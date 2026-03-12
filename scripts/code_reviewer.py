@@ -127,37 +127,57 @@ def _serialize_scope(scope: DiffScope, *, max_chars: int = 200_000) -> str:
     return "\n\n".join(chunks)
 
 
-def _parse_diff_lines(patch: str) -> set[int]:
-    """Extract the set of valid RIGHT-side line numbers from a unified diff."""
-    valid_lines: set[int] = set()
+def _parse_diff_lines(patch: str) -> tuple[set[int], set[int]]:
+    """Extract valid RIGHT-side line numbers from a unified diff.
+
+    Returns (added_lines, context_lines) where added_lines are ``+`` lines
+    and context_lines are unchanged lines shown in the diff.
+    """
+    added_lines: set[int] = set()
+    context_lines: set[int] = set()
     current_line = 0
     for raw_line in patch.splitlines():
         if raw_line.startswith("@@"):
-            # Parse @@ -old,count +new,count @@
             match = re.search(r"\+(\d+)", raw_line)
             if match:
                 current_line = int(match.group(1))
             continue
         if raw_line.startswith("-"):
-            # Deleted line — not on the right side
             continue
         if raw_line.startswith("+"):
-            valid_lines.add(current_line)
+            added_lines.add(current_line)
             current_line += 1
         else:
-            # Context line
-            valid_lines.add(current_line)
+            context_lines.add(current_line)
             current_line += 1
-    return valid_lines
+    return added_lines, context_lines
 
 
-def _snap_line_to_diff(line: int, valid_lines: set[int]) -> int | None:
-    """Return the line if it's in the diff, or the closest valid line within 5 lines."""
-    if not valid_lines:
+def _snap_line_to_diff(
+    line: int,
+    added_lines: set[int],
+    context_lines: set[int],
+) -> int | None:
+    """Snap a line number to the nearest added line in the diff.
+
+    Prefers ``+`` (added) lines over context lines.  Falls back to the
+    nearest context line only when no added line is within range.
+    Returns ``None`` when no diff line is within 5 lines.
+    """
+    all_lines = added_lines | context_lines
+    if not all_lines:
         return None
-    if line in valid_lines:
+    if line in added_lines:
         return line
-    closest = min(valid_lines, key=lambda v: abs(v - line))
+    # Try nearest added line first (within 5 lines)
+    if added_lines:
+        closest_added = min(added_lines, key=lambda v: abs(v - line))
+        if abs(closest_added - line) <= 5:
+            return closest_added
+    # Fall back to any diff line
+    if line in context_lines:
+        return line
+    closest = min(all_lines, key=lambda v: abs(v - line))
     if abs(closest - line) <= 5:
         return closest
     return None
@@ -314,15 +334,16 @@ CRITICAL rules:
             normalized_body = _normalize_finding_text(body)
             normalized_line = int(line) if isinstance(line, int) and line > 0 else None
             if normalized_line is not None and changed_file.patch:
-                valid_lines = _parse_diff_lines(changed_file.patch)
-                snapped = _snap_line_to_diff(normalized_line, valid_lines)
+                added_lines, context_lines = _parse_diff_lines(changed_file.patch)
+                snapped = _snap_line_to_diff(normalized_line, added_lines, context_lines)
                 if snapped != normalized_line:
                     logger.info(
-                        "Line %d for %s snapped to %s (valid lines in diff: %d)",
+                        "Line %d for %s snapped to %s (added=%d, context=%d lines in diff)",
                         normalized_line,
                         path,
                         snapped,
-                        len(valid_lines),
+                        len(added_lines),
+                        len(context_lines),
                     )
                 normalized_line = snapped
             dedupe_key = (path, normalized_line, normalized_body)
