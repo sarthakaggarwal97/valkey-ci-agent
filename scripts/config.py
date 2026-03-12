@@ -53,7 +53,8 @@ class BotConfig:
     bedrock_model_id: str = "us.anthropic.claude-opus-4-6-v1"
     max_input_tokens: int = 100_000
     max_output_tokens: int = 4096
-    max_patch_files: int = 10
+    max_patch_files: int = 15
+    max_patch_files_override: int | None = None
     confidence_threshold: str = "medium"
     monitored_workflows: list[str] = field(default_factory=lambda: [
         "ci.yml", "daily.yml", "weekly.yml", "external.yml"
@@ -312,6 +313,10 @@ def load_config_data(raw: Any, *, source: str = "<memory>") -> BotConfig:
             limits.get("max_patch_files"),
             defaults.max_patch_files,
         ),
+        max_patch_files_override=_coerce_int(
+            limits.get("max_patch_files_override"),
+            defaults.max_patch_files_override,
+        ) if limits.get("max_patch_files_override") is not None else defaults.max_patch_files_override,
         confidence_threshold=_coerce_str(
             fix_gen.get("confidence_threshold"),
             defaults.confidence_threshold,

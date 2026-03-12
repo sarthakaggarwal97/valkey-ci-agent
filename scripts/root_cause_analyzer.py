@@ -362,6 +362,22 @@ class RootCauseAnalyzer:
         if failure.file_path:
             files.append(failure.file_path)
 
+        # Strategy 4: for each .c/.cpp file, add corresponding .h/.hpp headers
+        for f in list(files):
+            if f.endswith(".c"):
+                files.append(f[:-2] + ".h")
+            elif f.endswith(".cpp"):
+                files.append(f[:-4] + ".hpp")
+
+        # Strategy 5: for each unique directory, add CMakeLists.txt and Makefile
+        seen_dirs: set[str] = set()
+        for f in list(files):
+            d = "/".join(f.split("/")[:-1]) if "/" in f else ""
+            if d and d not in seen_dirs:
+                seen_dirs.add(d)
+                files.append(f"{d}/CMakeLists.txt")
+                files.append(f"{d}/Makefile")
+
         # Deduplicate while preserving order
         return list(dict.fromkeys(files))
 

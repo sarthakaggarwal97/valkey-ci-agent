@@ -256,14 +256,20 @@ class FixGenerator:
 
             # Check patch scope — reject if too many files
             modified_files = _count_patch_files(diff)
-            if len(modified_files) > self._config.max_patch_files:
+            effective_limit = (
+                self._config.max_patch_files_override
+                if self._config.max_patch_files_override is not None
+                and self._config.max_patch_files_override > 0
+                else self._config.max_patch_files
+            )
+            if len(modified_files) > effective_limit:
                 logger.warning(
                     "Patch modifies %d files (limit %d). Rejecting.",
-                    len(modified_files), self._config.max_patch_files,
+                    len(modified_files), effective_limit,
                 )
                 apply_error = (
                     f"Patch modified {len(modified_files)} files which exceeds the "
-                    f"limit of {self._config.max_patch_files}."
+                    f"limit of {effective_limit}."
                 )
                 continue
 

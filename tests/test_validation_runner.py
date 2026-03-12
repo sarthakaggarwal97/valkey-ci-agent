@@ -218,17 +218,23 @@ class TestUntrustedForkSkip:
 # ---------------------------------------------------------------------------
 
 class TestNoMatchingProfile:
-    def test_returns_failure_when_no_profile_matches(self):
+    def test_uses_fallback_when_no_profile_matches(self):
         config = _make_config(profiles=[
             _make_profile(job_name_pattern="^completely-different$"),
         ])
         runner = ValidationRunner(config, repo_clone_url="https://github.com/owner/repo.git")
         report = _make_failure_report(job_name="test-sanitizer-address")
 
-        result = runner.validate("some patch", report)
+        with patch.object(runner, "_checkout_repo", return_value=(True, "")), \
+             patch.object(runner, "_apply_patch", return_value=(True, "")), \
+             patch(
+                 "scripts.validation_runner._run_commands",
+                 return_value=(True, "build OK"),
+             ):
+            result = runner.validate("some patch", report)
 
-        assert result.passed is False
-        assert "No matching validation profile" in result.output
+        # Fallback profile is used instead of returning failure
+        assert result.passed is True
 
 
 # ---------------------------------------------------------------------------

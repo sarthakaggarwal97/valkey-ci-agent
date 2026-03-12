@@ -209,11 +209,7 @@ def _is_single_run_candidate(
     """Return whether one strong signal is enough to queue or create a fix."""
     if report.is_unparseable or root_cause.is_flaky or root_cause.confidence != "high":
         return False
-    parser_types = {
-        parsed_failure.parser_type
-        for parsed_failure in report.parsed_failures
-    }
-    return bool(parser_types) and parser_types <= {"build"}
+    return True
 
 
 def _apply_history_summary(

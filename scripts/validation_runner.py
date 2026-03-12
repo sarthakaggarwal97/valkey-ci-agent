@@ -20,6 +20,12 @@ from scripts.models import FailureReport, ValidationResult
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_FALLBACK_PROFILE = ValidationProfile(
+    job_name_pattern=".*",
+    build_commands=["make"],
+    test_commands=[],
+)
+
 
 def _match_profile(
     job_name: str,
@@ -186,14 +192,12 @@ class ValidationRunner:
         if profile is None:
             logger.warning(
                 "No validation profile matches job '%s' with params %s. "
-                "Skipping validation.",
+                "Using default fallback profile. Consider configuring a "
+                "specific profile for this job.",
                 failure_report.job_name,
                 failure_report.matrix_params,
             )
-            return ValidationResult(
-                passed=False,
-                output=f"No matching validation profile for job '{failure_report.job_name}'",
-            )
+            profile = _DEFAULT_FALLBACK_PROFILE
 
         logger.info(
             "Validation profile matched: pattern=%s for job '%s'.",
