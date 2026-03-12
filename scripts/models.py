@@ -1,4 +1,4 @@
-"""Data models for the CI Failure Bot pipeline."""
+"""Data models for the CI Failure Bot and PR reviewer pipelines."""
 
 from __future__ import annotations
 
@@ -92,6 +92,101 @@ class FailureStoreEntry:
     queued_pr_payload: dict | None = None
 
 
+@dataclass
+class GithubEvent:
+    """Normalized GitHub event payload used by the PR reviewer."""
+
+    event_name: str
+    repo: str
+    actor: str
+    pr_number: int | None
+    comment_id: int | None
+    body: str | None
+    is_review_comment: bool = False
+    comment_path: str | None = None
+    comment_line: int | None = None
+    in_reply_to_id: int | None = None
+
+
+@dataclass
+class ChangedFile:
+    """A changed file in a pull request."""
+
+    path: str
+    status: str
+    additions: int
+    deletions: int
+    patch: str | None
+    contents: str | None
+    is_binary: bool
+
+
+@dataclass
+class PullRequestContext:
+    """Context fetched for a pull request review."""
+
+    repo: str
+    number: int
+    title: str
+    body: str
+    base_sha: str
+    head_sha: str
+    author: str
+    files: list[ChangedFile]
+
+
+@dataclass
+class SummaryResult:
+    """LLM-generated pull request summary."""
+
+    walkthrough: str
+    file_groups_markdown: str
+    release_notes: str | None
+
+
+@dataclass
+class ReviewFinding:
+    """A defect-oriented review finding on a PR."""
+
+    path: str
+    line: int | None
+    body: str
+    severity: str
+
+
+@dataclass
+class ReviewThread:
+    """Conversation context for review-thread or PR-comment chat."""
+
+    comment_id: int
+    path: str | None
+    line: int | None
+    conversation: list[str]
+    reply_to_bot: bool = False
+
+
+@dataclass
+class DiffScope:
+    """Subset of PR files under detailed review."""
+
+    base_sha: str
+    head_sha: str
+    files: list[ChangedFile]
+    incremental: bool
+
+
+@dataclass
+class ReviewState:
+    """Persisted reviewer state for incremental review."""
+
+    repo: str
+    pr_number: int
+    last_reviewed_head_sha: str | None
+    summary_comment_id: int | None
+    review_comment_ids: list[int]
+    updated_at: str
+
+
 def failure_report_to_dict(report: FailureReport) -> dict:
     """Serialize a failure report for persistence."""
     return asdict(report)
@@ -133,4 +228,21 @@ def root_cause_report_from_dict(data: dict) -> RootCauseReport:
         rationale=str(data.get("rationale", "")),
         is_flaky=bool(data.get("is_flaky", False)),
         flakiness_indicators=data.get("flakiness_indicators"),
+    )
+
+
+def review_state_to_dict(state: ReviewState) -> dict:
+    """Serialize a review state for persistence."""
+    return asdict(state)
+
+
+def review_state_from_dict(data: dict) -> ReviewState:
+    """Deserialize a persisted review state."""
+    return ReviewState(
+        repo=str(data.get("repo", "")),
+        pr_number=int(data.get("pr_number", 0)),
+        last_reviewed_head_sha=data.get("last_reviewed_head_sha"),
+        summary_comment_id=data.get("summary_comment_id"),
+        review_comment_ids=list(data.get("review_comment_ids", [])),
+        updated_at=str(data.get("updated_at", "")),
     )

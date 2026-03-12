@@ -11,6 +11,8 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import TYPE_CHECKING
 
+from github.GithubException import GithubException
+
 if TYPE_CHECKING:
     from github import Github
 
@@ -181,7 +183,10 @@ class RateLimiter:
         try:
             repo.get_git_ref(f"heads/{_RATE_STATE_BRANCH}")
             return
-        except Exception:
+        except GithubException as exc:
+            if exc.status != 404:
+                raise
+        except FileNotFoundError:
             pass
 
         base_ref = repo.get_git_ref(f"heads/{repo.default_branch}")
@@ -217,16 +222,24 @@ class RateLimiter:
             content = json.dumps(self.to_dict(), indent=2)
             try:
                 existing = repo.get_contents(_RATE_STATE_FILE, ref=_RATE_STATE_BRANCH)
-                if isinstance(existing, list):
-                    raise ValueError("Rate limiter state path resolved to a directory.")
-                repo.update_file(
-                    _RATE_STATE_FILE, "Update rate limiter state", content,
-                    existing.sha, branch=_RATE_STATE_BRANCH,
-                )
-            except Exception:
+            except GithubException as exc:
+                if exc.status != 404:
+                    raise
+                existing = None
+            except FileNotFoundError:
+                existing = None
+
+            if isinstance(existing, list):
+                raise ValueError("Rate limiter state path resolved to a directory.")
+            if existing is None:
                 repo.create_file(
                     _RATE_STATE_FILE, "Initialize rate limiter state", content,
                     branch=_RATE_STATE_BRANCH,
+                )
+            else:
+                repo.update_file(
+                    _RATE_STATE_FILE, "Update rate limiter state", content,
+                    existing.sha, branch=_RATE_STATE_BRANCH,
                 )
             logger.info("Saved rate limiter state.")
         except Exception as exc:

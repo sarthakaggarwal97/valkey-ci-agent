@@ -1,6 +1,22 @@
 # valkey-ci-bot
 An AI bot for Valkey CI failure remediation and PR review
 
+## PR review bot
+
+The repository also includes a reusable PR reviewer workflow at `.github/workflows/review-pr.yml`.
+
+It reviews pull requests through the GitHub API without checking out PR head code in the privileged workflow. The reviewer can:
+
+- post or update a PR summary comment
+- generate optional release notes
+- publish focused review comments
+- answer follow-up `/reviewbot` questions in PR comments and review threads
+
+Example consumer-repo files:
+
+- `examples/pr-review-caller-workflow.yml`
+- `examples/pr-review-config.yml`
+
 ## Bedrock KB refresh
 
 The repository includes a scheduled GitHub Actions workflow at `.github/workflows/refresh-bedrock-kb.yml`.

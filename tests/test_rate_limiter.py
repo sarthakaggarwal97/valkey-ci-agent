@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from github.GithubException import GithubException
 
 from scripts.config import BotConfig
 from scripts.rate_limiter import RateLimiter
@@ -239,7 +240,7 @@ class TestSerialization:
         repo = MagicMock()
         repo.default_branch = "main"
         repo.get_git_ref.side_effect = [
-            Exception("missing bot-data"),
+            GithubException(404, {"message": "missing bot-data"}),
             MagicMock(object=MagicMock(sha="base-sha")),
         ]
         gh = MagicMock()
@@ -252,3 +253,19 @@ class TestSerialization:
             ref="refs/heads/bot-data",
             sha="base-sha",
         )
+
+    def test_save_does_not_fallback_to_create_on_non_404_lookup_error(
+        self,
+        config: BotConfig,
+    ) -> None:
+        repo = MagicMock()
+        repo.default_branch = "main"
+        repo.get_git_ref.return_value = MagicMock()
+        repo.get_contents.side_effect = GithubException(500, {"message": "boom"})
+        gh = MagicMock()
+        gh.get_repo.return_value = repo
+
+        limiter = RateLimiter(config, github_client=gh, repo_full_name="owner/repo")
+        limiter.save()
+
+        repo.create_file.assert_not_called()

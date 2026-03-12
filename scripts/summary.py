@@ -181,3 +181,59 @@ class PRSummaryComment:
 
         lines.append("")
         return "\n".join(lines)
+
+
+@dataclass
+class ReviewStageResult:
+    """Outcome of a PR reviewer stage."""
+
+    stage: str
+    outcome: str
+    detail: str | None = None
+
+
+@dataclass
+class ReviewWorkflowSummary:
+    """Workflow summary tailored for PR reviewer runs."""
+
+    mode: str
+    results: list[ReviewStageResult] = field(default_factory=list)
+
+    def add_result(self, stage: str, outcome: str, detail: str | None = None) -> None:
+        """Record one reviewer stage result."""
+        self.results.append(
+            ReviewStageResult(stage=stage, outcome=outcome, detail=detail)
+        )
+
+    def render(self) -> str:
+        """Render the reviewer workflow summary."""
+        lines = [f"## PR Review Bot - {self.mode} run\n"]
+        if not self.results:
+            lines.append("No review stages executed.\n")
+            return "\n".join(lines)
+
+        lines.append("| Stage | Outcome | Detail |")
+        lines.append("|-------|---------|--------|")
+        for result in self.results:
+            lines.append(
+                f"| {result.stage} | {result.outcome} | {result.detail or ''} |"
+            )
+        lines.append("")
+        return "\n".join(lines)
+
+    def write(self) -> str:
+        """Render the summary and append it to ``$GITHUB_STEP_SUMMARY``."""
+        md = self.render()
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_path:
+            try:
+                with open(summary_path, "a") as fh:
+                    fh.write(md)
+                logger.info("Reviewer workflow summary written to %s", summary_path)
+            except OSError as exc:
+                logger.warning("Failed to write reviewer workflow summary: %s", exc)
+        else:
+            logger.debug(
+                "GITHUB_STEP_SUMMARY not set; reviewer summary not written to file."
+            )
+        return md

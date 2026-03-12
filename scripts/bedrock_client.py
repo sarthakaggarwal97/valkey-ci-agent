@@ -14,7 +14,7 @@ from typing import Any, Protocol
 import boto3
 from botocore.exceptions import ClientError
 
-from scripts.config import BotConfig, ProjectContext
+from scripts.config import ProjectContext
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,25 @@ class TokenBudgetLimiter(Protocol):
     def record_token_usage(self, amount: int) -> None: ...
 
 
+class BedrockConfig(Protocol):
+    """Configuration shape required by the Bedrock client."""
+
+    @property
+    def bedrock_model_id(self) -> str: ...
+
+    @property
+    def max_input_tokens(self) -> int: ...
+
+    @property
+    def max_output_tokens(self) -> int: ...
+
+    @property
+    def max_retries_bedrock(self) -> int: ...
+
+    @property
+    def project(self) -> ProjectContext: ...
+
+
 def _build_project_context_text(project: ProjectContext) -> str:
     """Format project context for inclusion in the system prompt."""
     parts = [
@@ -105,7 +124,7 @@ class BedrockClient:
 
     def __init__(
         self,
-        config: BotConfig,
+        config: BedrockConfig,
         *,
         client: BedrockRuntimeClient | None = None,
         rate_limiter: TokenBudgetLimiter | None = None,
@@ -124,7 +143,15 @@ class BedrockClient:
         self._project_context = _build_project_context_text(config.project)
         self._rate_limiter = rate_limiter
 
-    def invoke(self, system_prompt: str, user_prompt: str) -> str:
+    def invoke(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        model_id: str | None = None,
+        max_output_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> str:
         """Call Bedrock Converse API with the configured model.
 
         Includes project context in the system prompt, enforces token limits,
@@ -133,6 +160,9 @@ class BedrockClient:
         Args:
             system_prompt: The system-level instructions for the model.
             user_prompt: The user message to send to the model.
+            model_id: Optional model override for this call.
+            max_output_tokens: Optional output-token override for this call.
+            temperature: Optional sampling temperature for this call.
 
         Returns:
             The model's text response.
@@ -154,6 +184,7 @@ class BedrockClient:
                 retryable=False,
             )
 
+        output_tokens = max_output_tokens or self._config.max_output_tokens
         messages = [
             {
                 "role": "user",
@@ -161,18 +192,20 @@ class BedrockClient:
             }
         ]
 
-        converse_kwargs = {
-            "modelId": self._config.bedrock_model_id,
+        converse_kwargs: dict[str, Any] = {
+            "modelId": model_id or self._config.bedrock_model_id,
             "system": [{"text": full_system_prompt}],
             "messages": messages,
             "inferenceConfig": {
-                "maxTokens": self._config.max_output_tokens,
+                "maxTokens": output_tokens,
             },
         }
+        if temperature is not None:
+            converse_kwargs["inferenceConfig"]["temperature"] = temperature
 
         max_attempts = self._config.max_retries_bedrock + 1  # initial + retries
         last_error: ClientError | None = None
-        reserved_tokens = estimated_input_tokens + self._config.max_output_tokens
+        reserved_tokens = estimated_input_tokens + output_tokens
 
         for attempt in range(max_attempts):
             if self._rate_limiter is not None:

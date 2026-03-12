@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock
 
 import pytest
+from github.GithubException import GithubException
 
 from scripts.failure_store import FailureStore
 from scripts.models import FailureReport, ParsedFailure, RootCauseReport
@@ -79,27 +80,75 @@ SAMPLE_PATCH = """\
      }
 """
 
+MULTI_FILE_PATCH = """\
+--- a/src/foo.c
++++ b/src/foo.c
+@@ -40,3 +40,3 @@
+ void foo() {
+-    for (int i = 0; i <= n; i++) {
++    for (int i = 0; i < n; i++) {
+     }
+--- a/src/bar.c
++++ b/src/bar.c
+@@ -1,2 +1,3 @@
+ void bar() {
++    return;
+ }
+"""
+
 
 def _make_mock_repo():
     """Create a mock GitHub repo with the methods PRManager needs."""
     repo = MagicMock()
 
-    # get_git_ref returns a ref with an object.sha
-    ref = MagicMock()
-    ref.object.sha = "aabbccdd11223344"
-    repo.get_git_ref.return_value = ref
+    base_ref = MagicMock()
+    base_ref.object.sha = "aabbccdd11223344"
+    branch_ref = MagicMock()
+
+    def get_git_ref(name: str):
+        if name == "heads/unstable":
+            return base_ref
+        if name.startswith("heads/bot/fix/"):
+            return branch_ref
+        raise AssertionError(f"Unexpected ref lookup: {name}")
+
+    repo.get_git_ref.side_effect = get_git_ref
+    repo.base_ref = base_ref
+    repo.branch_ref = branch_ref
 
     # create_git_ref succeeds
     repo.create_git_ref.return_value = MagicMock()
 
-    # get_contents returns a file-like object
-    contents = MagicMock()
-    contents.decoded_content = b"void foo() {\n    for (int i = 0; i <= n; i++) {\n    }\n"
-    contents.sha = "file_sha_123"
-    repo.get_contents.return_value = contents
+    def get_contents(path: str, ref: str | None = None):
+        if path == "src/foo.c":
+            contents = MagicMock()
+            contents.decoded_content = (
+                b"void foo() {\n    for (int i = 0; i <= n; i++) {\n    }\n"
+            )
+            return contents
+        if path == "src/bar.c":
+            contents = MagicMock()
+            contents.decoded_content = b"void bar() {\n}\n"
+            return contents
+        raise FileNotFoundError(path)
 
-    # update_file succeeds
-    repo.update_file.return_value = {"commit": MagicMock()}
+    repo.get_contents.side_effect = get_contents
+
+    base_commit = MagicMock()
+    base_commit.sha = "abc123def456"
+    base_commit.tree = MagicMock()
+    repo.get_git_commit.return_value = base_commit
+
+    new_tree = MagicMock()
+    new_tree.sha = "tree123"
+    repo.create_git_tree.return_value = new_tree
+
+    new_commit = MagicMock()
+    new_commit.sha = "commit123"
+    repo.create_git_commit.return_value = new_commit
+
+    repo.base_commit = base_commit
+    repo.new_commit = new_commit
 
     # create_pull returns a PR mock
     pr = MagicMock()
@@ -283,11 +332,13 @@ class TestCreatePR:
         assert url == "https://github.com/owner/repo/pull/42"
 
         # Branch created from target
-        repo.get_git_ref.assert_called_once_with("heads/unstable")
+        repo.get_git_ref.assert_any_call("heads/unstable")
         repo.create_git_ref.assert_called_once()
         ref_arg = repo.create_git_ref.call_args
         assert "bot/fix/" in ref_arg.kwargs.get("ref", ref_arg[1].get("ref", ""))
         assert ref_arg.kwargs.get("sha", ref_arg[1].get("sha")) == report.commit_sha
+        repo.create_git_commit.assert_called_once()
+        repo.branch_ref.edit.assert_called_once_with(repo.new_commit.sha)
 
         # PR opened
         repo.create_pull.assert_called_once()
@@ -343,12 +394,26 @@ class TestCreatePR:
 
         mgr.create_pr(SAMPLE_PATCH, report, root_cause, "unstable")
 
-        # The commit message is passed to update_file
-        call_args = repo.update_file.call_args
-        commit_msg = call_args[0][1]  # second positional arg is the message
+        call_args = repo.create_git_commit.call_args
+        commit_msg = call_args.args[0]
         assert "TestCase" in commit_msg
         assert "test-ubuntu-latest" in commit_msg
         assert "Off-by-one" in commit_msg
+
+    def test_multi_file_patch_creates_single_commit(self):
+        mgr, repo, _ = _make_pr_manager()
+        report = _make_failure_report()
+        root_cause = _make_root_cause(files_to_change=["src/foo.c", "src/bar.c"])
+
+        mgr.create_pr(MULTI_FILE_PATCH, report, root_cause, "unstable")
+
+        repo.create_git_tree.assert_called_once()
+        repo.create_git_commit.assert_called_once()
+        tree_elements = repo.create_git_tree.call_args.args[0]
+        assert len(tree_elements) == 2
+        assert {
+            element._InputGitTreeElement__path for element in tree_elements
+        } == {"src/foo.c", "src/bar.c"}
 
 
 class TestForkPRSkip:
@@ -422,6 +487,20 @@ class TestGitHubAPIRejection:
                 mgr.create_pr(SAMPLE_PATCH, report, root_cause, "unstable")
 
         assert any("pr-creation-failed" in r.message for r in caplog.records)
+
+    def test_non_404_file_load_error_does_not_become_new_file(self):
+        repo = _make_mock_repo()
+        repo.get_contents.side_effect = GithubException(500, {"message": "boom"})
+        mgr, _, store = _make_pr_manager(repo=repo)
+        report = _make_failure_report()
+        root_cause = _make_root_cause()
+
+        with pytest.raises(RuntimeError, match="pr-creation-failed"):
+            mgr.create_pr(SAMPLE_PATCH, report, root_cause, "unstable")
+
+        repo.create_git_commit.assert_not_called()
+        fp = _compute_fingerprint(report)
+        assert store.entries[fp].status == "pr-creation-failed"
 
 
 class TestLabelApplication:

@@ -120,6 +120,40 @@ def _collect_source_files(
     return source_files
 
 
+def _load_root_cause_target_files(
+    report: FailureReport,
+    root_cause: RootCauseReport,
+    root_cause_analyzer: RootCauseAnalyzer,
+    source_files: dict[str, str],
+) -> dict[str, str]:
+    """Ensure fix generation has contents for files explicitly marked for change."""
+    missing_paths = [
+        path
+        for path in root_cause.files_to_change
+        if path and path not in source_files
+    ]
+    if not missing_paths:
+        return source_files
+
+    try:
+        contents = root_cause_analyzer._retrieve_file_contents(
+            report.commit_sha,
+            missing_paths,
+            repo_name=report.repo_full_name,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to retrieve root-cause target files for job %s: %s",
+            report.job_name,
+            exc,
+        )
+        return source_files
+
+    merged = dict(source_files)
+    merged.update(contents)
+    return merged
+
+
 def _build_pr_summary_comment(
     *,
     detection_duration: float,
@@ -302,6 +336,9 @@ def _analyze_and_fix(
     except Exception as exc:
         logger.warning("Failed to retrieve source files for job %s: %s", report.job_name, exc)
         source_files = {}
+    source_files = _load_root_cause_target_files(
+        report, root_cause, root_cause_analyzer, source_files,
+    )
 
     # Generate fix
     generation_start = time.perf_counter()
@@ -384,6 +421,9 @@ def _validate_fix(
             except Exception as exc:
                 logger.warning("Failed to retrieve source files for retry: %s", exc)
                 source_files = {}
+            source_files = _load_root_cause_target_files(
+                report, root_cause, root_cause_analyzer, source_files,
+            )
 
             try:
                 generation_start = time.perf_counter()

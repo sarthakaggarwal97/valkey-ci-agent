@@ -359,3 +359,59 @@ def test_valid_fields_preserved_with_unrecognized_ignored(
         assert cfg.validation_profiles == []
     finally:
         os.unlink(tmp_path)
+
+
+def test_invalid_scalar_types_fall_back_to_defaults() -> None:
+    config_data = {
+        "bedrock": {
+            "model_id": ["not-a-string"],
+            "max_input_tokens": "1000",
+        },
+        "limits": {
+            "max_patch_files": "10",
+        },
+        "fix_generation": {
+            "confidence_threshold": ["high"],
+        },
+        "monitored_workflows": "ci.yml",
+        "project": {
+            "test_frameworks": "gtest",
+            "source_dirs": "src/",
+            "test_to_source_patterns": {"test_path": "tests/a.tcl"},
+        },
+        "validation_profiles": [
+            {
+                "job_name_pattern": 123,
+                "matrix_params": ["bad"],
+                "env": "oops",
+                "install_commands": "pip install",
+                "build_commands": ["make"],
+                "test_commands": ["ctest"],
+            }
+        ],
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+        yaml.safe_dump(config_data, f)
+        tmp_path = f.name
+
+    try:
+        cfg = load_config(tmp_path)
+        defaults = BotConfig()
+
+        assert cfg.bedrock_model_id == defaults.bedrock_model_id
+        assert cfg.max_input_tokens == defaults.max_input_tokens
+        assert cfg.max_patch_files == defaults.max_patch_files
+        assert cfg.confidence_threshold == defaults.confidence_threshold
+        assert cfg.monitored_workflows == defaults.monitored_workflows
+        assert cfg.project.test_frameworks == defaults.project.test_frameworks
+        assert cfg.project.source_dirs == defaults.project.source_dirs
+        assert cfg.project.test_to_source_patterns == defaults.project.test_to_source_patterns
+        assert cfg.validation_profiles[0].job_name_pattern == ""
+        assert cfg.validation_profiles[0].matrix_params == {}
+        assert cfg.validation_profiles[0].env == {}
+        assert cfg.validation_profiles[0].install_commands == []
+        assert cfg.validation_profiles[0].build_commands == ["make"]
+        assert cfg.validation_profiles[0].test_commands == ["ctest"]
+    finally:
+        os.unlink(tmp_path)

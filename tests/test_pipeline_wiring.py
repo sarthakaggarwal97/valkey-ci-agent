@@ -221,6 +221,37 @@ class TestAnalyzeAndFix:
         assert rc is root_cause
         assert diff is None
 
+    def test_loads_root_cause_target_files_for_fix_generation(self):
+        report = _make_report()
+        project = ProjectContext()
+        root_cause = _make_root_cause(
+            confidence="high",
+            files_to_change=["src/foo.c", "include/foo.h"],
+        )
+
+        analyzer = MagicMock()
+        analyzer.analyze.return_value = root_cause
+        analyzer.identify_relevant_files.return_value = ["src/foo.c"]
+        analyzer._retrieve_file_contents.side_effect = [
+            {"src/foo.c": "int foo(void);"},
+            {"include/foo.h": "#define FOO 1"},
+        ]
+
+        fix_gen = MagicMock()
+        fix_gen.generate.return_value = "some diff"
+
+        rc, diff = _analyze_and_fix(report, analyzer, fix_gen, project)
+
+        assert rc is root_cause
+        assert diff == "some diff"
+        fix_gen.generate.assert_called_once_with(
+            root_cause,
+            {
+                "src/foo.c": "int foo(void);",
+                "include/foo.h": "#define FOO 1",
+            },
+        )
+
     def test_source_file_retrieval_failure_still_generates(self):
         """If source file retrieval fails, fix generation still proceeds with empty files."""
         report = _make_report()

@@ -1,0 +1,72 @@
+# Example caller workflow for consumer repositories.
+#
+# Copy this file to:
+#   .github/workflows/pr-review-bot.yml
+#
+# Required repository secrets:
+#   CI_BOT_AWS_ACCESS_KEY_ID
+#   CI_BOT_AWS_SECRET_ACCESS_KEY
+#   CI_BOT_AWS_REGION
+
+name: PR Review Bot
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+      allowed: ${{ steps.classify.outputs.allowed }}
+    steps:
+      - id: classify
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const eventName = context.eventName;
+            if (eventName === "pull_request_target") {
+              core.setOutput("mode", "review");
+              core.setOutput("allowed", "true");
+              return;
+            }
+            if (eventName === "pull_request_review_comment") {
+              core.setOutput("mode", "chat");
+              core.setOutput("allowed", "true");
+              return;
+            }
+            const issue = context.payload.issue;
+            const isPr = !!issue?.pull_request;
+            const body = context.payload.comment?.body || "";
+            const invoked = body.includes("/reviewbot");
+            core.setOutput("mode", isPr && invoked ? "chat" : "skip");
+            core.setOutput("allowed", isPr && invoked ? "true" : "false");
+
+  review:
+    needs: preflight
+    if: needs.preflight.outputs.allowed == 'true'
+    uses: valkey-io/valkey-ci-bot/.github/workflows/review-pr.yml@v1
+    with:
+      config_path: .github/pr-review-bot.yml
+      bot_repository: valkey-io/valkey-ci-bot
+      bot_ref: v1
+      mode: ${{ needs.preflight.outputs.mode }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.CI_BOT_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.CI_BOT_AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.CI_BOT_AWS_REGION }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

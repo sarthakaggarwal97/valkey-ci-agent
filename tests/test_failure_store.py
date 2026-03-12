@@ -14,6 +14,7 @@ from unittest.mock import MagicMock
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from github.GithubException import GithubException
 
 from scripts.failure_store import FailureStore
 from scripts.models import FailureStoreEntry, FailureReport, RootCauseReport
@@ -144,7 +145,7 @@ def test_save_creates_bot_data_branch_when_missing() -> None:
     repo = MagicMock()
     repo.default_branch = "main"
     repo.get_git_ref.side_effect = [
-        Exception("missing bot-data"),
+        GithubException(404, {"message": "missing bot-data"}),
         MagicMock(object=MagicMock(sha="base-sha")),
     ]
     gh = MagicMock()
@@ -157,3 +158,17 @@ def test_save_creates_bot_data_branch_when_missing() -> None:
         ref="refs/heads/bot-data",
         sha="base-sha",
     )
+
+
+def test_save_does_not_fallback_to_create_on_non_404_lookup_error() -> None:
+    repo = MagicMock()
+    repo.default_branch = "main"
+    repo.get_git_ref.return_value = MagicMock()
+    repo.get_contents.side_effect = GithubException(500, {"message": "boom"})
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    store = FailureStore(gh, "owner/repo")
+
+    store.save()
+
+    repo.create_file.assert_not_called()

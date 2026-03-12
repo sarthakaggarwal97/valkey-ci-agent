@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -191,6 +192,32 @@ class TestConfidenceGating:
 # ---------------------------------------------------------------------------
 
 class TestPatchValidation:
+    def test_validate_patch_applies_against_source_file_workspace(self):
+        original = "void handle_request(Request *req) {\n    process(req->data);\n}\n"
+        patched = (
+            "void handle_request(Request *req) {\n"
+            "    if (req == NULL) return;\n"
+            "    process(req->data);\n"
+            "}\n"
+        )
+        diff = "\n".join(
+            difflib.unified_diff(
+                original.splitlines(),
+                patched.splitlines(),
+                fromfile="a/src/server.c",
+                tofile="b/src/server.c",
+                lineterm="",
+            )
+        ) + "\n"
+
+        success, error_output = _validate_patch_applies(
+            diff,
+            {"src/server.c": original},
+        )
+
+        assert success is True
+        assert error_output == ""
+
     def test_returns_diff_on_clean_apply(self):
         gen, _ = _make_generator()
         rc = _make_root_cause()

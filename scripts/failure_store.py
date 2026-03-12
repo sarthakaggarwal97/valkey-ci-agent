@@ -8,6 +8,8 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from github.GithubException import GithubException
+
 from scripts.models import (
     FailureReport,
     FailureStoreEntry,
@@ -210,7 +212,10 @@ class FailureStore:
         try:
             repo.get_git_ref(f"heads/{_STORE_BRANCH}")
             return
-        except Exception:
+        except GithubException as exc:
+            if exc.status != 404:
+                raise
+        except FileNotFoundError:
             pass
 
         base_ref = repo.get_git_ref(f"heads/{repo.default_branch}")
@@ -247,16 +252,24 @@ class FailureStore:
             content = json.dumps(self.to_dict(), indent=2)
             try:
                 existing = repo.get_contents(_STORE_FILE, ref=_STORE_BRANCH)
-                if isinstance(existing, list):
-                    raise ValueError("Failure store path resolved to a directory.")
-                repo.update_file(
-                    _STORE_FILE, "Update failure store", content,
-                    existing.sha, branch=_STORE_BRANCH,
-                )
-            except Exception:
+            except GithubException as exc:
+                if exc.status != 404:
+                    raise
+                existing = None
+            except FileNotFoundError:
+                existing = None
+
+            if isinstance(existing, list):
+                raise ValueError("Failure store path resolved to a directory.")
+            if existing is None:
                 repo.create_file(
                     _STORE_FILE, "Initialize failure store", content,
                     branch=_STORE_BRANCH,
+                )
+            else:
+                repo.update_file(
+                    _STORE_FILE, "Update failure store", content,
+                    existing.sha, branch=_STORE_BRANCH,
                 )
             logger.info("Saved %d entries to failure store.", len(self._entries))
         except Exception as exc:

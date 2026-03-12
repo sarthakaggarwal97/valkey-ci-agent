@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from github.GithubException import GithubException
+from github.InputGitTreeElement import InputGitTreeElement
+
+from scripts.github_client import retry_github_call
 from scripts.failure_store import FailureStore
 from scripts.models import FailureReport, RootCauseReport
 
@@ -310,47 +314,46 @@ class PRManager:
     ) -> None:
         """Apply a unified diff patch via the GitHub Git Data API.
 
-        Creates a new tree with the patched files and commits it to the branch.
-        This avoids needing a local checkout — everything goes through the API.
+        Creates a single tree/commit update so a validated patch lands as one
+        commit on the bot branch.
         """
-        import re
-
-        # Parse unified diff to get file paths and new content
-        # For simplicity, use the entire patch content per file.
-        # Retrieve current file content, apply hunks, and create blobs.
-        # In practice, the patch has already been validated with `git apply --check`.
-        # We use a simpler approach: create a temporary commit using the
-        # GitHub API's update_file / create_file for each changed file.
-        #
-        # A more robust approach: use the Git Data API to create tree + commit.
-        # For MVP, we commit the patch as a single blob and let the workflow
-        # apply it. But since the design says "apply patch and commit", we
-        # parse the diff and apply changes file by file.
-
         file_patches = _parse_unified_diff(patch)
+        if not file_patches:
+            raise ValueError("patch contained no file changes")
+
+        parent_commit = repo.get_git_commit(base_sha)
+        tree_elements: list[InputGitTreeElement] = []
 
         for file_path, file_diff in file_patches.items():
             try:
-                # Get current file content from the base
-                contents = repo.get_contents(file_path, ref=branch_name)
+                contents = retry_github_call(
+                    lambda: repo.get_contents(file_path, ref=branch_name),
+                    retries=5,
+                    description=f"load branch contents for {file_path}",
+                )
+                if isinstance(contents, list):
+                    raise ValueError(f"Patch target {file_path} resolved to a directory.")
                 original = contents.decoded_content.decode("utf-8")
-                patched = _apply_hunks(original, file_diff)
-                repo.update_file(
-                    file_path,
-                    message,
-                    patched,
-                    contents.sha,
-                    branch=branch_name,
+            except GithubException as exc:
+                if exc.status != 404:
+                    raise
+                original = ""
+            except FileNotFoundError:
+                original = ""
+            patched = _apply_hunks(original, file_diff)
+            tree_elements.append(
+                InputGitTreeElement(
+                    path=file_path,
+                    mode="100644",
+                    type="blob",
+                    content=patched,
                 )
-            except Exception:
-                # File might be new
-                patched = _apply_hunks("", file_diff)
-                repo.create_file(
-                    file_path,
-                    message,
-                    patched,
-                    branch=branch_name,
-                )
+            )
+
+        new_tree = repo.create_git_tree(tree_elements, base_tree=parent_commit.tree)
+        new_commit = repo.create_git_commit(message, new_tree, [parent_commit])
+        branch_ref = repo.get_git_ref(f"heads/{branch_name}")
+        branch_ref.edit(new_commit.sha)
 
 
 def _parse_unified_diff(patch: str) -> dict[str, list[dict]]:

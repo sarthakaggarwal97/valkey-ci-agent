@@ -57,17 +57,83 @@ class BotConfig:
     validation_profiles: list[ValidationProfile] = field(default_factory=list)
 
 
+@dataclass
+class ReviewerModels:
+    """Model configuration for PR reviewer light/heavy tasks."""
+
+    light_model_id: str = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+    heavy_model_id: str = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    temperature: float = 0.05
+
+
+@dataclass
+class ReviewerConfig:
+    """Top-level PR reviewer configuration with sensible defaults."""
+
+    enabled: bool = True
+    collaborator_only: bool = False
+    disable_review: bool = False
+    disable_release_notes: bool = False
+    review_simple_changes: bool = False
+    review_comment_lgtm: bool = False
+    ignore_keyword: str = "/reviewbot: ignore"
+    max_files: int = 150
+    max_review_comments: int = 20
+    path_filters: list[str] = field(default_factory=list)
+    daily_token_budget: int = 1_000_000
+    bedrock_retries: int = 5
+    github_retries: int = 5
+    bedrock_timeout_ms: int = 120_000
+    bedrock_concurrency_limit: int = 2
+    github_concurrency_limit: int = 6
+    max_input_tokens: int = 100_000
+    max_output_tokens: int = 4096
+    project: ProjectContext = field(default_factory=ProjectContext)
+    models: ReviewerModels = field(default_factory=ReviewerModels)
+
+    @property
+    def bedrock_model_id(self) -> str:
+        """Default reviewer Bedrock model when no per-call override is given."""
+        return self.models.heavy_model_id
+
+    @property
+    def max_retries_bedrock(self) -> int:
+        """Alias used by the shared Bedrock client."""
+        return self.bedrock_retries
+
+
 def _merge_project(data: dict) -> ProjectContext:
     """Build a ProjectContext from a raw dict, using defaults for missing keys."""
     defaults = ProjectContext()
     return ProjectContext(
-        language=data.get("language", defaults.language),
-        build_system=data.get("build_system", defaults.build_system),
-        test_frameworks=data.get("test_frameworks", defaults.test_frameworks),
-        description=data.get("description", defaults.description),
-        source_dirs=data.get("source_dirs", defaults.source_dirs),
-        test_dirs=data.get("test_dirs", defaults.test_dirs),
-        test_to_source_patterns=data.get("test_to_source_patterns", defaults.test_to_source_patterns),
+        language=_coerce_str(
+            data.get("language"),
+            defaults.language,
+        ),
+        build_system=_coerce_str(
+            data.get("build_system"),
+            defaults.build_system,
+        ),
+        test_frameworks=_coerce_str_list(
+            data.get("test_frameworks"),
+            defaults.test_frameworks,
+        ),
+        description=_coerce_str(
+            data.get("description"),
+            defaults.description,
+        ),
+        source_dirs=_coerce_str_list(
+            data.get("source_dirs"),
+            defaults.source_dirs,
+        ),
+        test_dirs=_coerce_str_list(
+            data.get("test_dirs"),
+            defaults.test_dirs,
+        ),
+        test_to_source_patterns=_coerce_pattern_list(
+            data.get("test_to_source_patterns"),
+            defaults.test_to_source_patterns,
+        ),
     )
 
 
@@ -78,14 +144,97 @@ def _merge_validation_profiles(raw_list: list[dict]) -> list[ValidationProfile]:
         if not isinstance(item, dict):
             continue
         profiles.append(ValidationProfile(
-            job_name_pattern=item.get("job_name_pattern", ""),
-            matrix_params=item.get("matrix_params", {}),
-            env=item.get("env", {}),
-            install_commands=item.get("install_commands", []),
-            build_commands=item.get("build_commands", []),
-            test_commands=item.get("test_commands", []),
+            job_name_pattern=_coerce_str(item.get("job_name_pattern"), ""),
+            matrix_params=_coerce_str_dict(item.get("matrix_params"), {}),
+            env=_coerce_str_dict(item.get("env"), {}),
+            install_commands=_coerce_str_list(item.get("install_commands"), []),
+            build_commands=_coerce_str_list(item.get("build_commands"), []),
+            test_commands=_coerce_str_list(item.get("test_commands"), []),
         ))
     return profiles
+
+
+def _merge_reviewer_models(data: dict) -> ReviewerModels:
+    """Build ReviewerModels from a raw dict."""
+    defaults = ReviewerModels()
+    return ReviewerModels(
+        light_model_id=_coerce_str(
+            data.get("light_model_id"),
+            defaults.light_model_id,
+        ),
+        heavy_model_id=_coerce_str(
+            data.get("heavy_model_id"),
+            defaults.heavy_model_id,
+        ),
+        temperature=_coerce_float(
+            data.get("temperature"),
+            defaults.temperature,
+        ),
+    )
+
+
+def _coerce_str(value: Any, default: str) -> str:
+    """Return a string value or the provided default."""
+    return value if isinstance(value, str) else default
+
+
+def _coerce_str_list(value: Any, default: list[str]) -> list[str]:
+    """Return a list of strings or the provided default."""
+    if not isinstance(value, list):
+        return list(default)
+    if not all(isinstance(item, str) for item in value):
+        return list(default)
+    return list(value)
+
+
+def _coerce_str_dict(value: Any, default: dict[str, str]) -> dict[str, str]:
+    """Return a string-to-string mapping or the provided default."""
+    if not isinstance(value, dict):
+        return dict(default)
+    if not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
+        return dict(default)
+    return dict(value)
+
+
+def _coerce_pattern_list(
+    value: Any,
+    default: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Return a test-to-source pattern list or the provided default."""
+    if not isinstance(value, list):
+        return list(default)
+
+    patterns: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            return list(default)
+        test_path = item.get("test_path")
+        source_path = item.get("source_path")
+        if not isinstance(test_path, str) or not isinstance(source_path, str):
+            return list(default)
+        patterns.append({"test_path": test_path, "source_path": source_path})
+    return patterns
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    """Return an integer value or the provided default."""
+    if isinstance(value, bool):
+        return default
+    return value if isinstance(value, int) else default
+
+
+def _coerce_float(value: Any, default: float) -> float:
+    """Return a float value or the provided default."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    return default
+
+
+def _coerce_bool(value: Any, default: bool) -> bool:
+    """Return a boolean value or the provided default."""
+    return value if isinstance(value, bool) else default
 
 
 def load_config_data(raw: Any, *, source: str = "<memory>") -> BotConfig:
@@ -102,19 +251,55 @@ def load_config_data(raw: Any, *, source: str = "<memory>") -> BotConfig:
     fix_gen = raw.get("fix_generation", {}) if isinstance(raw.get("fix_generation"), dict) else {}
 
     return BotConfig(
-        bedrock_model_id=bedrock.get("model_id", defaults.bedrock_model_id),
-        max_input_tokens=bedrock.get("max_input_tokens", defaults.max_input_tokens),
-        max_output_tokens=bedrock.get("max_output_tokens", defaults.max_output_tokens),
-        max_patch_files=limits.get("max_patch_files", defaults.max_patch_files),
-        confidence_threshold=fix_gen.get("confidence_threshold", defaults.confidence_threshold),
-        monitored_workflows=raw.get("monitored_workflows", defaults.monitored_workflows),
-        max_retries_fix=fix_gen.get("max_retries", defaults.max_retries_fix),
-        max_retries_validation=fix_gen.get("max_validation_retries", defaults.max_retries_validation),
+        bedrock_model_id=_coerce_str(
+            bedrock.get("model_id"),
+            defaults.bedrock_model_id,
+        ),
+        max_input_tokens=_coerce_int(
+            bedrock.get("max_input_tokens"),
+            defaults.max_input_tokens,
+        ),
+        max_output_tokens=_coerce_int(
+            bedrock.get("max_output_tokens"),
+            defaults.max_output_tokens,
+        ),
+        max_patch_files=_coerce_int(
+            limits.get("max_patch_files"),
+            defaults.max_patch_files,
+        ),
+        confidence_threshold=_coerce_str(
+            fix_gen.get("confidence_threshold"),
+            defaults.confidence_threshold,
+        ),
+        monitored_workflows=_coerce_str_list(
+            raw.get("monitored_workflows"),
+            defaults.monitored_workflows,
+        ),
+        max_retries_fix=_coerce_int(
+            fix_gen.get("max_retries"),
+            defaults.max_retries_fix,
+        ),
+        max_retries_validation=_coerce_int(
+            fix_gen.get("max_validation_retries"),
+            defaults.max_retries_validation,
+        ),
         max_retries_bedrock=defaults.max_retries_bedrock,
-        max_prs_per_day=limits.get("max_prs_per_day", defaults.max_prs_per_day),
-        max_failures_per_run=limits.get("max_failures_per_run", defaults.max_failures_per_run),
-        max_open_bot_prs=limits.get("max_open_bot_prs", defaults.max_open_bot_prs),
-        daily_token_budget=limits.get("daily_token_budget", defaults.daily_token_budget),
+        max_prs_per_day=_coerce_int(
+            limits.get("max_prs_per_day"),
+            defaults.max_prs_per_day,
+        ),
+        max_failures_per_run=_coerce_int(
+            limits.get("max_failures_per_run"),
+            defaults.max_failures_per_run,
+        ),
+        max_open_bot_prs=_coerce_int(
+            limits.get("max_open_bot_prs"),
+            defaults.max_open_bot_prs,
+        ),
+        daily_token_budget=_coerce_int(
+            limits.get("daily_token_budget"),
+            defaults.daily_token_budget,
+        ),
         project=_merge_project(raw.get("project", {})) if isinstance(raw.get("project"), dict) else defaults.project,
         validation_profiles=_merge_validation_profiles(raw.get("validation_profiles", [])) if isinstance(raw.get("validation_profiles"), list) else defaults.validation_profiles,
     )
@@ -148,3 +333,139 @@ def load_config(path: str | Path) -> BotConfig:
         logger.warning("Invalid YAML in %s: %s. Using defaults.", config_path, exc)
         return BotConfig()
     return load_config_data(raw, source=str(config_path))
+
+
+def load_reviewer_config_data(raw: Any, *, source: str = "<memory>") -> ReviewerConfig:
+    """Build a ReviewerConfig from pre-loaded YAML data."""
+    if not isinstance(raw, dict):
+        logger.warning(
+            "Reviewer config source %s is not a YAML mapping. Using defaults.",
+            source,
+        )
+        return ReviewerConfig()
+
+    root = raw.get("reviewer") if isinstance(raw.get("reviewer"), dict) else raw
+    if not isinstance(root, dict):
+        logger.warning(
+            "Reviewer config source %s has invalid 'reviewer' section. Using defaults.",
+            source,
+        )
+        return ReviewerConfig()
+
+    defaults = ReviewerConfig()
+    models = root.get("models", {}) if isinstance(root.get("models"), dict) else {}
+    project = root.get("project", {}) if isinstance(root.get("project"), dict) else {}
+
+    return ReviewerConfig(
+        enabled=_coerce_bool(root.get("enabled"), defaults.enabled),
+        collaborator_only=_coerce_bool(
+            root.get("collaborator_only", defaults.collaborator_only)
+            if "collaborator_only" in root else defaults.collaborator_only,
+            defaults.collaborator_only,
+        ),
+        disable_review=_coerce_bool(
+            root.get("disable_review"), defaults.disable_review
+        ),
+        disable_release_notes=_coerce_bool(
+            root.get("disable_release_notes", defaults.disable_release_notes)
+            if "disable_release_notes" in root else defaults.disable_release_notes,
+            defaults.disable_release_notes,
+        ),
+        review_simple_changes=_coerce_bool(
+            root.get("review_simple_changes", defaults.review_simple_changes)
+            if "review_simple_changes" in root else defaults.review_simple_changes,
+            defaults.review_simple_changes,
+        ),
+        review_comment_lgtm=_coerce_bool(
+            root.get("review_comment_lgtm", defaults.review_comment_lgtm)
+            if "review_comment_lgtm" in root else defaults.review_comment_lgtm,
+            defaults.review_comment_lgtm,
+        ),
+        ignore_keyword=_coerce_str(
+            root.get("ignore_keyword"),
+            defaults.ignore_keyword,
+        ),
+        max_files=_coerce_int(root.get("max_files"), defaults.max_files),
+        max_review_comments=_coerce_int(
+            root.get("max_review_comments", defaults.max_review_comments)
+            if "max_review_comments" in root else defaults.max_review_comments,
+            defaults.max_review_comments,
+        ),
+        path_filters=_coerce_str_list(
+            root.get("path_filters"),
+            defaults.path_filters,
+        ),
+        daily_token_budget=_coerce_int(
+            root.get("daily_token_budget", defaults.daily_token_budget)
+            if "daily_token_budget" in root else defaults.daily_token_budget,
+            defaults.daily_token_budget,
+        ),
+        bedrock_retries=_coerce_int(
+            root.get("bedrock_retries"), defaults.bedrock_retries
+        ),
+        github_retries=_coerce_int(
+            root.get("github_retries"), defaults.github_retries
+        ),
+        bedrock_timeout_ms=_coerce_int(
+            root.get("bedrock_timeout_ms", defaults.bedrock_timeout_ms)
+            if "bedrock_timeout_ms" in root else defaults.bedrock_timeout_ms,
+            defaults.bedrock_timeout_ms,
+        ),
+        bedrock_concurrency_limit=_coerce_int(
+            root.get(
+                "bedrock_concurrency_limit", defaults.bedrock_concurrency_limit
+            ) if "bedrock_concurrency_limit" in root else defaults.bedrock_concurrency_limit,
+            defaults.bedrock_concurrency_limit,
+        ),
+        github_concurrency_limit=_coerce_int(
+            root.get("github_concurrency_limit", defaults.github_concurrency_limit)
+            if "github_concurrency_limit" in root else defaults.github_concurrency_limit,
+            defaults.github_concurrency_limit,
+        ),
+        max_input_tokens=_coerce_int(
+            root.get("max_input_tokens", defaults.max_input_tokens)
+            if "max_input_tokens" in root else defaults.max_input_tokens,
+            defaults.max_input_tokens,
+        ),
+        max_output_tokens=_coerce_int(
+            root.get("max_output_tokens", defaults.max_output_tokens)
+            if "max_output_tokens" in root else defaults.max_output_tokens,
+            defaults.max_output_tokens,
+        ),
+        project=_merge_project(project) if project else defaults.project,
+        models=_merge_reviewer_models(models),
+    )
+
+
+def load_reviewer_config_text(text: str, *, source: str = "<memory>") -> ReviewerConfig:
+    """Load PR reviewer configuration from YAML text."""
+    try:
+        raw = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        logger.warning(
+            "Invalid YAML in reviewer config %s: %s. Using defaults.",
+            source,
+            exc,
+        )
+        return ReviewerConfig()
+
+    return load_reviewer_config_data(raw, source=source)
+
+
+def load_reviewer_config(path: str | Path) -> ReviewerConfig:
+    """Load PR reviewer configuration from a YAML file."""
+    config_path = Path(path)
+    if not config_path.exists():
+        logger.info("Reviewer config file %s not found, using defaults.", config_path)
+        return ReviewerConfig()
+
+    try:
+        raw = yaml.safe_load(config_path.read_text())
+    except yaml.YAMLError as exc:
+        logger.warning(
+            "Invalid YAML in reviewer config %s: %s. Using defaults.",
+            config_path,
+            exc,
+        )
+        return ReviewerConfig()
+    return load_reviewer_config_data(raw, source=str(config_path))

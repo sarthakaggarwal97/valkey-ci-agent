@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
+import tempfile
+from pathlib import Path
 
 from scripts.bedrock_client import BedrockClient, BedrockError
 from scripts.config import BotConfig
@@ -97,22 +99,39 @@ def _build_user_prompt(
     return "\n".join(parts)
 
 
-def _validate_patch_applies(diff: str) -> tuple[bool, str]:
+def _validate_patch_applies(diff: str, source_files: dict[str, str]) -> tuple[bool, str]:
     """Check if a patch applies cleanly using `git apply --check`.
 
     Returns (success, error_output).
     """
     try:
-        result = subprocess.run(
-            ["git", "apply", "--check"],
-            input=diff,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0:
-            return True, ""
-        return False, result.stderr.strip()
+        with tempfile.TemporaryDirectory(prefix="ci-bot-patch-check-") as tmpdir:
+            work_dir = Path(tmpdir)
+            subprocess.run(
+                ["git", "init", "-q"],
+                cwd=str(work_dir),
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            for file_path, contents in source_files.items():
+                target = work_dir / file_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(contents)
+
+            result = subprocess.run(
+                ["git", "apply", "--check"],
+                input=diff,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(work_dir),
+            )
+            if result.returncode == 0:
+                return True, ""
+            return False, result.stderr.strip()
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
         return False, str(exc)
 
@@ -224,7 +243,7 @@ class FixGenerator:
                     continue
 
             # Validate patch applies cleanly
-            success, error_output = _validate_patch_applies(diff)
+            success, error_output = _validate_patch_applies(diff, source_files)
             if success:
                 logger.info(
                     "Patch generated successfully on attempt %d/%d "
