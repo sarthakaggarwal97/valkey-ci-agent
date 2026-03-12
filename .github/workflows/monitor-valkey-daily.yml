@@ -25,6 +25,9 @@ permissions:
   contents: write
   id-token: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: monitor-valkey-daily
   cancel-in-progress: false
@@ -35,7 +38,7 @@ jobs:
     timeout-minutes: 90
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-      MONITOR_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      MONITOR_DRY_RUN: ${{ github.event_name != 'workflow_dispatch' && 'true' || github.event.inputs.dry_run || 'true' }}
       MONITOR_MAX_RUNS: ${{ github.event.inputs.max_runs || '14' }}
       MONITOR_VERBOSE: ${{ github.event.inputs.verbose || 'false' }}
       VALKEY_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}

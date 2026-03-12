@@ -26,6 +26,8 @@ def test_monitor_workflow_uses_oidc_and_app_token_support() -> None:
 
     assert workflow["permissions"] == {"contents": "write", "id-token": "write"}
     assert on_block["workflow_dispatch"]["inputs"]["dry_run"]["default"] is True
+    assert workflow["env"]["FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"] is True
+    assert "github.event_name != 'workflow_dispatch'" in job_env["MONITOR_DRY_RUN"]
     assert "VALKEY_GITHUB_TOKEN" in job_env
     assert "VALKEY_GITHUB_APP_ID" in job_env
     assert "VALKEY_GITHUB_APP_PRIVATE_KEY" in job_env

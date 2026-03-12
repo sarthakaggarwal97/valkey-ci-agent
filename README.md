@@ -48,7 +48,9 @@ Required GitHub configuration for this repo:
 - either secret: `VALKEY_GITHUB_TOKEN`
 - or variable: `VALKEY_GITHUB_APP_ID` plus secret: `VALKEY_GITHUB_APP_PRIVATE_KEY`
 
-Manual dispatch defaults to `dry_run=true`. Dry runs do not advance the monitor watermark.
+Scheduled runs stay in `dry_run=true` observation mode and never open PRs to `valkey-io/valkey`.
+
+Opening a PR requires explicit manual approval: trigger the workflow with `dry_run=false`. Dry runs do not advance the monitor watermark.
 
 ## PR review bot
 

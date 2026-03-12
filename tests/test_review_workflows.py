@@ -30,6 +30,7 @@ def test_review_workflow_checks_out_bot_repository() -> None:
     assert "aws_region" in inputs
     assert "AWS_ROLE_ARN" in secrets
     assert "GITHUB_TOKEN" not in secrets
+    assert workflow["env"]["FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"] is True
 
     checkout_step = next(
         step

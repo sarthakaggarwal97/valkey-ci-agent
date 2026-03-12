@@ -30,6 +30,7 @@ def test_analyze_workflow_checks_out_bot_repository() -> None:
     assert "aws_region" in inputs
     assert "AWS_ROLE_ARN" in secrets
     assert "GITHUB_TOKEN" not in secrets
+    assert workflow["env"]["FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"] is True
 
     checkout_step = next(
         step
@@ -87,6 +88,7 @@ def test_ci_workflow_declares_checkout_permissions_and_current_action() -> None:
     workflow = _load_yaml(REPO_ROOT / ".github/workflows/ci.yml")
 
     assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["env"]["FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"] is True
 
     checkout_step = next(
         step

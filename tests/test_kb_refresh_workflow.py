@@ -28,6 +28,7 @@ def test_refresh_workflow_uses_oidc_and_dry_run_dispatch_default() -> None:
     assert dispatch_inputs["missing_only"]["default"] is False
     assert dispatch_inputs["skip_web_sync"]["default"] is False
     assert workflow["permissions"] == {"contents": "read", "id-token": "write"}
+    assert workflow["env"]["FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"] is True
 
     configure_step = next(
         step
