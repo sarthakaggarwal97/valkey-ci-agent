@@ -46,3 +46,17 @@ def test_example_caller_passes_bot_checkout_inputs() -> None:
     reconcile_with = workflow["jobs"]["reconcile"]["with"]
     assert reconcile_with["bot_repository"] == "valkey-io/valkey-ci-bot"
     assert reconcile_with["bot_ref"] == "v1"
+
+
+def test_ci_workflow_declares_checkout_permissions_and_current_action() -> None:
+    workflow = _load_yaml(REPO_ROOT / ".github/workflows/ci.yml")
+
+    assert workflow["permissions"] == {"contents": "read"}
+
+    checkout_step = next(
+        step
+        for step in workflow["jobs"]["test"]["steps"]
+        if step["name"] == "Checkout repository"
+    )
+    assert checkout_step["uses"] == "actions/checkout@v6"
+    assert checkout_step["with"]["persist-credentials"] is False
