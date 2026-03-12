@@ -61,7 +61,7 @@ def _make_root_cause(**overrides) -> RootCauseReport:
 
 
 class TestLoadRuntimeConfig:
-    def test_loads_from_repo_when_local_file_is_missing(self):
+    def test_loads_from_repo_when_local_file_is_missing(self, tmp_path, monkeypatch):
         gh = MagicMock()
         repo = MagicMock()
         repo.default_branch = "main"
@@ -74,6 +74,7 @@ class TestLoadRuntimeConfig:
         )
         repo.get_contents.return_value = contents
         gh.get_repo.return_value = repo
+        monkeypatch.chdir(tmp_path)
 
         cfg = _load_runtime_config(
             gh, "owner/repo", ".github/ci-failure-bot.yml", ref="abc123",
