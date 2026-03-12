@@ -97,6 +97,60 @@ def test_code_reviewer_uses_heavy_model_and_filters_findings() -> None:
     assert kwargs["model_id"] == config.models.heavy_model_id
 
 
+def test_code_reviewer_filters_speculative_and_file_level_findings() -> None:
+    bedrock = MagicMock()
+    bedrock.invoke.return_value = """
+    {
+      "findings": [
+        {
+          "path": "src/failover.c",
+          "line": 14,
+          "severity": "high",
+          "body": "This can leave failover state stale after timeout."
+        },
+        {
+          "path": "src/failover.c",
+          "line": null,
+          "severity": "medium",
+          "body": "The workflow file looks truncated in the review."
+        },
+        {
+          "path": "src/failover.c",
+          "line": 15,
+          "severity": "medium",
+          "body": "There is no evidence this field exists in another model. Verify that definition."
+        },
+        {
+          "path": "src/failover.c",
+          "line": 16,
+          "severity": "medium",
+          "body": "If `_helper` returns a sentinel object, this appends it twice."
+        }
+      ]
+    }
+    """
+    reviewer = CodeReviewer(bedrock)
+    scope = DiffScope(
+        base_sha="base123",
+        head_sha="head456",
+        files=_context().files,
+        incremental=False,
+    )
+
+    findings = reviewer.review(_context(), scope, ReviewerConfig(max_review_comments=5))
+
+    assert [(finding.path, finding.line, finding.body) for finding in findings] == [
+        (
+            "src/failover.c",
+            14,
+            "This can leave failover state stale after timeout.",
+        )
+    ]
+    user_prompt = bedrock.invoke.call_args[0][1]
+    assert "patch/content may be truncated" in user_prompt
+    assert "Do not report that a file, diff, or workflow looks truncated." in user_prompt
+
+
 def test_review_chat_uses_heavy_model() -> None:
     bedrock = MagicMock()
     bedrock.invoke.return_value = "Add a targeted failover timeout regression test."

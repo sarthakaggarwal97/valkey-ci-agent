@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -12,10 +13,34 @@ from scripts.config import RetrievalConfig, ReviewerConfig
 from scripts.models import ChangedFile, DiffScope, PullRequestContext, ReviewFinding
 
 _SYSTEM_PROMPT = """You are a strict code reviewer.
-Return only defect-oriented findings about correctness, regressions,
-security, performance risks, or missing validation.
+Return only high-confidence, defect-oriented findings about correctness,
+regressions, security, performance risks, or missing validation.
+Only report issues that are directly supported by the provided patch/content.
+The provided excerpts may be truncated; never treat missing context as a bug.
+Do not speculate about symbols, methods, fields, workflows, or files that are
+not shown, and do not ask maintainers to verify whether something exists.
+Avoid duplicate or overlapping findings for the same root cause.
 Do not include praise or generic approvals.
 Return valid JSON only."""
+
+_SPECULATIVE_SUBSTRINGS = (
+    "not shown in the diff",
+    "not shown in diff",
+    "there is no evidence",
+    "appears to be cut off",
+    "truncated in the review",
+    "verify whether",
+    "verify that",
+    "verify the full file",
+    "older callers",
+)
+
+_SPECULATIVE_PATTERNS = (
+    re.compile(r"\bif this method does not exist\b"),
+    re.compile(r"\bif the model does not define\b"),
+    re.compile(r"\bif the model doesn't define\b"),
+    re.compile(r"\bif [`_a-zA-Z0-9.()'-]+ returns a\b"),
+)
 
 
 def _extract_json_payload(text: str) -> Any:
@@ -72,10 +97,10 @@ def _serialize_scope(scope: DiffScope, *, max_chars: int = 18_000) -> str:
             f"Deletions: {changed_file.deletions}",
         ]
         if changed_file.patch:
-            chunk.append("Patch:")
+            chunk.append("Patch excerpt (may be truncated):")
             chunk.append(changed_file.patch[:1800])
         if changed_file.contents:
-            chunk.append("Contents:")
+            chunk.append("Contents excerpt (may be truncated):")
             chunk.append(changed_file.contents[:1200])
         rendered = "\n".join(chunk)
         if used + len(rendered) > max_chars:
@@ -83,6 +108,19 @@ def _serialize_scope(scope: DiffScope, *, max_chars: int = 18_000) -> str:
         chunks.append(rendered)
         used += len(rendered)
     return "\n\n".join(chunks)
+
+
+def _normalize_finding_text(text: str) -> str:
+    """Collapse whitespace and lowercase text for filtering and dedupe."""
+    return " ".join(text.lower().split())
+
+
+def _is_speculative_finding(body: str) -> bool:
+    """Reject findings that explicitly depend on missing or unseen evidence."""
+    normalized = _normalize_finding_text(body)
+    if any(marker in normalized for marker in _SPECULATIVE_SUBSTRINGS):
+        return True
+    return any(pattern.search(normalized) for pattern in _SPECULATIVE_PATTERNS)
 
 
 def _build_retrieval_query(pr: PullRequestContext, diff_scope: DiffScope) -> str:
@@ -144,7 +182,7 @@ PR title: {pr.title}
 PR description:
 {pr.body}
 
-Review scope:
+Review scope excerpts (patch/content may be truncated):
 {_serialize_scope(diff_scope)}
 
 {retrieved_context}
@@ -162,6 +200,11 @@ Return JSON in one of these shapes:
 or
 {{ "findings": [ ... ] }}
 
+Only return findings with direct evidence in the shown patch/content excerpts.
+Do not infer missing definitions from other files or from omitted parts of a file.
+Do not report that a file, diff, or workflow looks truncated.
+Do not ask maintainers to verify whether a symbol exists.
+Prefer one strongest finding per root cause; if unsure, return [].
 Do not emit generic praise.
 """
         response = self._bedrock.invoke(
@@ -182,7 +225,9 @@ Do not emit generic praise.
             raise ValueError("Review response did not contain a findings list.")
 
         allowed_paths = {changed_file.path for changed_file in diff_scope.files}
+        reviewable_files = {changed_file.path: changed_file for changed_file in diff_scope.files}
         findings: list[ReviewFinding] = []
+        seen_keys: set[tuple[str, int | None, str]] = set()
         for raw_finding in raw_findings:
             if not isinstance(raw_finding, dict):
                 continue
@@ -198,10 +243,21 @@ Do not emit generic praise.
             ):
                 continue
             line = raw_finding.get("line")
+            if _is_speculative_finding(body):
+                continue
+            changed_file = reviewable_files[path]
+            normalized_body = _normalize_finding_text(body)
+            normalized_line = int(line) if isinstance(line, int) and line > 0 else None
+            if normalized_line is None and changed_file.patch and not changed_file.is_binary:
+                continue
+            dedupe_key = (path, normalized_line, normalized_body)
+            if dedupe_key in seen_keys:
+                continue
+            seen_keys.add(dedupe_key)
             findings.append(
                 ReviewFinding(
                     path=path,
-                    line=int(line) if isinstance(line, int) and line > 0 else None,
+                    line=normalized_line,
                     body=body,
                     severity=str(raw_finding.get("severity", "medium")).strip() or "medium",
                 )
