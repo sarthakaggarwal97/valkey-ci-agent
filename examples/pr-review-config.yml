@@ -8,7 +8,7 @@ reviewer:
   collaborator_only: false
   disable_review: false
   disable_release_notes: false
-  review_simple_changes: false
+  review_simple_changes: true
   review_comment_lgtm: false
   ignore_keyword: "/reviewbot: ignore"
   max_files: 150

@@ -89,7 +89,7 @@ class ReviewerConfig:
     collaborator_only: bool = False
     disable_review: bool = False
     disable_release_notes: bool = False
-    review_simple_changes: bool = False
+    review_simple_changes: bool = True
     review_comment_lgtm: bool = False
     ignore_keyword: str = "/reviewbot: ignore"
     max_files: int = 150
