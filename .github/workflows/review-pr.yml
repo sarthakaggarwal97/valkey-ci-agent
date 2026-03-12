@@ -1,6 +1,26 @@
 name: Review Pull Request
 
 on:
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: "Repository containing the PR (e.g. valkey-io/valkey-fuzzer)"
+        required: true
+        type: string
+      pr_number:
+        description: "Pull request number to review"
+        required: true
+        type: number
+      config_path:
+        description: "Path to the PR reviewer configuration file"
+        required: false
+        type: string
+        default: ".github/pr-review-bot.yml"
+      aws_region:
+        description: "AWS region where Bedrock is available"
+        required: false
+        type: string
+        default: "us-east-1"
   workflow_call:
     inputs:
       config_path:
@@ -47,8 +67,8 @@ jobs:
       - name: Checkout bot repository
         uses: actions/checkout@v6
         with:
-          repository: ${{ inputs.bot_repository }}
-          ref: ${{ inputs.bot_ref }}
+          repository: ${{ inputs.bot_repository || github.repository }}
+          ref: ${{ inputs.bot_ref || github.sha }}
           persist-credentials: false
           fetch-depth: 1
 
@@ -64,7 +84,7 @@ jobs:
       - name: Configure AWS credentials from OIDC role
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN || secrets.CI_BOT_AWS_ROLE_ARN }}
           role-session-name: valkey-pr-review-bot-${{ github.run_id }}
           aws-region: ${{ inputs.aws_region }}
 
@@ -72,9 +92,19 @@ jobs:
         env:
           AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
         run: |
-          python -m scripts.pr_review_main \
-            --repo "${{ github.repository }}" \
-            --config "${{ inputs.config_path }}" \
-            --mode "${{ inputs.mode }}" \
-            --token "${{ github.token }}" \
-            --aws-region "${{ inputs.aws_region }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python -m scripts.pr_review_main \
+              --repo "${{ inputs.target_repo }}" \
+              --pr-number "${{ inputs.pr_number }}" \
+              --config "${{ inputs.config_path }}" \
+              --mode review \
+              --token "${{ secrets.REVIEW_TOKEN || github.token }}" \
+              --aws-region "${{ inputs.aws_region }}"
+          else
+            python -m scripts.pr_review_main \
+              --repo "${{ github.repository }}" \
+              --config "${{ inputs.config_path }}" \
+              --mode "${{ inputs.mode }}" \
+              --token "${{ github.token }}" \
+              --aws-region "${{ inputs.aws_region }}"
+          fi
