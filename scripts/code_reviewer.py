@@ -113,6 +113,42 @@ def _serialize_scope(scope: DiffScope, *, max_chars: int = 18_000) -> str:
     return "\n\n".join(chunks)
 
 
+def _parse_diff_lines(patch: str) -> set[int]:
+    """Extract the set of valid RIGHT-side line numbers from a unified diff."""
+    valid_lines: set[int] = set()
+    current_line = 0
+    for raw_line in patch.splitlines():
+        if raw_line.startswith("@@"):
+            # Parse @@ -old,count +new,count @@
+            match = re.search(r"\+(\d+)", raw_line)
+            if match:
+                current_line = int(match.group(1))
+            continue
+        if raw_line.startswith("-"):
+            # Deleted line — not on the right side
+            continue
+        if raw_line.startswith("+"):
+            valid_lines.add(current_line)
+            current_line += 1
+        else:
+            # Context line
+            valid_lines.add(current_line)
+            current_line += 1
+    return valid_lines
+
+
+def _snap_line_to_diff(line: int, valid_lines: set[int]) -> int | None:
+    """Return the line if it's in the diff, or the closest valid line within 5 lines."""
+    if not valid_lines:
+        return None
+    if line in valid_lines:
+        return line
+    closest = min(valid_lines, key=lambda v: abs(v - line))
+    if abs(closest - line) <= 5:
+        return closest
+    return None
+
+
 def _normalize_finding_text(text: str) -> str:
     """Collapse whitespace and lowercase text for filtering and dedupe."""
     return " ".join(text.lower().split())
@@ -260,6 +296,9 @@ Do not emit generic praise.
             changed_file = reviewable_files[path]
             normalized_body = _normalize_finding_text(body)
             normalized_line = int(line) if isinstance(line, int) and line > 0 else None
+            if normalized_line is not None and changed_file.patch:
+                valid_lines = _parse_diff_lines(changed_file.patch)
+                normalized_line = _snap_line_to_diff(normalized_line, valid_lines)
             dedupe_key = (path, normalized_line, normalized_body)
             if dedupe_key in seen_keys:
                 continue
