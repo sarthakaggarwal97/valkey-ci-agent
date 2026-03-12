@@ -89,7 +89,7 @@ def _looks_like_code(path: str) -> bool:
     }
 
 
-def _serialize_scope(scope: DiffScope, *, max_chars: int = 18_000) -> str:
+def _serialize_scope(scope: DiffScope, *, max_chars: int = 30_000) -> str:
     chunks: list[str] = []
     used = 0
     for changed_file in scope.files:
@@ -100,8 +100,8 @@ def _serialize_scope(scope: DiffScope, *, max_chars: int = 18_000) -> str:
             f"Deletions: {changed_file.deletions}",
         ]
         if changed_file.patch:
-            chunk.append("Patch excerpt (may be truncated):")
-            chunk.append(changed_file.patch[:1800])
+            chunk.append("Patch (unified diff with line numbers — may be truncated):")
+            chunk.append(changed_file.patch[:4000])
         if changed_file.contents:
             chunk.append("Contents excerpt (may be truncated):")
             chunk.append(changed_file.contents[:1200])
@@ -230,7 +230,7 @@ Return JSON in one of these shapes:
 [
   {{
     "path": "relative/path",
-    "line": 123 or null,
+    "line": <line number from the diff's +N side, or null if unsure>,
     "severity": "high|medium|low",
     "body": "single concrete finding"
   }}
@@ -239,12 +239,15 @@ Return JSON in one of these shapes:
 or
 {{ "findings": [ ... ] }}
 
-Only return findings with direct evidence in the shown patch/content excerpts.
-Do not infer missing definitions from other files or from omitted parts of a file.
-Do not report that a file, diff, or workflow looks truncated.
-Do not ask maintainers to verify whether a symbol exists.
-Prefer one strongest finding per root cause; if unsure, return [].
-Do not emit generic praise.
+CRITICAL rules:
+- The "line" field MUST be a line number visible in the unified diff after a "+" or " " (context) marker. Use the @@ hunk header to determine the correct line number. If you cannot identify the exact line, set "line" to null.
+- Only return findings with direct evidence in the shown patch/content excerpts.
+- Do NOT speculate about array sizes, buffer lengths, variable values, or code structure that is not fully visible in the provided excerpts.
+- Do not infer missing definitions from other files or from omitted parts of a file.
+- Do not report that a file, diff, or workflow looks truncated.
+- Do not ask maintainers to verify whether a symbol exists.
+- Prefer one strongest finding per root cause; if unsure, return [].
+- Do not emit generic praise.
 """
         response = self._bedrock.invoke(
             _SYSTEM_PROMPT,
@@ -298,7 +301,16 @@ Do not emit generic praise.
             normalized_line = int(line) if isinstance(line, int) and line > 0 else None
             if normalized_line is not None and changed_file.patch:
                 valid_lines = _parse_diff_lines(changed_file.patch)
-                normalized_line = _snap_line_to_diff(normalized_line, valid_lines)
+                snapped = _snap_line_to_diff(normalized_line, valid_lines)
+                if snapped != normalized_line:
+                    logger.info(
+                        "Line %d for %s snapped to %s (valid lines in diff: %d)",
+                        normalized_line,
+                        path,
+                        snapped,
+                        len(valid_lines),
+                    )
+                normalized_line = snapped
             dedupe_key = (path, normalized_line, normalized_body)
             if dedupe_key in seen_keys:
                 continue
