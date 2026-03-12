@@ -50,7 +50,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: "pip"
@@ -59,7 +59,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Configure AWS credentials from OIDC role
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: valkey-ci-bot-${{ github.run_id }}

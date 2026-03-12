@@ -47,6 +47,13 @@ def test_analyze_workflow_checks_out_bot_repository() -> None:
         for step in workflow["jobs"]["run-pipeline"]["steps"]
         if step["name"] == "Configure AWS credentials from OIDC role"
     )
+    setup_step = next(
+        step
+        for step in workflow["jobs"]["run-pipeline"]["steps"]
+        if step["name"] == "Set up Python 3.11"
+    )
+    assert setup_step["uses"] == "actions/setup-python@v6"
+    assert role_step["uses"] == "aws-actions/configure-aws-credentials@v5"
     assert role_step["with"]["role-to-assume"] == "${{ secrets.AWS_ROLE_ARN }}"
     assert role_step["with"]["aws-region"] == "${{ inputs.aws_region }}"
 
@@ -86,5 +93,11 @@ def test_ci_workflow_declares_checkout_permissions_and_current_action() -> None:
         for step in workflow["jobs"]["test"]["steps"]
         if step["name"] == "Checkout repository"
     )
+    setup_step = next(
+        step
+        for step in workflow["jobs"]["test"]["steps"]
+        if step["name"] == "Set up Python 3.11"
+    )
     assert checkout_step["uses"] == "actions/checkout@v6"
     assert checkout_step["with"]["persist-credentials"] is False
+    assert setup_step["uses"] == "actions/setup-python@v6"

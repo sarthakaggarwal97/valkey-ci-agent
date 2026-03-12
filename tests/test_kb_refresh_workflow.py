@@ -34,7 +34,13 @@ def test_refresh_workflow_uses_oidc_and_dry_run_dispatch_default() -> None:
         for step in workflow["jobs"]["refresh"]["steps"]
         if step["name"] == "Configure AWS credentials from OIDC role"
     )
-    assert configure_step["uses"] == "aws-actions/configure-aws-credentials@v4"
+    setup_step = next(
+        step
+        for step in workflow["jobs"]["refresh"]["steps"]
+        if step["name"] == "Set up Python 3.11"
+    )
+    assert setup_step["uses"] == "actions/setup-python@v6"
+    assert configure_step["uses"] == "aws-actions/configure-aws-credentials@v5"
     assert configure_step["with"]["role-to-assume"] == "${{ secrets.AWS_ROLE_ARN }}"
 
 

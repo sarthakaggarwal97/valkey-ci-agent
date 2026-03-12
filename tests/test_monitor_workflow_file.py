@@ -35,6 +35,18 @@ def test_monitor_workflow_uses_oidc_and_app_token_support() -> None:
         for step in workflow["jobs"]["monitor"]["steps"]
         if step["name"] == "Create target repository GitHub App token"
     )
+    setup_step = next(
+        step
+        for step in workflow["jobs"]["monitor"]["steps"]
+        if step["name"] == "Set up Python 3.11"
+    )
+    configure_step = next(
+        step
+        for step in workflow["jobs"]["monitor"]["steps"]
+        if step["name"] == "Configure AWS credentials from OIDC role"
+    )
+    assert setup_step["uses"] == "actions/setup-python@v6"
+    assert configure_step["uses"] == "aws-actions/configure-aws-credentials@v5"
     assert app_token_step["uses"] == "actions/create-github-app-token@v2"
     assert app_token_step["with"]["owner"] == "valkey-io"
     assert app_token_step["with"]["repositories"] == "valkey"
