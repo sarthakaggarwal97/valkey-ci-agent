@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import PurePosixPath
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from scripts.bedrock_client import PromptClient
 from scripts.bedrock_retriever import BedrockRetriever
@@ -224,15 +227,22 @@ Do not emit generic praise.
         if not isinstance(raw_findings, list):
             raise ValueError("Review response did not contain a findings list.")
 
+        logger.info("LLM returned %d raw finding(s).", len(raw_findings))
+
         allowed_paths = {changed_file.path for changed_file in diff_scope.files}
         reviewable_files = {changed_file.path: changed_file for changed_file in diff_scope.files}
         findings: list[ReviewFinding] = []
         seen_keys: set[tuple[str, int | None, str]] = set()
+        filtered_no_line = 0
+        filtered_speculative = 0
+        filtered_lgtm = 0
+        filtered_path = 0
         for raw_finding in raw_findings:
             if not isinstance(raw_finding, dict):
                 continue
             path = str(raw_finding.get("path", "")).strip()
             if not path or path not in allowed_paths:
+                filtered_path += 1
                 continue
             body = str(raw_finding.get("body", "")).strip()
             if not body:
@@ -241,15 +251,15 @@ Do not emit generic praise.
             if not config.review_comment_lgtm and (
                 "lgtm" in lowered or "looks good" in lowered or "no issues" in lowered
             ):
+                filtered_lgtm += 1
                 continue
             line = raw_finding.get("line")
             if _is_speculative_finding(body):
+                filtered_speculative += 1
                 continue
             changed_file = reviewable_files[path]
             normalized_body = _normalize_finding_text(body)
             normalized_line = int(line) if isinstance(line, int) and line > 0 else None
-            if normalized_line is None and changed_file.patch and not changed_file.is_binary:
-                continue
             dedupe_key = (path, normalized_line, normalized_body)
             if dedupe_key in seen_keys:
                 continue
@@ -262,5 +272,13 @@ Do not emit generic praise.
                     severity=str(raw_finding.get("severity", "medium")).strip() or "medium",
                 )
             )
+
+        logger.info(
+            "Finding filter stats: path=%d, lgtm=%d, speculative=%d, kept=%d",
+            filtered_path,
+            filtered_lgtm,
+            filtered_speculative,
+            len(findings),
+        )
 
         return findings[: config.max_review_comments]
