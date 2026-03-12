@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from scripts.models import FuzzerSignal
 from scripts.monitor_fuzzer_runs import MonitorArgs, monitor
 
 
@@ -82,7 +83,7 @@ def test_monitor_analyzes_new_runs_and_updates_watermark(
             overall_status="anomalous",
             scenario_id="seed-102",
             seed="102",
-            anomalies=[object()],
+            anomalies=[FuzzerSignal(title="Slot coverage drop", severity="high", evidence="coverage fell below threshold")],
             normal_signals=[],
             summary="Slot coverage failed.",
             reproduction_hint="valkey-fuzzer cluster --seed 102",

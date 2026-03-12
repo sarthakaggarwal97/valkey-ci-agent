@@ -37,8 +37,8 @@ def test_review_workflow_checks_out_bot_repository() -> None:
         for step in workflow["jobs"]["review"]["steps"]
         if step["name"] == "Checkout bot repository"
     )
-    assert checkout_step["with"]["repository"] == "${{ inputs.bot_repository }}"
-    assert checkout_step["with"]["ref"] == "${{ inputs.bot_ref }}"
+    assert checkout_step["with"]["repository"] == "${{ inputs.bot_repository || github.repository }}"
+    assert checkout_step["with"]["ref"] == "${{ inputs.bot_ref || github.sha }}"
     assert checkout_step["uses"] == "actions/checkout@v6"
 
     assert workflow["jobs"]["review"]["permissions"]["id-token"] == "write"
@@ -55,7 +55,7 @@ def test_review_workflow_checks_out_bot_repository() -> None:
     )
     assert setup_step["uses"] == "actions/setup-python@v6"
     assert role_step["uses"] == "aws-actions/configure-aws-credentials@v5"
-    assert role_step["with"]["role-to-assume"] == "${{ secrets.AWS_ROLE_ARN }}"
+    assert role_step["with"]["role-to-assume"] == "${{ secrets.AWS_ROLE_ARN || secrets.CI_BOT_AWS_ROLE_ARN }}"
     assert role_step["with"]["aws-region"] == "${{ inputs.aws_region }}"
 
     review_step = next(
