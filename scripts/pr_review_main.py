@@ -16,7 +16,7 @@ if __package__ in {None, ""}:
 import boto3
 from github import Github
 
-from scripts.bedrock_client import BedrockClient, BedrockError, PromptClient
+from scripts.bedrock_client import BedrockClient, PromptClient
 from scripts.bedrock_retriever import BedrockRetriever
 from scripts.code_reviewer import CodeReviewer
 from scripts.comment_publisher import CommentPublisher
@@ -42,31 +42,37 @@ def _load_runtime_reviewer_config(
     *,
     ref: str | None = None,
 ) -> ReviewerConfig:
-    """Load reviewer config from disk when present, otherwise from GitHub."""
-    local_path = Path(config_path)
-    if local_path.exists():
-        return load_reviewer_config(local_path)
-
+    """Load reviewer config from GitHub first, then fall back to local disk."""
     try:
-        repo = gh.get_repo(repo_name)
-        config_ref = ref or repo.default_branch
-        contents = repo.get_contents(config_path, ref=config_ref)
-        if isinstance(contents, list):
-            raise ValueError("Reviewer config path resolved to a directory.")
-        text = contents.decoded_content.decode("utf-8", errors="replace")
-        return load_reviewer_config_text(
-            text,
-            source=f"{repo_name}@{config_ref}:{config_path}",
-        )
+        if repo_name:
+            repo = gh.get_repo(repo_name)
+            config_ref = ref or repo.default_branch
+            contents = repo.get_contents(config_path, ref=config_ref)
+            if isinstance(contents, list):
+                raise ValueError("Reviewer config path resolved to a directory.")
+            text = contents.decoded_content.decode("utf-8", errors="replace")
+            return load_reviewer_config_text(
+                text,
+                source=f"{repo_name}@{config_ref}:{config_path}",
+            )
     except Exception as exc:
         logger.warning(
-            "Could not load reviewer config %s from %s%s: %s. Using defaults.",
+            "Could not load reviewer config %s from %s%s: %s.",
             config_path,
             repo_name,
             f" at {ref}" if ref else "",
             exc,
         )
-        return ReviewerConfig()
+
+    local_path = Path(config_path)
+    if local_path.exists():
+        return load_reviewer_config(local_path)
+
+    logger.warning(
+        "Could not load reviewer config %s locally. Using defaults.",
+        config_path,
+    )
+    return ReviewerConfig()
 
 
 def _select_review_files(
@@ -107,12 +113,15 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Review a pull request with Bedrock.")
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument("--config", default=".github/pr-review-bot.yml")
+    parser.add_argument("--pr-number", type=int, default=None)
     parser.add_argument(
         "--mode",
         default="auto",
         choices=["auto", "review", "chat", "skip"],
     )
     parser.add_argument("--token", required=True)
+    parser.add_argument("--state-token", default="")
+    parser.add_argument("--state-repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument("--aws-region", default=os.environ.get("AWS_DEFAULT_REGION", ""))
     parser.add_argument(
         "--event-name",
@@ -133,19 +142,29 @@ def run(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
 
-    if not args.event_name or not args.event_path:
-        logger.error("Both --event-name and --event-path are required.")
-        return 2
-
     gh = Github(args.token)
-    event = load_event_from_path(args.event_name, args.event_path)
-    repo_name = args.repo or event.repo
-    summary = ReviewWorkflowSummary(mode=args.mode if args.mode != "auto" else "router")
-    router = PREventRouter()
-    resolved_mode = router.classify_event(event)
-    if args.mode != "auto" and args.mode != resolved_mode and resolved_mode != "skip":
-        resolved_mode = args.mode
-    summary.mode = resolved_mode
+    state_gh = Github(args.state_token) if args.state_token else gh
+    manual_pr_number = args.pr_number
+    event = None
+    repo_name = args.repo
+    if manual_pr_number is not None:
+        if args.mode not in {"auto", "review"}:
+            logger.error("Manual PR review only supports --mode auto or --mode review.")
+            return 2
+        resolved_mode = "review"
+        summary = ReviewWorkflowSummary(mode=resolved_mode)
+    else:
+        if not args.event_name or not args.event_path:
+            logger.error("Both --event-name and --event-path are required.")
+            return 2
+        event = load_event_from_path(args.event_name, args.event_path)
+        repo_name = args.repo or event.repo
+        summary = ReviewWorkflowSummary(mode=args.mode if args.mode != "auto" else "router")
+        router = PREventRouter()
+        resolved_mode = router.classify_event(event)
+        if args.mode != "auto" and args.mode != resolved_mode and resolved_mode != "skip":
+            resolved_mode = args.mode
+        summary.mode = resolved_mode
 
     if not repo_name:
         summary.add_result("preflight", "failed", "missing-repository")
@@ -153,16 +172,17 @@ def run(argv: list[str] | None = None) -> int:
         return 2
 
     config = _load_runtime_reviewer_config(gh, repo_name, args.config)
-    gate = PermissionGate(gh, github_retries=config.github_retries)
-    allowed, reason = gate.may_process(event, config)
     if not config.enabled:
         summary.add_result("preflight", "skipped", "disabled")
         summary.write()
         return 0
-    if not allowed:
-        summary.add_result("preflight", "skipped", reason)
-        summary.write()
-        return 0
+    if event is not None:
+        gate = PermissionGate(gh, github_retries=config.github_retries)
+        allowed, reason = gate.may_process(event, config)
+        if not allowed:
+            summary.add_result("preflight", "skipped", reason)
+            summary.write()
+            return 0
 
     rate_limiter = RateLimiter(
         config=type(
@@ -176,6 +196,8 @@ def run(argv: list[str] | None = None) -> int:
         )(),
         github_client=gh,
         repo_full_name=repo_name,
+        state_github_client=state_gh,
+        state_repo_full_name=args.state_repo or repo_name,
     )
     rate_limiter.load()
 
@@ -199,12 +221,17 @@ def run(argv: list[str] | None = None) -> int:
         )
     fetcher = PRContextFetcher(gh, github_retries=config.github_retries)
     publisher = CommentPublisher(gh, github_retries=config.github_retries)
-    state_store = ReviewStateStore(gh, repo_name)
+    state_store = ReviewStateStore(state_gh, args.state_repo or repo_name)
 
     had_failure = False
 
     try:
-        pr_context = fetcher.fetch(repo_name, event.pr_number or 0)
+        if manual_pr_number is not None:
+            pr_number = manual_pr_number
+        else:
+            assert event is not None
+            pr_number = event.pr_number or 0
+        pr_context = fetcher.fetch(repo_name, pr_number)
         if config.ignore_keyword and config.ignore_keyword in (pr_context.body or ""):
             summary.add_result("preflight", "skipped", "ignored-by-keyword")
             summary.write()
@@ -217,6 +244,7 @@ def run(argv: list[str] | None = None) -> int:
         current_state = state_store.load(repo_name, pr_context.number)
 
         if resolved_mode == "chat":
+            assert event is not None
             if event.comment_id is None:
                 summary.add_result("chat", "skipped", "missing-comment-id")
                 summary.write()

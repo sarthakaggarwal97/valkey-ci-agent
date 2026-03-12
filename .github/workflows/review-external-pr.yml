@@ -1,0 +1,123 @@
+name: Review External Pull Request
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: "Repository containing the pull request to review (owner/repo)"
+        required: true
+        type: string
+      pr_number:
+        description: "Pull request number to review"
+        required: true
+        type: string
+      config_path:
+        description: "Reviewer config path. Target repo is checked first, then this bot repo."
+        required: false
+        default: ".github/pr-review-bot.yml"
+        type: string
+      aws_region:
+        description: "AWS region where Bedrock is available"
+        required: false
+        default: "us-east-1"
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: review-external-pr-${{ github.event.inputs.target_repo }}-${{ github.event.inputs.pr_number }}
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ github.event.inputs.aws_region || vars.AWS_REGION || 'us-east-1' }}
+      TARGET_REPO: ${{ github.event.inputs.target_repo }}
+      TARGET_PR_NUMBER: ${{ github.event.inputs.pr_number }}
+      TARGET_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+      TARGET_GITHUB_APP_ID: ${{ vars.VALKEY_GITHUB_APP_ID || '' }}
+      TARGET_GITHUB_APP_PRIVATE_KEY: ${{ secrets.VALKEY_GITHUB_APP_PRIVATE_KEY }}
+    steps:
+      - name: Check out bot repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate target repository authentication inputs
+        if: ${{ env.TARGET_GITHUB_TOKEN == '' && (env.TARGET_GITHUB_APP_ID == '' || env.TARGET_GITHUB_APP_PRIVATE_KEY == '') }}
+        run: |
+          echo "Configure either VALKEY_GITHUB_TOKEN or VALKEY_GITHUB_APP_ID plus VALKEY_GITHUB_APP_PRIVATE_KEY." >&2
+          exit 1
+
+      - name: Resolve target repository
+        id: target-repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${TARGET_REPO%%/*}"
+          repository="${TARGET_REPO#*/}"
+          if [[ -z "${owner}" || -z "${repository}" || "${owner}" == "${repository}" ]]; then
+            echo "Expected TARGET_REPO in owner/repo format, got '${TARGET_REPO}'." >&2
+            exit 1
+          fi
+          echo "owner=${owner}" >> "$GITHUB_OUTPUT"
+          echo "repository=${repository}" >> "$GITHUB_OUTPUT"
+
+      - name: Create target repository GitHub App token
+        id: app-token
+        if: ${{ env.TARGET_GITHUB_TOKEN == '' }}
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ env.TARGET_GITHUB_APP_ID }}
+          private-key: ${{ env.TARGET_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ steps.target-repo.outputs.owner }}
+          repositories: ${{ steps.target-repo.outputs.repository }}
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Select target repository token
+        id: target-token
+        shell: bash
+        run: |
+          if [[ -n "${TARGET_GITHUB_TOKEN}" ]]; then
+            echo "token=${TARGET_GITHUB_TOKEN}" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=${{ steps.app-token.outputs.token }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials from OIDC role
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: external-pr-review-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Review target pull request
+        shell: bash
+        run: |
+          python -m scripts.pr_review_main \
+            --repo "${TARGET_REPO}" \
+            --pr-number "${TARGET_PR_NUMBER}" \
+            --config "${{ github.event.inputs.config_path || '.github/pr-review-bot.yml' }}" \
+            --mode review \
+            --token "${{ steps.target-token.outputs.token }}" \
+            --state-token "${{ github.token }}" \
+            --state-repo "${{ github.repository }}" \
+            --aws-region "${AWS_REGION}"

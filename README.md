@@ -99,3 +99,18 @@ Example consumer-repo files:
 
 - `examples/pr-review-caller-workflow.yml`
 - `examples/pr-review-config.yml`
+
+For fork or cross-repo testing, this repo also includes [`.github/workflows/review-external-pr.yml`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.github/workflows/review-external-pr.yml).
+
+That workflow lets you dispatch a one-off review against any `owner/repo#PR` reachable by your GitHub token or GitHub App installation. It does not require adding workflow files or config files to the repository that owns the PR. The reviewer still posts summary and review comments on the target PR, but its incremental state is stored on this bot repo's `bot-data` branch instead of the target repo.
+
+Cross-repo/manual review uses:
+
+- secret: `AWS_ROLE_ARN`
+- either secret: `VALKEY_GITHUB_TOKEN`
+- or variable: `VALKEY_GITHUB_APP_ID` plus secret: `VALKEY_GITHUB_APP_PRIVATE_KEY`
+
+Config loading for the reviewer now checks the target repo first, then falls back to this bot repo's checked-in config path. That means:
+
+- if the target repo already has `.github/pr-review-bot.yml`, it is honored
+- if it does not, the bot repo's [`.github/pr-review-bot.yml`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.github/pr-review-bot.yml) is used as the default

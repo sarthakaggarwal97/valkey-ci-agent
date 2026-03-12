@@ -77,3 +77,65 @@ def test_example_pr_review_caller_passes_bot_checkout_inputs() -> None:
     review_secrets = workflow["jobs"]["review"]["secrets"]
     assert review_secrets["AWS_ROLE_ARN"] == "${{ secrets.CI_BOT_AWS_ROLE_ARN }}"
     assert "GITHUB_TOKEN" not in review_secrets
+
+
+def test_external_review_workflow_supports_cross_repo_dispatch() -> None:
+    workflow = _load_yaml(REPO_ROOT / ".github/workflows/review-external-pr.yml")
+    on_block = _get_on_block(workflow)
+    inputs = on_block["workflow_dispatch"]["inputs"]
+    job = workflow["jobs"]["review"]
+    job_env = job["env"]
+
+    assert workflow["permissions"] == {"contents": "write", "id-token": "write"}
+    assert workflow["env"]["FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"] is True
+    assert inputs["target_repo"]["required"] is True
+    assert inputs["pr_number"]["required"] is True
+    assert inputs["config_path"]["default"] == ".github/pr-review-bot.yml"
+    assert inputs["aws_region"]["default"] == "us-east-1"
+    assert job["concurrency"]["group"] == (
+        "review-external-pr-${{ github.event.inputs.target_repo }}-"
+        "${{ github.event.inputs.pr_number }}"
+    )
+    assert "TARGET_GITHUB_TOKEN" in job_env
+    assert "TARGET_GITHUB_APP_ID" in job_env
+    assert "TARGET_GITHUB_APP_PRIVATE_KEY" in job_env
+
+    resolve_step = next(
+        step
+        for step in job["steps"]
+        if step["name"] == "Resolve target repository"
+    )
+    app_token_step = next(
+        step
+        for step in job["steps"]
+        if step["name"] == "Create target repository GitHub App token"
+    )
+    configure_step = next(
+        step
+        for step in job["steps"]
+        if step["name"] == "Configure AWS credentials from OIDC role"
+    )
+    review_step = next(
+        step
+        for step in job["steps"]
+        if step["name"] == "Review target pull request"
+    )
+
+    assert "TARGET_REPO" in resolve_step["run"]
+    assert app_token_step["uses"] == "actions/create-github-app-token@v2"
+    assert app_token_step["with"]["owner"] == "${{ steps.target-repo.outputs.owner }}"
+    assert app_token_step["with"]["repositories"] == "${{ steps.target-repo.outputs.repository }}"
+    assert app_token_step["with"]["permission-contents"] == "read"
+    assert app_token_step["with"]["permission-pull-requests"] == "write"
+    assert configure_step["uses"] == "aws-actions/configure-aws-credentials@v5"
+    assert configure_step["with"]["role-to-assume"] == "${{ secrets.AWS_ROLE_ARN }}"
+
+    review_script = review_step["run"]
+    assert "python -m scripts.pr_review_main" in review_script
+    assert '--pr-number "${TARGET_PR_NUMBER}"' in review_script
+    assert '--state-token "${{ github.token }}"' in review_script
+    assert '--state-repo "${{ github.repository }}"' in review_script
+
+    for step in job["steps"]:
+        if "if" in step:
+            assert "secrets." not in step["if"]

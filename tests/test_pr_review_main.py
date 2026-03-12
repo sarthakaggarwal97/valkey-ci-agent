@@ -13,7 +13,12 @@ from scripts.models import (
     ReviewState,
     SummaryResult,
 )
-from scripts.pr_review_main import _filtered_context, _select_review_files, run
+from scripts.pr_review_main import (
+    _filtered_context,
+    _load_runtime_reviewer_config,
+    _select_review_files,
+    run,
+)
 
 
 def _event_file(tmp_path: Path, payload: dict) -> Path:
@@ -85,6 +90,37 @@ def test_filtered_context_restricts_files() -> None:
     filtered = _filtered_context(_context(), {"src/failover.c"})
 
     assert [changed_file.path for changed_file in filtered.files] == ["src/failover.c"]
+
+
+def test_load_runtime_reviewer_config_prefers_repository_file() -> None:
+    gh = MagicMock()
+    repo = gh.get_repo.return_value
+    repo.default_branch = "main"
+    repo.get_contents.return_value = MagicMock(decoded_content=b"enabled: true\n")
+
+    config = _load_runtime_reviewer_config(
+        gh,
+        "owner/repo",
+        ".github/pr-review-bot.yml",
+    )
+
+    assert config.enabled is True
+    repo.get_contents.assert_called_once_with(".github/pr-review-bot.yml", ref="main")
+
+
+def test_load_runtime_reviewer_config_falls_back_to_local_file(tmp_path) -> None:
+    config_path = tmp_path / "pr-review.yml"
+    config_path.write_text("enabled: false\n", encoding="utf-8")
+    gh = MagicMock()
+    gh.get_repo.side_effect = RuntimeError("missing target config")
+
+    config = _load_runtime_reviewer_config(
+        gh,
+        "owner/repo",
+        str(config_path),
+    )
+
+    assert config.enabled is False
 
 
 @patch("scripts.pr_review_main.boto3.client")
@@ -170,6 +206,87 @@ def test_run_review_mode_posts_summary_and_review(
     publisher.upsert_summary.assert_called_once()
     publisher.publish_review_comments.assert_called_once()
     state_store.save.assert_called_once()
+
+
+@patch("scripts.pr_review_main.boto3.client")
+@patch("scripts.pr_review_main.Github")
+@patch("scripts.pr_review_main.RateLimiter")
+@patch("scripts.pr_review_main.ReviewStateStore")
+@patch("scripts.pr_review_main.CommentPublisher")
+@patch("scripts.pr_review_main.PRContextFetcher")
+def test_run_manual_review_mode_uses_bot_repo_state(
+    mock_fetcher_cls,
+    mock_publisher_cls,
+    mock_state_store_cls,
+    mock_rate_limiter_cls,
+    mock_github_cls,
+    _mock_boto_client,
+) -> None:
+    context = _context()
+    context.repo = "fork-owner/valkey"
+
+    fetcher = mock_fetcher_cls.return_value
+    fetcher.fetch.return_value = context
+    fetcher.hydrate_contents.side_effect = lambda hydrated_context, _paths: hydrated_context
+    fetcher.build_diff_scope.return_value = MagicMock(files=context.files)
+
+    publisher = mock_publisher_cls.return_value
+    publisher.upsert_summary.return_value = 99
+    publisher.publish_review_comments.return_value = []
+
+    mock_state_store_cls.return_value.load.return_value = None
+    mock_rate_limiter_cls.return_value.load.return_value = None
+    mock_rate_limiter_cls.return_value.save.return_value = None
+
+    target_gh = MagicMock()
+    state_gh = MagicMock()
+    mock_github_cls.side_effect = [target_gh, state_gh]
+
+    with patch(
+        "scripts.pr_review_main._load_runtime_reviewer_config",
+        return_value=ReviewerConfig(),
+    ), patch(
+        "scripts.pr_review_main.PRSummarizer"
+    ) as mock_summarizer_cls, patch(
+        "scripts.pr_review_main.CodeReviewer"
+    ) as mock_reviewer_cls:
+        mock_summarizer_cls.return_value.summarize.return_value = SummaryResult(
+            walkthrough="Summary",
+            file_groups_markdown="- Core",
+            release_notes="Release note",
+        )
+        mock_reviewer_cls.return_value.classify_simple_change.return_value = False
+        mock_reviewer_cls.return_value.review.return_value = []
+
+        exit_code = run(
+            [
+                "--repo",
+                "fork-owner/valkey",
+                "--pr-number",
+                "17",
+                "--mode",
+                "review",
+                "--token",
+                "target-token",
+                "--state-token",
+                "state-token",
+                "--state-repo",
+                "sarthakaggarwal97/valkey-ci-bot",
+            ]
+        )
+
+    assert exit_code == 0
+    fetcher.fetch.assert_called_once_with("fork-owner/valkey", 17)
+    mock_state_store_cls.assert_called_once_with(
+        state_gh,
+        "sarthakaggarwal97/valkey-ci-bot",
+    )
+    rate_kwargs = mock_rate_limiter_cls.call_args.kwargs
+    assert rate_kwargs["github_client"] is target_gh
+    assert rate_kwargs["state_github_client"] is state_gh
+    assert rate_kwargs["state_repo_full_name"] == "sarthakaggarwal97/valkey-ci-bot"
+    publisher.upsert_summary.assert_called_once()
+    publisher.publish_review_comments.assert_called_once()
 
 
 @patch("scripts.pr_review_main.boto3.client")
