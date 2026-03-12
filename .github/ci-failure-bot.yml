@@ -1,0 +1,4 @@
+bedrock:
+  model_id: "anthropic.claude-sonnet-4-20250514"
+  max_input_tokens: 100000
+  max_output_tokens: 4096
