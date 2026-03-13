@@ -30,9 +30,13 @@ def test_get_job_log_uses_http_fallback_when_token_present(monkeypatch) -> None:
         def read(self) -> bytes:
             return b"from-http"
 
+    class _FakeOpener:
+        def open(self, request, timeout=60):
+            return _Response()
+
     monkeypatch.setattr(
-        "scripts.log_retriever.urlopen",
-        lambda request, timeout=60: _Response(),
+        "scripts.log_retriever.build_opener",
+        lambda *args: _FakeOpener(),
     )
 
     retriever = LogRetriever(github_client, token="secret-token")
