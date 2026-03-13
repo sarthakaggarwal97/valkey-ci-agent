@@ -1,26 +1,6 @@
 name: Review Pull Request
 
 on:
-  workflow_dispatch:
-    inputs:
-      target_repo:
-        description: "Repository containing the PR (e.g. valkey-io/valkey-fuzzer)"
-        required: true
-        type: string
-      pr_number:
-        description: "Pull request number to review"
-        required: true
-        type: number
-      config_path:
-        description: "Path to the PR reviewer configuration file"
-        required: false
-        type: string
-        default: ".github/pr-review-bot.yml"
-      aws_region:
-        description: "AWS region where Bedrock is available"
-        required: false
-        type: string
-        default: "us-east-1"
   workflow_call:
     inputs:
       config_path:
@@ -92,19 +72,9 @@ jobs:
         env:
           AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            python -m scripts.pr_review_main \
-              --repo "${{ inputs.target_repo }}" \
-              --pr-number "${{ inputs.pr_number }}" \
-              --config "${{ inputs.config_path }}" \
-              --mode review \
-              --token "${{ secrets.REVIEW_TOKEN || github.token }}" \
-              --aws-region "${{ inputs.aws_region }}"
-          else
-            python -m scripts.pr_review_main \
-              --repo "${{ github.repository }}" \
-              --config "${{ inputs.config_path }}" \
-              --mode "${{ inputs.mode }}" \
-              --token "${{ github.token }}" \
-              --aws-region "${{ inputs.aws_region }}"
-          fi
+          python -m scripts.pr_review_main \
+            --repo "${{ github.repository }}" \
+            --config "${{ inputs.config_path }}" \
+            --mode "${{ inputs.mode }}" \
+            --token "${{ github.token }}" \
+            --aws-region "${{ inputs.aws_region }}"
