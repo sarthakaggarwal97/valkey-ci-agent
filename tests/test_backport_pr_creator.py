@@ -1,0 +1,315 @@
+"""Property-based tests for scripts.backport_pr_creator.BackportPRCreator."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock, PropertyMock
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
+from scripts.backport_models import BackportPRContext, ResolutionResult
+from scripts.backport_pr_creator import BackportPRCreator
+from scripts.backport_utils import build_branch_name
+
+
+# ── Shared strategies ─────────────────────────────────────────────────
+
+_safe_text = st.text(
+    alphabet=st.characters(blacklist_categories=("Cs",)),
+    min_size=1,
+    max_size=200,
+)
+
+_sha_strategy = st.text(
+    alphabet="0123456789abcdef",
+    min_size=7,
+    max_size=40,
+)
+
+_pr_context_strategy = st.builds(
+    BackportPRContext,
+    source_pr_number=st.integers(min_value=1, max_value=999_999),
+    source_pr_title=_safe_text,
+    source_pr_body=_safe_text,
+    source_pr_url=st.from_regex(r"https://github\.com/[a-z]+/[a-z]+/pull/[0-9]+", fullmatch=True),
+    source_pr_diff=_safe_text,
+    target_branch=_safe_text,
+    commits=st.lists(_sha_strategy, min_size=1, max_size=5),
+    repo_full_name=_safe_text,
+)
+
+_resolved_result_strategy = st.builds(
+    ResolutionResult,
+    path=st.from_regex(r"src/[a-z_]+\.[ch]", fullmatch=True),
+    resolved_content=_safe_text,
+    resolution_summary=_safe_text,
+    tokens_used=st.integers(min_value=0, max_value=100_000),
+    attempts=st.integers(min_value=1, max_value=5),
+)
+
+_unresolved_result_strategy = st.builds(
+    ResolutionResult,
+    path=st.from_regex(r"src/[a-z_]+\.[ch]", fullmatch=True),
+    resolved_content=st.none(),
+    resolution_summary=_safe_text,
+    tokens_used=st.integers(min_value=0, max_value=100_000),
+    attempts=st.integers(min_value=1, max_value=5),
+)
+
+
+# ---------------------------------------------------------------------------
+# Feature: backport-bot, Property 4: PR body contains all required sections
+# ---------------------------------------------------------------------------
+
+
+class TestPRBodyCompletenessProperty:
+    """
+    **Validates: Requirements 4.4, 5.3**
+
+    For any BackportPRContext and list of ResolutionResults (including cases
+    where some files were resolved and some were not), the generated PR body
+    should contain: a link to the source PR, the list of cherry-picked commit
+    SHAs, whether conflicts were encountered, the resolution method for each
+    file, a per-file summary for each LLM-resolved file, and a disclaimer
+    about LLM-resolved conflicts requiring human review (when any file was
+    LLM-resolved).
+    """
+
+    @given(
+        context=_pr_context_strategy,
+        resolved=st.lists(_resolved_result_strategy, min_size=1, max_size=5),
+        unresolved=st.lists(_unresolved_result_strategy, min_size=0, max_size=3),
+    )
+    @settings(max_examples=100, deadline=None)
+    def test_body_with_conflicts_and_mixed_results(
+        self,
+        context: BackportPRContext,
+        resolved: list[ResolutionResult],
+        unresolved: list[ResolutionResult],
+    ) -> None:
+        """When conflicts occurred and some files were LLM-resolved, the body
+        must contain all required sections including the human review disclaimer."""
+        all_results = resolved + unresolved
+        body = BackportPRCreator.build_pr_body(
+            context, had_conflicts=True, resolution_results=all_results,
+        )
+
+        # Source PR link
+        assert context.source_pr_url in body
+
+        # Cherry-picked commit SHAs
+        for sha in context.commits:
+            assert sha in body
+
+        # Conflict status indicated
+        assert "conflict" in body.lower()
+
+        # Per-file resolution details
+        for result in all_results:
+            assert result.path in body
+            assert result.resolution_summary in body
+
+        # Human review disclaimer (at least one file was LLM-resolved)
+        assert "human review" in body.lower()
+
+    @given(context=_pr_context_strategy)
+    @settings(max_examples=100, deadline=None)
+    def test_body_without_conflicts(
+        self,
+        context: BackportPRContext,
+    ) -> None:
+        """When cherry-pick was clean, body still has source link and commits."""
+        body = BackportPRCreator.build_pr_body(
+            context, had_conflicts=False, resolution_results=None,
+        )
+
+        # Source PR link
+        assert context.source_pr_url in body
+
+        # Cherry-picked commit SHAs
+        for sha in context.commits:
+            assert sha in body
+
+        # No conflict markers section — but conflict status is still mentioned
+        assert "conflict" in body.lower()
+
+        # No human review disclaimer when no LLM resolution
+        assert "human review" not in body.lower() or "no" in body.lower()
+
+    @given(
+        context=_pr_context_strategy,
+        unresolved=st.lists(_unresolved_result_strategy, min_size=1, max_size=5),
+    )
+    @settings(max_examples=100, deadline=None)
+    def test_body_with_all_unresolved(
+        self,
+        context: BackportPRContext,
+        unresolved: list[ResolutionResult],
+    ) -> None:
+        """When all files are unresolved, no human review disclaimer is needed."""
+        body = BackportPRCreator.build_pr_body(
+            context, had_conflicts=True, resolution_results=unresolved,
+        )
+
+        # Source PR link
+        assert context.source_pr_url in body
+
+        # Cherry-picked commit SHAs
+        for sha in context.commits:
+            assert sha in body
+
+        # Per-file details present
+        for result in unresolved:
+            assert result.path in body
+            assert result.resolution_summary in body
+
+        # No human review disclaimer when no file was LLM-resolved
+        assert "human review" not in body.lower()
+
+
+# ---------------------------------------------------------------------------
+# Feature: backport-bot, Property 13: Duplicate detection uses branch naming convention
+# ---------------------------------------------------------------------------
+
+
+class TestDuplicateDetectionProperty:
+    """
+    **Validates: Requirements 6.1, 6.3**
+
+    For any source PR number and target branch, the duplicate detection logic
+    should identify an existing PR as a duplicate if and only if its head
+    branch matches the ``backport/<source-pr-number>-to-<target-branch>``
+    pattern.
+    """
+
+    @given(
+        source_pr_number=st.integers(min_value=1, max_value=999_999),
+        target_branch=st.text(
+            alphabet=st.characters(
+                whitelist_categories=("L", "N"),
+                whitelist_characters=".-_/",
+            ),
+            min_size=1,
+            max_size=50,
+        ),
+    )
+    @settings(max_examples=100, deadline=None)
+    def test_detects_duplicate_when_branch_matches(
+        self,
+        source_pr_number: int,
+        target_branch: str,
+    ) -> None:
+        """check_duplicate returns a PR URL when an open PR has the matching
+        head branch."""
+        expected_branch = build_branch_name(source_pr_number, target_branch)
+
+        # Mock GitHub client
+        mock_github = MagicMock()
+        mock_repo = MagicMock()
+        mock_github.get_repo.return_value = mock_repo
+
+        # Mock repo.owner.login
+        type(mock_repo.owner).login = PropertyMock(return_value="valkey-io")
+
+        # Mock an open PR with matching head branch
+        mock_pr = MagicMock()
+        mock_pr.html_url = f"https://github.com/valkey-io/valkey/pull/999"
+
+        mock_repo.get_pulls.return_value = [mock_pr]
+
+        creator = BackportPRCreator(mock_github, "valkey-io/valkey")
+        result = creator.check_duplicate(source_pr_number, target_branch)
+
+        # Should find the duplicate
+        assert result == mock_pr.html_url
+
+        # Verify the search used the correct branch name pattern
+        mock_repo.get_pulls.assert_called_once_with(
+            state="open",
+            head=f"valkey-io:{expected_branch}",
+        )
+
+    @given(
+        source_pr_number=st.integers(min_value=1, max_value=999_999),
+        target_branch=st.text(
+            alphabet=st.characters(
+                whitelist_categories=("L", "N"),
+                whitelist_characters=".-_/",
+            ),
+            min_size=1,
+            max_size=50,
+        ),
+    )
+    @settings(max_examples=100, deadline=None)
+    def test_returns_none_when_no_matching_pr(
+        self,
+        source_pr_number: int,
+        target_branch: str,
+    ) -> None:
+        """check_duplicate returns None when no PR has the matching head branch."""
+        expected_branch = build_branch_name(source_pr_number, target_branch)
+
+        mock_github = MagicMock()
+        mock_repo = MagicMock()
+        mock_github.get_repo.return_value = mock_repo
+        type(mock_repo.owner).login = PropertyMock(return_value="valkey-io")
+
+        # No open or closed PRs match
+        mock_repo.get_pulls.return_value = []
+
+        creator = BackportPRCreator(mock_github, "valkey-io/valkey")
+        result = creator.check_duplicate(source_pr_number, target_branch)
+
+        assert result is None
+
+        # Verify both open and closed states were searched with correct branch
+        calls = mock_repo.get_pulls.call_args_list
+        assert len(calls) == 2
+        assert calls[0].kwargs == {"state": "open", "head": f"valkey-io:{expected_branch}"}
+        assert calls[1].kwargs == {"state": "closed", "head": f"valkey-io:{expected_branch}"}
+
+    @given(
+        source_pr_number=st.integers(min_value=1, max_value=999_999),
+        target_branch=st.text(
+            alphabet=st.characters(
+                whitelist_categories=("L", "N"),
+                whitelist_characters=".-_/",
+            ),
+            min_size=1,
+            max_size=50,
+        ),
+    )
+    @settings(max_examples=100, deadline=None)
+    def test_detects_closed_duplicate(
+        self,
+        source_pr_number: int,
+        target_branch: str,
+    ) -> None:
+        """check_duplicate finds recently closed PRs as duplicates too
+        (handles label removal and re-addition)."""
+        expected_branch = build_branch_name(source_pr_number, target_branch)
+
+        mock_github = MagicMock()
+        mock_repo = MagicMock()
+        mock_github.get_repo.return_value = mock_repo
+        type(mock_repo.owner).login = PropertyMock(return_value="valkey-io")
+
+        mock_closed_pr = MagicMock()
+        mock_closed_pr.html_url = "https://github.com/valkey-io/valkey/pull/888"
+
+        # No open PRs, but a closed one matches
+        mock_repo.get_pulls.side_effect = [
+            [],  # open search returns nothing
+            [mock_closed_pr],  # closed search finds one
+        ]
+
+        creator = BackportPRCreator(mock_github, "valkey-io/valkey")
+        result = creator.check_duplicate(source_pr_number, target_branch)
+
+        assert result == mock_closed_pr.html_url
+
+        # Verify both searches used the correct branch name
+        calls = mock_repo.get_pulls.call_args_list
+        assert len(calls) == 2
+        assert calls[0].kwargs == {"state": "open", "head": f"valkey-io:{expected_branch}"}
+        assert calls[1].kwargs == {"state": "closed", "head": f"valkey-io:{expected_branch}"}

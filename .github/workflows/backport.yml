@@ -1,0 +1,96 @@
+name: Backport PR
+
+on:
+  workflow_call:
+    inputs:
+      source_pr_number:
+        description: "The merged PR number to backport"
+        required: true
+        type: number
+      repo_full_name:
+        description: "Full repository name (owner/repo) containing the source PR"
+        required: true
+        type: string
+      target_branch:
+        description: "Target release branch to cherry-pick onto (e.g. 8.1)"
+        required: true
+        type: string
+      config_path:
+        description: "Path to the backport bot configuration file in the consumer repo"
+        required: false
+        type: string
+        default: ".github/backport-bot.yml"
+      bot_repository:
+        description: "Repository containing the backport bot code"
+        required: false
+        type: string
+        default: "valkey-io/valkey-ci-bot"
+      bot_ref:
+        description: "Git ref of the backport bot repository to check out"
+        required: false
+        type: string
+        default: "v1"
+      aws_region:
+        description: "AWS region where Bedrock is available"
+        required: false
+        type: string
+        default: "us-east-1"
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  backport:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+      id-token: write
+    steps:
+      - name: Checkout bot repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.bot_repository }}
+          ref: ${{ inputs.bot_ref }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Checkout target repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repo_full_name }}
+          path: target-repo
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure AWS credentials from OIDC role
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: valkey-backport-bot-${{ github.run_id }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Run backport pipeline
+        env:
+          AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
+        run: |
+          python -m scripts.backport_main \
+            --repo "${{ inputs.repo_full_name }}" \
+            --pr-number "${{ inputs.source_pr_number }}" \
+            --target-branch "${{ inputs.target_branch }}" \
+            --config "${{ inputs.config_path }}" \
+            --token "${{ github.token }}" \
+            --aws-region "${{ inputs.aws_region }}"

@@ -114,3 +114,63 @@ Config loading for the reviewer now checks the target repo first, then falls bac
 
 - if the target repo already has `.github/pr-review-bot.yml`, it is honored
 - if it does not, the bot repo's [`.github/pr-review-bot.yml`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.github/pr-review-bot.yml) is used as the default
+
+## Backport bot
+
+The repository includes a reusable backport workflow at `.github/workflows/backport.yml`.
+
+When a maintainer adds a `backport <branch>` label to a merged PR in `valkey-io/valkey`, a caller workflow in that repo triggers this bot. The bot cherry-picks the merged PR's commits onto the target release branch and opens a backport PR. If the cherry-pick produces merge conflicts, the bot uses Amazon Bedrock to resolve them, applying the original PR's intent to the diverged codebase.
+
+The pipeline:
+
+1. validates the target branch exists and no duplicate backport PR is open
+2. checks the daily rate limit (default 10 PRs per 24 hours)
+3. clones the repo, cherry-picks onto a `backport/<pr>-to-<branch>` branch
+4. if conflicts arise, resolves them file-by-file using Bedrock (whitespace-only conflicts are resolved without LLM calls)
+5. pushes the branch and opens a backport PR with labels, conflict details, and per-file resolution summaries
+6. posts a summary comment on the source PR
+
+Example consumer-repo files:
+
+- `examples/backport-caller-workflow.yml` — caller workflow triggered on `pull_request_target` `labeled` events
+- `examples/backport-config.yml` — configuration with all available settings and defaults
+
+Required GitHub configuration in the consumer repo:
+
+- secret: `CI_BOT_AWS_ROLE_ARN` — IAM role assumable via GitHub OIDC for Bedrock access
+- variable: `CI_BOT_AWS_REGION` (optional, defaults to `us-east-1`)
+
+The bot applies a `backport` label to every backport PR, and an `llm-resolved-conflicts` label when any file was resolved by the LLM, signaling that extra review attention is needed.
+
+Configuration is loaded from `.github/backport-bot.yml` in the consumer repo. When the file is missing, sensible defaults are used. Configurable settings include the Bedrock model ID, max conflict retries, max conflicting files, daily PR limit, per-backport token budget, and label names.
+
+## PR review bot
+
+The repository also includes a reusable PR reviewer workflow at `.github/workflows/review-pr.yml`.
+
+It reviews pull requests through the GitHub API without checking out PR head code in the privileged workflow. The reviewer uses direct Bedrock runtime calls, and can optionally inject explicit Bedrock KB retrieval into prompts. The reviewer can:
+
+- post or update a PR summary comment
+- generate optional release notes
+- publish focused review comments
+- answer follow-up `/reviewbot` questions in PR comments and review threads
+
+Example consumer-repo files:
+
+- `examples/pr-review-caller-workflow.yml`
+- `examples/pr-review-config.yml`
+
+For fork or cross-repo testing, this repo also includes `.github/workflows/review-external-pr.yml`.
+
+That workflow lets you dispatch a one-off review against any `owner/repo#PR` reachable by your GitHub token or GitHub App installation. It does not require adding workflow files or config files to the repository that owns the PR. The reviewer still posts summary and review comments on the target PR, but its incremental state is stored on this bot repo's `bot-data` branch instead of the target repo.
+
+Cross-repo/manual review uses:
+
+- secret: `AWS_ROLE_ARN`
+- either secret: `VALKEY_GITHUB_TOKEN`
+- or variable: `VALKEY_GITHUB_APP_ID` plus secret: `VALKEY_GITHUB_APP_PRIVATE_KEY`
+
+Config loading for the reviewer now checks the target repo first, then falls back to this bot repo's checked-in config path. That means:
+
+- if the target repo already has `.github/pr-review-bot.yml`, it is honored
+- if it does not, the bot repo's `.github/pr-review-bot.yml` is used as the default
