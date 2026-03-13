@@ -87,48 +87,67 @@ def _render_issue_body(
         _issue_marker(fingerprint),
         f"<!-- valkey-ci-bot:occurrences:{occurrences} -->",
         "",
-        "## Automated Fuzzer Analysis",
-        "",
-        f"- Repository: `{analysis.repo}`",
-        f"- Workflow: `{analysis.workflow_file}`",
-        f"- Latest run: {analysis.run_url}",
-        f"- Conclusion: `{analysis.conclusion or 'unknown'}`",
-        f"- Overall status: `{analysis.overall_status}`",
-        f"- Scenario ID: `{analysis.scenario_id or 'unknown'}`",
-        f"- Seed: `{analysis.seed or 'unknown'}`",
-        f"- Observations of this anomaly: `{occurrences}`",
-    ]
-    if analysis.root_cause_category:
-        lines.append(f"- Root cause: `{analysis.root_cause_category}`")
-    if analysis.reproduction_hint:
-        lines.append(f"- Reproduction: `{analysis.reproduction_hint}`")
-
-    lines.extend([
-        "",
-        "## Summary",
-        "",
         analysis.summary,
         "",
-        "## Anomalies",
-        "",
+        "| | |",
+        "|---|---|",
+        f"| Run | [{analysis.run_id}]({analysis.run_url}) |",
+        f"| Conclusion | `{analysis.conclusion or 'unknown'}` |",
+        f"| Status | `{analysis.overall_status}` |",
+    ]
+    if analysis.root_cause_category:
+        lines.append(f"| Root cause | `{analysis.root_cause_category}` |")
+    lines.extend([
+        f"| Scenario | `{analysis.scenario_id or 'unknown'}` |",
+        f"| Seed | `{analysis.seed or 'unknown'}` |",
+        f"| Occurrences | {occurrences} |",
     ])
-    for anomaly in analysis.anomalies:
-        lines.append(
-            f"- **{anomaly.title}** ({anomaly.severity}): {anomaly.evidence}"
-        )
+
+    if analysis.reproduction_hint:
+        lines.extend([
+            "",
+            "**Reproduction**",
+            f"```",
+            analysis.reproduction_hint,
+            "```",
+        ])
+
+    # Deduplicate anomalies: skip generic titles whose evidence repeats
+    # a specific titled finding.
+    specific = [a for a in analysis.anomalies if a.title not in _GENERIC_TITLES]
+    generic = [a for a in analysis.anomalies if a.title in _GENERIC_TITLES]
+    specific_evidence = {a.evidence.strip().lower() for a in specific}
+    deduped_generic = [
+        a for a in generic
+        if a.evidence.strip().lower() not in specific_evidence
+    ]
+    deduped = specific + deduped_generic
+
+    if deduped:
+        critical = [a for a in deduped if a.severity == "critical"]
+        warnings = [a for a in deduped if a.severity != "critical"]
+
+        lines.extend(["", "### Anomalies", ""])
+        for anomaly in critical:
+            lines.append(f"- 🔴 **{anomaly.title}** — {anomaly.evidence}")
+        for anomaly in warnings:
+            lines.append(f"- 🟡 **{anomaly.title}** — {anomaly.evidence}")
 
     if analysis.normal_signals:
         lines.extend([
             "",
-            "## Expected / Normal Signals Observed",
+            "<details>",
+            f"<summary>Normal signals ({len(analysis.normal_signals)})</summary>",
             "",
         ])
-        for signal in analysis.normal_signals[:8]:
+        for signal in analysis.normal_signals:
             lines.append(f"- {signal}")
+        lines.extend(["", "</details>"])
 
     lines.extend([
         "",
-        "Automated issue created/updated by `valkey-ci-bot` based on anomalous fuzzer-run analysis.",
+        "---",
+        "*Automated by `valkey-ci-bot`*",
         "",
     ])
     return "\n".join(lines)
