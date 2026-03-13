@@ -361,7 +361,7 @@ def _post_comment(repo: object, pr_number: int, body: str) -> None:
     """Post a comment on a pull request (best-effort)."""
     try:
         pr = retry_github_call(
-            lambda: repo.get_pull(pr_number),  # type: ignore[union-attr]
+            lambda: repo.get_pull(pr_number),  # type: ignore[attr-defined]
             retries=3,
             description=f"get PR #{pr_number} for comment",
         )
