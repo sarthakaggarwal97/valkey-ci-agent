@@ -1,7 +1,7 @@
 name: Backport PR
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       source_pr_number:
         description: "The merged PR number to backport"
@@ -20,17 +20,10 @@ on:
         required: false
         type: string
         default: ".github/backport-bot.yml"
-      aws_region:
-        description: "AWS region where Bedrock is available"
-        required: false
-        type: string
-        default: "us-east-1"
-    secrets:
-      AWS_ROLE_ARN:
-        required: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
 
 jobs:
   backport:
@@ -44,8 +37,6 @@ jobs:
       - name: Checkout bot repository
         uses: actions/checkout@v6
         with:
-          repository: sarthakaggarwal97/valkey-ci-bot
-          ref: main
           persist-credentials: false
           fetch-depth: 1
 
@@ -63,16 +54,16 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: valkey-backport-bot-${{ github.run_id }}
-          aws-region: ${{ inputs.aws_region }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Run backport pipeline
         env:
-          AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
+          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
         run: |
           python -m scripts.backport_main \
             --repo "${{ inputs.repo_full_name }}" \
             --pr-number "${{ inputs.source_pr_number }}" \
             --target-branch "${{ inputs.target_branch }}" \
             --config "${{ inputs.config_path }}" \
-            --token "${{ github.token }}" \
-            --aws-region "${{ inputs.aws_region }}"
+            --token "${{ secrets.VALKEY_GITHUB_TOKEN }}" \
+            --aws-region "${{ env.AWS_REGION }}"
