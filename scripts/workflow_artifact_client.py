@@ -7,7 +7,7 @@ import logging
 import zipfile
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 from scripts.github_client import retry_github_call
 
@@ -153,6 +153,21 @@ def _extract_zip_files(blob: object, *, description: str) -> dict[str, bytes]:
     return extracted
 
 
+class _StripAuthRedirectHandler(HTTPRedirectHandler):
+    """Drop the Authorization header when following redirects.
+
+    GitHub's artifact/log download endpoints return a 302 to Azure Blob
+    Storage.  If the ``Authorization: Bearer`` header is forwarded, Azure
+    rejects the request with HTTP 401.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new_req is not None and new_req.host != req.host:
+            new_req.remove_header("Authorization")
+        return new_req
+
+
 def _download_bytes_via_http(path: str, token: str) -> bytes:
     request = Request(
         f"https://api.github.com{path}",
@@ -162,5 +177,6 @@ def _download_bytes_via_http(path: str, token: str) -> bytes:
             "User-Agent": "valkey-ci-bot",
         },
     )
-    with urlopen(request, timeout=60) as response:
+    opener = build_opener(_StripAuthRedirectHandler)
+    with opener.open(request, timeout=60) as response:
         return response.read()

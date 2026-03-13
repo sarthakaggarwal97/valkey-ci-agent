@@ -90,9 +90,13 @@ def test_download_artifact_files_can_use_http_fallback(monkeypatch) -> None:
         def read(self) -> bytes:
             return zip_buffer.getvalue()
 
+    class _FakeOpener:
+        def open(self, request, timeout=60):
+            return _Response()
+
     monkeypatch.setattr(
-        "scripts.workflow_artifact_client.urlopen",
-        lambda request, timeout=60: _Response(),
+        "scripts.workflow_artifact_client.build_opener",
+        lambda *args: _FakeOpener(),
     )
 
     client = WorkflowArtifactClient(github_client, token="secret-token")
