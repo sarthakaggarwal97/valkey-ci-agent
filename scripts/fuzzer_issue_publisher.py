@@ -38,12 +38,19 @@ def _stable_titles(signals: list[FuzzerSignal]) -> list[str]:
 
 
 def _fingerprint_for_analysis(analysis: FuzzerRunAnalysis) -> str:
-    titles = _stable_titles(analysis.anomalies)
-    basis = "|".join([
-        analysis.repo,
-        analysis.workflow_file,
-        *titles[:6],
-    ])
+    if analysis.root_cause_category:
+        basis = "|".join([
+            analysis.repo,
+            analysis.workflow_file,
+            analysis.root_cause_category,
+        ])
+    else:
+        titles = _stable_titles(analysis.anomalies)
+        basis = "|".join([
+            analysis.repo,
+            analysis.workflow_file,
+            *titles[:6],
+        ])
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:20]
 
 
@@ -91,6 +98,8 @@ def _render_issue_body(
         f"- Seed: `{analysis.seed or 'unknown'}`",
         f"- Observations of this anomaly: `{occurrences}`",
     ]
+    if analysis.root_cause_category:
+        lines.append(f"- Root cause: `{analysis.root_cause_category}`")
     if analysis.reproduction_hint:
         lines.append(f"- Reproduction: `{analysis.reproduction_hint}`")
 

@@ -287,6 +287,7 @@ class FuzzerRunAnalysis:
     anomalies: list[FuzzerSignal] = field(default_factory=list)
     normal_signals: list[str] = field(default_factory=list)
     reproduction_hint: str | None = None
+    root_cause_category: str | None = None
     raw_log_fallback_used: bool = False
 
 
@@ -372,6 +373,7 @@ def fuzzer_run_analysis_to_dict(analysis: FuzzerRunAnalysis) -> dict:
             "anomalies": list(getattr(analysis, "anomalies", [])),
             "normal_signals": list(getattr(analysis, "normal_signals", [])),
             "reproduction_hint": getattr(analysis, "reproduction_hint", None),
+            "root_cause_category": getattr(analysis, "root_cause_category", None),
             "raw_log_fallback_used": bool(
                 getattr(analysis, "raw_log_fallback_used", False)
             ),

@@ -22,6 +22,7 @@ Be conservative. Do not invent anomalies without evidence.
 Return valid JSON only using this exact schema:
 {
   "overall_status": "normal|warning|anomalous",
+  "root_cause_category": "short stable label for the class of failure, e.g. 'complete-shard-loss', 'split-brain', 'failover-timeout', 'replication-divergence'. Use the same label for the same kind of failure regardless of which specific nodes or shards are involved. Use null for normal runs.",
   "summary": "short maintainer-facing analysis of the run",
   "anomalies": [
     {
@@ -688,5 +689,8 @@ class FuzzerRunAnalyzer:
                 context,
                 model_payload.get("reproduction_hint"),
             ),
+            root_cause_category=str(model_payload["root_cause_category"]).strip()
+            if model_payload.get("root_cause_category")
+            else None,
             raw_log_fallback_used=context.raw_log_fallback_used,
         )
