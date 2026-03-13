@@ -59,14 +59,6 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Checkout target repository
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ inputs.repo_full_name }}
-          path: target-repo
-          fetch-depth: 0
-          token: ${{ github.token }}
-
       - name: Set up Python 3.11
         uses: actions/setup-python@v6
         with:

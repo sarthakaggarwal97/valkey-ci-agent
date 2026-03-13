@@ -205,13 +205,20 @@ def run_backport(
     ]
     merge_commit_sha = source_pr.merge_commit_sha
 
-    # Fetch diff
+    # Fetch PR diff
     try:
-        diff_content = retry_github_call(
-            lambda: repo.get_git_commit(merge_commit_sha).raw_data.get("message", ""),
+        # PyGithub doesn't have a direct diff method, but we can get
+        # the patch/diff from the PR's files
+        pr_files = retry_github_call(
+            lambda: list(source_pr.get_files()),
             retries=3,
-            description="get merge commit message",
+            description=f"get files for PR #{source_pr_number}",
         )
+        diff_parts = []
+        for f in pr_files:
+            if f.patch:
+                diff_parts.append(f"--- a/{f.filename}\n+++ b/{f.filename}\n{f.patch}")
+        diff_content = "\n".join(diff_parts)
     except Exception:
         diff_content = ""
 
@@ -425,15 +432,19 @@ def _apply_resolutions(
                 logger.warning("Could not stage unresolved file %s", result.path)
 
     if any_resolved or resolution_results:
-        # Complete the cherry-pick with resolved content
+        # Complete the cherry-pick with resolved content.
+        # Set core.editor=true to prevent git from opening an editor
+        # in the non-interactive CI environment.
         try:
             _run_git(
                 repo_dir, "-c", "user.name=backport-bot",
                 "-c", "user.email=backport-bot@users.noreply.github.com",
+                "-c", "core.editor=true",
                 "cherry-pick", "--continue",
             )
         except Exception:
-            # If cherry-pick --continue fails, commit directly
+            # If cherry-pick --continue fails (e.g. no cherry-pick in
+            # progress because all files were staged), commit directly.
             logger.warning("cherry-pick --continue failed, committing directly.")
             _run_git(
                 repo_dir, "-c", "user.name=backport-bot",
