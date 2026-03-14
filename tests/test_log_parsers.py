@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 3: Log parser extracts structured fields from all supported formats
+# Feature: valkey-ci-agent, Property 3: Log parser extracts structured fields from all supported formats
 """Property-based tests for log parsers.
 
 Validates: Requirements 2.2, 2.3, 2.4

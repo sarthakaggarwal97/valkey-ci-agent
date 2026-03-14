@@ -58,7 +58,7 @@ jobs:
   review:
     needs: preflight
     if: needs.preflight.outputs.allowed == 'true'
-    uses: valkey-io/valkey-ci-bot/.github/workflows/review-pr.yml@v1
+    uses: valkey-io/valkey-ci-agent/.github/workflows/review-pr.yml@v1
     with:
       config_path: .github/pr-review-bot.yml
       aws_region: ${{ vars.CI_BOT_AWS_REGION || 'us-east-1' }}

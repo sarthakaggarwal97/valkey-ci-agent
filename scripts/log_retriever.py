@@ -64,7 +64,7 @@ def _download_text_via_http(path: str, token: str) -> str:
         headers={
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
-            "User-Agent": "valkey-ci-bot",
+            "User-Agent": "valkey-ci-agent",
         },
     )
     opener = build_opener(_StripAuthRedirectHandler)

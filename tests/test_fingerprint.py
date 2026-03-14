@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 19: Fingerprint determinism
+# Feature: valkey-ci-agent, Property 19: Fingerprint determinism
 """Property tests for failure fingerprint determinism.
 
 Property 19: For any two failures with identical (failure_identifier,

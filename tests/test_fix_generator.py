@@ -387,7 +387,7 @@ class TestMarkdownFenceStripping:
 
 
 # ---------------------------------------------------------------------------
-# Feature: valkey-ci-bot, Property 8: Confidence gating for fix generation
+# Feature: valkey-ci-agent, Property 8: Confidence gating for fix generation
 # ---------------------------------------------------------------------------
 
 from hypothesis import given, settings
@@ -442,7 +442,7 @@ class TestConfidenceGatingProperty:
 
 
 # ---------------------------------------------------------------------------
-# Feature: valkey-ci-bot, Property 9: Patch scope validation
+# Feature: valkey-ci-agent, Property 9: Patch scope validation
 # ---------------------------------------------------------------------------
 
 
@@ -523,7 +523,7 @@ class TestPatchScopeValidationProperty:
 
 
 # ---------------------------------------------------------------------------
-# Feature: valkey-ci-bot, Property 10: Fix generation retry limit
+# Feature: valkey-ci-agent, Property 10: Fix generation retry limit
 # ---------------------------------------------------------------------------
 
 

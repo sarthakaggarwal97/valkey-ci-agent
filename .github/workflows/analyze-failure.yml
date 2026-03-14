@@ -53,7 +53,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: valkey-ci-bot-${{ github.run_id }}
+          role-session-name: valkey-ci-agent-${{ github.run_id }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Run analysis pipeline

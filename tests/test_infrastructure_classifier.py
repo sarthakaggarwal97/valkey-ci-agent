@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 1: Infrastructure failure classification
+# Feature: valkey-ci-agent, Property 1: Infrastructure failure classification
 """Property test for infrastructure failure classification.
 
 Validates: Requirements 1.4

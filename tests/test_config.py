@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 17: Configuration round-trip
+# Feature: valkey-ci-agent, Property 17: Configuration round-trip
 """Property tests for configuration loading.
 
 Property 17: For any valid YAML configuration containing all supported fields,
@@ -200,7 +200,7 @@ def test_missing_config_returns_defaults() -> None:
     assert cfg.validation_profiles == []
 
 
-# Feature: valkey-ci-bot, Property 18: Invalid config falls back to defaults
+# Feature: valkey-ci-agent, Property 18: Invalid config falls back to defaults
 # Validates: Requirements 8.4
 
 

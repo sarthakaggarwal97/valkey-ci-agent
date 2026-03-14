@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 24: Token budget enforcement
+# Feature: valkey-ci-agent, Property 24: Token budget enforcement
 """Property tests for token budget enforcement.
 
 Property 24: For any sequence of Bedrock API calls, the cumulative token usage

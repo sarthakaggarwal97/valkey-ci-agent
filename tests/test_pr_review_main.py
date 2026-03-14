@@ -271,7 +271,7 @@ def test_run_manual_review_mode_uses_bot_repo_state(
                 "--state-token",
                 "state-token",
                 "--state-repo",
-                "sarthakaggarwal97/valkey-ci-bot",
+                "sarthakaggarwal97/valkey-ci-agent",
             ]
         )
 
@@ -279,12 +279,12 @@ def test_run_manual_review_mode_uses_bot_repo_state(
     fetcher.fetch.assert_called_once_with("fork-owner/valkey", 17)
     mock_state_store_cls.assert_called_once_with(
         state_gh,
-        "sarthakaggarwal97/valkey-ci-bot",
+        "sarthakaggarwal97/valkey-ci-agent",
     )
     rate_kwargs = mock_rate_limiter_cls.call_args.kwargs
     assert rate_kwargs["github_client"] is target_gh
     assert rate_kwargs["state_github_client"] is state_gh
-    assert rate_kwargs["state_repo_full_name"] == "sarthakaggarwal97/valkey-ci-bot"
+    assert rate_kwargs["state_repo_full_name"] == "sarthakaggarwal97/valkey-ci-agent"
     publisher.upsert_summary.assert_called_once()
     publisher.approve_pr.assert_called_once()
 

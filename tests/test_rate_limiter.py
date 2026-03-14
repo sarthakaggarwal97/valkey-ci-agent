@@ -289,9 +289,9 @@ class TestSerialization:
             github_client=target_gh,
             repo_full_name="valkey-io/valkey",
             state_github_client=state_gh,
-            state_repo_full_name="owner/valkey-ci-bot",
+            state_repo_full_name="owner/valkey-ci-agent",
         )
         limiter.save()
 
-        state_gh.get_repo.assert_called_once_with("owner/valkey-ci-bot")
+        state_gh.get_repo.assert_called_once_with("owner/valkey-ci-agent")
         target_gh.get_repo.assert_not_called()

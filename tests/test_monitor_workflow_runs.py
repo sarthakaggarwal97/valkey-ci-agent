@@ -15,7 +15,7 @@ def _args(**overrides) -> MonitorArgs:
         config_path=".github/valkey-daily-bot.yml",
         target_token="target-token",
         state_token="state-token",
-        state_repo="owner/valkey-ci-bot",
+        state_repo="owner/valkey-ci-agent",
         max_runs=14,
         aws_region="us-east-1",
         dry_run=False,
@@ -159,4 +159,4 @@ def test_monitor_passes_queue_only_to_pipeline(
     _, kwargs = mock_run_pipeline.call_args
     assert kwargs["allow_pr_creation"] is False
     assert kwargs["state_github_token"] == "state-token"
-    assert kwargs["state_repo_name"] == "owner/valkey-ci-bot"
+    assert kwargs["state_repo_name"] == "owner/valkey-ci-agent"

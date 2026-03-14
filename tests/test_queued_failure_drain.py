@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 26: Queued failures are drained by reconciliation runs
+# Feature: valkey-ci-agent, Property 26: Queued failures are drained by reconciliation runs
 """Property tests for queued failure reconciliation drain.
 
 Property 26: For any queued failure created because of a 24-hour PR limit

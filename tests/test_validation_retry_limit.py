@@ -1,6 +1,6 @@
 """Property 12: Validation retry limit.
 
-# Feature: valkey-ci-bot, Property 12: Validation retry limit
+# Feature: valkey-ci-agent, Property 12: Validation retry limit
 
 **Validates: Requirements 5.8**
 

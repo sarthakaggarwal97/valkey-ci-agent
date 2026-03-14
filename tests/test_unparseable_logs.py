@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 4: Unparseable logs produce raw excerpt
+# Feature: valkey-ci-agent, Property 4: Unparseable logs produce raw excerpt
 """Property-based tests for unparseable log handling.
 
 Validates: Requirements 2.5

@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 11: Validation build configuration mapping
+# Feature: valkey-ci-agent, Property 11: Validation build configuration mapping
 """Property test for validation build configuration mapping.
 
 Property 11: For any failing job name and matrix parameters, the

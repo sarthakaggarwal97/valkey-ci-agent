@@ -72,7 +72,7 @@ jobs:
       fail-fast: false
       matrix:
         target_branch: ${{ fromJson(needs.preflight.outputs.branches) }}
-    uses: sarthakaggarwal97/valkey-ci-bot/.github/workflows/backport.yml@main
+    uses: sarthakaggarwal97/valkey-ci-agent/.github/workflows/backport.yml@main
     with:
       source_pr_number: ${{ github.event.pull_request.number }}
       repo_full_name: ${{ github.repository }}

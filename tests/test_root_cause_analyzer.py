@@ -460,7 +460,7 @@ class TestAnalyze:
 # ---------------------------------------------------------------------------
 # Property-based tests
 # ---------------------------------------------------------------------------
-# Feature: valkey-ci-bot, Property 6: Relevant file identification from failure data
+# Feature: valkey-ci-agent, Property 6: Relevant file identification from failure data
 
 from hypothesis import given, settings, HealthCheck
 from hypothesis import strategies as st
@@ -582,7 +582,7 @@ class TestRelevantFileIdentificationProperty:
 
 
 # ---------------------------------------------------------------------------
-# Feature: valkey-ci-bot, Property 7: Root cause analysis error propagation
+# Feature: valkey-ci-agent, Property 7: Root cause analysis error propagation
 # ---------------------------------------------------------------------------
 
 

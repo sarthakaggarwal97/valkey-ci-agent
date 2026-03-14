@@ -417,11 +417,11 @@ def _clone_repo(
     )
     # Configure git identity for cherry-pick commits
     subprocess.run(
-        ["git", "config", "user.name", "valkey-ci-bot"],
+        ["git", "config", "user.name", "valkey-ci-agent"],
         cwd=dest_dir, check=True, capture_output=True, text=True,
     )
     subprocess.run(
-        ["git", "config", "user.email", "valkey-ci-bot@users.noreply.github.com"],
+        ["git", "config", "user.email", "valkey-ci-agent@users.noreply.github.com"],
         cwd=dest_dir, check=True, capture_output=True, text=True,
     )
     # Fetch all branches so cherry-pick can reference any commit

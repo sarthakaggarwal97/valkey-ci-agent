@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 13: PR content completeness
+# Feature: valkey-ci-agent, Property 13: PR content completeness
 """Property test for PR content completeness.
 
 Property 13: For any validated fix, the created PR should have: a branch

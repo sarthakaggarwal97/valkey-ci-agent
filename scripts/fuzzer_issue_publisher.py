@@ -16,9 +16,9 @@ _GENERIC_TITLES = {
     "Validation error message",
     "Fuzzer run ended in failure",
 }
-_ISSUE_MARKER_PREFIX = "<!-- valkey-ci-bot:fuzzer-issue:"
+_ISSUE_MARKER_PREFIX = "<!-- valkey-ci-agent:fuzzer-issue:"
 _OCCURRENCES_MARKER_RE = re.compile(
-    r"<!-- valkey-ci-bot:occurrences:(\d+) -->"
+    r"<!-- valkey-ci-agent:occurrences:(\d+) -->"
 )
 
 
@@ -85,7 +85,7 @@ def _render_issue_body(
 ) -> str:
     lines = [
         _issue_marker(fingerprint),
-        f"<!-- valkey-ci-bot:occurrences:{occurrences} -->",
+        f"<!-- valkey-ci-agent:occurrences:{occurrences} -->",
         "",
         analysis.summary,
         "",
@@ -147,7 +147,7 @@ def _render_issue_body(
     lines.extend([
         "",
         "---",
-        "*Automated by `valkey-ci-bot`*",
+        "*Automated by `valkey-ci-agent`*",
         "",
     ])
     return "\n".join(lines)

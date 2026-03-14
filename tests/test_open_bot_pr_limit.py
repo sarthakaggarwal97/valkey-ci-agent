@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 23: Open bot PR limit
+# Feature: valkey-ci-agent, Property 23: Open bot PR limit
 """Property tests for open bot PR limit.
 
 Property 23: For any state where the target branch has max_open_bot_prs or

@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 21: Per-run failure processing limit with ordering
+# Feature: valkey-ci-agent, Property 21: Per-run failure processing limit with ordering
 """Property tests for per-run failure processing limit.
 
 Property 21: For any CI run with N failed jobs where N > max_failures_per_run,

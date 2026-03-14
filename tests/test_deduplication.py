@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 2: Deduplication skips known failures and allows reprocessing of abandoned
+# Feature: valkey-ci-agent, Property 2: Deduplication skips known failures and allows reprocessing of abandoned
 """Property tests for deduplication logic.
 
 Property 2: For any failure fingerprint that exists in the Failure_Store with

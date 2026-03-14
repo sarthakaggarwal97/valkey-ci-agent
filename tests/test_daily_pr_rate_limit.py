@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 22: Daily PR rate limit
+# Feature: valkey-ci-agent, Property 22: Daily PR rate limit
 """Property tests for daily PR rate limit.
 
 Property 22: For any sequence of PR creation attempts within a 24-hour window,

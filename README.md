@@ -1,4 +1,4 @@
-# valkey-ci-bot
+# valkey-ci-agent
 
 An AI bot for Valkey CI failure remediation, PR review, and automated backports.
 

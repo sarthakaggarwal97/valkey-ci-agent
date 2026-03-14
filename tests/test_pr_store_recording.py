@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 14: PR creation records in failure store
+# Feature: valkey-ci-agent, Property 14: PR creation records in failure store
 """Property test for PR creation records in failure store.
 
 Property 14: For any successfully created PR, the Failure_Store should

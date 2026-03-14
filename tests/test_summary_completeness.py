@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 25: Workflow summary completeness
+# Feature: valkey-ci-agent, Property 25: Workflow summary completeness
 """Property test for workflow summary completeness.
 
 Property 25: For any bot run, the workflow summary should contain an entry

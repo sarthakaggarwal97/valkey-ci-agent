@@ -358,7 +358,7 @@ class TestBedrockClientInvoke:
 
 # ---------------------------------------------------------------------------
 # Property-based tests: Bedrock error handling
-# Feature: valkey-ci-bot, Property 15: Bedrock error handling
+# Feature: valkey-ci-agent, Property 15: Bedrock error handling
 # ---------------------------------------------------------------------------
 
 from hypothesis import given, settings, assume
@@ -471,7 +471,7 @@ class TestBedrockErrorHandlingProperty:
 
 # ---------------------------------------------------------------------------
 # Property-based tests: System prompt includes project context
-# Feature: valkey-ci-bot, Property 16: System prompt includes project context
+# Feature: valkey-ci-agent, Property 16: System prompt includes project context
 # ---------------------------------------------------------------------------
 
 

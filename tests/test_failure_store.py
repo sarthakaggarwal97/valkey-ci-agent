@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 20: Failure store serialization round-trip
+# Feature: valkey-ci-agent, Property 20: Failure store serialization round-trip
 """Property tests for failure store serialization round-trip.
 
 Property 20: For any FailureStore containing arbitrary entries, serializing
@@ -267,10 +267,10 @@ def test_save_uses_separate_state_repository_when_configured() -> None:
         target_gh,
         "valkey-io/valkey",
         state_github_client=state_gh,
-        state_repo_full_name="owner/valkey-ci-bot",
+        state_repo_full_name="owner/valkey-ci-agent",
     )
 
     store.save()
 
-    state_gh.get_repo.assert_called_once_with("owner/valkey-ci-bot")
+    state_gh.get_repo.assert_called_once_with("owner/valkey-ci-agent")
     target_gh.get_repo.assert_not_called()

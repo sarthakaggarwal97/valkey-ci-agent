@@ -60,7 +60,7 @@ def test_upsert_issue_creates_new_issue_when_no_match_exists() -> None:
     body = repo.create_issue.call_args.kwargs["body"]
     assert "839534793" in body
     assert "Split-brain or slot loss" in body
-    assert "valkey-ci-bot:fuzzer-issue:" in body
+    assert "valkey-ci-agent:fuzzer-issue:" in body
 
 
 def test_upsert_issue_updates_existing_open_issue() -> None:
@@ -73,7 +73,7 @@ def test_upsert_issue_updates_existing_open_issue() -> None:
     analysis = _analysis()
     existing.body = (
         f"{_issue_marker(_fingerprint_for_analysis(analysis))}\n"
-        "<!-- valkey-ci-bot:occurrences:2 -->\n"
+        "<!-- valkey-ci-agent:occurrences:2 -->\n"
     )
     repo.get_issues.return_value = [existing]
 
@@ -84,4 +84,4 @@ def test_upsert_issue_updates_existing_open_issue() -> None:
     assert url.endswith("/8")
     existing.edit.assert_called_once()
     updated_body = existing.edit.call_args.kwargs["body"]
-    assert "<!-- valkey-ci-bot:occurrences:3 -->" in updated_body
+    assert "<!-- valkey-ci-agent:occurrences:3 -->" in updated_body

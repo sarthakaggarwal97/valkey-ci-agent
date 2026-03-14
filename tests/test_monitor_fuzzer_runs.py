@@ -16,7 +16,7 @@ def _args(**overrides) -> MonitorArgs:
         config_path=".github/valkey-fuzzer-bot.yml",
         target_token="target-token",
         state_token="state-token",
-        state_repo="owner/valkey-ci-bot",
+        state_repo="owner/valkey-ci-agent",
         max_runs=6,
         aws_region="us-east-1",
         dry_run=False,

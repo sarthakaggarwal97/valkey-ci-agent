@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 5: FailureReport contains all required fields
+# Feature: valkey-ci-agent, Property 5: FailureReport contains all required fields
 """Property test for FailureReport completeness.
 
 Validates: Requirements 2.6

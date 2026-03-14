@@ -1,4 +1,4 @@
-# Feature: valkey-ci-bot, Property 27: Untrusted fork failures never execute privileged stages
+# Feature: valkey-ci-agent, Property 27: Untrusted fork failures never execute privileged stages
 """Property test for untrusted fork trust gating.
 
 Property 27: For any workflow_run whose head repository differs from the
