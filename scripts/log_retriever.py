@@ -65,8 +65,7 @@ class LogRetriever:
         """Download the run-level log zip and extract the matching job's log."""
         try:
             repo = self._gh.get_repo(repo_full_name)
-            # Look up the run ID from the job
-            job_obj = repo.get_workflow_run_attempt  # not available; use REST
+            # Look up the run ID from the job metadata
             job_url = f"/repos/{repo_full_name}/actions/jobs/{job_id}"
             if self._token:
                 import json
