@@ -65,15 +65,25 @@ class LogRetriever:
         """Download the run-level log zip and extract the matching job's log."""
         try:
             repo = self._gh.get_repo(repo_full_name)
+
+            # Resolve a usable token for HTTP downloads
+            token = self._token
+            if not token:
+                auth = getattr(self._gh, "_Github__requester", None)
+                if auth:
+                    token_obj = getattr(auth, "_Requester__auth", None)
+                    if token_obj and hasattr(token_obj, "token"):
+                        token = token_obj.token
+
             # Look up the run ID from the job metadata
             job_url = f"/repos/{repo_full_name}/actions/jobs/{job_id}"
-            if self._token:
+            if token:
                 import json
                 import urllib.request
                 req = urllib.request.Request(
                     f"https://api.github.com{job_url}",
                     headers={
-                        "Authorization": f"Bearer {self._token}",
+                        "Authorization": f"Bearer {token}",
                         "Accept": "application/vnd.github+json",
                         "User-Agent": "valkey-ci-agent",
                     },
@@ -91,8 +101,8 @@ class LogRetriever:
 
             # Download the run-level log zip
             log_url = f"/repos/{repo_full_name}/actions/runs/{run_id}/logs"
-            if self._token:
-                zip_bytes = _download_bytes_via_http(log_url, self._token)
+            if token:
+                zip_bytes = _download_bytes_via_http(log_url, token)
             else:
                 _headers, zip_data = repo._requester.requestBlobAndCheck("GET", log_url)
                 zip_bytes = zip_data if isinstance(zip_data, bytes) else b""
