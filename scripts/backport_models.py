@@ -67,7 +67,7 @@ class BackportResult:
 class BackportConfig:
     """Configuration for the backport bot, loaded from consumer repo YAML."""
 
-    bedrock_model_id: str = "anthropic.claude-sonnet-4-20250514"
+    bedrock_model_id: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
     max_conflict_retries: int = 2
     max_conflicting_files: int = 20
     max_prs_per_day: int = 10
