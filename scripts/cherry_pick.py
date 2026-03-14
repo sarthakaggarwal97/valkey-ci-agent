@@ -79,16 +79,11 @@ class CherryPickExecutor:
                     "No conflicting files — cherry-pick is empty. "
                     "Retrying with --allow-empty.",
                 )
-                logger.info(
+                logger.debug(
                     "Original cherry-pick stderr: %s",
                     result.stderr.strip(),
                 )
-                abort_result = self._run_git("cherry-pick", "--abort", check=False)
-                logger.info(
-                    "Abort result: rc=%d stderr=%s",
-                    abort_result.returncode,
-                    abort_result.stderr.strip(),
-                )
+                self._run_git("cherry-pick", "--abort", check=False)
                 retry = self._run_git(
                     "cherry-pick", "-m", "1", "--allow-empty",
                     merge_commit_sha, check=False,

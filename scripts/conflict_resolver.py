@@ -7,6 +7,7 @@ whitespace-only conflict detection, retry logic, and C syntax validation.
 from __future__ import annotations
 
 import logging
+import re
 
 from scripts.backport_models import (
     BackportConfig,
@@ -26,8 +27,6 @@ logger = logging.getLogger(__name__)
 
 def _strip_code_fences(text: str) -> str:
     """Remove markdown code fences that LLMs sometimes wrap around output."""
-    import re
-
     # Match ```<optional lang>\n ... \n``` wrapping the entire response
     stripped = re.sub(
         r"^```[a-zA-Z]*\s*\n(.*?)```\s*$",
