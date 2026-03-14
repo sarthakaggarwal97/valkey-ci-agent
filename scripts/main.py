@@ -526,9 +526,9 @@ def _validate_fix(
                 max_validation_attempts, report.job_name,
             )
             return None
-    else:
-        # Loop completed without break — should not happen, but guard
-        return None
+    # Note: the for/else is intentionally omitted here — every loop
+    # iteration either breaks (on pass) or returns None (on exhausted
+    # retries / errors), so the else clause is unreachable.
 
     return current_diff
 

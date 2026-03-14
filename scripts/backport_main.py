@@ -9,6 +9,8 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import stat
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -247,7 +249,7 @@ def run_backport(
     branch_name = build_branch_name(source_pr_number, target_branch)
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Clone the repo with full history for cherry-pick
-        _clone_repo(repo_full_name, github_token, tmp_dir, target_branch)
+        git_env = _clone_repo(repo_full_name, github_token, tmp_dir, target_branch)
 
         # Create the backport branch locally from target branch HEAD
         _run_git(tmp_dir, "checkout", "-b", branch_name)
@@ -290,7 +292,7 @@ def run_backport(
 
         # Push the backport branch to the remote
         logger.info("Pushing branch %s to origin.", branch_name)
-        _run_git(tmp_dir, "push", "origin", branch_name)
+        _run_git(tmp_dir, "push", "origin", branch_name, env=git_env)
 
     # ---- Step 7: Create backport PR (Req 4.6) ----
     logger.info("Creating backport PR.")
@@ -380,18 +382,38 @@ def _clone_repo(
     github_token: str,
     dest_dir: str,
     target_branch: str,
-) -> None:
-    """Clone the repository with full history into *dest_dir*."""
-    import subprocess
+) -> dict[str, str]:
+    """Clone the repository with full history into *dest_dir*.
 
-    clone_url = f"https://x-access-token:{github_token}@github.com/{repo_full_name}.git"
+    Uses a git credential helper to supply the token, avoiding
+    embedding credentials in the clone URL (which would persist in
+    ``.git/config`` and be visible via ``git remote -v``).
+    """
     logger.info("Cloning %s into %s.", repo_full_name, dest_dir)
+
+    # Write a small credential-helper script that supplies the token.
+    # This keeps the token out of .git/config remote URLs while still
+    # allowing subsequent git operations (push, fetch) to authenticate.
+    askpass_script = os.path.join(dest_dir, ".git-askpass.sh")
+    with open(askpass_script, "w") as f:
+        f.write('#!/bin/sh\necho "$GIT_PASSWORD"\n')
+    os.chmod(askpass_script, stat.S_IRWXU)
+
+    env = {
+        **os.environ,
+        "GIT_ASKPASS": askpass_script,
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_PASSWORD": github_token,
+    }
+
+    clone_url = f"https://x-access-token@github.com/{repo_full_name}.git"
     subprocess.run(
         ["git", "clone", "--no-single-branch", "--branch", target_branch, clone_url, "."],
         cwd=dest_dir,
         check=True,
         capture_output=True,
         text=True,
+        env=env,
     )
     # Configure git identity for cherry-pick commits
     subprocess.run(
@@ -409,16 +431,16 @@ def _clone_repo(
         check=True,
         capture_output=True,
         text=True,
+        env=env,
     )
+    return env
 
 
-def _run_git(repo_dir: str, *args: str) -> None:
+def _run_git(repo_dir: str, *args: str, env: dict[str, str] | None = None) -> None:
     """Run a git command in *repo_dir*, raising on failure."""
-    import subprocess
-
     cmd = ["git", *args]
     logger.debug("Running: %s (cwd=%s)", " ".join(cmd), repo_dir)
-    subprocess.run(cmd, cwd=repo_dir, check=True, capture_output=True, text=True)
+    subprocess.run(cmd, cwd=repo_dir, check=True, capture_output=True, text=True, env=env)
 
 
 def _apply_resolutions(

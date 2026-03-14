@@ -248,10 +248,19 @@ def monitor(args: MonitorArgs) -> dict[str, object]:
                     allow_pr_creation=not args.queue_only,
                 )
             except Exception as exc:
+                logger.error(
+                    "Pipeline error for run %d: %s. "
+                    "Advancing watermark to avoid re-processing.",
+                    run.id,
+                    exc,
+                )
                 run_result["action"] = "pipeline-error"
                 run_result["error"] = str(exc)
                 run_results.append(run_result)
-                break
+                # Advance the watermark so the monitor does not get stuck
+                # retrying a permanently failing run on every invocation.
+                new_last_seen = max(new_last_seen, run.id)
+                continue
 
             run_result["action"] = "processed-failure"
             run_result["failure_reports"] = len(reports)

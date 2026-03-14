@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 _STORE_BRANCH = "bot-data"
 _STORE_FILE = "failure-store.json"
+_MAX_ERROR_SIGNATURE_CHARS = 10_000
 
 
 class FailureStore:
@@ -109,6 +110,9 @@ class FailureStore:
         """Record a failure in the store."""
         now = datetime.now(timezone.utc).isoformat()
         existing = self._entries.get(fingerprint)
+        # Truncate large error signatures to prevent store bloat.
+        if len(error_signature) > _MAX_ERROR_SIGNATURE_CHARS:
+            error_signature = error_signature[:_MAX_ERROR_SIGNATURE_CHARS] + "\n[truncated]"
         self._entries[fingerprint] = FailureStoreEntry(
             fingerprint=fingerprint,
             failure_identifier=failure_identifier,
@@ -247,7 +251,7 @@ class FailureStore:
                 matrix_params=dict(report.matrix_params),
                 failure_identifier=report.job_name,
                 test_name=None,
-                error_signature=report.raw_log_excerpt or "",
+                error_signature=(report.raw_log_excerpt or "")[:_MAX_ERROR_SIGNATURE_CHARS],
                 file_path="",
                 fingerprint=fingerprint,
             ),

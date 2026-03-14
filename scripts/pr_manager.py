@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from github.GithubException import GithubException
@@ -434,7 +435,7 @@ class PRManager:
         for file_path, file_diff in file_patches.items():
             try:
                 contents = retry_github_call(
-                    lambda: repo.get_contents(file_path, ref=branch_name),
+                    lambda fp=file_path: repo.get_contents(fp, ref=branch_name),
                     retries=5,
                     description=f"load branch contents for {file_path}",
                 )
@@ -470,8 +471,6 @@ def _parse_unified_diff(patch: str) -> dict[str, list[dict]]:
       - old_start, old_count, new_start, new_count
       - lines: list of diff lines (prefixed with +, -, or space)
     """
-    import re
-
     files: dict[str, list[dict]] = {}
     current_file: str | None = None
     current_hunk: dict | None = None
@@ -523,7 +522,7 @@ def _apply_hunks(original: str, hunks: list[dict]) -> str:
     orig_idx = 0  # 0-based index into original_lines
 
     for hunk in hunks:
-        # old_start is 1-based
+        # old_start is 1-based; for new files (@@ -0,0 +1,N @@) it is 0.
         hunk_start = hunk["old_start"] - 1 if hunk["old_start"] > 0 else 0
 
         # Copy lines before this hunk
@@ -538,7 +537,16 @@ def _apply_hunks(original: str, hunks: list[dict]) -> str:
             elif diff_line.startswith("-"):
                 orig_idx += 1  # skip removed line
             elif diff_line.startswith(" "):
-                result_lines.append(diff_line[1:])
+                # Validate context line matches the original when possible.
+                expected = diff_line[1:]
+                if orig_idx < len(original_lines) and original_lines[orig_idx] != expected:
+                    logger.warning(
+                        "Context line mismatch at line %d: expected %r, got %r",
+                        orig_idx + 1,
+                        expected,
+                        original_lines[orig_idx],
+                    )
+                result_lines.append(expected)
                 orig_idx += 1
 
     # Copy remaining lines after last hunk

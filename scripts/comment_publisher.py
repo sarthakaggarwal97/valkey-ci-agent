@@ -165,53 +165,57 @@ class CommentPublisher:
         """Fallback: publish each finding as a standalone review comment."""
         comment_ids: list[int] = []
         for finding in findings:
+            # Bind loop variables to avoid late-binding closure bugs.
+            f_body = finding.body
+            f_path = finding.path
+            f_line = finding.line
             try:
-                if finding.line is not None and finding.line > 0:
-                    line = finding.line
+                if f_line is not None and f_line > 0:
+                    line = f_line
                     comment = retry_github_call(
-                        lambda: pr.create_review_comment(
-                            finding.body,
+                        lambda f_body=f_body, f_path=f_path, line=line: pr.create_review_comment(
+                            f_body,
                             commit,
-                            finding.path,
+                            f_path,
                             line=line,
                             side="RIGHT",
                         ),
                         retries=self._github_retries,
-                        description=f"create line review comment for {finding.path}",
+                        description=f"create line review comment for {f_path}",
                     )
                 else:
                     comment = retry_github_call(
-                        lambda: pr.create_review_comment(
-                            finding.body,
+                        lambda f_body=f_body, f_path=f_path: pr.create_review_comment(
+                            f_body,
                             commit,
-                            finding.path,
+                            f_path,
                             subject_type="file",
                         ),
                         retries=self._github_retries,
-                        description=f"create file review comment for {finding.path}",
+                        description=f"create file review comment for {f_path}",
                     )
             except Exception as exc:
                 logger.info(
                     "Falling back to file-level review comment for %s:%s: %s",
-                    finding.path,
-                    finding.line,
+                    f_path,
+                    f_line,
                     exc,
                 )
                 try:
                     comment = retry_github_call(
-                        lambda: pr.create_review_comment(
-                            finding.body,
+                        lambda f_body=f_body, f_path=f_path: pr.create_review_comment(
+                            f_body,
                             commit,
-                            finding.path,
+                            f_path,
                             subject_type="file",
                         ),
                         retries=self._github_retries,
-                        description=f"fallback file review comment for {finding.path}",
+                        description=f"fallback file review comment for {f_path}",
                     )
                 except Exception as final_exc:
                     logger.warning(
                         "Failed to publish review comment on %s: %s",
-                        finding.path,
+                        f_path,
                         final_exc,
                     )
                     continue

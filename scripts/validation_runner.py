@@ -72,6 +72,13 @@ def _run_commands(
     """Execute a list of shell commands sequentially.
 
     Returns (all_passed, combined_output).
+
+    .. note::
+
+       Commands are executed with ``shell=True`` because they originate
+       from YAML configuration authored by the repository owner (the
+       ``validation_profiles`` section).  The trust boundary is the
+       config file author — do not pass untrusted input as commands.
     """
     merged_env = {**os.environ}
     if env:

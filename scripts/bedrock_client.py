@@ -240,15 +240,19 @@ class BedrockClient:
         last_error: ClientError | None = None
         reserved_tokens = estimated_input_tokens + output_tokens
 
+        # Reserve tokens once before the retry loop.  On retryable failures
+        # the reservation stays in place (the work *was* attempted); on
+        # success, _adjust_token_usage corrects the estimate to actuals.
+        if self._rate_limiter is not None:
+            if not self._rate_limiter.can_use_tokens(reserved_tokens):
+                raise BedrockError(
+                    "daily token budget exhausted",
+                    error_code="TokenBudgetExceeded",
+                    retryable=False,
+                )
+            self._rate_limiter.record_token_usage(reserved_tokens)
+
         for attempt in range(max_attempts):
-            if self._rate_limiter is not None:
-                if not self._rate_limiter.can_use_tokens(reserved_tokens):
-                    raise BedrockError(
-                        "daily token budget exhausted",
-                        error_code="TokenBudgetExceeded",
-                        retryable=False,
-                    )
-                self._rate_limiter.record_token_usage(reserved_tokens)
             try:
                 response = self._client.converse(**converse_kwargs)
                 # Track actual token usage from the API response when available
@@ -352,11 +356,8 @@ class BedrockClient:
         actual = usage.get("inputTokens", 0) + usage.get("outputTokens", 0)
         if actual > 0:
             diff = reserved_tokens - actual
-            if diff > 0:
-                # We over-reserved — give tokens back
-                self._rate_limiter.record_token_usage(-diff)
-            elif diff < 0:
-                # We under-reserved — charge the extra
+            if diff != 0:
+                # Positive diff → over-reserved (give back); negative → under-reserved (charge extra).
                 self._rate_limiter.record_token_usage(-diff)
         logger.debug(
             "Token usage: reserved=%d, actual=%d (input=%d, output=%d), adjustment=%+d",
@@ -451,15 +452,17 @@ class BedrockClient:
         last_error: ClientError | None = None
         reserved_tokens = estimated_input_tokens + output_tokens
 
+        # Reserve tokens once before the retry loop (same as invoke).
+        if self._rate_limiter is not None:
+            if not self._rate_limiter.can_use_tokens(reserved_tokens):
+                raise BedrockError(
+                    "daily token budget exhausted",
+                    error_code="TokenBudgetExceeded",
+                    retryable=False,
+                )
+            self._rate_limiter.record_token_usage(reserved_tokens)
+
         for attempt in range(max_attempts):
-            if self._rate_limiter is not None:
-                if not self._rate_limiter.can_use_tokens(reserved_tokens):
-                    raise BedrockError(
-                        "daily token budget exhausted",
-                        error_code="TokenBudgetExceeded",
-                        retryable=False,
-                    )
-                self._rate_limiter.record_token_usage(reserved_tokens)
             try:
                 response = self._client.converse(**converse_kwargs)
                 self._adjust_token_usage(response, reserved_tokens)

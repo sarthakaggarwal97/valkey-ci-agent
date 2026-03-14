@@ -107,11 +107,13 @@ def test_monitor_dry_run_does_not_process_or_advance_state(
 @patch("scripts.monitor_workflow_runs.run_pipeline")
 @patch("scripts.monitor_workflow_runs.Github")
 @patch("scripts.monitor_workflow_runs.MonitorStateStore")
-def test_monitor_stops_without_advancing_failed_run_on_pipeline_error(
+def test_monitor_advances_watermark_on_pipeline_error(
     mock_state_store_cls,
     mock_github_cls,
     mock_run_pipeline,
 ) -> None:
+    """Pipeline errors should advance the watermark so the monitor does not
+    get stuck retrying a permanently failing run on every invocation."""
     state_store = mock_state_store_cls.return_value
     state_store.get_last_seen_run_id.return_value = 100
 
@@ -124,9 +126,14 @@ def test_monitor_stops_without_advancing_failed_run_on_pipeline_error(
 
     result = monitor(_args())
 
+    # Both runs should be attempted (continue, not break).
+    assert len(result["runs"]) == 2
     assert result["runs"][0]["action"] == "pipeline-error"
-    state_store.mark_seen.assert_not_called()
-    state_store.save.assert_not_called()
+    assert result["runs"][1]["action"] == "pipeline-error"
+    # Watermark should advance past both failed runs.
+    assert result["new_last_seen_run_id"] == 102
+    state_store.mark_seen.assert_called_once()
+    state_store.save.assert_called_once()
 
 
 @patch("scripts.monitor_workflow_runs.run_pipeline")
