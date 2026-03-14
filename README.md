@@ -1,5 +1,14 @@
 # valkey-ci-bot
-An AI bot for Valkey CI failure remediation and PR review
+
+An AI bot for Valkey CI failure remediation, PR review, and automated backports.
+
+## Features
+
+- **CI Failure Bot** — analyzes workflow failures, generates and validates fixes, opens PRs with approval gating
+- **PR Review Bot** — reviews pull requests via the GitHub API, posts summaries, publishes review comments, answers follow-up questions
+- **Backport Bot** — cherry-picks merged PRs onto release branches with LLM-based conflict resolution
+- **Fuzzer Monitor** — watches fuzzer runs, detects anomalies, creates GitHub issues
+- **Central Valkey Monitor** — watches scheduled CI runs, tracks failure history, queues validated fixes
 
 ## Setup
 
@@ -16,79 +25,34 @@ AWS authentication is wired for GitHub Actions OIDC by default:
 
 Local development:
 
-- copy [`.env.example`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.env.example) to `.env.local`
+- copy `.env.example` to `.env.local`
 - fill in your own `GITHUB_TOKEN`, `AWS_REGION`, and `AWS_PROFILE`
 - source `.env.local` manually before running scripts
 
-## Retrieval KB Refresh
+## CI Failure Bot
 
-The retrieval-backed setup also includes [`.github/workflows/refresh-bedrock-kb.yml`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.github/workflows/refresh-bedrock-kb.yml).
+The core feature. Reusable workflow at `.github/workflows/analyze-failure.yml`.
 
-It refreshes the existing Valkey code and docs knowledge bases used by retrieval:
+When a CI workflow fails in `valkey-io/valkey`, the bot:
 
-- code KB: `OHQMPN9RCG`
-- docs KB: `NAKLE24DH9`
+1. detects and classifies the failure (build error, test failure, flaky test)
+2. retrieves and parses logs using format-specific parsers (gtest, tcl, build errors, sentinel/cluster)
+3. analyzes root cause using Amazon Bedrock
+4. generates a candidate fix
+5. validates the fix by re-running the failing workflow
+6. queues the validated fix for human approval before opening a PR
 
-The workflow is OIDC-only and uses:
-
-- GitHub secret: `AWS_ROLE_ARN`
-- GitHub variable: `AWS_REGION`
-
-Manual runs default to `dry_run=true` so you can verify corpus prep and data-source discovery before mutating Bedrock.
-
-## Central Valkey Monitor
-
-This repo also includes a centralized monitor workflow at [`.github/workflows/monitor-valkey-daily.yml`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.github/workflows/monitor-valkey-daily.yml).
-
-It runs from this repo, watches new scheduled `Daily` runs in `valkey-io/valkey`, analyzes new failures, records per-job pass/fail history, validates candidate fixes, and queues approved-ready patches using the local config at [`.github/valkey-daily-bot.yml`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.github/valkey-daily-bot.yml).
-
-Required GitHub configuration for this repo:
+Required GitHub configuration:
 
 - secret: `AWS_ROLE_ARN`
 - either secret: `VALKEY_GITHUB_TOKEN`
 - or variable: `VALKEY_GITHUB_APP_ID` plus secret: `VALKEY_GITHUB_APP_PRIVATE_KEY`
 
-The workflow has two stages:
+## PR Review Bot
 
-- `monitor`: runs automatically on schedule, analyzes failures, applies history-based queue gating, and queues validated fixes in this bot repo
-- `create-approved-prs`: runs only after approval on the protected environment `valkey-pr-approval`
+Reusable workflow at `.github/workflows/review-pr.yml`.
 
-No PR is opened against `valkey-io/valkey` until that environment approval is granted.
-
-Approval context is written into the workflow summary so you can review:
-
-- the root-cause rationale
-- files the bot wants to change
-- observed failure streak
-- last known good commit and first bad commit when history exists
-
-Manual dispatch still defaults to `dry_run=true` so you can inspect candidate runs without advancing state or queueing fixes. When you want a real automated pass, dispatch with `dry_run=false`; the workflow will still stop at the approval gate before opening any PRs.
-
-## Central Valkey Fuzzer Monitor
-
-This repo also includes an analysis-only monitor workflow at [`.github/workflows/monitor-valkey-fuzzer.yml`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.github/workflows/monitor-valkey-fuzzer.yml).
-
-It runs from this repo, watches new scheduled `fuzzer-run.yml` executions in `valkey-io/valkey-fuzzer`, downloads the structured artifact bundle from each run when available, falls back to job logs when it is not, and writes a per-run anomaly summary using the local config at [`.github/valkey-fuzzer-bot.yml`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.github/valkey-fuzzer-bot.yml).
-
-Required GitHub configuration for this repo:
-
-- secret: `AWS_ROLE_ARN`
-- either secret: `VALKEY_GITHUB_TOKEN`
-- or variable: `VALKEY_GITHUB_APP_ID` plus secret: `VALKEY_GITHUB_APP_PRIVATE_KEY`
-
-The fuzzer monitor is analysis-only:
-
-- it does not open pull requests
-- it distinguishes expected chaos behavior from anomalous behavior
-- it automatically creates or updates a GitHub issue in `valkey-io/valkey-fuzzer` when a run is classified as `anomalous`
-- it writes the analysis to the workflow summary
-- it uploads the raw `fuzzer-monitor-result.json` payload as a workflow artifact
-
-## PR review bot
-
-The repository also includes a reusable PR reviewer workflow at `.github/workflows/review-pr.yml`.
-
-It reviews pull requests through the GitHub API without checking out PR head code in the privileged workflow. The reviewer uses direct Bedrock runtime calls, and can optionally inject explicit Bedrock KB retrieval into prompts. The reviewer can:
+Reviews pull requests through the GitHub API without checking out PR head code in the privileged workflow. The reviewer uses direct Bedrock runtime calls, and can optionally inject explicit Bedrock KB retrieval into prompts. It can:
 
 - post or update a PR summary comment
 - generate optional release notes
@@ -100,24 +64,19 @@ Example consumer-repo files:
 - `examples/pr-review-caller-workflow.yml`
 - `examples/pr-review-config.yml`
 
-For fork or cross-repo testing, this repo also includes [`.github/workflows/review-external-pr.yml`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.github/workflows/review-external-pr.yml).
+For fork or cross-repo testing, `.github/workflows/review-external-pr.yml` lets you dispatch a one-off review against any `owner/repo#PR` reachable by your GitHub token or GitHub App installation. It does not require adding workflow files or config files to the target repository. The reviewer posts comments on the target PR, but its incremental state is stored on this bot repo's `bot-data` branch.
 
-That workflow lets you dispatch a one-off review against any `owner/repo#PR` reachable by your GitHub token or GitHub App installation. It does not require adding workflow files or config files to the repository that owns the PR. The reviewer still posts summary and review comments on the target PR, but its incremental state is stored on this bot repo's `bot-data` branch instead of the target repo.
+Config loading checks the target repo first (`.github/pr-review-bot.yml`), then falls back to this bot repo's checked-in config.
 
-Cross-repo/manual review uses:
+Required GitHub configuration:
 
 - secret: `AWS_ROLE_ARN`
 - either secret: `VALKEY_GITHUB_TOKEN`
 - or variable: `VALKEY_GITHUB_APP_ID` plus secret: `VALKEY_GITHUB_APP_PRIVATE_KEY`
 
-Config loading for the reviewer now checks the target repo first, then falls back to this bot repo's checked-in config path. That means:
+## Backport Bot
 
-- if the target repo already has `.github/pr-review-bot.yml`, it is honored
-- if it does not, the bot repo's [`.github/pr-review-bot.yml`](/Users/sarthagg/IdeaProjects/valkey-ci-bot/.github/pr-review-bot.yml) is used as the default
-
-## Backport bot
-
-The repository includes a reusable backport workflow at `.github/workflows/backport.yml`.
+Reusable workflow at `.github/workflows/backport.yml`.
 
 When a maintainer adds a `backport <branch>` label to a merged PR in `valkey-io/valkey`, a caller workflow in that repo triggers this bot. The bot cherry-picks the merged PR's commits onto the target release branch and opens a backport PR. If the cherry-pick produces merge conflicts, the bot uses Amazon Bedrock to resolve them, applying the original PR's intent to the diverged codebase.
 
@@ -130,6 +89,10 @@ The pipeline:
 5. pushes the branch and opens a backport PR with labels, conflict details, and per-file resolution summaries
 6. posts a summary comment on the source PR
 
+The bot applies a `backport` label to every backport PR, and an `llm-resolved-conflicts` label when any file was resolved by the LLM, signaling that extra review attention is needed.
+
+Configuration is loaded from `.github/backport-bot.yml` in the consumer repo. When the file is missing, sensible defaults are used. Configurable settings include the Bedrock model ID, max conflict retries, max conflicting files, daily PR limit, per-backport token budget, and label names.
+
 Example consumer-repo files:
 
 - `examples/backport-caller-workflow.yml` — caller workflow triggered on `pull_request_target` `labeled` events
@@ -140,37 +103,61 @@ Required GitHub configuration in the consumer repo:
 - secret: `CI_BOT_AWS_ROLE_ARN` — IAM role assumable via GitHub OIDC for Bedrock access
 - variable: `CI_BOT_AWS_REGION` (optional, defaults to `us-east-1`)
 
-The bot applies a `backport` label to every backport PR, and an `llm-resolved-conflicts` label when any file was resolved by the LLM, signaling that extra review attention is needed.
+## Central Valkey Monitor
 
-Configuration is loaded from `.github/backport-bot.yml` in the consumer repo. When the file is missing, sensible defaults are used. Configurable settings include the Bedrock model ID, max conflict retries, max conflicting files, daily PR limit, per-backport token budget, and label names.
+Workflow at `.github/workflows/monitor-valkey-daily.yml`.
 
-## PR review bot
+Runs from this repo, watches new scheduled `Daily` runs in `valkey-io/valkey`, analyzes new failures, records per-job pass/fail history, validates candidate fixes, and queues approved-ready patches using the local config at `.github/valkey-daily-bot.yml`.
 
-The repository also includes a reusable PR reviewer workflow at `.github/workflows/review-pr.yml`.
+The workflow has two stages:
 
-It reviews pull requests through the GitHub API without checking out PR head code in the privileged workflow. The reviewer uses direct Bedrock runtime calls, and can optionally inject explicit Bedrock KB retrieval into prompts. The reviewer can:
+- `monitor`: runs automatically on schedule, analyzes failures, applies history-based queue gating, and queues validated fixes in this bot repo
+- `create-approved-prs`: runs only after approval on the protected environment `valkey-pr-approval`
 
-- post or update a PR summary comment
-- generate optional release notes
-- publish focused review comments
-- answer follow-up `/reviewbot` questions in PR comments and review threads
+No PR is opened against `valkey-io/valkey` until that environment approval is granted.
 
-Example consumer-repo files:
+Approval context is written into the workflow summary so you can review the root-cause rationale, files the bot wants to change, observed failure streak, and last known good / first bad commits when history exists.
 
-- `examples/pr-review-caller-workflow.yml`
-- `examples/pr-review-config.yml`
+Manual dispatch defaults to `dry_run=true` so you can inspect candidate runs without advancing state or queueing fixes. Dispatch with `dry_run=false` for a real automated pass; the workflow still stops at the approval gate before opening any PRs.
 
-For fork or cross-repo testing, this repo also includes `.github/workflows/review-external-pr.yml`.
-
-That workflow lets you dispatch a one-off review against any `owner/repo#PR` reachable by your GitHub token or GitHub App installation. It does not require adding workflow files or config files to the repository that owns the PR. The reviewer still posts summary and review comments on the target PR, but its incremental state is stored on this bot repo's `bot-data` branch instead of the target repo.
-
-Cross-repo/manual review uses:
+Required GitHub configuration:
 
 - secret: `AWS_ROLE_ARN`
 - either secret: `VALKEY_GITHUB_TOKEN`
 - or variable: `VALKEY_GITHUB_APP_ID` plus secret: `VALKEY_GITHUB_APP_PRIVATE_KEY`
 
-Config loading for the reviewer now checks the target repo first, then falls back to this bot repo's checked-in config path. That means:
+## Central Valkey Fuzzer Monitor
 
-- if the target repo already has `.github/pr-review-bot.yml`, it is honored
-- if it does not, the bot repo's `.github/pr-review-bot.yml` is used as the default
+Workflow at `.github/workflows/monitor-valkey-fuzzer.yml`.
+
+Runs from this repo, watches new scheduled `fuzzer-run.yml` executions in `valkey-io/valkey-fuzzer`, downloads the structured artifact bundle from each run when available, falls back to job logs when it is not, and writes a per-run anomaly summary using the local config at `.github/valkey-fuzzer-bot.yml`.
+
+The fuzzer monitor is analysis-only:
+
+- it does not open pull requests
+- it distinguishes expected chaos behavior from anomalous behavior
+- it automatically creates or updates a GitHub issue in `valkey-io/valkey-fuzzer` when a run is classified as `anomalous`
+- it writes the analysis to the workflow summary
+- it uploads the raw `fuzzer-monitor-result.json` payload as a workflow artifact
+
+Required GitHub configuration:
+
+- secret: `AWS_ROLE_ARN`
+- either secret: `VALKEY_GITHUB_TOKEN`
+- or variable: `VALKEY_GITHUB_APP_ID` plus secret: `VALKEY_GITHUB_APP_PRIVATE_KEY`
+
+## Retrieval KB Refresh
+
+Workflow at `.github/workflows/refresh-bedrock-kb.yml`.
+
+Refreshes the existing Valkey code and docs knowledge bases used by retrieval:
+
+- code KB: `OHQMPN9RCG`
+- docs KB: `NAKLE24DH9`
+
+The workflow is OIDC-only and uses:
+
+- GitHub secret: `AWS_ROLE_ARN`
+- GitHub variable: `AWS_REGION`
+
+Manual runs default to `dry_run=true` so you can verify corpus prep and data-source discovery before mutating Bedrock.
