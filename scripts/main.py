@@ -245,6 +245,11 @@ def _should_queue_validated_fix(
     if _is_single_run_candidate(report, root_cause):
         return True, "high-confidence-build-failure"
 
+    # Flaky tests with a validated fix should be queued — they degrade CI
+    # signal and the fix has already passed validation.
+    if root_cause.is_flaky and root_cause.confidence in ("medium", "high"):
+        return True, "flaky-test-fix"
+
     streak = (
         history_summary.consecutive_failures
         if history_summary and isinstance(history_summary.consecutive_failures, int)
@@ -391,8 +396,9 @@ def _analyze_and_fix(
         logger.warning("Analysis failed for job %s: %s", report.job_name, root_cause.rationale)
         return root_cause, None
 
-    # Skip fix generation for low confidence
-    if root_cause.confidence == "low":
+    # Skip fix generation for low confidence non-flaky failures.
+    # Flaky tests still deserve a fix attempt since they degrade CI signal.
+    if root_cause.confidence == "low" and not root_cause.is_flaky:
         logger.warning(
             "Skipping fix generation for job %s: low-confidence.",
             report.job_name,
