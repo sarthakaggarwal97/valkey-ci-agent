@@ -48,6 +48,21 @@
           "error_signature": "2026-03-14T00:17:01.8800000Z Evaluating test-rpm-distros-tls-module-no-tls.if\n2026-03-14T00:17:01.8800000Z Evaluating: (success() && (((((github.event_name == 'workflow_call') || (github.event_name == 'workflow_dispatch') || (((github.event_name == 'schedule') && (github.repository == 'valkey-io/valkey'))) || (((github.event_name == 'pull_request') && (github.event.pull_request.base.ref != 'unstable') && (github.event.action != 'labeled'))))) && !contains(github.event.inputs.skipjobs, 'tls'))))\n2026-03-14T00:17:01.8800000Z Expanded: (true && ((('schedule' == 'workflow_call') || ('schedule' == 'workflow_dispatch') || (('schedule' == 'schedule') && ('valkey-io/valkey' == 'valkey-io/valkey')) || ((github.event_name == 'pull_request') && (github.event.pull_request.base.ref != 'unstable') && (github.event.action != 'labeled'))) && !contains(null, 'tls')))\n2026-03-14T00:17:01.8800000Z Result: true\n2026-03-14T00:17:01.8960000Z Requested labels: ubuntu-latest\n2026-03-14T00:17:01.8960000Z Job defined at: valkey-io/valkey/.github/workflows/daily.yml@refs/heads/unstable\n2026-03-14T00:17:01.8960000Z Waiting for a runner to pick up this job...\n2026-03-14T00:17:02.0470000Z Job is about to start running on the hosted runner: GitHub Actions 1000571504\n2026-03-14T00:17:02.0450000Z Job is waiting for a hosted runner to come online.",
           "file_path": "",
           "fingerprint": "0617a46802f930c5b020c7742051f7bb80689fb8bc1c8fef6e0c665e981e6fe2"
+        },
+        {
+          "outcome": "pass",
+          "observed_at": "2026-03-15T07:15:24.204392+00:00",
+          "commit_sha": "6c329dfe2c02d09b276fd5617acdb31e6169ebc1",
+          "workflow_run_id": 23099546491,
+          "workflow_name": "Daily",
+          "workflow_file": "daily.yml",
+          "job_name": "test-fedorarawhide-tls-module-no-tls",
+          "matrix_params": {},
+          "failure_identifier": "test-fedorarawhide-tls-module-no-tls",
+          "test_name": null,
+          "error_signature": "",
+          "file_path": "",
+          "fingerprint": null
         }
       ]
     },
@@ -73,6 +88,21 @@
           "error_signature": "2026-03-14T00:17:01.7350000Z Requested labels: ubuntu-latest\n2026-03-14T00:17:01.7350000Z Job defined at: valkey-io/valkey/.github/workflows/daily.yml@refs/heads/unstable\n2026-03-14T00:17:01.7350000Z Waiting for a runner to pick up this job...\n2026-03-14T00:17:01.7350000Z Evaluating test-ubuntu-32bit.if\n2026-03-14T00:17:01.7350000Z Evaluating: (success() && (((((github.event_name == 'workflow_call') || (github.event_name == 'workflow_dispatch') || (((github.event_name == 'schedule') && (github.repository == 'valkey-io/valkey'))) || (((github.event_name == 'pull_request') && (((github.event.pull_request.base.ref != 'unstable') || contains(github.event.pull_request.labels.*.name, 'run-extra-tests'))) && (((github.event.action != 'labeled') || (((github.event.pull_request.base.ref == 'unstable') && (github.event.label.name == 'run-extra-tests'))))))))) && !contains(github.event.inputs.skipjobs, '32bit'))))\n2026-03-14T00:17:01.7350000Z Expanded: (true && ((('schedule' == 'workflow_call') || ('schedule' == 'workflow_dispatch') || (('schedule' == 'schedule') && ('valkey-io/valkey' == 'valkey-io/valkey')) || ((github.event_name == 'pull_request') && ((github.event.pull_request.base.ref != 'unstable') || contains(github.event.pull_request.labels.*.name, 'run-extra-tests')) && ((github.event.action != 'labeled') || ((github.event.pull_request.base.ref == 'unstable') && (github.event.label.name == 'run-extra-tests'))))) && !contains(null, '32bit')))\n2026-03-14T00:17:01.7350000Z Result: true\n2026-03-14T00:17:01.8870000Z Job is about to start running on the hosted runner: GitHub Actions 1000571478\n2026-03-14T00:17:01.8870000Z Job is waiting for a hosted runner to come online.",
           "file_path": "",
           "fingerprint": "2e60bb8aab20f8d28eb5346a6f801d80206d7d486678c2e7da05c2315145e8b6"
+        },
+        {
+          "outcome": "pass",
+          "observed_at": "2026-03-15T07:15:24.204279+00:00",
+          "commit_sha": "6c329dfe2c02d09b276fd5617acdb31e6169ebc1",
+          "workflow_run_id": 23099546491,
+          "workflow_name": "Daily",
+          "workflow_file": "daily.yml",
+          "job_name": "test-ubuntu-32bit",
+          "matrix_params": {},
+          "failure_identifier": "test-ubuntu-32bit",
+          "test_name": null,
+          "error_signature": "",
+          "file_path": "",
+          "fingerprint": null
         }
       ]
     }
