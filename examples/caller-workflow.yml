@@ -87,6 +87,8 @@ jobs:
       mode: analyze
     secrets:
       AWS_ROLE_ARN: ${{ secrets.CI_BOT_AWS_ROLE_ARN }}
+      VALKEY_GITHUB_APP_ID: ${{ secrets.VALKEY_GITHUB_APP_ID }}
+      VALKEY_GITHUB_APP_PRIVATE_KEY: ${{ secrets.VALKEY_GITHUB_APP_PRIVATE_KEY }}
 
   # ---------------------------------------------------------------------------
   # Reconcile: drain queued failures and sync failure store with PR state.
@@ -102,6 +104,8 @@ jobs:
       mode: reconcile
     secrets:
       AWS_ROLE_ARN: ${{ secrets.CI_BOT_AWS_ROLE_ARN }}
+      VALKEY_GITHUB_APP_ID: ${{ secrets.VALKEY_GITHUB_APP_ID }}
+      VALKEY_GITHUB_APP_PRIVATE_KEY: ${{ secrets.VALKEY_GITHUB_APP_PRIVATE_KEY }}
 
   # ---------------------------------------------------------------------------
   # Skip: log untrusted or non-failure workflow_run events.

@@ -7,6 +7,12 @@
 #   Secret:   CI_BOT_AWS_ROLE_ARN
 #   Variable: CI_BOT_AWS_REGION
 #
+# For bot identity on comments, set these as org-level secrets:
+#   Secret:   VALKEY_GITHUB_APP_ID          – GitHub App ID
+#   Secret:   VALKEY_GITHUB_APP_PRIVATE_KEY – GitHub App private key
+#
+# Without the app secrets, comments will appear as github-actions[bot].
+#
 name: PR Review Bot
 
 on:
@@ -65,3 +71,5 @@ jobs:
       mode: ${{ needs.preflight.outputs.mode }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.CI_BOT_AWS_ROLE_ARN }}
+      VALKEY_GITHUB_APP_ID: ${{ secrets.VALKEY_GITHUB_APP_ID }}
+      VALKEY_GITHUB_APP_PRIVATE_KEY: ${{ secrets.VALKEY_GITHUB_APP_PRIVATE_KEY }}

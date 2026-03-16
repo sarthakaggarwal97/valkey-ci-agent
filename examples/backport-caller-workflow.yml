@@ -10,6 +10,11 @@
 #
 # No secrets or variables are needed in the consumer repo — the agent repo
 # owns all credentials.
+#
+# Optional (for bot identity on comments/PRs):
+#   Secret:   VALKEY_GITHUB_APP_ID          – GitHub App ID
+#   Secret:   VALKEY_GITHUB_APP_PRIVATE_KEY – GitHub App private key
+#
 name: Backport Agent
 
 permissions:

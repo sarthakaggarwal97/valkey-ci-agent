@@ -21,6 +21,12 @@ on:
     secrets:
       AWS_ROLE_ARN:
         required: true
+      VALKEY_GITHUB_APP_ID:
+        description: "GitHub App ID for the bot identity (optional, falls back to github.token)"
+        required: false
+      VALKEY_GITHUB_APP_PRIVATE_KEY:
+        description: "GitHub App private key for the bot identity (optional, falls back to github.token)"
+        required: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -49,6 +55,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Generate GitHub App token
+        if: ${{ secrets.VALKEY_GITHUB_APP_ID != '' && secrets.VALKEY_GITHUB_APP_PRIVATE_KEY != '' }}
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.VALKEY_GITHUB_APP_ID }}
+          private-key: ${{ secrets.VALKEY_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Configure AWS credentials from OIDC role
         uses: aws-actions/configure-aws-credentials@v5
         with:
@@ -64,5 +79,5 @@ jobs:
             --repo "${{ github.repository }}" \
             --config "${{ inputs.config_path }}" \
             --mode "${{ inputs.mode }}" \
-            --token "${{ github.token }}" \
+            --token "${{ steps.app-token.outputs.token || github.token }}" \
             --aws-region "${{ inputs.aws_region }}"
