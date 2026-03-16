@@ -67,6 +67,13 @@ class ReviewChat:
                 section_title="Retrieved Valkey Context",
             )
 
+        custom_instructions_section = ""
+        if config.custom_instructions:
+            custom_instructions_section = f"""
+## Project-Specific Context
+{config.custom_instructions}
+"""
+
         user_prompt = f"""Answer this pull request review question.
 
 PR title: {pr.title}
@@ -83,6 +90,7 @@ Relevant file context:
 {file_context}
 
 {retrieved_context}
+{custom_instructions_section}
 """
         return self._bedrock.invoke(
             _SYSTEM_PROMPT,

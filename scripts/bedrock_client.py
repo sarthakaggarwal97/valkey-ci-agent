@@ -123,6 +123,10 @@ def _build_project_context_text(project: ProjectContext) -> str:
     ]
     if project.description:
         parts.append(f"Project description: {project.description}")
+    if project.source_dirs:
+        parts.append(f"Source directories: {', '.join(project.source_dirs)}")
+    if project.test_dirs:
+        parts.append(f"Test directories: {', '.join(project.test_dirs)}")
     return "\n".join(parts)
 
 

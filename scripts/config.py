@@ -104,6 +104,7 @@ class ReviewerConfig:
     github_concurrency_limit: int = 6
     max_input_tokens: int = 190_000
     max_output_tokens: int = 8192
+    custom_instructions: str = ""
     project: ProjectContext = field(default_factory=ProjectContext)
     models: ReviewerModels = field(default_factory=ReviewerModels)
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
@@ -491,6 +492,10 @@ def load_reviewer_config_data(raw: Any, *, source: str = "<memory>") -> Reviewer
             root.get("max_output_tokens", defaults.max_output_tokens)
             if "max_output_tokens" in root else defaults.max_output_tokens,
             defaults.max_output_tokens,
+        ),
+        custom_instructions=_coerce_str(
+            root.get("custom_instructions"),
+            defaults.custom_instructions,
         ),
         project=_merge_project(project) if project else defaults.project,
         models=_merge_reviewer_models(models),

@@ -96,6 +96,14 @@ class PRSummarizer:
                 self._retrieval_config,
                 section_title="Retrieved Valkey Context",
             )
+
+        custom_instructions_section = ""
+        if config.custom_instructions:
+            custom_instructions_section = f"""
+## Project-Specific Context
+{config.custom_instructions}
+"""
+
         user_prompt = f"""Summarize this pull request.
 
 Title: {pr.title}
@@ -106,6 +114,7 @@ Changed files:
 {_render_file_context(pr)}
 
 {retrieved_context}
+{custom_instructions_section}
 
 Return JSON with this schema:
 {{

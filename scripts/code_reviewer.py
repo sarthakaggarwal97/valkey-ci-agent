@@ -726,6 +726,13 @@ Summary of all changes in this PR (for cross-file context):
 {short_summary}
 """
 
+        custom_instructions_section = ""
+        if config.custom_instructions:
+            custom_instructions_section = f"""
+## Project-Specific Review Guidelines
+{config.custom_instructions}
+"""
+
         user_prompt = f"""Review this pull request and return only actionable findings.
 
 PR title: {pr.title}
@@ -736,6 +743,7 @@ Review scope excerpts (patch/content may be truncated):
 {_serialize_scope(diff_scope)}
 
 {retrieved_context}
+{custom_instructions_section}
 
 Return JSON in one of these shapes:
 [
