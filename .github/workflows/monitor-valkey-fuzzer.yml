@@ -67,7 +67,7 @@ jobs:
 
       - name: Create target repository GitHub App token
         id: app-token
-        if: ${{ env.VALKEY_GITHUB_TOKEN == '' }}
+        if: ${{ env.VALKEY_GITHUB_APP_ID != '' && env.VALKEY_GITHUB_APP_PRIVATE_KEY != '' }}
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ env.VALKEY_GITHUB_APP_ID }}
@@ -82,10 +82,13 @@ jobs:
         id: target-token
         shell: bash
         run: |
-          if [[ -n "${VALKEY_GITHUB_TOKEN}" ]]; then
+          if [[ -n "${{ steps.app-token.outputs.token }}" ]]; then
+            echo "token=${{ steps.app-token.outputs.token }}" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${VALKEY_GITHUB_TOKEN}" ]]; then
             echo "token=${VALKEY_GITHUB_TOKEN}" >> "$GITHUB_OUTPUT"
           else
-            echo "token=${{ steps.app-token.outputs.token }}" >> "$GITHUB_OUTPUT"
+            echo "::error::No target repository token available."
+            exit 1
           fi
 
       - name: Configure AWS credentials from OIDC role
