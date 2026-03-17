@@ -486,49 +486,6 @@ def _build_retrieval_query(pr: PullRequestContext, diff_scope: DiffScope) -> str
     return "\n".join(filter(None, lines))
 
 
-_VERIFY_SYSTEM_PROMPT = """You are a senior software engineer tasked with verifying code review findings.
-Your job is to challenge each finding and determine if it is a TRUE positive or
-a FALSE positive. Be skeptical but fair — do not dismiss findings just because
-they involve concurrency, memory management, or error-path reasoning.
-
-A finding is a FALSE POSITIVE if:
-- It claims a guard, check, or cleanup is missing, but the guard exists in the
-  shown code (even in a different function within the same diff).
-- It describes a theoretical concern that cannot actually occur given the control
-  flow visible in the diff.
-- It flags redundant-but-harmless code as a bug.
-- It depends entirely on hypothetical future code changes with no current impact.
-
-A finding is a TRUE POSITIVE if:
-- The buggy code path can be traced within the provided diff excerpts.
-- The finding identifies a concrete defect (e.g., wrong operator, copy-paste
-  duplication, off-by-one, null dereference, memory leak, use-after-free,
-  race condition, missing cleanup on error path).
-- The finding identifies a real concurrency or memory safety issue where the
-  faulty interaction is visible in the shown code, even if it requires
-  reasoning about thread scheduling or error paths.
-
-Return valid JSON only."""
-
-_VERIFY_SCHEMA: dict = {
-    "type": "object",
-    "properties": {
-        "results": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "index": {"type": "integer"},
-                    "verdict": {"type": "string", "enum": ["keep", "drop"]},
-                    "reason": {"type": "string"},
-                },
-                "required": ["index", "verdict", "reason"],
-            },
-        },
-    },
-    "required": ["results"],
-}
-
 
 class CodeReviewer:
     """Generates focused review findings for risky code changes."""
@@ -687,16 +644,12 @@ or
                         seen.add(key)
                         deduped.append(f)
                 capped = deduped[: config.max_review_comments]
-                if capped:
-                    capped = self.verify_findings(capped, diff_scope, config)
                 return capped
 
         findings = self._review_single_scope(
             pr, diff_scope, config, short_summary=short_summary,
         )
         capped = findings[: config.max_review_comments]
-        if capped:
-            capped = self.verify_findings(capped, diff_scope, config)
         return capped
 
     def _review_single_scope(
@@ -947,104 +900,3 @@ CRITICAL rules:
 
         return capped
 
-    def verify_findings(
-        self,
-        findings: list[ReviewFinding],
-        diff_scope: DiffScope,
-        config: ReviewerConfig,
-    ) -> list[ReviewFinding]:
-        """Challenge each finding with a second LLM pass to filter false positives.
-
-        Sends the findings plus the diff context to the model and asks it to
-        classify each as keep or drop.  Findings the verifier marks as false
-        positives are removed before publishing.
-        """
-        if not findings:
-            return []
-
-        findings_block = "\n\n".join(
-            f"[Finding {i}] ({f.severity}) {f.path}:{f.line}\n{f.body}"
-            for i, f in enumerate(findings)
-        )
-
-        diff_block = _serialize_scope(diff_scope, max_chars=120_000)
-
-        user_prompt = f"""Below are code review findings generated for a pull request.
-Your task: for each finding, determine whether it is a TRUE positive (real bug
-with evidence fully traceable in the diff) or a FALSE positive.
-
-Diff context:
-{diff_block}
-
-Findings to verify:
-{findings_block}
-
-For each finding, return a JSON object with:
-- "index": the finding number (0-based)
-- "verdict": "keep" if true positive, "drop" if false positive
-- "reason": one sentence explaining your verdict
-
-Return JSON: {{ "results": [ ... ] }}
-"""
-        _has_schema_method = (
-            callable(getattr(self._bedrock, "invoke_with_schema", None))
-            and type(self._bedrock).__name__ != "MagicMock"
-        )
-
-        try:
-            used_tool_use = False
-            if _has_schema_method:
-                try:
-                    response = self._bedrock.invoke_with_schema(
-                        _VERIFY_SYSTEM_PROMPT,
-                        user_prompt,
-                        tool_name="verify_findings_json",
-                        tool_description="Verify code review findings as true or false positives",
-                        json_schema=_VERIFY_SCHEMA,
-                        model_id=config.models.heavy_model_id,
-                        max_output_tokens=config.max_output_tokens,
-                        temperature=0.0,
-                    )
-                    payload = json.loads(response) if isinstance(response, str) else response
-                    if isinstance(payload, dict) and "results" in payload:
-                        used_tool_use = True
-                except Exception as tool_exc:
-                    logger.info("Verify tool-use failed (%s), falling back to plain invoke.", tool_exc)
-
-            if not used_tool_use:
-                response = self._bedrock.invoke(
-                    _VERIFY_SYSTEM_PROMPT,
-                    user_prompt,
-                    model_id=config.models.heavy_model_id,
-                    max_output_tokens=config.max_output_tokens,
-                    temperature=0.0,
-                )
-                payload = _extract_json_payload(response)
-
-            results = payload.get("results", []) if isinstance(payload, dict) else []
-            drop_indices: set[int] = set()
-            for result in results:
-                if not isinstance(result, dict):
-                    continue
-                idx = result.get("index")
-                verdict = result.get("verdict", "").lower()
-                reason = result.get("reason", "")
-                if isinstance(idx, int) and verdict == "drop":
-                    drop_indices.add(idx)
-                    logger.info(
-                        "Verification dropped finding %d: %s", idx, reason,
-                    )
-
-            verified = [f for i, f in enumerate(findings) if i not in drop_indices]
-            logger.info(
-                "Verification pass: %d/%d findings kept, %d dropped.",
-                len(verified),
-                len(findings),
-                len(drop_indices),
-            )
-            return verified
-        except Exception as exc:
-            logger.warning(
-                "Finding verification failed (%s), keeping all findings.", exc,
-            )
-            return findings
