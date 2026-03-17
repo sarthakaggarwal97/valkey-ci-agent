@@ -35,6 +35,18 @@
       "created_at": "2026-03-16T07:50:47.238851+00:00",
       "updated_at": "2026-03-16T07:50:47.238851+00:00",
       "queued_pr_payload": null
+    },
+    "90a20b193126cbc808ca35dd8d576d0a40e40fb920b2955c824902c563944362": {
+      "fingerprint": "90a20b193126cbc808ca35dd8d576d0a40e40fb920b2955c824902c563944362",
+      "failure_identifier": "test-alpine-jemalloc",
+      "test_name": null,
+      "error_signature": "2026-03-17T00:19:10.1700000Z Evaluating test-alpine-jemalloc.if\n2026-03-17T00:19:10.1700000Z Evaluating: (success() && (((((github.event_name == 'workflow_call') || (github.event_name == 'workflow_dispatch') || (((github.event_name == 'schedule') && (github.repository == 'valkey-io/valkey'))) || (((github.event_name == 'pull_request') && (((github.event.pull_request.base.ref != 'unstable') || contains(github.event.pull_request.labels.*.name, 'run-extra-tests'))) && (((github.event.action != 'labeled') || (((github.event.pull_request.base.ref == 'unstable') && (github.event.label.name == 'run-extra-tests'))))))))) && !contains(github.event.inputs.skipjobs, 'alpine'))))\n2026-03-17T00:19:10.1700000Z Expanded: (true && ((('schedule' == 'workflow_call') || ('schedule' == 'workflow_dispatch') || (('schedule' == 'schedule') && ('valkey-io/valkey' == 'valkey-io/valkey')) || ((github.event_name == 'pull_request') && ((github.event.pull_request.base.ref != 'unstable') || contains(github.event.pull_request.labels.*.name, 'run-extra-tests')) && ((github.event.action != 'labeled') || ((github.event.pull_request.base.ref == 'unstable') && (github.event.label.name == 'run-extra-tests'))))) && !contains(null, 'alpine')))\n2026-03-17T00:19:10.1700000Z Result: true\n2026-03-17T00:19:10.6740000Z Requested labels: ubuntu-latest\n2026-03-17T00:19:10.6740000Z Job defined at: valkey-io/valkey/.github/workflows/daily.yml@refs/heads/unstable\n2026-03-17T00:19:10.6740000Z Waiting for a runner to pick up this job...\n2026-03-17T02:22:22.4770000Z Job is about to start running on the hosted runner: GitHub Actions 1000578818\n2026-03-17T02:22:22.4770000Z Job is waiting for a hosted runner to come online.",
+      "file_path": "",
+      "pr_url": null,
+      "status": "processing",
+      "created_at": "2026-03-17T06:16:03.196249+00:00",
+      "updated_at": "2026-03-17T06:16:03.196249+00:00",
+      "queued_pr_payload": null
     }
   },
   "history": {
@@ -175,6 +187,31 @@
           "error_signature": "",
           "file_path": "",
           "fingerprint": null
+        }
+      ]
+    },
+    "ea12cf8f481cf23ac7888219843b45fbd3806bb170096bf173ee83901a65be58": {
+      "key": "ea12cf8f481cf23ac7888219843b45fbd3806bb170096bf173ee83901a65be58",
+      "workflow_file": "daily.yml",
+      "job_name": "test-alpine-jemalloc",
+      "matrix_params": {},
+      "failure_identifier": "test-alpine-jemalloc",
+      "test_name": null,
+      "observations": [
+        {
+          "outcome": "fail",
+          "observed_at": "2026-03-17T06:16:03.196352+00:00",
+          "commit_sha": "6c329dfe2c02d09b276fd5617acdb31e6169ebc1",
+          "workflow_run_id": 23172248714,
+          "workflow_name": "Daily",
+          "workflow_file": "daily.yml",
+          "job_name": "test-alpine-jemalloc",
+          "matrix_params": {},
+          "failure_identifier": "test-alpine-jemalloc",
+          "test_name": null,
+          "error_signature": "2026-03-17T00:19:10.1700000Z Evaluating test-alpine-jemalloc.if\n2026-03-17T00:19:10.1700000Z Evaluating: (success() && (((((github.event_name == 'workflow_call') || (github.event_name == 'workflow_dispatch') || (((github.event_name == 'schedule') && (github.repository == 'valkey-io/valkey'))) || (((github.event_name == 'pull_request') && (((github.event.pull_request.base.ref != 'unstable') || contains(github.event.pull_request.labels.*.name, 'run-extra-tests'))) && (((github.event.action != 'labeled') || (((github.event.pull_request.base.ref == 'unstable') && (github.event.label.name == 'run-extra-tests'))))))))) && !contains(github.event.inputs.skipjobs, 'alpine'))))\n2026-03-17T00:19:10.1700000Z Expanded: (true && ((('schedule' == 'workflow_call') || ('schedule' == 'workflow_dispatch') || (('schedule' == 'schedule') && ('valkey-io/valkey' == 'valkey-io/valkey')) || ((github.event_name == 'pull_request') && ((github.event.pull_request.base.ref != 'unstable') || contains(github.event.pull_request.labels.*.name, 'run-extra-tests')) && ((github.event.action != 'labeled') || ((github.event.pull_request.base.ref == 'unstable') && (github.event.label.name == 'run-extra-tests'))))) && !contains(null, 'alpine')))\n2026-03-17T00:19:10.1700000Z Result: true\n2026-03-17T00:19:10.6740000Z Requested labels: ubuntu-latest\n2026-03-17T00:19:10.6740000Z Job defined at: valkey-io/valkey/.github/workflows/daily.yml@refs/heads/unstable\n2026-03-17T00:19:10.6740000Z Waiting for a runner to pick up this job...\n2026-03-17T02:22:22.4770000Z Job is about to start running on the hosted runner: GitHub Actions 1000578818\n2026-03-17T02:22:22.4770000Z Job is waiting for a hosted runner to come online.",
+          "file_path": "",
+          "fingerprint": "90a20b193126cbc808ca35dd8d576d0a40e40fb920b2955c824902c563944362"
         }
       ]
     }
