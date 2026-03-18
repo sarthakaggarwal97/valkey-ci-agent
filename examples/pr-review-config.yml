@@ -61,6 +61,13 @@ reviewer:
       clustering, Lua scripting, pub/sub, and persistence via RDB and AOF.
     source_dirs: ["src/"]
     test_dirs: ["tests/"]
+    # Optional mappings that help the reviewer find likely regression tests
+    # for a changed source file. Use {name} as the base filename placeholder.
+    test_to_source_patterns:
+      - test_path: "tests/unit/{name}.tcl"
+        source_path: "src/{name}.c"
+      - test_path: "tests/integration/{name}.tcl"
+        source_path: "src/{name}.c"
 
   retrieval:
     enabled: false

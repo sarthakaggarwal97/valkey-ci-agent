@@ -59,6 +59,18 @@ Reviews pull requests through the GitHub API without checking out PR head code i
 - publish focused review comments
 - answer follow-up `/reviewbot` questions in PR comments and review threads
 
+The reviewer is intentionally defect-oriented and conservative. It prefers a
+small number of high-confidence findings, generates structured candidate
+findings, runs a skeptic verification pass before publishing, ranks surviving
+findings by severity and confidence, and submits them as a single batched
+review with a short top-level summary.
+
+When deeper context is needed, the reviewer can fetch changed files at the PR
+head SHA, inspect the full pre-change file at the base SHA, search code at the
+pinned revision, and locate likely related tests. Test discovery uses the
+project metadata in the reviewer config, including optional
+`project.test_to_source_patterns` mappings.
+
 Example consumer-repo files:
 
 - `examples/pr-review-caller-workflow.yml`
@@ -67,6 +79,13 @@ Example consumer-repo files:
 For fork or cross-repo testing, `.github/workflows/review-external-pr.yml` lets you dispatch a one-off review against any `owner/repo#PR` reachable by your GitHub token or GitHub App installation. It does not require adding workflow files or config files to the target repository. The reviewer posts comments on the target PR, but its incremental state is stored on this agent repo's `bot-data` branch.
 
 Config loading checks the target repo first (`.github/pr-review-bot.yml`), then falls back to this agent repo's checked-in config.
+
+Useful reviewer config fields:
+
+- `reviewer.custom_instructions` for project-specific invariants and review guidance
+- `reviewer.project.source_dirs` and `reviewer.project.test_dirs` for source/test discovery
+- `reviewer.project.test_to_source_patterns` to map changed source files to likely regression tests
+- `reviewer.retrieval.*` to enable optional Bedrock Knowledge Base context
 
 Required GitHub configuration:
 
@@ -90,6 +109,11 @@ The pipeline:
 6. posts a summary comment on the source PR
 
 The agent applies a `backport` label to every backport PR, and an `llm-resolved-conflicts` label when any file was resolved by the LLM, signaling that extra review attention is needed.
+
+Generated backport PR bodies are verdict-first. They include a short backport
+summary, a compact facts table, a reviewer checklist, the cherry-picked commit
+list, conflict details, and a human-review warning when any file was
+LLM-resolved.
 
 Configuration is loaded from `.github/backport-agent.yml` in the consumer repo. When the file is missing, sensible defaults are used. Configurable settings include the Bedrock model ID, max conflict retries, max conflicting files, daily PR limit, per-backport token budget, and label names.
 
@@ -139,6 +163,11 @@ The fuzzer monitor is analysis-only:
 - it automatically creates or updates a GitHub issue in `valkey-io/valkey-fuzzer` when a run is classified as `anomalous`
 - it writes the analysis to the workflow summary
 - it uploads the raw `fuzzer-monitor-result.json` payload as a workflow artifact
+
+Generated anomaly issues are also verdict-first. Each issue includes a concise
+status line, metadata table, action-needed section, reproduction command when
+available, concrete findings grouped by severity, and collapsible normal
+signals for lower-noise triage.
 
 Required GitHub configuration:
 
