@@ -77,7 +77,7 @@ class BotConfig:
 class ReviewerModels:
     """Model configuration for PR reviewer light/heavy tasks."""
 
-    light_model_id: str = "us.anthropic.claude-opus-4-6-v1"
+    light_model_id: str = "us.anthropic.claude-sonnet-4-v1"
     heavy_model_id: str = "us.anthropic.claude-opus-4-6-v1"
     temperature: float = 0.05
 
@@ -96,7 +96,7 @@ class ReviewerConfig:
     max_files: int = 150
     max_review_comments: int = 20
     path_filters: list[str] = field(default_factory=list)
-    daily_token_budget: int = 1_000_000
+    daily_token_budget: int = 3_000_000
     bedrock_retries: int = 5
     github_retries: int = 5
     bedrock_timeout_ms: int = 120_000
