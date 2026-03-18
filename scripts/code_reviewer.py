@@ -626,6 +626,43 @@ _LIST_FILES_TOOL: dict = {
     },
 }
 
+_SEARCH_CODE_TOOL: dict = {
+    "toolSpec": {
+        "name": "search_code",
+        "description": (
+            "Search for a text pattern across the repository. Use this to "
+            "find all callers of a function, all references to a variable, "
+            "all places a macro or constant is used, or to locate where "
+            "something is defined. Returns matching file paths and line "
+            "excerpts. Limited to 15 results."
+        ),
+        "inputSchema": {
+            "json": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "The text or symbol to search for. Use a function "
+                            "name, variable name, string literal, or short "
+                            "code pattern."
+                        ),
+                    },
+                    "path_filter": {
+                        "type": "string",
+                        "description": (
+                            "Optional file extension or path prefix to narrow "
+                            "results (e.g. '.c', '.tcl', 'src/'). Omit to "
+                            "search all files."
+                        ),
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+}
+
 _SUBMIT_REVIEW_SCHEMA: dict = {
     "type": "object",
     "properties": {
@@ -696,6 +733,11 @@ class ReviewToolHandler:
             return self._get_file(tool_input.get("path", ""))
         if tool_name == "list_directory":
             return self._list_directory(tool_input.get("path", ""))
+        if tool_name == "search_code":
+            return self._search_code(
+                tool_input.get("query", ""),
+                tool_input.get("path_filter", ""),
+            )
         return f"Unknown tool: {tool_name}"
 
     def _get_file(self, path: str) -> str:
@@ -762,6 +804,60 @@ class ReviewToolHandler:
             return "\n".join(names)
         except Exception as exc:
             return f"Could not list {path}: {exc}"
+
+    def _search_code(self, query: str, path_filter: str = "") -> str:
+        if not query:
+            return "Error: query is required."
+        if self._fetch_count >= self._max_fetches:
+            return (
+                f"Fetch limit reached ({self._max_fetches}). "
+                "Please submit your review with the context you have."
+            )
+        self._fetch_count += 1
+        try:
+            # Build the GitHub code search query
+            search_q = f"{query} repo:{self._repo_name}"
+            if path_filter:
+                # path_filter can be an extension like ".c" or a path like "src/"
+                if path_filter.startswith("."):
+                    search_q += f" language:{path_filter.lstrip('.')}"
+                else:
+                    search_q += f" path:{path_filter}"
+
+            results = retry_github_call(
+                lambda: self._gh.search_code(search_q),
+                retries=self._github_retries,
+                description=f"search code for '{query}'",
+            )
+
+            lines: list[str] = []
+            count = 0
+            for item in results:
+                if count >= 15:
+                    break
+                # Each result has .path and .text_matches (if available)
+                entry = f"- {item.path}"
+                text_matches = getattr(item, "text_matches", None)
+                if text_matches:
+                    for match in text_matches[:2]:
+                        fragment = match.get("fragment", "").strip()
+                        if fragment:
+                            # Show first 200 chars of the fragment
+                            entry += f"\n  > {fragment[:200]}"
+                lines.append(entry)
+                count += 1
+
+            if not lines:
+                return f"No results found for '{query}'."
+
+            logger.info(
+                "Code search for '%s' returned %d result(s).", query, count,
+            )
+            return f"Found {count} result(s) for '{query}':\n" + "\n".join(lines)
+        except Exception as exc:
+            msg = f"Code search failed for '{query}': {exc}"
+            logger.warning(msg)
+            return msg
 
 
 class CodeReviewer:
@@ -1260,7 +1356,8 @@ WORKFLOW:
 1. Read the diff carefully and identify potential issues.
 2. If a potential finding depends on code in another file (e.g. an imported function, a header, a caller, a config file), use get_file to fetch that file and verify your hypothesis BEFORE reporting it.
 3. If you're unsure which file to look at, use list_directory to explore the repo structure.
-4. Once you have enough context, call submit_review with your findings.
+4. Use search_code to find all callers of a function, all references to a variable, or to locate where something is defined across the codebase.
+5. Once you have enough context, call submit_review with your findings.
 
 CRITICAL rules:
 - New hunks are annotated with line numbers (e.g. "120: code"). Use these for the "line" field.
@@ -1283,7 +1380,7 @@ CRITICAL rules:
             github_retries=config.github_retries,
         )
 
-        tools = [_GET_FILE_TOOL, _LIST_FILES_TOOL, _SUBMIT_REVIEW_TOOL]
+        tools = [_GET_FILE_TOOL, _LIST_FILES_TOOL, _SEARCH_CODE_TOOL, _SUBMIT_REVIEW_TOOL]
 
         try:
             response = self._bedrock.converse_with_tools(
