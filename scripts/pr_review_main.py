@@ -277,6 +277,7 @@ def run(argv: list[str] | None = None) -> int:
                 bedrock_client,
                 retriever=retriever,
                 retrieval_config=config.retrieval,
+                github_client=gh,
             ).reply(
                 chat_context,
                 thread,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts.bedrock_client import PromptClient
+from scripts.bedrock_client import BedrockClient, PromptClient
 from scripts.bedrock_retriever import BedrockRetriever
 from scripts.config import RetrievalConfig, ReviewerConfig
 from scripts.models import PullRequestContext, ReviewThread
@@ -40,10 +40,12 @@ class ReviewChat:
         *,
         retriever: BedrockRetriever | None = None,
         retrieval_config: RetrievalConfig | None = None,
+        github_client: "object | None" = None,
     ) -> None:
         self._bedrock = bedrock_client
         self._retriever = retriever
         self._retrieval_config = retrieval_config or RetrievalConfig()
+        self._github_client = github_client
 
     def reply(
         self,
@@ -92,6 +94,17 @@ Relevant file context:
 {retrieved_context}
 {custom_instructions_section}
 """
+        # Try agentic reply if we have a GitHub client and BedrockClient
+        if (
+            self._github_client is not None
+            and isinstance(self._bedrock, BedrockClient)
+        ):
+            agentic_reply = self._reply_agentic(
+                pr, user_prompt, config,
+            )
+            if agentic_reply is not None:
+                return agentic_reply
+
         return self._bedrock.invoke(
             _SYSTEM_PROMPT,
             user_prompt,
@@ -99,3 +112,81 @@ Relevant file context:
             max_output_tokens=config.max_output_tokens,
             temperature=config.models.temperature,
         ).strip()
+
+    def _reply_agentic(
+        self,
+        pr: PullRequestContext,
+        user_prompt: str,
+        config: ReviewerConfig,
+    ) -> str | None:
+        """Try to answer using the agentic tool-use loop."""
+        from scripts.code_reviewer import (
+            ReviewToolHandler,
+            _GET_FILE_TOOL,
+            _LIST_FILES_TOOL,
+            _SEARCH_CODE_TOOL,
+        )
+
+        _SUBMIT_REPLY_TOOL: dict = {
+            "toolSpec": {
+                "name": "submit_reply",
+                "description": "Submit your final reply to the review question.",
+                "inputSchema": {
+                    "json": {
+                        "type": "object",
+                        "properties": {
+                            "reply": {
+                                "type": "string",
+                                "description": "The reply text in markdown.",
+                            },
+                        },
+                        "required": ["reply"],
+                    },
+                },
+            },
+        }
+
+        agentic_prompt = user_prompt + (
+            "\n\nYou have tools to fetch additional files from the repository "
+            "if you need more context to answer accurately. Use get_file to "
+            "read source files. Use search_code to find definitions or usages. "
+            "When ready, call submit_reply with your answer."
+        )
+
+        tool_handler = ReviewToolHandler(
+            github_client=self._github_client,
+            repo_name=pr.repo,
+            head_sha=pr.head_sha,
+            max_fetches=6,
+        )
+
+        tools = [_GET_FILE_TOOL, _LIST_FILES_TOOL, _SEARCH_CODE_TOOL, _SUBMIT_REPLY_TOOL]
+
+        import json as _json
+        try:
+            response = self._bedrock.converse_with_tools(
+                _SYSTEM_PROMPT,
+                agentic_prompt,
+                tools=tools,
+                tool_handler=tool_handler,
+                terminal_tool="submit_reply",
+                max_turns=6,
+                model_id=config.models.heavy_model_id,
+                max_output_tokens=config.max_output_tokens,
+                temperature=config.models.temperature,
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Agentic chat reply failed: %s. Falling back.", exc,
+            )
+            return None
+
+        try:
+            payload = _json.loads(response) if isinstance(response, str) else response
+        except Exception:
+            return response.strip() if isinstance(response, str) else None
+
+        if isinstance(payload, dict) and "reply" in payload:
+            return payload["reply"].strip()
+        return response.strip() if isinstance(response, str) else None

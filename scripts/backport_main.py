@@ -279,7 +279,12 @@ def run_backport(
                 bedrock_adapter,
                 client=boto3.client("bedrock-runtime", region_name=aws_region),
             )
-            resolver = ConflictResolver(bedrock_client, config)
+            resolver = ConflictResolver(
+                bedrock_client, config,
+                github_client=gh,
+                repo_full_name=repo_full_name,
+                head_sha=merge_commit_sha or "",
+            )
             resolution_results = resolver.resolve_conflicts(
                 cherry_result.conflicting_files,
                 pr_context,

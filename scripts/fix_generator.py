@@ -163,12 +163,21 @@ class FixGenerator:
     scope and retry limits.
     """
 
-    def __init__(self, bedrock_client: BedrockClient, config: BotConfig):
+    def __init__(
+        self,
+        bedrock_client: BedrockClient,
+        config: BotConfig,
+        *,
+        github_client: "object | None" = None,
+        repo_full_name: str = "",
+    ):
         self._bedrock = bedrock_client
         self._config = config
         self.last_attempt_count = 0
         self._retriever: BedrockRetriever | None = None
         self._retrieval_config = RetrievalConfig()
+        self._github_client = github_client
+        self._repo_full_name = repo_full_name
 
     def with_retriever(
         self,
@@ -214,6 +223,15 @@ class FixGenerator:
             "Fix generation started: confidence=%s, files_to_change=%s",
             root_cause.confidence, root_cause.files_to_change,
         )
+
+        # Try agentic generation first
+        agentic_diff = self._generate_agentic(
+            root_cause, source_files, validation_error=validation_error,
+        )
+        if agentic_diff is not None:
+            self.last_attempt_count = 1
+            return agentic_diff
+
         max_attempts = self._config.max_retries_fix + 1  # initial + retries
         apply_error: str | None = None
         retrieved_context = ""
@@ -306,4 +324,122 @@ class FixGenerator:
         logger.error(
             "Fix generation failed after %d attempts.", max_attempts
         )
+        return None
+
+    def _generate_agentic(
+        self,
+        root_cause: RootCauseReport,
+        source_files: dict[str, str],
+        validation_error: str | None = None,
+    ) -> str | None:
+        """Try to generate a fix using the agentic tool-use loop.
+
+        Returns a unified diff string on success, or None to fall back.
+        """
+        if self._github_client is None or not self._repo_full_name:
+            return None
+
+        from scripts.code_reviewer import (
+            ReviewToolHandler,
+            _GET_FILE_TOOL,
+            _LIST_FILES_TOOL,
+            _SEARCH_CODE_TOOL,
+        )
+
+        _SUBMIT_FIX_TOOL: dict = {
+            "toolSpec": {
+                "name": "submit_fix",
+                "description": (
+                    "Submit the unified diff patch that fixes the issue. "
+                    "The diff must use standard unified diff format "
+                    "(--- a/file, +++ b/file, @@ hunks) and be applicable "
+                    "with `git apply`."
+                ),
+                "inputSchema": {
+                    "json": {
+                        "type": "object",
+                        "properties": {
+                            "diff": {
+                                "type": "string",
+                                "description": "The unified diff patch.",
+                            },
+                        },
+                        "required": ["diff"],
+                    },
+                },
+            },
+        }
+
+        retrieved_context = ""
+        if self._retriever is not None:
+            retrieved_context = self._retriever.render_for_prompt(
+                _build_retrieval_query(root_cause, source_files),
+                self._retrieval_config,
+                section_title="Retrieved Valkey Context",
+            )
+
+        user_prompt = _build_user_prompt(
+            root_cause, source_files, retrieved_context, None,
+            validation_error=validation_error,
+        )
+        user_prompt += (
+            "\n\nYou have tools to fetch additional files from the repository "
+            "if you need more context to generate the fix. Use get_file to "
+            "read source files, headers, tests, or configs. Use search_code "
+            "to find function definitions, callers, or usages. When ready, "
+            "call submit_fix with the unified diff."
+        )
+
+        tool_handler = ReviewToolHandler(
+            github_client=self._github_client,
+            repo_name=self._repo_full_name,
+            head_sha="HEAD",
+            max_fetches=8,
+        )
+
+        tools = [_GET_FILE_TOOL, _LIST_FILES_TOOL, _SEARCH_CODE_TOOL, _SUBMIT_FIX_TOOL]
+
+        import json as _json
+        try:
+            response = self._bedrock.converse_with_tools(
+                _SYSTEM_PROMPT,
+                user_prompt,
+                tools=tools,
+                tool_handler=tool_handler,
+                terminal_tool="submit_fix",
+                max_turns=8,
+            )
+        except Exception as exc:
+            logger.warning("Agentic fix generation failed: %s. Falling back.", exc)
+            return None
+
+        try:
+            payload = _json.loads(response) if isinstance(response, str) else response
+        except Exception:
+            payload = {}
+
+        diff = payload.get("diff", "") if isinstance(payload, dict) else str(payload)
+        diff = _strip_markdown_fences(diff)
+
+        if not diff:
+            return None
+
+        # Validate the patch
+        modified_files = _count_patch_files(diff)
+        effective_limit = (
+            self._config.max_patch_files_override
+            if self._config.max_patch_files_override is not None
+            and self._config.max_patch_files_override > 0
+            else self._config.max_patch_files
+        )
+        if len(modified_files) > effective_limit:
+            logger.warning("Agentic patch modifies too many files (%d).", len(modified_files))
+            return None
+
+        success, error_output = _validate_patch_applies(diff, source_files)
+        if success:
+            logger.info("Agentic fix generation succeeded (%d file(s)).", len(modified_files))
+            return diff
+
+        logger.warning("Agentic patch failed to apply: %s", error_output)
         return None

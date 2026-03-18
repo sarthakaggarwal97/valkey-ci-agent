@@ -21,6 +21,7 @@ from scripts.backport_utils import (
     validate_c_syntax,
 )
 from scripts.bedrock_client import BedrockClient
+from scripts.code_reviewer import ReviewToolHandler
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +57,16 @@ class ConflictResolver:
         self,
         bedrock_client: BedrockClient,
         config: BackportConfig,
+        *,
+        github_client: "object | None" = None,
+        repo_full_name: str = "",
+        head_sha: str = "",
     ) -> None:
         self._bedrock = bedrock_client
         self._config = config
+        self._github_client = github_client
+        self._repo_full_name = repo_full_name
+        self._head_sha = head_sha
 
     # ------------------------------------------------------------------
     # Public API
@@ -171,14 +179,16 @@ class ConflictResolver:
     ) -> ResolutionResult:
         """Attempt to resolve a single file, retrying on remaining markers.
 
-        The initial attempt plus up to *max_retries* additional attempts
-        are made.  On each retry the prompt is augmented with feedback
-        about the remaining conflict markers.
-
-        After a successful marker removal the resolved content is
-        validated with :func:`validate_c_syntax`.  If the syntax check
-        fails the file is left unresolved.
+        Tries the agentic tool-use approach first (if a GitHub client is
+        available), then falls back to the standard single-shot approach.
         """
+        # Try agentic resolution first
+        agentic_result = self._resolve_single_file_agentic(
+            conflict, pr_context, max_retries,
+        )
+        if agentic_result is not None:
+            return agentic_result
+
         total_attempts = 1 + max_retries
         tokens_used = 0
         resolved_text: str | None = None
@@ -328,3 +338,115 @@ class ConflictResolver:
 
         user_prompt = "\n".join(parts)
         return system_prompt, user_prompt
+
+    def _resolve_single_file_agentic(
+        self,
+        conflict: ConflictedFile,
+        pr_context: BackportPRContext,
+        max_retries: int,
+    ) -> ResolutionResult | None:
+        """Try to resolve a conflict using the agentic tool-use loop.
+
+        Returns a ResolutionResult on success, or None to fall back to
+        the standard single-shot approach.
+        """
+        if self._github_client is None or not self._repo_full_name:
+            return None
+
+        from scripts.code_reviewer import (
+            _GET_FILE_TOOL,
+            _LIST_FILES_TOOL,
+            _SEARCH_CODE_TOOL,
+        )
+
+        _SUBMIT_RESOLUTION_TOOL: dict = {
+            "toolSpec": {
+                "name": "submit_resolution",
+                "description": (
+                    "Submit the resolved file content. The content must be "
+                    "the complete file with ALL conflict markers removed."
+                ),
+                "inputSchema": {
+                    "json": {
+                        "type": "object",
+                        "properties": {
+                            "resolved_content": {
+                                "type": "string",
+                                "description": "The complete resolved file content.",
+                            },
+                        },
+                        "required": ["resolved_content"],
+                    },
+                },
+            },
+        }
+
+        system_prompt = _SYSTEM_PROMPT
+        _, user_prompt = self._build_prompt(conflict, pr_context)
+        user_prompt += (
+            "\n\nYou have tools to fetch additional files from the repository "
+            "if you need more context to resolve the conflict correctly. "
+            "Use get_file to read related source files, headers, or configs. "
+            "Use search_code to find function definitions or callers. "
+            "When ready, call submit_resolution with the complete resolved "
+            "file content."
+        )
+
+        tool_handler = ReviewToolHandler(
+            github_client=self._github_client,
+            repo_name=self._repo_full_name,
+            head_sha=self._head_sha or "HEAD",
+            max_fetches=8,
+        )
+
+        tools = [_GET_FILE_TOOL, _LIST_FILES_TOOL, _SEARCH_CODE_TOOL, _SUBMIT_RESOLUTION_TOOL]
+
+        import json as _json
+        try:
+            response = self._bedrock.converse_with_tools(
+                system_prompt,
+                user_prompt,
+                tools=tools,
+                tool_handler=tool_handler,
+                terminal_tool="submit_resolution",
+                max_turns=8,
+                model_id=self._config.bedrock_model_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Agentic conflict resolution failed for %s: %s. Falling back.",
+                conflict.path, exc,
+            )
+            return None
+
+        try:
+            payload = _json.loads(response) if isinstance(response, str) else response
+        except Exception:
+            payload = {}
+
+        resolved_text = payload.get("resolved_content", "") if isinstance(payload, dict) else str(payload)
+        resolved_text = _strip_code_fences(resolved_text)
+
+        if not resolved_text or has_conflict_markers(resolved_text):
+            logger.warning(
+                "Agentic resolution for %s still has markers or is empty.",
+                conflict.path,
+            )
+            return None
+
+        if not validate_c_syntax(resolved_text):
+            logger.warning(
+                "Agentic resolution for %s failed C syntax validation.",
+                conflict.path,
+            )
+            return None
+
+        tokens_used = len(user_prompt) // 4 + len(resolved_text) // 4
+        logger.info("Agentic conflict resolution succeeded for %s.", conflict.path)
+        return ResolutionResult(
+            path=conflict.path,
+            resolved_content=resolved_text,
+            resolution_summary="Resolved by LLM (agentic)",
+            tokens_used=tokens_used,
+            attempts=1,
+        )

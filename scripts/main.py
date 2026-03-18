@@ -696,7 +696,10 @@ def run_pipeline(
         )
     root_cause_analyzer = RootCauseAnalyzer(bedrock_client, gh)
     root_cause_analyzer.with_retriever(retriever, config.retrieval)
-    fix_generator = FixGenerator(bedrock_client, config)
+    fix_generator = FixGenerator(
+        bedrock_client, config,
+        github_client=gh, repo_full_name=repo_name,
+    )
     fix_generator.with_retriever(retriever, config.retrieval)
 
     # Build validation runner and PR manager (allow injection for testing)
