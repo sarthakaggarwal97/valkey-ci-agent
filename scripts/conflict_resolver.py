@@ -18,7 +18,8 @@ from scripts.backport_models import (
 from scripts.backport_utils import (
     has_conflict_markers,
     is_whitespace_only_conflict,
-    validate_c_syntax,
+    validate_resolved_content,
+    validation_label_for_path,
 )
 from scripts.bedrock_client import BedrockClient
 from scripts.code_reviewer import ReviewToolHandler
@@ -244,19 +245,21 @@ class ConflictResolver:
                 "markers and return the complete file without any markers."
             )
 
-        # Validate C syntax if we got a clean resolution.
+        # Validate resolved content using a parser that matches the file type.
         if resolved_text is not None:
-            if not validate_c_syntax(resolved_text):
+            validation_label = validation_label_for_path(conflict.path)
+            if not validate_resolved_content(conflict.path, resolved_text):
                 logger.warning(
-                    "Resolved content for %s failed C syntax validation. "
+                    "Resolved content for %s failed %s validation. "
                     "Leaving file unresolved.",
                     conflict.path,
+                    validation_label,
                 )
                 return ResolutionResult(
                     path=conflict.path,
                     resolved_content=None,
                     resolution_summary=(
-                        "LLM resolution failed C syntax validation"
+                        f"LLM resolution failed {validation_label} validation"
                     ),
                     tokens_used=tokens_used,
                     attempts=total_attempts,
@@ -434,10 +437,12 @@ class ConflictResolver:
             )
             return None
 
-        if not validate_c_syntax(resolved_text):
+        validation_label = validation_label_for_path(conflict.path)
+        if not validate_resolved_content(conflict.path, resolved_text):
             logger.warning(
-                "Agentic resolution for %s failed C syntax validation.",
+                "Agentic resolution for %s failed %s validation.",
                 conflict.path,
+                validation_label,
             )
             return None
 

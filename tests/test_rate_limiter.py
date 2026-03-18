@@ -8,6 +8,7 @@ failure queuing, and serialization round-trip.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -295,3 +296,64 @@ class TestSerialization:
 
         state_gh.get_repo.assert_called_once_with("owner/valkey-ci-agent")
         target_gh.get_repo.assert_not_called()
+
+    def test_save_retries_on_write_conflict_and_merges_remote_updates(
+        self,
+        config: BotConfig,
+    ) -> None:
+        repo = MagicMock()
+        repo.default_branch = "main"
+        repo.get_git_ref.return_value = MagicMock()
+
+        now = datetime.now(timezone.utc)
+        window_start = datetime.now(timezone.utc).isoformat()
+        initial_payload = {
+            "pr_timestamps": [(now - timedelta(minutes=2)).isoformat()],
+            "token_usage": 5,
+            "token_window_start": window_start,
+            "queued_failures": ["fp-a"],
+        }
+        concurrent_payload = {
+            "pr_timestamps": [
+                (now - timedelta(minutes=2)).isoformat(),
+                (now - timedelta(minutes=1)).isoformat(),
+            ],
+            "token_usage": 9,
+            "token_window_start": window_start,
+            "queued_failures": ["fp-a", "fp-c"],
+        }
+        initial_contents = MagicMock(
+            decoded_content=json.dumps(initial_payload).encode(),
+            sha="sha-1",
+        )
+        concurrent_contents = MagicMock(
+            decoded_content=json.dumps(concurrent_payload).encode(),
+            sha="sha-2",
+        )
+        repo.get_contents.side_effect = [
+            initial_contents,
+            initial_contents,
+            concurrent_contents,
+        ]
+        repo.update_file.side_effect = [
+            GithubException(409, {"message": "sha conflict"}),
+            None,
+        ]
+        gh = MagicMock()
+        gh.get_repo.return_value = repo
+
+        limiter = RateLimiter(config, github_client=gh, repo_full_name="owner/repo")
+        limiter.load()
+        limiter.record_pr_created()
+        local_timestamp = limiter.get_daily_pr_count()
+        limiter.record_token_usage(7)
+        limiter.queue_failure("fp-b")
+        limiter.save()
+
+        assert local_timestamp == 2
+        assert repo.update_file.call_count == 2
+        merged_payload = json.loads(repo.update_file.call_args_list[-1].args[2])
+        assert len(merged_payload["pr_timestamps"]) == 3
+        assert merged_payload["token_usage"] == 16
+        assert set(merged_payload["queued_failures"]) == {"fp-a", "fp-b", "fp-c"}
+        assert repo.update_file.call_args_list[-1].args[3] == "sha-2"

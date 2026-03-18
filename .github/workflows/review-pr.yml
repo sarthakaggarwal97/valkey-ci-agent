@@ -28,6 +28,10 @@ env:
 jobs:
   review:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: review-pr-${{ github.repository }}-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+      cancel-in-progress: false
     permissions:
       contents: write
       pull-requests: write

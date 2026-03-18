@@ -19,6 +19,17 @@ logger = logging.getLogger(__name__)
 
 _STORE_BRANCH = "bot-data"
 _STORE_FILE = "review-state.json"
+_MAX_PERSIST_ATTEMPTS = 3
+
+
+def _is_write_conflict(exc: Exception) -> bool:
+    """Return True when a GitHub write failed due to a stale file SHA."""
+    if not isinstance(exc, GithubException):
+        return False
+    if exc.status in {409, 422}:
+        return True
+    message = str(exc).lower()
+    return "sha" in message or "already exists" in message or "conflict" in message
 
 
 class ReviewStateStore:
@@ -48,14 +59,16 @@ class ReviewStateStore:
         self._ensure_loaded()
         if not state.updated_at:
             state.updated_at = datetime.now(timezone.utc).isoformat()
-        self._states[self._key(state.repo, state.pr_number)] = state
-        self._persist()
+        key = self._key(state.repo, state.pr_number)
+        self._states[key] = state
+        self._persist_mutation(lambda states: states.__setitem__(key, state))
 
     def clear(self, repo: str, pr_number: int) -> None:
         """Delete one PR review state if it exists."""
         self._ensure_loaded()
-        self._states.pop(self._key(repo, pr_number), None)
-        self._persist()
+        key = self._key(repo, pr_number)
+        self._states.pop(key, None)
+        self._persist_mutation(lambda states: states.pop(key, None))
 
     def to_dict(self) -> dict:
         """Serialize the entire store to JSON-compatible data."""
@@ -116,20 +129,36 @@ class ReviewStateStore:
                 retries=5,
                 description=f"load repository {self._repo_name}",
             )
+            data, _contents = self._read_remote_states(repo)
+            self._states = data
+        except Exception as exc:
+            logger.info("Could not load review state store (may not exist yet): %s", exc)
+            self._states = {}
+
+    def _read_remote_states(self, repo) -> tuple[dict[str, ReviewState], object | None]:
+        """Load the current remote snapshot and its GitHub contents object."""
+        try:
             contents = retry_github_call(
                 lambda: repo.get_contents(_STORE_FILE, ref=_STORE_BRANCH),
                 retries=5,
                 description=f"load {_STORE_FILE}",
             )
-            if isinstance(contents, list):
-                raise ValueError("Review state path resolved to a directory.")
-            data = json.loads(contents.decoded_content.decode())
-            self.from_dict(data)
-        except Exception as exc:
-            logger.info("Could not load review state store (may not exist yet): %s", exc)
-            self._states = {}
+        except GithubException as exc:
+            if exc.status == 404:
+                return {}, None
+            raise
+        except FileNotFoundError:
+            return {}, None
 
-    def _persist(self) -> None:
+        if isinstance(contents, list):
+            raise ValueError("Review state path resolved to a directory.")
+        raw = json.loads(contents.decoded_content.decode())
+        return {
+            key: review_state_from_dict(value)
+            for key, value in raw.items()
+        }, contents
+
+    def _persist_mutation(self, apply_mutation) -> None:  # type: ignore[no-untyped-def]
         if not self._gh or not self._repo_name:
             logger.warning("Cannot save review state store: no GitHub client or repo.")
             return
@@ -141,44 +170,51 @@ class ReviewStateStore:
                 description=f"load repository {self._repo_name}",
             )
             self._ensure_store_branch(repo)
-            content = json.dumps(self.to_dict(), indent=2)
-            try:
-                existing = retry_github_call(
-                    lambda: repo.get_contents(_STORE_FILE, ref=_STORE_BRANCH),
-                    retries=5,
-                    description=f"load {_STORE_FILE}",
+            for attempt in range(1, _MAX_PERSIST_ATTEMPTS + 1):
+                remote_states, existing = self._read_remote_states(repo)
+                merged_states = dict(remote_states)
+                apply_mutation(merged_states)
+                content = json.dumps(
+                    {
+                        key: review_state_to_dict(state)
+                        for key, state in merged_states.items()
+                    },
+                    indent=2,
                 )
-            except GithubException as exc:
-                if exc.status != 404:
+                try:
+                    if existing is None:
+                        retry_github_call(
+                            lambda: repo.create_file(
+                                _STORE_FILE,
+                                "Initialize PR review state",
+                                content,
+                                branch=_STORE_BRANCH,
+                            ),
+                            retries=5,
+                            description=f"create {_STORE_FILE}",
+                        )
+                    else:
+                        retry_github_call(
+                            lambda: repo.update_file(
+                                _STORE_FILE,
+                                "Update PR review state",
+                                content,
+                                existing.sha,
+                                branch=_STORE_BRANCH,
+                            ),
+                            retries=5,
+                            description=f"update {_STORE_FILE}",
+                        )
+                    self._states = merged_states
+                    return
+                except Exception as exc:
+                    if attempt < _MAX_PERSIST_ATTEMPTS and _is_write_conflict(exc):
+                        logger.info(
+                            "Review state write conflict on attempt %d/%d; reloading and retrying.",
+                            attempt,
+                            _MAX_PERSIST_ATTEMPTS,
+                        )
+                        continue
                     raise
-                existing = None
-            except FileNotFoundError:
-                existing = None
-
-            if isinstance(existing, list):
-                raise ValueError("Review state path resolved to a directory.")
-            if existing is None:
-                retry_github_call(
-                    lambda: repo.create_file(
-                        _STORE_FILE,
-                        "Initialize PR review state",
-                        content,
-                        branch=_STORE_BRANCH,
-                    ),
-                    retries=5,
-                    description=f"create {_STORE_FILE}",
-                )
-            else:
-                retry_github_call(
-                    lambda: repo.update_file(
-                        _STORE_FILE,
-                        "Update PR review state",
-                        content,
-                        existing.sha,
-                        branch=_STORE_BRANCH,
-                    ),
-                    retries=5,
-                    description=f"update {_STORE_FILE}",
-                )
         except Exception as exc:
             logger.warning("Failed to persist review state store: %s", exc)

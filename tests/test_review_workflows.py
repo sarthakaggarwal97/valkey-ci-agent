@@ -45,6 +45,12 @@ def test_review_workflow_checks_out_bot_repository() -> None:
     assert checkout_step["uses"] == "actions/checkout@v6"
 
     assert workflow["jobs"]["review"]["permissions"]["id-token"] == "write"
+    assert workflow["jobs"]["review"]["timeout-minutes"] == 45
+    assert workflow["jobs"]["review"]["concurrency"]["group"] == (
+        "review-pr-${{ github.repository }}-"
+        "${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}"
+    )
+    assert workflow["jobs"]["review"]["concurrency"]["cancel-in-progress"] is False
 
     role_step = next(
         step

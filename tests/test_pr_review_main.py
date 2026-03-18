@@ -16,6 +16,7 @@ from scripts.models import (
 from scripts.pr_review_main import (
     _filtered_context,
     _load_runtime_reviewer_config,
+    _select_chat_paths,
     _select_review_files,
     run,
 )
@@ -48,6 +49,22 @@ def _context() -> PullRequestContext:
             )
         ],
     )
+
+
+def _multi_file_context() -> PullRequestContext:
+    context = _context()
+    context.files.append(
+        ChangedFile(
+            path="tests/failover_timeout.tcl",
+            status="modified",
+            additions=3,
+            deletions=0,
+            patch="@@ -1 +1 @@\n-old\n+new",
+            contents="test failover timeout",
+            is_binary=False,
+        )
+    )
+    return context
 
 
 def test_select_review_files_applies_path_filters() -> None:
@@ -90,6 +107,32 @@ def test_filtered_context_restricts_files() -> None:
     filtered = _filtered_context(_context(), {"src/failover.c"})
 
     assert [changed_file.path for changed_file in filtered.files] == ["src/failover.c"]
+
+
+def test_select_chat_paths_prefers_explicit_file_mentions() -> None:
+    paths = ["src/failover.c", "tests/failover_timeout.tcl"]
+
+    selected = _select_chat_paths(
+        paths,
+        None,
+        ["Can you explain tests/failover_timeout.tcl?"],
+        "/reviewbot what changed in tests/failover_timeout.tcl?",
+    )
+
+    assert selected == {"tests/failover_timeout.tcl"}
+
+
+def test_select_chat_paths_falls_back_to_first_five_when_no_file_is_mentioned() -> None:
+    paths = [f"src/file{i}.c" for i in range(7)]
+
+    selected = _select_chat_paths(
+        paths,
+        None,
+        ["Can you suggest tests?"],
+        "/reviewbot can you suggest tests?",
+    )
+
+    assert selected == set(paths[:5])
 
 
 def test_load_runtime_reviewer_config_prefers_repository_file() -> None:
@@ -726,4 +769,77 @@ def test_run_chat_mode_does_not_use_unrelated_file_context_for_filtered_thread(
 
     assert exit_code == 0
     assert fetcher.hydrate_contents.call_args_list[-1].args[1] == set()
+    mock_publisher_cls.return_value.publish_chat_reply.assert_called_once()
+
+
+@patch("scripts.pr_review_main.boto3.client")
+@patch("scripts.pr_review_main.Github")
+@patch("scripts.pr_review_main.RateLimiter")
+@patch("scripts.pr_review_main.ReviewStateStore")
+@patch("scripts.pr_review_main.CommentPublisher")
+@patch("scripts.pr_review_main.PRContextFetcher")
+def test_run_issue_comment_chat_mode_prefers_mentioned_file_context(
+    mock_fetcher_cls,
+    mock_publisher_cls,
+    mock_state_store_cls,
+    mock_rate_limiter_cls,
+    mock_github_cls,
+    _mock_boto_client,
+    tmp_path,
+) -> None:
+    payload = {
+        "repository": {"full_name": "owner/repo"},
+        "sender": {"login": "alice"},
+        "issue": {"number": 11, "pull_request": {}},
+        "comment": {
+            "id": 77,
+            "body": "/reviewbot what changed in tests/failover_timeout.tcl?",
+        },
+    }
+    event_path = _event_file(tmp_path, payload)
+
+    fetcher = mock_fetcher_cls.return_value
+    fetcher.fetch.return_value = _multi_file_context()
+    fetcher.hydrate_contents.side_effect = lambda context, _paths: context
+    fetcher.fetch_review_thread.return_value = MagicMock(
+        comment_id=77,
+        path=None,
+        line=None,
+        conversation=["/reviewbot what changed in tests/failover_timeout.tcl?"],
+        reply_to_bot=False,
+    )
+
+    mock_publisher_cls.return_value.publish_chat_reply.return_value = 88
+    mock_state_store_cls.return_value.load.return_value = None
+    mock_rate_limiter_cls.return_value.load.return_value = None
+    mock_rate_limiter_cls.return_value.save.return_value = None
+    mock_github_cls.return_value = MagicMock()
+
+    with patch(
+        "scripts.pr_review_main._load_runtime_reviewer_config",
+        return_value=ReviewerConfig(),
+    ), patch(
+        "scripts.pr_review_main.ReviewChat"
+    ) as mock_chat_cls:
+        mock_chat_cls.return_value.reply.return_value = "Answer"
+
+        exit_code = run(
+            [
+                "--repo",
+                "owner/repo",
+                "--mode",
+                "chat",
+                "--token",
+                "token",
+                "--event-name",
+                "issue_comment",
+                "--event-path",
+                str(event_path),
+            ]
+        )
+
+    assert exit_code == 0
+    assert fetcher.hydrate_contents.call_args_list[-1].args[1] == {
+        "tests/failover_timeout.tcl",
+    }
     mock_publisher_cls.return_value.publish_chat_reply.assert_called_once()

@@ -210,6 +210,38 @@ class TestResolveSingleFile:
         assert result.resolved_content is None
         assert "C syntax validation" in result.resolution_summary
 
+    def test_non_c_files_do_not_use_c_brace_validation(self) -> None:
+        """Markdown files should not be rejected for unmatched curly braces."""
+        bedrock = MagicMock()
+        bedrock.invoke.return_value = "Use {placeholder in the docs.\n"
+        config = BackportConfig()
+        resolver = ConflictResolver(bedrock, config)
+
+        result = resolver._resolve_single_file(
+            _make_conflict(path="docs/guide.md"),
+            _make_pr_context(),
+            max_retries=0,
+        )
+
+        assert result.resolved_content == "Use {placeholder in the docs."
+        assert result.resolution_summary == "Resolved by LLM"
+
+    def test_yaml_validation_failure_leaves_unresolved(self) -> None:
+        """YAML files should be validated with a YAML parser."""
+        bedrock = MagicMock()
+        bedrock.invoke.return_value = "steps: [unterminated"
+        config = BackportConfig()
+        resolver = ConflictResolver(bedrock, config)
+
+        result = resolver._resolve_single_file(
+            _make_conflict(path=".github/workflows/test.yml"),
+            _make_pr_context(),
+            max_retries=0,
+        )
+
+        assert result.resolved_content is None
+        assert "YAML syntax validation" in result.resolution_summary
+
     def test_bedrock_exception_handled(self) -> None:
         """Bedrock errors are caught and file is left unresolved."""
         bedrock = MagicMock()

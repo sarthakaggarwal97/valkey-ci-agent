@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock
 
 from github.GithubException import GithubException
@@ -84,3 +85,72 @@ def test_save_does_not_fallback_to_create_on_non_404_lookup_error() -> None:
     )
 
     repo.create_file.assert_not_called()
+
+
+def test_save_retries_on_write_conflict_and_merges_remote_updates() -> None:
+    repo = MagicMock()
+    repo.default_branch = "main"
+    repo.get_git_ref.return_value = MagicMock()
+
+    initial_payload = {
+        "owner/repo#1": {
+            "repo": "owner/repo",
+            "pr_number": 1,
+            "last_reviewed_head_sha": "base",
+            "summary_comment_id": 11,
+            "review_comment_ids": [101],
+            "updated_at": "2026-03-12T00:00:00+00:00",
+        },
+    }
+    concurrent_payload = {
+        **initial_payload,
+        "owner/repo#9": {
+            "repo": "owner/repo",
+            "pr_number": 9,
+            "last_reviewed_head_sha": "head",
+            "summary_comment_id": 19,
+            "review_comment_ids": [901],
+            "updated_at": "2026-03-12T00:01:00+00:00",
+        },
+    }
+    initial_contents = MagicMock(
+        decoded_content=json.dumps(initial_payload).encode(),
+        sha="sha-1",
+    )
+    concurrent_contents = MagicMock(
+        decoded_content=json.dumps(concurrent_payload).encode(),
+        sha="sha-2",
+    )
+    repo.get_contents.side_effect = [
+        initial_contents,
+        initial_contents,
+        concurrent_contents,
+    ]
+    repo.update_file.side_effect = [
+        GithubException(409, {"message": "sha conflict"}),
+        None,
+    ]
+
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    store = ReviewStateStore(gh, "owner/repo")
+
+    store.save(
+        ReviewState(
+            repo="owner/repo",
+            pr_number=5,
+            last_reviewed_head_sha="abc123",
+            summary_comment_id=5,
+            review_comment_ids=[501],
+            updated_at="2026-03-12T00:02:00+00:00",
+        )
+    )
+
+    assert repo.update_file.call_count == 2
+    merged_payload = json.loads(repo.update_file.call_args_list[-1].args[2])
+    assert set(merged_payload) == {
+        "owner/repo#1",
+        "owner/repo#5",
+        "owner/repo#9",
+    }
+    assert repo.update_file.call_args_list[-1].args[3] == "sha-2"

@@ -6,7 +6,12 @@ syntax validation helpers used across the backport workflow.
 
 from __future__ import annotations
 
+import ast
+import json
 import re
+from pathlib import PurePosixPath
+
+import yaml  # type: ignore[import-untyped]
 
 _BACKPORT_PREFIX = "backport "
 _CONFLICT_MARKERS = re.compile(r"<{7}|={7}|>{7}")
@@ -75,6 +80,46 @@ def validate_c_syntax(content: str) -> bool:
             if depth < 0:
                 return False
     return depth == 0
+
+
+def validation_label_for_path(path: str) -> str:
+    """Return a human-readable validation label for the file type."""
+    suffix = PurePosixPath(path).suffix.lower()
+    if suffix in {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx"}:
+        return "C syntax"
+    if suffix == ".py":
+        return "Python syntax"
+    if suffix == ".json":
+        return "JSON syntax"
+    if suffix in {".yml", ".yaml"}:
+        return "YAML syntax"
+    return "content"
+
+
+def validate_resolved_content(path: str, content: str) -> bool:
+    """Validate resolved content using a file-type-specific parser when possible."""
+    suffix = PurePosixPath(path).suffix.lower()
+    if suffix in {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx"}:
+        return validate_c_syntax(content)
+    if suffix == ".py":
+        try:
+            ast.parse(content)
+        except SyntaxError:
+            return False
+        return True
+    if suffix == ".json":
+        try:
+            json.loads(content)
+        except json.JSONDecodeError:
+            return False
+        return True
+    if suffix in {".yml", ".yaml"}:
+        try:
+            yaml.safe_load(content)
+        except yaml.YAMLError:
+            return False
+        return True
+    return True
 
 
 def is_whitespace_only_conflict(target_content: str, source_content: str) -> bool:

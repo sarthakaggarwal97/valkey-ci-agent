@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import sys
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import PurePosixPath
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -108,6 +110,45 @@ def _filtered_context(
             if changed_file.path in allowed_paths
         ],
     )
+
+
+def _path_is_mentioned(text: str, path: str) -> bool:
+    """Return True when the comment text explicitly references a changed file."""
+    if not text:
+        return False
+    lowered = text.lower()
+    normalized_path = path.lower()
+    basename = PurePosixPath(path).name.lower()
+    if normalized_path in lowered or basename in lowered:
+        return True
+    stem = PurePosixPath(path).stem.lower()
+    if len(stem) >= 4:
+        return re.search(rf"\b{re.escape(stem)}\b", lowered) is not None
+    return False
+
+
+def _select_chat_paths(
+    selected_paths: list[str],
+    thread_path: str | None,
+    conversation: list[str],
+    prompt: str,
+) -> set[str]:
+    """Choose the most relevant changed files to hydrate for chat mode."""
+    if thread_path:
+        return {thread_path} if thread_path in set(selected_paths) else set()
+    if not selected_paths:
+        return set()
+
+    reference_text = "\n".join(
+        part for part in [prompt, *conversation] if part
+    )
+    mentioned_paths = [
+        path for path in selected_paths
+        if _path_is_mentioned(reference_text, path)
+    ]
+    if mentioned_paths:
+        return set(mentioned_paths[: min(8, len(mentioned_paths))])
+    return set(selected_paths[: min(5, len(selected_paths))])
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -261,14 +302,12 @@ def run(argv: list[str] | None = None) -> int:
                 summary.add_result("chat", "skipped", "unsupported-comment-context")
                 summary.write()
                 return 0
-            if event.is_review_comment:
-                relevant_paths = (
-                    {thread.path}
-                    if thread.path and thread.path in selected_path_set
-                    else set()
-                )
-            else:
-                relevant_paths = set(selected_paths[: min(5, len(selected_paths))])
+            relevant_paths = _select_chat_paths(
+                selected_paths,
+                thread.path if event.is_review_comment else None,
+                thread.conversation,
+                event.body or "",
+            )
             chat_context = _filtered_context(
                 fetcher.hydrate_contents(pr_context, relevant_paths),
                 relevant_paths,

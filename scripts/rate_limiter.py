@@ -22,6 +22,17 @@ logger = logging.getLogger(__name__)
 
 _RATE_STATE_BRANCH = "bot-data"
 _RATE_STATE_FILE = "rate-state.json"
+_MAX_PERSIST_ATTEMPTS = 3
+
+
+def _is_write_conflict(exc: Exception) -> bool:
+    """Return True when a GitHub write failed due to a stale file SHA."""
+    if not isinstance(exc, GithubException):
+        return False
+    if exc.status in {409, 422}:
+        return True
+    message = str(exc).lower()
+    return "sha" in message or "already exists" in message or "conflict" in message
 
 
 class RateLimiter:
@@ -55,6 +66,11 @@ class RateLimiter:
 
         # Queued failures (fingerprints waiting for rate limit reset)
         self._queued_failures: list[str] = []
+        self._pending_pr_timestamps: list[str] = []
+        self._pending_token_delta: int = 0
+        self._pending_token_window_start: str | None = None
+        self._pending_queue_additions: set[str] = set()
+        self._pending_queue_removals: set[str] = set()
 
     # --- Daily PR limit ---
 
@@ -114,7 +130,9 @@ class RateLimiter:
 
     def record_pr_created(self) -> None:
         """Record that a PR was just created."""
-        self._pr_timestamps.append(datetime.now(timezone.utc).isoformat())
+        timestamp = datetime.now(timezone.utc).isoformat()
+        self._pr_timestamps.append(timestamp)
+        self._pending_pr_timestamps.append(timestamp)
 
     # --- Token budget ---
 
@@ -140,6 +158,10 @@ class RateLimiter:
         """Record that `amount` tokens were consumed."""
         self._prune_token_window()
         self._token_usage += amount
+        if self._pending_token_window_start != self._token_window_start:
+            self._pending_token_delta = 0
+            self._pending_token_window_start = self._token_window_start
+        self._pending_token_delta += amount
 
     def get_token_usage(self) -> int:
         """Return cumulative token usage in the current 24-hour window."""
@@ -152,6 +174,8 @@ class RateLimiter:
         """Queue a failure fingerprint for processing after rate limits reset."""
         if fingerprint not in self._queued_failures:
             self._queued_failures.append(fingerprint)
+            self._pending_queue_additions.add(fingerprint)
+            self._pending_queue_removals.discard(fingerprint)
             logger.info("Queued failure %s for later processing.", fingerprint[:12])
 
     def get_queued_failures(self) -> list[str]:
@@ -162,6 +186,10 @@ class RateLimiter:
         """Remove a fingerprint from the queue after successful processing."""
         if fingerprint in self._queued_failures:
             self._queued_failures.remove(fingerprint)
+            if fingerprint in self._pending_queue_additions:
+                self._pending_queue_additions.remove(fingerprint)
+            else:
+                self._pending_queue_removals.add(fingerprint)
 
     # --- Persistence ---
 
@@ -182,6 +210,11 @@ class RateLimiter:
             "token_window_start", datetime.now(timezone.utc).isoformat()
         )
         self._queued_failures = data.get("queued_failures", [])
+        self._pending_pr_timestamps = []
+        self._pending_token_delta = 0
+        self._pending_token_window_start = self._token_window_start
+        self._pending_queue_additions = set()
+        self._pending_queue_removals = set()
 
     def _ensure_state_branch(self, repo) -> None:
         """Create the data branch from the default branch when missing."""
@@ -207,10 +240,7 @@ class RateLimiter:
             return
         try:
             repo = self._state_gh.get_repo(self._state_repo_name)
-            contents = repo.get_contents(_RATE_STATE_FILE, ref=_RATE_STATE_BRANCH)
-            if isinstance(contents, list):
-                raise ValueError("Rate limiter state path resolved to a directory.")
-            data = json.loads(contents.decoded_content.decode())
+            data, _contents = self._read_remote_state(repo)
             self.from_dict(data)
             logger.info("Loaded rate limiter state.")
         except Exception as exc:
@@ -224,28 +254,104 @@ class RateLimiter:
         try:
             repo = self._state_gh.get_repo(self._state_repo_name)
             self._ensure_state_branch(repo)
-            content = json.dumps(self.to_dict(), indent=2)
-            try:
-                existing = repo.get_contents(_RATE_STATE_FILE, ref=_RATE_STATE_BRANCH)
-            except GithubException as exc:
-                if exc.status != 404:
+            for attempt in range(1, _MAX_PERSIST_ATTEMPTS + 1):
+                remote_data, existing = self._read_remote_state(repo)
+                merged = self._merge_remote_state(remote_data)
+                content = json.dumps(merged, indent=2)
+                try:
+                    if existing is None:
+                        repo.create_file(
+                            _RATE_STATE_FILE,
+                            "Initialize rate limiter state",
+                            content,
+                            branch=_RATE_STATE_BRANCH,
+                        )
+                    else:
+                        repo.update_file(
+                            _RATE_STATE_FILE,
+                            "Update rate limiter state",
+                            content,
+                            existing.sha,
+                            branch=_RATE_STATE_BRANCH,
+                        )
+                    self.from_dict(merged)
+                    logger.info("Saved rate limiter state.")
+                    return
+                except Exception as exc:
+                    if attempt < _MAX_PERSIST_ATTEMPTS and _is_write_conflict(exc):
+                        logger.info(
+                            "Rate limiter write conflict on attempt %d/%d; reloading and retrying.",
+                            attempt,
+                            _MAX_PERSIST_ATTEMPTS,
+                        )
+                        continue
                     raise
-                existing = None
-            except FileNotFoundError:
-                existing = None
-
-            if isinstance(existing, list):
-                raise ValueError("Rate limiter state path resolved to a directory.")
-            if existing is None:
-                repo.create_file(
-                    _RATE_STATE_FILE, "Initialize rate limiter state", content,
-                    branch=_RATE_STATE_BRANCH,
-                )
-            else:
-                repo.update_file(
-                    _RATE_STATE_FILE, "Update rate limiter state", content,
-                    existing.sha, branch=_RATE_STATE_BRANCH,
-                )
-            logger.info("Saved rate limiter state.")
         except Exception as exc:
             logger.error("Failed to save rate limiter state: %s", exc)
+
+    def _read_remote_state(self, repo) -> tuple[dict, object | None]:
+        """Load the remote state payload and its GitHub contents object."""
+        try:
+            contents = repo.get_contents(_RATE_STATE_FILE, ref=_RATE_STATE_BRANCH)
+        except GithubException as exc:
+            if exc.status == 404:
+                return {}, None
+            raise
+        except FileNotFoundError:
+            return {}, None
+
+        if isinstance(contents, list):
+            raise ValueError("Rate limiter state path resolved to a directory.")
+        return json.loads(contents.decoded_content.decode()), contents
+
+    def _merge_remote_state(self, remote_data: dict) -> dict:
+        """Merge this process's pending mutations into the latest remote snapshot."""
+        now = datetime.now(timezone.utc)
+        merged = dict(remote_data)
+
+        remote_pr_timestamps = list(merged.get("pr_timestamps", []))
+        remote_pr_timestamps.extend(self._pending_pr_timestamps)
+        cutoff = now - timedelta(hours=24)
+        merged["pr_timestamps"] = [
+            ts for ts in remote_pr_timestamps
+            if datetime.fromisoformat(ts) > cutoff
+        ]
+
+        remote_window_start = str(
+            merged.get("token_window_start", now.isoformat())
+        )
+        remote_start = datetime.fromisoformat(remote_window_start)
+        remote_usage = int(merged.get("token_usage", 0))
+        if now - remote_start > timedelta(hours=24):
+            remote_usage = 0
+            remote_window_start = now.isoformat()
+            remote_start = now
+
+        pending_window_start = self._pending_token_window_start or self._token_window_start
+        pending_start = datetime.fromisoformat(pending_window_start)
+        if now - pending_start > timedelta(hours=24):
+            merged["token_usage"] = remote_usage
+            merged["token_window_start"] = remote_window_start
+        elif pending_start > remote_start:
+            merged["token_usage"] = max(0, self._pending_token_delta)
+            merged["token_window_start"] = pending_window_start
+        elif pending_start < remote_start:
+            logger.info(
+                "Skipping stale local token delta because the remote token window is newer.",
+            )
+            merged["token_usage"] = remote_usage
+            merged["token_window_start"] = remote_window_start
+        else:
+            merged["token_usage"] = max(0, remote_usage + self._pending_token_delta)
+            merged["token_window_start"] = remote_window_start
+
+        queue = list(merged.get("queued_failures", []))
+        for fingerprint in self._pending_queue_additions:
+            if fingerprint not in queue:
+                queue.append(fingerprint)
+        queue = [
+            fingerprint for fingerprint in queue
+            if fingerprint not in self._pending_queue_removals
+        ]
+        merged["queued_failures"] = queue
+        return merged

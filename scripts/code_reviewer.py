@@ -633,8 +633,9 @@ _SEARCH_CODE_TOOL: dict = {
             "Search for a text pattern across the repository. Use this to "
             "find all callers of a function, all references to a variable, "
             "all places a macro or constant is used, or to locate where "
-            "something is defined. Returns matching file paths and line "
-            "excerpts. Limited to 15 results."
+            "something is defined. Results are verified against the PR head "
+            "commit before being returned. Returns matching file paths and "
+            "line excerpts. Limited to 15 results."
         ),
         "inputSchema": {
             "json": {
@@ -726,6 +727,7 @@ class ReviewToolHandler:
         self._github_retries = github_retries
         self._fetch_count = 0
         self._cache: dict[str, str] = {}
+        self._repo = None
 
     def execute(self, tool_name: str, tool_input: dict) -> str:
         """Execute a tool call and return the result text."""
@@ -752,29 +754,27 @@ class ReviewToolHandler:
             )
         self._fetch_count += 1
         try:
-            repo = retry_github_call(
-                lambda: self._gh.get_repo(self._repo_name),
-                retries=self._github_retries,
-                description=f"get repo {self._repo_name}",
-            )
-            contents = retry_github_call(
-                lambda: repo.get_contents(path, ref=self._head_sha),
-                retries=self._github_retries,
+            repo = self._get_repo()
+            raw = self._fetch_file_text(
+                repo,
+                path,
                 description=f"get file {path}",
             )
-            if isinstance(contents, list):
+            if raw is None:
                 # It's a directory, not a file
+                contents = retry_github_call(
+                    lambda: repo.get_contents(path, ref=self._head_sha),
+                    retries=self._github_retries,
+                    description=f"get directory {path}",
+                )
+                if not isinstance(contents, list):
+                    return f"Could not fetch {path}: expected a directory listing."
                 names = [c.path for c in contents]
                 result = f"{path} is a directory. Contents:\n" + "\n".join(names)
                 self._cache[path] = result
                 return result
-            raw = contents.decoded_content.decode("utf-8", errors="replace")
-            truncated = raw[: self._max_file_bytes]
-            if len(raw) > self._max_file_bytes:
-                truncated += f"\n\n[truncated at {self._max_file_bytes} bytes]"
-            self._cache[path] = truncated
             logger.info("Fetched %s (%d bytes) for agentic review.", path, len(raw))
-            return truncated
+            return raw
         except Exception as exc:
             msg = f"Could not fetch {path}: {exc}"
             logger.warning(msg)
@@ -788,11 +788,7 @@ class ReviewToolHandler:
             )
         self._fetch_count += 1
         try:
-            repo = retry_github_call(
-                lambda: self._gh.get_repo(self._repo_name),
-                retries=self._github_retries,
-                description=f"get repo {self._repo_name}",
-            )
+            repo = self._get_repo()
             contents = retry_github_call(
                 lambda: repo.get_contents(path or "", ref=self._head_sha),
                 retries=self._github_retries,
@@ -815,6 +811,7 @@ class ReviewToolHandler:
             )
         self._fetch_count += 1
         try:
+            repo = self._get_repo()
             # Build the GitHub code search query
             search_q = f"{query} repo:{self._repo_name}"
             if path_filter:
@@ -835,32 +832,110 @@ class ReviewToolHandler:
 
             lines: list[str] = []
             count = 0
+            seen_paths: set[str] = set()
             for item in results:
+                path = getattr(item, "path", "")
+                if not path or path in seen_paths:
+                    continue
+                seen_paths.add(path)
+                if not self._path_matches_filter(path, path_filter):
+                    continue
+                text = self._fetch_file_text(
+                    repo,
+                    path,
+                    description=f"verify search hit {path}",
+                )
+                if text is None:
+                    continue
+                excerpts = self._extract_query_excerpts(text, query)
+                if not excerpts:
+                    continue
                 if count >= 15:
                     break
-                # Each result has .path and .text_matches (if available)
-                entry = f"- {item.path}"
-                text_matches = getattr(item, "text_matches", None)
-                if text_matches:
-                    for match in text_matches[:2]:
-                        fragment = match.get("fragment", "").strip()
-                        if fragment:
-                            # Show first 200 chars of the fragment
-                            entry += f"\n  > {fragment[:200]}"
+                entry = f"- {path}"
+                for excerpt in excerpts:
+                    entry += f"\n  > {excerpt}"
                 lines.append(entry)
                 count += 1
 
             if not lines:
-                return f"No results found for '{query}'."
+                return f"No results found for '{query}' at {self._head_sha[:12]}."
 
             logger.info(
-                "Code search for '%s' returned %d result(s).", query, count,
+                "Code search for '%s' returned %d verified result(s) at %s.",
+                query,
+                count,
+                self._head_sha[:12],
             )
-            return f"Found {count} result(s) for '{query}':\n" + "\n".join(lines)
+            return (
+                f"Found {count} verified result(s) for '{query}' "
+                f"at {self._head_sha[:12]}:\n" + "\n".join(lines)
+            )
         except Exception as exc:
             msg = f"Code search failed for '{query}': {exc}"
             logger.warning(msg)
             return msg
+
+    def _get_repo(self):
+        if self._repo is None:
+            self._repo = retry_github_call(
+                lambda: self._gh.get_repo(self._repo_name),
+                retries=self._github_retries,
+                description=f"get repo {self._repo_name}",
+            )
+        return self._repo
+
+    def _fetch_file_text(
+        self,
+        repo,
+        path: str,
+        *,
+        description: str,
+    ) -> str | None:
+        if path in self._cache:
+            return self._cache[path]
+        contents = retry_github_call(
+            lambda: repo.get_contents(path, ref=self._head_sha),
+            retries=self._github_retries,
+            description=description,
+        )
+        if isinstance(contents, list):
+            return None
+        raw = contents.decoded_content.decode("utf-8", errors="replace")
+        truncated = raw[: self._max_file_bytes]
+        if len(raw) > self._max_file_bytes:
+            truncated += f"\n\n[truncated at {self._max_file_bytes} bytes]"
+        self._cache[path] = truncated
+        return truncated
+
+    @staticmethod
+    def _path_matches_filter(path: str, path_filter: str) -> bool:
+        stripped = path_filter.strip()
+        if not stripped:
+            return True
+        lowered_path = path.lower()
+        if re.match(r"^\.\w+$", stripped):
+            return lowered_path.endswith(stripped.lower())
+        return path.startswith(stripped)
+
+    @staticmethod
+    def _extract_query_excerpts(
+        text: str,
+        query: str,
+        *,
+        max_matches: int = 2,
+    ) -> list[str]:
+        normalized_query = query.strip()
+        if not normalized_query:
+            return []
+        lowered_query = normalized_query.lower()
+        excerpts: list[str] = []
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if normalized_query in line or lowered_query in line.lower():
+                excerpts.append(f"L{line_number}: {line.strip()[:200]}")
+                if len(excerpts) >= max_matches:
+                    break
+        return excerpts
 
 
 class CodeReviewer:

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from scripts.code_reviewer import CodeReviewer
+from scripts.code_reviewer import CodeReviewer, ReviewToolHandler
 from scripts.config import RetrievalConfig, ReviewerConfig
 from scripts.models import (
     ChangedFile,
@@ -184,6 +184,46 @@ def test_review_chat_uses_heavy_model() -> None:
     assert "targeted failover timeout regression test" in reply
     kwargs = bedrock.invoke.call_args.kwargs
     assert kwargs["model_id"] == config.models.heavy_model_id
+
+
+def test_review_tool_handler_search_code_verifies_hits_at_head_sha() -> None:
+    gh = MagicMock()
+    repo = MagicMock()
+    gh.get_repo.return_value = repo
+
+    search_result = MagicMock()
+    search_result.path = "src/failover.c"
+    gh.search_code.return_value = [search_result]
+    repo.get_contents.return_value = MagicMock(
+        decoded_content=(
+            b"int failover_timeout(void) {\n    return 1;\n}\n"
+        ),
+    )
+
+    handler = ReviewToolHandler(gh, "owner/repo", "head456")
+    result = handler.execute("search_code", {"query": "failover_timeout"})
+
+    assert "Found 1 verified result(s)" in result
+    assert "src/failover.c" in result
+    repo.get_contents.assert_called_with("src/failover.c", ref="head456")
+
+
+def test_review_tool_handler_search_code_drops_unverified_hits() -> None:
+    gh = MagicMock()
+    repo = MagicMock()
+    gh.get_repo.return_value = repo
+
+    search_result = MagicMock()
+    search_result.path = "src/failover.c"
+    gh.search_code.return_value = [search_result]
+    repo.get_contents.return_value = MagicMock(
+        decoded_content=b"int unrelated(void) { return 0; }\n",
+    )
+
+    handler = ReviewToolHandler(gh, "owner/repo", "head456")
+    result = handler.execute("search_code", {"query": "failover_timeout"})
+
+    assert "No results found for 'failover_timeout'" in result
 
 
 def test_code_reviewer_raises_on_unparseable_response() -> None:
