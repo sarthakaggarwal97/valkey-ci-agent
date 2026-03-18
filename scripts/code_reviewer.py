@@ -10,9 +10,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from scripts.bedrock_client import PromptClient
+from scripts.bedrock_client import BedrockClient, PromptClient
 from scripts.bedrock_retriever import BedrockRetriever
 from scripts.config import RetrievalConfig, ReviewerConfig
+from scripts.github_client import retry_github_call
 from scripts.models import ChangedFile, DiffScope, PullRequestContext, ReviewFinding
 
 _SYSTEM_PROMPT = """You are a highly experienced software engineer performing a thorough code review.
@@ -37,6 +38,12 @@ Rules:
   through the shown code and explain the concrete scenario.
 - Prefer precision over recall: it is far better to miss a real bug than to
   report a false positive. Only report when you are highly confident.
+- YAML workflow files (.yml/.yaml) often embed shell or Python scripts inside
+  ``run: |`` heredoc blocks. The YAML-level indentation (the leading spaces
+  that align the code with the YAML key) is STRIPPED at runtime. Do NOT report
+  indentation errors based on the absolute column count in the file — only the
+  relative indentation within the embedded script matters. This is a very
+  common source of false positives.
 - Return valid JSON only."""
 
 _SPECULATIVE_SUBSTRINGS = (
@@ -415,6 +422,66 @@ _INDENTATION_KEYWORDS = re.compile(
 )
 
 
+def _is_inside_yaml_script_block(
+    file_contents: str,
+    line: int,
+) -> bool:
+    """Return True when *line* falls inside a YAML ``run: |`` heredoc block.
+
+    In GitHub Actions workflow files, Python/shell code is embedded inside
+    ``run: |`` (or ``run: |+``, ``run: |-``) blocks.  The YAML-level
+    indentation is stripped at runtime, so the *relative* indentation of
+    the embedded code is what matters — not the absolute column count in
+    the file.  LLMs frequently miscount indentation in these blocks
+    because they reason about the raw file columns.
+    """
+    lines = file_contents.splitlines()
+    if line < 1 or line > len(lines):
+        return False
+
+    target_line_raw = lines[line - 1]
+    if not target_line_raw.strip():
+        return False
+
+    # Scan the file for all ``run: |`` blocks and check whether the
+    # target line falls inside any of them.
+    i = 0
+    while i < len(lines):
+        raw = lines[i]
+        stripped = raw.lstrip()
+        if re.match(r"run:\s*\|[+-]?\s*$", stripped):
+            run_indent = len(raw) - len(stripped)
+            # The block content starts on the next non-empty line.
+            # Its indent defines the base indent of the block.
+            block_start = i + 1
+            base_indent: int | None = None
+            j = block_start
+            while j < len(lines):
+                bline = lines[j]
+                bstripped = bline.lstrip()
+                if not bstripped:
+                    # Blank lines are part of the block.
+                    j += 1
+                    continue
+                bindent = len(bline) - len(bstripped)
+                if base_indent is None:
+                    if bindent <= run_indent:
+                        # Empty block — no content.
+                        break
+                    base_indent = bindent
+                if bindent < base_indent:
+                    # Left the block.
+                    break
+                j += 1
+            # block spans lines[block_start] .. lines[j-1] (1-indexed: block_start+1 .. j)
+            if base_indent is not None and (block_start + 1) <= line <= j:
+                return True
+            i = j
+        else:
+            i += 1
+    return False
+
+
 def _is_false_indentation_finding(
     body: str,
     path: str,
@@ -427,6 +494,10 @@ def _is_false_indentation_finding(
     because the ``+``/``-``/`` `` prefix shifts columns by one.  When
     the finding mentions indentation and we have the full file, verify
     the claim before letting it through.
+
+    Also filters indentation findings inside YAML ``run: |`` heredoc
+    blocks, where the absolute column count is misleading because YAML
+    strips the block's base indentation at runtime.
     """
     if not _INDENTATION_KEYWORDS.search(body):
         return False
@@ -436,6 +507,19 @@ def _is_false_indentation_finding(
     lines = file_contents.splitlines()
     if line < 1 or line > len(lines):
         return False
+
+    # For YAML workflow files, indentation findings inside ``run: |``
+    # blocks are almost always false positives — the LLM reasons about
+    # the raw YAML-level indent instead of the runtime-stripped indent.
+    is_yaml = path.endswith((".yml", ".yaml"))
+    if is_yaml and _is_inside_yaml_script_block(file_contents, line):
+        logger.info(
+            "Filtering indentation finding for %s:%d — "
+            "line is inside a YAML run: | heredoc block.",
+            path,
+            line,
+        )
+        return True
 
     actual_line = lines[line - 1]
     actual_indent = len(actual_line) - len(actual_line.lstrip())
@@ -486,6 +570,199 @@ def _build_retrieval_query(pr: PullRequestContext, diff_scope: DiffScope) -> str
     return "\n".join(filter(None, lines))
 
 
+# ------------------------------------------------------------------
+# Agentic review: tool definitions and handler
+# ------------------------------------------------------------------
+
+_GET_FILE_TOOL: dict = {
+    "toolSpec": {
+        "name": "get_file",
+        "description": (
+            "Fetch the contents of a file from the repository at the PR's "
+            "head commit. Use this to read files that are referenced by the "
+            "changed code but not included in the diff — for example, "
+            "imported modules, header files, configuration files, or test "
+            "fixtures. Returns the file contents as text (truncated to 60 KB)."
+        ),
+        "inputSchema": {
+            "json": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Relative file path in the repository.",
+                    },
+                },
+                "required": ["path"],
+            },
+        },
+    },
+}
+
+_LIST_FILES_TOOL: dict = {
+    "toolSpec": {
+        "name": "list_directory",
+        "description": (
+            "List files in a directory of the repository at the PR's head "
+            "commit. Use this to discover file names when you need to find "
+            "related source files, headers, or tests. Returns a newline-"
+            "separated list of file paths."
+        ),
+        "inputSchema": {
+            "json": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": (
+                            "Directory path to list. Use empty string or '.' "
+                            "for the repository root."
+                        ),
+                    },
+                },
+                "required": ["path"],
+            },
+        },
+    },
+}
+
+_SUBMIT_REVIEW_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "reviews": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "line": {"type": "integer"},
+                    "severity": {
+                        "type": "string",
+                        "enum": ["high", "medium", "low"],
+                    },
+                    "body": {"type": "string"},
+                },
+                "required": ["path", "body"],
+            },
+        },
+        "lgtm": {"type": "boolean"},
+    },
+    "required": ["reviews", "lgtm"],
+}
+
+_SUBMIT_REVIEW_TOOL: dict = {
+    "toolSpec": {
+        "name": "submit_review",
+        "description": (
+            "Submit your final code review findings. Call this tool ONLY "
+            "after you have gathered all the context you need. Each finding "
+            "must reference a file path from the PR diff and include a "
+            "concrete, evidence-based description of the defect."
+        ),
+        "inputSchema": {"json": _SUBMIT_REVIEW_SCHEMA},
+    },
+}
+
+
+class ReviewToolHandler:
+    """Executes tool calls during the agentic review loop.
+
+    Fetches files and directory listings from the GitHub repository
+    at the PR's head commit SHA.
+    """
+
+    def __init__(
+        self,
+        github_client: "Any",
+        repo_name: str,
+        head_sha: str,
+        *,
+        max_file_bytes: int = 60_000,
+        max_fetches: int = 10,
+        github_retries: int = 5,
+    ) -> None:
+        self._gh = github_client
+        self._repo_name = repo_name
+        self._head_sha = head_sha
+        self._max_file_bytes = max_file_bytes
+        self._max_fetches = max_fetches
+        self._github_retries = github_retries
+        self._fetch_count = 0
+        self._cache: dict[str, str] = {}
+
+    def execute(self, tool_name: str, tool_input: dict) -> str:
+        """Execute a tool call and return the result text."""
+        if tool_name == "get_file":
+            return self._get_file(tool_input.get("path", ""))
+        if tool_name == "list_directory":
+            return self._list_directory(tool_input.get("path", ""))
+        return f"Unknown tool: {tool_name}"
+
+    def _get_file(self, path: str) -> str:
+        if not path:
+            return "Error: path is required."
+        if path in self._cache:
+            return self._cache[path]
+        if self._fetch_count >= self._max_fetches:
+            return (
+                f"Fetch limit reached ({self._max_fetches}). "
+                "Please submit your review with the context you have."
+            )
+        self._fetch_count += 1
+        try:
+            repo = retry_github_call(
+                lambda: self._gh.get_repo(self._repo_name),
+                retries=self._github_retries,
+                description=f"get repo {self._repo_name}",
+            )
+            contents = retry_github_call(
+                lambda: repo.get_contents(path, ref=self._head_sha),
+                retries=self._github_retries,
+                description=f"get file {path}",
+            )
+            if isinstance(contents, list):
+                # It's a directory, not a file
+                names = [c.path for c in contents]
+                result = f"{path} is a directory. Contents:\n" + "\n".join(names)
+                self._cache[path] = result
+                return result
+            raw = contents.decoded_content.decode("utf-8", errors="replace")
+            truncated = raw[: self._max_file_bytes]
+            if len(raw) > self._max_file_bytes:
+                truncated += f"\n\n[truncated at {self._max_file_bytes} bytes]"
+            self._cache[path] = truncated
+            logger.info("Fetched %s (%d bytes) for agentic review.", path, len(raw))
+            return truncated
+        except Exception as exc:
+            msg = f"Could not fetch {path}: {exc}"
+            logger.warning(msg)
+            return msg
+
+    def _list_directory(self, path: str) -> str:
+        if self._fetch_count >= self._max_fetches:
+            return (
+                f"Fetch limit reached ({self._max_fetches}). "
+                "Please submit your review with the context you have."
+            )
+        self._fetch_count += 1
+        try:
+            repo = retry_github_call(
+                lambda: self._gh.get_repo(self._repo_name),
+                retries=self._github_retries,
+                description=f"get repo {self._repo_name}",
+            )
+            contents = retry_github_call(
+                lambda: repo.get_contents(path or "", ref=self._head_sha),
+                retries=self._github_retries,
+                description=f"list dir {path}",
+            )
+            if not isinstance(contents, list):
+                return f"{path} is a file, not a directory."
+            names = sorted(c.path for c in contents)
+            return "\n".join(names)
+        except Exception as exc:
+            return f"Could not list {path}: {exc}"
+
 
 class CodeReviewer:
     """Generates focused review findings for risky code changes."""
@@ -496,10 +773,12 @@ class CodeReviewer:
         *,
         retriever: BedrockRetriever | None = None,
         retrieval_config: RetrievalConfig | None = None,
+        github_client: "Any | None" = None,
     ) -> None:
         self._bedrock = bedrock_client
         self._retriever = retriever
         self._retrieval_config = retrieval_config or RetrievalConfig()
+        self._github_client = github_client
 
     def classify_simple_change(self, files: list[ChangedFile]) -> bool:
         """Return ``True`` for changes that are likely trivial."""
@@ -605,13 +884,26 @@ or
         *,
         short_summary: str = "",
     ) -> list[ReviewFinding]:
-        """Review the selected diff scope with the configured heavy model."""
+        """Review the selected diff scope with the configured heavy model.
+
+        When a GitHub client is available, uses the agentic review path
+        which can fetch additional files from the repo during review.
+        Otherwise falls back to the single-scope prompt-based review.
+        """
         if not diff_scope.files:
             return []
 
+        # Choose the review strategy
+        use_agentic = (
+            self._github_client is not None
+            and isinstance(self._bedrock, BedrockClient)
+        )
+        review_fn = self._review_agentic if use_agentic else self._review_single_scope
+
+        if use_agentic:
+            logger.info("Using agentic review with tool-use loop.")
+
         # Check if the scope needs to be split into multiple chunks.
-        # Use ~75% of max_input_tokens (in chars, ~4 chars/token) as the budget
-        # to leave room for the system prompt, user prompt template, and output.
         char_budget = (config.max_input_tokens * 4) * 3 // 4
         scope_size = sum(
             len(f.patch or "") * 2 + min(len(f.contents or ""), 60_000) + 200
@@ -630,7 +922,7 @@ or
                         "Reviewing chunk %d/%d (%d file(s)).",
                         i + 1, len(chunks), len(chunk.files),
                     )
-                    chunk_findings = self._review_single_scope(
+                    chunk_findings = review_fn(
                         pr, chunk, config,
                         short_summary=short_summary,
                     )
@@ -646,7 +938,7 @@ or
                 capped = deduped[: config.max_review_comments]
                 return capped
 
-        findings = self._review_single_scope(
+        findings = review_fn(
             pr, diff_scope, config, short_summary=short_summary,
         )
         capped = findings[: config.max_review_comments]
@@ -900,3 +1192,204 @@ CRITICAL rules:
 
         return capped
 
+
+    # ------------------------------------------------------------------
+    # Agentic review with tool-use loop
+    # ------------------------------------------------------------------
+
+    def _review_agentic(
+        self,
+        pr: PullRequestContext,
+        diff_scope: DiffScope,
+        config: ReviewerConfig,
+        *,
+        short_summary: str = "",
+    ) -> list[ReviewFinding]:
+        """Review using a multi-turn tool-use loop.
+
+        The model can call ``get_file`` and ``list_directory`` to fetch
+        additional context from the repository before submitting its
+        final findings via ``submit_review``.
+
+        Falls back to ``_review_single_scope`` if the bedrock client
+        does not support ``converse_with_tools`` or if the GitHub client
+        is not available.
+        """
+        if not isinstance(self._bedrock, BedrockClient):
+            logger.info("Agentic review requires BedrockClient; falling back.")
+            return self._review_single_scope(
+                pr, diff_scope, config, short_summary=short_summary,
+            )
+        if self._github_client is None:
+            logger.info("No GitHub client for agentic review; falling back.")
+            return self._review_single_scope(
+                pr, diff_scope, config, short_summary=short_summary,
+            )
+        if not diff_scope.files:
+            return []
+
+        retrieved_context = ""
+        if self._retriever is not None:
+            retrieved_context = self._retriever.render_for_prompt(
+                _build_retrieval_query(pr, diff_scope),
+                self._retrieval_config,
+                section_title="Retrieved Valkey Context",
+            )
+
+        summary_section = ""
+        if short_summary:
+            summary_section = f"\nSummary of all changes in this PR (for cross-file context):\n{short_summary}\n"
+
+        custom_instructions_section = ""
+        if config.custom_instructions:
+            custom_instructions_section = f"\n## Project-Specific Review Guidelines\n{config.custom_instructions}\n"
+
+        user_prompt = f"""Review this pull request. You have tools to fetch additional files from the repository if you need more context to verify a potential finding.
+
+PR title: {pr.title}
+PR description:
+{pr.body}
+{summary_section}
+Review scope excerpts (patch/content may be truncated):
+{_serialize_scope(diff_scope)}
+
+{retrieved_context}
+{custom_instructions_section}
+
+WORKFLOW:
+1. Read the diff carefully and identify potential issues.
+2. If a potential finding depends on code in another file (e.g. an imported function, a header, a caller, a config file), use get_file to fetch that file and verify your hypothesis BEFORE reporting it.
+3. If you're unsure which file to look at, use list_directory to explore the repo structure.
+4. Once you have enough context, call submit_review with your findings.
+
+CRITICAL rules:
+- New hunks are annotated with line numbers (e.g. "120: code"). Use these for the "line" field.
+- Only report findings with direct evidence. If you fetched a file and it disproves your hypothesis, DROP the finding.
+- Do NOT report speculative issues. If you cannot verify a finding with the available tools, do not report it.
+- Do NOT provide general feedback, summaries, or praise.
+- Prefer precision over recall: it is far better to miss a real bug than to report a false positive.
+- YAML workflow files embed scripts in run: | blocks — YAML strips the base indentation at runtime. Do NOT report indentation errors in these blocks.
+- For code suggestions, use GitHub's suggestion format in the body:
+  ```suggestion
+  corrected code here
+  ```
+- When you are done, call submit_review. If there are no issues, set lgtm to true and reviews to [].
+"""
+
+        tool_handler = ReviewToolHandler(
+            github_client=self._github_client,
+            repo_name=pr.repo,
+            head_sha=pr.head_sha,
+            github_retries=config.github_retries,
+        )
+
+        tools = [_GET_FILE_TOOL, _LIST_FILES_TOOL, _SUBMIT_REVIEW_TOOL]
+
+        try:
+            response = self._bedrock.converse_with_tools(
+                _SYSTEM_PROMPT,
+                user_prompt,
+                tools=tools,
+                tool_handler=tool_handler,
+                terminal_tool="submit_review",
+                max_turns=6,
+                model_id=config.models.heavy_model_id,
+                max_output_tokens=config.max_output_tokens,
+                temperature=config.models.temperature,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Agentic review failed (%s); falling back to single-scope.",
+                exc,
+            )
+            return self._review_single_scope(
+                pr, diff_scope, config, short_summary=short_summary,
+            )
+
+        # Parse the submit_review JSON
+        try:
+            payload = json.loads(response) if isinstance(response, str) else response
+        except Exception:
+            payload = _extract_json_payload(response)
+
+        raw_findings = []
+        if isinstance(payload, dict):
+            raw_findings = payload.get("reviews", [])
+        elif isinstance(payload, list):
+            raw_findings = payload
+
+        logger.info("Agentic review returned %d raw finding(s).", len(raw_findings))
+
+        # Apply the same filtering as _review_single_scope
+        return self._filter_raw_findings(raw_findings, diff_scope, config)
+
+    def _filter_raw_findings(
+        self,
+        raw_findings: list,
+        diff_scope: DiffScope,
+        config: ReviewerConfig,
+    ) -> list[ReviewFinding]:
+        """Apply standard post-processing filters to raw LLM findings."""
+        allowed_paths = {f.path for f in diff_scope.files}
+        reviewable_files = {f.path: f for f in diff_scope.files}
+        findings: list[ReviewFinding] = []
+        seen_keys: set[tuple[str, int | None, str]] = set()
+        filtered_speculative = 0
+        filtered_lgtm = 0
+        filtered_path = 0
+
+        for raw_finding in raw_findings:
+            if not isinstance(raw_finding, dict):
+                continue
+            path = str(raw_finding.get("path", "")).strip()
+            if not path or path not in allowed_paths:
+                filtered_path += 1
+                continue
+            body = str(raw_finding.get("body", "")).strip()
+            if not body:
+                continue
+            lowered = body.lower()
+            if not config.review_comment_lgtm and (
+                "lgtm" in lowered or "looks good" in lowered or "no issues" in lowered
+            ):
+                filtered_lgtm += 1
+                continue
+            line = raw_finding.get("line")
+            if _is_speculative_finding(body):
+                filtered_speculative += 1
+                continue
+            changed_file = reviewable_files[path]
+            normalized_body = _normalize_finding_text(body)
+            normalized_line = int(line) if isinstance(line, int) and line > 0 else None
+            if normalized_line is not None and changed_file.patch:
+                added_lines, context_lines = _parse_diff_lines(changed_file.patch)
+                snapped = _snap_line_to_diff(normalized_line, added_lines, context_lines)
+                if snapped != normalized_line:
+                    logger.info(
+                        "Line %d for %s snapped to %s",
+                        normalized_line, path, snapped,
+                    )
+                normalized_line = snapped
+            if _is_false_indentation_finding(
+                body, path, normalized_line, changed_file.contents,
+            ):
+                filtered_speculative += 1
+                continue
+            dedupe_key = (path, normalized_line, normalized_body)
+            if dedupe_key in seen_keys:
+                continue
+            seen_keys.add(dedupe_key)
+            findings.append(
+                ReviewFinding(
+                    path=path,
+                    line=normalized_line,
+                    body=body,
+                    severity=str(raw_finding.get("severity", "medium")).strip() or "medium",
+                )
+            )
+
+        logger.info(
+            "Agentic filter stats: path=%d, lgtm=%d, speculative=%d, kept=%d",
+            filtered_path, filtered_lgtm, filtered_speculative, len(findings),
+        )
+        return findings[: config.max_review_comments]

@@ -13,7 +13,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import boto3
-from github import Github
+from github import Auth, Github
 
 from scripts.bedrock_client import BedrockClient, BedrockError
 from scripts.bedrock_retriever import BedrockRetriever
@@ -633,8 +633,8 @@ def run_pipeline(
     pr_manager: PRManager | None = None,
 ) -> PipelineResult:
     """Execute the full pipeline: Detect → Parse → Analyze → Fix → Validate → PR."""
-    gh = Github(github_token)
-    state_gh = Github(state_github_token or github_token)
+    gh = Github(auth=Auth.Token(github_token))
+    state_gh = Github(auth=Auth.Token(state_github_token or github_token))
     state_repo = state_repo_name or repo_name
 
     # Fetch workflow run before config so remote config loads can use the failing SHA.
@@ -969,8 +969,8 @@ def run_reconciliation(
 
     Returns the number of queued failures successfully processed.
     """
-    gh = Github(github_token)
-    state_gh = Github(state_github_token or github_token)
+    gh = Github(auth=Auth.Token(github_token))
+    state_gh = Github(auth=Auth.Token(state_github_token or github_token))
     state_repo = state_repo_name or repo_name
     config = _load_runtime_config(gh, repo_name, config_path)
 

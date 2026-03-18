@@ -20,7 +20,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import boto3
-from github import Github
+from github import Auth, Github
 from github.GithubException import GithubException
 
 from scripts.backport_config import load_backport_config_from_repo
@@ -136,7 +136,7 @@ def run_backport(
     **Validates: Requirements 1.2, 1.3, 1.5, 2.1, 4.6, 4.7, 6.1, 8.1,
     9.1, 9.2, 9.3, 9.4**
     """
-    gh = Github(github_token)
+    gh = Github(auth=Auth.Token(github_token))
     repo = retry_github_call(
         lambda: gh.get_repo(repo_full_name),
         retries=3,
@@ -533,7 +533,7 @@ def main() -> None:
     )
 
     # Load config from consumer repo
-    gh = Github(args.token)
+    gh = Github(auth=Auth.Token(args.token))
     config = load_backport_config_from_repo(gh, args.repo, args.config)
 
     result = run_backport(

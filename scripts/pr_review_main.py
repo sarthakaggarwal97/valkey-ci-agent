@@ -14,7 +14,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import boto3
-from github import Github
+from github import Auth, Github
 
 from scripts.bedrock_client import BedrockClient, PromptClient
 from scripts.bedrock_retriever import BedrockRetriever
@@ -143,8 +143,8 @@ def run(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
 
-    gh = Github(args.token)
-    state_gh = Github(args.state_token) if args.state_token else gh
+    gh = Github(auth=Auth.Token(args.token))
+    state_gh = Github(auth=Auth.Token(args.state_token)) if args.state_token else gh
     manual_pr_number = args.pr_number
     event = None
     repo_name = args.repo
@@ -334,6 +334,7 @@ def run(argv: list[str] | None = None) -> int:
                     bedrock_client,
                     retriever=retriever,
                     retrieval_config=config.retrieval,
+                    github_client=gh,
                 )
                 if reviewer.classify_simple_change(diff_scope.files) and not config.review_simple_changes:
                     detail = "simple-change" if diff_scope.files else "no-new-files"

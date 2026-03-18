@@ -88,6 +88,14 @@ class PromptClient(Protocol):
         ...
 
 
+class ToolHandler(Protocol):
+    """Callback interface for executing tool calls during multi-turn review."""
+
+    def execute(self, tool_name: str, tool_input: dict) -> str:
+        """Execute a tool call and return the result as a string."""
+        ...
+
+
 class TokenBudgetLimiter(Protocol):
     """Interface used for coarse Bedrock budget enforcement."""
 
@@ -504,4 +512,151 @@ class BedrockClient:
             f"Bedrock API error after {max_attempts} attempts",
             error_code=last_error.response.get("Error", {}).get("Code", "") if last_error else None,
             retryable=True,
+        )
+
+    def converse_with_tools(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        tools: list[dict],
+        tool_handler: "ToolHandler",
+        terminal_tool: str,
+        max_turns: int = 6,
+        model_id: str | None = None,
+        max_output_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> str:
+        """Run a multi-turn Converse loop with tool use.
+
+        The model can call tools (e.g. ``get_file``) to gather context,
+        and the loop continues until it calls the *terminal_tool* or
+        *max_turns* is reached.  The terminal tool's input JSON is
+        returned as the final result.
+
+        Args:
+            system_prompt: System-level instructions.
+            user_prompt: Initial user message.
+            tools: List of Bedrock toolSpec dicts.
+            tool_handler: Callback that executes non-terminal tool calls.
+            terminal_tool: Name of the tool whose invocation ends the loop.
+            max_turns: Maximum number of tool-use round-trips.
+            model_id: Optional model override.
+            max_output_tokens: Optional output-token override.
+            temperature: Optional sampling temperature.
+
+        Returns:
+            JSON string from the terminal tool invocation.
+        """
+        import json as _json
+
+        full_system_prompt = (
+            f"{system_prompt}\n\n"
+            f"## Project Context\n{self._project_context}"
+        )
+        output_tokens = max_output_tokens or self._config.max_output_tokens
+        messages: list[dict[str, Any]] = [
+            {"role": "user", "content": [{"text": user_prompt}]},
+        ]
+
+        converse_kwargs: dict[str, Any] = {
+            "modelId": model_id or self._config.bedrock_model_id,
+            "system": [{"text": full_system_prompt}],
+            "inferenceConfig": {"maxTokens": output_tokens},
+            "toolConfig": {"tools": tools},
+        }
+        if temperature is not None:
+            converse_kwargs["inferenceConfig"]["temperature"] = temperature
+
+        for turn in range(max_turns):
+            converse_kwargs["messages"] = messages
+
+            # Budget check per turn
+            estimated = _estimate_tokens(
+                full_system_prompt
+            ) + sum(
+                _estimate_tokens(str(m)) for m in messages
+            ) + output_tokens
+            if self._rate_limiter is not None:
+                if not self._rate_limiter.can_use_tokens(estimated):
+                    raise BedrockError(
+                        "daily token budget exhausted during tool-use loop",
+                        error_code="TokenBudgetExceeded",
+                        retryable=False,
+                    )
+                self._rate_limiter.record_token_usage(estimated)
+
+            response = self._client.converse(**converse_kwargs)
+            self._adjust_token_usage(response, estimated)
+
+            assistant_content = response["output"]["message"]["content"]
+            messages.append({"role": "assistant", "content": assistant_content})
+
+            # Collect all tool_use blocks from the response
+            tool_use_blocks = [
+                block for block in assistant_content if "toolUse" in block
+            ]
+
+            if not tool_use_blocks:
+                # Model produced text without calling a tool — extract it
+                text_parts = [
+                    block["text"] for block in assistant_content if "text" in block
+                ]
+                logger.info(
+                    "Model returned text without tool call on turn %d.", turn + 1,
+                )
+                return "".join(text_parts)
+
+            # Process each tool call
+            tool_results: list[dict] = []
+            terminal_result: str | None = None
+
+            for block in tool_use_blocks:
+                tool_use = block["toolUse"]
+                name = tool_use["name"]
+                tool_use_id = tool_use["toolUseId"]
+                tool_input = tool_use.get("input", {})
+
+                if name == terminal_tool:
+                    terminal_result = _json.dumps(tool_input)
+                    tool_results.append({
+                        "toolResult": {
+                            "toolUseId": tool_use_id,
+                            "content": [{"text": "Review submitted."}],
+                        }
+                    })
+                else:
+                    logger.info(
+                        "Tool call turn %d: %s(%s)",
+                        turn + 1, name,
+                        _json.dumps(tool_input)[:200],
+                    )
+                    try:
+                        result_text = tool_handler.execute(name, tool_input)
+                    except Exception as exc:
+                        result_text = f"Error: {exc}"
+                        logger.warning("Tool %s failed: %s", name, exc)
+                    tool_results.append({
+                        "toolResult": {
+                            "toolUseId": tool_use_id,
+                            "content": [{"text": result_text}],
+                        }
+                    })
+
+            if terminal_result is not None:
+                logger.info(
+                    "Terminal tool %s called on turn %d.", terminal_tool, turn + 1,
+                )
+                return terminal_result
+
+            # Feed tool results back for the next turn
+            messages.append({"role": "user", "content": tool_results})
+
+        logger.warning(
+            "Tool-use loop exhausted %d turns without terminal tool.", max_turns,
+        )
+        raise BedrockError(
+            f"Tool-use loop did not complete within {max_turns} turns.",
+            error_code="ToolUseLoopExhausted",
+            retryable=False,
         )
