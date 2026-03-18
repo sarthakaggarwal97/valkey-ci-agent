@@ -514,6 +514,26 @@ class BedrockClient:
             retryable=True,
         )
 
+    def _converse_with_retry(self, converse_kwargs: dict[str, Any]) -> dict:
+        """Call ``self._client.converse`` with retry on transient errors."""
+        max_attempts = self._config.max_retries_bedrock + 1
+        for attempt in range(max_attempts):
+            try:
+                return self._client.converse(**converse_kwargs)
+            except ClientError as exc:
+                if not _is_retryable_error(exc) or attempt == max_attempts - 1:
+                    raise
+                delay = _compute_backoff_delay(attempt)
+                error_code = exc.response.get("Error", {}).get("Code", "")
+                logger.warning(
+                    "Retryable error in converse (code=%s), attempt %d/%d, "
+                    "retrying in %.2fs.",
+                    error_code, attempt + 1, max_attempts, delay,
+                )
+                time.sleep(delay)
+        # Unreachable, but keeps mypy happy
+        raise BedrockError("converse retries exhausted", retryable=True)
+
     def converse_with_tools(
         self,
         system_prompt: str,
@@ -586,7 +606,7 @@ class BedrockClient:
                     )
                 self._rate_limiter.record_token_usage(estimated)
 
-            response = self._client.converse(**converse_kwargs)
+            response = self._converse_with_retry(converse_kwargs)
             self._adjust_token_usage(response, estimated)
 
             assistant_content = response["output"]["message"]["content"]
@@ -666,7 +686,7 @@ class BedrockClient:
                 "toolResult": {
                     "toolUseId": tool_use["toolUseId"],
                     "content": [{"text": (
-                        "Turn limit reached. You MUST call submit_review now "
+                        f"Turn limit reached. You MUST call {terminal_tool} now "
                         "with whatever findings you have so far."
                     )}],
                 }
@@ -696,7 +716,7 @@ class BedrockClient:
                     )
                 self._rate_limiter.record_token_usage(estimated)
 
-            response = self._client.converse(**forced_kwargs)
+            response = self._converse_with_retry(forced_kwargs)
             self._adjust_token_usage(response, estimated)
             assistant_content = response["output"]["message"]["content"]
 
