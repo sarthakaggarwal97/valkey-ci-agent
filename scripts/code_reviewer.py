@@ -54,6 +54,15 @@ Rules:
 _SEVERITY_RANK = {"high": 3, "medium": 2, "low": 1}
 _CONFIDENCE_RANK = {"high": 3, "medium": 2, "low": 1}
 
+# GitHub code search accepts language qualifiers for language names, not file
+# extensions. Keep the optimization only for extensions we know map cleanly;
+# unsupported extensions like ".h" must fall back to an unqualified search and
+# rely on local suffix filtering.
+_CODE_SEARCH_LANGUAGE_BY_EXTENSION = {
+    "c": "c",
+    "tcl": "tcl",
+}
+
 _SPECULATIVE_SUBSTRINGS = (
     "not shown in the diff",
     "not shown in diff",
@@ -1128,7 +1137,11 @@ class ReviewToolHandler:
                 # matches r"^\.\w+$".
                 stripped = path_filter.strip()
                 if re.match(r"^\.\w+$", stripped):
-                    search_q += f" language:{stripped.lstrip('.')}"
+                    language = _CODE_SEARCH_LANGUAGE_BY_EXTENSION.get(
+                        stripped.lstrip(".").lower(),
+                    )
+                    if language:
+                        search_q += f" language:{language}"
                 else:
                     search_q += f" path:{stripped}"
 

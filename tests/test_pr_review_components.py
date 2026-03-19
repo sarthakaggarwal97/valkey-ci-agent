@@ -224,6 +224,52 @@ def test_review_tool_handler_search_code_drops_unverified_hits() -> None:
     assert "No results found for 'failover_timeout'" in result
 
 
+def test_review_tool_handler_search_code_skips_language_qualifier_for_headers() -> None:
+    gh = MagicMock()
+    repo = MagicMock()
+    gh.get_repo.return_value = repo
+
+    search_result = MagicMock()
+    search_result.path = "src/failover.h"
+    gh.search_code.return_value = [search_result]
+    repo.get_contents.return_value = MagicMock(
+        decoded_content=b"int failover_timeout;\n",
+    )
+
+    handler = ReviewToolHandler(gh, "owner/repo", "head456")
+    result = handler.execute(
+        "search_code",
+        {"query": "failover_timeout", "path_filter": ".h"},
+    )
+
+    assert "Found 1 verified result(s)" in result
+    gh.search_code.assert_called_once_with("failover_timeout repo:owner/repo")
+
+
+def test_review_tool_handler_search_code_uses_language_qualifier_for_c_files() -> None:
+    gh = MagicMock()
+    repo = MagicMock()
+    gh.get_repo.return_value = repo
+
+    search_result = MagicMock()
+    search_result.path = "src/failover.c"
+    gh.search_code.return_value = [search_result]
+    repo.get_contents.return_value = MagicMock(
+        decoded_content=b"int failover_timeout(void) { return 1; }\n",
+    )
+
+    handler = ReviewToolHandler(gh, "owner/repo", "head456")
+    result = handler.execute(
+        "search_code",
+        {"query": "failover_timeout", "path_filter": ".c"},
+    )
+
+    assert "Found 1 verified result(s)" in result
+    gh.search_code.assert_called_once_with(
+        "failover_timeout repo:owner/repo language:c",
+    )
+
+
 def test_review_tool_handler_get_base_file_uses_base_sha() -> None:
     gh = MagicMock()
     repo = MagicMock()

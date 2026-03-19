@@ -606,7 +606,9 @@ class BedrockClient:
                     )
                 self._rate_limiter.record_token_usage(estimated)
 
+            turn_started = time.monotonic()
             response = self._converse_with_retry(converse_kwargs)
+            turn_elapsed = time.monotonic() - turn_started
             self._adjust_token_usage(response, estimated)
 
             assistant_content = response["output"]["message"]["content"]
@@ -616,6 +618,12 @@ class BedrockClient:
             tool_use_blocks = [
                 block for block in assistant_content if "toolUse" in block
             ]
+            logger.info(
+                "Tool-use turn %d completed in %.2fs with %d tool call(s).",
+                turn + 1,
+                turn_elapsed,
+                len(tool_use_blocks),
+            )
 
             if not tool_use_blocks:
                 # Model produced text without calling a tool — extract it
