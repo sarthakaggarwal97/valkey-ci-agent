@@ -171,7 +171,7 @@ Relevant file context:
                 tools=tools,
                 tool_handler=tool_handler,
                 terminal_tool="submit_reply",
-                max_turns=6,
+                max_turns=20,
                 model_id=config.models.heavy_model_id,
                 max_output_tokens=config.max_output_tokens,
                 temperature=config.models.temperature,

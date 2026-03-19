@@ -412,7 +412,7 @@ class ConflictResolver:
                 tools=tools,
                 tool_handler=tool_handler,
                 terminal_tool="submit_resolution",
-                max_turns=8,
+                max_turns=20,
                 model_id=self._config.bedrock_model_id,
             )
         except Exception as exc:

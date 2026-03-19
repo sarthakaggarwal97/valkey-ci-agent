@@ -542,7 +542,7 @@ class BedrockClient:
         tools: list[dict],
         tool_handler: "ToolHandler",
         terminal_tool: str,
-        max_turns: int = 6,
+        max_turns: int = 20,
         model_id: str | None = None,
         max_output_tokens: int | None = None,
         temperature: float | None = None,

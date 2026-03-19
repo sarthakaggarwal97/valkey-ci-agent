@@ -416,7 +416,7 @@ class FixGenerator:
                 tools=tools,
                 tool_handler=tool_handler,
                 terminal_tool="submit_fix",
-                max_turns=8,
+                max_turns=20,
             )
         except Exception as exc:
             logger.warning("Agentic fix generation failed: %s. Falling back.", exc)
