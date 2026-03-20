@@ -96,10 +96,10 @@ class ReviewerConfig:
     max_files: int = 150
     max_review_comments: int = 5
     path_filters: list[str] = field(default_factory=list)
-    daily_token_budget: int = 3_000_000
+    daily_token_budget: int = 12_000_000
     bedrock_retries: int = 5
     github_retries: int = 5
-    bedrock_timeout_ms: int = 120_000
+    bedrock_timeout_ms: int = 300_000
     bedrock_concurrency_limit: int = 2
     github_concurrency_limit: int = 6
     max_input_tokens: int = 190_000

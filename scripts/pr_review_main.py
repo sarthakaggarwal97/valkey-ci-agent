@@ -16,6 +16,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import boto3
+from botocore.config import Config as BotocoreConfig
 from github import Auth, Github
 
 from scripts.bedrock_client import BedrockClient, PromptClient
@@ -246,9 +247,15 @@ def run(argv: list[str] | None = None) -> int:
     )
     rate_limiter.load()
 
+    bedrock_timeout_seconds = max(60, int(config.bedrock_timeout_ms / 1000))
+    bedrock_client_config = BotocoreConfig(
+        read_timeout=bedrock_timeout_seconds,
+        connect_timeout=60,
+    )
     bedrock_runtime = boto3.client(
         "bedrock-runtime",
         region_name=args.aws_region or None,
+        config=bedrock_client_config,
     )
     bedrock_client: PromptClient = BedrockClient(
         config=config,
@@ -262,7 +269,11 @@ def run(argv: list[str] | None = None) -> int:
     ])
     if retrieval_enabled:
         retriever = BedrockRetriever(
-            boto3.client("bedrock-agent-runtime", region_name=args.aws_region or None),
+            boto3.client(
+                "bedrock-agent-runtime",
+                region_name=args.aws_region or None,
+                config=bedrock_client_config,
+            ),
         )
     fetcher = PRContextFetcher(gh, github_retries=config.github_retries)
     publisher = CommentPublisher(gh, github_retries=config.github_retries)

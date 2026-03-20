@@ -500,8 +500,14 @@ def test_run_review_mode_wires_retriever_when_enabled(
         )
 
     assert exit_code == 0
-    mock_boto_client.assert_any_call("bedrock-runtime", region_name="us-east-1")
-    mock_boto_client.assert_any_call("bedrock-agent-runtime", region_name="us-east-1")
+    runtime_call = mock_boto_client.call_args_list[0]
+    retriever_call = mock_boto_client.call_args_list[1]
+    assert runtime_call.args == ("bedrock-runtime",)
+    assert runtime_call.kwargs["region_name"] == "us-east-1"
+    assert runtime_call.kwargs["config"].read_timeout == config.bedrock_timeout_ms // 1000
+    assert retriever_call.args == ("bedrock-agent-runtime",)
+    assert retriever_call.kwargs["region_name"] == "us-east-1"
+    assert retriever_call.kwargs["config"].read_timeout == config.bedrock_timeout_ms // 1000
     assert mock_summarizer_cls.call_args.kwargs["retriever"] is not None
     assert mock_reviewer_cls.call_args.kwargs["retriever"] is not None
 
@@ -578,7 +584,10 @@ def test_run_review_mode_skips_retriever_client_without_kb_ids(
         )
 
     assert exit_code == 0
-    mock_boto_client.assert_called_once_with("bedrock-runtime", region_name="us-east-1")
+    runtime_call = mock_boto_client.call_args_list[0]
+    assert runtime_call.args == ("bedrock-runtime",)
+    assert runtime_call.kwargs["region_name"] == "us-east-1"
+    assert runtime_call.kwargs["config"].read_timeout == config.bedrock_timeout_ms // 1000
 
 
 @patch("scripts.pr_review_main.boto3.client")
