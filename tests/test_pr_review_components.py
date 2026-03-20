@@ -428,8 +428,45 @@ def test_review_tool_handler_reuses_shared_cache_across_handlers() -> None:
 
     assert "return 0" in first_handler.execute("get_file", {"path": "src/failover.c"})
     assert "return 0" in second_handler.execute("get_file", {"path": "src/failover.c"})
+    assert second_handler.inspected_file_paths() == ["src/failover.c"]
+    assert "src/failover.c" in second_handler.render_context()
     gh.get_repo.assert_called_once_with("owner/repo")
     repo.get_contents.assert_called_once_with("src/failover.c", ref="head456")
+
+
+def test_review_tool_handler_cached_base_file_counts_as_current_inspection() -> None:
+    gh = MagicMock()
+    repo = MagicMock()
+    gh.get_repo.return_value = repo
+    repo.get_contents.return_value = MagicMock(
+        decoded_content=b"int failover(void) { return 0; }\n",
+    )
+    shared_cache: dict[str, str] = {}
+    shared_repo_holder: dict[str, object] = {}
+
+    first_handler = ReviewToolHandler(
+        gh,
+        "owner/repo",
+        "head456",
+        base_sha="base123",
+        shared_cache=shared_cache,
+        shared_repo_holder=shared_repo_holder,
+    )
+    second_handler = ReviewToolHandler(
+        gh,
+        "owner/repo",
+        "head456",
+        base_sha="base123",
+        shared_cache=shared_cache,
+        shared_repo_holder=shared_repo_holder,
+    )
+
+    assert "return 0" in first_handler.execute("get_base_file", {"path": "src/failover.c"})
+    assert "return 0" in second_handler.execute("get_base_file", {"path": "src/failover.c"})
+    assert second_handler.inspected_file_paths() == ["src/failover.c"]
+    assert "src/failover.c" in second_handler.render_context()
+    gh.get_repo.assert_called_once_with("owner/repo")
+    repo.get_contents.assert_called_once_with("src/failover.c", ref="base123")
 
 
 def test_review_tool_handler_requires_explicit_file_fetch_before_submit() -> None:

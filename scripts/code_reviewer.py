@@ -1276,7 +1276,11 @@ class ReviewToolHandler:
             return "Error: path is required."
         cache_key = f"head:{path}"
         if cache_key in self._cache:
-            return self._cache[cache_key]
+            cached = self._cache[cache_key]
+            if not cached.startswith(f"{path} is a directory. Contents:\n"):
+                self._record_file_inspection(path)
+                self._remember_context(f"HEAD file {path}", cached)
+            return cached
         if self._fetch_count >= self._max_fetches:
             return self._fetch_limit_message(f"fetch {path}")
         self._fetch_count += 1
@@ -1319,7 +1323,10 @@ class ReviewToolHandler:
             return "Base commit is unavailable for this review."
         cache_key = f"base:{path}"
         if cache_key in self._cache:
-            return self._cache[cache_key]
+            cached = self._cache[cache_key]
+            self._record_file_inspection(path)
+            self._remember_context(f"BASE file {path}", cached)
+            return cached
         if self._fetch_count >= self._max_fetches:
             return self._fetch_limit_message(f"fetch base version of {path}")
         self._fetch_count += 1
