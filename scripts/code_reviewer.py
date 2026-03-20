@@ -64,7 +64,7 @@ _CODE_SEARCH_LANGUAGE_BY_EXTENSION = {
 }
 
 _FOCUSED_AGENTIC_FILE_LIMIT = 25
-_MIN_AGENTIC_FETCHES = 18
+_MIN_AGENTIC_FETCHES = 24
 _MAX_AGENTIC_FETCHES = 48
 _MIN_AGENTIC_TURNS = 24
 _MAX_AGENTIC_TURNS = 36
@@ -174,6 +174,17 @@ class ReviewCoverage:
         if not self.requested_lgtm:
             lines.extend(["", "The model did not request approval for this pass."])
         return "\n".join(lines)
+
+
+@dataclass
+class _AgenticToolState:
+    """Shared caches and search state reused across focused review passes."""
+
+    file_cache: dict[str, str] = field(default_factory=dict)
+    directory_cache: dict[str, list[str]] = field(default_factory=dict)
+    repo_holder: dict[str, Any] = field(default_factory=dict)
+    search_backend: dict[str, Any] = field(default_factory=dict)
+    changed_file_texts: dict[str, str] = field(default_factory=dict)
 
 
 def _extract_json_payload(text: str) -> Any:
@@ -1092,6 +1103,11 @@ class ReviewToolHandler:
         project: ProjectContext | None = None,
         required_files: list[ChangedFile] | None = None,
         suggested_support_paths: list[str] | None = None,
+        head_file_texts: dict[str, str] | None = None,
+        shared_cache: dict[str, str] | None = None,
+        shared_directory_cache: dict[str, list[str]] | None = None,
+        shared_repo_holder: dict[str, Any] | None = None,
+        shared_search_state: dict[str, Any] | None = None,
         max_file_bytes: int = 60_000,
         max_fetches: int = _MIN_AGENTIC_FETCHES,
         github_retries: int = 5,
@@ -1105,13 +1121,31 @@ class ReviewToolHandler:
         self._max_fetches = max_fetches
         self._github_retries = github_retries
         self._fetch_count = 0
-        self._cache: dict[str, str] = {}
-        self._directory_cache: dict[str, list[str]] = {}
+        self._cache = shared_cache if shared_cache is not None else {}
+        self._directory_cache = (
+            shared_directory_cache
+            if shared_directory_cache is not None else {}
+        )
+        self._shared_repo_holder = (
+            shared_repo_holder if shared_repo_holder is not None else {}
+        )
+        self._shared_search_state = (
+            shared_search_state if shared_search_state is not None else {}
+        )
+        self._shared_search_state.setdefault("github_search_disabled", False)
+        self._shared_search_state.setdefault("github_search_miss_count", 0)
+        self._shared_search_state.setdefault("github_search_success_count", 0)
+        self._shared_search_state.setdefault("repo_is_fork", None)
         self._history: list[str] = []
         self._checked_paths: set[str] = set()
         self._file_inspected_paths: set[str] = set()
         self._fetch_limit_hit = False
-        self._repo = None
+        self._repo = self._shared_repo_holder.get("repo")
+        self._head_file_texts = {
+            str(path).strip(): str(text)
+            for path, text in (head_file_texts or {}).items()
+            if str(path).strip() and isinstance(text, str) and text
+        }
         self._required_files = {
             changed_file.path: changed_file
             for changed_file in (required_files or [])
@@ -1397,6 +1431,7 @@ class ReviewToolHandler:
     def _search_code(self, query: str, path_filter: str = "") -> str:
         if not query:
             return "Error: query is required."
+        key = self._search_request_key(query, path_filter)
         guidance = self._search_guidance(query, path_filter)
         if guidance:
             logger.info(
@@ -1405,13 +1440,31 @@ class ReviewToolHandler:
                 path_filter,
             )
             return guidance
+        local_result = self._search_local_head_content(query, path_filter)
+        if local_result is not None:
+            self._consecutive_search_misses = 0
+            self._search_miss_counts.pop(key, None)
+            self._remember_context(f"Local code search {query}", local_result)
+            return local_result
+        if self._shared_search_state.get("github_search_disabled"):
+            logger.info(
+                "Skipping GitHub code search for '%s' because the backend was marked unavailable earlier in this run.",
+                query,
+            )
+            return (
+                "GitHub code search appears unavailable for this repository in this run. "
+                "Inspect related files directly instead of searching."
+            )
         if self._fetch_count >= self._max_fetches:
             filter_note = f" with filter {path_filter}" if path_filter else ""
             return self._fetch_limit_message(f"search for {query}{filter_note}")
         self._fetch_count += 1
         try:
             repo = self._get_repo()
-            key = self._search_request_key(query, path_filter)
+            repo_is_fork = self._shared_search_state.get("repo_is_fork")
+            if repo_is_fork is None:
+                repo_is_fork = bool(getattr(repo, "fork", False))
+                self._shared_search_state["repo_is_fork"] = repo_is_fork
             # Build the GitHub code search query
             search_q = f"{query} repo:{self._repo_name}"
             if path_filter:
@@ -1468,10 +1521,27 @@ class ReviewToolHandler:
             if not lines:
                 self._search_miss_counts[key] = self._search_miss_counts.get(key, 0) + 1
                 self._consecutive_search_misses += 1
+                miss_count = int(self._shared_search_state.get("github_search_miss_count", 0)) + 1
+                self._shared_search_state["github_search_miss_count"] = miss_count
+                if (
+                    repo_is_fork
+                    and int(self._shared_search_state.get("github_search_success_count", 0)) == 0
+                    and miss_count >= 3
+                ):
+                    self._shared_search_state["github_search_disabled"] = True
+                    logger.info(
+                        "Disabling GitHub code search for %s after %d empty search result(s) on a forked repository.",
+                        self._repo_name,
+                        miss_count,
+                    )
                 return f"No results found for '{query}' at {self._head_sha[:12]}."
 
             self._consecutive_search_misses = 0
             self._search_miss_counts.pop(key, None)
+            self._shared_search_state["github_search_success_count"] = (
+                int(self._shared_search_state.get("github_search_success_count", 0)) + 1
+            )
+            self._shared_search_state["github_search_miss_count"] = 0
             logger.info(
                 "Code search for '%s' returned %d verified result(s) at %s.",
                 query,
@@ -1488,6 +1558,62 @@ class ReviewToolHandler:
             msg = f"Code search failed for '{query}': {exc}"
             logger.warning(msg)
             return msg
+
+    def _search_local_head_content(self, query: str, path_filter: str) -> str | None:
+        normalized_query = query.strip()
+        if not normalized_query:
+            return None
+
+        lines: list[str] = []
+        seen_paths: set[str] = set()
+        for path, text in self._iter_local_head_search_sources():
+            if path in seen_paths or not self._path_matches_filter(path, path_filter):
+                continue
+            excerpts = self._extract_query_excerpts(text, normalized_query)
+            if not excerpts:
+                continue
+            seen_paths.add(path)
+            self._record_checked_path(path)
+            entry = f"- {path}"
+            for excerpt in excerpts:
+                entry += f"\n  > {excerpt}"
+            lines.append(entry)
+            if len(lines) >= 15:
+                break
+
+        if not lines:
+            return None
+
+        result = (
+            f"Found {len(lines)} local result(s) for '{normalized_query}' "
+            f"at {self._head_sha[:12]}:\n" + "\n".join(lines)
+        )
+        logger.info(
+            "Local head search for '%s' returned %d result(s) at %s.",
+            normalized_query,
+            len(lines),
+            self._head_sha[:12],
+        )
+        return result
+
+    def _iter_local_head_search_sources(self) -> list[tuple[str, str]]:
+        ordered: list[tuple[str, str]] = []
+        seen_paths: set[str] = set()
+
+        for cache_key, text in self._cache.items():
+            if not cache_key.startswith("head:"):
+                continue
+            path = cache_key.split(":", 1)[1]
+            if path and path not in seen_paths:
+                ordered.append((path, text))
+                seen_paths.add(path)
+
+        for path, text in self._head_file_texts.items():
+            if path not in seen_paths:
+                ordered.append((path, text))
+                seen_paths.add(path)
+
+        return ordered
 
     def _record_checked_path(self, path: str) -> None:
         normalized = path.strip()
@@ -1580,6 +1706,7 @@ class ReviewToolHandler:
                 retries=self._github_retries,
                 description=f"get repo {self._repo_name}",
             )
+            self._shared_repo_holder["repo"] = self._repo
         return self._repo
 
     def _fetch_file_text(
@@ -1836,6 +1963,20 @@ or
 
         if use_agentic:
             logger.info("Using agentic review with tool-use loop.")
+        shared_tool_state = (
+            _AgenticToolState(
+                changed_file_texts={
+                    changed_file.path: changed_file.contents or ""
+                    for changed_file in pr.files
+                    if (
+                        not changed_file.is_binary
+                        and changed_file.status != "removed"
+                        and changed_file.contents
+                    )
+                },
+            )
+            if use_agentic else None
+        )
 
         # Prefer focused file-by-file agentic passes for modest-sized reviews so
         # every triaged file gets its own explicit inspection pass.
@@ -1880,6 +2021,7 @@ or
                 chunk_findings = review_fn(
                     pr, chunk, config,
                     short_summary=short_summary,
+                    shared_tool_state=shared_tool_state,
                 )
                 all_findings.extend(chunk_findings)
                 if self._last_review_coverage is not None:
@@ -1902,7 +2044,11 @@ or
             return capped
 
         findings = review_fn(
-            pr, diff_scope, config, short_summary=short_summary,
+            pr,
+            diff_scope,
+            config,
+            short_summary=short_summary,
+            shared_tool_state=shared_tool_state,
         )
         ranked = sorted(findings, key=_finding_sort_key, reverse=True)
         capped = ranked[: config.max_review_comments]
@@ -1915,6 +2061,7 @@ or
         config: ReviewerConfig,
         *,
         short_summary: str = "",
+        shared_tool_state: _AgenticToolState | None = None,
     ) -> list[ReviewFinding]:
         """Review a single diff scope chunk with the configured heavy model."""
         if not diff_scope.files:
@@ -2023,6 +2170,7 @@ CRITICAL rules:
         config: ReviewerConfig,
         *,
         short_summary: str = "",
+        shared_tool_state: _AgenticToolState | None = None,
     ) -> list[ReviewFinding]:
         """Review using a multi-turn tool-use loop.
 
@@ -2136,6 +2284,26 @@ CRITICAL rules:
             project=config.project,
             required_files=diff_scope.files,
             suggested_support_paths=suggested_support_paths,
+            head_file_texts=(
+                shared_tool_state.changed_file_texts
+                if shared_tool_state is not None else None
+            ),
+            shared_cache=(
+                shared_tool_state.file_cache
+                if shared_tool_state is not None else None
+            ),
+            shared_directory_cache=(
+                shared_tool_state.directory_cache
+                if shared_tool_state is not None else None
+            ),
+            shared_repo_holder=(
+                shared_tool_state.repo_holder
+                if shared_tool_state is not None else None
+            ),
+            shared_search_state=(
+                shared_tool_state.search_backend
+                if shared_tool_state is not None else None
+            ),
             max_fetches=max_fetches,
             github_retries=config.github_retries,
         )
@@ -2626,6 +2794,13 @@ Return JSON only:
                 verified.append(draft)
                 continue
             if str(raw_result.get("verdict", "")).strip().lower() != "keep":
+                logger.info(
+                    "Verifier dropped candidate %d for %s:%s: %s",
+                    index,
+                    draft.path,
+                    draft.line if draft.line is not None else "?",
+                    str(raw_result.get("reason", "")).strip() or "no reason provided",
+                )
                 continue
             verified.append(
                 _FindingDraft(

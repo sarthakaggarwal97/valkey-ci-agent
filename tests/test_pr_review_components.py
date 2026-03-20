@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+import logging
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -271,6 +272,55 @@ def test_review_tool_handler_search_code_uses_language_qualifier_for_c_files() -
     )
 
 
+def test_review_tool_handler_search_code_prefers_local_head_content() -> None:
+    gh = MagicMock()
+
+    handler = ReviewToolHandler(
+        gh,
+        "owner/repo",
+        "head456",
+        head_file_texts={
+            "src/failover.c": "int failover_timeout(void) { return 1; }\n",
+        },
+    )
+    result = handler.execute("search_code", {"query": "failover_timeout"})
+
+    assert "Found 1 local result(s)" in result
+    assert "src/failover.c" in result
+    gh.search_code.assert_not_called()
+
+
+def test_review_tool_handler_disables_github_search_for_fork_after_repeated_misses() -> None:
+    gh = MagicMock()
+    repo = MagicMock()
+    repo.fork = True
+    gh.get_repo.return_value = repo
+    gh.search_code.return_value = []
+    shared_search_state: dict[str, object] = {}
+
+    handler = ReviewToolHandler(
+        gh,
+        "owner/repo",
+        "head456",
+        shared_search_state=shared_search_state,
+    )
+
+    assert "No results found" in handler.execute("search_code", {"query": "alpha"})
+    assert "No results found" in handler.execute("search_code", {"query": "beta"})
+    assert "No results found" in handler.execute("search_code", {"query": "gamma"})
+
+    second_handler = ReviewToolHandler(
+        gh,
+        "owner/repo",
+        "head456",
+        shared_search_state=shared_search_state,
+    )
+    disabled = second_handler.execute("search_code", {"query": "delta"})
+
+    assert "GitHub code search appears unavailable" in disabled
+    assert gh.search_code.call_count == 3
+
+
 def test_review_tool_handler_get_base_file_uses_base_sha() -> None:
     gh = MagicMock()
     repo = MagicMock()
@@ -349,6 +399,37 @@ def test_review_tool_handler_tracks_checked_paths_and_fetch_limit() -> None:
     assert "Fetch limit reached (1)" in second
     assert handler.checked_paths() == ["src/failover.c"]
     assert handler.fetch_limit_hit is True
+
+
+def test_review_tool_handler_reuses_shared_cache_across_handlers() -> None:
+    gh = MagicMock()
+    repo = MagicMock()
+    gh.get_repo.return_value = repo
+    repo.get_contents.return_value = MagicMock(
+        decoded_content=b"int failover(void) { return 0; }\n",
+    )
+    shared_cache: dict[str, str] = {}
+    shared_repo_holder: dict[str, object] = {}
+
+    first_handler = ReviewToolHandler(
+        gh,
+        "owner/repo",
+        "head456",
+        shared_cache=shared_cache,
+        shared_repo_holder=shared_repo_holder,
+    )
+    second_handler = ReviewToolHandler(
+        gh,
+        "owner/repo",
+        "head456",
+        shared_cache=shared_cache,
+        shared_repo_holder=shared_repo_holder,
+    )
+
+    assert "return 0" in first_handler.execute("get_file", {"path": "src/failover.c"})
+    assert "return 0" in second_handler.execute("get_file", {"path": "src/failover.c"})
+    gh.get_repo.assert_called_once_with("owner/repo")
+    repo.get_contents.assert_called_once_with("src/failover.c", ref="head456")
 
 
 def test_review_tool_handler_requires_explicit_file_fetch_before_submit() -> None:
@@ -469,8 +550,8 @@ def test_review_tool_handler_prioritizes_related_file_fetches_over_search_misses
 
     handler.execute("get_file", {"path": "tests/failover_timeout.tcl"})
     gh.search_code.return_value = []
-    miss = handler.execute("search_code", {"query": "failover_timeout"})
-    repeat = handler.execute("search_code", {"query": "failover_timeout"})
+    miss = handler.execute("search_code", {"query": "missing_symbol"})
+    repeat = handler.execute("search_code", {"query": "missing_symbol"})
     assert "No results found" in miss
     assert "already returned no results" in repeat
     gh.search_code.assert_called_once()
@@ -544,6 +625,43 @@ def test_code_reviewer_verifier_can_drop_candidate_findings() -> None:
     findings = reviewer.review(_context(), scope, ReviewerConfig(max_review_comments=5))
 
     assert findings == []
+
+
+def test_code_reviewer_logs_verifier_drop_reason(caplog: pytest.LogCaptureFixture) -> None:
+    bedrock = MagicMock()
+    bedrock.invoke.side_effect = [
+        """
+    {
+      "findings": [
+        {
+          "path": "src/failover.c",
+          "line": 14,
+          "severity": "high",
+          "confidence": "high",
+          "title": "Potential stale state",
+          "trigger": "a timeout fires before cleanup",
+          "impact": "leave stale failover state behind",
+          "body": "The timeout path updates the timer but not the state field."
+        }
+      ]
+    }
+    """,
+        '{"results": [{"index": 0, "verdict": "drop", "reason": "not well supported"}]}',
+    ]
+    reviewer = CodeReviewer(bedrock)
+    scope = DiffScope(
+        base_sha="base123",
+        head_sha="head456",
+        files=_context().files,
+        incremental=False,
+    )
+
+    with caplog.at_level(logging.INFO):
+        findings = reviewer.review(_context(), scope, ReviewerConfig(max_review_comments=5))
+
+    assert findings == []
+    assert "Verifier dropped candidate 0" in caplog.text
+    assert "not well supported" in caplog.text
 
 
 def test_code_reviewer_ranks_by_severity_and_confidence_before_capping() -> None:
@@ -702,6 +820,85 @@ def test_code_reviewer_runs_focused_agentic_pass_per_file() -> None:
     assert "tests/failover_timeout.tcl" in first_prompt
     assert "tests/failover_timeout.tcl" in second_prompt
     assert "src/failover_timeout.c" in second_prompt
+
+
+def test_code_reviewer_reuses_shared_tool_state_across_focused_agentic_passes() -> None:
+    runtime_client = MagicMock()
+    bedrock = BedrockClient(BotConfig(), client=runtime_client)
+    bedrock.converse_with_tools = MagicMock(side_effect=[
+        '{"reviews":[],"lgtm":true,"checked_files":["src/failover_timeout.c"],"skipped_files":[]}',
+        '{"reviews":[],"lgtm":true,"checked_files":["tests/failover_timeout.tcl"],"skipped_files":[]}',
+    ])
+    reviewer = CodeReviewer(bedrock, github_client=MagicMock())
+    files = [
+        ChangedFile(
+            path="src/failover_timeout.c",
+            status="modified",
+            additions=5,
+            deletions=1,
+            patch="@@ -1 +1 @@\n-old\n+new",
+            contents='''#include "failover_timeout.h"\nint failover_timeout(void) { return 1; }''',
+            is_binary=False,
+        ),
+        ChangedFile(
+            path="tests/failover_timeout.tcl",
+            status="modified",
+            additions=2,
+            deletions=0,
+            patch="@@ -1 +1 @@\n-old\n+new",
+            contents="test failover timeout {}",
+            is_binary=False,
+        ),
+    ]
+    context = PullRequestContext(
+        repo="owner/repo",
+        number=17,
+        title="Improve failover logic",
+        body="This updates failover behavior.",
+        base_sha="base123",
+        head_sha="head456",
+        author="alice",
+        files=files,
+    )
+    scope = DiffScope(
+        base_sha="base123",
+        head_sha="head456",
+        files=files,
+        incremental=False,
+    )
+    shared_cache_ids: list[int] = []
+    shared_search_state_ids: list[int] = []
+
+    class _FakeHandler:
+        def __init__(self, *args, required_files=None, shared_cache=None, shared_search_state=None, **kwargs):
+            shared_cache_ids.append(id(shared_cache))
+            shared_search_state_ids.append(id(shared_search_state))
+            assert shared_cache is not None
+            assert shared_search_state is not None
+            assert required_files is not None
+            self._path = required_files[0].path
+            self.fetch_limit_hit = False
+
+        def validate_terminal_tool(self, tool_name: str, tool_input: dict) -> tuple[bool, str]:
+            return True, "Review submitted."
+
+        def execute(self, tool_name: str, tool_input: dict) -> str:
+            return ""
+
+        def inspected_file_paths(self) -> list[str]:
+            return [self._path]
+
+        def checked_paths(self) -> list[str]:
+            return [self._path]
+
+        def render_context(self, *, max_chars: int = 24_000) -> str:
+            return ""
+
+    with patch("scripts.code_reviewer.ReviewToolHandler", _FakeHandler):
+        reviewer.review(context, scope, ReviewerConfig(max_review_comments=5))
+
+    assert len(set(shared_cache_ids)) == 1
+    assert len(set(shared_search_state_ids)) == 1
 
 
 def test_code_reviewer_handles_unparseable_agentic_submission() -> None:
