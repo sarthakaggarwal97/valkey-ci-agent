@@ -201,6 +201,21 @@
           "error_signature": "",
           "file_path": "",
           "fingerprint": null
+        },
+        {
+          "outcome": "pass",
+          "observed_at": "2026-03-22T07:10:34.359520+00:00",
+          "commit_sha": "07554d34d16e7ffa16552dbdb33cb3ba610c73e9",
+          "workflow_run_id": 23391950182,
+          "workflow_name": "Daily",
+          "workflow_file": "daily.yml",
+          "job_name": "test-fedorarawhide-tls-module-no-tls",
+          "matrix_params": {},
+          "failure_identifier": "test-fedorarawhide-tls-module-no-tls",
+          "test_name": null,
+          "error_signature": "",
+          "file_path": "",
+          "fingerprint": null
         }
       ]
     },
@@ -331,6 +346,21 @@
           "error_signature": "",
           "file_path": "",
           "fingerprint": null
+        },
+        {
+          "outcome": "pass",
+          "observed_at": "2026-03-22T07:10:34.359394+00:00",
+          "commit_sha": "07554d34d16e7ffa16552dbdb33cb3ba610c73e9",
+          "workflow_run_id": 23391950182,
+          "workflow_name": "Daily",
+          "workflow_file": "daily.yml",
+          "job_name": "test-ubuntu-32bit",
+          "matrix_params": {},
+          "failure_identifier": "test-ubuntu-32bit",
+          "test_name": null,
+          "error_signature": "",
+          "file_path": "",
+          "fingerprint": null
         }
       ]
     },
@@ -416,6 +446,21 @@
           "error_signature": "",
           "file_path": "",
           "fingerprint": null
+        },
+        {
+          "outcome": "pass",
+          "observed_at": "2026-03-22T07:10:35.475824+00:00",
+          "commit_sha": "07554d34d16e7ffa16552dbdb33cb3ba610c73e9",
+          "workflow_run_id": 23391950182,
+          "workflow_name": "Daily",
+          "workflow_file": "daily.yml",
+          "job_name": "test-alpine-jemalloc",
+          "matrix_params": {},
+          "failure_identifier": "test-alpine-jemalloc",
+          "test_name": null,
+          "error_signature": "",
+          "file_path": "",
+          "fingerprint": null
         }
       ]
     },
@@ -486,6 +531,21 @@
           "error_signature": "",
           "file_path": "",
           "fingerprint": null
+        },
+        {
+          "outcome": "pass",
+          "observed_at": "2026-03-22T07:10:35.475857+00:00",
+          "commit_sha": "07554d34d16e7ffa16552dbdb33cb3ba610c73e9",
+          "workflow_run_id": 23391950182,
+          "workflow_name": "Daily",
+          "workflow_file": "daily.yml",
+          "job_name": "test-fedorarawhide-tls-module",
+          "matrix_params": {},
+          "failure_identifier": "test-fedorarawhide-tls-module",
+          "test_name": null,
+          "error_signature": "",
+          "file_path": "",
+          "fingerprint": null
         }
       ]
     },
@@ -511,6 +571,21 @@
           "error_signature": "2026-03-21T00:17:09.2800000Z Evaluating test-ubuntu-jemalloc.if\n2026-03-21T00:17:09.2800000Z Evaluating: (success() && (((((github.event_name == 'workflow_call') || (github.event_name == 'workflow_dispatch') || (((github.event_name == 'schedule') && (github.repository == 'valkey-io/valkey'))) || (((github.event_name == 'pull_request') && (((github.event.pull_request.base.ref != 'unstable') || contains(github.event.pull_request.labels.*.name, 'run-extra-tests'))) && (((github.event.action != 'labeled') || (((github.event.pull_request.base.ref == 'unstable') && (github.event.label.name == 'run-extra-tests'))))))))) && !contains(github.event.inputs.skipjobs, 'ubuntu'))))\n2026-03-21T00:17:09.2800000Z Expanded: (true && ((('schedule' == 'workflow_call') || ('schedule' == 'workflow_dispatch') || (('schedule' == 'schedule') && ('valkey-io/valkey' == 'valkey-io/valkey')) || ((github.event_name == 'pull_request') && ((github.event.pull_request.base.ref != 'unstable') || contains(github.event.pull_request.labels.*.name, 'run-extra-tests')) && ((github.event.action != 'labeled') || ((github.event.pull_request.base.ref == 'unstable') && (github.event.label.name == 'run-extra-tests'))))) && !contains(null, 'ubuntu')))\n2026-03-21T00:17:09.2800000Z Result: true\n2026-03-21T00:17:09.2820000Z Requested labels: ubuntu-latest\n2026-03-21T00:17:09.2820000Z Job defined at: valkey-io/valkey/.github/workflows/daily.yml@refs/heads/unstable\n2026-03-21T00:17:09.2820000Z Waiting for a runner to pick up this job...\n2026-03-21T00:17:10.2150000Z Job is waiting for a hosted runner to come online.\n2026-03-21T00:17:10.2150000Z Job is about to start running on the hosted runner: GitHub Actions 1000591610",
           "file_path": "",
           "fingerprint": "23b86545679bedd7d54b453144bcc899a13d20409619ac19bc088fa793e483a4"
+        },
+        {
+          "outcome": "pass",
+          "observed_at": "2026-03-22T07:10:34.359430+00:00",
+          "commit_sha": "07554d34d16e7ffa16552dbdb33cb3ba610c73e9",
+          "workflow_run_id": 23391950182,
+          "workflow_name": "Daily",
+          "workflow_file": "daily.yml",
+          "job_name": "test-ubuntu-jemalloc",
+          "matrix_params": {},
+          "failure_identifier": "test-ubuntu-jemalloc",
+          "test_name": null,
+          "error_signature": "",
+          "file_path": "",
+          "fingerprint": null
         }
       ]
     }
