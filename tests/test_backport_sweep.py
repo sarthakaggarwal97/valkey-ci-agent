@@ -60,7 +60,6 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
         str(tmp_path),
         candidate,
         MagicMock(),
-        MagicMock(),
         "valkey-io/valkey",
         {},
     )
@@ -113,8 +112,6 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
                 path="conflict.txt",
                 resolved_content="target content\n",
                 resolution_summary="resolved",
-                tokens_used=0,
-                attempts=1,
             )
         ],
     )
@@ -122,7 +119,6 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
     result = backport_sweep._apply_candidate(
         str(tmp_path),
         candidate,
-        MagicMock(),
         MagicMock(),
         "valkey-io/valkey",
         {},
@@ -179,7 +175,6 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
     result = backport_sweep._apply_candidate(
         str(tmp_path),
         candidate,
-        MagicMock(),
         MagicMock(),
         "valkey-io/valkey",
         {},

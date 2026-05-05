@@ -122,4 +122,3 @@ See [`examples/backport-config.yml`](examples/backport-config.yml) for all avail
 
 - [docs/architecture.md](docs/architecture.md) — full system design including planned workflows
 - [CONTRIBUTING.md](CONTRIBUTING.md) — development setup and code structure
-- [AGENTS.md](AGENTS.md) — coding guidelines for LLM-generated code

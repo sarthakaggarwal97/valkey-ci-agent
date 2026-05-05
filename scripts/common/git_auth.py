@@ -1,5 +1,3 @@
-"""Credential-safe helpers for Git subprocess authentication."""
-
 from __future__ import annotations
 
 import os
@@ -10,27 +8,12 @@ from pathlib import Path
 
 
 def github_https_url(repo_full_name: str) -> str:
-    """Return a GitHub HTTPS URL without embedded credentials."""
     return f"https://github.com/{repo_full_name}.git"
-
-
-def redact_git_url(url: str) -> str:
-    """Redact credentials from a Git URL for logging and diagnostics."""
-    if "@" not in url:
-        return url
-    scheme, _, rest = url.partition("://")
-    if not rest or "@" not in rest:
-        return url
-    return f"{scheme}://<redacted>@{rest.split('@', 1)[1]}"
 
 
 @dataclass
 class GitAuth:
-    """Context manager that supplies Git credentials via ``GIT_ASKPASS``.
-
-    The helper script is written to the OS temp directory, not the checkout.
-    This keeps tokens out of remote URLs and outside AI-readable worktrees.
-    """
+    """Context manager that supplies Git credentials via GIT_ASKPASS."""
 
     token: str
     username: str = "x-access-token"
@@ -70,7 +53,6 @@ class GitAuth:
         return self._askpass_path
 
     def env(self, base: dict[str, str] | None = None) -> dict[str, str]:
-        """Return an environment suitable for authenticated Git commands."""
         env = dict(base or os.environ)
         if self.token:
             env["GIT_TERMINAL_PROMPT"] = "0"

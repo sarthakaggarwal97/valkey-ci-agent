@@ -11,8 +11,6 @@ from scripts.backport.utils import (
     validate_c_syntax,
 )
 
-# --- parse_backport_labels ---
-
 
 class TestParseBackportLabels:
     def test_single_label(self) -> None:
@@ -41,7 +39,6 @@ class TestParseBackportLabels:
         assert parse_backport_labels(["backport release/8.1"]) == ["release/8.1"]
 
 
-# --- build_branch_name ---
 
 
 class TestBuildBranchName:
@@ -52,7 +49,6 @@ class TestBuildBranchName:
         assert build_branch_name(99999, "7.2") == "backport/99999-to-7.2"
 
 
-# --- build_pr_title ---
 
 
 class TestBuildPrTitle:
@@ -64,7 +60,6 @@ class TestBuildPrTitle:
         assert build_pr_title(title, "7.2") == "[Backport 7.2] [BUG] Segfault on startup"
 
 
-# --- has_conflict_markers ---
 
 
 class TestHasConflictMarkers:
@@ -93,7 +88,6 @@ class TestHasConflictMarkers:
         assert has_conflict_markers("") is False
 
 
-# --- validate_c_syntax ---
 
 
 class TestValidateCSyntax:
@@ -119,7 +113,6 @@ class TestValidateCSyntax:
         assert validate_c_syntax("} {") is False
 
 
-# --- is_whitespace_only_conflict ---
 
 
 class TestIsWhitespaceOnlyConflict:
@@ -151,15 +144,13 @@ class TestIsWhitespaceOnlyConflict:
         assert is_whitespace_only_conflict("foo()", "bar()") is False
 
 
-# --- Property-Based Tests ---
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 
-# Feature: backport-agent, Property 1: Label parsing extracts correct target branches
 class TestParseBackportLabelsProperty:
-    """**Validates: Requirements 1.1, 1.4**"""
+
 
     @given(
         backport_branches=st.lists(
@@ -206,9 +197,8 @@ class TestParseBackportLabelsProperty:
         assert result == []
 
 
-# Feature: backport-agent, Property 2: Branch name construction follows convention
 class TestBuildBranchNameProperty:
-    """**Validates: Requirements 4.1, 6.2**"""
+
 
     @given(
         pr_number=st.integers(min_value=1, max_value=10**9),
@@ -230,9 +220,8 @@ class TestBuildBranchNameProperty:
         assert f"-to-{target_branch}" in result
 
 
-# Feature: backport-agent, Property 3: PR title follows convention
 class TestBuildPrTitleProperty:
-    """**Validates: Requirements 4.3**"""
+
 
     @given(
         source_title=st.text(min_size=1, max_size=200),
@@ -254,9 +243,8 @@ class TestBuildPrTitleProperty:
         assert result.endswith(source_title)
 
 
-# Feature: backport-agent, Property 5: Conflict marker detection
 class TestHasConflictMarkersProperty:
-    """**Validates: Requirements 3.3**"""
+
 
     MARKERS = ["<<<<<<<", "=======", ">>>>>>>"]
 
@@ -291,9 +279,8 @@ class TestHasConflictMarkersProperty:
         assert has_conflict_markers(content) is False
 
 
-# Feature: backport-agent, Property 6: C syntax validation rejects unbalanced braces
 class TestValidateCSyntaxProperty:
-    """**Validates: Requirements 5.5**"""
+
 
     @given(data=st.data())
     @settings(max_examples=100, deadline=None)
@@ -341,9 +328,8 @@ class TestValidateCSyntaxProperty:
         assert validate_c_syntax(unbalanced) is False
 
 
-# Feature: backport-agent, Property 14: Whitespace-only conflicts are resolved without LLM
 class TestIsWhitespaceOnlyConflictProperty:
-    """**Validates: Requirements 3.2**"""
+
 
     @given(
         base=st.text(min_size=0, max_size=200),

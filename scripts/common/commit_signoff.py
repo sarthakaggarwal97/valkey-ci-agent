@@ -15,17 +15,14 @@ class CommitSigner:
 
     @property
     def configured(self) -> bool:
-        """Return whether both signer name and email are available."""
         return bool(self.name.strip() and self.email.strip())
 
     @property
     def signoff_line(self) -> str:
-        """Render the standard DCO signoff trailer."""
         return f"Signed-off-by: {self.name.strip()} <{self.email.strip()}>"
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
-    """Parse a boolean-like environment variable."""
     value = os.environ.get(name, "")
     if not value:
         return default
@@ -33,7 +30,6 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 
 def load_signer_from_env() -> CommitSigner:
-    """Load the configured commit signer from environment variables."""
     return CommitSigner(
         name=os.environ.get("CI_BOT_COMMIT_NAME", "").strip(),
         email=os.environ.get("CI_BOT_COMMIT_EMAIL", "").strip(),
@@ -41,7 +37,6 @@ def load_signer_from_env() -> CommitSigner:
 
 
 def require_dco_signoff_from_env() -> bool:
-    """Return whether automated commit creation must enforce DCO signoff."""
     return _env_flag("CI_BOT_REQUIRE_DCO_SIGNOFF", default=False)
 
 

@@ -1,12 +1,8 @@
-"""Claude Code-based merge conflict resolver for the backport pipeline.
-
-Gives Claude Code the entire repo checkout (with conflict markers present)
-and lets it read the source, understand the PR intent, and edit files in
-place. After resolution, Claude runs make to verify compilation.
-"""
+"""Merge conflict resolution via Claude Code."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -27,6 +23,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _file_hash(path: str) -> str:
+    """SHA-256 of file content, or empty string if unreadable."""
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return ""
+
+
 def resolve_conflicts_with_claude(
     repo_dir: str,
     conflicting_files: list[ConflictedFile],
@@ -43,7 +47,7 @@ def resolve_conflicts_with_claude(
     results: list[ResolutionResult] = []
     llm_files: list[ConflictedFile] = []
 
-    # Fast path: whitespace-only conflicts (only when we have real content to compare)
+    # Fast path: whitespace-only conflicts
     for cf in conflicting_files:
         if (
             cf.target_branch_content
@@ -54,14 +58,17 @@ def resolve_conflicts_with_claude(
                 path=cf.path,
                 resolved_content=cf.source_branch_content,
                 resolution_summary="whitespace-only (no LLM needed)",
-                tokens_used=0,
-                attempts=0,
             ))
         else:
             llm_files.append(cf)
 
     if not llm_files:
         return results
+
+    # Snapshot file hashes before Claude edits (for C1: detect no-op resolutions)
+    pre_hashes: dict[str, str] = {}
+    for cf in llm_files:
+        pre_hashes[cf.path] = _file_hash(os.path.join(repo_dir, cf.path))
 
     # Build prompt for Claude Code
     file_list = "\n".join(f"- {cf.path}" for cf in llm_files)
@@ -96,6 +103,8 @@ def resolve_conflicts_with_claude(
         f"   - If after several iterations the build still does not pass, stop "
         f"and report the remaining error rather than inventing code.\n\n"
         f"CRITICAL constraints:\n"
+        f"- ONLY edit the conflicted files listed above. Do NOT modify other files.\n"
+        f"- Do NOT run `git add` or `git commit`.\n"
         f"- If a conflicted file does NOT exist on the target branch "
         f"(e.g., 'deleted by us' conflict), do NOT create it. Skip it. "
         f"The resulting commit should not add files that weren't already "
@@ -137,8 +146,6 @@ def resolve_conflicts_with_claude(
                 path=cf.path,
                 resolved_content=None,
                 resolution_summary=f"Claude Code failed: {detail[:300]}",
-                tokens_used=0,
-                attempts=1,
             )
             for cf in llm_files
         ]
@@ -152,7 +159,15 @@ def resolve_conflicts_with_claude(
             results.append(ResolutionResult(
                 path=cf.path, resolved_content=None,
                 resolution_summary=f"failed to read: {exc}",
-                tokens_used=0, attempts=1,
+            ))
+            continue
+
+        # C1: reject if Claude didn't actually modify the file
+        post_hash = hashlib.sha256(resolved.encode("utf-8")).hexdigest()
+        if post_hash == pre_hashes.get(cf.path):
+            results.append(ResolutionResult(
+                path=cf.path, resolved_content=None,
+                resolution_summary="file unchanged after Claude Code (no resolution attempted)",
             ))
             continue
 
@@ -160,26 +175,21 @@ def resolve_conflicts_with_claude(
             results.append(ResolutionResult(
                 path=cf.path, resolved_content=None,
                 resolution_summary="conflict markers remain after Claude Code",
-                tokens_used=0, attempts=1,
             ))
             continue
 
         valid = validate_resolved_content(cf.path, resolved)
         if not valid:
             results.append(ResolutionResult(
-                path=cf.path,
-                resolved_content=None,
+                path=cf.path, resolved_content=None,
                 resolution_summary="resolved content failed validation",
-                tokens_used=0,
-                attempts=1,
             ))
             continue
+
         results.append(ResolutionResult(
             path=cf.path,
             resolved_content=resolved,
             resolution_summary="resolved by Claude Code",
-            tokens_used=0,
-            attempts=1,
         ))
 
     return results

@@ -1,8 +1,4 @@
-"""Utility functions for the Backport Agent pipeline.
-
-Provides label parsing, naming conventions, conflict detection, and basic
-syntax validation helpers used across the backport workflow.
-"""
+"""Naming conventions, conflict detection, and validation helpers."""
 
 from __future__ import annotations
 
@@ -24,7 +20,6 @@ def parse_backport_labels(labels: list[str]) -> list[str]:
     by a non-empty branch name are considered.  Duplicate branch names are
     preserved in the order they appear.
 
-    **Validates: Requirements 1.1, 1.4**
     """
     branches: list[str] = []
     for label in labels:
@@ -36,18 +31,10 @@ def parse_backport_labels(labels: list[str]) -> list[str]:
 
 
 def build_branch_name(source_pr_number: int, target_branch: str) -> str:
-    """Return ``backport/<source_pr_number>-to-<target_branch>``.
-
-    **Validates: Requirements 4.1, 6.2**
-    """
     return f"backport/{source_pr_number}-to-{target_branch}"
 
 
 def build_pr_title(source_pr_title: str, target_branch: str) -> str:
-    """Return ``[Backport <target_branch>] <source_pr_title>``.
-
-    **Validates: Requirements 4.3**
-    """
     return f"[Backport {target_branch}] {source_pr_title}"
 
 
@@ -57,7 +44,6 @@ def has_conflict_markers(content: str) -> bool:
     Returns ``True`` if any of ``<<<<<<<``, ``=======``, or ``>>>>>>>``
     (seven characters each) appear anywhere in the string.
 
-    **Validates: Requirements 3.3**
     """
     return bool(_CONFLICT_MARKERS.search(content))
 
@@ -69,7 +55,6 @@ def validate_c_syntax(content: str) -> bool:
     and the brace depth never goes negative (i.e. no ``}`` before its
     matching ``{``).
 
-    **Validates: Requirements 5.5**
     """
     depth = 0
     for ch in content:
@@ -82,22 +67,8 @@ def validate_c_syntax(content: str) -> bool:
     return depth == 0
 
 
-def validation_label_for_path(path: str) -> str:
-    """Return a human-readable validation label for the file type."""
-    suffix = PurePosixPath(path).suffix.lower()
-    if suffix in {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx"}:
-        return "C syntax"
-    if suffix == ".py":
-        return "Python syntax"
-    if suffix == ".json":
-        return "JSON syntax"
-    if suffix in {".yml", ".yaml"}:
-        return "YAML syntax"
-    return "content"
-
 
 def validate_resolved_content(path: str, content: str) -> bool:
-    """Validate resolved content using a file-type-specific parser when possible."""
     suffix = PurePosixPath(path).suffix.lower()
     if suffix in {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx"}:
         return validate_c_syntax(content)
@@ -129,11 +100,9 @@ def is_whitespace_only_conflict(target_content: str, source_content: str) -> boo
     whitespace, and line endings.  The comparison strips all whitespace
     from both strings before checking equality.
 
-    **Validates: Requirements 3.2**
     """
     return _strip_all_whitespace(target_content) == _strip_all_whitespace(source_content)
 
 
 def _strip_all_whitespace(s: str) -> str:
-    """Remove all whitespace characters from *s*."""
     return re.sub(r"\s+", "", s)

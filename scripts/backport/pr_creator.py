@@ -1,8 +1,4 @@
-"""Backport PR creator for the Backport Agent pipeline.
-
-Creates backport branches and pull requests via the GitHub API, with
-duplicate detection and structured PR body generation.
-"""
+"""Backport PR creation and duplicate detection."""
 
 from __future__ import annotations
 
@@ -47,9 +43,6 @@ class BackportPRCreator:
         self._backport_label = backport_label or "backport"
         self._llm_conflict_label = llm_conflict_label or "llm-resolved-conflicts"
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     def create_backport_pr(
         self,
@@ -67,7 +60,6 @@ class BackportPRCreator:
 
         Returns the PR URL.
 
-        **Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7**
         """
         repo = retry_github_call(
             lambda: self._github.get_repo(self._repo_full_name),
@@ -139,7 +131,6 @@ class BackportPRCreator:
         * Per-file LLM resolution summaries (when applicable)
         * Human review disclaimer (when any file was LLM-resolved)
 
-        **Validates: Requirements 4.4, 5.3**
         """
         sections: list[str] = []
         results = resolution_results or []
@@ -253,7 +244,6 @@ class BackportPRCreator:
         convention ``backport/<pr>-to-<branch>``.  Also checks recently
         closed PRs to handle label removal and re-addition.
 
-        **Validates: Requirements 6.1, 6.2, 6.3**
         """
         branch_name = build_branch_name(source_pr_number, target_branch)
 

@@ -17,12 +17,7 @@ from scripts.ai.claude_code import (
 )
 
 AgentProfileName = Literal[
-    "review_readonly",
-    "summary_readonly",
-    "chat_readonly",
     "conflict_resolve_edit_only",
-    "fix_generate_patch",
-    "fuzzer_analysis_readonly",
 ]
 
 
@@ -58,33 +53,6 @@ class AgentRunResult:
 
 
 AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
-    "review_readonly": AgentProfile(
-        name="review_readonly",
-        allowed_tools="Read,Grep,Glob",
-        timeout=3600,
-        effort="max",
-        max_turns=240,
-        writes_allowed=False,
-        output_schema="review-findings-json",
-    ),
-    "summary_readonly": AgentProfile(
-        name="summary_readonly",
-        allowed_tools="Read,Grep,Glob",
-        timeout=1800,
-        effort="max",
-        max_turns=160,
-        writes_allowed=False,
-        output_schema="summary-markdown",
-    ),
-    "chat_readonly": AgentProfile(
-        name="chat_readonly",
-        allowed_tools="Read,Grep,Glob",
-        timeout=1800,
-        effort="max",
-        max_turns=160,
-        writes_allowed=False,
-        output_schema="reply-markdown",
-    ),
     "conflict_resolve_edit_only": AgentProfile(
         name="conflict_resolve_edit_only",
         allowed_tools="Read,Edit,MultiEdit,Grep,Glob,Bash",
@@ -93,24 +61,6 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
         max_turns=240,
         writes_allowed=True,
         output_schema="edited-files",
-    ),
-    "fix_generate_patch": AgentProfile(
-        name="fix_generate_patch",
-        allowed_tools="Read,Edit,MultiEdit,Write,Grep,Glob",
-        timeout=3600,
-        effort="max",
-        max_turns=240,
-        writes_allowed=True,
-        output_schema="edited-files",
-    ),
-    "fuzzer_analysis_readonly": AgentProfile(
-        name="fuzzer_analysis_readonly",
-        allowed_tools="Read,Grep,Glob",
-        timeout=3600,
-        effort="max",
-        max_turns=240,
-        writes_allowed=False,
-        output_schema="fuzzer-analysis-json",
     ),
 }
 

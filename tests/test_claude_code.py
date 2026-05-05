@@ -156,11 +156,3 @@ def test_run_claude_code_reports_missing_cli(monkeypatch):
 
     assert claude_code.run_claude_code("prompt") == ("", "claude not found", 127)
 
-
-def test_extract_diff_accepts_fenced_and_raw_diff():
-    fenced = "analysis\n```diff\n--- a/a.c\n+++ b/a.c\n@@\n-old\n+new\n```\n"
-    raw = "notes\n--- a/b.c\n+++ b/b.c\n@@\n-old\n+new\n"
-
-    assert claude_code.extract_diff(fenced).startswith("--- a/a.c")
-    assert claude_code.extract_diff(raw).startswith("--- a/b.c")
-    assert claude_code.extract_diff("no patch here") is None

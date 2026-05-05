@@ -193,7 +193,6 @@ jobs:
             --project-number "${PROJECT_NUMBER}"
             --project-owner-type "${PROJECT_OWNER_TYPE}"
             --status-value "${STATUS_VALUE}"
-            --aws-region "${AWS_REGION}"
             --verbose
           )
 

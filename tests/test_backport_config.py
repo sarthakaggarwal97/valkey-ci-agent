@@ -1,13 +1,4 @@
-# Feature: backport-agent, Property 12: Config loading round trip
-"""Property tests for backport configuration loading.
-
-Property 12: For any valid BackportConfig values serialized to a YAML-compatible
-dict, load_backport_config should produce a BackportConfig with matching field
-values. When given an empty or None input, it should return a BackportConfig with
-all default values.
-
-**Validates: Requirements 7.4, 7.5**
-"""
+"""Tests for backport configuration loading."""
 
 from __future__ import annotations
 
@@ -18,8 +9,6 @@ from hypothesis import strategies as st
 
 from scripts.backport.config import load_backport_config
 from scripts.backport.models import BackportConfig
-
-# --- Strategies ---
 
 safe_text = st.text(
     alphabet=st.characters(
@@ -40,14 +29,11 @@ backport_config_strategy = st.fixed_dictionaries({
 })
 
 
-# --- Property Tests ---
 
 
 @settings(max_examples=100, deadline=None)
 @given(config_data=backport_config_strategy)
 def test_config_round_trip(config_data: dict) -> None:
-    """Property 12 (part 1): Loading a valid config dict produces a
-    BackportConfig whose fields match the input values."""
     cfg = load_backport_config(config_data)
 
     assert cfg.backport_label == config_data["backport_label"]

@@ -29,12 +29,10 @@ _pr_context_strategy = st.builds(
     BackportPRContext,
     source_pr_number=st.integers(min_value=1, max_value=999_999),
     source_pr_title=_safe_text,
-    source_pr_body=_safe_text,
     source_pr_url=st.from_regex(r"https://github\.com/[a-z]+/[a-z]+/pull/[0-9]+", fullmatch=True),
     source_pr_diff=_safe_text,
     target_branch=_safe_text,
     commits=st.lists(_sha_strategy, min_size=1, max_size=5),
-    repo_full_name=_safe_text,
 )
 
 _resolved_result_strategy = st.builds(
@@ -42,8 +40,6 @@ _resolved_result_strategy = st.builds(
     path=st.from_regex(r"src/[a-z_]+\.[ch]", fullmatch=True),
     resolved_content=_safe_text,
     resolution_summary=_safe_text,
-    tokens_used=st.integers(min_value=0, max_value=100_000),
-    attempts=st.integers(min_value=1, max_value=5),
 )
 
 _unresolved_result_strategy = st.builds(
@@ -51,19 +47,13 @@ _unresolved_result_strategy = st.builds(
     path=st.from_regex(r"src/[a-z_]+\.[ch]", fullmatch=True),
     resolved_content=st.none(),
     resolution_summary=_safe_text,
-    tokens_used=st.integers(min_value=0, max_value=100_000),
-    attempts=st.integers(min_value=1, max_value=5),
 )
 
 
-# ---------------------------------------------------------------------------
-# Feature: backport-agent, Property 4: PR body contains all required sections
-# ---------------------------------------------------------------------------
 
 
 class TestPRBodyCompletenessProperty:
     """
-    **Validates: Requirements 4.4, 5.3**
 
     For any BackportPRContext and list of ResolutionResults (including cases
     where some files were resolved and some were not), the generated PR body
@@ -170,20 +160,16 @@ def test_build_pr_body_includes_checklist_and_plain_status_labels() -> None:
     context = BackportPRContext(
         source_pr_number=123,
         source_pr_title="Fix failover edge case",
-        source_pr_body="Body",
         source_pr_url="https://github.com/owner/repo/pull/123",
         source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
-        repo_full_name="owner/repo",
     )
     results = [
         ResolutionResult(
             path="src/server.c",
             resolved_content="resolved",
             resolution_summary="Applied the null check from the source branch.",
-            tokens_used=12,
-            attempts=1,
         )
     ]
 
@@ -215,19 +201,15 @@ def test_create_backport_pr_uses_configured_labels() -> None:
     context = BackportPRContext(
         source_pr_number=123,
         source_pr_title="Fix failover edge case",
-        source_pr_body="Body",
         source_pr_url="https://github.com/owner/repo/pull/123",
         source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
-        repo_full_name="owner/repo",
     )
     result = ResolutionResult(
         path="src/server.c",
         resolved_content="resolved",
         resolution_summary="Applied the null check from the source branch.",
-        tokens_used=12,
-        attempts=1,
     )
 
     creator = BackportPRCreator(
@@ -251,14 +233,10 @@ def test_create_backport_pr_uses_configured_labels() -> None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Feature: backport-agent, Property 13: Duplicate detection uses branch naming convention
-# ---------------------------------------------------------------------------
 
 
 class TestDuplicateDetectionProperty:
     """
-    **Validates: Requirements 6.1, 6.3**
 
     For any source PR number and target branch, the duplicate detection logic
     should identify an existing PR as a duplicate if and only if its head

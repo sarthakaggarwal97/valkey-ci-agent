@@ -1,18 +1,4 @@
-"""Hard block on writes to upstream valkey-io repositories.
-
-The only thing this module protects against is accidentally writing to
-``valkey-io/valkey``. Fork publishing is allowed without any environment
-setup.
-
-Writing to ``valkey-io/valkey`` requires an explicit opt-in:
-
-    export VALKEY_CI_AGENT_ALLOW_VALKEY_IO_PUBLISH=1
-
-This is defense-in-depth against a misconfiguration where the push target
-accidentally resolves to ``valkey-io/valkey``. If the guard fires, a
-:class:`PublishBlocked` exception is raised so the caller can log a clear
-reason.
-"""
+"""Block accidental writes to upstream valkey-io repositories."""
 
 from __future__ import annotations
 
@@ -27,10 +13,6 @@ _UPSTREAM_REPOS = {
 }
 
 
-class PublishBlocked(RuntimeError):
-    """Raised when the publish guard refuses to allow a GitHub write."""
-
-
 def _env_true(name: str) -> bool:
     return (os.environ.get(name, "") or "").strip().lower() in _TRUTHY
 
@@ -41,20 +23,10 @@ def check_publish_allowed(
     action: str = "write",
     context: str = "",
 ) -> None:
-    """Raise :class:`PublishBlocked` if ``target_repo`` is an upstream repo
-    and ``VALKEY_CI_AGENT_ALLOW_VALKEY_IO_PUBLISH`` is not set.
-
-    Writes to any non-upstream repo (including forks) pass through.
-
-    Args:
-        target_repo: ``owner/name`` of the repo receiving the write.
-        action: Short description, e.g. ``"create_pull"``, ``"create_issue"``.
-        context: Optional extra context (branch name, PR URL, etc.).
-    """
     if target_repo in _UPSTREAM_REPOS and not _env_true(
         "VALKEY_CI_AGENT_ALLOW_VALKEY_IO_PUBLISH"
     ):
-        raise PublishBlocked(
+        raise RuntimeError(
             f"Blocked {action} on {target_repo}: upstream publishing requires "
             "VALKEY_CI_AGENT_ALLOW_VALKEY_IO_PUBLISH=1"
             + (f" ({context})" if context else "")

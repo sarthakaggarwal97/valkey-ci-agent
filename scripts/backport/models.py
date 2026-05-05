@@ -10,7 +10,6 @@ class ConflictedFile:
     """A file with merge conflict markers after cherry-pick."""
 
     path: str
-    content_with_markers: str
     target_branch_content: str
     source_branch_content: str
 
@@ -22,8 +21,6 @@ class ResolutionResult:
     path: str
     resolved_content: str | None  # None = resolution failed
     resolution_summary: str
-    tokens_used: int
-    attempts: int
 
 
 @dataclass
@@ -41,19 +38,17 @@ class BackportPRContext:
 
     source_pr_number: int
     source_pr_title: str
-    source_pr_body: str
     source_pr_url: str
     source_pr_diff: str
     target_branch: str
     commits: list[str]
-    repo_full_name: str
 
 
 @dataclass
 class BackportResult:
     """Final outcome of a backport run."""
 
-    outcome: str  # "success", "conflicts-unresolved", "duplicate", "rate-limited", "branch-missing", "pr-not-merged", "error"
+    outcome: str  # "success", "conflicts-unresolved", "duplicate", "branch-missing", "pr-not-merged", "error"
     backport_pr_url: str | None = None
     commits_cherry_picked: int = 0
     files_conflicted: int = 0

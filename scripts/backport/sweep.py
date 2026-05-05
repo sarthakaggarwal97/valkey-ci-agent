@@ -1,20 +1,10 @@
-"""Weekly backport sweep for GitHub Project-tracked Valkey release branches.
-
-Discovers merged PRs marked "To be backported" on a GitHub Projects v2
-board, groups them by target release branch, cherry-picks them onto the
-branch, resolves conflicts with Claude Code, and opens/updates one PR
-per release branch on the configured push repo.
-
-Key design: one open PR per release branch at any time. New candidates
-are cherry-picked onto the existing branch; the PR auto-updates.
-"""
+"""Weekly backport sweep across release branches."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import logging
-import os
 import re
 import subprocess
 import sys
@@ -31,7 +21,6 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
-from scripts.backport.cherry_pick import CherryPickExecutor
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.main import (
     _resolve_commit_signer,
@@ -71,7 +60,6 @@ _VALKEY_IO_PROJECT_TO_BRANCH: dict[int, str] = {
 }
 
 
-# ── Data classes ──────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class ProjectBackportCandidate:
@@ -100,7 +88,6 @@ class BranchSweepResult:
     error: str = ""
 
 
-# ── GraphQL client ────────────────────────────────────────────────────
 
 class GitHubGraphQLClient:
     def __init__(self, token: str) -> None:
@@ -158,7 +145,6 @@ class GitHubGraphQLClient:
         return data.get("data", {})
 
 
-# ── Projects v2 discovery ─────────────────────────────────────────────
 
 class ProjectBackportDiscovery:
     def __init__(self, gql: GitHubGraphQLClient, *, project_owner: str,
@@ -238,7 +224,6 @@ def discover_release_branches(repo: Any, pattern: str) -> list[str]:
     return matched
 
 
-# ── Sweep orchestrator ────────────────────────────────────────────────
 
 def run_backport_sweep(
     *,
@@ -391,7 +376,6 @@ def _process_branch(
             already_applied = _list_already_applied(tmpdir, target_branch, backport_branch)
             logger.info("Already applied on %s: %s", backport_branch, already_applied)
 
-            cherry_picker = CherryPickExecutor(tmpdir)
             signer, require_dco_signoff = _resolve_commit_signer()
 
             applied_count = 0
@@ -411,7 +395,7 @@ def _process_branch(
                     ))
                     continue
 
-                cr = _apply_candidate(tmpdir, candidate, cherry_picker, signer, repo_full_name, git_env, require_dco_signoff=require_dco_signoff)
+                cr = _apply_candidate(tmpdir, candidate, signer, repo_full_name, git_env, require_dco_signoff=require_dco_signoff)
                 result.results.append(cr)
                 if cr.outcome == "applied":
                     applied_count += 1
@@ -452,7 +436,7 @@ def _process_branch(
 
 def _apply_candidate(
     repo_dir: str, candidate: ProjectBackportCandidate,
-    cherry_picker: CherryPickExecutor, signer: object,
+    signer: object,
     repo_full_name: str, git_env: dict[str, str],
     require_dco_signoff: bool = False,
 ) -> CandidateResult:
@@ -509,10 +493,6 @@ def _apply_candidate(
     conflicting_files = []
     target_missing_paths: set[str] = set()
     for path in conflicting_paths:
-        try:
-            content_with_markers = Path(os.path.join(repo_dir, path)).read_text()
-        except OSError:
-            content_with_markers = ""
         # :2:<path> = ours (target branch, where we're cherry-picking TO)
         # :3:<path> = theirs (source commit being cherry-picked)
         target_content = _read_index_stage(repo_dir, path, 2)
@@ -521,7 +501,6 @@ def _apply_candidate(
             target_missing_paths.add(path)
         conflicting_files.append(ConflictedFile(
             path=path,
-            content_with_markers=content_with_markers,
             target_branch_content=target_content,
             source_branch_content=source_content,
         ))
@@ -538,12 +517,10 @@ def _apply_candidate(
     pr_context = BackportPRContext(
         source_pr_number=candidate.source_pr_number,
         source_pr_title=candidate.source_pr_title,
-        source_pr_body="",
         source_pr_url=candidate.source_pr_url,
         source_pr_diff="",
         target_branch=candidate.target_branch,
         commits=candidate.commit_shas,
-        repo_full_name=repo_full_name,
     )
 
     resolutions = resolve_conflicts_with_claude(repo_dir, conflicting_files, pr_context)
@@ -689,7 +666,6 @@ def _parse_additions_from_stat(stat_output: str) -> int:
     return int(match.group(1)) if match else 0
 
 
-# ── PR management ─────────────────────────────────────────────────────
 
 def _read_index_stage(repo_dir: str, path: str, stage: int) -> str:
     """Read the content of a file from a specific merge stage.
@@ -892,7 +868,6 @@ def _list_already_applied(repo_dir: str, base_branch: str, backport_branch: str)
     return pr_nums
 
 
-# ── Summary / PR body ─────────────────────────────────────────────────
 
 def _build_pr_body(result: BranchSweepResult) -> str:
     lines = [
@@ -936,7 +911,6 @@ def _build_summary(results: list[BranchSweepResult]) -> str:
     return "\n".join(lines)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────
 
 def _normalize(value: object) -> str:
     return str(value or "").strip().lower()
@@ -1026,7 +1000,6 @@ def _matching_release_branch(fields: dict[str, list[str]], branch_fields: list[s
     return None
 
 
-# ── CLI ───────────────────────────────────────────────────────────────
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1045,7 +1018,6 @@ def main() -> None:
                         help="When the project implies the branch (e.g., project 14 → 8.1), set this to override the field-based lookup")
     parser.add_argument("--max-candidates", type=int, default=0,
                         help="Cap the number of candidates per branch (0 = unlimited)")
-    parser.add_argument("--aws-region", default="us-east-1")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--discover-only", action="store_true")
     parser.add_argument("--verbose", action="store_true")

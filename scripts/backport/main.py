@@ -1,8 +1,4 @@
-"""Backport Agent — CLI entry point and pipeline orchestrator.
-
-Orchestrates the full backport pipeline: config loading, validation,
-cherry-pick, conflict resolution, PR creation, and summary reporting.
-"""
+"""Backport pipeline CLI and orchestrator."""
 
 from __future__ import annotations
 
@@ -20,7 +16,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 from github.GithubException import GithubException
 
-from scripts.backport.cherry_pick import CherryPickExecutor
+from scripts.backport.cherry_pick import cherry_pick
 from scripts.backport.config import load_backport_config_from_repo
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.models import (
@@ -56,18 +52,14 @@ def _resolve_commit_signer() -> tuple[CommitSigner, bool]:
     return signer, require_dco
 
 
-# ------------------------------------------------------------------
-# Summary helpers
-# ------------------------------------------------------------------
 
 
 def build_summary(result: BackportResult) -> str:
     """Generate a human-readable summary string for a backport run.
 
     Contains: commits cherry-picked, conflicting files, files resolved,
-    files unresolved, and total tokens used.
+    and files unresolved.
 
-    **Validates: Requirements 9.2, 9.4**
     """
     lines = [
         f"- Outcome: `{result.outcome}`",
@@ -102,9 +94,6 @@ def emit_job_summary(text: str) -> None:
         logger.warning("Failed to write job summary: %s", exc)
 
 
-# ------------------------------------------------------------------
-# Pipeline
-# ------------------------------------------------------------------
 
 
 
@@ -120,9 +109,6 @@ def run_backport(
     """Execute the backport pipeline end-to-end.
 
     Returns a :class:`BackportResult` with outcome details.
-
-    **Validates: Requirements 1.2, 1.3, 1.5, 2.1, 4.6, 4.7, 6.1, 8.1,
-    9.1, 9.2, 9.3, 9.4**
     """
     gh = Github(auth=Auth.Token(github_token))
     try:
@@ -138,7 +124,6 @@ def run_backport(
             description=f"get repo {repo_full_name}",
         )
 
-        # ---- Step 1: Validate target branch exists (Req 1.5) ----
         logger.info("Validating target branch %s exists.", target_branch)
         try:
             retry_github_call(
@@ -154,7 +139,6 @@ def run_backport(
                 return BackportResult(outcome="branch-missing", error_message=msg)
             raise
 
-        # ---- Step 2: Check for duplicate backport PR (Req 6.1) ----
         logger.info("Checking for duplicate backport PR.")
         pr_target_repo = push_repo or repo_full_name
         pr_creator = BackportPRCreator(
@@ -173,7 +157,6 @@ def run_backport(
             _post_comment(repo, source_pr_number, f"Backport skipped: {msg}")
             return BackportResult(outcome="duplicate", backport_pr_url=existing_url)
 
-        # ---- Step 3: Fetch source PR metadata ----
         logger.info("Fetching source PR #%d metadata.", source_pr_number)
         try:
             source_pr = retry_github_call(
@@ -227,15 +210,12 @@ def run_backport(
         pr_context = BackportPRContext(
             source_pr_number=source_pr_number,
             source_pr_title=source_pr.title or "",
-            source_pr_body=source_pr.body or "",
             source_pr_url=source_pr.html_url,
             source_pr_diff=diff_content,
             target_branch=target_branch,
             commits=commits,
-            repo_full_name=repo_full_name,
         )
 
-        # ---- Step 5: Cherry-pick (Req 2.1) ----
         logger.info("Executing cherry-pick onto %s.", target_branch)
         branch_name = build_branch_name(source_pr_number, target_branch)
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -253,11 +233,9 @@ def run_backport(
                 # Create the backport branch locally from target branch HEAD
                 _run_git(tmp_dir, "checkout", "-b", branch_name)
 
-                executor = CherryPickExecutor(tmp_dir)
-
                 try:
-                    cherry_result = executor.execute(
-                        branch_name, merge_commit_sha, commits,
+                    cherry_result = cherry_pick(
+                        tmp_dir, branch_name, merge_commit_sha, commits,
                     )
                 except Exception as exc:
                     msg = f"Cherry-pick failed: {exc}"
@@ -265,7 +243,6 @@ def run_backport(
                     _post_comment(repo, source_pr_number, f"Backport failed: {msg}")
                     return BackportResult(outcome="error", error_message=msg)
 
-                # ---- Step 6: Conflict resolution ----
                 resolution_results = None
                 if not cherry_result.success and not cherry_result.conflicting_files:
                     msg = (
@@ -364,7 +341,6 @@ def run_backport(
                     logger.info("Pushing branch %s to origin.", branch_name)
                     _run_git(tmp_dir, "push", "origin", branch_name, env=git_env)
 
-        # ---- Step 7: Create backport PR (Req 4.6) ----
         logger.info("Creating backport PR.")
         risk = assess_backport_risk(
             pr_context,
@@ -381,7 +357,6 @@ def run_backport(
             _post_comment(repo, source_pr_number, f"Backport failed: {msg}")
             return BackportResult(outcome="error", error_message=msg)
 
-        # ---- Build result ----
         files_resolved = 0
         files_unresolved = 0
         if resolution_results:
@@ -404,7 +379,6 @@ def run_backport(
             risk_reasons=risk.reasons,
         )
 
-        # ---- Step 8: Post summary comment on source PR (Req 9.2) ----
         summary_text = build_summary(result)
         comment_body = (
             "## Backport Result\n\n"
@@ -414,7 +388,6 @@ def run_backport(
         _post_comment(repo, source_pr_number, comment_body)
 
 
-        # ---- Step 10: Emit GitHub Actions job summary (Req 9.4) ----
         job_summary = (
             f"## Backport Result: {result.outcome}\n\n"
             f"- Source PR: #{source_pr_number}\n"
@@ -431,9 +404,6 @@ def run_backport(
         return BackportResult(outcome="error", error_message=str(exc))
 
 
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
 
 
 def _post_comment(repo: object, pr_number: int, body: str) -> None:
@@ -584,9 +554,6 @@ def _apply_resolutions(
             raise
 
 
-# ------------------------------------------------------------------
-# CLI
-# ------------------------------------------------------------------
 
 
 def main() -> None:

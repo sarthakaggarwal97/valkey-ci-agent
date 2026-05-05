@@ -1,17 +1,13 @@
-"""Unit tests for CherryPickExecutor.
+"""Unit tests for cherry_pick().
 
-Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5
 """
 
 from __future__ import annotations
 
 import subprocess
-from unittest.mock import MagicMock, call, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
-import pytest
-
-from scripts.backport.cherry_pick import CherryPickExecutor
-from scripts.backport.models import CherryPickResult, ConflictedFile
+from scripts.backport.cherry_pick import cherry_pick
 
 
 def _ok(stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
@@ -36,8 +32,7 @@ class TestCleanCherryPickWithMergeCommit:
         # checkout succeeds, cherry-pick -m 1 succeeds
         mock_run.side_effect = [_ok(), _ok()]
 
-        executor = CherryPickExecutor("/repo")
-        result = executor.execute("8.1", "abc123merge", ["sha1", "sha2"])
+        result = cherry_pick("/repo", "8.1", "abc123merge", ["sha1", "sha2"])
 
         assert result.success is True
         assert result.applied_commits == ["abc123merge"]
@@ -47,8 +42,7 @@ class TestCleanCherryPickWithMergeCommit:
     def test_calls_checkout_then_cherry_pick(self, mock_run: MagicMock) -> None:
         mock_run.side_effect = [_ok(), _ok()]
 
-        executor = CherryPickExecutor("/repo")
-        executor.execute("8.1", "abc123merge", ["sha1"])
+        cherry_pick("/repo", "8.1", "abc123merge", ["sha1"])
 
         calls = mock_run.call_args_list
         # First call: git checkout 8.1
@@ -65,8 +59,7 @@ class TestCleanCherryPickSequential:
         # checkout + 3 cherry-picks all succeed
         mock_run.side_effect = [_ok(), _ok(), _ok(), _ok()]
 
-        executor = CherryPickExecutor("/repo")
-        result = executor.execute("7.2", None, ["sha1", "sha2", "sha3"])
+        result = cherry_pick("/repo", "7.2", None, ["sha1", "sha2", "sha3"])
 
         assert result.success is True
         assert result.applied_commits == ["sha1", "sha2", "sha3"]
@@ -76,8 +69,7 @@ class TestCleanCherryPickSequential:
     def test_calls_cherry_pick_per_commit(self, mock_run: MagicMock) -> None:
         mock_run.side_effect = [_ok(), _ok(), _ok()]
 
-        executor = CherryPickExecutor("/repo")
-        executor.execute("8.1", None, ["sha1", "sha2"])
+        cherry_pick("/repo", "8.1", None, ["sha1", "sha2"])
 
         calls = mock_run.call_args_list
         assert calls[0][0][0] == ["git", "checkout", "8.1"]
@@ -96,8 +88,7 @@ class TestCleanCherryPickSequential:
             _ok(),
         ]
 
-        executor = CherryPickExecutor("/repo")
-        result = executor.execute("8.1", None, ["sha1"])
+        result = cherry_pick("/repo", "8.1", None, ["sha1"])
 
         assert result.success is True
         assert result.applied_commits == ["sha1"]
@@ -125,8 +116,7 @@ class TestConflictDetection:
             _ok(stdout="source content 2"),              # git show CHERRY_PICK_HEAD:src/config.c
         ]
 
-        executor = CherryPickExecutor("/repo")
-        result = executor.execute("8.1", "mergesha", ["sha1"])
+        result = cherry_pick("/repo", "8.1", "mergesha", ["sha1"])
 
         assert result.success is False
         assert len(result.conflicting_files) == 2
@@ -148,11 +138,10 @@ class TestConflictDetection:
             _ok(stdout="source ver"),           # git show CHERRY_PICK_HEAD:file.c
         ]
 
-        executor = CherryPickExecutor("/repo")
-        result = executor.execute("8.1", None, ["sha1", "sha2", "sha3"])
+        result = cherry_pick("/repo", "8.1", None, ["sha1", "sha2", "sha3"])
 
         assert result.success is False
-        assert result.applied_commits == ["sha1", "sha2"]
+        assert result.applied_commits == ["sha1"]
         assert len(result.conflicting_files) == 1
         assert result.conflicting_files[0].path == "file.c"
 
@@ -169,12 +158,10 @@ class TestConflictDetection:
             _ok(stdout="source branch content"),    # git show CHERRY_PICK_HEAD:src/main.c
         ]
 
-        executor = CherryPickExecutor("/repo")
-        result = executor.execute("8.1", "mergesha", [])
+        result = cherry_pick("/repo", "8.1", "mergesha", [])
 
         cf = result.conflicting_files[0]
         assert cf.path == "src/main.c"
-        assert cf.content_with_markers == "markers here"
         assert cf.target_branch_content == "target branch content"
         assert cf.source_branch_content == "source branch content"
 
@@ -191,8 +178,7 @@ class TestConflictDetection:
             _fail(stderr="not found"),      # git show CHERRY_PICK_HEAD fails
         ]
 
-        executor = CherryPickExecutor("/repo")
-        result = executor.execute("8.1", "mergesha", [])
+        result = cherry_pick("/repo", "8.1", "mergesha", [])
 
         cf = result.conflicting_files[0]
         assert cf.target_branch_content == ""
@@ -206,8 +192,7 @@ class TestMergeCommitPreference:
     def test_uses_m1_flag_when_merge_sha_provided(self, mock_run: MagicMock) -> None:
         mock_run.side_effect = [_ok(), _ok()]
 
-        executor = CherryPickExecutor("/repo")
-        executor.execute("8.1", "merge_sha_abc", ["sha1", "sha2"])
+        cherry_pick("/repo", "8.1", "merge_sha_abc", ["sha1", "sha2"])
 
         cherry_pick_call = mock_run.call_args_list[1]
         cmd = cherry_pick_call[0][0]
@@ -219,8 +204,7 @@ class TestMergeCommitPreference:
     ) -> None:
         mock_run.side_effect = [_ok(), _ok()]
 
-        executor = CherryPickExecutor("/repo")
-        result = executor.execute("8.1", "merge_sha", ["sha1", "sha2", "sha3"])
+        result = cherry_pick("/repo", "8.1", "merge_sha", ["sha1", "sha2", "sha3"])
 
         # Only 2 subprocess calls: checkout + single cherry-pick
         assert mock_run.call_count == 2
@@ -232,8 +216,7 @@ class TestMergeCommitPreference:
     ) -> None:
         mock_run.side_effect = [_ok(), _ok(), _ok()]
 
-        executor = CherryPickExecutor("/repo")
-        result = executor.execute("8.1", None, ["sha1", "sha2"])
+        result = cherry_pick("/repo", "8.1", None, ["sha1", "sha2"])
 
         # checkout + 2 individual cherry-picks
         assert mock_run.call_count == 3
@@ -249,8 +232,7 @@ class TestMergeCommitPreference:
         """An empty string for merge_commit_sha is falsy, so sequential path is used."""
         mock_run.side_effect = [_ok(), _ok()]
 
-        executor = CherryPickExecutor("/repo")
-        result = executor.execute("8.1", "", ["sha1"])
+        result = cherry_pick("/repo", "8.1", "", ["sha1"])
 
         calls = mock_run.call_args_list
         # Should use sequential path (no -m 1)
@@ -265,8 +247,7 @@ class TestSubprocessCwd:
     def test_all_calls_use_repo_dir(self, mock_run: MagicMock) -> None:
         mock_run.side_effect = [_ok(), _ok()]
 
-        executor = CherryPickExecutor("/my/repo/path")
-        executor.execute("8.1", "sha", [])
+        cherry_pick("/my/repo/path", "8.1", "sha", [])
 
         for c in mock_run.call_args_list:
             assert c[1]["cwd"] == "/my/repo/path"

@@ -8,12 +8,10 @@ def _context(diff: str, target_branch: str = "9.1") -> BackportPRContext:
     return BackportPRContext(
         source_pr_number=123,
         source_pr_title="Fix issue",
-        source_pr_body="",
         source_pr_url="https://github.com/owner/repo/pull/123",
         source_pr_diff=diff,
         target_branch=target_branch,
         commits=["abc1234"],
-        repo_full_name="owner/repo",
     )
 
 
@@ -26,8 +24,6 @@ def test_backport_risk_marks_core_conflict_high() -> None:
                 path="src/cluster.c",
                 resolved_content="resolved",
                 resolution_summary="kept both changes",
-                tokens_used=0,
-                attempts=1,
             )
         ],
     )

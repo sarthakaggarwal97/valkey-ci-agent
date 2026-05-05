@@ -47,7 +47,6 @@ line-length = 120
 
 [tool.ruff.lint]
 # Start conservative: just catch obvious bugs (E, F, W) + import ordering (I).
-# Style enforcement (`ruff format`) is deferred — see AGENTS.md.
 select = ["E", "F", "W", "I"]
 ignore = [
     "E501",   # line-length handled by --line-length, not a hard error

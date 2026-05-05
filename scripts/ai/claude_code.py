@@ -1,16 +1,10 @@
-"""Thin wrapper around the Claude Code CLI.
-
-Runs ``claude --print`` as a subprocess with a stripped environment
-(only AWS credentials and process basics). Claude Code handles file
-reading, code search, and diff generation natively.
-"""
+"""Wrapper around the Claude Code CLI."""
 
 from __future__ import annotations
 
 import json
 import logging
 import os
-import re
 import subprocess
 import threading
 from typing import Any
@@ -46,12 +40,6 @@ _PASSTHROUGH_ENV_VARS = {
     "AWS_ROLE_SESSION_NAME",
 }
 DEFAULT_CLAUDE_ENV_ALLOWLIST = tuple(sorted(_PASSTHROUGH_ENV_VARS))
-_DIFF_FENCE_RE = re.compile(
-    r"```(?:diff|patch)?\n(---\s.+?)\n```", re.DOTALL
-)
-_RAW_DIFF_RE = re.compile(
-    r"^(---\s+a/.+?)(?=\n(?:[^-+ @\\]|$)|\Z)", re.DOTALL | re.MULTILINE
-)
 
 
 def run_claude_code(
@@ -182,23 +170,6 @@ def _resolve_bedrock_opus_model() -> str:
     return os.environ.get(_BEDROCK_OPUS_MODEL_ENV, "").strip() or _DEFAULT_BEDROCK_OPUS_MODEL
 
 
-def extract_diff(claude_output: str) -> str | None:
-    """Extract a unified diff from Claude's output.
-
-    Tries fenced ```diff blocks first, then raw --- a/ patterns.
-    Returns None if no diff found.
-    """
-    # Try fenced diff block
-    m = _DIFF_FENCE_RE.search(claude_output)
-    if m:
-        return m.group(1).strip()
-
-    # Try raw diff starting with --- a/
-    m = _RAW_DIFF_RE.search(claude_output)
-    if m:
-        return m.group(1).strip()
-
-    return None
 
 
 def _log_stream_event(raw_line: str) -> None:

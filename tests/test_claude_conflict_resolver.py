@@ -15,12 +15,10 @@ def _pr_context() -> BackportPRContext:
     return BackportPRContext(
         source_pr_number=1234,
         source_pr_title="Fix memory leak in cluster.c",
-        source_pr_body="Fixes a leak in clusterProcessPacket",
         source_pr_url="https://github.com/valkey-io/valkey/pull/1234",
         source_pr_diff="",
         target_branch="8.1",
         commits=["abc123"],
-        repo_full_name="valkey-io/valkey",
     )
 
 
@@ -31,7 +29,6 @@ def _agent_result(stdout: str, stderr: str = "", rc: int = 0):
 def test_whitespace_only_conflict_skips_claude(tmp_path: Path) -> None:
     cf = ConflictedFile(
         path="src/server.c",
-        content_with_markers="<<<<<<< HEAD\nfoo  \n=======\nfoo\n>>>>>>> abc123",
         target_branch_content="foo  ",
         source_branch_content="foo",
     )
@@ -50,7 +47,6 @@ def test_claude_resolves_conflict(tmp_path: Path) -> None:
 
     cf = ConflictedFile(
         path="src/cluster.c",
-        content_with_markers=conflicted.read_text(),
         target_branch_content="old code",
         source_branch_content="new code",
     )
@@ -82,7 +78,6 @@ def test_unresolved_conflict_returns_none(tmp_path: Path) -> None:
 
     cf = ConflictedFile(
         path="src/cluster.c",
-        content_with_markers=conflicted.read_text(),
         target_branch_content="old",
         source_branch_content="new",
     )
@@ -108,13 +103,11 @@ def test_mixed_whitespace_and_real_conflicts(tmp_path: Path) -> None:
 
     ws_file = ConflictedFile(
         path="src/server.c",
-        content_with_markers="...",
         target_branch_content="foo  \n",
         source_branch_content="foo\n",
     )
     real_file = ConflictedFile(
         path="src/cluster.c",
-        content_with_markers=real_conflict.read_text(),
         target_branch_content="old",
         source_branch_content="new",
     )

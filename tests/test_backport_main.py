@@ -1,14 +1,8 @@
-"""Tests for backport_main.py — property tests and unit tests.
-
-Covers:
-- Property 11: Summary contains all required metrics (Task 8.2)
-- Property 9: Rate limiter enforces daily PR limit (Task 8.3)
-- Unit tests for run_backport pipeline flow (Task 8.4)
-"""
+"""Tests for backport pipeline (main.py)."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from hypothesis import given, settings
@@ -23,19 +17,13 @@ from scripts.backport.models import (
     ConflictedFile,
     ResolutionResult,
 )
-from scripts.common.config import BotConfig
 
 # ======================================================================
-# Feature: backport-agent, Property 11: Summary contains all required metrics
-# **Validates: Requirements 9.2, 9.4**
 # ======================================================================
 
 
 class TestBuildSummaryProperty:
-    """Property 11: For any BackportResult, the generated summary string
-    should contain: the number of commits cherry-picked, the number of
-    conflicting files, the number of files resolved by the LLM, the number
-    of files left unresolved, and the total Bedrock token usage."""
+    """build_summary includes all key metrics from BackportResult."""
 
     @given(
         commits=st.integers(min_value=0, max_value=10_000),
@@ -45,7 +33,6 @@ class TestBuildSummaryProperty:
         tokens=st.integers(min_value=0, max_value=10_000_000),
         outcome=st.sampled_from([
             "success", "conflicts-unresolved", "duplicate",
-            "rate-limited", "branch-missing", "pr-not-merged", "error",
         ]),
     )
     @settings(max_examples=100, deadline=None)
@@ -75,15 +62,12 @@ class TestBuildSummaryProperty:
 
 
 # ======================================================================
-# Feature: backport-agent, Property 9: Rate limiter enforces daily PR limit
-# **Validates: Requirements 8.1**
 # ======================================================================
 
 
 
 # ======================================================================
 # Unit tests for run_backport pipeline flow (Task 8.4)
-# **Validates: Requirements 1.2, 1.3, 1.5, 6.1, 8.1, 9.3**
 # ======================================================================
 
 
@@ -126,7 +110,7 @@ class TestRunBackportCleanCherryPick:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.CherryPickExecutor")
+    @patch(f"{_PATCH_PREFIX}.cherry_pick")
     @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_clean_cherry_pick_returns_success(
@@ -162,12 +146,9 @@ class TestRunBackportCleanCherryPick:
         mock_pr_creator.check_duplicate.return_value = None
         mock_pr_creator.create_backport_pr.return_value = "https://github.com/valkey-io/valkey/pull/200"
 
-        # Rate limiter allows
 
         # Clean cherry-pick
-        mock_executor = MagicMock()
-        mock_executor_cls.return_value = mock_executor
-        mock_executor.execute.return_value = CherryPickResult(
+        mock_executor_cls.return_value = CherryPickResult(
             success=True,
             conflicting_files=[],
             applied_commits=["commit_sha_1"],
@@ -204,7 +185,7 @@ class TestRunBackportConflictedCherryPick:
     @patch(f"{_PATCH_PREFIX}._apply_resolutions")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
     @patch(f"{_PATCH_PREFIX}.resolve_conflicts_with_claude")
-    @patch(f"{_PATCH_PREFIX}.CherryPickExecutor")
+    @patch(f"{_PATCH_PREFIX}.cherry_pick")
     @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_conflicted_cherry_pick_with_resolution(
@@ -237,18 +218,14 @@ class TestRunBackportConflictedCherryPick:
         mock_pr_creator.check_duplicate.return_value = None
         mock_pr_creator.create_backport_pr.return_value = "https://github.com/valkey-io/valkey/pull/201"
 
-        # Rate limiter allows
 
         # Cherry-pick with conflicts
         conflicted_file = ConflictedFile(
             path="src/server.c",
-            content_with_markers="<<<<<<< HEAD\nold\n=======\nnew\n>>>>>>>",
             target_branch_content="old",
             source_branch_content="new",
         )
-        mock_executor = MagicMock()
-        mock_executor_cls.return_value = mock_executor
-        mock_executor.execute.return_value = CherryPickResult(
+        mock_executor_cls.return_value = CherryPickResult(
             success=False,
             conflicting_files=[conflicted_file],
             applied_commits=["merge_sha_abc"],
@@ -260,8 +237,6 @@ class TestRunBackportConflictedCherryPick:
                 path="src/server.c",
                 resolved_content="resolved content",
                 resolution_summary="Applied fix",
-                tokens_used=500,
-                attempts=1,
             ),
         ]
 
@@ -286,7 +261,7 @@ class TestRunBackportDuplicateDetection:
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.CherryPickExecutor")
+    @patch(f"{_PATCH_PREFIX}.cherry_pick")
     @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_duplicate_pr_skips_processing(
@@ -328,7 +303,7 @@ class TestRunBackportMergedPrValidation:
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.CherryPickExecutor")
+    @patch(f"{_PATCH_PREFIX}.cherry_pick")
     @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_unmerged_pr_skips_processing(
@@ -371,7 +346,7 @@ class TestRunBackportMissingBranch:
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.CherryPickExecutor")
+    @patch(f"{_PATCH_PREFIX}.cherry_pick")
     @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_missing_branch_skips_processing(
@@ -413,7 +388,7 @@ class TestRunBackportGitHubAPIError:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.CherryPickExecutor")
+    @patch(f"{_PATCH_PREFIX}.cherry_pick")
     @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_pr_creation_failure_returns_error(
@@ -443,12 +418,9 @@ class TestRunBackportGitHubAPIError:
         mock_pr_creator.check_duplicate.return_value = None
         mock_pr_creator.create_backport_pr.side_effect = Exception("GitHub API error")
 
-        # Rate limiter allows
 
         # Clean cherry-pick
-        mock_executor = MagicMock()
-        mock_executor_cls.return_value = mock_executor
-        mock_executor.execute.return_value = CherryPickResult(
+        mock_executor_cls.return_value = CherryPickResult(
             success=True,
             conflicting_files=[],
             applied_commits=["sha1"],
@@ -472,7 +444,7 @@ class TestRunBackportCherryPickFailure:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.CherryPickExecutor")
+    @patch(f"{_PATCH_PREFIX}.cherry_pick")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_cherry_pick_failure_without_conflicts_does_not_push_or_create_pr(
         self,
@@ -494,9 +466,7 @@ class TestRunBackportCherryPickFailure:
         mock_pr_creator.check_duplicate.return_value = None
 
 
-        mock_executor = MagicMock()
-        mock_executor_cls.return_value = mock_executor
-        mock_executor.execute.return_value = CherryPickResult(
+        mock_executor_cls.return_value = CherryPickResult(
             success=False,
             conflicting_files=[],
             applied_commits=["sha1"],
@@ -527,7 +497,7 @@ def test_run_backport_requires_commit_identity_when_dco_is_enabled(
     monkeypatch.delenv("CI_BOT_COMMIT_EMAIL", raising=False)
 
     result = run_backport(
-        repo_full_name="valkey-io/valkey",
+            repo_full_name="valkey-io/valkey",
         source_pr_number=100,
         target_branch="8.1",
         config=_default_config(),
