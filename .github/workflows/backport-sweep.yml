@@ -1,8 +1,8 @@
-name: Weekly Backport Sweep
+name: Backport Sweep
 
 on:
   schedule:
-    - cron: "0 9 * * 1"
+    - cron: "0 9 * * *"
   workflow_dispatch:
     inputs:
       repo:
@@ -72,13 +72,13 @@ permissions:
 
 jobs:
   sweep:
+    name: "backport/${{ matrix.project.branch }}"
     runs-on: ubuntu-latest
     timeout-minutes: 180
     # Matrix over all Valkey per-release backport projects. On scheduled
-    # runs we fan out across 5 release branches. On workflow_dispatch, if
+    # runs we fan out across all release branches. On workflow_dispatch, if
     # the caller passed project_number, only that one matrix leg will
-    # actually do work (others are short-circuited by the "skip unless
-    # matching" guard below).
+    # actually do work (others are short-circuited by the guard below).
     strategy:
       fail-fast: false
       matrix:
@@ -89,7 +89,7 @@ jobs:
           - { number: 18, branch: "9.0" }
           - { number: 41, branch: "9.1" }
     concurrency:
-      group: weekly-backport-sweep-${{ inputs.repo || 'valkey-io/valkey' }}-${{ matrix.project.number }}
+      group: backport-sweep-${{ inputs.repo || 'valkey-io/valkey' }}-${{ matrix.project.branch }}
       cancel-in-progress: false
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}

@@ -901,7 +901,7 @@ def _build_pr_body(result: BranchSweepResult) -> str:
 
 
 def _build_summary(results: list[BranchSweepResult]) -> str:
-    lines = ["## Weekly Backport Sweep", ""]
+    lines = ["## Backport Sweep", ""]
     for r in results:
         applied = sum(1 for c in r.results if c.outcome == "applied")
         suffix = f" — [PR]({r.pr_url})" if r.pr_url else ""

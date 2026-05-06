@@ -65,7 +65,7 @@ On the repo hosting the agent workflows:
 
 #### Step 3: Copy the caller workflow
 
-Copy [`examples/backport-caller-workflow.yml`](examples/backport-caller-workflow.yml) into your repo's `.github/workflows/` directory. It calls the reusable `weekly-backport-sweep.yml` from this repo.
+Copy [`examples/backport-caller-workflow.yml`](examples/backport-caller-workflow.yml) into your repo's `.github/workflows/` directory. It calls the reusable `backport-sweep.yml` from this repo.
 
 #### Step 4: (Optional) Backport config
 
