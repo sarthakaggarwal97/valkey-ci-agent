@@ -9,25 +9,7 @@ from pathlib import PurePosixPath
 
 import yaml  # type: ignore[import-untyped]
 
-_BACKPORT_PREFIX = "backport "
 _CONFLICT_MARKERS = re.compile(r"<{7}|={7}|>{7}")
-
-
-def parse_backport_labels(labels: list[str]) -> list[str]:
-    """Extract target branch names from labels matching ``backport <branch>``.
-
-    Only labels with the exact case-sensitive prefix ``"backport "`` followed
-    by a non-empty branch name are considered.  Duplicate branch names are
-    preserved in the order they appear.
-
-    """
-    branches: list[str] = []
-    for label in labels:
-        if label.startswith(_BACKPORT_PREFIX):
-            branch = label[len(_BACKPORT_PREFIX):]
-            if branch:
-                branches.append(branch)
-    return branches
 
 
 def build_branch_name(source_pr_number: int, target_branch: str) -> str:

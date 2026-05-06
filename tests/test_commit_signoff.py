@@ -6,24 +6,9 @@ import pytest
 
 from scripts.common.commit_signoff import (
     CommitSigner,
-    append_signoff,
     load_signer_from_env,
     require_dco_signoff_from_env,
 )
-
-
-def test_append_signoff_adds_trailer_when_signer_is_configured() -> None:
-    message = append_signoff(
-        "fix: test\nJob: daily\nRoot cause: example",
-        CommitSigner(name="Val Key", email="valkey@example.com"),
-    )
-
-    assert "Signed-off-by: Val Key <valkey@example.com>" in message
-
-
-def test_append_signoff_raises_when_required_but_signer_missing() -> None:
-    with pytest.raises(ValueError):
-        append_signoff("fix: test", CommitSigner(), require_signoff=True)
 
 
 def test_load_signer_from_env_reads_expected_variables(monkeypatch: pytest.MonkeyPatch) -> None:

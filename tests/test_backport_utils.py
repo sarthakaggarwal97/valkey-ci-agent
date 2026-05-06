@@ -7,41 +7,11 @@ from scripts.backport.utils import (
     build_pr_title,
     has_conflict_markers,
     is_whitespace_only_conflict,
-    parse_backport_labels,
     validate_c_syntax,
 )
 
 
 class TestParseBackportLabels:
-    def test_single_label(self) -> None:
-        assert parse_backport_labels(["backport 8.1"]) == ["8.1"]
-
-    def test_multiple_labels(self) -> None:
-        labels = ["backport 8.1", "bug", "backport 7.2"]
-        assert parse_backport_labels(labels) == ["8.1", "7.2"]
-
-    def test_no_matching_labels(self) -> None:
-        assert parse_backport_labels(["bug", "enhancement", "urgent"]) == []
-
-    def test_empty_list(self) -> None:
-        assert parse_backport_labels([]) == []
-
-    def test_case_sensitive(self) -> None:
-        assert parse_backport_labels(["Backport 8.1", "BACKPORT 8.1"]) == []
-
-    def test_prefix_only_no_branch(self) -> None:
-        assert parse_backport_labels(["backport "]) == []
-
-    def test_exact_string_backport(self) -> None:
-        assert parse_backport_labels(["backport"]) == []
-
-    def test_branch_with_slashes(self) -> None:
-        assert parse_backport_labels(["backport release/8.1"]) == ["release/8.1"]
-
-
-
-
-class TestBuildBranchName:
     def test_basic(self) -> None:
         assert build_branch_name(123, "8.1") == "backport/123-to-8.1"
 
@@ -147,54 +117,6 @@ class TestIsWhitespaceOnlyConflict:
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
-
-
-class TestParseBackportLabelsProperty:
-
-
-    @given(
-        backport_branches=st.lists(
-            st.text(min_size=1, max_size=50).filter(lambda s: "\x00" not in s),
-            max_size=10,
-        ),
-        other_labels=st.lists(
-            st.text(max_size=50).filter(
-                lambda s: not s.startswith("backport ") or s == "backport "
-            ),
-            max_size=10,
-        ),
-    )
-    @settings(max_examples=100)
-    def test_extracts_exactly_matching_branches(
-        self, backport_branches: list[str], other_labels: list[str]
-    ) -> None:
-        """For any mix of backport and non-backport labels, parse_backport_labels
-        returns exactly the branch names from labels matching 'backport <branch>'."""
-        # Build labels: valid backport labels + noise labels
-        backport_labels = [f"backport {branch}" for branch in backport_branches]
-        all_labels = backport_labels + other_labels
-
-        result = parse_backport_labels(all_labels)
-
-        # The result should contain exactly the branches we constructed,
-        # in the same order (backport labels come first in our input list)
-        assert result == backport_branches
-
-    @given(
-        labels=st.lists(
-            st.text(max_size=50).filter(
-                lambda s: not s.startswith("backport ") or s == "backport "
-            ),
-            max_size=20,
-        ),
-    )
-    @settings(max_examples=100)
-    def test_no_extra_branches_from_non_matching_labels(
-        self, labels: list[str]
-    ) -> None:
-        """When no labels match 'backport <branch>', the result is empty."""
-        result = parse_backport_labels(labels)
-        assert result == []
 
 
 class TestBuildBranchNameProperty:

@@ -39,28 +39,3 @@ def load_signer_from_env() -> CommitSigner:
 def require_dco_signoff_from_env() -> bool:
     return _env_flag("CI_BOT_REQUIRE_DCO_SIGNOFF", default=False)
 
-
-def append_signoff(
-    message: str,
-    signer: CommitSigner,
-    *,
-    require_signoff: bool = False,
-) -> str:
-    """Append a DCO signoff trailer when configured.
-
-    Raises ``ValueError`` when signoff is required but no signer identity is
-    configured.
-    """
-    normalized = message.rstrip()
-    if not signer.configured:
-        if require_signoff:
-            raise ValueError(
-                "DCO signoff is required, but CI_BOT_COMMIT_NAME or "
-                "CI_BOT_COMMIT_EMAIL is not configured."
-            )
-        return normalized
-
-    trailer = signer.signoff_line
-    if trailer in normalized.splitlines():
-        return normalized
-    return f"{normalized}\n\n{trailer}"

@@ -577,7 +577,7 @@ def _apply_candidate(
     # Claude Code conflict resolution sometimes over-applies when a file
     # doesn't exist on the target branch — it creates the whole file
     # instead of skipping it. Compare HEAD's stats to the source commit's
-    # stats; if additions exceed 3x upstream or >500 extra lines, revert.
+    # stats; if additions exceed 3x upstream or >300 extra lines, revert.
     issue = _check_applied_commit_size(repo_dir, candidate)
     if issue:
         logger.warning(
