@@ -31,7 +31,7 @@ The currently active workflow. Cherry-picks merged PRs from `unstable` onto rele
 
 ### How it works
 
-1. **Weekly sweep** — every Monday at 09:00 UTC, queries GitHub Project v2 boards for PRs marked "To be backported"
+1. **Daily sweep** — every day at 09:00 UTC, queries GitHub Project v2 boards for PRs marked "To be backported"
 2. **Cherry-pick** — attempts `git cherry-pick` for each candidate onto the target release branch
 3. **AI conflict resolution** — when cherry-pick conflicts, Claude Code reads both sides, resolves the conflict, and runs `make -j$(nproc)` to verify compilation
 4. **PR creation** — pushes the branch and opens (or updates) a draft PR with a summary table of applied/skipped commits
@@ -73,9 +73,9 @@ Copy [`examples/backport-config.yml`](examples/backport-config.yml) to `.github/
 
 ### Usage
 
-#### Weekly sweep (automatic)
+#### Daily sweep (automatic)
 
-Runs every Monday via cron. Sweeps all 5 release-branch project boards in parallel:
+Runs daily at 09:00 UTC via cron. Sweeps all 5 release-branch project boards in parallel:
 
 | Project | Branch |
 |---------|--------|
@@ -85,7 +85,7 @@ Runs every Monday via cron. Sweeps all 5 release-branch project boards in parall
 | 18 | 9.0 |
 | 41 | 9.1 |
 
-Each leg produces one PR (e.g., `[backport] Weekly backport sweep for 8.1`) bundling all pending backports for that branch.
+Each leg produces one PR (e.g., `[backport] Backport sweep for 8.1`) bundling all pending backports for that branch.
 
 #### Manual backport (on-demand)
 

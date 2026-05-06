@@ -340,10 +340,10 @@ def run_backport(
                     logger.info("Syncing %s:%s to upstream.", push_repo, target_branch)
                     _run_git(tmp_dir, "push", "fork", f"{target_branch}:{target_branch}", env=git_env)
                     logger.info("Pushing branch %s to fork %s.", branch_name, push_repo)
-                    _run_git(tmp_dir, "push", "fork", branch_name, env=git_env)
+                    _run_git(tmp_dir, "push", "--force", "fork", branch_name, env=git_env)
                 else:
                     logger.info("Pushing branch %s to origin.", branch_name)
-                    _run_git(tmp_dir, "push", "origin", branch_name, env=git_env)
+                    _run_git(tmp_dir, "push", "--force", "origin", branch_name, env=git_env)
 
         logger.info("Creating backport PR.")
         risk = assess_backport_risk(

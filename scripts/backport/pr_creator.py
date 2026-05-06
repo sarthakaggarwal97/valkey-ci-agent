@@ -102,17 +102,20 @@ class BackportPRCreator:
             description="create backport PR",
         )
 
-        # Apply labels.
+        # Apply labels (best-effort — don't fail the run if labels are missing).
         labels = [self._backport_label]
         if any_llm_resolved:
             labels.append(self._llm_conflict_label)
 
-        logger.info("Applying labels %s to PR #%d", labels, pr.number)
-        retry_github_call(
-            lambda: pr.add_to_labels(*labels),
-            retries=3,
-            description="apply labels to backport PR",
-        )
+        try:
+            logger.info("Applying labels %s to PR #%d", labels, pr.number)
+            retry_github_call(
+                lambda: pr.add_to_labels(*labels),
+                retries=3,
+                description="apply labels to backport PR",
+            )
+        except Exception as exc:
+            logger.warning("Failed to apply labels to PR #%d: %s", pr.number, exc)
 
         logger.info("Backport PR created: %s", pr.html_url)
         return pr.html_url
