@@ -388,3 +388,41 @@ def test_check_applied_commit_size_accepts_mild_ratio_under_floor(monkeypatch):
     """Upstream 5 lines, applied 50 (10x ratio but only 45 extra): accept."""
     _stub_size_check_subprocess(monkeypatch, upstream_add=5, applied_add=50)
     assert backport_sweep._check_applied_commit_size("/fake", _make_size_check_candidate()) is None
+
+
+
+def test_graphql_client_retry_exhaustion_raises_clear_error(monkeypatch):
+    """After exhausting retries on URLError, the client must raise a
+    RuntimeError (not UnboundLocalError from reading `body`)."""
+
+    class FakeURLError(Exception):
+        pass
+
+    # Build a URLError-like exception the client's except clause matches.
+    import urllib.error
+
+    call_count = {"n": 0}
+
+    def always_fails(*_args, **_kwargs):
+        call_count["n"] += 1
+        raise urllib.error.URLError("simulated network down")
+
+    monkeypatch.setattr(backport_sweep.urllib.request, "urlopen", always_fails)
+    # Skip actual sleeps in the backoff loop.
+    monkeypatch.setattr(backport_sweep, "_random", None, raising=False)
+    monkeypatch.setattr("random.uniform", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr("time.sleep", lambda *_args, **_kwargs: None)
+
+    client = backport_sweep.GitHubGraphQLClient("fake-token")
+    try:
+        client.execute("query {}", {})
+    except urllib.error.URLError:
+        # On the 4th attempt, the client re-raises the URLError directly,
+        # which is also fine — the test's purpose is to verify we never
+        # hit an UnboundLocalError from the `body` variable.
+        pass
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("expected retry exhaustion to raise")
+    assert call_count["n"] == 4, f"expected 4 retry attempts, got {call_count['n']}"

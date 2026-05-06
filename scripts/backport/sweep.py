@@ -100,6 +100,7 @@ class GitHubGraphQLClient:
         import random as _random
         import time as _time
         last_exc: Exception | None = None
+        body: str | None = None
         for attempt in range(4):
             request = urllib.request.Request(
                 "https://api.github.com/graphql",
@@ -134,9 +135,14 @@ class GitHubGraphQLClient:
                     _time.sleep(wait)
                     continue
                 raise
-        else:
-            if last_exc is not None:
-                raise last_exc
+
+        if body is None:
+            # All retries exhausted without a successful response. Surface
+            # the last captured exception instead of letting json.loads
+            # raise an opaque UnboundLocalError.
+            raise RuntimeError(
+                "GraphQL request failed after retries"
+            ) from last_exc
 
         data = json.loads(body)
         if data.get("errors"):
@@ -333,6 +339,11 @@ def _process_branch(
 
             # Check for existing backport branch on push_repo
             backport_branch = f"{_BRANCH_PREFIX}/{target_branch}"
+            # _find_existing_pr intentionally raises on transient GitHub
+            # errors (network, 5xx) rather than returning None, so that a
+            # flaky "list PRs" call can't be mistaken for "no open PR" and
+            # trigger _delete_stale_backport_branch below. The propagated
+            # exception is caught by the outer try/except on this branch.
             existing_pr = _find_existing_pr(gh, push_repo, backport_branch)
 
             if existing_pr:
