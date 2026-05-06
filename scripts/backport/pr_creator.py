@@ -79,7 +79,8 @@ class BackportPRCreator:
             and any(r.resolved_content is not None for r in resolution_results)
         )
 
-        body = self.build_pr_body(context, had_conflicts, resolution_results)
+        body = self.build_pr_body(context, had_conflicts, resolution_results,
+                                  applied_commits=cherry_pick_result.applied_commits)
 
         # Open the pull request (branch already exists on remote).
         logger.info(
@@ -121,6 +122,8 @@ class BackportPRCreator:
         context: BackportPRContext,
         had_conflicts: bool,
         resolution_results: list[ResolutionResult] | None,
+        *,
+        applied_commits: list[str] | None = None,
     ) -> str:
         """Build the PR body with links, commit list, conflict info.
 
@@ -200,7 +203,7 @@ class BackportPRCreator:
             )
         sections.append("### Reviewer Checklist\n\n" + "\n".join(checklist))
 
-        commits_list = "\n".join(f"- `{sha}`" for sha in context.commits)
+        commits_list = "\n".join(f"- `{sha}`" for sha in (applied_commits or context.commits))
         sections.append(f"### Cherry-Picked Commits\n\n{commits_list}")
 
         # Per-file resolution summaries.
