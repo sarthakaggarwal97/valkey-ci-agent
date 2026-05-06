@@ -404,7 +404,7 @@ def run_backport(
         logger.info("Backport complete: %s", result.outcome)
         return result
     except Exception as exc:
-        logger.exception("Backport pipeline failed: %s", exc)
+        logger.exception("Backport pipeline failed")
         return BackportResult(outcome="error", error_message=str(exc))
 
 

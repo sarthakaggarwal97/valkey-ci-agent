@@ -8,6 +8,7 @@ from scripts.backport.utils import (
     has_conflict_markers,
     is_whitespace_only_conflict,
     validate_c_syntax,
+    validate_resolved_content,
 )
 
 
@@ -299,3 +300,36 @@ class TestIsWhitespaceOnlyConflictProperty:
         modified_stripped = re.sub(r"\s+", "", modified)
         assume(base_stripped != modified_stripped)
         assert is_whitespace_only_conflict(base, modified) is False
+
+
+class TestValidateResolvedContent:
+    def test_valid_c_file(self):
+        assert validate_resolved_content("src/server.c", "int main() { return 0; }") is True
+
+    def test_invalid_c_file(self):
+        assert validate_resolved_content("src/server.c", "int main() {") is False
+
+    def test_valid_python_file(self):
+        assert validate_resolved_content("scripts/main.py", "x = 1\n") is True
+
+    def test_invalid_python_file(self):
+        assert validate_resolved_content("scripts/main.py", "def f(\n") is False
+
+    def test_valid_json_file(self):
+        assert validate_resolved_content("config.json", '{"key": "value"}') is True
+
+    def test_invalid_json_file(self):
+        assert validate_resolved_content("config.json", "{broken") is False
+
+    def test_valid_yaml_file(self):
+        assert validate_resolved_content("ci.yml", "name: CI\non: push\n") is True
+
+    def test_invalid_yaml_file(self):
+        assert validate_resolved_content("ci.yml", ":\n  - :\n  [invalid") is False
+
+    def test_unknown_extension_always_valid(self):
+        assert validate_resolved_content("README.md", "anything") is True
+
+    def test_header_file_uses_c_validation(self):
+        assert validate_resolved_content("src/server.h", "void f() { }") is True
+        assert validate_resolved_content("src/server.h", "void f() {") is False

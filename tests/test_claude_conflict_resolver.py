@@ -124,3 +124,31 @@ def test_mixed_whitespace_and_real_conflicts(tmp_path: Path) -> None:
     real_result = next(r for r in results if r.path == "src/cluster.c")
     assert "whitespace" in ws_result.resolution_summary
     assert real_result.resolved_content == "new\n"
+
+
+def test_unchanged_file_without_markers_detected(tmp_path: Path) -> None:
+    """If Claude doesn't edit the file and it has no conflict markers
+    (e.g., add/add conflict where git leaves one side), the pre-hash
+    check catches it as unresolved."""
+    src = tmp_path / "src"
+    src.mkdir()
+    # File without conflict markers (git left target side)
+    target_file = src / "server.c"
+    target_file.write_text("int main() { return 0; }\n")
+
+    cf = ConflictedFile(
+        path="src/server.c",
+        target_branch_content="int main() { return 0; }\n",
+        source_branch_content="int main() { return 1; }\n",
+    )
+
+    def mock_agent(_profile, prompt, **kw):
+        # Claude does nothing to the file
+        return _agent_result('{"type":"result","result":"Could not resolve"}')
+
+    with patch("scripts.backport.conflict_resolver.run_agent", side_effect=mock_agent):
+        results = resolve_conflicts_with_claude(str(tmp_path), [cf], _pr_context())
+
+    assert len(results) == 1
+    assert results[0].resolved_content is None
+    assert "file unchanged" in results[0].resolution_summary

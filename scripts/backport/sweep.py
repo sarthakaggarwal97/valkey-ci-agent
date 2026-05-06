@@ -419,7 +419,7 @@ def _process_branch(
                 result.pr_url = pr_url
 
     except Exception as exc:
-        logger.exception("Error processing branch %s: %s", target_branch, exc)
+        logger.exception("Error processing branch %s", target_branch)
         result.error = str(exc)
         result.results.append(CandidateResult(
             source_pr_number=0,
