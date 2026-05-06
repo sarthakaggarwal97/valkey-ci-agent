@@ -335,6 +335,10 @@ def run_backport(
                 if push_repo and push_repo != repo_full_name:
                     fork_url = github_https_url(push_repo)
                     _run_git(tmp_dir, "remote", "add", "fork", fork_url, env=git_env)
+                    # Sync the fork's target branch to upstream so the PR
+                    # doesn't show unrelated commits
+                    logger.info("Syncing %s:%s to upstream.", push_repo, target_branch)
+                    _run_git(tmp_dir, "push", "fork", f"{target_branch}:{target_branch}", env=git_env)
                     logger.info("Pushing branch %s to fork %s.", branch_name, push_repo)
                     _run_git(tmp_dir, "push", "fork", branch_name, env=git_env)
                 else:
