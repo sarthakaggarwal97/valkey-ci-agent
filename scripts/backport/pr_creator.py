@@ -169,7 +169,7 @@ class BackportPRCreator:
                 f"| Source PR | `{context.source_pr_url}` |",
                 f"| Source title | {_escape_table_cell(context.source_pr_title)} |",
                 f"| Target branch | `{context.target_branch}` |",
-                f"| Cherry-picked commits | {len(context.commits)} |",
+                f"| Cherry-picked commits | {len(applied_commits or context.commits)} |",
                 f"| Conflicts detected | {'yes' if had_conflicts else 'no'} |",
                 f"| Auto-resolved files | {resolved_count} |",
                 f"| Unresolved files | {unresolved_count} |",
