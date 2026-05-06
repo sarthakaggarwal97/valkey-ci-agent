@@ -549,11 +549,16 @@ def _apply_candidate(
             "resolution was already satisfied on target branch",
         )
 
-    commit_cmd = ["git", "commit", "--no-edit"]
-    if require_dco_signoff:
-        commit_cmd.append("--signoff")
+    # Complete the cherry-pick so git preserves the original author from
+    # CHERRY_PICK_HEAD. A plain `git commit` would set the author to the
+    # local user.name/user.email, breaking backport authorship. Set
+    # core.editor=true so git doesn't try to open an editor in CI.
     commit_result = subprocess.run(
-        commit_cmd,
+        [
+            "git",
+            "-c", "core.editor=true",
+            "cherry-pick", "--continue",
+        ],
         cwd=repo_dir, capture_output=True, text=True,
     )
     if commit_result.returncode != 0:
@@ -572,6 +577,20 @@ def _apply_candidate(
             "skipped-conflict",
             f"commit failed: {(commit_result.stderr or commit_result.stdout).strip()[:200]}",
         )
+    if require_dco_signoff:
+        amend_result = subprocess.run(
+            ["git", "commit", "--amend", "--no-edit", "--signoff"],
+            cwd=repo_dir, capture_output=True, text=True,
+        )
+        if amend_result.returncode != 0:
+            # Cherry-pick already succeeded; log and continue. Missing DCO
+            # sign-off will surface downstream (e.g., in the PR's CLA check)
+            # rather than silently discarding the backport.
+            logger.warning(
+                "Failed to amend commit with DCO sign-off for #%d: %s",
+                candidate.source_pr_number,
+                (amend_result.stderr or amend_result.stdout).strip()[:200],
+            )
 
     # Sanity check: reject commits that are wildly larger than upstream.
     # Claude Code conflict resolution sometimes over-applies when a file
