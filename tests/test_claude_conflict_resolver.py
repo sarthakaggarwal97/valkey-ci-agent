@@ -82,9 +82,9 @@ def test_unresolved_conflict_returns_none(tmp_path: Path) -> None:
         source_branch_content="new",
     )
 
-    # Mock Claude Code that fails to resolve (markers remain)
+    # Mock Claude Code that does nothing (file unchanged)
     def mock_agent(_profile, prompt, **kw):
-        # Claude didn't edit the file — markers remain
+        # Claude did not edit the file
         return _agent_result('{"type":"result","result":"I could not resolve this"}')
 
     with patch("scripts.backport.conflict_resolver.run_agent", side_effect=mock_agent):
@@ -92,7 +92,7 @@ def test_unresolved_conflict_returns_none(tmp_path: Path) -> None:
 
     assert len(results) == 1
     assert results[0].resolved_content is None
-    assert "markers remain" in results[0].resolution_summary
+    assert "file unchanged" in results[0].resolution_summary
 
 
 def test_mixed_whitespace_and_real_conflicts(tmp_path: Path) -> None:
