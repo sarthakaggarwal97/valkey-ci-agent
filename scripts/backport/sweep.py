@@ -25,11 +25,11 @@ from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.main import (
     _resolve_commit_signer,
     _run_git,
-    emit_job_summary,
 )
 from scripts.backport.models import BackportPRContext
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
+from scripts.common.job_summary import emit_job_summary
 from scripts.common.publish_guard import check_publish_allowed
 
 logger = logging.getLogger(__name__)

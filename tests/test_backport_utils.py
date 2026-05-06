@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from scripts.backport.utils import (
+    braces_balanced,
     build_branch_name,
     build_pr_title,
     has_conflict_markers,
     is_whitespace_only_conflict,
-    validate_c_syntax,
     validate_resolved_content,
 )
 
@@ -61,27 +61,27 @@ class TestHasConflictMarkers:
 
 
 
-class TestValidateCSyntax:
+class TestBracesBalanced:
     def test_balanced(self) -> None:
-        assert validate_c_syntax("int main() { return 0; }") is True
+        assert braces_balanced("int main() { return 0; }") is True
 
     def test_nested_balanced(self) -> None:
-        assert validate_c_syntax("void f() { if (x) { y(); } }") is True
+        assert braces_balanced("void f() { if (x) { y(); } }") is True
 
     def test_unbalanced_extra_open(self) -> None:
-        assert validate_c_syntax("void f() { if (x) {") is False
+        assert braces_balanced("void f() { if (x) {") is False
 
     def test_unbalanced_extra_close(self) -> None:
-        assert validate_c_syntax("void f() }") is False
+        assert braces_balanced("void f() }") is False
 
     def test_empty_string(self) -> None:
-        assert validate_c_syntax("") is True
+        assert braces_balanced("") is True
 
     def test_no_braces(self) -> None:
-        assert validate_c_syntax("// just a comment") is True
+        assert braces_balanced("// just a comment") is True
 
     def test_closing_before_opening(self) -> None:
-        assert validate_c_syntax("} {") is False
+        assert braces_balanced("} {") is False
 
 
 
@@ -202,7 +202,7 @@ class TestHasConflictMarkersProperty:
         assert has_conflict_markers(content) is False
 
 
-class TestValidateCSyntaxProperty:
+class TestBracesBalancedProperty:
 
 
     @given(data=st.data())
@@ -223,7 +223,7 @@ class TestValidateCSyntaxProperty:
             parts.append("}")
         parts.append(data.draw(filler))
         content = "".join(parts)
-        assert validate_c_syntax(content) is True
+        assert braces_balanced(content) is True
 
     @given(
         content=st.text(
@@ -237,7 +237,7 @@ class TestValidateCSyntaxProperty:
     ) -> None:
         """Strings with more '{' than '}' are rejected."""
         unbalanced = content + "{" * extra_opens
-        assert validate_c_syntax(unbalanced) is False
+        assert braces_balanced(unbalanced) is False
 
     @given(
         content=st.text(
@@ -248,7 +248,7 @@ class TestValidateCSyntaxProperty:
     def test_closing_before_opening_rejected(self, content: str) -> None:
         """A '}' appearing before any '{' is rejected."""
         unbalanced = "}" + content + "{"
-        assert validate_c_syntax(unbalanced) is False
+        assert braces_balanced(unbalanced) is False
 
 
 class TestIsWhitespaceOnlyConflictProperty:

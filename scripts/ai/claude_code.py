@@ -60,6 +60,11 @@ def run_claude_code(
     """
     env = _build_claude_env(env_allowlist)
     env["CLAUDE_CODE_USE_BEDROCK"] = "1"
+    # Resolve once here so the env-var override (CI_AGENT_CLAUDE_MODEL)
+    # always wins, regardless of whether the caller pre-resolved.
+    # runtime.run_agent intentionally calls _resolve_claude_model too so
+    # it can capture the resolved value in the audit record — the two
+    # calls are idempotent by design (override wins each time).
     resolved_model = _resolve_claude_model(model)
     env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = _resolve_bedrock_opus_model()
     if "AWS_REGION" not in env and "AWS_DEFAULT_REGION" not in env:

@@ -30,8 +30,15 @@ def has_conflict_markers(content: str) -> bool:
     return bool(_CONFLICT_MARKERS.search(content))
 
 
-def validate_c_syntax(content: str) -> bool:
-    """Basic C syntax validation — checks for balanced curly braces.
+def braces_balanced(content: str) -> bool:
+    """Check whether curly braces are balanced and never go negative.
+
+    This is a conservative signal that resolved C/C++ code isn't obviously
+    broken (mid-block truncation, missing outer braces). It does NOT
+    actually parse C — unbalanced braces inside string literals or
+    block comments will false-positive/negative. The real validation is
+    `make -j$(nproc)` run by Claude Code during resolution; this function
+    is a cheap last-mile sanity check.
 
     Returns ``True`` when the number of ``{`` equals the number of ``}``
     and the brace depth never goes negative (i.e. no ``}`` before its
@@ -53,7 +60,7 @@ def validate_c_syntax(content: str) -> bool:
 def validate_resolved_content(path: str, content: str) -> bool:
     suffix = PurePosixPath(path).suffix.lower()
     if suffix in {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx"}:
-        return validate_c_syntax(content)
+        return braces_balanced(content)
     if suffix == ".py":
         try:
             ast.parse(content)
