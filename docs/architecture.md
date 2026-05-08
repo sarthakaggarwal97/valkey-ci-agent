@@ -7,6 +7,7 @@ The Valkey CI Agent automates backport cherry-picks across release branches.
 ```
 scripts/
   backport/    Backport workflow (active)
+  review/      PR review workflow (active)
   ai/          Claude Code subprocess orchestration
   common/      Shared infrastructure
 ```
@@ -48,11 +49,22 @@ edits files in place, and runs `make` to verify compilation.
 - `publish_guard.py` — blocks accidental writes to upstream repos
 - `commit_signoff.py` — DCO sign-off handling
 
+## PR Review Flow
+
+```
+main.py (PR event or manual dispatch)
+  → fetches PR diff + changed files from GitHub
+  → for each of 9 specialists (parallel):
+      run_agent("code_review_specialist", prompt, cwd=repo)
+  → skeptic pass: filters false positives
+  → synthesis: deduplicate, rank, verdict
+  → posts summary comment + inline review comments
+```
+
 ## Planned Workflows
 
 Future sibling modules to `backport/`:
 
-- **PR Reviewer** — two-stage code review with skeptic pass
 - **Fuzzer Monitor** — triage fuzzer failures, file issues
 - **Daily CI Analysis** — detect flaky tests, generate fix PRs
 - **Health Dashboard** — publish CI metrics to GitHub Pages
