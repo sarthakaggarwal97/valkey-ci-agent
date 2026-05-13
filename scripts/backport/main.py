@@ -594,6 +594,9 @@ def main() -> None:
     registry = load_registry(args.registry)
     repo_entry = registry.get_repo(args.repo)
 
+    from scripts.common.publish_guard import configure_publish_guard
+    configure_publish_guard(registry.publish_guard_repos)
+
     result = run_backport(
         repo_full_name=args.repo,
         source_pr_number=args.pr_number,

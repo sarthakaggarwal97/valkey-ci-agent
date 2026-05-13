@@ -1039,6 +1039,9 @@ def main() -> None:
     registry = load_registry(args.registry)
     repo_entry, branch_entry = registry.get_branch(args.repo, args.branch)
 
+    from scripts.common.publish_guard import configure_publish_guard
+    configure_publish_guard(registry.publish_guard_repos)
+
     test_commands_override = None
     if args.test_commands:
         test_commands_override = [c.strip() for c in args.test_commands.split("\n") if c.strip()]
