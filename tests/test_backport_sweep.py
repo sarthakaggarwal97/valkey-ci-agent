@@ -238,7 +238,7 @@ def test_upsert_pr_uses_direct_upstream_branch_by_default():
     assert pr_url == "https://github.com/valkey-io/valkey/pull/555"
     mock_repo.create_pull.assert_called_once()
     _, kwargs = mock_repo.create_pull.call_args
-    assert kwargs["head"] == "valkey-io:agent/backport/weekly/8.1"
+    assert kwargs["head"] == "agent/backport/weekly/8.1"
     assert kwargs["base"] == "8.1"
     assert kwargs["draft"] is True
 

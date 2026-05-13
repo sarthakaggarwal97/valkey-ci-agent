@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -152,3 +153,38 @@ def test_unchanged_file_without_markers_detected(tmp_path: Path) -> None:
     assert len(results) == 1
     assert results[0].resolved_content is None
     assert "file unchanged" in results[0].resolution_summary
+
+
+def test_claude_editing_unlisted_file_is_rejected(tmp_path: Path) -> None:
+    repo = tmp_path
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+
+    src = repo / "src"
+    src.mkdir()
+    conflicted = src / "cluster.c"
+    other = src / "server.c"
+    conflicted.write_text("<<<<<<< HEAD\nold\n=======\nnew\n>>>>>>> abc\n")
+    other.write_text("unchanged\n")
+    subprocess.run(["git", "add", "src/server.c"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)
+
+    cf = ConflictedFile(
+        path="src/cluster.c",
+        target_branch_content="old",
+        source_branch_content="new",
+    )
+
+    def mock_agent(_profile, prompt, **kw):
+        conflicted.write_text("new\n")
+        other.write_text("unexpected edit\n")
+        return _agent_result('{"type":"result","result":"Resolved"}')
+
+    with patch("scripts.backport.conflict_resolver.run_agent", side_effect=mock_agent):
+        results = resolve_conflicts_with_claude(str(repo), [cf], _pr_context())
+
+    assert len(results) == 1
+    assert results[0].resolved_content is None
+    assert "outside the conflict set" in results[0].resolution_summary
+    assert "src/server.c" in results[0].resolution_summary

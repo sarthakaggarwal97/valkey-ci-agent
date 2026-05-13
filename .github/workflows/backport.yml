@@ -15,11 +15,6 @@ on:
         description: "Target release branch to cherry-pick onto (e.g. 8.1)"
         required: true
         type: string
-      config_path:
-        description: "[Deprecated] Unused — config is loaded from repos.yml registry"
-        required: false
-        type: string
-        default: ""
       aws_region:
         description: "AWS region where Bedrock is available"
         required: false

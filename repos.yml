@@ -1,6 +1,6 @@
 publish_guard:
-  protected_repos:
-    - valkey-io/valkey
+  # Repos listed below are protected automatically.
+  protected_repos: []
 
 repos:
   - repo: valkey-io/valkey

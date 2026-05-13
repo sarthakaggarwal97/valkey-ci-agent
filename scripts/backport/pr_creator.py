@@ -19,8 +19,24 @@ from scripts.common.publish_guard import check_publish_allowed
 logger = logging.getLogger(__name__)
 
 
-def build_pull_head_ref(base_repo: str, push_repo: str | None, branch_name: str) -> str:
-    """Return the GitHub pull-request head ref for a pushed branch."""
+def build_pull_create_head_ref(
+    base_repo: str,
+    push_repo: str | None,
+    branch_name: str,
+) -> str:
+    """Return the head ref used when creating a pull request."""
+    if not push_repo or push_repo == base_repo:
+        return branch_name
+    owner = push_repo.split("/")[0]
+    return f"{owner}:{branch_name}"
+
+
+def build_pull_search_head_ref(
+    base_repo: str,
+    push_repo: str | None,
+    branch_name: str,
+) -> str:
+    """Return the head ref used when searching pull requests."""
     source_repo = push_repo or base_repo
     owner = source_repo.split("/")[0]
     return f"{owner}:{branch_name}"
@@ -100,7 +116,11 @@ class BackportPRCreator:
             action="create_pull",
             context=f"backport {branch_name}->{context.target_branch}",
         )
-        head_ref = build_pull_head_ref(self._base_repo, self._push_repo, branch_name)
+        head_ref = build_pull_create_head_ref(
+            self._base_repo,
+            self._push_repo,
+            branch_name,
+        )
         pr = retry_github_call(
             lambda: repo.create_pull(
                 title=title,
@@ -270,7 +290,11 @@ class BackportPRCreator:
         )
 
         # Check open PRs with matching head branch.
-        head_ref = build_pull_head_ref(self._base_repo, self._push_repo, branch_name)
+        head_ref = build_pull_search_head_ref(
+            self._base_repo,
+            self._push_repo,
+            branch_name,
+        )
         logger.info(
             "Checking for duplicate backport PR with head ref %s",
             head_ref,

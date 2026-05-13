@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import os
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -29,6 +30,27 @@ def _file_hash(path: str) -> str:
         return hashlib.sha256(Path(path).read_bytes()).hexdigest()
     except OSError:
         return ""
+
+
+def _git_changed_paths(repo_dir: str) -> set[str]:
+    """Return paths currently changed or untracked in the git worktree."""
+    paths: set[str] = set()
+    commands = [
+        ["git", "diff", "--name-only"],
+        ["git", "diff", "--cached", "--name-only"],
+        ["git", "ls-files", "--others", "--exclude-standard"],
+    ]
+    for command in commands:
+        result = subprocess.run(
+            command,
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            continue
+        paths.update(line.strip() for line in result.stdout.splitlines() if line.strip())
+    return paths
 
 
 def resolve_conflicts_with_claude(
@@ -72,6 +94,13 @@ def resolve_conflicts_with_claude(
     pre_hashes: dict[str, str] = {}
     for cf in llm_files:
         pre_hashes[cf.path] = _file_hash(os.path.join(repo_dir, cf.path))
+    allowed_paths = {cf.path for cf in llm_files}
+    pre_changed_paths = _git_changed_paths(repo_dir)
+    protected_pre_hashes = {
+        path: _file_hash(os.path.join(repo_dir, path))
+        for path in pre_changed_paths
+        if path not in allowed_paths
+    }
 
     # Build prompt for Claude Code
     file_list = "\n".join(f"- {cf.path}" for cf in llm_files)
@@ -161,6 +190,28 @@ def resolve_conflicts_with_claude(
                 path=cf.path,
                 resolved_content=None,
                 resolution_summary=f"Claude Code failed: {detail[:300]}",
+            )
+            for cf in llm_files
+        ]
+
+    post_changed_paths = _git_changed_paths(repo_dir)
+    unexpected_paths = sorted(
+        path for path in post_changed_paths
+        if path not in pre_changed_paths and path not in allowed_paths
+    )
+    for path, pre_hash in protected_pre_hashes.items():
+        if _file_hash(os.path.join(repo_dir, path)) != pre_hash:
+            unexpected_paths.append(path)
+    if unexpected_paths:
+        summary = (
+            "Claude Code modified files outside the conflict set: "
+            + ", ".join(sorted(set(unexpected_paths))[:10])
+        )
+        return [
+            ResolutionResult(
+                path=cf.path,
+                resolved_content=None,
+                resolution_summary=summary,
             )
             for cf in llm_files
         ]
