@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
 from scripts.backport.cherry_pick import cherry_pick
@@ -22,6 +23,36 @@ def _fail(stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str
     return subprocess.CompletedProcess(
         args=["git"], returncode=1, stdout=stdout, stderr=stderr,
     )
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def test_empty_cherry_pick_does_not_create_empty_commit(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    (repo / "file.txt").write_text("already present\n", encoding="utf-8")
+    _git(repo, "add", "file.txt")
+    _git(repo, "commit", "-q", "-m", "already applied")
+    sha = _git(repo, "rev-parse", "HEAD")
+    before_count = _git(repo, "rev-list", "--count", "HEAD")
+
+    result = cherry_pick(str(repo), "main", sha, [])
+
+    assert result.success is True
+    assert result.applied_commits == []
+    assert _git(repo, "rev-list", "--count", "HEAD") == before_count
+    assert _git(repo, "status", "--porcelain") == ""
 
 
 class TestCleanCherryPickWithMergeCommit:
@@ -50,6 +81,24 @@ class TestCleanCherryPickWithMergeCommit:
         # Second call: git cherry-pick -m 1 <merge_sha>
         assert calls[1][0][0] == ["git", "cherry-pick", "-m", "1", "abc123merge"]
 
+    @patch("scripts.backport.cherry_pick.subprocess.run")
+    def test_retries_without_mainline_for_squash_merge_commit(
+        self, mock_run: MagicMock,
+    ) -> None:
+        mock_run.side_effect = [
+            _ok(),
+            _fail(stderr="error: commit abc123 is not a merge but no -m option was given?\nfatal: mainline was specified but commit abc123 is not a merge."),
+            _ok(),
+        ]
+
+        result = cherry_pick("/repo", "8.1", "abc123", ["sha1"])
+
+        assert result.success is True
+        assert result.applied_commits == ["abc123"]
+        calls = [call_args[0][0] for call_args in mock_run.call_args_list]
+        assert ["git", "cherry-pick", "-m", "1", "abc123"] in calls
+        assert ["git", "cherry-pick", "abc123"] in calls
+
 
 class TestCleanCherryPickSequential:
     """Scenario 2: Clean cherry-pick with sequential commits."""
@@ -77,7 +126,7 @@ class TestCleanCherryPickSequential:
         assert calls[2][0][0] == ["git", "cherry-pick", "sha2"]
 
     @patch("scripts.backport.cherry_pick.subprocess.run")
-    def test_empty_sequential_cherry_pick_retries_with_allow_empty(
+    def test_empty_sequential_cherry_pick_is_skipped(
         self, mock_run: MagicMock,
     ) -> None:
         mock_run.side_effect = [
@@ -88,14 +137,48 @@ class TestCleanCherryPickSequential:
             _ok(),
         ]
 
-        result = cherry_pick("/repo", "8.1", None, ["sha1"])
+        result = cherry_pick("/repo", "8.1", None, ["sha1", "sha2"])
 
         assert result.success is True
-        assert result.applied_commits == ["sha1"]
+        assert result.applied_commits == ["sha2"]
         assert result.conflicting_files == []
         calls = [call_args[0][0] for call_args in mock_run.call_args_list]
         assert ["git", "cherry-pick", "--abort"] in calls
-        assert ["git", "cherry-pick", "--allow-empty", "sha1"] in calls
+        assert ["git", "cherry-pick", "--allow-empty", "sha1"] not in calls
+
+    @patch("scripts.backport.cherry_pick.subprocess.run")
+    def test_empty_merge_cherry_pick_is_skipped(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = [
+            _ok(),
+            _fail(stderr="The previous cherry-pick is now empty"),
+            _ok(stdout=""),
+            _ok(),
+        ]
+
+        result = cherry_pick("/repo", "8.1", "merge_sha", ["sha1"])
+
+        assert result.success is True
+        assert result.applied_commits == []
+        assert result.conflicting_files == []
+        calls = [call_args[0][0] for call_args in mock_run.call_args_list]
+        assert ["git", "cherry-pick", "--abort"] in calls
+        assert ["git", "cherry-pick", "-m", "1", "--allow-empty", "merge_sha"] not in calls
+
+    @patch("scripts.backport.cherry_pick.subprocess.run")
+    def test_merge_failure_without_conflicts_is_not_counted_as_applied(
+        self, mock_run: MagicMock,
+    ) -> None:
+        mock_run.side_effect = [
+            _ok(),
+            _fail(stderr="fatal: bad revision"),
+            _ok(stdout=""),
+        ]
+
+        result = cherry_pick("/repo", "8.1", "missing_sha", ["sha1"])
+
+        assert result.success is False
+        assert result.conflicting_files == []
+        assert result.applied_commits == []
 
 
 class TestConflictDetection:

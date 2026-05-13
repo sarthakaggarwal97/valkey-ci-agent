@@ -75,6 +75,53 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
     assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
+def test_apply_candidate_retries_squash_merge_commit_without_mainline(
+    monkeypatch,
+    tmp_path,
+):
+    candidate = ProjectBackportCandidate(
+        source_pr_number=11,
+        source_pr_title="Squash merged fix",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/11",
+        target_branch="8.1",
+        merge_commit_sha="abc123",
+    )
+    git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        git_calls.append(args)
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "cherry-pick", "-m", "1", "abc123"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                1,
+                stdout="",
+                stderr="fatal: mainline was specified but commit abc123 is not a merge",
+            )
+        if cmd == ["git", "cherry-pick", "abc123"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
+    monkeypatch.setattr(backport_sweep.subprocess, "run", fake_subprocess_run)
+
+    result = backport_sweep._apply_candidate(
+        str(tmp_path),
+        candidate,
+        MagicMock(),
+        "valkey-io/valkey",
+        {},
+    )
+
+    assert result.outcome == "applied"
+    assert ("fetch", "origin", "abc123") in git_calls
+    assert ["git", "cherry-pick", "-m", "1", "abc123"] in subprocess_calls
+    assert ["git", "cherry-pick", "abc123"] in subprocess_calls
+
+
 def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
     conflicted_file = tmp_path / "conflict.txt"
     conflicted_file.write_text("target content\n", encoding="utf-8")

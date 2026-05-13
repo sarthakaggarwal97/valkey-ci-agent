@@ -21,6 +21,7 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
+from scripts.backport.cherry_pick import is_non_merge_mainline_error
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.main import (
     _resolve_commit_signer,
@@ -156,8 +157,8 @@ class ProjectBackportDiscovery:
         self._status_field = status_field
         self._status_value = status_value
         self._branch_fields = branch_fields or list(_DEFAULT_BRANCH_FIELDS)
-        # If set, every candidate on this project goes to this branch
-        # (used for per-release-version project boards like valkey-io/projects/14 → 8.1)
+        # If set, every candidate on this project goes to this branch.
+        # Each project board maps to exactly one release branch.
         self._implicit_target = implicit_target_branch
 
     def discover(self, release_branches: list[str]) -> dict[str, list[ProjectBackportCandidate]]:
@@ -444,6 +445,17 @@ def _apply_candidate(
             ["git", "cherry-pick", "-m", "1", sha],
             cwd=repo_dir, capture_output=True, text=True,
         )
+        if result.returncode != 0 and is_non_merge_mainline_error(
+            f"{result.stdout}\n{result.stderr}"
+        ):
+            logger.info(
+                "%s is not a merge commit; retrying cherry-pick without -m",
+                sha,
+            )
+            result = subprocess.run(
+                ["git", "cherry-pick", sha],
+                cwd=repo_dir, capture_output=True, text=True,
+            )
     except Exception as exc:
         return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "error", str(exc))
 

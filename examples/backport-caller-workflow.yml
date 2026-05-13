@@ -11,6 +11,8 @@
 # Required consumer-repo setup:
 #   Secret:   CI_BOT_AWS_ROLE_ARN        — IAM role assumable via GitHub OIDC
 #   Variable: CI_BOT_AWS_REGION          — optional, defaults to us-east-1
+#   Variable: VALKEY_CI_AGENT_ALLOW_VALKEY_IO_PUBLISH=1
+#   Registry: this repo/branch must be present in valkey-ci-agent repos.yml
 #
 # Pin the reusable workflow to a trusted release tag or full commit SHA in
 # production instead of tracking a moving branch.
@@ -19,6 +21,7 @@ name: Backport Agent
 permissions:
   contents: write
   pull-requests: write
+  issues: write
   actions: read
   id-token: write
 

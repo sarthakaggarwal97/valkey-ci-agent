@@ -91,7 +91,6 @@ def run_backport(
     """
     if (
         push_repo
-        and push_repo != repo_full_name
         and push_repo.split("/", 1)[0] == repo_full_name.split("/", 1)[0]
     ):
         return BackportResult(
@@ -236,6 +235,17 @@ def run_backport(
                     return BackportResult(outcome="error", error_message=msg)
 
                 resolution_results = None
+                if cherry_result.success and not cherry_result.applied_commits:
+                    msg = (
+                        f"Source PR #{source_pr_number} is already applied to "
+                        f"`{target_branch}`; no backport PR was created."
+                    )
+                    logger.info(msg)
+                    _post_comment(repo, source_pr_number, f"Backport skipped: {msg}")
+                    return BackportResult(
+                        outcome="already-applied",
+                        error_message=msg,
+                    )
                 if not cherry_result.success and not cherry_result.conflicting_files:
                     msg = (
                         "Cherry-pick failed without conflicted files; refusing to "
@@ -637,7 +647,10 @@ def main() -> None:
 
     from scripts.backport.registry import load_registry
     registry = load_registry(args.registry)
-    repo_entry = registry.get_repo(args.repo)
+    try:
+        repo_entry, _branch_entry = registry.get_branch(args.repo, args.target_branch)
+    except KeyError as exc:
+        parser.error(str(exc))
 
     from scripts.common.publish_guard import configure_publish_guard
     configure_publish_guard(registry.publish_guard_repos)

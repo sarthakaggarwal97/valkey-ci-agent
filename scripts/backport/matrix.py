@@ -2,8 +2,8 @@
 
 Usage:
     python -m scripts.backport.matrix --registry repos.yml
-    python -m scripts.backport.matrix --registry repos.yml --repo valkey-io/valkey
-    python -m scripts.backport.matrix --registry repos.yml --repo valkey-io/valkey --project-number 14
+    python -m scripts.backport.matrix --registry repos.yml --repo owner/repo
+    python -m scripts.backport.matrix --registry repos.yml --repo owner/repo --project-number 14
 """
 
 from __future__ import annotations

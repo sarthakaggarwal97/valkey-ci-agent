@@ -48,7 +48,7 @@ class BackportPRContext:
 class BackportResult:
     """Final outcome of a backport run."""
 
-    outcome: str  # "success", "conflicts-unresolved", "duplicate", "branch-missing", "pr-not-merged", "error"
+    outcome: str  # success, conflicts-unresolved, duplicate, branch-missing, pr-not-merged, already-applied, error
     backport_pr_url: str | None = None
     commits_cherry_picked: int = 0
     files_conflicted: int = 0
@@ -61,7 +61,7 @@ class BackportResult:
 
 @dataclass
 class BackportConfig:
-    """Configuration for the backport agent, loaded from consumer repo YAML."""
+    """Configuration for the backport agent, derived from the registry."""
 
     backport_label: str = "backport"
     llm_conflict_label: str = "llm-resolved-conflicts"

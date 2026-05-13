@@ -37,6 +37,14 @@ def _cherry_pick_merge(
     result = _run_git(
         repo_dir, "cherry-pick", "-m", "1", merge_commit_sha, check=False,
     )
+    if result.returncode != 0 and is_non_merge_mainline_error(
+        f"{result.stdout}\n{result.stderr}"
+    ):
+        logger.info(
+            "%s is not a merge commit; retrying cherry-pick without -m",
+            merge_commit_sha,
+        )
+        result = _run_git(repo_dir, "cherry-pick", merge_commit_sha, check=False)
     if result.returncode != 0:
         logger.warning(
             "Cherry-pick of merge commit %s produced conflicts",
@@ -44,45 +52,23 @@ def _cherry_pick_merge(
         )
         conflicts = _collect_conflicts(repo_dir, target_branch)
 
-        # Empty cherry-pick: non-zero exit but no unmerged files means
-        # the changes already exist on the target branch.  Abort the
-        # cherry-pick and retry with --allow-empty so the branch has a
-        # commit that can be pushed.
-        if not conflicts:
+        # Empty cherry-pick: the changes already exist on the target branch.
+        # Abort and report a no-op so callers can skip creating empty PRs.
+        if not conflicts and _is_empty_cherry_pick(result):
             logger.info(
-                "No conflicting files — cherry-pick is empty. "
-                "Retrying with --allow-empty.",
+                "No conflicting files — cherry-pick is empty/already applied.",
             )
             logger.debug(
                 "Original cherry-pick stderr: %s",
                 result.stderr.strip(),
             )
             _run_git(repo_dir, "cherry-pick", "--abort", check=False)
-            retry = _run_git(
-                repo_dir, "cherry-pick", "-m", "1", "--allow-empty",
-                merge_commit_sha, check=False,
-            )
-            if retry.returncode == 0:
-                logger.info(
-                    "Empty cherry-pick of %s succeeded with --allow-empty",
-                    merge_commit_sha,
-                )
-                return CherryPickResult(
-                    success=True,
-                    applied_commits=[merge_commit_sha],
-                )
-            # If --allow-empty also fails, fall through to conflict path
-            logger.warning(
-                "Retry with --allow-empty also failed for %s: %s",
-                merge_commit_sha,
-                retry.stderr.strip(),
-            )
-            conflicts = _collect_conflicts(repo_dir, target_branch)
+            return CherryPickResult(success=True, applied_commits=[])
 
         return CherryPickResult(
             success=False,
             conflicting_files=conflicts,
-            applied_commits=[merge_commit_sha],
+            applied_commits=[merge_commit_sha] if conflicts else [],
         )
     logger.info("Cherry-pick of merge commit %s succeeded", merge_commit_sha)
     return CherryPickResult(
@@ -105,32 +91,16 @@ def _cherry_pick_sequential(
                 "Cherry-pick of commit %s produced conflicts", sha,
             )
             conflicts = _collect_conflicts(repo_dir, target_branch)
-            if not conflicts:
+            if not conflicts and _is_empty_cherry_pick(result):
                 logger.info(
-                    "No conflicting files; cherry-pick is empty. "
-                    "Retrying with --allow-empty.",
+                    "No conflicting files; cherry-pick is empty/already applied.",
                 )
                 logger.debug(
                     "Original cherry-pick stderr: %s",
                     result.stderr.strip(),
                 )
                 _run_git(repo_dir, "cherry-pick", "--abort", check=False)
-                retry = _run_git(
-                    repo_dir, "cherry-pick", "--allow-empty", sha, check=False,
-                )
-                if retry.returncode == 0:
-                    logger.info(
-                        "Empty cherry-pick of %s succeeded with --allow-empty",
-                        sha,
-                    )
-                    applied.append(sha)
-                    continue
-                logger.warning(
-                    "Retry with --allow-empty also failed for %s: %s",
-                    sha,
-                    retry.stderr.strip(),
-                )
-                conflicts = _collect_conflicts(repo_dir, target_branch)
+                continue
             return CherryPickResult(
                 success=False,
                 conflicting_files=conflicts,
@@ -182,6 +152,24 @@ def _show_file(repo_dir: str, ref: str, file_path: str) -> str:
         )
         return ""
     return result.stdout
+
+
+def _is_empty_cherry_pick(result: subprocess.CompletedProcess[str]) -> bool:
+    output = f"{result.stdout}\n{result.stderr}".lower()
+    return (
+        "cherry-pick is now empty" in output
+        or "previous cherry-pick is now empty" in output
+        or "nothing to commit" in output
+        or "patch is empty" in output
+    )
+
+
+def is_non_merge_mainline_error(output: str) -> bool:
+    normalized = output.lower()
+    return (
+        "mainline was specified" in normalized
+        and "is not a merge" in normalized
+    )
 
 
 def _run_git(

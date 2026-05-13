@@ -18,14 +18,25 @@ def run_build_commands(repo_dir: str, commands: list[str]) -> tuple[bool, str]:
         return True, ""
     for command in commands:
         logger.info("Running backport validation command: %s", command)
-        result = subprocess.run(
-            command,
-            cwd=repo_dir,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=1800,
-        )
+        try:
+            result = subprocess.run(
+                command,
+                cwd=repo_dir,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=1800,
+            )
+        except subprocess.TimeoutExpired as exc:
+            output = "\n".join(
+                part for part in [
+                    _tail_text(exc.stdout),
+                    _tail_text(exc.stderr),
+                ]
+                if part
+            ).strip()
+            detail = output or f"`{command}` timed out after 1800 seconds"
+            return False, detail
         if result.returncode != 0:
             output = "\n".join(
                 part for part in [result.stdout[-2000:], result.stderr[-2000:]]
@@ -33,3 +44,11 @@ def run_build_commands(repo_dir: str, commands: list[str]) -> tuple[bool, str]:
             ).strip()
             return False, output or f"`{command}` failed with exit code {result.returncode}"
     return True, ""
+
+
+def _tail_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="replace")
+    return value[-2000:]

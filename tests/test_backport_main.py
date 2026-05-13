@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,6 +10,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from scripts.backport.main import build_summary, run_backport
+from scripts.backport.main import main as backport_main
 from scripts.backport.models import (
     BackportConfig,
     BackportPRContext,
@@ -75,6 +77,51 @@ def _default_config() -> BackportConfig:
     return BackportConfig()
 
 
+def test_cli_rejects_target_branch_missing_from_registry(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    registry = tmp_path / "repos.yml"
+    registry.write_text(
+        """
+publish_guard:
+  protected_repos: []
+repos:
+  - repo: valkey-io/valkey
+    project_owner: valkey-io
+    project_owner_type: organization
+    language: c
+    branches:
+      - branch: "8.1"
+        project_number: 14
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("BACKPORT_GITHUB_TOKEN", "token")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "backport",
+            "--registry",
+            str(registry),
+            "--repo",
+            "valkey-io/valkey",
+            "--pr-number",
+            "100",
+            "--target-branch",
+            "9.9",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        backport_main()
+
+    assert exc.value.code == 2
+    assert "Branch '9.9' not found" in capsys.readouterr().err
+
+
 def _make_mock_pr(
     title: str = "Fix bug",
     body: str = "Fixes a bug",
@@ -112,6 +159,20 @@ def test_run_backport_rejects_same_owner_push_repo() -> None:
         config=_default_config(),
         github_token="fake-token",
         push_repo="valkey-io/other-repo",
+    )
+
+    assert result.outcome == "error"
+    assert "direct-upstream" in (result.error_message or "")
+
+
+def test_run_backport_rejects_redundant_same_repo_push_repo() -> None:
+    result = run_backport(
+        repo_full_name="valkey-io/valkey",
+        source_pr_number=100,
+        target_branch="8.1",
+        config=_default_config(),
+        github_token="fake-token",
+        push_repo="valkey-io/valkey",
     )
 
     assert result.outcome == "error"
@@ -485,6 +546,56 @@ class TestRunBackportCherryPickFailure:
 
         assert result.outcome == "error"
         assert "without conflicted files" in (result.error_message or "")
+        mock_pr_creator.create_backport_pr.assert_not_called()
+        assert not any(
+            len(call_args.args) > 1 and call_args.args[1] == "push"
+            for call_args in mock_run_git.call_args_list
+        )
+
+
+class TestRunBackportAlreadyApplied:
+    """Test no-op cherry-picks that are already present on target."""
+
+    @patch(f"{_PATCH_PREFIX}._clone_repo")
+    @patch(f"{_PATCH_PREFIX}._run_git")
+    @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
+    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.Github")
+    def test_already_applied_does_not_push_or_create_pr(
+        self,
+        mock_gh_cls: MagicMock,
+        mock_executor_cls: MagicMock,
+        mock_pr_creator_cls: MagicMock,
+        mock_run_git: MagicMock,
+        mock_clone: MagicMock,
+    ) -> None:
+        mock_gh = MagicMock()
+        mock_gh_cls.return_value = mock_gh
+        mock_repo = MagicMock()
+        mock_gh.get_repo.return_value = mock_repo
+        mock_repo.get_branch.return_value = MagicMock()
+        mock_repo.get_pull.return_value = _make_mock_pr()
+
+        mock_pr_creator = MagicMock()
+        mock_pr_creator_cls.return_value = mock_pr_creator
+        mock_pr_creator.check_duplicate.return_value = None
+
+        mock_executor_cls.return_value = CherryPickResult(
+            success=True,
+            conflicting_files=[],
+            applied_commits=[],
+        )
+
+        result = run_backport(
+            repo_full_name="valkey-io/valkey",
+            source_pr_number=100,
+            target_branch="8.1",
+            config=_default_config(),
+            github_token="fake-token",
+        )
+
+        assert result.outcome == "already-applied"
+        assert "already applied" in (result.error_message or "")
         mock_pr_creator.create_backport_pr.assert_not_called()
         assert not any(
             len(call_args.args) > 1 and call_args.args[1] == "push"

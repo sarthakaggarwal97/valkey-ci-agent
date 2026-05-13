@@ -200,6 +200,12 @@ class TestValidation:
         with pytest.raises(ValueError, match="direct-upstream"):
             load_registry(path)
 
+    def test_same_repo_push_repo_rejected(self, tmp_path):
+        data = _minimal_registry(repos=[_minimal_repo(push_repo="org/repo")])
+        path = _write_registry(tmp_path, data)
+        with pytest.raises(ValueError, match="direct-upstream"):
+            load_registry(path)
+
     def test_build_commands_not_list(self, tmp_path):
         data = _minimal_registry(repos=[_minimal_repo(build_commands="make")])
         path = _write_registry(tmp_path, data)
