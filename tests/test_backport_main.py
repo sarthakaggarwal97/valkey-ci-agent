@@ -250,6 +250,56 @@ class TestRunBackportCleanCherryPick:
             llm_conflict_label="llm-resolved-conflicts",
         )
 
+    @patch("scripts.common.build_validator.run_build_commands")
+    @patch(f"{_PATCH_PREFIX}._clone_repo")
+    @patch(f"{_PATCH_PREFIX}._run_git")
+    @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
+    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.Github")
+    def test_build_validation_failure_blocks_push_and_pr(
+        self,
+        mock_gh_cls: MagicMock,
+        mock_executor_cls: MagicMock,
+        mock_pr_creator_cls: MagicMock,
+        mock_run_git: MagicMock,
+        mock_clone: MagicMock,
+        mock_run_build_commands: MagicMock,
+    ) -> None:
+        mock_gh = MagicMock()
+        mock_gh_cls.return_value = mock_gh
+        mock_repo = MagicMock()
+        mock_gh.get_repo.return_value = mock_repo
+        mock_repo.get_branch.return_value = MagicMock()
+        mock_repo.get_pull.return_value = _make_mock_pr()
+
+        mock_pr_creator = MagicMock()
+        mock_pr_creator_cls.return_value = mock_pr_creator
+        mock_pr_creator.check_duplicate.return_value = None
+
+        mock_executor_cls.return_value = CherryPickResult(
+            success=True,
+            conflicting_files=[],
+            applied_commits=["commit_sha_1"],
+        )
+        mock_run_build_commands.return_value = (False, "compile failed")
+
+        result = run_backport(
+            repo_full_name="valkey-io/valkey",
+            source_pr_number=100,
+            target_branch="8.1",
+            config=_default_config(),
+            github_token="fake-token",
+            build_commands=["make"],
+        )
+
+        assert result.outcome == "error"
+        assert "Build validation failed" in (result.error_message or "")
+        mock_pr_creator.create_backport_pr.assert_not_called()
+        assert not any(
+            len(call_args.args) > 1 and call_args.args[1] == "push"
+            for call_args in mock_run_git.call_args_list
+        )
+
 
 class TestRunBackportConflictedCherryPick:
     """Test conflicted cherry-pick flow with LLM resolution."""

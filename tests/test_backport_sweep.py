@@ -290,6 +290,90 @@ def test_upsert_pr_uses_direct_upstream_branch_by_default():
     assert kwargs["draft"] is True
 
 
+def test_clone_target_branch_invokes_git_clone_without_destination_cwd(
+    monkeypatch,
+    tmp_path,
+):
+    calls: list[tuple[list[str], dict]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(backport_sweep.subprocess, "run", fake_run)
+
+    dest = tmp_path / "checkout"
+    backport_sweep._clone_target_branch(
+        "owner/repo",
+        "1.0",
+        str(dest),
+        {"GIT_ASKPASS": "/tmp/askpass"},
+    )
+
+    assert calls == [
+        (
+            [
+                "git",
+                "clone",
+                "--branch",
+                "1.0",
+                "https://github.com/owner/repo.git",
+                str(dest),
+            ],
+            {
+                "check": True,
+                "capture_output": True,
+                "text": True,
+                "env": {"GIT_ASKPASS": "/tmp/askpass"},
+            },
+        )
+    ]
+    assert "cwd" not in calls[0][1]
+
+
+def test_push_backport_branch_uses_plain_push_for_new_branch(monkeypatch):
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        calls.append(args)
+
+    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
+
+    backport_sweep._push_backport_branch(
+        "/repo",
+        "agent/backport/weekly/8.1",
+        {},
+        force_with_lease=False,
+    )
+
+    assert calls == [("push", "push_target", "agent/backport/weekly/8.1")]
+
+
+def test_push_backport_branch_uses_force_with_lease_after_rebase(monkeypatch):
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        calls.append(args)
+
+    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
+
+    backport_sweep._push_backport_branch(
+        "/repo",
+        "agent/backport/weekly/8.1",
+        {},
+        force_with_lease=True,
+    )
+
+    assert calls == [
+        (
+            "push",
+            "--force-with-lease",
+            "push_target",
+            "agent/backport/weekly/8.1",
+        )
+    ]
+
+
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     full_env = dict(os.environ)

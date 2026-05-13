@@ -45,7 +45,6 @@ def test_backport_risk_keeps_clean_doc_change_low() -> None:
 
 
 def test_backport_risk_treats_9x_target_as_older_release_line() -> None:
-    """Regression: _CURRENT_DEV_MAJOR = 10, so 9.x is older and gets the bump."""
     risk = assess_backport_risk(
         _context(
             "diff --git a/src/cluster.c b/src/cluster.c\n",
@@ -61,3 +60,13 @@ def test_backport_risk_treats_9x_target_as_older_release_line() -> None:
         "9.1" in reason and "older release line" in reason
         for reason in risk.reasons
     )
+
+
+def test_backport_risk_does_not_treat_named_branch_as_release_line() -> None:
+    risk = assess_backport_risk(
+        _context("diff --git a/src/cluster.c b/src/cluster.c\n", target_branch="main"),
+        had_conflicts=False,
+        resolution_results=None,
+    )
+
+    assert not any("older release line" in reason for reason in risk.reasons)

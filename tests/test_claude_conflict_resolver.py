@@ -96,6 +96,30 @@ def test_unresolved_conflict_returns_none(tmp_path: Path) -> None:
     assert "file unchanged" in results[0].resolution_summary
 
 
+def test_claude_nonzero_exit_returns_unresolved(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    conflicted = src / "cluster.c"
+    conflicted.write_text("<<<<<<< HEAD\nold\n=======\nnew\n>>>>>>> abc\n")
+
+    cf = ConflictedFile(
+        path="src/cluster.c",
+        target_branch_content="old",
+        source_branch_content="new",
+    )
+
+    with patch(
+        "scripts.backport.conflict_resolver.run_agent",
+        return_value=_agent_result("", stderr="bedrock failed", rc=1),
+    ):
+        results = resolve_conflicts_with_claude(str(tmp_path), [cf], _pr_context())
+
+    assert len(results) == 1
+    assert results[0].resolved_content is None
+    assert "Claude Code failed" in results[0].resolution_summary
+    assert "bedrock failed" in results[0].resolution_summary
+
+
 def test_mixed_whitespace_and_real_conflicts(tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()

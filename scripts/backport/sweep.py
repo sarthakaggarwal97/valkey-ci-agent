@@ -1,4 +1,4 @@
-"""Weekly backport sweep across release branches."""
+"""Daily backport sweep across registered release branches."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -298,9 +299,7 @@ def _process_branch(
         with GitAuth(github_token, prefix="backport-sweep-git-askpass-") as git_auth:
             git_env = git_auth.env()
             check_publish_allowed(target_repo=push_repo, action="git_push", context=f"{_BRANCH_PREFIX}/{target_branch}")
-            # Clone
-            clone_url = github_https_url(repo_full_name)
-            _run_git(tmpdir, "clone", "--branch", target_branch, clone_url, tmpdir, env=git_env)
+            _clone_target_branch(repo_full_name, target_branch, tmpdir, git_env)
             _run_git(tmpdir, "config", "user.name", "valkey-ci-agent")
             _run_git(tmpdir, "config", "user.email", "ci-agent@valkey.io")
 
@@ -402,7 +401,12 @@ def _process_branch(
                     logger.warning("Validation failed for %s; not pushing branch.", target_branch)
                     return result
                 check_publish_allowed(target_repo=push_repo, action="git_push", context=backport_branch)
-                _run_git(tmpdir, "push", "push_target", backport_branch, env=git_env)
+                _push_backport_branch(
+                    tmpdir,
+                    backport_branch,
+                    git_env,
+                    force_with_lease=existing_pr is not None,
+                )
                 logger.info("Pushed %d commit(s) to %s/%s", len(applied), push_repo, backport_branch)
 
                 # Upsert PR
@@ -419,10 +423,38 @@ def _process_branch(
             detail=str(exc),
         ))
     finally:
-        import shutil
         shutil.rmtree(tmpdir, ignore_errors=True)
 
     return result
+
+
+def _clone_target_branch(
+    repo_full_name: str,
+    target_branch: str,
+    dest_dir: str,
+    git_env: dict[str, str],
+) -> None:
+    clone_url = github_https_url(repo_full_name)
+    subprocess.run(
+        ["git", "clone", "--branch", target_branch, clone_url, dest_dir],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=git_env,
+    )
+
+
+def _push_backport_branch(
+    repo_dir: str,
+    branch: str,
+    git_env: dict[str, str],
+    *,
+    force_with_lease: bool,
+) -> None:
+    args = ["push", "push_target", branch]
+    if force_with_lease:
+        args.insert(1, "--force-with-lease")
+    _run_git(repo_dir, *args, env=git_env)
 
 
 def _apply_candidate(

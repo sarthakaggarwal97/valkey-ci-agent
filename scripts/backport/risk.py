@@ -11,12 +11,8 @@ from scripts.backport.models import BackportPRContext, ResolutionResult
 
 RiskLevel = Literal["low", "medium", "high"]
 
-# Major version of the current development line. Any target branch with a
-# major < _CURRENT_DEV_MAJOR is treated as an older release branch for
-# backport-risk scoring. Bump this when Valkey rolls forward a major.
-_CURRENT_DEV_MAJOR = 10
-
 _DIFF_PATH_RE = re.compile(r"^diff --git a/(.*?) b/(.*?)$", re.MULTILINE)
+_RELEASE_BRANCH_RE = re.compile(r"^\d+\.\d+(?:\.\d+)?$")
 _HIGH_RISK_PREFIXES = (
     "src/cluster",
     "src/replication",
@@ -131,11 +127,4 @@ def _is_high_risk_path(path: str) -> bool:
 
 
 def _is_older_release_branch(target_branch: str) -> bool:
-    parts = target_branch.split(".")
-    if len(parts) < 2:
-        return False
-    try:
-        major = int(parts[0])
-    except ValueError:
-        return False
-    return major < _CURRENT_DEV_MAJOR
+    return bool(_RELEASE_BRANCH_RE.match(target_branch))

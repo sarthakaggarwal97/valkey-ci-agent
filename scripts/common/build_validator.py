@@ -19,6 +19,9 @@ def run_build_commands(repo_dir: str, commands: list[str]) -> tuple[bool, str]:
     for command in commands:
         logger.info("Running backport validation command: %s", command)
         try:
+            # Registry build commands are operator-controlled repo config, not
+            # user input from PRs or issues; shell=True is intentional so repos
+            # can express normal build pipelines.
             result = subprocess.run(
                 command,
                 cwd=repo_dir,
