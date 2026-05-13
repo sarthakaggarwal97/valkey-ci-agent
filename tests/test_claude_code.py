@@ -101,6 +101,28 @@ def test_run_claude_code_preserves_existing_region_and_model(monkeypatch):
     assert captured["env"]["AWS_REGION"] == "us-west-2"
 
 
+def test_run_claude_code_does_not_inherit_github_tokens(monkeypatch):
+    captured = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["env"] = kwargs["env"]
+        return _FakeProcess(cmd, stdout_text='{"type":"result","result":"ok"}\n', **kwargs)
+
+    monkeypatch.setenv("GITHUB_TOKEN", "github-secret")
+    monkeypatch.setenv("GH_TOKEN", "gh-secret")
+    monkeypatch.setenv("BACKPORT_GITHUB_TOKEN", "backport-secret")
+    monkeypatch.setenv("AWS_REGION", "us-west-2")
+    monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
+
+    stdout, stderr, rc = claude_code.run_claude_code("prompt")
+
+    assert (stdout, stderr, rc) == ('{"type":"result","result":"ok"}\n', "", 0)
+    assert captured["env"]["AWS_REGION"] == "us-west-2"
+    assert "GITHUB_TOKEN" not in captured["env"]
+    assert "GH_TOKEN" not in captured["env"]
+    assert "BACKPORT_GITHUB_TOKEN" not in captured["env"]
+
+
 def test_run_claude_code_honors_model_env_overrides(monkeypatch):
     captured = {}
 
@@ -155,4 +177,3 @@ def test_run_claude_code_reports_missing_cli(monkeypatch):
     monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
 
     assert claude_code.run_claude_code("prompt") == ("", "claude not found", 127)
-
