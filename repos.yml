@@ -7,7 +7,6 @@ repos:
     project_owner: valkey-io
     project_owner_type: organization
     language: c
-    push_repo: sarthakaggarwal97/valkey
     build_commands:
       - "make -j$(nproc)"
     backport_label: backport
