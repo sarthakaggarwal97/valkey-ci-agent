@@ -35,6 +35,9 @@ def resolve_conflicts_with_claude(
     repo_dir: str,
     conflicting_files: list[ConflictedFile],
     pr_context: BackportPRContext,
+    *,
+    language: str = "c",
+    build_commands: list[str] | None = None,
 ) -> list[ResolutionResult]:
     """Resolve cherry-pick merge conflicts using Claude Code.
 
@@ -72,8 +75,32 @@ def resolve_conflicts_with_claude(
 
     # Build prompt for Claude Code
     file_list = "\n".join(f"- {cf.path}" for cf in llm_files)
+
+    # Build validation section — only included if build commands are configured
+    if build_commands:
+        cmds_str = " && ".join(build_commands)
+        build_section = (
+            f"5. Run `{cmds_str}` from the repository root to verify your "
+            f"resolution compiles on the target branch.\n"
+            f"   - If the build fails, read the compiler errors carefully. The most "
+            f"common cause is a function-signature mismatch: the source PR uses a "
+            f"newer API that doesn't exist on the target branch. Adapt the call "
+            f"sites to the target branch's existing signatures, or drop the hunk "
+            f"if it's only useful with the newer API.\n"
+            f"   - If the build fails with unresolved references to files or "
+            f"symbols that do not exist on the target branch, remove those "
+            f"references. Do NOT create new files to satisfy the compiler.\n"
+            f"   - Iterate until `{cmds_str}` exits cleanly.\n"
+            f"   - If after several iterations the build still does not pass, stop "
+            f"and report the remaining error rather than inventing code.\n\n"
+        )
+    else:
+        build_section = (
+            "5. After resolving, verify no conflict markers remain in any file.\n\n"
+        )
+
     prompt = (
-        f"You are resolving merge conflicts in the Valkey C codebase.\n\n"
+        f"You are resolving merge conflicts in a {language} codebase.\n\n"
         f"Source PR #{pr_context.source_pr_number}: \"{pr_context.source_pr_title}\"\n"
         f"URL: {pr_context.source_pr_url}\n"
         f"Target branch: {pr_context.target_branch}\n\n"
@@ -89,19 +116,7 @@ def resolve_conflicts_with_claude(
         f"2. Understand the source PR's intent (preserve it — don't add new functionality)\n"
         f"3. Resolve each conflict by editing the files in place\n"
         f"4. After editing, verify no conflict markers remain\n"
-        f"5. Run `make -j$(nproc)` from the repository root to verify your "
-        f"resolution compiles on the target branch.\n"
-        f"   - If the build fails, read the compiler errors carefully. The most "
-        f"common cause is a function-signature mismatch: the source PR uses a "
-        f"newer API that doesn't exist on the target branch. Adapt the call "
-        f"sites to the target branch's existing signatures, or drop the hunk "
-        f"if it's only useful with the newer API.\n"
-        f"   - If the build fails with unresolved references to files or "
-        f"symbols that do not exist on the target branch, remove those "
-        f"references. Do NOT create new files to satisfy the compiler.\n"
-        f"   - Iterate until `make -j$(nproc)` exits cleanly.\n"
-        f"   - If after several iterations the build still does not pass, stop "
-        f"and report the remaining error rather than inventing code.\n\n"
+        f"{build_section}"
         f"CRITICAL constraints:\n"
         f"- ONLY edit the conflicted files listed above. Do NOT modify other files.\n"
         f"- Do NOT run `git add` or `git commit`.\n"

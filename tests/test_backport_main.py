@@ -111,12 +111,10 @@ class TestRunBackportCleanCherryPick:
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
     @patch(f"{_PATCH_PREFIX}.cherry_pick")
-    @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_clean_cherry_pick_returns_success(
         self,
         mock_gh_cls: MagicMock,
-        mock_load_config: MagicMock,
         mock_executor_cls: MagicMock,
         mock_pr_creator_cls: MagicMock,
         mock_run_git: MagicMock,
@@ -171,7 +169,8 @@ class TestRunBackportCleanCherryPick:
         mock_pr_creator.create_backport_pr.assert_called_once()
         mock_pr_creator_cls.assert_called_once_with(
             mock_gh,
-            "valkey-io/valkey",
+            base_repo="valkey-io/valkey",
+            push_repo=None,
             backport_label="backport",
             llm_conflict_label="llm-resolved-conflicts",
         )
@@ -186,12 +185,10 @@ class TestRunBackportConflictedCherryPick:
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
     @patch(f"{_PATCH_PREFIX}.resolve_conflicts_with_claude")
     @patch(f"{_PATCH_PREFIX}.cherry_pick")
-    @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_conflicted_cherry_pick_with_resolution(
         self,
         mock_gh_cls: MagicMock,
-        mock_load_config: MagicMock,
         mock_executor_cls: MagicMock,
         mock_resolve_conflicts: MagicMock,
         mock_pr_creator_cls: MagicMock,
@@ -262,12 +259,10 @@ class TestRunBackportDuplicateDetection:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
     @patch(f"{_PATCH_PREFIX}.cherry_pick")
-    @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_duplicate_pr_skips_processing(
         self,
         mock_gh_cls: MagicMock,
-        mock_load_config: MagicMock,
         mock_executor_cls: MagicMock,
         mock_pr_creator_cls: MagicMock,
         mock_clone: MagicMock,
@@ -304,12 +299,10 @@ class TestRunBackportMergedPrValidation:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
     @patch(f"{_PATCH_PREFIX}.cherry_pick")
-    @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_unmerged_pr_skips_processing(
         self,
         mock_gh_cls: MagicMock,
-        mock_load_config: MagicMock,
         mock_executor_cls: MagicMock,
         mock_pr_creator_cls: MagicMock,
         mock_clone: MagicMock,
@@ -347,12 +340,10 @@ class TestRunBackportMissingBranch:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
     @patch(f"{_PATCH_PREFIX}.cherry_pick")
-    @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_missing_branch_skips_processing(
         self,
         mock_gh_cls: MagicMock,
-        mock_load_config: MagicMock,
         mock_executor_cls: MagicMock,
         mock_pr_creator_cls: MagicMock,
         mock_clone: MagicMock,
@@ -389,12 +380,10 @@ class TestRunBackportGitHubAPIError:
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
     @patch(f"{_PATCH_PREFIX}.cherry_pick")
-    @patch(f"{_PATCH_PREFIX}.load_backport_config_from_repo")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_pr_creation_failure_returns_error(
         self,
         mock_gh_cls: MagicMock,
-        mock_load_config: MagicMock,
         mock_executor_cls: MagicMock,
         mock_pr_creator_cls: MagicMock,
         mock_run_git: MagicMock,

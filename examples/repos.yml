@@ -1,0 +1,52 @@
+# Example registry showing how to add a Valkey module.
+# This file is for documentation only — the live registry is repos.yml at the repo root.
+
+publish_guard:
+  protected_repos:
+    - valkey-io/valkey
+    - valkey-io/valkey-bloom
+
+repos:
+  - repo: valkey-io/valkey
+    project_owner: valkey-io
+    project_owner_type: organization
+    language: c
+    push_repo: valkey-io/valkey-backport-staging
+    build_commands:
+      - "make -j$(nproc)"
+    backport_label: backport
+    llm_conflict_label: llm-resolved-conflicts
+    max_conflicting_files: 100
+    branches:
+      - branch: "7.2"
+        project_number: 1
+      - branch: "8.0"
+        project_number: 2
+      - branch: "8.1"
+        project_number: 14
+      - branch: "9.0"
+        project_number: 18
+      - branch: "9.1"
+        project_number: 41
+
+  - repo: valkey-io/valkey-bloom
+    project_owner: valkey-io
+    project_owner_type: organization
+    language: c
+    push_repo: valkey-io/valkey-bloom-staging
+    build_commands:
+      - "make -j$(nproc)"
+    branches:
+      - branch: "1.0"
+        project_number: 5
+
+  - repo: valkey-io/valkey-search
+    project_owner: valkey-io
+    project_owner_type: organization
+    language: c++
+    push_repo: valkey-io/valkey-search-staging
+    build_commands:
+      - "cmake --build build -j$(nproc)"
+    branches:
+      - branch: "1.0"
+        project_number: 8

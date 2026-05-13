@@ -38,26 +38,9 @@ _DEFAULT_BRANCH_FIELDS = (
     "Backport Branch", "Target Branch", "Release Branch",
     "Branch", "Version", "Release", "Folder",
 )
-# Only sweep these release branches, even if other N.N branches exist in the repo
-_SUPPORTED_RELEASE_BRANCHES = ("7.2", "8.0", "8.1", "9.0", "9.1")
-_DEFAULT_RELEASE_BRANCH_PATTERN = r"\d+\.\d+"
 _DEFAULT_STATUS_FIELD = "Status"
 _DEFAULT_STATUS_VALUE = "To be backported"
 _BRANCH_PREFIX = "agent/backport/weekly"
-
-# Well-known per-release-branch backport project boards on valkey-io.
-# Each project is scoped to exactly one target branch (no per-item branch
-# field), so we can derive the implicit target from the project number alone.
-#
-# To add a new release branch: add the project number → branch mapping here,
-# and add the branch to _SUPPORTED_RELEASE_BRANCHES below.
-_VALKEY_IO_PROJECT_TO_BRANCH: dict[int, str] = {
-    1: "7.2",
-    2: "8.0",
-    14: "8.1",
-    18: "9.0",
-    41: "9.1",
-}
 
 
 
@@ -222,91 +205,74 @@ class ProjectBackportDiscovery:
         )
 
 
-def discover_release_branches(repo: Any, pattern: str) -> list[str]:
-    regex = re.compile(pattern)
-    branches = [b.name for b in retry_github_call(lambda: list(repo.get_branches()), retries=3, description="list branches")]
-    matched = sorted([b for b in branches if regex.fullmatch(b) and b in _SUPPORTED_RELEASE_BRANCHES], key=_release_branch_sort_key)
-    logger.info("Discovered release branches: %s", matched)
-    return matched
-
 
 
 def run_backport_sweep(
     *,
-    repo_full_name: str,
+    repo_entry: "RepoEntry",
+    branch_entry: "BranchEntry",
     github_token: str,
-    project_owner: str,
-    project_number: int,
-    project_owner_type: str = "organization",
     status_field: str = _DEFAULT_STATUS_FIELD,
     status_value: str = _DEFAULT_STATUS_VALUE,
     branch_fields: list[str] | None = None,
-    push_repo: str | None = None,
-    only_branch: str | None = None,
-    test_commands: list[str] | None = None,
+    test_commands_override: list[str] | None = None,
     discover_only: bool = False,
-    implicit_target_branch: str | None = None,
     max_candidates: int = 0,
-) -> list[BranchSweepResult]:
+) -> BranchSweepResult:
+    """Run backport sweep for a single repo+branch from the registry.
+
+    Returns a single BranchSweepResult.
+    """
+    from scripts.backport.registry import BranchEntry, RepoEntry  # noqa: F811
+
+    repo_full_name = repo_entry.repo
+    push_repo = repo_entry.effective_push_repo
+    target_branch = branch_entry.branch
+    project_number = branch_entry.project_number
+    test_commands = test_commands_override if test_commands_override is not None else list(repo_entry.build_commands)
+
     gh = Github(auth=Auth.Token(github_token))
     repo = retry_github_call(lambda: gh.get_repo(repo_full_name), retries=3, description=f"get {repo_full_name}")
-    release_branches = discover_release_branches(repo, _DEFAULT_RELEASE_BRANCH_PATTERN)
-
-    # Auto-derive implicit_target_branch for well-known valkey-io per-release
-    # project boards when caller did not pass one explicitly.
-    if (
-        not implicit_target_branch
-        and project_owner == "valkey-io"
-        and project_owner_type == "organization"
-        and project_number in _VALKEY_IO_PROJECT_TO_BRANCH
-    ):
-        implicit_target_branch = _VALKEY_IO_PROJECT_TO_BRANCH[project_number]
-        logger.info(
-            "Derived implicit target branch %s from valkey-io project %d",
-            implicit_target_branch, project_number,
-        )
-
-    if only_branch:
-        release_branches = [b for b in release_branches if b == only_branch]
-    if implicit_target_branch and implicit_target_branch not in release_branches:
-        # User-specified target takes precedence even if not in pattern match
-        release_branches = [implicit_target_branch]
 
     discovery = ProjectBackportDiscovery(
         GitHubGraphQLClient(github_token),
-        project_owner=project_owner, project_number=project_number,
-        project_owner_type=project_owner_type, status_field=status_field,
-        status_value=status_value, branch_fields=branch_fields,
-        implicit_target_branch=implicit_target_branch,
+        project_owner=repo_entry.project_owner,
+        project_number=project_number,
+        project_owner_type=repo_entry.project_owner_type,
+        status_field=status_field,
+        status_value=status_value,
+        branch_fields=branch_fields,
+        implicit_target_branch=target_branch,
     )
-    candidates_by_branch = discovery.discover(release_branches)
+    candidates_by_branch = discovery.discover([target_branch])
+    candidates = candidates_by_branch.get(target_branch, [])
 
-    results: list[BranchSweepResult] = []
-    for branch in release_branches:
-        candidates = candidates_by_branch.get(branch, [])
-        if max_candidates > 0:
-            logger.info("Branch %s: %d candidate(s) found, will apply up to %d", branch, len(candidates), max_candidates)
-        else:
-            logger.info("Branch %s: %d candidate(s)", branch, len(candidates))
-        if discover_only:
-            for c in candidates:
-                logger.info("  PR #%d: %s (%s)", c.source_pr_number, c.source_pr_title, c.merge_commit_sha or "no merge sha")
-            results.append(BranchSweepResult(target_branch=branch, candidates_found=len(candidates)))
-            continue
-        if not candidates:
-            results.append(BranchSweepResult(target_branch=branch))
-            continue
-        results.append(_process_branch(
-            gh=gh, repo=repo, repo_full_name=repo_full_name,
-            github_token=github_token, target_branch=branch,
-            candidates=candidates, push_repo=push_repo or repo_full_name,
-            test_commands=test_commands or [],
-            max_applied=max_candidates,
-        ))
+    if max_candidates > 0:
+        logger.info("Branch %s: %d candidate(s) found, will apply up to %d", target_branch, len(candidates), max_candidates)
+    else:
+        logger.info("Branch %s: %d candidate(s)", target_branch, len(candidates))
 
-    summary = _build_summary(results)
-    emit_job_summary(summary)
-    return results
+    if discover_only:
+        for c in candidates:
+            logger.info("  PR #%d: %s (%s)", c.source_pr_number, c.source_pr_title, c.merge_commit_sha or "no merge sha")
+        result = BranchSweepResult(target_branch=target_branch, candidates_found=len(candidates))
+        emit_job_summary(_build_summary([result]))
+        return result
+
+    if not candidates:
+        result = BranchSweepResult(target_branch=target_branch)
+        emit_job_summary(_build_summary([result]))
+        return result
+
+    result = _process_branch(
+        gh=gh, repo=repo, repo_full_name=repo_full_name,
+        github_token=github_token, target_branch=target_branch,
+        candidates=candidates, push_repo=push_repo,
+        test_commands=test_commands,
+        max_applied=max_candidates,
+    )
+    emit_job_summary(_build_summary([result]))
+    return result
 
 
 def _process_branch(
@@ -344,7 +310,7 @@ def _process_branch(
             # flaky "list PRs" call can't be mistaken for "no open PR" and
             # trigger _delete_stale_backport_branch below. The propagated
             # exception is caught by the outer try/except on this branch.
-            existing_pr = _find_existing_pr(gh, push_repo, backport_branch)
+            existing_pr = _find_existing_pr(gh, repo_full_name, push_repo, backport_branch)
 
             if existing_pr:
                 logger.info("Found existing PR #%d for %s, fetching branch...", existing_pr.number, target_branch)
@@ -426,7 +392,7 @@ def _process_branch(
                 logger.info("Pushed %d commit(s) to %s/%s", len(applied), push_repo, backport_branch)
 
                 # Upsert PR
-                pr_url = _upsert_pr(gh, push_repo, target_branch, backport_branch, result, existing_pr)
+                pr_url = _upsert_pr(gh, repo_full_name, push_repo, target_branch, backport_branch, result, existing_pr)
                 result.pr_url = pr_url
 
     except Exception as exc:
@@ -826,17 +792,22 @@ def _sync_target_branch_to_source(
         )
 
 
-def _find_existing_pr(gh: Any, push_repo: str, branch: str) -> Any | None:
-    """Return the open backport PR for *branch* on *push_repo*, or None.
+def _find_existing_pr(gh: Any, base_repo: str, push_repo: str, branch: str) -> Any | None:
+    """Return the open backport PR for *branch* on *base_repo*, or None.
 
     Only returns None when GitHub confirmed no matching PR exists.
     Transient errors (network, auth, 5xx) propagate so the caller can
     distinguish "no PR" from "couldn't check" and avoid deleting an
     active backport branch on a transient failure.
     """
-    repo = retry_github_call(lambda: gh.get_repo(push_repo), retries=2, description=f"get {push_repo}")
+    repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
+    # Cross-repo head ref: <push_owner>:<branch>; same-repo: just <branch>
+    if push_repo and push_repo != base_repo:
+        head_ref = f"{push_repo.split('/')[0]}:{branch}"
+    else:
+        head_ref = f"{base_repo.split('/')[0]}:{branch}"
     pulls = retry_github_call(
-        lambda: list(repo.get_pulls(state="open", head=f"{push_repo.split('/')[0]}:{branch}")),
+        lambda: list(repo.get_pulls(state="open", head=head_ref)),
         retries=2, description="list PRs",
     )
     return pulls[0] if pulls else None
@@ -868,25 +839,30 @@ def _delete_stale_backport_branch(gh: Any, push_repo: str, branch: str) -> None:
         logger.warning("Could not prune stale backport branch %s: %s", branch, exc)
 
 
-def _upsert_pr(gh: Any, push_repo: str, target_branch: str, head_branch: str,
+def _upsert_pr(gh: Any, base_repo: str, push_repo: str, target_branch: str, head_branch: str,
                result: BranchSweepResult, existing_pr: Any | None) -> str:
-    repo = retry_github_call(lambda: gh.get_repo(push_repo), retries=2, description=f"get {push_repo}")
+    repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
     body = _build_pr_body(result)
     title = f"[backport] Weekly backport sweep for {target_branch}"
 
+    # Build head ref: cross-repo uses <push_owner>:<branch>, same-repo uses <base_owner>:<branch>
+    if push_repo and push_repo != base_repo:
+        head_ref = f"{push_repo.split('/')[0]}:{head_branch}"
+    else:
+        head_ref = f"{base_repo.split('/')[0]}:{head_branch}"
+
     if existing_pr:
-        check_publish_allowed(target_repo=push_repo, action="edit_pull", context=f"PR #{existing_pr.number}")
+        check_publish_allowed(target_repo=base_repo, action="edit_pull", context=f"PR #{existing_pr.number}")
         retry_github_call(lambda: existing_pr.edit(title=title, body=body), retries=2, description="update PR")
-        logger.info("Updated PR #%d on %s", existing_pr.number, push_repo)
+        logger.info("Updated PR #%d on %s", existing_pr.number, base_repo)
         return existing_pr.html_url
 
-    check_publish_allowed(target_repo=push_repo, action="create_pull", context=head_branch)
-    owner = push_repo.split("/")[0]
+    check_publish_allowed(target_repo=base_repo, action="create_pull", context=head_branch)
     pr = retry_github_call(
-        lambda: repo.create_pull(title=title, body=body, head=f"{owner}:{head_branch}", base=target_branch, draft=True),
+        lambda: repo.create_pull(title=title, body=body, head=head_ref, base=target_branch, draft=True),
         retries=2, description="create PR",
     )
-    logger.info("Created PR #%d on %s", pr.number, push_repo)
+    logger.info("Created PR #%d on %s", pr.number, base_repo)
     return pr.html_url
 
 
@@ -963,14 +939,6 @@ def _esc(value: object) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
-def _release_branch_sort_key(name: str) -> tuple[int, ...]:
-    parts = []
-    for p in name.split("."):
-        try:
-            parts.append(int(p))
-        except ValueError:
-            parts.append(-1)
-    return tuple(parts)
 
 
 def _project_items_query(owner_field: str) -> str:
@@ -1046,19 +1014,18 @@ def _matching_release_branch(fields: dict[str, list[str]], branch_fields: list[s
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo", required=True)
+    parser.add_argument("--registry", default="repos.yml",
+                        help="Path to registry YAML (default: repos.yml)")
+    parser.add_argument("--repo", required=True,
+                        help="Repository full name (must exist in registry)")
+    parser.add_argument("--branch", required=True,
+                        help="Target branch (must exist in registry for this repo)")
     parser.add_argument("--target-token", required=True)
-    parser.add_argument("--project-owner", required=True)
-    parser.add_argument("--project-number", required=True, type=int)
-    parser.add_argument("--project-owner-type", default="organization")
-    parser.add_argument("--push-repo", default="")
     parser.add_argument("--status-field", default=_DEFAULT_STATUS_FIELD)
     parser.add_argument("--status-value", default=_DEFAULT_STATUS_VALUE)
     parser.add_argument("--branch-fields", default=",".join(_DEFAULT_BRANCH_FIELDS))
-    parser.add_argument("--test-commands", default="")
-    parser.add_argument("--only-branch", default="")
-    parser.add_argument("--implicit-target-branch", default="",
-                        help="When the project implies the branch (e.g., project 14 → 8.1), set this to override the field-based lookup")
+    parser.add_argument("--test-commands", default="",
+                        help="Override test commands (newline-separated). Empty = use registry.")
     parser.add_argument("--max-candidates", type=int, default=0,
                         help="Cap the number of candidates per branch (0 = unlimited)")
     parser.add_argument("--dry-run", action="store_true")
@@ -1068,45 +1035,38 @@ def main() -> None:
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    results = run_backport_sweep(
-        repo_full_name=args.repo,
+    from scripts.backport.registry import load_registry
+    registry = load_registry(args.registry)
+    repo_entry, branch_entry = registry.get_branch(args.repo, args.branch)
+
+    test_commands_override = None
+    if args.test_commands:
+        test_commands_override = [c.strip() for c in args.test_commands.split("\n") if c.strip()]
+
+    result = run_backport_sweep(
+        repo_entry=repo_entry,
+        branch_entry=branch_entry,
         github_token=args.target_token,
-        project_owner=args.project_owner,
-        project_number=args.project_number,
-        project_owner_type=args.project_owner_type,
         status_field=args.status_field,
         status_value=args.status_value,
         branch_fields=[f.strip() for f in args.branch_fields.split(",") if f.strip()] or None,
-        push_repo=args.push_repo or None,
-        only_branch=args.only_branch or None,
-        test_commands=[c.strip() for c in args.test_commands.split("\n") if c.strip()] or None,
+        test_commands_override=test_commands_override,
         discover_only=args.discover_only or args.dry_run,
-        implicit_target_branch=args.implicit_target_branch or None,
         max_candidates=args.max_candidates,
     )
 
-    print(json.dumps([{"branch": r.target_branch, "found": r.candidates_found, "applied": sum(1 for c in r.results if c.outcome == "applied"), "pr": r.pr_url} for r in results], indent=2))
+    print(json.dumps({"branch": result.target_branch, "found": result.candidates_found, "applied": sum(1 for c in result.results if c.outcome == "applied"), "pr": result.pr_url}, indent=2))
     if args.discover_only or args.dry_run:
         return
 
-    # Fail closed on:
-    #  1. Any BranchSweepResult.error (outer exception)
-    #  2. Any branch where candidates were found but all per-candidate
-    #     outcomes were "error" (per-candidate errors got swallowed)
-    failed_branches: list[str] = []
-    for r in results:
-        if r.error:
-            failed_branches.append(f"{r.target_branch}: {r.error}")
-            continue
-        if r.candidates_found > 0 and r.results:
-            errored = [c for c in r.results if c.outcome == "error"]
-            if len(errored) == len(r.results):
-                failed_branches.append(
-                    f"{r.target_branch}: all {len(errored)} candidates errored"
-                )
-    if failed_branches:
-        logger.error("Backport sweep failures: %s", "; ".join(failed_branches))
+    if result.error:
+        logger.error("Backport sweep failure: %s: %s", result.target_branch, result.error)
         sys.exit(1)
+    if result.candidates_found > 0 and result.results:
+        errored = [c for c in result.results if c.outcome == "error"]
+        if len(errored) == len(result.results):
+            logger.error("Backport sweep failure: %s: all %d candidates errored", result.target_branch, len(errored))
+            sys.exit(1)
 
 
 if __name__ == "__main__":

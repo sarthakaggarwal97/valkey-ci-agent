@@ -17,7 +17,6 @@ from github import Auth, Github
 from github.GithubException import GithubException
 
 from scripts.backport.cherry_pick import cherry_pick
-from scripts.backport.config import load_backport_config_from_repo
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.models import (
     BackportConfig,
@@ -118,10 +117,10 @@ def run_backport(
             raise
 
         logger.info("Checking for duplicate backport PR.")
-        pr_target_repo = push_repo or repo_full_name
         pr_creator = BackportPRCreator(
             gh,
-            pr_target_repo,
+            base_repo=repo_full_name,
+            push_repo=push_repo,
             backport_label=config.backport_label,
             llm_conflict_label=config.llm_conflict_label,
         )
@@ -554,9 +553,9 @@ def main() -> None:
         "--target-branch", required=True, help="Target release branch",
     )
     parser.add_argument(
-        "--config",
-        default=".github/backport-agent.yml",
-        help="Path to backport config YAML in the consumer repo",
+        "--registry",
+        default="repos.yml",
+        help="Path to registry YAML (default: repos.yml)",
     )
     parser.add_argument(
         "--token",
@@ -572,7 +571,7 @@ def main() -> None:
     parser.add_argument(
         "--push-repo",
         default="",
-        help="Push the backport branch to this repo instead of --repo (e.g. your fork)",
+        help="Override push_repo from registry (emergency use only)",
     )
     args = parser.parse_args()
 
@@ -591,17 +590,21 @@ def main() -> None:
             "GitHub token is required via --token, BACKPORT_GITHUB_TOKEN, or GITHUB_TOKEN."
         )
 
-    # Load config from consumer repo
-    gh = Github(auth=Auth.Token(github_token))
-    config = load_backport_config_from_repo(gh, args.repo, args.config)
+    from scripts.backport.registry import load_registry
+    registry = load_registry(args.registry)
+    repo_entry = registry.get_repo(args.repo)
 
     result = run_backport(
         repo_full_name=args.repo,
         source_pr_number=args.pr_number,
         target_branch=args.target_branch,
-        config=config,
+        config=BackportConfig(
+            backport_label=repo_entry.backport_label,
+            llm_conflict_label=repo_entry.llm_conflict_label,
+            max_conflicting_files=repo_entry.max_conflicting_files,
+        ),
         github_token=github_token,
-        push_repo=args.push_repo or None,
+        push_repo=args.push_repo or repo_entry.push_repo,
     )
 
     logger.info("Backport outcome: %s", result.outcome)

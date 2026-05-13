@@ -33,15 +33,29 @@ class BackportPRCreator:
     def __init__(
         self,
         github_client: Github,
-        repo_full_name: str,
+        base_repo: str,
         *,
+        push_repo: str | None = None,
         backport_label: str = "backport",
         llm_conflict_label: str = "llm-resolved-conflicts",
     ) -> None:
         self._github = github_client
-        self._repo_full_name = repo_full_name
+        self._base_repo = base_repo
+        self._push_repo = push_repo
         self._backport_label = backport_label or "backport"
         self._llm_conflict_label = llm_conflict_label or "llm-resolved-conflicts"
+
+    def _head_ref(self, branch_name: str) -> str:
+        """Build the head ref for PR creation/search.
+
+        Cross-repo: ``<push_repo_owner>:<branch>``
+        Same-repo: ``<base_repo_owner>:<branch>``
+        """
+        if self._push_repo and self._push_repo != self._base_repo:
+            owner = self._push_repo.split("/")[0]
+        else:
+            owner = self._base_repo.split("/")[0]
+        return f"{owner}:{branch_name}"
 
 
     def create_backport_pr(
@@ -62,9 +76,9 @@ class BackportPRCreator:
 
         """
         repo = retry_github_call(
-            lambda: self._github.get_repo(self._repo_full_name),
+            lambda: self._github.get_repo(self._base_repo),
             retries=3,
-            description=f"get repo {self._repo_full_name}",
+            description=f"get repo {self._base_repo}",
         )
 
         if branch_name is None:
@@ -87,7 +101,7 @@ class BackportPRCreator:
             "Opening backport PR: %s -> %s", branch_name, context.target_branch,
         )
         check_publish_allowed(
-            target_repo=self._repo_full_name,
+            target_repo=self._base_repo,
             action="create_pull",
             context=f"backport {branch_name}->{context.target_branch}",
         )
@@ -95,7 +109,7 @@ class BackportPRCreator:
             lambda: repo.create_pull(
                 title=title,
                 body=body,
-                head=branch_name,
+                head=self._head_ref(branch_name),
                 base=context.target_branch,
             ),
             retries=3,
@@ -254,18 +268,19 @@ class BackportPRCreator:
         branch_name = build_branch_name(source_pr_number, target_branch)
 
         repo = retry_github_call(
-            lambda: self._github.get_repo(self._repo_full_name),
+            lambda: self._github.get_repo(self._base_repo),
             retries=3,
-            description=f"get repo {self._repo_full_name}",
+            description=f"get repo {self._base_repo}",
         )
 
         # Check open PRs with matching head branch.
+        head_ref = self._head_ref(branch_name)
         logger.info(
-            "Checking for duplicate backport PR with head branch %s",
-            branch_name,
+            "Checking for duplicate backport PR with head ref %s",
+            head_ref,
         )
         open_pulls = retry_github_call(
-            lambda: repo.get_pulls(state="open", head=f"{repo.owner.login}:{branch_name}"),
+            lambda: repo.get_pulls(state="open", head=head_ref),
             retries=3,
             description="search open PRs for duplicate",
         )
@@ -279,7 +294,7 @@ class BackportPRCreator:
         # fresh backport. GitHub returns merged PRs as state=closed with
         # merged_at set.
         closed_pulls = retry_github_call(
-            lambda: repo.get_pulls(state="closed", head=f"{repo.owner.login}:{branch_name}"),
+            lambda: repo.get_pulls(state="closed", head=head_ref),
             retries=3,
             description="search closed PRs for duplicate",
         )

@@ -16,10 +16,10 @@ on:
         required: true
         type: string
       config_path:
-        description: "Path to the backport agent configuration file in the consumer repo"
+        description: "[Deprecated] Unused — config is loaded from repos.yml registry"
         required: false
         type: string
-        default: ".github/backport-agent.yml"
+        default: ""
       aws_region:
         description: "AWS region where Bedrock is available"
         required: false
@@ -110,7 +110,6 @@ jobs:
           REPO_FULL_NAME: ${{ inputs.repo_full_name }}
           SOURCE_PR_NUMBER: ${{ inputs.source_pr_number }}
           TARGET_BRANCH: ${{ inputs.target_branch }}
-          CONFIG_PATH: ${{ inputs.config_path }}
           PUSH_REPO: ${{ inputs.push_repo }}
         run: |
           set -euo pipefail
@@ -126,16 +125,12 @@ jobs:
             echo "Invalid target_branch: ${TARGET_BRANCH}" >&2
             exit 1
           fi
-          if [[ "${CONFIG_PATH}" == /* || "${CONFIG_PATH}" == *..* || "${CONFIG_PATH}" == -* ]]; then
-            echo "Invalid config_path: ${CONFIG_PATH}" >&2
-            exit 1
-          fi
           args=(
             -m scripts.backport.main
+            --registry repos.yml
             --repo "${REPO_FULL_NAME}"
             --pr-number "${SOURCE_PR_NUMBER}"
             --target-branch "${TARGET_BRANCH}"
-            --config "${CONFIG_PATH}"
           )
           if [[ -n "${PUSH_REPO}" ]]; then
             if [[ ! "${PUSH_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then

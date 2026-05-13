@@ -1,0 +1,26 @@
+publish_guard:
+  protected_repos:
+    - valkey-io/valkey
+
+repos:
+  - repo: valkey-io/valkey
+    project_owner: valkey-io
+    project_owner_type: organization
+    language: c
+    push_repo: sarthakaggarwal97/valkey
+    build_commands:
+      - "make -j$(nproc)"
+    backport_label: backport
+    llm_conflict_label: llm-resolved-conflicts
+    max_conflicting_files: 100
+    branches:
+      - branch: "7.2"
+        project_number: 1
+      - branch: "8.0"
+        project_number: 2
+      - branch: "8.1"
+        project_number: 14
+      - branch: "9.0"
+        project_number: 18
+      - branch: "9.1"
+        project_number: 41
