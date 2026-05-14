@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from scripts.backport.models import BackportPRContext
 
 logger = logging.getLogger(__name__)
+_VALIDATION_OUTPUT_LIMIT = 4000
 
 
 def _file_hash(path: str) -> str:
@@ -51,6 +52,106 @@ def _git_changed_paths(repo_dir: str) -> set[str]:
             continue
         paths.update(line.strip() for line in result.stdout.splitlines() if line.strip())
     return paths
+
+
+def _unexpected_modified_paths(
+    repo_dir: str,
+    *,
+    pre_changed_paths: set[str],
+    protected_pre_hashes: dict[str, str],
+    allowed_paths: set[str],
+) -> list[str]:
+    post_changed_paths = _git_changed_paths(repo_dir)
+    unexpected_paths = [
+        path for path in post_changed_paths
+        if path not in pre_changed_paths and path not in allowed_paths
+    ]
+    for path, pre_hash in protected_pre_hashes.items():
+        if _file_hash(os.path.join(repo_dir, path)) != pre_hash:
+            unexpected_paths.append(path)
+    return sorted(set(unexpected_paths))
+
+
+def _unresolved_results(
+    files: list[ConflictedFile], summary: str,
+) -> list[ResolutionResult]:
+    return [
+        ResolutionResult(
+            path=cf.path,
+            resolved_content=None,
+            resolution_summary=summary,
+        )
+        for cf in files
+    ]
+
+
+def _all_resolved(results: list[ResolutionResult]) -> bool:
+    return all(result.resolved_content is not None for result in results)
+
+
+def _read_current_results(
+    repo_dir: str,
+    files: list[ConflictedFile],
+    pre_hashes: dict[str, str],
+    *,
+    validation_retry: bool = False,
+) -> list[ResolutionResult]:
+    results: list[ResolutionResult] = []
+    for cf in files:
+        file_path = os.path.join(repo_dir, cf.path)
+        try:
+            resolved = Path(file_path).read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            prefix = "failed to read after validation retry" if validation_retry else "failed to read"
+            results.append(ResolutionResult(
+                path=cf.path,
+                resolved_content=None,
+                resolution_summary=f"{prefix}: {exc}",
+            ))
+            continue
+
+        post_hash = hashlib.sha256(resolved.encode("utf-8")).hexdigest()
+        if post_hash == pre_hashes.get(cf.path):
+            results.append(ResolutionResult(
+                path=cf.path,
+                resolved_content=None,
+                resolution_summary="file unchanged after Claude Code (no resolution attempted)",
+            ))
+            continue
+
+        if has_conflict_markers(resolved):
+            marker_msg = (
+                "conflict markers remain after validation retry"
+                if validation_retry
+                else "conflict markers remain after Claude Code"
+            )
+            results.append(ResolutionResult(
+                path=cf.path,
+                resolved_content=None,
+                resolution_summary=marker_msg,
+            ))
+            continue
+
+        valid, validation_error = validate_resolved_content_detail(cf.path, resolved)
+        if not valid:
+            summary = (
+                "resolved content failed validation after retry: "
+                if validation_retry
+                else "resolved content failed validation: "
+            )
+            results.append(ResolutionResult(
+                path=cf.path,
+                resolved_content=None,
+                resolution_summary=f"{summary}{validation_error}",
+            ))
+            continue
+
+        results.append(ResolutionResult(
+            path=cf.path,
+            resolved_content=resolved,
+            resolution_summary="resolved by Claude Code",
+        ))
+    return results
 
 
 def resolve_conflicts_with_claude(
@@ -149,6 +250,10 @@ def resolve_conflicts_with_claude(
         f"CRITICAL constraints:\n"
         f"- ONLY edit the conflicted files listed above. Do NOT modify other files.\n"
         f"- Do NOT run `git add` or `git commit`.\n"
+        f"- Before using a variable, Tcl proc, C function, macro, struct field, "
+        f"or test helper, verify it already exists on the target branch with "
+        f"grep/read. Match the local file's existing conventions instead of "
+        f"assuming newer-branch helper names exist.\n"
         f"- If a conflicted file does NOT exist on the target branch "
         f"(e.g., 'deleted by us' conflict), do NOT create it. Skip it. "
         f"The resulting commit should not add files that weren't already "
@@ -194,18 +299,16 @@ def resolve_conflicts_with_claude(
             for cf in llm_files
         ]
 
-    post_changed_paths = _git_changed_paths(repo_dir)
-    unexpected_paths = sorted(
-        path for path in post_changed_paths
-        if path not in pre_changed_paths and path not in allowed_paths
+    unexpected_paths = _unexpected_modified_paths(
+        repo_dir,
+        pre_changed_paths=pre_changed_paths,
+        protected_pre_hashes=protected_pre_hashes,
+        allowed_paths=allowed_paths,
     )
-    for path, pre_hash in protected_pre_hashes.items():
-        if _file_hash(os.path.join(repo_dir, path)) != pre_hash:
-            unexpected_paths.append(path)
     if unexpected_paths:
         summary = (
             "Claude Code modified files outside the conflict set: "
-            + ", ".join(sorted(set(unexpected_paths))[:10])
+            + ", ".join(unexpected_paths[:10])
         )
         return [
             ResolutionResult(
@@ -270,14 +373,12 @@ def resolve_conflicts_with_claude(
                     ),
                 ))
                 continue
-            post_retry_changed_paths = _git_changed_paths(repo_dir)
-            unexpected_retry_paths = sorted(
-                path for path in post_retry_changed_paths
-                if path not in pre_changed_paths and path not in allowed_paths
+            unexpected_retry_paths = _unexpected_modified_paths(
+                repo_dir,
+                pre_changed_paths=pre_changed_paths,
+                protected_pre_hashes=protected_pre_hashes,
+                allowed_paths=allowed_paths,
             )
-            for path, pre_hash in protected_pre_hashes.items():
-                if _file_hash(os.path.join(repo_dir, path)) != pre_hash:
-                    unexpected_retry_paths.append(path)
             if unexpected_retry_paths:
                 results.append(ResolutionResult(
                     path=cf.path,
@@ -285,7 +386,7 @@ def resolve_conflicts_with_claude(
                     resolution_summary=(
                         "Claude Code modified files outside the conflict set "
                         "during validation retry: "
-                        + ", ".join(sorted(set(unexpected_retry_paths))[:10])
+                        + ", ".join(unexpected_retry_paths[:10])
                     ),
                 ))
                 continue
@@ -324,5 +425,62 @@ def resolve_conflicts_with_claude(
             resolved_content=resolved,
             resolution_summary="resolved by Claude Code",
         ))
+
+    llm_results = [result for result in results if result.path in allowed_paths]
+    if build_commands and _all_resolved(llm_results):
+        from scripts.common.build_validator import run_build_commands
+
+        ok, output = run_build_commands(repo_dir, build_commands)
+        if not ok:
+            cmds = "\n".join(f"- {cmd}" for cmd in build_commands)
+            retry_prompt = (
+                "Your conflict resolution removed markers, but the target "
+                "branch validation commands failed.\n\n"
+                f"Commands:\n{cmds}\n\n"
+                f"Output:\n{output[-_VALIDATION_OUTPUT_LIMIT:]}\n\n"
+                "Fix only these conflicted files:\n"
+                f"{file_list}\n\n"
+                "Use the target branch's existing APIs, variables, test "
+                "helpers, and file conventions. Do NOT edit any other files. "
+                "Do NOT run `git add` or `git commit`."
+            )
+            retry_result = run_agent(
+                "conflict_resolve_edit_only", retry_prompt, cwd=repo_dir,
+            )
+            kept_results = [
+                result for result in results if result.path not in allowed_paths
+            ]
+            if retry_result.returncode != 0:
+                return kept_results + _unresolved_results(
+                    llm_files,
+                    "validation failed; Claude Code repair failed: "
+                    f"{(retry_result.stderr or '')[:200]}",
+                )
+            unexpected_retry_paths = _unexpected_modified_paths(
+                repo_dir,
+                pre_changed_paths=pre_changed_paths,
+                protected_pre_hashes=protected_pre_hashes,
+                allowed_paths=allowed_paths,
+            )
+            if unexpected_retry_paths:
+                return kept_results + _unresolved_results(
+                    llm_files,
+                    "Claude Code modified files outside the conflict set "
+                    "during validation repair: "
+                    + ", ".join(unexpected_retry_paths[:10]),
+                )
+            repaired_results = _read_current_results(
+                repo_dir, llm_files, pre_hashes, validation_retry=True,
+            )
+            if not _all_resolved(repaired_results):
+                return kept_results + repaired_results
+            ok, output = run_build_commands(repo_dir, build_commands)
+            if not ok:
+                return kept_results + _unresolved_results(
+                    llm_files,
+                    "validation commands failed after Claude Code repair: "
+                    f"{output[-500:]}",
+                )
+            return kept_results + repaired_results
 
     return results

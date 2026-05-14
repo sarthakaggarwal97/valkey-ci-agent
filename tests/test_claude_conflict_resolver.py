@@ -150,6 +150,56 @@ def test_validation_failure_retries_claude_once(tmp_path: Path) -> None:
     assert results[0].resolved_content == "proc f {} { return ok }\n"
 
 
+def test_command_validation_failure_retries_claude_once(tmp_path: Path) -> None:
+    src = tmp_path / "tests" / "unit" / "cluster"
+    src.mkdir(parents=True)
+    conflicted = src / "cli.tcl"
+    conflicted.write_text("<<<<<<< HEAD\nold\n=======\nnew\n>>>>>>> abc\n")
+
+    cf = ConflictedFile(
+        path="tests/unit/cluster/cli.tcl",
+        target_branch_content="old",
+        source_branch_content="new",
+    )
+    prompts: list[str] = []
+    validation_calls = 0
+
+    def mock_agent(_profile, prompt, **kw):
+        prompts.append(prompt)
+        if len(prompts) == 1:
+            conflicted.write_text("exec $::VALKEY_CLI_BIN --cluster info\n")
+        else:
+            conflicted.write_text("exec src/valkey-cli --cluster info\n")
+        return _agent_result('{"type":"result","result":"Resolved"}')
+
+    def mock_run_build_commands(_repo_dir, _commands):
+        nonlocal validation_calls
+        validation_calls += 1
+        if validation_calls == 1:
+            return False, 'can\'t read "::VALKEY_CLI_BIN": no such variable'
+        return True, ""
+
+    with (
+        patch("scripts.backport.conflict_resolver.run_agent", side_effect=mock_agent),
+        patch(
+            "scripts.common.build_validator.run_build_commands",
+            side_effect=mock_run_build_commands,
+        ),
+    ):
+        results = resolve_conflicts_with_claude(
+            str(tmp_path),
+            [cf],
+            _pr_context(),
+            build_commands=["./runtest --single unit/cluster/cli"],
+        )
+
+    assert len(prompts) == 2
+    assert "validation commands failed" in prompts[1]
+    assert 'VALKEY_CLI_BIN' in prompts[1]
+    assert validation_calls == 2
+    assert results[0].resolved_content == "exec src/valkey-cli --cluster info\n"
+
+
 def test_mixed_whitespace_and_real_conflicts(tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()
