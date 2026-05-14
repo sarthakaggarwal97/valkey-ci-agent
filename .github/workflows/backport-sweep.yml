@@ -36,6 +36,7 @@ permissions:
 jobs:
   preflight:
     name: "Generate matrix"
+    if: github.repository == 'valkey-io/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

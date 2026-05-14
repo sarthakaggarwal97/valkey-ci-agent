@@ -49,7 +49,7 @@ _DEFAULT_BRANCH_FIELDS = (
 )
 _DEFAULT_STATUS_FIELD = "Status"
 _DEFAULT_STATUS_VALUE = "To be backported"
-_BRANCH_PREFIX = "agent/backport/weekly"
+_BRANCH_PREFIX = "agent/backport/sweep"
 
 
 
@@ -884,7 +884,7 @@ def _upsert_pr(gh: Any, base_repo: str, push_repo: str, target_branch: str, head
                result: BranchSweepResult, existing_pr: Any | None) -> str:
     repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
     body = _build_pr_body(result)
-    title = f"[backport] Weekly backport sweep for {target_branch}"
+    title = f"[backport] Backport sweep for {target_branch}"
 
     head_ref = build_pull_create_head_ref(base_repo, push_repo, head_branch)
 
@@ -927,7 +927,7 @@ def _list_already_applied(repo_dir: str, base_branch: str, backport_branch: str)
 
 def _build_pr_body(result: BranchSweepResult) -> str:
     lines = [
-        f"# Weekly backport sweep for {result.target_branch}",
+        f"# Backport sweep for {result.target_branch}",
         "",
         "Automated cherry-picks from PRs marked \"To be backported\".",
         "",

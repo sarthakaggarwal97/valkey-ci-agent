@@ -333,3 +333,7 @@ class TestValidateResolvedContent:
     def test_header_file_uses_c_validation(self):
         assert validate_resolved_content("src/server.h", "void f() { }") is True
         assert validate_resolved_content("src/server.h", "void f() {") is False
+
+    def test_tcl_brace_validation(self):
+        assert validate_resolved_content("tests/unit/foo.tcl", "proc f {} { return ok }\n") is True
+        assert validate_resolved_content("tests/unit/foo.tcl", "proc f {} { return ok\n") is False

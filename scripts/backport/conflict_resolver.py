@@ -15,7 +15,7 @@ from scripts.backport.models import ConflictedFile, ResolutionResult
 from scripts.backport.utils import (
     has_conflict_markers,
     is_whitespace_only_conflict,
-    validate_resolved_content,
+    validate_resolved_content_detail,
 )
 
 if TYPE_CHECKING:
@@ -244,13 +244,80 @@ def resolve_conflicts_with_claude(
             ))
             continue
 
-        valid = validate_resolved_content(cf.path, resolved)
+        valid, validation_error = validate_resolved_content_detail(cf.path, resolved)
         if not valid:
-            results.append(ResolutionResult(
-                path=cf.path, resolved_content=None,
-                resolution_summary="resolved content failed validation",
-            ))
-            continue
+            logger.info(
+                "Validation failed for %s: %s. Retrying with error feedback.",
+                cf.path,
+                validation_error,
+            )
+            retry_prompt = (
+                f"Your previous resolution of `{cf.path}` failed validation:\n\n"
+                f"{validation_error}\n\n"
+                f"Fix only `{cf.path}`. Do NOT edit other files. "
+                f"Do NOT run `git add` or `git commit`."
+            )
+            retry_result = run_agent(
+                "conflict_resolve_edit_only", retry_prompt, cwd=repo_dir,
+            )
+            if retry_result.returncode != 0:
+                results.append(ResolutionResult(
+                    path=cf.path,
+                    resolved_content=None,
+                    resolution_summary=(
+                        "resolved content failed validation; retry failed: "
+                        f"{(retry_result.stderr or '')[:200]}"
+                    ),
+                ))
+                continue
+            post_retry_changed_paths = _git_changed_paths(repo_dir)
+            unexpected_retry_paths = sorted(
+                path for path in post_retry_changed_paths
+                if path not in pre_changed_paths and path not in allowed_paths
+            )
+            for path, pre_hash in protected_pre_hashes.items():
+                if _file_hash(os.path.join(repo_dir, path)) != pre_hash:
+                    unexpected_retry_paths.append(path)
+            if unexpected_retry_paths:
+                results.append(ResolutionResult(
+                    path=cf.path,
+                    resolved_content=None,
+                    resolution_summary=(
+                        "Claude Code modified files outside the conflict set "
+                        "during validation retry: "
+                        + ", ".join(sorted(set(unexpected_retry_paths))[:10])
+                    ),
+                ))
+                continue
+            try:
+                resolved = Path(file_path).read_text(
+                    encoding="utf-8", errors="replace",
+                )
+            except OSError as exc:
+                results.append(ResolutionResult(
+                    path=cf.path,
+                    resolved_content=None,
+                    resolution_summary=f"failed to read after validation retry: {exc}",
+                ))
+                continue
+            if has_conflict_markers(resolved):
+                results.append(ResolutionResult(
+                    path=cf.path,
+                    resolved_content=None,
+                    resolution_summary="conflict markers remain after validation retry",
+                ))
+                continue
+            valid, validation_error = validate_resolved_content_detail(cf.path, resolved)
+            if not valid:
+                results.append(ResolutionResult(
+                    path=cf.path,
+                    resolved_content=None,
+                    resolution_summary=(
+                        "resolved content failed validation after retry: "
+                        f"{validation_error}"
+                    ),
+                ))
+                continue
 
         results.append(ResolutionResult(
             path=cf.path,

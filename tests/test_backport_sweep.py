@@ -277,7 +277,7 @@ def test_upsert_pr_uses_direct_upstream_branch_by_default():
         "valkey-io/valkey",
         "valkey-io/valkey",
         "8.1",
-        "agent/backport/weekly/8.1",
+        "agent/backport/sweep/8.1",
         result,
         existing_pr=None,
     )
@@ -285,7 +285,7 @@ def test_upsert_pr_uses_direct_upstream_branch_by_default():
     assert pr_url == "https://github.com/valkey-io/valkey/pull/555"
     mock_repo.create_pull.assert_called_once()
     _, kwargs = mock_repo.create_pull.call_args
-    assert kwargs["head"] == "agent/backport/weekly/8.1"
+    assert kwargs["head"] == "agent/backport/sweep/8.1"
     assert kwargs["base"] == "8.1"
     assert kwargs["draft"] is True
 
@@ -341,12 +341,12 @@ def test_push_backport_branch_uses_plain_push_for_new_branch(monkeypatch):
 
     backport_sweep._push_backport_branch(
         "/repo",
-        "agent/backport/weekly/8.1",
+        "agent/backport/sweep/8.1",
         {},
         force_with_lease=False,
     )
 
-    assert calls == [("push", "push_target", "agent/backport/weekly/8.1")]
+    assert calls == [("push", "push_target", "agent/backport/sweep/8.1")]
 
 
 def test_push_backport_branch_uses_force_with_lease_after_rebase(monkeypatch):
@@ -359,7 +359,7 @@ def test_push_backport_branch_uses_force_with_lease_after_rebase(monkeypatch):
 
     backport_sweep._push_backport_branch(
         "/repo",
-        "agent/backport/weekly/8.1",
+        "agent/backport/sweep/8.1",
         {},
         force_with_lease=True,
     )
@@ -369,7 +369,7 @@ def test_push_backport_branch_uses_force_with_lease_after_rebase(monkeypatch):
             "push",
             "--force-with-lease",
             "push_target",
-            "agent/backport/weekly/8.1",
+            "agent/backport/sweep/8.1",
         )
     ]
 

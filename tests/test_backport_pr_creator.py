@@ -240,7 +240,7 @@ def test_create_backport_pr_uses_configured_labels() -> None:
 
 
 def test_pull_create_head_ref_uses_plain_branch_for_direct_upstream() -> None:
-    branch = "agent/backport/weekly/8.1"
+    branch = "agent/backport/sweep/8.1"
 
     assert build_pull_create_head_ref("valkey-io/valkey", None, branch) == branch
     assert (
@@ -250,7 +250,7 @@ def test_pull_create_head_ref_uses_plain_branch_for_direct_upstream() -> None:
 
 
 def test_pull_head_refs_for_different_owner_fork_escape_hatch() -> None:
-    branch = "agent/backport/weekly/8.1"
+    branch = "agent/backport/sweep/8.1"
 
     assert (
         build_pull_create_head_ref(
@@ -258,7 +258,7 @@ def test_pull_head_refs_for_different_owner_fork_escape_hatch() -> None:
             "ci-bot/valkey",
             branch,
         )
-        == "ci-bot:agent/backport/weekly/8.1"
+        == "ci-bot:agent/backport/sweep/8.1"
     )
     assert (
         build_pull_search_head_ref(
@@ -266,7 +266,7 @@ def test_pull_head_refs_for_different_owner_fork_escape_hatch() -> None:
             "ci-bot/valkey",
             branch,
         )
-        == "ci-bot:agent/backport/weekly/8.1"
+        == "ci-bot:agent/backport/sweep/8.1"
     )
 
 

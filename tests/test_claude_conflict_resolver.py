@@ -120,6 +120,36 @@ def test_claude_nonzero_exit_returns_unresolved(tmp_path: Path) -> None:
     assert "bedrock failed" in results[0].resolution_summary
 
 
+def test_validation_failure_retries_claude_once(tmp_path: Path) -> None:
+    src = tmp_path / "tests" / "unit"
+    src.mkdir(parents=True)
+    conflicted = src / "cluster.tcl"
+    conflicted.write_text("<<<<<<< HEAD\nold\n=======\nnew\n>>>>>>> abc\n")
+
+    cf = ConflictedFile(
+        path="tests/unit/cluster.tcl",
+        target_branch_content="old",
+        source_branch_content="new",
+    )
+    prompts: list[str] = []
+
+    def mock_agent(_profile, prompt, **kw):
+        prompts.append(prompt)
+        if len(prompts) == 1:
+            conflicted.write_text("proc f {} { return ok\n")
+        else:
+            conflicted.write_text("proc f {} { return ok }\n")
+        return _agent_result('{"type":"result","result":"Resolved"}')
+
+    with patch("scripts.backport.conflict_resolver.run_agent", side_effect=mock_agent):
+        results = resolve_conflicts_with_claude(str(tmp_path), [cf], _pr_context())
+
+    assert len(prompts) == 2
+    assert "failed validation" in prompts[1]
+    assert len(results) == 1
+    assert results[0].resolved_content == "proc f {} { return ok }\n"
+
+
 def test_mixed_whitespace_and_real_conflicts(tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()

@@ -58,28 +58,51 @@ def braces_balanced(content: str) -> bool:
 
 
 def validate_resolved_content(path: str, content: str) -> bool:
+    return validate_resolved_content_detail(path, content)[0]
+
+
+def validate_resolved_content_detail(path: str, content: str) -> tuple[bool, str]:
     suffix = PurePosixPath(path).suffix.lower()
     if suffix in {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx"}:
-        return braces_balanced(content)
+        if not braces_balanced(content):
+            return False, "C/C++ brace balance check failed"
+        return True, ""
     if suffix == ".py":
         try:
             ast.parse(content)
-        except SyntaxError:
-            return False
-        return True
+        except SyntaxError as exc:
+            return False, f"Python syntax error: {exc}"
+        return True, ""
     if suffix == ".json":
         try:
             json.loads(content)
-        except json.JSONDecodeError:
-            return False
-        return True
+        except json.JSONDecodeError as exc:
+            return False, f"JSON parse error: {exc}"
+        return True, ""
     if suffix in {".yml", ".yaml"}:
         try:
             yaml.safe_load(content)
-        except yaml.YAMLError:
-            return False
-        return True
-    return True
+        except yaml.YAMLError as exc:
+            return False, f"YAML parse error: {exc}"
+        return True, ""
+    if suffix == ".tcl":
+        return _validate_tcl(content)
+    return True, ""
+
+
+def _validate_tcl(content: str) -> tuple[bool, str]:
+    depth = 0
+    for index, ch in enumerate(content):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth < 0:
+                line = content[:index].count("\n") + 1
+                return False, f"Tcl brace error: unexpected closing brace at line {line}"
+    if depth:
+        return False, f"Tcl brace error: {depth} unclosed opening brace(s)"
+    return True, ""
 
 
 def is_whitespace_only_conflict(target_content: str, source_content: str) -> bool:
