@@ -17,3 +17,4 @@ new_content.txt
 .env.local
 .env.*
 !.env.example
+valkey_ci_agent.egg-info/

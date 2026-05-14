@@ -1,8 +1,0 @@
-Metadata-Version: 2.1
-Name: valkey-ci-agent
-Version: 0.1.0
-Summary: CI automation agent for the Valkey project
-License: Apache-2.0
-Requires-Python: >=3.9
-Provides-Extra: dev
-License-File: LICENSE
