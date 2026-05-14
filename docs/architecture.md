@@ -10,7 +10,7 @@ scripts/
   backport/    Backport workflow (active)
   ai/          Claude Code subprocess orchestration
   common/      Shared infrastructure
-repos.yml      Registry of repos, release branches, project boards, and builds
+repos.yml      Registry of repos, release branches, project boards, and validation
 ```
 
 ## Backport Flow
@@ -45,8 +45,13 @@ conflict_resolver.py
 
 Claude gets the repo checkout with conflict markers, reads both sides, and edits
 only the conflicted files in place. The prompt is parameterized by the repo
-language and build commands from `repos.yml`; build validation is skipped when a
+language and validation commands from `repos.yml`; validation is skipped when a
 repo has no commands configured.
+
+Validation is two-tiered. `build_commands` run for every generated branch, while
+optional `validation_rules` append targeted commands when changed paths match a
+rule. This lets Valkey core run focused Tcl cluster tests for cluster-related
+changes, and lets modules add their own smoke tests without changing agent code.
 
 ### Common Infrastructure
 

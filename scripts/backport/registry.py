@@ -20,6 +20,12 @@ class BranchEntry:
 
 
 @dataclass(frozen=True)
+class ValidationRule:
+    paths: tuple[str, ...]
+    commands: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class RepoEntry:
     repo: str
     project_owner: str
@@ -28,6 +34,7 @@ class RepoEntry:
     branches: tuple[BranchEntry, ...]
     push_repo: str
     build_commands: tuple[str, ...] = ()
+    validation_rules: tuple[ValidationRule, ...] = ()
     backport_label: str = "backport"
     llm_conflict_label: str = "llm-resolved-conflicts"
     max_conflicting_files: int = 100
@@ -142,6 +149,8 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         if not isinstance(cmd, str):
             raise ValueError(f"repos[{index}].build_commands[{j}] must be a string")
 
+    validation_rules = _parse_validation_rules(raw.get("validation_rules", []), index)
+
     backport_label = raw.get("backport_label", "backport")
     llm_conflict_label = raw.get("llm_conflict_label", "llm-resolved-conflicts")
     max_conflicting_files = raw.get("max_conflicting_files", 100)
@@ -165,11 +174,59 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         language=language,
         push_repo=push_repo,
         build_commands=tuple(build_commands),
+        validation_rules=tuple(validation_rules),
         backport_label=str(backport_label),
         llm_conflict_label=str(llm_conflict_label),
         max_conflicting_files=max_conflicting_files,
         branches=tuple(branches),
     )
+
+
+def _parse_validation_rules(raw: Any, repo_idx: int) -> list[ValidationRule]:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError(f"repos[{repo_idx}].validation_rules must be a list")
+
+    rules: list[ValidationRule] = []
+    for rule_idx, rule_raw in enumerate(raw):
+        if not isinstance(rule_raw, dict):
+            raise ValueError(
+                f"repos[{repo_idx}].validation_rules[{rule_idx}] must be a mapping"
+            )
+        paths = rule_raw.get("paths")
+        if not isinstance(paths, list) or not paths:
+            raise ValueError(
+                f"repos[{repo_idx}].validation_rules[{rule_idx}].paths "
+                "must be a non-empty list"
+            )
+        for path_idx, pattern in enumerate(paths):
+            if not isinstance(pattern, str) or not pattern:
+                raise ValueError(
+                    f"repos[{repo_idx}].validation_rules[{rule_idx}]"
+                    f".paths[{path_idx}] must be a non-empty string"
+                )
+
+        commands = rule_raw.get("commands")
+        if not isinstance(commands, list) or not commands:
+            raise ValueError(
+                f"repos[{repo_idx}].validation_rules[{rule_idx}].commands "
+                "must be a non-empty list"
+            )
+        for cmd_idx, command in enumerate(commands):
+            if not isinstance(command, str) or not command:
+                raise ValueError(
+                    f"repos[{repo_idx}].validation_rules[{rule_idx}]"
+                    f".commands[{cmd_idx}] must be a non-empty string"
+                )
+
+        rules.append(
+            ValidationRule(
+                paths=tuple(str(pattern) for pattern in paths),
+                commands=tuple(str(command) for command in commands),
+            )
+        )
+    return rules
 
 
 def _parse_branch_entry(

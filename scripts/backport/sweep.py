@@ -35,6 +35,10 @@ from scripts.backport.pr_creator import (
     create_pull_from_push_repo,
     pull_matches_push_repo,
 )
+from scripts.backport.validation import (
+    changed_paths_since_base,
+    select_validation_commands,
+)
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
 from scripts.common.job_summary import emit_job_summary
@@ -239,6 +243,7 @@ def run_backport_sweep(
     target_branch = branch_entry.branch
     project_number = branch_entry.project_number
     test_commands = test_commands_override if test_commands_override is not None else list(repo_entry.build_commands)
+    validation_rules = [] if test_commands_override is not None else list(repo_entry.validation_rules)
 
     gh = Github(auth=Auth.Token(github_token))
     repo = retry_github_call(lambda: gh.get_repo(repo_full_name), retries=3, description=f"get {repo_full_name}")
@@ -281,6 +286,7 @@ def run_backport_sweep(
         max_applied=max_candidates,
         language=repo_entry.language,
         build_commands=list(repo_entry.build_commands) or None,
+        validation_rules=validation_rules,
     )
     emit_job_summary(_build_summary([result]))
     return result
@@ -293,6 +299,7 @@ def _process_branch(
     max_applied: int = 0,
     language: str = "c",
     build_commands: list[str] | None = None,
+    validation_rules: list[Any] | None = None,
 ) -> BranchSweepResult:
     result = BranchSweepResult(target_branch=target_branch, candidates_found=len(candidates))
     tmpdir = tempfile.mkdtemp(prefix=f"backport-{target_branch}-")
@@ -387,6 +394,7 @@ def _process_branch(
                     tmpdir, candidate, signer, repo_full_name, git_env,
                     require_dco_signoff=require_dco_signoff,
                     language=language, build_commands=build_commands,
+                    validation_rules=validation_rules,
                 )
                 result.results.append(cr)
                 if cr.outcome == "applied":
@@ -395,7 +403,12 @@ def _process_branch(
             # Push if we applied anything and validation passes.
             applied = [r for r in result.results if r.outcome == "applied"]
             if applied:
-                ok, output = _run_test_commands(tmpdir, test_commands)
+                commands = select_validation_commands(
+                    test_commands,
+                    validation_rules or [],
+                    changed_paths_since_base(tmpdir, f"origin/{target_branch}"),
+                )
+                ok, output = _run_test_commands(tmpdir, commands)
                 if not ok:
                     for item in applied:
                         item.outcome = "skipped-test"
@@ -466,6 +479,7 @@ def _apply_candidate(
     require_dco_signoff: bool = False,
     language: str = "c",
     build_commands: list[str] | None = None,
+    validation_rules: list[Any] | None = None,
 ) -> CandidateResult:
     sha = candidate.merge_commit_sha
     if not sha:
@@ -561,9 +575,14 @@ def _apply_candidate(
         commits=candidate.commit_shas,
     )
 
+    resolver_validation_commands = select_validation_commands(
+        build_commands or [],
+        validation_rules or [],
+        conflicting_paths,
+    )
     resolutions = resolve_conflicts_with_claude(
         repo_dir, conflicting_files, pr_context,
-        language=language, build_commands=build_commands,
+        language=language, build_commands=resolver_validation_commands or None,
     )
     unresolved = [r for r in resolutions if r.resolved_content is None]
     if unresolved:

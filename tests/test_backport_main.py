@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from hypothesis import given, settings
@@ -19,6 +19,7 @@ from scripts.backport.models import (
     ConflictedFile,
     ResolutionResult,
 )
+from scripts.backport.registry import ValidationRule
 
 # ======================================================================
 # ======================================================================
@@ -295,6 +296,7 @@ class TestRunBackportCleanCherryPick:
         )
 
     @patch("scripts.common.build_validator.run_build_commands")
+    @patch(f"{_PATCH_PREFIX}.changed_paths_since_base", return_value=("src/server.c",))
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
@@ -307,6 +309,7 @@ class TestRunBackportCleanCherryPick:
         mock_pr_creator_cls: MagicMock,
         mock_run_git: MagicMock,
         mock_clone: MagicMock,
+        mock_changed_paths: MagicMock,
         mock_run_build_commands: MagicMock,
     ) -> None:
         mock_gh = MagicMock()
@@ -334,11 +337,22 @@ class TestRunBackportCleanCherryPick:
             config=_default_config(),
             github_token="fake-token",
             build_commands=["make"],
+            validation_rules=[
+                ValidationRule(
+                    paths=("src/server.c",),
+                    commands=("./runtest --single unit/cluster/slot-migration",),
+                )
+            ],
             push_repo=_DEFAULT_PUSH_REPO,
         )
 
         assert result.outcome == "error"
         assert "Build validation failed" in (result.error_message or "")
+        mock_changed_paths.assert_called_once()
+        mock_run_build_commands.assert_called_once_with(
+            ANY,
+            ["make", "./runtest --single unit/cluster/slot-migration"],
+        )
         mock_pr_creator.create_backport_pr.assert_not_called()
         assert not any(
             len(call_args.args) > 1 and call_args.args[1] == "push"

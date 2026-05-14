@@ -25,8 +25,13 @@ from scripts.backport.models import (
     ResolutionResult,
 )
 from scripts.backport.pr_creator import BackportPRCreator
+from scripts.backport.registry import ValidationRule
 from scripts.backport.risk import assess_backport_risk
 from scripts.backport.utils import build_branch_name
+from scripts.backport.validation import (
+    changed_paths_since_base,
+    select_validation_commands,
+)
 from scripts.common.commit_signoff import (
     CommitSigner,
     load_signer_from_env,
@@ -84,6 +89,7 @@ def run_backport(
     push_repo: str | None = None,
     language: str = "c",
     build_commands: list[str] | None = None,
+    validation_rules: list[ValidationRule] | None = None,
 ) -> BackportResult:
     """Execute the backport pipeline end-to-end.
 
@@ -280,12 +286,17 @@ def run_backport(
                         "Cherry-pick produced %d conflict(s). Invoking conflict resolver.",
                         len(cherry_result.conflicting_files),
                     )
+                    resolver_validation_commands = select_validation_commands(
+                        build_commands or [],
+                        validation_rules or [],
+                        [f.path for f in cherry_result.conflicting_files],
+                    )
                     resolution_results = resolve_conflicts_with_claude(
                         tmp_dir,
                         cherry_result.conflicting_files,
                         pr_context,
                         language=language,
-                        build_commands=build_commands,
+                        build_commands=resolver_validation_commands or None,
                     )
                     unresolved = [
                         r for r in resolution_results
@@ -336,11 +347,16 @@ def run_backport(
                         require_dco_signoff=require_dco_signoff,
                     )
 
-                # Run registry-configured build validation before pushing.
-                # Skipped if no commands are configured (build_commands empty).
-                if build_commands:
+                commands: list[str] = []
+                if build_commands or validation_rules:
+                    commands = select_validation_commands(
+                        build_commands or [],
+                        validation_rules or [],
+                        changed_paths_since_base(tmp_dir, f"origin/{target_branch}"),
+                    )
+                if commands:
                     from scripts.common.build_validator import run_build_commands
-                    ok, output = run_build_commands(tmp_dir, build_commands)
+                    ok, output = run_build_commands(tmp_dir, commands)
                     if not ok:
                         msg = f"Build validation failed: {output[:500]}"
                         logger.error(msg)
@@ -661,6 +677,7 @@ def main() -> None:
         push_repo=args.push_repo or repo_entry.push_repo,
         language=repo_entry.language,
         build_commands=list(repo_entry.build_commands) or None,
+        validation_rules=list(repo_entry.validation_rules),
     )
 
     logger.info("Backport outcome: %s", result.outcome)

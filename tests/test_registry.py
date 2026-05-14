@@ -9,6 +9,7 @@ from scripts.backport.registry import (
     BranchEntry,
     Registry,
     RepoEntry,
+    ValidationRule,
     load_registry,
 )
 
@@ -59,6 +60,7 @@ class TestLoadRegistry:
         assert entry.push_repo == "org/repo-backport-staging"
         assert entry.effective_push_repo == "org/repo-backport-staging"
         assert entry.build_commands == ()
+        assert entry.validation_rules == ()
         assert entry.backport_label == "backport"
         assert entry.llm_conflict_label == "llm-resolved-conflicts"
         assert entry.max_conflicting_files == 100
@@ -87,6 +89,12 @@ class TestLoadRegistry:
         data = _minimal_registry(repos=[_minimal_repo(
             push_repo="fork/repo",
             build_commands=["make -j4"],
+            validation_rules=[
+                {
+                    "paths": ["src/cluster_legacy.c", "tests/unit/cluster/*.tcl"],
+                    "commands": ["./runtest --single unit/cluster/slot-migration"],
+                }
+            ],
             backport_label="bp",
             llm_conflict_label="ai",
             max_conflicting_files=50,
@@ -101,6 +109,12 @@ class TestLoadRegistry:
         assert entry.push_repo == "fork/repo"
         assert entry.effective_push_repo == "fork/repo"
         assert entry.build_commands == ("make -j4",)
+        assert entry.validation_rules == (
+            ValidationRule(
+                paths=("src/cluster_legacy.c", "tests/unit/cluster/*.tcl"),
+                commands=("./runtest --single unit/cluster/slot-migration",),
+            ),
+        )
         assert entry.backport_label == "bp"
         assert entry.llm_conflict_label == "ai"
         assert entry.max_conflicting_files == 50
@@ -225,6 +239,24 @@ class TestValidation:
         data = _minimal_registry(repos=[_minimal_repo(build_commands="make")])
         path = _write_registry(tmp_path, data)
         with pytest.raises(ValueError, match="build_commands must be a list"):
+            load_registry(path)
+
+    def test_validation_rules_not_list(self, tmp_path):
+        data = _minimal_registry(repos=[_minimal_repo(validation_rules="rules")])
+        path = _write_registry(tmp_path, data)
+        with pytest.raises(ValueError, match="validation_rules must be a list"):
+            load_registry(path)
+
+    def test_validation_rule_requires_paths(self, tmp_path):
+        data = _minimal_registry(repos=[_minimal_repo(validation_rules=[{"commands": ["make test"]}])])
+        path = _write_registry(tmp_path, data)
+        with pytest.raises(ValueError, match="paths must be a non-empty list"):
+            load_registry(path)
+
+    def test_validation_rule_requires_commands(self, tmp_path):
+        data = _minimal_registry(repos=[_minimal_repo(validation_rules=[{"paths": ["src/*.c"]}])])
+        path = _write_registry(tmp_path, data)
+        with pytest.raises(ValueError, match="commands must be a non-empty list"):
             load_registry(path)
 
     def test_max_conflicting_files_invalid(self, tmp_path):
