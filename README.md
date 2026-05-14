@@ -51,6 +51,7 @@ publish_guard:
 
 repos:
   - repo: valkey-io/valkey
+    push_repo: valkey-io/valkey-backport-staging  # staging fork that receives agent branches
     project_owner: valkey-io
     project_owner_type: organization
     language: c                          # used in conflict resolver prompt
@@ -66,7 +67,7 @@ repos:
         project_number: 18
 ```
 
-By default, branches are pushed directly to the upstream repo and the PR is opened in that same repo. That is the standard Valkey onboarding model because it avoids creating and maintaining one staging repo per module. `push_repo` remains available only as an emergency/testing escape hatch for a real fork.
+Agent branches are pushed to the repo's configured `push_repo` staging fork, while PRs are opened against `repo` upstream. This keeps generated branches out of the upstream repositories while still giving reviewers normal PRs against the release branches. `push_repo` is required for every onboarded repository.
 
 See [`examples/repos.yml`](examples/repos.yml) for a multi-module example.
 
@@ -137,7 +138,7 @@ gh workflow run backport-sweep.yml \
 - **Credential isolation** — all GitHub auth uses `GIT_ASKPASS`; tokens never appear in `.git/config` or URLs
 - **Claude Code env isolation** — `GITHUB_TOKEN`, `GH_TOKEN`, and `*_SECRET` are stripped from the subprocess environment. Claude cannot see credentials.
 - **Deterministic build validation** — registry-configured build commands run after conflict resolution. A build failure blocks the push.
-- **Fork sync** — when using a fork push target, the agent fast-forwards the fork's release branch to match upstream before cherry-picking
+- **Staging fork sync** — the agent fast-forwards the staging fork's release branch to match upstream before cherry-picking
 - **Stale branch pruning** — if a previous backport PR was closed without merging, the agent deletes the orphaned branch before starting fresh
 - **DCO** — all agent commits are signed off
 

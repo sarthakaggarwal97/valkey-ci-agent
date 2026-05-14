@@ -26,7 +26,7 @@ class RepoEntry:
     project_owner_type: str
     language: str
     branches: tuple[BranchEntry, ...]
-    push_repo: str | None = None
+    push_repo: str
     build_commands: tuple[str, ...] = ()
     backport_label: str = "backport"
     llm_conflict_label: str = "llm-resolved-conflicts"
@@ -34,7 +34,7 @@ class RepoEntry:
 
     @property
     def effective_push_repo(self) -> str:
-        return self.push_repo or self.repo
+        return self.push_repo
 
 
 @dataclass(frozen=True)
@@ -91,9 +91,7 @@ def _parse_registry(raw: dict[str, Any]) -> Registry:
 
     protected_repos = set(protected)
     protected_repos.update(entry.repo for entry in entries)
-    protected_repos.update(
-        entry.push_repo for entry in entries if entry.push_repo is not None
-    )
+    protected_repos.update(entry.push_repo for entry in entries)
 
     return Registry(
         publish_guard_repos=frozenset(protected_repos),
@@ -128,14 +126,14 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         raise ValueError(f"repos[{index}].language is required")
 
     push_repo = raw.get("push_repo")
-    if push_repo is not None:
-        if not isinstance(push_repo, str) or not _REPO_RE.match(push_repo):
-            raise ValueError(f"repos[{index}].push_repo must be a valid 'owner/name' string")
-        if push_repo.split("/", 1)[0] == repo.split("/", 1)[0]:
-            raise ValueError(
-                f"repos[{index}].push_repo must be a different-owner fork; "
-                "omit push_repo for the standard direct-upstream model"
-            )
+    if not isinstance(push_repo, str) or not _REPO_RE.match(push_repo):
+        raise ValueError(
+            f"repos[{index}].push_repo is required and must be a valid 'owner/name' string"
+        )
+    if push_repo == repo:
+        raise ValueError(
+            f"repos[{index}].push_repo must be a staging fork, not the upstream repo"
+        )
 
     build_commands = raw.get("build_commands", [])
     if not isinstance(build_commands, list):

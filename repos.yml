@@ -4,6 +4,7 @@ publish_guard:
 
 repos:
   - repo: valkey-io/valkey
+    push_repo: valkey-io/valkey-backport-staging
     project_owner: valkey-io
     project_owner_type: organization
     language: c

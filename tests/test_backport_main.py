@@ -89,6 +89,7 @@ publish_guard:
   protected_repos: []
 repos:
   - repo: valkey-io/valkey
+    push_repo: valkey-io/valkey-backport-staging
     project_owner: valkey-io
     project_owner_type: organization
     language: c
@@ -151,18 +152,46 @@ def _make_mock_pr(
 _PATCH_PREFIX = "scripts.backport.main"
 
 
-def test_run_backport_rejects_same_owner_push_repo() -> None:
-    result = run_backport(
-        repo_full_name="valkey-io/valkey",
-        source_pr_number=100,
-        target_branch="8.1",
-        config=_default_config(),
-        github_token="fake-token",
-        push_repo="valkey-io/other-repo",
-    )
+@patch(f"{_PATCH_PREFIX}.Github")
+def test_run_backport_allows_same_owner_staging_push_repo(mock_github) -> None:
+    mock_repo = MagicMock()
+    mock_repo.get_branch.return_value = MagicMock()
+    mock_pr = _make_mock_pr()
+    mock_repo.get_pull.return_value = mock_pr
+    mock_github.return_value.get_repo.return_value = mock_repo
 
-    assert result.outcome == "error"
-    assert "direct-upstream" in (result.error_message or "")
+    with (
+        patch(f"{_PATCH_PREFIX}._resolve_commit_signer") as mock_signer,
+        patch(f"{_PATCH_PREFIX}._clone_repo"),
+        patch(f"{_PATCH_PREFIX}._run_git"),
+        patch(f"{_PATCH_PREFIX}.BackportPRCreator") as mock_creator_cls,
+        patch(f"{_PATCH_PREFIX}.cherry_pick") as mock_cherry_pick,
+    ):
+        mock_signer.return_value = (MagicMock(configured=False), False)
+        mock_cherry_pick.return_value = CherryPickResult(
+            success=True,
+            conflicting_files=[],
+            applied_commits=["abc123"],
+        )
+        mock_creator_cls.return_value.check_duplicate.return_value = None
+        mock_creator_cls.return_value.create_backport_pr.return_value = (
+            "https://github.com/valkey-io/valkey/pull/1"
+        )
+
+        result = run_backport(
+            repo_full_name="valkey-io/valkey",
+            source_pr_number=100,
+            target_branch="8.1",
+            config=_default_config(),
+            github_token="fake-token",
+            push_repo="valkey-io/valkey-backport-staging",
+        )
+
+    assert result.outcome == "success"
+    mock_creator_cls.assert_called_once()
+    _, kwargs = mock_creator_cls.call_args
+    assert kwargs["base_repo"] == "valkey-io/valkey"
+    assert kwargs["push_repo"] == "valkey-io/valkey-backport-staging"
 
 
 def test_run_backport_rejects_redundant_same_repo_push_repo() -> None:
@@ -176,7 +205,7 @@ def test_run_backport_rejects_redundant_same_repo_push_repo() -> None:
     )
 
     assert result.outcome == "error"
-    assert "direct-upstream" in (result.error_message or "")
+    assert "staging fork" in (result.error_message or "")
 
 
 class TestRunBackportCleanCherryPick:

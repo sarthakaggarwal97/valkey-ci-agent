@@ -3,18 +3,10 @@
 #
 # Standard deployment model:
 #
-# Direct push: omit push_repo. The agent pushes branches directly to the
-# upstream repo and opens a PR from that branch against the target release
-# branch. Requires the GitHub App to have contents:write on the upstream repo.
-# This scales cleanly across modules because onboarding a repo is only a
-# registry edit plus GitHub App installation permissions; no staging repo is
-# needed. Branches are temporary and deleted after merge.
-#
-# Emergency/testing escape hatch:
-#
-# Set push_repo only for a real fork when maintainers explicitly do not want
-# agent branches on the upstream repo. Do not create org-owned staging repos
-# for normal Valkey module onboarding.
+# Each upstream repo has a configured staging fork. The agent pushes
+# `agent/backport/...` branches to push_repo and opens PRs against repo.
+# This keeps generated branches out of upstream repositories while retaining
+# one central registry for all modules.
 
 publish_guard:
   # Repos listed below are protected automatically; use this only for extra
@@ -23,6 +15,7 @@ publish_guard:
 
 repos:
   - repo: valkey-io/valkey
+    push_repo: valkey-io/valkey-backport-staging
     project_owner: valkey-io
     project_owner_type: organization
     language: c
@@ -44,6 +37,7 @@ repos:
         project_number: 41
 
   - repo: valkey-io/valkey-bloom
+    push_repo: valkey-io/valkey-bloom-backport-staging
     project_owner: valkey-io
     project_owner_type: organization
     language: c
@@ -54,6 +48,7 @@ repos:
         project_number: 5
 
   - repo: valkey-io/valkey-search
+    push_repo: valkey-io/valkey-search-backport-staging
     project_owner: valkey-io
     project_owner_type: organization
     language: c++

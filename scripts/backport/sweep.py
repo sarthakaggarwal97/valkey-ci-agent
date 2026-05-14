@@ -30,8 +30,9 @@ from scripts.backport.main import (
 )
 from scripts.backport.models import BackportPRContext
 from scripts.backport.pr_creator import (
-    build_pull_create_head_ref,
     build_pull_search_head_ref,
+    create_pull_from_push_repo,
+    pull_matches_push_repo,
 )
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
@@ -851,7 +852,10 @@ def _find_existing_pr(gh: Any, base_repo: str, push_repo: str, branch: str) -> A
         lambda: list(repo.get_pulls(state="open", head=head_ref)),
         retries=2, description="list PRs",
     )
-    return pulls[0] if pulls else None
+    for pull in pulls:
+        if pull_matches_push_repo(pull, push_repo):
+            return pull
+    return None
 
 
 def _delete_stale_backport_branch(gh: Any, push_repo: str, branch: str) -> None:
@@ -886,8 +890,6 @@ def _upsert_pr(gh: Any, base_repo: str, push_repo: str, target_branch: str, head
     body = _build_pr_body(result)
     title = f"[backport] Backport sweep for {target_branch}"
 
-    head_ref = build_pull_create_head_ref(base_repo, push_repo, head_branch)
-
     if existing_pr:
         check_publish_allowed(target_repo=base_repo, action="edit_pull", context=f"PR #{existing_pr.number}")
         retry_github_call(lambda: existing_pr.edit(title=title, body=body), retries=2, description="update PR")
@@ -896,7 +898,16 @@ def _upsert_pr(gh: Any, base_repo: str, push_repo: str, target_branch: str, head
 
     check_publish_allowed(target_repo=base_repo, action="create_pull", context=head_branch)
     pr = retry_github_call(
-        lambda: repo.create_pull(title=title, body=body, head=head_ref, base=target_branch, draft=True),
+        lambda: create_pull_from_push_repo(
+            repo,
+            base_repo=base_repo,
+            push_repo=push_repo,
+            title=title,
+            body=body,
+            head_branch=head_branch,
+            base_branch=target_branch,
+            draft=True,
+        ),
         retries=2, description="create PR",
     )
     logger.info("Created PR #%d on %s", pr.number, base_repo)

@@ -13,6 +13,7 @@ publish_guard:
   protected_repos: []
 repos:
   - repo: org/core
+    push_repo: org/core-backport-staging
     project_owner: org
     project_owner_type: organization
     language: c
@@ -24,6 +25,7 @@ repos:
       - branch: "2.0"
         project_number: 2
   - repo: org/module
+    push_repo: org/module-backport-staging
     project_owner: org
     project_owner_type: organization
     language: c++
@@ -46,7 +48,7 @@ def test_build_matrix_emits_one_leg_per_registered_branch(tmp_path) -> None:
     ]
     assert matrix["include"][0]["branch"] == "1.0"
     assert matrix["include"][0]["project_number"] == 1
-    assert matrix["include"][0]["push_repo"] == "org/core"
+    assert matrix["include"][0]["push_repo"] == "org/core-backport-staging"
     assert matrix["include"][0]["language"] == "c"
     assert json.loads(matrix["include"][0]["build_commands_json"]) == ["make test"]
 
@@ -66,7 +68,7 @@ def test_build_matrix_filters_by_repo_and_project_number(tmp_path) -> None:
                 "project_owner_type": "organization",
                 "project_number": 2,
                 "branch": "2.0",
-                "push_repo": "org/core",
+                "push_repo": "org/core-backport-staging",
                 "language": "c",
                 "build_commands_json": json.dumps(["make test"]),
             }

@@ -57,14 +57,13 @@ repo has no commands configured.
 
 ## Repository Model
 
-The standard model is direct upstream branches: the agent pushes
-`agent/backport/...` branches to the target repository and opens PRs in that same
-repository. This keeps module onboarding to a registry edit plus GitHub App
-installation; no per-module staging repositories are required.
+The standard model is staging forks: the agent pushes `agent/backport/...`
+branches to each repo's configured `push_repo` and opens PRs against the
+upstream `repo`. This keeps generated branches out of upstream repositories
+while preserving normal review and merge flow on the upstream release branches.
 
-`push_repo` exists only as an explicit escape hatch for a real different-owner
-fork. Same-owner push targets are rejected so staging repositories do not become
-the default workflow.
+`push_repo` is required for every registry entry. Same-owner staging forks are
+valid, but `push_repo` must not be identical to `repo`.
 
 ## Planned Workflows
 

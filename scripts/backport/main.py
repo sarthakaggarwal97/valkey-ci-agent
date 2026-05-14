@@ -89,15 +89,11 @@ def run_backport(
 
     Returns a :class:`BackportResult` with outcome details.
     """
-    if (
-        push_repo
-        and push_repo.split("/", 1)[0] == repo_full_name.split("/", 1)[0]
-    ):
+    if push_repo == repo_full_name:
         return BackportResult(
             outcome="error",
             error_message=(
-                "push_repo must be a different-owner fork; omit push_repo for "
-                "the standard direct-upstream model"
+                "push_repo must be a staging fork, not the upstream repo"
             ),
         )
 
@@ -353,22 +349,22 @@ def run_backport(
 
                 # Push the backport branch to the remote
                 if push_repo and push_repo != repo_full_name:
-                    fork_url = github_https_url(push_repo)
-                    _run_git(tmp_dir, "remote", "add", "fork", fork_url, env=git_env)
-                    # Sync the fork's target branch to upstream so the PR
+                    staging_url = github_https_url(push_repo)
+                    _run_git(tmp_dir, "remote", "add", "staging", staging_url, env=git_env)
+                    # Sync the staging fork's target branch to upstream so the PR
                     # doesn't show unrelated commits
                     check_publish_allowed(
                         target_repo=push_repo, action="git_push",
-                        context=f"sync {target_branch} to fork",
+                        context=f"sync {target_branch} to staging fork",
                     )
                     logger.info("Syncing %s:%s to upstream.", push_repo, target_branch)
-                    _run_git(tmp_dir, "push", "fork", f"{target_branch}:{target_branch}", env=git_env)
+                    _run_git(tmp_dir, "push", "staging", f"{target_branch}:{target_branch}", env=git_env)
                     check_publish_allowed(
                         target_repo=push_repo, action="git_push",
                         context=f"push backport branch {branch_name}",
                     )
-                    logger.info("Pushing branch %s to fork %s.", branch_name, push_repo)
-                    _run_git(tmp_dir, "push", "--force", "fork", branch_name, env=git_env)
+                    logger.info("Pushing branch %s to staging repo %s.", branch_name, push_repo)
+                    _run_git(tmp_dir, "push", "--force-with-lease", "staging", branch_name, env=git_env)
                 else:
                     check_publish_allowed(
                         target_repo=repo_full_name, action="git_push",
@@ -626,7 +622,7 @@ def main() -> None:
     parser.add_argument(
         "--push-repo",
         default="",
-        help="Override push_repo from registry (emergency use only)",
+        help="Override push_repo from registry (emergency/testing use only)",
     )
     args = parser.parse_args()
 

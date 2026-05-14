@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from github import Github
+from github.PullRequest import PullRequest
 
 from scripts.backport.models import (
     BackportPRContext,
@@ -40,6 +42,62 @@ def build_pull_search_head_ref(
     source_repo = push_repo or base_repo
     owner = source_repo.split("/")[0]
     return f"{owner}:{branch_name}"
+
+
+def _same_owner_cross_repo(base_repo: str, push_repo: str | None) -> bool:
+    if not push_repo or push_repo == base_repo:
+        return False
+    return push_repo.split("/", 1)[0] == base_repo.split("/", 1)[0]
+
+
+def create_pull_from_push_repo(
+    repo: Any,
+    *,
+    base_repo: str,
+    push_repo: str | None,
+    title: str,
+    body: str,
+    head_branch: str,
+    base_branch: str,
+    draft: bool | None = None,
+) -> Any:
+    """Create a PR, including head_repo for same-organization staging forks."""
+    head_ref = build_pull_create_head_ref(base_repo, push_repo, head_branch)
+    if _same_owner_cross_repo(base_repo, push_repo):
+        assert push_repo is not None
+        payload: dict[str, Any] = {
+            "title": title,
+            "body": body,
+            "head": head_ref,
+            "head_repo": push_repo.split("/", 1)[1],
+            "base": base_branch,
+        }
+        if draft is not None:
+            payload["draft"] = draft
+        headers, data = repo._requester.requestJsonAndCheck(  # noqa: SLF001
+            "POST",
+            f"{repo.url}/pulls",
+            input=payload,
+        )
+        return PullRequest(repo._requester, headers, data, completed=True)  # noqa: SLF001
+
+    kwargs: dict[str, Any] = {
+        "title": title,
+        "body": body,
+        "head": head_ref,
+        "base": base_branch,
+    }
+    if draft is not None:
+        kwargs["draft"] = draft
+    return repo.create_pull(**kwargs)
+
+
+def pull_matches_push_repo(pr: Any, push_repo: str) -> bool:
+    """Return whether a PR head belongs to the expected push repo."""
+    head = getattr(pr, "head", None)
+    repo = getattr(head, "repo", None)
+    full_name = getattr(repo, "full_name", None)
+    return not isinstance(full_name, str) or not full_name or full_name == push_repo
 
 
 def _escape_table_cell(value: object) -> str:
@@ -116,17 +174,15 @@ class BackportPRCreator:
             action="create_pull",
             context=f"backport {branch_name}->{context.target_branch}",
         )
-        head_ref = build_pull_create_head_ref(
-            self._base_repo,
-            self._push_repo,
-            branch_name,
-        )
         pr = retry_github_call(
-            lambda: repo.create_pull(
+            lambda: create_pull_from_push_repo(
+                repo,
+                base_repo=self._base_repo,
+                push_repo=self._push_repo,
                 title=title,
                 body=body,
-                head=head_ref,
-                base=context.target_branch,
+                head_branch=branch_name,
+                base_branch=context.target_branch,
             ),
             retries=3,
             description="create backport PR",
@@ -304,7 +360,10 @@ class BackportPRCreator:
             retries=3,
             description="search open PRs for duplicate",
         )
+        expected_push_repo = self._push_repo or self._base_repo
         for pr in open_pulls:
+            if not pull_matches_push_repo(pr, expected_push_repo):
+                continue
             logger.info("Found existing open backport PR: %s", pr.html_url)
             return pr.html_url
 
@@ -319,6 +378,8 @@ class BackportPRCreator:
             description="search closed PRs for duplicate",
         )
         for pr in closed_pulls:
+            if not pull_matches_push_repo(pr, expected_push_repo):
+                continue
             if pr.merged_at is not None:
                 logger.info(
                     "Found existing merged backport PR: %s", pr.html_url,

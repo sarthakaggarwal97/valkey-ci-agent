@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -12,6 +12,8 @@ from scripts.backport.pr_creator import (
     BackportPRCreator,
     build_pull_create_head_ref,
     build_pull_search_head_ref,
+    create_pull_from_push_repo,
+    pull_matches_push_repo,
 )
 from scripts.backport.utils import build_branch_name
 
@@ -249,7 +251,7 @@ def test_pull_create_head_ref_uses_plain_branch_for_direct_upstream() -> None:
     )
 
 
-def test_pull_head_refs_for_different_owner_fork_escape_hatch() -> None:
+def test_pull_head_refs_for_different_owner_staging_fork() -> None:
     branch = "agent/backport/sweep/8.1"
 
     assert (
@@ -268,6 +270,74 @@ def test_pull_head_refs_for_different_owner_fork_escape_hatch() -> None:
         )
         == "ci-bot:agent/backport/sweep/8.1"
     )
+
+
+def test_pull_head_refs_for_same_owner_staging_fork() -> None:
+    branch = "agent/backport/sweep/8.1"
+
+    assert (
+        build_pull_create_head_ref(
+            "valkey-io/valkey",
+            "valkey-io/valkey-backport-staging",
+            branch,
+        )
+        == "valkey-io:agent/backport/sweep/8.1"
+    )
+    assert (
+        build_pull_search_head_ref(
+            "valkey-io/valkey",
+            "valkey-io/valkey-backport-staging",
+            branch,
+        )
+        == "valkey-io:agent/backport/sweep/8.1"
+    )
+
+
+def test_same_owner_staging_pr_creation_sets_head_repo() -> None:
+    repo = MagicMock()
+    repo.url = "https://api.github.com/repos/valkey-io/valkey"
+    repo._requester.requestJsonAndCheck.return_value = (  # noqa: SLF001
+        {},
+        {"html_url": "https://github.com/valkey-io/valkey/pull/1"},
+    )
+
+    with patch("scripts.backport.pr_creator.PullRequest", return_value="pull") as pull_cls:
+        created = create_pull_from_push_repo(
+            repo,
+            base_repo="valkey-io/valkey",
+            push_repo="valkey-io/valkey-backport-staging",
+            title="Backport",
+            body="Body",
+            head_branch="agent/backport/sweep/8.1",
+            base_branch="8.1",
+            draft=True,
+        )
+
+    assert created == "pull"
+    repo.create_pull.assert_not_called()
+    method, url = repo._requester.requestJsonAndCheck.call_args.args  # noqa: SLF001
+    kwargs = repo._requester.requestJsonAndCheck.call_args.kwargs  # noqa: SLF001
+    assert method == "POST"
+    assert url == "https://api.github.com/repos/valkey-io/valkey/pulls"
+    assert kwargs["input"] == {
+        "title": "Backport",
+        "body": "Body",
+        "head": "valkey-io:agent/backport/sweep/8.1",
+        "head_repo": "valkey-backport-staging",
+        "base": "8.1",
+        "draft": True,
+    }
+    pull_cls.assert_called_once()
+
+
+def test_pull_matches_push_repo_filters_ambiguous_same_owner_heads() -> None:
+    matching = MagicMock()
+    matching.head.repo.full_name = "valkey-io/valkey-backport-staging"
+    wrong = MagicMock()
+    wrong.head.repo.full_name = "valkey-io/valkey"
+
+    assert pull_matches_push_repo(matching, "valkey-io/valkey-backport-staging")
+    assert not pull_matches_push_repo(wrong, "valkey-io/valkey-backport-staging")
 
 
 

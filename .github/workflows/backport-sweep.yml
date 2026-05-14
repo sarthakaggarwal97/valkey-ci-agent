@@ -94,6 +94,9 @@ jobs:
       MAX_CANDIDATES: ${{ inputs.max_candidates || '0' }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
       VALKEY_CI_AGENT_ALLOW_VALKEY_IO_PUBLISH: ${{ vars.VALKEY_CI_AGENT_ALLOW_VALKEY_IO_PUBLISH || '' }}
+      CI_BOT_COMMIT_NAME: ${{ vars.CI_BOT_COMMIT_NAME || 'valkey-ci-agent' }}
+      CI_BOT_COMMIT_EMAIL: ${{ vars.CI_BOT_COMMIT_EMAIL || 'ci-agent@valkey.io' }}
+      CI_BOT_REQUIRE_DCO_SIGNOFF: ${{ vars.CI_BOT_REQUIRE_DCO_SIGNOFF || 'true' }}
     steps:
       - name: Check out agent repository
         uses: actions/checkout@v6
