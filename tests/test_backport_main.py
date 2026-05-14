@@ -163,13 +163,11 @@ def test_run_backport_allows_same_owner_staging_push_repo(mock_github) -> None:
     mock_github.return_value.get_repo.return_value = mock_repo
 
     with (
-        patch(f"{_PATCH_PREFIX}._resolve_commit_signer") as mock_signer,
         patch(f"{_PATCH_PREFIX}._clone_repo"),
         patch(f"{_PATCH_PREFIX}._run_git"),
         patch(f"{_PATCH_PREFIX}.BackportPRCreator") as mock_creator_cls,
         patch(f"{_PATCH_PREFIX}.cherry_pick") as mock_cherry_pick,
     ):
-        mock_signer.return_value = (MagicMock(configured=False), False)
         mock_cherry_pick.return_value = CherryPickResult(
             success=True,
             conflicting_files=[],
@@ -718,22 +716,3 @@ class TestRunBackportAlreadyApplied:
             for call_args in mock_run_git.call_args_list
         )
 
-
-def test_run_backport_requires_commit_identity_when_dco_is_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("CI_BOT_REQUIRE_DCO_SIGNOFF", "true")
-    monkeypatch.delenv("CI_BOT_COMMIT_NAME", raising=False)
-    monkeypatch.delenv("CI_BOT_COMMIT_EMAIL", raising=False)
-
-    result = run_backport(
-        repo_full_name="valkey-io/valkey",
-        source_pr_number=100,
-        target_branch="8.1",
-        config=_default_config(),
-        github_token="fake-token",
-        push_repo=_DEFAULT_PUSH_REPO,
-    )
-
-    assert result.outcome == "error"
-    assert "CI_BOT_COMMIT_NAME" in (result.error_message or "")

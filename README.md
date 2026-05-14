@@ -98,9 +98,6 @@ On `valkey-io/valkey-ci-agent`:
 | Secret | `AWS_ROLE_ARN` | OIDC role ARN with Bedrock `InvokeModel` permission |
 | Secret | `VALKEY_GITHUB_TOKEN` | App installation token or PAT |
 | Variable | `AWS_REGION` | e.g., `us-east-1` |
-| Variable | `CI_BOT_COMMIT_NAME` | e.g., `valkey-ci-agent` |
-| Variable | `CI_BOT_COMMIT_EMAIL` | e.g., `ci-agent@valkey.io` |
-| Variable | `CI_BOT_REQUIRE_DCO_SIGNOFF` | `true` |
 | Variable | `VALKEY_CI_AGENT_ALLOW_VALKEY_IO_PUBLISH` | `1` (to allow writes to protected repos) |
 
 #### Step 2: Edit `repos.yml`

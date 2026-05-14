@@ -26,7 +26,6 @@ from github.GithubException import GithubException
 from scripts.backport.cherry_pick import is_non_merge_mainline_error
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.main import (
-    _resolve_commit_signer,
     _run_git,
 )
 from scripts.backport.models import BackportPRContext
@@ -371,8 +370,6 @@ def _process_branch(
             already_applied = _list_already_applied(tmpdir, target_branch, backport_branch)
             logger.info("Already applied on %s: %s", backport_branch, already_applied)
 
-            signer, require_dco_signoff = _resolve_commit_signer()
-
             applied_count = 0
             for candidate in candidates:
                 if max_applied > 0 and applied_count >= max_applied:
@@ -391,8 +388,7 @@ def _process_branch(
                     continue
 
                 cr = _apply_candidate(
-                    tmpdir, candidate, signer, repo_full_name, git_env,
-                    require_dco_signoff=require_dco_signoff,
+                    tmpdir, candidate, repo_full_name, git_env,
                     language=language, build_commands=build_commands,
                     validation_rules=validation_rules,
                 )
@@ -474,9 +470,7 @@ def _push_backport_branch(
 
 def _apply_candidate(
     repo_dir: str, candidate: ProjectBackportCandidate,
-    signer: object,
     repo_full_name: str, git_env: dict[str, str],
-    require_dco_signoff: bool = False,
     language: str = "c",
     build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
@@ -637,20 +631,6 @@ def _apply_candidate(
             "skipped-conflict",
             f"commit failed: {(commit_result.stderr or commit_result.stdout).strip()[:200]}",
         )
-    if require_dco_signoff:
-        amend_result = subprocess.run(
-            ["git", "commit", "--amend", "--no-edit", "--signoff"],
-            cwd=repo_dir, capture_output=True, text=True,
-        )
-        if amend_result.returncode != 0:
-            # Cherry-pick already succeeded; log and continue. Missing DCO
-            # sign-off will surface downstream (e.g., in the PR's CLA check)
-            # rather than silently discarding the backport.
-            logger.warning(
-                "Failed to amend commit with DCO sign-off for #%d: %s",
-                candidate.source_pr_number,
-                (amend_result.stderr or amend_result.stdout).strip()[:200],
-            )
 
     # Sanity check: reject commits that are wildly larger than upstream.
     # Claude Code conflict resolution sometimes over-applies when a file

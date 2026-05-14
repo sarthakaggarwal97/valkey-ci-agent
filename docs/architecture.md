@@ -58,7 +58,6 @@ changes, and lets modules add their own smoke tests without changing agent code.
 - `git_auth.py` — GIT_ASKPASS credential helper
 - `github_client.py` — retry wrapper for GitHub API
 - `publish_guard.py` — fail-closed guard for writes to registry-protected repos
-- `commit_signoff.py` — DCO sign-off handling
 
 ## Repository Model
 

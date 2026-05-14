@@ -26,16 +26,10 @@ from scripts.backport.models import (
 )
 from scripts.backport.pr_creator import BackportPRCreator
 from scripts.backport.registry import ValidationRule
-from scripts.backport.risk import assess_backport_risk
 from scripts.backport.utils import build_branch_name
 from scripts.backport.validation import (
     changed_paths_since_base,
     select_validation_commands,
-)
-from scripts.common.commit_signoff import (
-    CommitSigner,
-    load_signer_from_env,
-    require_dco_signoff_from_env,
 )
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
@@ -43,18 +37,6 @@ from scripts.common.job_summary import emit_job_summary
 from scripts.common.publish_guard import check_publish_allowed
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_commit_signer() -> tuple[CommitSigner, bool]:
-    """Load commit signer policy from environment variables."""
-    signer = load_signer_from_env()
-    require_dco = require_dco_signoff_from_env()
-    if require_dco and not signer.configured:
-        raise ValueError(
-            "DCO signoff is required, but CI_BOT_COMMIT_NAME or "
-            "CI_BOT_COMMIT_EMAIL is not configured."
-        )
-    return signer, require_dco
 
 
 
@@ -73,10 +55,6 @@ def build_summary(result: BackportResult) -> str:
         f"- Files resolved by LLM: {result.files_resolved}",
         f"- Files unresolved: {result.files_unresolved}",
     ]
-    if result.risk_level:
-        lines.append(f"- Backport risk: `{result.risk_level}`")
-    if result.risk_reasons:
-        lines.append("- Risk signals: " + "; ".join(result.risk_reasons[:4]))
     return "\n".join(lines)
 
 
@@ -110,12 +88,6 @@ def run_backport(
 
     gh = Github(auth=Auth.Token(github_token))
     try:
-        try:
-            signer, require_dco_signoff = _resolve_commit_signer()
-        except ValueError as exc:
-            msg = str(exc)
-            logger.error(msg)
-            return BackportResult(outcome="error", error_message=msg)
         repo = retry_github_call(
             lambda: gh.get_repo(repo_full_name),
             retries=3,
@@ -224,7 +196,6 @@ def run_backport(
                     repo_full_name,
                     tmp_dir,
                     target_branch,
-                    signer=signer,
                     git_env=git_env,
                 )
 
@@ -303,11 +274,6 @@ def run_backport(
                         if r.resolved_content is None
                     ]
                     if unresolved:
-                        risk = assess_backport_risk(
-                            pr_context,
-                            had_conflicts=True,
-                            resolution_results=resolution_results,
-                        )
                         files_resolved = len(resolution_results) - len(unresolved)
                         files_unresolved = len(unresolved)
                         result = BackportResult(
@@ -316,8 +282,6 @@ def run_backport(
                             files_conflicted=len(cherry_result.conflicting_files),
                             files_resolved=files_resolved,
                             files_unresolved=files_unresolved,
-                            risk_level=risk.level,
-                            risk_reasons=risk.reasons,
                             error_message=(
                                 "Unresolved conflict(s): "
                                 + ", ".join(r.path for r in unresolved)
@@ -343,8 +307,6 @@ def run_backport(
                     _apply_resolutions(
                         tmp_dir,
                         resolution_results,
-                        signer=signer,
-                        require_dco_signoff=require_dco_signoff,
                     )
 
                 commands: list[str] = []
@@ -387,11 +349,6 @@ def run_backport(
                     logger.info("Pushing branch %s to staging repo %s.", branch_name, push_repo)
                     _run_git(tmp_dir, "push", "--force-with-lease", "staging", branch_name, env=git_env)
         logger.info("Creating backport PR.")
-        risk = assess_backport_risk(
-            pr_context,
-            had_conflicts=not cherry_result.success,
-            resolution_results=resolution_results,
-        )
         try:
             backport_pr_url = pr_creator.create_backport_pr(
                 pr_context, cherry_result, resolution_results, branch_name,
@@ -420,8 +377,6 @@ def run_backport(
             files_conflicted=len(cherry_result.conflicting_files),
             files_resolved=files_resolved,
             files_unresolved=files_unresolved,
-            risk_level=risk.level,
-            risk_reasons=risk.reasons,
         )
 
         summary_text = build_summary(result)
@@ -479,7 +434,6 @@ def _clone_repo(
     dest_dir: str,
     target_branch: str,
     *,
-    signer: CommitSigner,
     git_env: dict[str, str],
 ) -> dict[str, str]:
     """Clone the repository with full history into *dest_dir*.
@@ -500,18 +454,12 @@ def _clone_repo(
         env=git_env,
     )
     # Configure git identity for cherry-pick commits
-    user_name = signer.name if signer.configured else "valkey-ci-agent"
-    user_email = (
-        signer.email
-        if signer.configured
-        else "valkey-ci-agent@users.noreply.github.com"
-    )
     subprocess.run(
-        ["git", "config", "user.name", user_name],
+        ["git", "config", "user.name", "valkey-ci-agent"],
         cwd=dest_dir, check=True, capture_output=True, text=True,
     )
     subprocess.run(
-        ["git", "config", "user.email", user_email],
+        ["git", "config", "user.email", "valkey-ci-agent@users.noreply.github.com"],
         cwd=dest_dir, check=True, capture_output=True, text=True,
     )
     # Fetch all branches so cherry-pick can reference any commit
@@ -536,9 +484,6 @@ def _run_git(repo_dir: str, *args: str, env: dict[str, str] | None = None) -> No
 def _apply_resolutions(
     repo_dir: str,
     resolution_results: list[ResolutionResult],
-    *,
-    signer: CommitSigner,
-    require_dco_signoff: bool,
 ) -> None:
     """Write resolved file contents to the working tree and commit.
 
@@ -568,31 +513,12 @@ def _apply_resolutions(
     # Set core.editor=true to prevent git from opening an editor
     # in the non-interactive CI environment.
     try:
-        continue_args = [
+        _run_git(
             repo_dir,
-            "-c", f"user.name={signer.name or 'backport-agent'}",
-            "-c", (
-                f"user.email={signer.email or 'backport-agent@users.noreply.github.com'}"
-            ),
             "-c", "core.editor=true",
             "cherry-pick",
             "--continue",
-        ]
-        _run_git(
-            *continue_args,
         )
-        if require_dco_signoff:
-            _run_git(
-                repo_dir,
-                "-c", f"user.name={signer.name or 'backport-agent'}",
-                "-c", (
-                    f"user.email={signer.email or 'backport-agent@users.noreply.github.com'}"
-                ),
-                "commit",
-                "--amend",
-                "--no-edit",
-                "--signoff",
-            )
     except Exception as exc:
         # If cherry-pick --continue fails, something is wrong with the
         # resolution (e.g., all files matched target-branch content so

@@ -54,8 +54,6 @@ class BackportResult:
     files_conflicted: int = 0
     files_resolved: int = 0
     files_unresolved: int = 0
-    risk_level: str = ""
-    risk_reasons: list[str] = field(default_factory=list)
     error_message: str | None = None
 
 
