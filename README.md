@@ -9,7 +9,8 @@ The agent is structured as a layered framework:
 ```text
 scripts/
   ai/          AI layer: Claude Code subprocess orchestration
-  backport/    Workflow 1: automated backports (active)
+  backport/    Workflow: automated backports (active)
+  review/      Workflow: PR code review (active)
   common/      Shared infrastructure (git auth, GitHub client, safety guards)
 repos.yml      Central registry of repos, branches, project boards, validation
 ```
@@ -21,7 +22,7 @@ New workflows are added as sibling directories to `backport/`. Each workflow pic
 | Workflow | Status | Description |
 |----------|--------|-------------|
 | Backport | Active | Cherry-picks merged PRs onto release branches with AI conflict resolution |
-| PR Reviewer | Planned | Two-stage code review with skeptic pass |
+| PR Reviewer | Active | 9-specialist parallel code review with skeptic pass |
 | Fuzzer Monitor | Planned | Analyzes fuzzer runs, triages failures, files issues |
 | Daily CI Analysis | Planned | Detects flaky tests, generates fix PRs |
 | Health Dashboard | Planned | Publishes CI health metrics to GitHub Pages |
@@ -134,6 +135,27 @@ gh workflow run backport-sweep.yml \
   --field repo=valkey-io/valkey \
   --field project_number=14
 ```
+
+## PR Review Workflow
+
+Automated code review for pull requests. Runs 9 specialist reviewers in parallel (security, performance, correctness, style, etc.), then applies a skeptic pass to filter false positives, and synthesizes a final verdict.
+
+### How it works
+
+1. **Trigger** — fires on PR open/synchronize events, or via manual `workflow_dispatch`
+2. **Fetch context** — retrieves the PR diff and changed files from GitHub
+3. **Parallel review** — 9 specialist agents each review the PR from their domain perspective
+4. **Skeptic pass** — a skeptic agent filters out false positives and low-confidence findings
+5. **Synthesis** — deduplicates findings, ranks by severity, and produces a verdict (approve / request changes / comment)
+6. **Post results** — posts a summary comment on the PR and inline review comments on specific lines
+
+### Verdict system
+
+| Verdict | Meaning |
+|---------|---------|
+| Approve | No significant issues found |
+| Comment | Minor suggestions, non-blocking |
+| Request Changes | Issues that should be addressed before merge |
 
 ## Safety
 

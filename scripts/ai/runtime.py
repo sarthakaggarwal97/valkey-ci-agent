@@ -18,6 +18,7 @@ from scripts.ai.claude_code import (
 
 AgentProfileName = Literal[
     "conflict_resolve_edit_only",
+    "code_review_specialist",
 ]
 
 
@@ -61,6 +62,15 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
         max_turns=240,
         writes_allowed=True,
         output_schema="edited-files",
+    ),
+    "code_review_specialist": AgentProfile(
+        name="code_review_specialist",
+        allowed_tools="Read,Grep,Glob,Bash",
+        timeout=1800,
+        effort="high",
+        max_turns=50,
+        writes_allowed=False,
+        output_schema="text",
     ),
 }
 
