@@ -6,7 +6,7 @@ An AI-powered CI automation agent for the Valkey project. Uses Claude Code (Anth
 
 The agent is structured as a layered framework:
 
-```
+```text
 scripts/
   ai/          AI layer: Claude Code subprocess orchestration
   backport/    Workflow 1: automated backports (active)
@@ -51,6 +51,7 @@ repos:
     push_repo: valkey-io/valkey-backport-staging  # staging fork that receives agent branches
     project_owner: valkey-io
     project_owner_type: organization
+    require_staging_fork: true          # default; set false only for direct upstream pushes
     language: c                          # used in conflict resolver prompt
     build_commands:
       - "make -j$(nproc)"                # run before push; empty = skip
@@ -69,7 +70,7 @@ repos:
         project_number: 18
 ```
 
-Agent branches are pushed to the repo's configured `push_repo` staging fork, while PRs are opened against `repo` upstream. This keeps generated branches out of the upstream repositories while still giving reviewers normal PRs against the release branches. `push_repo` is required for every onboarded repository.
+Agent branches are pushed to the repo's configured `push_repo` staging fork, while PRs are opened against `repo` upstream. This keeps generated branches out of the upstream repositories while still giving reviewers normal PRs against the release branches. `push_repo` is required for every onboarded repository. Direct upstream pushes are only allowed when `require_staging_fork: false` is explicitly configured.
 
 `validation_rules` are optional. Each rule matches changed paths with shell-style globs and appends the listed commands after `build_commands`. Use them for high-signal tests that catch branch-specific adaptation mistakes without running a full CI matrix locally.
 

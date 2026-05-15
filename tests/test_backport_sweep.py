@@ -64,11 +64,10 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
     monkeypatch.setattr(backport_sweep.subprocess, "run", fake_subprocess_run)
 
     result = backport_sweep._apply_candidate(
-        str(tmp_path),
-        candidate,
-        MagicMock(),
-        "valkey-io/valkey",
-        {},
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
     )
 
     assert result.outcome == "skipped-existing"
@@ -111,11 +110,10 @@ def test_apply_candidate_retries_squash_merge_commit_without_mainline(
     monkeypatch.setattr(backport_sweep.subprocess, "run", fake_subprocess_run)
 
     result = backport_sweep._apply_candidate(
-        str(tmp_path),
-        candidate,
-        MagicMock(),
-        "valkey-io/valkey",
-        {},
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
     )
 
     assert result.outcome == "applied"
@@ -171,11 +169,10 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
     )
 
     result = backport_sweep._apply_candidate(
-        str(tmp_path),
-        candidate,
-        MagicMock(),
-        "valkey-io/valkey",
-        {},
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
     )
 
     assert result.outcome == "skipped-existing"
@@ -227,11 +224,10 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
     )
 
     result = backport_sweep._apply_candidate(
-        str(tmp_path),
-        candidate,
-        MagicMock(),
-        "valkey-io/valkey",
-        {},
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
     )
 
     assert result.outcome == "skipped-conflict"
@@ -629,3 +625,8 @@ def test_graphql_client_retry_exhaustion_raises_clear_error(monkeypatch):
     else:
         raise AssertionError("expected retry exhaustion to raise")
     assert call_count["n"] == 4, f"expected 4 retry attempts, got {call_count['n']}"
+
+
+def test_safe_tmp_component_removes_branch_separators():
+    assert backport_sweep._safe_tmp_component("release/8.1") == "release-8.1"
+    assert backport_sweep._safe_tmp_component("///") == "branch"

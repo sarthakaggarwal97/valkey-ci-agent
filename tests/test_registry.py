@@ -54,6 +54,7 @@ class TestLoadRegistry:
         assert entry.branches == (BranchEntry("1.0", 1),)
         assert entry.push_repo == "org/repo-backport-staging"
         assert entry.effective_push_repo == "org/repo-backport-staging"
+        assert entry.require_staging_fork is True
         assert entry.build_commands == ()
         assert entry.validation_rules == ()
         assert entry.backport_label == "backport"
@@ -202,6 +203,22 @@ class TestValidation:
         with pytest.raises(ValueError, match="staging fork"):
             load_registry(path)
 
+    def test_same_repo_push_repo_allowed_when_staging_requirement_disabled(self, tmp_path):
+        data = _minimal_registry(repos=[_minimal_repo(
+            push_repo="org/repo",
+            require_staging_fork=False,
+        )])
+        path = _write_registry(tmp_path, data)
+        reg = load_registry(path)
+        assert reg.get_repo("org/repo").push_repo == "org/repo"
+        assert reg.get_repo("org/repo").require_staging_fork is False
+
+    def test_require_staging_fork_must_be_boolean(self, tmp_path):
+        data = _minimal_registry(repos=[_minimal_repo(require_staging_fork="false")])
+        path = _write_registry(tmp_path, data)
+        with pytest.raises(ValueError, match="require_staging_fork"):
+            load_registry(path)
+
     def test_missing_push_repo_rejected(self, tmp_path):
         repo = _minimal_repo()
         del repo["push_repo"]
@@ -245,4 +262,3 @@ class TestValidation:
         path = _write_registry(tmp_path, data)
         with pytest.raises(ValueError, match="non-empty list"):
             load_registry(path)
-

@@ -205,7 +205,7 @@ class TestConflictDetection:
         assert len(result.conflicting_files) == 2
         assert result.conflicting_files[0].path == "src/server.c"
         assert result.conflicting_files[1].path == "src/config.c"
-        assert result.applied_commits == ["mergesha"]
+        assert result.applied_commits == []
 
     @patch("builtins.open", mock_open(read_data="conflict content"))
     @patch("scripts.backport.cherry_pick.subprocess.run")

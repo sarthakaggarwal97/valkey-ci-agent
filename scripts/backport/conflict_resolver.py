@@ -221,6 +221,7 @@ def resolve_conflicts_with_claude(
                 path=cf.path,
                 resolved_content=cf.source_branch_content,
                 resolution_summary="whitespace-only (no LLM needed)",
+                source="automatic",
             ))
         else:
             llm_files.append(cf)
@@ -254,7 +255,11 @@ def resolve_conflicts_with_claude(
         except (json.JSONDecodeError, TypeError):
             continue
         if event.get("type") == "result" and "result" in event:
-            result_text = event["result"]
+            raw_result = event.get("result")
+            if isinstance(raw_result, str):
+                result_text = raw_result
+            elif raw_result is not None:
+                result_text = json.dumps(raw_result, sort_keys=True, default=str)
 
     logger.info(
         "Claude Code finished (rc=%d). Result: %s",

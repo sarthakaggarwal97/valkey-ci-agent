@@ -68,7 +68,7 @@ def _cherry_pick_merge(
         return CherryPickResult(
             success=False,
             conflicting_files=conflicts,
-            applied_commits=[merge_commit_sha] if conflicts else [],
+            applied_commits=[],
         )
     logger.info("Cherry-pick of merge commit %s succeeded", merge_commit_sha)
     return CherryPickResult(

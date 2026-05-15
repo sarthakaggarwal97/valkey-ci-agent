@@ -192,6 +192,33 @@ def test_build_pr_body_includes_checklist_and_plain_status_labels() -> None:
     assert "❌" not in body
 
 
+def test_automatic_resolution_does_not_get_llm_disclaimer() -> None:
+    context = BackportPRContext(
+        source_pr_number=123,
+        source_pr_title="Whitespace-only conflict",
+        source_pr_url="https://github.com/owner/repo/pull/123",
+        source_pr_diff="diff",
+        target_branch="8.1",
+        commits=["abc1234"],
+    )
+    results = [
+        ResolutionResult(
+            path="src/server.c",
+            resolved_content="resolved",
+            resolution_summary="whitespace-only (no LLM needed)",
+            source="automatic",
+        )
+    ]
+
+    body = BackportPRCreator.build_pr_body(
+        context,
+        had_conflicts=True,
+        resolution_results=results,
+    )
+
+    assert "Human Review Required" not in body
+
+
 def test_create_backport_pr_uses_configured_labels() -> None:
     mock_github = MagicMock()
     mock_repo = MagicMock()
@@ -237,6 +264,48 @@ def test_create_backport_pr_uses_configured_labels() -> None:
         "needs-backport-review",
         "ai-resolved-conflict",
     )
+
+
+def test_create_backport_pr_does_not_apply_llm_label_for_automatic_resolution() -> None:
+    mock_github = MagicMock()
+    mock_repo = MagicMock()
+    mock_github.get_repo.return_value = mock_repo
+
+    mock_pr = MagicMock()
+    mock_pr.number = 456
+    mock_pr.html_url = "https://github.com/owner/repo/pull/456"
+    mock_repo.create_pull.return_value = mock_pr
+
+    context = BackportPRContext(
+        source_pr_number=123,
+        source_pr_title="Whitespace-only conflict",
+        source_pr_url="https://github.com/owner/repo/pull/123",
+        source_pr_diff="diff",
+        target_branch="8.1",
+        commits=["abc1234"],
+    )
+    result = ResolutionResult(
+        path="src/server.c",
+        resolved_content="resolved",
+        resolution_summary="whitespace-only (no LLM needed)",
+        source="automatic",
+    )
+
+    creator = BackportPRCreator(
+        mock_github,
+        "owner/repo",
+        backport_label="needs-backport-review",
+        llm_conflict_label="ai-resolved-conflict",
+    )
+
+    creator.create_backport_pr(
+        context,
+        CherryPickResult(success=False, conflicting_files=[], applied_commits=["abc1234"]),
+        [result],
+        branch_name="backport/123-to-8.1",
+    )
+
+    mock_pr.add_to_labels.assert_called_once_with("needs-backport-review")
 
 
 def test_pull_create_head_ref_uses_plain_branch_for_direct_upstream() -> None:

@@ -37,6 +37,7 @@ def test_whitespace_only_conflict_skips_claude(tmp_path: Path) -> None:
     assert len(results) == 1
     assert results[0].resolved_content == "foo"
     assert "whitespace" in results[0].resolution_summary
+    assert results[0].source == "automatic"
 
 
 def test_claude_resolves_conflict(tmp_path: Path) -> None:
@@ -94,6 +95,30 @@ def test_unresolved_conflict_returns_none(tmp_path: Path) -> None:
     assert len(results) == 1
     assert results[0].resolved_content is None
     assert "file unchanged" in results[0].resolution_summary
+
+
+def test_result_event_with_non_string_payload_is_logged_safely(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    conflicted = src / "cluster.c"
+    conflicted.write_text("<<<<<<< HEAD\nold code\n=======\nnew code\n>>>>>>> abc123\n")
+
+    cf = ConflictedFile(
+        path="src/cluster.c",
+        target_branch_content="old code",
+        source_branch_content="new code",
+    )
+
+    def mock_agent(_profile, prompt, **kw):
+        conflicted.write_text("new code\n")
+        result_event = json.dumps({"type": "result", "result": {"summary": "resolved"}})
+        return _agent_result(result_event)
+
+    with patch("scripts.backport.conflict_resolver.run_agent", side_effect=mock_agent):
+        results = resolve_conflicts_with_claude(str(tmp_path), [cf], _pr_context())
+
+    assert len(results) == 1
+    assert results[0].resolved_content == "new code\n"
 
 
 def test_claude_nonzero_exit_returns_unresolved(tmp_path: Path) -> None:

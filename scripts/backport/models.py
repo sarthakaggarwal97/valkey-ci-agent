@@ -3,6 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
+
+ResolutionSource = Literal["llm", "automatic"]
+BackportOutcome = Literal[
+    "success",
+    "conflicts-unresolved",
+    "duplicate",
+    "branch-missing",
+    "pr-not-merged",
+    "already-applied",
+    "error",
+]
 
 
 @dataclass
@@ -21,6 +33,7 @@ class ResolutionResult:
     path: str
     resolved_content: str | None  # None = resolution failed
     resolution_summary: str
+    source: ResolutionSource = "llm"
 
 
 @dataclass
@@ -48,7 +61,7 @@ class BackportPRContext:
 class BackportResult:
     """Final outcome of a backport run."""
 
-    outcome: str  # success, conflicts-unresolved, duplicate, branch-missing, pr-not-merged, already-applied, error
+    outcome: BackportOutcome
     backport_pr_url: str | None = None
     commits_cherry_picked: int = 0
     files_conflicted: int = 0
@@ -64,3 +77,4 @@ class BackportConfig:
     backport_label: str = "backport"
     llm_conflict_label: str = "llm-resolved-conflicts"
     max_conflicting_files: int = 100
+    require_staging_fork: bool = True

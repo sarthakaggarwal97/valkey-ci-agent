@@ -20,6 +20,7 @@ from scripts.backport.cherry_pick import cherry_pick
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.models import (
     BackportConfig,
+    BackportOutcome,
     BackportPRContext,
     BackportResult,
     ResolutionResult,
@@ -77,7 +78,7 @@ def run_backport(
             outcome="error",
             error_message="push_repo is required for the staging-repo backport model",
         )
-    if push_repo == repo_full_name:
+    if config.require_staging_fork and push_repo == repo_full_name:
         return BackportResult(
             outcome="error",
             error_message=(
@@ -330,15 +331,19 @@ def run_backport(
                         )
 
                 # Push the backport branch to the remote
-                if push_repo and push_repo != repo_full_name:
-                    staging_url = github_https_url(push_repo)
-                    _run_git(tmp_dir, "remote", "add", "staging", staging_url, env=git_env)
+                if push_repo:
+                    push_remote = "origin"
+                    if push_repo != repo_full_name:
+                        push_remote = "staging"
+                        staging_url = github_https_url(push_repo)
+                        _run_git(tmp_dir, "remote", "add", push_remote, staging_url, env=git_env)
                     # Sync the staging fork's target branch to upstream so the PR
                     # doesn't show unrelated commits
-                    logger.info("Syncing %s:%s to upstream.", push_repo, target_branch)
-                    _run_git(tmp_dir, "push", "staging", f"{target_branch}:{target_branch}", env=git_env)
-                    logger.info("Pushing branch %s to staging repo %s.", branch_name, push_repo)
-                    _run_git(tmp_dir, "push", "--force-with-lease", "staging", branch_name, env=git_env)
+                    if push_repo != repo_full_name:
+                        logger.info("Syncing %s:%s to upstream.", push_repo, target_branch)
+                        _run_git(tmp_dir, "push", push_remote, f"{target_branch}:{target_branch}", env=git_env)
+                    logger.info("Pushing branch %s to %s.", branch_name, push_repo)
+                    _run_git(tmp_dir, "push", "--force-with-lease", push_remote, branch_name, env=git_env)
         logger.info("Creating backport PR.")
         try:
             backport_pr_url = pr_creator.create_backport_pr(
@@ -360,7 +365,9 @@ def run_backport(
                 1 for r in resolution_results if r.resolved_content is None
             )
 
-        outcome = "success" if files_unresolved == 0 else "conflicts-unresolved"
+        outcome: BackportOutcome = (
+            "success" if files_unresolved == 0 else "conflicts-unresolved"
+        )
         result = BackportResult(
             outcome=outcome,
             backport_pr_url=backport_pr_url,
@@ -581,6 +588,7 @@ def main() -> None:
             backport_label=repo_entry.backport_label,
             llm_conflict_label=repo_entry.llm_conflict_label,
             max_conflicting_files=repo_entry.max_conflicting_files,
+            require_staging_fork=repo_entry.require_staging_fork,
         ),
         github_token=github_token,
         push_repo=args.push_repo or repo_entry.push_repo,

@@ -206,6 +206,46 @@ def test_run_backport_rejects_redundant_same_repo_push_repo() -> None:
     assert "staging fork" in (result.error_message or "")
 
 
+@patch(f"{_PATCH_PREFIX}.Github")
+def test_run_backport_allows_direct_push_when_configured(mock_github) -> None:
+    mock_repo = MagicMock()
+    mock_repo.get_branch.return_value = MagicMock()
+    mock_repo.get_pull.return_value = _make_mock_pr()
+    mock_github.return_value.get_repo.return_value = mock_repo
+
+    with (
+        patch(f"{_PATCH_PREFIX}._clone_repo"),
+        patch(f"{_PATCH_PREFIX}._run_git") as mock_run_git,
+        patch(f"{_PATCH_PREFIX}.BackportPRCreator") as mock_creator_cls,
+        patch(f"{_PATCH_PREFIX}.cherry_pick") as mock_cherry_pick,
+    ):
+        mock_cherry_pick.return_value = CherryPickResult(
+            success=True,
+            conflicting_files=[],
+            applied_commits=["abc123"],
+        )
+        mock_creator_cls.return_value.check_duplicate.return_value = None
+        mock_creator_cls.return_value.create_backport_pr.return_value = (
+            "https://github.com/valkey-io/valkey/pull/1"
+        )
+
+        result = run_backport(
+            repo_full_name="valkey-io/valkey",
+            source_pr_number=100,
+            target_branch="8.1",
+            config=BackportConfig(require_staging_fork=False),
+            github_token="fake-token",
+            push_repo="valkey-io/valkey",
+        )
+
+    assert result.outcome == "success"
+    assert any(
+        call.args[1:4] == ("push", "--force-with-lease", "origin")
+        for call in mock_run_git.call_args_list
+    )
+    assert not any(call.args[1:3] == ("remote", "add") for call in mock_run_git.call_args_list)
+
+
 def test_run_backport_requires_push_repo() -> None:
     result = run_backport(
         repo_full_name="valkey-io/valkey",
@@ -713,4 +753,3 @@ class TestRunBackportAlreadyApplied:
             len(call_args.args) > 1 and call_args.args[1] == "push"
             for call_args in mock_run_git.call_args_list
         )
-

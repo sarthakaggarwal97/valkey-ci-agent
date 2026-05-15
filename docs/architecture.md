@@ -5,7 +5,7 @@ defined in the central `repos.yml` registry.
 
 ## Layers
 
-```
+```text
 scripts/
   backport/    Backport workflow (active)
   ai/          Claude Code subprocess orchestration
@@ -15,7 +15,7 @@ repos.yml      Registry of repos, release branches, project boards, and validati
 
 ## Backport Flow
 
-```
+```text
 sweep.py (daily cron or manual dispatch)
   -> reads repos.yml and fans out one job per {repo, branch}
   -> discovers PRs from each branch's GitHub Project board
@@ -36,7 +36,7 @@ sweep.py (daily cron or manual dispatch)
 
 The only AI usage is conflict resolution:
 
-```
+```text
 conflict_resolver.py
   → runtime.run_agent("conflict_resolve_edit_only", prompt, cwd=repo)
     → claude_code.run_claude_code(prompt, ...)
@@ -66,7 +66,8 @@ upstream `repo`. This keeps generated branches out of upstream repositories
 while preserving normal review and merge flow on the upstream release branches.
 
 `push_repo` is required for every registry entry. Same-owner staging forks are
-valid, but `push_repo` must not be identical to `repo`.
+valid. By default `push_repo` must not be identical to `repo`; direct upstream
+pushes require an explicit `require_staging_fork: false` registry opt-out.
 
 ## Planned Workflows
 

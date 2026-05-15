@@ -43,4 +43,4 @@ jobs:
         run: pytest --cov=scripts --cov-report=term-missing --cov-report=xml --cov-fail-under=60 -v
 
       - name: Run mypy type checking
-        run: mypy scripts/ --ignore-missing-imports
+        run: mypy scripts/

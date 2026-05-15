@@ -51,6 +51,8 @@ def retry_github_call(
     description: str,
 ) -> _T:
     """Retry transient GitHub API failures with exponential backoff."""
+    if type(retries) is not int or retries < 0:
+        raise ValueError("retries must be a non-negative integer")
     attempts = retries + 1
     last_exc: Exception | None = None
     for attempt in range(attempts):

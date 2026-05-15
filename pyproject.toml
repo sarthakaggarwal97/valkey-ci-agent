@@ -31,10 +31,6 @@ python_version = "3.11"
 ignore_missing_imports = true
 show_error_codes = true
 
-[[tool.mypy.overrides]]
-module = "tests.*"
-ignore_errors = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

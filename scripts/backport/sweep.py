@@ -300,7 +300,7 @@ def _process_branch(
     validation_rules: list[Any] | None = None,
 ) -> BranchSweepResult:
     result = BranchSweepResult(target_branch=target_branch, candidates_found=len(candidates))
-    tmpdir = tempfile.mkdtemp(prefix=f"backport-{target_branch}-")
+    tmpdir = tempfile.mkdtemp(prefix=f"backport-{_safe_tmp_component(target_branch)}-")
 
     try:
         with GitAuth(github_token, prefix="backport-sweep-git-askpass-") as git_auth:
@@ -1051,6 +1051,10 @@ def _build_summary(results: list[BranchSweepResult]) -> str:
 
 def _normalize(value: object) -> str:
     return str(value or "").strip().lower()
+
+
+def _safe_tmp_component(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-") or "branch"
 
 
 def _esc(value: object) -> str:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import stat
 import tempfile
 from dataclasses import dataclass
@@ -29,7 +30,7 @@ class GitAuth:
                 handle.write(
                     "#!/bin/sh\n"
                     "case \"$1\" in\n"
-                    f"  *Username*) echo {self.username} ;;\n"
+                    f"  *Username*) echo {shlex.quote(self.username)} ;;\n"
                     "  *) echo \"$GIT_PASSWORD\" ;;\n"
                     "esac\n"
                 )

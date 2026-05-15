@@ -106,6 +106,10 @@ def _escape_table_cell(value: object) -> str:
     return text.replace("|", "\\|").replace("\n", "<br>")
 
 
+def _was_llm_resolved(result: ResolutionResult) -> bool:
+    return result.resolved_content is not None and result.source == "llm"
+
+
 class BackportPRCreator:
     """Create backport branches and pull requests via the GitHub API."""
 
@@ -156,8 +160,7 @@ class BackportPRCreator:
 
         had_conflicts = not cherry_pick_result.success
         any_llm_resolved = bool(
-            resolution_results
-            and any(r.resolved_content is not None for r in resolution_results)
+            resolution_results and any(_was_llm_resolved(r) for r in resolution_results)
         )
 
         body = self.build_pr_body(context, had_conflicts, resolution_results,
@@ -284,9 +287,7 @@ class BackportPRCreator:
             )
 
         # Human review disclaimer (when any file was LLM-resolved).
-        any_llm_resolved = bool(
-            results and any(r.resolved_content is not None for r in results)
-        )
+        any_llm_resolved = bool(results and any(_was_llm_resolved(r) for r in results))
         if any_llm_resolved:
             sections.append(
                 "### Human Review Required\n\n"

@@ -38,6 +38,7 @@ class RepoEntry:
     backport_label: str = "backport"
     llm_conflict_label: str = "llm-resolved-conflicts"
     max_conflicting_files: int = 100
+    require_staging_fork: bool = True
 
     @property
     def effective_push_repo(self) -> str:
@@ -120,7 +121,10 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         raise ValueError(
             f"repos[{index}].push_repo is required and must be a valid 'owner/name' string"
         )
-    if push_repo == repo:
+    require_staging_fork = raw.get("require_staging_fork", True)
+    if not isinstance(require_staging_fork, bool):
+        raise ValueError(f"repos[{index}].require_staging_fork must be a boolean")
+    if require_staging_fork and push_repo == repo:
         raise ValueError(
             f"repos[{index}].push_repo must be a staging fork, not the upstream repo"
         )
@@ -161,6 +165,7 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         backport_label=str(backport_label),
         llm_conflict_label=str(llm_conflict_label),
         max_conflicting_files=max_conflicting_files,
+        require_staging_fork=require_staging_fork,
         branches=tuple(branches),
     )
 
