@@ -26,7 +26,6 @@ def _minimal_repo(**overrides):
         "project_owner": "org",
         "project_owner_type": "organization",
         "language": "c",
-        "push_repo": "org/repo-backport-staging",
         "branches": [{"branch": "1.0", "project_number": 1}],
     }
     base.update(overrides)
@@ -52,9 +51,8 @@ class TestLoadRegistry:
         assert entry.project_owner == "org"
         assert entry.language == "c"
         assert entry.branches == (BranchEntry("1.0", 1),)
-        assert entry.push_repo == "org/repo-backport-staging"
-        assert entry.effective_push_repo == "org/repo-backport-staging"
-        assert entry.require_staging_fork is True
+        assert entry.push_repo is None
+        assert entry.effective_push_repo == "org/repo"
         assert entry.build_commands == ()
         assert entry.validation_rules == ()
         assert entry.backport_label == "backport"
@@ -191,41 +189,25 @@ class TestValidation:
         with pytest.raises(ValueError, match="push_repo"):
             load_registry(path)
 
-    def test_same_owner_push_repo_allowed_for_staging(self, tmp_path):
+    def test_same_owner_push_repo_rejected(self, tmp_path):
         data = _minimal_registry(repos=[_minimal_repo(push_repo="org/other-repo")])
         path = _write_registry(tmp_path, data)
-        reg = load_registry(path)
-        assert reg.get_repo("org/repo").push_repo == "org/other-repo"
+        with pytest.raises(ValueError, match="different-owner fork"):
+            load_registry(path)
 
     def test_same_repo_push_repo_rejected(self, tmp_path):
         data = _minimal_registry(repos=[_minimal_repo(push_repo="org/repo")])
         path = _write_registry(tmp_path, data)
-        with pytest.raises(ValueError, match="staging fork"):
+        with pytest.raises(ValueError, match="different-owner fork"):
             load_registry(path)
 
-    def test_same_repo_push_repo_allowed_when_staging_requirement_disabled(self, tmp_path):
-        data = _minimal_registry(repos=[_minimal_repo(
-            push_repo="org/repo",
-            require_staging_fork=False,
-        )])
-        path = _write_registry(tmp_path, data)
-        reg = load_registry(path)
-        assert reg.get_repo("org/repo").push_repo == "org/repo"
-        assert reg.get_repo("org/repo").require_staging_fork is False
-
-    def test_require_staging_fork_must_be_boolean(self, tmp_path):
-        data = _minimal_registry(repos=[_minimal_repo(require_staging_fork="false")])
-        path = _write_registry(tmp_path, data)
-        with pytest.raises(ValueError, match="require_staging_fork"):
-            load_registry(path)
-
-    def test_missing_push_repo_rejected(self, tmp_path):
+    def test_missing_push_repo_defaults_to_direct_upstream(self, tmp_path):
         repo = _minimal_repo()
-        del repo["push_repo"]
         data = _minimal_registry(repos=[repo])
         path = _write_registry(tmp_path, data)
-        with pytest.raises(ValueError, match="push_repo is required"):
-            load_registry(path)
+        reg = load_registry(path)
+        assert reg.get_repo("org/repo").push_repo is None
+        assert reg.get_repo("org/repo").effective_push_repo == "org/repo"
 
     def test_build_commands_not_list(self, tmp_path):
         data = _minimal_registry(repos=[_minimal_repo(build_commands="make")])

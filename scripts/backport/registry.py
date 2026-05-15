@@ -32,17 +32,16 @@ class RepoEntry:
     project_owner_type: str
     language: str
     branches: tuple[BranchEntry, ...]
-    push_repo: str
+    push_repo: str | None = None
     build_commands: tuple[str, ...] = ()
     validation_rules: tuple[ValidationRule, ...] = ()
     backport_label: str = "backport"
     llm_conflict_label: str = "llm-resolved-conflicts"
     max_conflicting_files: int = 100
-    require_staging_fork: bool = True
 
     @property
     def effective_push_repo(self) -> str:
-        return self.push_repo
+        return self.push_repo or self.repo
 
 
 @dataclass(frozen=True)
@@ -117,17 +116,16 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         raise ValueError(f"repos[{index}].language is required")
 
     push_repo = raw.get("push_repo")
-    if not isinstance(push_repo, str) or not _REPO_RE.match(push_repo):
-        raise ValueError(
-            f"repos[{index}].push_repo is required and must be a valid 'owner/name' string"
-        )
-    require_staging_fork = raw.get("require_staging_fork", True)
-    if not isinstance(require_staging_fork, bool):
-        raise ValueError(f"repos[{index}].require_staging_fork must be a boolean")
-    if require_staging_fork and push_repo == repo:
-        raise ValueError(
-            f"repos[{index}].push_repo must be a staging fork, not the upstream repo"
-        )
+    if push_repo is not None:
+        if not isinstance(push_repo, str) or not _REPO_RE.match(push_repo):
+            raise ValueError(
+                f"repos[{index}].push_repo must be a valid 'owner/name' string"
+            )
+        if push_repo.split("/", 1)[0] == repo.split("/", 1)[0]:
+            raise ValueError(
+                f"repos[{index}].push_repo must be a different-owner fork; "
+                "omit push_repo for direct upstream pushes"
+            )
 
     build_commands = raw.get("build_commands", [])
     if not isinstance(build_commands, list):
@@ -165,7 +163,6 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         backport_label=str(backport_label),
         llm_conflict_label=str(llm_conflict_label),
         max_conflicting_files=max_conflicting_files,
-        require_staging_fork=require_staging_fork,
         branches=tuple(branches),
     )
 
