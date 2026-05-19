@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from scripts.fuzzer.artifacts import ArtifactClient, _extract_zip
+from scripts.common.workflow_artifacts import ArtifactClient, _extract_zip
 
 
 def test_extract_zip_valid():
@@ -24,7 +24,7 @@ def test_extract_zip_returns_empty_on_bad_input(blob):
 
 def test_extract_zip_refuses_oversized_archive(monkeypatch):
     """A buggy fuzzer dumping a multi-GB log shouldn't OOM the monitor."""
-    from scripts.fuzzer import artifacts as artifacts_mod
+    from scripts.common import workflow_artifacts as artifacts_mod
     monkeypatch.setattr(artifacts_mod, "_MAX_UNCOMPRESSED_BYTES", 512)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:

@@ -1,4 +1,9 @@
-"""Workflow artifact and log retrieval for fuzzer runs."""
+"""GitHub Actions workflow run and artifact retrieval.
+
+Workflow-agnostic helpers for analysis pipelines (fuzzer, daily CI, PR
+reviewer, etc.) that need to enumerate recent runs of a target workflow
+and pull their uploaded artifacts.
+"""
 
 from __future__ import annotations
 

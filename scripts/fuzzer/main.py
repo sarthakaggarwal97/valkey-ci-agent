@@ -15,9 +15,10 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
+from scripts.common.issue_dedup import IssueDedupPublisher
+from scripts.common.workflow_artifacts import ArtifactClient
+from scripts.fuzzer import issue_renderer
 from scripts.fuzzer.analyzer import FuzzerRunAnalyzer
-from scripts.fuzzer.artifacts import ArtifactClient
-from scripts.fuzzer.issue_publisher import FuzzerIssuePublisher
 
 TARGET_REPO = "valkey-io/valkey-fuzzer"
 WORKFLOW_FILE = "fuzzer-run.yml"
@@ -55,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     gh = Github(auth=Auth.Token(token))
     client = ArtifactClient(gh, token=token)
     analyzer = FuzzerRunAnalyzer(gh, github_token=token, artifact_client=client)
-    publisher = FuzzerIssuePublisher(gh)
+    publisher = IssueDedupPublisher(gh, marker_namespace=issue_renderer.MARKER_NAMESPACE)
 
     runs = client.list_recent_runs(TARGET_REPO, WORKFLOW_FILE, event="schedule", max_runs=1)
     results: list[dict[str, Any]] = []
@@ -78,7 +79,11 @@ def main(argv: list[str] | None = None) -> int:
             entry["verdict"] = analysis.triage_verdict
             entry["summary"] = analysis.summary
             if _should_publish(analysis):
-                action, url = publisher.upsert_issue(TARGET_REPO, analysis)
+                action, url = publisher.upsert(
+                    TARGET_REPO,
+                    fingerprint=analysis.incident_fingerprint or "unknown",
+                    render=issue_renderer.render_for(analysis),
+                )
                 entry["issue_action"] = action
                 entry["issue_url"] = url
         except Exception as exc:

@@ -41,15 +41,17 @@ sweep.py (daily cron or manual dispatch)
 
 ```text
 fuzzer/main.py (cron every 4 hours)
-  -> ArtifactClient.list_recent_runs(valkey-io/valkey-fuzzer, fuzzer-run.yml)
+  -> common.workflow_artifacts.ArtifactClient.list_recent_runs(...)
   -> FuzzerRunAnalyzer.analyze(run)
-       artifacts.py -> download artifacts
+       common.workflow_artifacts -> download the artifact bundle
        analyzer._scan_logs() -> deterministic regex pass
        analyzer._invoke_claude() -> drop artifacts in a tempdir, run Claude
                                     under fuzzer_analysis_readonly profile,
                                     parse JSON verdict
-       incidents.compute_fingerprint() -> stable hash for dedup
-  -> FuzzerIssuePublisher.upsert_issue(...) when overall_status == anomalous
+       common.incidents.compute_fingerprint() -> stable hash over the
+                                    normalized anomaly shapes
+  -> common.issue_dedup.IssueDedupPublisher.upsert(...)
+       fuzzer.issue_renderer.render_for(analysis) -> title/body/comment
 ```
 
 Claude is given `Read,Grep,Glob` only — no edits, no shell, no network. If
@@ -66,9 +68,8 @@ updating issues on `valkey-fuzzer`.
 
 - `scripts/fuzzer/main.py` — CLI entry point (cron / manual dispatch)
 - `scripts/fuzzer/analyzer.py` — orchestration, deterministic scan, Claude Code integration
-- `scripts/fuzzer/artifacts.py` — workflow run artifact download
-- `scripts/fuzzer/issue_publisher.py` — GitHub issue create/update with fingerprint dedup
-- `scripts/fuzzer/incidents.py` — fingerprint computation
+- `scripts/fuzzer/issue_renderer.py` — fuzzer-specific title/body/comment rendering
+- `scripts/fuzzer/models.py` — typed dataclasses for the analysis pipeline
 
 ## AI Layer
 
@@ -85,9 +86,21 @@ Profiles registered today:
 
 ## Common Infrastructure
 
+Workflow-agnostic helpers in `scripts/common/`:
+
 - `git_auth.py` — GIT_ASKPASS credential helper
 - `github_client.py` — retry wrapper for GitHub API
 - `text_utils.py` — ANSI stripping for log scanning
+- `workflow_artifacts.py` — list and download GitHub Actions workflow runs
+  and their uploaded artifact bundles. Used by the fuzzer flow today; any
+  future workflow that needs to analyze recent runs of a target workflow
+  reuses it directly.
+- `incidents.py` — `compute_fingerprint(namespace, shapes)` produces a stable
+  hash over normalized anomaly shapes for issue deduplication.
+- `issue_dedup.py` — `IssueDedupPublisher` creates or updates a GitHub
+  issue keyed by a fingerprint marker. Workflows supply the rendered title,
+  body, and comment via a small `render(marker, occurrences) -> IssueContent`
+  callback; the publisher owns the dedup machinery.
 
 ## Repository Model
 

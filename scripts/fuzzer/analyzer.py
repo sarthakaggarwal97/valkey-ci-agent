@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from scripts.ai.runtime import run_agent
+from scripts.common.incidents import compute_fingerprint
 from scripts.common.text_utils import strip_ansi
-from scripts.fuzzer.artifacts import ArtifactClient
-from scripts.fuzzer.incidents import compute_fingerprint
+from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.fuzzer.models import FuzzerRunAnalysis, FuzzerRunContext, FuzzerSignal
 
 logger = logging.getLogger(__name__)
@@ -287,8 +287,8 @@ class FuzzerRunAnalyzer:
             tested_valkey_sha=context.tested_valkey_sha,
             root_cause_category=root_cause, reproduction_hint=hint,
             incident_fingerprint=compute_fingerprint(
-                repo=repo, workflow_file=workflow_file,
-                root_cause_category=root_cause, anomalies=anomalies,
+                namespace=(repo, workflow_file, root_cause or ""),
+                shapes=[f"{a.title}:{a.evidence}" for a in anomalies],
             ),
             suggested_labels=labels,
         )
