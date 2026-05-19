@@ -1,0 +1,120 @@
+name: Monitor Valkey Fuzzer Runs
+
+on:
+  schedule:
+    - cron: "41 */4 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List candidate fuzzer runs without analyzing them."
+        required: false
+        default: true
+        type: boolean
+      max_runs:
+        description: "Maximum recent fuzzer runs to inspect."
+        required: false
+        default: "1"
+        type: string
+      verbose:
+        description: "Enable verbose logging."
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: monitor-valkey-fuzzer-${{ github.event_name }}
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_EVIDENCE_DIR: agent-evidence
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
+      MAX_RUNS: ${{ github.event.inputs.max_runs || '1' }}
+      VERBOSE: ${{ github.event.inputs.verbose || 'false' }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          npm install -g @anthropic-ai/claude-code
+
+      - name: Generate GitHub App token
+        id: generate-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: valkey-fuzzer
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: valkey-fuzzer-monitor-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Analyze Valkey fuzzer runs
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          args=(
+            -m scripts.fuzzer.main
+            --target-repo "valkey-io/valkey-fuzzer"
+            --workflow-file "fuzzer-run.yml"
+            --max-runs "${MAX_RUNS}"
+            --output fuzzer-monitor-result.json
+          )
+
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+
+          if [[ "${VERBOSE}" == "true" ]]; then
+            args+=(--verbose)
+          fi
+
+          python "${args[@]}"
+
+      - name: Upload fuzzer analysis result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: valkey-fuzzer-monitor-result-${{ github.run_id }}
+          path: fuzzer-monitor-result.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload agent evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: valkey-fuzzer-agent-evidence-${{ github.run_id }}
+          path: agent-evidence
+          if-no-files-found: ignore
+          retention-days: 30

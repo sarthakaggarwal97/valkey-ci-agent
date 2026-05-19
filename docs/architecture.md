@@ -1,13 +1,15 @@
 # Architecture
 
-The Valkey CI Agent automates backport cherry-picks across Valkey repositories
-defined in the central `repos.yml` registry.
+The Valkey CI Agent runs scheduled workflows that act on Valkey repositories
+defined in the central `repos.yml` registry. Two workflows are active today:
+backports and fuzzer monitoring.
 
 ## Layers
 
 ```text
 scripts/
-  backport/    Backport workflow (active)
+  backport/    Backport workflow
+  fuzzer/      Fuzzer monitor workflow
   ai/          Claude Code subprocess orchestration
   common/      Shared infrastructure
 repos.yml      Registry of repos, release branches, and project boards
@@ -35,36 +37,57 @@ sweep.py (daily cron or manual dispatch)
   typed sweep results, Git workspace operations, GitHub PR operations,
   GraphQL access, validation command execution, and Markdown reporting
 
-### AI Layer
-
-The only AI usage is conflict resolution:
+## Fuzzer Flow
 
 ```text
-conflict_resolver.py
-  → runtime.run_agent("conflict_resolve_edit_only", prompt, cwd=repo)
-    → claude_code.run_claude_code(prompt, ...)
-      → subprocess: claude --print (Claude Code CLI via Bedrock)
+fuzzer/main.py (cron every 4 hours)
+  -> ArtifactClient.list_recent_runs(valkey-io/valkey-fuzzer, fuzzer-run.yml)
+  -> FuzzerRunAnalyzer.analyze(run)
+       artifacts.py -> download artifacts and run logs
+       analyzer._scan_logs() -> deterministic pattern matching
+       analyzer._invoke_claude() -> shallow-clones valkey + valkey-fuzzer at
+                                    the tested SHA, runs Claude under the
+                                    fuzzer_analysis_readonly profile, parses
+                                    JSON verdict
+       incidents.compute_fingerprint() -> stable hash for dedup
+  -> FuzzerIssuePublisher.upsert_issue(...) when overall_status == anomalous
 ```
 
-Claude gets the repo checkout with conflict markers, reads both sides, and edits
-only the conflicted files in place. The prompt is parameterized by the repo
-language from `repos.yml`.
+Claude is given `Read,Grep,Glob` only — no edits, no shell, no network. If the
+clone or Claude call fails, the analyzer falls back to deterministic findings
+and labels the verdict `needs-human-triage` rather than silently reporting
+"normal".
 
-Validation first runs the registry's optional `validation_setup_commands`,
-then validates the branch after each cherry-pick. The sweep branch is kept
-green: a cherry-pick is only kept if the whole branch still validates, and a
-failure is reset off the branch so it can never block later candidates. The
-run keeps a single validated cherry-pick (`--max-candidates 1`) and records
-skipped or failed candidates in the PR's "Needs attention" section without
-committing them. When `repair_validation_failures` is enabled, Claude Code
-gets one edit-only repair attempt scoped to the backport diff before a failing
-cherry-pick is dropped. Repos with no `build_commands` configured rely on
-upstream CI for verification.
+Unlike the backport flow, the fuzzer monitor never writes to `valkey-io/valkey`
+or `valkey-io/valkey-fuzzer` source — its only side effect is creating or
+updating issues on `valkey-fuzzer`.
 
-### Common Infrastructure
+### Entry Points
+
+- `scripts/fuzzer/main.py` — CLI entry point (cron / manual dispatch)
+- `scripts/fuzzer/analyzer.py` — orchestration, deterministic scan, Claude Code integration
+- `scripts/fuzzer/artifacts.py` — workflow run artifact and log download
+- `scripts/fuzzer/issue_publisher.py` — GitHub issue create/update with fingerprint dedup
+- `scripts/fuzzer/incidents.py` — fingerprint computation
+
+## AI Layer
+
+```text
+runtime.run_agent(profile, prompt, cwd=...)
+  -> claude_code.run_claude_code(...)
+    -> subprocess: claude --print (Claude Code CLI via Bedrock)
+```
+
+Profiles registered today:
+
+- `conflict_resolve_edit_only` — backport conflict resolution (Read/Edit/Bash, writes allowed)
+- `fuzzer_analysis_readonly` — fuzzer triage (Read/Grep/Glob only, no writes)
+
+## Common Infrastructure
 
 - `git_auth.py` — GIT_ASKPASS credential helper
 - `github_client.py` — retry wrapper for GitHub API
+- `text_utils.py` — ANSI stripping for log scanning
 
 ## Repository Model
 
@@ -79,8 +102,8 @@ the normal deployment model.
 
 ## Planned Workflows
 
-Future sibling modules to `backport/`:
+Future sibling modules to `backport/` and `fuzzer/`:
 
 - **PR Reviewer** — two-stage code review with skeptic pass
-- **Fuzzer Monitor** — triage fuzzer failures, file issues
 - **Daily CI Analysis** — detect flaky tests, generate fix PRs
+

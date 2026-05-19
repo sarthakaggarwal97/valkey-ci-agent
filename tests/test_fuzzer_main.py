@@ -1,0 +1,76 @@
+"""Tests for fuzzer main CLI."""
+from __future__ import annotations
+
+import json
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+import scripts.fuzzer.main as fuzzer_main_mod
+
+
+def test_requires_token(capsys, monkeypatch):
+    monkeypatch.delenv("TARGET_TOKEN", raising=False)
+    with pytest.raises(SystemExit):
+        fuzzer_main_mod.main([])
+    err = capsys.readouterr().err
+    assert "target-token" in err or "TARGET_TOKEN" in err
+
+
+def test_dry_run_prints_runs(monkeypatch, capsys):
+    monkeypatch.setenv("TARGET_TOKEN", "fake")
+    mock_run = MagicMock(id=42, conclusion="success", html_url="https://x/runs/42")
+    mock_workflow = MagicMock()
+    mock_workflow.get_runs.return_value = iter([mock_run])
+    mock_repo = MagicMock()
+    mock_repo.get_workflow.return_value = mock_workflow
+    mock_gh_cls = MagicMock()
+    mock_gh_cls.return_value.get_repo.return_value = mock_repo
+
+    with patch.object(fuzzer_main_mod, "Github", mock_gh_cls):
+        rc = fuzzer_main_mod.main(["--dry-run"])
+    assert rc == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["dry_run"] is True
+    assert payload["runs"] == [{
+        "run_id": 42, "conclusion": "success",
+        "html_url": "https://x/runs/42", "action": "would-analyze",
+    }]
+
+
+def test_output_flag_writes_file(monkeypatch, tmp_path):
+    monkeypatch.setenv("TARGET_TOKEN", "fake")
+    mock_workflow = MagicMock()
+    mock_workflow.get_runs.return_value = iter([])
+    mock_repo = MagicMock()
+    mock_repo.get_workflow.return_value = mock_workflow
+    mock_gh_cls = MagicMock()
+    mock_gh_cls.return_value.get_repo.return_value = mock_repo
+
+    out = tmp_path / "result.json"
+    with patch.object(fuzzer_main_mod, "Github", mock_gh_cls):
+        rc = fuzzer_main_mod.main(["--dry-run", "--output", str(out)])
+    assert rc == 0
+    assert json.loads(out.read_text())["runs"] == []
+
+
+def test_analysis_error_recorded(monkeypatch, capsys):
+    """An exception inside analyze() is captured per-run, not propagated."""
+    monkeypatch.setenv("TARGET_TOKEN", "fake")
+    mock_run = MagicMock(id=99, conclusion="failure", html_url="https://x/runs/99")
+    mock_workflow = MagicMock()
+    mock_workflow.get_runs.return_value = iter([mock_run])
+    mock_repo = MagicMock()
+    mock_repo.get_workflow.return_value = mock_workflow
+    mock_gh_cls = MagicMock()
+    mock_gh_cls.return_value.get_repo.return_value = mock_repo
+
+    with patch.object(fuzzer_main_mod, "Github", mock_gh_cls), \
+         patch.object(fuzzer_main_mod, "FuzzerRunAnalyzer") as mock_analyzer_cls:
+        mock_analyzer_cls.return_value.analyze.side_effect = RuntimeError("boom")
+        rc = fuzzer_main_mod.main([])
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["runs"][0]["action"] == "error"
+    assert "boom" in payload["runs"][0]["error"]

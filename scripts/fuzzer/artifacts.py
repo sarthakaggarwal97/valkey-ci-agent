@@ -1,0 +1,147 @@
+"""Workflow artifact and log retrieval for fuzzer runs."""
+
+from __future__ import annotations
+
+import io
+import logging
+import time
+import zipfile
+from dataclasses import dataclass
+from itertools import islice
+from typing import TYPE_CHECKING, Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+from scripts.common.github_client import retry_github_call
+
+if TYPE_CHECKING:
+    from github import Github
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class WorkflowArtifact:
+    artifact_id: int
+    name: str
+    size_in_bytes: int
+    expired: bool
+
+
+class ArtifactClient:
+    """Fetches workflow artifacts and logs from GitHub Actions."""
+
+    # Cap downloaded artifacts to defend against runaway logs / zip-bombs.
+    # Real fuzzer artifacts are typically <50 MB; this is a generous ceiling.
+    MAX_ARTIFACT_BYTES = 500 * 1024 * 1024
+
+    def __init__(self, github_client: Github, *, token: str, retries: int = 3) -> None:
+        if not token:
+            raise ValueError("GitHub token is required")
+        self._gh = github_client
+        self._token = token
+        self._retries = retries
+
+    def list_recent_runs(
+        self, repo_full_name: str, workflow_file: str,
+        *, event: str = "schedule", max_runs: int = 1,
+    ) -> list[Any]:
+        def _fetch() -> list[Any]:
+            repo = self._gh.get_repo(repo_full_name)
+            workflow = repo.get_workflow(workflow_file)
+            return list(islice(workflow.get_runs(event=event, status="completed"), max_runs))
+
+        return retry_github_call(
+            _fetch, retries=self._retries, description=f"list runs {workflow_file}",
+        )
+
+    def list_run_artifacts(self, repo_full_name: str, run_id: int) -> list[WorkflowArtifact]:
+        repo = self._gh.get_repo(repo_full_name)
+
+        def _fetch() -> Any:
+            _, data = repo._requester.requestJsonAndCheck(
+                "GET", f"/repos/{repo_full_name}/actions/runs/{run_id}/artifacts",
+            )
+            return data
+
+        payload = retry_github_call(_fetch, retries=self._retries,
+                                    description=f"list artifacts {run_id}")
+        if not isinstance(payload, dict):
+            return []
+        return [
+            WorkflowArtifact(
+                artifact_id=a["id"], name=a["name"],
+                size_in_bytes=a.get("size_in_bytes", 0),
+                expired=a.get("expired", False),
+            )
+            for a in payload.get("artifacts", [])
+            if isinstance(a, dict) and isinstance(a.get("id"), int)
+        ]
+
+    def download_artifact(self, repo_full_name: str, artifact_id: int) -> dict[str, bytes]:
+        blob = self._download(f"/repos/{repo_full_name}/actions/artifacts/{artifact_id}/zip")
+        return _extract_zip(blob, max_uncompressed=self.MAX_ARTIFACT_BYTES)
+
+    def download_run_logs(self, repo_full_name: str, run_id: int) -> dict[str, bytes]:
+        blob = self._download(f"/repos/{repo_full_name}/actions/runs/{run_id}/logs")
+        return _extract_zip(blob, max_uncompressed=self.MAX_ARTIFACT_BYTES)
+
+    def _download(self, path: str) -> bytes:
+        """Download bytes from the GitHub API with retry on transient errors."""
+        url = f"https://api.github.com{path}"
+        req = Request(url, headers={
+            "Authorization": f"Bearer {self._token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "valkey-ci-agent",
+        })
+        # urllib does not forward the Authorization header on cross-host
+        # redirects, which is what we want (GitHub redirects to signed S3 URLs).
+        for attempt in range(self._retries + 1):
+            try:
+                with urlopen(req, timeout=120) as resp:
+                    return resp.read()
+            except HTTPError as exc:
+                if exc.code == 404:
+                    logger.warning("Artifact not found at %s (likely expired)", path)
+                    return b""
+                if exc.code in (429, 500, 502, 503, 504) and attempt < self._retries:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise
+            except (URLError, TimeoutError, ConnectionError):
+                if attempt < self._retries:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise
+        return b""
+
+
+def _extract_zip(blob: bytes, *, max_uncompressed: int = 500 * 1024 * 1024) -> dict[str, bytes]:
+    """Extract a zip into a flat dict, rejecting path traversal and oversized entries."""
+    if not blob:
+        return {}
+    try:
+        with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+            total = sum(m.file_size for m in zf.infolist())
+            if total > max_uncompressed:
+                logger.warning(
+                    "Artifact uncompressed size %d exceeds cap %d; refusing to extract",
+                    total, max_uncompressed,
+                )
+                return {}
+            out: dict[str, bytes] = {}
+            for m in zf.infolist():
+                if m.is_dir():
+                    continue
+                # Reject absolute paths and parent-traversal entries; signed
+                # GitHub artifact zips contain only forward-slash paths under
+                # the artifact root, so this is a tight check.
+                norm = m.filename.replace("\\", "/")
+                if norm.startswith("/") or "../" in norm:
+                    logger.warning("Skipping suspicious zip entry: %r", m.filename)
+                    continue
+                out[norm] = zf.read(m)
+            return out
+    except zipfile.BadZipFile:
+        logger.warning("Artifact zip is corrupt; returning empty")
+        return {}
