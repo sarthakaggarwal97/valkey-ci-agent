@@ -45,8 +45,11 @@ fuzzer/main.py (cron every 4 hours)
   -> FuzzerRunAnalyzer.analyze(run)
        common.workflow_artifacts -> download the artifact bundle
        analyzer._scan_logs() -> deterministic regex pass
-       analyzer._invoke_claude() -> drop artifacts in a tempdir, run Claude
-                                    under fuzzer_analysis_readonly profile,
+       analyzer._invoke_claude() -> drop artifacts in a tempdir,
+                                    common.git_clone -> shallow-clone
+                                    valkey + valkey-fuzzer at the tested
+                                    SHAs, run Claude under
+                                    fuzzer_analysis_readonly profile,
                                     parse JSON verdict
        common.incidents.compute_fingerprint() -> stable hash over the
                                     normalized anomaly shapes
@@ -54,11 +57,15 @@ fuzzer/main.py (cron every 4 hours)
        fuzzer.issue_renderer.render_for(analysis) -> title/body/comment
 ```
 
-Claude is given `Read,Grep,Glob` only — no edits, no shell, no network. If
-Claude fails, the analyzer falls back to deterministic findings and labels the
-verdict `needs-human-triage` rather than silently reporting "normal". If the
-fuzzer run produced no artifact bundle the analyzer surfaces that as an error
-rather than triaging from raw logs.
+Claude is given `Read,Grep,Glob` only — no edits, no shell, no network. The
+clones give Claude line-level access so it can grep for assertion text or
+crash handlers in `valkey/src/` to distinguish known-benign asserts from new
+crashes. If a clone fails, the prompt tells Claude not to cite source line
+numbers and the analyzer falls back to artifact-only analysis. If Claude
+itself fails, the analyzer falls back to deterministic findings and labels
+the verdict `needs-human-triage` rather than silently reporting "normal".
+If the fuzzer run produced no artifact bundle the analyzer surfaces that
+as an error rather than triaging from raw logs.
 
 Unlike the backport flow, the fuzzer monitor never writes to `valkey-io/valkey`
 or `valkey-io/valkey-fuzzer` source — its only side effect is creating or
@@ -95,6 +102,10 @@ Workflow-agnostic helpers in `scripts/common/`:
   and their uploaded artifact bundles. Used by the fuzzer flow today; any
   future workflow that needs to analyze recent runs of a target workflow
   reuses it directly.
+- `git_clone.py` — `shallow_clone_at_sha(repo, dest, sha)` — defensive
+  shallow clone of a public repo at a specific commit, with input
+  validation against argument injection. Used by the fuzzer flow to give
+  Claude source access at the tested SHA.
 - `incidents.py` — `compute_fingerprint(namespace, shapes)` produces a stable
   hash over normalized anomaly shapes for issue deduplication.
 - `issue_dedup.py` — `IssueDedupPublisher` creates or updates a GitHub

@@ -100,3 +100,20 @@ def test_parse_claude_response_requires_overall_status():
 def test_parse_claude_response_rejects_garbage():
     with pytest.raises(ValueError):
         _parse_claude_response("no json here at all")
+
+
+def test_format_source_note_when_clones_succeed():
+    from scripts.fuzzer.analyzer import _format_source_note
+    ctx = _ctx(tested_valkey_sha="deadbeef")
+    note = _format_source_note(ctx, valkey_ok=True, fuzzer_ok=True)
+    assert "valkey/" in note and "deadbeef" in note
+    assert "valkey-fuzzer/" in note
+    assert "NOT AVAILABLE" not in note
+
+
+def test_format_source_note_when_clones_fail():
+    """A failed clone must be called out so Claude doesn't cite line numbers."""
+    from scripts.fuzzer.analyzer import _format_source_note
+    note = _format_source_note(_ctx(), valkey_ok=False, fuzzer_ok=False)
+    assert "NOT AVAILABLE" in note
+    assert "Do not cite source line numbers" in note

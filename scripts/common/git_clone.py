@@ -1,0 +1,80 @@
+"""Shallow git-clone helpers for workflows that need source access.
+
+Workflow-agnostic. Used today by the fuzzer monitor (clones valkey + the
+fuzzer repo at the tested SHA so Claude Code can grep through source while
+triaging); other analysis workflows can reuse the same pattern.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import subprocess
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
+_REPO_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+
+_CLONE_TIMEOUT_S = 120
+_FETCH_TIMEOUT_S = 60
+_CHECKOUT_TIMEOUT_S = 30
+
+
+def shallow_clone_at_sha(repo: str, dest: Path, sha: str | None = None) -> bool:
+    """Clone ``repo`` (e.g. ``"valkey-io/valkey"``) into ``dest``.
+
+    If ``sha`` is provided, fetches and checks out that exact commit.
+    If ``sha`` is None, does a regular ``--depth 1`` clone of the default
+    branch.
+
+    Returns True on success, False on any failure. Failures are logged at
+    warning level — callers are expected to keep going (e.g. tell their
+    AI subprocess that source is unavailable) rather than abort.
+
+    Inputs are validated to defend against argument injection into git:
+    ``repo`` must match ``owner/name``, ``sha`` must match a hex commit hash.
+    """
+    if not _REPO_RE.fullmatch(repo):
+        logger.warning("Refusing to clone unrecognized repo identifier: %r", repo)
+        return False
+    if sha is not None and not _SHA_RE.fullmatch(sha):
+        logger.warning("Refusing to clone %s at non-SHA value: %r", repo, sha)
+        return False
+
+    url = f"https://github.com/{repo}.git"
+    args = ["git", "clone", "--filter=blob:none"]
+    if sha is None:
+        args.extend(["--depth", "1"])
+    args.extend([url, str(dest)])
+
+    if not _run(args, timeout=_CLONE_TIMEOUT_S, desc=f"clone {repo}"):
+        return False
+    if sha is None:
+        return True
+
+    if not _run(
+        ["git", "fetch", "--depth", "1", "origin", sha],
+        cwd=dest, timeout=_FETCH_TIMEOUT_S, desc=f"fetch {sha[:12]} in {repo}",
+    ):
+        return False
+    return _run(
+        ["git", "checkout", sha],
+        cwd=dest, timeout=_CHECKOUT_TIMEOUT_S, desc=f"checkout {sha[:12]} in {repo}",
+    )
+
+
+def _run(args: list[str], *, timeout: int, desc: str, cwd: Path | None = None) -> bool:
+    try:
+        result = subprocess.run(
+            args, cwd=str(cwd) if cwd else None,
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning("git %s timed out after %ds", desc, timeout)
+        return False
+    if result.returncode != 0:
+        logger.warning("git %s failed: %s", desc, result.stderr[:200].strip())
+        return False
+    return True

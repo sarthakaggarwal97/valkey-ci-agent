@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.ai.runtime import run_agent
+from scripts.common.git_clone import shallow_clone_at_sha
 from scripts.common.incidents import compute_fingerprint
 from scripts.common.text_utils import strip_ansi
 from scripts.common.workflow_artifacts import ArtifactClient
@@ -136,11 +137,15 @@ segfaults, permanent slot loss, split-brain, data inconsistency after recovery.
 ## Run
 {run_url} (Valkey SHA {valkey_sha}, scenario {scenario_id}, seed {seed})
 
+## Working directory layout
+{source_note}
+
 ## Deterministic findings
 {deterministic_summary}
 
 ## Task
-Read _artifacts/ as needed. Return ONLY a single JSON object:
+Read the artifacts and source as needed (use Grep to find assertion text or
+crash handlers in valkey/src/ for context). Return ONLY a single JSON object:
 {{
   "overall_status": "normal|warning|anomalous",
   "triage_verdict": "likely-core-valkey-bug|possible-core-valkey-bug|expected-chaos-noise|environmental-or-infra|needs-human-triage",
@@ -154,7 +159,7 @@ Read _artifacts/ as needed. Return ONLY a single JSON object:
 
 def _invoke_claude(context: FuzzerRunContext, anomalies: list[FuzzerSignal],
                    workdir: Path) -> dict[str, Any]:
-    """Drop artifacts in workdir/_artifacts and let Claude grep them."""
+    """Drop artifacts in workdir/_artifacts, clone source, and run Claude."""
     art_dir = workdir / "_artifacts"
     art_dir.mkdir()
     if context.results:
@@ -162,12 +167,25 @@ def _invoke_claude(context: FuzzerRunContext, anomalies: list[FuzzerSignal],
     for name, text in context.node_logs.items():
         (art_dir / name).write_text(text)
 
+    # Clone valkey at the tested commit and the fuzzer at the run's HEAD so
+    # Claude can grep for assertion text, crash handlers, validation logic.
+    # If a clone fails, tell Claude so it doesn't cite source line numbers
+    # with false confidence.
+    valkey_ok = shallow_clone_at_sha(
+        "valkey-io/valkey", workdir / "valkey", context.tested_valkey_sha,
+    )
+    fuzzer_ok = shallow_clone_at_sha(
+        context.repo, workdir / "valkey-fuzzer", context.head_sha or None,
+    )
+
+    source_note = _format_source_note(context, valkey_ok=valkey_ok, fuzzer_ok=fuzzer_ok)
     det_lines = [f"- [{a.severity}] {a.title}: {a.evidence}" for a in anomalies[:15]] or ["- none"]
     prompt = _CLAUDE_PROMPT_TEMPLATE.format(
         run_url=context.run_url,
         valkey_sha=context.tested_valkey_sha or "unknown",
         scenario_id=context.scenario_id or "unknown",
         seed=context.seed or "unknown",
+        source_note=source_note,
         deterministic_summary="\n".join(det_lines),
     )
 
@@ -175,6 +193,28 @@ def _invoke_claude(context: FuzzerRunContext, anomalies: list[FuzzerSignal],
     if result.returncode != 0:
         raise RuntimeError(f"Claude Code failed (rc={result.returncode}): {result.stderr[:300]}")
     return _parse_claude_response(result.stdout)
+
+
+def _format_source_note(context: FuzzerRunContext, *, valkey_ok: bool, fuzzer_ok: bool) -> str:
+    """Tell Claude exactly which source trees are available and at what SHA."""
+    lines = ["- _artifacts/ — results.json and per-node Valkey server logs."]
+    if valkey_ok:
+        lines.append(
+            f"- valkey/ — Valkey source at commit {context.tested_valkey_sha or 'default branch'}. "
+            "Grep for assertion text, crash handlers, BUG REPORT lines."
+        )
+    else:
+        lines.append(
+            "- valkey/ — NOT AVAILABLE (clone failed). Do not cite source line numbers."
+        )
+    if fuzzer_ok:
+        lines.append(
+            "- valkey-fuzzer/ — Fuzzer source at the run's HEAD. "
+            "Check validation logic in src/ if a check failed."
+        )
+    else:
+        lines.append("- valkey-fuzzer/ — NOT AVAILABLE (clone failed).")
+    return "\n".join(lines)
 
 
 def _parse_claude_response(stdout: str) -> dict[str, Any]:
