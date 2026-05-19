@@ -153,7 +153,7 @@ The monitor reuses the same secrets and OIDC role as the backport workflow (see 
 ### Manual run
 
 ```bash
-# List candidate runs without invoking Claude or filing issues (default)
+# List candidate runs without invoking Claude or filing issues (dry_run=true by default)
 gh workflow run monitor-fuzzer.yml --repo valkey-io/valkey-ci-agent
 
 # Run live against the last 3 runs

@@ -76,7 +76,8 @@ def test_updates_existing_issue_on_search_hit():
 
 
 def test_updates_existing_with_none_body():
-    """Regression: existing issue with None body should not crash."""
+    """Regression: if the loaded body is None/empty, the dedup marker is
+    re-injected so future runs still match this issue."""
     marker = "<!-- valkey-ci-agent:fuzzer-issue:fp_test_12345678901 -->"
     # Search result has the marker in body, but the reloaded issue has body=None.
     loaded = MagicMock(
@@ -95,3 +96,6 @@ def test_updates_existing_with_none_body():
     )
     assert action == "updated"
     loaded.edit.assert_called_once()
+    edited_body = loaded.edit.call_args.kwargs["body"]
+    assert marker in edited_body
+    assert "<!-- valkey-ci-agent:occurrences:2 -->" in edited_body

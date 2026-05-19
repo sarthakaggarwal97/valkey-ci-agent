@@ -35,3 +35,25 @@ def test_volatile_parts_normalized():
         anomalies=[FuzzerSignal("crash", "critical", "node-5 at 0xdeadbeef")],
     )
     assert fp1 == fp2
+
+
+def test_volatile_parts_normalized_multi_anomalies():
+    """With many anomalies, normalization happens before dedup/slice so
+    volatile variants do not change which shapes survive the cap."""
+    fp1 = compute_fingerprint(
+        repo="r", workflow_file="w", root_cause_category="crash",
+        anomalies=[
+            FuzzerSignal("crash", "critical", "node-1 at 0xaaa"),
+            FuzzerSignal("crash", "critical", "node-2 at 0xbbb"),
+            FuzzerSignal("timeout", "critical", "after 120 seconds"),
+        ],
+    )
+    fp2 = compute_fingerprint(
+        repo="r", workflow_file="w", root_cause_category="crash",
+        anomalies=[
+            FuzzerSignal("crash", "critical", "node-9 at 0xdeadbeef"),
+            FuzzerSignal("crash", "critical", "node-10 at 0xfeedface"),
+            FuzzerSignal("timeout", "critical", "after 999 seconds"),
+        ],
+    )
+    assert fp1 == fp2

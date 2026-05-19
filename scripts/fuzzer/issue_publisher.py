@@ -53,6 +53,10 @@ class FuzzerIssuePublisher:
 
         # Update existing.
         body = existing.body or ""
+        # If the loaded body lost the dedup marker (e.g. an editor stripped
+        # HTML comments), reinject it so future runs still match this issue.
+        if marker not in body:
+            body = f"{marker}\n{body}".rstrip()
         m = _OCCURRENCES_RE.search(body)
         count = int(m.group(1)) + 1 if m else 2
         new_body = (

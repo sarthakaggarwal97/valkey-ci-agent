@@ -113,7 +113,7 @@ class ArtifactClient:
                     time.sleep(2 ** attempt)
                     continue
                 raise
-        return b""
+        raise AssertionError("unreachable: retry loop must return or raise")
 
 
 def _extract_zip(blob: bytes, *, max_uncompressed: int = 500 * 1024 * 1024) -> dict[str, bytes]:

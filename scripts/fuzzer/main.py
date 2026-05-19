@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from github import Auth, Github
 
@@ -20,6 +20,13 @@ from scripts.fuzzer.artifacts import ArtifactClient
 from scripts.fuzzer.issue_publisher import FuzzerIssuePublisher
 
 logger = logging.getLogger(__name__)
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("--max-runs must be >= 1")
+    return parsed
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -32,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="Workflow event type to filter on (default: %(default)s)")
     parser.add_argument("--target-token", default=None,
                         help="GitHub token (falls back to TARGET_TOKEN env var)")
-    parser.add_argument("--max-runs", type=int, default=1,
+    parser.add_argument("--max-runs", type=_positive_int, default=1,
                         help="Maximum recent runs to inspect (default: %(default)s)")
     parser.add_argument("--output",
                         help="Write JSON result to this path instead of stdout")
