@@ -1,4 +1,4 @@
-"""Monitor scheduled Valkey fuzzer workflow runs."""
+"""Monitor the latest scheduled Valkey fuzzer workflow run."""
 
 from __future__ import annotations
 
@@ -19,39 +19,23 @@ from scripts.fuzzer.analyzer import FuzzerRunAnalyzer
 from scripts.fuzzer.artifacts import ArtifactClient
 from scripts.fuzzer.issue_publisher import FuzzerIssuePublisher
 
+TARGET_REPO = "valkey-io/valkey-fuzzer"
+WORKFLOW_FILE = "fuzzer-run.yml"
+
 logger = logging.getLogger(__name__)
-
-
-def _positive_int(value: str) -> int:
-    parsed = int(value)
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("--max-runs must be >= 1")
-    return parsed
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--target-repo", default="valkey-io/valkey-fuzzer",
-                        help="Target repository to monitor (default: %(default)s)")
-    parser.add_argument("--workflow-file", default="fuzzer-run.yml",
-                        help="Workflow filename in the target repo (default: %(default)s)")
-    parser.add_argument("--event", default="schedule",
-                        help="Workflow event type to filter on (default: %(default)s)")
     parser.add_argument("--target-token", default=None,
                         help="GitHub token (falls back to TARGET_TOKEN env var)")
-    parser.add_argument("--max-runs", type=_positive_int, default=1,
-                        help="Maximum recent runs to inspect (default: %(default)s)")
     parser.add_argument("--output",
                         help="Write JSON result to this path instead of stdout")
     parser.add_argument("--dry-run", action="store_true",
-                        help="List candidate runs without analyzing or filing issues")
-    parser.add_argument("--verbose", action="store_true")
+                        help="List the latest run without analyzing or filing an issue")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     token = args.target_token or os.environ.get("TARGET_TOKEN", "")
     if not token:
@@ -62,11 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     analyzer = FuzzerRunAnalyzer(gh, github_token=token, artifact_client=client)
     publisher = FuzzerIssuePublisher(gh)
 
-    runs = client.list_recent_runs(
-        args.target_repo, args.workflow_file,
-        event=args.event, max_runs=args.max_runs,
-    )
-
+    runs = client.list_recent_runs(TARGET_REPO, WORKFLOW_FILE, event="schedule", max_runs=1)
     results: list[dict[str, Any]] = []
     for run in runs:
         entry: dict[str, Any] = {
@@ -81,16 +61,13 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         try:
-            analysis = analyzer.analyze(
-                args.target_repo, run.id, workflow_file=args.workflow_file,
-            )
+            analysis = analyzer.analyze(TARGET_REPO, run.id, workflow_file=WORKFLOW_FILE)
             entry["action"] = "analyzed"
             entry["status"] = analysis.overall_status
             entry["verdict"] = analysis.triage_verdict
             entry["summary"] = analysis.summary
-
             if analysis.overall_status == "anomalous":
-                action, url = publisher.upsert_issue(args.target_repo, analysis)
+                action, url = publisher.upsert_issue(TARGET_REPO, analysis)
                 entry["issue_action"] = action
                 entry["issue_url"] = url
         except Exception as exc:
@@ -100,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
 
         results.append(entry)
 
-    output = {"target_repo": args.target_repo, "dry_run": args.dry_run, "runs": results}
+    output = {"target_repo": TARGET_REPO, "dry_run": args.dry_run, "runs": results}
     rendered = json.dumps(output, indent=2)
     if args.output:
         Path(args.output).write_text(rendered, encoding="utf-8")

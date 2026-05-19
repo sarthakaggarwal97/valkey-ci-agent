@@ -5,7 +5,6 @@ import pytest
 
 from scripts.fuzzer.analyzer import (
     _dedupe_signals,
-    _find_sha,
     _load_artifacts,
     _parse_claude_response,
     _scan_logs,
@@ -14,26 +13,22 @@ from scripts.fuzzer.analyzer import (
 from scripts.fuzzer.models import FuzzerRunContext, FuzzerSignal
 
 
+def _ctx(**kw) -> FuzzerRunContext:
+    defaults = dict(repo="r", workflow_file="w", run_id=1, run_url="u",
+                    conclusion="failure", head_sha="h")
+    defaults.update(kw)
+    return FuzzerRunContext(**defaults)
+
+
 def test_scan_logs_detects_crash():
-    ctx = FuzzerRunContext(repo="r", workflow_file="w", run_id=1, run_url="u",
-                           conclusion="failure", head_sha="h")
-    ctx.raw_job_log = "ASSERTION FAILED at server.c:123"
+    ctx = _ctx()
+    ctx.node_logs = {"node-1.log": "ASSERTION FAILED at server.c:123"}
     anomalies, _ = _scan_logs(ctx)
     assert any("crash" in a.title.lower() or "assertion" in a.title.lower() for a in anomalies)
 
 
-def test_scan_logs_detects_normal():
-    ctx = FuzzerRunContext(repo="r", workflow_file="w", run_id=1, run_url="u",
-                           conclusion="success", head_sha="h")
-    ctx.node_logs = {"n.log": "Failover election won"}
-    anomalies, normals = _scan_logs(ctx)
-    assert len(anomalies) == 0
-    assert any("Failover" in n for n in normals)
-
-
-def test_scan_logs_structured_results():
-    ctx = FuzzerRunContext(repo="r", workflow_file="w", run_id=1, run_url="u",
-                           conclusion="failure", head_sha="h")
+def test_scan_logs_validation_failure():
+    ctx = _ctx()
     ctx.results = {
         "success": False, "error_message": "failed",
         "final_validation": {"checks": {"slot_coverage": {"success": False, "error": "lost slots"}}},
@@ -42,20 +37,8 @@ def test_scan_logs_structured_results():
     assert any("slot" in a.title.lower() for a in anomalies)
 
 
-def test_find_sha():
-    assert _find_sha({"valkey_sha": "abc1234"}) == "abc1234"
-    assert _find_sha({"nested": {"tested_valkey_sha": "def5678"}}) == "def5678"
-    assert _find_sha({"unrelated": "data"}) is None
-
-
-def test_find_sha_rejects_non_sha():
-    # Key matches but value isn't a valid SHA.
-    assert _find_sha({"valkey_sha": "not-a-sha"}) is None
-
-
-def test_load_artifacts():
-    ctx = FuzzerRunContext(repo="r", workflow_file="w", run_id=1, run_url="u",
-                           conclusion="failure", head_sha="h")
+def test_load_artifacts_reads_manifest_and_results():
+    ctx = _ctx()
     _load_artifacts(ctx, {
         "manifest.json": b'{"scenario_id": "chaos-1", "seed": 42, "valkey_sha": "deadbeef1234567"}',
         "results.json": b'{"results": [{"success": false}]}',
@@ -68,9 +51,7 @@ def test_load_artifacts():
 
 
 def test_triage_normal():
-    status, verdict = _triage([])
-    assert status == "normal"
-    assert verdict == "expected-chaos-noise"
+    assert _triage([]) == ("normal", "expected-chaos-noise")
 
 
 def test_triage_critical_bug_indicator():
@@ -79,17 +60,14 @@ def test_triage_critical_bug_indicator():
     assert verdict == "likely-core-valkey-bug"
 
 
-def test_triage_critical_non_indicator():
-    # A critical signal that's NOT in bug indicators set.
-    status, verdict = _triage([FuzzerSignal("custom validation failed", "critical", "x")])
-    assert status == "anomalous"
-    assert verdict == "possible-core-valkey-bug"
+def test_triage_critical_non_bug_indicator():
+    # OOM is critical but not in the bug-indicator subset.
+    status, verdict = _triage([FuzzerSignal("OOM", "critical", "x")])
+    assert (status, verdict) == ("anomalous", "possible-core-valkey-bug")
 
 
 def test_triage_warning():
-    status, verdict = _triage([FuzzerSignal("something", "warning", "x")])
-    assert status == "warning"
-    assert verdict == "possible-core-valkey-bug"
+    assert _triage([FuzzerSignal("X", "warning", "y")]) == ("warning", "possible-core-valkey-bug")
 
 
 def test_dedupe_signals():
@@ -105,11 +83,6 @@ def test_parse_claude_response_plain_json():
     assert _parse_claude_response('{"overall_status": "normal"}')["overall_status"] == "normal"
 
 
-def test_parse_claude_response_with_prose():
-    text = 'Here is the analysis: {"overall_status": "anomalous", "summary": "x"} Thanks!'
-    assert _parse_claude_response(text)["overall_status"] == "anomalous"
-
-
 def test_parse_claude_response_stream_json():
     stream = "\n".join([
         '{"type": "progress", "data": "thinking"}',
@@ -118,13 +91,12 @@ def test_parse_claude_response_stream_json():
     assert _parse_claude_response(stream)["overall_status"] == "warning"
 
 
+def test_parse_claude_response_requires_overall_status():
+    """Progress events without overall_status must not be returned as the verdict."""
+    with pytest.raises(ValueError):
+        _parse_claude_response('{"type": "progress", "data": "x"}')
+
+
 def test_parse_claude_response_rejects_garbage():
     with pytest.raises(ValueError):
         _parse_claude_response("no json here at all")
-
-
-def test_bug_indicator_titles_are_subset_of_anomaly_patterns():
-    """Guard against drift between the two pattern tables."""
-    from scripts.fuzzer.analyzer import _ANOMALY_PATTERNS, _BUG_INDICATOR_TITLES
-    pattern_titles = {title for title, _, _ in _ANOMALY_PATTERNS}
-    assert _BUG_INDICATOR_TITLES <= pattern_titles

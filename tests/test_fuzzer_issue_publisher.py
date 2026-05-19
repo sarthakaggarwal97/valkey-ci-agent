@@ -48,7 +48,7 @@ def test_creates_new_issue_when_search_returns_nothing():
     mock_gh.get_repo.return_value = mock_repo
     mock_gh.search_issues.return_value = iter([])
 
-    action, _ = FuzzerIssuePublisher(mock_gh, retries=0).upsert_issue(
+    action, _ = FuzzerIssuePublisher(mock_gh).upsert_issue(
         "valkey-io/valkey-fuzzer", _analysis(),
     )
     assert action == "created"
@@ -67,7 +67,7 @@ def test_updates_existing_issue_on_search_hit():
     mock_gh.get_repo.return_value = mock_repo
     mock_gh.search_issues.return_value = [existing]
 
-    action, _ = FuzzerIssuePublisher(mock_gh, retries=0).upsert_issue(
+    action, _ = FuzzerIssuePublisher(mock_gh).upsert_issue(
         "valkey-io/valkey-fuzzer", _analysis(),
     )
     assert action == "updated"
@@ -75,11 +75,10 @@ def test_updates_existing_issue_on_search_hit():
     existing.create_comment.assert_called_once()
 
 
-def test_updates_existing_with_none_body():
-    """Regression: if the loaded body is None/empty, the dedup marker is
-    re-injected so future runs still match this issue."""
+def test_updates_existing_reinjects_missing_marker():
+    """If the loaded body is None or has been stripped of the marker,
+    re-inject it so future runs continue to dedupe against this issue."""
     marker = "<!-- valkey-ci-agent:fuzzer-issue:fp_test_12345678901 -->"
-    # Search result has the marker in body, but the reloaded issue has body=None.
     loaded = MagicMock(
         number=5, html_url="https://x/issues/5",
         body=None, title="[fuzzer-run] old",
@@ -91,11 +90,10 @@ def test_updates_existing_with_none_body():
     search_result = MagicMock(number=5, body=f"{marker}\n")
     mock_gh.search_issues.return_value = [search_result]
 
-    action, _ = FuzzerIssuePublisher(mock_gh, retries=0).upsert_issue(
+    action, _ = FuzzerIssuePublisher(mock_gh).upsert_issue(
         "valkey-io/valkey-fuzzer", _analysis(),
     )
     assert action == "updated"
-    loaded.edit.assert_called_once()
     edited_body = loaded.edit.call_args.kwargs["body"]
     assert marker in edited_body
     assert "<!-- valkey-ci-agent:occurrences:2 -->" in edited_body

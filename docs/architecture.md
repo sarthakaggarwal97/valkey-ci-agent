@@ -43,20 +43,20 @@ sweep.py (daily cron or manual dispatch)
 fuzzer/main.py (cron every 4 hours)
   -> ArtifactClient.list_recent_runs(valkey-io/valkey-fuzzer, fuzzer-run.yml)
   -> FuzzerRunAnalyzer.analyze(run)
-       artifacts.py -> download artifacts and run logs
-       analyzer._scan_logs() -> deterministic pattern matching
-       analyzer._invoke_claude() -> shallow-clones valkey + valkey-fuzzer at
-                                    the tested SHA, runs Claude under the
-                                    fuzzer_analysis_readonly profile, parses
-                                    JSON verdict
+       artifacts.py -> download artifacts
+       analyzer._scan_logs() -> deterministic regex pass
+       analyzer._invoke_claude() -> drop artifacts in a tempdir, run Claude
+                                    under fuzzer_analysis_readonly profile,
+                                    parse JSON verdict
        incidents.compute_fingerprint() -> stable hash for dedup
   -> FuzzerIssuePublisher.upsert_issue(...) when overall_status == anomalous
 ```
 
-Claude is given `Read,Grep,Glob` only — no edits, no shell, no network. If the
-clone or Claude call fails, the analyzer falls back to deterministic findings
-and labels the verdict `needs-human-triage` rather than silently reporting
-"normal".
+Claude is given `Read,Grep,Glob` only — no edits, no shell, no network. If
+Claude fails, the analyzer falls back to deterministic findings and labels the
+verdict `needs-human-triage` rather than silently reporting "normal". If the
+fuzzer run produced no artifact bundle the analyzer surfaces that as an error
+rather than triaging from raw logs.
 
 Unlike the backport flow, the fuzzer monitor never writes to `valkey-io/valkey`
 or `valkey-io/valkey-fuzzer` source — its only side effect is creating or
@@ -66,7 +66,7 @@ updating issues on `valkey-fuzzer`.
 
 - `scripts/fuzzer/main.py` — CLI entry point (cron / manual dispatch)
 - `scripts/fuzzer/analyzer.py` — orchestration, deterministic scan, Claude Code integration
-- `scripts/fuzzer/artifacts.py` — workflow run artifact and log download
+- `scripts/fuzzer/artifacts.py` — workflow run artifact download
 - `scripts/fuzzer/issue_publisher.py` — GitHub issue create/update with fingerprint dedup
 - `scripts/fuzzer/incidents.py` — fingerprint computation
 

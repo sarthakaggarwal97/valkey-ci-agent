@@ -31,10 +31,6 @@ class WorkflowArtifact:
 class ArtifactClient:
     """Fetches workflow artifacts and logs from GitHub Actions."""
 
-    # Cap downloaded artifacts to defend against runaway logs / zip-bombs.
-    # Real fuzzer artifacts are typically <50 MB; this is a generous ceiling.
-    MAX_ARTIFACT_BYTES = 500 * 1024 * 1024
-
     def __init__(self, github_client: Github, *, token: str, retries: int = 3) -> None:
         if not token:
             raise ValueError("GitHub token is required")
@@ -79,15 +75,11 @@ class ArtifactClient:
         ]
 
     def download_artifact(self, repo_full_name: str, artifact_id: int) -> dict[str, bytes]:
-        blob = self._download(f"/repos/{repo_full_name}/actions/artifacts/{artifact_id}/zip")
-        return _extract_zip(blob, max_uncompressed=self.MAX_ARTIFACT_BYTES)
-
-    def download_run_logs(self, repo_full_name: str, run_id: int) -> dict[str, bytes]:
-        blob = self._download(f"/repos/{repo_full_name}/actions/runs/{run_id}/logs")
-        return _extract_zip(blob, max_uncompressed=self.MAX_ARTIFACT_BYTES)
+        return _extract_zip(self._download(
+            f"/repos/{repo_full_name}/actions/artifacts/{artifact_id}/zip"
+        ))
 
     def _download(self, path: str) -> bytes:
-        """Download bytes from the GitHub API with retry on transient errors."""
         url = f"https://api.github.com{path}"
         req = Request(url, headers={
             "Authorization": f"Bearer {self._token}",
@@ -116,32 +108,12 @@ class ArtifactClient:
         raise AssertionError("unreachable: retry loop must return or raise")
 
 
-def _extract_zip(blob: bytes, *, max_uncompressed: int = 500 * 1024 * 1024) -> dict[str, bytes]:
-    """Extract a zip into a flat dict, rejecting path traversal and oversized entries."""
+def _extract_zip(blob: bytes) -> dict[str, bytes]:
     if not blob:
         return {}
     try:
         with zipfile.ZipFile(io.BytesIO(blob)) as zf:
-            total = sum(m.file_size for m in zf.infolist())
-            if total > max_uncompressed:
-                logger.warning(
-                    "Artifact uncompressed size %d exceeds cap %d; refusing to extract",
-                    total, max_uncompressed,
-                )
-                return {}
-            out: dict[str, bytes] = {}
-            for m in zf.infolist():
-                if m.is_dir():
-                    continue
-                # Reject absolute paths and parent-traversal entries; signed
-                # GitHub artifact zips contain only forward-slash paths under
-                # the artifact root, so this is a tight check.
-                norm = m.filename.replace("\\", "/")
-                if norm.startswith("/") or "../" in norm:
-                    logger.warning("Skipping suspicious zip entry: %r", m.filename)
-                    continue
-                out[norm] = zf.read(m)
-            return out
+            return {m.filename: zf.read(m) for m in zf.infolist() if not m.is_dir()}
     except zipfile.BadZipFile:
         logger.warning("Artifact zip is corrupt; returning empty")
         return {}

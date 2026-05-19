@@ -140,7 +140,7 @@ The fuzzer monitor watches scheduled `valkey-io/valkey-fuzzer` workflow runs, an
 
 1. **Cron** — every 4 hours, the monitor checks the latest scheduled fuzzer run
 2. **Deterministic scan** — pattern-matches crash/sanitizer/failover/RDB signals against artifact JSON and node logs; ignores chaos-expected noise (CLUSTERDOWN, replication link loss)
-3. **Claude Code analysis** — clones `valkey-io/valkey` at the tested commit and `valkey-io/valkey-fuzzer` at the run's HEAD, then asks Claude (with read-only tools) to correlate findings with source and decide whether the run reflects a real bug
+3. **Claude Code analysis** — drops the artifacts in a tempdir and asks Claude (with read-only `Read,Grep,Glob` tools) to read them and decide whether the run reflects a real bug or chaos-expected noise
 4. **Issue upsert** — anomalous runs file (or update) an issue on `valkey-io/valkey-fuzzer`, deduplicated by a stable fingerprint over root cause and anomaly shape
 5. **Audit** — per-run JSON results and Claude evidence are uploaded as workflow artifacts
 
@@ -153,17 +153,16 @@ The monitor reuses the same secrets and OIDC role as the backport workflow (see 
 ### Manual run
 
 ```bash
-# List candidate runs without invoking Claude or filing issues (dry_run=true by default)
+# Run live against the latest scheduled fuzzer run (default)
 gh workflow run monitor-fuzzer.yml --repo valkey-io/valkey-ci-agent
 
-# Run live against the last 3 runs
+# Probe without invoking Claude or filing issues
 gh workflow run monitor-fuzzer.yml \
   --repo valkey-io/valkey-ci-agent \
-  --field dry_run=false \
-  --field max_runs=3
+  --field dry_run=true
 ```
 
-Scheduled runs always run live; `dry_run` only applies to manual `workflow_dispatch`.
+Scheduled runs always run live.
 
 ## Safety
 

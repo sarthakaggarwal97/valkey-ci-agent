@@ -6,17 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "List candidate fuzzer runs without analyzing them."
-        required: false
-        default: true
-        type: boolean
-      max_runs:
-        description: "Maximum recent fuzzer runs to inspect."
-        required: false
-        default: "1"
-        type: string
-      verbose:
-        description: "Enable verbose logging."
+        description: "List the candidate run without analyzing or filing an issue."
         required: false
         default: false
         type: boolean
@@ -34,15 +24,13 @@ jobs:
       contents: read
       id-token: write
     concurrency:
-      group: monitor-valkey-fuzzer-${{ github.event_name }}
+      group: monitor-valkey-fuzzer
       cancel-in-progress: false
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       CLAUDE_CODE_USE_BEDROCK: "1"
       CI_AGENT_EVIDENCE_DIR: agent-evidence
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
-      MAX_RUNS: ${{ github.event.inputs.max_runs || '1' }}
-      VERBOSE: ${{ github.event.inputs.verbose || 'false' }}
     steps:
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
@@ -69,7 +57,6 @@ jobs:
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey-fuzzer
-          # Least-privilege: only what the analyzer + issue publisher need.
           permission-actions: read
           permission-contents: read
           permission-issues: write
@@ -82,28 +69,16 @@ jobs:
           role-session-name: valkey-fuzzer-monitor-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Analyze Valkey fuzzer runs
+      - name: Analyze the latest fuzzer run
         shell: bash
         env:
           TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           set -euo pipefail
-          args=(
-            -m scripts.fuzzer.main
-            --target-repo "valkey-io/valkey-fuzzer"
-            --workflow-file "fuzzer-run.yml"
-            --max-runs "${MAX_RUNS}"
-            --output fuzzer-monitor-result.json
-          )
-
+          args=(-m scripts.fuzzer.main --output fuzzer-monitor-result.json)
           if [[ "${DRY_RUN}" == "true" ]]; then
             args+=(--dry-run)
           fi
-
-          if [[ "${VERBOSE}" == "true" ]]; then
-            args+=(--verbose)
-          fi
-
           python "${args[@]}"
 
       - name: Upload fuzzer analysis result

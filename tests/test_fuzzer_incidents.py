@@ -25,21 +25,9 @@ def test_different_failures_differ():
     assert fp1 != fp2
 
 
-def test_volatile_parts_normalized():
-    fp1 = compute_fingerprint(
-        repo="r", workflow_file="w", root_cause_category="crash",
-        anomalies=[FuzzerSignal("crash", "critical", "node-1 at 0x7fff1234")],
-    )
-    fp2 = compute_fingerprint(
-        repo="r", workflow_file="w", root_cause_category="crash",
-        anomalies=[FuzzerSignal("crash", "critical", "node-5 at 0xdeadbeef")],
-    )
-    assert fp1 == fp2
-
-
-def test_volatile_parts_normalized_multi_anomalies():
-    """With many anomalies, normalization happens before dedup/slice so
-    volatile variants do not change which shapes survive the cap."""
+def test_volatile_parts_normalized_before_slice():
+    """Normalization happens before sort/slice so volatile addresses, node IDs,
+    and run-specific numbers don't change which 8 shapes survive the cap."""
     fp1 = compute_fingerprint(
         repo="r", workflow_file="w", root_cause_category="crash",
         anomalies=[

@@ -6,7 +6,6 @@ import logging
 import re
 from typing import Any
 
-from scripts.common.github_client import retry_github_call
 from scripts.fuzzer.models import FuzzerRunAnalysis
 
 logger = logging.getLogger(__name__)
@@ -16,18 +15,18 @@ _OCCURRENCES_RE = re.compile(r"<!-- valkey-ci-agent:occurrences:(\d+) -->")
 
 
 class FuzzerIssuePublisher:
-    """Creates or updates issues on the target repo for anomalous runs."""
+    """Creates or updates issues on the target repo for anomalous runs.
 
-    def __init__(self, github_client: Any, *, retries: int = 3) -> None:
+    Per-run failures are tolerated: the surrounding loop in `main.py` catches
+    exceptions per-run, so a transient GitHub error here just means the next
+    cron run will retry against the same fingerprint.
+    """
+
+    def __init__(self, github_client: Any) -> None:
         self._gh = github_client
-        self._retries = retries
 
     def upsert_issue(self, repo_name: str, analysis: FuzzerRunAnalysis) -> tuple[str, str]:
-        """Create or update an issue. Returns (action, url)."""
-        repo = retry_github_call(
-            lambda: self._gh.get_repo(repo_name),
-            retries=self._retries, description=f"get repo {repo_name}",
-        )
+        repo = self._gh.get_repo(repo_name)
         fp = analysis.incident_fingerprint or "unknown"
         marker = f"{_MARKER_PREFIX}{fp} -->"
         title = _build_title(analysis)
@@ -36,25 +35,16 @@ class FuzzerIssuePublisher:
 
         if existing is None:
             body = _render_body(analysis, marker, occurrences=1)
-            issue = retry_github_call(
-                lambda: repo.create_issue(title=title, body=body),
-                retries=self._retries, description="create issue",
-            )
+            issue = repo.create_issue(title=title, body=body)
             if analysis.suggested_labels:
                 try:
-                    retry_github_call(
-                        lambda: issue.add_to_labels(*analysis.suggested_labels),
-                        retries=self._retries, description="add labels",
-                    )
+                    issue.add_to_labels(*analysis.suggested_labels)
                 except Exception as exc:
                     logger.info("Could not add labels to issue #%s: %s", issue.number, exc)
             logger.info("Created issue #%s for run %s", issue.number, analysis.run_id)
             return "created", issue.html_url
 
-        # Update existing.
         body = existing.body or ""
-        # If the loaded body lost the dedup marker (e.g. an editor stripped
-        # HTML comments), reinject it so future runs still match this issue.
         if marker not in body:
             body = f"{marker}\n{body}".rstrip()
         m = _OCCURRENCES_RE.search(body)
@@ -63,37 +53,19 @@ class FuzzerIssuePublisher:
             _OCCURRENCES_RE.sub(f"<!-- valkey-ci-agent:occurrences:{count} -->", body)
             if m else f"{body}\n<!-- valkey-ci-agent:occurrences:{count} -->"
         )
-        retry_github_call(
-            lambda: existing.edit(body=new_body, title=title),
-            retries=self._retries, description="update issue",
-        )
-        retry_github_call(
-            lambda: existing.create_comment(body=_render_comment(analysis, count)),
-            retries=self._retries, description="add comment",
-        )
+        existing.edit(body=new_body, title=title)
+        existing.create_comment(body=_render_comment(analysis, count))
         logger.info("Updated issue #%s (occurrence %d)", existing.number, count)
         return "updated", existing.html_url
 
     def _find_existing(self, repo_name: str, marker: str) -> Any:
-        """Find an open issue containing the marker.
-
-        Uses the GitHub search API to avoid paginating all open issues.
-        """
+        """Find an open issue containing the dedup marker, or None."""
         query = f'"{marker}" in:body repo:{repo_name} is:issue is:open'
         try:
-            results = retry_github_call(
-                lambda: list(self._gh.search_issues(query)),
-                retries=self._retries, description="search existing issue",
-            )
-            for issue in results:
+            for issue in self._gh.search_issues(query):
                 if marker in (issue.body or ""):
-                    # Reload against the actual repo to get a mutable issue
-                    # handle (search results are sometimes read-only wrappers).
-                    issue_number = issue.number
-                    return retry_github_call(
-                        lambda: self._gh.get_repo(repo_name).get_issue(issue_number),
-                        retries=self._retries, description=f"load issue #{issue_number}",
-                    )
+                    # Reload via the actual repo so we get a mutable issue handle.
+                    return self._gh.get_repo(repo_name).get_issue(issue.number)
         except Exception as exc:
             logger.warning("Issue search failed, skipping dedup check: %s", exc)
         return None
@@ -134,7 +106,7 @@ def _render_body(analysis: FuzzerRunAnalysis, marker: str, *, occurrences: int) 
             lines.append(f"- **[{a.severity}]** {a.title}: {a.evidence}")
     if analysis.reproduction_hint:
         lines.extend(["", f"**Reproduce**: `{analysis.reproduction_hint}`"])
-    lines.extend(["", "---", "*Generated by valkey-ci-agent using Claude Code.*"])
+    lines.extend(["", "---", "*Generated by valkey-ci-agent*"])
     return "\n".join(lines)
 
 
