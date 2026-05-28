@@ -442,6 +442,21 @@ def _process_branch(
                 )
                 result.results.append(cr)
                 if cr.outcome == "applied":
+                    if _head_changes_workflow_files(tmpdir):
+                        cr.outcome = "skipped-conflict"
+                        cr.detail = (
+                            "changes GitHub Actions workflow files; "
+                            "the backport App token cannot push workflow updates"
+                        )
+                        _run_git(tmpdir, "reset", "--hard", "HEAD^")
+                        logger.warning(
+                            "Candidate #%d on %s changes workflow files; "
+                            "removed candidate because the App token cannot "
+                            "push workflow updates.",
+                            candidate.source_pr_number,
+                            target_branch,
+                        )
+                        continue
                     if validate_each_candidate:
                         ok, output = _validate_backport_branch(
                             tmpdir,
@@ -481,7 +496,7 @@ def _process_branch(
             applied = [r for r in result.results if r.outcome == "applied"]
             branch_has_changes = _branch_has_changes(tmpdir, target_branch)
             validation_failed = retained_validation_failure
-            if branch_has_changes:
+            if branch_has_changes and (applied or validation_failed):
                 if applied and not retained_validation_failure:
                     ok, output = _validate_backport_branch(
                         tmpdir,
@@ -887,6 +902,21 @@ def _validate_backport_branch(
         changed_paths_since_base(repo_dir, f"origin/{target_branch}"),
     )
     return _run_test_commands(repo_dir, commands)
+
+
+def _head_changes_workflow_files(repo_dir: str) -> bool:
+    result = subprocess.run(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return False
+    return any(
+        path.strip().startswith(".github/workflows/")
+        for path in result.stdout.splitlines()
+    )
 
 
 def _branch_has_changes(repo_dir: str, target_branch: str) -> bool:
