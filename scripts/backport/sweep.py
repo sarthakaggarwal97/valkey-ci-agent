@@ -355,6 +355,12 @@ def _process_branch(
                 tmpdir, validation_setup_commands or [],
             )
             if not setup_ok:
+                logger.warning(
+                    "Validation setup failed for %s.\n"
+                    "Output (last 4000 chars):\n%s",
+                    target_branch,
+                    setup_output[-4000:],
+                )
                 raise RuntimeError(
                     "validation setup failed: "
                     + (setup_output[:500] or "setup command failed")
@@ -471,6 +477,9 @@ def _process_branch(
                             cr.outcome = "applied-validation-failed"
                             cr.detail = output[:500]
                             if applied_count == 0:
+                                # Keep the first failing retained candidate on
+                                # the branch so maintainers can inspect the
+                                # concrete validation failure in a draft PR.
                                 retained_validation_failure = True
                                 retained_validation_output = output
                                 logger.warning(
@@ -516,7 +525,9 @@ def _process_branch(
                     )
                 if not ok:
                     validation_failed = True
-                    for item in committed:
+                    for item in result.results:
+                        if item.outcome != "applied":
+                            continue
                         item.outcome = "applied-validation-failed"
                         item.detail = output[:500]
                     logger.warning(
@@ -1327,11 +1338,18 @@ def _build_pr_body(
 def _build_summary(results: list[BranchSweepResult]) -> str:
     lines = ["## Backport Sweep", ""]
     for r in results:
-        applied = sum(1 for c in r.results if _result_is_on_backport_branch(c))
+        retained = sum(1 for c in r.results if _result_is_on_backport_branch(c))
+        validation_failed = sum(
+            1 for c in r.results
+            if c.outcome == "applied-validation-failed"
+        )
         suffix = f" — [PR]({r.pr_url})" if r.pr_url else ""
         if r.error:
             suffix += f" — error: {r.error}"
-        lines.append(f"- `{r.target_branch}`: {applied}/{r.candidates_found} applied" + suffix)
+        status = f"{retained}/{r.candidates_found} retained"
+        if validation_failed:
+            status += f" ({validation_failed} validation failed)"
+        lines.append(f"- `{r.target_branch}`: {status}" + suffix)
     return "\n".join(lines)
 
 
