@@ -10,6 +10,7 @@ import pytest
 from github.GithubException import GithubException
 
 from scripts.backport import sweep as backport_sweep
+from scripts.backport import sweep_graphql
 from scripts.backport.models import ResolutionResult
 from scripts.backport.sweep import (
     BranchSweepResult,
@@ -1580,13 +1581,13 @@ def test_graphql_client_retry_exhaustion_raises_clear_error(monkeypatch):
         call_count["n"] += 1
         raise urllib.error.URLError("simulated network down")
 
-    monkeypatch.setattr(backport_sweep.urllib.request, "urlopen", always_fails)
+    monkeypatch.setattr(sweep_graphql.urllib.request, "urlopen", always_fails)
     # Skip actual sleeps in the backoff loop.
     monkeypatch.setattr(backport_sweep, "_random", None, raising=False)
     monkeypatch.setattr("random.uniform", lambda *_args, **_kwargs: 0.0)
     monkeypatch.setattr("time.sleep", lambda *_args, **_kwargs: None)
 
-    client = backport_sweep.GitHubGraphQLClient("fake-token")
+    client = sweep_graphql.GitHubGraphQLClient("fake-token")
     try:
         client.execute("query {}", {})
     except urllib.error.URLError:

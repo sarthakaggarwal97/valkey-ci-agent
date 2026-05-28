@@ -31,6 +31,9 @@ sweep.py (daily cron or manual dispatch)
 - `scripts/backport/main.py` — single-PR backport (manual dispatch)
 - `scripts/backport/matrix.py` — GitHub Actions matrix generation from `repos.yml`
 - `scripts/backport/registry.py` — typed registry loader and validation
+- `scripts/backport/sweep_*.py` — focused sweep support modules:
+  typed sweep results, Git workspace operations, GitHub PR operations,
+  GraphQL access, validation command execution, and Markdown reporting
 
 ### AI Layer
 
