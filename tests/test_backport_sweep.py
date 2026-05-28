@@ -869,17 +869,31 @@ def test_process_branch_repairs_batch_validation_failure(monkeypatch):
     )
 
     run_calls: list[list[str]] = []
+    log_paths: list[str | None] = []
 
-    def fake_run_test_commands(_repo_dir, commands, **_kwargs):
+    def fake_run_test_commands(_repo_dir, commands, log_path=None, **_kwargs):
         run_calls.append(list(commands))
+        log_paths.append(log_path)
         if not commands:
             return True, ""
         return False, "compiler error"
 
     repairs: list[str] = []
+    repair_log_paths: list[str | None] = []
 
-    def fake_repair(_repo_dir, _target_branch, _commands, _rules, output):
+    def fake_repair(
+        _repo_dir,
+        _target_branch,
+        _commands,
+        _rules,
+        output,
+        *,
+        validation_log_path=None,
+    ):
         repairs.append(output)
+        repair_log_paths.append(validation_log_path)
+        assert validation_log_path is not None
+        assert Path(validation_log_path).exists()
         return True, ""
 
     monkeypatch.setattr(backport_sweep, "_run_test_commands", fake_run_test_commands)
@@ -910,6 +924,11 @@ def test_process_branch_repairs_batch_validation_failure(monkeypatch):
     assert upserts[0]["draft"] is False
     assert repairs == ["compiler error"]
     assert run_calls == [[], ["make"]]
+    assert log_paths[0] is None
+    repair_log_path = repair_log_paths[0]
+    assert repair_log_path is not None
+    assert log_paths[1] == repair_log_path
+    assert not Path(repair_log_path).exists()
 
 
 def test_process_branch_revalidates_preserved_existing_branch(monkeypatch):
@@ -1675,11 +1694,10 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     assert "/tmp/" in agent_calls[0][1] or "backport-validation-" in agent_calls[0][1]
     assert ("add", "src/a.c") in git_calls
     assert ("commit", "-m", "Repair backport validation failure") in git_calls
-    # Two validate calls: refresh-log before agent, then re-validate after edits.
-    assert validation_calls == [["make"], ["make"]]
-    # First call writes the failing run's full log; second re-runs validation.
-    assert log_paths[0] is not None
-    assert log_paths[1] is None
+    # The failing validation has already happened; repair only revalidates once
+    # after Claude edits.
+    assert validation_calls == [["make"]]
+    assert log_paths == [None]
 
 
 # ---------------------------------------------------------------------------

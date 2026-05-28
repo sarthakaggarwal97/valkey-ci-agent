@@ -541,51 +541,61 @@ def _process_branch(
             branch_has_changes = _branch_has_changes(tmpdir, target_branch)
             validation_failed = retained_validation_failure
             if branch_has_changes and (committed or validation_failed):
-                if head_validated and not retained_validation_failure:
-                    ok, output = True, ""
-                elif committed and not retained_validation_failure:
-                    ok, output = _validate_backport_branch(
-                        tmpdir,
-                        target_branch,
-                        test_commands,
-                        validation_rules or [],
-                    )
-                else:
-                    ok, output = (
-                        not retained_validation_failure,
-                        retained_validation_output,
-                    )
-                if not ok:
-                    if repair_validation_failures:
-                        ok, output = _repair_validation_failure_with_claude(
+                validation_log_path = None
+                try:
+                    if head_validated and not retained_validation_failure:
+                        ok, output = True, ""
+                    elif committed and not retained_validation_failure:
+                        if repair_validation_failures:
+                            validation_log_path = _create_validation_log_path()
+                        ok, output = _validate_backport_branch(
                             tmpdir,
                             target_branch,
                             test_commands,
                             validation_rules or [],
-                            output,
+                            log_path=validation_log_path,
                         )
-                        if ok:
-                            validation_failed = False
-                            _mark_repaired_results(result.results)
+                    else:
+                        ok, output = (
+                            not retained_validation_failure,
+                            retained_validation_output,
+                        )
+                    if not ok:
+                        if repair_validation_failures:
+                            ok, output = _repair_validation_failure_with_claude(
+                                tmpdir,
+                                target_branch,
+                                test_commands,
+                                validation_rules or [],
+                                output,
+                                validation_log_path=validation_log_path,
+                            )
+                            if ok:
+                                validation_failed = False
+                                _mark_repaired_results(result.results)
+                            else:
+                                validation_failed = True
                         else:
                             validation_failed = True
-                    else:
-                        validation_failed = True
-                    if not ok:
-                        # Attribute this run's validation output only to fresh
-                        # commits. Already-retained commits stay in Applied with
-                        # their original branch-state detail; the draft PR section
-                        # reports that the combined branch is red.
-                        for item in result.results:
-                            if item.outcome != "applied":
-                                continue
-                            item.outcome = "applied-validation-failed"
-                            item.detail = output[:500]
-                        logger.warning(
-                            "Validation failed for %s; pushing draft PR with "
-                            "failure details.\nOutput (last 4000 chars):\n%s",
-                            target_branch, output[-4000:],
-                        )
+                        if not ok:
+                            # Attribute this run's validation output only to
+                            # fresh commits. Already-retained commits stay in
+                            # Applied with their original branch-state detail;
+                            # the draft PR section reports that the combined
+                            # branch is red.
+                            for item in result.results:
+                                if item.outcome != "applied":
+                                    continue
+                                item.outcome = "applied-validation-failed"
+                                item.detail = output[:500]
+                            logger.warning(
+                                "Validation failed for %s; pushing draft PR "
+                                "with failure details.\nOutput (last 4000 "
+                                "chars):\n%s",
+                                target_branch, output[-4000:],
+                            )
+                finally:
+                    _remove_validation_log_path(validation_log_path)
                 _push_backport_branch(
                     tmpdir,
                     backport_branch,
@@ -993,27 +1003,21 @@ def _repair_validation_failure_with_claude(
     test_commands: list[str],
     validation_rules: list[Any],
     validation_output: str,
+    *,
+    validation_log_path: str | None = None,
 ) -> tuple[bool, str]:
     changed_paths = changed_paths_since_base(repo_dir, f"origin/{target_branch}")
     if not changed_paths:
         return False, validation_output
 
-    # Write the full validation log to a tempfile outside repo_dir so it
-    # can't accidentally be committed. Claude reads the file directly via
-    # the Read tool — embedding a tail in the prompt starves the agent of
-    # the actual error when build output is dominated by trailing warnings.
-    log_fd, log_path = tempfile.mkstemp(prefix="backport-validation-", suffix=".log")
-    os.close(log_fd)
+    # The caller passes the full failing validation log when it has one. The
+    # fallback keeps direct helper use safe without adding an extra production
+    # build just to reconstruct diagnostic output.
+    owns_log_path = validation_log_path is None
+    log_path = validation_log_path or _create_validation_log_path()
     try:
-        # Refresh the log file with the failing run's output so the path
-        # always reflects the validation Claude is being asked to repair.
-        _validate_backport_branch(
-            repo_dir,
-            target_branch,
-            test_commands,
-            validation_rules,
-            log_path=log_path,
-        )
+        if owns_log_path:
+            Path(log_path).write_text(validation_output, encoding="utf-8")
 
         prompt = _build_validation_repair_prompt(
             target_branch,
@@ -1072,10 +1076,26 @@ def _repair_validation_failure_with_claude(
         _run_git(repo_dir, "reset", "--hard", "HEAD^")
         return False, output
     finally:
-        try:
-            os.unlink(log_path)
-        except OSError:
-            pass
+        if owns_log_path:
+            _remove_validation_log_path(log_path)
+
+
+def _create_validation_log_path() -> str:
+    log_fd, log_path = tempfile.mkstemp(
+        prefix="backport-validation-",
+        suffix=".log",
+    )
+    os.close(log_fd)
+    return log_path
+
+
+def _remove_validation_log_path(log_path: str | None) -> None:
+    if not log_path:
+        return
+    try:
+        os.unlink(log_path)
+    except OSError:
+        pass
 
 
 def _build_validation_repair_prompt(
