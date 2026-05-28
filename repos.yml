@@ -26,9 +26,8 @@ repos:
     language: c++
     validation_setup_commands:
       - "docker build -t valkey-search-backport -f .devcontainer/Dockerfile ."
-      - "mkdir -p test-results"
     build_commands:
-      - "docker run --privileged --rm -v \"$(pwd):/workspace\" --user \"ubuntu:ubuntu\" valkey-search-backport sudo ci/build_ubuntu.sh --unittest-output=/workspace/test-results"
+      - "docker run --privileged --rm -v \"$(pwd):/workspace\" --user \"ubuntu:ubuntu\" valkey-search-backport sudo ci/build_ubuntu.sh"
     validate_each_candidate: true
     backport_label: backport
     llm_conflict_label: ai-resolved-conflicts
