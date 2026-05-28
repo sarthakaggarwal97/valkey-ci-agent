@@ -428,6 +428,7 @@ def _process_branch(
             applied_count = 0
             retained_validation_failure = False
             retained_validation_output = ""
+            preflight_checked_existing_branch = False
             for candidate in candidates:
                 if max_applied > 0 and applied_count >= max_applied:
                     logger.info(
@@ -443,6 +444,28 @@ def _process_branch(
                         detail=DETAIL_ALREADY_ON_SWEEP_BRANCH,
                     ))
                     continue
+
+                if validate_each_candidate and not preflight_checked_existing_branch:
+                    preflight_checked_existing_branch = True
+                    if _branch_has_changes(tmpdir, target_branch):
+                        ok, output = _validate_backport_branch(
+                            tmpdir,
+                            target_branch,
+                            test_commands,
+                            validation_rules or [],
+                        )
+                        if not ok:
+                            retained_validation_failure = True
+                            retained_validation_output = output
+                            logger.warning(
+                                "Validation failed for existing backport "
+                                "branch %s before applying candidate #%d; "
+                                "preserving branch and deferring remaining "
+                                "candidates.",
+                                target_branch,
+                                candidate.source_pr_number,
+                            )
+                            break
 
                 cr = _apply_candidate(
                     tmpdir, candidate, repo_full_name, git_env,
@@ -525,6 +548,10 @@ def _process_branch(
                     )
                 if not ok:
                     validation_failed = True
+                    # Attribute this run's validation output only to fresh
+                    # commits. Already-retained commits stay in Applied with
+                    # their original branch-state detail; the draft PR section
+                    # reports that the combined branch is red.
                     for item in result.results:
                         if item.outcome != "applied":
                             continue

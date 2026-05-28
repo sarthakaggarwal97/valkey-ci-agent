@@ -911,6 +911,98 @@ def test_process_branch_revalidates_preserved_existing_branch(monkeypatch):
     assert run_calls == [[], ["make"]]
 
 
+def test_process_branch_preflights_existing_branch_before_next_candidate(
+    monkeypatch,
+):
+    candidates = [
+        ProjectBackportCandidate(
+            source_pr_number=5,
+            source_pr_title="Previously retained",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/5",
+            target_branch="8.1",
+            merge_commit_sha="sha5",
+        ),
+        ProjectBackportCandidate(
+            source_pr_number=6,
+            source_pr_title="Should not be blamed",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/6",
+            target_branch="8.1",
+            merge_commit_sha="sha6",
+        ),
+    ]
+
+    monkeypatch.setattr(backport_sweep, "_clone_target_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "_run_git", lambda *_args, **_kwargs: None)
+    existing_pr = MagicMock(number=100)
+    monkeypatch.setattr(
+        backport_sweep,
+        "_find_existing_pr",
+        lambda *_args, **_kwargs: existing_pr,
+    )
+    monkeypatch.setattr(
+        backport_sweep.subprocess,
+        "run",
+        lambda cmd, **_kwargs: subprocess.CompletedProcess(
+            cmd, 0, stdout="", stderr="",
+        ),
+    )
+    monkeypatch.setattr(backport_sweep, "_delete_stale_backport_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "_list_already_applied", lambda *_args, **_kwargs: {"5"})
+    monkeypatch.setattr(backport_sweep, "changed_paths_since_base", lambda *_args, **_kwargs: ["src/a.c"])
+    monkeypatch.setattr(backport_sweep, "_head_changes_workflow_files", lambda *_args: False)
+    monkeypatch.setattr(backport_sweep, "_branch_has_changes", lambda *_args, **_kwargs: True)
+
+    def fail_apply(_repo_dir, candidate, *_args, **_kwargs):
+        raise AssertionError(
+            f"candidate #{candidate.source_pr_number} should be deferred"
+        )
+
+    monkeypatch.setattr(backport_sweep, "_apply_candidate", fail_apply)
+
+    run_calls: list[list[str]] = []
+
+    def fake_run_test_commands(_repo_dir, commands):
+        run_calls.append(list(commands))
+        if not commands:
+            return True, ""
+        return False, "existing branch still fails"
+
+    monkeypatch.setattr(backport_sweep, "_run_test_commands", fake_run_test_commands)
+    pushed: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        backport_sweep,
+        "_push_backport_branch",
+        lambda _repo_dir, branch, _env, *, force_with_lease: pushed.append(
+            (branch, force_with_lease)
+        ),
+    )
+    upserts: list[dict] = []
+    monkeypatch.setattr(
+        backport_sweep,
+        "_upsert_pr",
+        lambda *args, **kwargs: upserts.append(kwargs)
+        or "https://github.com/valkey-io/valkey/pull/100",
+    )
+
+    result = backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="8.1",
+        candidates=candidates,
+        push_repo="valkey-io/valkey",
+        test_commands=["make"],
+        validate_each_candidate=True,
+    )
+
+    assert [r.outcome for r in result.results] == ["skipped-existing"]
+    assert result.results[0].detail == backport_sweep.DETAIL_ALREADY_ON_SWEEP_BRANCH
+    assert pushed == [("agent/backport/sweep/8.1", True)]
+    assert upserts[0]["draft"] is True
+    assert run_calls == [[], ["make"]]
+
+
 def test_process_branch_incremental_validation_preserves_first_failure(
     monkeypatch,
 ):
@@ -943,7 +1035,12 @@ def test_process_branch_incremental_validation_preserves_first_failure(
     monkeypatch.setattr(backport_sweep, "_list_already_applied", lambda *_args, **_kwargs: set())
     monkeypatch.setattr(backport_sweep, "changed_paths_since_base", lambda *_args, **_kwargs: ["src/a.c"])
     monkeypatch.setattr(backport_sweep, "_head_changes_workflow_files", lambda *_args: False)
-    monkeypatch.setattr(backport_sweep, "_branch_has_changes", lambda *_args, **_kwargs: True)
+    branch_changes = iter([False, True])
+    monkeypatch.setattr(
+        backport_sweep,
+        "_branch_has_changes",
+        lambda *_args, **_kwargs: next(branch_changes),
+    )
 
     attempted: list[int] = []
 
@@ -1035,7 +1132,12 @@ def test_process_branch_incremental_validation_drops_failed_later_candidate(
     monkeypatch.setattr(backport_sweep, "_list_already_applied", lambda *_args, **_kwargs: set())
     monkeypatch.setattr(backport_sweep, "changed_paths_since_base", lambda *_args, **_kwargs: ["src/a.c"])
     monkeypatch.setattr(backport_sweep, "_head_changes_workflow_files", lambda *_args: False)
-    monkeypatch.setattr(backport_sweep, "_branch_has_changes", lambda *_args, **_kwargs: True)
+    branch_changes = iter([False, True])
+    monkeypatch.setattr(
+        backport_sweep,
+        "_branch_has_changes",
+        lambda *_args, **_kwargs: next(branch_changes),
+    )
     monkeypatch.setattr(
         backport_sweep,
         "_apply_candidate",
