@@ -30,7 +30,7 @@ repos:
       - "docker build -t valkey-search-backport -f .devcontainer/Dockerfile ."
     build_commands:
       - "docker run --privileged --rm -v \"$(pwd):/workspace\" --user \"ubuntu:ubuntu\" valkey-search-backport sudo ci/build_ubuntu.sh"
-    validate_each_candidate: true
+    repair_validation_failures: true
     backport_label: backport
     llm_conflict_label: ai-resolved-conflicts
     max_conflicting_files: 100

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from github.GithubException import GithubException
@@ -840,6 +841,77 @@ def test_process_branch_batch_validation_keeps_prior_sweep_details(monkeypatch):
     assert "| #6 | New failure | compiler error |" in body
 
 
+def test_process_branch_repairs_batch_validation_failure(monkeypatch):
+    candidate = ProjectBackportCandidate(
+        source_pr_number=10,
+        source_pr_title="Compile failure",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/10",
+        target_branch="8.1",
+        merge_commit_sha="sha10",
+    )
+
+    monkeypatch.setattr(backport_sweep, "_clone_target_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "_run_git", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "_find_existing_pr", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "_delete_stale_backport_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "_list_already_applied", lambda *_args, **_kwargs: set())
+    monkeypatch.setattr(backport_sweep, "changed_paths_since_base", lambda *_args, **_kwargs: ["src/a.c"])
+    monkeypatch.setattr(backport_sweep, "_head_changes_workflow_files", lambda *_args: False)
+    monkeypatch.setattr(backport_sweep, "_branch_has_changes", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        backport_sweep,
+        "_apply_candidate",
+        lambda _repo_dir, c, *_args, **_kwargs: CandidateResult(
+            c.source_pr_number,
+            c.source_pr_title,
+            "applied",
+        ),
+    )
+
+    run_calls: list[list[str]] = []
+
+    def fake_run_test_commands(_repo_dir, commands):
+        run_calls.append(list(commands))
+        if not commands:
+            return True, ""
+        return False, "compiler error"
+
+    repairs: list[str] = []
+
+    def fake_repair(_repo_dir, _target_branch, _commands, _rules, output):
+        repairs.append(output)
+        return True, ""
+
+    monkeypatch.setattr(backport_sweep, "_run_test_commands", fake_run_test_commands)
+    monkeypatch.setattr(backport_sweep, "_repair_validation_failure_with_claude", fake_repair)
+    monkeypatch.setattr(backport_sweep, "_push_backport_branch", lambda *_args, **_kwargs: None)
+    upserts: list[dict] = []
+    monkeypatch.setattr(
+        backport_sweep,
+        "_upsert_pr",
+        lambda *args, **kwargs: upserts.append(kwargs)
+        or "https://github.com/valkey-io/valkey/pull/100",
+    )
+
+    result = backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="8.1",
+        candidates=[candidate],
+        push_repo="valkey-io/valkey",
+        test_commands=["make"],
+        repair_validation_failures=True,
+    )
+
+    assert result.results[0].outcome == "applied"
+    assert result.results[0].detail == "validation repaired by Claude Code"
+    assert upserts[0]["draft"] is False
+    assert repairs == ["compiler error"]
+    assert run_calls == [[], ["make"]]
+
+
 def test_process_branch_revalidates_preserved_existing_branch(monkeypatch):
     candidate = ProjectBackportCandidate(
         source_pr_number=10,
@@ -1147,7 +1219,7 @@ def test_process_branch_incremental_validation_drops_failed_later_candidate(
             "applied",
         ),
     )
-    validation_results = [(True, ""), (False, "bad compile"), (True, "")]
+    validation_results = [(True, ""), (False, "bad compile")]
     validation_index = 0
     run_calls: list[list[str]] = []
 
@@ -1190,7 +1262,7 @@ def test_process_branch_incremental_validation_drops_failed_later_candidate(
     assert ("reset", "--hard", "HEAD^") in git_calls
     assert result.pr_url == "https://github.com/valkey-io/valkey/pull/100"
     assert upserts[0]["draft"] is False
-    assert run_calls == [[], ["make"], ["make"], ["make"]]
+    assert run_calls == [[], ["make"], ["make"]]
     assert validation_index == len(validation_results)
 
 
@@ -1541,6 +1613,63 @@ def test_build_summary_reports_validation_failures_as_retained():
 
     assert "`8.1`: 2/3 retained (1 validation failed)" in summary
     assert "applied" not in summary
+
+
+def test_validation_repair_prompt_is_narrowly_scoped():
+    prompt = backport_sweep._build_validation_repair_prompt(
+        "8.1",
+        ("src/module.c", "tests/module.tcl"),
+        "compiler says missing old_helper",
+    )
+
+    assert "Only edit the changed files listed above" in prompt
+    assert "Do NOT run builds, tests, docker, git" in prompt
+    assert "validation output, commit messages, diffs" in prompt
+    assert "src/module.c" in prompt
+    assert "compiler says missing old_helper" in prompt
+
+
+def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
+    agent_calls: list[tuple[str, str, str]] = []
+    git_calls: list[tuple[str, ...]] = []
+    validation_calls: list[list[str]] = []
+
+    monkeypatch.setattr(
+        backport_sweep,
+        "changed_paths_since_base",
+        lambda *_args, **_kwargs: ("src/a.c",),
+    )
+
+    def fake_run_agent(profile, prompt, *, cwd):
+        agent_calls.append((profile, prompt, cwd))
+        return SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(backport_sweep, "run_agent", fake_run_agent)
+    monkeypatch.setattr(backport_sweep, "_worktree_changed_paths", lambda *_args: ("src/a.c",))
+    monkeypatch.setattr(backport_sweep, "_run_git", lambda _repo_dir, *args, **_kwargs: git_calls.append(args))
+    monkeypatch.setattr(backport_sweep, "_has_staged_changes", lambda *_args: True)
+
+    def fake_validate(_repo_dir, _target_branch, commands, _rules):
+        validation_calls.append(list(commands))
+        return True, "ok"
+
+    monkeypatch.setattr(backport_sweep, "_validate_backport_branch", fake_validate)
+
+    ok, output = backport_sweep._repair_validation_failure_with_claude(
+        "/repo",
+        "8.1",
+        ["make"],
+        [],
+        "compiler error",
+    )
+
+    assert ok is True
+    assert output == "ok"
+    assert agent_calls[0][0] == "validation_repair_edit_only"
+    assert "compiler error" in agent_calls[0][1]
+    assert ("add", "src/a.c") in git_calls
+    assert ("commit", "-m", "Repair backport validation failure") in git_calls
+    assert validation_calls == [["make"]]
 
 
 # ---------------------------------------------------------------------------

@@ -52,8 +52,12 @@ then runs `build_commands` before push. Repos can opt into
 `validate_each_candidate` to validate after each cherry-pick. After one
 candidate has been retained, later validation failures are reset so the sweep
 can keep moving; when the first retained candidate fails, the broken branch is
-preserved as a draft PR for review. Repos with no `build_commands` configured
-rely on upstream CI for verification.
+preserved as a draft PR for review. For expensive validation, repos can instead
+use `repair_validation_failures`: the sweep runs one batch validation, gives
+Claude Code one edit-only repair attempt scoped to the backport diff when that
+validation fails, and re-runs validation once before deciding whether to push a
+draft PR. Repos with no `build_commands` configured rely on upstream CI for
+verification.
 
 ### Common Infrastructure
 

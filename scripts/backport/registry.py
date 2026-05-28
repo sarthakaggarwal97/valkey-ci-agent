@@ -37,6 +37,7 @@ class RepoEntry:
     validation_setup_commands: tuple[str, ...] = ()
     validation_rules: tuple[ValidationRule, ...] = ()
     validate_each_candidate: bool = False
+    repair_validation_failures: bool = False
     backport_label: str = "backport"
     llm_conflict_label: str = "ai-resolved-conflicts"
     max_conflicting_files: int = 100
@@ -152,6 +153,11 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
     validate_each_candidate = raw.get("validate_each_candidate", False)
     if not isinstance(validate_each_candidate, bool):
         raise ValueError(f"repos[{index}].validate_each_candidate must be a boolean")
+    repair_validation_failures = raw.get("repair_validation_failures", False)
+    if not isinstance(repair_validation_failures, bool):
+        raise ValueError(
+            f"repos[{index}].repair_validation_failures must be a boolean"
+        )
 
     backport_label = raw.get("backport_label", "backport")
     if not isinstance(backport_label, str) or not backport_label.strip():
@@ -183,6 +189,7 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         validation_setup_commands=tuple(validation_setup_commands),
         validation_rules=tuple(validation_rules),
         validate_each_candidate=validate_each_candidate,
+        repair_validation_failures=repair_validation_failures,
         backport_label=backport_label,
         llm_conflict_label=llm_conflict_label,
         max_conflicting_files=max_conflicting_files,
