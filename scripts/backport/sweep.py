@@ -1301,6 +1301,23 @@ def _sync_target_branch_to_source(
         )
 
 
+def _resolve_pr_target_repo(base_repo: str, push_repo: str) -> str:
+    """Return the repo where the backport PR should be opened.
+
+    Production behavior: PRs are opened on ``base_repo`` (the upstream
+    project) so reviewers find them in the place they normally look.
+
+    Test-harness override: when ``CI_AGENT_PR_TARGET=push_repo`` is set,
+    open the PR on ``push_repo`` instead. This is used when running the
+    sweep against a personal fork to avoid leaking transient test PRs to
+    the upstream project. The override is gated on a deliberate env var
+    so the production scheduled-run behavior is unchanged.
+    """
+    if os.environ.get("CI_AGENT_PR_TARGET", "").lower() == "push_repo":
+        return push_repo
+    return base_repo
+
+
 def _find_existing_pr(gh: Any, base_repo: str, push_repo: str, branch: str) -> Any | None:
     """Return the open backport PR for *branch* on *base_repo*, or None.
 
@@ -1309,8 +1326,9 @@ def _find_existing_pr(gh: Any, base_repo: str, push_repo: str, branch: str) -> A
     distinguish "no PR" from "couldn't check" and avoid deleting an
     active backport branch on a transient failure.
     """
-    repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
-    head_ref = build_pull_search_head_ref(base_repo, push_repo, branch)
+    pr_repo = _resolve_pr_target_repo(base_repo, push_repo)
+    repo = retry_github_call(lambda: gh.get_repo(pr_repo), retries=2, description=f"get {pr_repo}")
+    head_ref = build_pull_search_head_ref(pr_repo, push_repo, branch)
     pulls = retry_github_call(
         lambda: list(repo.get_pulls(state="open", head=head_ref)),
         retries=2, description="list PRs",
@@ -1350,7 +1368,8 @@ def _upsert_pr(gh: Any, base_repo: str, push_repo: str, target_branch: str, head
                result: BranchSweepResult, existing_pr: Any | None,
                gql: GitHubGraphQLClient | None = None,
                draft: bool = False) -> str:
-    repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
+    pr_repo = _resolve_pr_target_repo(base_repo, push_repo)
+    repo = retry_github_call(lambda: gh.get_repo(pr_repo), retries=2, description=f"get {pr_repo}")
     body = _build_pr_body(result, validation_failed=draft)
     title_prefix = "[backport][validation failed]" if draft else "[backport]"
     title = f"{title_prefix} Backport sweep for {target_branch}"
@@ -1367,7 +1386,7 @@ def _upsert_pr(gh: Any, base_repo: str, push_repo: str, target_branch: str, head
                 _mark_pr_draft(gql, node_id)
                 logger.info(
                     "Converted PR #%d on %s back to draft after validation failure",
-                    existing_pr.number, base_repo,
+                    existing_pr.number, pr_repo,
                 )
         elif not draft and getattr(existing_pr, "draft", False) and gql is not None:
             node_id = getattr(existing_pr, "node_id", None)
@@ -1375,15 +1394,15 @@ def _upsert_pr(gh: Any, base_repo: str, push_repo: str, target_branch: str, head
                 _mark_pr_ready_for_review(gql, node_id)
                 logger.info(
                     "Marked PR #%d on %s ready for review",
-                    existing_pr.number, base_repo,
+                    existing_pr.number, pr_repo,
                 )
-        logger.info("Updated PR #%d on %s", existing_pr.number, base_repo)
+        logger.info("Updated PR #%d on %s", existing_pr.number, pr_repo)
         return existing_pr.html_url
 
     pr = retry_github_call(
         lambda: create_pull_from_push_repo(
             repo,
-            base_repo=base_repo,
+            base_repo=pr_repo,
             push_repo=push_repo,
             title=title,
             body=body,
@@ -1393,7 +1412,7 @@ def _upsert_pr(gh: Any, base_repo: str, push_repo: str, target_branch: str, head
         ),
         retries=2, description="create PR",
     )
-    logger.info("Created PR #%d on %s", pr.number, base_repo)
+    logger.info("Created PR #%d on %s", pr.number, pr_repo)
     return pr.html_url
 
 
