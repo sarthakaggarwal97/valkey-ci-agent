@@ -718,12 +718,21 @@ def test_process_branch_incremental_validation_drops_failed_later_candidate(
             "applied",
         ),
     )
-    validations = iter([(True, ""), (False, "bad compile"), (True, "")])
+    validation_results = [(True, ""), (False, "bad compile"), (True, "")]
+    validation_index = 0
+    run_calls: list[list[str]] = []
 
     def fake_run_test_commands(_repo_dir, commands):
+        nonlocal validation_index
+
+        run_calls.append(list(commands))
         if not commands:
             return True, ""
-        return next(validations)
+        if validation_index >= len(validation_results):
+            raise AssertionError(f"unexpected validation command: {commands!r}")
+        result = validation_results[validation_index]
+        validation_index += 1
+        return result
 
     monkeypatch.setattr(backport_sweep, "_run_test_commands", fake_run_test_commands)
     reset_calls: list[list[str]] = []
@@ -759,6 +768,8 @@ def test_process_branch_incremental_validation_drops_failed_later_candidate(
     assert ["git", "reset", "--hard", "HEAD^"] in reset_calls
     assert result.pr_url == "https://github.com/valkey-io/valkey/pull/100"
     assert upserts[0]["draft"] is False
+    assert run_calls == [[], ["make"], ["make"], ["make"]]
+    assert validation_index == len(validation_results)
 
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
