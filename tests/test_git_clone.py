@@ -87,3 +87,12 @@ def test_timeout_returns_false(tmp_path):
 
     with patch("scripts.common.git_clone.subprocess.run", side_effect=fake_run):
         assert shallow_clone_at_sha("owner/name", tmp_path / "dest") is False
+
+
+def test_oserror_returns_false(tmp_path):
+    """A missing/non-executable git binary is logged and reported as failure."""
+    def fake_run(args, **kwargs):
+        raise OSError("git is not executable")
+
+    with patch("scripts.common.git_clone.subprocess.run", side_effect=fake_run):
+        assert shallow_clone_at_sha("owner/name", tmp_path / "dest") is False

@@ -75,6 +75,9 @@ def _run(args: list[str], *, timeout: int, desc: str, cwd: Path | None = None) -
     except subprocess.TimeoutExpired:
         logger.warning("git %s timed out after %ds", desc, timeout)
         return False
+    except OSError as exc:
+        logger.warning("git %s failed to start: %s", desc, exc)
+        return False
     if result.returncode != 0:
         logger.warning("git %s failed: %s", desc, result.stderr[:200].strip())
         return False

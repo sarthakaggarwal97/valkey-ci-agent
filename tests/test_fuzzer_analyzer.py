@@ -116,8 +116,13 @@ def test_format_source_note_when_clones_succeed():
 def test_format_source_note_when_clones_fail():
     """A failed clone must be called out so Claude doesn't cite line numbers."""
     from scripts.fuzzer.analyzer import _format_source_note
-    note = _format_source_note(_ctx(), valkey_ok=False, fuzzer_ok=False)
+    note = _format_source_note(
+        _ctx(tested_valkey_sha="deadbeef"),
+        valkey_ok=False,
+        fuzzer_ok=False,
+    )
     assert "NOT AVAILABLE" in note
+    assert "clone failed" in note
     assert "Do not cite source line numbers" in note
 
 
