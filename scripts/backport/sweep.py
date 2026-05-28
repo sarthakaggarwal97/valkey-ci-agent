@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -962,9 +963,13 @@ def _read_index_stage(repo_dir: str, path: str, stage: int) -> str:
     return ""
 
 
-def _run_test_commands(repo_dir: str, test_commands: list[str]) -> tuple[bool, str]:
+def _run_test_commands(
+    repo_dir: str,
+    test_commands: list[str],
+    log_path: str | None = None,
+) -> tuple[bool, str]:
     from scripts.common.build_validator import run_build_commands
-    return run_build_commands(repo_dir, test_commands)
+    return run_build_commands(repo_dir, test_commands, log_path=log_path)
 
 
 def _validate_backport_branch(
@@ -972,13 +977,14 @@ def _validate_backport_branch(
     target_branch: str,
     test_commands: list[str],
     validation_rules: list[Any],
+    log_path: str | None = None,
 ) -> tuple[bool, str]:
     commands = select_validation_commands(
         test_commands,
         validation_rules,
         changed_paths_since_base(repo_dir, f"origin/{target_branch}"),
     )
-    return _run_test_commands(repo_dir, commands)
+    return _run_test_commands(repo_dir, commands, log_path=log_path)
 
 
 def _repair_validation_failure_with_claude(
@@ -992,66 +998,90 @@ def _repair_validation_failure_with_claude(
     if not changed_paths:
         return False, validation_output
 
-    prompt = _build_validation_repair_prompt(
-        target_branch,
-        changed_paths,
-        validation_output,
-    )
-    logger.info(
-        "Calling Claude Code to repair validation failure on %s (%d changed path(s))",
-        target_branch,
-        len(changed_paths),
-    )
-    agent_result = run_agent(
-        "validation_repair_edit_only",
-        prompt,
-        cwd=repo_dir,
-    )
-    if agent_result.returncode != 0:
-        _run_git(repo_dir, "reset", "--hard", "HEAD")
-        detail = agent_result.stderr or "Claude Code validation repair failed"
-        return False, detail[:500] or validation_output
-
-    edited_paths = _worktree_changed_paths(repo_dir)
-    allowed_paths = set(changed_paths)
-    unexpected_paths = sorted(set(edited_paths) - allowed_paths)
-    if unexpected_paths:
-        _run_git(repo_dir, "reset", "--hard", "HEAD")
-        return (
-            False,
-            "Claude Code validation repair edited files outside the backport "
-            "diff: " + ", ".join(unexpected_paths[:10]),
+    # Write the full validation log to a tempfile outside repo_dir so it
+    # can't accidentally be committed. Claude reads the file directly via
+    # the Read tool — embedding a tail in the prompt starves the agent of
+    # the actual error when build output is dominated by trailing warnings.
+    log_fd, log_path = tempfile.mkstemp(prefix="backport-validation-", suffix=".log")
+    os.close(log_fd)
+    try:
+        # Refresh the log file with the failing run's output so the path
+        # always reflects the validation Claude is being asked to repair.
+        _validate_backport_branch(
+            repo_dir,
+            target_branch,
+            test_commands,
+            validation_rules,
+            log_path=log_path,
         )
-    if not edited_paths:
-        return False, validation_output
 
-    _run_git(repo_dir, "add", *edited_paths)
-    if not _has_staged_changes(repo_dir):
-        return False, validation_output
-    _run_git(repo_dir, "commit", "-m", "Repair backport validation failure")
+        prompt = _build_validation_repair_prompt(
+            target_branch,
+            changed_paths,
+            log_path,
+        )
+        logger.info(
+            "Calling Claude Code to repair validation failure on %s "
+            "(%d changed path(s), log=%s)",
+            target_branch,
+            len(changed_paths),
+            log_path,
+        )
+        agent_result = run_agent(
+            "validation_repair_edit_only",
+            prompt,
+            cwd=repo_dir,
+        )
+        if agent_result.returncode != 0:
+            _run_git(repo_dir, "reset", "--hard", "HEAD")
+            detail = agent_result.stderr or "Claude Code validation repair failed"
+            return False, detail[:500] or validation_output
 
-    ok, output = _validate_backport_branch(
-        repo_dir,
-        target_branch,
-        test_commands,
-        validation_rules,
-    )
-    if ok:
-        logger.info("Claude Code validation repair passed for %s", target_branch)
-        return True, output
+        edited_paths = _worktree_changed_paths(repo_dir)
+        allowed_paths = set(changed_paths)
+        unexpected_paths = sorted(set(edited_paths) - allowed_paths)
+        if unexpected_paths:
+            _run_git(repo_dir, "reset", "--hard", "HEAD")
+            return (
+                False,
+                "Claude Code validation repair edited files outside the backport "
+                "diff: " + ", ".join(unexpected_paths[:10]),
+            )
+        if not edited_paths:
+            return False, validation_output
 
-    logger.warning(
-        "Claude Code validation repair did not fix %s; removing repair commit.",
-        target_branch,
-    )
-    _run_git(repo_dir, "reset", "--hard", "HEAD^")
-    return False, output
+        _run_git(repo_dir, "add", *edited_paths)
+        if not _has_staged_changes(repo_dir):
+            return False, validation_output
+        _run_git(repo_dir, "commit", "-m", "Repair backport validation failure")
+
+        ok, output = _validate_backport_branch(
+            repo_dir,
+            target_branch,
+            test_commands,
+            validation_rules,
+        )
+        if ok:
+            logger.info("Claude Code validation repair passed for %s", target_branch)
+            return True, output
+
+        logger.warning(
+            "Claude Code validation repair did not fix %s; removing repair commit.",
+            target_branch,
+        )
+        _run_git(repo_dir, "reset", "--hard", "HEAD^")
+        return False, output
+    finally:
+        try:
+            os.unlink(log_path)
+        except OSError:
+            pass
 
 
 def _build_validation_repair_prompt(
     target_branch: str,
     changed_paths: tuple[str, ...],
-    validation_output: str,
+    validation_log_path: str,
 ) -> str:
     path_list = "\n".join(f"- {path}" for path in changed_paths)
     return (
@@ -1063,14 +1093,21 @@ def _build_validation_repair_prompt(
         "stage or commit changes, or run commands.\n\n"
         "Backport branch changed files:\n"
         f"{path_list}\n\n"
-        "Validation output (diagnostic only, last 12000 chars):\n"
-        "```text\n"
-        f"{validation_output[-12000:]}\n"
-        "```\n\n"
+        "Full validation output is at:\n"
+        f"  {validation_log_path}\n\n"
+        "Read that file with the Read tool, and use Grep/Glob if needed to "
+        "find the first real error. Build logs commonly trail with hundreds "
+        "of unrelated warnings; the actual cause is usually higher up. Look "
+        "for `error:`, `FAILED:`, `undefined reference`, `not declared`, or "
+        "the first non-zero exit code section.\n\n"
+        "You also have full read access to the cherry-picked repository at "
+        "the working directory — read source files, headers, and existing "
+        "target-branch APIs as needed to understand what differs from the "
+        "source PR.\n\n"
         "Your task:\n"
-        "1. Use the validation output to identify a minimal branch-adaptation "
-        "fix for this backport.\n"
-        "2. Only edit the changed files listed above.\n"
+        "1. Identify the first real error in the validation log.\n"
+        "2. Apply a minimal branch-adaptation fix scoped to the changed files "
+        "listed above.\n"
         "3. Preserve the source PR's intent; do not add unrelated behavior.\n"
         "4. Match APIs, helper names, include paths, and build conventions "
         "that already exist on the target branch.\n\n"

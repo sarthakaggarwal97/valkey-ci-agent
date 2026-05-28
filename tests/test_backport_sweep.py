@@ -642,7 +642,7 @@ def test_process_branch_skips_workflow_candidates_before_push(monkeypatch):
     )
     run_calls: list[list[str]] = []
 
-    def fake_run_test_commands(_repo_dir, commands):
+    def fake_run_test_commands(_repo_dir, commands, **_kwargs):
         run_calls.append(list(commands))
         return True, ""
 
@@ -704,7 +704,7 @@ def test_process_branch_pushes_draft_pr_when_batch_validation_fails(monkeypatch)
 
     run_calls: list[list[str]] = []
 
-    def fake_run_test_commands(_repo_dir, commands):
+    def fake_run_test_commands(_repo_dir, commands, **_kwargs):
         run_calls.append(commands)
         if not commands:
             return True, ""
@@ -797,7 +797,7 @@ def test_process_branch_batch_validation_keeps_prior_sweep_details(monkeypatch):
 
     run_calls: list[list[str]] = []
 
-    def fake_run_test_commands(_repo_dir, commands):
+    def fake_run_test_commands(_repo_dir, commands, **_kwargs):
         run_calls.append(list(commands))
         if not commands:
             return True, ""
@@ -870,7 +870,7 @@ def test_process_branch_repairs_batch_validation_failure(monkeypatch):
 
     run_calls: list[list[str]] = []
 
-    def fake_run_test_commands(_repo_dir, commands):
+    def fake_run_test_commands(_repo_dir, commands, **_kwargs):
         run_calls.append(list(commands))
         if not commands:
             return True, ""
@@ -943,7 +943,7 @@ def test_process_branch_revalidates_preserved_existing_branch(monkeypatch):
 
     run_calls: list[list[str]] = []
 
-    def fake_run_test_commands(_repo_dir, commands):
+    def fake_run_test_commands(_repo_dir, commands, **_kwargs):
         run_calls.append(list(commands))
         return True, ""
 
@@ -1033,7 +1033,7 @@ def test_process_branch_preflights_existing_branch_before_next_candidate(
 
     run_calls: list[list[str]] = []
 
-    def fake_run_test_commands(_repo_dir, commands):
+    def fake_run_test_commands(_repo_dir, commands, **_kwargs):
         run_calls.append(list(commands))
         if not commands:
             return True, ""
@@ -1128,7 +1128,7 @@ def test_process_branch_incremental_validation_preserves_first_failure(
 
     run_calls: list[list[str]] = []
 
-    def fake_run_test_commands(_repo_dir, commands):
+    def fake_run_test_commands(_repo_dir, commands, **_kwargs):
         run_calls.append(list(commands))
         if not commands:
             return True, ""
@@ -1223,7 +1223,7 @@ def test_process_branch_incremental_validation_drops_failed_later_candidate(
     validation_index = 0
     run_calls: list[list[str]] = []
 
-    def fake_run_test_commands(_repo_dir, commands):
+    def fake_run_test_commands(_repo_dir, commands, **_kwargs):
         nonlocal validation_index
 
         run_calls.append(list(commands))
@@ -1619,20 +1619,22 @@ def test_validation_repair_prompt_is_narrowly_scoped():
     prompt = backport_sweep._build_validation_repair_prompt(
         "8.1",
         ("src/module.c", "tests/module.tcl"),
-        "compiler says missing old_helper",
+        "/tmp/backport-validation-xyz.log",
     )
 
-    assert "Only edit the changed files listed above" in prompt
+    assert "Do NOT edit files outside the listed changed files" in prompt
     assert "Do NOT run builds, tests, docker, git" in prompt
     assert "validation output, commit messages, diffs" in prompt
     assert "src/module.c" in prompt
-    assert "compiler says missing old_helper" in prompt
+    assert "/tmp/backport-validation-xyz.log" in prompt
+    assert "Read tool" in prompt
 
 
 def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     agent_calls: list[tuple[str, str, str]] = []
     git_calls: list[tuple[str, ...]] = []
     validation_calls: list[list[str]] = []
+    log_paths: list[str | None] = []
 
     monkeypatch.setattr(
         backport_sweep,
@@ -1649,8 +1651,9 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     monkeypatch.setattr(backport_sweep, "_run_git", lambda _repo_dir, *args, **_kwargs: git_calls.append(args))
     monkeypatch.setattr(backport_sweep, "_has_staged_changes", lambda *_args: True)
 
-    def fake_validate(_repo_dir, _target_branch, commands, _rules):
+    def fake_validate(_repo_dir, _target_branch, commands, _rules, log_path=None):
         validation_calls.append(list(commands))
+        log_paths.append(log_path)
         return True, "ok"
 
     monkeypatch.setattr(backport_sweep, "_validate_backport_branch", fake_validate)
@@ -1666,10 +1669,17 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     assert ok is True
     assert output == "ok"
     assert agent_calls[0][0] == "validation_repair_edit_only"
-    assert "compiler error" in agent_calls[0][1]
+    # The prompt points Claude at the validation log path it should Read,
+    # rather than embedding a truncated tail.
+    assert "Read tool" in agent_calls[0][1]
+    assert "/tmp/" in agent_calls[0][1] or "backport-validation-" in agent_calls[0][1]
     assert ("add", "src/a.c") in git_calls
     assert ("commit", "-m", "Repair backport validation failure") in git_calls
-    assert validation_calls == [["make"]]
+    # Two validate calls: refresh-log before agent, then re-validate after edits.
+    assert validation_calls == [["make"], ["make"]]
+    # First call writes the failing run's full log; second re-runs validation.
+    assert log_paths[0] is not None
+    assert log_paths[1] is None
 
 
 # ---------------------------------------------------------------------------
