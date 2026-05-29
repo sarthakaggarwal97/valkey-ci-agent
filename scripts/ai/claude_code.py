@@ -80,6 +80,12 @@ def run_claude_code(
         "claude", "--print",
         "--max-turns", str(max_turns),
         "--tools", allowed_tools,
+        # Headless --print mode has no human to answer permission prompts, so
+        # bypass them entirely. The subprocess env is already hardened (GitHub
+        # tokens stripped, AWS-only allowlist) and runs in throwaway checkouts.
+        # --disallowedTools below still removes tools a profile bars outright
+        # (the bypass skips prompts; the deny list removes the tool).
+        "--dangerously-skip-permissions",
         "--output-format", "stream-json",
         "--verbose",
     ]
