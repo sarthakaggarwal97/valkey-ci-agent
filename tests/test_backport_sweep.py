@@ -145,6 +145,12 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="conflict.txt\n", stderr="")
+        if cmd in (
+            ["git", "diff", "--name-only", "-z"],
+            ["git", "diff", "--cached", "--name-only", "-z"],
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+        ):
+            return subprocess.CompletedProcess(cmd, 0, stdout="conflict.txt\0", stderr="")
         if cmd[:2] == ["git", "show"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="target content\n", stderr="")
         if cmd[:3] == ["git", "cat-file", "-e"]:
@@ -1698,6 +1704,52 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     # after Claude edits.
     assert validation_calls == [["make"]]
     assert log_paths == [None]
+
+
+def test_worktree_changed_paths_handles_spaces(tmp_path):
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    src = tmp_path / "src"
+    src.mkdir()
+    tracked = src / "file with space.c"
+    untracked = src / "new file with space.c"
+    tracked.write_text("old\n", encoding="utf-8")
+    subprocess.run(["git", "add", "src/file with space.c"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+
+    tracked.write_text("new\n", encoding="utf-8")
+    untracked.write_text("created\n", encoding="utf-8")
+
+    assert backport_sweep._worktree_changed_paths(str(tmp_path)) == (
+        "src/file with space.c",
+        "src/new file with space.c",
+    )
+    assert backport_sweep._changed_paths_in_index_or_worktree(str(tmp_path)) == (
+        "src/file with space.c",
+        "src/new file with space.c",
+    )
+
+
+def test_build_pr_body_surfaces_claude_repair_diagnosis():
+    result = BranchSweepResult(
+        target_branch="8.1",
+        candidates_found=1,
+        results=[
+            CandidateResult(
+                10,
+                "Broken compile",
+                "applied-validation-failed",
+                "Claude repair diagnosis:\nmissing include in tag.cc\n\n"
+                "Validation output:\nwarning tail",
+            ),
+        ],
+    )
+
+    body = backport_sweep._build_pr_body(result, validation_failed=True)
+
+    assert "### Claude repair diagnosis" in body
+    assert "missing include in tag.cc" in body
 
 
 # ---------------------------------------------------------------------------
