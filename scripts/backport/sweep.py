@@ -1448,8 +1448,7 @@ def _upsert_pr(gh: Any, base_repo: str, push_repo: str, target_branch: str, head
                draft: bool = False) -> str:
     repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
     body = _build_pr_body(result, validation_failed=draft)
-    title_prefix = "[backport][validation failed]" if draft else "[backport]"
-    title = f"{title_prefix} Backport sweep for {target_branch}"
+    title = f"[backport] Backport sweep for {target_branch}"
 
     if existing_pr:
         retry_github_call(lambda: existing_pr.edit(title=title, body=body), retries=2, description="update PR")

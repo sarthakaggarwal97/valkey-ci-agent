@@ -508,7 +508,7 @@ def test_upsert_pr_creates_draft_when_validation_failed():
 
     _, kwargs = mock_repo.create_pull.call_args
     assert kwargs["draft"] is True
-    assert kwargs["title"] == "[backport][validation failed] Backport sweep for 8.1"
+    assert kwargs["title"] == "[backport] Backport sweep for 8.1"
     assert "## Validation failed" in kwargs["body"]
     assert "## Applied (validation failed)" in kwargs["body"]
     assert "## Needs attention" not in kwargs["body"]
