@@ -982,7 +982,7 @@ def _stub_size_check_subprocess(monkeypatch, upstream_add: int, applied_add: int
                 stdout=f" 1 file changed, {applied_add} insertions(+)\n",
                 stderr="",
             )
-        if cmd[:2] == ["git", "show"]:
+        if cmd[:3] == ["git", "diff", "--stat"]:
             return subprocess.CompletedProcess(
                 cmd, 0,
                 stdout=f" 1 file changed, {upstream_add} insertions(+)\n",
@@ -1090,6 +1090,58 @@ def test_graphql_client_retry_exhaustion_raises_clear_error(monkeypatch):
     else:
         raise AssertionError("expected retry exhaustion to raise")
     assert call_count["n"] == 4, f"expected 4 retry attempts, got {call_count['n']}"
+
+
+def _fake_graphql_response(payload):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self):
+            import json as _json
+            return _json.dumps(payload).encode()
+
+    return FakeResponse()
+
+
+def test_graphql_client_retries_transient_errors_in_200_body(monkeypatch):
+    """Rate-limit errors arrive in a 200 body and must trigger backoff retries."""
+    responses = [
+        {"errors": [{"type": "RATE_LIMITED", "message": "API rate limit exceeded"}]},
+        {"data": {"ok": True}},
+    ]
+
+    def fake_urlopen(*_args, **_kwargs):
+        return _fake_graphql_response(responses.pop(0))
+
+    monkeypatch.setattr(sweep_graphql.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr("random.uniform", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr("time.sleep", lambda *_args, **_kwargs: None)
+
+    result = sweep_graphql.GitHubGraphQLClient("fake-token").execute("query {}", {})
+    assert result == {"ok": True}
+    assert responses == []
+
+
+def test_graphql_client_raises_immediately_on_non_transient_error(monkeypatch):
+    """A genuine query error must surface right away, not retry."""
+    call_count = {"n": 0}
+
+    def fake_urlopen(*_args, **_kwargs):
+        call_count["n"] += 1
+        return _fake_graphql_response(
+            {"errors": [{"type": "INVALID", "message": "Field 'bogus' doesn't exist"}]}
+        )
+
+    monkeypatch.setattr(sweep_graphql.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr("time.sleep", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(RuntimeError, match="GraphQL errors"):
+        sweep_graphql.GitHubGraphQLClient("fake-token").execute("query {}", {})
+    assert call_count["n"] == 1
 
 
 def test_safe_tmp_component_removes_branch_separators():

@@ -255,8 +255,10 @@ def check_applied_commit_size(
         ["git", "fetch", "origin", source_sha],
         cwd=repo_dir, capture_output=True, text=True, check=False,
     )
+    # Diff against the first parent rather than `git show --stat`, which emits
+    # no diffstat for merge commits and would silently disable this guard.
     upstream_stats = run_process(
-        ["git", "show", "--stat", "--format=", source_sha],
+        ["git", "diff", "--stat", f"{source_sha}^1", source_sha],
         cwd=repo_dir, capture_output=True, text=True, check=False,
     )
     upstream_additions = parse_additions_from_stat(upstream_stats.stdout)
