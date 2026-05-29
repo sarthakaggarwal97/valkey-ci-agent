@@ -1563,15 +1563,22 @@ def _validation_failure_detail(output: str) -> str:
     """Preserve AI diagnosis while keeping routine validation logs compact."""
     diagnosis = _repair_diagnosis_from_detail(output)
     if not diagnosis:
-        return output[:500]
+        return _compact_validation_output(output)
     marker = "\n\nValidation output:\n"
     validation_tail = output.split(marker, 1)[1] if marker in output else ""
     return (
         "Claude repair diagnosis:\n"
         f"{diagnosis[:1500]}\n\n"
         "Validation output:\n"
-        f"{validation_tail[:500]}"
+        f"{_compact_validation_output(validation_tail)}"
     )
+
+
+def _compact_validation_output(output: str, *, limit: int = 500) -> str:
+    text = output.strip()
+    if len(text) <= limit:
+        return text
+    return text[-limit:]
 
 
 def _build_pr_body(

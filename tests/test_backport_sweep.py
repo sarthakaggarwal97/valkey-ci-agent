@@ -1808,6 +1808,28 @@ def test_build_pr_body_surfaces_claude_repair_diagnosis():
     assert "missing include in tag.cc" in body
 
 
+def test_validation_failure_detail_uses_tail_without_repair_diagnosis():
+    detail = backport_sweep._validation_failure_detail(
+        "configure output\n" + ("compiler noise\n" * 80) + "undefined reference to objectGetVal\n"
+    )
+
+    assert "configure output" not in detail
+    assert "undefined reference to objectGetVal" in detail
+
+
+def test_validation_failure_detail_uses_tail_with_repair_diagnosis():
+    detail = backport_sweep._validation_failure_detail(
+        "Claude repair diagnosis:\n"
+        "clean cherry-pick used a newer API\n\n"
+        "Validation output:\n"
+        + ("compiler noise\n" * 80)
+        + "undefined reference to objectGetVal\n"
+    )
+
+    assert "clean cherry-pick used a newer API" in detail
+    assert "undefined reference to objectGetVal" in detail
+
+
 # ---------------------------------------------------------------------------
 # ProjectBackportDiscovery — cross-repo filter
 # ---------------------------------------------------------------------------
