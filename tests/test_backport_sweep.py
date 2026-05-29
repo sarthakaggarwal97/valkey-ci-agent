@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
 from github.GithubException import GithubException
 
 from scripts.backport import sweep as backport_sweep
@@ -74,7 +75,7 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
     assert result.outcome == "skipped-existing"
     assert result.detail == "already applied or empty cherry-pick"
     assert ("fetch", "origin", "abc123") in git_calls
-    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
+    assert ("cherry-pick", "--abort") in git_calls
 
 
 def test_apply_candidate_retries_squash_merge_commit_without_mainline(
@@ -186,7 +187,7 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
     assert result.detail == "resolution was already satisfied on target branch"
     assert ("add", "conflict.txt") in git_calls
     assert ["git", "commit", "--no-edit"] not in subprocess_calls
-    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
+    assert ("cherry-pick", "--abort") in git_calls
 
 
 def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_path):
@@ -242,7 +243,62 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
     assert ("add", "src/cluster_legacy.c") not in git_calls
     assert missing_on_target.exists()
     assert ["git", "commit", "--no-edit"] not in subprocess_calls
-    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
+    assert ("cherry-pick", "--abort") in git_calls
+
+
+def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
+    conflicted_file = tmp_path / "conflict.txt"
+    conflicted_file.write_text("<<<<<<< HEAD\ntarget\n=======\nsource\n>>>>>>> source\n", encoding="utf-8")
+    candidate = ProjectBackportCandidate(
+        source_pr_number=631,
+        source_pr_title="Fix ordering",
+        source_pr_url="https://github.com/valkey-io/valkey-search/pull/631",
+        target_branch="1.1",
+        merge_commit_sha="abc123",
+    )
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        if args == ("cherry-pick", "--abort"):
+            raise subprocess.CalledProcessError(1, ["git", *args])
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        if cmd[:2] == ["git", "cherry-pick"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
+        if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="conflict.txt\n", stderr="")
+        if cmd in (
+            ["git", "diff", "--name-only", "-z"],
+            ["git", "diff", "--cached", "--name-only", "-z"],
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+        ):
+            return subprocess.CompletedProcess(cmd, 0, stdout="conflict.txt\0", stderr="")
+        if cmd[:2] == ["git", "show"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="target\n", stderr="")
+        if cmd[:3] == ["git", "cat-file", "-e"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
+    monkeypatch.setattr(backport_sweep.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(
+        backport_sweep,
+        "resolve_conflicts_with_claude",
+        lambda *_args, **_kwargs: [
+            ResolutionResult(
+                path="conflict.txt",
+                resolved_content=None,
+                resolution_summary="unresolved",
+            )
+        ],
+    )
+
+    with pytest.raises(subprocess.CalledProcessError):
+        backport_sweep._apply_candidate(
+            repo_dir=str(tmp_path),
+            candidate=candidate,
+            repo_full_name="valkey-io/valkey-search",
+            git_env={},
+        )
 
 
 def test_run_test_commands_returns_failure_output(tmp_path):

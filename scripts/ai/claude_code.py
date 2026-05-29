@@ -83,7 +83,11 @@ def run_claude_code(
         "--output-format", "stream-json",
         "--verbose",
     ]
-    denied = disallowed_tools or _default_disallowed_tools(allowed_tools)
+    denied = (
+        _default_disallowed_tools(allowed_tools)
+        if disallowed_tools is None
+        else disallowed_tools
+    )
     if denied:
         cmd.extend(["--disallowedTools", denied])
     if resolved_model:

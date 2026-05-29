@@ -405,7 +405,7 @@ def _process_branch(
                     cwd=tmpdir, capture_output=True, text=True,
                 )
                 if rebase_result.returncode != 0:
-                    subprocess.run(["git", "rebase", "--abort"], cwd=tmpdir, capture_output=True)
+                    _run_git(tmpdir, "rebase", "--abort")
                     raise RuntimeError(
                         f"Could not rebase existing backport branch "
                         f"{backport_branch} onto origin/{target_branch}. "
@@ -725,7 +725,7 @@ def _apply_candidate(
         if line.strip()
     ]
     if not conflicting_paths:
-        subprocess.run(["git", "cherry-pick", "--abort"], cwd=repo_dir, capture_output=True)
+        _abort_cherry_pick(repo_dir)
         stderr = result.stderr[:500]
         if "cherry-pick is now empty" in result.stderr or "nothing to commit" in result.stderr:
             return CandidateResult(
@@ -759,7 +759,7 @@ def _apply_candidate(
             source_branch_content=source_content,
         ))
     if target_missing_paths:
-        subprocess.run(["git", "cherry-pick", "--abort"], cwd=repo_dir, capture_output=True)
+        _abort_cherry_pick(repo_dir)
         paths = ", ".join(sorted(target_missing_paths))
         return CandidateResult(
             candidate.source_pr_number,
@@ -792,8 +792,7 @@ def _apply_candidate(
     )
     unresolved = [r for r in resolutions if r.resolved_content is None]
     if unresolved:
-        # Abort cherry-pick
-        subprocess.run(["git", "cherry-pick", "--abort"], cwd=repo_dir, capture_output=True)
+        _abort_cherry_pick(repo_dir)
         # Surface why each file couldn't be resolved (truncated for readability).
         details = "; ".join(
             f"{r.path}: {(r.resolution_summary or 'unresolved')[:200]}"
@@ -816,7 +815,7 @@ def _apply_candidate(
             resolved_path.write_text(r.resolved_content, encoding="utf-8")
             _run_git(repo_dir, "add", r.path)
     if not _has_staged_changes(repo_dir):
-        subprocess.run(["git", "cherry-pick", "--abort"], cwd=repo_dir, capture_output=True)
+        _abort_cherry_pick(repo_dir)
         return CandidateResult(
             candidate.source_pr_number,
             candidate.source_pr_title,
@@ -840,13 +839,13 @@ def _apply_candidate(
         stderr_lower = (commit_result.stderr or "").lower()
         stdout_lower = (commit_result.stdout or "").lower()
         if "nothing to commit" in stderr_lower or "nothing to commit" in stdout_lower:
-            subprocess.run(["git", "cherry-pick", "--abort"], cwd=repo_dir, capture_output=True)
+            _abort_cherry_pick(repo_dir)
             return CandidateResult(
                 candidate.source_pr_number, candidate.source_pr_title,
                 "skipped-existing",
                 "resolution was already satisfied on target branch",
             )
-        subprocess.run(["git", "cherry-pick", "--abort"], cwd=repo_dir, capture_output=True)
+        _abort_cherry_pick(repo_dir)
         return CandidateResult(
             candidate.source_pr_number, candidate.source_pr_title,
             "skipped-conflict",
@@ -864,7 +863,7 @@ def _apply_candidate(
             "Reverting cherry-pick for #%d: %s",
             candidate.source_pr_number, issue,
         )
-        subprocess.run(["git", "reset", "--hard", "HEAD^"], cwd=repo_dir, capture_output=True)
+        _run_git(repo_dir, "reset", "--hard", "HEAD^")
         return CandidateResult(
             candidate.source_pr_number, candidate.source_pr_title,
             "skipped-conflict",
@@ -872,6 +871,11 @@ def _apply_candidate(
         )
 
     return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied", "conflicts resolved by Claude Code")
+
+
+def _abort_cherry_pick(repo_dir: str) -> None:
+    """Abort an in-progress cherry-pick, failing closed if git cannot clean up."""
+    _run_git(repo_dir, "cherry-pick", "--abort")
 
 
 def _has_staged_changes(repo_dir: str) -> bool:
