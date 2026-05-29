@@ -18,28 +18,18 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
-from scripts.ai.runtime import run_agent
-from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.main import _run_git
 from scripts.backport.sweep_apply import (
     apply_candidate,
-    check_applied_commit_size,
-    has_staged_changes,
-    index_stage_exists,
-    parse_additions_from_stat,
-    read_index_stage,
 )
 from scripts.backport.sweep_git import (
     branch_has_changes,
-    changed_paths_in_index_or_worktree,
     clone_target_branch,
-    collect_git_paths_z,
     head_changes_workflow_files,
     list_already_applied,
     push_backport_branch,
     safe_tmp_component,
     sync_target_branch_to_source,
-    worktree_changed_paths,
 )
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import (
@@ -51,25 +41,17 @@ from scripts.backport.sweep_models import (
 from scripts.backport.sweep_prs import (
     delete_stale_backport_branch,
     find_existing_pr,
-    mark_pr_ready_for_review,
     upsert_pr,
 )
 from scripts.backport.sweep_reporting import (
-    build_pr_body,
     build_summary,
-    compact_validation_output,
     result_is_on_backport_branch,
     validation_failure_detail,
 )
 from scripts.backport.sweep_validation import (
-    build_validation_repair_prompt,
-    extract_agent_result_text,
-    repair_validation_failure_with_claude,
     run_test_commands,
     validate_branch_with_optional_repair,
-    validation_output_with_diagnosis,
 )
-from scripts.backport.validation import changed_paths_since_base, select_validation_commands
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
 from scripts.common.job_summary import emit_job_summary
@@ -268,12 +250,12 @@ def run_backport_sweep(
             target_branch=target_branch,
             candidates_found=len(candidates),
         )
-        emit_job_summary(_build_summary([result]))
+        emit_job_summary(build_summary([result]))
         return result
 
     if not candidates:
         result = BranchSweepResult(target_branch=target_branch)
-        emit_job_summary(_build_summary([result]))
+        emit_job_summary(build_summary([result]))
         return result
 
     result = _process_branch(
@@ -292,7 +274,7 @@ def run_backport_sweep(
         validation_rules=validation_rules,
         repair_validation_failures=repo_entry.repair_validation_failures,
     )
-    emit_job_summary(_build_summary([result]))
+    emit_job_summary(build_summary([result]))
     return result
 
 
@@ -318,12 +300,12 @@ def _process_branch(
         target_branch=target_branch,
         candidates_found=len(candidates),
     )
-    tmpdir = tempfile.mkdtemp(prefix=f"backport-{_safe_tmp_component(target_branch)}-")
+    tmpdir = tempfile.mkdtemp(prefix=f"backport-{safe_tmp_component(target_branch)}-")
 
     try:
         with GitAuth(github_token, prefix="backport-sweep-git-askpass-") as git_auth:
             git_env = git_auth.env()
-            _clone_target_branch(repo_full_name, target_branch, tmpdir, git_env)
+            clone_target_branch(repo_full_name, target_branch, tmpdir, git_env)
             _run_git(tmpdir, "config", "user.name", "valkeyrie-bot[bot]")
             _run_git(
                 tmpdir,
@@ -332,7 +314,7 @@ def _process_branch(
                 "3692572+valkeyrie-bot[bot]@users.noreply.github.com",
             )
 
-            setup_ok, setup_output = _run_test_commands(
+            setup_ok, setup_output = run_test_commands(
                 tmpdir,
                 validation_setup_commands or [],
             )
@@ -348,7 +330,7 @@ def _process_branch(
                 )
 
             if push_repo != repo_full_name:
-                _sync_target_branch_to_source(
+                sync_target_branch_to_source(
                     gh,
                     push_repo,
                     repo_full_name,
@@ -356,7 +338,7 @@ def _process_branch(
                 )
 
             backport_branch = f"{_BRANCH_PREFIX}/{target_branch}"
-            existing_pr = _find_existing_pr(
+            existing_pr = find_existing_pr(
                 gh,
                 repo_full_name,
                 push_repo,
@@ -392,12 +374,12 @@ def _process_branch(
                         f"{rebase_result.stderr.strip()[:300]}"
                     )
             else:
-                _delete_stale_backport_branch(gh, push_repo, backport_branch)
+                delete_stale_backport_branch(gh, push_repo, backport_branch)
                 _run_git(tmpdir, "checkout", "-b", backport_branch)
                 push_url = github_https_url(push_repo)
                 _run_git(tmpdir, "remote", "add", "push_target", push_url, env=git_env)
 
-            already_applied = _list_already_applied(
+            already_applied = list_already_applied(
                 tmpdir,
                 target_branch,
                 backport_branch,
@@ -427,7 +409,7 @@ def _process_branch(
                     )
                     continue
 
-                candidate_result = _apply_candidate(
+                candidate_result = apply_candidate(
                     tmpdir,
                     candidate,
                     repo_full_name,
@@ -441,7 +423,7 @@ def _process_branch(
                 if candidate_result.outcome != "applied":
                     continue
 
-                if _head_changes_workflow_files(tmpdir):
+                if head_changes_workflow_files(tmpdir):
                     candidate_result.outcome = "skipped-conflict"
                     candidate_result.detail = (
                         "changes GitHub Actions workflow files; "
@@ -470,7 +452,7 @@ def _process_branch(
                 )
                 if not ok:
                     candidate_result.outcome = "skipped-validation-failed"
-                    candidate_result.detail = _validation_failure_detail(output)
+                    candidate_result.detail = validation_failure_detail(output)
                     _run_git(tmpdir, "reset", "--hard", "HEAD^")
                     logger.warning(
                         "Validation failed for candidate #%d on %s; removed candidate and continuing.",
@@ -483,10 +465,10 @@ def _process_branch(
 
             committed = [
                 item for item in result.results
-                if _result_is_on_backport_branch(item)
+                if result_is_on_backport_branch(item)
             ]
-            if committed and _branch_has_changes(tmpdir, target_branch):
-                _push_backport_branch(
+            if committed and branch_has_changes(tmpdir, target_branch):
+                push_backport_branch(
                     tmpdir,
                     backport_branch,
                     git_env,
@@ -499,7 +481,7 @@ def _process_branch(
                     backport_branch,
                 )
 
-                result.pr_url = _upsert_pr(
+                result.pr_url = upsert_pr(
                     gh,
                     repo_full_name,
                     push_repo,
@@ -525,268 +507,6 @@ def _process_branch(
         shutil.rmtree(tmpdir, ignore_errors=True)
 
     return result
-
-
-def _clone_target_branch(
-    repo_full_name: str,
-    target_branch: str,
-    dest_dir: str,
-    git_env: dict[str, str],
-) -> None:
-    clone_target_branch(repo_full_name, target_branch, dest_dir, git_env)
-
-
-def _push_backport_branch(
-    repo_dir: str,
-    branch: str,
-    git_env: dict[str, str],
-    *,
-    force_with_lease: bool,
-) -> None:
-    push_backport_branch(
-        repo_dir,
-        branch,
-        git_env,
-        branch_prefix=_BRANCH_PREFIX,
-        force_with_lease=force_with_lease,
-        run_git=_run_git,
-    )
-
-
-def _apply_candidate(
-    repo_dir: str,
-    candidate: ProjectBackportCandidate,
-    repo_full_name: str,
-    git_env: dict[str, str],
-    language: str = "c",
-    build_commands: list[str] | None = None,
-    validation_rules: list[Any] | None = None,
-) -> CandidateResult:
-    return apply_candidate(
-        repo_dir,
-        candidate,
-        repo_full_name,
-        git_env,
-        language=language,
-        build_commands=build_commands,
-        validation_rules=validation_rules,
-        run_git=_run_git,
-        resolve_conflicts=resolve_conflicts_with_claude,
-        run_process=subprocess.run,
-    )
-
-
-def _has_staged_changes(repo_dir: str) -> bool:
-    return has_staged_changes(repo_dir, run_process=subprocess.run)
-
-
-def _changed_paths_in_index_or_worktree(repo_dir: str) -> tuple[str, ...]:
-    return changed_paths_in_index_or_worktree(
-        repo_dir,
-        run_process=subprocess.run,
-    )
-
-
-def _collect_git_paths_z(
-    repo_dir: str,
-    commands: tuple[tuple[str, ...], ...],
-) -> tuple[str, ...]:
-    return collect_git_paths_z(
-        repo_dir,
-        commands,
-        run_process=subprocess.run,
-    )
-
-
-def _index_stage_exists(repo_dir: str, path: str, stage: int) -> bool:
-    return index_stage_exists(repo_dir, path, stage, run_process=subprocess.run)
-
-
-def _check_applied_commit_size(
-    repo_dir: str,
-    candidate: ProjectBackportCandidate,
-) -> str | None:
-    return check_applied_commit_size(
-        repo_dir,
-        candidate,
-        run_process=subprocess.run,
-    )
-
-
-def _parse_additions_from_stat(stat_output: str) -> int:
-    return parse_additions_from_stat(stat_output)
-
-
-def _read_index_stage(repo_dir: str, path: str, stage: int) -> str:
-    return read_index_stage(repo_dir, path, stage, run_process=subprocess.run)
-
-
-def _run_test_commands(
-    repo_dir: str,
-    test_commands: list[str],
-    log_path: str | None = None,
-) -> tuple[bool, str]:
-    return run_test_commands(repo_dir, test_commands, log_path=log_path)
-
-
-def _validate_backport_branch(
-    repo_dir: str,
-    target_branch: str,
-    test_commands: list[str],
-    validation_rules: list[Any],
-    log_path: str | None = None,
-) -> tuple[bool, str]:
-    commands = select_validation_commands(
-        test_commands,
-        validation_rules,
-        changed_paths_since_base(repo_dir, f"origin/{target_branch}"),
-    )
-    return _run_test_commands(repo_dir, commands, log_path=log_path)
-
-
-def _repair_validation_failure_with_claude(
-    repo_dir: str,
-    target_branch: str,
-    test_commands: list[str],
-    validation_rules: list[Any],
-    validation_output: str,
-    *,
-    validation_log_path: str | None = None,
-) -> tuple[bool, str]:
-    return repair_validation_failure_with_claude(
-        repo_dir,
-        target_branch,
-        test_commands,
-        validation_rules,
-        validation_output,
-        validation_log_path=validation_log_path,
-        run_git=_run_git,
-        run_agent_func=run_agent,
-        validate_func=_validate_backport_branch,
-        changed_paths_func=_worktree_changed_paths,
-        changed_paths_since_base_func=changed_paths_since_base,
-        has_staged_changes_func=_has_staged_changes,
-    )
-
-
-def _extract_agent_result_text(stdout: str) -> str:
-    return extract_agent_result_text(stdout)
-
-
-def _validation_output_with_diagnosis(
-    validation_output: str,
-    diagnosis: str,
-) -> str:
-    return validation_output_with_diagnosis(validation_output, diagnosis)
-
-
-def _build_validation_repair_prompt(
-    target_branch: str,
-    changed_paths: tuple[str, ...],
-    validation_log_path: str,
-) -> str:
-    return build_validation_repair_prompt(
-        target_branch,
-        changed_paths,
-        validation_log_path,
-    )
-
-
-def _worktree_changed_paths(repo_dir: str) -> tuple[str, ...]:
-    return worktree_changed_paths(repo_dir, run_process=subprocess.run)
-
-
-def _head_changes_workflow_files(repo_dir: str) -> bool:
-    return head_changes_workflow_files(repo_dir)
-
-
-def _branch_has_changes(repo_dir: str, target_branch: str) -> bool:
-    return branch_has_changes(repo_dir, target_branch)
-
-
-def _sync_target_branch_to_source(
-    gh: Any,
-    push_repo: str,
-    source_repo: str,
-    target_branch: str,
-) -> None:
-    sync_target_branch_to_source(gh, push_repo, source_repo, target_branch)
-
-
-def _find_existing_pr(
-    gh: Any,
-    base_repo: str,
-    push_repo: str,
-    branch: str,
-) -> Any | None:
-    return find_existing_pr(gh, base_repo, push_repo, branch)
-
-
-def _delete_stale_backport_branch(gh: Any, push_repo: str, branch: str) -> None:
-    delete_stale_backport_branch(gh, push_repo, branch)
-
-
-def _upsert_pr(
-    gh: Any,
-    base_repo: str,
-    push_repo: str,
-    target_branch: str,
-    head_branch: str,
-    result: BranchSweepResult,
-    existing_pr: Any | None,
-    gql: GitHubGraphQLClient | None = None,
-) -> str:
-    return upsert_pr(
-        gh,
-        base_repo,
-        push_repo,
-        target_branch,
-        head_branch,
-        result,
-        existing_pr,
-        gql=gql,
-    )
-
-
-def _mark_pr_ready_for_review(
-    gql: GitHubGraphQLClient,
-    pr_node_id: str,
-) -> None:
-    mark_pr_ready_for_review(gql, pr_node_id)
-
-
-def _list_already_applied(
-    repo_dir: str,
-    base_branch: str,
-    backport_branch: str,
-) -> set[str]:
-    return list_already_applied(repo_dir, base_branch, backport_branch)
-
-
-def _result_is_on_backport_branch(result: CandidateResult) -> bool:
-    return result_is_on_backport_branch(result)
-
-
-def _validation_failure_detail(output: str) -> str:
-    return validation_failure_detail(output)
-
-
-def _compact_validation_output(output: str, *, limit: int = 500) -> str:
-    return compact_validation_output(output, limit=limit)
-
-
-def _build_pr_body(result: BranchSweepResult) -> str:
-    return build_pr_body(result)
-
-
-def _build_summary(results: list[BranchSweepResult]) -> str:
-    return build_summary(results)
-
-
-def _safe_tmp_component(value: str) -> str:
-    return safe_tmp_component(value)
-
-
 def _normalize(value: object) -> str:
     return str(value or "").strip().lower()
 

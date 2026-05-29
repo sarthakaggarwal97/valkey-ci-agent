@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from scripts.backport.cherry_pick import is_non_merge_mainline_error
+from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
+from scripts.backport.main import _run_git as run_git_default
 from scripts.backport.models import BackportPRContext, ConflictedFile, ResolutionResult
 from scripts.backport.sweep_git import changed_paths_in_index_or_worktree
 from scripts.backport.sweep_models import CandidateResult, ProjectBackportCandidate
@@ -34,8 +36,8 @@ def apply_candidate(
     language: str = "c",
     build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
-    run_git: RunGit,
-    resolve_conflicts: ResolveConflicts,
+    run_git: RunGit = run_git_default,
+    resolve_conflicts: ResolveConflicts = resolve_conflicts_with_claude,
     run_process: RunProcess = subprocess.run,
 ) -> CandidateResult:
     sha = candidate.merge_commit_sha

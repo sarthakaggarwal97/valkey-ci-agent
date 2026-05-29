@@ -10,12 +10,29 @@ import pytest
 from github.GithubException import GithubException
 
 from scripts.backport import sweep as backport_sweep
-from scripts.backport import sweep_graphql
+from scripts.backport import sweep_apply, sweep_graphql, sweep_validation
 from scripts.backport.models import ResolutionResult
 from scripts.backport.sweep import (
     BranchSweepResult,
     CandidateResult,
     ProjectBackportCandidate,
+)
+from scripts.backport.sweep_apply import apply_candidate, check_applied_commit_size
+from scripts.backport.sweep_git import (
+    changed_paths_in_index_or_worktree,
+    clone_target_branch,
+    push_backport_branch,
+    safe_tmp_component,
+    sync_target_branch_to_source,
+    worktree_changed_paths,
+)
+from scripts.backport.sweep_prs import upsert_pr
+from scripts.backport.sweep_reporting import build_pr_body, build_summary
+from scripts.backport.sweep_validation import (
+    build_validation_repair_prompt,
+    repair_validation_failure_with_claude,
+    run_test_commands,
+    validate_backport_branch,
 )
 from scripts.common.git_auth import GitAuth
 
@@ -63,14 +80,15 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
-    monkeypatch.setattr(backport_sweep.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
 
-    result = backport_sweep._apply_candidate(
+    result = apply_candidate(
         repo_dir=str(tmp_path),
         candidate=candidate,
         repo_full_name="valkey-io/valkey",
         git_env={},
+        run_git=fake_run_git,
+        run_process=fake_subprocess_run,
     )
 
     assert result.outcome == "skipped-existing"
@@ -109,14 +127,15 @@ def test_apply_candidate_retries_squash_merge_commit_without_mainline(
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
-    monkeypatch.setattr(backport_sweep.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
 
-    result = backport_sweep._apply_candidate(
+    result = apply_candidate(
         repo_dir=str(tmp_path),
         candidate=candidate,
         repo_full_name="valkey-io/valkey",
         git_env={},
+        run_git=fake_run_git,
+        run_process=fake_subprocess_run,
     )
 
     assert result.outcome == "applied"
@@ -163,25 +182,24 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
-    monkeypatch.setattr(backport_sweep.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(
-        backport_sweep,
-        "resolve_conflicts_with_claude",
-        lambda *_args, **_kwargs: [
+    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    def fake_resolve(*_args, **_kwargs):
+        return [
             ResolutionResult(
                 path="conflict.txt",
                 resolved_content="target content\n",
                 resolution_summary="resolved",
             )
-        ],
-    )
+        ]
 
-    result = backport_sweep._apply_candidate(
+    result = apply_candidate(
         repo_dir=str(tmp_path),
         candidate=candidate,
         repo_full_name="valkey-io/valkey",
         git_env={},
+        run_git=fake_run_git,
+        run_process=fake_subprocess_run,
+        resolve_conflicts=fake_resolve,
     )
 
     assert result.outcome == "skipped-existing"
@@ -224,19 +242,18 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
-    monkeypatch.setattr(backport_sweep.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(
-        backport_sweep,
-        "resolve_conflicts_with_claude",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not call Claude")),
-    )
+    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    def fake_resolve(*_args, **_kwargs):
+        raise AssertionError("should not call Claude")
 
-    result = backport_sweep._apply_candidate(
+    result = apply_candidate(
         repo_dir=str(tmp_path),
         candidate=candidate,
         repo_full_name="valkey-io/valkey",
         git_env={},
+        run_git=fake_run_git,
+        run_process=fake_subprocess_run,
+        resolve_conflicts=fake_resolve,
     )
 
     assert result.outcome == "skipped-conflict"
@@ -279,31 +296,30 @@ def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
-    monkeypatch.setattr(backport_sweep.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(
-        backport_sweep,
-        "resolve_conflicts_with_claude",
-        lambda *_args, **_kwargs: [
+    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    def fake_resolve(*_args, **_kwargs):
+        return [
             ResolutionResult(
                 path="conflict.txt",
                 resolved_content=None,
                 resolution_summary="unresolved",
             )
-        ],
-    )
+        ]
 
     with pytest.raises(subprocess.CalledProcessError):
-        backport_sweep._apply_candidate(
+        apply_candidate(
             repo_dir=str(tmp_path),
             candidate=candidate,
             repo_full_name="valkey-io/valkey-search",
             git_env={},
+            run_git=fake_run_git,
+            run_process=fake_subprocess_run,
+            resolve_conflicts=fake_resolve,
         )
 
 
 def test_run_test_commands_returns_failure_output(tmp_path):
-    ok, output = backport_sweep._run_test_commands(
+    ok, output = run_test_commands(
         str(tmp_path),
         ["printf stdout; printf stderr >&2; exit 3"],
     )
@@ -334,7 +350,7 @@ def test_upsert_pr_uses_direct_upstream_branch_by_default():
         ],
     )
 
-    pr_url = backport_sweep._upsert_pr(
+    pr_url = upsert_pr(
         mock_gh,
         "valkey-io/valkey",
         "valkey-io/valkey",
@@ -380,7 +396,7 @@ def test_upsert_pr_promotes_existing_draft_to_ready():
         results=[CandidateResult(10, "Some PR", "applied", "")],
     )
 
-    backport_sweep._upsert_pr(
+    upsert_pr(
         mock_gh,
         "valkey-io/valkey",
         "valkey-io/valkey",
@@ -421,7 +437,7 @@ def test_upsert_pr_skips_ready_promotion_when_already_open():
         results=[CandidateResult(11, "Another PR", "applied", "")],
     )
 
-    backport_sweep._upsert_pr(
+    upsert_pr(
         mock_gh,
         "valkey-io/valkey",
         "valkey-io/valkey",
@@ -450,7 +466,7 @@ def test_clone_target_branch_invokes_git_clone_without_destination_cwd(
     monkeypatch.setattr(backport_sweep.subprocess, "run", fake_run)
 
     dest = tmp_path / "checkout"
-    backport_sweep._clone_target_branch(
+    clone_target_branch(
         "owner/repo",
         "1.0",
         str(dest),
@@ -486,11 +502,12 @@ def test_push_backport_branch_uses_plain_push_for_new_branch(monkeypatch):
 
     monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
 
-    backport_sweep._push_backport_branch(
+    push_backport_branch(
         "/repo",
         "agent/backport/sweep/8.1",
         {},
         force_with_lease=False,
+        run_git=fake_run_git,
     )
 
     assert calls == [("push", "push_target", "agent/backport/sweep/8.1")]
@@ -504,11 +521,12 @@ def test_push_backport_branch_uses_force_with_lease_after_rebase(monkeypatch):
 
     monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
 
-    backport_sweep._push_backport_branch(
+    push_backport_branch(
         "/repo",
         "agent/backport/sweep/8.1",
         {},
         force_with_lease=True,
+        run_git=fake_run_git,
     )
 
     assert calls == [
@@ -535,30 +553,30 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     applied_by_pr = {3, 4, 6, 7, 8, 9}
     attempted: list[int] = []
 
-    monkeypatch.setattr(backport_sweep, "_clone_target_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "_run_git", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(backport_sweep, "_find_existing_pr", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(backport_sweep, "_delete_stale_backport_branch", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(backport_sweep, "_list_already_applied", lambda *_args, **_kwargs: {"2"})
-    monkeypatch.setattr(backport_sweep, "changed_paths_since_base", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr(backport_sweep, "_run_test_commands", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: {"2"})
+    monkeypatch.setattr(sweep_validation, "changed_paths_since_base", lambda *_args, **_kwargs: [], raising=False)
+    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
     monkeypatch.setattr(
         backport_sweep,
         "validate_branch_with_optional_repair",
         lambda *_args, **_kwargs: (True, ""),
     )
-    monkeypatch.setattr(backport_sweep, "_head_changes_workflow_files", lambda *_args: False)
-    monkeypatch.setattr(backport_sweep, "_branch_has_changes", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(backport_sweep, "head_changes_workflow_files", lambda *_args: False)
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_args, **_kwargs: True)
 
     pushed: list[str] = []
     monkeypatch.setattr(
         backport_sweep,
-        "_push_backport_branch",
+        "push_backport_branch",
         lambda _repo_dir, branch, *_args, **_kwargs: pushed.append(branch),
     )
     monkeypatch.setattr(
         backport_sweep,
-        "_upsert_pr",
+        "upsert_pr",
         lambda *_args, **_kwargs: "https://github.com/valkey-io/valkey/pull/100",
     )
 
@@ -577,7 +595,7 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
             detail="conflict",
         )
 
-    monkeypatch.setattr(backport_sweep, "_apply_candidate", fake_apply)
+    monkeypatch.setattr(backport_sweep, "apply_candidate", fake_apply)
 
     result = backport_sweep._process_branch(
         gh=MagicMock(),
@@ -609,21 +627,21 @@ def test_process_branch_skips_workflow_candidates_before_push(monkeypatch):
         merge_commit_sha="sha3317",
     )
 
-    monkeypatch.setattr(backport_sweep, "_clone_target_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_args, **_kwargs: None)
     git_calls: list[tuple[str, ...]] = []
     monkeypatch.setattr(
         backport_sweep,
         "_run_git",
         lambda _repo_dir, *args, **_kwargs: git_calls.append(args),
     )
-    monkeypatch.setattr(backport_sweep, "_find_existing_pr", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(backport_sweep, "_delete_stale_backport_branch", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(backport_sweep, "_list_already_applied", lambda *_args, **_kwargs: set())
-    monkeypatch.setattr(backport_sweep, "_head_changes_workflow_files", lambda *_args: True)
-    monkeypatch.setattr(backport_sweep, "_branch_has_changes", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: set())
+    monkeypatch.setattr(backport_sweep, "head_changes_workflow_files", lambda *_args: True)
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(
         backport_sweep,
-        "_apply_candidate",
+        "apply_candidate",
         lambda _repo_dir, c, *_args, **_kwargs: CandidateResult(
             c.source_pr_number,
             c.source_pr_title,
@@ -642,9 +660,9 @@ def test_process_branch_skips_workflow_candidates_before_push(monkeypatch):
     def fail_upsert(*_args, **_kwargs):
         raise AssertionError("workflow-only skipped runs must not upsert PRs")
 
-    monkeypatch.setattr(backport_sweep, "_run_test_commands", fake_run_test_commands)
-    monkeypatch.setattr(backport_sweep, "_push_backport_branch", fail_push)
-    monkeypatch.setattr(backport_sweep, "_upsert_pr", fail_upsert)
+    monkeypatch.setattr(backport_sweep, "run_test_commands", fake_run_test_commands)
+    monkeypatch.setattr(backport_sweep, "push_backport_branch", fail_push)
+    monkeypatch.setattr(backport_sweep, "upsert_pr", fail_upsert)
 
     result = backport_sweep._process_branch(
         gh=MagicMock(),
@@ -673,18 +691,18 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
     validates after each kept cherry-pick (validate_fn). Returns
     (result, pushed, upserts, reset_count).
     """
-    monkeypatch.setattr(backport_sweep, "_clone_target_branch", lambda *_a, **_k: None)
-    monkeypatch.setattr(backport_sweep, "_find_existing_pr", lambda *_a, **_k: None)
-    monkeypatch.setattr(backport_sweep, "_delete_stale_backport_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_a, **_k: None)
+    monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(
         backport_sweep,
-        "_list_already_applied",
+        "list_already_applied",
         lambda *_a, **_k: set(already_applied or set()),
     )
-    monkeypatch.setattr(backport_sweep, "_head_changes_workflow_files", lambda *_a: False)
-    monkeypatch.setattr(backport_sweep, "_branch_has_changes", lambda *_a, **_k: True)
-    monkeypatch.setattr(backport_sweep, "_run_test_commands", lambda *_a, **_k: (True, ""))
-    monkeypatch.setattr(backport_sweep, "_apply_candidate", apply_fn)
+    monkeypatch.setattr(backport_sweep, "head_changes_workflow_files", lambda *_a: False)
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
+    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
+    monkeypatch.setattr(backport_sweep, "apply_candidate", apply_fn)
     monkeypatch.setattr(backport_sweep, "validate_branch_with_optional_repair", validate_fn)
 
     reset_count = {"n": 0}
@@ -698,7 +716,7 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
     pushed: list[tuple[str, bool]] = []
     monkeypatch.setattr(
         backport_sweep,
-        "_push_backport_branch",
+        "push_backport_branch",
         lambda _repo_dir, branch, _env, *, force_with_lease: pushed.append(
             (branch, force_with_lease)
         ),
@@ -709,7 +727,7 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
         upserts.append(kwargs)
         return "https://github.com/valkey-io/valkey/pull/100"
 
-    monkeypatch.setattr(backport_sweep, "_upsert_pr", fake_upsert)
+    monkeypatch.setattr(backport_sweep, "upsert_pr", fake_upsert)
 
     result = backport_sweep._process_branch(
         gh=MagicMock(),
@@ -895,21 +913,18 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
     # mid-cherry-pick (fetch, initial cherry-pick, stage-reading). Drive
     # only the commit-resolution + sanity-check portion by monkeypatching
     # the parts that would re-run git ops or talk to Claude.
-    monkeypatch.setattr(
-        backport_sweep,
-        "resolve_conflicts_with_claude",
-        lambda *_args, **_kwargs: [
+    def fake_resolve(*_args, **_kwargs):
+        return [
             ResolutionResult(
                 path="file.txt",
                 resolved_content="line1\nresolved-content\nline3\n",
                 resolution_summary="resolved",
             )
-        ],
-    )
+        ]
     # Skip over-application check (requires `git fetch origin` which fails in
     # the tmpdir repo).
     monkeypatch.setattr(
-        backport_sweep, "_check_applied_commit_size", lambda *_a, **_k: None,
+        sweep_apply, "check_applied_commit_size", lambda *_a, **_k: None,
     )
     # Drive just the post-resolution phase: write files, stage, continue.
     # This mirrors what _apply_candidate does after Claude returns.
@@ -955,7 +970,7 @@ def _make_size_check_candidate() -> ProjectBackportCandidate:
     )
 
 
-def _stub_size_check_subprocess(monkeypatch, upstream_add: int, applied_add: int) -> None:
+def _stub_size_check_subprocess(monkeypatch, upstream_add: int, applied_add: int):
     """Stub subprocess.run so _check_applied_commit_size sees the given additions."""
 
     def fake(cmd, **_kwargs):
@@ -975,41 +990,41 @@ def _stub_size_check_subprocess(monkeypatch, upstream_add: int, applied_add: int
             )
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(backport_sweep.subprocess, "run", fake)
+    return fake
 
 
 def test_check_applied_commit_size_passes_small_pr_adaptation(monkeypatch):
     """A 1-line upstream PR that becomes 5 lines after branch adaptation
     must not be rejected (under old 3x rule, 3+ lines would trip)."""
-    _stub_size_check_subprocess(monkeypatch, upstream_add=1, applied_add=5)
-    assert backport_sweep._check_applied_commit_size("/fake", _make_size_check_candidate()) is None
+    fake = _stub_size_check_subprocess(monkeypatch, upstream_add=1, applied_add=5)
+    assert check_applied_commit_size("/fake", _make_size_check_candidate(), run_process=fake) is None
 
 
 def test_check_applied_commit_size_passes_medium_pr_slight_growth(monkeypatch):
     """Upstream 50 lines, applied 120 lines (70 extra) is fine under the new rule."""
-    _stub_size_check_subprocess(monkeypatch, upstream_add=50, applied_add=120)
-    assert backport_sweep._check_applied_commit_size("/fake", _make_size_check_candidate()) is None
+    fake = _stub_size_check_subprocess(monkeypatch, upstream_add=50, applied_add=120)
+    assert check_applied_commit_size("/fake", _make_size_check_candidate(), run_process=fake) is None
 
 
 def test_check_applied_commit_size_rejects_ratio_and_floor(monkeypatch):
     """Upstream 100 lines, applied 400 (300 extra, 4x) trips both guards."""
-    _stub_size_check_subprocess(monkeypatch, upstream_add=100, applied_add=400)
-    issue = backport_sweep._check_applied_commit_size("/fake", _make_size_check_candidate())
+    fake = _stub_size_check_subprocess(monkeypatch, upstream_add=100, applied_add=400)
+    issue = check_applied_commit_size("/fake", _make_size_check_candidate(), run_process=fake)
     assert issue is not None
     assert "+400" in issue and "+100" in issue
 
 
 def test_check_applied_commit_size_rejects_absolute_floor_only(monkeypatch):
     """Upstream 200 lines, applied 600 (400 extra, 3x): absolute-floor branch."""
-    _stub_size_check_subprocess(monkeypatch, upstream_add=200, applied_add=600)
-    issue = backport_sweep._check_applied_commit_size("/fake", _make_size_check_candidate())
+    fake = _stub_size_check_subprocess(monkeypatch, upstream_add=200, applied_add=600)
+    issue = check_applied_commit_size("/fake", _make_size_check_candidate(), run_process=fake)
     assert issue is not None
 
 
 def test_check_applied_commit_size_accepts_mild_ratio_under_floor(monkeypatch):
     """Upstream 5 lines, applied 50 (10x ratio but only 45 extra): accept."""
-    _stub_size_check_subprocess(monkeypatch, upstream_add=5, applied_add=50)
-    assert backport_sweep._check_applied_commit_size("/fake", _make_size_check_candidate()) is None
+    fake = _stub_size_check_subprocess(monkeypatch, upstream_add=5, applied_add=50)
+    assert check_applied_commit_size("/fake", _make_size_check_candidate(), run_process=fake) is None
 
 
 def test_sync_target_branch_creates_missing_fork_branch():
@@ -1027,7 +1042,7 @@ def test_sync_target_branch_creates_missing_fork_branch():
         "ci-bot/valkey": fork_repo,
     }[name]
 
-    backport_sweep._sync_target_branch_to_source(
+    sync_target_branch_to_source(
         gh,
         "ci-bot/valkey",
         "valkey-io/valkey",
@@ -1078,8 +1093,8 @@ def test_graphql_client_retry_exhaustion_raises_clear_error(monkeypatch):
 
 
 def test_safe_tmp_component_removes_branch_separators():
-    assert backport_sweep._safe_tmp_component("release/8.1") == "release-8.1"
-    assert backport_sweep._safe_tmp_component("///") == "branch"
+    assert safe_tmp_component("release/8.1") == "release-8.1"
+    assert safe_tmp_component("///") == "branch"
 
 
 def test_build_pr_body_lists_already_on_branch_under_applied():
@@ -1134,7 +1149,7 @@ def test_build_pr_body_lists_already_on_branch_under_applied():
         ],
     )
 
-    body = backport_sweep._build_pr_body(result)
+    body = build_pr_body(result)
 
     assert "## Applied" in body
     # The Applied section is the only commit-listing section in the body
@@ -1166,14 +1181,14 @@ def test_build_summary_counts_applied_candidates():
         ],
     )
 
-    summary = backport_sweep._build_summary([result])
+    summary = build_summary([result])
 
     assert "`8.1`: 1/3 applied" in summary
     assert "https://github.com/valkey-io/valkey/pull/100" in summary
 
 
 def test_validation_repair_prompt_is_narrowly_scoped():
-    prompt = backport_sweep._build_validation_repair_prompt(
+    prompt = build_validation_repair_prompt(
         "8.1",
         ("src/module.c", "tests/module.tcl"),
         "/tmp/backport-validation-xyz.log",
@@ -1193,34 +1208,31 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     validation_calls: list[list[str]] = []
     log_paths: list[str | None] = []
 
-    monkeypatch.setattr(
-        backport_sweep,
-        "changed_paths_since_base",
-        lambda *_args, **_kwargs: ("src/a.c",),
-    )
+    def changed_paths_since_base_func(*_args, **_kwargs):
+        return ("src/a.c",)
 
     def fake_run_agent(profile, prompt, *, cwd):
         agent_calls.append((profile, prompt, cwd))
         return SimpleNamespace(returncode=0, stderr="")
 
-    monkeypatch.setattr(backport_sweep, "run_agent", fake_run_agent)
-    monkeypatch.setattr(backport_sweep, "_worktree_changed_paths", lambda *_args: ("src/a.c",))
-    monkeypatch.setattr(backport_sweep, "_run_git", lambda _repo_dir, *args, **_kwargs: git_calls.append(args))
-    monkeypatch.setattr(backport_sweep, "_has_staged_changes", lambda *_args: True)
 
     def fake_validate(_repo_dir, _target_branch, commands, _rules, log_path=None):
         validation_calls.append(list(commands))
         log_paths.append(log_path)
         return True, "ok"
 
-    monkeypatch.setattr(backport_sweep, "_validate_backport_branch", fake_validate)
-
-    ok, output = backport_sweep._repair_validation_failure_with_claude(
+    ok, output = repair_validation_failure_with_claude(
         "/repo",
         "8.1",
         ["make"],
         [],
         "compiler error",
+        run_git=lambda _repo_dir, *args, **_kwargs: git_calls.append(args),
+        run_agent_func=fake_run_agent,
+        validate_func=fake_validate,
+        changed_paths_func=lambda *_args: ("src/a.c",),
+        changed_paths_since_base_func=changed_paths_since_base_func,
+        has_staged_changes_func=lambda *_args: True,
     )
 
     assert ok is True
@@ -1253,18 +1265,18 @@ def test_worktree_changed_paths_handles_spaces(tmp_path):
     tracked.write_text("new\n", encoding="utf-8")
     untracked.write_text("created\n", encoding="utf-8")
 
-    assert backport_sweep._worktree_changed_paths(str(tmp_path)) == (
+    assert worktree_changed_paths(str(tmp_path)) == (
         "src/file with space.c",
         "src/new file with space.c",
     )
-    assert backport_sweep._changed_paths_in_index_or_worktree(str(tmp_path)) == (
+    assert changed_paths_in_index_or_worktree(str(tmp_path)) == (
         "src/file with space.c",
         "src/new file with space.c",
     )
 
 
 def test_validation_failure_detail_uses_tail_without_repair_diagnosis():
-    detail = backport_sweep._validation_failure_detail(
+    detail = backport_sweep.validation_failure_detail(
         "configure output\n" + ("compiler noise\n" * 80) + "undefined reference to objectGetVal\n"
     )
 
@@ -1273,7 +1285,7 @@ def test_validation_failure_detail_uses_tail_without_repair_diagnosis():
 
 
 def test_validation_failure_detail_uses_tail_with_repair_diagnosis():
-    detail = backport_sweep._validation_failure_detail(
+    detail = backport_sweep.validation_failure_detail(
         "Claude repair diagnosis:\n"
         "clean cherry-pick used a newer API\n\n"
         "Validation output:\n"

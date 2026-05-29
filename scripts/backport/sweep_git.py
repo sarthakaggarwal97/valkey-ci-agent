@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from github.GithubException import GithubException
 
+from scripts.backport.main import _run_git as run_git_default
 from scripts.common.git_auth import github_https_url
 from scripts.common.github_client import retry_github_call
 
@@ -17,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 RunGit = Callable[..., Any]
+
+BRANCH_PREFIX = "agent/backport/sweep"
 
 
 def safe_tmp_component(value: str) -> str:
@@ -44,9 +47,9 @@ def push_backport_branch(
     branch: str,
     git_env: dict[str, str],
     *,
-    branch_prefix: str,
     force_with_lease: bool,
-    run_git: RunGit,
+    branch_prefix: str = BRANCH_PREFIX,
+    run_git: RunGit = run_git_default,
 ) -> None:
     if not branch.startswith(f"{branch_prefix}/"):
         raise RuntimeError(
@@ -72,7 +75,7 @@ def list_already_applied(repo_dir: str, base_branch: str, backport_branch: str) 
     return pr_nums
 
 
-def abort_cherry_pick(repo_dir: str, *, run_git: RunGit) -> None:
+def abort_cherry_pick(repo_dir: str, *, run_git: RunGit = run_git_default) -> None:
     """Abort an in-progress cherry-pick, failing closed on cleanup errors."""
     run_git(repo_dir, "cherry-pick", "--abort")
 

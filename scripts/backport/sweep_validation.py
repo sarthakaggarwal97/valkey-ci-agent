@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from scripts.ai.runtime import run_agent
+from scripts.backport.main import _run_git as run_git_default
 from scripts.backport.sweep_apply import has_staged_changes
 from scripts.backport.sweep_git import worktree_changed_paths
 from scripts.backport.validation import (
@@ -58,7 +59,7 @@ def validate_branch_with_optional_repair(
     validation_rules: list[Any],
     *,
     repair: bool,
-    run_git: RunGit,
+    run_git: RunGit = run_git_default,
 ) -> tuple[bool, str]:
     """Validate the current branch, attempting one Claude repair if enabled.
 
@@ -99,7 +100,7 @@ def repair_validation_failure_with_claude(
     validation_output: str,
     *,
     validation_log_path: str | None = None,
-    run_git: RunGit,
+    run_git: RunGit = run_git_default,
     run_agent_func: RunAgent = run_agent,
     validate_func: ValidateBranch = validate_backport_branch,
     changed_paths_func: ChangedPaths = worktree_changed_paths,
