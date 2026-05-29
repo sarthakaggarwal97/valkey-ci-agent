@@ -51,7 +51,6 @@ from scripts.backport.sweep_models import (
 from scripts.backport.sweep_prs import (
     delete_stale_backport_branch,
     find_existing_pr,
-    mark_pr_draft,
     mark_pr_ready_for_review,
     upsert_pr,
 )
@@ -59,18 +58,15 @@ from scripts.backport.sweep_reporting import (
     build_pr_body,
     build_summary,
     compact_validation_output,
-    repair_diagnosis_from_detail,
     result_is_on_backport_branch,
     validation_failure_detail,
 )
 from scripts.backport.sweep_validation import (
     build_validation_repair_prompt,
-    create_validation_log_path,
     extract_agent_result_text,
-    mark_repaired_results,
-    remove_validation_log_path,
     repair_validation_failure_with_claude,
     run_test_commands,
+    validate_branch_with_optional_repair,
     validation_output_with_diagnosis,
 )
 from scripts.backport.validation import changed_paths_since_base, select_validation_commands
@@ -294,7 +290,6 @@ def run_backport_sweep(
         language=repo_entry.language,
         build_commands=list(repo_entry.build_commands) or None,
         validation_rules=validation_rules,
-        validate_each_candidate=repo_entry.validate_each_candidate,
         repair_validation_failures=repo_entry.repair_validation_failures,
     )
     emit_job_summary(_build_summary([result]))
@@ -316,7 +311,6 @@ def _process_branch(
     language: str = "c",
     build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
-    validate_each_candidate: bool = False,
     repair_validation_failures: bool = False,
 ) -> BranchSweepResult:
     _ = repo
@@ -411,10 +405,6 @@ def _process_branch(
             logger.info("Already applied on %s: %s", backport_branch, already_applied)
 
             applied_count = 0
-            retained_validation_failure = False
-            retained_validation_output = ""
-            head_validated = False
-            preflight_checked_existing_branch = False
 
             for index, candidate in enumerate(candidates):
                 if max_applied > 0 and applied_count >= max_applied:
@@ -436,27 +426,6 @@ def _process_branch(
                         )
                     )
                     continue
-
-                if validate_each_candidate and not preflight_checked_existing_branch:
-                    preflight_checked_existing_branch = True
-                    if _branch_has_changes(tmpdir, target_branch):
-                        ok, output = _validate_backport_branch(
-                            tmpdir,
-                            target_branch,
-                            test_commands,
-                            validation_rules or [],
-                        )
-                        if not ok:
-                            retained_validation_failure = True
-                            retained_validation_output = output
-                            logger.warning(
-                                "Validation failed for existing backport branch %s before applying candidate #%d; "
-                                "preserving branch and deferring remaining candidates.",
-                                target_branch,
-                                candidate.source_pr_number,
-                            )
-                            break
-                        head_validated = True
 
                 candidate_result = _apply_candidate(
                     tmpdir,
@@ -487,35 +456,28 @@ def _process_branch(
                     )
                     continue
 
-                if validate_each_candidate:
-                    ok, output = _validate_backport_branch(
-                        tmpdir,
+                # The sweep branch must stay green: only keep a cherry-pick if
+                # the whole branch still validates. A red commit left on the
+                # branch would block every later candidate, so we always reset
+                # a failure off the branch and move on to the next candidate.
+                ok, output = validate_branch_with_optional_repair(
+                    tmpdir,
+                    target_branch,
+                    test_commands,
+                    validation_rules or [],
+                    repair=repair_validation_failures,
+                    run_git=_run_git,
+                )
+                if not ok:
+                    candidate_result.outcome = "skipped-validation-failed"
+                    candidate_result.detail = _validation_failure_detail(output)
+                    _run_git(tmpdir, "reset", "--hard", "HEAD^")
+                    logger.warning(
+                        "Validation failed for candidate #%d on %s; removed candidate and continuing.",
+                        candidate.source_pr_number,
                         target_branch,
-                        test_commands,
-                        validation_rules or [],
                     )
-                    if not ok:
-                        candidate_result.outcome = "applied-validation-failed"
-                        candidate_result.detail = _validation_failure_detail(output)
-                        if applied_count == 0:
-                            retained_validation_failure = True
-                            retained_validation_output = output
-                            logger.warning(
-                                "Validation failed for first retained candidate #%d on %s; "
-                                "preserving branch for draft PR review.",
-                                candidate.source_pr_number,
-                                target_branch,
-                            )
-                            break
-                        candidate_result.outcome = "skipped-test"
-                        _run_git(tmpdir, "reset", "--hard", "HEAD^")
-                        logger.warning(
-                            "Validation failed for candidate #%d on %s; removed candidate and continuing.",
-                            candidate.source_pr_number,
-                            target_branch,
-                        )
-                        continue
-                    head_validated = True
+                    continue
 
                 applied_count += 1
 
@@ -523,63 +485,7 @@ def _process_branch(
                 item for item in result.results
                 if _result_is_on_backport_branch(item)
             ]
-            has_branch_changes = _branch_has_changes(tmpdir, target_branch)
-            validation_failed = retained_validation_failure
-
-            if has_branch_changes and (committed or validation_failed):
-                validation_log_path = None
-                try:
-                    if head_validated and not retained_validation_failure:
-                        ok, output = True, ""
-                    elif committed and not retained_validation_failure:
-                        if repair_validation_failures:
-                            validation_log_path = _create_validation_log_path()
-                        ok, output = _validate_backport_branch(
-                            tmpdir,
-                            target_branch,
-                            test_commands,
-                            validation_rules or [],
-                            log_path=validation_log_path,
-                        )
-                    else:
-                        ok, output = (
-                            not retained_validation_failure,
-                            retained_validation_output,
-                        )
-
-                    if not ok:
-                        if repair_validation_failures:
-                            ok, output = _repair_validation_failure_with_claude(
-                                tmpdir,
-                                target_branch,
-                                test_commands,
-                                validation_rules or [],
-                                output,
-                                validation_log_path=validation_log_path,
-                            )
-                            if ok:
-                                validation_failed = False
-                                _mark_repaired_results(result.results)
-                            else:
-                                validation_failed = True
-                        else:
-                            validation_failed = True
-
-                        if not ok:
-                            for item in result.results:
-                                if item.outcome != "applied":
-                                    continue
-                                item.outcome = "applied-validation-failed"
-                                item.detail = _validation_failure_detail(output)
-                            logger.warning(
-                                "Validation failed for %s; pushing draft PR with failure details.\n"
-                                "Output (last 4000 chars):\n%s",
-                                target_branch,
-                                output[-4000:],
-                            )
-                finally:
-                    _remove_validation_log_path(validation_log_path)
-
+            if committed and _branch_has_changes(tmpdir, target_branch):
                 _push_backport_branch(
                     tmpdir,
                     backport_branch,
@@ -588,10 +494,7 @@ def _process_branch(
                 )
                 logger.info(
                     "Pushed %d commit(s) to %s/%s",
-                    sum(
-                        1 for item in result.results
-                        if _result_is_on_backport_branch(item)
-                    ),
+                    len(committed),
                     push_repo,
                     backport_branch,
                 )
@@ -605,7 +508,6 @@ def _process_branch(
                     result,
                     existing_pr,
                     gql=GitHubGraphQLClient(github_token),
-                    draft=validation_failed,
                 )
 
     except Exception as exc:
@@ -780,14 +682,6 @@ def _validation_output_with_diagnosis(
     return validation_output_with_diagnosis(validation_output, diagnosis)
 
 
-def _create_validation_log_path() -> str:
-    return create_validation_log_path()
-
-
-def _remove_validation_log_path(log_path: str | None) -> None:
-    remove_validation_log_path(log_path)
-
-
 def _build_validation_repair_prompt(
     target_branch: str,
     changed_paths: tuple[str, ...],
@@ -802,10 +696,6 @@ def _build_validation_repair_prompt(
 
 def _worktree_changed_paths(repo_dir: str) -> tuple[str, ...]:
     return worktree_changed_paths(repo_dir, run_process=subprocess.run)
-
-
-def _mark_repaired_results(results: list[CandidateResult]) -> None:
-    mark_repaired_results(results)
 
 
 def _head_changes_workflow_files(repo_dir: str) -> bool:
@@ -847,7 +737,6 @@ def _upsert_pr(
     result: BranchSweepResult,
     existing_pr: Any | None,
     gql: GitHubGraphQLClient | None = None,
-    draft: bool = False,
 ) -> str:
     return upsert_pr(
         gh,
@@ -858,7 +747,6 @@ def _upsert_pr(
         result,
         existing_pr,
         gql=gql,
-        draft=draft,
     )
 
 
@@ -867,10 +755,6 @@ def _mark_pr_ready_for_review(
     pr_node_id: str,
 ) -> None:
     mark_pr_ready_for_review(gql, pr_node_id)
-
-
-def _mark_pr_draft(gql: GitHubGraphQLClient, pr_node_id: str) -> None:
-    mark_pr_draft(gql, pr_node_id)
 
 
 def _list_already_applied(
@@ -885,10 +769,6 @@ def _result_is_on_backport_branch(result: CandidateResult) -> bool:
     return result_is_on_backport_branch(result)
 
 
-def _repair_diagnosis_from_detail(detail: str) -> str:
-    return repair_diagnosis_from_detail(detail)
-
-
 def _validation_failure_detail(output: str) -> str:
     return validation_failure_detail(output)
 
@@ -897,12 +777,8 @@ def _compact_validation_output(output: str, *, limit: int = 500) -> str:
     return compact_validation_output(output, limit=limit)
 
 
-def _build_pr_body(
-    result: BranchSweepResult,
-    *,
-    validation_failed: bool = False,
-) -> str:
-    return build_pr_body(result, validation_failed=validation_failed)
+def _build_pr_body(result: BranchSweepResult) -> str:
+    return build_pr_body(result)
 
 
 def _build_summary(results: list[BranchSweepResult]) -> str:

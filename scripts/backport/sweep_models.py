@@ -20,8 +20,8 @@ class ProjectBackportCandidate:
 class CandidateResult:
     source_pr_number: int
     source_pr_title: str
-    # applied-validation-failed means the commit is present on the pushed
-    # branch, but validation failed and the PR remains draft.
+    # One of: applied, skipped-existing, skipped-conflict,
+    # skipped-validation-failed, error.
     outcome: str
     detail: str = ""
 

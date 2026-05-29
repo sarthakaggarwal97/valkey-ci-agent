@@ -51,6 +51,46 @@ def validate_backport_branch(
     return run_test_commands(repo_dir, commands, log_path=log_path)
 
 
+def validate_branch_with_optional_repair(
+    repo_dir: str,
+    target_branch: str,
+    test_commands: list[str],
+    validation_rules: list[Any],
+    *,
+    repair: bool,
+    run_git: RunGit,
+) -> tuple[bool, str]:
+    """Validate the current branch, attempting one Claude repair if enabled.
+
+    Returns (green, output). When ``repair`` is set and the first validation
+    fails, Claude Code gets one scoped repair attempt before giving up. The
+    repair helper removes its own repair commit on failure, so on a red
+    return the branch is left exactly as the caller handed it in.
+    """
+    log_path = create_validation_log_path() if repair else None
+    try:
+        ok, output = validate_backport_branch(
+            repo_dir,
+            target_branch,
+            test_commands,
+            validation_rules,
+            log_path=log_path,
+        )
+        if ok or not repair:
+            return ok, output
+        return repair_validation_failure_with_claude(
+            repo_dir,
+            target_branch,
+            test_commands,
+            validation_rules,
+            output,
+            validation_log_path=log_path,
+            run_git=run_git,
+        )
+    finally:
+        remove_validation_log_path(log_path)
+
+
 def repair_validation_failure_with_claude(
     repo_dir: str,
     target_branch: str,
@@ -243,12 +283,3 @@ def build_validation_repair_prompt(
         "unchanged.\n\n"
         "Do NOT wrap output in markdown. Just edit files directly."
     )
-
-
-def mark_repaired_results(results: list[Any]) -> None:
-    for item in results:
-        if item.outcome == "applied-validation-failed":
-            item.outcome = "applied"
-            item.detail = "validation repaired by Claude Code"
-        elif item.outcome == "applied" and not item.detail:
-            item.detail = "validation repaired by Claude Code"

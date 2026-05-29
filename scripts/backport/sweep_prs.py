@@ -59,25 +59,17 @@ def upsert_pr(
     result: BranchSweepResult,
     existing_pr: Any | None,
     gql: GitHubGraphQLClient | None = None,
-    draft: bool = False,
 ) -> str:
     repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
-    body = build_pr_body(result, validation_failed=draft)
+    body = build_pr_body(result)
     title = f"[backport] Backport sweep for {target_branch}"
 
     if existing_pr:
         retry_github_call(lambda: existing_pr.edit(title=title, body=body), retries=2, description="update PR")
-        # Validation can fail and later recover on scheduled sweeps. PyGithub
-        # does not expose either draft transition, so use GraphQL for both.
-        if draft and not getattr(existing_pr, "draft", False) and gql is not None:
-            node_id = getattr(existing_pr, "node_id", None)
-            if node_id:
-                mark_pr_draft(gql, node_id)
-                logger.info(
-                    "Converted PR #%d on %s back to draft after validation failure",
-                    existing_pr.number, base_repo,
-                )
-        elif not draft and getattr(existing_pr, "draft", False) and gql is not None:
+        # The sweep branch is always green, so any PR we update is ready for
+        # review. Promote a leftover draft (e.g. from an older sweep) back to
+        # ready. PyGithub does not expose this transition, so use GraphQL.
+        if getattr(existing_pr, "draft", False) and gql is not None:
             node_id = getattr(existing_pr, "node_id", None)
             if node_id:
                 mark_pr_ready_for_review(gql, node_id)
@@ -97,24 +89,13 @@ def upsert_pr(
             body=body,
             head_branch=head_branch,
             base_branch=target_branch,
-            draft=draft,
+            draft=False,
         ),
         retries=2,
         description="create PR",
     )
     logger.info("Created PR #%d on %s", pr.number, base_repo)
     return pr.html_url
-
-
-def mark_pr_draft(gql: GitHubGraphQLClient, pr_node_id: str) -> None:
-    mutation = """
-    mutation($id: ID!) {
-      convertPullRequestToDraft(input: {pullRequestId: $id}) {
-        pullRequest { isDraft }
-      }
-    }
-    """
-    gql.execute(mutation, {"id": pr_node_id})
 
 
 def mark_pr_ready_for_review(gql: GitHubGraphQLClient, pr_node_id: str) -> None:

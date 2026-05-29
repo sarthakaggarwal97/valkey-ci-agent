@@ -10,7 +10,7 @@ from scripts.backport.sweep_models import (
 
 
 def result_is_on_backport_branch(result: CandidateResult) -> bool:
-    return result.outcome in {"applied", "applied-validation-failed"} or (
+    return result.outcome == "applied" or (
         result.outcome == "skipped-existing"
         and result.detail == DETAIL_ALREADY_ON_SWEEP_BRANCH
     )
@@ -48,8 +48,6 @@ def compact_validation_output(output: str, *, limit: int = 500) -> str:
 
 def build_pr_body(
     result: BranchSweepResult,
-    *,
-    validation_failed: bool = False,
 ) -> str:
     lines = [
         f"# Backport sweep for {result.target_branch}",
@@ -57,46 +55,11 @@ def build_pr_body(
         'Automated cherry-picks from PRs marked "To be backported".',
         "",
     ]
-    if validation_failed:
-        lines.extend([
-            "## Validation failed",
-            "",
-            "This draft PR preserves the attempted backport branch so "
-            "maintainers can inspect and fix the validation failure instead "
-            "of losing the work in scheduled-run logs.",
-            "",
-        ])
-        diagnoses = [
-            diagnosis
-            for r in result.results
-            if (diagnosis := repair_diagnosis_from_detail(r.detail))
-        ]
-        if diagnoses:
-            lines.extend([
-                "### Claude repair diagnosis",
-                "",
-                "```text",
-                diagnoses[0][:1500],
-                "```",
-                "",
-            ])
 
-    applied = [
-        r for r in result.results
-        if result_is_on_backport_branch(r)
-        and r.outcome != "applied-validation-failed"
-    ]
-    validation_failed_applied = [
-        r for r in result.results
-        if r.outcome == "applied-validation-failed"
-    ]
+    applied = [r for r in result.results if result_is_on_backport_branch(r)]
     failed = [
         r for r in result.results
-        if r.outcome not in {
-            "applied",
-            "applied-validation-failed",
-            "skipped-existing",
-        }
+        if r.outcome not in {"applied", "skipped-existing"}
     ]
 
     if applied:
@@ -104,22 +67,6 @@ def build_pr_body(
         for r in applied:
             lines.append(
                 f"| #{r.source_pr_number} | {_esc(r.source_pr_title)} | {_esc(r.detail)} |",
-            )
-        lines.append("")
-
-    if validation_failed_applied:
-        lines.extend([
-            "## Applied (validation failed)",
-            "",
-            "These candidates are present on the backport branch, but validation failed.",
-            "",
-            "| Source PR | Title | Validation output |",
-            "|---|---|---|",
-        ])
-        for r in validation_failed_applied:
-            lines.append(
-                f"| #{r.source_pr_number} | {_esc(r.source_pr_title)} | "
-                f"{_esc(r.detail)} |",
             )
         lines.append("")
 
@@ -148,18 +95,13 @@ def build_pr_body(
 def build_summary(results: list[BranchSweepResult]) -> str:
     lines = ["## Backport Sweep", ""]
     for r in results:
-        retained = sum(1 for c in r.results if result_is_on_backport_branch(c))
-        validation_failed = sum(
-            1 for c in r.results
-            if c.outcome == "applied-validation-failed"
-        )
+        applied = sum(1 for c in r.results if result_is_on_backport_branch(c))
         suffix = f" -- [PR]({r.pr_url})" if r.pr_url else ""
         if r.error:
             suffix += f" -- error: {r.error}"
-        status = f"{retained}/{r.candidates_found} retained"
-        if validation_failed:
-            status += f" ({validation_failed} validation failed)"
-        lines.append(f"- `{r.target_branch}`: {status}" + suffix)
+        lines.append(
+            f"- `{r.target_branch}`: {applied}/{r.candidates_found} applied" + suffix
+        )
     return "\n".join(lines)
 
 
