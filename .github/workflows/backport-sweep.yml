@@ -34,7 +34,7 @@ permissions: {}
 jobs:
   preflight:
     name: "Generate matrix"
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'valkey-io/valkey-ci-agent' || github.repository == 'sarthakaggarwal97/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -114,13 +114,28 @@ jobs:
           pip install -r requirements.txt
           npm install -g @anthropic-ai/claude-code
 
-      - name: Generate GitHub App token
+      - name: Generate GitHub App token (upstream)
         id: generate-token
+        if: github.repository == 'valkey-io/valkey-ci-agent'
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
+
+      - name: Use fork PAT (test harness)
+        id: fork-token
+        if: github.repository != 'valkey-io/valkey-ci-agent'
+        shell: bash
+        env:
+          VALKEY_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${VALKEY_GITHUB_TOKEN}" ]]; then
+            echo "VALKEY_GITHUB_TOKEN secret is required (needs read:project scope)" >&2
+            exit 1
+          fi
+          echo "token=${VALKEY_GITHUB_TOKEN}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
@@ -132,7 +147,8 @@ jobs:
       - name: Run backport sweep
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
+          TARGET_TOKEN: ${{ steps.generate-token.outputs.token || steps.fork-token.outputs.token }}
+          CI_AGENT_PR_TARGET: ${{ github.repository == 'valkey-io/valkey-ci-agent' && '' || 'push_repo' }}
         run: |
           set -euo pipefail
           args=(
