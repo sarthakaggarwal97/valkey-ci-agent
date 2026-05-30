@@ -22,6 +22,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from scripts.common.github_client import retry_github_call
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,7 +71,10 @@ class IssueDedupPublisher:
         guard against re-runs of the same source event (e.g. the same
         workflow run id) inflating the count.
         """
-        repo = self._gh.get_repo(repo_name)
+        repo = retry_github_call(
+            lambda: self._gh.get_repo(repo_name),
+            retries=2, description=f"get repo {repo_name}",
+        )
         marker = f"<!-- {self._ns}:{fingerprint} -->"
         existing = self._find_existing(repo_name, marker)
 
@@ -78,7 +83,10 @@ class IssueDedupPublisher:
             body = content.body
             if idempotency_key is not None:
                 body = f"{body}\n{_last_key_marker(self._ns, idempotency_key)}"
-            issue = repo.create_issue(title=content.title, body=body)
+            issue = retry_github_call(
+                lambda: repo.create_issue(title=content.title, body=body),
+                retries=2, description="create issue",
+            )
             if content.labels:
                 try:
                     issue.add_to_labels(*content.labels)
@@ -116,18 +124,31 @@ class IssueDedupPublisher:
             else:
                 new_body = f"{new_body}\n{replacement}"
         content = render(marker, count)
-        existing.edit(body=new_body, title=content.title)
-        existing.create_comment(body=content.comment)
+        retry_github_call(
+            lambda: existing.edit(body=new_body, title=content.title),
+            retries=2, description=f"update issue #{existing.number}",
+        )
+        retry_github_call(
+            lambda: existing.create_comment(body=content.comment),
+            retries=2, description=f"comment on issue #{existing.number}",
+        )
         logger.info("Updated issue #%s (occurrence %d)", existing.number, count)
         return "updated", existing.html_url
 
     def _find_existing(self, repo_name: str, marker: str) -> Any:
         """Find an open issue containing the marker, or None."""
         query = f'"{marker}" in:body repo:{repo_name} is:issue is:open'
-        for issue in self._gh.search_issues(query):
+        results = retry_github_call(
+            lambda: list(self._gh.search_issues(query)),
+            retries=2, description="search issues",
+        )
+        for issue in results:
             if marker in (issue.body or ""):
                 # Reload via the actual repo so we get a mutable issue handle.
-                return self._gh.get_repo(repo_name).get_issue(issue.number)
+                return retry_github_call(
+                    lambda: self._gh.get_repo(repo_name).get_issue(issue.number),
+                    retries=2, description=f"get issue #{issue.number}",
+                )
         return None
 
 

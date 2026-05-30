@@ -13,6 +13,8 @@ import re
 from typing import Iterable
 
 _VOLATILE_RE = re.compile(
+    # Order matters (left-to-right alternation): hex/SHA before bare digits,
+    # and "node-N" before the bare \d+ so "node-5" collapses as one unit.
     r"0x[0-9a-f]+|\b[0-9a-f]{7,40}\b|\bnode[-_ ]?\d+\b|\b\d+\b",
     re.IGNORECASE,
 )

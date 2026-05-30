@@ -16,7 +16,11 @@ from typing import TYPE_CHECKING, Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from scripts.common.github_client import retry_github_call
+from scripts.common.github_client import (
+    RETRYABLE_HTTP_STATUS,
+    retry_github_call,
+    transient_backoff_delay,
+)
 
 if TYPE_CHECKING:
     from github import Github
@@ -96,7 +100,8 @@ class ArtifactClient:
         req.add_unredirected_header("Authorization", f"Bearer {self._token}")
         # Hand-rolled retry rather than retry_github_call: this is a raw urllib
         # call (not a PyGithub operation) and needs HTTP-status-specific
-        # handling for the 404/expired and rate-limit cases below.
+        # handling for the 404/expired case below. Retry classification and
+        # backoff are shared with retry_github_call so behavior stays uniform.
         for attempt in range(self._retries + 1):
             try:
                 with urlopen(req, timeout=120) as resp:
@@ -105,13 +110,13 @@ class ArtifactClient:
                 if exc.code == 404:
                     logger.warning("Artifact not found at %s (likely expired)", path)
                     return b""
-                if exc.code in (429, 500, 502, 503, 504) and attempt < self._retries:
-                    time.sleep(2 ** attempt)
+                if exc.code in RETRYABLE_HTTP_STATUS and attempt < self._retries:
+                    time.sleep(transient_backoff_delay(attempt))
                     continue
                 raise
             except (URLError, TimeoutError, ConnectionError):
                 if attempt < self._retries:
-                    time.sleep(2 ** attempt)
+                    time.sleep(transient_backoff_delay(attempt))
                     continue
                 raise
         raise AssertionError("unreachable: retry loop must return or raise")
