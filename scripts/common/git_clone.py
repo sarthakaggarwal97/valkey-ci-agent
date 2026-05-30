@@ -19,16 +19,16 @@ _SHA_RE = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
 _REPO_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 
 _CLONE_TIMEOUT_S = 120
-_FETCH_TIMEOUT_S = 60
 _CHECKOUT_TIMEOUT_S = 30
 
 
 def shallow_clone_at_sha(repo: str, dest: Path, sha: str | None = None) -> bool:
     """Clone ``repo`` (e.g. ``"valkey-io/valkey"``) into ``dest``.
 
-    If ``sha`` is provided, fetches and checks out that exact commit.
-    If ``sha`` is None, does a regular ``--depth 1`` clone of the default
-    branch.
+    If ``sha`` is provided, blobless-clones the full history and checks out
+    that exact commit (GitHub refuses fetching an arbitrary non-tip SHA, so a
+    shallow clone + fetch cannot reach it). If ``sha`` is None, does a
+    ``--depth 1`` clone of the default branch.
 
     Returns True on success, False on any failure. Failures are logged at
     warning level — callers are expected to keep going (e.g. tell their
@@ -45,17 +45,22 @@ def shallow_clone_at_sha(repo: str, dest: Path, sha: str | None = None) -> bool:
         return False
 
     url = f"https://github.com/{repo}.git"
-    args = ["git", "clone", "--filter=blob:none", "--depth", "1"]
-    args.extend([url, str(dest)])
-
-    if not _run(args, timeout=_CLONE_TIMEOUT_S, desc=f"clone {repo}"):
-        return False
     if sha is None:
-        return True
+        # No specific commit wanted: a shallow clone of the default branch tip
+        # is enough and cheapest.
+        ok = _run(
+            ["git", "clone", "--filter=blob:none", "--depth", "1", url, str(dest)],
+            timeout=_CLONE_TIMEOUT_S, desc=f"clone {repo}",
+        )
+        return ok
 
+    # GitHub's HTTPS protocol refuses `git fetch <commit-sha>` for a commit
+    # that is not a ref tip, so a `--depth 1` clone + fetch can't reach an
+    # arbitrary tested SHA. Clone the full (but blobless) history instead and
+    # check the commit out; blobs are still fetched on demand.
     if not _run(
-        ["git", "fetch", "--depth", "1", "origin", sha],
-        cwd=dest, timeout=_FETCH_TIMEOUT_S, desc=f"fetch {sha[:12]} in {repo}",
+        ["git", "clone", "--filter=blob:none", url, str(dest)],
+        timeout=_CLONE_TIMEOUT_S, desc=f"clone {repo}",
     ):
         return False
     return _run(

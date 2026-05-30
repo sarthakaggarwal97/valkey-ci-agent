@@ -44,12 +44,12 @@ def test_default_branch_uses_depth_1(tmp_path):
 
 
 def test_sha_path_runs_clone_fetch_checkout(tmp_path):
-    """With a SHA we do clone + fetch --depth 1 + checkout."""
+    """With a SHA we do a blobless full clone (no --depth) + checkout."""
     sha = "deadbeef1234567"
     calls = []
 
     def fake_run(args, **kwargs):
-        calls.append(args[:3])
+        calls.append(args)
 
         class _R:
             returncode = 0
@@ -61,8 +61,11 @@ def test_sha_path_runs_clone_fetch_checkout(tmp_path):
         ok = shallow_clone_at_sha("owner/name", tmp_path / "dest", sha=sha)
     assert ok is True
     assert calls[0][:2] == ["git", "clone"]
-    assert calls[1][:2] == ["git", "fetch"]
-    assert calls[2][:2] == ["git", "checkout"]
+    # The SHA clone must NOT be shallow — a depth-1 clone can't reach a
+    # non-tip commit since GitHub refuses fetching arbitrary SHAs.
+    assert "--depth" not in calls[0]
+    assert calls[1][:2] == ["git", "checkout"]
+    assert len(calls) == 2
 
 
 def test_clone_failure_returns_false(tmp_path):
