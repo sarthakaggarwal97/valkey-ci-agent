@@ -39,10 +39,9 @@ _ANOMALY_PATTERNS: list[tuple[str, str, str, bool]] = [
 ]
 
 
-def _scan_logs(context: FuzzerRunContext) -> tuple[list[FuzzerSignal], list[str]]:
+def _scan_logs(context: FuzzerRunContext) -> list[FuzzerSignal]:
     """Deterministic pattern matching on results.json and node logs."""
     anomalies: list[FuzzerSignal] = []
-    normals: list[str] = []
 
     results = context.results or {}
     if results.get("success") is False:
@@ -60,8 +59,6 @@ def _scan_logs(context: FuzzerRunContext) -> tuple[list[FuzzerSignal], list[str]
                     f"{name} validation failed", "critical",
                     str(check.get("error") or "failed"),
                 ))
-            elif check.get("success") is True:
-                normals.append(f"{name} passed")
 
     for name, text in context.node_logs.items():
         cleaned = strip_ansi(text)
@@ -70,7 +67,7 @@ def _scan_logs(context: FuzzerRunContext) -> tuple[list[FuzzerSignal], list[str]
             if m:
                 anomalies.append(FuzzerSignal(title, severity, f"{name}: {m.group(0)[:200]}"))
 
-    return _dedupe_signals(anomalies), normals
+    return _dedupe_signals(anomalies)
 
 
 def _dedupe_signals(signals: list[FuzzerSignal]) -> list[FuzzerSignal]:
@@ -280,7 +277,7 @@ class FuzzerRunAnalyzer:
             )
         _load_artifacts(context, files)
 
-        anomalies, normals = _scan_logs(context)
+        anomalies = _scan_logs(context)
 
         claude_payload: dict[str, Any] = {}
         claude_error: str | None = None
@@ -329,7 +326,7 @@ class FuzzerRunAnalyzer:
             run_url=context.run_url, conclusion=context.conclusion,
             head_sha=context.head_sha, overall_status=overall_status,
             triage_verdict=triage_verdict, summary=summary,
-            anomalies=anomalies, normal_signals=normals,
+            anomalies=anomalies,
             scenario_id=context.scenario_id, seed=context.seed,
             tested_valkey_sha=context.tested_valkey_sha,
             root_cause_category=root_cause, reproduction_hint=hint,

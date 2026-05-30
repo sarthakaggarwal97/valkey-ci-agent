@@ -94,6 +94,9 @@ class ArtifactClient:
         # URLs that must not receive our token. add_unredirected_header keeps
         # the Authorization off the redirected request.
         req.add_unredirected_header("Authorization", f"Bearer {self._token}")
+        # Hand-rolled retry rather than retry_github_call: this is a raw urllib
+        # call (not a PyGithub operation) and needs HTTP-status-specific
+        # handling for the 404/expired and rate-limit cases below.
         for attempt in range(self._retries + 1):
             try:
                 with urlopen(req, timeout=120) as resp:

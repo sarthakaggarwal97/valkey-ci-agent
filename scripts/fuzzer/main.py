@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:
             entry["action"] = "error"
             entry["error"] = str(exc)
-            logger.warning("Failed to analyze run %s: %s", run.id, exc)
+            logger.warning("Failed to analyze run %s: %s", run.id, exc, exc_info=True)
 
         results.append(entry)
 

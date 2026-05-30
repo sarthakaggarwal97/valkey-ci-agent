@@ -8,10 +8,9 @@ from typing import Any
 
 @dataclass
 class FuzzerSignal:
-    """A single anomaly or normal observation from a fuzzer run.
+    """A single anomaly observed in a fuzzer run.
 
-    `severity` is "critical" or "warning". Normal observations are returned as
-    plain strings, not signals.
+    `severity` is "critical" or "warning".
     """
 
     title: str
@@ -33,10 +32,7 @@ class FuzzerRunContext:
     seed: str | None = None
     tested_valkey_sha: str | None = None
     results: dict[str, Any] | None = None
-    scenario_yaml: str | None = None
-    structured_logs: dict[str, dict[str, Any]] = field(default_factory=dict)
     node_logs: dict[str, str] = field(default_factory=dict)
-    raw_job_log: str = ""
 
 
 @dataclass
@@ -53,7 +49,6 @@ class FuzzerRunAnalysis:
     triage_verdict: str
     summary: str
     anomalies: list[FuzzerSignal] = field(default_factory=list)
-    normal_signals: list[str] = field(default_factory=list)
     scenario_id: str | None = None
     seed: str | None = None
     tested_valkey_sha: str | None = None

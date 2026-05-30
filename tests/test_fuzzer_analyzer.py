@@ -25,7 +25,7 @@ def _ctx(**kw) -> FuzzerRunContext:
 def test_scan_logs_detects_crash():
     ctx = _ctx()
     ctx.node_logs = {"node-1.log": "ASSERTION FAILED at server.c:123"}
-    anomalies, _ = _scan_logs(ctx)
+    anomalies = _scan_logs(ctx)
     assert any("crash" in a.title.lower() or "assertion" in a.title.lower() for a in anomalies)
 
 
@@ -35,7 +35,7 @@ def test_scan_logs_validation_failure():
         "success": False, "error_message": "failed",
         "final_validation": {"checks": {"slot_coverage": {"success": False, "error": "lost slots"}}},
     }
-    anomalies, _ = _scan_logs(ctx)
+    anomalies = _scan_logs(ctx)
     assert any("slot" in a.title.lower() for a in anomalies)
 
 
