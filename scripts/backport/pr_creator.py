@@ -112,8 +112,8 @@ class BackportPRCreator:
         self._github = github_client
         self._base_repo = base_repo
         self._push_repo = push_repo
-        self._backport_label = backport_label
-        self._llm_conflict_label = llm_conflict_label
+        self._backport_label = backport_label or "backport"
+        self._llm_conflict_label = llm_conflict_label or "ai-resolved-conflicts"
 
     def create_backport_pr(
         self,
@@ -186,7 +186,7 @@ class BackportPRCreator:
                 retries=3,
                 description="apply labels to backport PR",
             )
-        except GithubException as exc:
+        except Exception as exc:
             logger.warning("Failed to apply labels to PR #%d: %s", pr.number, exc)
 
         logger.info("Backport PR created: %s", pr.html_url)
@@ -213,6 +213,13 @@ class BackportPRCreator:
                     label, self._base_repo, exc,
                 )
                 return
+        except Exception as exc:
+            # Best-effort: a transport/parse failure must not abort PR creation.
+            logger.warning(
+                "Could not verify label %r on %s: %s",
+                label, self._base_repo, exc,
+            )
+            return
 
         color, description = _LABEL_DEFAULTS.get(
             label, ("ededed", f"Created by valkey-ci-agent for label {label!r}"),
@@ -230,6 +237,12 @@ class BackportPRCreator:
             # 422 means the label was created concurrently — fine.
             if exc.status == 422:
                 return
+            logger.error(
+                "Failed to create label %r on %s: %s",
+                label, self._base_repo, exc,
+            )
+        except Exception as exc:
+            # Best-effort: a transport/parse failure must not abort PR creation.
             logger.error(
                 "Failed to create label %r on %s: %s",
                 label, self._base_repo, exc,
