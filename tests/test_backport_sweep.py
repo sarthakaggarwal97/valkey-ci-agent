@@ -28,7 +28,12 @@ from scripts.backport.sweep_git import (
     worktree_changed_paths,
 )
 from scripts.backport.sweep_prs import upsert_pr
-from scripts.backport.sweep_reporting import build_pr_body, build_summary
+from scripts.backport.sweep_reporting import (
+    build_pr_body,
+    build_summary,
+    parse_previous_applied,
+    parse_previous_failed,
+)
 from scripts.backport.sweep_validation import (
     build_validation_repair_prompt,
     repair_validation_failure_with_claude,
@@ -36,6 +41,8 @@ from scripts.backport.sweep_validation import (
     validate_backport_branch,
 )
 from scripts.common.git_auth import GitAuth
+
+DETAIL = backport_sweep.DETAIL_ALREADY_ON_SWEEP_BRANCH
 
 
 def test_git_auth_keeps_askpass_outside_clone_destination(tmp_path):
@@ -1406,6 +1413,58 @@ def test_build_pr_body_uses_branch_commits_and_preserves_prior_detail():
     assert "#1826" in body
     assert "conflicts resolved by Claude Code" in body
     assert body.index("#1298") < body.index("#2915")
+
+
+def test_build_pr_body_round_trips_applied_and_failed_detail():
+    first = build_pr_body(
+        BranchSweepResult("8.0", 2, results=[
+            CandidateResult(2915, "Fix | crash", "applied", "conflicts resolved by Claude Code"),
+            CandidateResult(1826, "Fix Lua VM crash", "skipped-conflict", "lacks src/lua/engine_lua.c"),
+        ]),
+        branch_applied=[CandidateResult(2915, "Fix | crash", "applied", "conflicts resolved by Claude Code")],
+    )
+
+    # A later run that processes nothing must keep every entry from the prior body.
+    second = build_pr_body(
+        BranchSweepResult("8.0", 0),
+        branch_applied=[CandidateResult(2915, "Fix | crash", "skipped-existing", DETAIL)],
+        previous_body=first,
+    )
+
+    assert parse_previous_applied(second) == [
+        CandidateResult(2915, "Fix | crash", "applied", "conflicts resolved by Claude Code"),
+    ]
+    assert [(r.source_pr_number, r.detail) for r in parse_previous_failed(second)] == [
+        (1826, "lacks src/lua/engine_lua.c"),
+    ]
+
+
+def test_build_pr_body_drops_failed_entry_once_applied():
+    previous_body = "\n".join([
+        "## Needs attention", "",
+        "| Source PR | Title | Outcome | Reason |", "|---|---|---|---|",
+        "| #4100 | Now fixed | skipped-conflict | was conflicting |",
+    ])
+
+    body = build_pr_body(
+        BranchSweepResult("8.0", 0),
+        branch_applied=[CandidateResult(4100, "Now fixed", "skipped-existing", DETAIL)],
+        previous_body=previous_body,
+    )
+
+    assert "## Needs attention" not in body
+    assert "#4100" in body
+
+
+def test_build_pr_body_uses_friendly_detail_for_bare_branch_commit():
+    body = build_pr_body(
+        BranchSweepResult("8.0", 0),
+        branch_applied=[CandidateResult(4200, "Preserved feature", "skipped-existing", DETAIL)],
+    )
+
+    assert "#4200" in body
+    assert DETAIL not in body
+    assert "cherry-picked in a prior sweep" in body
 
 
 def test_build_summary_counts_applied_candidates():

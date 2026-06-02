@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
@@ -66,10 +67,14 @@ def build_pr_body(
         branch_applied=branch_applied,
         previous_body=previous_body,
     )
-    failed = [
-        r for r in result.results
-        if r.outcome not in {"applied", "skipped-existing"}
-    ]
+    failed = merge_failed_results(
+        [
+            r for r in result.results
+            if r.outcome not in {"applied", "skipped-existing"}
+        ],
+        applied=applied,
+        previous_body=previous_body,
+    )
 
     if applied:
         lines.extend(["## Applied", "", "| Source PR | Title | Detail |", "|---|---|---|"])
@@ -120,64 +125,82 @@ def merge_applied_results(
     branch_applied: list[CandidateResult] | None = None,
     previous_body: str | None = None,
 ) -> list[CandidateResult]:
-    previous = parse_previous_applied(previous_body or "")
-    previous_by_pr = {r.source_pr_number: r for r in previous}
+    previous_by_pr = {r.source_pr_number: r for r in parse_previous_applied(previous_body or "")}
     current_by_pr = {r.source_pr_number: r for r in current}
-
-    if branch_applied is None:
-        base_results = [*previous, *current]
-    else:
-        base_results = [*branch_applied, *current]
+    membership = branch_applied if branch_applied is not None else current
 
     merged: list[CandidateResult] = []
     seen: set[int] = set()
-    for base in base_results:
+    for base in membership:
         if base.source_pr_number in seen:
             continue
         seen.add(base.source_pr_number)
-        current_result = current_by_pr.get(base.source_pr_number)
-        previous_result = previous_by_pr.get(base.source_pr_number)
         merged.append(
             _merge_applied_result(
                 base,
-                current_result=current_result,
-                previous_result=previous_result,
+                current_result=current_by_pr.get(base.source_pr_number),
+                previous_result=previous_by_pr.get(base.source_pr_number),
             )
         )
     return merged
 
 
+def merge_failed_results(
+    current: list[CandidateResult],
+    *,
+    applied: list[CandidateResult],
+    previous_body: str | None = None,
+) -> list[CandidateResult]:
+    applied_prs = {r.source_pr_number for r in applied}
+    current_by_pr = {r.source_pr_number: r for r in current}
+
+    merged: list[CandidateResult] = []
+    seen: set[int] = set()
+    for base in [*current, *parse_previous_failed(previous_body or "")]:
+        pr_number = base.source_pr_number
+        if pr_number in seen or pr_number in applied_prs:
+            continue
+        seen.add(pr_number)
+        merged.append(current_by_pr.get(pr_number, base))
+    return merged
+
+
 def parse_previous_applied(body: str) -> list[CandidateResult]:
-    results: list[CandidateResult] = []
-    in_applied = False
+    return [
+        CandidateResult(pr_number, cells[1], "applied", cells[2])
+        for pr_number, cells in _parse_section_rows(body, "## Applied", min_cells=3)
+    ]
+
+
+def parse_previous_failed(body: str) -> list[CandidateResult]:
+    return [
+        CandidateResult(pr_number, cells[1], cells[2] or "error", cells[3])
+        for pr_number, cells in _parse_section_rows(body, "## Needs attention", min_cells=4)
+    ]
+
+
+def _parse_section_rows(body: str, heading: str, *, min_cells: int) -> Iterator[tuple[int, list[str]]]:
+    in_section = False
     for line in body.splitlines():
         stripped = line.strip()
-        if stripped == "## Applied":
-            in_applied = True
+        if stripped == heading:
+            in_section = True
             continue
-        if in_applied and stripped.startswith("## "):
+        if in_section and stripped.startswith("## "):
             break
-        if not in_applied or not stripped.startswith("|"):
+        if not in_section or not stripped.startswith("|"):
             continue
 
         cells = _split_markdown_table_row(stripped)
-        if len(cells) < 3:
+        if len(cells) < min_cells:
             continue
-        source, title, detail = cells[:3]
+        source = cells[0]
         if source.lower() == "source pr" or set(source) <= {"-"}:
             continue
         match = re.search(r"#(\d+)", source)
         if not match:
             continue
-        results.append(
-            CandidateResult(
-                source_pr_number=int(match.group(1)),
-                source_pr_title=title,
-                outcome="applied",
-                detail=detail,
-            )
-        )
-    return results
+        yield int(match.group(1)), cells
 
 
 def _merge_applied_result(
@@ -197,6 +220,9 @@ def _merge_applied_result(
         if previous_result is not None:
             detail = previous_result.detail
             title = title or previous_result.source_pr_title
+
+    if detail == DETAIL_ALREADY_ON_SWEEP_BRANCH:
+        detail = "cherry-picked in a prior sweep"
 
     return CandidateResult(
         source_pr_number=base.source_pr_number,
