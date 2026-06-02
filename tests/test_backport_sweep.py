@@ -1456,6 +1456,27 @@ def test_build_pr_body_drops_failed_entry_once_applied():
     assert "#4100" in body
 
 
+def test_build_pr_body_clears_stale_failure_when_current_skips_existing():
+    previous_body = "\n".join([
+        "## Needs attention", "",
+        "| Source PR | Title | Outcome | Reason |", "|---|---|---|---|",
+        "| #4001 | Already merged | skipped-conflict | was conflicting |",
+    ])
+
+    # Current run reports it as already on the release branch (not on the
+    # sweep branch, so not in Applied) -> it no longer needs attention.
+    body = build_pr_body(
+        BranchSweepResult("8.0", 1, results=[
+            CandidateResult(4001, "Already merged", "skipped-existing", "already applied or empty cherry-pick"),
+        ]),
+        branch_applied=[],
+        previous_body=previous_body,
+    )
+
+    assert "## Needs attention" not in body
+    assert "#4001" not in body
+
+
 def test_build_pr_body_uses_friendly_detail_for_bare_branch_commit():
     body = build_pr_body(
         BranchSweepResult("8.0", 0),

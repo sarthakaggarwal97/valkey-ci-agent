@@ -67,14 +67,14 @@ def build_pr_body(
         branch_applied=branch_applied,
         previous_body=previous_body,
     )
-    failed = merge_failed_results(
-        [
-            r for r in result.results
-            if r.outcome not in {"applied", "skipped-existing"}
-        ],
-        applied=applied,
-        previous_body=previous_body,
-    )
+    resolved = {r.source_pr_number for r in applied}
+    failed_now = []
+    for r in result.results:
+        if r.outcome in {"applied", "skipped-existing"}:
+            resolved.add(r.source_pr_number)
+        else:
+            failed_now.append(r)
+    failed = merge_failed_results(failed_now, resolved=resolved, previous_body=previous_body)
 
     if applied:
         lines.extend(["## Applied", "", "| Source PR | Title | Detail |", "|---|---|---|"])
@@ -148,17 +148,16 @@ def merge_applied_results(
 def merge_failed_results(
     current: list[CandidateResult],
     *,
-    applied: list[CandidateResult],
+    resolved: set[int],
     previous_body: str | None = None,
 ) -> list[CandidateResult]:
-    applied_prs = {r.source_pr_number for r in applied}
     current_by_pr = {r.source_pr_number: r for r in current}
 
     merged: list[CandidateResult] = []
     seen: set[int] = set()
     for base in [*current, *parse_previous_failed(previous_body or "")]:
         pr_number = base.source_pr_number
-        if pr_number in seen or pr_number in applied_prs:
+        if pr_number in seen or pr_number in resolved:
             continue
         seen.add(pr_number)
         merged.append(current_by_pr.get(pr_number, base))
