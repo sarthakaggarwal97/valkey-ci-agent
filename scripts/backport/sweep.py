@@ -444,12 +444,19 @@ def _process_branch(
                 if result_is_on_backport_branch(item)
             ]
             if committed and branch_has_changes(tmpdir, target_branch):
-                push_backport_branch(
-                    tmpdir,
-                    backport_branch,
-                    git_env,
-                    force_with_lease=existing_pr is not None,
-                )
+                try:
+                    push_backport_branch(
+                        tmpdir,
+                        backport_branch,
+                        git_env,
+                        force_with_lease=existing_pr is not None,
+                    )
+                except Exception as exc:
+                    for item in result.results:
+                        if item.outcome == "applied":
+                            item.outcome = "error"
+                            item.detail = f"push failed: {exc}"
+                    raise
                 logger.info(
                     "Pushed %d commit(s) to %s/%s",
                     len(committed),

@@ -726,6 +726,56 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     assert result.pr_url == "https://github.com/valkey-io/valkey/pull/100"
 
 
+def test_process_branch_push_failure_reconciles_applied(monkeypatch):
+    candidate = ProjectBackportCandidate(
+        source_pr_number=1,
+        source_pr_title="PR 1",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/1",
+        target_branch="8.1",
+        merge_commit_sha="sha1",
+    )
+
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "_run_git", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: set())
+    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(
+        backport_sweep,
+        "validate_branch_with_optional_repair",
+        lambda *_args, **_kwargs: (True, ""),
+    )
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        backport_sweep,
+        "apply_candidate",
+        lambda _repo_dir, c, *_args, **_kwargs: CandidateResult(
+            c.source_pr_number, c.source_pr_title, "applied"
+        ),
+    )
+
+    def fail_push(*_args, **_kwargs):
+        raise RuntimeError("workflows permission denied")
+
+    monkeypatch.setattr(backport_sweep, "push_backport_branch", fail_push)
+
+    result = backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="8.1",
+        candidates=[candidate],
+        push_repo="valkey-io/valkey",
+        test_commands=[],
+    )
+
+    assert result.error == "workflows permission denied"
+    assert result.results[0].outcome == "error"
+    assert "push failed" in result.results[0].detail
+    assert sum(1 for r in result.results if r.outcome == "applied") == 0
+
+
 def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn,
                                already_applied=None, max_applied=1):
     """Run _process_branch with the common green-only mocks wired up.
