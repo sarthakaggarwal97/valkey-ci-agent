@@ -756,7 +756,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     )
 
     def fail_push(*_args, **_kwargs):
-        raise subprocess.CalledProcessError(1, ["git", "push"], stderr="workflows permission denied")
+        raise RuntimeError("push rejected")
 
     monkeypatch.setattr(backport_sweep, "push_backport_branch", fail_push)
 

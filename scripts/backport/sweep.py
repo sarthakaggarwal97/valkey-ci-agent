@@ -451,7 +451,7 @@ def _process_branch(
                         git_env,
                         force_with_lease=existing_pr is not None,
                     )
-                except subprocess.CalledProcessError as exc:
+                except Exception as exc:
                     for item in result.results:
                         if item.outcome == "applied":
                             item.outcome = "error"
