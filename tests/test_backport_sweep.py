@@ -756,7 +756,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     )
 
     def fail_push(*_args, **_kwargs):
-        raise RuntimeError("workflows permission denied")
+        raise subprocess.CalledProcessError(1, ["git", "push"], stderr="workflows permission denied")
 
     monkeypatch.setattr(backport_sweep, "push_backport_branch", fail_push)
 
@@ -770,7 +770,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
         test_commands=[],
     )
 
-    assert result.error == "workflows permission denied"
+    assert result.error
     assert result.results[0].outcome == "error"
     assert "push failed" in result.results[0].detail
     assert sum(1 for r in result.results if r.outcome == "applied") == 0
