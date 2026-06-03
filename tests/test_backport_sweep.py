@@ -675,7 +675,6 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
         "validate_branch_with_optional_repair",
         lambda *_args, **_kwargs: (True, ""),
     )
-    monkeypatch.setattr(backport_sweep, "head_changes_workflow_files", lambda *_args: False)
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_args, **_kwargs: True)
 
     pushed: list[str] = []
@@ -727,70 +726,6 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     assert result.pr_url == "https://github.com/valkey-io/valkey/pull/100"
 
 
-def test_process_branch_skips_workflow_candidates_before_push(monkeypatch):
-    candidate = ProjectBackportCandidate(
-        source_pr_number=3317,
-        source_pr_title="Fix macOS workflow",
-        source_pr_url="https://github.com/valkey-io/valkey/pull/3317",
-        target_branch="8.1",
-        merge_commit_sha="sha3317",
-    )
-
-    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_args, **_kwargs: None)
-    git_calls: list[tuple[str, ...]] = []
-    monkeypatch.setattr(
-        backport_sweep,
-        "_run_git",
-        lambda _repo_dir, *args, **_kwargs: git_calls.append(args),
-    )
-    monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: set())
-    monkeypatch.setattr(backport_sweep, "head_changes_workflow_files", lambda *_args: True)
-    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr(
-        backport_sweep,
-        "apply_candidate",
-        lambda _repo_dir, c, *_args, **_kwargs: CandidateResult(
-            c.source_pr_number,
-            c.source_pr_title,
-            "applied",
-        ),
-    )
-    run_calls: list[list[str]] = []
-
-    def fake_run_test_commands(_repo_dir, commands, **_kwargs):
-        run_calls.append(list(commands))
-        return True, ""
-
-    def fail_push(*_args, **_kwargs):
-        raise AssertionError("workflow candidates must not be pushed")
-
-    def fail_upsert(*_args, **_kwargs):
-        raise AssertionError("workflow-only skipped runs must not upsert PRs")
-
-    monkeypatch.setattr(backport_sweep, "run_test_commands", fake_run_test_commands)
-    monkeypatch.setattr(backport_sweep, "push_backport_branch", fail_push)
-    monkeypatch.setattr(backport_sweep, "upsert_pr", fail_upsert)
-
-    result = backport_sweep._process_branch(
-        gh=MagicMock(),
-        repo_full_name="valkey-io/valkey",
-        github_token="token",
-        target_branch="8.1",
-        candidates=[candidate],
-        push_repo="valkey-io/valkey",
-        test_commands=["make"],
-    )
-
-    assert result.error == ""
-    assert result.pr_url == ""
-    assert result.results[0].outcome == "skipped-conflict"
-    assert "workflow" in result.results[0].detail
-    assert ("reset", "--hard", "HEAD^") in git_calls
-    assert run_calls == [[]]
-
-
 def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn,
                                already_applied=None, max_applied=1):
     """Run _process_branch with the common green-only mocks wired up.
@@ -808,7 +743,6 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
         lambda *_a, **_k: set(already_applied or set()),
     )
     monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_a, **_k: [])
-    monkeypatch.setattr(backport_sweep, "head_changes_workflow_files", lambda *_a: False)
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
     monkeypatch.setattr(backport_sweep, "apply_candidate", apply_fn)

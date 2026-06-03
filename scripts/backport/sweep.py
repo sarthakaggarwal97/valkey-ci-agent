@@ -25,7 +25,6 @@ from scripts.backport.sweep_apply import (
 from scripts.backport.sweep_git import (
     branch_has_changes,
     clone_target_branch,
-    head_changes_workflow_files,
     list_already_applied,
     list_applied_prs_on_branch,
     push_backport_branch,
@@ -415,21 +414,6 @@ def _process_branch(
                 if candidate_result.outcome != "applied":
                     continue
 
-                if head_changes_workflow_files(tmpdir):
-                    candidate_result.outcome = "skipped-conflict"
-                    candidate_result.detail = (
-                        "changes GitHub Actions workflow files; "
-                        "the backport App token cannot push workflow updates"
-                    )
-                    _run_git(tmpdir, "reset", "--hard", "HEAD^")
-                    logger.warning(
-                        "Candidate #%d on %s changes workflow files; removed candidate because "
-                        "the App token cannot push workflow updates.",
-                        candidate.source_pr_number,
-                        target_branch,
-                    )
-                    continue
-
                 # The sweep branch must stay green: only keep a cherry-pick if
                 # the whole branch still validates. A red commit left on the
                 # branch would block every later candidate, so we always reset
@@ -699,3 +683,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
