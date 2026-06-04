@@ -80,7 +80,7 @@ See [`examples/repos.yml`](examples/repos.yml) for a multi-module example.
   - `pull-requests:write` on each repo (for opening PRs)
   - `issues:write` on each repo (for backport status comments)
   - `organization_projects:read` on the org (for querying project boards)
-- An AWS account with Bedrock access to `us.anthropic.claude-opus-4-7`
+- An AWS account with Bedrock access to `us.anthropic.claude-opus-4-8`
 - An OIDC trust between GitHub Actions and your AWS account
 
 #### Step 1: Configure secrets and variables
