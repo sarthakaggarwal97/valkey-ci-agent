@@ -76,3 +76,22 @@ def test_list_run_artifacts():
     arts = client.list_run_artifacts("r", 99)
     assert len(arts) == 1
     assert arts[0].name == "fuzzer-run-artifacts-123"
+
+
+def test_list_run_artifacts_skips_malformed_entries():
+    """An artifact entry missing id or name is skipped, not a hard error."""
+    mock_repo = MagicMock()
+    mock_repo._requester.requestJsonAndCheck.return_value = (
+        {}, {"artifacts": [
+            {"id": 1, "name": "good"},
+            {"id": 2},                       # missing name
+            {"name": "no-id"},               # missing id
+            "not-a-dict",
+        ]},
+    )
+    mock_gh = MagicMock()
+    mock_gh.get_repo.return_value = mock_repo
+
+    client = ArtifactClient(mock_gh, token="t")
+    arts = client.list_run_artifacts("r", 99)
+    assert [a.name for a in arts] == ["good"]

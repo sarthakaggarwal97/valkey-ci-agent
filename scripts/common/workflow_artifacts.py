@@ -79,7 +79,9 @@ class ArtifactClient:
                 expired=a.get("expired", False),
             )
             for a in payload.get("artifacts", [])
-            if isinstance(a, dict) and isinstance(a.get("id"), int)
+            if isinstance(a, dict)
+            and isinstance(a.get("id"), int)
+            and isinstance(a.get("name"), str)
         ]
 
     def download_artifact(self, repo_full_name: str, artifact_id: int) -> dict[str, bytes]:
