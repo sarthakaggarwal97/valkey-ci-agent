@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from github.GithubException import GithubException
@@ -20,9 +21,22 @@ from scripts.common.github_client import retry_github_call
 logger = logging.getLogger(__name__)
 
 
+def _resolve_pr_target_repo(base_repo: str, push_repo: str) -> str:
+    """Return the repo where the backport PR should be opened.
+
+    Production: PRs open on ``base_repo`` (the upstream project). When
+    ``CI_AGENT_PR_TARGET=push_repo`` is set (fork test harness), open them
+    on ``push_repo`` instead so transient test PRs never leak upstream.
+    """
+    if os.environ.get("CI_AGENT_PR_TARGET", "").lower() == "push_repo":
+        return push_repo
+    return base_repo
+
+
 def find_existing_pr(gh: Any, base_repo: str, push_repo: str, branch: str) -> Any | None:
-    repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
-    head_ref = build_pull_search_head_ref(base_repo, push_repo, branch)
+    pr_repo = _resolve_pr_target_repo(base_repo, push_repo)
+    repo = retry_github_call(lambda: gh.get_repo(pr_repo), retries=2, description=f"get {pr_repo}")
+    head_ref = build_pull_search_head_ref(pr_repo, push_repo, branch)
     pulls = retry_github_call(
         lambda: list(repo.get_pulls(state="open", head=head_ref)),
         retries=2, description="list PRs",
@@ -61,7 +75,8 @@ def upsert_pr(
     gql: GitHubGraphQLClient | None = None,
     branch_applied: list[CandidateResult] | None = None,
 ) -> str:
-    repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
+    pr_repo = _resolve_pr_target_repo(base_repo, push_repo)
+    repo = retry_github_call(lambda: gh.get_repo(pr_repo), retries=2, description=f"get {pr_repo}")
     previous_body = getattr(existing_pr, "body", None) if existing_pr else None
     body = build_pr_body(
         result,
@@ -81,15 +96,15 @@ def upsert_pr(
                 mark_pr_ready_for_review(gql, node_id)
                 logger.info(
                     "Marked PR #%d on %s ready for review",
-                    existing_pr.number, base_repo,
+                    existing_pr.number, pr_repo,
                 )
-        logger.info("Updated PR #%d on %s", existing_pr.number, base_repo)
+        logger.info("Updated PR #%d on %s", existing_pr.number, pr_repo)
         return existing_pr.html_url
 
     pr = retry_github_call(
         lambda: create_pull_from_push_repo(
             repo,
-            base_repo=base_repo,
+            base_repo=pr_repo,
             push_repo=push_repo,
             title=title,
             body=body,
@@ -100,7 +115,7 @@ def upsert_pr(
         retries=2,
         description="create PR",
     )
-    logger.info("Created PR #%d on %s", pr.number, base_repo)
+    logger.info("Created PR #%d on %s", pr.number, pr_repo)
     return pr.html_url
 
 
