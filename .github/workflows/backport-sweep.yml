@@ -147,7 +147,8 @@ jobs:
       - name: Run backport sweep
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
+          TARGET_TOKEN: ${{ steps.generate-token.outputs.token || steps.fork-token.outputs.token }}
+          CI_AGENT_PR_TARGET: ${{ github.repository == 'valkey-io/valkey-ci-agent' && '' || 'push_repo' }}
         run: |
           set -euo pipefail
           args=(
