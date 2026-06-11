@@ -92,6 +92,32 @@ def test_poll_branch_sweeps_when_no_open_pr(monkeypatch, tmp_path):
     assert captured["max_candidates"] == 2
 
 
+def test_poll_branch_degrades_when_pr_check_fails(monkeypatch, tmp_path):
+    repo_entry, branch_entry = _branch(tmp_path)
+
+    monkeypatch.setattr(poller, "Github", lambda *a, **k: object())
+
+    def _boom(*a, **k):
+        raise RuntimeError("github api down")
+
+    monkeypatch.setattr(poller, "find_existing_pr", _boom)
+
+    def _must_not_run(*a, **k):
+        raise AssertionError("run_backport_sweep called after failed PR check")
+
+    monkeypatch.setattr(poller, "run_backport_sweep", _must_not_run)
+
+    result = poller.poll_branch(
+        repo_entry=repo_entry,
+        branch_entry=branch_entry,
+        github_token="token",
+    )
+
+    assert result["action"] == "error"
+    assert result["error"] == "github api down"
+    assert result["branch"] == "1.0"
+
+
 def test_poll_branch_passes_max_candidates_through(monkeypatch, tmp_path):
     repo_entry, branch_entry = _branch(tmp_path)
 
