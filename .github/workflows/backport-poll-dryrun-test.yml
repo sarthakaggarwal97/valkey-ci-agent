@@ -1,0 +1,86 @@
+# Fork-only manual test for the backport poller. Exercises the preflight matrix
+# fan-out and the poller's open-PR decision against live upstream state, in
+# --dry-run mode so it never runs a sweep, needs no App or AWS secrets, and
+# makes no writes. Uses the built-in GITHUB_TOKEN (read access to public repos).
+#
+# This is a throwaway test harness, not part of the agent's operation. Do not
+# merge it into valkey-io/valkey-ci-agent.
+
+name: Backport Poll (dry-run test)
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Filter to this repository (empty = all repos in registry)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: "Generate matrix"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has_entries: ${{ steps.matrix.outputs.has_entries }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install pyyaml
+      - id: matrix
+        shell: bash
+        env:
+          REPO_FILTER: ${{ inputs.repo || '' }}
+        run: |
+          set -euo pipefail
+          args=(--registry repos.yml)
+          if [[ -n "${REPO_FILTER}" ]]; then
+            args+=(--repo "${REPO_FILTER}")
+          fi
+          python -m scripts.backport.matrix "${args[@]}" --output-file "$GITHUB_OUTPUT"
+
+  poll-dry-run:
+    name: "poll-dry/${{ matrix.repo }}/${{ matrix.branch }}"
+    needs: preflight
+    if: needs.preflight.outputs.has_entries == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.preflight.outputs.matrix) }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - name: Poll decision (dry run)
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.poller \
+            --registry repos.yml \
+            --repo "${{ matrix.repo }}" \
+            --branch "${{ matrix.branch }}" \
+            --target-token "${TARGET_TOKEN}" \
+            --dry-run \
+            --verbose
