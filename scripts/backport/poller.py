@@ -84,7 +84,7 @@ def poll_branch(
         "branch": target_branch,
         "action": "swept",
         "found": result.candidates_found,
-        "applied": sum(1 for item in result.results if item.outcome == "applied"),
+        "applied": result.applied_count,
         "pr": result.pr_url,
         "error": result.error,
     }
