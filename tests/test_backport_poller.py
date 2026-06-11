@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from scripts.backport import poller
 from scripts.backport.registry import load_registry
+from scripts.backport.sweep_models import BranchSweepResult, CandidateResult
 
 
 def _registry(tmp_path) -> str:
@@ -64,15 +65,14 @@ def test_poll_branch_sweeps_when_no_open_pr(monkeypatch, tmp_path):
 
     def _fake_sweep(*, repo_entry, branch_entry, github_token, max_candidates):
         captured["max_candidates"] = max_candidates
-        return SimpleNamespace(
+        return BranchSweepResult(
             target_branch=branch_entry.branch,
             candidates_found=3,
             results=[
-                SimpleNamespace(outcome="applied"),
-                SimpleNamespace(outcome="skipped"),
+                CandidateResult(1, "first", "applied"),
+                CandidateResult(2, "second", "skipped-conflict"),
             ],
             pr_url="https://example/pr/99",
-            error=None,
         )
 
     monkeypatch.setattr(poller, "run_backport_sweep", _fake_sweep)
@@ -88,7 +88,7 @@ def test_poll_branch_sweeps_when_no_open_pr(monkeypatch, tmp_path):
     assert result["found"] == 3
     assert result["applied"] == 1
     assert result["pr"] == "https://example/pr/99"
-    assert result["error"] is None
+    assert not result["error"]
     assert captured["max_candidates"] == 2
 
 
@@ -102,12 +102,9 @@ def test_poll_branch_passes_max_candidates_through(monkeypatch, tmp_path):
 
     def _fake_sweep(*, repo_entry, branch_entry, github_token, max_candidates):
         captured["max_candidates"] = max_candidates
-        return SimpleNamespace(
+        return BranchSweepResult(
             target_branch=branch_entry.branch,
             candidates_found=0,
-            results=[],
-            pr_url=None,
-            error=None,
         )
 
     monkeypatch.setattr(poller, "run_backport_sweep", _fake_sweep)
