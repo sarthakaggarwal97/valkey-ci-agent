@@ -49,8 +49,13 @@ def poll_branch(
 ) -> dict:
     """Run a sweep for one branch unless an open sweep PR already exists.
 
+    ``max_candidates`` defaults to 2 to match the daily sweep's effective cap,
+    not ``run_backport_sweep``'s own default of 5.
+
     Returns a result dict describing the action taken: ``skipped-open-pr`` when
-    a sweep PR is already open, otherwise the sweep outcome.
+    a sweep PR is already open, ``swept`` when a sweep ran, or ``error`` when the
+    open-PR check itself failed. A failed check degrades to an error result
+    rather than crashing, matching how ``run_backport_sweep`` handles failures.
     """
     repo_full_name = repo_entry.repo
     push_repo = repo_entry.effective_push_repo
@@ -58,7 +63,17 @@ def poll_branch(
     backport_branch = f"{_BRANCH_PREFIX}/{target_branch}"
 
     gh = Github(auth=Auth.Token(github_token))
-    existing_pr = find_existing_pr(gh, repo_full_name, push_repo, backport_branch)
+    try:
+        existing_pr = find_existing_pr(gh, repo_full_name, push_repo, backport_branch)
+    except Exception as exc:
+        logger.exception("Error checking for open sweep PR on %s", target_branch)
+        return {
+            "repo": repo_full_name,
+            "branch": target_branch,
+            "action": "error",
+            "error": str(exc),
+        }
+
     if existing_pr is not None:
         logger.info(
             "Branch %s: open sweep PR #%d exists, skipping",
