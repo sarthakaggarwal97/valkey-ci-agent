@@ -25,9 +25,32 @@ sweep.py (daily cron or manual dispatch)
       pr_creator.py -> opens/updates PR on the upstream repo
 ```
 
+### Poll
+
+The daily sweep tops a rolling backport PR up to `--max-candidates` validated
+cherry-picks and then waits for the next cron tick, so a merged sweep PR is not
+topped back up until the following day. The poll workflow (`backport-poll.yml`)
+closes that gap on a short cron. For each registered `{repo, branch}` it runs
+the same sweep, but only when no sweep PR is currently open for that branch:
+
+```text
+poller.py (short cron or manual dispatch)
+  -> reads repos.yml and fans out one job per {repo, branch}
+  -> find_existing_pr(...) -> open sweep PR for this branch?
+       yes -> skip; a human is reviewing it
+       no  -> run_backport_sweep(...) opens a fresh PR
+```
+
+The open-PR check is the entire state model: a merge closes the sweep PR, the
+next poll finds the gap and tops the board back up, and the new PR locks the
+branch again until it too merges. The poll job shares the
+`backport-sweep-{repo}-{branch}` concurrency group with the daily sweep so the
+two never race for the same branch.
+
 ### Entry Points
 
 - `scripts/backport/sweep.py` — daily sweep across registered repos and release branches
+- `scripts/backport/poller.py` — short-cron poll that sweeps a branch only when no sweep PR is open
 - `scripts/backport/main.py` — single-PR backport (manual dispatch)
 - `scripts/backport/matrix.py` — GitHub Actions matrix generation from `repos.yml`
 - `scripts/backport/registry.py` — typed registry loader and validation
