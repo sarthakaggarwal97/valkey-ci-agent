@@ -25,6 +25,14 @@ on:
         required: false
         default: true
         type: boolean
+  repository_dispatch:
+    # Fired by a registered downstream repo when one of its backport PRs
+    # merges, to immediately top up the sweep PR instead of waiting for the
+    # daily cron. Payload: { "repo": "owner/name", "branch": "<release>" }.
+    # The matrix is still generated from this repo's repos.yml, so an
+    # unregistered repo or branch in the payload produces an empty matrix
+    # and the run is a safe no-op.
+    types: [backport-followup]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -62,8 +70,9 @@ jobs:
         id: matrix
         shell: bash
         env:
-          REPO_FILTER: ${{ inputs.repo || '' }}
+          REPO_FILTER: ${{ inputs.repo || github.event.client_payload.repo || '' }}
           PROJECT_FILTER: ${{ inputs.project_number || '' }}
+          BRANCH_FILTER: ${{ github.event.client_payload.branch || '' }}
         run: |
           set -euo pipefail
           args=(--registry repos.yml)
@@ -72,6 +81,9 @@ jobs:
           fi
           if [[ -n "${PROJECT_FILTER}" ]]; then
             args+=(--project-number "${PROJECT_FILTER}")
+          fi
+          if [[ -n "${BRANCH_FILTER}" ]]; then
+            args+=(--branch "${BRANCH_FILTER}")
           fi
           python -m scripts.backport.matrix "${args[@]}" --output-file "$GITHUB_OUTPUT"
 

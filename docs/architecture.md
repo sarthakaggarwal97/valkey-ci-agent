@@ -27,6 +27,16 @@ sweep.py (daily cron or manual dispatch)
       pr_creator.py -> opens/updates PR on the upstream repo
 ```
 
+The sweep also accepts a `repository_dispatch` event of type
+`backport-followup` carrying `{repo, branch}` in its `client_payload`. A
+registered downstream repo fires this when one of its backport PRs merges, so
+the sweep PR is topped up immediately instead of waiting for the daily cron.
+The dispatched run scopes the matrix to exactly that `{repo, branch}`. Because
+the matrix is always generated from this repo's `repos.yml`, a payload naming
+an unregistered repo or branch yields an empty matrix and the run is a safe
+no-op. `examples/backport-followup-sender.yml` is the workflow a downstream
+repo copies into its own `.github/workflows/` to emit the event.
+
 Validation first runs the registry's optional `validation_setup_commands`,
 then validates the branch after each cherry-pick. The sweep branch is kept
 green: a cherry-pick is only kept if the whole branch still validates, and a

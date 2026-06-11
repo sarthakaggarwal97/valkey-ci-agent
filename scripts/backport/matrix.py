@@ -24,6 +24,7 @@ def build_matrix(
     *,
     repo_filter: str | None = None,
     project_number_filter: int | None = None,
+    branch_filter: str | None = None,
 ) -> dict:
     """Build a GitHub Actions matrix from the registry.
 
@@ -37,6 +38,8 @@ def build_matrix(
             continue
         for branch_entry in repo_entry.branches:
             if project_number_filter is not None and branch_entry.project_number != project_number_filter:
+                continue
+            if branch_filter and branch_entry.branch != branch_filter:
                 continue
             entries.append({
                 "repo": repo_entry.repo,
@@ -62,6 +65,7 @@ def main() -> None:
     parser.add_argument("--registry", required=True, help="Path to repos.yml")
     parser.add_argument("--repo", default="", help="Filter to this repo only")
     parser.add_argument("--project-number", type=int, default=None, help="Filter to this project number")
+    parser.add_argument("--branch", default="", help="Filter to this release branch only")
     parser.add_argument("--output-file", default="", help="Write to file instead of stdout (for GITHUB_OUTPUT)")
     args = parser.parse_args()
 
@@ -69,6 +73,7 @@ def main() -> None:
         args.registry,
         repo_filter=args.repo or None,
         project_number_filter=args.project_number,
+        branch_filter=args.branch or None,
     )
 
     has_entries = len(matrix["include"]) > 0

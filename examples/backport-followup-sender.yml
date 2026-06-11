@@ -1,0 +1,55 @@
+# Drop this into a downstream repo's .github/workflows/ to trigger an
+# immediate backport sweep when a backport PR merges, instead of waiting for
+# the valkey-ci-agent daily cron.
+#
+# How it works: when a PR whose title starts with "[backport]" is merged into
+# a release branch, this workflow sends a repository_dispatch event to
+# valkey-io/valkey-ci-agent. The agent runs a sweep scoped to exactly this
+# repo and branch, topping the sweep PR back up with the next candidates.
+#
+# Prerequisites:
+#   1. A token with actions:write on valkey-io/valkey-ci-agent. The default
+#      GITHUB_TOKEN cannot dispatch across repositories. Use a GitHub App
+#      installation token (e.g. valkeyrie-bot) or a fine-grained PAT stored as
+#      a secret named CI_AGENT_DISPATCH_TOKEN.
+#   2. The release branch must be registered in valkey-ci-agent's repos.yml.
+#      An unregistered repo/branch is a safe no-op on the agent side.
+#
+# Adjust the `branches` list to match this repo's release branches. GitHub
+# branch filters use glob syntax (fnmatch), not regex. "[0-9]*.[0-9]*" matches
+# release branches like 1.2 or 8.0; the title check below is what actually
+# scopes this to backport PRs.
+
+name: Backport Follow-up Dispatch
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - "[0-9]*.[0-9]*"
+
+permissions: {}
+
+jobs:
+  dispatch:
+    # Only fire for merged backport PRs, never for closed-without-merge.
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.title, '[backport]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger backport sweep on valkey-ci-agent
+        env:
+          GH_TOKEN: ${{ secrets.CI_AGENT_DISPATCH_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/valkey-io/valkey-ci-agent/dispatches \
+            -f event_type=backport-followup \
+            -F "client_payload[repo]=${REPO}" \
+            -F "client_payload[branch]=${BRANCH}"

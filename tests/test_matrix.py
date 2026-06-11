@@ -76,3 +76,34 @@ def test_build_matrix_filters_by_repo_and_project_number(tmp_path) -> None:
             }
         ]
     }
+
+
+def test_build_matrix_filters_by_branch(tmp_path) -> None:
+    matrix = build_matrix(_write_registry(tmp_path), branch_filter="1.0")
+
+    assert [(entry["repo"], entry["branch"]) for entry in matrix["include"]] == [
+        ("org/core", "1.0"),
+        ("org/module", "1.0"),
+    ]
+
+
+def test_build_matrix_scopes_to_single_repo_branch(tmp_path) -> None:
+    matrix = build_matrix(
+        _write_registry(tmp_path),
+        repo_filter="org/core",
+        branch_filter="2.0",
+    )
+
+    assert [(entry["repo"], entry["branch"]) for entry in matrix["include"]] == [
+        ("org/core", "2.0"),
+    ]
+
+
+def test_build_matrix_unregistered_branch_yields_no_entries(tmp_path) -> None:
+    matrix = build_matrix(
+        _write_registry(tmp_path),
+        repo_filter="org/core",
+        branch_filter="9.9",
+    )
+
+    assert matrix == {"include": []}
