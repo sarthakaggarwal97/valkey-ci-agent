@@ -120,6 +120,13 @@ def poll_branch(
     }
 
 
+def _nonneg_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be >= 0 (0 = unlimited)")
+    return parsed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -140,7 +147,7 @@ def main() -> None:
     parser.add_argument("--target-token", required=True)
     parser.add_argument(
         "--max-candidates",
-        type=int,
+        type=_nonneg_int,
         default=2,
         help="Cap the number of applied cherry-picks per branch (0 = unlimited)",
     )
