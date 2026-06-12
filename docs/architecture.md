@@ -43,7 +43,7 @@ upstream CI for verification.
 The daily sweep tops a rolling backport PR up to `--max-candidates` validated
 cherry-picks and then waits for the next cron tick, so a merged sweep PR is not
 topped back up until the following day. The poll workflow (`backport-poll.yml`)
-closes that gap on a short cron. For each registered `{repo, branch}` it runs
+closes that gap by running hourly. For each registered `{repo, branch}` it runs
 the same sweep, but only when no sweep PR is currently open for that branch:
 
 ```text
