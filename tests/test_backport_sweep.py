@@ -1771,6 +1771,7 @@ def _reorder_process_branch(monkeypatch, *, branch, candidates, max_applied):
     monkeypatch.setattr(
         backport_sweep, "list_already_applied", lambda *_a, **_k: set(kept_after_reset)
     )
+    monkeypatch.setattr(backport_sweep, "candidate_is_empty_on_ref", lambda *_a, **_k: False)
     monkeypatch.setattr(backport_sweep, "push_backport_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(
         backport_sweep, "upsert_pr", lambda *_a, **_k: "https://github.com/x/y/pull/100"
@@ -1913,5 +1914,73 @@ def test_process_branch_skips_empty_late_candidate_without_reorder(monkeypatch):
     assert resets == []
     assert result.branch_notes == []
     # #3756 is reported as skipped, not applied.
+    outcomes = {r.source_pr_number: r.outcome for r in result.results}
+    assert outcomes[3756] == "skipped-existing"
+
+
+def test_process_branch_skips_empty_mid_prefix_candidate_without_reorder(monkeypatch):
+    # P2 repro: branch [#3743, #3938]; late candidate #3756 (May 18) sorts
+    # between them (after #3743, before #3938). If #3756 is empty on the target,
+    # it must be skipped without resetting the branch -- newer than the oldest
+    # branch commit but older than the newest, so the broadened gate must catch it.
+    branch = [
+        BranchAppliedPr(3743, "first", "sha3743"),
+        BranchAppliedPr(3938, "second", "sha3938"),
+    ]
+    candidates = _reorder_candidates("3743", "3756", "3938")
+
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep, "find_existing_pr", lambda *_a, **_k: SimpleNamespace(number=42)
+    )
+    monkeypatch.setattr(backport_sweep, "github_https_url", lambda *_a, **_k: "https://x")
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
+    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
+    monkeypatch.setattr(
+        backport_sweep, "validate_branch_with_optional_repair", lambda *_a, **_k: (True, "")
+    )
+    monkeypatch.setattr(backport_sweep, "list_branch_applied_prs", lambda *_a, **_k: branch)
+    monkeypatch.setattr(
+        backport_sweep, "list_already_applied", lambda *_a, **_k: {"3743", "3938"}
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "candidate_is_empty_on_ref",
+        lambda _d, candidate, *_a, **_k: candidate.source_pr_number == 3756,
+    )
+    monkeypatch.setattr(backport_sweep, "push_backport_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep, "upsert_pr", lambda *_a, **_k: "https://github.com/x/y/pull/100"
+    )
+    monkeypatch.setattr(
+        backport_sweep.subprocess,
+        "run",
+        lambda *_a, **_k: subprocess.CompletedProcess([], 0, "", ""),
+    )
+    resets: list[str] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        if args[:2] == ("reset", "--hard"):
+            resets.append(args[2])
+
+    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
+    monkeypatch.setattr(
+        backport_sweep, "apply_candidate",
+        lambda _d, c, *_a, **_k: CandidateResult(c.source_pr_number, c.source_pr_title, "applied"),
+    )
+
+    result = backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="9.1",
+        candidates=candidates,
+        push_repo="sarthakaggarwal97/valkey",
+        test_commands=[],
+        max_applied=5,
+    )
+
+    assert resets == []
+    assert result.branch_notes == []
     outcomes = {r.source_pr_number: r.outcome for r in result.results}
     assert outcomes[3756] == "skipped-existing"
