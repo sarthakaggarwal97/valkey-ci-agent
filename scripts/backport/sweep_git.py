@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 RunGit = Callable[..., Any]
 
 BRANCH_PREFIX = "agent/backport/sweep"
+PARENTHESIZED_PR_RE = re.compile(r"\(#(\d+)\)")
+MERGE_PR_RE = re.compile(r"\bMerge pull request #(\d+)\b")
 
 
 def safe_tmp_component(value: str) -> str:
@@ -62,6 +64,18 @@ def push_backport_branch(
     run_git(repo_dir, *args, env=git_env)
 
 
+def source_pr_number_from_commit_subject(subject: str) -> str | None:
+    """Return the GitHub PR number represented by a squash/merge subject."""
+    parenthesized_prs = PARENTHESIZED_PR_RE.findall(subject)
+    if parenthesized_prs:
+        # GitHub squash commits append the source PR at the end. PR titles can
+        # contain earlier references, e.g. `Revert "... (#3544)" (#3756)`.
+        return parenthesized_prs[-1]
+
+    merge_match = MERGE_PR_RE.search(subject)
+    return merge_match.group(1) if merge_match else None
+
+
 def list_already_applied(repo_dir: str, base_branch: str, backport_branch: str) -> set[str]:
     result = subprocess.run(
         ["git", "log", f"origin/{base_branch}..{backport_branch}", "--format=%s"],
@@ -69,9 +83,9 @@ def list_already_applied(repo_dir: str, base_branch: str, backport_branch: str) 
     )
     pr_nums: set[str] = set()
     for line in result.stdout.strip().splitlines():
-        m = re.search(r"\(#(\d+)\)", line)
-        if m:
-            pr_nums.add(m.group(1))
+        pr_number = source_pr_number_from_commit_subject(line)
+        if pr_number:
+            pr_nums.add(pr_number)
     return pr_nums
 
 

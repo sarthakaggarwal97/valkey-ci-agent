@@ -17,12 +17,17 @@ from scripts.backport.sweep import (
     CandidateResult,
     ProjectBackportCandidate,
 )
-from scripts.backport.sweep_apply import apply_candidate, check_applied_commit_size
+from scripts.backport.sweep_apply import (
+    apply_candidate,
+    candidate_is_empty_on_ref,
+    check_applied_commit_size,
+)
 from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
     clone_target_branch,
     push_backport_branch,
     safe_tmp_component,
+    source_pr_number_from_commit_subject,
     sync_target_branch_to_source,
     worktree_changed_paths,
 )
@@ -580,6 +585,78 @@ def test_push_backport_branch_uses_force_with_lease_after_rebase(monkeypatch):
             "agent/backport/sweep/8.1",
         )
     ]
+
+
+@pytest.mark.parametrize(
+    ("subject", "expected"),
+    [
+        (
+            'Revert "IO-Threads redesign cleanup work (#3544)" (#3756)',
+            "3756",
+        ),
+        (
+            "Fix IO-Threads redesign cleanup perf regression from #3544 (#3938)",
+            "3938",
+        ),
+        (
+            "Merge pull request #3801 from valkey-io/backport-copy-acl",
+            "3801",
+        ),
+        (
+            "Release notes update",
+            None,
+        ),
+    ],
+)
+def test_source_pr_number_from_commit_subject_uses_source_pr(subject, expected):
+    assert source_pr_number_from_commit_subject(subject) == expected
+
+
+def test_candidate_empty_on_target_ref_ignores_existing_sweep_commits(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "target")
+    _git(repo, "config", "user.name", "Tester")
+    _git(repo, "config", "user.email", "tester@example.com")
+
+    path = repo / "io.txt"
+    path.write_text("original\n", encoding="utf-8")
+    _git(repo, "add", "io.txt")
+    _git(repo, "commit", "-q", "-m", "base")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    path.write_text("changed\n", encoding="utf-8")
+    _git(repo, "commit", "-am", "IO-Threads redesign cleanup work (#3544)")
+    path.write_text("original\n", encoding="utf-8")
+    _git(repo, "commit", "-am", 'Revert "IO-Threads redesign cleanup work (#3544)" (#3756)')
+    revert_sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+    _git(repo, "checkout", "-q", "target")
+    _git(repo, "checkout", "-q", "-b", "agent/backport/sweep/9.1")
+    path.write_text("changed\n", encoding="utf-8")
+    _git(repo, "commit", "-am", "Fix IO-Threads redesign cleanup perf regression from #3544 (#3938)")
+
+    candidate = ProjectBackportCandidate(
+        source_pr_number=3756,
+        source_pr_title='Revert "IO-Threads redesign cleanup work (#3544)"',
+        source_pr_url="https://github.com/valkey-io/valkey/pull/3756",
+        target_branch="9.1",
+        merge_commit_sha=revert_sha,
+    )
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        if args[:2] == ("fetch", "origin"):
+            return None
+        return _git(Path(_repo_dir), *args)
+
+    assert candidate_is_empty_on_ref(
+        str(repo),
+        candidate,
+        "target",
+        {},
+        run_git=fake_run_git,
+    )
+    assert path.read_text(encoding="utf-8") == "changed\n"
 
 
 def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):

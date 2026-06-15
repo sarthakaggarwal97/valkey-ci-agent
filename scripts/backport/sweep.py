@@ -21,6 +21,7 @@ from github import Auth, Github
 from scripts.backport.main import _run_git
 from scripts.backport.sweep_apply import (
     apply_candidate,
+    candidate_is_empty_on_ref,
 )
 from scripts.backport.sweep_git import (
     branch_has_changes,
@@ -396,6 +397,23 @@ def _process_branch(
                             source_pr_title=candidate.source_pr_title,
                             outcome="skipped-existing",
                             detail=DETAIL_ALREADY_ON_SWEEP_BRANCH,
+                        )
+                    )
+                    continue
+
+                if existing_pr and candidate_is_empty_on_ref(
+                    tmpdir,
+                    candidate,
+                    f"origin/{target_branch}",
+                    git_env,
+                    run_git=_run_git,
+                ):
+                    result.results.append(
+                        CandidateResult(
+                            source_pr_number=candidate.source_pr_number,
+                            source_pr_title=candidate.source_pr_title,
+                            outcome="skipped-existing",
+                            detail="already applied or empty cherry-pick on target branch",
                         )
                     )
                     continue
