@@ -21,12 +21,14 @@ from github import Auth, Github
 from scripts.backport.main import _run_git
 from scripts.backport.sweep_apply import (
     apply_candidate,
+    candidate_is_empty_on_ref,
 )
 from scripts.backport.sweep_git import (
     branch_has_changes,
     clone_target_branch,
     list_already_applied,
     list_applied_prs_on_branch,
+    list_branch_applied_prs,
     push_backport_branch,
     safe_tmp_component,
     sync_target_branch_to_source,
@@ -34,6 +36,7 @@ from scripts.backport.sweep_git import (
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
+    BranchAppliedPr,
     BranchSweepResult,
     CandidateResult,
     ProjectBackportCandidate,
@@ -67,6 +70,94 @@ _DEFAULT_BRANCH_FIELDS = (
 _DEFAULT_STATUS_FIELD = "Status"
 _DEFAULT_STATUS_VALUE = "To be backported"
 _BRANCH_PREFIX = "agent/backport/sweep"
+
+
+def _merged_at_by_pr(
+    candidates: list[ProjectBackportCandidate],
+) -> dict[str, str]:
+    return {
+        str(candidate.source_pr_number): candidate.merged_at
+        for candidate in candidates
+        if candidate.merged_at
+    }
+
+
+def _find_branch_reorder_index(
+    branch_prs: list[BranchAppliedPr],
+    merged_at_by_source_pr: dict[str, str],
+) -> int | None:
+    """Return the earliest branch index that must be replayed to restore order."""
+    for index, applied in enumerate(branch_prs):
+        merged_at = merged_at_by_source_pr.get(str(applied.source_pr_number))
+        if not merged_at:
+            continue
+        for previous_index, previous in enumerate(branch_prs[:index]):
+            previous_merged_at = merged_at_by_source_pr.get(
+                str(previous.source_pr_number)
+            )
+            if previous_merged_at and merged_at < previous_merged_at:
+                return previous_index
+    return None
+
+
+def _find_candidate_insert_index(
+    branch_prs: list[BranchAppliedPr],
+    candidate: ProjectBackportCandidate,
+    merged_at_by_source_pr: dict[str, str],
+) -> int | None:
+    """Return where a not-yet-applied candidate must be inserted on the branch."""
+    if not candidate.merged_at:
+        return None
+    for index, applied in enumerate(branch_prs):
+        applied_merged_at = merged_at_by_source_pr.get(str(applied.source_pr_number))
+        if applied_merged_at and candidate.merged_at < applied_merged_at:
+            return index
+    return None
+
+
+def _reset_existing_branch_suffix(
+    repo_dir: str,
+    target_branch: str,
+    branch_prs: list[BranchAppliedPr],
+    reset_index: int,
+    candidates: list[ProjectBackportCandidate],
+    result: BranchSweepResult,
+    reason: str,
+) -> set[str]:
+    """Reset the branch to ``reset_index`` and return the PRs to replay.
+
+    Raises if the dropped suffix contains a PR that is no longer a candidate,
+    so a reorder can never silently drop work from the branch.
+    """
+    candidate_prs = {str(candidate.source_pr_number) for candidate in candidates}
+    dropped = branch_prs[reset_index:]
+    missing = [
+        f"#{applied.source_pr_number}"
+        for applied in dropped
+        if str(applied.source_pr_number) not in candidate_prs
+    ]
+    if missing:
+        raise RuntimeError(
+            "Cannot reorder existing sweep branch because the affected suffix "
+            "contains PR(s) no longer present in the candidate list: "
+            + ", ".join(missing)
+        )
+
+    reset_ref = (
+        f"origin/{target_branch}"
+        if reset_index == 0
+        else branch_prs[reset_index - 1].commit_sha
+    )
+    _run_git(repo_dir, "reset", "--hard", reset_ref)
+
+    replay_prs = {str(applied.source_pr_number) for applied in dropped}
+    first_replayed = f"#{dropped[0].source_pr_number}" if dropped else "the suffix"
+    result.branch_notes.append(
+        "Reordered existing sweep branch: "
+        f"preserved {reset_index} existing commit(s), replayed from "
+        f"{first_replayed}. {reason}"
+    )
+    return replay_prs
 
 
 class ProjectBackportDiscovery:
@@ -328,6 +419,9 @@ def _process_branch(
                 push_repo,
                 backport_branch,
             )
+            branch_prs: list[BranchAppliedPr] = []
+            replay_required_prs: set[str] = set()
+            merged_at_by_source_pr = _merged_at_by_pr(candidates)
 
             if existing_pr:
                 logger.info(
@@ -357,6 +451,36 @@ def _process_branch(
                         f"the next sweep. Git stderr: "
                         f"{rebase_result.stderr.strip()[:300]}"
                     )
+
+                branch_prs = list_branch_applied_prs(
+                    tmpdir,
+                    target_branch,
+                    backport_branch,
+                )
+                reorder_index = _find_branch_reorder_index(
+                    branch_prs,
+                    merged_at_by_source_pr,
+                )
+                if reorder_index is not None:
+                    first_replayed = branch_prs[reorder_index].source_pr_number
+                    logger.warning(
+                        "Branch %s is out of merge order at PR #%d; replaying "
+                        "existing suffix from that point.",
+                        target_branch,
+                        first_replayed,
+                    )
+                    replay_required_prs.update(
+                        _reset_existing_branch_suffix(
+                            tmpdir,
+                            target_branch,
+                            branch_prs,
+                            reorder_index,
+                            candidates,
+                            result,
+                            "Existing commits were not chronological by mergedAt.",
+                        )
+                    )
+                    branch_prs = branch_prs[:reorder_index]
             else:
                 delete_stale_backport_branch(gh, push_repo, backport_branch)
                 _run_git(tmpdir, "checkout", "-b", backport_branch)
@@ -373,7 +497,14 @@ def _process_branch(
             applied_count = 0
 
             for index, candidate in enumerate(candidates):
-                if max_applied > 0 and applied_count >= max_applied:
+                candidate_pr = str(candidate.source_pr_number)
+                is_replay_candidate = candidate_pr in replay_required_prs
+
+                if (
+                    max_applied > 0
+                    and applied_count >= max_applied
+                    and not is_replay_candidate
+                ):
                     logger.info(
                         "Branch %s: reached cap of %d applied backport(s); deferring remaining %d candidate(s) to next sweep",
                         target_branch,
@@ -382,7 +513,7 @@ def _process_branch(
                     )
                     break
 
-                if str(candidate.source_pr_number) in already_applied:
+                if candidate_pr in already_applied:
                     result.results.append(
                         CandidateResult(
                             source_pr_number=candidate.source_pr_number,
@@ -392,6 +523,66 @@ def _process_branch(
                         )
                     )
                     continue
+
+                if existing_pr:
+                    insert_index = _find_candidate_insert_index(
+                        branch_prs,
+                        candidate,
+                        merged_at_by_source_pr,
+                    )
+                    if insert_index is not None:
+                        # The candidate merged before a commit already on the
+                        # branch. If it is already on the release branch it
+                        # cherry-picks empty -- skip it rather than reorder.
+                        if candidate_is_empty_on_ref(
+                            tmpdir,
+                            candidate,
+                            f"origin/{target_branch}",
+                            git_env,
+                            run_git=_run_git,
+                        ):
+                            result.results.append(
+                                CandidateResult(
+                                    source_pr_number=candidate.source_pr_number,
+                                    source_pr_title=candidate.source_pr_title,
+                                    outcome="skipped-existing",
+                                    detail=(
+                                        "already applied or empty cherry-pick "
+                                        "on target branch"
+                                    ),
+                                )
+                            )
+                            continue
+
+                        before_pr = branch_prs[insert_index].source_pr_number
+                        logger.warning(
+                            "Candidate #%d on %s merged before already-applied "
+                            "PR #%d; replaying existing suffix before applying.",
+                            candidate.source_pr_number,
+                            target_branch,
+                            before_pr,
+                        )
+                        replay_required_prs.update(
+                            _reset_existing_branch_suffix(
+                                tmpdir,
+                                target_branch,
+                                branch_prs,
+                                insert_index,
+                                candidates,
+                                result,
+                                (
+                                    f"Inserted #{candidate.source_pr_number} "
+                                    f"before already-applied #{before_pr}."
+                                ),
+                            )
+                        )
+                        branch_prs = branch_prs[:insert_index]
+                        already_applied = list_already_applied(
+                            tmpdir,
+                            target_branch,
+                            backport_branch,
+                        )
+                        is_replay_candidate = candidate_pr in replay_required_prs
 
                 candidate_result = apply_candidate(
                     tmpdir,
@@ -430,7 +621,8 @@ def _process_branch(
                     )
                     continue
 
-                applied_count += 1
+                if not is_replay_candidate:
+                    applied_count += 1
 
             committed = [
                 item for item in result.results
