@@ -21,6 +21,7 @@ from scripts.backport.sweep_apply import apply_candidate
 from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
     clone_target_branch,
+    find_merge_order_inversion,
     list_applied_prs_on_branch,
     push_backport_branch,
     safe_tmp_component,
@@ -1634,3 +1635,56 @@ def test_project_items_query_selects_repository_name_with_owner():
     query = backport_sweep._project_items_query("organization")
     assert "repository {" in query
     assert "nameWithOwner" in query
+
+
+def _inversion_candidate(pr_number: int, merged_at: str) -> ProjectBackportCandidate:
+    return ProjectBackportCandidate(
+        source_pr_number=pr_number,
+        source_pr_title=f"PR {pr_number}",
+        source_pr_url=f"https://github.com/valkey-io/valkey/pull/{pr_number}",
+        target_branch="9.1",
+        merged_at=merged_at,
+    )
+
+
+def test_find_merge_order_inversion_detects_out_of_order_candidate():
+    """A revert merged before an already-applied re-apply is an inversion."""
+    # Sorted ascending by merged_at: revert (#3756, May 18) precedes the
+    # re-apply (#3938, Jun 9). The branch already has #3938 but not the revert.
+    candidates = [
+        _inversion_candidate(3756, "2026-05-18T00:00:00Z"),
+        _inversion_candidate(3938, "2026-06-09T00:00:00Z"),
+        _inversion_candidate(3964, "2026-06-10T00:00:00Z"),
+    ]
+    inversion = find_merge_order_inversion({"3938"}, candidates)
+    assert inversion is not None
+    assert inversion.source_pr_number == 3756
+
+
+def test_find_merge_order_inversion_none_when_order_consistent():
+    """Appending only newer candidates keeps the branch in merge order."""
+    candidates = [
+        _inversion_candidate(3938, "2026-06-09T00:00:00Z"),
+        _inversion_candidate(3964, "2026-06-10T00:00:00Z"),
+        _inversion_candidate(3920, "2026-06-12T00:00:00Z"),
+    ]
+    # #3938 already applied; remaining candidates all merged later.
+    assert find_merge_order_inversion({"3938"}, candidates) is None
+
+
+def test_find_merge_order_inversion_none_when_nothing_applied():
+    """A fresh branch (nothing applied) can never be out of order."""
+    candidates = [
+        _inversion_candidate(3756, "2026-05-18T00:00:00Z"),
+        _inversion_candidate(3938, "2026-06-09T00:00:00Z"),
+    ]
+    assert find_merge_order_inversion(set(), candidates) is None
+
+
+def test_find_merge_order_inversion_none_when_all_applied():
+    """Nothing new to append means no inversion is possible."""
+    candidates = [
+        _inversion_candidate(3756, "2026-05-18T00:00:00Z"),
+        _inversion_candidate(3938, "2026-06-09T00:00:00Z"),
+    ]
+    assert find_merge_order_inversion({"3756", "3938"}, candidates) is None

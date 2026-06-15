@@ -76,6 +76,35 @@ def list_already_applied(repo_dir: str, base_branch: str, backport_branch: str) 
     }
 
 
+def find_merge_order_inversion(
+    applied_pr_numbers: set[str],
+    sorted_candidates: list[Any],
+) -> Any | None:
+    """Detect a candidate that must precede an already-applied commit.
+
+    ``sorted_candidates`` is the full candidate list already sorted ascending
+    by ``merged_at``. Commits on the existing branch are append-only and keep
+    their original order, so if any not-yet-applied candidate sorts *before* a
+    candidate that is already on the branch, the branch order is stale and the
+    branch must be rebuilt from scratch to restore chronological order.
+
+    Returns the first not-yet-applied candidate that sorts before an
+    already-applied one, or ``None`` if the existing branch order is still
+    consistent with merge order.
+    """
+    first_unapplied = None
+    for candidate in sorted_candidates:
+        if str(candidate.source_pr_number) in applied_pr_numbers:
+            # An already-applied candidate sorts after a not-yet-applied one,
+            # so appending the unapplied candidate would land it out of merge
+            # order on the branch.
+            if first_unapplied is not None:
+                return first_unapplied
+        elif first_unapplied is None:
+            first_unapplied = candidate
+    return None
+
+
 def list_applied_prs_on_branch(
     repo_dir: str,
     base_branch: str,

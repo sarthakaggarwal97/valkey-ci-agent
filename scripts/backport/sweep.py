@@ -25,6 +25,7 @@ from scripts.backport.sweep_apply import (
 from scripts.backport.sweep_git import (
     branch_has_changes,
     clone_target_branch,
+    find_merge_order_inversion,
     list_already_applied,
     list_applied_prs_on_branch,
     push_backport_branch,
@@ -357,6 +358,34 @@ def _process_branch(
                         f"the next sweep. Git stderr: "
                         f"{rebase_result.stderr.strip()[:300]}"
                     )
+
+                # The existing branch is append-only: its commits keep their
+                # original order. If a newly discovered candidate sorts before
+                # a commit already on the branch (e.g. a revert merged earlier
+                # than a re-apply that was swept first), appending it would put
+                # the branch out of merge order. Reset to the release branch and
+                # rebuild from scratch so the sorted candidate loop restores the
+                # correct chronological order.
+                applied_before_rebuild = list_already_applied(
+                    tmpdir,
+                    target_branch,
+                    backport_branch,
+                )
+                inversion = find_merge_order_inversion(
+                    applied_before_rebuild,
+                    candidates,
+                )
+                if inversion is not None:
+                    logger.warning(
+                        "Branch %s is out of merge order: candidate #%d (merged %s) "
+                        "sorts before an already-applied commit; rebuilding branch "
+                        "from origin/%s.",
+                        target_branch,
+                        inversion.source_pr_number,
+                        inversion.merged_at or "unknown",
+                        target_branch,
+                    )
+                    _run_git(tmpdir, "reset", "--hard", f"origin/{target_branch}")
             else:
                 delete_stale_backport_branch(gh, push_repo, backport_branch)
                 _run_git(tmpdir, "checkout", "-b", backport_branch)
