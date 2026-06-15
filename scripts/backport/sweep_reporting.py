@@ -62,6 +62,12 @@ def build_pr_body(
         if r.outcome not in {"applied", "skipped-existing"}
     ]
 
+    if result.branch_notes:
+        lines.extend(["## Branch updates", ""])
+        for note in result.branch_notes:
+            lines.append(f"- {_esc(note)}")
+        lines.append("")
+
     if applied:
         lines.extend(["## Applied", "", "| Source PR | Title | Detail |", "|---|---|---|"])
         for r in applied:

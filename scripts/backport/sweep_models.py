@@ -32,10 +32,18 @@ class CandidateResult:
 DETAIL_ALREADY_ON_SWEEP_BRANCH = "already on backport branch"
 
 
+@dataclass(frozen=True)
+class BranchAppliedPr:
+    source_pr_number: int
+    source_pr_title: str
+    commit_sha: str
+
+
 @dataclass
 class BranchSweepResult:
     target_branch: str
     candidates_found: int = 0
     results: list[CandidateResult] = field(default_factory=list)
+    branch_notes: list[str] = field(default_factory=list)
     pr_url: str = ""
     error: str = ""

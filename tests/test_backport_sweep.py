@@ -13,6 +13,7 @@ from scripts.backport import sweep as backport_sweep
 from scripts.backport import sweep_apply, sweep_graphql, sweep_validation
 from scripts.backport.models import ResolutionResult
 from scripts.backport.sweep import (
+    BranchAppliedPr,
     BranchSweepResult,
     CandidateResult,
     ProjectBackportCandidate,
@@ -875,6 +876,140 @@ def _applied(_repo_dir, candidate, *_args, **_kwargs):
     return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
 
 
+def test_process_branch_reorders_suffix_for_late_older_candidate(monkeypatch):
+    candidates = [
+        ProjectBackportCandidate(
+            3700,
+            "Older kept commit",
+            "https://github.com/valkey-io/valkey/pull/3700",
+            "9.1",
+            merge_commit_sha="sha3700",
+            merged_at="2026-05-01T00:00:00Z",
+        ),
+        ProjectBackportCandidate(
+            3756,
+            'Revert "IO-Threads redesign cleanup work (#3544)"',
+            "https://github.com/valkey-io/valkey/pull/3756",
+            "9.1",
+            merge_commit_sha="sha3756",
+            merged_at="2026-05-18T21:24:40Z",
+        ),
+        ProjectBackportCandidate(
+            3938,
+            "Fix IO-Threads cleanup perf regression",
+            "https://github.com/valkey-io/valkey/pull/3938",
+            "9.1",
+            merge_commit_sha="sha3938",
+            merged_at="2026-06-09T23:45:32Z",
+        ),
+        ProjectBackportCandidate(
+            3964,
+            "ACL follow-up",
+            "https://github.com/valkey-io/valkey/pull/3964",
+            "9.1",
+            merge_commit_sha="sha3964",
+            merged_at="2026-06-10T11:00:00Z",
+        ),
+        ProjectBackportCandidate(
+            4000,
+            "Deferred new candidate",
+            "https://github.com/valkey-io/valkey/pull/4000",
+            "9.1",
+            merge_commit_sha="sha4000",
+            merged_at="2026-06-11T11:00:00Z",
+        ),
+    ]
+    branch_prs = [
+        BranchAppliedPr(3700, "Older kept commit", "sha3700"),
+        BranchAppliedPr(3938, "Fix IO-Threads cleanup perf regression", "sha3938"),
+        BranchAppliedPr(3964, "ACL follow-up", "sha3964"),
+    ]
+
+    reset_done = {"value": False}
+    git_calls: list[tuple[str, ...]] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        git_calls.append(args)
+        if args == ("reset", "--hard", "sha3700"):
+            reset_done["value"] = True
+
+    def fake_list_already_applied(*_args, **_kwargs):
+        if reset_done["value"]:
+            return {"3700"}
+        return {"3700", "3938", "3964"}
+
+    applied: list[int] = []
+
+    def fake_apply_candidate(_repo_dir, candidate, *_args, **_kwargs):
+        applied.append(candidate.source_pr_number)
+        return CandidateResult(
+            candidate.source_pr_number,
+            candidate.source_pr_title,
+            "applied",
+            "clean cherry-pick",
+        )
+
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep,
+        "find_existing_pr",
+        lambda *_a, **_k: SimpleNamespace(number=3970, draft=False),
+    )
+    monkeypatch.setattr(backport_sweep, "github_https_url", lambda *_a, **_k: "https://x")
+    monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_a, **_k: branch_prs)
+    monkeypatch.setattr(backport_sweep, "list_already_applied", fake_list_already_applied)
+    monkeypatch.setattr(backport_sweep, "candidate_is_empty_on_ref", lambda *_a, **_k: False)
+    monkeypatch.setattr(backport_sweep, "apply_candidate", fake_apply_candidate)
+    monkeypatch.setattr(backport_sweep, "head_changes_workflow_files", lambda *_a: False)
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
+    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
+    monkeypatch.setattr(
+        backport_sweep,
+        "validate_branch_with_optional_repair",
+        lambda *_a, **_k: (True, ""),
+    )
+    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
+    monkeypatch.setattr(
+        backport_sweep.subprocess,
+        "run",
+        lambda *_a, **_k: subprocess.CompletedProcess([], 0, "", ""),
+    )
+    pushed: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        backport_sweep,
+        "push_backport_branch",
+        lambda _repo_dir, branch, _env, *, force_with_lease: pushed.append(
+            (branch, force_with_lease)
+        ),
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "upsert_pr",
+        lambda *_args, **_kwargs: "https://github.com/valkey-io/valkey/pull/3970",
+    )
+
+    result = backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="9.1",
+        candidates=candidates,
+        push_repo="valkey-io/valkey",
+        test_commands=["make"],
+        max_applied=1,
+    )
+
+    assert result.error == ""
+    assert ("reset", "--hard", "sha3700") in git_calls
+    assert ("reset", "--hard", "origin/9.1") not in git_calls
+    # #3756 consumes the one new-candidate slot; #3938/#3964 are replayed
+    # because they were already part of the open sweep PR, while #4000 waits.
+    assert applied == [3756, 3938, 3964]
+    assert pushed == [("agent/backport/sweep/9.1", True)]
+    assert result.branch_notes
+    assert "Inserted #3756 before already-applied #3938" in result.branch_notes[0]
+
+
 def test_process_branch_does_not_push_when_only_candidate_fails_validation(monkeypatch):
     """A red cherry-pick is reset off the branch and never pushed."""
     result, pushed, upserts, resets = _green_only_process_branch(
@@ -1264,6 +1399,57 @@ def test_graphql_client_raises_immediately_on_non_transient_error(monkeypatch):
 def test_safe_tmp_component_removes_branch_separators():
     assert safe_tmp_component("release/8.1") == "release-8.1"
     assert safe_tmp_component("///") == "branch"
+
+
+def test_find_candidate_insert_index_preserves_ordered_prefix():
+    branch_prs = [
+        BranchAppliedPr(3700, "older kept commit", "sha3700"),
+        BranchAppliedPr(3938, "newer replay commit", "sha3938"),
+        BranchAppliedPr(3964, "newest replay commit", "sha3964"),
+    ]
+    merged_at = {
+        "3700": "2026-05-01T00:00:00Z",
+        "3756": "2026-05-18T21:24:40Z",
+        "3938": "2026-06-09T23:45:32Z",
+        "3964": "2026-06-10T11:00:00Z",
+    }
+    candidate = ProjectBackportCandidate(
+        source_pr_number=3756,
+        source_pr_title='Revert "IO-Threads redesign cleanup work (#3544)"',
+        source_pr_url="https://github.com/valkey-io/valkey/pull/3756",
+        target_branch="9.1",
+        merge_commit_sha="sha3756",
+        merged_at=merged_at["3756"],
+    )
+
+    assert backport_sweep._find_candidate_insert_index(
+        branch_prs,
+        candidate,
+        merged_at,
+    ) == 1
+
+
+def test_build_pr_body_lists_branch_reorder_notes():
+    result = BranchSweepResult(
+        target_branch="9.1",
+        branch_notes=[
+            "Reordered existing sweep branch: preserved 1 existing commit(s), "
+            "replayed from #3938. Inserted #3756 before already-applied #3938.",
+        ],
+        results=[
+            CandidateResult(
+                3756,
+                'Revert "IO-Threads redesign cleanup work (#3544)"',
+                "applied",
+                "clean cherry-pick",
+            ),
+        ],
+    )
+
+    body = build_pr_body(result)
+
+    assert "## Branch updates" in body
+    assert "Inserted #3756 before already-applied #3938" in body
 
 
 def test_build_pr_body_lists_already_on_branch_under_applied():

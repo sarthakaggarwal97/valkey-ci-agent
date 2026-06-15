@@ -11,6 +11,7 @@ from typing import Any, Callable
 from github.GithubException import GithubException
 
 from scripts.backport.main import _run_git as run_git_default
+from scripts.backport.sweep_models import BranchAppliedPr
 from scripts.common.git_auth import github_https_url
 from scripts.common.github_client import retry_github_call
 
@@ -77,16 +78,49 @@ def source_pr_number_from_commit_subject(subject: str) -> str | None:
 
 
 def list_already_applied(repo_dir: str, base_branch: str, backport_branch: str) -> set[str]:
+    return {
+        str(applied.source_pr_number)
+        for applied in list_applied_prs_on_branch(repo_dir, base_branch, backport_branch)
+    }
+
+
+def list_applied_prs_on_branch(
+    repo_dir: str,
+    base_branch: str,
+    backport_branch: str,
+) -> list[BranchAppliedPr]:
     result = subprocess.run(
-        ["git", "log", f"origin/{base_branch}..{backport_branch}", "--format=%s"],
+        [
+            "git",
+            "log",
+            "--reverse",
+            f"origin/{base_branch}..{backport_branch}",
+            "--format=%H%x00%s",
+        ],
         cwd=repo_dir, capture_output=True, text=True, check=True,
     )
-    pr_nums: set[str] = set()
+    applied: list[BranchAppliedPr] = []
+    seen: set[int] = set()
     for line in result.stdout.strip().splitlines():
-        pr_number = source_pr_number_from_commit_subject(line)
-        if pr_number:
-            pr_nums.add(pr_number)
-    return pr_nums
+        if "\0" not in line:
+            continue
+        commit_sha, subject = line.split("\0", 1)
+        pr_number = source_pr_number_from_commit_subject(subject)
+        if not pr_number:
+            continue
+        source_pr_number = int(pr_number)
+        if source_pr_number in seen:
+            continue
+        seen.add(source_pr_number)
+        title = re.sub(r"\s*\(#\d+\)\s*$", "", subject).strip() or subject.strip()
+        applied.append(
+            BranchAppliedPr(
+                source_pr_number=source_pr_number,
+                source_pr_title=title,
+                commit_sha=commit_sha,
+            )
+        )
+    return applied
 
 
 RunProcess = Callable[..., subprocess.CompletedProcess[Any]]
