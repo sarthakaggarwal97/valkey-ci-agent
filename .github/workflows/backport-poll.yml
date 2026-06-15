@@ -1,8 +1,13 @@
-name: Backport Sweep
+name: Backport Poll
+
+# Runs the backport poller on a short cron. For each registered {repo, branch}
+# the poller runs a sweep only when no sweep PR is currently open for that
+# branch, so a merged sweep PR is topped back up within one poll interval
+# instead of waiting for the daily Backport Sweep cron.
 
 on:
   schedule:
-    - cron: "0 9 * * *"
+    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       repo:
@@ -20,11 +25,6 @@ on:
         required: false
         type: string
         default: "2"
-      dry_run:
-        description: "Discovery only — don't cherry-pick or push"
-        required: false
-        default: true
-        type: boolean
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -44,13 +44,13 @@ jobs:
       has_entries: ${{ steps.matrix.outputs.has_entries }}
     steps:
       - name: Check out agent repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
           fetch-depth: 1
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.11"
           cache: "pip"
@@ -75,8 +75,8 @@ jobs:
           fi
           python -m scripts.backport.matrix "${args[@]}" --output-file "$GITHUB_OUTPUT"
 
-  sweep:
-    name: "backport/${{ matrix.repo }}/${{ matrix.branch }}"
+  poll:
+    name: "poll/${{ matrix.repo }}/${{ matrix.branch }}"
     needs: preflight
     if: needs.preflight.outputs.has_entries == 'true'
     runs-on: ubuntu-latest
@@ -85,6 +85,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.preflight.outputs.matrix) }}
     concurrency:
+      # Shared with Backport Sweep so the poller never races the daily cron
+      # for the same branch.
       group: backport-sweep-${{ matrix.repo }}-${{ matrix.branch }}
       cancel-in-progress: false
     env:
@@ -92,19 +94,18 @@ jobs:
       CLAUDE_CODE_USE_BEDROCK: "1"
       CI_AGENT_EVIDENCE_DIR: agent-evidence
       MAX_CANDIDATES: ${{ inputs.max_candidates || '2' }}
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
     permissions:
       contents: read
       id-token: write
     steps:
       - name: Check out agent repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
           fetch-depth: 1
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.11"
           cache: "pip"
@@ -112,7 +113,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          npm install -g @anthropic-ai/claude-code
+          npm install -g @anthropic-ai/claude-code@2.1.175
 
       - name: Generate GitHub App token
         id: generate-token
@@ -123,50 +124,42 @@ jobs:
           owner: valkey-io
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: backport-sweep-${{ github.run_id }}-${{ matrix.branch }}
+          role-session-name: backport-poll-${{ github.run_id }}-${{ matrix.branch }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Run backport sweep
+      - name: Run backport poll
         shell: bash
         env:
           TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           set -euo pipefail
-          args=(
-            -m scripts.backport.sweep
-            --registry repos.yml
-            --repo "${{ matrix.repo }}"
-            --branch "${{ matrix.branch }}"
-            --target-token "${TARGET_TOKEN}"
-            --verbose
-          )
-
-          if [[ "${MAX_CANDIDATES}" != "0" ]]; then
-            args+=(--max-candidates "${MAX_CANDIDATES}")
-          fi
-
-          if [[ "${DRY_RUN}" == "true" ]]; then
-            args+=(--discover-only)
-          fi
-
-          python "${args[@]}" | tee backport-sweep-result.json
+          # Pass --max-candidates unconditionally, including 0, which the
+          # poller treats as unlimited. Dropping it at 0 would fall back to the
+          # Python default instead of unlimited.
+          python -m scripts.backport.poller \
+            --registry repos.yml \
+            --repo "${{ matrix.repo }}" \
+            --branch "${{ matrix.branch }}" \
+            --target-token "${TARGET_TOKEN}" \
+            --max-candidates "${MAX_CANDIDATES}" \
+            --verbose | tee backport-poll-result.json
 
       - name: Upload result
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: backport-sweep-result-${{ github.run_id }}-${{ matrix.repo_slug }}-${{ matrix.branch }}
-          path: backport-sweep-result.json
+          name: backport-poll-result-${{ github.run_id }}-${{ matrix.repo_slug }}-${{ matrix.branch }}
+          path: backport-poll-result.json
           retention-days: 30
 
       - name: Upload agent evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: backport-sweep-agent-evidence-${{ github.run_id }}-${{ matrix.repo_slug }}-${{ matrix.branch }}
+          name: backport-poll-agent-evidence-${{ github.run_id }}-${{ matrix.repo_slug }}-${{ matrix.branch }}
           path: agent-evidence
           if-no-files-found: ignore
           retention-days: 30
