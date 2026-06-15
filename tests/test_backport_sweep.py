@@ -17,16 +17,18 @@ from scripts.backport.sweep import (
     CandidateResult,
     ProjectBackportCandidate,
 )
-from scripts.backport.sweep_apply import apply_candidate
+from scripts.backport.sweep_apply import apply_candidate, candidate_is_empty_on_ref
 from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
     clone_target_branch,
     list_applied_prs_on_branch,
     push_backport_branch,
     safe_tmp_component,
+    source_pr_number_from_commit_subject,
     sync_target_branch_to_source,
     worktree_changed_paths,
 )
+from scripts.backport.sweep_models import BranchAppliedPr
 from scripts.backport.sweep_prs import upsert_pr
 from scripts.backport.sweep_reporting import (
     build_pr_body,
@@ -1634,3 +1636,175 @@ def test_project_items_query_selects_repository_name_with_owner():
     query = backport_sweep._project_items_query("organization")
     assert "repository {" in query
     assert "nameWithOwner" in query
+
+
+# --- Backport sweep merge-order reorder tests ---
+
+_REORDER_MERGED_AT = {
+    "3700": "2026-05-01T00:00:00Z",
+    "3743": "2026-05-18T17:54:16Z",
+    "3756": "2026-05-18T21:24:40Z",
+    "3938": "2026-06-09T23:45:32Z",
+    "3964": "2026-06-10T21:45:41Z",
+}
+
+
+@pytest.mark.parametrize(
+    ("subject", "expected"),
+    [
+        ('Revert "IO-Threads redesign cleanup work (#3544)" (#3756)', "3756"),
+        ("Fix IO-Threads redesign cleanup perf regression from #3544 (#3938)", "3938"),
+        ("Merge pull request #3801 from valkey-io/backport-copy-acl", "3801"),
+        ("Release notes update", None),
+    ],
+)
+def test_source_pr_number_from_commit_subject_uses_source_pr(subject, expected):
+    assert source_pr_number_from_commit_subject(subject) == expected
+
+
+def test_find_branch_reorder_index_detects_out_of_order_suffix():
+    # Branch order: re-apply (#3938, Jun 9) then revert (#3756, May 18) -- the
+    # revert is older yet sits later, so the branch must replay from #3938.
+    branch_prs = [
+        BranchAppliedPr(3938, "re-apply", "sha3938"),
+        BranchAppliedPr(3756, "revert", "sha3756"),
+    ]
+    assert backport_sweep._find_branch_reorder_index(branch_prs, _REORDER_MERGED_AT) == 0
+
+
+def test_find_branch_reorder_index_none_when_in_order():
+    branch_prs = [
+        BranchAppliedPr(3756, "revert", "sha3756"),
+        BranchAppliedPr(3938, "re-apply", "sha3938"),
+        BranchAppliedPr(3964, "later", "sha3964"),
+    ]
+    assert backport_sweep._find_branch_reorder_index(branch_prs, _REORDER_MERGED_AT) is None
+
+
+def test_find_candidate_insert_index_preserves_ordered_prefix():
+    # A late-added candidate (#3756, May 18) that merged before an applied
+    # commit (#3938, Jun 9) must insert at that commit's index, preserving the
+    # older in-order prefix (#3700).
+    branch_prs = [
+        BranchAppliedPr(3700, "older kept commit", "sha3700"),
+        BranchAppliedPr(3938, "newer replay commit", "sha3938"),
+        BranchAppliedPr(3964, "newest replay commit", "sha3964"),
+    ]
+    candidate = ProjectBackportCandidate(
+        source_pr_number=3756,
+        source_pr_title='Revert "IO-Threads redesign cleanup work (#3544)"',
+        source_pr_url="https://github.com/valkey-io/valkey/pull/3756",
+        target_branch="9.1",
+        merge_commit_sha="sha3756",
+        merged_at=_REORDER_MERGED_AT["3756"],
+    )
+    assert backport_sweep._find_candidate_insert_index(
+        branch_prs, candidate, _REORDER_MERGED_AT
+    ) == 1
+
+
+def test_find_candidate_insert_index_none_when_candidate_is_newest():
+    branch_prs = [
+        BranchAppliedPr(3700, "older", "sha3700"),
+        BranchAppliedPr(3938, "newer", "sha3938"),
+    ]
+    candidate = ProjectBackportCandidate(
+        source_pr_number=3964,
+        source_pr_title="newest",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/3964",
+        target_branch="9.1",
+        merge_commit_sha="sha3964",
+        merged_at=_REORDER_MERGED_AT["3964"],
+    )
+    assert backport_sweep._find_candidate_insert_index(
+        branch_prs, candidate, _REORDER_MERGED_AT
+    ) is None
+
+
+def test_candidate_empty_on_target_ref_ignores_existing_sweep_commits(tmp_path):
+    # The revert's effect is already on the target branch; even though the sweep
+    # branch re-introduced it via #3938, the empty-check against the clean
+    # target must still report the revert as a no-op.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "target")
+    _git(repo, "config", "user.name", "Tester")
+    _git(repo, "config", "user.email", "tester@example.com")
+
+    path = repo / "io.txt"
+    path.write_text("original\n", encoding="utf-8")
+    _git(repo, "add", "io.txt")
+    _git(repo, "commit", "-q", "-m", "base")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    path.write_text("changed\n", encoding="utf-8")
+    _git(repo, "commit", "-am", "IO-Threads redesign cleanup work (#3544)")
+    path.write_text("original\n", encoding="utf-8")
+    _git(repo, "commit", "-am", 'Revert "IO-Threads redesign cleanup work (#3544)" (#3756)')
+    revert_sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+    _git(repo, "checkout", "-q", "target")
+    _git(repo, "checkout", "-q", "-b", "agent/backport/sweep/9.1")
+    path.write_text("changed\n", encoding="utf-8")
+    _git(repo, "commit", "-am", "Fix IO-Threads redesign cleanup perf regression from #3544 (#3938)")
+
+    candidate = ProjectBackportCandidate(
+        source_pr_number=3756,
+        source_pr_title='Revert "IO-Threads redesign cleanup work (#3544)"',
+        source_pr_url="https://github.com/valkey-io/valkey/pull/3756",
+        target_branch="9.1",
+        merge_commit_sha=revert_sha,
+    )
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        if args[:2] == ("fetch", "origin"):
+            return None
+        return _git(Path(_repo_dir), *args)
+
+    assert candidate_is_empty_on_ref(str(repo), candidate, "target", {}, run_git=fake_run_git)
+    assert path.read_text(encoding="utf-8") == "changed\n"
+
+
+def test_build_pr_body_lists_branch_reorder_notes():
+    result = BranchSweepResult(
+        target_branch="9.1",
+        branch_notes=[
+            "Reordered existing sweep branch: preserved 1 existing commit(s), "
+            "replayed from #3938. Inserted #3756 before already-applied #3938.",
+        ],
+        results=[
+            CandidateResult(
+                3756,
+                'Revert "IO-Threads redesign cleanup work (#3544)"',
+                "applied",
+                "clean cherry-pick",
+            ),
+        ],
+    )
+    body = build_pr_body(result)
+    assert "## Branch updates" in body
+    assert "Inserted #3756 before already-applied #3938" in body
+
+
+def test_reset_existing_branch_suffix_refuses_to_drop_non_candidate():
+    # A PR on the branch suffix that is no longer a candidate must not be
+    # silently dropped during a reorder.
+    branch_prs = [
+        BranchAppliedPr(3938, "re-apply", "sha3938"),
+        BranchAppliedPr(9999, "no-longer-a-candidate", "sha9999"),
+    ]
+    candidates = [
+        ProjectBackportCandidate(
+            source_pr_number=3938,
+            source_pr_title="re-apply",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/3938",
+            target_branch="9.1",
+            merge_commit_sha="sha3938",
+            merged_at=_REORDER_MERGED_AT["3938"],
+        ),
+    ]
+    result = BranchSweepResult(target_branch="9.1")
+    with pytest.raises(RuntimeError, match="#9999"):
+        backport_sweep._reset_existing_branch_suffix(
+            "/tmp/x", "9.1", branch_prs, 0, candidates, result, "reason"
+        )
