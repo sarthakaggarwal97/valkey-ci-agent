@@ -92,31 +92,32 @@ def list_already_applied(repo_dir: str, base_branch: str, backport_branch: str) 
 
 
 def find_merge_order_inversion(
-    applied_pr_numbers: set[str],
-    sorted_candidates: list[Any],
-) -> Any | None:
-    """Detect a candidate that must precede an already-applied commit.
+    branch_pr_numbers: list[str],
+    merged_at_by_pr: dict[str, str],
+) -> str | None:
+    """Detect a sweep branch whose commits are out of merge order.
 
-    ``sorted_candidates`` is the full candidate list already sorted ascending
-    by ``merged_at``. Commits on the existing branch are append-only and keep
-    their original order, so if any not-yet-applied candidate sorts *before* a
-    candidate that is already on the branch, the branch order is stale and the
-    branch must be rebuilt from scratch to restore chronological order.
+    ``branch_pr_numbers`` lists the PRs cherry-picked onto the sweep branch in
+    branch (oldest-first) order. ``merged_at_by_pr`` maps a PR number to its
+    ``mergedAt`` timestamp. The branch is append-only, so commits keep the order
+    they were swept in; if that order is not non-decreasing by ``mergedAt`` (for
+    example a revert merged earlier than a re-apply that was swept first), the
+    branch is stale and must be rebuilt from the release tip to restore
+    chronological order.
 
-    Returns the first not-yet-applied candidate that sorts before an
-    already-applied one, or ``None`` if the existing branch order is still
-    consistent with merge order.
+    Returns the first PR number that sits later on the branch than an
+    earlier-merged PR placed after it (i.e. the out-of-order commit), or
+    ``None`` if the branch order is consistent with merge order. PRs without a
+    known ``mergedAt`` are skipped — only commits we can order participate.
     """
-    first_unapplied = None
-    for candidate in sorted_candidates:
-        if str(candidate.source_pr_number) in applied_pr_numbers:
-            # An already-applied candidate sorts after a not-yet-applied one,
-            # so appending the unapplied candidate would land it out of merge
-            # order on the branch.
-            if first_unapplied is not None:
-                return first_unapplied
-        elif first_unapplied is None:
-            first_unapplied = candidate
+    previous_merged_at = ""
+    for pr_number in branch_pr_numbers:
+        merged_at = merged_at_by_pr.get(pr_number)
+        if not merged_at:
+            continue
+        if merged_at < previous_merged_at:
+            return pr_number
+        previous_merged_at = merged_at
     return None
 
 

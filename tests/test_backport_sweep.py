@@ -1638,79 +1638,50 @@ def test_project_items_query_selects_repository_name_with_owner():
     assert "nameWithOwner" in query
 
 
-def _inversion_candidate(pr_number: int, merged_at: str) -> ProjectBackportCandidate:
-    return ProjectBackportCandidate(
-        source_pr_number=pr_number,
-        source_pr_title=f"PR {pr_number}",
-        source_pr_url=f"https://github.com/valkey-io/valkey/pull/{pr_number}",
-        target_branch="9.1",
-        merged_at=merged_at,
-    )
+_MERGED_AT = {
+    "3743": "2026-05-18T17:54:16Z",
+    "3756": "2026-05-18T21:24:40Z",
+    "3938": "2026-06-09T23:45:32Z",
+    "3964": "2026-06-10T21:45:41Z",
+    "3920": "2026-06-12T00:00:00Z",
+}
 
 
-def test_find_merge_order_inversion_detects_out_of_order_candidate():
-    """A revert merged before an already-applied re-apply is an inversion."""
-    # Sorted ascending by merged_at: revert (#3756, May 18) precedes the
-    # re-apply (#3938, Jun 9). The branch already has #3938 but not the revert.
-    candidates = [
-        _inversion_candidate(3756, "2026-05-18T00:00:00Z"),
-        _inversion_candidate(3938, "2026-06-09T00:00:00Z"),
-        _inversion_candidate(3964, "2026-06-10T00:00:00Z"),
-    ]
-    inversion = find_merge_order_inversion({"3938"}, candidates)
-    assert inversion is not None
-    assert inversion.source_pr_number == 3756
+def test_find_merge_order_inversion_detects_out_of_order_branch():
+    """A revert swept after an earlier re-apply leaves the branch out of order."""
+    # Branch order: re-apply (#3938, Jun 9) then revert (#3756, May 18) -- the
+    # revert is older but sits later on the branch, so it is the inversion.
+    branch_prs = ["3938", "3964", "3756"]
+    assert find_merge_order_inversion(branch_prs, _MERGED_AT) == "3756"
 
 
-def test_find_merge_order_inversion_none_when_order_consistent():
-    """Appending only newer candidates keeps the branch in merge order."""
-    candidates = [
-        _inversion_candidate(3938, "2026-06-09T00:00:00Z"),
-        _inversion_candidate(3964, "2026-06-10T00:00:00Z"),
-        _inversion_candidate(3920, "2026-06-12T00:00:00Z"),
-    ]
-    # #3938 already applied; remaining candidates all merged later.
-    assert find_merge_order_inversion({"3938"}, candidates) is None
+def test_find_merge_order_inversion_none_when_branch_in_order():
+    """Commits swept in merge order are not flagged."""
+    branch_prs = ["3756", "3938", "3964"]
+    assert find_merge_order_inversion(branch_prs, _MERGED_AT) is None
 
 
-def test_find_merge_order_inversion_none_when_nothing_applied():
-    """A fresh branch (nothing applied) can never be out of order."""
-    candidates = [
-        _inversion_candidate(3756, "2026-05-18T00:00:00Z"),
-        _inversion_candidate(3938, "2026-06-09T00:00:00Z"),
-    ]
-    assert find_merge_order_inversion(set(), candidates) is None
+def test_find_merge_order_inversion_none_when_branch_empty():
+    """A fresh branch (no commits) can never be out of order."""
+    assert find_merge_order_inversion([], _MERGED_AT) is None
 
 
-def test_find_merge_order_inversion_none_when_all_applied():
-    """Nothing new to append means no inversion is possible."""
-    candidates = [
-        _inversion_candidate(3756, "2026-05-18T00:00:00Z"),
-        _inversion_candidate(3938, "2026-06-09T00:00:00Z"),
-    ]
-    assert find_merge_order_inversion({"3756", "3938"}, candidates) is None
+def test_find_merge_order_inversion_ignores_release_branch_candidates():
+    """Candidates already on the release branch are absent from the branch list.
 
-
-
-def test_find_merge_order_inversion_pr_3970_scenario():
-    """Reproduce the live #3970 ordering bug across the full candidate set.
-
-    On #3970 the re-apply (#3938) was committed before the revert (#3756),
-    so a later poll run that re-discovered #3756 would append it after the
-    already-applied #3938 -- reverting the re-applied work. The earliest
-    candidate (#3743) is already on the base branch (applied); the revert
-    (#3756) sorts second and is not yet applied, while #3938/#3964 are.
-    The inversion must be flagged on the revert so the branch is rebuilt.
+    The sweep branch only carries its own commits (#3938, #3964); the revert
+    #3756 lives on the release branch and is not in ``branch_prs``. The branch
+    order is consistent, so no rebuild is triggered -- guarding against a
+    false-positive rebuild loop.
     """
-    candidates = [
-        _inversion_candidate(3743, "2026-05-18T17:54:16Z"),
-        _inversion_candidate(3756, "2026-05-18T21:24:40Z"),
-        _inversion_candidate(3938, "2026-06-09T23:45:32Z"),
-        _inversion_candidate(3964, "2026-06-10T21:45:41Z"),
-    ]
-    inversion = find_merge_order_inversion({"3743", "3938", "3964"}, candidates)
-    assert inversion is not None
-    assert inversion.source_pr_number == 3756
+    branch_prs = ["3938", "3964"]
+    assert find_merge_order_inversion(branch_prs, _MERGED_AT) is None
+
+
+def test_find_merge_order_inversion_skips_unknown_merged_at():
+    """A branch PR without a known mergedAt is skipped, not treated as oldest."""
+    branch_prs = ["3938", "9999", "3964"]
+    assert find_merge_order_inversion(branch_prs, _MERGED_AT) is None
 
 
 
@@ -1780,19 +1751,23 @@ def test_process_branch_rebuilds_when_existing_branch_out_of_order(monkeypatch):
         "validate_branch_with_optional_repair",
         lambda *_a, **_k: (True, ""),
     )
+    # The existing branch carries the re-apply (#3938) ahead of the revert
+    # (#3756) -- the out-of-order #3970 state that must trigger a rebuild.
     monkeypatch.setattr(
         backport_sweep,
         "list_applied_prs_on_branch",
-        lambda *_a, **_k: [],
+        lambda *_a, **_k: [
+            CandidateResult(3938, "re-apply", "skipped-existing", ""),
+            CandidateResult(3756, "revert", "skipped-existing", ""),
+        ],
     )
 
-    # Before the reset the branch already carries #3938; after the reset to the
-    # release tip nothing is applied, so the sorted loop rebuilds from scratch.
-    applied_states = iter([{"3938"}, set()])
+    # After the inversion reset, the rebuilt branch starts empty, so the sorted
+    # candidate loop reprocesses every candidate from scratch.
     monkeypatch.setattr(
         backport_sweep,
         "list_already_applied",
-        lambda *_a, **_k: next(applied_states),
+        lambda *_a, **_k: set(),
     )
 
     git_calls: list[tuple] = []

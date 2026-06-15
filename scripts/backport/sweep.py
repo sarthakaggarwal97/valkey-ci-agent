@@ -359,30 +359,30 @@ def _process_branch(
                         f"{rebase_result.stderr.strip()[:300]}"
                     )
 
-                # The existing branch is append-only: its commits keep their
-                # original order. If a newly discovered candidate sorts before
-                # a commit already on the branch (e.g. a revert merged earlier
-                # than a re-apply that was swept first), appending it would put
-                # the branch out of merge order. Reset to the release branch and
-                # rebuild from scratch so the sorted candidate loop restores the
-                # correct chronological order.
-                applied_before_rebuild = list_already_applied(
-                    tmpdir,
-                    target_branch,
-                    backport_branch,
-                )
-                inversion = find_merge_order_inversion(
-                    applied_before_rebuild,
-                    candidates,
-                )
+                # The existing branch is append-only: its commits keep the order
+                # they were swept in. If that order is not chronological by
+                # mergedAt (e.g. a revert merged earlier than a re-apply that was
+                # swept first), reset to the release branch and rebuild so the
+                # sorted candidate loop restores the correct order.
+                branch_prs = [
+                    str(applied.source_pr_number)
+                    for applied in list_applied_prs_on_branch(
+                        tmpdir,
+                        target_branch,
+                        backport_branch,
+                    )
+                ]
+                merged_at_by_pr = {
+                    str(candidate.source_pr_number): candidate.merged_at
+                    for candidate in candidates
+                }
+                inversion = find_merge_order_inversion(branch_prs, merged_at_by_pr)
                 if inversion is not None:
                     logger.warning(
-                        "Branch %s is out of merge order: candidate #%d (merged %s) "
-                        "sorts before an already-applied commit; rebuilding branch "
-                        "from origin/%s.",
+                        "Branch %s is out of merge order at PR #%s; rebuilding "
+                        "branch from origin/%s.",
                         target_branch,
-                        inversion.source_pr_number,
-                        inversion.merged_at or "unknown",
+                        inversion,
                         target_branch,
                     )
                     _run_git(tmpdir, "reset", "--hard", f"origin/{target_branch}")
