@@ -495,15 +495,25 @@ def _process_branch(
             logger.info("Already applied on %s: %s", backport_branch, already_applied)
 
             applied_count = 0
+            applied_replay_prs: set[str] = set()
 
             for index, candidate in enumerate(candidates):
                 candidate_pr = str(candidate.source_pr_number)
                 is_replay_candidate = candidate_pr in replay_required_prs
+                if is_replay_candidate:
+                    applied_replay_prs.add(candidate_pr)
+
+                # A reset replayed an out-of-order suffix off the branch; those
+                # PRs must be re-applied before the cap may stop the loop, or
+                # the rewritten branch would be pushed missing commits that were
+                # previously on the open sweep PR.
+                replay_pending = bool(replay_required_prs - applied_replay_prs)
 
                 if (
                     max_applied > 0
                     and applied_count >= max_applied
                     and not is_replay_candidate
+                    and not replay_pending
                 ):
                     logger.info(
                         "Branch %s: reached cap of %d applied backport(s); deferring remaining %d candidate(s) to next sweep",

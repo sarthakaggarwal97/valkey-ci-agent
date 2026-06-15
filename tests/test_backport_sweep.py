@@ -1808,3 +1808,86 @@ def test_reset_existing_branch_suffix_refuses_to_drop_non_candidate():
         backport_sweep._reset_existing_branch_suffix(
             "/tmp/x", "9.1", branch_prs, 0, candidates, result, "reason"
         )
+
+
+def test_process_branch_reorder_replays_suffix_despite_cap(monkeypatch):
+    """A reorder must replay the whole reset suffix even when max_applied=1.
+
+    Repro: branch has [#3700, #3938, #3964]; candidates (sorted) are
+    [#3700, #3743, #3756, #3938, #3964] with #3743/#3756 merged before #3938.
+    The first late-older candidate resets the suffix (#3938, #3964) off the
+    branch. With the cap reached after applying one new candidate, the loop
+    must NOT break before replaying #3938/#3964 -- otherwise the rewritten
+    branch is pushed missing commits that were on the open PR.
+    """
+    merged_at = {
+        "3700": "2026-05-01T00:00:00Z",
+        "3743": "2026-05-18T17:54:16Z",
+        "3756": "2026-05-18T21:24:40Z",
+        "3938": "2026-06-09T23:45:32Z",
+        "3964": "2026-06-10T21:45:41Z",
+    }
+    candidates = [
+        ProjectBackportCandidate(
+            source_pr_number=int(pr),
+            source_pr_title=f"PR {pr}",
+            source_pr_url=f"https://github.com/valkey-io/valkey/pull/{pr}",
+            target_branch="9.1",
+            merge_commit_sha=f"sha{pr}",
+            merged_at=merged_at[pr],
+        )
+        for pr in ("3700", "3743", "3756", "3938", "3964")
+    ]
+    branch = [
+        BranchAppliedPr(3700, "kept", "sha3700"),
+        BranchAppliedPr(3938, "re-apply", "sha3938"),
+        BranchAppliedPr(3964, "later", "sha3964"),
+    ]
+
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep, "find_existing_pr", lambda *_a, **_k: SimpleNamespace(number=42)
+    )
+    monkeypatch.setattr(backport_sweep, "github_https_url", lambda *_a, **_k: "https://x")
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
+    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
+    monkeypatch.setattr(
+        backport_sweep, "validate_branch_with_optional_repair", lambda *_a, **_k: (True, "")
+    )
+    monkeypatch.setattr(backport_sweep, "list_branch_applied_prs", lambda *_a, **_k: branch)
+    # #3700 stays applied across resets; the suffix (#3938, #3964) is removed.
+    monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_a, **_k: {"3700"})
+    monkeypatch.setattr(backport_sweep, "candidate_is_empty_on_ref", lambda *_a, **_k: False)
+    monkeypatch.setattr(backport_sweep, "push_backport_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep, "upsert_pr", lambda *_a, **_k: "https://github.com/x/y/pull/100"
+    )
+    monkeypatch.setattr(
+        backport_sweep.subprocess,
+        "run",
+        lambda *_a, **_k: subprocess.CompletedProcess([], 0, "", ""),
+    )
+    monkeypatch.setattr(backport_sweep, "_run_git", lambda *_a, **_k: None)
+
+    attempted: list[int] = []
+
+    def fake_apply(_repo_dir, candidate, *_a, **_k):
+        attempted.append(candidate.source_pr_number)
+        return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
+
+    monkeypatch.setattr(backport_sweep, "apply_candidate", fake_apply)
+
+    backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="9.1",
+        candidates=candidates,
+        push_repo="sarthakaggarwal97/valkey",
+        test_commands=[],
+        max_applied=1,
+    )
+
+    # The reset suffix (#3938, #3964) must be replayed despite the cap.
+    assert 3938 in attempted, f"#3938 was dropped, not replayed: {attempted}"
+    assert 3964 in attempted, f"#3964 was dropped, not replayed: {attempted}"
