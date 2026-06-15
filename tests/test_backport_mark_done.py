@@ -106,19 +106,19 @@ def test_mark_backport_items_done_gates_on_verified_set() -> None:
 def test_reconcile_marks_only_branch_present_items(monkeypatch) -> None:
     gql = FakeGraphQLClient(
         project_items=[
-            _project_item(201, "valkey-io/valkey", "item-201", "To be backported", merge_sha="aaa"),
-            _project_item(202, "valkey-io/valkey", "item-202", "To be backported", merge_sha="bbb"),
-            _project_item(203, "valkey-io/valkey", "item-203", "Done", merge_sha="ccc"),
-            _project_item(204, "valkey-io/valkey-bloom", "item-204", "To be backported", merge_sha="ddd"),
+            _project_item(201, "valkey-io/valkey", "item-201", "To be backported"),
+            _project_item(202, "valkey-io/valkey", "item-202", "To be backported"),
+            _project_item(203, "valkey-io/valkey", "item-203", "Done"),
+            _project_item(204, "valkey-io/valkey-bloom", "item-204", "To be backported"),
         ]
     )
 
     captured: dict = {}
 
-    def fake_verify(repo, branch, pr_merge_shas, *, token="", git_env=None):
+    def fake_verify(repo, branch, pr_numbers, *, token="", git_env=None):
         captured["repo"] = repo
         captured["branch"] = branch
-        captured["pr_merge_shas"] = dict(pr_merge_shas)
+        captured["pr_numbers"] = set(pr_numbers)
         return {201}  # only 201 actually landed on the branch
 
     monkeypatch.setattr(mark_done, "verify_prs_on_branch", fake_verify)
@@ -131,9 +131,8 @@ def test_reconcile_marks_only_branch_present_items(monkeypatch) -> None:
         target_branch="9.1",
     )
 
-    # Only valkey-io/valkey items still "To be backported" are candidates,
-    # each paired with its development-branch merge SHA.
-    assert captured["pr_merge_shas"] == {201: "aaa", 202: "bbb"}
+    # Only valkey-io/valkey items still "To be backported" are candidates.
+    assert captured["pr_numbers"] == {201, 202}
     assert captured["repo"] == "valkey-io/valkey"
     assert captured["branch"] == "9.1"
     assert result.updated == [201]
@@ -183,7 +182,7 @@ def test_pr_numbers_from_subjects_uses_trailing_pr_only() -> None:
     assert pr_numbers_from_commit_subjects(subjects) == {3756}
 
 
-def test_verify_counts_subject_and_sha_but_not_body_mention(tmp_path, monkeypatch) -> None:
+def test_verify_counts_subject_but_not_body_mention(tmp_path, monkeypatch) -> None:
     import subprocess
 
     repo = tmp_path / "repo"
@@ -204,7 +203,6 @@ def test_verify_counts_subject_and_sha_but_not_body_mention(tmp_path, monkeypatc
     (repo / "f").write_text("1")
     git("add", "f")
     git("commit", "-qm", "Cherry-picked fix (#3801)")
-    sha_3801 = git("rev-parse", "HEAD")  # this commit's own SHA = the "merge sha" case
 
     (repo / "f").write_text("2")
     git(
@@ -222,17 +220,13 @@ def test_verify_counts_subject_and_sha_but_not_body_mention(tmp_path, monkeypatc
         "valkey-io/valkey",
         "9.1",
         {
-            3801: "irrelevant",   # present via subject (#3801)
-            3920: "irrelevant",   # only mentioned in a body -> NOT present
-            3801_000 + 1: sha_3801,  # present via merge-SHA ancestry
-            4242: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",  # unknown sha -> absent
+            3801,  # present via subject (#3801)
+            3920,  # only mentioned in a body -> NOT present
+            4242,  # never referenced -> absent
         },
     )
 
-    assert 3801 in present
-    assert 3801_000 + 1 in present
-    assert 3920 not in present
-    assert 4242 not in present
+    assert present == {3801}
 
 
 def test_verify_detects_squash_merged_applied_table(tmp_path, monkeypatch) -> None:
@@ -259,7 +253,9 @@ def test_verify_detects_squash_merged_applied_table(tmp_path, monkeypatch) -> No
         "| #3801 | Validate DB clause | |\n"
         "| #3847 | Harden SENTINEL | |\n\n"
         "## Needs attention\n\n"
-        "| #9999 | Failed one | skipped-conflict |\n"
+        "| Source PR | Title | Outcome | Reason |\n"
+        "|---|---|---|---|\n"
+        "| #9999 | Failed one | skipped-conflict | conflict |\n"
     )
     git("init", "-q")
     (repo / "f").write_text("1")
@@ -274,7 +270,7 @@ def test_verify_detects_squash_merged_applied_table(tmp_path, monkeypatch) -> No
     present = mark_done.verify_prs_on_branch(
         "valkey-io/valkey",
         "9.1",
-        {3801: "", 3847: "", 9999: ""},  # no merge SHAs -> body table is the only signal
+        {3801, 3847, 9999},  # the ## Applied table is the only signal
     )
 
     # Applied source PRs are detected; the failed "Needs attention" row is not.
@@ -339,7 +335,7 @@ class FakeGraphQLClient:
 
 
 def _project_item(
-    number: int, repo: str, item_id: str, status: str, *, merge_sha: str = ""
+    number: int, repo: str, item_id: str, status: str
 ) -> dict:
     return {
         "id": item_id,
@@ -347,7 +343,6 @@ def _project_item(
             "__typename": "PullRequest",
             "number": number,
             "repository": {"nameWithOwner": repo},
-            "mergeCommit": {"oid": merge_sha} if merge_sha else None,
         },
         "fieldValues": {
             "nodes": [

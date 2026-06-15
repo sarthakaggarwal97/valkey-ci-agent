@@ -101,17 +101,15 @@ def parse_backport_source_pr_numbers(
 def verify_prs_on_branch(
     repo_full_name: str,
     target_branch: str,
-    pr_merge_shas: dict[int, str],
+    pr_numbers: set[int],
     *,
     token: str = "",
     git_env: dict[str, str] | None = None,
 ) -> set[int]:
-    """Return which of ``pr_merge_shas`` actually landed on ``target_branch``.
+    """Return which of ``pr_numbers`` actually landed on ``target_branch``.
 
-    A PR is considered present if any of:
+    A PR is considered present if either:
 
-    * its development-branch merge commit is an ancestor of the branch tip
-      (a direct merge or fast-forward — exact, no heuristic), or
     * a commit on the branch carries the PR's trailing ``(#N)`` in its subject
       (a cherry-pick that kept the source PR's title), or
     * a backport commit on the branch lists the PR in an ``## Applied`` table
@@ -119,14 +117,13 @@ def verify_prs_on_branch(
       commit whose subject is the *backport* PR; the source PRs it carried are
       only recoverable from that ``## Applied`` table.
 
-    Subject matching uses the trailing ``(#N)`` only; body matching is limited
-    to the structured ``## Applied`` section (parsed by
-    :func:`parse_backport_source_pr_numbers`), so a stray ``(#N)`` reference in
-    prose never counts.
+    Subject matching uses the trailing ``(#N)`` only; body matching reads only
+    the structured ``## Applied`` section, so a stray ``(#N)`` reference in a
+    ``## Needs attention`` row or in prose never counts.
 
     ``token`` authenticates the clone for private/auth-required repos.
     """
-    if not pr_merge_shas:
+    if not pr_numbers:
         return set()
 
     env = dict(os.environ if git_env is None else git_env)
@@ -139,13 +136,7 @@ def verify_prs_on_branch(
             applied = pr_numbers_from_commit_subjects(_branch_commit_subjects(repo_dir))
             applied |= _applied_prs_from_commit_bodies(repo_dir)
 
-            present: set[int] = set()
-            for pr_number, merge_sha in pr_merge_shas.items():
-                if pr_number in applied:
-                    present.add(pr_number)
-                elif merge_sha and _commit_is_ancestor(repo_dir, merge_sha):
-                    present.add(pr_number)
-    return present
+    return pr_numbers & applied
 
 
 def _branch_commit_subjects(repo_dir: str) -> list[str]:
@@ -167,9 +158,9 @@ def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
     """Source PR numbers listed in ``## Applied`` tables of backport commits.
 
     Squash-merged backport sweeps record the cherry-picked source PRs only in
-    the commit body's ``## Applied`` section. Reuses the same body parser as the
-    merge-hook path, so a (#N) outside that table (e.g. a "Needs attention" row
-    or prose) is not treated as applied.
+    the commit body's ``## Applied`` section. Only that section's table cells
+    are read, so a ``(#N)`` in a later ``## Needs attention`` row or in prose is
+    never treated as applied.
     """
     result = subprocess.run(
         ["git", "log", "-z", "--format=%B", "HEAD"],
@@ -180,26 +171,10 @@ def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
     )
     numbers: set[int] = set()
     for message in result.stdout.split(_COMMIT_RECORD_DELIM):
-        if "## Applied" in message:
-            numbers.update(parse_backport_source_pr_numbers(message))
+        applied_section = _markdown_section(message, "Applied")
+        if applied_section:
+            numbers.update(_pr_numbers_from_table_cells(applied_section))
     return numbers
-
-
-def _commit_is_ancestor(repo_dir: str, commit_sha: str) -> bool:
-    """True if ``commit_sha`` is reachable from HEAD.
-
-    Returns False when the commit is not present in the shallow clone (the
-    shallow boundary makes it unknown, which we treat as "not yet present" — a
-    later, deeper run can still pick it up). Never raises on a missing commit.
-    """
-    result = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", commit_sha, "HEAD"],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-    )
-    # 0 = ancestor; 1 = not an ancestor; other (e.g. 128 unknown commit) = treat as absent.
-    return result.returncode == 0
 
 
 def _shallow_clone(
@@ -340,7 +315,7 @@ def reconcile_project_board(
         project_owner_type=project_owner_type,
     )
 
-    pr_merge_shas: dict[int, str] = {}
+    candidate_pr_numbers: set[int] = set()
     for item in project["items"]:
         content = item.get("content") or {}
         if content.get("__typename") != "PullRequest":
@@ -352,17 +327,17 @@ def reconcile_project_board(
         number = content.get("number")
         if not isinstance(number, int):
             continue
-        pr_merge_shas[number] = str((content.get("mergeCommit") or {}).get("oid") or "")
+        candidate_pr_numbers.add(number)
 
-    if not pr_merge_shas:
+    if not candidate_pr_numbers:
         return BackportStatusUpdateResult(requested=[])
 
     verified = verify_prs_on_branch(
-        source_repo, target_branch, pr_merge_shas, token=token, git_env=git_env
+        source_repo, target_branch, candidate_pr_numbers, token=token, git_env=git_env
     )
     logger.info(
         "Branch %s: %d candidate(s) in %r, %d verified present",
-        target_branch, len(pr_merge_shas), from_status, len(verified),
+        target_branch, len(candidate_pr_numbers), from_status, len(verified),
     )
 
     return mark_backport_items_done(
@@ -370,7 +345,7 @@ def reconcile_project_board(
         project_owner=project_owner,
         project_number=project_number,
         source_repo=source_repo,
-        source_pr_numbers=sorted(pr_merge_shas),
+        source_pr_numbers=sorted(candidate_pr_numbers),
         project_owner_type=project_owner_type,
         status_field=status_field,
         from_status=from_status,
@@ -531,7 +506,6 @@ query($owner: String!, $number: Int!, $cursor: String) {{
             ... on PullRequest {{
               number
               repository {{ nameWithOwner }}
-              mergeCommit {{ oid }}
             }}
           }}
           fieldValues(first: 50) {{
@@ -630,13 +604,13 @@ def main() -> None:
     if args.no_verify:
         verified = None
     else:
-        # Merge mode parses PR numbers from the merged backport PR, so the
-        # development-branch merge SHAs aren't known here; presence is
-        # established by the cherry-pick's (#N) subject on the branch.
+        # Presence is established by the cherry-pick's trailing (#N) subject on
+        # the branch, or by the source PR appearing in a sweep commit's
+        # ## Applied table.
         verified = verify_prs_on_branch(
             repo_entry.repo,
             branch_entry.branch,
-            {pr: "" for pr in source_pr_numbers},
+            set(source_pr_numbers),
             token=args.target_token,
         )
 
