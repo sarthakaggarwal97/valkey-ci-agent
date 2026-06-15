@@ -21,8 +21,23 @@ from scripts.common.github_client import retry_github_call
 
 logger = logging.getLogger(__name__)
 
+PARENTHESIZED_PR_RE = re.compile(r"\(#(\d+)\)")
+MERGE_PR_RE = re.compile(r"\bMerge pull request #(\d+)\b")
+
 
 RunGit = Callable[..., Any]
+
+
+def source_pr_number_from_commit_subject(subject: str) -> str | None:
+    """Return the GitHub PR number represented by a squash/merge subject."""
+    parenthesized_prs = PARENTHESIZED_PR_RE.findall(subject)
+    if parenthesized_prs:
+        # GitHub squash commits append the source PR at the end. PR titles can
+        # contain earlier references, e.g. `Revert "... (#3544)" (#3756)`.
+        return parenthesized_prs[-1]
+
+    merge_match = MERGE_PR_RE.search(subject)
+    return merge_match.group(1) if merge_match else None
 
 BRANCH_PREFIX = "agent/backport/sweep"
 
@@ -123,10 +138,10 @@ def list_applied_prs_on_branch(
     applied: list[CandidateResult] = []
     seen: set[int] = set()
     for line in result.stdout.strip().splitlines():
-        m = re.search(r"\(#(\d+)\)", line)
-        if not m:
+        pr_str = source_pr_number_from_commit_subject(line)
+        if not pr_str:
             continue
-        pr_number = int(m.group(1))
+        pr_number = int(pr_str)
         if pr_number in seen:
             continue
         seen.add(pr_number)
