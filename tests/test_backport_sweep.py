@@ -1984,3 +1984,66 @@ def test_process_branch_skips_empty_mid_prefix_candidate_without_reorder(monkeyp
     assert result.branch_notes == []
     outcomes = {r.source_pr_number: r.outcome for r in result.results}
     assert outcomes[3756] == "skipped-existing"
+
+
+def test_process_branch_aborts_push_when_replay_candidate_fails(monkeypatch):
+    # Reviewer repro: branch [#3700, #3938]; late candidate #3743 forces a reset
+    # to #3700; the replayed #3938 then fails validation. Pushing now would drop
+    # the previously-reviewed #3938, so the sweep must abort the push entirely.
+    branch = [
+        BranchAppliedPr(3700, "kept", "sha3700"),
+        BranchAppliedPr(3938, "re-apply", "sha3938"),
+    ]
+    candidates = _reorder_candidates("3700", "3743", "3938")
+
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep, "find_existing_pr", lambda *_a, **_k: SimpleNamespace(number=42)
+    )
+    monkeypatch.setattr(backport_sweep, "github_https_url", lambda *_a, **_k: "https://x")
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
+    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
+    monkeypatch.setattr(backport_sweep, "candidate_is_empty_on_ref", lambda *_a, **_k: False)
+    monkeypatch.setattr(backport_sweep, "list_branch_applied_prs", lambda *_a, **_k: branch)
+    monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_a, **_k: {"3700"})
+    _validate_target = {"pr": None}
+    # #3938 (the replayed suffix) fails validation; everything else is green.
+    monkeypatch.setattr(
+        backport_sweep,
+        "validate_branch_with_optional_repair",
+        lambda _d, _t, *_a, **_k: (False, "boom") if _validate_target.get("pr") == 3938 else (True, ""),
+    )
+    monkeypatch.setattr(
+        backport_sweep.subprocess,
+        "run",
+        lambda *_a, **_k: subprocess.CompletedProcess([], 0, "", ""),
+    )
+    monkeypatch.setattr(backport_sweep, "_run_git", lambda *_a, **_k: None)
+
+    pushed: list[str] = []
+    monkeypatch.setattr(
+        backport_sweep, "push_backport_branch",
+        lambda _d, branch_name, *_a, **_k: pushed.append(branch_name),
+    )
+    monkeypatch.setattr(backport_sweep, "upsert_pr", lambda *_a, **_k: "https://x/pull/100")
+
+    def fake_apply(_repo_dir, candidate, *_a, **_k):
+        _validate_target["pr"] = candidate.source_pr_number
+        return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
+
+    monkeypatch.setattr(backport_sweep, "apply_candidate", fake_apply)
+
+    result = backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="9.1",
+        candidates=candidates,
+        push_repo="sarthakaggarwal97/valkey",
+        test_commands=[],
+        max_applied=5,
+    )
+    # The reviewed branch must NOT be force-pushed when a replay fails; the
+    # branch error is recorded instead.
+    assert pushed == []
+    assert "failed to replay" in result.error

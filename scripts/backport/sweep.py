@@ -557,6 +557,7 @@ def _process_branch(
 
             applied_count = 0
             replayed_prs: set[str] = set()
+            replay_failed = False
 
             for index, candidate in enumerate(candidates):
                 candidate_pr = str(candidate.source_pr_number)
@@ -603,6 +604,8 @@ def _process_branch(
                 result.results.append(candidate_result)
 
                 if candidate_result.outcome != "applied":
+                    if is_cap_exempt:
+                        replay_failed = True
                     continue
 
                 # The sweep branch must stay green: only keep a cherry-pick if
@@ -626,12 +629,25 @@ def _process_branch(
                         candidate.source_pr_number,
                         target_branch,
                     )
+                    if is_cap_exempt:
+                        replay_failed = True
                     continue
 
                 if is_cap_exempt:
                     replayed_prs.add(candidate_pr)
                 else:
                     applied_count += 1
+
+            # A replay candidate that was on the open PR before the reorder reset
+            # failed to re-apply. Force-pushing now would drop a previously
+            # reviewed commit, so abort and leave the existing PR untouched for
+            # manual resolution rather than silently shrinking it.
+            if replay_failed:
+                raise RuntimeError(
+                    f"Aborting {backport_branch} push: a previously-applied commit "
+                    "failed to replay after a merge-order reorder. The existing PR "
+                    "is left unchanged; resolve the replay conflict manually."
+                )
 
             committed = [
                 item for item in result.results
