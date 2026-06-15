@@ -25,6 +25,7 @@ from scripts.backport.sweep_git import (
     list_applied_prs_on_branch,
     push_backport_branch,
     safe_tmp_component,
+    source_pr_number_from_commit_subject,
     sync_target_branch_to_source,
     worktree_changed_paths,
 )
@@ -1688,3 +1689,162 @@ def test_find_merge_order_inversion_none_when_all_applied():
         _inversion_candidate(3938, "2026-06-09T00:00:00Z"),
     ]
     assert find_merge_order_inversion({"3756", "3938"}, candidates) is None
+
+
+
+def test_find_merge_order_inversion_pr_3970_scenario():
+    """Reproduce the live #3970 ordering bug across the full candidate set.
+
+    On #3970 the re-apply (#3938) was committed before the revert (#3756),
+    so a later poll run that re-discovered #3756 would append it after the
+    already-applied #3938 -- reverting the re-applied work. The earliest
+    candidate (#3743) is already on the base branch (applied); the revert
+    (#3756) sorts second and is not yet applied, while #3938/#3964 are.
+    The inversion must be flagged on the revert so the branch is rebuilt.
+    """
+    candidates = [
+        _inversion_candidate(3743, "2026-05-18T17:54:16Z"),
+        _inversion_candidate(3756, "2026-05-18T21:24:40Z"),
+        _inversion_candidate(3938, "2026-06-09T23:45:32Z"),
+        _inversion_candidate(3964, "2026-06-10T21:45:41Z"),
+    ]
+    inversion = find_merge_order_inversion({"3743", "3938", "3964"}, candidates)
+    assert inversion is not None
+    assert inversion.source_pr_number == 3756
+
+
+
+@pytest.mark.parametrize(
+    ("subject", "expected"),
+    [
+        (
+            'Revert "IO-Threads redesign cleanup work (#3544)" (#3756)',
+            "3756",
+        ),
+        (
+            "Fix IO-Threads redesign cleanup perf regression from #3544 (#3938)",
+            "3938",
+        ),
+        (
+            "Merge pull request #3801 from valkey-io/backport-copy-acl",
+            "3801",
+        ),
+        (
+            "Release notes update",
+            None,
+        ),
+    ],
+)
+def test_source_pr_number_from_commit_subject_uses_source_pr(subject, expected):
+    assert source_pr_number_from_commit_subject(subject) == expected
+
+
+
+def test_process_branch_rebuilds_when_existing_branch_out_of_order(monkeypatch):
+    """The #3970 scenario: an existing branch has the re-apply (#3938) but a
+    later-discovered, earlier-merged revert (#3756) must precede it. The
+    inversion guard resets the branch to the release tip so the sorted loop
+    rebuilds it in merge order, and the now-redundant revert cherry-picks
+    empty and is skipped -- no extra empty-check needed.
+    """
+    candidates = [
+        ProjectBackportCandidate(
+            source_pr_number=3756,
+            source_pr_title='Revert "IO-Threads redesign cleanup work (#3544)"',
+            source_pr_url="https://github.com/valkey-io/valkey/pull/3756",
+            target_branch="9.1",
+            merge_commit_sha="sha3756",
+            merged_at="2026-05-18T21:24:40Z",
+        ),
+        ProjectBackportCandidate(
+            source_pr_number=3938,
+            source_pr_title="Fix IO-Threads cleanup perf regression",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/3938",
+            target_branch="9.1",
+            merge_commit_sha="sha3938",
+            merged_at="2026-06-09T23:45:32Z",
+        ),
+    ]
+
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep,
+        "find_existing_pr",
+        lambda *_a, **_k: SimpleNamespace(number=3970),
+    )
+    monkeypatch.setattr(backport_sweep, "github_https_url", lambda *_a, **_k: "https://x")
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
+    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
+    monkeypatch.setattr(
+        backport_sweep,
+        "validate_branch_with_optional_repair",
+        lambda *_a, **_k: (True, ""),
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "list_applied_prs_on_branch",
+        lambda *_a, **_k: [],
+    )
+
+    # Before the reset the branch already carries #3938; after the reset to the
+    # release tip nothing is applied, so the sorted loop rebuilds from scratch.
+    applied_states = iter([{"3938"}, set()])
+    monkeypatch.setattr(
+        backport_sweep,
+        "list_already_applied",
+        lambda *_a, **_k: next(applied_states),
+    )
+
+    git_calls: list[tuple] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        git_calls.append(args)
+
+    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
+    monkeypatch.setattr(
+        backport_sweep.subprocess,
+        "run",
+        lambda *_a, **_k: subprocess.CompletedProcess([], 0, "", ""),
+    )
+
+    # On the rebuilt (clean) branch, the revert cherry-picks empty and is
+    # skipped by apply_candidate's existing empty detection; the re-apply lands.
+    def fake_apply(_repo_dir, candidate, *_args, **_kwargs):
+        if candidate.source_pr_number == 3756:
+            return CandidateResult(
+                candidate.source_pr_number,
+                candidate.source_pr_title,
+                "skipped-existing",
+                "already applied or empty cherry-pick",
+            )
+        return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
+
+    monkeypatch.setattr(backport_sweep, "apply_candidate", fake_apply)
+    monkeypatch.setattr(
+        backport_sweep,
+        "push_backport_branch",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "upsert_pr",
+        lambda *_a, **_k: "https://github.com/valkey-io/valkey/pull/3987",
+    )
+
+    result = backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="9.1",
+        candidates=candidates,
+        push_repo="valkey-io/valkey",
+        test_commands=["make"],
+        max_applied=5,
+    )
+
+    # The inversion guard reset the branch to the release tip.
+    assert ("reset", "--hard", "origin/9.1") in git_calls
+    # Final order: revert skipped-empty, re-apply applied -- correct end state.
+    outcomes = {r.source_pr_number: r.outcome for r in result.results}
+    assert outcomes[3756] == "skipped-existing"
+    assert outcomes[3938] == "applied"
