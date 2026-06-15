@@ -17,7 +17,7 @@ from scripts.backport.sweep import (
     CandidateResult,
     ProjectBackportCandidate,
 )
-from scripts.backport.sweep_apply import apply_candidate, candidate_is_empty_on_ref
+from scripts.backport.sweep_apply import apply_candidate
 from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
     clone_target_branch,
@@ -1638,6 +1638,7 @@ def test_project_items_query_selects_repository_name_with_owner():
     assert "nameWithOwner" in query
 
 
+
 # --- Backport sweep merge-order reorder tests ---
 
 _REORDER_MERGED_AT = {
@@ -1647,6 +1648,20 @@ _REORDER_MERGED_AT = {
     "3938": "2026-06-09T23:45:32Z",
     "3964": "2026-06-10T21:45:41Z",
 }
+
+
+def _reorder_candidates(*pr_numbers: str) -> list[ProjectBackportCandidate]:
+    return [
+        ProjectBackportCandidate(
+            source_pr_number=int(pr),
+            source_pr_title=f"PR {pr}",
+            source_pr_url=f"https://github.com/valkey-io/valkey/pull/{pr}",
+            target_branch="9.1",
+            merge_commit_sha=f"sha{pr}",
+            merged_at=_REORDER_MERGED_AT[pr],
+        )
+        for pr in pr_numbers
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1662,107 +1677,58 @@ def test_source_pr_number_from_commit_subject_uses_source_pr(subject, expected):
     assert source_pr_number_from_commit_subject(subject) == expected
 
 
-def test_find_branch_reorder_index_detects_out_of_order_suffix():
-    # Branch order: re-apply (#3938, Jun 9) then revert (#3756, May 18) -- the
-    # revert is older yet sits later, so the branch must replay from #3938.
-    branch_prs = [
+def test_ordered_branch_prefix_length_full_when_in_order():
+    branch = [
+        BranchAppliedPr(3756, "revert", "sha3756"),
+        BranchAppliedPr(3938, "re-apply", "sha3938"),
+    ]
+    candidates = _reorder_candidates("3756", "3938", "3964")
+    assert backport_sweep._ordered_branch_prefix_length(
+        branch, candidates, _REORDER_MERGED_AT
+    ) == 2
+
+
+def test_ordered_branch_prefix_length_cuts_at_internal_inversion():
+    # #3938 (Jun 9) then #3756 (May 18): #3938 is newer than a commit that
+    # follows it, so the cut goes back to index 0 -- both are replayed in order.
+    branch = [
         BranchAppliedPr(3938, "re-apply", "sha3938"),
         BranchAppliedPr(3756, "revert", "sha3756"),
     ]
-    assert backport_sweep._find_branch_reorder_index(branch_prs, _REORDER_MERGED_AT) == 0
+    candidates = _reorder_candidates("3756", "3938")
+    assert backport_sweep._ordered_branch_prefix_length(
+        branch, candidates, _REORDER_MERGED_AT
+    ) == 0
 
 
-def test_find_branch_reorder_index_none_when_in_order():
-    branch_prs = [
-        BranchAppliedPr(3756, "revert", "sha3756"),
+def test_ordered_branch_prefix_length_cuts_for_late_added_candidate():
+    # #3756 (May 18) is a candidate not yet on the branch; it must precede the
+    # branch's #3938 (Jun 9), so the prefix keeps only #3700 and replays #3938.
+    branch = [
+        BranchAppliedPr(3700, "kept", "sha3700"),
         BranchAppliedPr(3938, "re-apply", "sha3938"),
         BranchAppliedPr(3964, "later", "sha3964"),
     ]
-    assert backport_sweep._find_branch_reorder_index(branch_prs, _REORDER_MERGED_AT) is None
-
-
-def test_find_candidate_insert_index_preserves_ordered_prefix():
-    # A late-added candidate (#3756, May 18) that merged before an applied
-    # commit (#3938, Jun 9) must insert at that commit's index, preserving the
-    # older in-order prefix (#3700).
-    branch_prs = [
-        BranchAppliedPr(3700, "older kept commit", "sha3700"),
-        BranchAppliedPr(3938, "newer replay commit", "sha3938"),
-        BranchAppliedPr(3964, "newest replay commit", "sha3964"),
-    ]
-    candidate = ProjectBackportCandidate(
-        source_pr_number=3756,
-        source_pr_title='Revert "IO-Threads redesign cleanup work (#3544)"',
-        source_pr_url="https://github.com/valkey-io/valkey/pull/3756",
-        target_branch="9.1",
-        merge_commit_sha="sha3756",
-        merged_at=_REORDER_MERGED_AT["3756"],
-    )
-    assert backport_sweep._find_candidate_insert_index(
-        branch_prs, candidate, _REORDER_MERGED_AT
+    candidates = _reorder_candidates("3700", "3756", "3938", "3964")
+    assert backport_sweep._ordered_branch_prefix_length(
+        branch, candidates, _REORDER_MERGED_AT
     ) == 1
 
 
-def test_find_candidate_insert_index_none_when_candidate_is_newest():
-    branch_prs = [
-        BranchAppliedPr(3700, "older", "sha3700"),
-        BranchAppliedPr(3938, "newer", "sha3938"),
+def test_ordered_branch_prefix_length_empty_branch():
+    candidates = _reorder_candidates("3756", "3938")
+    assert backport_sweep._ordered_branch_prefix_length([], candidates, _REORDER_MERGED_AT) == 0
+
+
+def test_reset_branch_to_prefix_refuses_to_drop_non_candidate():
+    branch = [
+        BranchAppliedPr(3938, "re-apply", "sha3938"),
+        BranchAppliedPr(9999, "no-longer-a-candidate", "sha9999"),
     ]
-    candidate = ProjectBackportCandidate(
-        source_pr_number=3964,
-        source_pr_title="newest",
-        source_pr_url="https://github.com/valkey-io/valkey/pull/3964",
-        target_branch="9.1",
-        merge_commit_sha="sha3964",
-        merged_at=_REORDER_MERGED_AT["3964"],
-    )
-    assert backport_sweep._find_candidate_insert_index(
-        branch_prs, candidate, _REORDER_MERGED_AT
-    ) is None
-
-
-def test_candidate_empty_on_target_ref_ignores_existing_sweep_commits(tmp_path):
-    # The revert's effect is already on the target branch; even though the sweep
-    # branch re-introduced it via #3938, the empty-check against the clean
-    # target must still report the revert as a no-op.
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git(repo, "init", "-q", "-b", "target")
-    _git(repo, "config", "user.name", "Tester")
-    _git(repo, "config", "user.email", "tester@example.com")
-
-    path = repo / "io.txt"
-    path.write_text("original\n", encoding="utf-8")
-    _git(repo, "add", "io.txt")
-    _git(repo, "commit", "-q", "-m", "base")
-
-    _git(repo, "checkout", "-q", "-b", "source")
-    path.write_text("changed\n", encoding="utf-8")
-    _git(repo, "commit", "-am", "IO-Threads redesign cleanup work (#3544)")
-    path.write_text("original\n", encoding="utf-8")
-    _git(repo, "commit", "-am", 'Revert "IO-Threads redesign cleanup work (#3544)" (#3756)')
-    revert_sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
-
-    _git(repo, "checkout", "-q", "target")
-    _git(repo, "checkout", "-q", "-b", "agent/backport/sweep/9.1")
-    path.write_text("changed\n", encoding="utf-8")
-    _git(repo, "commit", "-am", "Fix IO-Threads redesign cleanup perf regression from #3544 (#3938)")
-
-    candidate = ProjectBackportCandidate(
-        source_pr_number=3756,
-        source_pr_title='Revert "IO-Threads redesign cleanup work (#3544)"',
-        source_pr_url="https://github.com/valkey-io/valkey/pull/3756",
-        target_branch="9.1",
-        merge_commit_sha=revert_sha,
-    )
-
-    def fake_run_git(_repo_dir, *args, **_kwargs):
-        if args[:2] == ("fetch", "origin"):
-            return None
-        return _git(Path(_repo_dir), *args)
-
-    assert candidate_is_empty_on_ref(str(repo), candidate, "target", {}, run_git=fake_run_git)
-    assert path.read_text(encoding="utf-8") == "changed\n"
+    candidates = _reorder_candidates("3938")
+    result = BranchSweepResult(target_branch="9.1")
+    with pytest.raises(RuntimeError, match="#9999"):
+        backport_sweep._reset_branch_to_prefix("/tmp/x", "9.1", branch, 0, candidates, result)
 
 
 def test_build_pr_body_lists_branch_reorder_notes():
@@ -1770,80 +1736,20 @@ def test_build_pr_body_lists_branch_reorder_notes():
         target_branch="9.1",
         branch_notes=[
             "Reordered existing sweep branch: preserved 1 existing commit(s), "
-            "replayed from #3938. Inserted #3756 before already-applied #3938.",
+            "replayed from #3938 to restore mergedAt order.",
         ],
         results=[
-            CandidateResult(
-                3756,
-                'Revert "IO-Threads redesign cleanup work (#3544)"',
-                "applied",
-                "clean cherry-pick",
-            ),
+            CandidateResult(3756, "revert", "applied", "clean cherry-pick"),
         ],
     )
     body = build_pr_body(result)
     assert "## Branch updates" in body
-    assert "Inserted #3756 before already-applied #3938" in body
+    assert "replayed from #3938" in body
 
 
-def test_reset_existing_branch_suffix_refuses_to_drop_non_candidate():
-    # A PR on the branch suffix that is no longer a candidate must not be
-    # silently dropped during a reorder.
-    branch_prs = [
-        BranchAppliedPr(3938, "re-apply", "sha3938"),
-        BranchAppliedPr(9999, "no-longer-a-candidate", "sha9999"),
-    ]
-    candidates = [
-        ProjectBackportCandidate(
-            source_pr_number=3938,
-            source_pr_title="re-apply",
-            source_pr_url="https://github.com/valkey-io/valkey/pull/3938",
-            target_branch="9.1",
-            merge_commit_sha="sha3938",
-            merged_at=_REORDER_MERGED_AT["3938"],
-        ),
-    ]
-    result = BranchSweepResult(target_branch="9.1")
-    with pytest.raises(RuntimeError, match="#9999"):
-        backport_sweep._reset_existing_branch_suffix(
-            "/tmp/x", "9.1", branch_prs, 0, candidates, result, "reason"
-        )
-
-
-def test_process_branch_reorder_replays_suffix_despite_cap(monkeypatch):
-    """A reorder must replay the whole reset suffix even when max_applied=1.
-
-    Repro: branch has [#3700, #3938, #3964]; candidates (sorted) are
-    [#3700, #3743, #3756, #3938, #3964] with #3743/#3756 merged before #3938.
-    The first late-older candidate resets the suffix (#3938, #3964) off the
-    branch. With the cap reached after applying one new candidate, the loop
-    must NOT break before replaying #3938/#3964 -- otherwise the rewritten
-    branch is pushed missing commits that were on the open PR.
-    """
-    merged_at = {
-        "3700": "2026-05-01T00:00:00Z",
-        "3743": "2026-05-18T17:54:16Z",
-        "3756": "2026-05-18T21:24:40Z",
-        "3938": "2026-06-09T23:45:32Z",
-        "3964": "2026-06-10T21:45:41Z",
-    }
-    candidates = [
-        ProjectBackportCandidate(
-            source_pr_number=int(pr),
-            source_pr_title=f"PR {pr}",
-            source_pr_url=f"https://github.com/valkey-io/valkey/pull/{pr}",
-            target_branch="9.1",
-            merge_commit_sha=f"sha{pr}",
-            merged_at=merged_at[pr],
-        )
-        for pr in ("3700", "3743", "3756", "3938", "3964")
-    ]
-    branch = [
-        BranchAppliedPr(3700, "kept", "sha3700"),
-        BranchAppliedPr(3938, "re-apply", "sha3938"),
-        BranchAppliedPr(3964, "later", "sha3964"),
-    ]
-
+def _reorder_process_branch(monkeypatch, *, branch, candidates, max_applied):
+    """Run _process_branch over an existing out-of-order branch; return
+    (attempted PR order, git reset refs, branch_notes)."""
     monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(
         backport_sweep, "find_existing_pr", lambda *_a, **_k: SimpleNamespace(number=42)
@@ -1855,9 +1761,16 @@ def test_process_branch_reorder_replays_suffix_despite_cap(monkeypatch):
         backport_sweep, "validate_branch_with_optional_repair", lambda *_a, **_k: (True, "")
     )
     monkeypatch.setattr(backport_sweep, "list_branch_applied_prs", lambda *_a, **_k: branch)
-    # #3700 stays applied across resets; the suffix (#3938, #3964) is removed.
-    monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_a, **_k: {"3700"})
-    monkeypatch.setattr(backport_sweep, "candidate_is_empty_on_ref", lambda *_a, **_k: False)
+    # After a reset the kept prefix's PRs stay applied; the replayed suffix is not.
+    kept_after_reset = {
+        str(b.source_pr_number)
+        for b in branch[: backport_sweep._ordered_branch_prefix_length(
+            branch, candidates, backport_sweep._merged_at_by_pr(candidates)
+        )]
+    }
+    monkeypatch.setattr(
+        backport_sweep, "list_already_applied", lambda *_a, **_k: set(kept_after_reset)
+    )
     monkeypatch.setattr(backport_sweep, "push_backport_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(
         backport_sweep, "upsert_pr", lambda *_a, **_k: "https://github.com/x/y/pull/100"
@@ -1867,7 +1780,13 @@ def test_process_branch_reorder_replays_suffix_despite_cap(monkeypatch):
         "run",
         lambda *_a, **_k: subprocess.CompletedProcess([], 0, "", ""),
     )
-    monkeypatch.setattr(backport_sweep, "_run_git", lambda *_a, **_k: None)
+    resets: list[str] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        if args[:2] == ("reset", "--hard"):
+            resets.append(args[2])
+
+    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
 
     attempted: list[int] = []
 
@@ -1877,7 +1796,7 @@ def test_process_branch_reorder_replays_suffix_despite_cap(monkeypatch):
 
     monkeypatch.setattr(backport_sweep, "apply_candidate", fake_apply)
 
-    backport_sweep._process_branch(
+    result = backport_sweep._process_branch(
         gh=MagicMock(),
         repo_full_name="valkey-io/valkey",
         github_token="token",
@@ -1885,9 +1804,44 @@ def test_process_branch_reorder_replays_suffix_despite_cap(monkeypatch):
         candidates=candidates,
         push_repo="sarthakaggarwal97/valkey",
         test_commands=[],
-        max_applied=1,
+        max_applied=max_applied,
     )
+    return attempted, resets, result.branch_notes
 
-    # The reset suffix (#3938, #3964) must be replayed despite the cap.
-    assert 3938 in attempted, f"#3938 was dropped, not replayed: {attempted}"
-    assert 3964 in attempted, f"#3964 was dropped, not replayed: {attempted}"
+
+def test_process_branch_reorders_out_of_order_branch(monkeypatch):
+    # Branch has the re-apply (#3938) ahead of the revert (#3756). The reset
+    # cuts to origin and both are replayed in mergedAt order.
+    branch = [
+        BranchAppliedPr(3938, "re-apply", "sha3938"),
+        BranchAppliedPr(3756, "revert", "sha3756"),
+    ]
+    candidates = _reorder_candidates("3756", "3938")
+    attempted, resets, notes = _reorder_process_branch(
+        monkeypatch, branch=branch, candidates=candidates, max_applied=5
+    )
+    assert resets == ["origin/9.1"]
+    assert attempted == [3756, 3938]
+    assert notes and "preserved 0 existing commit(s)" in notes[0]
+
+
+def test_process_branch_reorder_replays_full_suffix_despite_cap(monkeypatch):
+    # Reviewer repro: branch [#3700, #3938, #3964], late candidates #3743/#3756
+    # merged before #3938, max_applied=1. The suffix (#3938, #3964) was on the
+    # branch, so it must be replayed despite the cap; only net-new applies count.
+    branch = [
+        BranchAppliedPr(3700, "kept", "sha3700"),
+        BranchAppliedPr(3938, "re-apply", "sha3938"),
+        BranchAppliedPr(3964, "later", "sha3964"),
+    ]
+    candidates = _reorder_candidates("3700", "3743", "3756", "3938", "3964")
+    attempted, resets, _notes = _reorder_process_branch(
+        monkeypatch, branch=branch, candidates=candidates, max_applied=1
+    )
+    # Reset keeps #3700 (sha3700), replays the rest.
+    assert resets == ["sha3700"]
+    # #3938 and #3964 were on the branch -> cap-exempt -> must be replayed.
+    assert 3938 in attempted, f"#3938 dropped: {attempted}"
+    assert 3964 in attempted, f"#3964 dropped: {attempted}"
+    # One net-new candidate (#3743) applies under the cap; #3756 is deferred.
+    assert 3743 in attempted
