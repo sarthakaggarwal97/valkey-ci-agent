@@ -37,6 +37,7 @@ The currently active workflow. Cherry-picks merged PRs onto release branches wit
 4. **AI conflict resolution** — when cherry-pick conflicts, Claude Code reads both sides and resolves the conflict in place
 5. **Validation** — registry-configured build commands run before push; any failure blocks the push
 6. **PR creation** — pushes the branch and opens (or updates) a PR with a summary table
+7. **Status sync** — after a backport PR is merged into the release branch, the source PR's Project v2 status can be moved from "To be backported" to "Done"
 
 Manual single-PR backports are also supported via `workflow_dispatch`.
 
@@ -79,7 +80,7 @@ See [`examples/repos.yml`](examples/repos.yml) for a multi-module example.
   - `contents:write` on each repo in the registry (for pushing branches)
   - `pull-requests:write` on each repo (for opening PRs)
   - `issues:write` on each repo (for backport status comments)
-  - `organization_projects:read` on the org (for querying project boards)
+  - `organization_projects:write` on the org (for querying and updating project boards)
 - An AWS account with Bedrock access to `us.anthropic.claude-opus-4-7`
 - An OIDC trust between GitHub Actions and your AWS account
 
@@ -120,6 +121,36 @@ gh workflow run manual-backport.yml \
 ```
 
 Creates one PR named `[Backport 9.0] <original title>`.
+
+#### Mark merged backports done
+
+Target repositories can call the reusable status workflow when a backport PR is merged:
+
+```yaml
+name: Backport Status
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  mark-done:
+    if: github.event.pull_request.merged == true
+    uses: valkey-io/valkey-ci-agent/.github/workflows/backport-merged.yml@main
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      repo_full_name: ${{ github.repository }}
+      target_branch: ${{ github.event.pull_request.base.ref }}
+      backport_pr_body: ${{ github.event.pull_request.body }}
+      backport_pr_head_ref: ${{ github.event.pull_request.head.ref }}
+    secrets:
+      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+```
+
+The workflow parses the merged backport PR body. Sweep PRs update every PR listed in the `Applied` section, while manual backport PRs update the single `Source PR` row.
 
 #### Filtering the sweep
 
