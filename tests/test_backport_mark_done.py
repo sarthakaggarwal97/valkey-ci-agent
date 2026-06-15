@@ -174,6 +174,15 @@ def test_pr_numbers_from_subjects_ignores_body_only_mentions() -> None:
     assert pr_numbers_from_commit_subjects(subjects) == {3801, 3920}
 
 
+def test_pr_numbers_from_subjects_uses_trailing_pr_only() -> None:
+    from scripts.backport.utils import pr_numbers_from_commit_subjects
+
+    # A revert names the reverted PR mid-subject; only the trailing (#N) is the
+    # commit's own PR. Must be 3756 (the revert), not 3544 (what it reverts).
+    subjects = ['Revert "IO-Threads redesign cleanup work (#3544)" (#3756)']
+    assert pr_numbers_from_commit_subjects(subjects) == {3756}
+
+
 def test_verify_counts_subject_and_sha_but_not_body_mention(tmp_path, monkeypatch) -> None:
     import subprocess
 

@@ -111,12 +111,13 @@ def verify_prs_on_branch(
 
     * its development-branch merge commit is an ancestor of the branch tip
       (a direct merge or fast-forward — exact, no heuristic), or
-    * a commit on the branch carries the PR's ``(#N)`` suffix in its subject
-      (a cherry-pick, whose SHA differs). This reuses
-      :func:`list_applied_prs_on_branch`, the exact rule the sweep uses to skip
-      already-applied PRs, so mark-done and the sweep never disagree.
+    * a commit on the branch carries the PR's trailing ``(#N)`` in its subject
+      (a cherry-pick, whose SHA differs). Subject matching goes through
+      :func:`pr_numbers_from_commit_subjects`, the same helper the sweep uses to
+      identify already-applied PRs, so mark-done and the sweep never disagree.
 
-    Mentions of ``(#N)`` in a commit *body* do not count — only subjects.
+    Only the trailing ``(#N)`` of a subject counts; references elsewhere in a
+    subject or body do not.
     """
     if not pr_merge_shas:
         return set()

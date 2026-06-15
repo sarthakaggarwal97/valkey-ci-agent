@@ -15,16 +15,19 @@ def build_branch_name(source_pr_number: int, target_branch: str) -> str:
 
 
 def pr_numbers_from_commit_subjects(subjects: list[str]) -> set[int]:
-    """Source PR numbers referenced by a trailing ``(#N)`` in commit subjects.
+    """Source PR numbers from the *trailing* ``(#N)`` of each commit subject.
 
     Single source of truth for "which PRs does this commit history contain",
     shared by the sweep (to skip already-applied PRs) and mark-done (to verify
-    a board item actually landed). Only subjects are considered — a ``(#N)`` in
-    a commit body is a reference, not an application.
+    a board item actually landed).
+
+    Only the trailing ``(#N)`` identifies the PR a commit belongs to. An earlier
+    ``(#N)`` in the subject is a reference, not the commit's own PR — e.g.
+    ``Revert "... (#3544)" (#3756)`` is PR 3756, not 3544.
     """
     numbers: set[int] = set()
     for line in subjects:
-        m = re.search(r"\(#(\d+)\)", line)
+        m = re.search(r"\(#(\d+)\)\s*$", line)
         if m:
             numbers.add(int(m.group(1)))
     return numbers
