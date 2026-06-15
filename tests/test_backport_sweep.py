@@ -1845,3 +1845,73 @@ def test_process_branch_reorder_replays_full_suffix_despite_cap(monkeypatch):
     assert 3964 in attempted, f"#3964 dropped: {attempted}"
     # One net-new candidate (#3743) applies under the cap; #3756 is deferred.
     assert 3743 in attempted
+
+
+def test_process_branch_skips_empty_late_candidate_without_reorder(monkeypatch):
+    # #3756 (May 18) is a late candidate that sorts before the in-order branch
+    # [#3938, #3964], but its change is already on the release branch (empty).
+    # It must be skipped without resetting/replaying the branch -- no churn.
+    branch = [
+        BranchAppliedPr(3938, "re-apply", "sha3938"),
+        BranchAppliedPr(3964, "later", "sha3964"),
+    ]
+    candidates = _reorder_candidates("3756", "3938", "3964")
+
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep, "find_existing_pr", lambda *_a, **_k: SimpleNamespace(number=42)
+    )
+    monkeypatch.setattr(backport_sweep, "github_https_url", lambda *_a, **_k: "https://x")
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
+    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
+    monkeypatch.setattr(
+        backport_sweep, "validate_branch_with_optional_repair", lambda *_a, **_k: (True, "")
+    )
+    monkeypatch.setattr(backport_sweep, "list_branch_applied_prs", lambda *_a, **_k: branch)
+    monkeypatch.setattr(
+        backport_sweep, "list_already_applied", lambda *_a, **_k: {"3938", "3964"}
+    )
+    # #3756 cherry-picks empty on the target branch.
+    monkeypatch.setattr(
+        backport_sweep,
+        "candidate_is_empty_on_ref",
+        lambda _d, candidate, *_a, **_k: candidate.source_pr_number == 3756,
+    )
+    monkeypatch.setattr(backport_sweep, "push_backport_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep, "upsert_pr", lambda *_a, **_k: "https://github.com/x/y/pull/100"
+    )
+    monkeypatch.setattr(
+        backport_sweep.subprocess,
+        "run",
+        lambda *_a, **_k: subprocess.CompletedProcess([], 0, "", ""),
+    )
+    resets: list[str] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        if args[:2] == ("reset", "--hard"):
+            resets.append(args[2])
+
+    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
+    monkeypatch.setattr(
+        backport_sweep, "apply_candidate",
+        lambda _d, c, *_a, **_k: CandidateResult(c.source_pr_number, c.source_pr_title, "applied"),
+    )
+
+    result = backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="9.1",
+        candidates=candidates,
+        push_repo="sarthakaggarwal97/valkey",
+        test_commands=[],
+        max_applied=5,
+    )
+
+    # No reorder: the branch was never reset, and there are no reorder notes.
+    assert resets == []
+    assert result.branch_notes == []
+    # #3756 is reported as skipped, not applied.
+    outcomes = {r.source_pr_number: r.outcome for r in result.results}
+    assert outcomes[3756] == "skipped-existing"

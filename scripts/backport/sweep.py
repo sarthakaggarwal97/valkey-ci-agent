@@ -21,6 +21,7 @@ from github import Auth, Github
 from scripts.backport.main import _run_git
 from scripts.backport.sweep_apply import (
     apply_candidate,
+    candidate_is_empty_on_ref,
 )
 from scripts.backport.sweep_git import (
     branch_has_changes,
@@ -472,6 +473,48 @@ def _process_branch(
                     target_branch,
                     backport_branch,
                 )
+                # A late candidate that sorts before commits already on the
+                # branch would force a reorder. If its change is already on the
+                # release branch (cherry-picks empty) it contributes nothing, so
+                # skip it here rather than reset+replay the branch every sweep.
+                oldest_branch_merged_at = min(
+                    (
+                        merged_at_by_source_pr[str(applied.source_pr_number)]
+                        for applied in branch_prs
+                        if str(applied.source_pr_number) in merged_at_by_source_pr
+                    ),
+                    default=None,
+                )
+                on_branch_prs = {
+                    str(applied.source_pr_number) for applied in branch_prs
+                }
+                kept_candidates = []
+                for candidate in candidates:
+                    forces_reorder = (
+                        oldest_branch_merged_at is not None
+                        and candidate.merged_at
+                        and candidate.merged_at < oldest_branch_merged_at
+                        and str(candidate.source_pr_number) not in on_branch_prs
+                    )
+                    if forces_reorder and candidate_is_empty_on_ref(
+                        tmpdir,
+                        candidate,
+                        f"origin/{target_branch}",
+                        git_env,
+                        run_git=_run_git,
+                    ):
+                        result.results.append(
+                            CandidateResult(
+                                source_pr_number=candidate.source_pr_number,
+                                source_pr_title=candidate.source_pr_title,
+                                outcome="skipped-existing",
+                                detail="already applied or empty cherry-pick on target branch",
+                            )
+                        )
+                        continue
+                    kept_candidates.append(candidate)
+                candidates = kept_candidates
+
                 prefix_length = _ordered_branch_prefix_length(
                     branch_prs,
                     candidates,
