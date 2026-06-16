@@ -59,6 +59,18 @@ def test_git_auth_keeps_askpass_outside_clone_destination(tmp_path):
     assert not askpass.exists()
 
 
+def test_git_auth_default_env_strips_ambient_tokens(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "ambient")
+    monkeypatch.setenv("GH_TOKEN", "ambient")
+    with GitAuth("token", prefix="test-git-auth-") as git_auth:
+        env = git_auth.env()
+    assert env["GIT_PASSWORD"] == "token"
+    assert env["GIT_CONFIG_NOSYSTEM"] == "1"
+    assert env["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert "GITHUB_TOKEN" not in env
+    assert "GH_TOKEN" not in env
+
+
 def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
     candidate = ProjectBackportCandidate(
         source_pr_number=10,

@@ -9,7 +9,9 @@ The agent is structured as a layered framework:
 ```text
 scripts/
   ai/          AI layer: Claude Code subprocess orchestration
-  backport/    Workflow 1: automated backports (active)
+  backport/    Automated backports (active)
+  fuzzer/      Fuzzer run monitoring (active)
+  ci_fix/      On-demand CI test-fix bot (active)
   common/      Shared infrastructure (git auth, GitHub client, safety guards)
 repos.yml      Central registry of repos, branches, and project boards
 ```
@@ -22,6 +24,7 @@ New workflows are added as sibling directories to `backport/`. Each workflow pic
 |----------|--------|-------------|
 | Backport | Active | Cherry-picks merged PRs onto release branches with AI conflict resolution |
 | Fuzzer Monitor | Active | Analyzes scheduled fuzzer runs and files issues for anomalous failures |
+| CI Fix | Active | On-demand `@valkeyrie-bot fix <ci-link>` — diagnoses and fixes a failing test on a backport PR |
 | PR Reviewer | Planned | Two-stage code review with skeptic pass |
 | Daily CI Analysis | Planned | Detects flaky tests, generates fix PRs |
 
@@ -191,6 +194,93 @@ gh workflow run monitor-fuzzer.yml \
 
 Scheduled runs always run live.
 
+## CI Fix Workflow
+
+An on-demand workflow that fixes a single failing test on a backport PR when a
+maintainer asks for it. From this agent repository, run it explicitly:
+
+```bash
+gh workflow run ci-fix.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey \
+  --field pr=<pr-number> \
+  --field run_url=https://github.com/valkey-io/valkey/actions/runs/<run_id>
+```
+
+The workflow is dispatch-only today and is scoped to `valkey-io/valkey`,
+matching the GitHub App token it mints. A comment trigger
+(`@valkeyrie-bot fix <run-url>` on a `valkey-io/valkey` PR) needs a thin
+wrapper in `valkey-io/valkey` that forwards the `issue_comment` event here,
+because such events only fire in the repository where the comment is made; that
+wrapper is a planned follow-up. The intended comment shape is:
+
+```text
+@valkeyrie-bot fix https://github.com/valkey-io/valkey/actions/runs/<run_id>
+```
+
+Add a free-text hint via the dispatch `hint` input to steer the diagnosis
+(e.g. `look at the valgrind timeout`). The bot fixes one test per invocation;
+re-run it to address the next failing test in the same run.
+
+### How it works
+
+The division of labor is the whole design: **AI judges, code executes and
+owns every verdict.** The AI never runs a command and never pushes.
+
+1. **Gate** (code, fail-closed) — parses the command, verifies the commenter
+   is an active member of `valkey-io/contributors`, and binds the failed run
+   to the PR head (`head_repo` + `head_branch` + `head_sha`). If the branch
+   moved since the run, it refuses — the log no longer describes the code.
+2. **Fetch** (code) — downloads the failed run's logs and shallow-clones the
+   repo at the exact failed commit.
+3. **Diagnose** (AI, read-only) — reads the log and the repo, including the
+   project's *own* CI workflow files to learn how it builds and tests, then
+   returns a structured proposal: port an existing upstream fix, author a
+   test-scaffolding fix, or refuse. Nothing about the test framework is
+   hardcoded, so the same engine works for any repo.
+4. **Select the verifier** (code) — code, not the AI, decides where the fix is
+   verified. It lists the jobs that actually failed in the linked run, requires
+   the AI's job hint to match one of them, and classifies that job's runner from
+   its workflow definition: an x86 Linux job verifies locally, a container job
+   verifies inside that image via Docker, a macOS job verifies on a macOS
+   runner. Anything it cannot classify safely (arm, self-hosted, dynamic) is
+   refused.
+5. **Verify + review** — apply the fix (edit-only AI; never weakens the
+   assertion under test), then verify with the selected backend:
+   - Linux/Docker: run the AI's targeted command in a **sanitized subprocess**
+     (scrubbed environment, locked working directory, timeout, output cap;
+     Docker adds no-network, dropped capabilities, non-root), where the real
+     exit code is the verdict. This path retries on failure.
+   - macOS: send the approved patch to a macOS runner the agent controls, which
+     checks out the PR head, applies the patch, and runs the command; its CI
+     conclusion is the verdict.
+   A skeptic review (read-only AI) judges whether the fix addresses the root
+   cause rather than silencing the symptom. A push requires both a passing
+   verification and an approving review.
+6. **Push** (code) — extracts only the approved patch, applies it in a fresh
+   trusted clone at the gated SHA, commits authored as the bot (no DCO
+   sign-off — a human must certify before merge), and pushes to the PR's own
+   `agent/backport/...` branch. The checkout that ran tests never receives
+   credentials. The PR's normal CI re-runs as the authoritative check. The bot
+   never merges.
+
+This is targeted verification of the one failing check, not a replay of the
+whole CI job. Every refusal posts a PR comment explaining why, with evidence,
+so when the bot can't safely fix something (a real product bug, a flaky test,
+an unverifiable environment), a maintainer can take over immediately.
+
+### Configuration
+
+Reuses the same secrets and OIDC role as the other workflows (see
+[Step 1](#step-1-configure-secrets-and-variables)). The workflow mints two
+short-lived App tokens:
+
+- On `valkey-io/valkey`: `members:read` (team authorization), `actions:read`
+  (run logs and failed-job listing), `contents:write` (push the fix),
+  `issues:write` (PR comments), `pull-requests:write` (PR metadata).
+- On `valkey-io/valkey-ci-agent`: `actions:write` (dispatch and read the
+  macOS verification workflow). Used only for the macOS backend.
+
 ## Safety
 
 - **Branch namespace** — the agent writes only `agent/backport/...` branches and opens PRs for maintainer review.
@@ -199,7 +289,7 @@ Scheduled runs always run live.
 - **Deterministic validation** — registry-configured build commands run before push. A validation failure blocks the push.
 - **Fork sync** — when a different-owner `push_repo` is configured, the agent fast-forwards that fork's release branch to match upstream before cherry-picking
 - **Stale branch pruning** — if a previous backport PR was closed without merging, the agent deletes the orphaned branch before starting fresh
-- **DCO** — all agent commits are signed off
+- **DCO** — backport commits are signed off. ci_fix commits are authored by the bot without a sign-off, so a human certifies the change before merge.
 
 ## Documentation
 

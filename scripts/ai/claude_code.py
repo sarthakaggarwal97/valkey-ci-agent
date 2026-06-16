@@ -10,6 +10,8 @@ import subprocess
 import threading
 from typing import Any
 
+from scripts.common.proc import filter_env
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CLAUDE_MODEL = "opus"
@@ -160,11 +162,7 @@ def _build_claude_env(env_allowlist: tuple[str, ...] | None = None) -> dict[str,
     by the Bedrock provider.
     """
     allowed = set(env_allowlist or DEFAULT_CLAUDE_ENV_ALLOWLIST)
-    env = {
-        name: value
-        for name, value in os.environ.items()
-        if name in allowed and value
-    }
+    env = filter_env(tuple(allowed))
     env["CLAUDE_CODE_USE_BEDROCK"] = "1"
     env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = _resolve_bedrock_opus_model()
     return env

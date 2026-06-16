@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.ai.runtime import run_agent
+from scripts.common.ai_output import extract_json_object
 from scripts.common.git_clone import shallow_clone_at_sha
 from scripts.common.incidents import compute_fingerprint
 from scripts.common.text_utils import strip_ansi
@@ -222,27 +223,11 @@ def _format_source_note(context: FuzzerRunContext, *, valkey_ok: bool, fuzzer_ok
 
 
 def _parse_claude_response(stdout: str) -> dict[str, Any]:
-    """Find the last stream-json `result` event, fall back to plain JSON."""
-    text = stdout
-    for line in stdout.strip().splitlines():
-        try:
-            ev = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(ev, dict) and ev.get("type") == "result" and "result" in ev:
-            text = ev["result"]
-    decoder = json.JSONDecoder()
-    start = text.find("{")
-    while start != -1:
-        try:
-            obj, _ = decoder.raw_decode(text[start:])
-        except ValueError:
-            start = text.find("{", start + 1)
-            continue
-        if isinstance(obj, dict) and "overall_status" in obj:
-            return obj
-        start = text.find("{", start + 1)
-    raise ValueError("No analysis JSON object in Claude response")
+    """Find the analysis JSON object in the Claude response."""
+    obj = extract_json_object(stdout, required_key="overall_status")
+    if obj is None:
+        raise ValueError("No analysis JSON object in Claude response")
+    return obj
 
 
 class FuzzerRunAnalyzer:
