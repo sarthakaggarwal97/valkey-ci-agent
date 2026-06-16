@@ -7,9 +7,17 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.common.proc import filter_env
+
 
 def github_https_url(repo_full_name: str) -> str:
     return f"https://github.com/{repo_full_name}.git"
+
+
+_GIT_AUTH_ENV_ALLOWLIST = (
+    "PATH", "HOME", "TMPDIR", "TMP", "USER", "LOGNAME", "LANG", "LC_ALL",
+    "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE",
+)
 
 
 @dataclass
@@ -54,9 +62,11 @@ class GitAuth:
         return self._askpass_path
 
     def env(self, base: dict[str, str] | None = None) -> dict[str, str]:
-        env = dict(base or os.environ)
+        env = dict(base) if base is not None else filter_env(_GIT_AUTH_ENV_ALLOWLIST)
         if self.token:
             env["GIT_TERMINAL_PROMPT"] = "0"
+            env["GIT_CONFIG_NOSYSTEM"] = "1"
+            env["GIT_CONFIG_GLOBAL"] = os.devnull
             env["GIT_PASSWORD"] = self.token
             if self._askpass_path:
                 env["GIT_ASKPASS"] = self._askpass_path

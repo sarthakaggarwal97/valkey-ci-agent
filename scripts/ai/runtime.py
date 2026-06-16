@@ -20,6 +20,7 @@ AgentProfileName = Literal[
     "conflict_resolve_edit_only",
     "validation_repair_edit_only",
     "fuzzer_analysis_readonly",
+    "ci_fix_diagnose_readonly",
 ]
 
 
@@ -78,6 +79,15 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
     ),
     "fuzzer_analysis_readonly": AgentProfile(
         name="fuzzer_analysis_readonly",
+        allowed_tools="Read,Grep,Glob",
+        timeout=1200,
+        effort="max",
+        max_turns=200,
+        writes_allowed=False,
+        output_schema="text",
+    ),
+    "ci_fix_diagnose_readonly": AgentProfile(
+        name="ci_fix_diagnose_readonly",
         allowed_tools="Read,Grep,Glob",
         timeout=1200,
         effort="max",

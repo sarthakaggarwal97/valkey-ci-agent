@@ -1,8 +1,8 @@
 # Architecture
 
-The Valkey CI Agent runs scheduled workflows that act on Valkey repositories
-defined in the central `repos.yml` registry. Two workflows are active today:
-backports and fuzzer monitoring.
+The Valkey CI Agent runs workflows that act on Valkey repositories defined in
+the central `repos.yml` registry. Three workflows are active today: backports
+and fuzzer monitoring (scheduled), and the CI test-fix bot (on-demand).
 
 ## Layers
 
@@ -10,6 +10,7 @@ backports and fuzzer monitoring.
 scripts/
   backport/    Backport workflow
   fuzzer/      Fuzzer monitor workflow
+  ci_fix/      CI test-fix bot
   ai/          Claude Code subprocess orchestration
   common/      Shared infrastructure
 repos.yml      Registry of repos, release branches, and project boards
@@ -112,6 +113,65 @@ updating issues on `valkey-fuzzer`.
 - `scripts/fuzzer/issue_renderer.py` — fuzzer-specific title/body/comment rendering
 - `scripts/fuzzer/models.py` — typed dataclasses for the analysis pipeline
 
+## CI Fix Flow
+
+On-demand, triggered by a maintainer commenting `@valkeyrie-bot fix <ci-link>`
+on a backport PR. Decoupled from the backport sweep; it shares only the
+common infrastructure.
+
+```text
+ci_fix/main.py (workflow_dispatch or issue_comment event)
+  -> gate.build_fix_request(...)        fail-closed auth (contributors team)
+                                        + SHA-bound run gating
+  -> pipeline.run_ci_fix(...)
+       common.workflow_artifacts -> download the failed run's logs
+       common.git_clone          -> shallow-clone the repo at the failed SHA
+       diagnose.diagnose_failure -> read-only AI returns a FixProposal
+                                    (port | author | refuse)
+       review.run_fix_loop       -> apply (edit-only AI)
+                                    -> runner.run_verification_command (code
+                                       runs the AI-proposed command in a
+                                       sanitized subprocess; exit code is the
+                                       verdict)
+                                    -> review_fix (skeptic AI)
+                                    repeat on feedback; success needs the test
+                                    to pass AND the review to approve
+       push.commit_and_push_fix  -> extract approved patch
+                                    -> apply in a fresh trusted clone
+                                    -> DCO commit, push to the PR's own
+                                       agent/backport/... branch (never merge)
+  -> comment.render_comment(outcome) -> posted on the PR
+```
+
+The defining invariant is the AI/code split plus a hard checkout boundary: the
+AI proposes (which test, how to fix, how to run it, whether the fix is sound)
+and code disposes (runs the command, owns pass/fail, performs the push). The AI
+subprocess never executes a command and never touches the remote. The checkout
+that runs untrusted test code never receives push credentials; publishing
+happens by applying the approved patch in a fresh clone at the gated SHA.
+
+Nothing about the test framework is hardcoded. The diagnosis reads the target
+repo's own CI workflow files to learn how it builds and runs tests, so the
+same engine works for any repo with a comment-triggerable PR — not just Valkey
+core's Tcl suite.
+
+Every failure mode — un-runnable variant, a real product bug, a flaky test, a
+moved branch, a non-member commenter — returns a `FixOutcome` that becomes an
+explanatory PR comment rather than a silent failure or an unsafe push.
+
+### Entry Points
+
+- `scripts/ci_fix/main.py` — workflow_dispatch / issue_comment event entry point
+- `scripts/ci_fix/gate.py` — command parsing, fail-closed team auth, SHA-bound run gating
+- `scripts/ci_fix/diagnose.py` — read-only AI diagnosis into a structured proposal
+- `scripts/ci_fix/apply.py` — edit-only AI fix application
+- `scripts/ci_fix/runner.py` — sanitized command execution that owns the verdict
+- `scripts/ci_fix/review.py` — skeptic review and the apply/run/review loop
+- `scripts/ci_fix/push.py` — patch handoff, DCO commit, namespace-restricted push
+- `scripts/ci_fix/comment.py` — render the outcome into a PR comment
+- `scripts/ci_fix/pipeline.py` — top-level orchestration
+- `scripts/ci_fix/models.py` — typed dataclasses for the pipeline
+
 ## AI Layer
 
 ```text
@@ -124,6 +184,7 @@ Profiles registered today:
 
 - `conflict_resolve_edit_only` — backport conflict resolution (Read/Edit/Bash, writes allowed)
 - `fuzzer_analysis_readonly` — fuzzer triage (Read/Grep/Glob only, no writes)
+- `ci_fix_diagnose_readonly` — CI-fix diagnosis and skeptic review (Read/Grep/Glob only, no writes)
 
 ## Common Infrastructure
 
@@ -133,13 +194,19 @@ Workflow-agnostic helpers in `scripts/common/`:
 - `github_client.py` — retry wrapper for GitHub API
 - `text_utils.py` — ANSI stripping for log scanning
 - `workflow_artifacts.py` — list and download GitHub Actions workflow runs
-  and their uploaded artifact bundles. Used by the fuzzer flow today; any
-  future workflow that needs to analyze recent runs of a target workflow
-  reuses it directly.
+  and their uploaded artifact bundles, plus `download_run_logs(...)` for a
+  run's raw console logs. Used by the fuzzer flow (artifacts) and the CI-fix
+  flow (run logs).
 - `git_clone.py` — `shallow_clone_at_sha(repo, dest, sha)` — defensive
   shallow clone of a public repo at a specific commit, with input
-  validation against argument injection. Used by the fuzzer flow to give
-  Claude source access at the tested SHA.
+  validation against argument injection. Gives the AI source access at the
+  tested SHA in both the fuzzer and CI-fix flows.
+- `proc.py` — `git_output(...)` (run a git command and return stdout) and
+  `filter_env(allowlist)` (the single place that turns an env allowlist into
+  a concrete, scrubbed subprocess environment).
+- `ai_output.py` — `extract_json_object(stdout, required_key=...)` parses a
+  structured verdict out of Claude Code's stream-json output. Shared by the
+  fuzzer and CI-fix flows.
 - `incidents.py` — `compute_fingerprint(namespace, shapes)` produces a stable
   hash over normalized anomaly shapes for issue deduplication.
 - `issue_dedup.py` — `IssueDedupPublisher` creates or updates a GitHub
@@ -160,7 +227,9 @@ the normal deployment model.
 
 ## Planned Workflows
 
-Future sibling modules to `backport/` and `fuzzer/`:
+Future sibling modules and extensions:
 
 - **PR Reviewer** — two-stage code review with skeptic pass
-- **Daily CI Analysis** — detect flaky tests, generate fix PRs
+- **Autonomous CI-fix poller** — the CI-fix engine, driven by a poller that
+  detects red backport PRs (or test-failure issues) instead of a maintainer
+  `@`-mention. Same pipeline, a different front door.

@@ -9,7 +9,9 @@ The agent is structured as a layered framework:
 ```text
 scripts/
   ai/          AI layer: Claude Code subprocess orchestration
-  backport/    Workflow 1: automated backports (active)
+  backport/    Automated backports (active)
+  fuzzer/      Fuzzer run monitoring (active)
+  ci_fix/      On-demand CI test-fix bot (active)
   common/      Shared infrastructure (git auth, GitHub client, safety guards)
 repos.yml      Central registry of repos, branches, and project boards
 ```
@@ -22,6 +24,7 @@ New workflows are added as sibling directories to `backport/`. Each workflow pic
 |----------|--------|-------------|
 | Backport | Active | Cherry-picks merged PRs onto release branches with AI conflict resolution |
 | Fuzzer Monitor | Active | Analyzes scheduled fuzzer runs and files issues for anomalous failures |
+| CI Fix | Active | On-demand `@valkeyrie-bot fix <ci-link>` — diagnoses and fixes a failing test on a backport PR |
 | PR Reviewer | Planned | Two-stage code review with skeptic pass |
 | Daily CI Analysis | Planned | Detects flaky tests, generates fix PRs |
 
@@ -190,6 +193,78 @@ gh workflow run monitor-fuzzer.yml \
 ```
 
 Scheduled runs always run live.
+
+## CI Fix Workflow
+
+An on-demand workflow that fixes a single failing test on a backport PR when a
+maintainer asks for it. From this agent repository, run it explicitly:
+
+```bash
+gh workflow run ci-fix.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey \
+  --field pr=<pr-number> \
+  --field run_url=https://github.com/valkey-io/valkey/actions/runs/<run_id>
+```
+
+The workflow also supports `issue_comment` events for a thin workflow installed
+in the target repository. A comment trigger must live in the repository where
+the PR comment is created; this agent repo cannot receive comments from
+`valkey-io/valkey` PRs directly. The shipped workflow is intentionally scoped
+to `valkey-io/valkey`, matching the GitHub App token it mints. The command
+shape is:
+
+```
+@valkeyrie-bot fix https://github.com/valkey-io/valkey/actions/runs/<run_id>
+```
+
+Add a free-text hint after the link, or via the dispatch `hint` input, to steer
+the diagnosis (e.g. `... look at the valgrind timeout`). The bot fixes one test
+per invocation; re-run it to address the next failing test in the same run.
+
+### How it works
+
+The division of labor is the whole design: **AI judges, code executes and
+owns every verdict.** The AI never runs a command and never pushes.
+
+1. **Gate** (code, fail-closed) — parses the command, verifies the commenter
+   is an active member of `valkey-io/contributors`, and binds the failed run
+   to the PR head (`head_repo` + `head_branch` + `head_sha`). If the branch
+   moved since the run, it refuses — the log no longer describes the code.
+2. **Fetch** (code) — downloads the failed run's logs and shallow-clones the
+   repo at the exact failed commit.
+3. **Diagnose** (AI, read-only) — reads the log and the repo, including the
+   project's *own* CI workflow files to learn how it builds and tests, then
+   returns a structured proposal: port an existing upstream fix, author a
+   test-scaffolding fix, or refuse. Nothing about the test framework is
+   hardcoded, so the same engine works for any repo.
+4. **Apply + run + review loop** (the fix-feedback loop):
+   - apply the fix (edit-only AI; never weakens the assertion under test),
+   - run the AI-proposed build+test command in a **sanitized subprocess** —
+     scrubbed environment, locked working directory, timeout, output cap —
+     where the real exit code is the verdict,
+   - a skeptic review (read-only AI) judges whether the fix addresses the
+     root cause rather than silencing the symptom.
+   A push requires **both** the test to pass and the review to approve;
+   failures feed back into a revised attempt.
+5. **Push** (code) — extracts only the approved patch, applies it in a fresh
+   trusted clone at the gated SHA, commits with a DCO sign-off, and pushes to
+   the PR's own `agent/backport/...` branch. The checkout that ran tests never
+   receives credentials. The PR's normal CI re-runs as the authoritative
+   check. The bot never merges.
+
+Every refusal posts a PR comment explaining why, with evidence — so when the
+bot can't safely fix something (a real product bug, a flaky test, an
+un-runnable variant), a maintainer can take over immediately.
+
+### Configuration
+
+Reuses the same secrets and OIDC role as the other workflows (see
+[Step 1](#step-1-configure-secrets-and-variables)). The Valkeyrie App needs
+`members:read` (team authorization), `actions:read` (run logs),
+`contents:write` (push the fix), and `pull-requests:write` (comment) on
+`valkey-io/valkey`. The workflow mints a short-lived installation token scoped
+to that repository.
 
 ## Safety
 
