@@ -21,7 +21,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
 
-from scripts.ci_fix.apply import apply_fix
+from scripts.ci_fix.apply import apply_fix, apply_port_commit
 from scripts.ci_fix.diagnose import diagnose_failure, write_logs_to_workspace
 from scripts.ci_fix.gate import GateRejection, ParsedCommand, build_fix_request
 from scripts.ci_fix.models import (
@@ -30,7 +30,9 @@ from scripts.ci_fix.models import (
     FixProposal,
     FixRequest,
     OutcomeKind,
+    ReviewVerdict,
 )
+from scripts.ci_fix.port_discovery import discover_port_candidates
 from scripts.ci_fix.push import PushRefused, commit_and_push_fix
 from scripts.ci_fix.review import (
     LoopResult,
@@ -122,9 +124,19 @@ def _run_in_workspace(
             summary=f"Could not clone {request.repo_full_name} at {request.head_sha[:12]}.",
         )
 
-    proposal = diagnose_func(str(logs_dir), str(repo_dir), hint=request.hint)
+    port_candidates = discover_port_candidates(str(repo_dir), str(logs_dir))
+    proposal = diagnose_func(
+        str(logs_dir), str(repo_dir), hint=request.hint,
+        port_candidates=port_candidates,
+    )
     if proposal.path is FixPath.REFUSE:
         return _refuse(proposal, proposal.reasoning or "No safe fix found.")
+
+    if proposal.path is FixPath.PORT:
+        return _port_and_push(
+            repo_dir, request, proposal, failed_jobs,
+            git_env=git_env, push_func=push_func,
+        )
 
     plan = _plan_verification(repo_dir, request, proposal, failed_jobs)
     if isinstance(plan, str):  # a refusal reason
@@ -191,6 +203,45 @@ def _loop_and_push(
         repo_dir, request, proposal, loop.changed_paths,
         review=loop.review, run_result=loop.run_result,
         verify_backend=backend, git_env=git_env, push_func=push_func,
+    )
+
+
+def _port_and_push(
+    repo_dir: Path, request: FixRequest, proposal: FixProposal, failed_jobs: tuple[str, ...],
+    *, git_env: dict[str, str], push_func: Push,
+) -> FixOutcome:
+    """Apply an already-merged upstream fix and publish it.
+
+    PORT is the only path allowed to rely on the PR's normal CI as the
+    authoritative verifier. Code still requires the hinted job to be a real
+    failed job and requires the upstream commit to cherry-pick cleanly.
+    """
+    job = _match_failed_job(proposal.failing_job_hint, failed_jobs)
+    if job is None:
+        return _refuse(
+            proposal,
+            f"The named job {proposal.failing_job_hint or '(none)'!r} is not among the failed "
+            f"jobs of the linked run ({', '.join(failed_jobs) or 'none found'}); "
+            "refusing rather than porting a fix for a job that did not fail.",
+        )
+    if not proposal.unstable_fix_commit.strip():
+        return _refuse(proposal, "diagnosis chose PORT but did not name an upstream fix commit")
+
+    applied = apply_port_commit(str(repo_dir), proposal.unstable_fix_commit)
+    if not applied.ok:
+        return _refuse(proposal, applied.detail)
+
+    review = ReviewVerdict(
+        approved=True,
+        reasoning=(
+            f"Ported upstream commit {proposal.unstable_fix_commit[:12]}; "
+            "this PORT path relies on the PR's normal CI as the verification authority."
+        ),
+    )
+    return _push(
+        repo_dir, request, proposal, applied.changed_paths,
+        review=review, verify_backend="upstream-port",
+        git_env=git_env, push_func=push_func,
     )
 
 

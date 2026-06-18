@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import subprocess
 from unittest.mock import MagicMock
 
 from scripts.ci_fix import apply as apply_mod
-from scripts.ci_fix.apply import apply_fix
+from scripts.ci_fix.apply import apply_fix, apply_port_commit
 from scripts.ci_fix.models import FixPath, FixProposal
 
 
@@ -68,14 +69,71 @@ def test_feedback_included_in_prompt(monkeypatch):
     assert "rejected" in captured["prompt"].lower()
 
 
-def test_port_uses_edit_only_profile(monkeypatch):
-    captured = {}
+def test_port_cherry_picks_clean_commit(tmp_path):
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", "-b", "release", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+    (repo / "f.txt").write_text("base\n")
+    subprocess.run(["git", "-C", str(repo), "add", "f.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "base"], check=True)
+    subprocess.run(["git", "-C", str(repo), "checkout", "-qb", "unstable"], check=True)
+    (repo / "f.txt").write_text("fixed\n")
+    subprocess.run(["git", "-C", str(repo), "commit", "-am", "fix upstream", "-q"], check=True)
+    commit = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", "release"], check=True)
 
-    def fake_run_agent(profile, prompt, **kwargs):
-        captured["profile"] = profile
-        return MagicMock(returncode=0, stdout="", stderr="")
+    result = apply_port_commit(str(repo), commit)
 
-    monkeypatch.setattr(apply_mod, "run_agent", fake_run_agent)
-    monkeypatch.setattr(apply_mod, "worktree_changed_paths", lambda _r: ("t",))
-    apply_fix("/repo", _proposal(FixPath.PORT))
-    assert captured["profile"] == "validation_repair_edit_only"
+    assert result.ok is True
+    assert result.changed_paths == ("f.txt",)
+    assert (repo / "f.txt").read_text() == "fixed\n"
+
+
+def test_apply_fix_port_never_calls_agent(monkeypatch, tmp_path):
+    agent = MagicMock()
+    monkeypatch.setattr(apply_mod, "run_agent", agent)
+    monkeypatch.setattr(
+        apply_mod, "apply_port_commit",
+        lambda *_a, **_k: apply_mod.PortApplyResult(ok=True, changed_paths=("f.txt",)),
+    )
+    proposal = _proposal(FixPath.PORT).__class__(
+        **{**_proposal(FixPath.PORT).__dict__, "unstable_fix_commit": "abc1234"}
+    )
+    ok, changed = apply_fix(str(tmp_path), proposal)
+    assert ok is True
+    assert changed == ("f.txt",)
+    agent.assert_not_called()
+
+
+def test_port_conflict_refuses_and_aborts(tmp_path):
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", "-b", "release", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+    (repo / "f.txt").write_text("base\n")
+    subprocess.run(["git", "-C", str(repo), "add", "f.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "base"], check=True)
+    subprocess.run(["git", "-C", str(repo), "checkout", "-qb", "unstable"], check=True)
+    (repo / "f.txt").write_text("upstream\n")
+    subprocess.run(["git", "-C", str(repo), "commit", "-am", "fix upstream", "-q"], check=True)
+    commit = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", "release"], check=True)
+    (repo / "f.txt").write_text("release diverged\n")
+    subprocess.run(["git", "-C", str(repo), "commit", "-am", "release edit", "-q"], check=True)
+
+    result = apply_port_commit(str(repo), commit)
+
+    assert result.ok is False
+    assert "cherry-pick" in result.detail
+    status = subprocess.run(
+        ["git", "-C", str(repo), "status", "--short"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    assert status == ""
