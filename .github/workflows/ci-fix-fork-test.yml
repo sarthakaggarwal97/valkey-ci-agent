@@ -24,6 +24,10 @@ on:
         description: "Optional diagnosis hint"
         required: false
         type: string
+      commenter:
+        description: "Requesting user (test passthrough)"
+        required: false
+        type: string
 
 permissions: {}
 
