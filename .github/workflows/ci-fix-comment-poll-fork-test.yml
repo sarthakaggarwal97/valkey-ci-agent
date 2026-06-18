@@ -1,0 +1,55 @@
+name: CI Fix Comment Poll Fork Test
+
+# THROWAWAY fork-testing workflow for the comment poller. Scans the personal
+# valkey fork for "@valkeyrie-ops fix <ci-link>" comments and dispatches the
+# fork's ci-fix-fork-test workflow. Uses a classic PAT and the fork-owner
+# allowlist, never the production App or any valkey-io repo. Not for upstream.
+
+on:
+  workflow_dispatch:
+    inputs:
+      lookback_minutes:
+        description: "Comment lookback window in minutes"
+        required: false
+        type: string
+        default: "120"
+
+permissions: {}
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      # The valkey-io/contributors team is not readable from a fork, so the
+      # allowlist authorizes the fork owner instead.
+      CI_FIX_AUTH_ALLOWLIST: sarthakaggarwal97
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Poll the fork and dispatch the fork ci-fix
+        env:
+          CI_FIX_POLL_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          CI_FIX_POLL_TARGET_REPO: sarthakaggarwal97/valkey
+          CI_FIX_POLL_AGENT_REPO: sarthakaggarwal97/valkey-ci-agent
+          CI_FIX_POLL_WORKFLOW: ci-fix-fork-test.yml
+          CI_FIX_POLL_REF: ci-fix-fork-test
+          # With a PAT the claim reaction is authored by the user, not a bot.
+          CI_FIX_POLL_BOT_LOGIN: sarthakaggarwal97
+          CI_FIX_POLL_LOOKBACK_MINUTES: ${{ inputs.lookback_minutes || '120' }}
+        run: python -m scripts.ci_fix.comment_poll
