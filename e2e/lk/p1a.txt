@@ -1,3 +1,3 @@
 top
-mid TARGET p1a
+mid FEATURE p1a
 bot
