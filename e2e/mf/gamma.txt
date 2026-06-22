@@ -1,0 +1,6 @@
+header gamma
+line G1 base
+line G2 base
+line G3 base
+line G4 base
+footer gamma

@@ -1,0 +1,5 @@
+header alpha
+line A1 base
+line A2 base
+line A3 base
+footer alpha
