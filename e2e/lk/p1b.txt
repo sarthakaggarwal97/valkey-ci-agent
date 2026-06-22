@@ -1,3 +1,3 @@
 top
-mid SHARED p1b
+mid FEATURE p1b
 bot
