@@ -1,6 +1,6 @@
 header gamma
 line G1 base
-line G2 TARGET
-line G3 TARGET
+line G2 FEATURE-two
+line G3 FEATURE-two
 line G4 base
 footer gamma

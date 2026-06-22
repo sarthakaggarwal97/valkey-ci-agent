@@ -1,5 +1,5 @@
 header alpha
 line A1 base
-line A2 TARGET
-line A3 TARGET
+line A2 FEATURE-one
+line A3 FEATURE-one
 footer alpha
