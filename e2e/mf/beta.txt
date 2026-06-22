@@ -1,4 +1,4 @@
 header beta
-line B1 base
+line B1 TARGET
 line B2 base
 footer beta
