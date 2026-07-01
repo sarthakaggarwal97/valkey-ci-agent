@@ -16,7 +16,10 @@ from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
     CandidateResult,
 )
-from scripts.backport.utils import pr_numbers_from_commit_subjects
+from scripts.backport.utils import (
+    pr_numbers_from_applied_tables,
+    pr_numbers_from_commit_subjects,
+)
 from scripts.common.git_auth import github_https_url
 from scripts.common.github_client import retry_github_call
 
@@ -26,6 +29,8 @@ logger = logging.getLogger(__name__)
 RunGit = Callable[..., Any]
 
 BRANCH_PREFIX = "agent/backport/sweep"
+_COMMIT_RECORD_DELIM = "\x00"
+_TARGET_APPLIED_SCAN_LIMIT = 5000
 
 
 def safe_tmp_component(value: str) -> str:
@@ -75,6 +80,33 @@ def list_already_applied(repo_dir: str, base_branch: str, backport_branch: str) 
         str(result.source_pr_number)
         for result in list_applied_prs_on_branch(repo_dir, base_branch, backport_branch)
     }
+
+
+def list_applied_prs_on_target_branch(repo_dir: str, base_branch: str) -> set[str]:
+    """Return source PRs listed as applied in release-branch sweep commits.
+
+    Squash-merged sweep PRs name the backport PR in the commit subject, so only
+    the preserved ``## Applied`` table is trusted here. The scan is bounded to
+    recent history to cover open board items without walking an entire long-lived
+    release branch. Direct cherry-picks that are already on the target branch
+    are still handled by Git as empty cherry-picks; this helper is only for the
+    squash-sweep signal Git cannot infer from individual commit subjects.
+    """
+    bodies = subprocess.run(
+        [
+            "git",
+            "log",
+            f"--max-count={_TARGET_APPLIED_SCAN_LIMIT}",
+            "-z",
+            "--format=%B",
+            f"origin/{base_branch}",
+        ],
+        cwd=repo_dir, capture_output=True, text=True, check=True,
+    )
+    applied = pr_numbers_from_applied_tables(
+        bodies.stdout.split(_COMMIT_RECORD_DELIM)
+    )
+    return {str(number) for number in applied}
 
 
 def list_applied_prs_on_branch(

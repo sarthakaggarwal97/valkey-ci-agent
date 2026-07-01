@@ -7,6 +7,7 @@ from scripts.backport.utils import (
     build_pr_title,
     has_conflict_markers,
     is_whitespace_only_conflict,
+    pr_numbers_from_applied_tables,
 )
 
 
@@ -27,6 +28,35 @@ class TestBuildPrTitle:
     def test_preserves_original_title(self) -> None:
         title = "[BUG] Segfault on startup"
         assert build_pr_title(title, "7.2") == "[Backport 7.2] [BUG] Segfault on startup"
+
+
+class TestPrNumbersFromAppliedTables:
+    def test_reads_only_source_pr_column_from_applied_section(self) -> None:
+        body = (
+            "[backport] Backport sweep for 9.1 (#3774)\n\n"
+            "## Applied\n\n"
+            "| Source PR | Title | Detail |\n"
+            "|---|---|---|\n"
+            "| #3801 | Validate DB clause | |\n"
+            "| #3847 | Revert work (#7777) | depends on #8888 |\n\n"
+            "## Needs attention\n\n"
+            "| Source PR | Title | Outcome | Reason |\n"
+            "|---|---|---|---|\n"
+            "| #9999 | Failed one | skipped-conflict | conflict |\n"
+        )
+
+        assert pr_numbers_from_applied_tables([body]) == {3801, 3847}
+
+    def test_handles_linked_source_pr_cells_and_wrapped_rows(self) -> None:
+        body = (
+            "## Applied\n\n"
+            "| Detail | Source PR | Title |\n"
+            "|---|---|---|\n"
+            "| resolved | [#42](https://github.com/o/r/pull/42) | Long title |\n"
+            "continued title text with #1234 reference |\n"
+        )
+
+        assert pr_numbers_from_applied_tables([body]) == {42}
 
 
 
@@ -227,6 +257,5 @@ class TestIsWhitespaceOnlyConflictProperty:
         modified_stripped = re.sub(r"\s+", "", modified)
         assume(base_stripped != modified_stripped)
         assert is_whitespace_only_conflict(base, modified) is False
-
 
 

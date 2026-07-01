@@ -7,6 +7,7 @@ from collections.abc import Iterator
 
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
+    DETAIL_ALREADY_ON_TARGET_BRANCH,
     DETAIL_EMPTY_ON_TARGET,
     DETAIL_RESOLVED_BY_AI,
     BranchSweepResult,
@@ -34,6 +35,12 @@ def _skip_reason(result: CandidateResult) -> str:
     the resolution matched the target branch), falling back to a generic line.
     """
     return result.skip_reason.strip() or _SKIP_REASON_FALLBACK
+
+
+def _reported_skip_reason(result: CandidateResult) -> str:
+    if result.detail == DETAIL_ALREADY_ON_TARGET_BRANCH:
+        return "Already applied on the target branch by an earlier sweep."
+    return _skip_reason(result)
 
 
 def result_is_on_backport_branch(result: CandidateResult) -> bool:
@@ -95,16 +102,17 @@ def build_pr_body(
     )
     resolved = {r.source_pr_number for r in applied}
     failed_now = []
-    skipped_empty = []
+    skipped_results = []
+    applied_numbers = {a.source_pr_number for a in applied}
     for r in result.results:
         if r.outcome in {"applied", "skipped-existing"}:
             resolved.add(r.source_pr_number)
             if (
                 r.outcome == "skipped-existing"
-                and r.detail == DETAIL_EMPTY_ON_TARGET
-                and r.source_pr_number not in {a.source_pr_number for a in applied}
+                and r.detail in {DETAIL_EMPTY_ON_TARGET, DETAIL_ALREADY_ON_TARGET_BRANCH}
+                and r.source_pr_number not in applied_numbers
             ):
-                skipped_empty.append(r)
+                skipped_results.append(r)
         else:
             failed_now.append(r)
     failed = merge_failed_results(failed_now, resolved=resolved, previous_body=previous_body)
@@ -126,21 +134,20 @@ def build_pr_body(
                 "",
             ])
 
-    if skipped_empty:
+    if skipped_results:
         lines.extend([
             "## Skipped",
             "",
-            "These candidates were evaluated but contribute no change to this "
-            "branch, e.g. the fix targets code that does not exist here. No "
-            "backport commit was created for them.",
+            "These candidates were evaluated, but no backport commit was "
+            "created on this sweep branch.",
             "",
             "| Source PR | Title | Reason |",
             "|---|---|---|",
         ])
-        for r in skipped_empty:
+        for r in skipped_results:
             lines.append(
                 f"| #{r.source_pr_number} | {_esc(r.source_pr_title)} | "
-                f"{_esc(_skip_reason(r))} |",
+                f"{_esc(_reported_skip_reason(r))} |",
             )
         lines.append("")
 
