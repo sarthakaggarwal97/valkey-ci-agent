@@ -27,6 +27,7 @@ from scripts.backport.sweep_git import (
     clone_target_branch,
     list_already_applied,
     list_applied_prs_on_branch,
+    list_applied_prs_on_target_branch,
     push_backport_branch,
     safe_tmp_component,
     sync_target_branch_to_source,
@@ -34,6 +35,7 @@ from scripts.backport.sweep_git import (
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
+    DETAIL_ALREADY_ON_TARGET_BRANCH,
     BranchSweepResult,
     CandidateResult,
     ProjectBackportCandidate,
@@ -368,7 +370,12 @@ def _process_branch(
                 target_branch,
                 backport_branch,
             )
+            already_on_target = list_applied_prs_on_target_branch(
+                tmpdir,
+                target_branch,
+            )
             logger.info("Already applied on %s: %s", backport_branch, already_applied)
+            logger.info("Already applied on %s: %s", target_branch, already_on_target)
 
             applied_count = 0
 
@@ -382,13 +389,20 @@ def _process_branch(
                     )
                     break
 
-                if str(candidate.source_pr_number) in already_applied:
+                candidate_pr = str(candidate.source_pr_number)
+                skip_detail = None
+                if candidate_pr in already_applied:
+                    skip_detail = DETAIL_ALREADY_ON_SWEEP_BRANCH
+                elif candidate_pr in already_on_target:
+                    skip_detail = DETAIL_ALREADY_ON_TARGET_BRANCH
+
+                if skip_detail is not None:
                     result.results.append(
                         CandidateResult(
                             source_pr_number=candidate.source_pr_number,
                             source_pr_title=candidate.source_pr_title,
                             outcome="skipped-existing",
-                            detail=DETAIL_ALREADY_ON_SWEEP_BRANCH,
+                            detail=skip_detail,
                         )
                     )
                     continue
@@ -683,4 +697,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -22,6 +22,7 @@ from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
     clone_target_branch,
     list_applied_prs_on_branch,
+    list_applied_prs_on_target_branch,
     push_backport_branch,
     safe_tmp_component,
     sync_target_branch_to_source,
@@ -969,6 +970,7 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: {"2"})
+    monkeypatch.setattr(backport_sweep, "list_applied_prs_on_target_branch", lambda *_args, **_kwargs: set())
     monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(sweep_validation, "changed_paths_since_base", lambda *_args, **_kwargs: [], raising=False)
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
@@ -1042,6 +1044,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: set())
+    monkeypatch.setattr(backport_sweep, "list_applied_prs_on_target_branch", lambda *_args, **_kwargs: set())
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
     monkeypatch.setattr(
         backport_sweep,
@@ -1079,7 +1082,8 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
 
 
 def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn,
-                               already_applied=None, max_applied=1):
+                               already_applied=None, already_on_target=None,
+                               max_applied=1):
     """Run _process_branch with the common green-only mocks wired up.
 
     Tests supply how each candidate applies (apply_fn) and how the branch
@@ -1093,6 +1097,11 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
         backport_sweep,
         "list_already_applied",
         lambda *_a, **_k: set(already_applied or set()),
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "list_applied_prs_on_target_branch",
+        lambda *_a, **_k: set(already_on_target or set()),
     )
     monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_a, **_k: [])
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
@@ -1233,6 +1242,32 @@ def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
     assert pushed == [("agent/backport/sweep/8.1", False)]
 
 
+
+
+def test_process_branch_skips_squash_applied_target_candidate(monkeypatch):
+    """Squash-merged sweep entries on the target branch are not re-applied."""
+    from scripts.backport.sweep_models import DETAIL_ALREADY_ON_TARGET_BRANCH
+
+    attempted: list[int] = []
+
+    def fake_apply(_repo_dir, candidate, *_args, **_kwargs):
+        attempted.append(candidate.source_pr_number)
+        return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
+
+    result, pushed, _upserts, _resets = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(40), _candidate(41)],
+        apply_fn=fake_apply,
+        validate_fn=lambda *_a, **_k: (True, ""),
+        already_on_target={"40"},
+        max_applied=1,
+    )
+
+    assert attempted == [41]
+    assert result.results[0].outcome == "skipped-existing"
+    assert result.results[0].detail == DETAIL_ALREADY_ON_TARGET_BRANCH
+    assert result.results[1].outcome == "applied"
+    assert pushed == [("agent/backport/sweep/8.1", False)]
 
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -1500,6 +1535,51 @@ def test_list_applied_prs_on_branch_reads_backport_commit_subjects(tmp_path):
     ]
 
 
+def test_list_applied_prs_on_target_branch_reads_squash_applied_tables(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "8.0")
+    _git(repo, "config", "user.name", "Test User")
+    _git(repo, "config", "user.email", "test@example.com")
+    (repo / "file.txt").write_text("base\n", encoding="utf-8")
+    _git(repo, "add", "file.txt")
+    _git(repo, "commit", "-q", "-m", "base")
+
+    body = (
+        "[backport] Backport sweep for 8.0 (#3774)\n\n"
+        "## Applied\n\n"
+        "| Source PR | Title | Detail |\n"
+        "|---|---|---|\n"
+        "| #1298 | Preserve original fd blocking state | |\n"
+        "| #2915 | Revert work (#7777) | depends on #8888 |\n\n"
+        "## Needs attention\n\n"
+        "| Source PR | Title | Outcome | Reason |\n"
+        "|---|---|---|---|\n"
+        "| #9999 | Failed one | skipped-conflict | conflict |\n"
+    )
+    (repo / "file.txt").write_text("base\nsquash\n", encoding="utf-8")
+    _git(repo, "commit", "-q", "-am", body)
+    _git(repo, "update-ref", "refs/remotes/origin/8.0", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "agent/backport/sweep/8.0")
+
+    applied = list_applied_prs_on_target_branch(str(repo), "8.0")
+
+    assert applied == {"1298", "2915"}
+
+
+def test_list_applied_prs_on_target_branch_bounds_history(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **_kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(sweep_git.subprocess, "run", fake_run)
+
+    assert list_applied_prs_on_target_branch("/repo", "8.0") == set()
+    assert "--max-count=5000" in calls[0]
+
+
 def test_build_pr_body_lists_already_on_branch_under_applied():
     """Applied table reflects cumulative state of the backport branch.
 
@@ -1622,6 +1702,31 @@ def test_build_pr_body_surfaces_no_op_resolution_under_skipped():
     assert "#312" in applied
     assert "#313" not in applied
 
+
+def test_build_pr_body_surfaces_target_branch_applied_under_skipped():
+    """A candidate found in a prior target sweep is visible but not Applied."""
+    from scripts.backport.sweep_models import DETAIL_ALREADY_ON_TARGET_BRANCH
+
+    result = BranchSweepResult(
+        target_branch="8.0",
+        candidates_found=1,
+        results=[
+            CandidateResult(
+                source_pr_number=313,
+                source_pr_title="Fix off_t truncation in bio repl",
+                outcome="skipped-existing",
+                detail=DETAIL_ALREADY_ON_TARGET_BRANCH,
+            ),
+        ],
+    )
+
+    body = build_pr_body(result)
+
+    assert "## Applied" not in body
+    assert "## Skipped" in body
+    skipped = body.split("## Skipped", 1)[1]
+    assert "#313" in skipped
+    assert "Already applied on the target branch by an earlier sweep" in skipped
 
 
 def test_empty_skip_reason_detects_change_not_applicable():

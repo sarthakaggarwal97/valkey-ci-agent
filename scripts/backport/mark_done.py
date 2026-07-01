@@ -6,10 +6,10 @@ only the verified ones. It runs from the scheduled poller and is self-healing:
 it reconciles the whole board against branch reality on every run, so it does
 not depend on any merge hook firing.
 
-Done is gated on the branch genuinely containing the source PR's commit (the
-same ``(#<pr>)`` signal the sweep uses to skip already-applied PRs), so a
-backport PR body that merely *claims* a PR was applied can never mark it Done
-on its own.
+Done is gated on the branch history genuinely recording the source PR: either
+the direct cherry-pick subject carries ``(#<pr>)`` or a squash-merged sweep
+commit preserves the source PR in its ``## Applied`` table. A backport PR body
+that merely *claims* a PR was applied can never mark it Done on its own.
 """
 
 from __future__ import annotations
@@ -18,14 +18,16 @@ import argparse
 import json
 import logging
 import os
-import re
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from typing import Any
 
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
-from scripts.backport.utils import pr_numbers_from_commit_subjects
+from scripts.backport.utils import (
+    pr_numbers_from_applied_tables,
+    pr_numbers_from_commit_subjects,
+)
 from scripts.common.git_auth import GitAuth, github_https_url
 
 logger = logging.getLogger(__name__)
@@ -131,12 +133,9 @@ def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
         text=True,
         check=True,
     )
-    numbers: set[int] = set()
-    for message in result.stdout.split(_COMMIT_RECORD_DELIM):
-        applied_section = _markdown_section(message, "Applied")
-        if applied_section:
-            numbers.update(_pr_numbers_from_table_cells(applied_section))
-    return numbers
+    return pr_numbers_from_applied_tables(
+        result.stdout.split(_COMMIT_RECORD_DELIM)
+    )
 
 
 def _shallow_clone(
@@ -314,54 +313,6 @@ def reconcile_project_board(
         project=project,
         dry_run=dry_run,
     )
-
-
-def _markdown_section(body: str, heading: str) -> str:
-    pattern = re.compile(
-        rf"(?ims)^##\s+{re.escape(heading)}\s*$([\s\S]*?)(?=^##\s+|\Z)"
-    )
-    match = pattern.search(body)
-    return match.group(1) if match else ""
-
-
-def _pr_numbers_from_table_cells(markdown: str) -> set[int]:
-    """Source PR numbers from the ``Source PR`` column of a markdown table.
-
-    Only the ``Source PR`` column is read, so a ``#N`` appearing in a Title or
-    Detail cell (e.g. a revert subject, or a "depends on #N" note) is never
-    counted. Cells whose text wraps across newlines are reassembled first: a
-    logical row begins at a line starting with ``|`` and absorbs the lines that
-    follow until the next row. When no ``Source PR`` header is present the first
-    column is used, since the sweep always lists the source PR first.
-    """
-    rows: list[str] = []
-    for line in markdown.splitlines():
-        if line.lstrip().startswith("|"):
-            rows.append(line)
-        elif rows:
-            rows[-1] += " " + line.strip()
-
-    pr_cell = re.compile(r"^(?:\[)?#(\d+)(?:\]\([^)]*\))?$")
-    column: int | None = None
-    numbers: set[int] = set()
-    for row in rows:
-        cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
-        if column is None:
-            for index, cell in enumerate(cells):
-                if _normalize(cell) == "source pr":
-                    column = index
-                    break
-            else:
-                column = 0  # no header row; sweep lists the source PR first
-            if any(_normalize(cell) == "source pr" for cell in cells):
-                continue  # consumed the header row itself
-        if all(set(cell) <= set("-: ") for cell in cells if cell):
-            continue  # separator row (|---|---|)
-        if column < len(cells):
-            match = pr_cell.match(cells[column])
-            if match:
-                numbers.add(int(match.group(1)))
-    return numbers
 
 
 def _normalize(value: object) -> str:

@@ -49,6 +49,11 @@ class CandidateResult:
 # empty cherry-picks that mean "already on the release branch".
 DETAIL_ALREADY_ON_SWEEP_BRANCH = "already on backport branch"
 
+# Detail string used when a candidate PR is already recorded in a squash-merged
+# sweep on the target branch. Reporting keeps this out of the Applied table
+# because no commit was created on the active sweep branch.
+DETAIL_ALREADY_ON_TARGET_BRANCH = "already applied on target branch"
+
 # Stable detail recorded for a candidate whose conflicts were resolved by the
 # AI. Kept as a constant so the sweep-PR-body round-trip can recognize and
 # preserve the signal across runs.
