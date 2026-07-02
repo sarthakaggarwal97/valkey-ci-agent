@@ -292,11 +292,13 @@ def _source_file_from_root_cause(root_cause: str) -> str:
 
 
 def _looks_like_build_failure(proposal: FixProposal) -> bool:
-    text = f"{proposal.failing_check} {proposal.root_cause}".lower()
+    check = proposal.failing_check.strip().lower()
+    if check.startswith(("make ", "cmake ", "ninja ", "clang ", "gcc ", "cc ")):
+        return True
+    text = f"{check} {proposal.root_cause}".lower()
     return any(
         marker in text
         for marker in (
-            "make ",
             "compile",
             "compiler",
             "clang",
@@ -314,8 +316,6 @@ def _clean_failing_check(failing_check: str) -> str:
     lowered = check.lower()
     if lowered.startswith(("make ", "cmake ", "ninja ", "clang ", "gcc ", "cc ")):
         return "build failure"
-    if lowered.startswith("compile of "):
-        return check
     return check
 
 

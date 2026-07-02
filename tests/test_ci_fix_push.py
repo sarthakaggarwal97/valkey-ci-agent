@@ -199,3 +199,17 @@ def test_author_fix_commit_message_keeps_natural_test_name():
     assert push_mod._commit_message(proposal).splitlines()[0] == (
         "Fix corrupt payload: zset listpack with NAN score"
     )
+
+
+def test_author_fix_commit_message_does_not_treat_make_progress_as_build():
+    proposal = FixProposal(
+        path=FixPath.AUTHOR,
+        failing_check="replication timeout",
+        root_cause="timeout.c:169 the test does not make progress before timing out",
+        reasoning="timeout fix",
+        confidence=0.9,
+        build_command="make",
+        verify_command="./runtest --single replication",
+    )
+
+    assert push_mod._commit_message(proposal).splitlines()[0] == "Fix replication timeout"

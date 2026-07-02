@@ -79,6 +79,8 @@ jobs:
           path: target
 
       - name: Install Homebrew LLVM when requested
+        # The verifier currently runs on GitHub's arm64 macOS image, where
+        # Homebrew LLVM is installed under /opt/homebrew/opt/llvm.
         if: >-
           ${{
             contains(inputs.verify_command, '/opt/homebrew/opt/llvm/bin/') ||

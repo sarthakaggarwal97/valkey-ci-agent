@@ -308,6 +308,17 @@ def test_combined_command_groups_semicolon_build_before_verify():
     assert "should-not-run" not in result.stdout
 
 
+def test_combined_command_leaves_plain_command_ungrouped():
+    proposal = FixProposal(
+        path=FixPath.AUTHOR, failing_check="t", root_cause="rc", reasoning="why",
+        confidence=0.9,
+        build_command="make",
+        verify_command="./runtest --single x",
+    )
+
+    assert combined_command(proposal) == "make && ./runtest --single x"
+
+
 def test_oversized_patch_refuses():
     """A patch larger than the review cap must fail closed, not push unreviewed."""
     from scripts.ci_fix.review import MAX_REVIEWABLE_PATCH_CHARS
