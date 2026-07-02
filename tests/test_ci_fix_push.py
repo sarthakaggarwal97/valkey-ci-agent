@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from scripts.ci_fix import push as push_mod
+from scripts.ci_fix.models import FixPath, FixProposal
 from scripts.ci_fix.push import PushRefused, commit_and_push_port
 
 
@@ -160,3 +161,41 @@ def test_port_push_refuses_malformed_commit(tmp_path):
             head_branch="agent/backport/sweep/9.0", head_sha="a" * 40,
             unstable_fix_commit="not-a-sha", git_env={},
         )
+
+
+def test_author_fix_commit_message_uses_source_file_for_build_failure():
+    proposal = FixProposal(
+        path=FixPath.AUTHOR,
+        failing_check="make SERVER_CFLAGS='-Werror' (compile of timeout.o)",
+        root_cause=(
+            "timeout.c:169 `if (ftval > LLONG_MAX)` compares a long double "
+            "against the LLONG_MAX const int; newer Xcode clang errors under "
+            "-Werror."
+        ),
+        reasoning="minimal cast",
+        confidence=0.9,
+        build_command="make SERVER_CFLAGS='-Werror'",
+        verify_command="make SERVER_CFLAGS='-Werror'",
+    )
+
+    message = push_mod._commit_message(proposal)
+    subject = message.splitlines()[0]
+    assert subject == "Fix timeout.c build failure"
+    assert "make SERVER_CFLAGS" not in subject
+    assert all(len(line) <= 72 for line in message.splitlines())
+
+
+def test_author_fix_commit_message_keeps_natural_test_name():
+    proposal = FixProposal(
+        path=FixPath.AUTHOR,
+        failing_check="corrupt payload: zset listpack with NAN score",
+        root_cause="payload embeds RDB v80; branch is v11",
+        reasoning="scaffolding fix",
+        confidence=0.9,
+        build_command="make",
+        verify_command="./runtest --single x",
+    )
+
+    assert push_mod._commit_message(proposal).splitlines()[0] == (
+        "Fix corrupt payload: zset listpack with NAN score"
+    )
