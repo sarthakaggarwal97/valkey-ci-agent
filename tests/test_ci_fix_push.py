@@ -213,3 +213,37 @@ def test_author_fix_commit_message_does_not_treat_make_progress_as_build():
     )
 
     assert push_mod._commit_message(proposal).splitlines()[0] == "Fix replication timeout"
+
+
+def test_author_fix_commit_message_does_not_treat_test_error_as_build():
+    proposal = FixProposal(
+        path=FixPath.AUTHOR,
+        failing_check="protocol test",
+        root_cause="tests/unit/protocol.tcl:42 assertion error: invalid CRLF response",
+        reasoning="protocol fix",
+        confidence=0.9,
+        build_command="make",
+        verify_command="./runtest --single unit/protocol",
+    )
+
+    assert push_mod._commit_message(proposal).splitlines()[0] == "Fix protocol test"
+
+
+def test_author_fix_commit_message_preserves_body_paragraphs():
+    proposal = FixProposal(
+        path=FixPath.AUTHOR,
+        failing_check="protocol test",
+        root_cause=(
+            "First sentence describes the failure and has enough words to wrap "
+            "onto another line cleanly.\n\n"
+            "Second sentence explains why the fix is safe."
+        ),
+        reasoning="protocol fix",
+        confidence=0.9,
+        build_command="make",
+        verify_command="./runtest --single unit/protocol",
+    )
+
+    message = push_mod._commit_message(proposal)
+    assert "\n\nSecond sentence explains why the fix is safe.\n" in message
+    assert all(len(line) <= 72 for line in message.splitlines())

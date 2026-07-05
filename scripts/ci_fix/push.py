@@ -259,13 +259,21 @@ def _commit_message(proposal: FixProposal) -> str:
     the detailed root cause in a wrapped body.
     """
     subject = _commit_subject(proposal)
-    body = textwrap.fill(
-        proposal.root_cause.strip(),
-        width=72,
-        break_long_words=False,
-        break_on_hyphens=False,
-    )
+    body = _format_commit_body(proposal.root_cause)
     return f"{subject}\n\n{body}\n"
+
+
+def _format_commit_body(body: str) -> str:
+    return "\n\n".join(
+        textwrap.fill(
+            paragraph.strip(),
+            width=72,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        for paragraph in body.strip().split("\n\n")
+        if paragraph.strip()
+    )
 
 
 _SOURCE_LOCATION_RE = re.compile(
@@ -304,8 +312,6 @@ def _looks_like_build_failure(proposal: FixProposal) -> bool:
             "clang",
             "gcc",
             "-werror",
-            "warning:",
-            "error:",
         )
     )
 
