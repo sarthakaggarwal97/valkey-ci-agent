@@ -185,13 +185,13 @@ def test_generated_diff_failure_is_verified_after_temporary_commit(tmp_path):
     def run_command(_repo_dir: str, command: str, **_kwargs) -> RunResult:
         calls.append(command)
         if command == "make && regen && git diff --exit-code":
-            return RunResult(True, False, 1, command, "diff --git a/generated.h b/generated.h")
+            return RunResult(True, False, 1, command, "generator output without a visible diff")
         if command == "make":
             return _passed()
         if command == "regen && git diff --exit-code":
             if (repo / "generated.h").read_text() != "new generated\n":
                 (repo / "generated.h").write_text("new generated\n")
-                return RunResult(True, False, 1, command, "diff --git a/generated.h b/generated.h")
+                return RunResult(True, False, 1, command, "generator output without a visible diff")
             return _passed()
         raise AssertionError(f"unexpected command: {command}")
 
