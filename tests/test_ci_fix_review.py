@@ -220,6 +220,31 @@ def test_generated_diff_failure_is_verified_after_temporary_commit(tmp_path):
     ]
 
 
+def test_generated_diff_detection_requires_verifier_git_diff_signal():
+    """AI-authored stale/dirty wording alone must not route into the generated
+    diff path; the verifier that ran must itself involve git diff."""
+    from scripts.ci_fix.review import _looks_like_generated_diff_failure
+
+    proposal = FixProposal(
+        path=FixPath.AUTHOR,
+        failing_check="test stale replica cleanup",
+        root_cause="dirty stale state after failover",
+        reasoning="clean up stale state",
+        confidence=0.9,
+        build_command="make",
+        verify_command="./runtest --single cluster",
+    )
+    result = RunResult(
+        ran=True,
+        passed=False,
+        exit_code=1,
+        command="./runtest --single cluster",
+        output_tail="[err]: stale replica state did not converge",
+    )
+
+    assert _looks_like_generated_diff_failure(proposal, result) is False
+
+
 def test_rejected_review_is_not_handed_off():
     """When verification cannot run but the skeptic rejects the patch, it must
     not be handed off: handoff is gated on review approval, not patch presence."""
