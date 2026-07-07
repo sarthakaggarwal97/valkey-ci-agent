@@ -1,0 +1,111 @@
+name: CI Fix Fork Test
+
+# THROWAWAY fork-testing workflow. Runs the ci_fix pipeline against the personal
+# fork using a classic PAT directly (no GitHub App). Every repo reference is a
+# fork repo; the fork owner is authorized via CI_FIX_AUTH_ALLOWLIST because the
+# valkey-io/contributors team is not readable from a fork. Not for upstream.
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "PR repository (fork)"
+        required: true
+        default: "sarthakaggarwal97/valkey"
+        type: string
+      pr:
+        description: "PR number on the fork"
+        required: true
+        type: number
+      run_url:
+        description: "Failed GitHub Actions run URL on the fork"
+        required: true
+        type: string
+      hint:
+        description: "Optional diagnosis hint"
+        required: false
+        type: string
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  ci-fix-fork-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_EVIDENCE_DIR: agent-evidence
+      # Authorize the fork owner directly; the valkey-io/contributors team is
+      # not readable from a fork, so the allowlist stands in for it. The auth
+      # org/team are also pointed at the fork owner so no valkey-io lookup runs.
+      CI_FIX_AUTH_ALLOWLIST: sarthakaggarwal97
+      CI_FIX_AUTH_ORG: sarthakaggarwal97
+      CI_FIX_AUTH_TEAM: contributors
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          install-claude: "true"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: valkey-ci-fix-fork-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run the CI fix against the fork
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          # macOS verification dispatches verify-macos on the agent fork. The
+          # PAT has workflow scope on the fork, so it can dispatch there.
+          CI_FIX_MACOS_AGENT_REPO: sarthakaggarwal97/valkey-ci-agent
+          CI_FIX_MACOS_AGENT_REF: fix/hidden-generated-diff-ci-fix
+          CI_FIX_MACOS_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          CI_FIX_REPO: ${{ inputs.repo }}
+          CI_FIX_PR: ${{ inputs.pr }}
+          CI_FIX_RUN_URL: ${{ inputs.run_url }}
+          CI_FIX_HINT: ${{ inputs.hint || '' }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${CI_FIX_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "Invalid repo: ${CI_FIX_REPO}" >&2; exit 1
+          fi
+          if [[ "${CI_FIX_REPO%%/*}" != "sarthakaggarwal97" ]]; then
+            echo "Fork test is scoped to the sarthakaggarwal97 fork (got: ${CI_FIX_REPO})" >&2; exit 1
+          fi
+          if [[ ! "${CI_FIX_PR}" =~ ^[0-9]+$ ]]; then
+            echo "Invalid PR number: ${CI_FIX_PR}" >&2; exit 1
+          fi
+          args=(-m scripts.ci_fix.main
+            --repo "${CI_FIX_REPO}"
+            --pr "${CI_FIX_PR}"
+            --run-url "${CI_FIX_RUN_URL}"
+            --commenter "sarthakaggarwal97")
+          if [[ -n "${CI_FIX_HINT}" ]]; then
+            args+=(--hint "${CI_FIX_HINT}")
+          fi
+          python "${args[@]}"
+
+      - name: Upload agent evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-fix-fork-test-evidence-${{ github.run_id }}
+          path: agent-evidence
+          if-no-files-found: ignore
+          retention-days: 14
