@@ -223,17 +223,21 @@ def _react_outcome(gh: Github, repo_full_name: str, comment_id: int, kind: Outco
     """
     if not comment_id:
         return
-    content = _OUTCOME_REACTIONS[kind]
-    url = f"/repos/{repo_full_name}/issues/comments/{comment_id}/reactions"
-    requester = gh.get_repo(repo_full_name)._requester  # noqa: SLF001 - matches workflow_artifacts
 
     def _react() -> None:
+        # A new OutcomeKind without a mapping falls back to "-1": any outcome we
+        # did not explicitly mark as pushed is a non-success. The whole body -
+        # including the repo/requester lookup - is inside the guarded call so a
+        # transient API error here can never escape into the run's exit code.
+        content = _OUTCOME_REACTIONS.get(kind, "-1")
+        url = f"/repos/{repo_full_name}/issues/comments/{comment_id}/reactions"
+        requester = gh.get_repo(repo_full_name)._requester  # noqa: SLF001 - matches workflow_artifacts
         requester.requestJsonAndCheck("POST", url, input={"content": content})
 
     try:
-        retry_github_call(_react, retries=2, description=f"react {content} on comment {comment_id}")
+        retry_github_call(_react, retries=2, description=f"react to comment {comment_id}")
     except Exception:  # noqa: BLE001 - the reaction is a nicety, not the report
-        logger.exception("Failed to react %s on comment %s", content, comment_id)
+        logger.exception("Failed to react to comment %s", comment_id)
 
 
 if __name__ == "__main__":

@@ -202,3 +202,12 @@ def test_react_outcome_swallows_failure():
     gh, requester = _reaction_gh()
     requester.requestJsonAndCheck.side_effect = RuntimeError("boom")
     _react_outcome(gh, "valkey-io/valkey", 55, OutcomeKind.PUSHED)
+
+
+def test_react_outcome_swallows_repo_lookup_failure():
+    """A transient failure in the repo lookup must not escape either."""
+    from scripts.ci_fix.main import _react_outcome
+
+    gh = MagicMock()
+    gh.get_repo.side_effect = RuntimeError("transient API error")
+    _react_outcome(gh, "valkey-io/valkey", 55, OutcomeKind.PUSHED)
