@@ -1510,6 +1510,79 @@ def test_adapt_target_missing_tests_fails_closed_on_production_edit(tmp_path):
 
     assert result.fatal is True
     assert "outside allowed test scope: src/networking.c" in result.summary
+    # The pre-agent staged edit must be restored; the agent's overwrite is gone.
+    assert (repo / "src" / "networking.c").read_text(encoding="utf-8") == "int fix = 1;\n"
+
+
+def test_adapt_target_missing_tests_rolls_back_on_agent_failure(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Local Committer")
+    _git(repo, "config", "user.email", "committer@local.invalid")
+    _git(repo, "config", "commit.gpgsign", "false")
+    (repo / "src").mkdir()
+    (repo / "tests" / "unit").mkdir(parents=True)
+    (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
+    (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
+    _git(repo, "add", "src/networking.c")
+
+    def fake_run_agent(_profile, _prompt, **_kwargs):
+        # Agent creates a stray untracked file and edits a tracked test file,
+        # then fails. Nothing it touched should survive the rollback.
+        (repo / "tests" / "unit" / "stray.tcl").write_text("garbage\n", encoding="utf-8")
+        (repo / "tests" / "unit" / "networking.tcl").write_text("mangled\n", encoding="utf-8")
+        result = MagicMock()
+        result.returncode = 1
+        result.stdout = ""
+        result.stderr = "boom"
+        return result
+
+    result = adapt_target_missing_tests_with_claude(
+        str(repo),
+        ProjectBackportCandidate(
+            source_pr_number=3306,
+            source_pr_title="Improve COB memory tracking with copy avoidance",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+            target_branch="9.0",
+            merge_commit_sha="269b1c5",
+        ),
+        {"src/unit/test_networking.cpp": "TEST(...)\n"},
+        language="c",
+        run_agent_func=fake_run_agent,
+    )
+
+    assert result.adapted_paths == []
+    assert "Claude Code failed" in result.summary
+    # Pre-agent staged edit preserved, agent's edits reverted, stray file gone.
+    assert (repo / "src" / "networking.c").read_text(encoding="utf-8") == "int fix = 1;\n"
+    assert (repo / "tests" / "unit" / "networking.tcl").read_text(encoding="utf-8") == "start_server {} {}\n"
+    assert not (repo / "tests" / "unit" / "stray.tcl").exists()
+    staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
+    assert staged == ["src/networking.c"]
+
+
+def test_is_test_path_rejects_metadata_and_build_files():
+    from scripts.backport.sweep_apply import is_test_path
+
+    # Metadata/build files under test dirs are NOT editable test source.
+    assert not is_test_path("tests/CMakeLists.txt")
+    assert not is_test_path("tests/BUILD")
+    assert not is_test_path("tests/package.json")
+    assert not is_test_path("tests/config.yml")
+    assert not is_test_path("tests/assets/default.conf")
+    assert not is_test_path("test/helpers/gen.cmake")
+    # Production source is never a test.
+    assert not is_test_path("src/networking.c")
+    assert not is_test_path("src/unit/logreqres.c")
+    # Recognized test source is still accepted.
+    assert is_test_path("tests/unit/type/list.tcl")
+    assert is_test_path("tests/integration/repl.tcl")
+    assert is_test_path("src/unit/test_networking.cpp")
+    assert is_test_path("foo/test_helper.py")
 
 
 def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, tmp_path):

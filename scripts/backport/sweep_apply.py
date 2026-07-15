@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import subprocess
@@ -374,16 +373,26 @@ def index_stage_exists(
     return result.returncode == 0
 
 
+# Extensions that hold executable test source. Build/metadata files such as
+# CMakeLists.txt, BUILD, or package.json are deliberately excluded so they are
+# never dropped as "missing tests" or edited by the adaptation agent.
+_TEST_SOURCE_SUFFIXES = (".tcl", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".py")
+
+
 def is_test_path(path: str) -> bool:
     normalized = path.replace("\\", "/").strip("/")
     parts = [part.lower() for part in normalized.split("/") if part]
-    if any(part in {"test", "tests"} for part in parts):
-        return True
-
     name = parts[-1] if parts else ""
+    # Authorization boundary: only recognized test-source files qualify. A
+    # location under test/ or tests/ is not sufficient on its own.
+    if not name.endswith(_TEST_SOURCE_SUFFIXES):
+        return False
+
     if len(parts) >= 3 and parts[0] == "src" and parts[1] == "unit":
         return name.startswith("test_")
-    return name.startswith("test_") or name.endswith(("_test.c", "_test.cc", "_test.cpp"))
+    if name.startswith("test_") or name.endswith(("_test.c", "_test.cc", "_test.cpp")):
+        return True
+    return any(part in {"test", "tests"} for part in parts)
 
 
 def adapt_target_missing_tests_with_claude(
@@ -397,7 +406,10 @@ def adapt_target_missing_tests_with_claude(
     run_agent_func: RunAgent = run_agent,
 ) -> MissingTestAdaptationResult:
     pre_changed_paths = set(changed_paths_in_index_or_worktree(repo_dir, run_process=run_process))
-    protected_pre_hashes = {path: file_hash(Path(repo_dir, path)) for path in pre_changed_paths}
+    # Snapshot the exact pre-agent bytes of every already-changed file so any
+    # unsuccessful path can restore the worktree to precisely this state,
+    # rather than leaving stray agent edits behind for the next candidate.
+    pre_snapshots = {path: file_bytes(Path(repo_dir, path)) for path in pre_changed_paths}
     prompt = build_test_adaptation_prompt(
         repo_dir,
         candidate,
@@ -420,19 +432,31 @@ def adapt_target_missing_tests_with_claude(
         result_text[:200] if result_text else "(no result text)",
     )
 
+    post_changed_paths = set(changed_paths_in_index_or_worktree(repo_dir, run_process=run_process))
+    new_changed_paths = sorted(post_changed_paths - pre_changed_paths)
+
+    def rollback() -> None:
+        _restore_pre_agent_state(
+            repo_dir,
+            pre_snapshots=pre_snapshots,
+            new_paths=new_changed_paths,
+            run_git=run_git,
+            run_process=run_process,
+        )
+
     if agent_result.returncode != 0:
+        rollback()
         detail = agent_result.stderr or result_text or "Claude Code returned non-zero"
         return MissingTestAdaptationResult(
             summary=f"test adaptation not applied: Claude Code failed: {detail[:200]}",
         )
 
-    post_changed_paths = set(changed_paths_in_index_or_worktree(repo_dir, run_process=run_process))
-    new_changed_paths = sorted(post_changed_paths - pre_changed_paths)
     protected_changes = sorted(
-        path for path, pre_hash in protected_pre_hashes.items() if file_hash(Path(repo_dir, path)) != pre_hash
+        path for path, pre_bytes in pre_snapshots.items() if file_bytes(Path(repo_dir, path)) != pre_bytes
     )
     non_test_changes = sorted(path for path in new_changed_paths if not is_test_path(path))
     if protected_changes or non_test_changes:
+        rollback()
         details = ", ".join((protected_changes + non_test_changes)[:10])
         return MissingTestAdaptationResult(
             summary=f"test adaptation modified paths outside allowed test scope: {details}",
@@ -454,12 +478,7 @@ def adapt_target_missing_tests_with_claude(
         if has_conflict_markers(content):
             invalid_paths.append(path)
     if invalid_paths:
-        discard_worktree_paths(
-            repo_dir,
-            new_changed_paths,
-            run_git=run_git,
-            run_process=run_process,
-        )
+        rollback()
         return MissingTestAdaptationResult(
             summary=("test adaptation not applied: invalid generated test path(s): " + ", ".join(invalid_paths[:10])),
         )
@@ -551,11 +570,49 @@ def extract_agent_result_text(agent_result: AgentRunResult) -> str:
     return result_text
 
 
-def file_hash(path: Path) -> str:
+def file_bytes(path: Path) -> bytes | None:
+    """Return the file's bytes, or ``None`` if it cannot be read.
+
+    ``None`` is a distinct sentinel from empty bytes so a file that becomes
+    unreadable is treated as changed rather than silently matching.
+    """
     try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
+        return path.read_bytes()
     except OSError:
-        return ""
+        return None
+
+
+def _restore_pre_agent_state(
+    repo_dir: str,
+    *,
+    pre_snapshots: dict[str, bytes | None],
+    new_paths: list[str],
+    run_git: RunGit = run_git_default,
+    run_process: RunProcess = subprocess.run,
+) -> None:
+    """Undo every agent edit, returning the worktree to its pre-agent state.
+
+    Restores the recorded bytes of files that were already changed before the
+    agent ran, and removes paths the agent newly touched (checking out tracked
+    files, deleting untracked ones). ``cherry-pick --abort`` alone does not
+    remove newly created untracked files, so a rejected adaptation must clean
+    up after itself to avoid contaminating a later cherry-pick.
+    """
+    for path, pre_bytes in pre_snapshots.items():
+        if pre_bytes is None:
+            continue
+        file_path = Path(repo_dir, path)
+        if file_bytes(file_path) == pre_bytes:
+            continue
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_bytes(pre_bytes)
+
+    discard_worktree_paths(
+        repo_dir,
+        new_paths,
+        run_git=run_git,
+        run_process=run_process,
+    )
 
 
 def discard_worktree_paths(
