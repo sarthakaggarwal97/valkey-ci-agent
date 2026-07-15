@@ -9,12 +9,11 @@ injection. Returns ``True`` on success, ``False`` on any failure.
 from __future__ import annotations
 
 import logging
-import os
 import re
 import subprocess
 from pathlib import Path
 
-from scripts.common.proc import LOCKED_GIT_CONFIG, PROCESS_BASICS, filter_env
+from scripts.common.proc import run_git
 
 logger = logging.getLogger(__name__)
 
@@ -78,15 +77,15 @@ def _run(args: list[str], *, timeout: int, desc: str, cwd: Path | None = None) -
     # helpers/external diff disabled, no system/global config, and a scrubbed
     # environment (no GitHub token, no AWS credentials) so a checkout filter can
     # neither run a credential helper nor read a secret from the environment.
-    git_args = [args[0], *LOCKED_GIT_CONFIG, *args[1:]] if args and args[0] == "git" else args
-    env = filter_env(PROCESS_BASICS)
-    env["GIT_CONFIG_NOSYSTEM"] = "1"
-    env["GIT_CONFIG_GLOBAL"] = os.devnull
-    env["GIT_TERMINAL_PROMPT"] = "0"
+    if not args or args[0] != "git":
+        logger.warning("Refusing non-Git command for %s", desc)
+        return False
     try:
-        result = subprocess.run(
-            git_args, cwd=str(cwd) if cwd else None,
-            capture_output=True, text=True, timeout=timeout, env=env,
+        result = run_git(
+            str(cwd) if cwd else None,
+            *args[1:],
+            timeout=timeout,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         logger.warning("git %s timed out after %ds", desc, timeout)
