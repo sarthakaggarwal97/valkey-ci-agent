@@ -1,5 +1,6 @@
 repos:
   - repo: valkey-io/valkey
+    push_repo: sarthakaggarwal97/valkey
     project_owner: valkey-io
     project_owner_type: organization
     language: c
@@ -22,6 +23,7 @@ repos:
         project_number: 41
 
   - repo: valkey-io/valkey-search
+    push_repo: sarthakaggarwal97/valkey-search
     project_owner: valkey-io
     project_owner_type: organization
     language: c++
