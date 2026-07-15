@@ -1,11 +1,7 @@
 name: CI Fix Bot
 
-# A maintainer triggers a fix manually via workflow_dispatch (the Actions UI or
-# `gh workflow run`), supplying the PR and the failing run URL. A comment-based
-# trigger (`@valkeyrie-bot fix ...` on a valkey-io/valkey PR) needs a thin
-# wrapper in the target repo to forward the event here, since issue_comment
-# events only fire in the repo where the comment is made; that wrapper is a
-# follow-up. See README for the dispatch invocation.
+run-name: "CI fix [dispatch:${{ inputs.correlation_id }}]"
+
 on:
   workflow_dispatch:
     inputs:
@@ -30,8 +26,12 @@ on:
         required: false
         type: string
       comment_id:
-        description: "Triggering comment id, reacted to with the run outcome"
+        description: "Triggering comment id"
         required: false
+        type: string
+      correlation_id:
+        description: "Durable dispatch correlation (32 lowercase hex characters)"
+        required: true
         type: string
 
 permissions: {}
@@ -39,125 +39,465 @@ permissions: {}
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+concurrency:
+  group: ci-fix-${{ inputs.pr }}
+  cancel-in-progress: false
+
 jobs:
-  ci-fix:
+  discovery:
+    if: >-
+      ${{
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_CI_FIX != 'true'
+      }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 20
     permissions:
       contents: read
-      id-token: write
-    concurrency:
-      # Serialize ci-fix runs for the same PR so two dispatches don't push at
-      # once. This does not coordinate with other workflows that write the same
-      # branch; the fast-forward-only push (see push.py) is what keeps a
-      # concurrent branch update from being clobbered.
-      group: ci-fix-${{ inputs.pr }}
-      cancel-in-progress: false
-    env:
-      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-      CLAUDE_CODE_USE_BEDROCK: "1"
-      CI_AGENT_EVIDENCE_DIR: agent-evidence
     steps:
-      - name: Check out agent repository
+      - name: Check out immutable agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
 
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
-        with:
-          install-claude: "true"
 
-      - name: Generate GitHub App token
-        id: generate-token
+      - name: Enforce operational controls before token minting
+        shell: bash
+        env:
+          OPERATION_ID: ci-fix:discover:${{ github.run_id }}:${{ github.run_attempt }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo valkey-io/valkey \
+            --operation "${OPERATION_ID}" >/dev/null
+
+      - name: Generate read-only discovery token
+        id: discovery-token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey
-          # members:read for the contributors-team auth check; contents:write
-          # to push the fix; pull-requests:write + issues:write to comment (the
-          # PR comment uses the Issues comments API); actions:read for logs.
           permission-members: read
           permission-actions: read
+          permission-contents: read
+          permission-pull-requests: read
+          permission-metadata: read
+
+      - name: Collect exact run and workflow evidence
+        shell: bash
+        env:
+          DISCOVERY_GITHUB_TOKEN: ${{ steps.discovery-token.outputs.token }}
+          CI_FIX_REPO: ${{ inputs.repo }}
+          CI_FIX_PR: ${{ inputs.pr }}
+          CI_FIX_RUN_URL: ${{ inputs.run_url }}
+          CI_FIX_COMMENTER: ${{ (github.actor == 'valkeyrie-ops[bot]' && inputs.commenter) || github.actor }}
+          CI_FIX_HINT: ${{ inputs.hint || '' }}
+          CI_FIX_COMMENT_ID: ${{ inputs.comment_id || '0' }}
+          CI_FIX_CORRELATION_ID: ${{ inputs.correlation_id }}
+        run: |
+          set -euo pipefail
+          test "${CI_FIX_REPO}" = "valkey-io/valkey"
+          [[ "${CI_FIX_PR}" =~ ^[0-9]+$ ]]
+          [[ "${CI_FIX_COMMENT_ID}" =~ ^[0-9]+$ ]]
+          [[ "${CI_FIX_CORRELATION_ID}" =~ ^[0-9a-f]{32}$ ]]
+          python -m scripts.ci_fix.phased discover \
+            --repo "${CI_FIX_REPO}" \
+            --pr "${CI_FIX_PR}" \
+            --run-url "${CI_FIX_RUN_URL}" \
+            --commenter "${CI_FIX_COMMENTER}" \
+            --hint "${CI_FIX_HINT}" \
+            --comment-id "${CI_FIX_COMMENT_ID}" \
+            --output-directory ci-fix-discovery
+
+      - name: Upload discovery artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-fix-discovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-discovery
+          if-no-files-found: error
+          retention-days: 1
+
+  ai-prepare:
+    needs: discovery
+    if: >-
+      ${{
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_CI_FIX != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    concurrency:
+      group: ai-ci-fix-${{ inputs.repo }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.prepare.outputs.status }}
+      environment: ${{ steps.prepare.outputs.environment }}
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download discovery artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ci-fix-discovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact
+
+      - name: Load repository operational policy
+        shell: bash
+        env:
+          OPERATION_ID: ci-fix:prepare:${{ github.run_id }}:${{ github.run_attempt }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo valkey-io/valkey \
+            --operation "${OPERATION_ID}"
+
+      - name: Set up isolated AI runtime
+        uses: ./.github/actions/setup-ai-runtime
+        with:
+          upstream-url: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          gateway-token: ${{ secrets.AI_GATEWAY_TOKEN }}
+
+      - name: Diagnose and prepare reviewed patch
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.phased prepare \
+            --artifact-directory ci-fix-artifact
+
+      - name: Clean up isolated AI runtime
+        if: always()
+        uses: ./.github/actions/cleanup-ai-runtime
+
+      - name: Upload prepared artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-fix-prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload AI evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-fix-ai-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact/ai-*
+          if-no-files-found: ignore
+          retention-days: 30
+
+  validation-linux:
+    needs: ai-prepare
+    if: >-
+      ${{
+        needs.ai-prepare.outputs.status == 'ready' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_CI_FIX != 'true' &&
+        needs.ai-prepare.outputs.environment != 'macos'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download prepared artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ci-fix-prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact
+
+      - name: Verify failing baseline and patched tree
+        shell: bash
+        env:
+          VERIFY_RUNS: ${{ vars.CI_FIX_VERIFY_RUNS || '2' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.phased validate \
+            --artifact-directory ci-fix-artifact \
+            --platform linux \
+            --verify-runs "${VERIFY_RUNS}"
+
+      - name: Upload validated artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-fix-validated-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact
+          if-no-files-found: error
+          retention-days: 1
+
+  validation-macos:
+    needs: ai-prepare
+    if: >-
+      ${{
+        needs.ai-prepare.outputs.status == 'ready' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_CI_FIX != 'true' &&
+        needs.ai-prepare.outputs.environment == 'macos'
+      }}
+    runs-on: macos-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download prepared artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ci-fix-prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact
+
+      - name: Provision dedicated verifier identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          verifier_user="ci-fix-verifier"
+          if /usr/bin/id "${verifier_user}" >/dev/null 2>&1; then
+            echo "Verifier identity already exists; refusing an untrusted runner image" >&2
+            exit 1
+          fi
+          password="$(/usr/bin/uuidgen)-$(/usr/bin/uuidgen)"
+          sudo /usr/sbin/sysadminctl \
+            -addUser "${verifier_user}" \
+            -fullName "CI Fix Verifier" \
+            -home /var/empty \
+            -shell /bin/bash \
+            -password "${password}" >/dev/null
+          unset password
+          verifier_uid="$(/usr/bin/id -u "${verifier_user}")"
+          test "${verifier_uid}" -gt 0
+          test "${verifier_uid}" -ne "$(/usr/bin/id -u)"
+          if /usr/sbin/dseditgroup -o checkmember -m "${verifier_user}" admin |
+              /usr/bin/grep -q 'yes'; then
+            echo "Verifier identity unexpectedly has administrator access" >&2
+            exit 1
+          fi
+          test -x /usr/bin/sandbox-exec
+
+      - name: Verify failing baseline and patched tree
+        shell: bash
+        env:
+          VERIFY_RUNS: ${{ vars.CI_FIX_VERIFY_RUNS || '2' }}
+          CI_FIX_MACOS_SANDBOX_USER: ci-fix-verifier
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.phased validate \
+            --artifact-directory ci-fix-artifact \
+            --platform macos \
+            --verify-runs "${VERIFY_RUNS}"
+
+      - name: Upload validated artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-fix-validated-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact
+          if-no-files-found: error
+          retention-days: 1
+
+  publisher:
+    needs: [ai-prepare, validation-linux, validation-macos]
+    if: >-
+      ${{
+        always() &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_CI_FIX != 'true' &&
+        needs.ai-prepare.outputs.status == 'ready' &&
+        (
+          needs.validation-linux.result == 'success' ||
+          needs.validation-macos.result == 'success'
+        )
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download validated artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ci-fix-validated-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact
+
+      - name: Verify artifact before minting write token
+        shell: bash
+        env:
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo valkey-io/valkey \
+            --operation ci-fix:publish \
+            --admit-publication-key \
+              "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:ci-fix" \
+            >/dev/null
+          python -m scripts.ci_fix.phased preflight-publish \
+            --artifact-directory ci-fix-artifact
+
+      - name: Generate publisher token
+        id: publisher-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: valkey
           permission-contents: write
           permission-workflows: write
           permission-pull-requests: write
           permission-issues: write
           permission-metadata: read
 
-      - name: Generate agent-repo token (macOS verify dispatch)
-        id: agent-token
+      - name: Publish validated CI fix
+        shell: bash
+        env:
+          PUBLISH_GITHUB_TOKEN: ${{ steps.publisher-token.outputs.token }}
+          PUBLISHER_IDENTITY: ${{ steps.publisher-token.outputs.app-slug }}[bot]
+          PUBLISHER_INSTALLATION_ID: ${{ steps.publisher-token.outputs.installation-id }}
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.phased publish \
+            --artifact-directory ci-fix-artifact
+
+      - name: Upload publication manifest
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-fix-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact/publication.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  refusal-reporter:
+    needs: ai-prepare
+    if: >-
+      ${{
+        needs.ai-prepare.outputs.status == 'refused' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_CI_FIX != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download refused artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ci-fix-prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact
+
+      - name: Verify refusal before minting comment token
+        shell: bash
+        env:
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo valkey-io/valkey \
+            --operation ci-fix:report-refusal \
+            --admit-publication-key \
+              "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:ci-fix-refusal" \
+            >/dev/null
+          python -m scripts.ci_fix.phased preflight-refusal \
+            --artifact-directory ci-fix-artifact
+
+      - name: Generate comment-only reporter token
+        id: reporter-token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
-          repositories: valkey-ci-agent
-          # actions:write to dispatch the verify-macos workflow and read its
-          # run status; nothing else on the agent repo.
-          permission-actions: write
+          repositories: valkey
+          permission-pull-requests: write
+          permission-issues: write
           permission-metadata: read
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: valkey-ci-fix-${{ github.run_id }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Run the CI fix
+      - name: Report refusal
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
-          CI_FIX_MACOS_AGENT_REPO: valkey-io/valkey-ci-agent
-          CI_FIX_MACOS_AGENT_REF: main
-          CI_FIX_MACOS_TOKEN: ${{ steps.agent-token.outputs.token }}
-          CI_FIX_REPO: ${{ inputs.repo }}
-          CI_FIX_PR: ${{ inputs.pr }}
-          CI_FIX_RUN_URL: ${{ inputs.run_url }}
-          CI_FIX_VERIFY_RUNS: ${{ vars.CI_FIX_VERIFY_RUNS || '2' }}
-          # The commenter input is honored only when the trusted poller App
-          # dispatched this run; any other dispatcher (a human via the Actions
-          # UI) falls back to github.actor, so a manual run cannot rewrite the
-          # audit attribution. The engine's authorization check runs against
-          # whichever principal is chosen regardless.
-          CI_FIX_COMMENTER: ${{ (github.actor == 'valkeyrie-ops[bot]' && inputs.commenter) || github.actor }}
-          CI_FIX_HINT: ${{ inputs.hint || '' }}
-          CI_FIX_COMMENT_ID: ${{ inputs.comment_id || '' }}
+          REPORT_GITHUB_TOKEN: ${{ steps.reporter-token.outputs.token }}
+          PUBLISHER_IDENTITY: ${{ steps.reporter-token.outputs.app-slug }}[bot]
+          PUBLISHER_INSTALLATION_ID: ${{ steps.reporter-token.outputs.installation-id }}
         run: |
           set -euo pipefail
-          if [[ ! "${CI_FIX_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-            echo "Invalid repo: ${CI_FIX_REPO}" >&2
-            exit 1
-          fi
-          if [[ "${CI_FIX_REPO}" != "valkey-io/valkey" ]]; then
-            echo "ci-fix.yml is currently scoped to valkey-io/valkey (got: ${CI_FIX_REPO})" >&2
-            exit 1
-          fi
-          if [[ ! "${CI_FIX_PR}" =~ ^[0-9]+$ ]]; then
-            echo "Invalid PR number: ${CI_FIX_PR}" >&2
-            exit 1
-          fi
-          args=(
-            -m scripts.ci_fix.main
-            --repo "${CI_FIX_REPO}"
-            --pr "${CI_FIX_PR}"
-            --run-url "${CI_FIX_RUN_URL}"
-            --commenter "${CI_FIX_COMMENTER}"
-          )
-          if [[ -n "${CI_FIX_HINT}" ]]; then
-            args+=(--hint "${CI_FIX_HINT}")
-          fi
-          python "${args[@]}"
+          python -m scripts.ci_fix.phased report-refusal \
+            --artifact-directory ci-fix-artifact
 
-      - name: Upload agent evidence
+      - name: Upload refusal publication manifest
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ci-fix-agent-evidence-${{ github.run_id }}
-          path: agent-evidence
-          if-no-files-found: ignore
+          name: ci-fix-refusal-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-fix-artifact/publication.json
+          if-no-files-found: warn
           retention-days: 30

@@ -106,6 +106,29 @@ def is_authorized(
     exercised end-to-end in a fork environment where the production team is not
     readable, without weakening the default behavior.
     """
+    return authorization_status(
+        gh,
+        org,
+        team_slug,
+        username,
+        retries=retries,
+    ) is True
+
+
+def authorization_status(
+    gh: Any,
+    org: str,
+    team_slug: str,
+    username: str,
+    *,
+    retries: int = 2,
+) -> bool | None:
+    """Return authorization, or ``None`` when GitHub could not establish it.
+
+    Security gates continue to fail closed through :func:`is_authorized`.
+    Durable pollers use the tri-state result so a transient API failure is
+    retried instead of being recorded as a permanent authorization denial.
+    """
     if not username:
         return False
     if username in _auth_allowlist():
@@ -122,7 +145,7 @@ def is_authorized(
         )
     except Exception as exc:  # noqa: BLE001 - fail closed on any read error
         logger.warning("Authorization check failed closed for %s: %s", username, exc)
-        return False
+        return None
     state = getattr(membership, "state", None)
     return state == "active"
 

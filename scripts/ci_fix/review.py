@@ -155,6 +155,10 @@ _MISSING_DEPENDENCY_PATTERNS = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
+_FAIL_FAST_DISABLE_RE = re.compile(
+    r"(?:^|[\n;&|()])\s*set\s+(?:\+e|\+o\s+pipefail)(?:\s|$|[;&|])",
+)
+
 
 def looks_like_missing_dependency(output: str) -> bool:
     """True if the verify output indicates a missing build/runtime dependency.
@@ -203,6 +207,8 @@ def precheck_command(proposal: FixProposal) -> str:
     if not proposal.verify_command.strip():
         return "no command to verify the fix; refusing to push an unverified change"
     combined = combined_command(proposal)
+    if _FAIL_FAST_DISABLE_RE.search(combined):
+        return "verification command attempts to disable fail-fast shell behavior"
     if _is_noop_command(combined):
         return (
             "verification command has no build or test signal "

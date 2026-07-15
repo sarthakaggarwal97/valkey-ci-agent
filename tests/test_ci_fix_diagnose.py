@@ -124,6 +124,40 @@ def test_no_json_raises(monkeypatch):
         diagnose_failure("/tmp/ci.log", "/tmp/repo")
 
 
+def test_unknown_proposal_keys_are_rejected(monkeypatch):
+    payload = {"path": "refuse", "confidence": 0.1, "verdict": "ship-it"}
+    _mock_agent(monkeypatch, _stream_json_result(payload))
+    with pytest.raises(ValueError, match="unknown keys"):
+        diagnose_failure("/tmp/ci.log", "/tmp/repo")
+
+
+def test_unsafe_workdir_is_rejected(monkeypatch):
+    payload = {
+        "path": "author",
+        "failing_check": "build",
+        "root_cause": "missing include",
+        "confidence": 0.9,
+        "verify_command": "make",
+        "workdir": "../neighbor",
+    }
+    _mock_agent(monkeypatch, _stream_json_result(payload))
+    with pytest.raises(ValueError, match="workdir"):
+        diagnose_failure("/tmp/ci.log", "/tmp/repo")
+
+
+def test_oversized_commands_are_rejected(monkeypatch):
+    payload = {
+        "path": "author",
+        "failing_check": "build",
+        "root_cause": "missing include",
+        "confidence": 0.9,
+        "verify_command": "x" * 9000,
+    }
+    _mock_agent(monkeypatch, _stream_json_result(payload))
+    with pytest.raises(ValueError, match="verify_command"):
+        diagnose_failure("/tmp/ci.log", "/tmp/repo")
+
+
 def test_plain_json_without_stream_wrapper(monkeypatch):
     """The agent may emit a bare JSON object, not wrapped in stream-json."""
     payload = {"path": "refuse", "failing_check": "t", "confidence": 0.1}
@@ -136,6 +170,7 @@ def test_hint_is_included_in_prompt(monkeypatch):
 
     def fake_run_agent(profile, prompt, **kwargs):
         captured["prompt"] = prompt
+        captured["cwd"] = kwargs["cwd"]
         return MagicMock(
             stdout=_stream_json_result({"path": "refuse", "confidence": 0.0}),
             stderr="", returncode=0,
@@ -145,6 +180,8 @@ def test_hint_is_included_in_prompt(monkeypatch):
     diagnose_failure("/tmp/ci.log", "/tmp/repo", hint="look at the valgrind timeout")
     assert "valgrind timeout" in captured["prompt"]
     assert "Maintainer hint" in captured["prompt"]
+    assert captured["prompt"].find("/workspace/ci.log") >= 0
+    assert captured["cwd"] == "/tmp"
 
 
 def test_port_candidates_are_included_in_prompt(monkeypatch):
@@ -229,7 +266,7 @@ def test_max_turns_exhaustion_refuses_gracefully(monkeypatch):
                      "result": "Found a parser desync but ran out of turns."}),
     ])
     _mock_agent(monkeypatch, stream, returncode=1)
-    proposal = diagnose_failure("/logs", "/repo")
+    proposal = diagnose_failure("/workspace/logs", "/workspace/repo")
     assert proposal.path is FixPath.REFUSE
     assert "investigation budget" in proposal.reasoning
     assert "parser desync" in proposal.reasoning  # partial findings surfaced
@@ -239,7 +276,7 @@ def test_genuine_agent_failure_still_raises(monkeypatch):
     """A nonzero exit without the turn-exhaustion marker is a real failure."""
     _mock_agent(monkeypatch, "some crash output", returncode=1)
     try:
-        diagnose_failure("/logs", "/repo")
+        diagnose_failure("/workspace/logs", "/workspace/repo")
         raised = False
     except RuntimeError:
         raised = True

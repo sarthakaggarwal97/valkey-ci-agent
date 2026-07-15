@@ -17,3 +17,17 @@ def test_render_handoff_includes_patch_and_language():
     assert "could not verify" in body
     assert "+fix" in body            # the patch is included
     assert "I did not push this" in body
+
+
+def test_rendered_free_text_cannot_inject_markdown_or_mentions():
+    from scripts.ci_fix.comment import render_comment
+    from scripts.ci_fix.models import FixOutcome, OutcomeKind
+
+    body = render_comment(FixOutcome(
+        kind=OutcomeKind.FAILED,
+        summary="failed\n## injected @maintainer",
+    ))
+    assert "\n## injected" not in body
+    assert "\\#\\# injected" in body
+    assert "@maintainer" not in body
+    assert "@\u200bmaintainer" in body

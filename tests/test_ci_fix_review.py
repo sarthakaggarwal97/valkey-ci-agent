@@ -13,6 +13,8 @@ import json
 import subprocess
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scripts.ci_fix import review as review_mod
 from scripts.ci_fix.models import FixPath, FixProposal, ReviewVerdict, RunResult
 from scripts.ci_fix.review import combined_command, review_fix, run_fix_loop
@@ -614,6 +616,28 @@ def test_precheck_command_refuses_empty_and_noop():
     ok = FixProposal(path=FixPath.AUTHOR, failing_check="t", root_cause="rc",
                      reasoning="w", confidence=0.9, build_command="make", verify_command="./runtest x")
     assert precheck_command(ok) == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "set +e; make test; true",
+        "make test && set +o pipefail; false | true",
+    ],
+)
+def test_precheck_command_refuses_disabling_fail_fast(command):
+    from scripts.ci_fix.review import precheck_command
+
+    proposal = FixProposal(
+        path=FixPath.AUTHOR,
+        failing_check="t",
+        root_cause="rc",
+        reasoning="w",
+        confidence=0.9,
+        verify_command=command,
+    )
+
+    assert "disable fail-fast" in precheck_command(proposal)
 
 
 def test_build_and_review_patch_empty_oversized_rejected_ok(monkeypatch):

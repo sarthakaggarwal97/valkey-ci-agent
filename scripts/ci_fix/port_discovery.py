@@ -15,7 +15,13 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from scripts.common.proc import git_output, run_git
+from scripts.common.proc import (
+    GitPathEncodingError,
+    decode_git_paths,
+    git_output,
+    run_git,
+    run_git_bytes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +226,22 @@ def _candidate_from_line(repo_dir: str, line: str) -> PortCandidate:
 
 def _changed_paths(repo_dir: str, sha: str) -> tuple[str, ...]:
     try:
-        out = git_output(repo_dir, "diff-tree", "--no-commit-id", "--name-only", "-r", sha)
+        result = run_git_bytes(
+            repo_dir,
+            "diff-tree",
+            "--no-commit-id",
+            "--name-only",
+            "-z",
+            "-r",
+            sha,
+        )
     except subprocess.CalledProcessError:
         return ()
-    return tuple(path for path in out.splitlines() if path)
+    try:
+        return decode_git_paths(
+            result.stdout,
+            context=f"changed paths for commit {sha}",
+        )
+    except GitPathEncodingError as exc:
+        logger.warning("Skipping non-UTF-8 candidate paths: %s", exc)
+        return ()

@@ -112,7 +112,7 @@ def test_push_capable_app_tokens_can_update_workflows():
     required_steps = {
         ".github/workflows/backport.yml": "Generate publisher token",
         ".github/workflows/backport-candidates.yml": "Generate aggregate publisher token",
-        ".github/workflows/ci-fix.yml": "Generate GitHub App token",
+        ".github/workflows/ci-fix.yml": "Generate publisher token",
         ".github/workflows/manual-revert-commit.yml": "Generate GitHub App token",
     }
     offenders = []

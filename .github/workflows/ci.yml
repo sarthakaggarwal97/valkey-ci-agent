@@ -31,6 +31,18 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
+      - name: Review dependency and license changes
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: moderate
+          license-check: true
+          deny-licenses: >-
+            AGPL-1.0-only, AGPL-1.0-or-later,
+            AGPL-3.0-only, AGPL-3.0-or-later,
+            GPL-2.0-only, GPL-2.0-or-later,
+            GPL-3.0-only, GPL-3.0-or-later
+
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
         with:
@@ -42,7 +54,7 @@ jobs:
         run: ruff check scripts/ tests/
 
       - name: Run pytest
-        if: matrix.python-version != '3.11'
+        if: matrix.python-version == '3.9'
         run: pytest -v
 
       - name: Run pytest with coverage
@@ -52,3 +64,69 @@ jobs:
       - name: Run mypy type checking
         if: matrix.python-version == '3.11'
         run: mypy scripts/
+
+      - name: Audit locked runtime dependencies
+        if: matrix.python-version == '3.11'
+        run: pip-audit --requirement requirements/runtime.txt
+
+      - name: Audit Python 3.9 dependencies with reviewed backports
+        if: matrix.python-version == '3.9'
+        run: >-
+          pip-audit --requirement requirements/runtime.txt
+          --ignore-vuln PYSEC-2026-2275
+          --ignore-vuln PYSEC-2026-141
+          --ignore-vuln PYSEC-2026-142
+
+  isolation-macos:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          python-version: "3.11"
+          install-mode: dev
+
+      - name: Provision dedicated verifier identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          verifier_user="ci-fix-verifier"
+          if /usr/bin/id "${verifier_user}" >/dev/null 2>&1; then
+            echo "Verifier identity already exists" >&2
+            exit 1
+          fi
+          password="$(/usr/bin/uuidgen)-$(/usr/bin/uuidgen)"
+          sudo /usr/sbin/sysadminctl \
+            -addUser "${verifier_user}" \
+            -fullName "CI Fix Verifier" \
+            -home /var/empty \
+            -shell /bin/bash \
+            -password "${password}" >/dev/null
+          unset password
+          verifier_uid="$(/usr/bin/id -u "${verifier_user}")"
+          test "${verifier_uid}" -gt 0
+          test "${verifier_uid}" -ne "$(/usr/bin/id -u)"
+          if /usr/sbin/dseditgroup -o checkmember -m "${verifier_user}" admin |
+              /usr/bin/grep -q 'yes'; then
+            echo "Verifier identity unexpectedly has administrator access" >&2
+            exit 1
+          fi
+          test -x /usr/bin/sandbox-exec
+
+      - name: Run macOS kernel-boundary regression
+        shell: bash
+        env:
+          CI_FIX_MACOS_SANDBOX_USER: ci-fix-verifier
+        run: |
+          set -euo pipefail
+          pytest -q tests/test_ci_fix_runner.py \
+            -k real_macos_sandbox_denies_network_and_sibling_files

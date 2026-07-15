@@ -2,8 +2,8 @@ name: CI Fix Comment Poll
 
 # Scans recent valkey-io/valkey PR comments for "@valkeyrie-ops fix <ci-link>"
 # and dispatches the ci-fix workflow for each new one. The trigger only; the
-# fix itself runs in ci-fix.yml. Idempotency is a reaction marker on the
-# comment, so overlapping or replayed ticks never double-dispatch.
+# fix itself runs in ci-fix.yml. Durable state and dispatch correlation live in
+# an append-only agent-repository issue ledger. Reactions are display-only.
 
 on:
   schedule:
@@ -23,7 +23,12 @@ permissions: {}
 jobs:
   poll:
     name: "Poll for fix commands"
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: >-
+      ${{
+        github.repository == 'valkey-io/valkey-ci-agent' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_CI_FIX != 'true'
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 70
     concurrency:
@@ -40,6 +45,23 @@ jobs:
 
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
+
+      - name: Reserve dispatch publication before token minting
+        shell: bash
+        env:
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo valkey-io/valkey \
+            --operation ci-fix:dispatch \
+            --admit-publication-key \
+              "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:ci-fix-dispatch" \
+            >/dev/null
 
       - name: Generate App token
         id: token

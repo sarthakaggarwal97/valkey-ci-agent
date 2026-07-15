@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import subprocess
 
-from scripts.ci_fix.port_discovery import discover_port_candidates, format_port_candidates
+from scripts.ci_fix.port_discovery import (
+    _changed_paths,
+    discover_port_candidates,
+    format_port_candidates,
+)
 
 
 def _git(repo, *args):
@@ -127,3 +131,17 @@ def test_discovers_fix_when_default_branch_is_main(tmp_path):
     candidates = discover_port_candidates(str(repo), str(logs))
 
     assert [c.sha for c in candidates] == [upstream]
+
+
+def test_changed_paths_preserves_newlines_in_filenames(tmp_path):
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    _commit(repo, "base")
+    filename = "line\nbreak.c"
+    (repo / filename).write_text("content\n", encoding="utf-8")
+    sha = _commit(repo, "add unusual filename")
+
+    assert _changed_paths(str(repo), sha) == (filename,)

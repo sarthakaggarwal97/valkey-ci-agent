@@ -19,18 +19,37 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
+import os
+import shutil
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from scripts.ai.runtime import run_agent
 from scripts.ci_fix.models import FixPath, FixProposal
 from scripts.ci_fix.port_discovery import PortCandidate, format_port_candidates
 from scripts.common.ai_output import extract_json_object
+from scripts.common.workflow_artifacts import DownloadedMember
 
 logger = logging.getLogger(__name__)
 
 # Cap the untrusted free-text hint before it enters a prompt.
 _MAX_HINT_CHARS = 500
+_PROPOSAL_KEYS = {
+    "path",
+    "failing_check",
+    "failing_job",
+    "root_cause",
+    "reasoning",
+    "confidence",
+    "build_command",
+    "verify_command",
+    "workdir",
+    "unstable_fix_commit",
+    "other_failing_checks",
+}
+_MAX_PROPOSAL_TEXT = 16_384
+_MAX_COMMAND_CHARS = 8192
+_MAX_OTHER_FAILURES = 50
 
 _PROMPT_TEMPLATE = """\
 You are diagnosing a single failing CI check in a Continuous Integration run
@@ -151,15 +170,20 @@ def diagnose_failure(
             f"{hint.strip()[:_MAX_HINT_CHARS]}\n"
         )
 
+    workspace, prompt_logs, prompt_repo = _isolated_workspace_paths(
+        logs_dir,
+        repo_path,
+    )
     prompt = _PROMPT_TEMPLATE.format(
-        logs_dir=logs_dir,
-        repo_path=repo_path,
+        logs_dir=prompt_logs,
+        repo_path=prompt_repo,
         hint_block=hint_block,
         port_candidates_block=format_port_candidates(port_candidates),
     )
-    # cwd is the repo so Read/Grep/Glob resolve relative paths against the
-    # checkout; the logs dir lives outside it and is referenced by absolute path.
-    result = run_agent("ci_fix_diagnose_readonly", prompt, cwd=repo_path)
+    # The isolated runtime mounts exactly this common workspace. It contains
+    # only the checkout and bounded evidence; host absolute paths are not
+    # meaningful inside the container.
+    result = run_agent("ci_fix_diagnose_readonly", prompt, cwd=workspace)
     if result.returncode != 0:
         # Running out of the investigation budget is an expected outcome for a
         # genuinely hard failure, not a crash. Refuse gracefully (with whatever
@@ -172,6 +196,25 @@ def diagnose_failure(
             f"diagnosis agent failed (rc={result.returncode}): {result.stderr[:300]}"
         )
     return _parse_proposal(result.stdout)
+
+
+def _isolated_workspace_paths(logs_dir: str, repo_path: str) -> tuple[str, str, str]:
+    logs = Path(logs_dir).resolve()
+    repo = Path(repo_path).resolve()
+    try:
+        common = Path(os.path.commonpath((logs, repo)))
+    except ValueError as exc:
+        raise ValueError("logs and repository must share an isolated workspace") from exc
+    if common == Path(common.anchor) or common in {logs, repo}:
+        raise ValueError(
+            "logs and repository must be separate children of one isolated workspace"
+        )
+    try:
+        prompt_logs = Path("/workspace", logs.relative_to(common)).as_posix()
+        prompt_repo = Path("/workspace", repo.relative_to(common)).as_posix()
+    except ValueError as exc:
+        raise ValueError("logs and repository escape the isolated workspace") from exc
+    return str(common), prompt_logs, prompt_repo
 
 
 # The Claude CLI emits this result subtype when it hits the turn budget before
@@ -232,9 +275,12 @@ def _parse_proposal(stdout: str) -> FixProposal:
 
 
 def _proposal_from_payload(payload: dict[str, Any]) -> FixProposal:
+    unknown = sorted(set(payload) - _PROPOSAL_KEYS)
+    if unknown:
+        raise ValueError(f"diagnosis contains unknown keys: {unknown}")
     path = _coerce_path(payload.get("path"))
-    failing_check = _str(payload.get("failing_check"))
-    root_cause = _str(payload.get("root_cause"))
+    failing_check = _bounded_str(payload.get("failing_check"), "failing_check")
+    root_cause = _bounded_str(payload.get("root_cause"), "root_cause")
     # An actionable path needs a named test and a cause; without them the apply
     # prompt would be blank and we cannot verify what we fixed. Treat as REFUSE.
     if path is not FixPath.REFUSE and not (failing_check and root_cause):
@@ -247,13 +293,33 @@ def _proposal_from_payload(payload: dict[str, Any]) -> FixProposal:
         path=path,
         failing_check=failing_check,
         root_cause=root_cause,
-        reasoning=_str(payload.get("reasoning")),
+        reasoning=_bounded_str(payload.get("reasoning"), "reasoning"),
         confidence=_confidence(payload.get("confidence")),
-        failing_job_hint="" if refusing else _str(payload.get("failing_job")),
-        build_command="" if refusing else _str(payload.get("build_command")),
-        verify_command="" if refusing else _str(payload.get("verify_command")),
-        workdir="" if refusing else _str(payload.get("workdir")),
-        unstable_fix_commit="" if refusing else _str(payload.get("unstable_fix_commit")),
+        failing_job_hint=(
+            "" if refusing else _bounded_str(payload.get("failing_job"), "failing_job", 1024)
+        ),
+        build_command=(
+            "" if refusing else _bounded_str(
+                payload.get("build_command"),
+                "build_command",
+                _MAX_COMMAND_CHARS,
+            )
+        ),
+        verify_command=(
+            "" if refusing else _bounded_str(
+                payload.get("verify_command"),
+                "verify_command",
+                _MAX_COMMAND_CHARS,
+            )
+        ),
+        workdir="" if refusing else _workdir(payload.get("workdir")),
+        unstable_fix_commit=(
+            "" if refusing else _bounded_str(
+                payload.get("unstable_fix_commit"),
+                "unstable_fix_commit",
+                64,
+            )
+        ),
         other_failing_checks=_str_tuple(payload.get("other_failing_checks")),
     )
 
@@ -274,14 +340,43 @@ def _confidence(value: Any) -> float:
         return 0.0
 
 
-def _str(value: Any) -> str:
-    return value.strip() if isinstance(value, str) else ""
+def _bounded_str(
+    value: Any,
+    field: str,
+    limit: int = _MAX_PROPOSAL_TEXT,
+) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError(f"diagnosis field {field!r} must be a string")
+    stripped = value.strip()
+    if len(stripped) > limit:
+        raise ValueError(f"diagnosis field {field!r} exceeds {limit} characters")
+    return stripped
+
+
+def _workdir(value: Any) -> str:
+    workdir = _bounded_str(value, "workdir", 1024)
+    if not workdir:
+        return ""
+    path = PurePosixPath(workdir)
+    if path.is_absolute() or ".." in path.parts or "\0" in workdir:
+        raise ValueError("diagnosis workdir must stay within the checkout")
+    return workdir
 
 
 def _str_tuple(value: Any) -> tuple[str, ...]:
-    if not isinstance(value, list):
+    if value is None:
         return ()
-    return tuple(item.strip() for item in value if isinstance(item, str) and item.strip())
+    if not isinstance(value, list) or len(value) > _MAX_OTHER_FAILURES:
+        raise ValueError(
+            f"other_failing_checks must be a list of at most {_MAX_OTHER_FAILURES} strings"
+        )
+    return tuple(
+        item
+        for raw in value
+        if (item := _bounded_str(raw, "other_failing_checks item", 1024))
+    )
 def write_logs_to_workspace(logs: dict[str, bytes], workdir: Path) -> Path:
     """Write the run's per-step log files into a ``logs/`` directory.
 
@@ -298,4 +393,21 @@ def write_logs_to_workspace(logs: dict[str, bytes], workdir: Path) -> Path:
     for name, payload in logs.items():
         safe_name = name.replace("/", "__")
         (logs_dir / safe_name).write_bytes(payload)
+    return logs_dir
+
+
+def copy_downloaded_logs_to_workspace(
+    logs: tuple[DownloadedMember, ...],
+    workdir: Path,
+) -> Path:
+    """Copy path-backed logs without materializing the archive in memory."""
+    logs_dir = workdir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    used: set[str] = set()
+    for index, member in enumerate(logs):
+        safe_name = member.name.replace("/", "__")
+        if safe_name in used:
+            safe_name = f"{index:04d}__{safe_name}"
+        used.add(safe_name)
+        shutil.copyfile(member.path, logs_dir / safe_name)
     return logs_dir

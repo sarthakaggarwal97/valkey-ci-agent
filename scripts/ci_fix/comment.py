@@ -11,44 +11,52 @@ from __future__ import annotations
 import re
 
 from scripts.ci_fix.models import FixOutcome, OutcomeKind
+from scripts.common.markdown import (
+    bounded_comment,
+    escape_text,
+    fenced_code,
+    inline_code,
+    markdown_link,
+)
 
 _OUTPUT_TAIL_IN_COMMENT = 3000
 
 
 def _fenced(body: str, *, lang: str = "") -> str:
-    """Wrap untrusted text in a code fence it cannot break out of.
-
-    Command output may itself contain ``` runs; per CommonMark, the fence must
-    be longer than the longest backtick run inside, so we size it accordingly.
-    """
-    longest = max((len(m) for m in re.findall(r"`+", body)), default=0)
-    fence = "`" * max(3, longest + 1)
-    return f"{fence}{lang}\n{body}\n{fence}"
+    return fenced_code(body, language=lang)
 
 
 def render_comment(outcome: FixOutcome) -> str:
     if outcome.kind is OutcomeKind.PUSHED:
-        return _render_pushed(outcome)
-    if outcome.kind is OutcomeKind.REFUSED:
-        return _render_refused(outcome)
-    if outcome.kind is OutcomeKind.HANDOFF:
-        return _render_handoff(outcome)
-    return _render_failed(outcome)
+        body = _render_pushed(outcome)
+    elif outcome.kind is OutcomeKind.REFUSED:
+        body = _render_refused(outcome)
+    elif outcome.kind is OutcomeKind.HANDOFF:
+        body = _render_handoff(outcome)
+    else:
+        body = _render_failed(outcome)
+    return bounded_comment(body)
 
 
 def _render_pushed(outcome: FixOutcome) -> str:
     proposal = outcome.proposal
     run = outcome.run_result
     review = outcome.review
+    check = proposal.failing_check if proposal else "the failing check"
     lines = [
-        f"Fixed **{proposal.failing_check if proposal else 'the failing check'}** "
-        f"and pushed `{outcome.commit_sha[:12]}` to this PR's branch.",
+        f"Fixed **{escape_text(check, max_bytes=1024, multiline=False)}** "
+        f"and pushed {inline_code(outcome.commit_sha[:12])} to this PR's branch.",
         "",
     ]
     if outcome.failing_run_url:
-        lines += [f"Fixing the failure from [this run]({outcome.failing_run_url}).", ""]
+        lines += [
+            f"Fixing the failure from "
+            f"{markdown_link('this run', outcome.failing_run_url)}.",
+            "",
+        ]
     lines += [
-        f"**Root cause:** {proposal.root_cause if proposal else ''}",
+        f"**Root cause:** "
+        f"{escape_text(proposal.root_cause if proposal else '', max_bytes=4096)}",
         "",
     ]
     if run is not None:
@@ -73,7 +81,10 @@ def _render_pushed(outcome: FixOutcome) -> str:
         where = _backend_label(outcome)
         lines += [f"**Verified by:** {where}", ""]
     if review is not None and review.reasoning:
-        lines += [f"**Review:** {review.reasoning}", ""]
+        lines += [
+            f"**Review:** {escape_text(review.reasoning, max_bytes=4096)}",
+            "",
+        ]
     lines += _remaining_checks(outcome)
     if outcome.verify_backend == "upstream-port":
         lines.append(
@@ -82,8 +93,9 @@ def _render_pushed(outcome: FixOutcome) -> str:
         )
     else:
         lines.append(
-            "_The fix passed targeted verification of the failing check; this PR's "
-            "full CI will confirm. I do not merge._"
+            "_This was a targeted approximation, not a replay of the complete "
+            "Actions job. It reproduced the failing baseline and patched command; "
+            "this PR's full CI is authoritative. I do not merge._"
         )
     return "\n".join(lines)
 
@@ -118,19 +130,33 @@ def _backend_label(outcome: FixOutcome) -> str:
     if backend == "local":
         return "targeted verification on a Linux runner"
     if backend.startswith("docker:"):
-        return f"targeted verification in the `{backend[len('docker:'):]}` container"
+        return (
+            "targeted verification in the "
+            f"{inline_code(backend[len('docker:'):])} container"
+        )
     if backend == "macos":
-        run = f" ([run]({outcome.macos_run_url}))" if outcome.macos_run_url else ""
+        run = (
+            f" ({markdown_link('run', outcome.macos_run_url)})"
+            if outcome.macos_run_url
+            else ""
+        )
         return f"targeted verification on a macOS runner{run}"
     if backend == "upstream-port":
         return "ported upstream fix; awaiting this PR's normal CI"
-    return backend
+    return escape_text(backend, max_bytes=1024, multiline=False)
 
 
 def _render_refused(outcome: FixOutcome) -> str:
-    lines = [f"I did not push a fix: {outcome.summary}", ""]
+    lines = [
+        f"I did not push a fix: {escape_text(outcome.summary, max_bytes=4096)}",
+        "",
+    ]
     if outcome.failing_run_url:
-        lines += [f"Looked at the failure from [this run]({outcome.failing_run_url}).", ""]
+        lines += [
+            f"Looked at the failure from "
+            f"{markdown_link('this run', outcome.failing_run_url)}.",
+            "",
+        ]
     if outcome.run_result is not None and outcome.run_result.output_tail:
         lines += [
             "<details><summary>Evidence</summary>",
@@ -144,7 +170,10 @@ def _render_refused(outcome: FixOutcome) -> str:
 
 
 def _render_failed(outcome: FixOutcome) -> str:
-    return f"I hit an error and could not complete the fix: {outcome.summary}"
+    return (
+        "I hit an error and could not complete the fix: "
+        f"{escape_text(outcome.summary, max_bytes=4096)}"
+    )
 
 
 def _render_handoff(outcome: FixOutcome) -> str:
@@ -155,12 +184,26 @@ def _render_handoff(outcome: FixOutcome) -> str:
         "",
     ]
     if outcome.failing_run_url:
-        lines += [f"From the failure in [this run]({outcome.failing_run_url}).", ""]
+        lines += [
+            f"From the failure in "
+            f"{markdown_link('this run', outcome.failing_run_url)}.",
+            "",
+        ]
     if proposal is not None and proposal.root_cause:
-        lines += [f"**Root cause:** {proposal.root_cause}", ""]
-    lines += [f"**Why not verified:** {outcome.summary}", ""]
+        lines += [
+            f"**Root cause:** {escape_text(proposal.root_cause, max_bytes=4096)}",
+            "",
+        ]
+    lines += [
+        f"**Why not verified:** {escape_text(outcome.summary, max_bytes=4096)}",
+        "",
+    ]
     if outcome.review is not None and outcome.review.reasoning:
-        lines += [f"**Review:** {outcome.review.reasoning}", ""]
+        lines += [
+            f"**Review:** "
+            f"{escape_text(outcome.review.reasoning, max_bytes=4096)}",
+            "",
+        ]
     if outcome.handoff_patch:
         lines += [
             "Proposed patch (apply and let this PR's CI judge it):",
@@ -176,7 +219,10 @@ def _render_handoff(outcome: FixOutcome) -> str:
 def _remaining_checks(outcome: FixOutcome) -> list[str]:
     if not outcome.other_failing_checks:
         return []
-    listed = "\n".join(f"- `{name}`" for name in outcome.other_failing_checks)
+    listed = "\n".join(
+        f"- {inline_code(name)}"
+        for name in outcome.other_failing_checks
+    )
     return [
         "Other checks also failed in that run; re-invoke with the same command to "
         "address the next one:",
