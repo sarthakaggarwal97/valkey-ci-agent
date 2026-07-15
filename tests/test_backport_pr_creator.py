@@ -16,6 +16,7 @@ from scripts.backport.pr_creator import (
     pull_matches_push_repo,
 )
 from scripts.backport.utils import build_branch_name
+from scripts.common.markdown import escape_text
 
 # ── Shared strategies ─────────────────────────────────────────────────
 
@@ -102,7 +103,7 @@ class TestPRBodyCompletenessProperty:
         # Per-file resolution details
         for result in all_results:
             assert result.path in body
-            assert result.resolution_summary in body
+            assert escape_text(result.resolution_summary) in body
 
         # Human review disclaimer (at least one file was LLM-resolved)
         assert "human review" in body.lower()
@@ -156,7 +157,7 @@ class TestPRBodyCompletenessProperty:
         # Per-file details present
         for result in unresolved:
             assert result.path in body
-            assert result.resolution_summary in body
+            assert escape_text(result.resolution_summary) in body
 
         # No human review disclaimer when no file was LLM-resolved
         assert "human review" not in body.lower()

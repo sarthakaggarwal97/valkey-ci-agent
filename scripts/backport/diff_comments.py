@@ -24,6 +24,14 @@ from typing import Any
 
 from scripts.backport.models import ResolutionResult
 from scripts.common.github_client import retry_github_call
+from scripts.common.markdown import (
+    blockquote,
+    bounded_comment,
+    escape_text,
+    inline_code,
+    markdown_link,
+    safe_url,
+)
 
 _MARKER_PREFIX = "valkey-ci-agent:ai-diff"
 
@@ -69,14 +77,15 @@ def _files_changed_url(pr_html_url: str, path: str) -> str | None:
 
 
 def _safe_text(value: str, *, limit: int | None = None) -> str:
-    text = " ".join(value.replace("\r\n", "\n").replace("\r", "\n").split())
-    if limit is not None and len(text) > limit:
-        text = text[:limit].rstrip() + "..."
-    return html.escape(text, quote=False)
+    return escape_text(
+        value,
+        max_bytes=limit,
+        multiline=False,
+    )
 
 
 def _path_code(path: str) -> str:
-    return f"<code>{html.escape(path)}</code>"
+    return inline_code(path)
 
 
 def _summary_block(results: list[ResolutionResult]) -> str:
@@ -84,9 +93,7 @@ def _summary_block(results: list[ResolutionResult]) -> str:
     if not summary:
         return ""
     text = summary.strip()
-    if len(text) > _MAX_SUMMARY_CHARS:
-        text = text[:_MAX_SUMMARY_CHARS].rstrip() + "\n... summary truncated."
-    quoted = "\n".join(f"> {html.escape(line, quote=False)}" for line in text.splitlines())
+    quoted = blockquote(text, max_bytes=_MAX_SUMMARY_CHARS)
     return f"**Claude Summary**\n\n{quoted}\n\n"
 
 
@@ -125,7 +132,7 @@ def _file_line(
     )
     url = commit_url or _files_changed_url(pr_html_url, result.path)
     if url:
-        return f"- {_path_code(result.path)} — [view diff]({url})"
+        return f"- {_path_code(result.path)} - {markdown_link('view diff', url)}"
     return f"- {_path_code(result.path)}"
 
 
@@ -165,11 +172,15 @@ def _render_body(
         for result in results
     )
     if resolved_commit_sha and repo_html_url:
+        commit_url = safe_url(f"{repo_html_url}/commit/{resolved_commit_sha}")
         lines.extend([
             "",
-            f"Full backport commit diff: "
-            f"[commit {resolved_commit_sha[:12]}]"
-            f"({repo_html_url}/commit/{resolved_commit_sha}).",
+            "Full backport commit diff: "
+            + (
+                f"{markdown_link(f'commit {resolved_commit_sha[:12]}', commit_url)}."
+                if commit_url
+                else inline_code(resolved_commit_sha[:12])
+            ),
         ])
     lines.extend([
         "",
@@ -206,7 +217,7 @@ def render_diff_comment(
     )
     sha = _payload_sha(body)
     marker = f'<!-- {_MARKER_PREFIX} source_pr="{source_pr}" sha="{sha}" -->'
-    return f"{marker}\n{body}"
+    return bounded_comment(f"{marker}\n{body}")
 
 
 def parse_marker(body: str) -> DiffCommentMarker | None:

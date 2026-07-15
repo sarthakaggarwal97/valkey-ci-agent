@@ -1,32 +1,20 @@
-"""Mark project-board backport items done once the backport actually lands.
-
-``reconcile_project_board`` lists every board item still in "To be backported",
-verifies each source PR actually has a commit on the target branch, and flips
-only the verified ones. It runs from the scheduled poller and is self-healing:
-it reconciles the whole board against branch reality on every run, so it does
-not depend on any merge hook firing.
-
-Done is gated on the branch genuinely containing the source PR's commit (the
-same ``(#<pr>)`` signal the sweep uses to skip already-applied PRs), so a
-backport PR body that merely *claims* a PR was applied can never mark it Done
-on its own.
-"""
+"""Mark project items done from immutable merged-backport provenance."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import logging
-import os
 import re
-import subprocess
-import tempfile
 from dataclasses import dataclass, field
 from typing import Any
 
+from github import Auth, Github
+
+from scripts.backport.provenance import parse_provenance_commit
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
-from scripts.backport.utils import pr_numbers_from_commit_subjects
-from scripts.common.git_auth import GitAuth, github_https_url
+from scripts.backport.utils import build_branch_name
+from scripts.common.phase_artifact import ArtifactError
 from scripts.common.polling import (
     PollLoopError,
     add_poll_loop_args,
@@ -40,10 +28,8 @@ _DEFAULT_STATUS_FIELD = "Status"
 _DEFAULT_FROM_STATUS = "To be backported"
 _DEFAULT_DONE_STATUS = "Done"
 
-# Depth of the shallow verification clone. A release branch accumulates backports
-# steadily, so a few thousand commits comfortably covers any PR still sitting in
-# "To be backported" since the branch was cut.
-_VERIFY_CLONE_DEPTH = 5000
+_PUBLISHER_LOGIN = "valkeyrie-bot[bot]"
+_MAX_CLOSED_PULLS = 10_000
 
 
 @dataclass
@@ -73,95 +59,172 @@ def verify_prs_on_branch(
     *,
     token: str = "",
     git_env: dict[str, str] | None = None,
+    push_repo: str | None = None,
+    github_client: Any | None = None,
+    publisher_login: str = _PUBLISHER_LOGIN,
 ) -> set[int]:
-    """Return which of ``pr_numbers`` actually landed on ``target_branch``.
-
-    A PR is considered present if either:
-
-    * a commit on the branch carries the PR's trailing ``(#N)`` in its subject
-      (a cherry-pick that kept the source PR's title), or
-    * a backport commit on the branch lists the PR in an ``## Applied`` table
-      in its body. The sweep squash-merges a batch of cherry-picks into one
-      commit whose subject is the *backport* PR; the source PRs it carried are
-      only recoverable from that ``## Applied`` table.
-
-    Subject matching uses the trailing ``(#N)`` only; body matching reads only
-    the structured ``## Applied`` section, so a stray ``(#N)`` reference in a
-    ``## Needs attention`` row or in prose never counts.
-
-    ``token`` authenticates the clone for private/auth-required repos.
-    """
+    """Verify merged PR ancestry and the publisher's immutable provenance."""
     if not pr_numbers:
         return set()
-
-    env = dict(os.environ if git_env is None else git_env)
-    with GitAuth(token, prefix="mark-done-git-askpass-") as git_auth:
-        env = git_auth.env(env)
-        with tempfile.TemporaryDirectory(prefix="mark-done-verify-") as tmp:
-            repo_dir = os.path.join(tmp, "repo")
-            _shallow_clone(repo_full_name, target_branch, repo_dir, env)
-
-            applied = pr_numbers_from_commit_subjects(_branch_commit_subjects(repo_dir))
-            applied |= _applied_prs_from_commit_bodies(repo_dir)
-
-    return pr_numbers & applied
-
-
-def _branch_commit_subjects(repo_dir: str) -> list[str]:
-    result = subprocess.run(
-        ["git", "log", "--format=%s", "HEAD"],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-        check=True,
+    del git_env  # retained for API compatibility; verification is now REST-based.
+    if github_client is None:
+        if not token:
+            raise ValueError("token is required for provenance verification")
+        github_client = Github(auth=Auth.Token(token))
+    repo = github_client.get_repo(repo_full_name)
+    expected_push_repo = push_repo or repo_full_name
+    expected_branches = {
+        build_branch_name(number, target_branch): number
+        for number in pr_numbers
+    }
+    verified: set[int] = set()
+    pulls = repo.get_pulls(
+        state="closed",
+        base=target_branch,
+        sort="updated",
+        direction="desc",
     )
-    return result.stdout.splitlines()
+    for index, pull in enumerate(pulls):
+        if index >= _MAX_CLOSED_PULLS:
+            raise RuntimeError("closed backport PR scan exceeded its safety limit")
+        branch = str(getattr(getattr(pull, "head", None), "ref", "") or "")
+        number = expected_branches.get(branch)
+        if number is None or number in verified:
+            continue
+        head_repo = str(
+            getattr(
+                getattr(getattr(pull, "head", None), "repo", None),
+                "full_name",
+                "",
+            )
+            or ""
+        )
+        author = str(getattr(getattr(pull, "user", None), "login", "") or "")
+        if (
+            head_repo != expected_push_repo
+            or author != publisher_login
+            or getattr(pull, "merged_at", None) is None
+        ):
+            continue
+        try:
+            _verify_merged_pull_provenance(
+                repo,
+                pull,
+                repository=repo_full_name,
+                target_branch=target_branch,
+                source_pr_number=number,
+            )
+        except (ArtifactError, RuntimeError, ValueError) as exc:
+            logger.warning(
+                "Backport PR #%s failed provenance verification for source #%d: %s",
+                getattr(pull, "number", "?"),
+                number,
+                exc,
+            )
+            continue
+        verified.add(number)
+        if verified == pr_numbers:
+            break
+    return verified
 
 
-# git log -z NUL-separates commit records, letting us split multi-line bodies.
-_COMMIT_RECORD_DELIM = "\x00"
-
-
-def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
-    """Source PR numbers listed in ``## Applied`` tables of backport commits.
-
-    Squash-merged backport sweeps record the cherry-picked source PRs only in
-    the commit body's ``## Applied`` section. Only that section's table cells
-    are read, so a ``(#N)`` in a later ``## Needs attention`` row or in prose is
-    never treated as applied.
-    """
-    result = subprocess.run(
-        ["git", "log", "-z", "--format=%B", "HEAD"],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    numbers: set[int] = set()
-    for message in result.stdout.split(_COMMIT_RECORD_DELIM):
-        applied_section = _markdown_section(message, "Applied")
-        if applied_section:
-            numbers.update(_pr_numbers_from_table_cells(applied_section))
-    return numbers
-
-
-def _shallow_clone(
-    repo_full_name: str, target_branch: str, dest_dir: str, git_env: dict[str, str]
+def _verify_merged_pull_provenance(
+    repo: Any,
+    pull: Any,
+    *,
+    repository: str,
+    target_branch: str,
+    source_pr_number: int,
 ) -> None:
-    subprocess.run(
-        [
-            "git", "clone",
-            "--branch", target_branch,
-            "--single-branch",
-            f"--depth={_VERIFY_CLONE_DEPTH}",
-            github_https_url(repo_full_name),
-            dest_dir,
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=git_env,
+    commits = _bounded_commits(pull.get_commits(), "backport PR")
+    if len(commits) != 2:
+        raise ArtifactError("backport PR must contain one target and one provenance commit")
+    target_commit, attestation_commit = commits
+    head_sha = str(getattr(getattr(pull, "head", None), "sha", "") or "").lower()
+    if _commit_sha(attestation_commit) != head_sha:
+        raise ArtifactError("provenance commit is not the immutable PR head")
+    provenance = parse_provenance_commit(_commit_message(attestation_commit))
+    expected = {
+        "repository": repository,
+        "target_branch": target_branch,
+        "source_pr_number": source_pr_number,
+        "target_commit": _commit_sha(target_commit),
+    }
+    for key, value in expected.items():
+        if provenance[key] != value:
+            raise ArtifactError(f"provenance {key} differs from merged PR")
+
+    attestation_parents = _commit_parents(attestation_commit)
+    target_parents = _commit_parents(target_commit)
+    if attestation_parents != (provenance["target_commit"],):
+        raise ArtifactError("provenance commit does not directly follow target commit")
+    if target_parents != (provenance["base_commit"],):
+        raise ArtifactError("target commit does not directly follow attested base")
+    if (
+        _commit_tree(target_commit) != provenance["validated_tree"]
+        or _commit_tree(attestation_commit) != provenance["validated_tree"]
+    ):
+        raise ArtifactError("PR commit tree differs from validated provenance tree")
+
+    source_pr = repo.get_pull(source_pr_number)
+    if not bool(getattr(source_pr, "merged", False)):
+        raise ArtifactError("source PR is no longer recorded as merged")
+    merge_sha = str(getattr(source_pr, "merge_commit_sha", "") or "").lower() or None
+    source_commits = tuple(
+        _commit_sha(commit)
+        for commit in _bounded_commits(source_pr.get_commits(), "source PR")
     )
+    if (
+        merge_sha != provenance["source_merge_commit"]
+        or list(source_commits) != provenance["source_commits"]
+    ):
+        raise ArtifactError("source PR identity differs from published provenance")
+
+    merge_commit = str(getattr(pull, "merge_commit_sha", "") or "").lower()
+    if not merge_commit:
+        raise ArtifactError("merged backport PR has no merge commit")
+    comparison = repo.compare(merge_commit, target_branch)
+    if str(getattr(comparison, "status", "") or "") not in {"ahead", "identical"}:
+        raise ArtifactError("backport merge commit is not an ancestor of target branch")
+
+
+def _bounded_commits(values: Any, label: str) -> list[Any]:
+    commits: list[Any] = []
+    for commit in values:
+        commits.append(commit)
+        if len(commits) > 1000:
+            raise ArtifactError(f"{label} has more than 1000 commits")
+    if not commits:
+        raise ArtifactError(f"{label} has no commits")
+    return commits
+
+
+def _commit_sha(commit: Any) -> str:
+    value = str(getattr(commit, "sha", "") or "").lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", value):
+        raise ArtifactError("GitHub returned a malformed commit SHA")
+    return value
+
+
+def _commit_message(commit: Any) -> str:
+    value = getattr(getattr(commit, "commit", None), "message", None)
+    if not isinstance(value, str) or not value:
+        raise ArtifactError("GitHub returned an empty commit message")
+    return value
+
+
+def _commit_tree(commit: Any) -> str:
+    value = str(
+        getattr(getattr(getattr(commit, "commit", None), "tree", None), "sha", "")
+        or ""
+    ).lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", value):
+        raise ArtifactError("GitHub returned a malformed commit tree")
+    return value
+
+
+def _commit_parents(commit: Any) -> tuple[str, ...]:
+    return tuple(_commit_sha(parent) for parent in (getattr(commit, "parents", None) or []))
 
 
 def mark_backport_items_done(
@@ -263,6 +326,7 @@ def reconcile_project_board(
     done_status: str = _DEFAULT_DONE_STATUS,
     token: str = "",
     git_env: dict[str, str] | None = None,
+    push_repo: str | None = None,
     dry_run: bool = False,
 ) -> BackportStatusUpdateResult:
     """Self-healing reconcile: mark Done every "To be backported" item that is
@@ -299,7 +363,12 @@ def reconcile_project_board(
         return BackportStatusUpdateResult(requested=[])
 
     verified = verify_prs_on_branch(
-        source_repo, target_branch, candidate_pr_numbers, token=token, git_env=git_env
+        source_repo,
+        target_branch,
+        candidate_pr_numbers,
+        token=token,
+        git_env=git_env,
+        push_repo=push_repo,
     )
     logger.info(
         "Branch %s: %d candidate(s) in %r, %d verified present",
@@ -322,54 +391,6 @@ def reconcile_project_board(
     )
 
 
-def _markdown_section(body: str, heading: str) -> str:
-    pattern = re.compile(
-        rf"(?ims)^##\s+{re.escape(heading)}\s*$([\s\S]*?)(?=^##\s+|\Z)"
-    )
-    match = pattern.search(body)
-    return match.group(1) if match else ""
-
-
-def _pr_numbers_from_table_cells(markdown: str) -> set[int]:
-    """Source PR numbers from the ``Source PR`` column of a markdown table.
-
-    Only the ``Source PR`` column is read, so a ``#N`` appearing in a Title or
-    Detail cell (e.g. a revert subject, or a "depends on #N" note) is never
-    counted. Cells whose text wraps across newlines are reassembled first: a
-    logical row begins at a line starting with ``|`` and absorbs the lines that
-    follow until the next row. When no ``Source PR`` header is present the first
-    column is used, since the sweep always lists the source PR first.
-    """
-    rows: list[str] = []
-    for line in markdown.splitlines():
-        if line.lstrip().startswith("|"):
-            rows.append(line)
-        elif rows:
-            rows[-1] += " " + line.strip()
-
-    pr_cell = re.compile(r"^(?:\[)?#(\d+)(?:\]\([^)]*\))?$")
-    column: int | None = None
-    numbers: set[int] = set()
-    for row in rows:
-        cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
-        if column is None:
-            for index, cell in enumerate(cells):
-                if _normalize(cell) == "source pr":
-                    column = index
-                    break
-            else:
-                column = 0  # no header row; sweep lists the source PR first
-            if any(_normalize(cell) == "source pr" for cell in cells):
-                continue  # consumed the header row itself
-        if all(set(cell) <= set("-: ") for cell in cells if cell):
-            continue  # separator row (|---|---|)
-        if column < len(cells):
-            match = pr_cell.match(cells[column])
-            if match:
-                numbers.add(int(match.group(1)))
-    return numbers
-
-
 def _normalize(value: object) -> str:
     return str(value or "").strip().lower()
 
@@ -386,6 +407,7 @@ def _load_project(
     cursor = None
     project_id = ""
     fields: list[dict[str, Any]] = []
+    fields_page_info: dict[str, Any] = {}
     items: list[dict[str, Any]] = []
 
     while True:
@@ -399,18 +421,84 @@ def _load_project(
 
         project_id = project_id or str(project.get("id") or "")
         if not fields:
-            fields = (project.get("fields") or {}).get("nodes") or []
+            fields_connection = project.get("fields") or {}
+            fields = list(fields_connection.get("nodes") or [])
+            fields_page_info = fields_connection.get("pageInfo") or {}
 
         page = project.get("items") or {}
         items.extend(page.get("nodes") or [])
         page_info = page.get("pageInfo") or {}
         if not page_info.get("hasNextPage"):
             break
-        cursor = page_info.get("endCursor")
+        cursor = _required_next_cursor(page_info, "project items")
 
     if not project_id:
         raise RuntimeError(f"Project {project_owner}/{project_number} has no id")
+    fields.extend(
+        _load_remaining_fields(
+            gql,
+            project_id=project_id,
+            page_info=fields_page_info,
+        )
+    )
+    for item in items:
+        _load_remaining_item_field_values(gql, item)
     return {"id": project_id, "fields": fields, "items": items}
+
+
+def _load_remaining_fields(
+    gql: GitHubGraphQLClient,
+    *,
+    project_id: str,
+    page_info: dict[str, Any],
+) -> list[dict[str, Any]]:
+    nodes: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    while page_info.get("hasNextPage"):
+        cursor = _required_next_cursor(page_info, "project fields")
+        if cursor in seen:
+            raise RuntimeError("project fields pagination cursor repeated")
+        seen.add(cursor)
+        data = gql.execute(
+            _project_fields_query(),
+            {"id": project_id, "cursor": cursor},
+        )
+        connection = ((data.get("node") or {}).get("fields") or {})
+        nodes.extend(connection.get("nodes") or [])
+        page_info = connection.get("pageInfo") or {}
+    return nodes
+
+
+def _load_remaining_item_field_values(
+    gql: GitHubGraphQLClient,
+    item: dict[str, Any],
+) -> None:
+    connection = item.get("fieldValues") or {}
+    nodes = list(connection.get("nodes") or [])
+    page_info = connection.get("pageInfo") or {}
+    seen: set[str] = set()
+    while page_info.get("hasNextPage"):
+        cursor = _required_next_cursor(page_info, "project item field values")
+        if cursor in seen:
+            raise RuntimeError("project item field-values cursor repeated")
+        seen.add(cursor)
+        data = gql.execute(
+            _item_field_values_query(),
+            {"id": item["id"], "cursor": cursor},
+        )
+        next_connection = (
+            (data.get("node") or {}).get("fieldValues") or {}
+        )
+        nodes.extend(next_connection.get("nodes") or [])
+        page_info = next_connection.get("pageInfo") or {}
+    item["fieldValues"] = {"nodes": nodes, "pageInfo": page_info}
+
+
+def _required_next_cursor(page_info: dict[str, Any], label: str) -> str:
+    cursor = page_info.get("endCursor")
+    if not isinstance(cursor, str) or not cursor:
+        raise RuntimeError(f"{label} is truncated without an end cursor")
+    return cursor
 
 
 def _find_status_field_and_option(
@@ -484,6 +572,7 @@ query($owner: String!, $number: Int!, $cursor: String) {{
     projectV2(number: $number) {{
       id
       fields(first: 100) {{
+        pageInfo {{ hasNextPage endCursor }}
         nodes {{
           __typename
           ... on ProjectV2SingleSelectField {{
@@ -504,7 +593,8 @@ query($owner: String!, $number: Int!, $cursor: String) {{
               repository {{ nameWithOwner }}
             }}
           }}
-          fieldValues(first: 50) {{
+          fieldValues(first: 100) {{
+            pageInfo {{ hasNextPage endCursor }}
             nodes {{
               __typename
               ... on ProjectV2ItemFieldSingleSelectValue {{
@@ -518,6 +608,49 @@ query($owner: String!, $number: Int!, $cursor: String) {{
     }}
   }}
 }}
+"""
+
+
+def _project_fields_query() -> str:
+    return """
+query($id: ID!, $cursor: String) {
+  node(id: $id) {
+    ... on ProjectV2 {
+      fields(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          __typename
+          ... on ProjectV2SingleSelectField {
+            id
+            name
+            options { id name }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+def _item_field_values_query() -> str:
+    return """
+query($id: ID!, $cursor: String) {
+  node(id: $id) {
+    ... on ProjectV2Item {
+      fieldValues(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          __typename
+          ... on ProjectV2ItemFieldSingleSelectValue {
+            name
+            field { ... on ProjectV2FieldCommon { name } }
+          }
+        }
+      }
+    }
+  }
+}
 """
 
 
@@ -612,6 +745,7 @@ def _run_poll(
             from_status=from_status,
             done_status=done_status,
             token=token,
+            push_repo=repo_entry.effective_push_repo,
             dry_run=dry_run,
         )
         out[branch_entry.branch] = result.as_dict()

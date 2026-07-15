@@ -9,13 +9,32 @@ def _write_registry(tmp_path) -> str:
     path = tmp_path / "repos.yml"
     path.write_text(
         """
+schema_version: 2
 repos:
   - repo: org/core
     project_owner: org
     project_owner_type: organization
     language: c
-    build_commands:
-      - make test
+    validation:
+      adapter: container-argv-v1
+      image: "gcc@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      platform: linux/amd64
+      network: none
+      resources:
+        cpus: 1
+        memory_mb: 512
+        pids: 64
+        output_bytes: 65536
+        tmpfs_mb: 64
+      default_commands: [build]
+      commands:
+        - id: build
+          argv: ["make", "test"]
+          working_directory: "."
+          timeout_seconds: 600
+          inputs: ["**"]
+          expected_artifacts: []
+      rules: []
     branches:
       - branch: "1.0"
         project_number: 1
@@ -25,6 +44,10 @@ repos:
     project_owner: org
     project_owner_type: organization
     language: c++
+    validation_waiver:
+      reason: Unit-test module has no build system.
+      approved_by: test suite
+      expires: "2099-01-01"
     branches:
       - branch: "1.0"
         project_number: 3
@@ -47,9 +70,9 @@ def test_build_matrix_emits_one_leg_per_registered_branch(tmp_path) -> None:
     assert matrix["include"][0]["project_number"] == 1
     assert matrix["include"][0]["push_repo"] == "org/core"
     assert matrix["include"][0]["language"] == "c"
-    assert json.loads(matrix["include"][0]["build_commands_json"]) == ["make test"]
-    assert json.loads(matrix["include"][0]["validation_setup_commands_json"]) == []
-    assert matrix["include"][0]["repair_validation_failures"] is False
+    validation = json.loads(matrix["include"][0]["validation_json"])
+    assert validation["commands"][0]["argv"] == ["make", "test"]
+    assert json.loads(matrix["include"][0]["validation_waiver_json"]) is None
 
 
 def test_build_matrix_filters_by_repo_and_project_number(tmp_path) -> None:
@@ -70,9 +93,10 @@ def test_build_matrix_filters_by_repo_and_project_number(tmp_path) -> None:
                 "branch": "2.0",
                 "push_repo": "org/core",
                 "language": "c",
-                "build_commands_json": json.dumps(["make test"]),
-                "validation_setup_commands_json": json.dumps([]),
-                "repair_validation_failures": False,
+                "validation_json": json.dumps(
+                    json.loads(build_matrix(_write_registry(tmp_path))["include"][0]["validation_json"])
+                ),
+                "validation_waiver_json": json.dumps(None),
             }
         ]
     }

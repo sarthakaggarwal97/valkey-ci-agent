@@ -4,10 +4,56 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from pathlib import Path
 
-from scripts.backport.models import CherryPickResult, ConflictedFile
+from scripts.backport.models import CherryPickResult, ConflictedFile, ResolutionResult
+from scripts.common.proc import (
+    GitPathEncodingError,
+    decode_git_paths,
+    run_git,
+    run_git_bytes,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def complete_resolved_cherry_pick(
+    repo_dir: str,
+    resolutions: list[ResolutionResult],
+) -> None:
+    """Apply text resolutions and complete the in-progress cherry-pick."""
+    root = Path(repo_dir).resolve()
+    for resolution in resolutions:
+        if resolution.resolved_content is None:
+            raise ValueError(
+                f"Cannot apply unresolved conflict for {resolution.path}"
+            )
+        path = (root / resolution.path).resolve()
+        if path != root and root not in path.parents:
+            raise ValueError(
+                f"Conflict resolution path escapes checkout: {resolution.path!r}"
+            )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            content = resolution.resolved_content.encode("utf-8", errors="strict")
+        except UnicodeEncodeError as exc:
+            raise ValueError(
+                f"Conflict resolution is not valid UTF-8 for {resolution.path}"
+            ) from exc
+        if b"\0" in content:
+            raise ValueError(
+                f"Conflict resolution contains binary content for {resolution.path}"
+            )
+        path.write_bytes(content)
+        _run_git(repo_dir, "add", "--", resolution.path)
+
+    _run_git(
+        repo_dir,
+        "-c",
+        "core.editor=true",
+        "cherry-pick",
+        "--continue",
+    )
 
 
 def cherry_pick(
@@ -50,7 +96,7 @@ def _cherry_pick_merge(
             "Cherry-pick of merge commit %s produced conflicts",
             merge_commit_sha,
         )
-        conflicts = _collect_conflicts(repo_dir, target_branch)
+        conflicts, handoff_reason = _collect_conflicts(repo_dir, target_branch)
 
         # Empty cherry-pick: the changes already exist on the target branch.
         # Abort and report a no-op so callers can skip creating empty PRs.
@@ -70,6 +116,7 @@ def _cherry_pick_merge(
             conflicting_files=conflicts,
             applied_commits=[],
             conflicting_commit_sha=merge_commit_sha,
+            handoff_reason=handoff_reason,
         )
     logger.info("Cherry-pick of merge commit %s succeeded", merge_commit_sha)
     return CherryPickResult(
@@ -91,7 +138,7 @@ def _cherry_pick_sequential(
             logger.warning(
                 "Cherry-pick of commit %s produced conflicts", sha,
             )
-            conflicts = _collect_conflicts(repo_dir, target_branch)
+            conflicts, handoff_reason = _collect_conflicts(repo_dir, target_branch)
             if not conflicts and _is_empty_cherry_pick(result):
                 logger.info(
                     "No conflicting files; cherry-pick is empty/already applied.",
@@ -107,29 +154,40 @@ def _cherry_pick_sequential(
                 conflicting_files=conflicts,
                 applied_commits=applied,
                 conflicting_commit_sha=sha,
+                handoff_reason=handoff_reason,
             )
         applied.append(sha)
     logger.info("All %d commits cherry-picked cleanly", len(applied))
     return CherryPickResult(success=True, applied_commits=applied)
 
 
-def _collect_conflicts(repo_dir: str, target_branch: str) -> list[ConflictedFile]:
-    result = _run_git(repo_dir, "diff", "--name-only", "--diff-filter=U")
-    paths = [p for p in result.stdout.strip().splitlines() if p]
+def _collect_conflicts(
+    repo_dir: str,
+    target_branch: str,
+) -> tuple[list[ConflictedFile], str | None]:
+    result = run_git_bytes(
+        repo_dir,
+        "diff",
+        "--name-only",
+        "-z",
+        "--diff-filter=U",
+    )
+    try:
+        paths = decode_git_paths(result.stdout, context="conflicting path list")
+    except GitPathEncodingError as exc:
+        logger.warning("Conflict requires human handling: %s", exc)
+        return [], str(exc)
     logger.info("Found %d conflicting file(s): %s", len(paths), paths)
 
     conflicts: list[ConflictedFile] = []
     for path in paths:
-        cf = _build_conflicted_file(repo_dir, target_branch, path)
-        # Binary files have no line-level merge, so the resolver can't act on
-        # them. Skip them (git marks binary content with a NUL byte). A
-        # cherry-pick left with only binary conflicts becomes an empty set and
-        # is skipped by the caller.
-        if "\x00" in cf.target_branch_content or "\x00" in cf.source_branch_content:
-            logger.warning("Skipping binary conflict: %s", path)
-            continue
+        try:
+            cf = _build_conflicted_file(repo_dir, target_branch, path)
+        except ValueError as exc:
+            logger.warning("Conflict requires human handling: %s", exc)
+            return [], str(exc)
         conflicts.append(cf)
-    return conflicts
+    return conflicts, None
 
 
 def _build_conflicted_file(
@@ -152,16 +210,28 @@ def _build_conflicted_file(
 
 
 def _show_file(repo_dir: str, ref: str, file_path: str) -> str:
-    result = _run_git(repo_dir, "show", f"{ref}:{file_path}", check=False)
+    result = run_git_bytes(
+        repo_dir,
+        "show",
+        f"{ref}:{file_path}",
+        check=False,
+    )
     if result.returncode != 0:
         logger.warning(
             "Could not read %s:%s — %s",
             ref,
             file_path,
-            result.stderr.strip(),
+            result.stderr.decode("utf-8", errors="backslashreplace").strip(),
         )
         return ""
-    return result.stdout
+    if b"\0" in result.stdout:
+        raise ValueError(f"binary conflict requires human handling: {file_path}")
+    try:
+        return result.stdout.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"non-UTF-8 conflict requires human handling: {file_path}"
+        ) from exc
 
 
 def _is_empty_cherry_pick(result: subprocess.CompletedProcess[str]) -> bool:
@@ -187,20 +257,17 @@ def _run_git(
     *args: str,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    cmd = ["git", *args]
-    logger.debug("Running: %s", " ".join(cmd))
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        errors="replace",
-        cwd=repo_dir,
+    logger.debug("Running locked git %s", " ".join(args))
+    result = run_git(
+        repo_dir,
+        *args,
         check=False,
+        errors="backslashreplace",
     )
     if check and result.returncode != 0:
         raise subprocess.CalledProcessError(
             result.returncode,
-            cmd,
+            result.args,
             output=result.stdout,
             stderr=result.stderr,
         )

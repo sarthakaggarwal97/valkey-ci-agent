@@ -15,18 +15,30 @@ on:
         description: "Target release branch to cherry-pick onto (e.g. 8.1)"
         required: true
         type: string
-      aws_region:
-        description: "AWS region where Bedrock is available"
-        required: false
-        type: string
-        default: "us-east-1"
       push_repo:
         description: "Override different-owner fork for the backport branch"
         required: false
         type: string
         default: ""
+      agent_repository:
+        description: "Repository containing this reusable workflow"
+        required: true
+        type: string
+      agent_ref:
+        description: "Full immutable commit SHA containing this reusable workflow"
+        required: true
+        type: string
+      artifact_suffix:
+        description: "Safe unique suffix for phase artifacts in this workflow run"
+        required: true
+        type: string
+      publication_mode:
+        description: "Publish one PR or export for aggregate sweep publication"
+        required: false
+        type: string
+        default: individual
     secrets:
-      AWS_ROLE_ARN:
+      AI_GATEWAY_TOKEN:
         required: true
       VALKEYRIE_BOT_APP_ID:
         required: true
@@ -35,53 +47,451 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  CLAUDE_CODE_USE_BEDROCK: "1"
-  CI_AGENT_EVIDENCE_DIR: agent-evidence
+
+concurrency:
+  group: backport-${{ inputs.repo_full_name }}-${{ inputs.source_pr_number }}-${{ inputs.target_branch }}
+  cancel-in-progress: false
+
+permissions: {}
 
 jobs:
-  backport:
+  discovery:
+    if: >-
+      ${{
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    concurrency:
-      group: backport-${{ inputs.repo_full_name }}-${{ inputs.source_pr_number }}-${{ inputs.target_branch }}
-      cancel-in-progress: false
+    timeout-minutes: 15
     permissions:
       contents: read
-      id-token: write
     steps:
-      - name: Resolve called workflow ref
-        id: called-workflow
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
-        with:
-          script: |
-            const token = await core.getIDToken('valkey-ci-agent');
-            const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
-            const workflowRef = payload.job_workflow_ref || '';
-            const marker = '/.github/workflows/';
-            const markerIndex = workflowRef.indexOf(marker);
-            const refIndex = workflowRef.lastIndexOf('@');
-            if (markerIndex <= 0 || refIndex <= markerIndex) {
-              core.setFailed(`Could not resolve called workflow repository/ref from job_workflow_ref: ${workflowRef}`);
-              return;
-            }
-            core.setOutput('repository', workflowRef.slice(0, markerIndex));
-            core.setOutput('ref', workflowRef.slice(refIndex + 1));
+      - name: Validate immutable agent source
+        shell: bash
+        env:
+          AGENT_REPOSITORY: ${{ inputs.agent_repository }}
+          AGENT_REF: ${{ inputs.agent_ref }}
+          ARTIFACT_SUFFIX: ${{ inputs.artifact_suffix }}
+        run: |
+          set -euo pipefail
+          test "${AGENT_REPOSITORY}" = "valkey-io/valkey-ci-agent"
+          [[ "${AGENT_REF}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${ARTIFACT_SUFFIX}" =~ ^[A-Za-z0-9_.-]{1,120}$ ]]
+          [[ "${{ inputs.publication_mode }}" =~ ^(individual|aggregate)$ ]]
 
-      - name: Checkout agent repository
+      - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: ${{ steps.called-workflow.outputs.repository }}
-          ref: ${{ steps.called-workflow.outputs.ref }}
+          repository: ${{ inputs.agent_repository }}
+          ref: ${{ inputs.agent_ref }}
           persist-credentials: false
           fetch-depth: 1
 
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
-        with:
-          install-claude: "true"
 
-      - name: Generate GitHub App token
-        id: generate-token
+      - name: Enforce operational controls before token minting
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ inputs.repo_full_name }}
+          OPERATION_ID: backport:discover:${{ github.run_id }}:${{ github.run_attempt }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo "${TARGET_REPOSITORY}" \
+            --operation "${OPERATION_ID}" >/dev/null
+
+      - name: Generate read-only discovery token
+        id: discovery-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          permission-contents: read
+          permission-pull-requests: read
+          permission-metadata: read
+
+      - name: Discover immutable backport inputs
+        shell: bash
+        env:
+          DISCOVERY_GITHUB_TOKEN: ${{ steps.discovery-token.outputs.token }}
+          REPO_FULL_NAME: ${{ inputs.repo_full_name }}
+          SOURCE_PR_NUMBER: ${{ inputs.source_pr_number }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          PUSH_REPO: ${{ inputs.push_repo }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.phased \
+            --registry repos.yml \
+            discover \
+            --repo "${REPO_FULL_NAME}" \
+            --pr-number "${SOURCE_PR_NUMBER}" \
+            --target-branch "${TARGET_BRANCH}" \
+            --push-repo "${PUSH_REPO}" \
+            --output backport-discovery/discovery.json
+
+      - name: Upload discovery descriptor
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-discovery-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-discovery/discovery.json
+          if-no-files-found: error
+          retention-days: 1
+
+  ai-prepare:
+    needs: discovery
+    if: >-
+      ${{
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    concurrency:
+      group: ai-backport-${{ inputs.repo_full_name }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.prepare.outputs.status }}
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.agent_repository }}
+          ref: ${{ inputs.agent_ref }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download discovery descriptor
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-discovery-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-discovery
+
+      - name: Load repository operational policy
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ inputs.repo_full_name }}
+          OPERATION_ID: backport:prepare:${{ github.run_id }}:${{ github.run_attempt }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo "${TARGET_REPOSITORY}" \
+            --operation "${OPERATION_ID}"
+
+      - name: Set up isolated AI runtime
+        uses: ./.github/actions/setup-ai-runtime
+        with:
+          upstream-url: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          gateway-token: ${{ secrets.AI_GATEWAY_TOKEN }}
+
+      - name: Prepare content-addressed patch
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.phased \
+            prepare \
+            --discovery backport-discovery/discovery.json \
+            --output-directory backport-prepared
+
+      - name: Clean up isolated AI runtime
+        if: always()
+        uses: ./.github/actions/cleanup-ai-runtime
+
+      - name: Upload prepared artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-prepared-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-prepared
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload AI evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-ai-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-prepared/ai-*
+          if-no-files-found: ignore
+          retention-days: 30
+
+  validation:
+    needs: ai-prepare
+    if: >-
+      ${{
+        needs.ai-prepare.outputs.status == 'ready' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.validate.outputs.status }}
+      repairable: ${{ steps.validate.outputs.repairable }}
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.agent_repository }}
+          ref: ${{ inputs.agent_ref }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download prepared artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-prepared-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-artifact
+
+      - name: Validate prepared tree without credentials
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.phased \
+            --registry repos.yml \
+            validate \
+            --artifact-directory backport-artifact
+
+      - name: Upload validated artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-validated-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-artifact
+          if-no-files-found: error
+          retention-days: 1
+
+  ai-repair:
+    needs: validation
+    if: >-
+      ${{
+        always() &&
+        needs.validation.result == 'success' &&
+        needs.validation.outputs.status == 'failed' &&
+        needs.validation.outputs.repairable == 'true' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: ai-backport-${{ inputs.repo_full_name }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.repair.outputs.status }}
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.agent_repository }}
+          ref: ${{ inputs.agent_ref }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download failed validation artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-validated-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-failed
+
+      - name: Load repository operational policy
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ inputs.repo_full_name }}
+          OPERATION_ID: backport:repair:${{ github.run_id }}:${{ github.run_attempt }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo "${TARGET_REPOSITORY}" \
+            --operation "${OPERATION_ID}"
+
+      - name: Set up isolated AI runtime
+        uses: ./.github/actions/setup-ai-runtime
+        with:
+          upstream-url: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          gateway-token: ${{ secrets.AI_GATEWAY_TOKEN }}
+
+      - name: Repair failed validation without credentials
+        id: repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.phased \
+            --registry repos.yml \
+            repair-validation \
+            --artifact-directory backport-failed \
+            --output-directory backport-repaired
+
+      - name: Clean up isolated AI runtime
+        if: always()
+        uses: ./.github/actions/cleanup-ai-runtime
+
+      - name: Upload repaired prepared artifact
+        if: steps.repair.outputs.status == 'ready'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-repaired-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-repaired
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload repair AI evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-repair-ai-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-repaired/ai-*
+          if-no-files-found: ignore
+          retention-days: 30
+
+  repair-validation:
+    needs: ai-repair
+    if: >-
+      ${{
+        needs.ai-repair.outputs.status == 'ready' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.validate.outputs.status }}
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.agent_repository }}
+          ref: ${{ inputs.agent_ref }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download repaired prepared artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-repaired-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-artifact
+
+      - name: Validate repaired tree without credentials
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.phased \
+            --registry repos.yml \
+            validate \
+            --artifact-directory backport-artifact
+
+      - name: Upload repaired validation artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-repaired-validated-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-artifact
+          if-no-files-found: error
+          retention-days: 1
+
+  publisher:
+    needs: [validation, ai-repair, repair-validation]
+    if: >-
+      ${{
+        always() &&
+        (
+          needs.validation.outputs.status == 'passed' ||
+          needs.repair-validation.outputs.status == 'passed'
+        ) &&
+        inputs.publication_mode == 'individual' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.agent_repository }}
+          ref: ${{ inputs.agent_ref }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download initially validated artifact
+        if: needs.validation.outputs.status == 'passed'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-validated-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-artifact
+
+      - name: Download repaired and validated artifact
+        if: needs.repair-validation.outputs.status == 'passed'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-repaired-validated-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-artifact
+
+      - name: Verify artifact before minting write token
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ inputs.repo_full_name }}
+          ARTIFACT_SUFFIX: ${{ inputs.artifact_suffix }}
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo "${TARGET_REPOSITORY}" \
+            --operation backport:publish \
+            --admit-publication-key \
+              "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${ARTIFACT_SUFFIX}" \
+            >/dev/null
+          python -m scripts.backport.phased \
+            --registry repos.yml \
+            preflight-publish \
+            --artifact-directory backport-artifact
+
+      - name: Generate publisher token
+        id: publisher-token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -93,56 +503,228 @@ jobs:
           permission-issues: write
           permission-metadata: read
 
-      - name: Configure AWS credentials from OIDC role
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: valkey-backport-agent-${{ github.run_id }}
-          aws-region: ${{ inputs.aws_region }}
-
-      - name: Run backport pipeline
+      - name: Publish validated backport
+        shell: bash
         env:
-          AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
-          BACKPORT_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
-          REPO_FULL_NAME: ${{ inputs.repo_full_name }}
-          SOURCE_PR_NUMBER: ${{ inputs.source_pr_number }}
-          TARGET_BRANCH: ${{ inputs.target_branch }}
-          PUSH_REPO: ${{ inputs.push_repo }}
+          PUBLISH_GITHUB_TOKEN: ${{ steps.publisher-token.outputs.token }}
+          PUBLISHER_IDENTITY: ${{ steps.publisher-token.outputs.app-slug }}[bot]
+          PUBLISHER_INSTALLATION_ID: ${{ steps.publisher-token.outputs.installation-id }}
         run: |
           set -euo pipefail
-          if [[ ! "${REPO_FULL_NAME}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-            echo "Invalid repo_full_name: ${REPO_FULL_NAME}" >&2
-            exit 1
-          fi
-          if [[ ! "${SOURCE_PR_NUMBER}" =~ ^[0-9]+$ ]]; then
-            echo "Invalid source_pr_number: ${SOURCE_PR_NUMBER}" >&2
-            exit 1
-          fi
-          if [[ ! "${TARGET_BRANCH}" =~ ^[A-Za-z0-9._/-]+$ || "${TARGET_BRANCH}" == -* || "${TARGET_BRANCH}" == *..* ]]; then
-            echo "Invalid target_branch: ${TARGET_BRANCH}" >&2
-            exit 1
-          fi
-          args=(
-            -m scripts.backport.main
-            --registry repos.yml
-            --repo "${REPO_FULL_NAME}"
-            --pr-number "${SOURCE_PR_NUMBER}"
-            --target-branch "${TARGET_BRANCH}"
-          )
-          if [[ -n "${PUSH_REPO}" ]]; then
-            if [[ ! "${PUSH_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-              echo "Invalid push_repo: ${PUSH_REPO}" >&2
-              exit 1
-            fi
-            args+=(--push-repo "${PUSH_REPO}")
-          fi
-          python "${args[@]}"
+          python -m scripts.backport.phased \
+            --registry repos.yml \
+            publish \
+            --artifact-directory backport-artifact
 
-      - name: Upload agent evidence
+      - name: Upload publication manifest
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: backport-agent-evidence-${{ github.run_id }}
-          path: agent-evidence
-          if-no-files-found: ignore
+          name: backport-publication-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-artifact/publication.json
+          if-no-files-found: warn
           retention-days: 30
+
+  aggregate-handoff:
+    needs: [validation, ai-repair, repair-validation]
+    if: >-
+      ${{
+        always() &&
+        inputs.publication_mode == 'aggregate' &&
+        (
+          needs.validation.outputs.status == 'passed' ||
+          needs.repair-validation.outputs.status == 'passed'
+        ) &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Download initially validated artifact
+        if: needs.validation.outputs.status == 'passed'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-validated-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-aggregate-candidate
+
+      - name: Download repaired and validated artifact
+        if: needs.repair-validation.outputs.status == 'passed'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-repaired-validated-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-aggregate-candidate
+
+      - name: Upload aggregate candidate handoff
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-aggregate-result-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-aggregate-candidate
+          if-no-files-found: error
+          retention-days: 1
+
+  failure-reporter:
+    needs: [ai-prepare, validation, ai-repair, repair-validation]
+    if: >-
+      ${{
+        always() &&
+        (
+          needs.ai-prepare.outputs.status == 'refused' ||
+          (
+            needs.validation.outputs.status == 'failed' &&
+            needs.repair-validation.outputs.status != 'passed'
+          )
+        ) &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.agent_repository }}
+          ref: ${{ inputs.agent_ref }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download refused preparation
+        if: needs.ai-prepare.outputs.status == 'refused'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-prepared-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-failure
+
+      - name: Download failed repaired validation
+        if: needs.repair-validation.outputs.status == 'failed'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-repaired-validated-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-failure
+
+      - name: Download failed initial validation
+        if: >-
+          ${{
+            needs.ai-prepare.outputs.status == 'ready' &&
+            needs.validation.outputs.status == 'failed' &&
+            needs.repair-validation.outputs.status != 'failed'
+          }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-validated-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-failure
+
+      - name: Verify failure before minting comment token
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ inputs.repo_full_name }}
+          ARTIFACT_SUFFIX: ${{ inputs.artifact_suffix }}
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo "${TARGET_REPOSITORY}" \
+            --operation backport:report-failure \
+            --admit-publication-key \
+              "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${ARTIFACT_SUFFIX}:failure" \
+            >/dev/null
+          python -m scripts.backport.phased \
+            --registry repos.yml \
+            preflight-failure-report \
+            --artifact-directory backport-failure
+
+      - name: Generate comment-only reporter token
+        id: reporter-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          permission-pull-requests: write
+          permission-issues: write
+          permission-metadata: read
+
+      - name: Report backport needs attention
+        shell: bash
+        env:
+          REPORT_GITHUB_TOKEN: ${{ steps.reporter-token.outputs.token }}
+          PUBLISHER_IDENTITY: ${{ steps.reporter-token.outputs.app-slug }}[bot]
+          PUBLISHER_INSTALLATION_ID: ${{ steps.reporter-token.outputs.installation-id }}
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.phased \
+            report-failure \
+            --artifact-directory backport-failure
+
+      - name: Upload failure publication manifest
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-failure-publication-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-failure/publication.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload aggregate failure handoff
+        if: inputs.publication_mode == 'aggregate'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-aggregate-result-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.artifact_suffix }}
+          path: backport-failure
+          if-no-files-found: error
+          retention-days: 1
+
+  validation-outcome:
+    needs:
+      - ai-prepare
+      - validation
+      - ai-repair
+      - repair-validation
+      - publisher
+      - aggregate-handoff
+    if: >-
+      ${{
+        always() &&
+        needs.ai-prepare.outputs.status == 'ready' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require a published validated tree
+        shell: bash
+        env:
+          INITIAL_STATUS: ${{ needs.validation.outputs.status }}
+          REPAIRED_STATUS: ${{ needs.repair-validation.outputs.status }}
+          PUBLISHER_RESULT: ${{ needs.publisher.result }}
+          HANDOFF_RESULT: ${{ needs.aggregate-handoff.result }}
+          PUBLICATION_MODE: ${{ inputs.publication_mode }}
+        run: |
+          set -euo pipefail
+          if [[ "${INITIAL_STATUS}" != "passed" && "${REPAIRED_STATUS}" != "passed" ]]; then
+            echo "::error::Backport validation failed and no repaired tree passed validation"
+            exit 1
+          fi
+          if [[ "${PUBLICATION_MODE}" == "individual" ]]; then
+            if [[ "${PUBLISHER_RESULT}" != "success" ]]; then
+              echo "::error::Validated backport was not published"
+              exit 1
+            fi
+          elif [[ "${HANDOFF_RESULT}" != "success" ]]; then
+            echo "::error::Validated backport was not exported for aggregation"
+            exit 1
+          fi

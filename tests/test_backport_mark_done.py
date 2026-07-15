@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -11,6 +12,10 @@ from scripts.backport.mark_done import (
     BackportStatusUpdateResult,
     mark_backport_items_done,
     reconcile_project_board,
+)
+from scripts.backport.provenance import (
+    build_provenance,
+    provenance_commit_message,
 )
 from scripts.common.polling import PollLoopError
 
@@ -82,7 +87,9 @@ def test_reconcile_marks_only_branch_present_items(monkeypatch) -> None:
 
     captured: dict = {}
 
-    def fake_verify(repo, branch, pr_numbers, *, token="", git_env=None):
+    def fake_verify(
+        repo, branch, pr_numbers, *, token="", git_env=None, push_repo=None,
+    ):
         captured["repo"] = repo
         captured["branch"] = branch
         captured["pr_numbers"] = set(pr_numbers)
@@ -149,101 +156,130 @@ def test_pr_numbers_from_subjects_uses_trailing_pr_only() -> None:
     assert pr_numbers_from_commit_subjects(subjects) == {3756}
 
 
-def test_verify_counts_subject_but_not_body_mention(tmp_path, monkeypatch) -> None:
-    import subprocess
-
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    env = {
-        **os.environ,
-        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-    }
-
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args], cwd=repo, check=True, env=env,
-            capture_output=True, text=True,
-        ).stdout.strip()
-
-    git("init", "-q")
-    (repo / "f").write_text("1")
-    git("add", "f")
-    git("commit", "-qm", "Cherry-picked fix (#3801)")
-
-    (repo / "f").write_text("2")
-    git(
-        "commit", "-aqm",
-        "Some later work\n\nThis follows up on (#3920) but does not apply it.",
+def _commit(sha: str, *, tree: str, message: str, parents=()):
+    return SimpleNamespace(
+        sha=sha,
+        parents=[SimpleNamespace(sha=value) for value in parents],
+        commit=SimpleNamespace(
+            message=message,
+            tree=SimpleNamespace(sha=tree),
+        ),
     )
 
-    # Clone is the local repo (skip network). verify operates on the checked-out tree.
-    def fake_clone(repo_full_name, target_branch, dest_dir, git_env):
-        subprocess.run(["git", "clone", "-q", str(repo), dest_dir], check=True, env=env)
 
-    monkeypatch.setattr(mark_done, "_shallow_clone", fake_clone)
+def _provenance_fixture(*, source_commits=None, comparison_status="ahead"):
+    base = "a" * 40
+    target = "b" * 40
+    attestation = "c" * 40
+    tree = "d" * 40
+    source = "e" * 40
+    source_merge = "f" * 40
+    merge = "1" * 40
+    source_commits = source_commits or [source]
+    provenance = build_provenance(
+        repository="valkey-io/valkey",
+        target_branch="9.1",
+        source_pr_number=3801,
+        source_merge_commit=source_merge,
+        source_commits=tuple(source_commits),
+        base_commit=base,
+        target_commit=target,
+        patch_sha256="2" * 64,
+        patch_id="3" * 40,
+        validated_tree=tree,
+        prepared_manifest_sha256="4" * 64,
+        validated_manifest_sha256="5" * 64,
+    )
+    target_commit = _commit(target, tree=tree, message="target", parents=(base,))
+    attestation_commit = _commit(
+        attestation,
+        tree=tree,
+        message=provenance_commit_message(provenance),
+        parents=(target,),
+    )
+    pull = SimpleNamespace(
+        number=9001,
+        head=SimpleNamespace(
+            ref="agent/backport/3801-to-9.1",
+            sha=attestation,
+            repo=SimpleNamespace(full_name="valkey-io/valkey"),
+        ),
+        user=SimpleNamespace(login="publisher[bot]"),
+        merged_at="2026-01-01",
+        merge_commit_sha=merge,
+        get_commits=lambda: [target_commit, attestation_commit],
+    )
+    source_pr = SimpleNamespace(
+        merged=True,
+        merge_commit_sha=source_merge,
+        get_commits=lambda: [
+            _commit(value, tree=tree, message="source")
+            for value in source_commits
+        ],
+    )
+    repo = MagicMock()
+    repo.get_pulls.return_value = [pull]
+    repo.get_pull.return_value = source_pr
+    repo.compare.return_value = SimpleNamespace(status=comparison_status)
+    github = MagicMock()
+    github.get_repo.return_value = repo
+    return github, repo, pull
 
+
+def test_verify_requires_immutable_provenance_and_target_ancestry() -> None:
+    github, repo, _pull = _provenance_fixture()
     present = mark_done.verify_prs_on_branch(
         "valkey-io/valkey",
         "9.1",
-        {
-            3801,  # present via subject (#3801)
-            3920,  # only mentioned in a body -> NOT present
-            4242,  # never referenced -> absent
-        },
+        {3801, 3920},
+        github_client=github,
+        publisher_login="publisher[bot]",
     )
-
     assert present == {3801}
+    repo.compare.assert_called_once_with("1" * 40, "9.1")
 
 
-def test_verify_detects_squash_merged_applied_table(tmp_path, monkeypatch) -> None:
-    import subprocess
-
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    env = {
-        **os.environ,
-        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-    }
-
-    def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=repo, check=True, env=env, capture_output=True, text=True)
-
-    # A squash-merged backport sweep: subject names the backport PR (#3774);
-    # the source PRs it applied live only in the ## Applied table.
-    body = (
-        "[backport] Backport sweep for 9.1 (#3774)\n\n"
-        "## Applied\n\n"
-        "| Source PR | Title | Detail |\n"
-        "|---|---|---|\n"
-        "| #3801 | Validate DB clause | |\n"
-        "| #3847 | Revert work (#7777) | depends on #8888 |\n\n"
-        "## Needs attention\n\n"
-        "| Source PR | Title | Outcome | Reason |\n"
-        "|---|---|---|---|\n"
-        "| #9999 | Failed one | skipped-conflict | conflict |\n"
-    )
-    git("init", "-q")
-    (repo / "f").write_text("1")
-    git("add", "f")
-    git("commit", "-qm", body)
-
-    def fake_clone(repo_full_name, target_branch, dest_dir, git_env):
-        subprocess.run(["git", "clone", "-q", str(repo), dest_dir], check=True, env=env)
-
-    monkeypatch.setattr(mark_done, "_shallow_clone", fake_clone)
-
-    present = mark_done.verify_prs_on_branch(
+def test_verify_rejects_source_drift_and_non_ancestor_merge() -> None:
+    github, repo, pull = _provenance_fixture(comparison_status="diverged")
+    assert mark_done.verify_prs_on_branch(
         "valkey-io/valkey",
         "9.1",
-        {3801, 3847, 7777, 8888, 9999},  # the ## Applied table is the only signal
-    )
+        {3801},
+        github_client=github,
+        publisher_login="publisher[bot]",
+    ) == set()
 
-    # Only Source-PR-column entries of the Applied table count: the #7777 in a
-    # Title cell, the #8888 in a Detail cell, and the Needs-attention #9999 are
-    # all excluded.
-    assert present == {3801, 3847}
+    github, repo, pull = _provenance_fixture()
+    repo.get_pull.return_value.get_commits = lambda: [
+        _commit("9" * 40, tree="d" * 40, message="changed source"),
+    ]
+    assert mark_done.verify_prs_on_branch(
+        "valkey-io/valkey",
+        "9.1",
+        {3801},
+        github_client=github,
+        publisher_login="publisher[bot]",
+    ) == set()
+
+
+def test_verify_rejects_mutable_applied_table_without_provenance() -> None:
+    github, _repo, pull = _provenance_fixture()
+    pull.get_commits = lambda: [
+        _commit("b" * 40, tree="d" * 40, message="target", parents=("a" * 40,)),
+        _commit(
+            "c" * 40,
+            tree="d" * 40,
+            message="## Applied\n\n| Source PR |\n|---|\n| #3801 |",
+            parents=("b" * 40,),
+        ),
+    ]
+    assert mark_done.verify_prs_on_branch(
+        "valkey-io/valkey",
+        "9.1",
+        {3801},
+        github_client=github,
+        publisher_login="publisher[bot]",
+    ) == set()
 
 
 def test_dry_run_reports_without_mutating() -> None:
@@ -265,6 +301,84 @@ def test_dry_run_reports_without_mutating() -> None:
 
     assert result.updated == [101]
     assert gql.mutations == []
+
+
+def test_load_project_paginates_fields_and_each_items_field_values() -> None:
+    calls: list[dict] = []
+
+    class PaginatedGraphQL:
+        def execute(self, query: str, variables: dict) -> dict:
+            calls.append(dict(variables))
+            if "query($id: ID!, $cursor: String)" in query and "... on ProjectV2Item {" in query:
+                return {
+                    "node": {
+                        "fieldValues": {
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            "nodes": [{
+                                "__typename": "ProjectV2ItemFieldSingleSelectValue",
+                                "name": "To be backported",
+                                "field": {"name": "Status"},
+                            }],
+                        }
+                    }
+                }
+            if "query($id: ID!, $cursor: String)" in query:
+                return {
+                    "node": {
+                        "fields": {
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            "nodes": [{
+                                "__typename": "ProjectV2SingleSelectField",
+                                "id": "status-field",
+                                "name": "Status",
+                                "options": [{"id": "done", "name": "Done"}],
+                            }],
+                        }
+                    }
+                }
+            return {
+                "organization": {
+                    "projectV2": {
+                        "id": "project",
+                        "fields": {
+                            "pageInfo": {"hasNextPage": True, "endCursor": "fields-1"},
+                            "nodes": [],
+                        },
+                        "items": {
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            "nodes": [{
+                                "id": "item-1",
+                                "content": {
+                                    "__typename": "PullRequest",
+                                    "number": 42,
+                                    "repository": {"nameWithOwner": "valkey-io/valkey"},
+                                },
+                                "fieldValues": {
+                                    "pageInfo": {
+                                        "hasNextPage": True,
+                                        "endCursor": "values-1",
+                                    },
+                                    "nodes": [],
+                                },
+                            }],
+                        },
+                    }
+                }
+            }
+
+    project = mark_done._load_project(
+        PaginatedGraphQL(),
+        project_owner="valkey-io",
+        project_number=14,
+        project_owner_type="organization",
+    )
+    assert project["fields"][0]["name"] == "Status"
+    assert mark_done._item_single_select_value(
+        project["items"][0],
+        "Status",
+    ) == "To be backported"
+    assert {"id": "project", "cursor": "fields-1"} in calls
+    assert {"id": "item-1", "cursor": "values-1"} in calls
 
 
 def test_main_surfaces_sustained_poll_failure(monkeypatch, capsys) -> None:

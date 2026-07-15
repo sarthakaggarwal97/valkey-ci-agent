@@ -1,9 +1,8 @@
 name: Backport Mark Done Poll
 
 # Self-healing reconcile of project-board backport status. For every
-# "To be backported" item, verify the source PR's commit is actually on the
-# target branch and flip verified items to Done. Independent of any merge hook:
-# catches items backported by the sweep, manual cherry-picks, or older runs.
+# "To be backported" item, verify immutable publisher provenance and the
+# backport merge commit's target-branch ancestry before flipping it to Done.
 
 on:
   schedule:
@@ -27,7 +26,12 @@ permissions: {}
 jobs:
   preflight:
     name: "Generate matrix"
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: >-
+      ${{
+        github.repository == 'valkey-io/valkey-ci-agent' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -65,7 +69,12 @@ jobs:
   reconcile:
     name: "mark-done/${{ matrix.repo }}/${{ matrix.branch }}"
     needs: preflight
-    if: needs.preflight.outputs.has_entries == 'true'
+    if: >-
+      ${{
+        needs.preflight.outputs.has_entries == 'true' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 70
     strategy:
@@ -76,7 +85,6 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
-      id-token: write
     env:
       POLL_INTERVAL_SECONDS: ${{ github.event_name == 'schedule' && '1800' || '0' }}
       POLL_DURATION_SECONDS: ${{ github.event_name == 'schedule' && '3300' || '0' }}
@@ -89,6 +97,25 @@ jobs:
 
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
+
+      - name: Reserve mark-done publication before token minting
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ matrix.repo }}
+          TARGET_BRANCH: ${{ matrix.branch }}
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo "${TARGET_REPOSITORY}" \
+            --operation backport:mark-done \
+            --admit-publication-key \
+              "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${TARGET_BRANCH}" \
+            >/dev/null
 
       - name: Generate GitHub App token
         id: generate-token

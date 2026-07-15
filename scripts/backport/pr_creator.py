@@ -15,6 +15,15 @@ from scripts.backport.models import (
 )
 from scripts.backport.utils import build_branch_name, build_pr_title
 from scripts.common.github_client import retry_github_call
+from scripts.common.markdown import (
+    bounded_body,
+    bounded_title,
+    escape_text,
+    inline_code,
+    markdown_link,
+    table_cell,
+)
+from scripts.common.metadata_reconciler import with_desired_labels
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +76,8 @@ def create_pull_from_push_repo(
     """Create a PR from either the upstream branch or a different-owner fork."""
     head_ref = build_pull_create_head_ref(base_repo, push_repo, head_branch)
     kwargs: dict[str, Any] = {
-        "title": title,
-        "body": body,
+        "title": bounded_title(title),
+        "body": bounded_body(body),
         "head": head_ref,
         "base": base_branch,
     }
@@ -85,12 +94,33 @@ def pull_matches_push_repo(pr: Any, push_repo: str) -> bool:
     return isinstance(full_name, str) and full_name == push_repo
 
 
+def find_existing_pr(
+    gh: Any,
+    base_repo: str,
+    push_repo: str,
+    branch: str,
+) -> Any | None:
+    """Return the open PR for the exact bot branch and push repository."""
+    repo = retry_github_call(
+        lambda: gh.get_repo(base_repo),
+        retries=2,
+        description=f"get {base_repo}",
+    )
+    head_ref = build_pull_search_head_ref(base_repo, push_repo, branch)
+    pulls = retry_github_call(
+        lambda: list(repo.get_pulls(state="open", head=head_ref)),
+        retries=2,
+        description="list backport PRs",
+    )
+    for pull in pulls:
+        if pull_matches_push_repo(pull, push_repo):
+            return pull
+    return None
+
+
 def _escape_table_cell(value: object) -> str:
     """Return markdown-table-safe text."""
-    text = str(value).replace("\r\n", "\n").replace("\r", "\n").strip()
-    if not text:
-        return ""
-    return text.replace("|", "\\|").replace("\n", "<br>")
+    return table_cell(value)
 
 
 def _was_llm_resolved(result: ResolutionResult) -> bool:
@@ -150,8 +180,18 @@ class BackportPRCreator:
             resolution_results and any(_was_llm_resolved(r) for r in resolution_results)
         )
 
-        body = self.build_pr_body(context, had_conflicts, resolution_results,
-                                  applied_commits=cherry_pick_result.applied_commits)
+        labels = [self._backport_label]
+        if any_llm_resolved:
+            labels.append(self._llm_conflict_label)
+        body = with_desired_labels(
+            self.build_pr_body(
+                context,
+                had_conflicts,
+                resolution_results,
+                applied_commits=cherry_pick_result.applied_commits,
+            ),
+            labels,
+        )
 
         # Open the pull request (branch already exists on remote).
         logger.info(
@@ -171,11 +211,7 @@ class BackportPRCreator:
             description="create backport PR",
         )
 
-        # Apply labels (best-effort — don't fail the run if labels are missing).
-        labels = [self._backport_label]
-        if any_llm_resolved:
-            labels.append(self._llm_conflict_label)
-
+        # The body marker makes these best-effort mutations self-healing.
         for label in labels:
             self._ensure_label_exists(repo, label)
 
@@ -291,9 +327,10 @@ class BackportPRCreator:
             "\n".join([
                 "| Field | Value |",
                 "|---|---|",
-                f"| Source PR | [#{context.source_pr_number}]({context.source_pr_url}) |",
+                f"| Source PR | "
+                f"{markdown_link(f'#{context.source_pr_number}', context.source_pr_url)} |",
                 f"| Source title | {_escape_table_cell(context.source_pr_title)} |",
-                f"| Target branch | `{context.target_branch}` |",
+                f"| Target branch | {inline_code(context.target_branch)} |",
                 f"| Cherry-picked commits | {len(applied_commits or context.commits)} |",
                 f"| Conflicts detected | {'yes' if had_conflicts else 'no'} |",
                 f"| Auto-resolved files | {resolved_count} |",
@@ -313,7 +350,10 @@ class BackportPRCreator:
             )
         sections.append("### Reviewer Checklist\n\n" + "\n".join(checklist))
 
-        commits_list = "\n".join(f"- `{sha}`" for sha in (applied_commits or context.commits))
+        commits_list = "\n".join(
+            f"- {inline_code(sha)}"
+            for sha in (applied_commits or context.commits)
+        )
         sections.append(f"### Cherry-Picked Commits\n\n{commits_list}")
 
         # Per-file resolution summaries.
@@ -325,9 +365,15 @@ class BackportPRCreator:
                     else "Needs manual resolution"
                 )
                 link = links.get(result.path)
-                suffix = f" ([view diff]({link}))" if link else ""
+                suffix = (
+                    f" ({markdown_link('view diff', link)})"
+                    if link
+                    else ""
+                )
                 file_lines.append(
-                    f"- `{result.path}`: {status}. {result.resolution_summary}{suffix}"
+                    f"- {inline_code(result.path)}: {status}. "
+                    f"{escape_text(result.resolution_summary, max_bytes=4096)}"
+                    f"{suffix}"
                 )
             conflict_details = "\n".join(file_lines)
             if any(_was_llm_resolved(r) for r in results):
@@ -350,7 +396,7 @@ class BackportPRCreator:
                 "the intent of the original pull request."
             )
 
-        return "\n\n".join(sections)
+        return bounded_body("\n\n".join(sections))
 
     def check_duplicate(
         self,
@@ -360,7 +406,7 @@ class BackportPRCreator:
         """Return existing backport PR URL if one exists, else ``None``.
 
         Checks for open PRs whose head branch matches the naming
-        convention ``backport/<pr>-to-<branch>``.  Also checks recently
+        convention ``agent/backport/<pr>-to-<branch>``. Also checks recently
         closed PRs to handle label removal and re-addition.
 
         """

@@ -29,7 +29,12 @@ permissions: {}
 
 jobs:
   revert-commit:
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: >-
+      ${{
+        github.repository == 'valkey-io/valkey-ci-agent' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -43,6 +48,24 @@ jobs:
 
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
+
+      - name: Enforce repository controls before token minting
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ inputs.repo }}
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo "${TARGET_REPOSITORY}" \
+            --operation manual-revert:publish \
+            --admit-publication-key \
+              "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:manual-revert" \
+            >/dev/null
 
       - name: Resolve target repo
         id: target

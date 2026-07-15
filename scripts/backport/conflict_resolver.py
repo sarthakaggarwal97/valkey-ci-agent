@@ -7,7 +7,6 @@ import hashlib
 import json
 import logging
 import os
-import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,6 +16,7 @@ from scripts.backport.utils import (
     has_conflict_markers,
     is_whitespace_only_conflict,
 )
+from scripts.common.proc import GitPathEncodingError, decode_git_paths, run_git_bytes
 
 if TYPE_CHECKING:
     from scripts.backport.models import BackportPRContext
@@ -37,32 +37,35 @@ def _file_hash(path: str) -> str:
         return ""
 
 
-def _read_text(path: str) -> str:
-    """Return file content as text, or empty string if unreadable."""
+def _read_text(path: str) -> str | None:
+    """Return strict UTF-8 file content, or ``None`` if unreadable."""
     try:
-        return Path(path).read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return ""
+        return Path(path).read_bytes().decode("utf-8", errors="strict")
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 def _git_changed_paths(repo_dir: str) -> set[str]:
     """Return paths currently changed or untracked in the git worktree."""
     paths: set[str] = set()
     commands = [
-        ["git", "diff", "--name-only"],
-        ["git", "diff", "--cached", "--name-only"],
-        ["git", "ls-files", "--others", "--exclude-standard"],
+        ("diff", "--name-only", "-z"),
+        ("diff", "--cached", "--name-only", "-z"),
+        ("ls-files", "--others", "--exclude-standard", "-z"),
     ]
     for command in commands:
-        result = subprocess.run(
-            command,
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-        )
+        result = run_git_bytes(repo_dir, *command, check=False)
         if result.returncode != 0:
             continue
-        paths.update(line.strip() for line in result.stdout.splitlines() if line.strip())
+        try:
+            paths.update(
+                decode_git_paths(
+                    result.stdout,
+                    context=f"git {' '.join(command)}",
+                )
+            )
+        except GitPathEncodingError:
+            raise
     return paths
 
 
@@ -210,7 +213,7 @@ def _validate_file(
     repo_dir: str,
     cf: ConflictedFile,
     pre_hashes: dict[str, str],
-    pre_contents: dict[str, str],
+    pre_contents: dict[str, str | None],
     *,
     llm_summary: str = "",
 ) -> tuple[ResolutionResult | None, str | None]:
@@ -227,17 +230,16 @@ def _validate_file(
     """
     file_path = os.path.join(repo_dir, cf.path)
     try:
-        content = Path(file_path).read_text(encoding="utf-8", errors="replace")
-    except OSError as exc:
+        content = Path(file_path).read_bytes().decode("utf-8", errors="strict")
+    except (OSError, UnicodeDecodeError) as exc:
         return ResolutionResult(
             path=cf.path, resolved_content=None,
-            resolution_summary=f"failed to read: {exc}",
+            resolution_summary=f"file is unreadable or not valid UTF-8: {exc}",
         ), None
 
-    baseline = pre_contents.get(cf.path, "")
-    # Compare raw-byte hashes (matching how pre_hashes was computed via
-    # _file_hash) so an unedited file with non-UTF-8 bytes is not misdetected
-    # as changed by the read_text(errors="replace") round-trip above.
+    baseline = pre_contents.get(cf.path) or ""
+    # Compare raw-byte hashes so an unchanged file is detected independently
+    # of its decoded text representation.
     if _file_hash(file_path) == pre_hashes.get(cf.path):
         # File unchanged — but if it has no conflict markers, git's auto-merge
         # already produced a clean result. Treat it as resolved so it gets staged.
@@ -271,7 +273,7 @@ def _collect_allowed_path_edits(
     allowed_paths: set[str],
     conflict_paths: set[str],
     pre_hashes: dict[str, str],
-    pre_contents: dict[str, str],
+    pre_contents: dict[str, str | None],
     *,
     llm_summary: str = "",
 ) -> list[ResolutionResult]:
@@ -282,12 +284,15 @@ def _collect_allowed_path_edits(
         if _file_hash(file_path) == pre_hashes.get(path):
             continue
         try:
-            content = Path(file_path).read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
+            content = Path(file_path).read_bytes().decode("utf-8", errors="strict")
+        except (OSError, UnicodeDecodeError) as exc:
             results.append(ResolutionResult(
                 path=path,
                 resolved_content=None,
-                resolution_summary=f"allowed cherry-pick file edit failed to read: {exc}",
+                resolution_summary=(
+                    "allowed cherry-pick file is unreadable or not valid UTF-8: "
+                    f"{exc}"
+                ),
             ))
             continue
         if has_conflict_markers(content):
@@ -302,10 +307,10 @@ def _collect_allowed_path_edits(
             resolved_content=content,
             resolution_summary="auto-merged cherry-pick file adapted by Claude Code",
             resolution_diff=_resolution_diff(
-                path, pre_contents.get(path, ""), content,
+                path, pre_contents.get(path) or "", content,
             ),
             reviewer_diff=_reviewer_diff(
-                path, pre_contents.get(path, ""), content,
+                path, pre_contents.get(path) or "", content,
             ),
             llm_summary=llm_summary or None,
         ))
@@ -323,7 +328,6 @@ def resolve_conflicts_with_claude(
     pr_context: BackportPRContext,
     *,
     language: str = "c",
-    build_commands: list[str] | None = None,  # noqa: ARG001 — kept for API stability
     allowed_paths: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> list[ResolutionResult]:
     """Resolve cherry-pick merge conflicts using Claude Code.
@@ -377,7 +381,13 @@ def resolve_conflicts_with_claude(
         path: _read_text(os.path.join(repo_dir, path))
         for path in allowed_path_set
     }
-    pre_changed_paths = _git_changed_paths(repo_dir)
+    try:
+        pre_changed_paths = _git_changed_paths(repo_dir)
+    except GitPathEncodingError as exc:
+        return results + _unresolved(
+            llm_files,
+            f"non-UTF-8 changed path requires human handling: {exc}",
+        )
     protected_pre_hashes = {
         path: _file_hash(os.path.join(repo_dir, path))
         for path in pre_changed_paths
@@ -410,12 +420,18 @@ def resolve_conflicts_with_claude(
         detail = agent_result.stderr or result_text or "Claude Code returned non-zero"
         return results + _unresolved(llm_files, f"Claude Code failed: {detail[:300]}")
 
-    unexpected = _unexpected_modified_paths(
-        repo_dir,
-        pre_changed_paths=pre_changed_paths,
-        protected_pre_hashes=protected_pre_hashes,
-        allowed_paths=allowed_path_set,
-    )
+    try:
+        unexpected = _unexpected_modified_paths(
+            repo_dir,
+            pre_changed_paths=pre_changed_paths,
+            protected_pre_hashes=protected_pre_hashes,
+            allowed_paths=allowed_path_set,
+        )
+    except GitPathEncodingError as exc:
+        return results + _unresolved(
+            llm_files,
+            f"non-UTF-8 changed path requires human handling: {exc}",
+        )
     if unexpected:
         return results + _unresolved(
             llm_files,
@@ -467,12 +483,23 @@ def resolve_conflicts_with_claude(
             ))
         return results
 
-    unexpected_retry = _unexpected_modified_paths(
-        repo_dir,
-        pre_changed_paths=pre_changed_paths,
-        protected_pre_hashes=protected_pre_hashes,
-        allowed_paths=allowed_path_set,
-    )
+    try:
+        unexpected_retry = _unexpected_modified_paths(
+            repo_dir,
+            pre_changed_paths=pre_changed_paths,
+            protected_pre_hashes=protected_pre_hashes,
+            allowed_paths=allowed_path_set,
+        )
+    except GitPathEncodingError as exc:
+        for cf, _err in needs_retry:
+            results.append(ResolutionResult(
+                path=cf.path,
+                resolved_content=None,
+                resolution_summary=(
+                    f"non-UTF-8 changed path requires human handling: {exc}"
+                ),
+            ))
+        return results
     if unexpected_retry:
         for cf, _err in needs_retry:
             results.append(ResolutionResult(

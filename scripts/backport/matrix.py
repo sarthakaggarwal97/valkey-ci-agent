@@ -17,6 +17,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.backport.registry import load_registry
+from scripts.common.validation_adapter import validation_adapter_to_dict
 
 
 def build_matrix(
@@ -35,6 +36,8 @@ def build_matrix(
     for repo_entry in registry.repos:
         if repo_filter and repo_entry.repo != repo_filter:
             continue
+        if not repo_entry.automation.enabled:
+            continue
         for branch_entry in repo_entry.branches:
             if project_number_filter is not None and branch_entry.project_number != project_number_filter:
                 continue
@@ -47,11 +50,20 @@ def build_matrix(
                 "branch": branch_entry.branch,
                 "push_repo": repo_entry.effective_push_repo,
                 "language": repo_entry.language,
-                "build_commands_json": json.dumps(list(repo_entry.build_commands)),
-                "validation_setup_commands_json": json.dumps(
-                    list(repo_entry.validation_setup_commands)
+                "validation_json": json.dumps(
+                    validation_adapter_to_dict(repo_entry.validation)
+                    if repo_entry.validation is not None
+                    else None
                 ),
-                "repair_validation_failures": repo_entry.repair_validation_failures,
+                "validation_waiver_json": json.dumps(
+                    {
+                        "reason": repo_entry.validation_waiver.reason,
+                        "approved_by": repo_entry.validation_waiver.approved_by,
+                        "expires": repo_entry.validation_waiver.expires.isoformat(),
+                    }
+                    if repo_entry.validation_waiver is not None
+                    else None
+                ),
             })
 
     return {"include": entries}

@@ -6,19 +6,32 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import TypeVar
 from unittest.mock import MagicMock, mock_open, patch
 
-from scripts.backport.cherry_pick import cherry_pick
+import pytest
+
+from scripts.backport.cherry_pick import cherry_pick, complete_resolved_cherry_pick
+from scripts.backport.models import ResolutionResult
+from scripts.common.proc import LOCKED_GIT_CONFIG
+
+_Output = TypeVar("_Output", str, bytes)
 
 
-def _ok(stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
+def _ok(
+    stdout: _Output = "",
+    stderr: _Output = "",
+) -> subprocess.CompletedProcess[_Output]:
     """Return a successful CompletedProcess."""
     return subprocess.CompletedProcess(
         args=["git"], returncode=0, stdout=stdout, stderr=stderr,
     )
 
 
-def _fail(stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
+def _fail(
+    stdout: _Output = "",
+    stderr: _Output = "",
+) -> subprocess.CompletedProcess[_Output]:
     """Return a failed CompletedProcess."""
     return subprocess.CompletedProcess(
         args=["git"], returncode=1, stdout=stdout, stderr=stderr,
@@ -33,6 +46,12 @@ def _git(repo: Path, *args: str) -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+def _git_command(call_args) -> list[str]:
+    command = call_args[0][0]
+    assert command[1:1 + len(LOCKED_GIT_CONFIG)] == list(LOCKED_GIT_CONFIG)
+    return ["git", *command[1 + len(LOCKED_GIT_CONFIG):]]
 
 
 def test_empty_cherry_pick_does_not_create_empty_commit(tmp_path: Path) -> None:
@@ -77,9 +96,9 @@ class TestCleanCherryPickWithMergeCommit:
 
         calls = mock_run.call_args_list
         # First call: git checkout 8.1
-        assert calls[0][0][0] == ["git", "checkout", "8.1"]
+        assert _git_command(calls[0]) == ["git", "checkout", "8.1"]
         # Second call: git cherry-pick -m 1 <merge_sha>
-        assert calls[1][0][0] == ["git", "cherry-pick", "-m", "1", "abc123merge"]
+        assert _git_command(calls[1]) == ["git", "cherry-pick", "-m", "1", "abc123merge"]
 
     @patch("scripts.backport.cherry_pick.subprocess.run")
     def test_retries_without_mainline_for_squash_merge_commit(
@@ -95,7 +114,7 @@ class TestCleanCherryPickWithMergeCommit:
 
         assert result.success is True
         assert result.applied_commits == ["abc123"]
-        calls = [call_args[0][0] for call_args in mock_run.call_args_list]
+        calls = [_git_command(call_args) for call_args in mock_run.call_args_list]
         assert ["git", "cherry-pick", "-m", "1", "abc123"] in calls
         assert ["git", "cherry-pick", "abc123"] in calls
 
@@ -121,9 +140,9 @@ class TestCleanCherryPickSequential:
         cherry_pick("/repo", "8.1", None, ["sha1", "sha2"])
 
         calls = mock_run.call_args_list
-        assert calls[0][0][0] == ["git", "checkout", "8.1"]
-        assert calls[1][0][0] == ["git", "cherry-pick", "sha1"]
-        assert calls[2][0][0] == ["git", "cherry-pick", "sha2"]
+        assert _git_command(calls[0]) == ["git", "checkout", "8.1"]
+        assert _git_command(calls[1]) == ["git", "cherry-pick", "sha1"]
+        assert _git_command(calls[2]) == ["git", "cherry-pick", "sha2"]
 
     @patch("scripts.backport.cherry_pick.subprocess.run")
     def test_empty_sequential_cherry_pick_is_skipped(
@@ -142,7 +161,7 @@ class TestCleanCherryPickSequential:
         assert result.success is True
         assert result.applied_commits == ["sha2"]
         assert result.conflicting_files == []
-        calls = [call_args[0][0] for call_args in mock_run.call_args_list]
+        calls = [_git_command(call_args) for call_args in mock_run.call_args_list]
         assert ["git", "cherry-pick", "--abort"] in calls
         assert ["git", "cherry-pick", "--allow-empty", "sha1"] not in calls
 
@@ -160,7 +179,7 @@ class TestCleanCherryPickSequential:
         assert result.success is True
         assert result.applied_commits == []
         assert result.conflicting_files == []
-        calls = [call_args[0][0] for call_args in mock_run.call_args_list]
+        calls = [_git_command(call_args) for call_args in mock_run.call_args_list]
         assert ["git", "cherry-pick", "--abort"] in calls
         assert ["git", "cherry-pick", "-m", "1", "--allow-empty", "merge_sha"] not in calls
 
@@ -192,11 +211,11 @@ class TestConflictDetection:
         mock_run.side_effect = [
             _ok(),                                      # checkout
             _fail(stderr="conflict"),                    # cherry-pick -m 1 fails
-            _ok(stdout="src/server.c\nsrc/config.c\n"), # git diff --name-only --diff-filter=U
-            _ok(stdout="target content"),                # git show 8.1:src/server.c
-            _ok(stdout="source content"),                # git show CHERRY_PICK_HEAD:src/server.c
-            _ok(stdout="target content 2"),              # git show 8.1:src/config.c
-            _ok(stdout="source content 2"),              # git show CHERRY_PICK_HEAD:src/config.c
+            _ok(stdout=b"src/server.c\0src/config.c\0"),
+            _ok(stdout=b"target content"),
+            _ok(stdout=b"source content"),
+            _ok(stdout=b"target content 2"),
+            _ok(stdout=b"source content 2"),
         ]
 
         result = cherry_pick("/repo", "8.1", "mergesha", ["sha1"])
@@ -216,9 +235,9 @@ class TestConflictDetection:
             _ok(),                              # checkout
             _ok(),                              # cherry-pick sha1 succeeds
             _fail(stderr="conflict"),           # cherry-pick sha2 fails
-            _ok(stdout="file.c\n"),             # git diff --name-only --diff-filter=U
-            _ok(stdout="target ver"),           # git show 8.1:file.c
-            _ok(stdout="source ver"),           # git show CHERRY_PICK_HEAD:file.c
+            _ok(stdout=b"file.c\0"),
+            _ok(stdout=b"target ver"),
+            _ok(stdout=b"source ver"),
         ]
 
         result = cherry_pick("/repo", "8.1", None, ["sha1", "sha2", "sha3"])
@@ -236,9 +255,9 @@ class TestConflictDetection:
         mock_run.side_effect = [
             _ok(),                                  # checkout
             _fail(),                                # cherry-pick fails
-            _ok(stdout="src/main.c\n"),             # git diff
-            _ok(stdout="target branch content"),    # git show 8.1:src/main.c
-            _ok(stdout="source branch content"),    # git show CHERRY_PICK_HEAD:src/main.c
+            _ok(stdout=b"src/main.c\0"),
+            _ok(stdout=b"target branch content"),
+            _ok(stdout=b"source branch content"),
         ]
 
         result = cherry_pick("/repo", "8.1", "mergesha", [])
@@ -256,9 +275,9 @@ class TestConflictDetection:
         mock_run.side_effect = [
             _ok(),                          # checkout
             _fail(),                        # cherry-pick fails
-            _ok(stdout="new_file.c\n"),     # git diff
-            _fail(stderr="not found"),      # git show target branch fails
-            _fail(stderr="not found"),      # git show CHERRY_PICK_HEAD fails
+            _ok(stdout=b"new_file.c\0"),
+            _fail(stderr=b"not found"),
+            _fail(stderr=b"not found"),
         ]
 
         result = cherry_pick("/repo", "8.1", "mergesha", [])
@@ -268,39 +287,124 @@ class TestConflictDetection:
         assert cf.source_branch_content == ""
 
     @patch("scripts.backport.cherry_pick.subprocess.run")
-    def test_binary_conflict_is_skipped(self, mock_run: MagicMock) -> None:
+    def test_binary_conflict_requires_human_handoff(self, mock_run: MagicMock) -> None:
         # One text conflict and one binary conflict (NUL byte in content).
         mock_run.side_effect = [
             _ok(),                                  # checkout
             _fail(stderr="conflict"),                # cherry-pick fails
-            _ok(stdout="src/main.c\nfixture.gz\n"),  # git diff --name-only
-            _ok(stdout="target text"),               # git show 8.1:src/main.c
-            _ok(stdout="source text"),               # git show CHERRY_PICK_HEAD:src/main.c
-            _ok(stdout="binary\x00blob"),            # git show 8.1:fixture.gz
-            _ok(stdout="binary\x00other"),           # git show CHERRY_PICK_HEAD:fixture.gz
+            _ok(stdout=b"src/main.c\0fixture.gz\0"),
+            _ok(stdout=b"target text"),
+            _ok(stdout=b"source text"),
+            _ok(stdout=b"binary\0blob"),
         ]
 
         result = cherry_pick("/repo", "8.1", "mergesha", [])
 
         assert result.success is False
-        # Only the text file survives; the binary one is skipped.
-        assert [cf.path for cf in result.conflicting_files] == ["src/main.c"]
+        assert result.conflicting_files == []
+        assert result.handoff_reason == "binary conflict requires human handling: fixture.gz"
 
     @patch("scripts.backport.cherry_pick.subprocess.run")
-    def test_only_binary_conflicts_yields_empty_set(self, mock_run: MagicMock) -> None:
+    def test_only_binary_conflict_records_handoff_reason(
+        self,
+        mock_run: MagicMock,
+    ) -> None:
         mock_run.side_effect = [
             _ok(),                          # checkout
             _fail(stderr="conflict"),        # cherry-pick fails
-            _ok(stdout="fixture.gz\n"),      # git diff --name-only
-            _ok(stdout="bin\x00a"),          # git show 8.1:fixture.gz
-            _ok(stdout="bin\x00b"),          # git show CHERRY_PICK_HEAD:fixture.gz
+            _ok(stdout=b"fixture.gz\0"),
+            _ok(stdout=b"bin\0a"),
         ]
 
         result = cherry_pick("/repo", "8.1", "mergesha", [])
 
-        # No resolvable conflicts — caller skips the candidate.
         assert result.success is False
         assert result.conflicting_files == []
+        assert result.handoff_reason == "binary conflict requires human handling: fixture.gz"
+
+    @patch("scripts.backport.cherry_pick.subprocess.run")
+    def test_newline_in_conflict_path_is_not_split(
+        self,
+        mock_run: MagicMock,
+    ) -> None:
+        mock_run.side_effect = [
+            _ok(),
+            _fail(stderr="conflict"),
+            _ok(stdout=b"src/line\nbreak.c\0"),
+            _ok(stdout=b"target"),
+            _ok(stdout=b"source"),
+        ]
+
+        result = cherry_pick("/repo", "8.1", "mergesha", [])
+
+        assert [item.path for item in result.conflicting_files] == [
+            "src/line\nbreak.c"
+        ]
+        show_calls = [_git_command(call) for call in mock_run.call_args_list[3:]]
+        assert show_calls == [
+            [
+                "git",
+                "show",
+                "--no-ext-diff",
+                "--no-textconv",
+                "8.1:src/line\nbreak.c",
+            ],
+            [
+                "git",
+                "show",
+                "--no-ext-diff",
+                "--no-textconv",
+                "CHERRY_PICK_HEAD:src/line\nbreak.c",
+            ],
+        ]
+
+    @patch("scripts.backport.cherry_pick.subprocess.run")
+    def test_non_utf8_conflict_path_requires_handoff(
+        self,
+        mock_run: MagicMock,
+    ) -> None:
+        mock_run.side_effect = [
+            _ok(),
+            _fail(stderr="conflict"),
+            _ok(stdout=b"src/bad-\xff.c\0"),
+        ]
+
+        result = cherry_pick("/repo", "8.1", "mergesha", [])
+
+        assert result.conflicting_files == []
+        assert result.handoff_reason is not None
+        assert "non-UTF-8 path" in result.handoff_reason
+        assert "\ufffd" not in result.handoff_reason
+
+    @patch("scripts.backport.cherry_pick.subprocess.run")
+    def test_non_utf8_conflict_content_requires_handoff(
+        self,
+        mock_run: MagicMock,
+    ) -> None:
+        mock_run.side_effect = [
+            _ok(),
+            _fail(stderr="conflict"),
+            _ok(stdout=b"src/main.c\0"),
+            _ok(stdout=b"target-\xff"),
+        ]
+
+        result = cherry_pick("/repo", "8.1", "mergesha", [])
+
+        assert result.conflicting_files == []
+        assert result.handoff_reason == (
+            "non-UTF-8 conflict requires human handling: src/main.c"
+        )
+
+
+def test_complete_resolution_rejects_non_utf8_surrogate(tmp_path: Path) -> None:
+    resolution = ResolutionResult(
+        path="file.txt",
+        resolved_content="bad\udcff",
+        resolution_summary="invalid",
+    )
+
+    with pytest.raises(ValueError, match="not valid UTF-8"):
+        complete_resolved_cherry_pick(str(tmp_path), [resolution])
 
 
 class TestMergeCommitPreference:
@@ -313,7 +417,7 @@ class TestMergeCommitPreference:
         cherry_pick("/repo", "8.1", "merge_sha_abc", ["sha1", "sha2"])
 
         cherry_pick_call = mock_run.call_args_list[1]
-        cmd = cherry_pick_call[0][0]
+        cmd = _git_command(cherry_pick_call)
         assert cmd == ["git", "cherry-pick", "-m", "1", "merge_sha_abc"]
 
     @patch("scripts.backport.cherry_pick.subprocess.run")
@@ -339,8 +443,8 @@ class TestMergeCommitPreference:
         # checkout + 2 individual cherry-picks
         assert mock_run.call_count == 3
         calls = mock_run.call_args_list
-        assert calls[1][0][0] == ["git", "cherry-pick", "sha1"]
-        assert calls[2][0][0] == ["git", "cherry-pick", "sha2"]
+        assert _git_command(calls[1]) == ["git", "cherry-pick", "sha1"]
+        assert _git_command(calls[2]) == ["git", "cherry-pick", "sha2"]
         assert result.applied_commits == ["sha1", "sha2"]
 
     @patch("scripts.backport.cherry_pick.subprocess.run")
@@ -354,7 +458,7 @@ class TestMergeCommitPreference:
 
         calls = mock_run.call_args_list
         # Should use sequential path (no -m 1)
-        assert calls[1][0][0] == ["git", "cherry-pick", "sha1"]
+        assert _git_command(calls[1]) == ["git", "cherry-pick", "sha1"]
         assert result.applied_commits == ["sha1"]
 
 

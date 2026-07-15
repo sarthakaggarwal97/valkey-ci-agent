@@ -12,10 +12,10 @@ from scripts.backport.utils import (
 
 class TestParseBackportLabels:
     def test_basic(self) -> None:
-        assert build_branch_name(123, "8.1") == "backport/123-to-8.1"
+        assert build_branch_name(123, "8.1") == "agent/backport/123-to-8.1"
 
     def test_large_pr_number(self) -> None:
-        assert build_branch_name(99999, "7.2") == "backport/99999-to-7.2"
+        assert build_branch_name(99999, "7.2") == "agent/backport/99999-to-7.2"
 
 
 
@@ -109,10 +109,10 @@ class TestBuildBranchNameProperty:
         self, pr_number: int, target_branch: str
     ) -> None:
         """For any positive PR number and non-empty branch name,
-        build_branch_name returns 'backport/<pr_number>-to-<target_branch>'."""
+        build_branch_name returns 'agent/backport/<pr_number>-to-<target_branch>'."""
         result = build_branch_name(pr_number, target_branch)
-        assert result == f"backport/{pr_number}-to-{target_branch}"
-        assert result.startswith("backport/")
+        assert result == f"agent/backport/{pr_number}-to-{target_branch}"
+        assert result.startswith("agent/backport/")
         assert f"-to-{target_branch}" in result
 
 
@@ -227,6 +227,5 @@ class TestIsWhitespaceOnlyConflictProperty:
         modified_stripped = re.sub(r"\s+", "", modified)
         assume(base_stripped != modified_stripped)
         assert is_whitespace_only_conflict(base, modified) is False
-
 
 

@@ -11,7 +11,7 @@ _CONFLICT_MARKERS = re.compile(
 
 
 def build_branch_name(source_pr_number: int, target_branch: str) -> str:
-    return f"backport/{source_pr_number}-to-{target_branch}"
+    return f"agent/backport/{source_pr_number}-to-{target_branch}"
 
 
 def pr_numbers_from_commit_subjects(subjects: list[str]) -> set[int]:

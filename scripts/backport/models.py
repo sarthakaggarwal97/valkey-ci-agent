@@ -47,6 +47,7 @@ class CherryPickResult:
     conflicting_files: list[ConflictedFile] = field(default_factory=list)
     applied_commits: list[str] = field(default_factory=list)
     conflicting_commit_sha: str | None = None
+    handoff_reason: str | None = None
 
 
 @dataclass

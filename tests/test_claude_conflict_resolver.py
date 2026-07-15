@@ -194,6 +194,29 @@ def test_claude_nonzero_exit_returns_unresolved(tmp_path: Path) -> None:
     assert "bedrock failed" in results[0].resolution_summary
 
 
+def test_claude_non_utf8_edit_is_rejected_without_replacement(
+    tmp_path: Path,
+) -> None:
+    conflicted = tmp_path / "cluster.c"
+    conflicted.write_text("<<<<<<< HEAD\nold\n=======\nnew\n>>>>>>> abc\n")
+    cf = ConflictedFile(
+        path="cluster.c",
+        target_branch_content="old",
+        source_branch_content="new",
+    )
+
+    def mock_agent(_profile, prompt, **kw):
+        conflicted.write_bytes(b"resolved-\xff\n")
+        return _agent_result('{"type":"result","result":"Resolved"}')
+
+    with patch("scripts.backport.conflict_resolver.run_agent", side_effect=mock_agent):
+        results = resolve_conflicts_with_claude(str(tmp_path), [cf], _pr_context())
+
+    assert results[0].resolved_content is None
+    assert "not valid UTF-8" in results[0].resolution_summary
+    assert "\ufffd" not in results[0].resolution_summary
+
+
 def test_validation_failure_retries_claude_once(tmp_path: Path) -> None:
     """If Claude leaves conflict markers in the file, the resolver retries once."""
     src = tmp_path / "tests" / "unit"

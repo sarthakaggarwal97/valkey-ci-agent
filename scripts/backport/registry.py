@@ -4,13 +4,55 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from scripts.common.operational_controls import (
+    OperationalPolicy,
+    parse_operational_policy,
+)
+from scripts.common.validation_adapter import (
+    ValidationAdapter,
+    ValidationRule,
+    parse_validation_adapter,
+)
+
+__all__ = [
+    "BranchEntry",
+    "OperationalPolicy",
+    "Registry",
+    "RepoEntry",
+    "ValidationRule",
+    "ValidationWaiver",
+    "load_registry",
+]
+
 _REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+_BRANCH_RE = re.compile(r"^(?!-)(?!.*\.\.)(?!.*//)[A-Za-z0-9._/-]+$")
 _VALID_OWNER_TYPES = {"organization", "user"}
+_SCHEMA_VERSION = 2
+
+_TOP_LEVEL_KEYS = {"schema_version", "repos"}
+_REPO_KEYS = {
+    "repo",
+    "project_owner",
+    "project_owner_type",
+    "language",
+    "branches",
+    "push_repo",
+    "validation",
+    "validation_waiver",
+    "repair_validation_failures",
+    "backport_label",
+    "llm_conflict_label",
+    "max_conflicting_files",
+    "automation",
+}
+_BRANCH_KEYS = {"branch", "project_number"}
+_WAIVER_KEYS = {"reason", "approved_by", "expires"}
 
 
 @dataclass(frozen=True)
@@ -20,9 +62,10 @@ class BranchEntry:
 
 
 @dataclass(frozen=True)
-class ValidationRule:
-    paths: tuple[str, ...]
-    commands: tuple[str, ...]
+class ValidationWaiver:
+    reason: str
+    approved_by: str
+    expires: date
 
 
 @dataclass(frozen=True)
@@ -33,13 +76,13 @@ class RepoEntry:
     language: str
     branches: tuple[BranchEntry, ...]
     push_repo: str | None = None
-    build_commands: tuple[str, ...] = ()
-    validation_setup_commands: tuple[str, ...] = ()
-    validation_rules: tuple[ValidationRule, ...] = ()
+    validation: ValidationAdapter | None = None
+    validation_waiver: ValidationWaiver | None = None
     repair_validation_failures: bool = False
     backport_label: str = "backport"
     llm_conflict_label: str = "ai-resolved-conflicts"
     max_conflicting_files: int = 100
+    automation: OperationalPolicy = OperationalPolicy()
 
     @property
     def effective_push_repo(self) -> str:
@@ -76,6 +119,13 @@ def load_registry(path: str) -> Registry:
 
 
 def _parse_registry(raw: dict[str, Any]) -> Registry:
+    _reject_unknown_keys(raw, _TOP_LEVEL_KEYS, "registry")
+    schema_version = raw.get("schema_version")
+    if schema_version != _SCHEMA_VERSION:
+        raise ValueError(
+            f"schema_version must be {_SCHEMA_VERSION}, got {schema_version!r}"
+        )
+
     # repos
     repos_raw = raw.get("repos", [])
     if not isinstance(repos_raw, list) or not repos_raw:
@@ -94,6 +144,7 @@ def _parse_registry(raw: dict[str, Any]) -> Registry:
 def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
     if not isinstance(raw, dict):
         raise ValueError(f"repos[{index}] must be a mapping")
+    _reject_unknown_keys(raw, _REPO_KEYS, f"repos[{index}]")
 
     repo = raw.get("repo")
     if not isinstance(repo, str) or not _REPO_RE.match(repo):
@@ -129,41 +180,56 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
                 "omit push_repo for direct upstream pushes"
             )
 
-    build_commands = raw.get("build_commands", [])
-    if not isinstance(build_commands, list):
-        raise ValueError(f"repos[{index}].build_commands must be a list")
-    for j, cmd in enumerate(build_commands):
-        if not isinstance(cmd, str) or not cmd.strip():
-            raise ValueError(
-                f"repos[{index}].build_commands[{j}] must be a non-empty string"
-            )
-
-    validation_setup_commands = raw.get("validation_setup_commands", [])
-    if not isinstance(validation_setup_commands, list):
-        raise ValueError(f"repos[{index}].validation_setup_commands must be a list")
-    for j, cmd in enumerate(validation_setup_commands):
-        if not isinstance(cmd, str) or not cmd.strip():
-            raise ValueError(
-                f"repos[{index}].validation_setup_commands[{j}] "
-                "must be a non-empty string"
-            )
-
-    validation_rules = _parse_validation_rules(raw.get("validation_rules", []), index)
+    validation_raw = raw.get("validation")
+    validation = (
+        parse_validation_adapter(
+            validation_raw,
+            field=f"repos[{index}].validation",
+        )
+        if validation_raw is not None
+        else None
+    )
+    validation_waiver = _parse_validation_waiver(
+        raw.get("validation_waiver"),
+        index,
+    )
     repair_validation_failures = raw.get("repair_validation_failures", False)
     if not isinstance(repair_validation_failures, bool):
         raise ValueError(
-            f"repos[{index}].repair_validation_failures must be a boolean"
+            f"repos[{index}].repair_validation_failures must be boolean"
         )
-
     backport_label = raw.get("backport_label", "backport")
     if not isinstance(backport_label, str) or not backport_label.strip():
         raise ValueError(f"repos[{index}].backport_label must be a non-empty string")
     llm_conflict_label = raw.get("llm_conflict_label", "ai-resolved-conflicts")
     if not isinstance(llm_conflict_label, str) or not llm_conflict_label.strip():
         raise ValueError(f"repos[{index}].llm_conflict_label must be a non-empty string")
+    if len(backport_label) > 50 or "\n" in backport_label:
+        raise ValueError(f"repos[{index}].backport_label must be at most 50 characters without newlines")
+    if len(llm_conflict_label) > 50 or "\n" in llm_conflict_label:
+        raise ValueError(
+            f"repos[{index}].llm_conflict_label must be at most 50 characters without newlines"
+        )
+    if backport_label.casefold() == llm_conflict_label.casefold():
+        raise ValueError(f"repos[{index}] backport and LLM conflict labels must be distinct")
     max_conflicting_files = raw.get("max_conflicting_files", 100)
     if not isinstance(max_conflicting_files, int) or max_conflicting_files < 1:
         raise ValueError(f"repos[{index}].max_conflicting_files must be a positive integer")
+    automation = parse_operational_policy(
+        raw.get("automation"),
+        field=f"repos[{index}].automation",
+    )
+
+    if validation is None and validation_waiver is None:
+        raise ValueError(
+            f"repos[{index}] must define validation or an explicit validation_waiver"
+        )
+    if validation_waiver is not None and (
+        validation is not None or repair_validation_failures
+    ):
+        raise ValueError(
+            f"repos[{index}].validation_waiver cannot be combined with validation commands or repair"
+        )
 
     branches_raw = raw.get("branches", [])
     if not isinstance(branches_raw, list) or not branches_raw:
@@ -181,62 +247,51 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         project_owner_type=project_owner_type,
         language=language,
         push_repo=push_repo,
-        build_commands=tuple(build_commands),
-        validation_setup_commands=tuple(validation_setup_commands),
-        validation_rules=tuple(validation_rules),
+        validation=validation,
+        validation_waiver=validation_waiver,
         repair_validation_failures=repair_validation_failures,
         backport_label=backport_label,
         llm_conflict_label=llm_conflict_label,
         max_conflicting_files=max_conflicting_files,
+        automation=automation,
         branches=tuple(branches),
     )
 
 
-def _parse_validation_rules(raw: Any, repo_idx: int) -> list[ValidationRule]:
+def _parse_validation_waiver(raw: Any, repo_idx: int) -> ValidationWaiver | None:
     if raw is None:
-        return []
-    if not isinstance(raw, list):
-        raise ValueError(f"repos[{repo_idx}].validation_rules must be a list")
+        return None
+    field = f"repos[{repo_idx}].validation_waiver"
+    if not isinstance(raw, dict):
+        raise ValueError(f"{field} must be a mapping")
+    _reject_unknown_keys(raw, _WAIVER_KEYS, field)
+    values: dict[str, str] = {}
+    for key in _WAIVER_KEYS:
+        value = raw.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field}.{key} must be a non-empty string")
+        values[key] = value.strip()
+    try:
+        expires = date.fromisoformat(values["expires"])
+    except ValueError as exc:
+        raise ValueError(f"{field}.expires must be an ISO date (YYYY-MM-DD)") from exc
+    if expires < date.today():
+        raise ValueError(f"{field} expired on {expires.isoformat()}")
+    return ValidationWaiver(
+        reason=values["reason"],
+        approved_by=values["approved_by"],
+        expires=expires,
+    )
 
-    rules: list[ValidationRule] = []
-    for rule_idx, rule_raw in enumerate(raw):
-        if not isinstance(rule_raw, dict):
-            raise ValueError(
-                f"repos[{repo_idx}].validation_rules[{rule_idx}] must be a mapping"
-            )
-        paths = rule_raw.get("paths")
-        if not isinstance(paths, list) or not paths:
-            raise ValueError(
-                f"repos[{repo_idx}].validation_rules[{rule_idx}].paths "
-                "must be a non-empty list"
-            )
-        for path_idx, pattern in enumerate(paths):
-            if not isinstance(pattern, str) or not pattern.strip():
-                raise ValueError(
-                    f"repos[{repo_idx}].validation_rules[{rule_idx}]"
-                    f".paths[{path_idx}] must be a non-empty string"
-                )
 
-        commands = rule_raw.get("commands")
-        if not isinstance(commands, list) or not commands:
-            raise ValueError(
-                f"repos[{repo_idx}].validation_rules[{rule_idx}].commands "
-                "must be a non-empty list"
-            )
-        for cmd_idx, command in enumerate(commands):
-            if not isinstance(command, str) or not command.strip():
-                raise ValueError(
-                    f"repos[{repo_idx}].validation_rules[{rule_idx}]"
-                    f".commands[{cmd_idx}] must be a non-empty string"
-                )
-
-        rules.append(
-            ValidationRule(
-                paths=tuple(str(pattern) for pattern in paths),
-                commands=tuple(str(command) for command in commands),
-            )
-        )
-    return rules
+def _reject_unknown_keys(
+    value: dict[str, Any],
+    allowed: set[str],
+    field: str,
+) -> None:
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise ValueError(f"{field} contains unknown key(s): {', '.join(unknown)}")
 
 
 def _parse_branch_entry(
@@ -245,18 +300,31 @@ def _parse_branch_entry(
 ) -> BranchEntry:
     if not isinstance(raw, dict):
         raise ValueError(f"repos[{repo_idx}].branches[{branch_idx}] must be a mapping")
+    _reject_unknown_keys(
+        raw,
+        _BRANCH_KEYS,
+        f"repos[{repo_idx}].branches[{branch_idx}]",
+    )
 
     branch = raw.get("branch")
-    if not isinstance(branch, str) or not branch:
-        raise ValueError(f"repos[{repo_idx}].branches[{branch_idx}].branch is required")
+    if (
+        not isinstance(branch, str)
+        or not _BRANCH_RE.fullmatch(branch)
+        or branch.endswith(("/", "."))
+        or "@{" in branch
+        or branch.endswith(".lock")
+    ):
+        raise ValueError(
+            f"repos[{repo_idx}].branches[{branch_idx}].branch must be a safe Git branch name"
+        )
     if branch in seen_branches:
         raise ValueError(f"Duplicate branch '{branch}' in repos[{repo_idx}]")
     seen_branches.add(branch)
 
     project_number = raw.get("project_number")
-    if not isinstance(project_number, int) or project_number < 0:
+    if isinstance(project_number, bool) or not isinstance(project_number, int) or project_number < 1:
         raise ValueError(
-            f"repos[{repo_idx}].branches[{branch_idx}].project_number must be a non-negative integer"
+            f"repos[{repo_idx}].branches[{branch_idx}].project_number must be a positive integer"
         )
     if project_number in seen_projects:
         raise ValueError(

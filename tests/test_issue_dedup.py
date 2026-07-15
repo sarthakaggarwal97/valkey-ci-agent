@@ -1,11 +1,13 @@
 """Tests for the generic marker-based issue dedup publisher."""
 from __future__ import annotations
 
+import hashlib
 from unittest.mock import MagicMock
 
 import pytest
 
 from scripts.common.issue_dedup import IssueContent, IssueDedupPublisher
+from scripts.common.markdown import GITHUB_BODY_MAX_BYTES, GITHUB_TITLE_MAX_BYTES
 
 NAMESPACE = "valkey-ci-agent:test"
 
@@ -318,3 +320,169 @@ def test_idempotency_key_different_value_still_updates():
     assert f"<!-- {NAMESPACE}:occurrences:2 -->" in edited
     assert f"<!-- {NAMESPACE}:last-key:run-99 -->" in edited
     assert f"<!-- {NAMESPACE}:last-key:run-42 -->" not in edited
+
+
+def _event_marker(key: str, count: int) -> str:
+    digest = hashlib.sha256(key.encode()).hexdigest()
+    return f"<!-- {NAMESPACE}:event:{digest}:{count} -->"
+
+
+def test_update_commits_immutable_event_comment_before_body_edit():
+    marker = f"<!-- {NAMESPACE}:fp1 -->"
+    existing = MagicMock(
+        number=5,
+        html_url="https://x/issues/5",
+        body=f"{marker}\n<!-- {NAMESPACE}:occurrences:1 -->",
+    )
+    repo = MagicMock()
+    repo.get_issue.return_value = existing
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    gh.search_issues.return_value = [existing]
+
+    IssueDedupPublisher(gh, marker_namespace=NAMESPACE).upsert(
+        "o/r",
+        fingerprint="fp1",
+        render=_render_static(),
+        idempotency_key="run-42",
+    )
+
+    names = [call[0] for call in existing.method_calls]
+    assert names.index("create_comment") < names.index("edit")
+    comment = existing.create_comment.call_args.kwargs["body"]
+    assert _event_marker("run-42", 2) in comment
+
+
+def test_comment_failure_leaves_mutable_body_untouched():
+    marker = f"<!-- {NAMESPACE}:fp1 -->"
+    existing = MagicMock(
+        number=5,
+        html_url="https://x/issues/5",
+        body=f"{marker}\n<!-- {NAMESPACE}:occurrences:1 -->",
+    )
+    existing.create_comment.side_effect = RuntimeError("comment failed")
+    repo = MagicMock()
+    repo.get_issue.return_value = existing
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    gh.search_issues.return_value = [existing]
+
+    with pytest.raises(RuntimeError, match="comment failed"):
+        IssueDedupPublisher(gh, marker_namespace=NAMESPACE).upsert(
+            "o/r",
+            fingerprint="fp1",
+            render=_render_static(),
+            idempotency_key="run-42",
+        )
+    existing.edit.assert_not_called()
+
+
+def test_retry_repairs_body_after_comment_committed_but_edit_failed():
+    marker = f"<!-- {NAMESPACE}:fp1 -->"
+    original_body = f"{marker}\n<!-- {NAMESPACE}:occurrences:1 -->"
+    comments = []
+    existing = MagicMock(
+        number=5,
+        html_url="https://x/issues/5",
+        body=original_body,
+    )
+
+    def record_comment(*, body):
+        comments.append(MagicMock(body=body))
+
+    existing.create_comment.side_effect = record_comment
+    existing.get_comments.side_effect = lambda: comments
+    existing.edit.side_effect = [RuntimeError("edit failed"), None]
+    repo = MagicMock()
+    repo.get_issue.return_value = existing
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    gh.search_issues.return_value = [existing]
+    publisher = IssueDedupPublisher(gh, marker_namespace=NAMESPACE)
+
+    with pytest.raises(RuntimeError, match="edit failed"):
+        publisher.upsert(
+            "o/r",
+            fingerprint="fp1",
+            render=_render_static(),
+            idempotency_key="run-42",
+        )
+    action, _ = publisher.upsert(
+        "o/r",
+        fingerprint="fp1",
+        render=_render_static(),
+        idempotency_key="run-42",
+    )
+
+    assert action == "skipped-duplicate"
+    assert existing.create_comment.call_count == 1
+    repaired = existing.edit.call_args.kwargs["body"]
+    assert f"<!-- {NAMESPACE}:occurrences:2 -->" in repaired
+
+
+def test_out_of_order_retry_is_found_in_immutable_comment_ledger():
+    marker = f"<!-- {NAMESPACE}:fp1 -->"
+    existing = MagicMock(
+        number=5,
+        html_url="https://x/issues/5",
+        body=(
+            f"{marker}\n<!-- {NAMESPACE}:occurrences:3 -->\n"
+            f"<!-- {NAMESPACE}:last-key:run-99 -->"
+        ),
+    )
+    existing.get_comments.return_value = [
+        MagicMock(body=_event_marker("run-42", 2)),
+    ]
+    repo = MagicMock()
+    repo.get_issue.return_value = existing
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    gh.search_issues.return_value = [existing]
+
+    action, _ = IssueDedupPublisher(gh, marker_namespace=NAMESPACE).upsert(
+        "o/r",
+        fingerprint="fp1",
+        render=_render_static(),
+        idempotency_key="run-42",
+    )
+    assert action == "skipped-duplicate"
+    existing.create_comment.assert_not_called()
+    existing.edit.assert_not_called()
+
+
+def test_rejects_unsafe_event_keys_before_github_calls():
+    gh = MagicMock()
+    with pytest.raises(ValueError, match="idempotency_key"):
+        IssueDedupPublisher(gh, marker_namespace=NAMESPACE).upsert(
+            "o/r",
+            fingerprint="fp1",
+            render=_render_static(),
+            idempotency_key="bad --> marker",
+        )
+    gh.get_repo.assert_not_called()
+
+
+def test_publisher_enforces_github_budgets_and_preserves_event_markers():
+    repo = MagicMock()
+    repo.create_issue.return_value = MagicMock(
+        number=1,
+        html_url="https://x/issues/1",
+    )
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    gh.search_issues.return_value = []
+
+    IssueDedupPublisher(gh, marker_namespace=NAMESPACE).upsert(
+        "o/r",
+        fingerprint="fp1",
+        render=_render_static(
+            title="\N{SNOWMAN}" * 1000,
+            body="x" * (GITHUB_BODY_MAX_BYTES * 2),
+        ),
+        idempotency_key="run-42",
+    )
+    kwargs = repo.create_issue.call_args.kwargs
+    assert len(kwargs["title"].encode("utf-8")) <= GITHUB_TITLE_MAX_BYTES
+    assert len(kwargs["body"].encode("utf-8")) <= GITHUB_BODY_MAX_BYTES
+    assert _event_marker("run-42", 1) in kwargs["body"]
+    assert f"<!-- {NAMESPACE}:last-key:run-42 -->" in kwargs["body"]

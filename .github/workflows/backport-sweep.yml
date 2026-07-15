@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       repo:
-        description: "Filter to this repository (empty = all repos in registry)"
+        description: "Filter to this repository (empty = all repos)"
         required: false
         type: string
         default: ""
@@ -16,151 +16,35 @@ on:
         type: string
         default: ""
       max_candidates:
-        description: "Cap successfully applied cherry-picks per branch (0 = unlimited)"
+        description: "Maximum candidates per branch (0 = no caller cap)"
         required: false
-        type: string
-        default: "2"
+        type: number
+        default: 2
       dry_run:
-        description: "Discovery only — don't cherry-pick or push"
+        description: "Discover candidates without running backports"
         required: false
         default: true
         type: boolean
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 permissions: {}
 
 jobs:
-  preflight:
-    name: "Generate matrix"
-    if: github.repository == 'valkey-io/valkey-ci-agent'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  candidates:
+    if: >-
+      ${{
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
     permissions:
       contents: read
-    outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-      has_entries: ${{ steps.matrix.outputs.has_entries }}
-    steps:
-      - name: Check out agent repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Set up agent dependencies
-        uses: ./.github/actions/setup-agent
-
-      - name: Generate matrix from registry
-        id: matrix
-        shell: bash
-        env:
-          REPO_FILTER: ${{ inputs.repo || '' }}
-          PROJECT_FILTER: ${{ inputs.project_number || '' }}
-        run: |
-          set -euo pipefail
-          args=(--registry repos.yml)
-          if [[ -n "${REPO_FILTER}" ]]; then
-            args+=(--repo "${REPO_FILTER}")
-          fi
-          if [[ -n "${PROJECT_FILTER}" ]]; then
-            args+=(--project-number "${PROJECT_FILTER}")
-          fi
-          python -m scripts.backport.matrix "${args[@]}" --output-file "$GITHUB_OUTPUT"
-
-  sweep:
-    name: "backport/${{ matrix.repo }}/${{ matrix.branch }}"
-    needs: preflight
-    if: needs.preflight.outputs.has_entries == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.preflight.outputs.matrix) }}
-    concurrency:
-      group: backport-sweep-${{ matrix.repo }}-${{ matrix.branch }}
-      cancel-in-progress: false
-    env:
-      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-      CLAUDE_CODE_USE_BEDROCK: "1"
-      CI_AGENT_EVIDENCE_DIR: agent-evidence
-      MAX_CANDIDATES: ${{ inputs.max_candidates || '2' }}
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Check out agent repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Set up agent dependencies
-        uses: ./.github/actions/setup-agent
-        with:
-          install-claude: "true"
-
-      - name: Generate GitHub App token
-        id: generate-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          permission-contents: write
-          permission-workflows: write
-          permission-pull-requests: write
-          permission-issues: write
-          permission-organization-projects: read
-          permission-metadata: read
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: backport-sweep-${{ github.run_id }}-${{ matrix.branch }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Run backport sweep
-        shell: bash
-        env:
-          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: |
-          set -euo pipefail
-          args=(
-            -m scripts.backport.sweep
-            --registry repos.yml
-            --repo "${{ matrix.repo }}"
-            --branch "${{ matrix.branch }}"
-            --target-token "${TARGET_TOKEN}"
-            --verbose
-          )
-
-          if [[ "${MAX_CANDIDATES}" != "0" ]]; then
-            args+=(--max-candidates "${MAX_CANDIDATES}")
-          fi
-
-          if [[ "${DRY_RUN}" == "true" ]]; then
-            args+=(--discover-only)
-          fi
-
-          python "${args[@]}" | tee backport-sweep-result.json
-
-      - name: Upload result
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: backport-sweep-result-${{ github.run_id }}-${{ matrix.repo_slug }}-${{ matrix.branch }}
-          path: backport-sweep-result.json
-          retention-days: 30
-
-      - name: Upload agent evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: backport-sweep-agent-evidence-${{ github.run_id }}-${{ matrix.repo_slug }}-${{ matrix.branch }}
-          path: agent-evidence
-          if-no-files-found: ignore
-          retention-days: 30
+    uses: ./.github/workflows/backport-candidates.yml
+    with:
+      repo: ${{ inputs.repo || '' }}
+      project_number: ${{ inputs.project_number || '' }}
+      max_candidates: ${{ github.event_name != 'workflow_dispatch' && 2 || inputs.max_candidates }}
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+      mode: sweep
+    secrets:
+      AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}

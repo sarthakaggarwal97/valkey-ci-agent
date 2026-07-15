@@ -1,0 +1,364 @@
+name: Discover and Backport Candidates
+
+on:
+  workflow_call:
+    inputs:
+      repo:
+        required: false
+        type: string
+        default: ""
+      project_number:
+        required: false
+        type: string
+        default: ""
+      max_candidates:
+        required: true
+        type: number
+      dry_run:
+        required: false
+        type: boolean
+        default: false
+      mode:
+        required: true
+        type: string
+    secrets:
+      AI_GATEWAY_TOKEN:
+        required: true
+      VALKEYRIE_BOT_APP_ID:
+        required: true
+      VALKEYRIE_BOT_PRIVATE_KEY:
+        required: true
+
+permissions: {}
+
+jobs:
+  discovery:
+    if: >-
+      ${{
+        github.repository == 'valkey-io/valkey-ci-agent' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.candidates.outputs.matrix }}
+      has_entries: ${{ steps.candidates.outputs.has_entries }}
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Enforce global controls before token minting
+        shell: bash
+        env:
+          OPERATION_ID: backport:candidates:${{ github.run_id }}:${{ github.run_attempt }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --repo valkey-io/valkey-ci-agent \
+            --operation "${OPERATION_ID}" >/dev/null
+
+      - name: Generate read-only discovery token
+        id: discovery-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          permission-contents: read
+          permission-pull-requests: read
+          permission-organization-projects: read
+          permission-metadata: read
+
+      - name: Discover bounded candidate matrix
+        id: candidates
+        shell: bash
+        env:
+          DISCOVERY_GITHUB_TOKEN: ${{ steps.discovery-token.outputs.token }}
+          REPO_FILTER: ${{ inputs.repo }}
+          PROJECT_FILTER: ${{ inputs.project_number }}
+          MAX_CANDIDATES: ${{ inputs.max_candidates }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          args=(
+            -m scripts.backport.candidate_matrix
+            --registry repos.yml
+            --max-candidates "${MAX_CANDIDATES}"
+            --output backport-candidates.json
+            --github-output "${GITHUB_OUTPUT}"
+          )
+          if [[ -n "${REPO_FILTER}" ]]; then
+            args+=(--repo "${REPO_FILTER}")
+          fi
+          if [[ -n "${PROJECT_FILTER}" ]]; then
+            args+=(--project-number "${PROJECT_FILTER}")
+          fi
+          python "${args[@]}"
+
+      - name: Upload candidate evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-candidates-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: backport-candidates.json
+          if-no-files-found: error
+          retention-days: 30
+
+  backport:
+    needs: discovery
+    if: >-
+      ${{
+        needs.discovery.outputs.has_entries == 'true' &&
+        inputs.dry_run == false &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJson(needs.discovery.outputs.matrix) }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/backport.yml
+    with:
+      source_pr_number: ${{ matrix.source_pr_number }}
+      repo_full_name: ${{ matrix.repo }}
+      target_branch: ${{ matrix.branch }}
+      push_repo: ${{ matrix.push_repo }}
+      agent_repository: ${{ github.repository }}
+      agent_ref: ${{ github.sha }}
+      artifact_suffix: ${{ matrix.artifact_suffix }}
+      publication_mode: aggregate
+    secrets:
+      AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+
+  aggregate-prepare:
+    needs: [discovery, backport]
+    if: >-
+      ${{
+        always() &&
+        needs.discovery.outputs.has_entries == 'true' &&
+        inputs.dry_run == false &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download validated candidate handoffs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: backport-aggregate-result-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: aggregate-candidates
+          merge-multiple: false
+
+      - name: Prepare rolling aggregate without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.aggregate \
+            --registry repos.yml \
+            prepare \
+            --candidates-directory aggregate-candidates \
+            --output-directory backport-aggregate \
+            --max-candidates "${{ inputs.max_candidates }}"
+
+      - name: Upload aggregate prepared artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-aggregate-prepared-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: backport-aggregate
+          if-no-files-found: error
+          retention-days: 1
+
+  aggregate-validation:
+    needs: aggregate-prepare
+    if: >-
+      ${{
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    outputs:
+      passed_count: ${{ steps.validate.outputs.passed_count }}
+      failed_count: ${{ steps.validate.outputs.failed_count }}
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download aggregate prepared artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-aggregate-prepared-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: backport-aggregate
+
+      - name: Validate aggregate trees without credentials
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.aggregate \
+            --registry repos.yml \
+            validate \
+            --artifact-directory backport-aggregate
+
+      - name: Upload aggregate validation artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-aggregate-validated-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: backport-aggregate
+          if-no-files-found: error
+          retention-days: 1
+
+  aggregate-publisher:
+    needs: aggregate-validation
+    if: >-
+      ${{
+        needs.aggregate-validation.outputs.passed_count != '0' &&
+        needs.aggregate-validation.outputs.passed_count != '' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_BACKPORT != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download aggregate validation artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backport-aggregate-validated-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: backport-aggregate
+
+      - name: Verify aggregates before minting write token
+        shell: bash
+        env:
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          repositories_file="${RUNNER_TEMP}/aggregate-publish-repositories.txt"
+          python -m scripts.backport.aggregate \
+            --registry repos.yml \
+            preflight-publish \
+            --artifact-directory backport-aggregate \
+            --repositories-output "${repositories_file}"
+          mapfile -t repositories < "${repositories_file}"
+          for repository in "${repositories[@]}"; do
+            safe_repository="${repository//\//-}"
+            python -m scripts.common.operational_controls \
+              --registry repos.yml \
+              --repo "${repository}" \
+              --operation backport:aggregate-publish \
+              --admit-publication-key \
+                "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${safe_repository}:${{ inputs.mode }}" \
+              >/dev/null
+          done
+
+      - name: Generate aggregate publisher token
+        id: publisher-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          permission-contents: write
+          permission-workflows: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-metadata: read
+
+      - name: Publish rolling aggregate PRs
+        shell: bash
+        env:
+          PUBLISH_GITHUB_TOKEN: ${{ steps.publisher-token.outputs.token }}
+          PUBLISHER_IDENTITY: ${{ steps.publisher-token.outputs.app-slug }}[bot]
+          PUBLISHER_INSTALLATION_ID: ${{ steps.publisher-token.outputs.installation-id }}
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.aggregate \
+            --registry repos.yml \
+            publish \
+            --artifact-directory backport-aggregate
+
+      - name: Upload aggregate publication manifests
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-aggregate-publication-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: backport-aggregate/group-*/publication.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  aggregate-outcome:
+    needs: [aggregate-validation, aggregate-publisher]
+    if: always() && needs.aggregate-validation.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require every aggregate validation to pass
+        shell: bash
+        env:
+          PASSED_COUNT: ${{ needs.aggregate-validation.outputs.passed_count }}
+          FAILED_COUNT: ${{ needs.aggregate-validation.outputs.failed_count }}
+          PUBLISHER_RESULT: ${{ needs.aggregate-publisher.result }}
+        run: |
+          set -euo pipefail
+          if [[ "${FAILED_COUNT}" != "0" ]]; then
+            echo "::error::One or more rolling aggregate trees failed validation"
+            exit 1
+          fi
+          if [[ "${PASSED_COUNT}" != "0" && "${PUBLISHER_RESULT}" != "success" ]]; then
+            echo "::error::Validated rolling aggregate was not published"
+            exit 1
+          fi

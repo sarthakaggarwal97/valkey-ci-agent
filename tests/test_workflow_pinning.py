@@ -110,9 +110,8 @@ def test_github_app_tokens_request_explicit_permissions():
 def test_push_capable_app_tokens_can_update_workflows():
     """Push tokens need workflows:write for commits touching .github/workflows."""
     required_steps = {
-        ".github/workflows/backport.yml": "Generate GitHub App token",
-        ".github/workflows/backport-poll.yml": "Generate GitHub App token",
-        ".github/workflows/backport-sweep.yml": "Generate GitHub App token",
+        ".github/workflows/backport.yml": "Generate publisher token",
+        ".github/workflows/backport-candidates.yml": "Generate aggregate publisher token",
         ".github/workflows/ci-fix.yml": "Generate GitHub App token",
         ".github/workflows/manual-revert-commit.yml": "Generate GitHub App token",
     }
