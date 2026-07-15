@@ -4,18 +4,29 @@ from __future__ import annotations
 
 import logging
 import re
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 
 from github import Github
 from github.WorkflowRun import WorkflowRun
 
 from scripts.common.github_client import retry_github_call
-from scripts.common.workflow_artifacts import ArtifactClient
+from scripts.common.workflow_artifacts import ArtifactClient, ArtifactState
 
 logger = logging.getLogger(__name__)
 
 # Name of the JSON file the Valkey CI workflow uploads inside its artifact zip.
 _FAILURES_JSON_NAME = "all-test-failures.json"
 _FAILURES_ARTIFACT_NAME = "all-test-failures"
+
+
+@dataclass(frozen=True)
+class TestFailureArtifact:
+    state: ArtifactState
+    content: bytes | None = None
+    detail: str = ""
+
 
 def get_latest_daily_run(
     gh: Github,
@@ -83,14 +94,11 @@ def download_all_test_failures(
     github_token: str,
     *,
     artifact_client: ArtifactClient | None = None,
-) -> bytes | None:
+) -> TestFailureArtifact:
     """Download the 'all-test-failures' artifact from a workflow run.
 
-    Returns the raw JSON content as bytes, or None if the artifact (or the
-    JSON file inside it) is not found. Delegates the listing, download, and
-    zip extraction to the shared :class:`ArtifactClient`, which handles the
-    auth-stripping redirect, transient-failure retries, expired (404)
-    artifacts, and a runaway-extraction cap.
+    Returns a typed state so absence, expiration, corruption, oversize, and
+    transport failures cannot be mistaken for a clean CI run.
     """
     client = artifact_client or ArtifactClient(gh, token=github_token)
 
@@ -102,27 +110,45 @@ def download_all_test_failures(
         logger.info(
             "No %r artifact found in run %d", _FAILURES_ARTIFACT_NAME, run_id
         )
-        return None
+        return TestFailureArtifact(
+            ArtifactState.NOT_FOUND,
+            detail=f"artifact {_FAILURES_ARTIFACT_NAME!r} was not listed",
+        )
     if target.expired:
         logger.warning(
             "Artifact %r (id=%d) in run %d has expired",
             target.name, target.artifact_id, run_id,
         )
-        return None
+        return TestFailureArtifact(
+            ArtifactState.EXPIRED,
+            detail=f"artifact {target.artifact_id} has expired",
+        )
 
     logger.info("Downloading artifact: %s (id=%d)", target.name, target.artifact_id)
-    files = client.download_artifact(repo_full_name, target.artifact_id)
-
-    content = files.get(_FAILURES_JSON_NAME)
-    if content is None:
-        logger.warning(
-            "Artifact zip for run %d does not contain %s; found: %s",
-            run_id, _FAILURES_JSON_NAME, sorted(files),
+    with tempfile.TemporaryDirectory(prefix="test-failures-") as temporary:
+        result = client.download_artifact(
+            repo_full_name,
+            target.artifact_id,
+            destination=Path(temporary),
+            requested={_FAILURES_JSON_NAME},
         )
-        return None
+        if result.state is not ArtifactState.AVAILABLE:
+            return TestFailureArtifact(result.state, detail=result.detail)
+        member = result.member(_FAILURES_JSON_NAME)
+        if member is None:
+            logger.warning(
+                "Artifact zip for run %d does not contain %s",
+                run_id,
+                _FAILURES_JSON_NAME,
+            )
+            return TestFailureArtifact(
+                ArtifactState.MEMBER_MISSING,
+                detail=f"artifact does not contain {_FAILURES_JSON_NAME}",
+            )
+        content = member.path.read_bytes()
 
     logger.info("Extracted %s from artifact zip", _FAILURES_JSON_NAME)
-    return content
+    return TestFailureArtifact(ArtifactState.AVAILABLE, content=content)
 
 def get_job_urls(
     gh: Github,

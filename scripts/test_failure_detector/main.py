@@ -9,8 +9,9 @@ import sys
 
 from github import Auth, Github
 
+from scripts.common.github_client import retry_github_call
 from scripts.common.job_summary import emit_job_summary
-from scripts.common.workflow_artifacts import ArtifactClient
+from scripts.common.workflow_artifacts import ArtifactClient, ArtifactState
 from scripts.test_failure_detector.download import (
     download_all_test_failures,
     get_job_urls,
@@ -73,6 +74,7 @@ def run(
     artifact_client = ArtifactClient(gh, token=github_token)
 
     # Step 1: Find the workflow run
+    run_conclusion: str | None = None
     if run_id is None:
         logger.info("Looking for latest %s run on %s/%s...", workflow_name, repo_full_name, branch)
         daily_run = get_latest_daily_run(gh, repo_full_name, workflow_name, branch)
@@ -85,18 +87,50 @@ def run(
             )
             return 1
         run_id = daily_run.id
+        run_conclusion = str(daily_run.conclusion or "")
     else:
         logger.info("Using specified run ID: %d", run_id)
 
     # Step 2: Download the all-test-failures artifact
     logger.info("Downloading all-test-failures artifact from run %d...", run_id)
-    artifact_content = download_all_test_failures(
+    artifact_result = download_all_test_failures(
         gh, repo_full_name, run_id, github_token, artifact_client=artifact_client,
     )
-    if artifact_content is None:
-        logger.info("No test failures artifact found — CI run likely passed cleanly.")
-        emit_job_summary(_build_job_summary(run_id, repo_full_name, 0, {}))
-        return 0
+    if artifact_result.state is not ArtifactState.AVAILABLE:
+        conclusion = run_conclusion or _get_run_conclusion(
+            gh,
+            repo_full_name,
+            run_id,
+        )
+        if (
+            artifact_result.state is ArtifactState.NOT_FOUND
+            and conclusion == "success"
+        ):
+            logger.info(
+                "Run %d concluded success and its failure artifact is absent; "
+                "the source workflow establishes a clean run.",
+                run_id,
+            )
+            emit_job_summary(_build_job_summary(run_id, repo_full_name, 0, {}))
+            return 0
+        logger.error(
+            "Required test-failure artifact is %s for run %d: %s",
+            artifact_result.state.value,
+            run_id,
+            artifact_result.detail,
+        )
+        emit_job_summary(
+            f"### Test Failure Detector\n\n"
+            f"Required evidence for [run #{run_id}]"
+            f"(https://github.com/{repo_full_name}/actions/runs/{run_id}) is "
+            f"`{artifact_result.state.value}`. The run concluded "
+            f"`{conclusion or 'unknown'}` and cannot be classified as clean."
+        )
+        return 1
+    if artifact_result.content is None:
+        logger.error("Available artifact result has no content")
+        return 1
+    artifact_content = artifact_result.content
 
     try:
         all_failures = json.loads(artifact_content)
@@ -171,6 +205,15 @@ def run(
         )
         return 1
     return 0
+
+
+def _get_run_conclusion(gh: Github, repo_full_name: str, run_id: int) -> str:
+    run = retry_github_call(
+        lambda: gh.get_repo(repo_full_name).get_workflow_run(run_id),
+        retries=3,
+        description=f"get workflow run {run_id}",
+    )
+    return str(getattr(run, "conclusion", "") or "")
 
 def main() -> None:
     parser = argparse.ArgumentParser(

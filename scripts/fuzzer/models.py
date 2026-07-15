@@ -37,7 +37,7 @@ class FuzzerRunContext:
 
 @dataclass
 class FuzzerRunAnalysis:
-    """Final triage output produced by `FuzzerRunAnalyzer.analyze`."""
+    """Final triage output produced by the credentialless analysis phase."""
 
     repo: str
     workflow_file: str

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "List the candidate run without analyzing or filing an issue."
+        description: "Discover pending runs without analyzing or filing issues."
         required: false
         default: false
         type: boolean
@@ -16,22 +16,27 @@ permissions: {}
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+concurrency:
+  group: monitor-valkey-fuzzer-publisher
+  cancel-in-progress: false
+
 jobs:
-  monitor:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.repository == 'valkey-io/valkey-ci-agent' }}
+  discovery:
+    if: >-
+      ${{
+        (github.event_name == 'workflow_dispatch' ||
+        github.repository == 'valkey-io/valkey-ci-agent') &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_FUZZER != 'true'
+      }}
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 20
     permissions:
       contents: read
-      id-token: write
-    concurrency:
-      group: monitor-valkey-fuzzer
-      cancel-in-progress: false
-    env:
-      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-      CLAUDE_CODE_USE_BEDROCK: "1"
-      CI_AGENT_EVIDENCE_DIR: agent-evidence
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
+    outputs:
+      has_runs: ${{ steps.discover.outputs.has_runs }}
+      run_count: ${{ steps.discover.outputs.run_count }}
+      dry_run: ${{ steps.mode.outputs.dry_run }}
     steps:
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -41,11 +46,30 @@ jobs:
 
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
-        with:
-          install-claude: "true"
 
-      - name: Generate GitHub App token
-        id: generate-token
+      - name: Enforce operational controls before token minting
+        shell: bash
+        env:
+          OPERATION_ID: fuzzer:discover:${{ github.run_id }}:${{ github.run_attempt }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --repo valkey-io/valkey-fuzzer \
+            --operation "${OPERATION_ID}" >/dev/null
+
+      - name: Resolve execution mode
+        id: mode
+        shell: bash
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          printf 'dry_run=%s\n' "${DRY_RUN}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate read-only discovery token
+        id: discovery-token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -54,42 +78,191 @@ jobs:
           repositories: valkey-fuzzer
           permission-actions: read
           permission-contents: read
-          permission-issues: write
+          permission-issues: read
           permission-metadata: read
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: valkey-fuzzer-monitor-${{ github.run_id }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Analyze the latest fuzzer run
+      - name: Discover every unprocessed completed run
+        id: discover
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
+          READ_GITHUB_TOKEN: ${{ steps.discovery-token.outputs.token }}
         run: |
           set -euo pipefail
-          args=(-m scripts.fuzzer.main --output fuzzer-monitor-result.json)
-          if [[ "${DRY_RUN}" == "true" ]]; then
-            args+=(--dry-run)
-          fi
-          python "${args[@]}"
+          python -m scripts.fuzzer.phased discover \
+            --output-directory fuzzer-artifact \
+            --max-runs 4 \
+            --github-output "${GITHUB_OUTPUT}"
 
-      - name: Upload fuzzer analysis result
+      - name: Upload immutable discovery artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: valkey-fuzzer-discovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: fuzzer-artifact
+          if-no-files-found: error
+          retention-days: 2
+
+  analysis:
+    needs: discovery
+    if: >-
+      ${{
+        needs.discovery.outputs.has_runs == 'true' &&
+        needs.discovery.outputs.dry_run != 'true' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_FUZZER != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    concurrency:
+      group: ai-fuzzer-valkey-io-valkey-fuzzer
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download immutable discovery artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: valkey-fuzzer-discovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: fuzzer-artifact
+
+      - name: Load repository operational policy
+        shell: bash
+        env:
+          OPERATION_ID: fuzzer:analyze:${{ github.run_id }}:${{ github.run_attempt }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --repo valkey-io/valkey-fuzzer \
+            --operation "${OPERATION_ID}"
+
+      - name: Set up isolated AI runtime
+        uses: ./.github/actions/setup-ai-runtime
+        with:
+          upstream-url: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          gateway-token: ${{ secrets.AI_GATEWAY_TOKEN }}
+
+      - name: Analyze discovered runs without GitHub credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.fuzzer.phased analyze \
+            --artifact-directory fuzzer-artifact
+
+      - name: Clean up isolated AI runtime
+        if: always()
+        uses: ./.github/actions/cleanup-ai-runtime
+
+      - name: Upload schema-validated analyses
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: valkey-fuzzer-monitor-result-${{ github.run_id }}
-          path: fuzzer-monitor-result.json
-          if-no-files-found: warn
-          retention-days: 14
+          name: valkey-fuzzer-analyzed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: fuzzer-artifact
+          if-no-files-found: error
+          retention-days: 2
 
       - name: Upload agent evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: valkey-fuzzer-agent-evidence-${{ github.run_id }}
-          path: agent-evidence
+          name: valkey-fuzzer-agent-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: fuzzer-artifact/ai-*
           if-no-files-found: ignore
+          retention-days: 30
+
+  publisher:
+    needs: [discovery, analysis]
+    if: >-
+      ${{
+        needs.analysis.result == 'success' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_FUZZER != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download schema-validated analyses
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: valkey-fuzzer-analyzed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: fuzzer-artifact
+
+      - name: Verify analyses before minting issue token
+        shell: bash
+        env:
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.operational_controls \
+            --repo valkey-io/valkey-fuzzer \
+            --operation fuzzer:publish \
+            --admit-publication-key \
+              "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:fuzzer" \
+            >/dev/null
+          python -m scripts.fuzzer.phased preflight-publish \
+            --artifact-directory fuzzer-artifact
+
+      - name: Generate issue-only publisher token
+        id: publisher-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: valkey-fuzzer
+          permission-issues: write
+          permission-metadata: read
+
+      - name: Publish findings and advance durable cursor
+        shell: bash
+        env:
+          PUBLISH_GITHUB_TOKEN: ${{ steps.publisher-token.outputs.token }}
+          PUBLISHER_IDENTITY: ${{ steps.publisher-token.outputs.app-slug }}[bot]
+          PUBLISHER_INSTALLATION_ID: ${{ steps.publisher-token.outputs.installation-id }}
+        run: |
+          set -euo pipefail
+          python -m scripts.fuzzer.phased publish \
+            --artifact-directory fuzzer-artifact \
+            --output fuzzer-monitor-result.json
+
+      - name: Upload publisher result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: valkey-fuzzer-monitor-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: fuzzer-monitor-result.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload publication manifest
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: valkey-fuzzer-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: fuzzer-artifact/publication.json
+          if-no-files-found: warn
           retention-days: 30

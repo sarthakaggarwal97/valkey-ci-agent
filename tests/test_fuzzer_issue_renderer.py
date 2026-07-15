@@ -95,3 +95,21 @@ def test_render_for_returns_callable_with_labels():
     assert f"<!-- {MARKER_NAMESPACE}:occurrences:3 -->" in content.body
     assert "Occurrence #3" in content.comment
     assert content.labels == ("possible-valkey-bug",)
+
+
+def test_untrusted_analysis_text_is_escaped_and_mentions_are_neutralized():
+    analysis = _analysis(
+        summary="summary\n## injected @maintainer",
+        anomalies=[
+            FuzzerSignal(
+                "title **breakout**",
+                "critical",
+                "evidence\n| table | @team",
+            ),
+        ],
+    )
+    body = _render_body(analysis, "<!-- marker -->", occurrences=1)
+    assert "\n## injected" not in body
+    assert "\\#\\# injected" in body
+    assert "@maintainer" not in body
+    assert "@\u200bmaintainer" in body

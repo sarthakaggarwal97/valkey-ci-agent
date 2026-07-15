@@ -122,6 +122,15 @@ class TestBuildIssueBody:
     def test_contains_auto_created_footer(self) -> None:
         assert "Auto-created by Test Failure Detector" in self._body(_make_failure())
 
+    def test_untrusted_trace_cannot_escape_fence_or_activate_mention(self) -> None:
+        body = self._body(_make_failure(
+            error="failure\n```\n## injected\n@maintainer",
+        ))
+        assert "````\nfailure\n```" in body
+        assert body.endswith("*Auto-created by Test Failure Detector*")
+        assert "@maintainer" not in body
+        assert "@\u200bmaintainer" in body
+
 
 class TestExtractEnvironments:
     def test_extracts_backtick_envs(self) -> None:

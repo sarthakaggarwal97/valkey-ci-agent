@@ -1,6 +1,7 @@
 """Tests for fuzzer analyzer."""
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,6 +14,7 @@ from scripts.fuzzer.analyzer import (
     _triage,
 )
 from scripts.fuzzer.models import FuzzerRunContext, FuzzerSignal
+from scripts.fuzzer.schema import FuzzerSchemaError
 
 
 def _ctx(**kw) -> FuzzerRunContext:
@@ -22,11 +24,37 @@ def _ctx(**kw) -> FuzzerRunContext:
     return FuzzerRunContext(**defaults)
 
 
+def _ai_json(**updates) -> str:
+    payload = {
+        "schema_version": 1,
+        "overall_status": "normal",
+        "triage_verdict": "expected-chaos-noise",
+        "root_cause_category": None,
+        "summary": "No actionable anomaly was identified.",
+        "anomalies": [],
+        "reproduction_hint": None,
+    }
+    payload.update(updates)
+    return json.dumps(payload)
+
+
 def test_scan_logs_detects_crash():
     ctx = _ctx()
     ctx.node_logs = {"node-1.log": "ASSERTION FAILED at server.c:123"}
     anomalies = _scan_logs(ctx)
     assert any("crash" in a.title.lower() or "assertion" in a.title.lower() for a in anomalies)
+
+
+def test_scan_logs_counts_and_samples_all_matches():
+    ctx = _ctx()
+    ctx.node_logs = {
+        "node-1.log": "ASSERTION FAILED\nnoise\nASSERTION FAILED",
+        "node-2.log": "BUG REPORT START",
+    }
+    signal = next(item for item in _scan_logs(ctx) if item.title == "Node crash or assertion")
+    assert signal.evidence.startswith("3 match(es)")
+    assert "node-1.log" in signal.evidence
+    assert "node-2.log" in signal.evidence
 
 
 def test_scan_logs_validation_failure():
@@ -50,6 +78,24 @@ def test_load_artifacts_reads_manifest_and_results():
     assert ctx.seed == "42"
     assert ctx.tested_valkey_sha == "deadbeef1234567"
     assert "node-1.log" in ctx.node_logs
+
+
+def test_load_artifacts_preserves_nested_log_identity_and_rejects_singleton_collision():
+    ctx = _ctx()
+    _load_artifacts(ctx, {
+        "node-a/server.log": b"first",
+        "node-b/server.log": b"second",
+    })
+    assert ctx.node_logs == {
+        "node-a/server.log": "first",
+        "node-b/server.log": "second",
+    }
+
+    with pytest.raises(ValueError, match="multiple fuzzer artifact files"):
+        _load_artifacts(_ctx(), {
+            "attempt-a/results.json": b'{"success": true}',
+            "attempt-b/results.json": b'{"success": false}',
+        })
 
 
 def test_triage_normal():
@@ -82,13 +128,19 @@ def test_dedupe_signals():
 
 
 def test_parse_claude_response_plain_json():
-    assert _parse_claude_response('{"overall_status": "normal"}')["overall_status"] == "normal"
+    assert _parse_claude_response(_ai_json())["overall_status"] == "normal"
 
 
 def test_parse_claude_response_stream_json():
     stream = "\n".join([
         '{"type": "progress", "data": "thinking"}',
-        '{"type": "result", "result": "{\\"overall_status\\": \\"warning\\"}"}',
+        json.dumps({
+            "type": "result",
+            "result": _ai_json(
+                overall_status="warning",
+                triage_verdict="needs-human-triage",
+            ),
+        }),
     ])
     assert _parse_claude_response(stream)["overall_status"] == "warning"
 
@@ -102,6 +154,17 @@ def test_parse_claude_response_requires_overall_status():
 def test_parse_claude_response_rejects_garbage():
     with pytest.raises(ValueError):
         _parse_claude_response("no json here at all")
+
+
+@pytest.mark.parametrize("mutation", [
+    {"overall_status": "invented"},
+    {"triage_verdict": "definitely-a-bug"},
+    {"unexpected": "field"},
+    {"anomalies": [{"title": "x", "severity": "severe", "evidence": "y"}]},
+])
+def test_parse_claude_response_rejects_invalid_schema(mutation):
+    with pytest.raises(FuzzerSchemaError):
+        _parse_claude_response(_ai_json(**mutation))
 
 
 def test_format_source_note_when_clones_succeed():
@@ -149,7 +212,7 @@ def test_invoke_claude_skips_valkey_clone_when_sha_missing(monkeypatch, tmp_path
         clone_calls.append((repo, sha))
         return True
 
-    fake_result = MagicMock(returncode=0, stdout='{"overall_status": "normal"}', stderr="")
+    fake_result = MagicMock(returncode=0, stdout=_ai_json(), stderr="")
     monkeypatch.setattr(analyzer_mod, "shallow_clone_at_sha", fake_clone)
     monkeypatch.setattr(analyzer_mod, "run_agent", lambda *a, **kw: fake_result)
 
@@ -186,7 +249,7 @@ def test_invoke_claude_retries_once_then_succeeds(monkeypatch, tmp_path):
     monkeypatch.setattr(analyzer_mod, "shallow_clone_at_sha", lambda *a, **kw: True)
     results = [
         MagicMock(returncode=1, stdout="", stderr="timeout after 1800s"),
-        MagicMock(returncode=0, stdout='{"overall_status": "normal"}', stderr=""),
+        MagicMock(returncode=0, stdout=_ai_json(), stderr=""),
     ]
     calls = {"n": 0}
 
@@ -203,7 +266,7 @@ def test_invoke_claude_retries_once_then_succeeds(monkeypatch, tmp_path):
 
 def test_invoke_claude_does_not_retry_on_parse_failure(monkeypatch, tmp_path):
     """A successful exit with unparseable output is deterministic, so it is
-    raised immediately rather than burning a second Bedrock attempt."""
+    raised immediately rather than burning a second model-gateway attempt."""
     from scripts.fuzzer import analyzer as analyzer_mod
 
     monkeypatch.setattr(analyzer_mod, "shallow_clone_at_sha", lambda *a, **kw: True)
@@ -264,8 +327,24 @@ def test_agent_failure_analysis_carries_error_and_distinct_fingerprint():
 
 
 def test_agent_failure_analysis_fingerprint_is_stable():
-    """Repeated Bedrock outages collapse into one issue."""
+    """Repeated model-gateway outages collapse into one issue."""
     from scripts.fuzzer.analyzer import _build_agent_failure_analysis
     a = _build_agent_failure_analysis(_ctx(), "timeout after 1800s")
     b = _build_agent_failure_analysis(_ctx(), "a totally different error string")
     assert a.incident_fingerprint == b.incident_fingerprint
+
+
+def test_invalid_ai_schema_falls_back_to_deterministic_triage(monkeypatch):
+    from scripts.fuzzer import analyzer as analyzer_mod
+
+    monkeypatch.setattr(
+        analyzer_mod,
+        "_invoke_claude",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            FuzzerSchemaError("invented enum"),
+        ),
+    )
+    result = analyzer_mod.analyze_context(_ctx())
+    assert result.overall_status == "normal"
+    assert result.triage_verdict == "expected-chaos-noise"
+    assert result.analyzer_incomplete is False

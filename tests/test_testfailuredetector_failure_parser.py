@@ -177,3 +177,17 @@ class TestParseAndDeduplicate:
             ("foo in bar.tcl", "baz.tcl"),
             ("foo", "bar.tcl in baz.tcl"),
         }
+
+    def test_rejects_non_string_identity_and_omits_non_string_error(self) -> None:
+        data = {
+            "job-1": {
+                "suite": [
+                    {"test_name": ["not", "text"], "test_file": "x", "error": "bad"},
+                    {"test_name": "valid", "test_file": "x", "error": {"nested": True}},
+                ],
+            },
+        }
+        results = parse_and_deduplicate(data, {})
+        assert len(results) == 1
+        assert results[0].test_name == "valid"
+        assert results[0].error == ""

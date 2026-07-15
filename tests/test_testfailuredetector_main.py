@@ -6,6 +6,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from scripts.common.workflow_artifacts import ArtifactState
+from scripts.test_failure_detector.download import (
+    TestFailureArtifact as FailureArtifactResult,
+)
+
 # PyGithub requires urllib3 v2 + OpenSSL 1.1.1+. On older dev hosts the import
 # fails at collection time. Guard with a skip so the test file is still valid.
 try:
@@ -29,7 +34,10 @@ class TestRunArtifactJSONGuard:
         self, _mock_gh, _mock_client, mock_download, mock_emit,
     ) -> None:
         # A truncated/invalid artifact body — json.loads would raise.
-        mock_download.return_value = b"{not valid json"
+        mock_download.return_value = FailureArtifactResult(
+            ArtifactState.AVAILABLE,
+            content=b"{not valid json",
+        )
 
         rc = detector_main.run(
             github_token="t", repo_full_name="valkey-io/valkey", run_id=123,
@@ -50,7 +58,10 @@ class TestRunArtifactJSONGuard:
     ) -> None:
         # A bare scalar: json.loads succeeds, then len() would crash. Reported
         # as malformed rather than propagating a TypeError.
-        mock_download.return_value = b"123"
+        mock_download.return_value = FailureArtifactResult(
+            ArtifactState.AVAILABLE,
+            content=b"123",
+        )
 
         rc = detector_main.run(
             github_token="t", repo_full_name="valkey-io/valkey", run_id=123,
@@ -59,6 +70,85 @@ class TestRunArtifactJSONGuard:
         assert rc == 1
         mock_emit.assert_called_once()
         assert "unexpected format" in mock_emit.call_args.args[0]
+
+
+class TestArtifactStateClassification:
+    @patch("scripts.test_failure_detector.main._get_run_conclusion")
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_missing_artifact_on_failed_run_is_operational_error(
+        self,
+        _mock_gh,
+        _mock_client,
+        mock_download,
+        mock_emit,
+        mock_conclusion,
+    ) -> None:
+        mock_download.return_value = FailureArtifactResult(
+            ArtifactState.NOT_FOUND,
+            detail="not listed",
+        )
+        mock_conclusion.return_value = "failure"
+        rc = detector_main.run(
+            github_token="t",
+            repo_full_name="valkey-io/valkey",
+            run_id=123,
+        )
+        assert rc == 1
+        assert "cannot be classified as clean" in mock_emit.call_args.args[0]
+
+    @patch("scripts.test_failure_detector.main._get_run_conclusion")
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_successful_source_run_can_establish_clean_absence(
+        self,
+        _mock_gh,
+        _mock_client,
+        mock_download,
+        mock_emit,
+        mock_conclusion,
+    ) -> None:
+        mock_download.return_value = FailureArtifactResult(
+            ArtifactState.NOT_FOUND,
+            detail="not listed",
+        )
+        mock_conclusion.return_value = "success"
+        rc = detector_main.run(
+            github_token="t",
+            repo_full_name="valkey-io/valkey",
+            run_id=123,
+        )
+        assert rc == 0
+        assert "| Unique failures detected | 0 |" in mock_emit.call_args.args[0]
+
+    @patch("scripts.test_failure_detector.main._get_run_conclusion")
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_expired_artifact_is_error_even_if_run_succeeded(
+        self,
+        _mock_gh,
+        _mock_client,
+        mock_download,
+        _mock_emit,
+        mock_conclusion,
+    ) -> None:
+        mock_download.return_value = FailureArtifactResult(
+            ArtifactState.EXPIRED,
+            detail="retention elapsed",
+        )
+        mock_conclusion.return_value = "success"
+        rc = detector_main.run(
+            github_token="t",
+            repo_full_name="valkey-io/valkey",
+            run_id=123,
+        )
+        assert rc == 1
 
     @patch("scripts.test_failure_detector.main.parse_and_deduplicate")
     @patch("scripts.test_failure_detector.main.get_job_urls")
@@ -72,7 +162,10 @@ class TestRunArtifactJSONGuard:
     ) -> None:
         # A top-level list parses fine but is the wrong shape: without the guard
         # it slips past parse_and_deduplicate as "no failures" and exits 0.
-        mock_download.return_value = b"[1, 2, 3]"
+        mock_download.return_value = FailureArtifactResult(
+            ArtifactState.AVAILABLE,
+            content=b"[1, 2, 3]",
+        )
 
         rc = detector_main.run(
             github_token="t", repo_full_name="valkey-io/valkey", run_id=123,
@@ -100,7 +193,10 @@ class TestRunProcessingErrorsExitCode:
         self, _mock_gh, _mock_client, mock_download, mock_emit,
         mock_job_urls, mock_parse, mock_process,
     ) -> None:
-        mock_download.return_value = b'{"job": {"suite": []}}'
+        mock_download.return_value = FailureArtifactResult(
+            ArtifactState.AVAILABLE,
+            content=b'{"job": {"suite": []}}',
+        )
         mock_parse.return_value = [MagicMock(display_name="t", jobs=[])]
         mock_process.return_value = {
             "created": 1, "updated": 0, "skipped": 0, "errors": 1,
@@ -125,7 +221,10 @@ class TestRunProcessingErrorsExitCode:
         self, _mock_gh, _mock_client, mock_download, mock_emit,
         mock_job_urls, mock_parse, mock_process,
     ) -> None:
-        mock_download.return_value = b'{"job": {"suite": []}}'
+        mock_download.return_value = FailureArtifactResult(
+            ArtifactState.AVAILABLE,
+            content=b'{"job": {"suite": []}}',
+        )
         mock_parse.return_value = [MagicMock(display_name="t", jobs=[])]
         mock_process.return_value = {
             "created": 1, "updated": 1, "skipped": 0, "errors": 0,

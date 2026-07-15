@@ -23,12 +23,18 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: test-failure-detector-publisher-${{ inputs.repo || 'valkey-io/valkey' }}
+  cancel-in-progress: false
+
 jobs:
   detect-failures:
     name: "Detect test failures"
     if: >
       (github.event_name == 'workflow_dispatch' ||
-      github.repository == 'valkey-io/valkey-ci-agent')
+      github.repository == 'valkey-io/valkey-ci-agent') &&
+      vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+      vars.VALKEY_CI_AGENT_DISABLE_TEST_FAILURE_DETECTOR != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Check out agent repository
@@ -39,6 +45,25 @@ jobs:
 
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
+
+      - name: Reserve issue publication before token minting
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ inputs.repo || 'valkey-io/valkey' }}
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          test "${TARGET_REPOSITORY}" = "valkey-io/valkey"
+          python -m scripts.common.operational_controls \
+            --registry repos.yml \
+            --repo "${TARGET_REPOSITORY}" \
+            --operation test-failure:publish \
+            --admit-publication-key \
+              "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:test-failure" \
+            >/dev/null
 
       - name: Generate GitHub App token
         id: generate-token

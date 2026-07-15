@@ -19,6 +19,14 @@ from datetime import datetime, timezone
 
 from scripts.common.incidents import compute_fingerprint
 from scripts.common.issue_dedup import IssueContent
+from scripts.common.markdown import (
+    bounded_body,
+    bounded_comment,
+    bounded_title,
+    fenced_code,
+    inline_code,
+    markdown_link,
+)
 from scripts.test_failure_detector.parse_failures import UniqueFailure
 
 MARKER_NAMESPACE = "valkey-ci-agent:test-failure"
@@ -148,42 +156,44 @@ class _FailureRenderer:
 
 
 def _build_title(failure: UniqueFailure) -> str:
-    return f"[TEST-FAILURE] {failure.test_name} in {failure.test_file}"
+    return bounded_title(
+        f"[TEST-FAILURE] {failure.test_name} in {failure.test_file}",
+    )
 
 
 def _build_body(failure: UniqueFailure, marker: str, *, occurrences: int) -> str:
     """Build the issue body for a test failure."""
     ci_links = "\n".join(
-        f"- `{j.job}`: [CI link]({j.url})" for j in failure.jobs
+        f"- {inline_code(j.job)}: {markdown_link('CI link', j.url)}"
+        for j in failure.jobs
     )
-    env_list = ", ".join(f"`{j.job}`" for j in failure.jobs)
+    env_list = ", ".join(inline_code(j.job) for j in failure.jobs)
 
-    return "\n".join([
+    return bounded_body("\n".join([
         marker,
         f"<!-- {MARKER_NAMESPACE}:occurrences:{occurrences} -->",
         "",
         "**Summary**",
         "",
-        f"`{failure.test_name}` in `{failure.test_file}` is failing in CI.",
+        f"{inline_code(failure.test_name)} in "
+        f"{inline_code(failure.test_file)} is failing in CI.",
         "",
         "**Failing test(s)**",
         "",
-        f"- Test name: `{failure.test_name}`",
-        f"- Test file: `{failure.test_file}`",
+        f"- Test name: {inline_code(failure.test_name)}",
+        f"- Test file: {inline_code(failure.test_file)}",
         "- CI link(s):",
         ci_links,
         "",
         "**Error stack trace**",
         "",
-        "```",
-        failure.error or "N/A",
-        "```",
+        fenced_code(failure.error or "N/A"),
         "",
         f"**Environments:** {env_list}",
         "",
         "---",
         "*Auto-created by Test Failure Detector*",
-    ])
+    ]))
 
 
 def _build_comment(
@@ -204,16 +214,19 @@ def _build_comment(
     """
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     ci_links = "\n".join(
-        f"- `{j.job}`: [CI link]({j.url})" for j in failure.jobs
+        f"- {inline_code(j.job)}: {markdown_link('CI link', j.url)}"
+        for j in failure.jobs
     )
     lines = [f"Test failed again on {today}."]
     if newly_failing:
-        new_envs = ", ".join(f"`{e}`" for e in newly_failing)
+        new_envs = ", ".join(inline_code(e) for e in newly_failing)
         lines.append(f"\n**Newly failing in:** {new_envs}")
     if new_error:
-        lines.append(f"\n**New error stack trace**\n\n```\n{new_error}\n```")
+        lines.append(
+            f"\n**New error stack trace**\n\n{fenced_code(new_error)}",
+        )
     lines.append(f"\n**Failed in:**\n{ci_links}")
-    return "\n".join(lines)
+    return bounded_comment("\n".join(lines))
 
 
 def _extract_environments_from_body(body: str) -> list[str]:
@@ -221,14 +234,21 @@ def _extract_environments_from_body(body: str) -> list[str]:
     env_match = re.search(r"\*\*Environments:\*\*\s*(.+)", body)
     if not env_match:
         return []
-    return re.findall(r"`([^`]+)`", env_match.group(1))
+    return [
+        match.group("value").strip()
+        for match in re.finditer(
+            r"(?P<fence>`+)(?P<value>.*?)(?P=fence)",
+            env_match.group(1),
+        )
+    ]
 
 
 # The fenced code block holding the trace under the "Error stack trace" header
 # in a body built by :func:`_build_body`. Non-greedy so it stops at the closing
 # fence rather than swallowing later fenced blocks.
 _ERROR_BLOCK_RE = re.compile(
-    r"\*\*Error stack trace\*\*\s*```\n(.*?)\n```",
+    r"\*\*Error stack trace\*\*\s*(?P<fence>`{3,})[^\n]*\n"
+    r"(?P<body>.*?)\n(?P=fence)",
     re.DOTALL,
 )
 
@@ -243,7 +263,7 @@ def _extract_error_from_body(body: str) -> str:
     match = _ERROR_BLOCK_RE.search(body)
     if not match:
         return ""
-    return match.group(1).strip()
+    return match.group("body").strip()
 
 
 # Run-specific tokens scrubbed before comparing two traces, so an unchanged
@@ -279,5 +299,5 @@ def _normalize_trace(text: str) -> str:
 
 def _update_environments_in_body(body: str, all_envs: list[str]) -> str:
     """Replace the Environments line in the issue body with an updated list."""
-    new_env_line = f"**Environments:** {', '.join(f'`{e}`' for e in all_envs)}"
+    new_env_line = f"**Environments:** {', '.join(inline_code(e) for e in all_envs)}"
     return re.sub(r"\*\*Environments:\*\*\s*.+", new_env_line, body)

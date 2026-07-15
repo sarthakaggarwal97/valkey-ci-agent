@@ -7,6 +7,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from scripts.common.workflow_artifacts import (
+    ArtifactDownloadResult,
+    ArtifactState,
+    DownloadedMember,
+)
+
 try:
     from scripts.test_failure_detector.download import (
         download_all_test_failures,
@@ -199,46 +205,59 @@ class TestDownloadAllTestFailures:
             artifact_id=artifact_id, name=name, size_in_bytes=10, expired=expired,
         )
 
-    def test_downloads_and_extracts_json(self) -> None:
+    def test_downloads_and_extracts_json(self, tmp_path) -> None:
         """Should locate the artifact and return the extracted JSON content."""
         failures_data = {"job-1": {"suite": [{"test_name": "t", "test_file": "f.tcl", "error": "e"}]}}
 
         client = MagicMock()
         client.list_run_artifacts.return_value = [self._make_artifact("all-test-failures")]
-        client.download_artifact.return_value = {
-            "all-test-failures.json": json.dumps(failures_data).encode(),
-        }
+        payload = json.dumps(failures_data).encode()
+        path = tmp_path / "all-test-failures.json"
+        path.write_bytes(payload)
+        client.download_artifact.return_value = ArtifactDownloadResult(
+            ArtifactState.AVAILABLE,
+            members=(
+                DownloadedMember(
+                    "all-test-failures.json",
+                    path,
+                    len(payload),
+                    "a" * 64,
+                ),
+            ),
+        )
 
         result = download_all_test_failures(
             MagicMock(), "owner/repo", 123, "fake-token", artifact_client=client,
         )
-        assert result is not None
-        assert json.loads(result) == failures_data
-        client.download_artifact.assert_called_once_with("owner/repo", 555)
+        assert result.state is ArtifactState.AVAILABLE
+        assert json.loads(result.content) == failures_data
+        kwargs = client.download_artifact.call_args.kwargs
+        assert kwargs["requested"] == {"all-test-failures.json"}
+        assert kwargs["destination"].name.startswith("test-failures-")
 
-    def test_returns_none_when_no_artifact(self) -> None:
-        """Should return None if no all-test-failures artifact exists."""
+    def test_returns_not_found_when_no_artifact(self) -> None:
+        """Should report NOT_FOUND if no all-test-failures artifact exists."""
         client = MagicMock()
         client.list_run_artifacts.return_value = [self._make_artifact("some-other-artifact")]
 
         result = download_all_test_failures(
             MagicMock(), "owner/repo", 123, "fake-token", artifact_client=client,
         )
-        assert result is None
+        assert result.state is ArtifactState.NOT_FOUND
         client.download_artifact.assert_not_called()
 
-    def test_returns_none_when_no_artifacts_at_all(self) -> None:
-        """Should return None if the run has no artifacts."""
+    def test_returns_not_found_when_no_artifacts_at_all(self) -> None:
+        """Should report NOT_FOUND if the run has no artifacts."""
         client = MagicMock()
         client.list_run_artifacts.return_value = []
 
         result = download_all_test_failures(
             MagicMock(), "owner/repo", 123, "fake-token", artifact_client=client,
         )
-        assert result is None
+        assert result.state is ArtifactState.NOT_FOUND
 
-    def test_returns_none_when_artifact_expired(self) -> None:
-        """Should return None (without downloading) if the artifact is expired."""
+    def test_returns_expired_when_artifact_expired(self) -> None:
+        """Should report EXPIRED without downloading the artifact."""
         client = MagicMock()
         client.list_run_artifacts.return_value = [
             self._make_artifact("all-test-failures", expired=True)
@@ -247,19 +266,36 @@ class TestDownloadAllTestFailures:
         result = download_all_test_failures(
             MagicMock(), "owner/repo", 123, "fake-token", artifact_client=client,
         )
-        assert result is None
+        assert result.state is ArtifactState.EXPIRED
         client.download_artifact.assert_not_called()
 
-    def test_returns_none_when_json_missing_from_zip(self) -> None:
-        """Should return None if the zip lacks the expected JSON file."""
+    def test_returns_member_missing_when_json_missing_from_zip(self) -> None:
+        """Should report MEMBER_MISSING if the ZIP lacks the expected JSON."""
         client = MagicMock()
         client.list_run_artifacts.return_value = [self._make_artifact("all-test-failures")]
-        client.download_artifact.return_value = {"something-else.txt": b"nope"}
+        client.download_artifact.return_value = ArtifactDownloadResult(
+            ArtifactState.AVAILABLE,
+        )
 
         result = download_all_test_failures(
             MagicMock(), "owner/repo", 123, "fake-token", artifact_client=client,
         )
-        assert result is None
+        assert result.state is ArtifactState.MEMBER_MISSING
+
+    def test_propagates_corrupt_download_state(self) -> None:
+        client = MagicMock()
+        client.list_run_artifacts.return_value = [
+            self._make_artifact("all-test-failures")
+        ]
+        client.download_artifact.return_value = ArtifactDownloadResult(
+            ArtifactState.CORRUPT,
+            detail="bad central directory",
+        )
+        result = download_all_test_failures(
+            MagicMock(), "owner/repo", 123, "fake-token", artifact_client=client,
+        )
+        assert result.state is ArtifactState.CORRUPT
+        assert "central directory" in result.detail
 
 
 class TestGetJobUrls:
