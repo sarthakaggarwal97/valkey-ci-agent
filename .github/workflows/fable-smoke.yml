@@ -1,0 +1,44 @@
+name: Fable 5 Smoke Test
+
+# TEST HARNESS ONLY (test-pr61) — never merged. Verifies that Claude Code,
+# invoked exactly as the agent invokes it, actually runs on Fable 5 via
+# Bedrock instead of silently falling back to another model. Read-only:
+# no GitHub tokens, no repo writes; the only side effect is one Bedrock call.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  smoke:
+    if: github.repository != 'valkey-io/valkey-ci-agent'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          install-claude: "true"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: fable-smoke-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run Fable 5 smoke test
+        run: python -m scripts.fable_smoke
