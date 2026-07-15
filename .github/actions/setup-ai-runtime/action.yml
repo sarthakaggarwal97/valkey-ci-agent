@@ -1,0 +1,161 @@
+name: Set up isolated AI runtime
+description: Build an isolated Claude runtime and start its credential-holding gateway.
+
+inputs:
+  upstream-url:
+    description: Anthropic-compatible HTTPS gateway origin.
+    required: true
+  gateway-token:
+    description: Narrow credential accepted only by the configured model gateway.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Build pinned AI runtime images
+      shell: bash
+      run: |
+        set -euo pipefail
+        docker build \
+          --file .github/ai-runtime/Dockerfile \
+          --tag valkey-ci-agent-ai-runtime:${GITHUB_SHA} \
+          .
+        docker build \
+          --file .github/ai-gateway/Dockerfile \
+          --tag valkey-ci-agent-ai-gateway:${GITHUB_SHA} \
+          .
+        identity="$(
+          docker image inspect \
+            --format '{{.Id}}' \
+            "valkey-ci-agent-ai-runtime:${GITHUB_SHA}"
+        )"
+        [[ "${identity}" =~ ^sha256:[0-9a-f]{64}$ ]]
+        echo "CI_AGENT_AI_CONTAINER_IDENTITY=${identity}" >> "${GITHUB_ENV}"
+
+    - name: Start credential gateway
+      shell: bash
+      env:
+        AI_GATEWAY_UPSTREAM_URL: ${{ inputs.upstream-url }}
+        AI_GATEWAY_TOKEN: ${{ inputs.gateway-token }}
+      run: |
+        set -euo pipefail
+        suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+        suffix="${suffix//[^A-Za-z0-9_.-]/-}"
+        network="ci-agent-ai-${suffix}"
+        gateway="ci-agent-ai-gateway-${suffix}"
+
+        if [[ ! "${AI_GATEWAY_UPSTREAM_URL}" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$ ]]; then
+          echo "::error::AI gateway URL must be an HTTPS origin"
+          exit 1
+        fi
+        test -n "${AI_GATEWAY_TOKEN}"
+        control_vars=(
+          AI_CONTROL_REPOSITORY
+          AI_CONTROL_OPERATION
+          AI_CONTROL_ENABLED
+          AI_CONTROL_DAILY_REQUEST_LIMIT
+          AI_CONTROL_DAILY_INPUT_TOKEN_LIMIT
+          AI_CONTROL_DAILY_OUTPUT_TOKEN_LIMIT
+          AI_CONTROL_DAILY_COST_MICROUSD
+          AI_CONTROL_MAX_QUEUE_DEPTH
+          AI_CONTROL_FAILURE_THRESHOLD
+          AI_CONTROL_CIRCUIT_COOLDOWN_SECONDS
+          AI_CONTROL_MAX_PUBLICATIONS_PER_DAY
+          AI_CONTROL_RUN_REQUEST_LIMIT
+          AI_CONTROL_POLICY_SHA256
+        )
+        for name in "${control_vars[@]}"; do
+          test -n "${!name:-}"
+        done
+        test "${AI_CONTROL_ENABLED}" = "true"
+
+        docker network create --internal "${network}" >/dev/null
+        control_env=()
+        for name in "${control_vars[@]}"; do
+          control_env+=(--env "${name}")
+        done
+        docker run --detach \
+          --name "${gateway}" \
+          --network bridge \
+          --read-only \
+          --cap-drop ALL \
+          --security-opt no-new-privileges \
+          --pids-limit 64 \
+          --memory 256m \
+          --cpus 1 \
+          --env AI_GATEWAY_UPSTREAM_URL \
+          --env AI_GATEWAY_TOKEN \
+          "${control_env[@]}" \
+          valkey-ci-agent-ai-gateway:${GITHUB_SHA} >/dev/null
+        docker network connect --alias ai-gateway "${network}" "${gateway}"
+
+        for _ in {1..30}; do
+          if docker exec "${gateway}" \
+            python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=1).read()" \
+            >/dev/null 2>&1; then
+            break
+          fi
+          sleep 1
+        done
+        docker exec "${gateway}" \
+          python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=1).read()"
+
+        {
+          echo "CI_AGENT_AI_CONTAINER_IMAGE=valkey-ci-agent-ai-runtime:${GITHUB_SHA}"
+          echo "CI_AGENT_AI_DOCKER_NETWORK=${network}"
+          echo "CI_AGENT_AI_GATEWAY_CONTAINER=${gateway}"
+        } >> "${GITHUB_ENV}"
+
+    - name: Probe AI runtime isolation
+      shell: bash
+      run: |
+        set -euo pipefail
+        probe_root="$(mktemp -d)"
+        trap 'rm -rf "${probe_root}"' EXIT
+        mkdir -p \
+          "${probe_root}/workspace" \
+          "${probe_root}/host-home/.aws" \
+          "${probe_root}/neighbor-workspace/.github/workflows"
+        printf 'host-only\n' > "${probe_root}/host-secret"
+        printf '[default]\naws_access_key_id=host-only\n' \
+          > "${probe_root}/host-home/.aws/credentials"
+        printf '[credential]\nhelper=host-only\n' \
+          > "${probe_root}/host-home/.gitconfig"
+        printf 'name: host-only\n' \
+          > "${probe_root}/neighbor-workspace/.github/workflows/ci.yml"
+        export AI_RUNTIME_PARENT_SECRET="must-not-cross-ai-boundary"
+
+        docker run --rm \
+          --network "${CI_AGENT_AI_DOCKER_NETWORK}" \
+          --read-only \
+          --cap-drop ALL \
+          --security-opt no-new-privileges \
+          --pids-limit 64 \
+          --memory 256m \
+          --cpus 1 \
+          --user 1000:1000 \
+          --volume "${probe_root}/workspace:/workspace:ro" \
+          --workdir /workspace \
+          --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m \
+          --tmpfs /home/node:rw,noexec,nosuid,nodev,size=16m \
+          --entrypoint /bin/bash \
+          "${CI_AGENT_AI_CONTAINER_IMAGE}" \
+          --noprofile --norc -euo pipefail -c '
+            test ! -e .git
+            test ! -e "${HOME}/.aws/credentials"
+            test ! -e "${HOME}/.gitconfig"
+            test ! -e "'"${probe_root}"'/host-secret"
+            test ! -e "'"${probe_root}"'/host-home/.aws/credentials"
+            test ! -e "'"${probe_root}"'/host-home/.gitconfig"
+            test ! -e "'"${probe_root}"'/neighbor-workspace/.github/workflows/ci.yml"
+            test -z "${AI_RUNTIME_PARENT_SECRET:-}"
+            ! grep -a -s "AI_RUNTIME_PARENT_SECRET=" /proc/[0-9]*/environ
+            test ! -S /var/run/docker.sock
+            ! touch /ai-runtime-root-write
+            test ! -e /dev/mem
+            exec 3<>/dev/tcp/ai-gateway/8080
+            printf "GET /health HTTP/1.0\r\nHost: ai-gateway\r\n\r\n" >&3
+            IFS= read -r status <&3
+            [[ "${status}" = *" 200 "* ]]
+            ! timeout 3 /bin/bash -c "exec 4<>/dev/tcp/169.254.169.254/80"
+          '

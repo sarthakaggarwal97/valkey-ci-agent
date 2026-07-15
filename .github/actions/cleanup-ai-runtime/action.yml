@@ -1,0 +1,16 @@
+name: Clean up isolated AI runtime
+description: Remove the per-job model gateway and internal Docker network.
+
+runs:
+  using: composite
+  steps:
+    - name: Remove AI runtime resources
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ -n "${CI_AGENT_AI_GATEWAY_CONTAINER:-}" ]]; then
+          docker rm --force "${CI_AGENT_AI_GATEWAY_CONTAINER}" >/dev/null 2>&1 || true
+        fi
+        if [[ -n "${CI_AGENT_AI_DOCKER_NETWORK:-}" ]]; then
+          docker network rm "${CI_AGENT_AI_DOCKER_NETWORK}" >/dev/null 2>&1 || true
+        fi

@@ -6,43 +6,33 @@ import json
 import logging
 import os
 import re
+import signal
 import subprocess
 import threading
+from pathlib import Path
 from typing import Any
 
-from scripts.common.proc import filter_env
+from scripts.common.proc import NETWORK_ENV, PROCESS_BASICS, filter_env
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CLAUDE_MODEL = "opus"
-_DEFAULT_BEDROCK_OPUS_MODEL = "us.anthropic.claude-opus-4-8"
 _CLAUDE_MODEL_ENV = "CI_AGENT_CLAUDE_MODEL"
-_BEDROCK_OPUS_MODEL_ENV = "CI_AGENT_CLAUDE_BEDROCK_OPUS_MODEL"
 _DEFAULT_TIMEOUT_SECONDS = 60 * 60
-_PASSTHROUGH_ENV_VARS = {
-    "PATH",
-    "HOME",
-    "TMPDIR",
-    "TMP",
-    "USER",
-    "LOGNAME",
-    "LANG",
-    "LC_ALL",
-    "SSL_CERT_FILE",
-    "REQUESTS_CA_BUNDLE",
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN",
-    "AWS_REGION",
-    "AWS_DEFAULT_REGION",
-    "AWS_PROFILE",
-    "AWS_SHARED_CREDENTIALS_FILE",
-    "AWS_CONFIG_FILE",
-    "AWS_WEB_IDENTITY_TOKEN_FILE",
-    "AWS_ROLE_ARN",
-    "AWS_ROLE_SESSION_NAME",
-}
-DEFAULT_CLAUDE_ENV_ALLOWLIST = tuple(sorted(_PASSTHROUGH_ENV_VARS))
+_MAX_TRANSCRIPT_BYTES = 32 * 1024 * 1024
+_STREAM_READ_CHARS = 64 * 1024
+_MAX_LOG_BUFFER_CHARS = 256 * 1024
+_DOCKER_ENV_VARS = (
+    "DOCKER_HOST",
+    "DOCKER_TLS_VERIFY",
+    "DOCKER_CERT_PATH",
+    "CI_AGENT_AI_CONTAINER_IMAGE",
+    "CI_AGENT_AI_CONTAINER_IDENTITY",
+    "CI_AGENT_AI_DOCKER_NETWORK",
+)
+DEFAULT_CLAUDE_ENV_ALLOWLIST = tuple(
+    sorted(set(PROCESS_BASICS + NETWORK_ENV + _DOCKER_ENV_VARS))
+)
 
 
 def run_claude_code(
@@ -56,61 +46,64 @@ def run_claude_code(
     allowed_tools: str = "Read,Edit,MultiEdit,Write,Bash,Glob,Grep",
     disallowed_tools: str | None = None,
     env_allowlist: tuple[str, ...] | None = None,
+    dangerously_skip_permissions: bool = False,
 ) -> tuple[str, str, int]:
     """Run claude CLI and return (stdout, stderr, exit_code).
 
-    Requires ``claude`` on PATH and Bedrock credentials in the
-    environment (CLAUDE_CODE_USE_BEDROCK=1 + AWS creds).
+    Requires the pinned AI runtime image and internal Docker network created by
+    ``setup-ai-runtime``. The Claude container receives no cloud credential,
+    host home directory, Docker socket, or filesystem outside ``cwd``.
     """
     env = _build_claude_env(env_allowlist)
-    env["CLAUDE_CODE_USE_BEDROCK"] = "1"
     # Resolve once here so the env-var override (CI_AGENT_CLAUDE_MODEL)
     # always wins, regardless of whether the caller pre-resolved.
     # runtime.run_agent intentionally calls _resolve_claude_model too so
     # it can capture the resolved value in the audit record - the two
     # calls are idempotent by design (override wins each time).
     resolved_model = _resolve_claude_model(model)
-    env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = _resolve_bedrock_opus_model()
-    if "AWS_REGION" not in env and "AWS_DEFAULT_REGION" not in env:
-        env["AWS_REGION"] = "us-east-1"
-    elif "AWS_REGION" not in env and "AWS_DEFAULT_REGION" in env:
-        env["AWS_REGION"] = env["AWS_DEFAULT_REGION"]
-    elif "AWS_DEFAULT_REGION" not in env and "AWS_REGION" in env:
-        env["AWS_DEFAULT_REGION"] = env["AWS_REGION"]
-
-    cmd = [
-        "claude", "--print",
+    claude_args = [
+        "--print",
         "--max-turns", str(max_turns),
         "--tools", allowed_tools,
-        # Three layers, each doing distinct work: --tools is the set of tools
-        # that exist, --disallowedTools (below) hard-denies specific ones, and
-        # --dangerously-skip-permissions drops the interactive approval prompt
-        # that otherwise blocks every write in headless --print mode. The env
-        # is already hardened (GitHub tokens stripped, AWS-only) and runs in
-        # throwaway checkouts.
-        "--dangerously-skip-permissions",
         # cwd is an untrusted checkout, so ignore any .mcp.json it carries:
         # --tools gates the model's tools but not an MCP server the project
-        # config could otherwise auto-register into this AWS-credentialed
-        # subprocess.
+        # config could otherwise auto-register inside the isolated tool
+        # process.
         "--strict-mcp-config",
         "--output-format", "stream-json",
         "--verbose",
     ]
+    if dangerously_skip_permissions:
+        # Edit-only profiles need to bypass interactive approval in headless
+        # mode. Read-only profiles never receive this broad permission switch.
+        claude_args.append("--dangerously-skip-permissions")
     denied = (
         _default_disallowed_tools(allowed_tools)
         if disallowed_tools is None
         else disallowed_tools
     )
     if denied:
-        cmd.extend(["--disallowedTools", denied])
+        claude_args.extend(["--disallowedTools", denied])
     if resolved_model:
-        cmd.extend(["--model", resolved_model])
+        claude_args.extend(["--model", resolved_model])
     if effort:
-        cmd.extend(["--effort", effort])
+        claude_args.extend(["--effort", effort])
+
+    try:
+        cmd = _containerized_command(
+            claude_args,
+            cwd=cwd,
+            writes_allowed=dangerously_skip_permissions,
+            env=env,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        logger.error("Claude isolation unavailable: %s", exc)
+        return "", str(exc), 127
 
     logger.info("Running claude: cwd=%s, timeout=%d, prompt=%s…", cwd, timeout, prompt[:120])
     stdout_parts: list[str] = []
+    transcript_bytes = 0
+    transcript_exceeded = threading.Event()
     process = None
     try:
         process = subprocess.Popen(
@@ -119,17 +112,46 @@ def run_claude_code(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            cwd=cwd,
+            cwd=None,
             env=env,
             bufsize=1,
+            start_new_session=True,
         )
 
         def _read_stdout() -> None:
+            nonlocal transcript_bytes
             if process.stdout is None:
                 return
-            for line in process.stdout:
-                stdout_parts.append(line)
-                _log_stream_event(line)
+            log_buffer = ""
+            while chunk := process.stdout.read(_STREAM_READ_CHARS):
+                encoded = chunk.encode("utf-8")
+                remaining = _MAX_TRANSCRIPT_BYTES - transcript_bytes
+                if len(encoded) > remaining:
+                    prefix = encoded[: max(remaining, 0)].decode(
+                        "utf-8",
+                        errors="ignore",
+                    )
+                    if prefix:
+                        stdout_parts.append(prefix)
+                        transcript_bytes += len(prefix.encode("utf-8"))
+                    transcript_exceeded.set()
+                    _terminate_process(process)
+                    break
+                stdout_parts.append(chunk)
+                transcript_bytes += len(encoded)
+                log_buffer += chunk
+                lines = log_buffer.splitlines(keepends=True)
+                if lines and not lines[-1].endswith(("\n", "\r")):
+                    log_buffer = lines.pop()
+                else:
+                    log_buffer = ""
+                for line in lines:
+                    _log_stream_event(line)
+                if len(log_buffer) > _MAX_LOG_BUFFER_CHARS:
+                    _log_stream_event(log_buffer)
+                    log_buffer = ""
+            if log_buffer:
+                _log_stream_event(log_buffer)
 
         reader = threading.Thread(target=_read_stdout, daemon=True)
         reader.start()
@@ -140,14 +162,21 @@ def run_claude_code(
         returncode = process.wait(timeout=timeout)
         reader.join(timeout=5)
         stdout = "".join(stdout_parts)
+        if transcript_exceeded.is_set():
+            logger.error(
+                "Claude transcript exceeded %d bytes.",
+                _MAX_TRANSCRIPT_BYTES,
+            )
+            return (
+                stdout,
+                f"transcript exceeded {_MAX_TRANSCRIPT_BYTES} bytes",
+                1,
+            )
         logger.info("Claude exited %d (%d chars stdout).", returncode, len(stdout))
         return stdout, "", returncode
     except subprocess.TimeoutExpired:
         if process is not None:
-            try:
-                process.kill()
-            except ProcessLookupError:
-                pass
+            _terminate_process(process)
         # Let the reader thread flush buffered output before we read it.
         reader.join(timeout=5)
         stdout = "".join(stdout_parts)
@@ -158,19 +187,65 @@ def run_claude_code(
         return "", "claude not found", 127
 
 
-def _build_claude_env(env_allowlist: tuple[str, ...] | None = None) -> dict[str, str]:
-    """Return the minimal environment Claude Code needs for Bedrock.
+def _terminate_process(process: subprocess.Popen[str]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError, AttributeError):
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
 
-    GitHub tokens and other workflow secrets are intentionally not inherited.
-    Tool-using prompts may contain untrusted PR or artifact content, so the
-    subprocess gets only process/runtime basics plus AWS credentials required
-    by the Bedrock provider.
-    """
+
+def _build_claude_env(env_allowlist: tuple[str, ...] | None = None) -> dict[str, str]:
+    """Return only the environment needed by the host-side Docker client."""
     allowed = set(env_allowlist or DEFAULT_CLAUDE_ENV_ALLOWLIST)
-    env = filter_env(tuple(allowed))
-    env["CLAUDE_CODE_USE_BEDROCK"] = "1"
-    env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = _resolve_bedrock_opus_model()
-    return env
+    return filter_env(tuple(allowed))
+
+
+def _containerized_command(
+    claude_args: list[str],
+    *,
+    cwd: str | None,
+    writes_allowed: bool,
+    env: dict[str, str],
+) -> list[str]:
+    if not cwd:
+        raise ValueError("Claude requires an explicit isolated workspace")
+    workspace = Path(cwd).resolve()
+    if not workspace.is_dir():
+        raise ValueError(f"Claude workspace does not exist: {workspace}")
+    image = env.get("CI_AGENT_AI_CONTAINER_IMAGE", "").strip()
+    network = env.get("CI_AGENT_AI_DOCKER_NETWORK", "").strip()
+    if not image or not network:
+        raise ValueError(
+            "isolated AI runtime is not configured "
+            "(CI_AGENT_AI_CONTAINER_IMAGE/CI_AGENT_AI_DOCKER_NETWORK)"
+        )
+    mount_mode = "rw" if writes_allowed else "ro"
+    return [
+        "docker",
+        "run",
+        "--rm",
+        "--network", network,
+        "--read-only",
+        "--cap-drop", "ALL",
+        "--security-opt", "no-new-privileges",
+        "--pids-limit", "256",
+        "--memory", "2g",
+        "--cpus", "2",
+        "--user", "1000:1000",
+        "--volume", f"{workspace}:/workspace:{mount_mode}",
+        "--workdir", "/workspace",
+        "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=256m",
+        "--tmpfs", "/home/node:rw,noexec,nosuid,nodev,size=128m",
+        "--env", "HOME=/home/node",
+        "--env", "ANTHROPIC_BASE_URL=http://ai-gateway:8080",
+        "--env", "ANTHROPIC_AUTH_TOKEN=credential-held-by-gateway",
+        "--env", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
+        image,
+        *claude_args,
+    ]
 
 
 def _resolve_claude_model(model: str | None) -> str | None:
@@ -179,11 +254,6 @@ def _resolve_claude_model(model: str | None) -> str | None:
     if override:
         return override
     return model or _DEFAULT_CLAUDE_MODEL
-
-
-def _resolve_bedrock_opus_model() -> str:
-    """Resolve the Bedrock Opus model/inference profile used by Claude Code."""
-    return os.environ.get(_BEDROCK_OPUS_MODEL_ENV, "").strip() or _DEFAULT_BEDROCK_OPUS_MODEL
 
 
 def _default_disallowed_tools(allowed_tools: str) -> str:
