@@ -373,26 +373,13 @@ def index_stage_exists(
     return result.returncode == 0
 
 
-# Extensions that hold executable test source. Build/metadata files such as
-# CMakeLists.txt, BUILD, or package.json are deliberately excluded so they are
-# never dropped as "missing tests" or edited by the adaptation agent.
-_TEST_SOURCE_SUFFIXES = (".tcl", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".py")
-
-
 def is_test_path(path: str) -> bool:
     normalized = path.replace("\\", "/").strip("/")
     parts = [part.lower() for part in normalized.split("/") if part]
     name = parts[-1] if parts else ""
-    # Authorization boundary: only recognized test-source files qualify. A
-    # location under test/ or tests/ is not sufficient on its own.
-    if not name.endswith(_TEST_SOURCE_SUFFIXES):
-        return False
-
     if len(parts) >= 3 and parts[0] == "src" and parts[1] == "unit":
-        return name.startswith("test_")
-    if name.startswith("test_") or name.endswith(("_test.c", "_test.cc", "_test.cpp")):
-        return True
-    return any(part in {"test", "tests"} for part in parts)
+        return name.startswith("test_") and name.endswith(".cpp")
+    return len(parts) >= 2 and parts[0] == "tests" and name.endswith(".tcl")
 
 
 def adapt_target_missing_tests_with_claude(
@@ -410,6 +397,7 @@ def adapt_target_missing_tests_with_claude(
     # unsuccessful path can restore the worktree to precisely this state,
     # rather than leaving stray agent edits behind for the next candidate.
     pre_snapshots = {path: file_bytes(Path(repo_dir, path)) for path in pre_changed_paths}
+    pre_index_entries = index_entries_for_paths(repo_dir, pre_changed_paths, run_process=run_process)
     prompt = build_test_adaptation_prompt(
         repo_dir,
         candidate,
@@ -424,7 +412,7 @@ def adapt_target_missing_tests_with_claude(
         candidate.source_pr_number,
         candidate.target_branch,
     )
-    agent_result = run_agent_func("conflict_resolve_edit_only", prompt, cwd=repo_dir)
+    agent_result = run_agent_func("test_adaptation_edit_only", prompt, cwd=repo_dir)
     result_text = extract_agent_result_text(agent_result)
     logger.info(
         "Claude Code test adaptation finished (rc=%d). Result: %s",
@@ -439,6 +427,7 @@ def adapt_target_missing_tests_with_claude(
         _restore_pre_agent_state(
             repo_dir,
             pre_snapshots=pre_snapshots,
+            pre_index_entries=pre_index_entries,
             new_paths=new_changed_paths,
             run_git=run_git,
             run_process=run_process,
@@ -449,15 +438,20 @@ def adapt_target_missing_tests_with_claude(
         detail = agent_result.stderr or result_text or "Claude Code returned non-zero"
         return MissingTestAdaptationResult(
             summary=f"test adaptation not applied: Claude Code failed: {detail[:200]}",
+            fatal=True,
         )
 
     protected_changes = sorted(
         path for path, pre_bytes in pre_snapshots.items() if file_bytes(Path(repo_dir, path)) != pre_bytes
     )
+    post_index_entries = index_entries_for_paths(repo_dir, pre_changed_paths, run_process=run_process)
+    protected_index_changes = sorted(
+        path for path, pre_entries in pre_index_entries.items() if post_index_entries.get(path, ()) != pre_entries
+    )
     non_test_changes = sorted(path for path in new_changed_paths if not is_test_path(path))
-    if protected_changes or non_test_changes:
+    if protected_changes or protected_index_changes or non_test_changes:
         rollback()
-        details = ", ".join((protected_changes + non_test_changes)[:10])
+        details = ", ".join((protected_changes + protected_index_changes + non_test_changes)[:10])
         return MissingTestAdaptationResult(
             summary=f"test adaptation modified paths outside allowed test scope: {details}",
             fatal=True,
@@ -582,10 +576,34 @@ def file_bytes(path: Path) -> bytes | None:
         return None
 
 
+def index_entries_for_paths(
+    repo_dir: str,
+    paths: set[str],
+    *,
+    run_process: RunProcess = subprocess.run,
+) -> dict[str, tuple[str, ...]]:
+    entries: dict[str, tuple[str, ...]] = {}
+    for path in sorted(paths):
+        result = run_process(
+            ["git", "ls-files", "--stage", "--", path],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"could not inspect index entry for {path}: "
+                + ((result.stderr or "").strip()[:300] or "git ls-files failed")
+            )
+        entries[path] = tuple(line for line in result.stdout.splitlines() if line)
+    return entries
+
+
 def _restore_pre_agent_state(
     repo_dir: str,
     *,
     pre_snapshots: dict[str, bytes | None],
+    pre_index_entries: dict[str, tuple[str, ...]],
     new_paths: list[str],
     run_git: RunGit = run_git_default,
     run_process: RunProcess = subprocess.run,
@@ -613,6 +631,39 @@ def _restore_pre_agent_state(
         run_git=run_git,
         run_process=run_process,
     )
+    restore_index_entries(
+        repo_dir,
+        pre_index_entries,
+        run_git=run_git,
+        run_process=run_process,
+    )
+
+
+def restore_index_entries(
+    repo_dir: str,
+    entries_by_path: dict[str, tuple[str, ...]],
+    *,
+    run_git: RunGit = run_git_default,
+    run_process: RunProcess = subprocess.run,
+) -> None:
+    for path, entries in entries_by_path.items():
+        current_entries = index_entries_for_paths(repo_dir, {path}, run_process=run_process).get(path, ())
+        if current_entries:
+            run_git(repo_dir, "reset", "-q", "HEAD", "--", path)
+        if not entries:
+            continue
+        result = run_process(
+            ["git", "update-index", "--index-info"],
+            cwd=repo_dir,
+            input="\n".join(entries) + "\n",
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"could not restore index entry for {path}: "
+                + ((result.stderr or "").strip()[:300] or "git update-index failed")
+            )
 
 
 def discard_worktree_paths(
