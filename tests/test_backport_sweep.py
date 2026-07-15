@@ -364,6 +364,8 @@ def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="TEST(...)\n", stderr="")
         if cmd == ["git", "cat-file", "-e", ":2:src/unit/test_networking.cpp"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "cat-file", "-e", ":1:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
         if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
         if cmd == ["git", "-c", "core.editor=true", "cherry-pick", "--continue"]:
@@ -402,7 +404,9 @@ def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
     )
     assert result.resolved_by_ai is True
     assert result.resolved_commit_sha == "abc123"
-    assert adaptation_calls == [{"src/unit/test_networking.cpp": "TEST(...)\n"}]
+    assert adaptation_calls == [
+        {"src/unit/test_networking.cpp": "Full upstream test content for a new missing test file:\nTEST(...)\n"}
+    ]
     assert (
         "rm",
         "-f",
@@ -438,6 +442,8 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
             return subprocess.CompletedProcess(cmd, 0, stdout="TEST(...)\n", stderr="")
         if cmd == ["git", "cat-file", "-e", ":2:src/unit/test_networking.cpp"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "cat-file", "-e", ":1:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
         raise AssertionError(f"unexpected command: {cmd}")
 
     def fake_adapt(_repo_dir, _candidate, _sources, **_kwargs):
@@ -468,6 +474,52 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
     ) in git_calls
 
 
+def test_apply_candidate_aborts_when_target_missing_test_adaptation_raises(monkeypatch, tmp_path):
+    candidate = ProjectBackportCandidate(
+        source_pr_number=3306,
+        source_pr_title="Improve COB memory tracking with copy avoidance",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+        target_branch="9.0",
+        merge_commit_sha="269b1c5",
+    )
+    git_calls: list[tuple[str, ...]] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        git_calls.append(args)
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
+        if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="src/unit/test_networking.cpp\n", stderr="")
+        if cmd == ["git", "show", ":2:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "show", ":3:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="TEST(...)\n", stderr="")
+        if cmd == ["git", "cat-file", "-e", ":2:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "cat-file", "-e", ":1:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    def fake_adapt(*_args, **_kwargs):
+        raise RuntimeError("adapter exploded")
+
+    result = apply_candidate(
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
+        run_git=fake_run_git,
+        run_process=fake_subprocess_run,
+        adapt_missing_tests=fake_adapt,
+    )
+
+    assert result.outcome == "skipped-conflict"
+    assert result.detail == "test adaptation failed unexpectedly: adapter exploded"
+    assert ("cherry-pick", "--abort") in git_calls
+
+
 def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(monkeypatch, tmp_path):
     candidate = ProjectBackportCandidate(
         source_pr_number=3306,
@@ -494,6 +546,8 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(m
             return subprocess.CompletedProcess(cmd, 0, stdout="TEST(...)\n", stderr="")
         if cmd == ["git", "cat-file", "-e", ":2:src/unit/test_networking.cpp"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "cat-file", "-e", ":1:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
         raise AssertionError(f"unexpected command: {cmd}")
 
     def fake_adapt(_repo_dir, _candidate, _sources, **_kwargs):
@@ -516,6 +570,154 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(m
     assert result.detail == "test adaptation not applied: invalid generated test path(s): tests/unit/networking.tcl"
     assert ("cherry-pick", "--abort") in git_calls
     assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] not in subprocess_calls
+
+
+def test_apply_candidate_continues_when_test_adaptation_makes_no_changes(monkeypatch, tmp_path):
+    candidate = ProjectBackportCandidate(
+        source_pr_number=4060,
+        source_pr_title="Fix io_last_written bookmark desync that corrupts replies with IO threads",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/4060",
+        target_branch="9.0",
+        merge_commit_sha="cdf98a2",
+    )
+    git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        git_calls.append(args)
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "cherry-pick", "-m", "1", "cdf98a2"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
+        if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="src/unit/test_networking.cpp\n", stderr="")
+        if cmd == ["git", "show", ":2:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "show", ":3:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="TEST(...)\n", stderr="")
+        if cmd == ["git", "cat-file", "-e", ":2:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "cat-file", "-e", ":1:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd == ["git", "-c", "core.editor=true", "cherry-pick", "--continue"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    def fake_adapt(_repo_dir, _candidate, _sources, **_kwargs):
+        return MissingTestAdaptationResult(
+            summary="test adaptation not applied: no branch-native test changes",
+        )
+
+    result = apply_candidate(
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
+        run_git=fake_run_git,
+        run_process=fake_subprocess_run,
+        adapt_missing_tests=fake_adapt,
+    )
+
+    assert result.outcome == "applied"
+    assert result.detail == (
+        "dropped target-missing test file(s): src/unit/test_networking.cpp; "
+        "test adaptation not applied: no branch-native test changes"
+    )
+    assert result.resolved_by_ai is False
+    assert ("add", "tests/unit/networking.tcl") not in git_calls
+    assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] in subprocess_calls
+
+
+def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatch, tmp_path):
+    candidate = ProjectBackportCandidate(
+        source_pr_number=3306,
+        source_pr_title="Improve COB memory tracking with copy avoidance",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+        target_branch="9.0",
+        merge_commit_sha="269b1c5",
+    )
+    git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
+    resolve_calls = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        git_calls.append(args)
+
+    def fake_subprocess_run(cmd, **kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
+        if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="src/unit/test_networking.cpp\nsrc/networking.c\n",
+                stderr="",
+            )
+        if cmd == ["git", "show", ":2:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "show", ":3:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="TEST(...)\n", stderr="")
+        if cmd == ["git", "cat-file", "-e", ":2:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "cat-file", "-e", ":1:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "show", ":2:src/networking.c"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="target\n", stderr="")
+        if cmd == ["git", "show", ":3:src/networking.c"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="source\n", stderr="")
+        if cmd == ["git", "cat-file", "-e", ":2:src/networking.c"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd in (
+            ["git", "diff", "--name-only", "-z"],
+            ["git", "diff", "--cached", "--name-only", "-z"],
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+        ):
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+        if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd == ["git", "-c", "core.editor=true", "cherry-pick", "--continue"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd} kwargs={kwargs}")
+
+    def fake_resolve(_repo_dir, conflicted_files, *_args, **kwargs):
+        resolve_calls.append((conflicted_files, kwargs))
+        return [
+            ResolutionResult(
+                path="src/networking.c",
+                resolved_content="resolved\n",
+                resolution_summary="resolved ordinary conflict",
+            )
+        ]
+
+    def fake_adapt(_repo_dir, _candidate, _sources, **_kwargs):
+        return MissingTestAdaptationResult(
+            summary="test adaptation not applied: no branch-native test changes",
+        )
+
+    result = apply_candidate(
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
+        run_git=fake_run_git,
+        run_process=fake_subprocess_run,
+        resolve_conflicts=fake_resolve,
+        adapt_missing_tests=fake_adapt,
+    )
+
+    assert result.outcome == "applied"
+    assert result.resolved_by_ai is True
+    assert [cf.path for cf in resolve_calls[0][0]] == ["src/networking.c"]
+    assert ("add", "src/networking.c") in git_calls
+    assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] in subprocess_calls
 
 
 def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
@@ -1640,8 +1842,9 @@ def test_adapt_target_missing_tests_stages_branch_native_test(tmp_path):
 
     def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
-        assert kwargs["cwd"] == str(repo)
-        (repo / "tests" / "unit" / "networking.tcl").write_text(
+        sandbox = Path(kwargs["cwd"])
+        assert sandbox != repo
+        (sandbox / "tests" / "unit" / "networking.tcl").write_text(
             "start_server {} {}\n# adapted coverage\n",
             encoding="utf-8",
         )
@@ -1671,6 +1874,31 @@ def test_adapt_target_missing_tests_stages_branch_native_test(tmp_path):
     assert staged == ["src/networking.c", "tests/unit/networking.tcl"]
 
 
+def test_missing_test_context_uses_diff_for_modify_delete_conflict(tmp_path):
+    calls: list[list[str]] = []
+
+    def fake_run_process(cmd, **_kwargs):
+        calls.append(cmd)
+        if cmd == ["git", "cat-file", "-e", ":1:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd == ["git", "show", ":1:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="TEST(old)\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    context = sweep_apply.build_missing_test_context(
+        str(tmp_path),
+        "src/unit/test_networking.cpp",
+        "TEST(new)\n",
+        run_process=fake_run_process,
+    )
+
+    assert context.startswith("Changed upstream test hunk:\n")
+    assert "--- a/src/unit/test_networking.cpp" in context
+    assert "+++ b/src/unit/test_networking.cpp" in context
+    assert "-TEST(old)" in context
+    assert "+TEST(new)" in context
+
+
 def test_adapt_target_missing_tests_fails_closed_on_production_edit(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -1687,9 +1915,10 @@ def test_adapt_target_missing_tests_fails_closed_on_production_edit(tmp_path):
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
     _git(repo, "add", "src/networking.c")
 
-    def fake_run_agent(profile, _prompt, **_kwargs):
+    def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
-        (repo / "src" / "networking.c").write_text("int fix = 2;\n", encoding="utf-8")
+        sandbox = Path(kwargs["cwd"])
+        (sandbox / "src" / "networking.c").write_text("int fix = 2;\n", encoding="utf-8")
         result = MagicMock()
         result.returncode = 0
         result.stdout = '{"type":"result","result":"oops"}\n'
@@ -1711,9 +1940,58 @@ def test_adapt_target_missing_tests_fails_closed_on_production_edit(tmp_path):
     )
 
     assert result.fatal is True
-    assert "outside allowed test scope: src/networking.c" in result.summary
+    assert "invalid generated test path(s): src/networking.c" in result.summary
     # The pre-agent staged edit must be restored; the agent's overwrite is gone.
     assert (repo / "src" / "networking.c").read_text(encoding="utf-8") == "int fix = 1;\n"
+
+
+def test_adapt_target_missing_tests_rejects_ignored_sandbox_edit(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Local Committer")
+    _git(repo, "config", "user.email", "committer@local.invalid")
+    _git(repo, "config", "commit.gpgsign", "false")
+    (repo / "src").mkdir()
+    (repo / "tests" / "unit").mkdir(parents=True)
+    (repo / ".gitignore").write_text("ignored.cfg\n", encoding="utf-8")
+    (repo / "ignored.cfg").write_text("before\n", encoding="utf-8")
+    (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
+    (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
+    _git(repo, "add", "src/networking.c")
+
+    def fake_run_agent(profile, _prompt, **kwargs):
+        assert profile == "test_adaptation_edit_only"
+        sandbox = Path(kwargs["cwd"])
+        (sandbox / "ignored.cfg").write_text("after\n", encoding="utf-8")
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = '{"type":"result","result":"ignored edit"}\n'
+        result.stderr = ""
+        return result
+
+    result = adapt_target_missing_tests_with_claude(
+        str(repo),
+        ProjectBackportCandidate(
+            source_pr_number=3306,
+            source_pr_title="Improve COB memory tracking with copy avoidance",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+            target_branch="9.0",
+            merge_commit_sha="269b1c5",
+        ),
+        {"src/unit/test_networking.cpp": "TEST(...)\n"},
+        language="c",
+        run_agent_func=fake_run_agent,
+    )
+
+    assert result.fatal is True
+    assert "invalid generated test path(s): ignored.cfg" in result.summary
+    assert (repo / "ignored.cfg").read_text(encoding="utf-8") == "before\n"
+    staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
+    assert staged == ["src/networking.c"]
 
 
 def test_adapt_target_missing_tests_fails_closed_on_production_unstage(tmp_path):
@@ -1732,10 +2010,11 @@ def test_adapt_target_missing_tests_fails_closed_on_production_unstage(tmp_path)
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
     _git(repo, "add", "src/networking.c")
 
-    def fake_run_agent(profile, _prompt, **_kwargs):
+    def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
-        _git(repo, "reset", "HEAD", "--", "src/networking.c")
-        (repo / "tests" / "unit" / "networking.tcl").write_text(
+        sandbox = Path(kwargs["cwd"])
+        (sandbox / "src" / "networking.c").write_text("int fix = 2;\n", encoding="utf-8")
+        (sandbox / "tests" / "unit" / "networking.tcl").write_text(
             "start_server {} {}\n# adapted coverage\n",
             encoding="utf-8",
         )
@@ -1760,7 +2039,7 @@ def test_adapt_target_missing_tests_fails_closed_on_production_unstage(tmp_path)
     )
 
     assert result.fatal is True
-    assert "outside allowed test scope: src/networking.c" in result.summary
+    assert "invalid generated test path(s): src/networking.c" in result.summary
     assert (repo / "src" / "networking.c").read_text(encoding="utf-8") == "int fix = 1;\n"
     assert (repo / "tests" / "unit" / "networking.tcl").read_text(encoding="utf-8") == "start_server {} {}\n"
     staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
@@ -1783,12 +2062,13 @@ def test_adapt_target_missing_tests_rolls_back_on_agent_failure(tmp_path):
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
     _git(repo, "add", "src/networking.c")
 
-    def fake_run_agent(profile, _prompt, **_kwargs):
+    def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
         # Agent creates a stray untracked file and edits a tracked test file,
         # then fails. Nothing it touched should survive the rollback.
-        (repo / "tests" / "unit" / "stray.tcl").write_text("garbage\n", encoding="utf-8")
-        (repo / "tests" / "unit" / "networking.tcl").write_text("mangled\n", encoding="utf-8")
+        sandbox = Path(kwargs["cwd"])
+        (sandbox / "tests" / "unit" / "stray.tcl").write_text("garbage\n", encoding="utf-8")
+        (sandbox / "tests" / "unit" / "networking.tcl").write_text("mangled\n", encoding="utf-8")
         result = MagicMock()
         result.returncode = 1
         result.stdout = ""
@@ -1836,9 +2116,10 @@ def test_adapt_target_missing_tests_fails_closed_on_conflict_marker_output(tmp_p
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
     _git(repo, "add", "src/networking.c")
 
-    def fake_run_agent(profile, _prompt, **_kwargs):
+    def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
-        (repo / "tests" / "unit" / "networking.tcl").write_text(
+        sandbox = Path(kwargs["cwd"])
+        (sandbox / "tests" / "unit" / "networking.tcl").write_text(
             "<<<<<<< HEAD\nold\n=======\nnew\n>>>>>>> source\n",
             encoding="utf-8",
         )

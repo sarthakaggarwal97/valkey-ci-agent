@@ -7,7 +7,9 @@ from collections.abc import Iterator
 
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
+    DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX,
     DETAIL_EMPTY_ON_TARGET,
+    DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX,
     DETAIL_RESOLVED_BY_AI,
     BranchSweepResult,
     CandidateResult,
@@ -15,8 +17,8 @@ from scripts.backport.sweep_models import (
 
 AI_DETAIL_MARKERS = (
     DETAIL_RESOLVED_BY_AI,
-    "ported target-missing test coverage to:",
-    "dropped target-missing test file(s):",
+    DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX,
+    DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX,
 )
 
 
@@ -31,10 +33,7 @@ def _detail_records_ai(detail: str) -> bool:
     return any(marker in detail for marker in AI_DETAIL_MARKERS)
 
 
-_SKIP_REASON_FALLBACK = (
-    "The cherry-pick produced no net change on this branch, so there is "
-    "nothing to backport."
-)
+_SKIP_REASON_FALLBACK = "The cherry-pick produced no net change on this branch, so there is nothing to backport."
 
 
 def _skip_reason(result: CandidateResult) -> str:
@@ -48,8 +47,7 @@ def _skip_reason(result: CandidateResult) -> str:
 
 def result_is_on_backport_branch(result: CandidateResult) -> bool:
     return result.outcome == "applied" or (
-        result.outcome == "skipped-existing"
-        and result.detail == DETAIL_ALREADY_ON_SWEEP_BRANCH
+        result.outcome == "skipped-existing" and result.detail == DETAIL_ALREADY_ON_SWEEP_BRANCH
     )
 
 
@@ -57,7 +55,7 @@ def repair_diagnosis_from_detail(detail: str) -> str:
     prefix = "Claude repair diagnosis:\n"
     if not detail.startswith(prefix):
         return ""
-    body = detail[len(prefix):]
+    body = detail[len(prefix) :]
     return body.split("\n\nValidation output:\n", 1)[0].strip()
 
 
@@ -131,44 +129,48 @@ def build_pr_body(
             )
         lines.append("")
         if any(_is_ai_resolved(r) for r in applied):
-            lines.extend([
-                "AI resolution details are posted as comments on this PR when available.",
-                "",
-            ])
+            lines.extend(
+                [
+                    "AI resolution details are posted as comments on this PR when available.",
+                    "",
+                ]
+            )
 
     if skipped_empty:
-        lines.extend([
-            "## Skipped",
-            "",
-            "These candidates were evaluated but contribute no change to this "
-            "branch, e.g. the fix targets code that does not exist here. No "
-            "backport commit was created for them.",
-            "",
-            "| Source PR | Title | Reason |",
-            "|---|---|---|",
-        ])
+        lines.extend(
+            [
+                "## Skipped",
+                "",
+                "These candidates were evaluated but contribute no change to this "
+                "branch, e.g. the fix targets code that does not exist here. No "
+                "backport commit was created for them.",
+                "",
+                "| Source PR | Title | Reason |",
+                "|---|---|---|",
+            ]
+        )
         for r in skipped_empty:
             lines.append(
-                f"| #{r.source_pr_number} | {_esc(r.source_pr_title)} | "
-                f"{_esc(_skip_reason(r))} |",
+                f"| #{r.source_pr_number} | {_esc(r.source_pr_title)} | {_esc(_skip_reason(r))} |",
             )
         lines.append("")
 
     if failed:
-        lines.extend([
-            "## Needs attention",
-            "",
-            "These candidates could not be applied automatically and need a maintainer to follow up.",
-            "",
-            f"<details><summary>{len(failed)} candidate(s)</summary>",
-            "",
-            "| Source PR | Title | Outcome | Reason |",
-            "|---|---|---|---|",
-        ])
+        lines.extend(
+            [
+                "## Needs attention",
+                "",
+                "These candidates could not be applied automatically and need a maintainer to follow up.",
+                "",
+                f"<details><summary>{len(failed)} candidate(s)</summary>",
+                "",
+                "| Source PR | Title | Outcome | Reason |",
+                "|---|---|---|---|",
+            ]
+        )
         for r in failed:
             lines.append(
-                f"| #{r.source_pr_number} | {_esc(r.source_pr_title)} | "
-                f"{r.outcome} | {_esc(r.detail)} |",
+                f"| #{r.source_pr_number} | {_esc(r.source_pr_title)} | {r.outcome} | {_esc(r.detail)} |",
             )
         lines.extend(["", "</details>", ""])
 
@@ -183,9 +185,7 @@ def build_summary(results: list[BranchSweepResult]) -> str:
         suffix = f" -- [PR]({r.pr_url})" if r.pr_url else ""
         if r.error:
             suffix += f" -- error: {r.error}"
-        lines.append(
-            f"- `{r.target_branch}`: {applied}/{r.candidates_found} applied" + suffix
-        )
+        lines.append(f"- `{r.target_branch}`: {applied}/{r.candidates_found} applied" + suffix)
     return "\n".join(lines)
 
 
@@ -240,7 +240,10 @@ def parse_previous_applied(body: str) -> list[CandidateResult]:
         detail = _markdown_link_label(cells[2])
         results.append(
             CandidateResult(
-                pr_number, cells[1], "applied", detail,
+                pr_number,
+                cells[1],
+                "applied",
+                detail,
                 resolved_by_ai=_detail_records_ai(detail),
             )
         )
@@ -293,11 +296,7 @@ def _merge_applied_result(
     # Whether this candidate's conflicts were resolved by the AI, from any
     # source that survives across runs: the current run's durable flag/detail,
     # the membership base, or the detail parsed from the previous PR body.
-    resolved_by_ai = (
-        _is_ai_resolved(current_result)
-        or _is_ai_resolved(base)
-        or _is_ai_resolved(previous_result)
-    )
+    resolved_by_ai = _is_ai_resolved(current_result) or _is_ai_resolved(base) or _is_ai_resolved(previous_result)
 
     if current_result is not None:
         title = current_result.source_pr_title or base.source_pr_title

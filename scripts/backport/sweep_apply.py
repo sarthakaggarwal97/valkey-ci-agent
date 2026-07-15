@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
+import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -16,7 +19,9 @@ from scripts.backport.main import _run_git as run_git_default
 from scripts.backport.models import BackportPRContext, ConflictedFile, ResolutionResult
 from scripts.backport.sweep_git import changed_paths_in_index_or_worktree
 from scripts.backport.sweep_models import (
+    DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX,
     DETAIL_EMPTY_ON_TARGET,
+    DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX,
     DETAIL_RESOLVED_BY_AI,
     CandidateResult,
     ProjectBackportCandidate,
@@ -25,6 +30,9 @@ from scripts.backport.utils import has_conflict_markers
 from scripts.backport.validation import select_validation_commands
 
 logger = logging.getLogger(__name__)
+
+MAX_TEST_CONTEXT_CHARS = 12000
+MAX_EXISTING_TEST_PATHS = 120
 
 RunGit = Callable[..., Any]
 RunProcess = Callable[..., subprocess.CompletedProcess[str]]
@@ -37,6 +45,12 @@ class MissingTestAdaptationResult:
     adapted_paths: list[str] = field(default_factory=list)
     summary: str = ""
     fatal: bool = False
+
+
+@dataclass(frozen=True)
+class FileSnapshot:
+    state: str
+    content: bytes = b""
 
 
 AdaptMissingTests = Callable[..., MissingTestAdaptationResult]
@@ -144,7 +158,7 @@ def apply_candidate(
     logger.info("Found %d conflicting file(s): %s", len(conflicting_paths), conflicting_paths)
     conflicting_files = []
     target_missing_paths: set[str] = set()
-    target_missing_test_sources: dict[str, str] = {}
+    target_missing_test_contexts: dict[str, str] = {}
     for path in conflicting_paths:
         target_content = read_index_stage(repo_dir, path, 2, run_process=run_process)
         source_content = read_index_stage(repo_dir, path, 3, run_process=run_process)
@@ -158,7 +172,12 @@ def apply_candidate(
         if not index_stage_exists(repo_dir, path, 2, run_process=run_process):
             target_missing_paths.add(path)
             if is_test_path(path):
-                target_missing_test_sources[path] = source_content
+                target_missing_test_contexts[path] = build_missing_test_context(
+                    repo_dir,
+                    path,
+                    source_content,
+                    run_process=run_process,
+                )
         conflicting_files.append(
             ConflictedFile(
                 path=path,
@@ -237,15 +256,21 @@ def apply_candidate(
             run_git(repo_dir, "add", r.path)
 
     test_adaptation = MissingTestAdaptationResult()
-    if target_missing_test_sources:
-        test_adaptation = adapt_missing_tests(
-            repo_dir,
-            candidate,
-            target_missing_test_sources,
-            language=language,
-            run_git=run_git,
-            run_process=run_process,
-        )
+    if target_missing_test_contexts:
+        try:
+            test_adaptation = adapt_missing_tests(
+                repo_dir,
+                candidate,
+                target_missing_test_contexts,
+                language=language,
+                run_git=run_git,
+                run_process=run_process,
+            )
+        except Exception as exc:  # noqa: BLE001 - adapter failures must fail closed
+            test_adaptation = MissingTestAdaptationResult(
+                summary=f"test adaptation failed unexpectedly: {str(exc)[:200]}",
+                fatal=True,
+            )
         if test_adaptation.fatal:
             _abort_cherry_pick(repo_dir, run_git)
             return CandidateResult(
@@ -321,7 +346,7 @@ def apply_candidate(
         detail_parts.append(DETAIL_RESOLVED_BY_AI)
     if target_missing_paths:
         paths = ", ".join(sorted(target_missing_paths))
-        detail_parts.append(f"dropped target-missing test file(s): {paths}")
+        detail_parts.append(f"{DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX} {paths}")
     if test_adaptation.summary:
         detail_parts.append(test_adaptation.summary)
     detail = "; ".join(detail_parts) or ""
@@ -382,6 +407,27 @@ def is_test_path(path: str) -> bool:
     return len(parts) >= 2 and parts[0] == "tests" and name.endswith(".tcl")
 
 
+def build_missing_test_context(
+    repo_dir: str,
+    path: str,
+    source_content: str,
+    *,
+    run_process: RunProcess = subprocess.run,
+) -> str:
+    if index_stage_exists(repo_dir, path, 1, run_process=run_process):
+        base_content = read_index_stage(repo_dir, path, 1, run_process=run_process)
+        diff = "".join(
+            difflib.unified_diff(
+                base_content.splitlines(keepends=True),
+                source_content.splitlines(keepends=True),
+                fromfile=f"a/{path}",
+                tofile=f"b/{path}",
+            )
+        )
+        return "Changed upstream test hunk:\n" + (diff or "(no textual diff)")
+    return "Full upstream test content for a new missing test file:\n" + source_content
+
+
 def adapt_target_missing_tests_with_claude(
     repo_dir: str,
     candidate: ProjectBackportCandidate,
@@ -392,12 +438,7 @@ def adapt_target_missing_tests_with_claude(
     run_process: RunProcess = subprocess.run,
     run_agent_func: RunAgent = run_agent,
 ) -> MissingTestAdaptationResult:
-    pre_changed_paths = set(changed_paths_in_index_or_worktree(repo_dir, run_process=run_process))
-    # Snapshot the exact pre-agent bytes of every already-changed file so any
-    # unsuccessful path can restore the worktree to precisely this state,
-    # rather than leaving stray agent edits behind for the next candidate.
-    pre_snapshots = {path: file_bytes(Path(repo_dir, path)) for path in pre_changed_paths}
-    pre_index_entries = index_entries_for_paths(repo_dir, pre_changed_paths, run_process=run_process)
+    existing_test_paths = set(list_existing_test_paths(repo_dir, run_process=run_process))
     prompt = build_test_adaptation_prompt(
         repo_dir,
         candidate,
@@ -406,85 +447,85 @@ def adapt_target_missing_tests_with_claude(
         run_process=run_process,
     )
 
-    logger.info(
-        "Calling Claude Code to adapt %d target-missing test file(s) for PR #%d onto %s...",
-        len(missing_test_sources),
-        candidate.source_pr_number,
-        candidate.target_branch,
-    )
-    agent_result = run_agent_func("test_adaptation_edit_only", prompt, cwd=repo_dir)
-    result_text = extract_agent_result_text(agent_result)
-    logger.info(
-        "Claude Code test adaptation finished (rc=%d). Result: %s",
-        agent_result.returncode,
-        result_text[:200] if result_text else "(no result text)",
-    )
+    try:
+        with tempfile.TemporaryDirectory(prefix="valkey-test-adaptation-") as temp_dir:
+            sandbox_dir = Path(temp_dir, "repo")
+            copy_worktree_for_adaptation(repo_dir, sandbox_dir)
+            sandbox_before = snapshot_regular_files(sandbox_dir)
 
-    post_changed_paths = set(changed_paths_in_index_or_worktree(repo_dir, run_process=run_process))
-    new_changed_paths = sorted(post_changed_paths - pre_changed_paths)
+            logger.info(
+                "Calling Claude Code to adapt %d target-missing test file(s) for PR #%d onto %s...",
+                len(missing_test_sources),
+                candidate.source_pr_number,
+                candidate.target_branch,
+            )
+            agent_result = run_agent_func("test_adaptation_edit_only", prompt, cwd=str(sandbox_dir))
+            result_text = extract_agent_result_text(agent_result)
+            logger.info(
+                "Claude Code test adaptation finished (rc=%d). Result: %s",
+                agent_result.returncode,
+                result_text[:200] if result_text else "(no result text)",
+            )
 
-    def rollback() -> None:
-        _restore_pre_agent_state(
-            repo_dir,
-            pre_snapshots=pre_snapshots,
-            pre_index_entries=pre_index_entries,
-            new_paths=new_changed_paths,
-            run_git=run_git,
-            run_process=run_process,
-        )
+            sandbox_after = snapshot_regular_files(sandbox_dir)
+            changed_paths = changed_snapshot_paths(sandbox_before, sandbox_after)
 
-    if agent_result.returncode != 0:
-        rollback()
-        detail = agent_result.stderr or result_text or "Claude Code returned non-zero"
+            if agent_result.returncode != 0:
+                detail = agent_result.stderr or result_text or "Claude Code returned non-zero"
+                return MissingTestAdaptationResult(
+                    summary=f"test adaptation not applied: Claude Code failed: {detail[:200]}",
+                    fatal=True,
+                )
+
+            if not changed_paths:
+                return MissingTestAdaptationResult(
+                    summary="test adaptation not applied: no branch-native test changes",
+                )
+
+            invalid_paths = invalid_sandbox_test_paths(
+                sandbox_dir,
+                changed_paths,
+                sandbox_before=sandbox_before,
+                existing_test_paths=existing_test_paths,
+            )
+            if invalid_paths:
+                return MissingTestAdaptationResult(
+                    summary=(
+                        "test adaptation not applied: invalid generated test path(s): " + ", ".join(invalid_paths[:10])
+                    ),
+                    fatal=True,
+                )
+
+            import_snapshots = {path: snapshot_path(Path(repo_dir, path)) for path in changed_paths}
+            import_index_entries = index_entries_for_paths(repo_dir, set(changed_paths), run_process=run_process)
+            try:
+                for path in changed_paths:
+                    destination = Path(repo_dir, path)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(Path(sandbox_dir, path).read_bytes())
+                    run_git(repo_dir, "add", path)
+            except Exception as exc:  # noqa: BLE001 - imported partial edits must be rolled back
+                restore_paths(
+                    repo_dir,
+                    import_snapshots,
+                    index_entries=import_index_entries,
+                    run_git=run_git,
+                    run_process=run_process,
+                )
+                return MissingTestAdaptationResult(
+                    summary=f"test adaptation import failed: {str(exc)[:200]}",
+                    fatal=True,
+                )
+
+            return MissingTestAdaptationResult(
+                adapted_paths=changed_paths,
+                summary=f"{DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX} " + ", ".join(changed_paths),
+            )
+    except Exception as exc:  # noqa: BLE001 - adaptation infrastructure failures must fail closed
         return MissingTestAdaptationResult(
-            summary=f"test adaptation not applied: Claude Code failed: {detail[:200]}",
+            summary=f"test adaptation failed unexpectedly: {str(exc)[:200]}",
             fatal=True,
         )
-
-    protected_changes = sorted(
-        path for path, pre_bytes in pre_snapshots.items() if file_bytes(Path(repo_dir, path)) != pre_bytes
-    )
-    post_index_entries = index_entries_for_paths(repo_dir, pre_changed_paths, run_process=run_process)
-    protected_index_changes = sorted(
-        path for path, pre_entries in pre_index_entries.items() if post_index_entries.get(path, ()) != pre_entries
-    )
-    non_test_changes = sorted(path for path in new_changed_paths if not is_test_path(path))
-    if protected_changes or protected_index_changes or non_test_changes:
-        rollback()
-        details = ", ".join((protected_changes + protected_index_changes + non_test_changes)[:10])
-        return MissingTestAdaptationResult(
-            summary=f"test adaptation modified paths outside allowed test scope: {details}",
-            fatal=True,
-        )
-
-    if not new_changed_paths:
-        return MissingTestAdaptationResult(
-            summary="test adaptation not applied: no branch-native test changes",
-        )
-
-    invalid_paths = []
-    for path in new_changed_paths:
-        file_path = Path(repo_dir, path)
-        if not file_path.exists():
-            invalid_paths.append(path)
-            continue
-        content = file_path.read_text(encoding="utf-8", errors="replace")
-        if has_conflict_markers(content):
-            invalid_paths.append(path)
-    if invalid_paths:
-        rollback()
-        return MissingTestAdaptationResult(
-            summary=("test adaptation not applied: invalid generated test path(s): " + ", ".join(invalid_paths[:10])),
-            fatal=True,
-        )
-
-    for path in new_changed_paths:
-        run_git(repo_dir, "add", path)
-
-    return MissingTestAdaptationResult(
-        adapted_paths=new_changed_paths,
-        summary="ported target-missing test coverage to: " + ", ".join(new_changed_paths),
-    )
 
 
 def build_test_adaptation_prompt(
@@ -496,7 +537,7 @@ def build_test_adaptation_prompt(
     run_process: RunProcess = subprocess.run,
 ) -> str:
     source_sections = "\n\n".join(
-        f"### Missing upstream test file: {path}\n```\n{content[:12000]}\n```"
+        f"### Missing upstream test file: {path}\n```\n{content[:MAX_TEST_CONTEXT_CHARS]}\n```"
         for path, content in sorted(missing_test_sources.items())
     )
     existing_tests = "\n".join(f"- {path}" for path in list_existing_test_paths(repo_dir, run_process=run_process))
@@ -509,21 +550,19 @@ def build_test_adaptation_prompt(
         f"branch. The cherry-pick has already kept those missing files absent. "
         f"Your task is to decide whether equivalent coverage can be added using "
         f"the target branch's existing test format.\n\n"
-        f"Missing upstream test content:\n{source_sections}\n\n"
+        f"Missing upstream test context:\n{source_sections}\n\n"
         f"Existing test files on the target branch include:\n"
         f"{existing_tests or '- (none found)'}\n\n"
         f"CRITICAL constraints:\n"
-        f"- Edit or create test files only. Do not edit source, build, workflow, "
+        f"- Edit existing test files only. Do not edit source, build, workflow, "
         f"or metadata files.\n"
         f"- Prefer modifying an existing test file that matches the target "
-        f"branch's conventions. Only create a new test file if the target branch "
-        f"already has that kind of test directory and naming pattern.\n"
+        f"branch's conventions. Do not create new files.\n"
         f"- Preserve the source PR's test intent only. Do not add unrelated "
         f"coverage or new product behavior.\n"
         f"- Before using a helper, command, macro, fixture, or test harness, "
         f"verify it exists on this target branch.\n"
-        f"- Do not recreate the missing upstream file path unless that exact "
-        f"test harness already exists on the target branch.\n"
+        f"- Do not recreate the missing upstream file path.\n"
         f"- Do not run `git add`, `git commit`, or any network command.\n"
         f"- If equivalent branch-native coverage is not practical, make no file "
         f"changes and explain that in your final result.\n\n"
@@ -534,7 +573,7 @@ def build_test_adaptation_prompt(
 def list_existing_test_paths(
     repo_dir: str,
     *,
-    limit: int = 120,
+    limit: int = MAX_EXISTING_TEST_PATHS,
     run_process: RunProcess = subprocess.run,
 ) -> list[str]:
     result = run_process(
@@ -565,16 +604,63 @@ def extract_agent_result_text(agent_result: AgentRunResult) -> str:
     return result_text
 
 
-def file_bytes(path: Path) -> bytes | None:
-    """Return the file's bytes, or ``None`` if it cannot be read.
+def copy_worktree_for_adaptation(repo_dir: str, sandbox_dir: Path) -> None:
+    shutil.copytree(
+        repo_dir,
+        sandbox_dir,
+        ignore=shutil.ignore_patterns(".git"),
+        symlinks=True,
+    )
 
-    ``None`` is a distinct sentinel from empty bytes so a file that becomes
-    unreadable is treated as changed rather than silently matching.
-    """
+
+def snapshot_regular_files(root: Path) -> dict[str, FileSnapshot]:
+    snapshots: dict[str, FileSnapshot] = {}
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root).as_posix()
+        snapshots[relative] = snapshot_path(path)
+    return snapshots
+
+
+def snapshot_path(path: Path) -> FileSnapshot:
+    if not path.exists():
+        return FileSnapshot("absent")
+    if not path.is_file():
+        return FileSnapshot("special")
     try:
-        return path.read_bytes()
+        return FileSnapshot("file", path.read_bytes())
     except OSError:
-        return None
+        return FileSnapshot("unreadable")
+
+
+def changed_snapshot_paths(
+    before: dict[str, FileSnapshot],
+    after: dict[str, FileSnapshot],
+) -> list[str]:
+    return sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))
+
+
+def invalid_sandbox_test_paths(
+    sandbox_dir: Path,
+    changed_paths: list[str],
+    *,
+    sandbox_before: dict[str, FileSnapshot],
+    existing_test_paths: set[str],
+) -> list[str]:
+    invalid_paths = []
+    for path in changed_paths:
+        file_path = Path(sandbox_dir, path)
+        if path not in sandbox_before or path not in existing_test_paths or not is_test_path(path):
+            invalid_paths.append(path)
+            continue
+        if not file_path.exists() or not file_path.is_file():
+            invalid_paths.append(path)
+            continue
+        content = file_path.read_text(encoding="utf-8", errors="replace")
+        if has_conflict_markers(content):
+            invalid_paths.append(path)
+    return invalid_paths
 
 
 def index_entries_for_paths(
@@ -598,46 +684,6 @@ def index_entries_for_paths(
             )
         entries[path] = tuple(line for line in result.stdout.splitlines() if line)
     return entries
-
-
-def _restore_pre_agent_state(
-    repo_dir: str,
-    *,
-    pre_snapshots: dict[str, bytes | None],
-    pre_index_entries: dict[str, tuple[str, ...]],
-    new_paths: list[str],
-    run_git: RunGit = run_git_default,
-    run_process: RunProcess = subprocess.run,
-) -> None:
-    """Undo every agent edit, returning the worktree to its pre-agent state.
-
-    Restores the recorded bytes of files that were already changed before the
-    agent ran, and removes paths the agent newly touched (checking out tracked
-    files, deleting untracked ones). ``cherry-pick --abort`` alone does not
-    remove newly created untracked files, so a rejected adaptation must clean
-    up after itself to avoid contaminating a later cherry-pick.
-    """
-    for path, pre_bytes in pre_snapshots.items():
-        if pre_bytes is None:
-            continue
-        file_path = Path(repo_dir, path)
-        if file_bytes(file_path) == pre_bytes:
-            continue
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_bytes(pre_bytes)
-
-    discard_worktree_paths(
-        repo_dir,
-        new_paths,
-        run_git=run_git,
-        run_process=run_process,
-    )
-    restore_index_entries(
-        repo_dir,
-        pre_index_entries,
-        run_git=run_git,
-        run_process=run_process,
-    )
 
 
 def restore_index_entries(
@@ -667,28 +713,30 @@ def restore_index_entries(
             )
 
 
-def discard_worktree_paths(
+def restore_paths(
     repo_dir: str,
-    paths: list[str],
+    snapshots: dict[str, FileSnapshot],
     *,
+    index_entries: dict[str, tuple[str, ...]],
     run_git: RunGit = run_git_default,
     run_process: RunProcess = subprocess.run,
 ) -> None:
-    for path in paths:
-        tracked = run_process(
-            ["git", "ls-files", "--error-unmatch", "--", path],
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-        )
-        if tracked.returncode == 0:
-            run_git(repo_dir, "reset", "-q", "HEAD", "--", path)
-            run_git(repo_dir, "checkout", "--", path)
-        else:
-            try:
-                Path(repo_dir, path).unlink()
-            except OSError:
-                pass
+    for path, snapshot in snapshots.items():
+        file_path = Path(repo_dir, path)
+        if snapshot.state == "file":
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_bytes(snapshot.content)
+        elif snapshot.state == "absent" and file_path.exists():
+            if file_path.is_dir():
+                shutil.rmtree(file_path)
+            else:
+                file_path.unlink()
+    restore_index_entries(
+        repo_dir,
+        index_entries,
+        run_git=run_git,
+        run_process=run_process,
+    )
 
 
 def read_index_stage(
