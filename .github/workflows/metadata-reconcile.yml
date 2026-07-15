@@ -1,0 +1,141 @@
+name: Reconcile Agent Metadata
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Optional allowlisted repository to reconcile"
+        required: false
+        type: string
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: valkey-ci-agent-metadata-reconciler
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: >-
+      ${{
+        (github.event_name == 'workflow_dispatch' ||
+        github.repository == 'valkey-io/valkey-ci-agent') &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_METADATA_RECONCILER != 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has_entries: ${{ steps.plan.outputs.has_entries }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Plan enabled repository matrix
+        id: plan
+        shell: bash
+        env:
+          REPO_FILTER: ${{ inputs.repo || '' }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          args=(--registry repos.yml --plan --github-output "${GITHUB_OUTPUT}")
+          if [[ -n "${REPO_FILTER}" ]]; then
+            args+=(--repo "${REPO_FILTER}")
+          fi
+          python -m scripts.common.metadata_reconciler "${args[@]}"
+
+  reconcile:
+    needs: plan
+    if: >-
+      ${{
+        needs.plan.outputs.has_entries == 'true' &&
+        vars.VALKEY_CI_AGENT_KILL_SWITCH != 'true' &&
+        vars.VALKEY_CI_AGENT_DISABLE_METADATA_RECONCILER != 'true'
+      }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Reserve metadata publication before token minting
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ matrix.repo }}
+          REGISTRY_BACKED: ${{ matrix.registry_backed }}
+          AI_GATEWAY_UPSTREAM_URL: ${{ vars.AI_GATEWAY_UPSTREAM_URL }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          VALKEY_CI_AGENT_KILL_SWITCH: ${{ vars.VALKEY_CI_AGENT_KILL_SWITCH || 'false' }}
+          VALKEY_CI_AGENT_DISABLED_REPOSITORIES: ${{ vars.VALKEY_CI_AGENT_DISABLED_REPOSITORIES || '' }}
+        run: |
+          set -euo pipefail
+          args=(
+            --repo "${TARGET_REPOSITORY}"
+            --operation metadata:reconcile
+            --admit-publication-key
+            "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${TARGET_REPOSITORY}"
+          )
+          if [[ "${REGISTRY_BACKED}" == "true" ]]; then
+            args+=(--registry repos.yml)
+          fi
+          python -m scripts.common.operational_controls "${args[@]}" >/dev/null
+
+      - name: Generate repository-scoped metadata token
+        id: metadata-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: ${{ matrix.repo_name }}
+          permission-issues: write
+          permission-pull-requests: write
+          permission-metadata: read
+
+      - name: Converge desired labels and comments
+        shell: bash
+        env:
+          METADATA_GITHUB_TOKEN: ${{ steps.metadata-token.outputs.token }}
+          PUBLISHER_IDENTITY: ${{ steps.metadata-token.outputs.app-slug }}[bot]
+          TARGET_REPOSITORY: ${{ matrix.repo }}
+        run: |
+          set -euo pipefail
+          python -m scripts.common.metadata_reconciler \
+            --registry repos.yml \
+            --repo "${TARGET_REPOSITORY}" |
+            tee metadata-reconcile-result.json
+
+      - name: Upload reconciliation result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: metadata-reconcile-${{ github.run_id }}-${{ matrix.repo_name }}
+          path: metadata-reconcile-result.json
+          if-no-files-found: warn
+          retention-days: 30

@@ -10,16 +10,18 @@ infrastructure — see [docs/architecture.md](docs/architecture.md).
 
 ## Prerequisites
 
-- Python 3.9 or later. CI runs a 3.9 and 3.11 matrix, so 3.11 is the closest
-  match for the lint, coverage, and type-check jobs.
+- Python 3.9 through 3.11. CI tests the oldest and newest supported minor
+  versions; use 3.11 locally to match the lint, coverage, type, and primary
+  audit jobs.
 - GitHub CLI (`gh`) for dispatching workflows.
 - A GitHub token for local API-backed runs.
-- AWS credentials with Bedrock access when running workflows that invoke Claude
-  Code through Bedrock.
-- Claude Code CLI when running AI-backed backport flows locally:
+- Access to the configured Anthropic-compatible model gateway when exercising
+  AI-backed workflows.
+- Node.js and npm for rebuilding the locked Claude runtime.
+- Docker for the isolated AI runtime and typed validation adapters.
 
 ```bash
-npm install -g @anthropic-ai/claude-code
+npm ci --prefix .github/actions/setup-agent/claude --no-audit --no-fund
 ```
 
 ## Local Environment
@@ -38,19 +40,18 @@ source .env.local
 set +a
 ```
 
-For local development, prefer `AWS_PROFILE` plus `AWS_REGION`. In GitHub
-Actions, AWS access is configured with OIDC and the `AWS_ROLE_ARN` secret.
+AI-backed workflow tests require `AI_GATEWAY_UPSTREAM_URL` and a narrow
+`AI_GATEWAY_TOKEN`; ordinary unit tests do not.
 
 ## Install Dependencies
 
-Install the package and development tools in editable mode:
+CI installs the hash-locked files under `requirements/`. For an exact local
+development environment, use:
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install --require-hashes -r requirements/dev.txt
+python -m pip install --no-deps --no-build-isolation -e .
 ```
-
-This pulls in the runtime dependencies declared in `pyproject.toml` plus the
-test and lint tooling. For a runtime-only install, use `python -m pip install .`.
 
 ## Test Locally
 
@@ -67,10 +68,34 @@ ruff check scripts/ tests/
 pytest -v
 pytest --cov=scripts --cov-report=term-missing --cov-report=xml --cov-fail-under=60 -v
 mypy scripts/
+# Python 3.11
+pip-audit --requirement requirements/runtime.txt
 ```
 
-CI splits these across its matrix: `pytest -v` runs on 3.9, while ruff, the
-coverage run, and mypy run on 3.11.
+CI runs the full test suite and dependency audit on Python 3.9 and 3.11. Lint,
+coverage, and type checking run on Python 3.11.
+
+The fixed Requests and urllib3 releases no longer support Python 3.9. For that
+runtime, the package applies the reviewed upstream fixes in
+`scripts/common/python39_http_hardening.py`. Audit the conditional lock while
+acknowledging only those exact backports:
+
+```bash
+pip-audit --requirement requirements/runtime.txt \
+  --ignore-vuln PYSEC-2026-2275 \
+  --ignore-vuln PYSEC-2026-141 \
+  --ignore-vuln PYSEC-2026-142
+```
+
+The Python 3.9 CI leg runs this audit and the hardening regression tests. The
+exceptions suppress package-version metadata findings, not unmitigated code.
+
+Dependency pull requests additionally run GitHub's dependency-review action.
+It blocks newly introduced vulnerabilities rated moderate or higher and rejects
+AGPL or GPL 2/3 dependencies. Apache-2.0, permissive, weak-copyleft, and
+separately reviewed proprietary tool dependencies remain eligible. Runtime and
+development Python dependencies must stay hash-locked, and the Claude runtime
+must stay version- and integrity-locked through `npm ci`.
 
 ## Commit Requirements
 
@@ -88,29 +113,31 @@ python -m scripts.backport.matrix --registry repos.yml --repo valkey-io/valkey
 python -m scripts.backport.matrix --registry repos.yml --repo valkey-io/valkey --project-number 14
 ```
 
-To test backport sweep discovery locally without cherry-picking or pushing:
+To test candidate discovery locally without cherry-picking or pushing:
 
 ```bash
-python -m scripts.backport.sweep \
+DISCOVERY_GITHUB_TOKEN="$GITHUB_TOKEN" python -m scripts.backport.candidate_matrix \
   --registry repos.yml \
   --repo valkey-io/valkey \
-  --branch 9.0 \
-  --target-token "$GITHUB_TOKEN" \
-  --discover-only \
-  --verbose
+  --project-number 18 \
+  --max-candidates 2 \
+  --output /tmp/backport-candidates.json
 ```
 
-The single-PR backport command is write-capable when it reaches the push and PR
-creation stages. Use it only with an intended target repository and token:
+The former operator module paths remain available as phase routers. Each
+invocation performs exactly one trust-domain phase; no local command combines
+AI or target-code execution with a publisher token:
 
 ```bash
-BACKPORT_GITHUB_TOKEN="$GITHUB_TOKEN" python -m scripts.backport.main \
-  --registry repos.yml \
-  --repo valkey-io/valkey \
-  --pr-number 3601 \
-  --target-branch 9.0 \
-  --verbose
+python -m scripts.backport.main --help
+python -m scripts.backport.sweep --help
+python -m scripts.backport.poller --help
+python -m scripts.ci_fix.main --help
+python -m scripts.fuzzer.main --help
 ```
+
+Use the phased GitHub workflow when one dispatch should run the complete
+write-capable operation.
 
 To reconcile a project board against branch reality without mutating it, run the
 mark-done step in dry-run mode. Omit `--target-branch` to reconcile every branch
@@ -133,10 +160,10 @@ backport has actually landed on the target branch.
 
 ### CI
 
-`.github/workflows/ci.yml` runs on pushes and pull requests to `main`, across a
-Python 3.9 and 3.11 matrix. It installs dev dependencies through the
-`setup-agent` action (equivalent to `python -m pip install -e ".[dev]"`) and
-runs, depending on the Python version:
+`.github/workflows/ci.yml` runs on pushes and pull requests to `main` with
+Python 3.9 and 3.11. The `setup-agent` action installs the matching
+hash-locked development set. Python 3.9 runs the full unit suite; Python 3.11
+runs:
 
 ```bash
 ruff check scripts/ tests/
@@ -145,22 +172,35 @@ pytest --cov=scripts --cov-report=term-missing --cov-report=xml --cov-fail-under
 mypy scripts/
 ```
 
-The coverage run and the lint/type checks run on 3.11; the plain `pytest -v` run
-covers 3.9.
-
 ### Required Secrets and Variables
 
 Operational workflows require these values in the `valkey-ci-agent` repository:
 
 | Type | Name | Purpose |
 |------|------|---------|
-| Secret | `AWS_ROLE_ARN` | OIDC role ARN with Bedrock `InvokeModel` permission |
+| Secret | `AI_GATEWAY_TOKEN` | Narrow token accepted by the configured model gateway |
 | Secret | `VALKEYRIE_BOT_APP_ID` | Valkeyrie GitHub App ID |
 | Secret | `VALKEYRIE_BOT_PRIVATE_KEY` | Valkeyrie GitHub App private key |
-| Variable | `AWS_REGION` | AWS region, for example `us-east-1` |
+| Variable | `AI_GATEWAY_UPSTREAM_URL` | HTTPS origin of the Anthropic-compatible model gateway |
+| Variable | `VALKEY_CI_AGENT_KILL_SWITCH` | Set to `true` to stop every operational workflow before token minting |
+| Variable | `VALKEY_CI_AGENT_DISABLED_REPOSITORIES` | Optional comma-separated `owner/name` disable list |
+| Variable | `VALKEY_CI_AGENT_DISABLE_BACKPORT` | Set to `true` to stop backport discovery, AI, validation, and publishing |
+| Variable | `VALKEY_CI_AGENT_DISABLE_CI_FIX` | Set to `true` to stop CI-fix polling, verification, and publishing |
+| Variable | `VALKEY_CI_AGENT_DISABLE_FUZZER` | Set to `true` to stop fuzzer analysis and publishing |
+| Variable | `VALKEY_CI_AGENT_DISABLE_TEST_FAILURE_DETECTOR` | Set to `true` to stop test-failure issue publishing |
+| Variable | `VALKEY_CI_AGENT_DISABLE_METADATA_RECONCILER` | Set to `true` to stop label and desired-comment reconciliation |
 
 The workflows mint a short-lived GitHub App installation token for repository
 reads, branch pushes, PR creation, status comments, and project-board queries.
+
+The model gateway is part of the enforcement boundary, not a transparent
+Anthropic proxy. It must implement `POST /v1/controls/admit`, atomically account
+by the supplied repository and policy digest, and deny requests that exceed the
+daily token/cost budget, queue depth, publication budget, or open circuit.
+`scripts/ai/gateway_proxy.py` fails closed if this admission response is absent
+or invalid. Repository defaults live in the strict `automation` block in
+`repos.yml`; fuzzer monitoring uses the same bounded defaults under its own
+repository identity.
 
 ### Manual Backport
 
@@ -213,10 +253,29 @@ gh workflow run backport-mark-done-poll.yml \
 
 ## Registry Changes
 
-`repos.yml` is the source of truth for onboarded repositories, release branches,
-project boards, labels, and validation commands. Use `examples/repos.yml` as a
-reference for multi-repository configuration.
+`repos.yml` is the source of truth for repositories, release branches, project
+boards, labels, operational limits, and typed validation adapters. The strict
+schema rejects unknown keys. Each repository must define bounded automation
+budgets and either a digest-pinned `container-argv-v1` or
+`container-argv-v2` adapter, or an approved, expiring `validation_waiver`;
+silent validation skips are not supported. V2 adds size- and SHA-256-pinned
+GitHub release assets, extracted without root and mounted read-only into the
+otherwise networkless validation container. Use `examples/repos.yml` as a
+reference. Set `repair_validation_failures: true` to preserve one edit-only,
+path-scoped repair attempt after a candidate validation failure. Repair output
+must pass a fresh credentialless validation job before publication.
 
-Registry-configured `build_commands` run before pushing a generated backport
-branch. A non-zero exit blocks the push. Repositories with no `build_commands`
-configured rely on their upstream CI for validation.
+Before enabling a new or changed entry, run the live onboarding preflight with
+an App installation token carrying the complete production permission grant:
+
+```bash
+REGISTRY_PREFLIGHT_GITHUB_TOKEN="$GITHUB_TOKEN" \
+  python -m scripts.backport.registry_preflight \
+  --registry repos.yml \
+  --repo valkey-io/valkey
+```
+
+The preflight resolves the source and optional push repositories, every release
+branch and project, the required Status options and labels, each validation
+image digest, and the effective App permissions. It is read-only and fails
+closed on missing or truncated state.

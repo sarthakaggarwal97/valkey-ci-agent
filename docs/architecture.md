@@ -1,8 +1,8 @@
 # Architecture
 
 The Valkey CI Agent runs workflows that act on Valkey repositories defined in
-the central `repos.yml` registry. Three workflows are active today: backports
-and fuzzer monitoring (scheduled), and the CI test-fix bot (on-demand).
+the central `repos.yml` registry. Four workflows are active today: backports,
+fuzzer monitoring, test-failure detection, and the on-demand CI test-fix bot.
 
 ## Layers
 
@@ -20,91 +20,90 @@ repos.yml      Registry of repos, release branches, and project boards
 ## Backport Flow
 
 ```text
-sweep.py (daily cron or manual dispatch)
-  -> reads repos.yml and fans out one job per {repo, branch}
-  -> discovers PRs from each branch's GitHub Project board
-  -> for each registered release branch:
-      cherry_pick.py -> git cherry-pick
-      conflict_resolver.py -> Claude Code resolves conflicts
-      pr_creator.py -> opens/updates PR on the upstream repo
+backport-candidates.yml
+  discovery (read-only GitHub token)
+    -> project_discovery.py queries every Project page
+    -> candidate_matrix.py emits a bounded candidate matrix
+  backport (one reusable workflow invocation per candidate)
+    -> discovery resolves immutable source/base identities
+    -> ai-prepare creates a content-addressed patch without GitHub credentials
+    -> validation runs a typed adapter without GitHub/model credentials
+    -> on candidate failure, ai-repair may make one path-scoped edit-only attempt
+    -> repair-validation validates the repaired artifact in a fresh job
+    -> unresolved failures are verified and reported on the source PR
+    -> publisher verifies the handoff, then mints a write token
+    -> fresh clone applies the exact patch and opens a PR
+  scheduled/polled aggregation
+    -> validated candidate handoffs are combined without credentials
+    -> the complete rolling branch is validated in a fresh job
+    -> a fresh publisher clone updates agent/backport/sweep/<branch>
 ```
 
-Validation first runs the registry's optional `validation_setup_commands`,
-then validates the branch after each cherry-pick. The sweep branch is kept
-green: a cherry-pick is only kept if the whole branch still validates, and a
-failure is reset off the branch so it can never block later candidates. The
-run keeps up to two validated cherry-picks (`--max-candidates 2`) and records
-skipped or failed candidates in the PR's "Needs attention" section without
-committing them. When `repair_validation_failures` is enabled, Claude Code
-gets one edit-only repair attempt scoped to the backport diff before a failing
-cherry-pick is dropped. Repos with no `build_commands` configured rely on
-upstream CI for verification.
+The registry accepts only versioned `container-argv` validation adapters. They
+declare a digest-pinned image, argv arrays, working directory, input and
+artifact paths, platform, no-network policy, timeout, and resource limits. V2
+can additionally bind immutable GitHub release inputs by URL, exact size, and
+SHA-256. A credentialless host fetches those inputs, then a locked,
+networkless container extracts them without root and mounts them read-only.
+Validation runs in a fresh container with no `.git`, capabilities, ambient
+credentials, or host network. A repository without an adapter must carry an
+explicit, approved, expiring waiver; there is no implicit successful skip.
+When `repair_validation_failures` is enabled, only candidate failures may enter
+the isolated repair job. The repaired patch is lineage-bound to the original
+patch and failed validation, cannot change the backport path set, and is not
+publishable until a separate validation job succeeds.
+Preparation refusals and validation failures are content-addressed before a
+comment-only token is minted. The source PR carries one durable
+target-branch-specific needs-attention record; a later successful publication
+updates that record instead of leaving stale failure state.
 
-### Poll
-
-The daily sweep tops a rolling backport PR up to `--max-candidates` validated
-cherry-picks and then waits for the next cron tick, so a merged sweep PR is not
-topped back up until the following day. The poll workflow (`backport-poll.yml`)
-closes that gap by starting hourly and polling immediately, then once more 30
-minutes later inside the same runner. For each registered `{repo, branch}` it
-runs the same sweep, but only when no sweep PR is currently open for that
-branch:
-
-```text
-poller.py (short cron or manual dispatch)
-  -> reads repos.yml and fans out one job per {repo, branch}
-  -> find_existing_pr(...) -> open sweep PR for this branch?
-       yes -> skip; a human is reviewing it
-       no  -> run_backport_sweep(...) opens a fresh PR
-```
-
-The open-PR check is the entire state model: a merge closes the sweep PR, the
-next poll finds the gap and tops the board back up, and the new PR locks the
-branch again until it too merges. The poll job shares the
-`backport-sweep-{repo}-{branch}` concurrency group with the daily sweep so the
-two never race for the same branch. Manual dispatches are one-shot; only
-scheduled runs use the sustained in-run cadence.
+The former credentialed manual and rolling-sweep mutation engines were
+replaced. Scheduled, polled, and manually requested candidates all enter the
+same candidate phases. Manual runs publish one PR; scheduled and polled runs
+hand successful candidates to `aggregate.py`, which preserves the rolling PR
+while independently validating the combined branch. The caller's
+`max_candidates` value caps successful aggregate additions; failed or skipped
+attempts do not consume it. Repository queue depth remains a separate bound on
+the number of attempts admitted in one run.
 
 ### Entry Points
 
-- `scripts/backport/sweep.py` - daily sweep across registered repos and release branches
-- `scripts/backport/poller.py` - short-cron poll that sweeps a branch only when no sweep PR is open
-- `scripts/backport/main.py` - single-PR backport (manual dispatch)
-- `scripts/backport/matrix.py` - GitHub Actions matrix generation from `repos.yml`
+- `.github/workflows/backport-candidates.yml` - scheduled/poll candidate fan-out
+- `.github/workflows/backport.yml` - reusable credential-separated workflow
+- `scripts/backport/main.py` - compatible local router for one candidate phase
+- `scripts/backport/sweep.py` and `poller.py` - compatible local routers for candidate and rolling-aggregate phases
+- `scripts/backport/candidate_matrix.py` - bounded Project candidate discovery
+- `scripts/backport/phased.py` - phase-specific preparation, validation, repair, and publication
+- `scripts/backport/aggregate.py` - rolling branch preparation, full-tree validation, and publication
+- `scripts/backport/project_discovery.py` - paginated read-only Project queries
 - `scripts/backport/registry.py` - typed registry loader and validation
-- `scripts/backport/sweep_*.py` - focused sweep support modules:
-  typed sweep results, Git workspace operations, GitHub PR operations,
-  GraphQL access, validation command execution, and Markdown reporting
+- `scripts/backport/provenance.py` - immutable source-to-target provenance
 
 ## Fuzzer Flow
 
 ```text
-fuzzer/main.py (cron every 4 hours)
-  -> common.workflow_artifacts.ArtifactClient.list_recent_runs(...)
-  -> FuzzerRunAnalyzer.analyze(run)
-       common.workflow_artifacts -> download the artifact bundle
-       analyzer._scan_logs() -> deterministic regex pass
-       analyzer._invoke_claude() -> drop artifacts in a tempdir,
-                                    common.git_clone -> shallow-clone
-                                    valkey + valkey-fuzzer at the tested
-                                    SHAs, run Claude under
-                                    fuzzer_analysis_readonly profile,
-                                    parse JSON verdict
-       common.incidents.compute_fingerprint() -> stable hash over the
-                                    normalized anomaly shapes
-  -> common.issue_dedup.IssueDedupPublisher.upsert(...)
-       fuzzer.issue_renderer.render_for(analysis) -> title/body/comment
+monitor-fuzzer.yml (cron every 4 hours)
+  discovery (read-only actions/issues token)
+    -> state.py reads the durable high-water cursor
+    -> phased.py visits every completed run above it, oldest first
+    -> ArtifactClient writes bounded, hashed evidence files
+  analysis (no GitHub or cloud credentials)
+    -> deterministic scan gathers bounded samples and counts
+    -> read-only Claude profile returns a strict versioned schema
+    -> invalid AI output falls back to deterministic human triage
+    -> analyzed.json links every analysis and AI transcript by SHA-256
+  publisher (issue-only token)
+    -> preflight reloads every strict artifact
+    -> IssueDedupPublisher reconciles the incident event ledger
+    -> state.py advances the cursor only after that run is fully published
+    -> publication.json records publisher and final issue/cursor state
 ```
 
-Claude is given `Read,Grep,Glob` only - no edits, no shell, no network. The
-clones give Claude line-level access so it can grep for assertion text or
-crash handlers in `valkey/src/` to distinguish known-benign asserts from new
-crashes. If a clone fails, the prompt tells Claude not to cite source line
-numbers and the analyzer falls back to artifact-only analysis. If Claude
-itself fails, the analyzer falls back to deterministic findings and labels
-the verdict `needs-human-triage` rather than silently reporting "normal".
-If the fuzzer run produced no artifact bundle the analyzer surfaces that
-as an error rather than triaging from raw logs.
+Claude is given `Read,Grep,Glob` only. Its explicit workspace is mounted
+read-only, and the container can reach only the internal model gateway. Source
+clones are pinned to the tested SHAs. Missing, expired, corrupt, oversized, or
+ambiguous artifact evidence remains an explicit operational state rather than
+being interpreted as a clean run.
 
 Unlike the backport flow, the fuzzer monitor never writes to `valkey-io/valkey`
 or `valkey-io/valkey-fuzzer` source - its only side effect is creating or
@@ -112,77 +111,59 @@ updating issues on `valkey-fuzzer`.
 
 ### Entry Points
 
-- `scripts/fuzzer/main.py` - CLI entry point (cron / manual dispatch)
-- `scripts/fuzzer/analyzer.py` - orchestration, deterministic scan, Claude Code integration
+- `.github/workflows/monitor-fuzzer.yml` - credential-separated scheduled flow
+- `scripts/fuzzer/main.py` - compatible local router for one fuzzer phase
+- `scripts/fuzzer/phased.py` - discovery, analysis, preflight, and publication entry point
+- `scripts/fuzzer/state.py` - durable consecutive-run cursor
+- `scripts/fuzzer/schema.py` - strict AI and stored-analysis schemas
+- `scripts/fuzzer/phase_artifact.py` - bounded cross-job artifacts
+- `scripts/fuzzer/analyzer.py` - deterministic scan and Claude integration
 - `scripts/fuzzer/issue_renderer.py` - fuzzer-specific title/body/comment rendering
 - `scripts/fuzzer/models.py` - typed dataclasses for the analysis pipeline
 
 ## CI Fix Flow
 
-On-demand, triggered by a maintainer commenting `@valkeyrie-bot fix <ci-link>`
-on a backport PR. Decoupled from the backport sweep; it shares only the
-common infrastructure.
+On-demand, triggered by a maintainer comment or manual dispatch. The comment
+poller persists every request in an append-only issue ledger before dispatch,
+then reconciles it through `observed -> authorized -> dispatching ->
+dispatched(run_id) -> completed`.
 
 ```text
-ci_fix/main.py (workflow_dispatch event)
-  -> gate.build_fix_request(...)        fail-closed auth (contributors team)
-                                        + SHA-bound run gating
-  -> pipeline.run_ci_fix(...)
-       verify.github_runs        -> list the jobs that actually failed (code,
-                                    not the AI, owns this)
-       common.workflow_artifacts -> download the failed run's logs
-       common.git_clone          -> shallow-clone the repo at the failed SHA
-       port_discovery            -> code-discovers default-branch candidates
-                                    for likely missing backports
-       diagnose.diagnose_failure -> read-only AI returns a FixProposal
-                                    (port | author | refuse) + a failing-job hint,
-                                    using the discovered port candidates so
-                                    missing backports are preferred over refusals
-       pipeline._plan_verification
-                                 -> code matches the hint to a real failed job
-                                    and classifies its workflow environment
-                                    (verify.workflow_env) into a VerificationPlan:
-                                    local | docker(image) | macos | refuse
-       port:
-         apply.apply_port_commit -> cherry-pick the upstream fix commit without
-                                    committing; push and rely on this PR's
-                                    normal CI as the verification authority
-       local/docker:
-         review.run_fix_loop     -> reproduce the failure on a clean checkout
-                                    -> apply (edit-only AI)
-                                    -> runner.run_verification_command (code runs
-                                       the AI command in a sanitized subprocess,
-                                       inside the job's container for docker;
-                                       exit code is the verdict; build once,
-                                       verify K times)
-                                    -> build_and_review_patch (skeptic AI)
-                                    retry on feedback; needs pass AND approve
-       macos:
-         apply + build_and_review_patch, then
-         verify.macos.MacosVerifier -> dispatch the agent's verify-macos job,
-                                       wait, conclusion is the verdict
-       push.commit_and_push_fix  -> extract approved patch
-                                    -> apply in a fresh trusted clone
-                                    -> commit (no sign-off), push to the PR's own
-                                       agent/backport/... branch (never merge)
-  -> comment.render_comment(outcome) -> posted on the PR
+ci-fix.yml
+  discovery (read-only GitHub token)
+    -> fail-closed team authorization and PR/run/head-SHA binding
+    -> exact workflow file is loaded at the run SHA
+    -> failed job IDs, display names, matrix, runner, and image are captured
+    -> bounded run logs and workflow source are hashed into discovery.json
+  ai-prepare (no GitHub/cloud credentials)
+    -> clone the exact head and code-discover upstream port candidates
+    -> read-only diagnosis selects one captured failed job
+    -> code either applies an ancestry-checked port or an edit-only authored fix
+    -> skeptical review approves the bounded patch
+    -> prepared.json links proposal, review, patch, and complete AI evidence
+  validation (credentialless Linux or macOS worker)
+    -> reproduce a clean failing baseline
+    -> apply the exact patch and verify its tree
+    -> run from a .git-free quota filesystem with network denied
+    -> enforce non-root identity, resource limits, and descendant cleanup
+    -> require repeated patched passes under a recorded isolation contract
+    -> validated.json hashes commands, baseline, result, image, and tree
+  publisher
+    -> preflight the complete handoff before minting a write token
+    -> create a desired-comment record before publication
+    -> apply the patch to a fresh locked clone at the gated SHA
+    -> push only the owned agent/backport branch, never merge
+    -> reconcile the final comment/reaction after the expected head is visible
+    -> write publication.json with publisher and final remote state
 ```
 
-The defining invariant is the AI/code split plus a hard checkout boundary: the
-AI proposes (which check failed, how to fix, a targeted command, a job hint,
-whether the fix is sound) and code disposes (selects the verifier environment
-from the real failed job, runs the command, owns pass/fail, performs the push).
-The AI never selects where verification runs, never executes a command, and
-never touches the remote. The checkout that runs untrusted test code never
-receives push credentials; publishing applies the approved patch in a fresh
-clone at the gated SHA. This is targeted verification of the one failing check,
-not a replay of the whole CI job.
-
-Nothing about the test framework is hardcoded. The diagnosis reads the target
-repo's own CI workflow files to learn how it builds and runs tests, and the
-port-discovery and verification logic resolve the default branch from the
-clone (so a repo whose default is `main`, like Valkey Search, works the same as
-Valkey core's `unstable`). The engine is repo-agnostic in principle.
+The AI proposes a failed-job hint, fix, and targeted command. Code resolves that
+hint against the exact captured workflow/job metadata, selects the verifier,
+owns every pass/fail decision, and performs publication. The AI cannot execute
+commands or touch a remote. The worker that executes target code has no
+repository, model, or cloud credential, and its checkout is never reused by the
+publisher. Verification intentionally targets one failed check and records
+which Actions semantics it does and does not reproduce.
 
 The deployment is not yet fully registry-driven. `ci-fix.yml` and
 `ci-fix-comment-poll.yml` are operationally scoped to `valkey-io/valkey`: the
@@ -194,48 +175,67 @@ GitHub App token lifetime. Onboarding another repo (e.g. Valkey Search) still
 needs a registry-driven token/poll/dispatch path in the workflows; the Python
 engine being repo-agnostic is a precondition, not the whole job.
 
-Every failure mode - un-runnable variant, a real product bug, a flaky test, a
-moved branch, a non-member commenter - returns a `FixOutcome` that becomes an
-explanatory PR comment rather than a silent failure or an unsafe push.
-
-For local and Docker verification, a push requires a failing baseline first. If
-the command passes before the fix, the agent treats the CI failure as flaky or
-environment-specific and refuses. If the baseline cannot be established because
-the local verifier is missing setup dependencies, the agent may still author and
-skeptically review a patch, but it is returned as a handoff rather than pushed.
+Every published patch, including a code-discovered port, requires a failing
+baseline and patched success. A baseline that is green, un-runnable, or
+incomplete causes refusal; it is never converted into publication evidence.
 
 ### Entry Points
 
-- `scripts/ci_fix/main.py` - workflow_dispatch entry point; mints the target and agent-repo tokens
+- `.github/workflows/ci-fix.yml` - credential-separated workflow
+- `scripts/ci_fix/main.py` - compatible local router for one CI-fix phase
+- `scripts/ci_fix/phased.py` - discovery, preparation, validation, refusal, and publication
+- `scripts/ci_fix/phase_artifact.py` - strict cross-job artifacts
+- `scripts/ci_fix/comment_poll.py` - authorized request polling and reconciliation
+- `scripts/ci_fix/dispatch_ledger.py` - append-only dispatch state machine
 - `scripts/ci_fix/gate.py` - command parsing, fail-closed team auth, SHA-bound run gating
 - `scripts/ci_fix/diagnose.py` - read-only AI diagnosis into a structured proposal (fix + job hint)
 - `scripts/ci_fix/apply.py` - edit-only AI fix application
-- `scripts/ci_fix/runner.py` - sanitized local/Docker command execution that owns the verdict
-- `scripts/ci_fix/review.py` - skeptic review, the apply/run/review loop, and the shared patch helpers
-- `scripts/ci_fix/push.py` - patch handoff, commit (no sign-off), namespace-restricted push
+- `scripts/ci_fix/runner.py` - isolated Linux/macOS execution contract
+- `scripts/ci_fix/review.py` - baseline, repeated verification, and skeptical review
+- `scripts/ci_fix/port_policy.py` - branch ownership and portable-commit policy
 - `scripts/ci_fix/comment.py` - render the outcome into a PR comment
-- `scripts/ci_fix/pipeline.py` - top-level orchestration; code-owned verifier selection
+- `scripts/ci_fix/selection.py` - deterministic failed-job and port selection
 - `scripts/ci_fix/models.py` - typed dataclasses for the pipeline
-- `scripts/ci_fix/verify/` - the verifier layer:
-  - `base.py` - VerifyEnv, FailedJob, VerificationPlan, VerificationResult, the VerifyBackend protocol
-  - `workflow_env.py` - classify a failed job's runner (x86 Linux / Docker / macOS / unsupported)
-  - `github_runs.py` - list the jobs that actually failed in a run (code-owned)
-  - `macos.py` - the macOS verifier: dispatch the verify-macos job and wait
-- `.github/workflows/ci-fix-verify-macos.yml` - the macOS verification job
+- `scripts/ci_fix/verify/job_metadata.py` - exact workflow job/matrix resolution
 
 ## AI Layer
 
 ```text
 runtime.run_agent(profile, prompt, cwd=...)
   -> claude_code.run_claude_code(...)
-    -> subprocess: claude --print (Claude Code CLI via Bedrock)
+    -> non-root, read-only Claude container
+      -> local credential-holding gateway proxy
+        -> central /v1/controls/admit quota and circuit decision
+        -> Anthropic-compatible model gateway
 ```
 
 Profiles registered today:
 
-- `conflict_resolve_edit_only` - backport conflict resolution (Read/Edit/Bash, writes allowed)
+- `conflict_resolve_edit_only` - backport conflict resolution (Read/Edit/MultiEdit/Grep/Glob; Bash and Write denied)
+- `validation_repair_edit_only` - scoped backport/CI-fix repair (Read/Edit/MultiEdit/Grep/Glob; Bash and Write denied)
 - `fuzzer_analysis_readonly` - fuzzer triage (Read/Grep/Glob only, no writes)
 - `ci_fix_diagnose_readonly` - CI-fix diagnosis and skeptic review (Read/Grep/Glob only, no writes)
+
+The tool container contains only its explicit workspace, has a read-only root,
+dropped capabilities, a non-root UID, PID/memory/CPU limits, and an internal
+Docker network whose only peer is the gateway. It receives no gateway, GitHub,
+or cloud credential. The gateway permits only message/count endpoints and
+requires atomic central admission before forwarding. Repository policy sets
+daily request/input/output/cost budgets, queue depth, per-run calls, publication
+budget, and the failure threshold/cooldown. AI evidence records the full bounded
+prompt/transcript plus token, turn, and cost totals.
+
+## Operational Controls
+
+The registry's strict `automation` object is content-addressed into every
+backport handoff. `operational_controls.py` rejects disabled repositories and
+organization/module kill switches before token minting. Candidate discovery
+caps each repository at `max_queue_depth`; AI jobs also use bounded workflow
+concurrency. The central gateway owns cross-run daily accounting and automatic
+disable circuits, while the local gateway owns per-run limits and a fast
+upstream-failure circuit. Publisher jobs repeat the kill-switch check and
+atomically reserve the central publication budget before minting write
+credentials.
 
 ## Common Infrastructure
 
@@ -243,6 +243,8 @@ Workflow-agnostic helpers in `scripts/common/`:
 
 - `git_auth.py` - GIT_ASKPASS credential helper
 - `github_client.py` - retry wrapper for GitHub API
+- `github_rest.py` - the only private PyGithub requester boundary, with strict
+  response contracts for REST operations not exposed by public objects
 - `text_utils.py` - ANSI stripping for log scanning
 - `workflow_artifacts.py` - list and download GitHub Actions workflow runs
   and their uploaded artifact bundles, plus `download_run_logs(...)` for a
@@ -255,23 +257,33 @@ Workflow-agnostic helpers in `scripts/common/`:
 - `polling.py` - shared one-shot-or-sustained poll loop helpers for scheduled
   pollers that need a predictable in-run cadence.
 - `proc.py` - `git_output(...)` (run a git command and return stdout) and
-  `filter_env(allowlist)` (the single place that turns an env allowlist into
-  a concrete, scrubbed subprocess environment).
+  locked Git/process-group execution with scrubbed environments and output,
+  timeout, and descendant-process bounds.
 - `ai_output.py` - `extract_json_object(stdout, required_key=...)` parses a
   structured verdict out of Claude Code's stream-json output. Shared by the
   fuzzer and CI-fix flows.
 - `incidents.py` - `compute_fingerprint(namespace, shapes)` produces a stable
   hash over normalized anomaly shapes for issue deduplication.
 - `issue_dedup.py` - `IssueDedupPublisher` creates or updates a GitHub
-  issue keyed by a fingerprint marker. Workflows supply the rendered title,
-  body, and comment via a small `render(marker, occurrences) -> IssueContent`
-  callback; the publisher owns the dedup machinery.
+  issue keyed by a fingerprint marker and append-only source-event ledger.
+- `markdown.py` - bounded GitHub Markdown rendering, dynamic fences, mention
+  neutralization, URL validation, and table/inline escaping
+- `phase_artifact.py`, `ai_evidence.py`, and `publication_manifest.py` -
+  strict content-addressed handoffs and replay evidence
+- `desired_comments.py` and `metadata_reconciler.py` - durable desired-state
+  records and idempotent convergence after source publication
+- `operational_controls.py` - repository budgets, disable controls, policy
+  digests, and gateway environment
 
-Workflow setup is centralized in `.github/actions/setup-agent`. Jobs still
-check out the agent repository explicitly, then use that local composite action
-to install the pinned Python toolchain, project dependencies, and optionally
-the pinned Claude Code CLI. The workflow standards tests scan both workflows
-and local action metadata so external actions and Claude installs do not drift.
+Python setup is centralized in `.github/actions/setup-agent` and installs
+hash-locked dependencies for the supported Python 3.9 through 3.11 range. CI
+tests both boundary minors, while operational workflows use Python 3.11.
+Because upstream Requests and urllib3 fixed releases dropped Python 3.9,
+`scripts/common/python39_http_hardening.py` applies the reviewed fixes for that
+runtime and CI audits only those exact exceptions. AI jobs separately use
+`setup-ai-runtime`, which builds the digest-pinned, lockfile-installed Claude
+and gateway images. Workflow standards tests scan workflows, composite actions,
+Docker bases, and the Claude lockfile so external code does not drift.
 
 ## Repository Model
 
@@ -289,11 +301,16 @@ the normal deployment model.
 ```text
 main.py (daily cron or manual dispatch)
   -> get_latest_daily_run() or use provided run_id
-  -> download_all_test_failures() from the run's artifacts
+  -> require a source workflow conclusion that permits artifact analysis
+  -> download_all_test_failures() as a typed artifact state
   -> get_job_urls() for CI links
   -> parse_and_deduplicate() groups by {test_name, test_file}
-  -> process_failures() creates/updates GitHub issues
+  -> process_failures() reconciles bounded Markdown issues
 ```
+
+Missing, expired, corrupt, oversized, or transport-failed required artifacts
+are operational failures. Only source workflow evidence can establish a clean
+run; an empty collection is not used as a substitute for artifact state.
 
 ### Entry Points
 
