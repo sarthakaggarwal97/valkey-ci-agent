@@ -820,6 +820,66 @@ def test_sweep_body_preserves_ai_resolution_across_unprocessed_runs():
     assert "conflicts resolved by Claude Code" in body2
 
 
+def test_sweep_body_preserves_target_missing_test_adaptation_detail_across_runs():
+    from scripts.backport.sweep_models import DETAIL_ALREADY_ON_SWEEP_BRANCH
+
+    detail = (
+        "dropped target-missing test file(s): src/unit/test_networking.cpp; "
+        "ported target-missing test coverage to: tests/unit/networking.tcl"
+    )
+    day0 = build_pr_body(
+        BranchSweepResult(
+            target_branch="9.0",
+            candidates_found=1,
+            results=[
+                CandidateResult(
+                    3306,
+                    "Improve COB memory tracking with copy avoidance",
+                    "applied",
+                    detail,
+                    resolved_by_ai=True,
+                ),
+            ],
+        )
+    )
+
+    assert detail in day0
+    assert parse_previous_applied(day0) == [
+        CandidateResult(
+            3306,
+            "Improve COB memory tracking with copy avoidance",
+            "applied",
+            detail,
+            resolved_by_ai=True,
+        )
+    ]
+
+    day1 = build_pr_body(
+        BranchSweepResult(target_branch="9.0", candidates_found=0, results=[]),
+        branch_applied=[
+            CandidateResult(
+                3306,
+                "Improve COB memory tracking with copy avoidance",
+                "skipped-existing",
+                DETAIL_ALREADY_ON_SWEEP_BRANCH,
+            ),
+        ],
+        previous_body=day0,
+    )
+
+    assert detail in day1
+    assert "conflicts resolved by Claude Code" not in day1
+    assert parse_previous_applied(day1) == [
+        CandidateResult(
+            3306,
+            "Improve COB memory tracking with copy avoidance",
+            "applied",
+            detail,
+            resolved_by_ai=True,
+        )
+    ]
+
+
 def test_sweep_reconcile_deletes_stale_source_pr_comment_groups():
     """A source PR commented on by an earlier sweep must have its comments
     deleted once it is no longer represented in the current result."""
@@ -903,6 +963,42 @@ def test_sweep_reconcile_deletes_stale_source_pr_comment_groups():
     live = {parse_marker(c.body).source_pr for c in pr.get_issue_comments() if parse_marker(c.body)}
     assert stale.deleted, "stale source PR #2 comment should be deleted"
     assert live == {1}, "only the current source PR #1 group should remain"
+
+
+def test_sweep_reconcile_does_not_post_empty_comment_for_test_adaptation_only():
+    from scripts.backport.sweep_prs import _reconcile_sweep_diff_comments
+
+    class FakePR:
+        html_url = "https://github.com/o/r/pull/9"
+
+        def __init__(self):
+            self.created: list[str] = []
+
+        def get_issue_comments(self):
+            return []
+
+        def create_issue_comment(self, body):
+            self.created.append(body)
+            raise AssertionError("adaptation-only result should not post an empty diff comment")
+
+    pr = FakePR()
+    result = BranchSweepResult(
+        target_branch="9.0",
+        candidates_found=1,
+        results=[
+            CandidateResult(
+                3306,
+                "Improve COB memory tracking with copy avoidance",
+                "applied",
+                "ported target-missing test coverage to: tests/unit/networking.tcl",
+                resolutions=[],
+                resolved_by_ai=True,
+            ),
+        ],
+    )
+
+    assert _reconcile_sweep_diff_comments(pr, result) == {}
+    assert pr.created == []
 
 
 def test_sweep_reconcile_keeps_comments_for_still_applied_candidate_on_rerun():

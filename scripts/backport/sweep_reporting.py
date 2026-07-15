@@ -13,12 +13,22 @@ from scripts.backport.sweep_models import (
     CandidateResult,
 )
 
+AI_DETAIL_MARKERS = (
+    DETAIL_RESOLVED_BY_AI,
+    "ported target-missing test coverage to:",
+    "dropped target-missing test file(s):",
+)
+
 
 def _is_ai_resolved(result: CandidateResult | None) -> bool:
     """Whether *result* records an AI conflict resolution, durably or by detail."""
     if result is None:
         return False
-    return result.resolved_by_ai or result.detail == DETAIL_RESOLVED_BY_AI
+    return result.resolved_by_ai or _detail_records_ai(result.detail)
+
+
+def _detail_records_ai(detail: str) -> bool:
+    return any(marker in detail for marker in AI_DETAIL_MARKERS)
 
 
 _SKIP_REASON_FALLBACK = (
@@ -231,7 +241,7 @@ def parse_previous_applied(body: str) -> list[CandidateResult]:
         results.append(
             CandidateResult(
                 pr_number, cells[1], "applied", detail,
-                resolved_by_ai=detail == DETAIL_RESOLVED_BY_AI,
+                resolved_by_ai=_detail_records_ai(detail),
             )
         )
     return results
@@ -301,9 +311,9 @@ def _merge_applied_result(
             detail = previous_result.detail
             title = title or previous_result.source_pr_title
 
-    if resolved_by_ai:
-        # The fact that the AI resolved this candidate is durable; never let it
-        # collapse into the generic prior-sweep string on later runs.
+    if resolved_by_ai and not _detail_records_ai(detail):
+        # The fact that the AI resolved this candidate is durable. Use the
+        # generic marker only when the row has no richer AI provenance to keep.
         detail = DETAIL_RESOLVED_BY_AI
     elif detail == DETAIL_ALREADY_ON_SWEEP_BRANCH:
         detail = "cherry-picked in a prior sweep"
