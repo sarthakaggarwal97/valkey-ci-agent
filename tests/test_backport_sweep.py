@@ -468,6 +468,56 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
     ) in git_calls
 
 
+def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(monkeypatch, tmp_path):
+    candidate = ProjectBackportCandidate(
+        source_pr_number=3306,
+        source_pr_title="Improve COB memory tracking with copy avoidance",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+        target_branch="9.0",
+        merge_commit_sha="269b1c5",
+    )
+    git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        git_calls.append(args)
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
+        if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="src/unit/test_networking.cpp\n", stderr="")
+        if cmd == ["git", "show", ":2:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "show", ":3:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="TEST(...)\n", stderr="")
+        if cmd == ["git", "cat-file", "-e", ":2:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    def fake_adapt(_repo_dir, _candidate, _sources, **_kwargs):
+        return MissingTestAdaptationResult(
+            summary="test adaptation not applied: invalid generated test path(s): tests/unit/networking.tcl",
+            fatal=True,
+        )
+
+    result = apply_candidate(
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
+        run_git=fake_run_git,
+        run_process=fake_subprocess_run,
+        adapt_missing_tests=fake_adapt,
+    )
+
+    assert result.outcome == "skipped-conflict"
+    assert result.detail == "test adaptation not applied: invalid generated test path(s): tests/unit/networking.tcl"
+    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] not in subprocess_calls
+
+
 def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
     conflicted_file = tmp_path / "conflict.txt"
     conflicted_file.write_text("<<<<<<< HEAD\ntarget\n=======\nsource\n>>>>>>> source\n", encoding="utf-8")
@@ -1766,6 +1816,56 @@ def test_adapt_target_missing_tests_rolls_back_on_agent_failure(tmp_path):
     assert (repo / "src" / "networking.c").read_text(encoding="utf-8") == "int fix = 1;\n"
     assert (repo / "tests" / "unit" / "networking.tcl").read_text(encoding="utf-8") == "start_server {} {}\n"
     assert not (repo / "tests" / "unit" / "stray.tcl").exists()
+    staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
+    assert staged == ["src/networking.c"]
+
+
+def test_adapt_target_missing_tests_fails_closed_on_conflict_marker_output(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Local Committer")
+    _git(repo, "config", "user.email", "committer@local.invalid")
+    _git(repo, "config", "commit.gpgsign", "false")
+    (repo / "src").mkdir()
+    (repo / "tests" / "unit").mkdir(parents=True)
+    (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
+    (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
+    _git(repo, "add", "src/networking.c")
+
+    def fake_run_agent(profile, _prompt, **_kwargs):
+        assert profile == "test_adaptation_edit_only"
+        (repo / "tests" / "unit" / "networking.tcl").write_text(
+            "<<<<<<< HEAD\nold\n=======\nnew\n>>>>>>> source\n",
+            encoding="utf-8",
+        )
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = '{"type":"result","result":"invalid"}\n'
+        result.stderr = ""
+        return result
+
+    result = adapt_target_missing_tests_with_claude(
+        str(repo),
+        ProjectBackportCandidate(
+            source_pr_number=3306,
+            source_pr_title="Improve COB memory tracking with copy avoidance",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+            target_branch="9.0",
+            merge_commit_sha="269b1c5",
+        ),
+        {"src/unit/test_networking.cpp": "TEST(...)\n"},
+        language="c",
+        run_agent_func=fake_run_agent,
+    )
+
+    assert result.fatal is True
+    assert result.adapted_paths == []
+    assert result.summary == "test adaptation not applied: invalid generated test path(s): tests/unit/networking.tcl"
+    assert (repo / "tests" / "unit" / "networking.tcl").read_text(encoding="utf-8") == "start_server {} {}\n"
     staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
     assert staged == ["src/networking.c"]
 

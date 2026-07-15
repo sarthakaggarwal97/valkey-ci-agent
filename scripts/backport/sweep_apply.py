@@ -475,6 +475,7 @@ def adapt_target_missing_tests_with_claude(
         rollback()
         return MissingTestAdaptationResult(
             summary=("test adaptation not applied: invalid generated test path(s): " + ", ".join(invalid_paths[:10])),
+            fatal=True,
         )
 
     for path in new_changed_paths:
