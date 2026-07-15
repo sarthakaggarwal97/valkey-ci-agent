@@ -17,7 +17,11 @@ from scripts.backport.sweep import (
     CandidateResult,
     ProjectBackportCandidate,
 )
-from scripts.backport.sweep_apply import apply_candidate
+from scripts.backport.sweep_apply import (
+    MissingTestAdaptationResult,
+    adapt_target_missing_tests_with_claude,
+    apply_candidate,
+)
 from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
     clone_target_branch,
@@ -246,6 +250,7 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
         raise AssertionError(f"unexpected command: {cmd}")
 
     monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+
     def fake_resolve(*_args, **_kwargs):
         return [
             ResolutionResult(
@@ -306,6 +311,7 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
         raise AssertionError(f"unexpected command: {cmd}")
 
     monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+
     def fake_resolve(*_args, **_kwargs):
         raise AssertionError("should not call Claude")
 
@@ -325,6 +331,87 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
     assert missing_on_target.exists()
     assert ["git", "commit", "--no-edit"] not in subprocess_calls
     assert ("cherry-pick", "--abort") in git_calls
+
+
+def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
+    candidate = ProjectBackportCandidate(
+        source_pr_number=3306,
+        source_pr_title="Improve COB memory tracking with copy avoidance",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+        target_branch="9.0",
+        merge_commit_sha="269b1c5",
+    )
+    git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
+
+    def fake_run_git(_repo_dir, *args, **_kwargs):
+        git_calls.append(args)
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
+        if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="src/unit/test_networking.cpp\n",
+                stderr="",
+            )
+        if cmd == ["git", "show", ":2:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd == ["git", "show", ":3:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="TEST(...)\n", stderr="")
+        if cmd == ["git", "cat-file", "-e", ":2:src/unit/test_networking.cpp"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+        if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+        if cmd == ["git", "-c", "core.editor=true", "cherry-pick", "--continue"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    adaptation_calls: list[dict[str, str]] = []
+
+    def fake_adapt(_repo_dir, _candidate, sources, **_kwargs):
+        adaptation_calls.append(sources)
+        return MissingTestAdaptationResult(
+            adapted_paths=["tests/unit/networking.tcl"],
+            summary="ported target-missing test coverage to: tests/unit/networking.tcl",
+        )
+
+    def fake_resolve(*_args, **_kwargs):
+        raise AssertionError("should not call Claude conflict resolver")
+
+    result = apply_candidate(
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
+        run_git=fake_run_git,
+        run_process=fake_subprocess_run,
+        resolve_conflicts=fake_resolve,
+        adapt_missing_tests=fake_adapt,
+    )
+
+    assert result.outcome == "applied"
+    assert result.detail == (
+        "dropped target-missing test file(s): src/unit/test_networking.cpp; "
+        "ported target-missing test coverage to: tests/unit/networking.tcl"
+    )
+    assert result.resolved_by_ai is True
+    assert result.resolved_commit_sha == "abc123"
+    assert adaptation_calls == [{"src/unit/test_networking.cpp": "TEST(...)\n"}]
+    assert (
+        "rm",
+        "-f",
+        "--ignore-unmatch",
+        "--",
+        "src/unit/test_networking.cpp",
+    ) in git_calls
+    assert ("cherry-pick", "--abort") not in git_calls
+    assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] in subprocess_calls
 
 
 def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
@@ -360,6 +447,7 @@ def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
         raise AssertionError(f"unexpected command: {cmd}")
 
     monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+
     def fake_resolve(*_args, **_kwargs):
         return [
             ResolutionResult(
@@ -652,16 +740,22 @@ def test_upsert_pr_preserves_existing_applied_detail_on_update():
 def test_sweep_body_points_to_ai_comments_when_ai_resolved():
     from scripts.backport.sweep_models import DETAIL_RESOLVED_BY_AI
 
-    with_ai = build_pr_body(BranchSweepResult(
-        target_branch="8.1", candidates_found=1,
-        results=[CandidateResult(50, "AI fix", "applied", DETAIL_RESOLVED_BY_AI, resolved_by_ai=True)],
-    ))
+    with_ai = build_pr_body(
+        BranchSweepResult(
+            target_branch="8.1",
+            candidates_found=1,
+            results=[CandidateResult(50, "AI fix", "applied", DETAIL_RESOLVED_BY_AI, resolved_by_ai=True)],
+        )
+    )
     assert "AI resolution details are posted as comments on this PR when available." in with_ai
 
-    without_ai = build_pr_body(BranchSweepResult(
-        target_branch="8.1", candidates_found=1,
-        results=[CandidateResult(51, "Clean fix", "applied", "cherry-picked cleanly")],
-    ))
+    without_ai = build_pr_body(
+        BranchSweepResult(
+            target_branch="8.1",
+            candidates_found=1,
+            results=[CandidateResult(51, "Clean fix", "applied", "cherry-picked cleanly")],
+        )
+    )
     assert "AI resolution details are posted as comments on this PR" not in without_ai
 
 
@@ -669,7 +763,8 @@ def test_sweep_body_links_ai_row_to_comment_when_url_known():
     from scripts.backport.sweep_models import DETAIL_RESOLVED_BY_AI
 
     result = BranchSweepResult(
-        target_branch="8.1", candidates_found=2,
+        target_branch="8.1",
+        candidates_found=2,
         results=[
             CandidateResult(50, "AI fix", "applied", DETAIL_RESOLVED_BY_AI, resolved_by_ai=True),
             CandidateResult(51, "Clean fix", "applied", "cherry-picked cleanly"),
@@ -763,14 +858,20 @@ def test_sweep_reconcile_deletes_stale_source_pr_comment_groups():
             return c
 
     # Prior sweep left a comment for source PR #2.
-    stale = FakeComment(render_diff_comment(2, [
-        ResolutionResult(
-            path="src/old.c", resolved_content="x\n",
-            resolution_summary="resolved by Claude Code",
-            resolution_diff="-a\n+b",
-            reviewer_diff="-a\n+b",
-        ),
-    ]))
+    stale = FakeComment(
+        render_diff_comment(
+            2,
+            [
+                ResolutionResult(
+                    path="src/old.c",
+                    resolved_content="x\n",
+                    resolution_summary="resolved by Claude Code",
+                    resolution_diff="-a\n+b",
+                    reviewer_diff="-a\n+b",
+                ),
+            ],
+        )
+    )
     pr = FakePR([stale])
 
     # Current result only has source PR #1 with fresh resolutions; #2 is gone.
@@ -779,10 +880,14 @@ def test_sweep_reconcile_deletes_stale_source_pr_comment_groups():
         candidates_found=1,
         results=[
             CandidateResult(
-                1, "Fix one", "applied", "conflicts resolved by Claude Code",
+                1,
+                "Fix one",
+                "applied",
+                "conflicts resolved by Claude Code",
                 resolutions=[
                     ResolutionResult(
-                        path="src/new.c", resolved_content="x\n",
+                        path="src/new.c",
+                        resolved_content="x\n",
                         resolution_summary="resolved by Claude Code",
                         resolution_diff="-a\n+b",
                         reviewer_diff="-a\n+b",
@@ -795,11 +900,7 @@ def test_sweep_reconcile_deletes_stale_source_pr_comment_groups():
 
     _reconcile_sweep_diff_comments(pr, result)
 
-    live = {
-        parse_marker(c.body).source_pr
-        for c in pr.get_issue_comments()
-        if parse_marker(c.body)
-    }
+    live = {parse_marker(c.body).source_pr for c in pr.get_issue_comments() if parse_marker(c.body)}
     assert stale.deleted, "stale source PR #2 comment should be deleted"
     assert live == {1}, "only the current source PR #1 group should remain"
 
@@ -840,14 +941,20 @@ def test_sweep_reconcile_keeps_comments_for_still_applied_candidate_on_rerun():
             return c
 
     # Prior sweep posted a comment for source PR #5.
-    kept = FakeComment(render_diff_comment(5, [
-        ResolutionResult(
-            path="src/x.c", resolved_content="x\n",
-            resolution_summary="resolved by Claude Code",
-            resolution_diff="-a\n+b",
-            reviewer_diff="-a\n+b",
-        ),
-    ]))
+    kept = FakeComment(
+        render_diff_comment(
+            5,
+            [
+                ResolutionResult(
+                    path="src/x.c",
+                    resolved_content="x\n",
+                    resolution_summary="resolved by Claude Code",
+                    resolution_diff="-a\n+b",
+                    reviewer_diff="-a\n+b",
+                ),
+            ],
+        )
+    )
     pr = FakePR([kept])
 
     # Rerun: #5 is still on the branch but only as already-on-branch, with no
@@ -863,11 +970,7 @@ def test_sweep_reconcile_keeps_comments_for_still_applied_candidate_on_rerun():
     _reconcile_sweep_diff_comments(pr, result)
 
     assert not kept.deleted, "comments for a still-on-branch candidate must be kept"
-    live = {
-        parse_marker(c.body).source_pr
-        for c in pr.get_issue_comments()
-        if parse_marker(c.body)
-    }
+    live = {parse_marker(c.body).source_pr for c in pr.get_issue_comments() if parse_marker(c.body)}
     assert live == {5}
 
 
@@ -905,14 +1008,20 @@ def test_sweep_reconcile_keeps_comments_for_branch_applied_membership_only():
             self._c.append(c)
             return c
 
-    kept = FakeComment(render_diff_comment(5, [
-        ResolutionResult(
-            path="src/x.c", resolved_content="x\n",
-            resolution_summary="resolved by Claude Code",
-            resolution_diff="-a\n+b",
-            reviewer_diff="-a\n+b",
-        ),
-    ]))
+    kept = FakeComment(
+        render_diff_comment(
+            5,
+            [
+                ResolutionResult(
+                    path="src/x.c",
+                    resolved_content="x\n",
+                    resolution_summary="resolved by Claude Code",
+                    resolution_diff="-a\n+b",
+                    reviewer_diff="-a\n+b",
+                ),
+            ],
+        )
+    )
     pr = FakePR([kept])
 
     urls = _reconcile_sweep_diff_comments(
@@ -924,11 +1033,7 @@ def test_sweep_reconcile_keeps_comments_for_branch_applied_membership_only():
     )
 
     assert not kept.deleted
-    live = {
-        parse_marker(c.body).source_pr
-        for c in pr.get_issue_comments()
-        if parse_marker(c.body)
-    }
+    live = {parse_marker(c.body).source_pr for c in pr.get_issue_comments() if parse_marker(c.body)}
     assert live == {5}
     assert urls == {5: kept.html_url}
 
@@ -945,7 +1050,8 @@ def test_clone_target_branch_invokes_git_clone_without_destination_cwd(
 
     monkeypatch.setattr(sweep_git.subprocess, "run", fake_run)
     monkeypatch.setattr(
-        sweep_git, "run_git_default",
+        sweep_git,
+        "run_git_default",
         lambda repo_dir, *args, **_kwargs: calls.append((["git", *args], {})),
     )
 
@@ -1127,9 +1233,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     monkeypatch.setattr(
         backport_sweep,
         "apply_candidate",
-        lambda _repo_dir, c, *_args, **_kwargs: CandidateResult(
-            c.source_pr_number, c.source_pr_title, "applied"
-        ),
+        lambda _repo_dir, c, *_args, **_kwargs: CandidateResult(c.source_pr_number, c.source_pr_title, "applied"),
     )
 
     def fail_push(*_args, **_kwargs):
@@ -1153,8 +1257,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     assert sum(1 for r in result.results if r.outcome == "applied") == 0
 
 
-def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn,
-                               already_applied=None, max_applied=1):
+def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn, already_applied=None, max_applied=1):
     """Run _process_branch with the common green-only mocks wired up.
 
     Tests supply how each candidate applies (apply_fn) and how the branch
@@ -1187,9 +1290,7 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
     monkeypatch.setattr(
         backport_sweep,
         "push_backport_branch",
-        lambda _repo_dir, branch, _env, *, force_with_lease: pushed.append(
-            (branch, force_with_lease)
-        ),
+        lambda _repo_dir, branch, _env, *, force_with_lease: pushed.append((branch, force_with_lease)),
     )
     upserts: list[dict] = []
 
@@ -1308,8 +1409,6 @@ def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
     assert pushed == [("agent/backport/sweep/8.1", False)]
 
 
-
-
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     full_env = dict(os.environ)
     full_env.update(env or {})
@@ -1321,6 +1420,96 @@ def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> subproces
         text=True,
         env=full_env,
     )
+
+
+def test_adapt_target_missing_tests_stages_branch_native_test(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Local Committer")
+    _git(repo, "config", "user.email", "committer@local.invalid")
+    _git(repo, "config", "commit.gpgsign", "false")
+    (repo / "src").mkdir()
+    (repo / "tests" / "unit").mkdir(parents=True)
+    (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
+    (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
+    _git(repo, "add", "src/networking.c")
+
+    def fake_run_agent(_profile, _prompt, **kwargs):
+        assert kwargs["cwd"] == str(repo)
+        (repo / "tests" / "unit" / "networking.tcl").write_text(
+            "start_server {} {}\n# adapted coverage\n",
+            encoding="utf-8",
+        )
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = '{"type":"result","result":"ported"}\n'
+        result.stderr = ""
+        return result
+
+    result = adapt_target_missing_tests_with_claude(
+        str(repo),
+        ProjectBackportCandidate(
+            source_pr_number=3306,
+            source_pr_title="Improve COB memory tracking with copy avoidance",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+            target_branch="9.0",
+            merge_commit_sha="269b1c5",
+        ),
+        {"src/unit/test_networking.cpp": "TEST(...)\n"},
+        language="c",
+        run_agent_func=fake_run_agent,
+    )
+
+    assert result.adapted_paths == ["tests/unit/networking.tcl"]
+    assert result.summary == "ported target-missing test coverage to: tests/unit/networking.tcl"
+    staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
+    assert staged == ["src/networking.c", "tests/unit/networking.tcl"]
+
+
+def test_adapt_target_missing_tests_fails_closed_on_production_edit(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Local Committer")
+    _git(repo, "config", "user.email", "committer@local.invalid")
+    _git(repo, "config", "commit.gpgsign", "false")
+    (repo / "src").mkdir()
+    (repo / "tests" / "unit").mkdir(parents=True)
+    (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
+    (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
+    _git(repo, "add", "src/networking.c")
+
+    def fake_run_agent(_profile, _prompt, **_kwargs):
+        (repo / "src" / "networking.c").write_text("int fix = 2;\n", encoding="utf-8")
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = '{"type":"result","result":"oops"}\n'
+        result.stderr = ""
+        return result
+
+    result = adapt_target_missing_tests_with_claude(
+        str(repo),
+        ProjectBackportCandidate(
+            source_pr_number=3306,
+            source_pr_title="Improve COB memory tracking with copy avoidance",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+            target_branch="9.0",
+            merge_commit_sha="269b1c5",
+        ),
+        {"src/unit/test_networking.cpp": "TEST(...)\n"},
+        language="c",
+        run_agent_func=fake_run_agent,
+    )
+
+    assert result.fatal is True
+    assert "outside allowed test scope: src/networking.c" in result.summary
 
 
 def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, tmp_path):
@@ -1361,7 +1550,9 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
     # Attempt cherry-pick - will conflict
     result = subprocess.run(
         ["git", "cherry-pick", source_sha],
-        cwd=str(repo), capture_output=True, text=True,
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
     )
     assert result.returncode != 0, "expected cherry-pick to conflict"
 
@@ -1390,6 +1581,7 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
                 resolution_summary="resolved",
             )
         ]
+
     # Drive just the post-resolution phase: write files, stage, continue.
     # This mirrors what _apply_candidate does after Claude returns.
     resolution = ResolutionResult(
@@ -1404,10 +1596,14 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
     commit_result = subprocess.run(
         [
             "git",
-            "-c", "core.editor=true",
-            "cherry-pick", "--continue",
+            "-c",
+            "core.editor=true",
+            "cherry-pick",
+            "--continue",
         ],
-        cwd=str(repo), capture_output=True, text=True,
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
     )
     assert commit_result.returncode == 0, commit_result.stderr
 
@@ -1421,7 +1617,6 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
     assert committer == "Local Committer <committer@local.invalid>"
     # Don't rely on the unused `candidate` local.
     assert candidate.source_pr_number == 42
-
 
 
 def test_sync_target_branch_creates_missing_fork_branch():
@@ -1499,6 +1694,7 @@ def _fake_graphql_response(payload):
 
         def read(self):
             import json as _json
+
             return _json.dumps(payload).encode()
 
     return FakeResponse()
@@ -1529,9 +1725,7 @@ def test_graphql_client_raises_immediately_on_non_transient_error(monkeypatch):
 
     def fake_urlopen(*_args, **_kwargs):
         call_count["n"] += 1
-        return _fake_graphql_response(
-            {"errors": [{"type": "INVALID", "message": "Field 'bogus' doesn't exist"}]}
-        )
+        return _fake_graphql_response({"errors": [{"type": "INVALID", "message": "Field 'bogus' doesn't exist"}]})
 
     monkeypatch.setattr(sweep_graphql.urllib.request, "urlopen", fake_urlopen)
     monkeypatch.setattr("time.sleep", lambda *_args, **_kwargs: None)
@@ -1698,7 +1892,6 @@ def test_build_pr_body_surfaces_no_op_resolution_under_skipped():
     assert "#313" not in applied
 
 
-
 def test_empty_skip_reason_detects_change_not_applicable():
     from scripts.backport.models import ConflictedFile, ResolutionResult
     from scripts.backport.sweep_apply import _empty_skip_reason
@@ -1801,10 +1994,14 @@ def test_build_pr_body_uses_branch_commits_and_preserves_prior_detail():
 
 def test_build_pr_body_round_trips_applied_and_failed_detail():
     first = build_pr_body(
-        BranchSweepResult("8.0", 2, results=[
-            CandidateResult(2915, "Fix | crash", "applied", "conflicts resolved by Claude Code"),
-            CandidateResult(1826, "Fix Lua VM crash", "skipped-conflict", "lacks src/lua/engine_lua.c"),
-        ]),
+        BranchSweepResult(
+            "8.0",
+            2,
+            results=[
+                CandidateResult(2915, "Fix | crash", "applied", "conflicts resolved by Claude Code"),
+                CandidateResult(1826, "Fix Lua VM crash", "skipped-conflict", "lacks src/lua/engine_lua.c"),
+            ],
+        ),
         branch_applied=[CandidateResult(2915, "Fix | crash", "applied", "conflicts resolved by Claude Code")],
     )
 
@@ -1817,7 +2014,10 @@ def test_build_pr_body_round_trips_applied_and_failed_detail():
 
     assert parse_previous_applied(second) == [
         CandidateResult(
-            2915, "Fix | crash", "applied", "conflicts resolved by Claude Code",
+            2915,
+            "Fix | crash",
+            "applied",
+            "conflicts resolved by Claude Code",
             resolved_by_ai=True,
         ),
     ]
@@ -1829,29 +2029,37 @@ def test_build_pr_body_round_trips_applied_and_failed_detail():
 def test_parse_previous_applied_preserves_ai_detail_from_linked_row():
     from scripts.backport.sweep_models import DETAIL_RESOLVED_BY_AI
 
-    body = "\n".join([
-        "## Applied",
-        "",
-        "| Source PR | Title | Detail |",
-        "|---|---|---|",
-        "| #2915 | Fix crash | "
-        f"[{DETAIL_RESOLVED_BY_AI}](https://github.com/o/r/pull/9#issuecomment-123) |",
-    ])
+    body = "\n".join(
+        [
+            "## Applied",
+            "",
+            "| Source PR | Title | Detail |",
+            "|---|---|---|",
+            f"| #2915 | Fix crash | [{DETAIL_RESOLVED_BY_AI}](https://github.com/o/r/pull/9#issuecomment-123) |",
+        ]
+    )
 
     assert parse_previous_applied(body) == [
         CandidateResult(
-            2915, "Fix crash", "applied", DETAIL_RESOLVED_BY_AI,
+            2915,
+            "Fix crash",
+            "applied",
+            DETAIL_RESOLVED_BY_AI,
             resolved_by_ai=True,
         ),
     ]
 
 
 def test_build_pr_body_drops_failed_entry_once_applied():
-    previous_body = "\n".join([
-        "## Needs attention", "",
-        "| Source PR | Title | Outcome | Reason |", "|---|---|---|---|",
-        "| #4100 | Now fixed | skipped-conflict | was conflicting |",
-    ])
+    previous_body = "\n".join(
+        [
+            "## Needs attention",
+            "",
+            "| Source PR | Title | Outcome | Reason |",
+            "|---|---|---|---|",
+            "| #4100 | Now fixed | skipped-conflict | was conflicting |",
+        ]
+    )
 
     body = build_pr_body(
         BranchSweepResult("8.0", 0),
@@ -1864,18 +2072,26 @@ def test_build_pr_body_drops_failed_entry_once_applied():
 
 
 def test_build_pr_body_clears_stale_failure_when_current_skips_existing():
-    previous_body = "\n".join([
-        "## Needs attention", "",
-        "| Source PR | Title | Outcome | Reason |", "|---|---|---|---|",
-        "| #4001 | Already merged | skipped-conflict | was conflicting |",
-    ])
+    previous_body = "\n".join(
+        [
+            "## Needs attention",
+            "",
+            "| Source PR | Title | Outcome | Reason |",
+            "|---|---|---|---|",
+            "| #4001 | Already merged | skipped-conflict | was conflicting |",
+        ]
+    )
 
     # Current run reports it as already on the release branch (not on the
     # sweep branch, so not in Applied) -> it no longer needs attention.
     body = build_pr_body(
-        BranchSweepResult("8.0", 1, results=[
-            CandidateResult(4001, "Already merged", "skipped-existing", "already applied or empty cherry-pick"),
-        ]),
+        BranchSweepResult(
+            "8.0",
+            1,
+            results=[
+                CandidateResult(4001, "Already merged", "skipped-existing", "already applied or empty cherry-pick"),
+            ],
+        ),
         branch_applied=[],
         previous_body=previous_body,
     )
@@ -1940,7 +2156,6 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     def fake_run_agent(profile, prompt, *, cwd):
         agent_calls.append((profile, prompt, cwd))
         return SimpleNamespace(returncode=0, stderr="")
-
 
     def fake_validate(_repo_dir, _target_branch, commands, _rules, log_path=None):
         validation_calls.append(list(commands))
@@ -2014,9 +2229,7 @@ def test_validation_failure_detail_uses_tail_with_repair_diagnosis():
     detail = backport_sweep.validation_failure_detail(
         "Claude repair diagnosis:\n"
         "clean cherry-pick used a newer API\n\n"
-        "Validation output:\n"
-        + ("compiler noise\n" * 80)
-        + "undefined reference to objectGetVal\n"
+        "Validation output:\n" + ("compiler noise\n" * 80) + "undefined reference to objectGetVal\n"
     )
 
     assert "clean cherry-pick used a newer API" in detail
@@ -2028,8 +2241,9 @@ def test_validation_failure_detail_uses_tail_with_repair_diagnosis():
 # ---------------------------------------------------------------------------
 
 
-def _project_item(*, number: int, repo: str, status: str = "To be backported",
-                  merge_sha: str = "abc1234567890abcdef") -> dict:
+def _project_item(
+    *, number: int, repo: str, status: str = "To be backported", merge_sha: str = "abc1234567890abcdef"
+) -> dict:
     """Build a fake project-item payload shaped like the GraphQL response."""
     return {
         "content": {
