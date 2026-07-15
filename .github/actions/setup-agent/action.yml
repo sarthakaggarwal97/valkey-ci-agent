@@ -49,14 +49,26 @@ runs:
     - name: Install runtime dependencies
       if: ${{ inputs['install-mode'] == 'runtime' }}
       shell: bash
-      run: python -m pip install .
+      run: |
+        set -euo pipefail
+        python -m pip install --require-hashes -r requirements/runtime.txt
+        python -m pip install --no-deps --no-build-isolation .
 
     - name: Install development dependencies
       if: ${{ inputs['install-mode'] == 'dev' }}
       shell: bash
-      run: python -m pip install -e ".[dev]"
+      run: |
+        set -euo pipefail
+        python -m pip install --require-hashes -r requirements/dev.txt
+        python -m pip install --no-deps --no-build-isolation -e .
 
     - name: Install Claude Code
       if: ${{ inputs['install-claude'] == 'true' }}
       shell: bash
-      run: npm install -g @anthropic-ai/claude-code@2.1.175
+      run: |
+        set -euo pipefail
+        npm ci \
+          --prefix .github/actions/setup-agent/claude \
+          --no-audit \
+          --no-fund
+        echo "${GITHUB_WORKSPACE}/.github/actions/setup-agent/claude/node_modules/.bin" >> "${GITHUB_PATH}"
