@@ -1,6 +1,7 @@
 """Tests for fuzzer analyzer."""
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,6 +14,7 @@ from scripts.fuzzer.analyzer import (
     _triage,
 )
 from scripts.fuzzer.models import FuzzerRunContext, FuzzerSignal
+from scripts.fuzzer.schema import FuzzerSchemaError
 
 
 def _ctx(**kw) -> FuzzerRunContext:
@@ -20,6 +22,24 @@ def _ctx(**kw) -> FuzzerRunContext:
                     conclusion="failure", head_sha="h")
     defaults.update(kw)
     return FuzzerRunContext(**defaults)
+
+
+def _ai_payload(**updates):
+    payload = {
+        "schema_version": 1,
+        "overall_status": "normal",
+        "triage_verdict": "expected-chaos-noise",
+        "root_cause_category": None,
+        "summary": "No actionable anomaly was identified.",
+        "anomalies": [],
+        "reproduction_hint": None,
+    }
+    payload.update(updates)
+    return payload
+
+
+def _ai_json(**updates) -> str:
+    return json.dumps(_ai_payload(**updates))
 
 
 def test_scan_logs_detects_crash():
@@ -82,13 +102,19 @@ def test_dedupe_signals():
 
 
 def test_parse_claude_response_plain_json():
-    assert _parse_claude_response('{"overall_status": "normal"}')["overall_status"] == "normal"
+    assert _parse_claude_response(_ai_json())["overall_status"] == "normal"
 
 
 def test_parse_claude_response_stream_json():
     stream = "\n".join([
         '{"type": "progress", "data": "thinking"}',
-        '{"type": "result", "result": "{\\"overall_status\\": \\"warning\\"}"}',
+        json.dumps({
+            "type": "result",
+            "result": _ai_json(
+                overall_status="warning",
+                triage_verdict="needs-human-triage",
+            ),
+        }),
     ])
     assert _parse_claude_response(stream)["overall_status"] == "warning"
 
@@ -102,6 +128,38 @@ def test_parse_claude_response_requires_overall_status():
 def test_parse_claude_response_rejects_garbage():
     with pytest.raises(ValueError):
         _parse_claude_response("no json here at all")
+
+
+@pytest.mark.parametrize("mutation", [
+    {"schema_version": True},
+    {"schema_version": 2},
+    {"overall_status": "invented"},
+    {"triage_verdict": "definitely-a-bug"},
+    {"root_cause_category": "Free form category"},
+    {"summary": "é" * 2_001},
+    {"unexpected": "field"},
+    {"anomalies": [{"title": "x", "severity": "severe", "evidence": "y"}]},
+    {"anomalies": [{"title": "", "severity": "warning", "evidence": "y"}]},
+    {"anomalies": [{"title": "x", "severity": "warning", "evidence": ""}]},
+    {"anomalies": [{"title": "x", "severity": "warning"}]},
+    {"anomalies": "not-a-list"},
+])
+def test_parse_claude_response_rejects_invalid_schema(mutation):
+    with pytest.raises(FuzzerSchemaError):
+        _parse_claude_response(_ai_json(**mutation))
+
+
+def test_parse_claude_response_rejects_missing_key():
+    payload = _ai_payload()
+    del payload["summary"]
+    with pytest.raises(FuzzerSchemaError, match="missing=.*summary"):
+        _parse_claude_response(json.dumps(payload))
+
+
+def test_parse_claude_response_rejects_too_many_anomalies():
+    anomaly = {"title": "x", "severity": "warning", "evidence": "y"}
+    with pytest.raises(FuzzerSchemaError, match="at most 25"):
+        _parse_claude_response(_ai_json(anomalies=[anomaly] * 26))
 
 
 def test_format_source_note_when_clones_succeed():
@@ -149,7 +207,7 @@ def test_invoke_claude_skips_valkey_clone_when_sha_missing(monkeypatch, tmp_path
         clone_calls.append((repo, sha))
         return True
 
-    fake_result = MagicMock(returncode=0, stdout='{"overall_status": "normal"}', stderr="")
+    fake_result = MagicMock(returncode=0, stdout=_ai_json(), stderr="")
     monkeypatch.setattr(analyzer_mod, "shallow_clone_at_sha", fake_clone)
     monkeypatch.setattr(analyzer_mod, "run_agent", lambda *a, **kw: fake_result)
 
@@ -186,7 +244,7 @@ def test_invoke_claude_retries_once_then_succeeds(monkeypatch, tmp_path):
     monkeypatch.setattr(analyzer_mod, "shallow_clone_at_sha", lambda *a, **kw: True)
     results = [
         MagicMock(returncode=1, stdout="", stderr="timeout after 1800s"),
-        MagicMock(returncode=0, stdout='{"overall_status": "normal"}', stderr=""),
+        MagicMock(returncode=0, stdout=_ai_json(), stderr=""),
     ]
     calls = {"n": 0}
 
@@ -269,3 +327,85 @@ def test_agent_failure_analysis_fingerprint_is_stable():
     a = _build_agent_failure_analysis(_ctx(), "timeout after 1800s")
     b = _build_agent_failure_analysis(_ctx(), "a totally different error string")
     assert a.incident_fingerprint == b.incident_fingerprint
+
+
+def test_invalid_ai_schema_without_findings_surfaces_analyzer_failure(monkeypatch):
+    from scripts.fuzzer import analyzer as analyzer_mod
+
+    run = MagicMock(
+        html_url="https://github.com/valkey-io/valkey-fuzzer/actions/runs/1",
+        conclusion="success",
+        head_sha="a" * 40,
+    )
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow_run.return_value = run
+    bundle = MagicMock(
+        name="fuzzer-run-artifacts-1",
+        expired=False,
+        artifact_id=10,
+    )
+    client = MagicMock()
+    client.list_run_artifacts.return_value = [bundle]
+    client.download_artifact.return_value = {
+        "manifest.json": b'{"valkey_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}',
+        "results.json": b'{"success": true}',
+    }
+    monkeypatch.setattr(
+        analyzer_mod,
+        "_invoke_claude",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            FuzzerSchemaError("invented enum"),
+        ),
+    )
+
+    analyzer = analyzer_mod.FuzzerRunAnalyzer(
+        gh, github_token="token", artifact_client=client,
+    )
+    result = analyzer.analyze("valkey-io/valkey-fuzzer", 1, workflow_file="fuzzer-run.yml")
+
+    assert result.overall_status == "warning"
+    assert result.triage_verdict == "needs-human-triage"
+    assert result.analyzer_incomplete is True
+
+
+def test_invalid_ai_schema_with_findings_uses_deterministic_triage(monkeypatch):
+    from scripts.fuzzer import analyzer as analyzer_mod
+
+    run = MagicMock(
+        html_url="https://github.com/valkey-io/valkey-fuzzer/actions/runs/1",
+        conclusion="failure",
+        head_sha="a" * 40,
+    )
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow_run.return_value = run
+    bundle = MagicMock(
+        name="fuzzer-run-artifacts-1",
+        expired=False,
+        artifact_id=10,
+    )
+    client = MagicMock()
+    client.list_run_artifacts.return_value = [bundle]
+    client.download_artifact.return_value = {
+        "manifest.json": b'{"valkey_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}',
+        "results.json": b'{"success": false, "error_message": "crash"}',
+    }
+    monkeypatch.setattr(
+        analyzer_mod,
+        "_invoke_claude",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            FuzzerSchemaError("invented enum"),
+        ),
+    )
+
+    analyzer = analyzer_mod.FuzzerRunAnalyzer(
+        gh, github_token="token", artifact_client=client,
+    )
+    result = analyzer.analyze(
+        "valkey-io/valkey-fuzzer",
+        1,
+        workflow_file="fuzzer-run.yml",
+    )
+
+    assert result.overall_status == "anomalous"
+    assert result.triage_verdict == "possible-core-valkey-bug"
+    assert result.analyzer_incomplete is False

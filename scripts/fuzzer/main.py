@@ -19,6 +19,7 @@ from scripts.common.issue_dedup import IssueDedupPublisher
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.fuzzer import issue_renderer
 from scripts.fuzzer.analyzer import FuzzerRunAnalyzer
+from scripts.fuzzer.schema import validate_analysis
 
 TARGET_REPO = "valkey-io/valkey-fuzzer"
 WORKFLOW_FILE = "fuzzer-run.yml"
@@ -74,6 +75,12 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             analysis = analyzer.analyze(TARGET_REPO, run.id, workflow_file=WORKFLOW_FILE)
+            validate_analysis(
+                analysis,
+                expected_repo=TARGET_REPO,
+                expected_workflow_file=WORKFLOW_FILE,
+                expected_run_id=run.id,
+            )
             entry["action"] = "analyzed"
             entry["status"] = analysis.overall_status
             entry["verdict"] = analysis.triage_verdict

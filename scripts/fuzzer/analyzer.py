@@ -17,6 +17,7 @@ from scripts.common.incidents import compute_fingerprint
 from scripts.common.text_utils import strip_ansi
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.fuzzer.models import FuzzerRunAnalysis, FuzzerRunContext, FuzzerSignal
+from scripts.fuzzer.schema import FuzzerSchemaError, validate_ai_payload
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +150,7 @@ segfaults, permanent slot loss, split-brain, data inconsistency after recovery.
 Read the artifacts and source as needed (use Grep to find assertion text or
 crash handlers in valkey/src/ for context). Return ONLY a single JSON object:
 {{
+  "schema_version": 1,
   "overall_status": "normal|warning|anomalous",
   "triage_verdict": "likely-core-valkey-bug|possible-core-valkey-bug|expected-chaos-noise|environmental-or-infra|needs-human-triage",
   "root_cause_category": "short-label or null",
@@ -241,11 +243,11 @@ def _format_source_note(context: FuzzerRunContext, *, valkey_ok: bool, fuzzer_ok
 
 
 def _parse_claude_response(stdout: str) -> dict[str, Any]:
-    """Find the analysis JSON object in the Claude response."""
+    """Find and strictly validate the analysis JSON object."""
     obj = extract_json_object(stdout, required_key="overall_status")
     if obj is None:
         raise ValueError("No analysis JSON object in Claude response")
-    return obj
+    return validate_ai_payload(obj)
 
 
 class FuzzerRunAnalyzer:
@@ -287,6 +289,11 @@ class FuzzerRunAnalyzer:
         try:
             with tempfile.TemporaryDirectory(prefix="fuzzer-") as td:
                 claude_payload = _invoke_claude(context, anomalies, Path(td))
+        except FuzzerSchemaError as exc:
+            # AI output is advisory. A malformed response must not control
+            # issue status, labels, or publication.
+            claude_error = str(exc)
+            logger.warning("Rejected invalid Claude analysis for run %s: %s", run_id, exc)
         except (RuntimeError, ValueError, OSError, subprocess.SubprocessError) as exc:
             claude_error = str(exc)
             logger.warning("Claude analysis failed for run %s: %s", run_id, exc, exc_info=True)
