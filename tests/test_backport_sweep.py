@@ -12,6 +12,11 @@ from github.GithubException import GithubException
 from scripts.backport import sweep as backport_sweep
 from scripts.backport import sweep_apply, sweep_git, sweep_graphql, sweep_validation
 from scripts.backport.models import ResolutionResult
+from scripts.backport.provenance import (
+    attach_provenance_to_head,
+    build_provenance,
+    parse_provenance_records,
+)
 from scripts.backport.sweep import (
     BranchSweepResult,
     CandidateResult,
@@ -1590,6 +1595,11 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
         )
 
     monkeypatch.setattr(backport_sweep, "apply_candidate", fake_apply)
+    monkeypatch.setattr(
+        backport_sweep,
+        "attach_provenance_to_head",
+        _fake_attach_provenance,
+    )
 
     result = backport_sweep._process_branch(
         gh=MagicMock(),
@@ -1637,6 +1647,11 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
         "apply_candidate",
         lambda _repo_dir, c, *_args, **_kwargs: CandidateResult(c.source_pr_number, c.source_pr_title, "applied"),
     )
+    monkeypatch.setattr(
+        backport_sweep,
+        "attach_provenance_to_head",
+        _fake_attach_provenance,
+    )
 
     def fail_push(*_args, **_kwargs):
         raise RuntimeError("push rejected")
@@ -1678,6 +1693,11 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
     monkeypatch.setattr(backport_sweep, "apply_candidate", apply_fn)
+    monkeypatch.setattr(
+        backport_sweep,
+        "attach_provenance_to_head",
+        _fake_attach_provenance,
+    )
     monkeypatch.setattr(backport_sweep, "validate_branch_with_optional_repair", validate_fn)
 
     reset_count = {"n": 0}
@@ -1723,6 +1743,29 @@ def _candidate(num):
         source_pr_url=f"https://github.com/valkey-io/valkey/pull/{num}",
         target_branch="8.1",
         merge_commit_sha=f"sha{num}",
+    )
+
+
+def _fake_attach_provenance(
+    _repo_dir,
+    *,
+    repository,
+    target_branch,
+    source_pr_number,
+    source_merge_commit,
+):
+    record = {
+        "version": 1,
+        "kind": "valkey-backport-source-provenance",
+        "repository": repository,
+        "target_branch": target_branch,
+        "source_pr_number": source_pr_number,
+        "source_merge_commit": f"{source_pr_number:040x}",
+    }
+    return (
+        record,
+        f"{source_pr_number + 500:040x}",
+        f"{source_pr_number + 1000:040x}",
     )
 
 
@@ -1786,6 +1829,31 @@ def test_process_branch_pushes_green_branch_as_ready(monkeypatch):
     assert resets == 0
     assert pushed == [("agent/backport/sweep/8.1", False)]
     assert upserts[0].get("draft", False) is False
+
+
+def test_process_branch_keeps_resolution_link_when_repair_commit_is_attested(
+    monkeypatch,
+):
+    resolved_sha = "d" * 40
+
+    def applied_with_resolution(_repo_dir, candidate, *_args, **_kwargs):
+        return CandidateResult(
+            candidate.source_pr_number,
+            candidate.source_pr_title,
+            "applied",
+            resolved_commit_sha=resolved_sha,
+        )
+
+    result, pushed, _upserts, _resets = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(21)],
+        apply_fn=applied_with_resolution,
+        validate_fn=lambda *_a, **_k: (True, ""),
+    )
+
+    assert pushed
+    assert result.results[0].backport_commit_sha != resolved_sha
+    assert result.results[0].resolved_commit_sha == resolved_sha
 
 
 def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
@@ -2479,6 +2547,98 @@ def test_list_applied_prs_on_branch_reads_backport_commit_subjects(tmp_path):
         (1298, "Preserve original fd blocking state"),
         (2915, "Fix CLUSTER SLOTS crash"),
     ]
+
+
+def test_list_applied_prs_prefers_provenance_over_subject_heuristic(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "8.0")
+    _git(repo, "config", "user.name", "Test User")
+    _git(repo, "config", "user.email", "test@example.com")
+    (repo / "file.txt").write_text("base\n", encoding="utf-8")
+    _git(repo, "add", "file.txt")
+    _git(repo, "commit", "-q", "-m", "base")
+    _git(repo, "update-ref", "refs/remotes/origin/8.0", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "agent/backport/sweep/8.0")
+    (repo / "file.txt").write_text("base\nfix\n", encoding="utf-8")
+    _git(repo, "commit", "-q", "-am", "Fix cluster state (#4172)")
+    record, _previous_sha, commit_sha = attach_provenance_to_head(
+        str(repo),
+        repository="valkey-io/valkey",
+        target_branch="8.0",
+        source_pr_number=4167,
+        source_merge_commit="a" * 40,
+    )
+
+    applied = list_applied_prs_on_branch(
+        str(repo),
+        "8.0",
+        "agent/backport/sweep/8.0",
+    )
+
+    assert len(applied) == 1
+    assert applied[0].source_pr_number == 4167
+    assert applied[0].provenance == record
+    assert applied[0].backport_commit_sha == commit_sha
+
+
+def test_list_applied_prs_rejects_mismatched_expected_merge(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "8.0")
+    _git(repo, "config", "user.name", "Test User")
+    _git(repo, "config", "user.email", "test@example.com")
+    (repo / "file.txt").write_text("base\n", encoding="utf-8")
+    _git(repo, "add", "file.txt")
+    _git(repo, "commit", "-q", "-m", "base")
+    _git(repo, "update-ref", "refs/remotes/origin/8.0", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "agent/backport/sweep/8.0")
+    (repo / "file.txt").write_text("base\nfix\n", encoding="utf-8")
+    _git(repo, "commit", "-q", "-am", "Fix cluster state (#4167)")
+    attach_provenance_to_head(
+        str(repo),
+        repository="valkey-io/valkey",
+        target_branch="8.0",
+        source_pr_number=4167,
+        source_merge_commit="a" * 40,
+    )
+
+    with pytest.raises(RuntimeError, match="not b{40}"):
+        list_applied_prs_on_branch(
+            str(repo),
+            "8.0",
+            "agent/backport/sweep/8.0",
+            repository="valkey-io/valkey",
+            expected_merge_commits={4167: "b" * 40},
+        )
+
+
+def test_build_pr_body_copies_provenance_for_squash_merge():
+    record = build_provenance(
+        repository="valkey-io/valkey",
+        target_branch="9.0",
+        source_pr_number=4167,
+        source_merge_commit="a" * 40,
+    )
+    result = BranchSweepResult(
+        target_branch="9.0",
+        results=[
+            CandidateResult(
+                4167,
+                "Fix release behavior",
+                "applied",
+                provenance=record,
+                source_merge_commit="a" * 40,
+                backport_commit_sha="b" * 40,
+            )
+        ],
+    )
+
+    body = build_pr_body(result)
+
+    assert "## Provenance" in body
+    assert "| #4167 | `aaaaaaaaaaaa` | `bbbbbbbbbbbb` |" in body
+    assert parse_provenance_records(body) == [record]
 
 
 def test_build_pr_body_lists_already_on_branch_under_applied():

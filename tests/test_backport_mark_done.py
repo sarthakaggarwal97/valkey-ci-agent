@@ -12,6 +12,7 @@ from scripts.backport.mark_done import (
     mark_backport_items_done,
     reconcile_project_board,
 )
+from scripts.backport.provenance import build_provenance, format_provenance
 from scripts.common.polling import PollLoopError
 
 
@@ -73,8 +74,20 @@ def test_mark_backport_items_done_gates_on_verified_set() -> None:
 def test_reconcile_marks_only_branch_present_items(monkeypatch) -> None:
     gql = FakeGraphQLClient(
         project_items=[
-            _project_item(201, "valkey-io/valkey", "item-201", "To be backported"),
-            _project_item(202, "valkey-io/valkey", "item-202", "To be backported"),
+            _project_item(
+                201,
+                "valkey-io/valkey",
+                "item-201",
+                "To be backported",
+                merge_sha="a" * 40,
+            ),
+            _project_item(
+                202,
+                "valkey-io/valkey",
+                "item-202",
+                "To be backported",
+                merge_sha="b" * 40,
+            ),
             _project_item(203, "valkey-io/valkey", "item-203", "Done"),
             _project_item(204, "valkey-io/valkey-bloom", "item-204", "To be backported"),
         ]
@@ -82,10 +95,19 @@ def test_reconcile_marks_only_branch_present_items(monkeypatch) -> None:
 
     captured: dict = {}
 
-    def fake_verify(repo, branch, pr_numbers, *, token="", git_env=None):
+    def fake_verify(
+        repo,
+        branch,
+        pr_numbers,
+        *,
+        token="",
+        git_env=None,
+        expected_merge_commits=None,
+    ):
         captured["repo"] = repo
         captured["branch"] = branch
         captured["pr_numbers"] = set(pr_numbers)
+        captured["expected_merge_commits"] = expected_merge_commits
         return {201}  # only 201 actually landed on the branch
 
     monkeypatch.setattr(mark_done, "verify_prs_on_branch", fake_verify)
@@ -102,6 +124,10 @@ def test_reconcile_marks_only_branch_present_items(monkeypatch) -> None:
     assert captured["pr_numbers"] == {201, 202}
     assert captured["repo"] == "valkey-io/valkey"
     assert captured["branch"] == "9.1"
+    assert captured["expected_merge_commits"] == {
+        201: "a" * 40,
+        202: "b" * 40,
+    }
     assert result.updated == [201]
     assert result.unverified == [202]
     assert [m["itemId"] for m in gql.mutations] == ["item-201"]
@@ -246,6 +272,161 @@ def test_verify_detects_squash_merged_applied_table(tmp_path, monkeypatch) -> No
     assert present == {3801, 3847}
 
 
+def test_verify_provenance_checks_source_merge_identity(
+    tmp_path, monkeypatch
+) -> None:
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+    }
+    first = build_provenance(
+        repository="valkey-io/valkey",
+        target_branch="9.1",
+        source_pr_number=3801,
+        source_merge_commit="a" * 40,
+    )
+    second = build_provenance(
+        repository="valkey-io/valkey",
+        target_branch="9.1",
+        source_pr_number=3847,
+        source_merge_commit="b" * 40,
+    )
+    body = (
+        "[backport] sweep (#4000)\n\n"
+        "## Applied\n\n"
+        "| Source PR | Title | Detail |\n"
+        "|---|---|---|\n"
+        "| #3801 | First | |\n"
+        "| #3847 | Second | |\n\n"
+        f"{format_provenance(first)}\n"
+        f"{format_provenance(second)}"
+    )
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, env=env)
+    (repo / "f").write_text("1", encoding="utf-8")
+    subprocess.run(["git", "add", "f"], cwd=repo, check=True, env=env)
+    subprocess.run(
+        ["git", "commit", "-qm", body],
+        cwd=repo,
+        check=True,
+        env=env,
+    )
+
+    def fake_clone(repo_full_name, target_branch, dest_dir, git_env):
+        subprocess.run(
+            ["git", "clone", "-q", str(repo), dest_dir],
+            check=True,
+            env=env,
+        )
+
+    monkeypatch.setattr(mark_done, "_shallow_clone", fake_clone)
+
+    present = mark_done.verify_prs_on_branch(
+        "valkey-io/valkey",
+        "9.1",
+        {3801, 3847},
+        expected_merge_commits={
+            3801: "a" * 40,
+            3847: "c" * 40,
+        },
+    )
+
+    assert present == {3801}
+
+
+def test_verify_provenance_requires_expected_source_merge(
+    tmp_path, monkeypatch
+) -> None:
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+    }
+    record = build_provenance(
+        repository="valkey-io/valkey",
+        target_branch="9.1",
+        source_pr_number=3801,
+        source_merge_commit="a" * 40,
+    )
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, env=env)
+    (repo / "f").write_text("1", encoding="utf-8")
+    subprocess.run(["git", "add", "f"], cwd=repo, check=True, env=env)
+    subprocess.run(
+        ["git", "commit", "-qm", f"Fix (#3801)\n\n{format_provenance(record)}"],
+        cwd=repo,
+        check=True,
+        env=env,
+    )
+
+    def fake_clone(repo_full_name, target_branch, dest_dir, git_env):
+        subprocess.run(
+            ["git", "clone", "-q", str(repo), dest_dir],
+            check=True,
+            env=env,
+        )
+
+    monkeypatch.setattr(mark_done, "_shallow_clone", fake_clone)
+
+    assert mark_done.verify_prs_on_branch(
+        "valkey-io/valkey",
+        "9.1",
+        {3801},
+    ) == set()
+
+
+def test_verify_malformed_provenance_does_not_fall_back_to_legacy(
+    tmp_path, monkeypatch
+) -> None:
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+    }
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, env=env)
+    (repo / "f").write_text("1", encoding="utf-8")
+    subprocess.run(["git", "add", "f"], cwd=repo, check=True, env=env)
+    subprocess.run(
+        [
+            "git",
+            "commit",
+            "-qm",
+            "Fix (#3801)\n\nValkey-Backport-Provenance: malformed",
+        ],
+        cwd=repo,
+        check=True,
+        env=env,
+    )
+
+    def fake_clone(repo_full_name, target_branch, dest_dir, git_env):
+        subprocess.run(
+            ["git", "clone", "-q", str(repo), dest_dir],
+            check=True,
+            env=env,
+        )
+
+    monkeypatch.setattr(mark_done, "_shallow_clone", fake_clone)
+
+    with pytest.raises(RuntimeError, match="Malformed backport provenance"):
+        mark_done.verify_prs_on_branch(
+            "valkey-io/valkey",
+            "9.1",
+            {3801},
+            expected_merge_commits={3801: "a" * 40},
+        )
+
+
 def test_dry_run_reports_without_mutating() -> None:
     gql = FakeGraphQLClient(
         project_items=[
@@ -348,9 +529,14 @@ class FakeGraphQLClient:
 
 
 def _project_item(
-    number: int, repo: str, item_id: str, status: str
+    number: int,
+    repo: str,
+    item_id: str,
+    status: str,
+    *,
+    merge_sha: str | None = None,
 ) -> dict:
-    return {
+    item = {
         "id": item_id,
         "content": {
             "__typename": "PullRequest",
@@ -367,3 +553,6 @@ def _project_item(
             ]
         },
     }
+    if merge_sha is not None:
+        item["content"]["mergeCommit"] = {"oid": merge_sha}
+    return item

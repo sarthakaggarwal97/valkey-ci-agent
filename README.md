@@ -76,6 +76,12 @@ By default, agent branches are pushed directly to `repo` under the `agent/backpo
 
 The sweep branch is always kept green: a candidate is only kept if the whole branch still validates after the cherry-pick, so one bad commit can never block later candidates. Each scheduled run keeps up to two validated cherry-picks (`--max-candidates 2`) and reports candidates that were skipped or failed validation in the PR's "Needs attention" section without committing them. When `repair_validation_failures` is enabled, Claude Code gets one narrow edit-only attempt to fix a failing cherry-pick before it is dropped.
 
+Each newly validated backport carries canonical source provenance (repository,
+source PR, source merge commit, and target branch). The same records are copied
+into the sweep PR body so they survive squash merges. Mark-done reconciliation
+verifies the recorded merge commit against the project item when provenance is
+available, while retaining legacy detection for manual and older backports.
+
 See [`examples/repos.yml`](examples/repos.yml) for a multi-module example.
 
 ### Setup and Usage

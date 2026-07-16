@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 
+from scripts.backport.provenance import format_provenance
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
     DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX,
@@ -135,6 +136,38 @@ def build_pr_body(
                     "",
                 ]
             )
+
+        provenance = [
+            (item, item.provenance)
+            for item in applied
+            if item.provenance is not None
+        ]
+        if provenance:
+            lines.extend(
+                [
+                    "## Provenance",
+                    "",
+                    "| Source PR | Source merge commit | Backport commit |",
+                    "|---|---|---|",
+                ]
+            )
+            for item, record in provenance:
+                source_sha = str(record["source_merge_commit"])
+                backport_sha = item.backport_commit_sha or ""
+                lines.append(
+                    f"| #{item.source_pr_number} | `{source_sha[:12]}` | "
+                    f"`{backport_sha[:12]}` |"
+                )
+            lines.append("")
+            for _item, record in provenance:
+                lines.extend(
+                    [
+                        "<!--",
+                        format_provenance(record),
+                        "-->",
+                    ]
+                )
+            lines.append("")
 
     if skipped_empty:
         lines.extend(
@@ -323,6 +356,15 @@ def _merge_applied_result(
         outcome="applied",
         detail=detail,
         resolved_by_ai=resolved_by_ai,
+        provenance=base.provenance or (
+            current_result.provenance if current_result is not None else None
+        ),
+        source_merge_commit=base.source_merge_commit or (
+            current_result.source_merge_commit if current_result is not None else None
+        ),
+        backport_commit_sha=base.backport_commit_sha or (
+            current_result.backport_commit_sha if current_result is not None else None
+        ),
     )
 
 

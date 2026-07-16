@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from scripts.backport.models import ResolutionResult
 
@@ -42,6 +43,11 @@ class CandidateResult:
     # `cherry-pick --continue`. Lets diff comments link each resolved file to
     # its native diff in the commit view instead of inlining it.
     resolved_commit_sha: str | None = None
+    # Canonical source identity embedded in the backport commit after the
+    # candidate validates. Also copied into the sweep PR for squash merges.
+    provenance: dict[str, Any] | None = None
+    source_merge_commit: str | None = None
+    backport_commit_sha: str | None = None
 
 
 # Detail string used when a candidate PR is already cherry-picked onto the

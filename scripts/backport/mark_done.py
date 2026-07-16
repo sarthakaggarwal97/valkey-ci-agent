@@ -6,10 +6,10 @@ only the verified ones. It runs from the scheduled poller and is self-healing:
 it reconciles the whole board against branch reality on every run, so it does
 not depend on any merge hook firing.
 
-Done is gated on the branch genuinely containing the source PR's commit (the
-same ``(#<pr>)`` signal the sweep uses to skip already-applied PRs), so a
-backport PR body that merely *claims* a PR was applied can never mark it Done
-on its own.
+Done is gated on the branch genuinely containing the source PR. New sweep
+commits carry source provenance whose merge SHA is checked against the project
+item. Older and manual backports retain the existing ``(#<pr>)`` and structured
+``## Applied`` detection.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import tempfile
 from dataclasses import dataclass, field
 from typing import Any
 
+from scripts.backport.provenance import ProvenanceError, parse_provenance_records
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.utils import pr_numbers_from_commit_subjects
 from scripts.common.git_auth import GitAuth, github_https_url
@@ -73,18 +74,23 @@ def verify_prs_on_branch(
     *,
     token: str = "",
     git_env: dict[str, str] | None = None,
+    expected_merge_commits: dict[int, str] | None = None,
 ) -> set[int]:
     """Return which of ``pr_numbers`` actually landed on ``target_branch``.
 
     A PR is considered present if either:
 
-    * a commit on the branch carries the PR's trailing ``(#N)`` in its subject
+    * a commit carries canonical provenance for the repository, target branch,
+      source PR, and expected source merge commit,
+    * a legacy commit on the branch carries the PR's trailing ``(#N)`` in its subject
       (a cherry-pick that kept the source PR's title), or
-    * a backport commit on the branch lists the PR in an ``## Applied`` table
+    * a legacy backport commit lists the PR in an ``## Applied`` table
       in its body. The sweep squash-merges a batch of cherry-picks into one
       commit whose subject is the *backport* PR; the source PRs it carried are
       only recoverable from that ``## Applied`` table.
 
+    When a provenance record exists for a PR, it supersedes legacy signals for
+    that PR so a mismatched record cannot fall through to a title or table.
     Subject matching uses the trailing ``(#N)`` only; body matching reads only
     the structured ``## Applied`` section, so a stray ``(#N)`` reference in a
     ``## Needs attention`` row or in prose never counts.
@@ -101,10 +107,23 @@ def verify_prs_on_branch(
             repo_dir = os.path.join(tmp, "repo")
             _shallow_clone(repo_full_name, target_branch, repo_dir, env)
 
-            applied = pr_numbers_from_commit_subjects(_branch_commit_subjects(repo_dir))
-            applied |= _applied_prs_from_commit_bodies(repo_dir)
+            legacy_applied = pr_numbers_from_commit_subjects(
+                _branch_commit_subjects(repo_dir)
+            )
+            legacy_applied |= _applied_prs_from_commit_bodies(repo_dir)
+            provenance_seen, provenance_verified = (
+                _verified_prs_from_provenance(
+                    repo_dir,
+                    repo_full_name=repo_full_name,
+                    target_branch=target_branch,
+                    requested=pr_numbers,
+                    expected_merge_commits=expected_merge_commits or {},
+                )
+            )
 
-    return pr_numbers & applied
+    return pr_numbers & (
+        provenance_verified | (legacy_applied - provenance_seen)
+    )
 
 
 def _branch_commit_subjects(repo_dir: str) -> list[str]:
@@ -143,6 +162,59 @@ def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
         if applied_section:
             numbers.update(_pr_numbers_from_table_cells(applied_section))
     return numbers
+
+
+def _verified_prs_from_provenance(
+    repo_dir: str,
+    *,
+    repo_full_name: str,
+    target_branch: str,
+    requested: set[int],
+    expected_merge_commits: dict[int, str],
+) -> tuple[set[int], set[int]]:
+    seen: set[int] = set()
+    verified: set[int] = set()
+    records_by_pr: dict[int, dict[str, Any]] = {}
+    result = subprocess.run(
+        ["git", "log", "-z", "--format=%B", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    for message in result.stdout.split(_COMMIT_RECORD_DELIM):
+        try:
+            records = parse_provenance_records(message)
+        except ProvenanceError as exc:
+            raise RuntimeError(
+                f"Malformed backport provenance on {target_branch}: {exc}"
+            ) from exc
+        for record in records:
+            pr_number = int(record["source_pr_number"])
+            if pr_number not in requested:
+                continue
+            seen.add(pr_number)
+            prior = records_by_pr.get(pr_number)
+            if prior is not None and prior != record:
+                raise RuntimeError(
+                    f"Conflicting backport provenance for source PR #{pr_number}"
+                )
+            records_by_pr[pr_number] = record
+
+    for pr_number, record in records_by_pr.items():
+        if (
+            record["repository"] != repo_full_name
+            or record["target_branch"] != target_branch
+        ):
+            continue
+        expected_merge = expected_merge_commits.get(pr_number, "").lower()
+        if (
+            not expected_merge
+            or record["source_merge_commit"] != expected_merge
+        ):
+            continue
+        verified.add(pr_number)
+    return seen, verified
 
 
 def _shallow_clone(
@@ -270,9 +342,9 @@ def reconcile_project_board(
 
     Unlike :func:`mark_backport_items_done`, this does not need a merged-PR body
     or a merge hook. It scans the board, clones the branch once, verifies each
-    candidate by ``(#N)`` presence, and flips only the verified items. Items not
-    yet on the branch are recorded as ``unverified`` and left untouched so a
-    later run can pick them up.
+    candidate from provenance or a legacy branch signal, and flips only the
+    verified items. Items not yet on the branch are recorded as ``unverified``
+    and left untouched so a later run can pick them up.
     """
     project = _load_project(
         gql,
@@ -298,8 +370,25 @@ def reconcile_project_board(
     if not candidate_pr_numbers:
         return BackportStatusUpdateResult(requested=[])
 
+    expected_merge_commits = {
+        int(item["content"]["number"]): str(
+            (item["content"].get("mergeCommit") or {}).get("oid") or ""
+        ).lower()
+        for item in project["items"]
+        if (
+            isinstance(item.get("content"), dict)
+            and item["content"].get("number") in candidate_pr_numbers
+            and (item["content"].get("mergeCommit") or {}).get("oid")
+        )
+    }
+    verify_kwargs: dict[str, Any] = {"token": token, "git_env": git_env}
+    if expected_merge_commits:
+        verify_kwargs["expected_merge_commits"] = expected_merge_commits
     verified = verify_prs_on_branch(
-        source_repo, target_branch, candidate_pr_numbers, token=token, git_env=git_env
+        source_repo,
+        target_branch,
+        candidate_pr_numbers,
+        **verify_kwargs,
     )
     logger.info(
         "Branch %s: %d candidate(s) in %r, %d verified present",
@@ -501,6 +590,7 @@ query($owner: String!, $number: Int!, $cursor: String) {{
             __typename
             ... on PullRequest {{
               number
+              mergeCommit {{ oid }}
               repository {{ nameWithOwner }}
             }}
           }}

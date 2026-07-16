@@ -19,6 +19,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.backport.main import _run_git
+from scripts.backport.provenance import attach_provenance_to_head
 from scripts.backport.sweep_apply import (
     apply_candidate,
 )
@@ -371,6 +372,12 @@ def _process_branch(
                 tmpdir,
                 target_branch,
                 backport_branch,
+                repository=repo_full_name,
+                expected_merge_commits={
+                    candidate.source_pr_number: candidate.merge_commit_sha
+                    for candidate in candidates
+                    if candidate.merge_commit_sha
+                },
             )
             logger.info("Already applied on %s: %s", backport_branch, already_applied)
 
@@ -434,6 +441,28 @@ def _process_branch(
                     )
                     continue
 
+                try:
+                    provenance, previous_commit_sha, commit_sha = attach_provenance_to_head(
+                        tmpdir,
+                        repository=repo_full_name,
+                        target_branch=target_branch,
+                        source_pr_number=candidate.source_pr_number,
+                        source_merge_commit=candidate.merge_commit_sha or "",
+                    )
+                except (OSError, RuntimeError, ValueError) as exc:
+                    candidate_result.outcome = "error"
+                    candidate_result.detail = (
+                        f"could not record source provenance: {str(exc)[:300]}"
+                    )
+                    raise RuntimeError(candidate_result.detail) from exc
+                candidate_result.provenance = provenance
+                candidate_result.source_merge_commit = candidate.merge_commit_sha
+                candidate_result.backport_commit_sha = commit_sha
+                if candidate_result.resolved_commit_sha in {
+                    None,
+                    previous_commit_sha,
+                }:
+                    candidate_result.resolved_commit_sha = commit_sha
                 applied_count += 1
 
             committed = [
@@ -474,6 +503,7 @@ def _process_branch(
                         tmpdir,
                         target_branch,
                         backport_branch,
+                        repository=repo_full_name,
                     ),
                     backport_label=backport_label,
                     llm_conflict_label=llm_conflict_label,
@@ -689,4 +719,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

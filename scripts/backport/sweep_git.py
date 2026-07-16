@@ -12,6 +12,7 @@ from github.GithubException import GithubException
 
 from scripts.backport.main import BOT_EMAIL, BOT_NAME
 from scripts.backport.main import _run_git as run_git_default
+from scripts.backport.provenance import parse_provenance_records
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
     CandidateResult,
@@ -70,10 +71,23 @@ def push_backport_branch(
     run_git(repo_dir, *args, env=git_env)
 
 
-def list_already_applied(repo_dir: str, base_branch: str, backport_branch: str) -> set[str]:
+def list_already_applied(
+    repo_dir: str,
+    base_branch: str,
+    backport_branch: str,
+    *,
+    repository: str | None = None,
+    expected_merge_commits: dict[int, str] | None = None,
+) -> set[str]:
     return {
         str(result.source_pr_number)
-        for result in list_applied_prs_on_branch(repo_dir, base_branch, backport_branch)
+        for result in list_applied_prs_on_branch(
+            repo_dir,
+            base_branch,
+            backport_branch,
+            repository=repository,
+            expected_merge_commits=expected_merge_commits,
+        )
     }
 
 
@@ -81,34 +95,132 @@ def list_applied_prs_on_branch(
     repo_dir: str,
     base_branch: str,
     backport_branch: str,
+    *,
+    repository: str | None = None,
+    expected_merge_commits: dict[int, str] | None = None,
 ) -> list[CandidateResult]:
     result = subprocess.run(
         [
             "git",
             "log",
+            "-z",
             "--reverse",
             f"origin/{base_branch}..{backport_branch}",
-            "--format=%s",
+            "--format=%H%x00%s%x00%B",
         ],
         cwd=repo_dir, capture_output=True, text=True, check=True,
     )
     applied: list[CandidateResult] = []
     seen: set[int] = set()
-    for line in result.stdout.strip().splitlines():
-        matched = pr_numbers_from_commit_subjects([line])
+    fields = result.stdout.split("\x00")
+    commits: list[tuple[str, str, list[dict[str, Any]]]] = []
+    for offset in range(0, len(fields) - 2, 3):
+        commit_sha = fields[offset].strip()
+        subject = fields[offset + 1].strip()
+        body = fields[offset + 2].strip()
+        records = parse_provenance_records(body)
+        for record in records:
+            if record["target_branch"] != base_branch:
+                raise RuntimeError(
+                    f"backport provenance targets {record['target_branch']!r}, "
+                    f"not {base_branch!r}"
+                )
+            if repository is not None and record["repository"] != repository:
+                raise RuntimeError(
+                    f"backport provenance names {record['repository']!r}, "
+                    f"not {repository!r}"
+                )
+            pr_number = int(record["source_pr_number"])
+            expected_merge = (expected_merge_commits or {}).get(pr_number)
+            if (
+                expected_merge is not None
+                and record["source_merge_commit"] != expected_merge.lower()
+            ):
+                raise RuntimeError(
+                    f"backport provenance for source PR #{pr_number} names merge "
+                    f"commit {record['source_merge_commit']}, not {expected_merge}"
+                )
+        commits.append((commit_sha, subject, records))
+
+    provenance_by_pr: dict[int, tuple[dict[str, Any], str, str]] = {}
+    for commit_sha, subject, records in commits:
+        if records:
+            for record in records:
+                pr_number = int(record["source_pr_number"])
+                prior = provenance_by_pr.get(pr_number)
+                if prior is not None and prior[0] != record:
+                    raise RuntimeError(
+                        f"conflicting backport provenance for source PR #{pr_number}"
+                    )
+                provenance_by_pr[pr_number] = (record, commit_sha, subject)
+
+    for commit_sha, subject, records in commits:
+        if records:
+            for record in records:
+                pr_number = int(record["source_pr_number"])
+                if pr_number in seen:
+                    continue
+                seen.add(pr_number)
+                title = re.sub(r"\s*\(#\d+\)\s*$", "", subject).strip() or subject
+                applied.append(
+                    CandidateResult(
+                        source_pr_number=pr_number,
+                        source_pr_title=title,
+                        outcome="skipped-existing",
+                        detail=DETAIL_ALREADY_ON_SWEEP_BRANCH,
+                        provenance=record,
+                        source_merge_commit=str(record["source_merge_commit"]),
+                        backport_commit_sha=commit_sha,
+                    )
+                )
+            continue
+
+        matched = pr_numbers_from_commit_subjects([subject])
         if not matched:
             continue
         pr_number = next(iter(matched))
         if pr_number in seen:
             continue
         seen.add(pr_number)
-        title = re.sub(r"\s*\(#\d+\)\s*$", "", line).strip() or line.strip()
+        title = re.sub(r"\s*\(#\d+\)\s*$", "", subject).strip() or subject
+        provenance_entry = provenance_by_pr.get(pr_number)
+        if provenance_entry is not None:
+            record, provenance_commit_sha, _provenance_subject = provenance_entry
+            applied.append(
+                CandidateResult(
+                    source_pr_number=pr_number,
+                    source_pr_title=title,
+                    outcome="skipped-existing",
+                    detail=DETAIL_ALREADY_ON_SWEEP_BRANCH,
+                    provenance=record,
+                    source_merge_commit=str(record["source_merge_commit"]),
+                    backport_commit_sha=provenance_commit_sha,
+                )
+            )
+            continue
         applied.append(
             CandidateResult(
                 source_pr_number=pr_number,
                 source_pr_title=title,
                 outcome="skipped-existing",
                 detail=DETAIL_ALREADY_ON_SWEEP_BRANCH,
+                backport_commit_sha=commit_sha,
+            )
+        )
+
+    for pr_number, (record, commit_sha, subject) in provenance_by_pr.items():
+        if pr_number in seen:
+            continue
+        seen.add(pr_number)
+        applied.append(
+            CandidateResult(
+                source_pr_number=pr_number,
+                source_pr_title=subject,
+                outcome="skipped-existing",
+                detail=DETAIL_ALREADY_ON_SWEEP_BRANCH,
+                provenance=record,
+                source_merge_commit=str(record["source_merge_commit"]),
+                backport_commit_sha=commit_sha,
             )
         )
     return applied
