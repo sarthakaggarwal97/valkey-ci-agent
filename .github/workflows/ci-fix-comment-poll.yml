@@ -1,9 +1,10 @@
 name: CI Fix Comment Poll
 
-# Scans recent valkey-io/valkey PR comments for "@valkeyrie-ops fix <ci-link>"
-# and dispatches the ci-fix workflow for each new one. The trigger only; the
-# fix itself runs in ci-fix.yml. Idempotency is a reaction marker on the
-# comment, so overlapping or replayed ticks never double-dispatch.
+# Scans recent PR comments in every repository with ci_fix.enabled in repos.yml
+# for "@valkeyrie-ops fix <ci-link>" and dispatches the ci-fix workflow for each
+# new one. The trigger only; the fix itself runs in ci-fix.yml. Idempotency is a
+# reaction marker on the comment, so overlapping or replayed ticks never
+# double-dispatch.
 
 on:
   schedule:
@@ -41,6 +42,17 @@ jobs:
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
 
+      - name: Resolve CI fix repositories
+        id: targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.registry \
+            --registry repos.yml \
+            token-scope \
+            --owner valkey-io \
+            --include-repository valkey-io/valkey-ci-agent >> "${GITHUB_OUTPUT}"
+
       - name: Generate App token
         id: token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
@@ -48,9 +60,7 @@ jobs:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
-          repositories: |
-            valkey
-            valkey-ci-agent
+          repositories: ${{ steps.targets.outputs.repositories }}
           permission-members: read
           permission-issues: write
           permission-pull-requests: read
@@ -64,4 +74,5 @@ jobs:
           CI_FIX_POLL_LOOKBACK_MINUTES: ${{ inputs.lookback_minutes || '180' }}
           CI_FIX_POLL_INTERVAL_SECONDS: ${{ github.event_name == 'schedule' && '1800' || '0' }}
           CI_FIX_POLL_DURATION_SECONDS: ${{ github.event_name == 'schedule' && '3300' || '0' }}
+          CI_FIX_POLL_REGISTRY: repos.yml
         run: python -m scripts.ci_fix.comment_poll

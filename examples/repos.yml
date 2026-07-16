@@ -14,6 +14,8 @@ repos:
     language: c
     build_commands:
       - "make -j$(nproc)"
+    ci_fix:
+      enabled: true
     backport_label: backport
     llm_conflict_label: ai-resolved-conflicts
     max_conflicting_files: 100
@@ -47,6 +49,8 @@ repos:
       - "docker build -t valkey-search-backport -f .devcontainer/Dockerfile ."
     build_commands:
       - "docker run --privileged --rm -v \"$(pwd):/workspace\" --user \"ubuntu:ubuntu\" valkey-search-backport sudo ci/build_ubuntu.sh"
+    ci_fix:
+      enabled: true
     repair_validation_failures: true
     branches:
       - branch: "1.0"

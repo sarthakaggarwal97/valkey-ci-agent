@@ -7,6 +7,7 @@ import yaml
 
 from scripts.backport.registry import (
     BranchEntry,
+    CiFixConfig,
     Registry,
     RepoEntry,
     ValidationRule,
@@ -53,6 +54,7 @@ class TestLoadRegistry:
         assert entry.branches == (BranchEntry("1.0", 1),)
         assert entry.push_repo is None
         assert entry.effective_push_repo == "org/repo"
+        assert entry.ci_fix == CiFixConfig(enabled=False)
         assert entry.build_commands == ()
         assert entry.validation_setup_commands == ()
         assert entry.validation_rules == ()
@@ -72,6 +74,7 @@ class TestLoadRegistry:
                     "commands": ["./runtest --single unit/cluster/slot-migration"],
                 }
             ],
+            ci_fix={"enabled": True},
             repair_validation_failures=True,
             backport_label="bp",
             llm_conflict_label="ai",
@@ -95,6 +98,7 @@ class TestLoadRegistry:
             ),
         )
         assert entry.repair_validation_failures is True
+        assert entry.ci_fix == CiFixConfig(enabled=True)
         assert entry.backport_label == "bp"
         assert entry.llm_conflict_label == "ai"
         assert entry.max_conflicting_files == 50
@@ -249,6 +253,18 @@ class TestValidation:
             ValueError,
             match="repair_validation_failures must be a boolean",
         ):
+            load_registry(path)
+
+    def test_ci_fix_must_be_mapping(self, tmp_path):
+        data = _minimal_registry(repos=[_minimal_repo(ci_fix=True)])
+        path = _write_registry(tmp_path, data)
+        with pytest.raises(ValueError, match="ci_fix must be a mapping"):
+            load_registry(path)
+
+    def test_ci_fix_enabled_must_be_boolean(self, tmp_path):
+        data = _minimal_registry(repos=[_minimal_repo(ci_fix={"enabled": "yes"})])
+        path = _write_registry(tmp_path, data)
+        with pytest.raises(ValueError, match="ci_fix.enabled must be a boolean"):
             load_registry(path)
 
     def test_backport_label_must_be_non_empty_string(self, tmp_path):

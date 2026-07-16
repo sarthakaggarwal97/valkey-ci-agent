@@ -1,16 +1,14 @@
 name: CI Fix Bot
 
 # A maintainer triggers a fix manually via workflow_dispatch (the Actions UI or
-# `gh workflow run`), supplying the PR and the failing run URL. A comment-based
-# trigger (`@valkeyrie-bot fix ...` on a valkey-io/valkey PR) needs a thin
-# wrapper in the target repo to forward the event here, since issue_comment
-# events only fire in the repo where the comment is made; that wrapper is a
-# follow-up. See README for the dispatch invocation.
+# `gh workflow run`), supplying the PR and the failing run URL. The target must
+# be explicitly enabled for CI fixing in repos.yml. The comment poller handles
+# `@valkeyrie-ops fix ...` commands in every enabled repository.
 on:
   workflow_dispatch:
     inputs:
       repo:
-        description: "PR repository, e.g. valkey-io/valkey"
+        description: "CI-fix-enabled PR repository, e.g. valkey-io/valkey"
         required: true
         type: string
       pr:
@@ -51,7 +49,7 @@ jobs:
       # once. This does not coordinate with other workflows that write the same
       # branch; the fast-forward-only push (see push.py) is what keeps a
       # concurrent branch update from being clobbered.
-      group: ci-fix-${{ inputs.pr }}
+      group: ci-fix-${{ inputs.repo }}-${{ inputs.pr }}
       cancel-in-progress: false
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -69,14 +67,26 @@ jobs:
         with:
           install-claude: "true"
 
+      - name: Resolve target repository
+        id: target
+        shell: bash
+        env:
+          CI_FIX_REPO: ${{ inputs.repo }}
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.registry \
+            --registry repos.yml \
+            resolve \
+            --repo "${CI_FIX_REPO}" >> "${GITHUB_OUTPUT}"
+
       - name: Generate GitHub App token
         id: generate-token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
+          owner: ${{ steps.target.outputs.owner }}
+          repositories: ${{ steps.target.outputs.name }}
           # members:read for the contributors-team auth check; contents:write
           # to push the fix; pull-requests:write + issues:write to comment (the
           # PR comment uses the Issues comments API); actions:read for logs.
@@ -127,14 +137,11 @@ jobs:
           CI_FIX_COMMENTER: ${{ (github.actor == 'valkeyrie-ops[bot]' && inputs.commenter) || github.actor }}
           CI_FIX_HINT: ${{ inputs.hint || '' }}
           CI_FIX_COMMENT_ID: ${{ inputs.comment_id || '' }}
+          CI_FIX_AUTH_ORG: ${{ steps.target.outputs.owner }}
         run: |
           set -euo pipefail
           if [[ ! "${CI_FIX_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
             echo "Invalid repo: ${CI_FIX_REPO}" >&2
-            exit 1
-          fi
-          if [[ "${CI_FIX_REPO}" != "valkey-io/valkey" ]]; then
-            echo "ci-fix.yml is currently scoped to valkey-io/valkey (got: ${CI_FIX_REPO})" >&2
             exit 1
           fi
           if [[ ! "${CI_FIX_PR}" =~ ^[0-9]+$ ]]; then

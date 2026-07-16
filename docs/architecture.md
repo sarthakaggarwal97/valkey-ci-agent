@@ -184,15 +184,16 @@ port-discovery and verification logic resolve the default branch from the
 clone (so a repo whose default is `main`, like Valkey Search, works the same as
 Valkey core's `unstable`). The engine is repo-agnostic in principle.
 
-The deployment is not yet fully registry-driven. `ci-fix.yml` and
-`ci-fix-comment-poll.yml` are operationally scoped to `valkey-io/valkey`: the
-workflow guards on the repo, mints a token for it, and the poller watches only
-it. The comment poller runs hourly but uses a shared in-run polling loop to scan
-immediately and again 30 minutes later, avoiding dependence on GitHub's
-scheduled-workflow queue for every half-hour tick. The loop is capped below the
-GitHub App token lifetime. Onboarding another repo (e.g. Valkey Search) still
-needs a registry-driven token/poll/dispatch path in the workflows; the Python
-engine being repo-agnostic is a precondition, not the whole job.
+The deployment is registry-driven. A repository must set
+`ci_fix.enabled: true` in `repos.yml`; being registered for backports alone does
+not grant CI-fix write access. `ci-fix.yml` resolves the requested target
+through that allowlist before minting a token scoped to only that repository.
+The comment poller derives both its token repository scope and its poll targets
+from the same entries. It runs hourly but uses a shared in-run polling loop to
+scan immediately and again 30 minutes later, avoiding dependence on GitHub's
+scheduled-workflow queue for every half-hour tick. A failure reading one
+repository is isolated, while an iteration where every target fails is surfaced
+as a workflow failure. The loop is capped below the GitHub App token lifetime.
 
 Every failure mode - un-runnable variant, a real product bug, a flaky test, a
 moved branch, a non-member commenter - returns a `FixOutcome` that becomes an

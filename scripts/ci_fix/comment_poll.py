@@ -1,9 +1,9 @@
 """Comment-triggered entry point for the CI fix bot.
 
-A maintainer comments ``@valkeyrie-ops fix <ci-link>`` on a valkey-io/valkey PR.
-This scheduled poller finds that comment and dispatches the existing ``ci-fix``
-workflow, which does the actual diagnose/verify/push. The poller is only the
-trigger; it owns no fix logic.
+A maintainer comments ``@valkeyrie-ops fix <ci-link>`` on a PR in a
+registry-enabled repository. This scheduled poller finds that comment and
+dispatches the existing ``ci-fix`` workflow, which does the actual
+diagnose/verify/push. The poller is only the trigger; it owns no fix logic.
 
 Idempotency is a reaction marker on GitHub, not external state. The claim is
 atomic: GitHub's create-reaction returns ``201`` when this call added the
@@ -20,12 +20,18 @@ from __future__ import annotations
 import logging
 import os
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable
+from json import JSONDecodeError, loads
+from typing import Any, Callable, Optional
 
 from github import Auth, Github
+from github.GithubException import GithubException
 
+from scripts.backport.registry import load_registry
 from scripts.ci_fix.gate import ParsedCommand, is_authorized, parse_command
+from scripts.ci_fix.registry import enabled_ci_fix_repositories
+from scripts.common.git_clone import REPO_RE
 from scripts.common.github_client import retry_github_call
 from scripts.common.polling import env_int, env_seconds, run_poll_loop
 
@@ -52,6 +58,24 @@ DispatchFn = Callable[[str, int, ParsedCommand, str, int], None]
 """(repo_full_name, pr_number, command, commenter, comment_id) -> None."""
 
 
+@dataclass(frozen=True)
+class Claim:
+    """An acquired reaction claim that can be released before dispatch."""
+
+    release: Callable[[], None]
+
+
+ClaimFn = Callable[[Any], Optional[Claim]]
+
+
+class AllRepositoriesUnavailable(RuntimeError):
+    """Raised when a poll iteration cannot read any configured repository."""
+
+
+class WorkflowDispatchRejected(RuntimeError):
+    """Raised when GitHub does not accept a workflow dispatch request."""
+
+
 def poll_once(
     gh: Github,
     *,
@@ -61,15 +85,16 @@ def poll_once(
     bot_login: str,
     lookback_minutes: int,
     dispatch: DispatchFn,
-    claim: Callable[[Any], bool],
+    claim: ClaimFn,
 ) -> int:
     """Scan recent PR comments once and dispatch a fix for each new command.
 
     Returns the number of comments dispatched. ``bot_login`` is the App's own
     login (``<app-slug>[bot]``) used to recognize our own claim reaction.
-    ``claim`` performs the atomic reaction claim and returns True only when this
-    run acquired it; ``dispatch`` triggers the ci-fix workflow. Both are injected
-    so the orchestration is testable without real GitHub side effects.
+    ``claim`` performs the atomic reaction claim and returns a releasable claim
+    only when this run acquired it; ``dispatch`` triggers the ci-fix workflow.
+    Both are injected so the orchestration is testable without real GitHub side
+    effects.
     """
     repo = gh.get_repo(target_repo)
     since = time.time() - lookback_minutes * 60
@@ -99,7 +124,7 @@ def _process_comment(
     team_slug: str,
     bot_login: str,
     dispatch: DispatchFn,
-    claim: Callable[[Any], bool],
+    claim: ClaimFn,
 ) -> bool:
     """Handle one comment; return True iff it was claimed and dispatched.
 
@@ -121,10 +146,18 @@ def _process_comment(
         return False
     if _already_claimed(comment, bot_login):
         return False
-    if not claim(comment):
+    acquired = claim(comment)
+    if acquired is None:
         # Another concurrent tick won the claim, or the claim call failed.
         return False
-    dispatch(target_repo, pr_number, command, commenter, comment.id)
+    try:
+        dispatch(target_repo, pr_number, command, commenter, comment.id)
+    except Exception:
+        # A rejected dispatch must not strand the permanent idempotency marker.
+        # Releasing the exact reaction created above preserves atomicity: this
+        # cannot delete another poller's claim.
+        acquired.release()
+        raise
     logger.info("Dispatched ci-fix for %s#%d (commenter %s)", target_repo, pr_number, commenter)
     return True
 
@@ -193,8 +226,8 @@ def _from_epoch(epoch: float) -> datetime:
     return datetime.fromtimestamp(epoch, tz=timezone.utc)
 
 
-def claim_via_status(comment: Any) -> bool:
-    """Atomically claim ``comment`` by creating the reaction, return True on win.
+def claim_via_status(comment: Any) -> Claim | None:
+    """Atomically claim ``comment`` and return a releasable claim on a win.
 
     The win condition is the raw HTTP status: ``201`` means this call created the
     reaction (we own the claim), ``200`` means it already existed (another tick
@@ -202,20 +235,50 @@ def claim_via_status(comment: Any) -> bool:
     through the requester, which returns the status. The reactions endpoint is
     derived from the comment's own API URL (``comment.url``), since a listed
     comment does not expose its repository. A failed call is treated as "not
-    claimed" so a later tick can retry.
+    claimed" so a later tick can retry. The create response's reaction id lets
+    us delete exactly our claim if workflow dispatch is rejected.
     """
     requester = comment._requester  # noqa: SLF001 - the only status-exposing path
     url = f"{comment.url}/reactions"
     try:
-        status, _headers, _data = retry_github_call(
+        status, _headers, data = retry_github_call(
             lambda: requester.requestJson("POST", url, input={"content": _CLAIM_REACTION}),
             retries=2,
             description=f"claim reaction on comment {comment.id}",
         )
     except Exception as exc:  # noqa: BLE001 - a failed claim is a clean skip
         logger.warning("Claim failed for comment %s: %s", comment.id, exc)
-        return False
-    return status == 201
+        return None
+    if status != 201:
+        return None
+
+    try:
+        payload = loads(data) if isinstance(data, str) else data
+        reaction_id = payload["id"]
+        if not isinstance(reaction_id, int):
+            raise TypeError("reaction id is not an integer")
+    except (JSONDecodeError, KeyError, TypeError) as exc:
+        # GitHub documents an id in every successful create-reaction response.
+        # Without it the claim cannot be rolled back safely, so do not dispatch.
+        logger.error("Claim response for comment %s had no usable reaction id: %s", comment.id, exc)
+        return None
+
+    def _release() -> None:
+        def _delete() -> None:
+            delete_status, headers, body = requester.requestJson(
+                "DELETE",
+                f"{url}/{reaction_id}",
+            )
+            if delete_status not in {204, 404}:
+                raise GithubException(delete_status, body, headers)
+
+        retry_github_call(
+            _delete,
+            retries=3,
+            description=f"release claim reaction on comment {comment.id}",
+        )
+
+    return Claim(release=_release)
 
 
 def dispatch_ci_fix(
@@ -245,8 +308,15 @@ def dispatch_ci_fix(
         if comment_id:
             inputs["comment_id"] = str(comment_id)
         wf = gh.get_repo(agent_repo).get_workflow(workflow)
+
+        def _create_dispatch() -> None:
+            if not wf.create_dispatch(ref, inputs):
+                raise WorkflowDispatchRejected(
+                    f"GitHub rejected {workflow} for {repo_full_name}#{pr_number}"
+                )
+
         retry_github_call(
-            lambda: wf.create_dispatch(ref, inputs),
+            _create_dispatch,
             retries=2,
             description=f"dispatch {workflow} for {repo_full_name}#{pr_number}",
         )
@@ -261,6 +331,71 @@ def _lookback_minutes() -> int:
         minimum=1,
         maximum=_MAX_LOOKBACK_MINUTES,
     )
+
+
+def _target_repos() -> tuple[str, ...]:
+    """Return an explicit test override or registry-enabled production targets."""
+    override = os.environ.get("CI_FIX_POLL_TARGET_REPO")
+    if override is not None:
+        repos = tuple(
+            dict.fromkeys(entry.strip() for entry in override.split(",") if entry.strip())
+        )
+        if not repos:
+            raise ValueError("CI_FIX_POLL_TARGET_REPO did not contain a repository")
+        malformed = tuple(repo for repo in repos if not REPO_RE.fullmatch(repo))
+        if malformed:
+            raise ValueError(
+                "CI_FIX_POLL_TARGET_REPO contains malformed repositories: "
+                + ", ".join(malformed)
+            )
+        return repos
+
+    registry_path = os.environ.get("CI_FIX_POLL_REGISTRY", "repos.yml")
+    repos = tuple(
+        entry.repo
+        for entry in enabled_ci_fix_repositories(load_registry(registry_path))
+    )
+    if not repos:
+        raise ValueError(f"No repositories in {registry_path} are enabled for CI fixing")
+    return repos
+
+
+def poll_repositories(
+    gh: Github,
+    *,
+    target_repos: tuple[str, ...],
+    org: str,
+    team_slug: str,
+    bot_login: str,
+    lookback_minutes: int,
+    dispatch: DispatchFn,
+    claim: ClaimFn,
+) -> int:
+    """Poll all targets, isolating API failures unless every target fails."""
+    dispatched = 0
+    failures: list[tuple[str, GithubException]] = []
+    for target_repo in target_repos:
+        try:
+            dispatched += poll_once(
+                gh,
+                target_repo=target_repo,
+                org=org,
+                team_slug=team_slug,
+                bot_login=bot_login,
+                lookback_minutes=lookback_minutes,
+                dispatch=dispatch,
+                claim=claim,
+            )
+        except GithubException as exc:
+            failures.append((target_repo, exc))
+            logger.warning("Skipping repository %s after GitHub API error: %s", target_repo, exc)
+
+    if failures and len(failures) == len(target_repos):
+        failed_names = ", ".join(repo for repo, _exc in failures)
+        raise AllRepositoriesUnavailable(
+            f"GitHub API access failed for every CI-fix repository: {failed_names}"
+        ) from failures[-1][1]
+    return dispatched
 
 
 def _bot_login() -> str:
@@ -293,7 +428,7 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     token = os.environ["CI_FIX_POLL_TOKEN"]
-    target_repo = os.environ.get("CI_FIX_POLL_TARGET_REPO", "valkey-io/valkey")
+    target_repos = _target_repos()
     agent_repo = os.environ.get("CI_FIX_POLL_AGENT_REPO", "valkey-io/valkey-ci-agent")
     workflow = os.environ.get("CI_FIX_POLL_WORKFLOW", "ci-fix.yml")
     ref = os.environ.get("CI_FIX_POLL_REF", "main")
@@ -308,9 +443,9 @@ def main() -> int:
     dispatch = dispatch_ci_fix(gh, agent_repo=agent_repo, workflow=workflow, ref=ref)
 
     def _poll() -> int:
-        return poll_once(
+        return poll_repositories(
             gh,
-            target_repo=target_repo,
+            target_repos=target_repos,
             org=org,
             team_slug=team_slug,
             bot_login=bot_login,

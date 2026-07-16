@@ -1,4 +1,4 @@
-"""Registry loader for multi-repo backport configuration."""
+"""Registry loader for repository capabilities and backport configuration."""
 
 from __future__ import annotations
 
@@ -26,12 +26,18 @@ class ValidationRule:
 
 
 @dataclass(frozen=True)
+class CiFixConfig:
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
 class RepoEntry:
     repo: str
     project_owner: str
     project_owner_type: str
     language: str
     branches: tuple[BranchEntry, ...]
+    ci_fix: CiFixConfig = CiFixConfig()
     push_repo: str | None = None
     build_commands: tuple[str, ...] = ()
     validation_setup_commands: tuple[str, ...] = ()
@@ -154,6 +160,7 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         raise ValueError(
             f"repos[{index}].repair_validation_failures must be a boolean"
         )
+    ci_fix = _parse_ci_fix_config(raw.get("ci_fix"), index)
 
     backport_label = raw.get("backport_label", "backport")
     if not isinstance(backport_label, str) or not backport_label.strip():
@@ -180,6 +187,7 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         project_owner=project_owner,
         project_owner_type=project_owner_type,
         language=language,
+        ci_fix=ci_fix,
         push_repo=push_repo,
         build_commands=tuple(build_commands),
         validation_setup_commands=tuple(validation_setup_commands),
@@ -190,6 +198,18 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         max_conflicting_files=max_conflicting_files,
         branches=tuple(branches),
     )
+
+
+def _parse_ci_fix_config(raw: Any, repo_idx: int) -> CiFixConfig:
+    if raw is None:
+        return CiFixConfig()
+    if not isinstance(raw, dict):
+        raise ValueError(f"repos[{repo_idx}].ci_fix must be a mapping")
+
+    enabled = raw.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ValueError(f"repos[{repo_idx}].ci_fix.enabled must be a boolean")
+    return CiFixConfig(enabled=enabled)
 
 
 def _parse_validation_rules(raw: Any, repo_idx: int) -> list[ValidationRule]:

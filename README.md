@@ -57,6 +57,8 @@ repos:
     project_owner: valkey-io
     project_owner_type: organization
     language: c                          # used in conflict resolver prompt
+    ci_fix:
+      enabled: true                      # explicit CI-fix write/poll opt-in
     validation_setup_commands:
       - "./ci/setup-backport-validation.sh" # optional; run once in clone
     build_commands:
@@ -73,6 +75,11 @@ repos:
 ```
 
 By default, agent branches are pushed directly to `repo` under the `agent/backport/...` namespace and PRs are opened in that same upstream repository. `push_repo` is optional and only exists as an escape hatch for a real different-owner fork; same-owner `push_repo` values are rejected so staging repositories do not become the normal model.
+
+CI fixing is a separate, explicit capability. Set `ci_fix.enabled: true` on a
+registry entry to allow the CI-fix workflow to mint a repository-scoped token,
+poll its PR comments, and fix its agent-owned backport branches. Omitting the
+setting leaves CI fixing disabled even when the repository supports backports.
 
 The sweep branch is always kept green: a candidate is only kept if the whole branch still validates after the cherry-pick, so one bad commit can never block later candidates. Each scheduled run keeps up to two validated cherry-picks (`--max-candidates 2`) and reports candidates that were skipped or failed validation in the PR's "Needs attention" section without committing them. When `repair_validation_failures` is enabled, Claude Code gets one narrow edit-only attempt to fix a failing cherry-pick before it is dropped.
 
@@ -172,11 +179,14 @@ gh workflow run ci-fix.yml \
   --field run_url=https://github.com/valkey-io/valkey/actions/runs/<run_id>
 ```
 
-The workflow is scoped to `valkey-io/valkey`, matching the GitHub App token it
-mints. Maintainers can dispatch it manually, or comment on a `valkey-io/valkey`
-PR and let `ci-fix-comment-poll.yml` dispatch it. The invocation must start the
-comment, and the hint is only the rest of that line, so a conversational comment
-that merely quotes or mentions the command does not trigger a run. The intended
+The workflow accepts every repository explicitly opted in through
+`ci_fix.enabled` in `repos.yml`. Today that is `valkey-io/valkey` and
+`valkey-io/valkey-search`. It resolves the dispatch target through the registry
+before minting a token scoped only to that repository. Maintainers can dispatch
+it manually, or comment on a PR in either repository and let
+`ci-fix-comment-poll.yml` dispatch it. The invocation must start the comment,
+and the hint is only the rest of that line, so a conversational comment that
+merely quotes or mentions the command does not trigger a run. The intended
 comment shape is:
 
 ```text
@@ -248,17 +258,21 @@ Reuses the same secrets and OIDC role as the other workflows (see
 [Step 1](#step-1-configure-secrets-and-variables)). The workflow mints two
 short-lived App tokens:
 
-- On `valkey-io/valkey`: `members:read` (team authorization), `actions:read`
-  (run logs and failed-job listing), `contents:write` (push the fix),
-  `issues:write` (PR comments), `pull-requests:write` (PR metadata).
+- On the registry-resolved target repository: `members:read` (team
+  authorization), `actions:read` (run logs and failed-job listing),
+  `contents:write` (push the fix), `issues:write` (PR comments), and
+  `pull-requests:write` (PR metadata).
 - On `valkey-io/valkey-ci-agent`: `actions:write` (dispatch and read the
   macOS verification workflow). Used only for the macOS backend.
 
 `ci-fix-comment-poll.yml` runs hourly and polls twice inside the same runner,
-30 minutes apart. The in-run loop is capped below the GitHub App token lifetime,
-so the second tick does not depend on GitHub scheduling another workflow exactly
-on time. Optional poller tuning lives in `CI_FIX_POLL_INTERVAL_SECONDS` and
-`CI_FIX_POLL_DURATION_SECONDS`.
+30 minutes apart. Each tick polls all `ci_fix.enabled` repositories from the
+registry. A GitHub API failure in one repository does not block the others, but
+the tick fails if every repository is inaccessible so token or App-installation
+problems are visible. The in-run loop is capped below the GitHub App token
+lifetime, so the second tick does not depend on GitHub scheduling another
+workflow exactly on time. Optional poller tuning lives in
+`CI_FIX_POLL_INTERVAL_SECONDS` and `CI_FIX_POLL_DURATION_SECONDS`.
 
 Optional verification tuning: `CI_FIX_VERIFY_RUNS` sets how many times a
 Linux/Docker fix must pass the verify command before it is trusted (default 2,
