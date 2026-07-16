@@ -1,10 +1,14 @@
+validation_profiles:
+  valkey-make:
+    build_commands:
+      - "make -j$(nproc)"
+
 repos:
   - repo: valkey-io/valkey
     project_owner: valkey-io
     project_owner_type: organization
     language: c
-    build_commands:
-      - "make -j$(nproc)"
+    validation_profile: valkey-make
     repair_validation_failures: true
     backport_label: backport
     llm_conflict_label: ai-resolved-conflicts

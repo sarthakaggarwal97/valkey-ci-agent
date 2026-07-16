@@ -10,7 +10,13 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 
 _REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+_PROFILE_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _VALID_OWNER_TYPES = {"organization", "user"}
+_PROFILE_KEYS = {
+    "build_commands",
+    "validation_setup_commands",
+    "validation_rules",
+}
 
 
 @dataclass(frozen=True)
@@ -26,6 +32,14 @@ class ValidationRule:
 
 
 @dataclass(frozen=True)
+class ValidationProfile:
+    name: str
+    build_commands: tuple[str, ...]
+    validation_setup_commands: tuple[str, ...] = ()
+    validation_rules: tuple[ValidationRule, ...] = ()
+
+
+@dataclass(frozen=True)
 class RepoEntry:
     repo: str
     project_owner: str
@@ -33,6 +47,7 @@ class RepoEntry:
     language: str
     branches: tuple[BranchEntry, ...]
     push_repo: str | None = None
+    validation_profile: str | None = None
     build_commands: tuple[str, ...] = ()
     validation_setup_commands: tuple[str, ...] = ()
     validation_rules: tuple[ValidationRule, ...] = ()
@@ -49,6 +64,7 @@ class RepoEntry:
 @dataclass(frozen=True)
 class Registry:
     repos: tuple[RepoEntry, ...]
+    validation_profiles: tuple[ValidationProfile, ...] = ()
 
     def get_repo(self, repo_full_name: str) -> RepoEntry:
         for entry in self.repos:
@@ -65,6 +81,12 @@ class Registry:
             f"Branch '{branch}' not found for '{repo_full_name}' in registry"
         )
 
+    def get_validation_profile(self, name: str) -> ValidationProfile:
+        for profile in self.validation_profiles:
+            if profile.name == name:
+                return profile
+        raise KeyError(f"Validation profile '{name}' not found in registry")
+
 
 def load_registry(path: str) -> Registry:
     """Load and validate the registry from a YAML file."""
@@ -76,6 +98,9 @@ def load_registry(path: str) -> Registry:
 
 
 def _parse_registry(raw: dict[str, Any]) -> Registry:
+    profiles = _parse_validation_profiles(raw.get("validation_profiles", {}))
+    profiles_by_name = {profile.name: profile for profile in profiles}
+
     # repos
     repos_raw = raw.get("repos", [])
     if not isinstance(repos_raw, list) or not repos_raw:
@@ -84,14 +109,22 @@ def _parse_registry(raw: dict[str, Any]) -> Registry:
     seen_repos: set[str] = set()
     entries: list[RepoEntry] = []
     for i, repo_raw in enumerate(repos_raw):
-        entries.append(_parse_repo_entry(repo_raw, i, seen_repos))
+        entries.append(
+            _parse_repo_entry(repo_raw, i, seen_repos, profiles_by_name)
+        )
 
     return Registry(
         repos=tuple(entries),
+        validation_profiles=tuple(profiles),
     )
 
 
-def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
+def _parse_repo_entry(
+    raw: Any,
+    index: int,
+    seen_repos: set[str],
+    profiles: dict[str, ValidationProfile],
+) -> RepoEntry:
     if not isinstance(raw, dict):
         raise ValueError(f"repos[{index}] must be a mapping")
 
@@ -129,26 +162,43 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
                 "omit push_repo for direct upstream pushes"
             )
 
-    build_commands = raw.get("build_commands", [])
-    if not isinstance(build_commands, list):
-        raise ValueError(f"repos[{index}].build_commands must be a list")
-    for j, cmd in enumerate(build_commands):
-        if not isinstance(cmd, str) or not cmd.strip():
+    profile_name = raw.get("validation_profile")
+    build_commands: tuple[str, ...]
+    validation_setup_commands: tuple[str, ...]
+    validation_rules: tuple[ValidationRule, ...]
+    if profile_name is not None:
+        if not isinstance(profile_name, str) or not _PROFILE_RE.fullmatch(profile_name):
             raise ValueError(
-                f"repos[{index}].build_commands[{j}] must be a non-empty string"
+                f"repos[{index}].validation_profile must be a valid profile name"
             )
-
-    validation_setup_commands = raw.get("validation_setup_commands", [])
-    if not isinstance(validation_setup_commands, list):
-        raise ValueError(f"repos[{index}].validation_setup_commands must be a list")
-    for j, cmd in enumerate(validation_setup_commands):
-        if not isinstance(cmd, str) or not cmd.strip():
+        inline_fields = sorted(_PROFILE_KEYS.intersection(raw))
+        if inline_fields:
             raise ValueError(
-                f"repos[{index}].validation_setup_commands[{j}] "
-                "must be a non-empty string"
+                f"repos[{index}] cannot combine validation_profile with inline "
+                f"validation fields: {', '.join(inline_fields)}"
             )
-
-    validation_rules = _parse_validation_rules(raw.get("validation_rules", []), index)
+        profile = profiles.get(profile_name)
+        if profile is None:
+            raise ValueError(
+                f"repos[{index}].validation_profile references unknown profile "
+                f"{profile_name!r}"
+            )
+        build_commands = profile.build_commands
+        validation_setup_commands = profile.validation_setup_commands
+        validation_rules = profile.validation_rules
+    else:
+        build_commands = tuple(_parse_command_list(
+            raw.get("build_commands", []),
+            f"repos[{index}].build_commands",
+        ))
+        validation_setup_commands = tuple(_parse_command_list(
+            raw.get("validation_setup_commands", []),
+            f"repos[{index}].validation_setup_commands",
+        ))
+        validation_rules = tuple(_parse_validation_rules(
+            raw.get("validation_rules", []),
+            f"repos[{index}].validation_rules",
+        ))
     repair_validation_failures = raw.get("repair_validation_failures", False)
     if not isinstance(repair_validation_failures, bool):
         raise ValueError(
@@ -181,6 +231,7 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         project_owner_type=project_owner_type,
         language=language,
         push_repo=push_repo,
+        validation_profile=profile_name,
         build_commands=tuple(build_commands),
         validation_setup_commands=tuple(validation_setup_commands),
         validation_rules=tuple(validation_rules),
@@ -192,42 +243,103 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
     )
 
 
-def _parse_validation_rules(raw: Any, repo_idx: int) -> list[ValidationRule]:
+def _parse_validation_profiles(raw: Any) -> list[ValidationProfile]:
+    if raw is None:
+        return []
+    if not isinstance(raw, dict):
+        raise ValueError("validation_profiles must be a mapping")
+
+    profiles: list[ValidationProfile] = []
+    for name, profile_raw in raw.items():
+        field = f"validation_profiles.{name}"
+        if not isinstance(name, str) or not _PROFILE_RE.fullmatch(name):
+            raise ValueError(f"validation profile name {name!r} is invalid")
+        if not isinstance(profile_raw, dict):
+            raise ValueError(f"{field} must be a mapping")
+        unknown = sorted(str(key) for key in set(profile_raw) - _PROFILE_KEYS)
+        if unknown:
+            raise ValueError(
+                f"{field} contains unknown fields: {', '.join(unknown)}"
+            )
+        build_commands = _parse_command_list(
+            profile_raw.get("build_commands", []),
+            f"{field}.build_commands",
+        )
+        validation_setup_commands = _parse_command_list(
+            profile_raw.get("validation_setup_commands", []),
+            f"{field}.validation_setup_commands",
+        )
+        validation_rules = _parse_validation_rules(
+            profile_raw.get("validation_rules", []),
+            f"{field}.validation_rules",
+        )
+        if not (
+            build_commands
+            or validation_setup_commands
+            or validation_rules
+        ):
+            raise ValueError(
+                f"{field} must configure at least one validation command or rule"
+            )
+        profiles.append(
+            ValidationProfile(
+                name=name,
+                build_commands=tuple(build_commands),
+                validation_setup_commands=tuple(validation_setup_commands),
+                validation_rules=tuple(validation_rules),
+            )
+        )
+    return profiles
+
+
+def _parse_command_list(
+    raw: Any,
+    field: str,
+) -> list[str]:
+    if not isinstance(raw, list):
+        raise ValueError(f"{field} must be a list")
+    for index, command in enumerate(raw):
+        if not isinstance(command, str) or not command.strip():
+            raise ValueError(
+                f"{field}[{index}] must be a non-empty string"
+            )
+    return raw
+
+
+def _parse_validation_rules(raw: Any, field: str) -> list[ValidationRule]:
     if raw is None:
         return []
     if not isinstance(raw, list):
-        raise ValueError(f"repos[{repo_idx}].validation_rules must be a list")
+        raise ValueError(f"{field} must be a list")
 
     rules: list[ValidationRule] = []
     for rule_idx, rule_raw in enumerate(raw):
         if not isinstance(rule_raw, dict):
             raise ValueError(
-                f"repos[{repo_idx}].validation_rules[{rule_idx}] must be a mapping"
+                f"{field}[{rule_idx}] must be a mapping"
             )
         paths = rule_raw.get("paths")
         if not isinstance(paths, list) or not paths:
             raise ValueError(
-                f"repos[{repo_idx}].validation_rules[{rule_idx}].paths "
-                "must be a non-empty list"
+                f"{field}[{rule_idx}].paths must be a non-empty list"
             )
         for path_idx, pattern in enumerate(paths):
             if not isinstance(pattern, str) or not pattern.strip():
                 raise ValueError(
-                    f"repos[{repo_idx}].validation_rules[{rule_idx}]"
-                    f".paths[{path_idx}] must be a non-empty string"
+                    f"{field}[{rule_idx}].paths[{path_idx}] "
+                    "must be a non-empty string"
                 )
 
         commands = rule_raw.get("commands")
         if not isinstance(commands, list) or not commands:
             raise ValueError(
-                f"repos[{repo_idx}].validation_rules[{rule_idx}].commands "
-                "must be a non-empty list"
+                f"{field}[{rule_idx}].commands must be a non-empty list"
             )
         for cmd_idx, command in enumerate(commands):
             if not isinstance(command, str) or not command.strip():
                 raise ValueError(
-                    f"repos[{repo_idx}].validation_rules[{rule_idx}]"
-                    f".commands[{cmd_idx}] must be a non-empty string"
+                    f"{field}[{rule_idx}].commands[{cmd_idx}] "
+                    "must be a non-empty string"
                 )
 
         rules.append(

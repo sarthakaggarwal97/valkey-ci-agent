@@ -7,13 +7,17 @@
 # draft PRs in that same upstream repository. `push_repo` is optional and only
 # for a different-owner fork escape hatch.
 
+validation_profiles:
+  valkey-make:
+    build_commands:
+      - "make -j$(nproc)"
+
 repos:
   - repo: valkey-io/valkey
     project_owner: valkey-io
     project_owner_type: organization
     language: c
-    build_commands:
-      - "make -j$(nproc)"
+    validation_profile: valkey-make
     backport_label: backport
     llm_conflict_label: ai-resolved-conflicts
     max_conflicting_files: 100
@@ -33,8 +37,7 @@ repos:
     project_owner: valkey-io
     project_owner_type: organization
     language: c
-    build_commands:
-      - "make -j$(nproc)"
+    validation_profile: valkey-make
     branches:
       - branch: "1.0"
         project_number: 5

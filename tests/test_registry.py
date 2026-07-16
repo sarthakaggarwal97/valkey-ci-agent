@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import yaml
 
@@ -9,6 +11,7 @@ from scripts.backport.registry import (
     BranchEntry,
     Registry,
     RepoEntry,
+    ValidationProfile,
     ValidationRule,
     load_registry,
 )
@@ -41,6 +44,22 @@ def _minimal_registry(**overrides):
 
 
 class TestLoadRegistry:
+    def test_checked_in_registries_load_and_preserve_search_validation(self):
+        root = Path(__file__).resolve().parents[1]
+        live = load_registry(str(root / "repos.yml"))
+        example = load_registry(str(root / "examples" / "repos.yml"))
+
+        core = live.get_repo("valkey-io/valkey")
+        search = live.get_repo("valkey-io/valkey-search")
+        assert core.validation_profile == "valkey-make"
+        assert core.build_commands == ("make -j$(nproc)",)
+        assert search.validation_profile is None
+        assert search.validation_setup_commands == (
+            "docker build -t valkey-search-backport -f .devcontainer/Dockerfile .",
+        )
+        assert search.build_commands[0].startswith("docker run --privileged")
+        assert example.get_repo("valkey-io/valkey-bloom").validation_profile == "valkey-make"
+
     def test_valid_minimal(self, tmp_path):
         path = _write_registry(tmp_path, _minimal_registry())
         reg = load_registry(path)
@@ -53,6 +72,7 @@ class TestLoadRegistry:
         assert entry.branches == (BranchEntry("1.0", 1),)
         assert entry.push_repo is None
         assert entry.effective_push_repo == "org/repo"
+        assert entry.validation_profile is None
         assert entry.build_commands == ()
         assert entry.validation_setup_commands == ()
         assert entry.validation_rules == ()
@@ -60,6 +80,7 @@ class TestLoadRegistry:
         assert entry.backport_label == "backport"
         assert entry.llm_conflict_label == "ai-resolved-conflicts"
         assert entry.max_conflicting_files == 100
+        assert reg.validation_profiles == ()
 
     def test_full_entry(self, tmp_path):
         data = _minimal_registry(repos=[_minimal_repo(
@@ -99,6 +120,42 @@ class TestLoadRegistry:
         assert entry.llm_conflict_label == "ai"
         assert entry.max_conflicting_files == 50
         assert len(entry.branches) == 2
+
+    def test_validation_profile_resolves_to_existing_pipeline_fields(self, tmp_path):
+        data = _minimal_registry(
+            validation_profiles={
+                "standard-c": {
+                    "validation_setup_commands": ["./ci/setup.sh"],
+                    "build_commands": ["make -j4"],
+                    "validation_rules": [{
+                        "paths": ["src/cluster*.c"],
+                        "commands": ["make test-cluster"],
+                    }],
+                },
+            },
+            repos=[_minimal_repo(validation_profile="standard-c")],
+        )
+        reg = load_registry(_write_registry(tmp_path, data))
+        entry = reg.repos[0]
+
+        assert reg.validation_profiles == (
+            ValidationProfile(
+                name="standard-c",
+                build_commands=("make -j4",),
+                validation_setup_commands=("./ci/setup.sh",),
+                validation_rules=(
+                    ValidationRule(
+                        paths=("src/cluster*.c",),
+                        commands=("make test-cluster",),
+                    ),
+                ),
+            ),
+        )
+        assert reg.get_validation_profile("standard-c") == reg.validation_profiles[0]
+        assert entry.validation_profile == "standard-c"
+        assert entry.build_commands == ("make -j4",)
+        assert entry.validation_setup_commands == ("./ci/setup.sh",)
+        assert entry.validation_rules == reg.validation_profiles[0].validation_rules
 
     def test_get_repo(self, tmp_path):
         path = _write_registry(tmp_path, _minimal_registry())
@@ -214,6 +271,79 @@ class TestValidation:
         reg = load_registry(path)
         assert reg.get_repo("org/repo").push_repo is None
         assert reg.get_repo("org/repo").effective_push_repo == "org/repo"
+
+    def test_validation_profiles_must_be_mapping(self, tmp_path):
+        data = _minimal_registry(validation_profiles=["standard-c"])
+        with pytest.raises(ValueError, match="validation_profiles must be a mapping"):
+            load_registry(_write_registry(tmp_path, data))
+
+    def test_validation_profile_requires_at_least_one_action(self, tmp_path):
+        data = _minimal_registry(
+            validation_profiles={"standard-c": {}},
+        )
+        with pytest.raises(ValueError, match="at least one validation command or rule"):
+            load_registry(_write_registry(tmp_path, data))
+
+    def test_validation_profile_can_contain_only_path_rules(self, tmp_path):
+        data = _minimal_registry(
+            validation_profiles={
+                "targeted": {
+                    "validation_rules": [{
+                        "paths": ["src/cluster*.c"],
+                        "commands": ["make test-cluster"],
+                    }],
+                },
+            },
+            repos=[_minimal_repo(validation_profile="targeted")],
+        )
+
+        entry = load_registry(_write_registry(tmp_path, data)).repos[0]
+
+        assert entry.build_commands == ()
+        assert entry.validation_setup_commands == ()
+        assert entry.validation_rules == (
+            ValidationRule(
+                paths=("src/cluster*.c",),
+                commands=("make test-cluster",),
+            ),
+        )
+
+    def test_validation_profile_rejects_unknown_fields(self, tmp_path):
+        data = _minimal_registry(
+            validation_profiles={
+                "standard-c": {
+                    "build_commands": ["make"],
+                    "timeout": 30,
+                },
+            },
+        )
+        with pytest.raises(ValueError, match="unknown fields: timeout"):
+            load_registry(_write_registry(tmp_path, data))
+
+    def test_repo_rejects_unknown_validation_profile(self, tmp_path):
+        data = _minimal_registry(
+            repos=[_minimal_repo(validation_profile="missing")],
+        )
+        with pytest.raises(ValueError, match="unknown profile 'missing'"):
+            load_registry(_write_registry(tmp_path, data))
+
+    def test_repo_rejects_profile_mixed_with_inline_validation(self, tmp_path):
+        data = _minimal_registry(
+            validation_profiles={
+                "standard-c": {"build_commands": ["make"]},
+            },
+            repos=[_minimal_repo(
+                validation_profile="standard-c",
+                build_commands=["make other"],
+            )],
+        )
+        with pytest.raises(ValueError, match="cannot combine validation_profile"):
+            load_registry(_write_registry(tmp_path, data))
+
+    def test_get_validation_profile_missing(self, tmp_path):
+        reg = load_registry(_write_registry(tmp_path, _minimal_registry()))
+        with pytest.raises(KeyError, match="not-here"):
+            reg.get_validation_profile("not-here")
 
     def test_build_commands_not_list(self, tmp_path):
         data = _minimal_registry(repos=[_minimal_repo(build_commands="make")])

@@ -221,8 +221,10 @@ gh workflow run backport-mark-done-poll.yml \
 ## Registry Changes
 
 `repos.yml` is the source of truth for onboarded repositories, release branches,
-project boards, labels, and validation commands. Use `examples/repos.yml` as a
-reference for multi-repository configuration.
+project boards, labels, and validation commands. Reusable `validation_profiles`
+can supply setup commands, build commands, and path rules; repositories without
+a profile continue to use the inline validation fields. Use `examples/repos.yml`
+as a reference for multi-repository configuration.
 
 Registry-configured `build_commands` run before pushing a generated backport
 branch. A non-zero exit blocks the push. Repositories with no `build_commands`

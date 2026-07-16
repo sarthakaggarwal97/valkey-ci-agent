@@ -52,15 +52,17 @@ Manual single-PR backports are also supported via `workflow_dispatch`.
 The registry is the single source of truth. To onboard a new repo, add an entry to `repos.yml`:
 
 ```yaml
+validation_profiles:
+  standard-c:
+    build_commands:
+      - "make -j$(nproc)"
+
 repos:
   - repo: valkey-io/valkey
     project_owner: valkey-io
     project_owner_type: organization
     language: c                          # used in conflict resolver prompt
-    validation_setup_commands:
-      - "./ci/setup-backport-validation.sh" # optional; run once in clone
-    build_commands:
-      - "make -j$(nproc)"                # run before push; empty = skip
+    validation_profile: standard-c       # optional reusable validation config
     repair_validation_failures: false    # optional; one AI repair attempt on failure
     backport_label: backport
     llm_conflict_label: ai-resolved-conflicts
@@ -71,6 +73,11 @@ repos:
       - branch: "9.0"
         project_number: 18
 ```
+
+Repositories can instead keep inline `validation_setup_commands`,
+`build_commands`, and `validation_rules`; this remains the fallback for
+repository-specific validation such as Valkey Search. A profile and inline
+validation fields cannot be combined on the same repository entry.
 
 By default, agent branches are pushed directly to `repo` under the `agent/backport/...` namespace and PRs are opened in that same upstream repository. `push_repo` is optional and only exists as an escape hatch for a real different-owner fork; same-owner `push_repo` values are rejected so staging repositories do not become the normal model.
 

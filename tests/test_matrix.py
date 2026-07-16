@@ -9,13 +9,16 @@ def _write_registry(tmp_path) -> str:
     path = tmp_path / "repos.yml"
     path.write_text(
         """
+validation_profiles:
+  standard-c:
+    build_commands:
+      - make test
 repos:
   - repo: org/core
     project_owner: org
     project_owner_type: organization
     language: c
-    build_commands:
-      - make test
+    validation_profile: standard-c
     branches:
       - branch: "1.0"
         project_number: 1
