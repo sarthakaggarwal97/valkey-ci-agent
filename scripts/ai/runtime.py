@@ -91,7 +91,9 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
     "fuzzer_analysis_readonly": AgentProfile(
         name="fuzzer_analysis_readonly",
         allowed_tools="Read,Grep,Glob",
-        timeout=1800,
+        # Two attempts plus artifact and GitHub operations must fit inside one
+        # short-lived App/AWS credential lease.
+        timeout=1200,
         effort="max",
         max_turns=200,
         writes_allowed=False,

@@ -1,8 +1,9 @@
-"""Monitor the latest scheduled Valkey fuzzer workflow run."""
+"""Process the pending scheduled Valkey fuzzer workflow-run backlog."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -19,6 +20,7 @@ from scripts.common.issue_dedup import IssueDedupPublisher
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.fuzzer import issue_renderer
 from scripts.fuzzer.analyzer import FuzzerRunAnalyzer
+from scripts.fuzzer.state import FuzzerStateStore
 
 TARGET_REPO = "valkey-io/valkey-fuzzer"
 WORKFLOW_FILE = "fuzzer-run.yml"
@@ -26,6 +28,8 @@ WORKFLOW_FILE = "fuzzer-run.yml"
 # Verdicts that should NOT produce an issue. Everything else does — including
 # `needs-human-triage` (Claude failed and there are unresolved signals).
 _NO_PUBLISH_VERDICTS = frozenset({"expected-chaos-noise", "environmental-or-infra"})
+_MAX_BATCH_RUNS = 20
+_MAX_SCANNED_RUNS = 1_000
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,58 @@ def _should_publish(analysis: Any) -> bool:
     return analysis.triage_verdict not in _NO_PUBLISH_VERDICTS
 
 
+def _select_unprocessed_runs(
+    workflow: Any,
+    *,
+    cursor: int,
+    max_runs: int,
+) -> list[Any]:
+    """Return the oldest completed prefix above a durable run-ID cursor."""
+    if cursor < 0:
+        raise ValueError("cursor must be non-negative")
+    if not 1 <= max_runs <= _MAX_BATCH_RUNS:
+        raise ValueError(f"max_runs must be between 1 and {_MAX_BATCH_RUNS}")
+
+    newer: list[Any] = []
+    for scanned, run in enumerate(workflow.get_runs(event="schedule"), start=1):
+        if scanned > _MAX_SCANNED_RUNS:
+            raise RuntimeError("fuzzer run backlog exceeds the discovery window")
+        run_id = getattr(run, "id", None)
+        if (
+            not isinstance(run_id, int)
+            or isinstance(run_id, bool)
+            or run_id <= 0
+        ):
+            raise RuntimeError("GitHub returned a fuzzer run with an invalid ID")
+        if cursor == 0:
+            if str(getattr(run, "status", "")) == "completed":
+                return [run]
+            continue
+        if run_id <= cursor:
+            break
+        newer.append(run)
+
+    newer.sort(key=lambda item: item.id)
+    completed_prefix: list[Any] = []
+    for run in newer:
+        if str(getattr(run, "status", "")) != "completed":
+            break
+        completed_prefix.append(run)
+        if len(completed_prefix) == max_runs:
+            break
+    return completed_prefix
+
+
+def _result_digest(entry: dict[str, Any]) -> str:
+    payload = json.dumps(
+        entry,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target-token", default=None,
@@ -44,8 +100,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output",
                         help="Write JSON result to this path instead of stdout")
     parser.add_argument("--dry-run", action="store_true",
-                        help="List the latest run without analyzing or filing an issue")
+                        help="List pending runs without analyzing or filing issues")
+    parser.add_argument(
+        "--max-runs",
+        type=int,
+        default=2,
+        help="Maximum oldest-first backlog runs to process (default: 2)",
+    )
     args = parser.parse_args(argv)
+    if not 1 <= args.max_runs <= _MAX_BATCH_RUNS:
+        parser.error(f"--max-runs must be between 1 and {_MAX_BATCH_RUNS}")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -57,9 +121,27 @@ def main(argv: list[str] | None = None) -> int:
     client = ArtifactClient(gh, token=token)
     analyzer = FuzzerRunAnalyzer(gh, github_token=token, artifact_client=client)
     publisher = IssueDedupPublisher(gh, marker_namespace=issue_renderer.MARKER_NAMESPACE)
+    state_store = FuzzerStateStore(gh)
+    state = state_store.read(TARGET_REPO)
 
-    runs = client.list_recent_runs(TARGET_REPO, WORKFLOW_FILE, event="schedule", max_runs=1)
+    repo = gh.get_repo(TARGET_REPO)
+    workflow = repo.get_workflow(WORKFLOW_FILE)
+    runs = _select_unprocessed_runs(
+        workflow,
+        cursor=state.cursor,
+        max_runs=args.max_runs,
+    )
     results: list[dict[str, Any]] = []
+    cursor = state.cursor
+    bootstrap_anchor: int | None = None
+    if runs and state.cursor == 0 and not args.dry_run:
+        initialized = state_store.initialize(
+            TARGET_REPO,
+            first_run_id=runs[0].id,
+            first_run_url=runs[0].html_url,
+        )
+        cursor = initialized.cursor
+        bootstrap_anchor = cursor
     for run in runs:
         entry: dict[str, Any] = {
             "run_id": run.id,
@@ -80,30 +162,48 @@ def main(argv: list[str] | None = None) -> int:
             entry["summary"] = analysis.summary
             if _should_publish(analysis):
                 if not analysis.incident_fingerprint:
-                    # Refuse to publish without a fingerprint — otherwise
-                    # unrelated runs would collide on a single issue.
-                    logger.error(
-                        "Run %s passed publish gate but has no fingerprint; skipping",
-                        run.id,
+                    raise RuntimeError(
+                        f"run {run.id} passed the publish gate without a fingerprint"
                     )
-                    entry["issue_action"] = "skipped-no-fingerprint"
-                else:
-                    action, url = publisher.upsert(
-                        TARGET_REPO,
-                        fingerprint=analysis.incident_fingerprint,
-                        render=issue_renderer.render_for(analysis),
-                        idempotency_key=str(run.id),
-                    )
-                    entry["issue_action"] = action
-                    entry["issue_url"] = url
+                action, url = publisher.upsert(
+                    TARGET_REPO,
+                    fingerprint=analysis.incident_fingerprint,
+                    render=issue_renderer.render_for(analysis),
+                    idempotency_key=str(run.id),
+                )
+                entry["issue_action"] = action
+                entry["issue_url"] = url
+            else:
+                entry["issue_action"] = "not-required"
+
+            result_sha256 = _result_digest(entry)
+            state_store.advance(
+                TARGET_REPO,
+                expected_cursor=cursor,
+                run_id=run.id,
+                run_url=run.html_url,
+                result_sha256=result_sha256,
+            )
+            cursor = run.id
+            entry["result_sha256"] = result_sha256
+            entry["cursor_action"] = "advanced"
         except Exception as exc:
             entry["action"] = "error"
             entry["error"] = str(exc)
             logger.warning("Failed to analyze run %s: %s", run.id, exc, exc_info=True)
+            results.append(entry)
+            break
 
         results.append(entry)
 
-    output = {"target_repo": TARGET_REPO, "dry_run": args.dry_run, "runs": results}
+    output = {
+        "target_repo": TARGET_REPO,
+        "dry_run": args.dry_run,
+        "initial_cursor": state.cursor,
+        "final_cursor": cursor,
+        "bootstrap_anchor": bootstrap_anchor,
+        "runs": results,
+    }
     rendered = json.dumps(output, indent=2)
     if args.output:
         Path(args.output).write_text(rendered, encoding="utf-8")

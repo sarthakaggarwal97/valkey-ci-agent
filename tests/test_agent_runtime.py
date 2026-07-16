@@ -72,6 +72,7 @@ def test_test_adaptation_profile_denies_shell_and_write_tools() -> None:
 def test_fuzzer_profile_is_readonly() -> None:
     profile = agent_runtime.AGENT_PROFILES["fuzzer_analysis_readonly"]
     assert profile.writes_allowed is False
+    assert profile.timeout <= 1200
     assert "Edit" not in profile.allowed_tools
     assert "Bash" not in profile.allowed_tools
     assert "Read" in profile.allowed_tools

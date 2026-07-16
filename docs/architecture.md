@@ -79,8 +79,9 @@ scheduled runs use the sustained in-run cadence.
 ## Fuzzer Flow
 
 ```text
-fuzzer/main.py (cron every 4 hours)
-  -> common.workflow_artifacts.ArtifactClient.list_recent_runs(...)
+fuzzer/main.py (cron every 4 hours; durable oldest-first backlog)
+  -> fuzzer.state.FuzzerStateStore.read(...)
+  -> select the oldest completed prefix after the cursor
   -> FuzzerRunAnalyzer.analyze(run)
        common.workflow_artifacts -> download the artifact bundle
        analyzer._scan_logs() -> deterministic regex pass
@@ -94,6 +95,7 @@ fuzzer/main.py (cron every 4 hours)
                                     normalized anomaly shapes
   -> common.issue_dedup.IssueDedupPublisher.upsert(...)
        fuzzer.issue_renderer.render_for(analysis) -> title/body/comment
+  -> fuzzer.state.FuzzerStateStore.advance(...)
 ```
 
 Claude is given `Read,Grep,Glob` only - no edits, no shell, no network. The
