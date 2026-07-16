@@ -2,7 +2,7 @@
 
 The pipeline is a chain of small, explicit handoffs:
 
-    gate    -> FixRequest        (who asked, which run, which SHA)
+    gate    -> FixRequest        (who asked, which target, run, and SHA)
     diagnose-> FixProposal       (AI: what failed, how to fix, how to run it)
     apply   -> (edits on disk)
     run     -> RunResult         (code: the AI-proposed command's real verdict)
@@ -31,11 +31,12 @@ class FixPath(str, Enum):
 
 @dataclass(frozen=True)
 class FixRequest:
-    """A validated ``@valkeyrie-bot fix <ci-link>`` invocation.
+    """A validated PR- or source-issue fix invocation.
 
-    Produced by the gate only after fail-closed auth and SHA-bound run
-    checks pass. ``head_sha`` is the commit the failed run was built from and
-    the commit the repo is checked out at - they are guaranteed equal here.
+    Produced only after the relevant fail-closed gate passes. ``head_sha`` is
+    the commit the failed run built and the commit the diagnosis checkout uses.
+    For a PR it is also the current PR head; for an issue-driven fix it is a
+    verified ancestor of the current default branch.
     """
 
     repo_full_name: str
@@ -131,4 +132,6 @@ class FixOutcome:
     # For HANDOFF: the unverified candidate patch, posted for a human to apply
     # and let real CI judge.
     handoff_patch: str = ""
+    # The complete reviewed path set represented by ``handoff_patch``.
+    handoff_paths: tuple[str, ...] = ()
     other_failing_checks: tuple[str, ...] = ()

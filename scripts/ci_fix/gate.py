@@ -39,9 +39,11 @@ _COMMAND_RE = re.compile(
     r"^\s*@valkeyrie-(?:bot|ops)\s+fix\s+(?P<url>\S+)(?:[^\S\n]+(?P<hint>[^\n]*))?",
     re.IGNORECASE,
 )
-# Actions run URL: .../<owner>/<repo>/actions/runs/<run_id>
+# Exact Actions run or job URL: .../<owner>/<repo>/actions/runs/<run_id>.
 _RUN_URL_RE = re.compile(
-    r"github\.com/(?P<owner>[A-Za-z0-9._-]+)/(?P<repo>[A-Za-z0-9._-]+)/actions/runs/(?P<run_id>\d+)",
+    r"^https://github\.com/(?P<owner>[A-Za-z0-9._-]+)/"
+    r"(?P<repo>[A-Za-z0-9._-]+)/actions/runs/(?P<run_id>\d+)"
+    r"(?:(?:/attempts/\d+)|(?:/job/\d+))?/?(?:[?#][^\s]*)?$",
 )
 
 _DEFAULT_AUTH_TEAM = "contributors"
@@ -69,15 +71,19 @@ def parse_command(body: str) -> ParsedCommand | None:
     match = _COMMAND_RE.search(body)
     if not match:
         return None
-    url_match = _RUN_URL_RE.search(match.group("url"))
+    return parse_run_url(match.group("url"), hint=(match.group("hint") or "").strip())
+
+
+def parse_run_url(url: str, *, hint: str = "") -> ParsedCommand | None:
+    """Parse one Actions run or job URL into a code-owned run identity."""
+    url_match = _RUN_URL_RE.fullmatch(url)
     if not url_match:
         return None
-    hint = (match.group("hint") or "").strip()
     return ParsedCommand(
         run_owner=url_match.group("owner"),
         run_repo=url_match.group("repo"),
         run_id=int(url_match.group("run_id")),
-        hint=hint,
+        hint=hint.strip(),
     )
 
 

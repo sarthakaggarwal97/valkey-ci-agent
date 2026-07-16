@@ -537,7 +537,14 @@ def test_pipeline_refuses_job_not_in_failed_set(monkeypatch):
     assert "not among the failed jobs" in outcome.summary
 
 
-def _macos_pipeline(monkeypatch, verifier, *, apply_ok=True, review_ok=True):
+def _macos_pipeline(
+    monkeypatch,
+    verifier,
+    *,
+    apply_ok=True,
+    review_ok=True,
+    **pipeline_kwargs,
+):
     from scripts.ci_fix.verify.base import VerifyEnv
     from scripts.ci_fix.verify.workflow_env import JobEnvironment
     monkeypatch.setattr("scripts.ci_fix.pipeline.shallow_clone_at_sha", lambda *a, **k: True)
@@ -555,6 +562,7 @@ def _macos_pipeline(monkeypatch, verifier, *, apply_ok=True, review_ok=True):
         diagnose_func=lambda *a, **k: _proposal(),
         push_func=lambda *a, **k: "cafe" * 10,
         macos_verifier=verifier,
+        **pipeline_kwargs,
     )
 
 
@@ -573,6 +581,121 @@ def test_pipeline_macos_green_pushes(monkeypatch):
     assert outcome.kind is OutcomeKind.PUSHED
     assert outcome.verify_backend == "macos"
     assert outcome.macos_run_url == "https://run/9"
+
+
+def test_pipeline_issue_macos_reproduces_then_passes_repeatedly(monkeypatch):
+    from scripts.ci_fix.verify.base import VerificationResult
+
+    verifier = MagicMock()
+    verifier.verify.side_effect = [
+        VerificationResult(
+            verified=False,
+            ran=True,
+            detail="baseline failed",
+            run_url="https://run/baseline",
+            output_tail="corrupt payload: zset listpack with NAN score",
+        ),
+        VerificationResult(verified=True, ran=True, detail="ok", run_url="https://run/1"),
+        VerificationResult(verified=True, ran=True, detail="ok", run_url="https://run/2"),
+        VerificationResult(verified=True, ran=True, detail="ok", run_url="https://run/3"),
+    ]
+
+    outcome = _macos_pipeline(
+        monkeypatch,
+        verifier,
+        macos_baseline_runs=3,
+        macos_verify_runs=3,
+        allow_passing_macos_baseline_handoff=True,
+    )
+
+    assert outcome.kind is OutcomeKind.PUSHED
+    assert verifier.verify.call_count == 4
+    assert verifier.verify.call_args_list[0].args[2] == ""
+    assert all(call.args[2] == "diff\n" for call in verifier.verify.call_args_list[1:])
+
+
+def test_pipeline_issue_macos_unrelated_baseline_failure_is_draft_handoff(monkeypatch):
+    from scripts.ci_fix.verify.base import VerificationResult
+
+    verifier = MagicMock()
+    verifier.verify.side_effect = [
+        VerificationResult(
+            verified=False,
+            ran=True,
+            detail="baseline failed",
+            output_tail="compiler unavailable",
+            run_url="https://run/baseline",
+        ),
+        VerificationResult(verified=True, ran=True, detail="ok", run_url="https://run/1"),
+    ]
+
+    outcome = _macos_pipeline(
+        monkeypatch,
+        verifier,
+        macos_baseline_runs=2,
+        macos_verify_runs=1,
+        allow_passing_macos_baseline_handoff=True,
+    )
+
+    assert outcome.kind is OutcomeKind.HANDOFF
+    assert "without identifying the requested check" in outcome.summary
+
+
+def test_pipeline_issue_macos_clean_baseline_is_draft_handoff(monkeypatch):
+    from scripts.ci_fix.verify.base import VerificationResult
+
+    verifier = MagicMock()
+    verifier.verify.return_value = VerificationResult(
+        verified=True,
+        ran=True,
+        detail="ok",
+        run_url="https://run/green",
+    )
+
+    outcome = _macos_pipeline(
+        monkeypatch,
+        verifier,
+        macos_baseline_runs=2,
+        macos_verify_runs=2,
+        allow_passing_macos_baseline_handoff=True,
+    )
+
+    assert outcome.kind is OutcomeKind.HANDOFF
+    assert outcome.handoff_patch == "diff\n"
+    assert outcome.handoff_paths == ("test.tcl",)
+    assert "did not reproduce" in outcome.summary
+    assert "2 macOS verification run(s)" in outcome.summary
+    assert verifier.verify.call_count == 4
+
+
+def test_pipeline_issue_macos_unrunnable_baseline_is_draft_handoff(monkeypatch):
+    from scripts.ci_fix.verify.base import VerificationResult
+
+    verifier = MagicMock()
+    verifier.verify.side_effect = [
+        VerificationResult(
+            verified=False,
+            ran=False,
+            detail="dispatch unavailable",
+        ),
+        VerificationResult(
+            verified=True,
+            ran=True,
+            detail="ok",
+            run_url="https://run/candidate",
+        ),
+    ]
+
+    outcome = _macos_pipeline(
+        monkeypatch,
+        verifier,
+        macos_baseline_runs=3,
+        allow_passing_macos_baseline_handoff=True,
+    )
+
+    assert outcome.kind is OutcomeKind.HANDOFF
+    assert "could not run the unpatched macOS baseline" in outcome.summary
+    assert verifier.verify.call_count == 2
 
 
 def test_pipeline_macos_cleanup_failure_preserves_push(monkeypatch):
@@ -766,4 +889,5 @@ def test_pipeline_handoff_when_verify_cannot_run(monkeypatch):
     outcome = _run_pipeline(monkeypatch, loop=lambda *a, **k: handoff_loop)
     assert outcome.kind is OutcomeKind.HANDOFF
     assert outcome.handoff_patch == "--- a/src/x.c\n+++ b/src/x.c\n"
+    assert outcome.handoff_paths == ("src/x.c",)
     assert "could not verify" in outcome.summary

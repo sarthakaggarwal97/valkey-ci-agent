@@ -63,6 +63,20 @@ def test_parse_command_ignores_quoted_mention_mid_comment():
 
 def test_parse_command_requires_run_url():
     assert parse_command("@valkeyrie-bot fix https://example.com/not-a-run") is None
+    assert parse_command(
+        f"@valkeyrie-bot fix https://example.com/redirect/{_RUN_URL}"
+    ) is None
+
+
+def test_parse_command_accepts_common_github_run_url_variants():
+    variants = (
+        f"{_RUN_URL}/job/123",
+        f"{_RUN_URL}/attempts/2",
+        f"{_RUN_URL}?check_suite_focus=true",
+        f"{_RUN_URL}#summary",
+    )
+    assert all(parse_command(f"@valkeyrie-bot fix {url}") is not None for url in variants)
+    assert parse_command(f"@valkeyrie-bot fix {_RUN_URL}/evil") is None
 
 
 # --- is_authorized (fail closed) ---

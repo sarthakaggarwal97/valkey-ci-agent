@@ -107,7 +107,8 @@ def test_workflows_use_registry_outputs_instead_of_repo_allowlists():
     assert "scripts.ci_fix.registry" in fix_workflow
     assert "owner: ${{ steps.target.outputs.owner }}" in fix_workflow
     assert "repositories: ${{ steps.target.outputs.name }}" in fix_workflow
-    assert "group: ci-fix-${{ inputs.repo }}-${{ inputs.pr }}" in fix_workflow
+    assert "format('issue-{0}', inputs.issue)" in fix_workflow
+    assert "format('pr-{0}', inputs.pr)" in fix_workflow
     assert 'CI_FIX_REPO}" != "valkey-io/valkey"' not in fix_workflow
 
     assert "scripts.ci_fix.registry" in poll_workflow

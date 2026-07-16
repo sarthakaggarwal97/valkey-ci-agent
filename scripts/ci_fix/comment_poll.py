@@ -1,18 +1,19 @@
 """Comment-triggered entry point for the CI fix bot.
 
-A maintainer comments ``@valkeyrie-ops fix <ci-link>`` on a PR in a
-registry-enabled repository. This scheduled poller finds that comment and
+A maintainer comments ``@valkeyrie-ops fix <ci-link>`` on a PR or open issue in
+a registry-enabled repository. This scheduled poller finds that comment and
 dispatches the existing ``ci-fix`` workflow, which does the actual
-diagnose/verify/push. The poller is only the trigger; it owns no fix logic.
+diagnose/verify/publish work. Bot-created detector issues may omit the link and
+reuse their recorded run. The poller is only the trigger; it owns no fix logic.
 
 Idempotency is a reaction marker on GitHub, not external state. The claim is
 atomic: GitHub's create-reaction returns ``201`` when this call added the
 reaction and ``200`` when it already existed, so only the run that observes
 ``201`` dispatches. Two overlapping ticks therefore cannot both fire.
 
-Order per comment: parse, reject bots, confirm it is a PR, authorize the
-verified comment author, skip if already marked, claim (atomic), dispatch. Each
-step that cannot proceed skips without claiming, so a later tick can retry.
+Order per comment: parse, reject bots, classify the parent as a PR or eligible
+source issue, authorize the verified comment author, skip if already marked,
+claim (atomic), dispatch. Guards fail before claiming so a later tick can retry.
 """
 
 from __future__ import annotations
@@ -30,6 +31,11 @@ from github.GithubException import GithubException
 
 from scripts.backport.registry import load_registry
 from scripts.ci_fix.gate import ParsedCommand, is_authorized, parse_command
+from scripts.ci_fix.issue_gate import (
+    IssueFixInvocation,
+    is_issue_fix_target,
+    parse_issue_fix_invocation,
+)
 from scripts.ci_fix.registry import enabled_ci_fix_repositories
 from scripts.common.git_clone import REPO_RE
 from scripts.common.github_client import retry_github_call
@@ -56,6 +62,8 @@ _MAX_LOOP_SECONDS = 55 * 60
 
 DispatchFn = Callable[[str, int, ParsedCommand, str, int], None]
 """(repo_full_name, pr_number, command, commenter, comment_id) -> None."""
+IssueDispatchFn = Callable[[str, int, IssueFixInvocation, str, int], None]
+"""(repo_full_name, issue_number, invocation, commenter, comment_id) -> None."""
 
 
 @dataclass(frozen=True)
@@ -85,9 +93,10 @@ def poll_once(
     bot_login: str,
     lookback_minutes: int,
     dispatch: DispatchFn,
+    issue_dispatch: IssueDispatchFn | None = None,
     claim: ClaimFn,
 ) -> int:
-    """Scan recent PR comments once and dispatch a fix for each new command.
+    """Scan recent PR and eligible issue comments for new fix commands.
 
     Returns the number of comments dispatched. ``bot_login`` is the App's own
     login (``<app-slug>[bot]``) used to recognize our own claim reaction.
@@ -105,7 +114,8 @@ def poll_once(
             if _process_comment(
                 gh, repo, comment,
                 target_repo=target_repo, org=org, team_slug=team_slug,
-                bot_login=bot_login, dispatch=dispatch, claim=claim,
+                bot_login=bot_login, dispatch=dispatch,
+                issue_dispatch=issue_dispatch, claim=claim,
             ):
                 dispatched += 1
         except Exception as exc:  # noqa: BLE001 - one bad comment must not abort the tick
@@ -124,6 +134,7 @@ def _process_comment(
     team_slug: str,
     bot_login: str,
     dispatch: DispatchFn,
+    issue_dispatch: IssueDispatchFn | None,
     claim: ClaimFn,
 ) -> bool:
     """Handle one comment; return True iff it was claimed and dispatched.
@@ -132,14 +143,33 @@ def _process_comment(
     tick can retry. The caller isolates this per comment, so an API error on one
     comment does not stop the rest of the tick.
     """
-    command = parse_command(comment.body or "")
-    if command is None:
-        return False
     if _is_bot(comment):
         return False
-    pr_number = _pull_request_number(repo, comment)
-    if pr_number is None:
+
+    body = comment.body or ""
+    command = parse_command(body)
+    issue_invocation = parse_issue_fix_invocation(body)
+    if command is None and issue_invocation is None:
         return False
+
+    parent = _parent_issue(repo, comment)
+    if parent is None:
+        return False
+    number, issue = parent
+    is_pull = getattr(issue, "pull_request", None) is not None
+    if is_pull and command is None:
+        return False
+    if not is_pull and (
+        issue_dispatch is None
+        or issue_invocation is None
+        or not is_issue_fix_target(
+            issue,
+            issue_invocation,
+            detector_login=bot_login,
+        )
+    ):
+        return False
+
     commenter = _login(comment)
     if not is_authorized(gh, org, team_slug, commenter):
         logger.info("Skipping comment %s from unauthorized %s", comment.id, commenter)
@@ -150,15 +180,29 @@ def _process_comment(
     if acquired is None:
         # Another concurrent tick won the claim, or the claim call failed.
         return False
+
     try:
-        dispatch(target_repo, pr_number, command, commenter, comment.id)
+        if is_pull:
+            assert command is not None
+            dispatch(target_repo, number, command, commenter, comment.id)
+            target_kind = "PR"
+        else:
+            assert issue_dispatch is not None and issue_invocation is not None
+            issue_dispatch(target_repo, number, issue_invocation, commenter, comment.id)
+            target_kind = "issue"
     except Exception:
         # A rejected dispatch must not strand the permanent idempotency marker.
         # Releasing the exact reaction created above preserves atomicity: this
         # cannot delete another poller's claim.
         acquired.release()
         raise
-    logger.info("Dispatched ci-fix for %s#%d (commenter %s)", target_repo, pr_number, commenter)
+    logger.info(
+        "Dispatched ci-fix for %s %s#%d (commenter %s)",
+        target_repo,
+        target_kind,
+        number,
+        commenter,
+    )
     return True
 
 
@@ -166,8 +210,8 @@ def _recent_comments(repo: Any, since_epoch: float) -> list[Any]:
     """List repository issue comments updated since ``since_epoch``.
 
     Uses the issue-comments listing (not issue search, which returns issues, not
-    comment objects). Covers comments on both issues and PRs; the caller filters
-    to PRs.
+    comment objects). Covers comments on both issues and PRs; the caller applies
+    the target-specific gate.
     """
     since = _from_epoch(since_epoch)
     return list(
@@ -183,11 +227,19 @@ def _pull_request_number(repo: Any, comment: Any) -> int | None:
     """Return the PR number this comment belongs to, or None if it is an issue.
 
     An issue comment carries the parent issue URL (``.../issues/<n>``). We fetch
-    that issue from the known repo and require a ``pull_request`` field: the
-    ci-fix engine only acts on PRs, so an issue comment must never be claimed.
+    that issue from the known repo and require a ``pull_request`` field. This
+    legacy helper remains for callers that specifically need a PR parent.
     The repo is passed in because a listed ``IssueComment`` does not expose its
     repository.
     """
+    parent = _parent_issue(repo, comment)
+    if parent is None:
+        return None
+    number, issue = parent
+    return number if getattr(issue, "pull_request", None) is not None else None
+
+
+def _parent_issue(repo: Any, comment: Any) -> tuple[int, Any] | None:
     number = _issue_number_from_url(getattr(comment, "issue_url", "") or "")
     if number is None:
         return None
@@ -196,7 +248,7 @@ def _pull_request_number(repo: Any, comment: Any) -> int | None:
         retries=3,
         description=f"get issue {number} for comment {comment.id}",
     )
-    return number if getattr(issue, "pull_request", None) is not None else None
+    return number, issue
 
 
 def _already_claimed(comment: Any, bot_login: str) -> bool:
@@ -324,6 +376,49 @@ def dispatch_ci_fix(
     return _dispatch
 
 
+def dispatch_issue_fix(
+    gh: Github,
+    *,
+    agent_repo: str,
+    workflow: str,
+    ref: str,
+) -> IssueDispatchFn:
+    """Build a dispatcher for issue-to-draft-PR fixes."""
+
+    def _dispatch(
+        repo_full_name: str,
+        issue_number: int,
+        invocation: IssueFixInvocation,
+        commenter: str,
+        comment_id: int = 0,
+    ) -> None:
+        inputs = {
+            "repo": repo_full_name,
+            "issue": str(issue_number),
+            "run_url": invocation.run_url,
+            "hint": invocation.hint,
+            "commenter": commenter,
+        }
+        if comment_id:
+            inputs["comment_id"] = str(comment_id)
+        wf = gh.get_repo(agent_repo).get_workflow(workflow)
+
+        def _create_dispatch() -> None:
+            if not wf.create_dispatch(ref, inputs):
+                raise WorkflowDispatchRejected(
+                    f"GitHub rejected {workflow} for issue "
+                    f"{repo_full_name}#{issue_number}"
+                )
+
+        retry_github_call(
+            _create_dispatch,
+            retries=2,
+            description=f"dispatch {workflow} for issue {repo_full_name}#{issue_number}",
+        )
+
+    return _dispatch
+
+
 def _lookback_minutes() -> int:
     return env_int(
         "CI_FIX_POLL_LOOKBACK_MINUTES",
@@ -369,6 +464,7 @@ def poll_repositories(
     bot_login: str,
     lookback_minutes: int,
     dispatch: DispatchFn,
+    issue_dispatch: IssueDispatchFn | None = None,
     claim: ClaimFn,
 ) -> int:
     """Poll all targets, isolating API failures unless every target fails."""
@@ -384,6 +480,7 @@ def poll_repositories(
                 bot_login=bot_login,
                 lookback_minutes=lookback_minutes,
                 dispatch=dispatch,
+                issue_dispatch=issue_dispatch,
                 claim=claim,
             )
         except GithubException as exc:
@@ -441,6 +538,9 @@ def main() -> int:
 
     gh = Github(auth=Auth.Token(token))
     dispatch = dispatch_ci_fix(gh, agent_repo=agent_repo, workflow=workflow, ref=ref)
+    issue_dispatch = dispatch_issue_fix(
+        gh, agent_repo=agent_repo, workflow=workflow, ref=ref
+    )
 
     def _poll() -> int:
         return poll_repositories(
@@ -451,6 +551,7 @@ def main() -> int:
             bot_login=bot_login,
             lookback_minutes=_lookback_minutes(),
             dispatch=dispatch,
+            issue_dispatch=issue_dispatch,
             claim=claim_via_status,
         )
 

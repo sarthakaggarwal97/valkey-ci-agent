@@ -22,10 +22,12 @@ import re
 import subprocess
 import tempfile
 import textwrap
+from dataclasses import dataclass
 from pathlib import Path
 
 from scripts.ci_fix.models import FixProposal
 from scripts.ci_fix.port_discovery import resolve_default_branch
+from scripts.ci_fix.rendering import normalize_generated_text
 from scripts.common.git_auth import github_https_url
 from scripts.common.git_clone import REPO_RE, SHA_RE
 from scripts.common.proc import BOT_EMAIL, BOT_NAME, EmptyPatch, build_approved_patch, git_output, run_git
@@ -33,10 +35,18 @@ from scripts.common.proc import BOT_EMAIL, BOT_NAME, EmptyPatch, build_approved_
 logger = logging.getLogger(__name__)
 
 ALLOWED_BRANCH_PREFIX = "agent/backport/"
+ISSUE_BRANCH_PREFIX = "agent/ci-fix/issue-"
+_ISSUE_BRANCH_RE = re.compile(r"^agent/ci-fix/issue-(\d+)-run-(\d+)$")
 
 
 class PushRefused(Exception):
     """Raised when a push target falls outside the allowed namespace."""
+
+
+@dataclass(frozen=True)
+class IssuePushResult:
+    commit_sha: str
+    base_sha: str
 
 
 def commit_and_push_fix(
@@ -109,6 +119,272 @@ def commit_and_push_fix(
             raise PushRefused(f"Refusing to push: git failed: {detail}") from exc
 
         return git_output(str(clean_repo), "rev-parse", "HEAD").strip()
+
+
+def commit_and_push_issue_fix(
+    repo_dir: str,
+    *,
+    repo_full_name: str,
+    base_branch: str,
+    branch_name: str,
+    issue_number: int,
+    run_id: int,
+    run_sha: str,
+    proposal: FixProposal,
+    changed_paths: tuple[str, ...],
+    git_env: dict[str, str],
+) -> IssuePushResult:
+    """Publish a verified issue fix on a new agent-owned branch."""
+    if not changed_paths:
+        raise PushRefused("Refusing to publish issue fix: no approved changed paths.")
+    try:
+        patch = build_approved_patch(repo_dir, changed_paths)
+    except EmptyPatch as exc:
+        raise PushRefused(f"Refusing to publish issue fix: {exc}.") from exc
+    return commit_and_push_issue_patch(
+        patch,
+        repo_full_name=repo_full_name,
+        base_branch=base_branch,
+        branch_name=branch_name,
+        issue_number=issue_number,
+        run_id=run_id,
+        run_sha=run_sha,
+        proposal=proposal,
+        expected_paths=changed_paths,
+        git_env=git_env,
+    )
+
+
+def commit_and_push_issue_patch(
+    patch: str,
+    *,
+    repo_full_name: str,
+    base_branch: str,
+    branch_name: str,
+    issue_number: int,
+    run_id: int,
+    run_sha: str,
+    proposal: FixProposal,
+    expected_paths: tuple[str, ...] = (),
+    git_env: dict[str, str],
+) -> IssuePushResult:
+    """Apply a reviewed patch to the latest default branch and push a new ref.
+
+    This path also publishes handoff patches whose flaky baseline could not be
+    reproduced locally. The caller opens a draft PR and labels that limitation;
+    this function only guarantees exact-patch transfer and namespace-safe,
+    non-force publication.
+    """
+    if not REPO_RE.fullmatch(repo_full_name):
+        raise PushRefused(f"Refusing to push to malformed repo {repo_full_name!r}.")
+    issue_branch = _ISSUE_BRANCH_RE.fullmatch(branch_name)
+    if issue_branch is None:
+        raise PushRefused(
+            f"Refusing to push to {branch_name!r}: issue fixes require "
+            f"{ISSUE_BRANCH_PREFIX}<issue>-run-<run>."
+        )
+    if int(issue_branch.group(1)) != issue_number:
+        raise PushRefused(
+            "Refusing to publish issue fix: branch issue number does not match "
+            f"issue #{issue_number}."
+        )
+    if int(issue_branch.group(2)) != run_id:
+        raise PushRefused(
+            "Refusing to publish issue fix: branch run ID does not match "
+            f"run {run_id}."
+        )
+    if not _is_valid_branch_name(branch_name):
+        raise PushRefused(f"Refusing to push to malformed branch {branch_name!r}.")
+    if not _is_valid_branch_name(base_branch):
+        raise PushRefused(f"Refusing to use malformed base branch {base_branch!r}.")
+    if issue_number < 1:
+        raise PushRefused("Refusing to publish an issue fix without a valid issue number.")
+    if run_id < 1:
+        raise PushRefused("Refusing to publish an issue fix without a valid run ID.")
+    if not SHA_RE.fullmatch(run_sha):
+        raise PushRefused(f"Refusing to publish issue fix from malformed run SHA {run_sha!r}.")
+    if not patch.strip():
+        raise PushRefused("Refusing to publish an empty issue-fix patch.")
+
+    with tempfile.TemporaryDirectory(prefix="ci-fix-issue-push-") as tmpdir:
+        clean_repo = Path(tmpdir) / "repo"
+        _clone_clean(repo_full_name, clean_repo)
+        try:
+            base_ref = f"refs/remotes/origin/{base_branch}"
+            branch_ref = f"refs/remotes/origin/{branch_name}"
+            run_git(
+                str(clean_repo),
+                "fetch",
+                "origin",
+                f"refs/heads/{base_branch}:{base_ref}",
+            )
+            run_git(str(clean_repo), "checkout", "--detach", base_ref)
+            publication_base_sha = git_output(
+                str(clean_repo), "rev-parse", "HEAD"
+            ).strip()
+            if not _is_ancestor(str(clean_repo), run_sha, base_ref):
+                raise PushRefused(
+                    "Refusing to publish issue fix: the failing run commit is "
+                    f"no longer an ancestor of {base_branch!r}."
+                )
+            existing = _existing_ref(str(clean_repo), branch_ref)
+            if existing:
+                return _recover_issue_branch(
+                    str(clean_repo),
+                    branch_ref=branch_ref,
+                    current_base_ref=base_ref,
+                    patch=patch,
+                    issue_number=issue_number,
+                    run_sha=run_sha,
+                    proposal=proposal,
+                )
+            run_git(str(clean_repo), "checkout", "-b", branch_name)
+            _apply_patch(str(clean_repo), patch)
+
+            staged = _staged_paths(str(clean_repo))
+            if not staged:
+                raise PushRefused("Refusing to publish issue fix: patch staged no files.")
+            if expected_paths and staged != tuple(sorted(expected_paths)):
+                raise PushRefused(
+                    "Refusing to publish issue fix: reviewed patch staged unexpected "
+                    f"paths {staged!r} (expected {tuple(sorted(expected_paths))!r})."
+                )
+
+            run_git(str(clean_repo), "config", "user.name", BOT_NAME)
+            run_git(str(clean_repo), "config", "user.email", BOT_EMAIL)
+            message = f"{_commit_message(proposal).rstrip()}\n\nRefs #{issue_number}\n"
+            run_git(str(clean_repo), "commit", "-m", message)
+            run_git(
+                str(clean_repo),
+                "remote",
+                "set-url",
+                "origin",
+                github_https_url(repo_full_name),
+            )
+            run_git(
+                str(clean_repo), "push", "origin", f"HEAD:refs/heads/{branch_name}",
+                env=git_env,
+            )
+        except PushRefused:
+            raise
+        except subprocess.CalledProcessError as exc:
+            recovered = _recover_after_push_race(
+                str(clean_repo),
+                branch_name=branch_name,
+                current_base_ref=base_ref,
+                patch=patch,
+                issue_number=issue_number,
+                run_sha=run_sha,
+                proposal=proposal,
+            )
+            if recovered is not None:
+                return recovered
+            detail = (exc.stderr or str(exc)).strip()[:300]
+            raise PushRefused(f"Refusing to publish issue fix: git failed: {detail}") from exc
+
+        return IssuePushResult(
+            commit_sha=git_output(str(clean_repo), "rev-parse", "HEAD").strip(),
+            base_sha=publication_base_sha,
+        )
+
+
+def _recover_after_push_race(
+    repo_dir: str,
+    *,
+    branch_name: str,
+    current_base_ref: str,
+    patch: str,
+    issue_number: int,
+    run_sha: str,
+    proposal: FixProposal,
+) -> IssuePushResult | None:
+    """Recover when another invocation published the exact branch first."""
+    branch_ref = f"refs/remotes/origin/{branch_name}"
+    try:
+        run_git(
+            repo_dir,
+            "fetch",
+            "origin",
+            f"refs/heads/{branch_name}:{branch_ref}",
+        )
+    except subprocess.CalledProcessError:
+        return None
+    return _recover_issue_branch(
+        repo_dir,
+        branch_ref=branch_ref,
+        current_base_ref=current_base_ref,
+        patch=patch,
+        issue_number=issue_number,
+        run_sha=run_sha,
+        proposal=proposal,
+    )
+
+
+def _recover_issue_branch(
+    repo_dir: str,
+    *,
+    branch_ref: str,
+    current_base_ref: str,
+    patch: str,
+    issue_number: int,
+    run_sha: str,
+    proposal: FixProposal,
+) -> IssuePushResult:
+    """Accept an orphan branch only when it is exactly our reviewed commit."""
+    commit_sha = git_output(repo_dir, "rev-parse", "--verify", branch_ref).strip()
+    commit_line = git_output(
+        repo_dir, "rev-list", "--parents", "-n", "1", commit_sha
+    ).strip().split()
+    if len(commit_line) != 2:
+        raise PushRefused(
+            "Refusing to recover issue-fix branch: expected exactly one commit "
+            "on top of its publication base."
+        )
+    base_sha = commit_line[1]
+    if not _is_ancestor(repo_dir, run_sha, base_sha):
+        raise PushRefused(
+            "Refusing to recover issue-fix branch: its base does not contain "
+            "the failing run commit."
+        )
+    if not _is_ancestor(repo_dir, base_sha, current_base_ref):
+        raise PushRefused(
+            "Refusing to recover issue-fix branch: its base is not in the "
+            "current default-branch history."
+        )
+
+    expected_message = (
+        f"{_commit_message(proposal).rstrip()}\n\nRefs #{issue_number}"
+    )
+    actual_message = git_output(repo_dir, "show", "-s", "--format=%B", commit_sha).strip()
+    author_email = git_output(repo_dir, "show", "-s", "--format=%ae", commit_sha).strip()
+    committer_email = git_output(repo_dir, "show", "-s", "--format=%ce", commit_sha).strip()
+    if (
+        actual_message != expected_message
+        or author_email != BOT_EMAIL
+        or committer_email != BOT_EMAIL
+    ):
+        raise PushRefused(
+            "Refusing to recover issue-fix branch: commit identity or provenance "
+            "does not match this invocation."
+        )
+
+    run_git(repo_dir, "checkout", "--detach", base_sha)
+    _apply_patch(repo_dir, patch)
+    expected_tree = git_output(repo_dir, "write-tree").strip()
+    actual_tree = git_output(repo_dir, "show", "-s", "--format=%T", commit_sha).strip()
+    if expected_tree != actual_tree:
+        raise PushRefused(
+            "Refusing to recover issue-fix branch: existing commit does not "
+            "contain the exact reviewed patch."
+        )
+    return IssuePushResult(commit_sha=commit_sha, base_sha=base_sha)
+
+
+def _existing_ref(repo_dir: str, ref: str) -> str:
+    try:
+        return git_output(repo_dir, "rev-parse", "--verify", ref).strip()
+    except subprocess.CalledProcessError:
+        return ""
 
 
 def commit_and_push_port(
@@ -264,16 +540,31 @@ def _commit_message(proposal: FixProposal) -> str:
 
 
 def _format_commit_body(body: str) -> str:
-    return "\n\n".join(
-        textwrap.fill(
-            paragraph.strip(),
-            width=72,
-            break_long_words=False,
-            break_on_hyphens=False,
+    paragraphs: list[str] = []
+    remaining = 2_000
+    for raw in re.split(r"\n\s*\n", body):
+        normalized = normalize_generated_text(raw, limit=remaining)
+        if not normalized:
+            continue
+        paragraphs.append(normalized)
+        remaining -= len(normalized)
+        if remaining <= 0:
+            break
+    if not paragraphs:
+        paragraphs = ["Unspecified CI failure."]
+
+    rendered = []
+    for index, paragraph in enumerate(paragraphs):
+        label = "Root cause: " if index == 0 else "Detail: "
+        rendered.append(
+            textwrap.fill(
+                f"{label}{paragraph}",
+                width=72,
+                break_long_words=False,
+                break_on_hyphens=False,
+            )
         )
-        for paragraph in body.strip().split("\n\n")
-        if paragraph.strip()
-    )
+    return "\n\n".join(rendered)
 
 
 _SOURCE_LOCATION_RE = re.compile(

@@ -26,7 +26,7 @@ New workflows are added as sibling directories to `backport/`. Each workflow pic
 |----------|--------|-------------|
 | Backport | Active | Cherry-picks merged PRs onto release branches with AI conflict resolution |
 | Fuzzer Monitor | Active | Analyzes scheduled fuzzer runs and files issues for anomalous failures |
-| CI Fix | Active | On-demand `@valkeyrie-bot fix <ci-link>` - diagnoses and fixes a failing test on a backport PR |
+| CI Fix | Active | Repairs agent backport PRs or opens draft fixes from failed default-branch CI |
 | Test Failure Detector | Active | Detects test failures from Daily CI, files/updates GitHub issues |
 | PR Reviewer | Planned | Two-stage code review with skeptic pass |
 | Additional Daily CI Analysis | Planned | Detects flaky tests, generates fix PRs |
@@ -78,8 +78,9 @@ By default, agent branches are pushed directly to `repo` under the `agent/backpo
 
 CI fixing is a separate, explicit capability. Set `ci_fix.enabled: true` on a
 registry entry to allow the CI-fix workflow to mint a repository-scoped token,
-poll its PR comments, and fix its agent-owned backport branches. Omitting the
-setting leaves CI fixing disabled even when the repository supports backports.
+poll its PR and eligible issue comments, fix its agent-owned backport branches,
+and open issue-driven draft PRs. Omitting the setting leaves CI fixing disabled
+even when the repository supports backports.
 
 The sweep branch is always kept green: a candidate is only kept if the whole branch still validates after the cherry-pick, so one bad commit can never block later candidates. Each scheduled run keeps up to two validated cherry-picks (`--max-candidates 2`) and reports candidates that were skipped or failed validation in the PR's "Needs attention" section without committing them. When `repair_validation_failures` is enabled, Claude Code gets one narrow edit-only attempt to fix a failing cherry-pick before it is dropped.
 
@@ -168,89 +169,93 @@ gh workflow run test-failure-detector-sweep.yml \
 
 ## CI Fix Workflow
 
-An on-demand workflow that fixes a single failing test on a backport PR when a
-maintainer asks for it. From this agent repository, run it explicitly:
+An on-demand workflow with two additive modes:
+
+- **Backport PR repair** updates an existing `agent/backport/...` PR branch.
+- **Issue repair** creates a new draft PR from the current default branch. An
+  explicit failed-run URL works on any open issue; a Test Failure Detector issue
+  created by the configured App may reuse a run URL recorded by that same App.
+
+Run either mode explicitly from this agent repository:
 
 ```bash
+# Repair an existing agent backport PR.
 gh workflow run ci-fix.yml \
   --repo valkey-io/valkey-ci-agent \
   --field repo=valkey-io/valkey \
   --field pr=<pr-number> \
   --field run_url=https://github.com/valkey-io/valkey/actions/runs/<run_id>
+
+# Create a draft fix from an open source issue.
+gh workflow run ci-fix.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey \
+  --field issue=<issue-number> \
+  --field run_url=https://github.com/valkey-io/valkey/actions/runs/<run_id>
 ```
+
+Exactly one of `pr` or `issue` must be supplied. `run_url` is required for PR
+repairs and ordinary issues. It may be omitted only for a detector issue created
+by the configured App that already records a valid Actions run URL.
 
 The workflow accepts every repository explicitly opted in through
 `ci_fix.enabled` in `repos.yml`. Today that is `valkey-io/valkey` and
 `valkey-io/valkey-search`. It resolves the dispatch target through the registry
 before minting a token scoped only to that repository. Maintainers can dispatch
-it manually, or comment on a PR in either repository and let
-`ci-fix-comment-poll.yml` dispatch it. The invocation must start the comment,
-and the hint is only the rest of that line, so a conversational comment that
-merely quotes or mentions the command does not trigger a run. The intended
-comment shape is:
+it manually, or comment on an eligible PR or open issue and let
+`ci-fix-comment-poll.yml` dispatch it:
 
 ```text
-@valkeyrie-bot fix https://github.com/valkey-io/valkey/actions/runs/<run_id>
+@valkeyrie-ops fix https://github.com/valkey-io/valkey/actions/runs/<run_id>
 ```
 
-Add a free-text hint via the dispatch `hint` input to steer the diagnosis
-(e.g. `look at the valgrind timeout`). The bot fixes one test per invocation;
-re-run it to address the next failing test in the same run.
+The invocation must start the comment, and the optional hint is only the rest
+of that line. An ordinary issue must include the URL. On a detector issue
+created by the configured App, `@valkeyrie-ops fix <hint>` may omit it; the gate
+selects the latest valid CI link recorded by that same App. The bot fixes one
+test per invocation.
 
 ### How it works
 
-The division of labor is the whole design: **AI judges, code executes and
-owns every verdict.** The AI never runs a command and never pushes.
+The division of labor is the whole design: **AI judges, code executes and owns
+every verdict.** The AI never runs a command and never pushes.
 
-1. **Gate** (code, fail-closed) - parses the command, verifies the commenter
-   is an active member of `valkey-io/contributors`, and binds the failed run
-   to the PR head (`head_repo` + `head_branch` + `head_sha`). If the branch
-   moved since the run, it refuses - the log no longer describes the code.
-2. **Fetch** (code) - downloads the failed run's logs and shallow-clones the
-   repo at the exact failed commit.
-3. **Diagnose** (AI, read-only) - reads the log and the repo, including the
-   project's *own* CI workflow files to learn how it builds and tests, then
-   returns a structured proposal: port an existing upstream fix, author a
-   test-scaffolding fix, or refuse. Nothing about the test framework is
-   hardcoded, so the same engine works for any repo.
-4. **Select the verifier** (code) - code, not the AI, decides where the fix is
-   verified. It lists the jobs that actually failed in the linked run, requires
-   the AI's job hint to match one of them, and classifies that job's runner from
-   its workflow definition: an x86 Linux job verifies locally, a container job
-   verifies inside that image via Docker, a macOS job verifies on a macOS
-   runner. Anything it cannot classify safely (arm, self-hosted, dynamic) is
-   refused.
-5. **Verify + review** - the verification policy depends on the fix path:
-   - PORT: when the fix is an existing default-branch commit that cherry-picks
-     cleanly, the bot may push the port and rely on this PR's normal CI as the
-     authority. This exception is limited to already-merged upstream fixes.
-   - Linux/Docker: first run the AI's targeted build+verify recipe on the clean
-     checkout. If it passes before any fix, the bot treats the linked failure
-     as flaky or environment-specific and refuses. If the local environment
-     cannot establish a baseline because a setup dependency is missing, any
-     authored patch is handoff-only. Otherwise, apply the fix and run it in a
-     **sanitized subprocess** (scrubbed environment, locked working directory,
-     timeout, output cap; Docker adds no-network, dropped capabilities,
-     non-root), where the real exit code is the verdict. The build runs once
-     and the verify command must pass `CI_FIX_VERIFY_RUNS` times in a row
-     (default 2). This path retries on failure.
-   - macOS: send the approved patch to a macOS runner the agent controls, which
-     checks out the PR head, applies the patch, and runs the command; its CI
-     conclusion is the verdict.
-   A skeptic review (read-only AI) judges whether the fix addresses the root
-   cause rather than silencing the symptom. A push requires both a passing
-   verification and an approving review.
-6. **Push** (code) - extracts only the approved patch, applies it in a fresh
-   trusted clone at the gated SHA, commits authored as the bot (no DCO
-   sign-off - a human must certify before merge), and pushes to the PR's own
-   `agent/backport/...` branch. The checkout that ran tests never receives
-   credentials. The PR's normal CI re-runs as the authoritative check. The bot
-   never merges.
+1. **Gate** (code, fail-closed) - verifies active membership in
+   `valkey-io/contributors`. PR repair binds the run to the exact current PR
+   head. Issue repair requires an open issue, an explicit failed-run URL or a
+   `test-failure` issue created by the configured detector App and carrying its
+   marker, a completed same-repository run whose commit remains in the current
+   default branch's ancestry, and no prior PR for the generated issue/run
+   branch.
+2. **Fetch** (code) - downloads run logs and clones the repository at the exact
+   failed commit.
+3. **Diagnose** (AI, read-only) - reads bounded log, source-issue, source, and
+   workflow evidence and returns a structured proposal. PR repair may port an
+   existing default-branch fix; issue repair permits only a causal authored fix
+   or a refusal. Arbitrary sleeps, weakened assertions, skips, and product
+   changes without a narrow test-failure cause are refused.
+4. **Select the verifier** (code) - requires the proposed job to be one that
+   actually failed, then derives local, Docker, or macOS verification from the
+   repository's workflow. Unsupported or ambiguous environments are refused.
+5. **Verify + review** - Linux and Docker execute in a sanitized subprocess;
+   macOS uses an agent-owned workflow. PR repair requires a failing baseline
+   before an authored push. Issue repair repeats both the unpatched baseline
+   and post-change command. A clean or unavailable baseline can produce only
+   an explicitly unverified draft handoff. Verification performed at an older
+   default-branch commit is also reported as historical, with the draft PR's CI
+   authoritative for the published branch. A skeptic review must approve the
+   exact patch and reject symptom masking.
+6. **Publish** (code) - PR repair applies the exact approved patch to the gated
+   SHA and pushes fast-forward-only to the existing `agent/backport/...`
+   branch. Issue repair applies it to the latest default-branch tip, pushes
+   `agent/ci-fix/issue-<issue>-run-<run>`, and opens a linked draft PR. The
+   checkout that ran tests never receives credentials. The bot never marks a
+   draft ready, certifies DCO, or merges.
 
-This is targeted verification of the one failing check, not a replay of the
-whole CI job. Every refusal posts a PR comment explaining why, with evidence,
-so when the bot can't safely fix something (a real product bug, a flaky test,
-an unverifiable environment), a maintainer can take over immediately.
+This is targeted verification of one failing check, not a replay of the whole
+CI job. Every outcome is posted to the triggering PR or issue. A non-reproduced
+issue failure is labeled as unverified in both the issue comment and draft PR;
+green PR CI remains the authority.
 
 ### Configuration
 
@@ -276,12 +281,17 @@ workflow exactly on time. Optional poller tuning lives in
 
 Optional verification tuning: `CI_FIX_VERIFY_RUNS` sets how many times a
 Linux/Docker fix must pass the verify command before it is trusted (default 2,
-maximum 10). The build runs once regardless, so raising it only repeats the
-verify step. macOS verification runs once on its dedicated runner.
+maximum 10). `CI_FIX_ISSUE_BASELINE_RUNS` and
+`CI_FIX_ISSUE_VERIFY_RUNS` independently control issue-driven pre-fix and
+post-change repetitions across Linux, Docker, and macOS (default 5 each,
+minimum 2, maximum 20). Issue mode is capped at 55 minutes so its final push and
+report occur before the one-hour App and AWS credentials expire; tune repetition
+counts down for slow checks. Existing PR-repair macOS verification remains
+one-shot.
 
 ## Safety
 
-- **Branch namespace** - the agent writes only `agent/backport/...` branches and opens PRs for maintainer review.
+- **Branch namespace** - the agent writes only `agent/backport/...` and `agent/ci-fix/issue-...` branches; issue fixes always open as drafts.
 - **Credential isolation** - all GitHub auth uses `GIT_ASKPASS`; tokens never appear in `.git/config` or URLs
 - **Claude Code env isolation** - `GITHUB_TOKEN`, `GH_TOKEN`, and `*_SECRET` are stripped from the subprocess environment. Claude cannot see credentials.
 - **Deterministic validation** - registry-configured build commands run before push. A validation failure blocks the push.

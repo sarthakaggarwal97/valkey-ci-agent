@@ -245,5 +245,5 @@ def test_author_fix_commit_message_preserves_body_paragraphs():
     )
 
     message = push_mod._commit_message(proposal)
-    assert "\n\nSecond sentence explains why the fix is safe.\n" in message
+    assert "\n\nDetail: Second sentence explains why the fix is safe.\n" in message
     assert all(len(line) <= 72 for line in message.splitlines())

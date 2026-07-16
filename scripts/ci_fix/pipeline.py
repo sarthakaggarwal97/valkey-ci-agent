@@ -1,4 +1,4 @@
-"""Top-level orchestration for ``@valkeyrie-bot fix <ci-link>``.
+"""Shared orchestration for PR and issue-driven CI fixes.
 
 Thin wiring over a clean data flow; every refusal returns a ``FixOutcome`` so
 the workflow always posts an explanatory comment:
@@ -31,6 +31,7 @@ from scripts.ci_fix.models import (
     FixRequest,
     OutcomeKind,
     ReviewVerdict,
+    RunResult,
 )
 from scripts.ci_fix.port_discovery import PortCandidate, discover_port_candidates
 from scripts.ci_fix.push import PushRefused, commit_and_push_fix, commit_and_push_port
@@ -40,6 +41,7 @@ from scripts.ci_fix.review import (
     build_and_review_patch,
     combined_command,
     precheck_command,
+    reproduced_the_named_failure,
     reset_worktree,
     run_fix_loop,
 )
@@ -82,6 +84,9 @@ def run_ci_fix(
     push_func: Push = commit_and_push_fix,
     port_push_func: PortPush = commit_and_push_port,
     macos_verifier: VerifyBackend | None = None,
+    macos_baseline_runs: int = 0,
+    macos_verify_runs: int = 1,
+    allow_passing_macos_baseline_handoff: bool = False,
 ) -> FixOutcome:
     """Run the whole pipeline and return a terminal ``FixOutcome``."""
     request = build_fix_request(
@@ -91,6 +96,44 @@ def run_ci_fix(
     if isinstance(request, GateRejection):
         return FixOutcome(kind=OutcomeKind.REFUSED, summary=request.reason)
 
+    return run_fix_request(
+        gh,
+        request=request,
+        git_env=git_env,
+        artifact_client=artifact_client,
+        verify_runs=verify_runs,
+        diagnose_func=diagnose_func,
+        run_loop_func=run_loop_func,
+        push_func=push_func,
+        port_push_func=port_push_func,
+        macos_verifier=macos_verifier,
+        macos_baseline_runs=macos_baseline_runs,
+        macos_verify_runs=macos_verify_runs,
+        allow_passing_macos_baseline_handoff=allow_passing_macos_baseline_handoff,
+    )
+
+
+def run_fix_request(
+    gh: Any,
+    *,
+    request: FixRequest,
+    git_env: dict[str, str],
+    artifact_client: ArtifactClient,
+    verify_runs: int = DEFAULT_VERIFY_RUNS,
+    diagnose_func: Diagnose = diagnose_failure,
+    run_loop_func: RunLoop = run_fix_loop,
+    push_func: Push = commit_and_push_fix,
+    port_push_func: PortPush = commit_and_push_port,
+    macos_verifier: VerifyBackend | None = None,
+    macos_baseline_runs: int = 0,
+    macos_verify_runs: int = 1,
+    allow_passing_macos_baseline_handoff: bool = False,
+) -> FixOutcome:
+    """Execute an already validated fix request.
+
+    The existing PR gate and the issue-to-new-PR gate enforce different source
+    invariants, then share this evidence/diagnosis/verification pipeline.
+    """
     failed_jobs = tuple(j.name for j in failed_jobs_for_run(gh, request.repo_full_name, request.run_id))
 
     with tempfile.TemporaryDirectory(prefix="ci-fix-") as workdir_str:
@@ -99,7 +142,9 @@ def run_ci_fix(
             artifact_client=artifact_client, git_env=git_env,
             diagnose_func=diagnose_func, run_loop_func=run_loop_func, push_func=push_func,
             port_push_func=port_push_func, macos_verifier=macos_verifier,
-            verify_runs=verify_runs,
+            verify_runs=verify_runs, macos_baseline_runs=macos_baseline_runs,
+            macos_verify_runs=macos_verify_runs,
+            allow_passing_macos_baseline_handoff=allow_passing_macos_baseline_handoff,
         )
     run_url = f"https://github.com/{request.repo_full_name}/actions/runs/{request.run_id}"
     return replace(outcome, failing_run_url=run_url)
@@ -118,6 +163,9 @@ def _run_in_workspace(
     port_push_func: PortPush,
     macos_verifier: VerifyBackend | None,
     verify_runs: int,
+    macos_baseline_runs: int,
+    macos_verify_runs: int,
+    allow_passing_macos_baseline_handoff: bool,
 ) -> FixOutcome:
     logs = artifact_client.download_run_logs(request.repo_full_name, request.run_id)
     if not logs:
@@ -156,6 +204,9 @@ def _run_in_workspace(
         return _verify_once_and_push(
             repo_dir, request, proposal, plan,
             verifier=macos_verifier, git_env=git_env, push_func=push_func,
+            baseline_runs=macos_baseline_runs,
+            verify_runs=macos_verify_runs,
+            allow_passing_baseline_handoff=allow_passing_macos_baseline_handoff,
         )
     return _loop_and_push(
         repo_dir, request, proposal, plan,
@@ -211,6 +262,7 @@ def _loop_and_push(
             kind=OutcomeKind.HANDOFF, summary=loop.detail, proposal=proposal,
             run_result=loop.run_result, review=loop.review,
             handoff_patch=loop.handoff_patch,
+            handoff_paths=loop.changed_paths,
             other_failing_checks=proposal.other_failing_checks,
         )
     if not loop.success:
@@ -293,6 +345,8 @@ def _port_and_push(
 def _verify_once_and_push(
     repo_dir: Path, request: FixRequest, proposal: FixProposal, plan: VerificationPlan,
     *, verifier: VerifyBackend | None, git_env: dict[str, str], push_func: Push,
+    baseline_runs: int = 0, verify_runs: int = 1,
+    allow_passing_baseline_handoff: bool = False,
 ) -> FixOutcome:
     """macOS: apply, review, and remotely verify with bounded feedback retries.
 
@@ -306,6 +360,19 @@ def _verify_once_and_push(
         if precheck:
             return _refuse(proposal, precheck)
 
+        baseline_handoff_only = False
+        baseline_detail = ""
+        if baseline_runs > 0:
+            baseline_handoff_only, baseline_detail = _establish_macos_baseline(
+                repo_dir,
+                proposal,
+                plan,
+                verifier=verifier,
+                runs=baseline_runs,
+            )
+            if baseline_handoff_only and not allow_passing_baseline_handoff:
+                return _refuse(proposal, baseline_detail)
+
         # The push path extracts an approved patch and applies it in a separate
         # clean clone, so resetting this worktree on the way out is safe
         # for every outcome, including a successful push.
@@ -313,6 +380,9 @@ def _verify_once_and_push(
             return _macos_fix_loop(
                 repo_dir, request, proposal, plan,
                 verifier=verifier, git_env=git_env, push_func=push_func,
+                verify_runs=verify_runs,
+                baseline_handoff_only=baseline_handoff_only,
+                baseline_detail=baseline_detail,
             )
         finally:
             try:
@@ -336,6 +406,8 @@ def _verify_once_and_push(
 def _macos_fix_loop(
     repo_dir: Path, request: FixRequest, proposal: FixProposal, plan: VerificationPlan,
     *, verifier: VerifyBackend, git_env: dict[str, str], push_func: Push,
+    verify_runs: int = 1, baseline_handoff_only: bool = False,
+    baseline_detail: str = "",
 ) -> FixOutcome:
     """Apply, review, and remotely verify the fix up to N times with feedback.
 
@@ -372,9 +444,31 @@ def _macos_fix_loop(
             last_summary = reviewed.detail
             continue
 
-        result = verifier.verify(str(repo_dir), plan, reviewed.patch)
+        result = _verify_macos_repeatedly(
+            repo_dir,
+            plan,
+            reviewed.patch,
+            verifier=verifier,
+            runs=verify_runs,
+        )
         last_run_url = result.run_url
         if result.verified:
+            if baseline_handoff_only:
+                return FixOutcome(
+                    kind=OutcomeKind.HANDOFF,
+                    summary=(
+                        f"{baseline_detail}; the reviewed patch passed "
+                        f"{max(1, verify_runs)} macOS verification run(s), so "
+                        "opening a draft for CI validation instead of claiming a verified fix"
+                    ),
+                    proposal=proposal,
+                    review=reviewed.review,
+                    verify_backend=backend_label(VerifyEnv.MACOS),
+                    macos_run_url=result.run_url,
+                    handoff_patch=reviewed.patch,
+                    handoff_paths=changed,
+                    other_failing_checks=proposal.other_failing_checks,
+                )
             return _push(
                 repo_dir, request, proposal, changed,
                 review=reviewed.review, verify_backend=backend_label(VerifyEnv.MACOS),
@@ -393,6 +487,75 @@ def _macos_fix_loop(
         kind=OutcomeKind.REFUSED, summary=last_summary,
         proposal=proposal, review=last_review, macos_run_url=last_run_url,
         other_failing_checks=proposal.other_failing_checks,
+    )
+
+
+def _establish_macos_baseline(
+    repo_dir: Path,
+    proposal: FixProposal,
+    plan: VerificationPlan,
+    *,
+    verifier: VerifyBackend,
+    runs: int,
+) -> tuple[bool, str]:
+    """Return whether a macOS fix must be draft-only and the reason."""
+    runs = max(1, runs)
+    for attempt in range(1, runs + 1):
+        result = verifier.verify(str(repo_dir), plan, "")
+        if not result.ran:
+            return True, (
+                "could not run the unpatched macOS baseline "
+                f"(attempt {attempt}/{runs}: {result.detail})"
+            )
+        if not result.verified:
+            baseline = _verification_run_result(result, plan)
+            if not reproduced_the_named_failure(proposal, baseline):
+                return True, (
+                    "the unpatched macOS baseline failed without identifying "
+                    f"the requested check {proposal.failing_check!r}"
+                )
+            logger.info(
+                "macOS baseline reproduced the targeted failure on attempt %d/%d",
+                attempt,
+                runs,
+            )
+            return False, ""
+    return True, f"the targeted failure did not reproduce in {runs} unpatched macOS run(s)"
+
+
+def _verification_run_result(
+    result: VerificationResult,
+    plan: VerificationPlan,
+) -> RunResult:
+    """Adapt remote evidence to the named-failure matcher."""
+    return RunResult(
+        ran=result.ran,
+        passed=result.verified,
+        exit_code=0 if result.verified else 1,
+        command=plan.command,
+        output_tail=result.output_tail,
+    )
+
+
+def _verify_macos_repeatedly(
+    repo_dir: Path,
+    plan: VerificationPlan,
+    patch: str,
+    *,
+    verifier: VerifyBackend,
+    runs: int,
+) -> VerificationResult:
+    """Require every remote candidate run to pass."""
+    runs = max(1, runs)
+    result: VerificationResult | None = None
+    for _attempt in range(1, runs + 1):
+        result = verifier.verify(str(repo_dir), plan, patch)
+        if not result.verified:
+            return result
+    assert result is not None
+    return replace(
+        result,
+        detail=f"targeted macOS verification passed {runs} run(s)",
     )
 
 

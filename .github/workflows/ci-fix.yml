@@ -8,16 +8,22 @@ on:
   workflow_dispatch:
     inputs:
       repo:
-        description: "CI-fix-enabled PR repository, e.g. valkey-io/valkey"
+        description: "CI-fix-enabled target repository, e.g. valkey-io/valkey"
         required: true
         type: string
       pr:
-        description: "Backport PR number"
-        required: true
+        description: "Backport PR number (set either pr or issue)"
+        required: false
         type: number
+        default: 0
+      issue:
+        description: "Open source issue number for a new draft PR (set either issue or pr)"
+        required: false
+        type: number
+        default: 0
       run_url:
-        description: "Failed GitHub Actions run URL"
-        required: true
+        description: "Failed Actions run URL (optional only when a detector issue records one)"
+        required: false
         type: string
       hint:
         description: "Optional diagnosis hint"
@@ -40,7 +46,9 @@ env:
 jobs:
   ci-fix:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # Issue mode must finish while the one-hour GitHub App and AWS sessions are
+    # still valid so publication and outcome reporting cannot fail on expiry.
+    timeout-minutes: ${{ inputs.issue > 0 && 55 || 90 }}
     permissions:
       contents: read
       id-token: write
@@ -49,7 +57,7 @@ jobs:
       # once. This does not coordinate with other workflows that write the same
       # branch; the fast-forward-only push (see push.py) is what keeps a
       # concurrent branch update from being clobbered.
-      group: ci-fix-${{ inputs.repo }}-${{ inputs.pr }}
+      group: ci-fix-${{ inputs.repo }}-${{ inputs.issue > 0 && format('issue-{0}', inputs.issue) || format('pr-{0}', inputs.pr) }}
       cancel-in-progress: false
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -127,8 +135,11 @@ jobs:
           CI_FIX_MACOS_TOKEN: ${{ steps.agent-token.outputs.token }}
           CI_FIX_REPO: ${{ inputs.repo }}
           CI_FIX_PR: ${{ inputs.pr }}
+          CI_FIX_ISSUE: ${{ inputs.issue }}
           CI_FIX_RUN_URL: ${{ inputs.run_url }}
           CI_FIX_VERIFY_RUNS: ${{ vars.CI_FIX_VERIFY_RUNS || '2' }}
+          CI_FIX_ISSUE_VERIFY_RUNS: ${{ vars.CI_FIX_ISSUE_VERIFY_RUNS || '5' }}
+          CI_FIX_ISSUE_BASELINE_RUNS: ${{ vars.CI_FIX_ISSUE_BASELINE_RUNS || '5' }}
           # The commenter input is honored only when the trusted poller App
           # dispatched this run; any other dispatcher (a human via the Actions
           # UI) falls back to github.actor, so a manual run cannot rewrite the
@@ -138,23 +149,46 @@ jobs:
           CI_FIX_HINT: ${{ inputs.hint || '' }}
           CI_FIX_COMMENT_ID: ${{ inputs.comment_id || '' }}
           CI_FIX_AUTH_ORG: ${{ steps.target.outputs.owner }}
+          CI_FIX_DETECTOR_LOGIN: ${{ format('{0}[bot]', steps.generate-token.outputs.app-slug) }}
         run: |
           set -euo pipefail
           if [[ ! "${CI_FIX_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
             echo "Invalid repo: ${CI_FIX_REPO}" >&2
             exit 1
           fi
-          if [[ ! "${CI_FIX_PR}" =~ ^[0-9]+$ ]]; then
-            echo "Invalid PR number: ${CI_FIX_PR}" >&2
+          if [[ ! "${CI_FIX_PR}" =~ ^[0-9]+$ ]] || [[ ! "${CI_FIX_ISSUE}" =~ ^[0-9]+$ ]]; then
+            echo "Invalid pr or issue number: pr=${CI_FIX_PR} issue=${CI_FIX_ISSUE}" >&2
+            exit 1
+          fi
+          if (( (CI_FIX_PR > 0) == (CI_FIX_ISSUE > 0) )); then
+            echo "Set exactly one of pr or issue" >&2
             exit 1
           fi
           args=(
-            -m scripts.ci_fix.main
+            -m
+          )
+          if (( CI_FIX_PR > 0 )); then
+            if [[ -z "${CI_FIX_RUN_URL}" ]]; then
+              echo "run_url is required for PR fixes" >&2
+              exit 1
+            fi
+            args+=(
+              scripts.ci_fix.main
+              --pr "${CI_FIX_PR}"
+            )
+          else
+            args+=(
+              scripts.ci_fix.issue_main
+              --issue "${CI_FIX_ISSUE}"
+            )
+          fi
+          args+=(
             --repo "${CI_FIX_REPO}"
-            --pr "${CI_FIX_PR}"
-            --run-url "${CI_FIX_RUN_URL}"
             --commenter "${CI_FIX_COMMENTER}"
           )
+          if [[ -n "${CI_FIX_RUN_URL}" ]]; then
+            args+=(--run-url "${CI_FIX_RUN_URL}")
+          fi
           if [[ -n "${CI_FIX_HINT}" ]]; then
             args+=(--hint "${CI_FIX_HINT}")
           fi

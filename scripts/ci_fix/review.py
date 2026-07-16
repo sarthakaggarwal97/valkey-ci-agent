@@ -263,9 +263,9 @@ def reproduce_failure(
 def reproduced_the_named_failure(proposal: FixProposal, result: RunResult) -> bool:
     """Return True when the failed baseline output names the intended check.
 
-    The match is evidence only. Build and lint failures often omit the job or
-    check name from compiler output, so absence is logged by the caller rather
-    than treated as a hard mismatch.
+    Build and lint failures often omit the job or check name from compiler
+    output, so the caller decides whether absence requires refusal, a draft-only
+    handoff, or only a warning.
     """
     check = proposal.failing_check.strip()
     if len(check) < _MIN_MATCHABLE_CHECK_CHARS:
@@ -408,6 +408,9 @@ def run_fix_loop(
     *,
     max_attempts: int = 5,
     verify_runs: int = DEFAULT_VERIFY_RUNS,
+    baseline_runs: int = 1,
+    allow_passing_baseline_handoff: bool = False,
+    require_named_baseline: bool = False,
     container_image: str = "",
     apply_func: ApplyFix = apply_fix,
     run_command: RunCommand = run_verification_command,
@@ -418,11 +421,17 @@ def run_fix_loop(
 
     Returns a ``LoopResult`` whose ``success`` is True only when the failure
     reproduced, verification passed ``verify_runs`` times, and the skeptic
-    approved. Every non-success path leaves the worktree reset to HEAD so the
-    caller never pushes a partial edit.
+    approved. Issue-driven flaky fixes may set
+    ``allow_passing_baseline_handoff``: a reviewed patch can then be handed off
+    to a draft PR when ``baseline_runs`` clean attempts did not reproduce the
+    CI failure, but it is never treated as verified. ``require_named_baseline``
+    similarly prevents an unrelated command failure from proving reproduction.
+    Every non-success path leaves the worktree reset to HEAD so the caller never
+    pushes a partial edit.
     """
     max_attempts = max(1, max_attempts)
     verify_runs = max(1, verify_runs)
+    baseline_runs = max(1, baseline_runs)
     precheck = precheck_command(proposal)
     if precheck:
         return LoopResult(
@@ -434,9 +443,18 @@ def run_fix_loop(
     # this local environment, keep the existing handoff path alive but make any
     # authored patch handoff-only: without a failing baseline, we must not push.
     reset_func(repo_dir)
-    baseline = reproduce_failure(
-        repo_dir, proposal, container_image=container_image, run_command=run_command,
-    )
+    if baseline_runs == 1:
+        baseline = reproduce_failure(
+            repo_dir, proposal, container_image=container_image, run_command=run_command,
+        )
+    else:
+        baseline = verify_repeatedly(
+            repo_dir,
+            proposal,
+            runs=baseline_runs,
+            container_image=container_image,
+            run_command=run_command,
+        )
     baseline_handoff_only = False
     if not baseline.ran:
         baseline_handoff_only = True
@@ -445,18 +463,26 @@ def run_fix_loop(
             baseline.output_tail[:300],
         )
     elif baseline.passed:
-        reset_func(repo_dir)
-        return LoopResult(
-            success=False,
-            run_result=baseline,
-            review=None,
-            changed_paths=(),
-            attempts=0,
-            detail=(
-                "the failure did not reproduce on a clean checkout; it is likely "
-                "flaky or environment-specific, so refusing rather than pushing a fix"
-            ),
-        )
+        if allow_passing_baseline_handoff:
+            baseline_handoff_only = True
+            logger.info(
+                "failure did not reproduce in %d baseline run(s); any authored "
+                "fix will be handoff-only",
+                baseline_runs,
+            )
+        else:
+            reset_func(repo_dir)
+            return LoopResult(
+                success=False,
+                run_result=baseline,
+                review=None,
+                changed_paths=(),
+                attempts=0,
+                detail=(
+                    "the failure did not reproduce on a clean checkout; it is likely "
+                    "flaky or environment-specific, so refusing rather than pushing a fix"
+                ),
+            )
     elif looks_like_missing_dependency(baseline.output_tail):
         baseline_handoff_only = True
         logger.warning(
@@ -464,10 +490,33 @@ def run_fix_loop(
             "any authored fix will be handoff-only"
         )
     elif not reproduced_the_named_failure(proposal, baseline):
-        logger.warning(
-            "baseline reproduce failed but %r was not found in output; proceeding unconfirmed",
-            proposal.failing_check,
-        )
+        if require_named_baseline:
+            if allow_passing_baseline_handoff:
+                baseline_handoff_only = True
+                logger.warning(
+                    "baseline failed without naming %r; any authored fix will "
+                    "be handoff-only",
+                    proposal.failing_check,
+                )
+            else:
+                reset_func(repo_dir)
+                return LoopResult(
+                    success=False,
+                    run_result=baseline,
+                    review=None,
+                    changed_paths=(),
+                    attempts=0,
+                    detail=(
+                        "the baseline command failed, but its output did not "
+                        f"identify the requested check {proposal.failing_check!r}"
+                    ),
+                )
+        else:
+            logger.warning(
+                "baseline reproduce failed but %r was not found in output; "
+                "proceeding unconfirmed",
+                proposal.failing_check,
+            )
     reset_func(repo_dir)
 
     last_detail = "no attempt made"

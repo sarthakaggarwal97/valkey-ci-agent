@@ -25,9 +25,10 @@ on:
         required: true
         type: string
       patch_b64:
-        description: "base64-encoded patch to apply"
-        required: true
+        description: "base64-encoded patch to apply (empty for a baseline run)"
+        required: false
         type: string
+        default: ""
       verify_command:
         description: "Targeted verification command to run"
         required: true
@@ -63,7 +64,7 @@ jobs:
           if [[ ! "${HEAD_SHA}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
             echo "Invalid head_sha" >&2; exit 1
           fi
-          if [[ -z "${PATCH_B64}" || ! "${PATCH_B64}" =~ ^[A-Za-z0-9+/]+={0,2}$ ]]; then
+          if [[ -n "${PATCH_B64}" && ! "${PATCH_B64}" =~ ^[A-Za-z0-9+/]+={0,2}$ ]]; then
             echo "Invalid patch_b64" >&2; exit 1
           fi
           if [[ "${VERIFY_WORKDIR}" == *..* || "${VERIFY_WORKDIR}" == /* || "${VERIFY_WORKDIR}" == *$'\n'* ]]; then
@@ -101,6 +102,7 @@ jobs:
           test -x /opt/homebrew/opt/llvm/bin/llvm-ranlib
 
       - name: Apply candidate patch
+        if: ${{ inputs.patch_b64 != '' }}
         working-directory: target
         env:
           PATCH_B64: ${{ inputs.patch_b64 }}

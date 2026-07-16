@@ -23,7 +23,7 @@ from scripts.common.proc import worktree_changed_paths
 logger = logging.getLogger(__name__)
 
 _PROMPT_TEMPLATE = """\
-You are fixing a single failing CI check on a release branch. A diagnosis has
+You are fixing a single failing CI check on a repository branch. A diagnosis has
 already been made; apply the fix by editing files in the repository at the
 working directory. The failure may be a test, a compile/build error, a lint or
 schema check, or another deterministic failure.
@@ -104,4 +104,3 @@ def apply_fix(
         logger.info("apply agent made no edits; treating as refusal")
         return False, ()
     return True, changed
-

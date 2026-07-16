@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 
 from scripts.ci_fix.models import FixOutcome, OutcomeKind
+from scripts.ci_fix.rendering import markdown_generated_text
 
 _OUTPUT_TAIL_IN_COMMENT = 3000
 
@@ -41,14 +42,14 @@ def _render_pushed(outcome: FixOutcome) -> str:
     run = outcome.run_result
     review = outcome.review
     lines = [
-        f"Fixed **{proposal.failing_check if proposal else 'the failing check'}** "
+        f"Fixed **{markdown_generated_text(proposal.failing_check) if proposal else 'the failing check'}** "
         f"and pushed `{outcome.commit_sha[:12]}` to this PR's branch.",
         "",
     ]
     if outcome.failing_run_url:
         lines += [f"Fixing the failure from [this run]({outcome.failing_run_url}).", ""]
     lines += [
-        f"**Root cause:** {proposal.root_cause if proposal else ''}",
+        f"**Root cause:** {markdown_generated_text(proposal.root_cause) if proposal else ''}",
         "",
     ]
     if run is not None:
@@ -73,7 +74,7 @@ def _render_pushed(outcome: FixOutcome) -> str:
         where = _backend_label(outcome)
         lines += [f"**Verified by:** {where}", ""]
     if review is not None and review.reasoning:
-        lines += [f"**Review:** {review.reasoning}", ""]
+        lines += [f"**Review:** {markdown_generated_text(review.reasoning)}", ""]
     lines += _remaining_checks(outcome)
     if outcome.verify_backend == "upstream-port":
         lines.append(
@@ -128,7 +129,7 @@ def _backend_label(outcome: FixOutcome) -> str:
 
 
 def _render_refused(outcome: FixOutcome) -> str:
-    lines = [f"I did not push a fix: {outcome.summary}", ""]
+    lines = [f"I did not push a fix: {markdown_generated_text(outcome.summary)}", ""]
     if outcome.failing_run_url:
         lines += [f"Looked at the failure from [this run]({outcome.failing_run_url}).", ""]
     if outcome.run_result is not None and outcome.run_result.output_tail:
@@ -144,7 +145,10 @@ def _render_refused(outcome: FixOutcome) -> str:
 
 
 def _render_failed(outcome: FixOutcome) -> str:
-    return f"I hit an error and could not complete the fix: {outcome.summary}"
+    return (
+        "I hit an error and could not complete the fix: "
+        f"{markdown_generated_text(outcome.summary)}"
+    )
 
 
 def _render_handoff(outcome: FixOutcome) -> str:
@@ -157,10 +161,13 @@ def _render_handoff(outcome: FixOutcome) -> str:
     if outcome.failing_run_url:
         lines += [f"From the failure in [this run]({outcome.failing_run_url}).", ""]
     if proposal is not None and proposal.root_cause:
-        lines += [f"**Root cause:** {proposal.root_cause}", ""]
-    lines += [f"**Why not verified:** {outcome.summary}", ""]
+        lines += [f"**Root cause:** {markdown_generated_text(proposal.root_cause)}", ""]
+    lines += [f"**Why not verified:** {markdown_generated_text(outcome.summary)}", ""]
     if outcome.review is not None and outcome.review.reasoning:
-        lines += [f"**Review:** {outcome.review.reasoning}", ""]
+        lines += [
+            f"**Review:** {markdown_generated_text(outcome.review.reasoning)}",
+            "",
+        ]
     if outcome.handoff_patch:
         lines += [
             "Proposed patch (apply and let this PR's CI judge it):",
@@ -176,7 +183,9 @@ def _render_handoff(outcome: FixOutcome) -> str:
 def _remaining_checks(outcome: FixOutcome) -> list[str]:
     if not outcome.other_failing_checks:
         return []
-    listed = "\n".join(f"- `{name}`" for name in outcome.other_failing_checks)
+    listed = "\n".join(
+        f"- {markdown_generated_text(name)}" for name in outcome.other_failing_checks
+    )
     return [
         "Other checks also failed in that run; re-invoke with the same command to "
         "address the next one:",

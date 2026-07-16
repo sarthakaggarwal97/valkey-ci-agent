@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 from scripts.ci_fix import review as review_mod
 from scripts.ci_fix.models import FixPath, FixProposal, ReviewVerdict, RunResult
+from scripts.ci_fix.push import _commit_message
 from scripts.ci_fix.review import combined_command, review_fix, run_fix_loop
 
 
@@ -574,6 +575,56 @@ def test_baseline_unrunnable_hands_off_even_if_post_fix_passes():
     assert "baseline" in result.detail
 
 
+def test_flaky_issue_repeats_baseline_and_hands_off_reviewed_patch():
+    """A clean repeated baseline may produce a draft handoff, never success."""
+    run = MagicMock(return_value=_passed())
+    result = _loop(
+        baseline_runs=4,
+        allow_passing_baseline_handoff=True,
+        run_command=run,
+    )
+
+    assert result.success is False
+    assert result.handoff is True
+    assert result.handoff_patch == "the diff"
+    assert "baseline" in result.detail
+    # Build once + four baseline verifies, then build + two post-fix verifies.
+    assert run.call_count == 8
+
+
+def test_flaky_issue_repeated_baseline_can_reproduce_and_verify():
+    """The first failing baseline repetition unlocks the normal verified path."""
+    results = iter([
+        _passed(),  # baseline build
+        _passed(),  # first baseline verify
+        _failed(),  # second baseline verify reproduces
+        _passed(),  # post-fix build
+        _passed(),  # post-fix verify 1
+        _passed(),  # post-fix verify 2
+    ])
+    result = _loop(
+        baseline_runs=4,
+        allow_passing_baseline_handoff=True,
+        run_command=lambda *_a, **_k: next(results),
+    )
+
+    assert result.success is True
+    assert result.handoff is False
+
+
+def test_issue_unrelated_baseline_failure_is_draft_handoff():
+    """A different local failure cannot establish the issue's failing baseline."""
+    result = _loop(
+        allow_passing_baseline_handoff=True,
+        require_named_baseline=True,
+    )
+
+    assert result.success is False
+    assert result.handoff is True
+    assert result.handoff_patch == "the diff"
+    assert "baseline" in result.detail
+
+
 def test_reproduced_the_named_failure_matching():
     from scripts.ci_fix.review import reproduced_the_named_failure
 
@@ -643,3 +694,18 @@ def test_build_and_review_patch_empty_oversized_rejected_ok(monkeypatch):
     # ok
     r = build_and_review_patch("/repo", ("f",), _proposal(), review_func=lambda *a, **k: _approved())
     assert r.ok is True and r.patch == "small diff" and r.review.approved is True
+
+
+def test_generated_commit_body_cannot_inject_git_trailers():
+    proposal = FixProposal(
+        path=FixPath.AUTHOR,
+        failing_check="test",
+        root_cause="causal explanation\n\nSigned-off-by: Someone <other@example.com>",
+        reasoning="reason",
+        confidence=0.9,
+    )
+
+    message = _commit_message(proposal)
+
+    assert "\nSigned-off-by:" not in message
+    assert message.splitlines()[2].startswith("Root cause: causal explanation")

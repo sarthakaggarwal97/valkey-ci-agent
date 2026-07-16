@@ -84,6 +84,27 @@ def test_green_run_verifies(monkeypatch):
     assert captured["inputs"]["target_repo"] == "owner/target"
 
 
+def test_empty_patch_dispatches_unmodified_baseline(monkeypatch):
+    monkeypatch.setattr("scripts.ci_fix.verify.macos.time.sleep", lambda *_: None)
+    gh, captured, set_token, _run = _gh_with_run(conclusion="failure")
+    orig = gh.get_repo.return_value.get_workflow.return_value.create_dispatch.side_effect
+
+    def dispatch_then_token(ref, inputs):
+        result = orig(ref, inputs)
+        set_token()
+        return result
+
+    gh.get_repo.return_value.get_workflow.return_value.create_dispatch.side_effect = (
+        dispatch_then_token
+    )
+
+    result = _verifier(gh).verify("/repo", _plan(), "")
+
+    assert result.verified is False
+    assert result.ran is True
+    assert captured["inputs"]["patch_b64"] == ""
+
+
 def test_dispatch_normalizes_root_src_object_make(monkeypatch):
     monkeypatch.setattr("scripts.ci_fix.verify.macos.time.sleep", lambda *_: None)
     gh, captured, set_token, _run = _gh_with_run(conclusion="success")

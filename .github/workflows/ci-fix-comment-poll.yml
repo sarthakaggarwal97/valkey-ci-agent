@@ -1,8 +1,9 @@
 name: CI Fix Comment Poll
 
-# Scans recent PR comments in every repository with ci_fix.enabled in repos.yml
-# for "@valkeyrie-ops fix <ci-link>" and dispatches the ci-fix workflow for each
-# new one. The trigger only; the fix itself runs in ci-fix.yml. Idempotency is a
+# Scans recent PR and issue comments in every repository with ci_fix.enabled in
+# repos.yml for "@valkeyrie-ops fix <ci-link>" and dispatches the ci-fix
+# workflow for each new one. Bot-created detector issues may reuse a recorded
+# link. The trigger only; the fix itself runs in ci-fix.yml. Idempotency is a
 # reaction marker on the comment, so overlapping or replayed ticks never
 # double-dispatch.
 

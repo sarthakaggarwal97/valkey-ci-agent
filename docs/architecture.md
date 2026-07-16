@@ -1,8 +1,8 @@
 # Architecture
 
 The Valkey CI Agent runs workflows that act on Valkey repositories defined in
-the central `repos.yml` registry. Three workflows are active today: backports
-and fuzzer monitoring (scheduled), and the CI test-fix bot (on-demand).
+the central `repos.yml` registry. Active workflows cover backports, fuzzer
+monitoring, daily test-failure detection, and on-demand CI repair.
 
 ## Layers
 
@@ -119,15 +119,27 @@ updating issues on `valkey-fuzzer`.
 
 ## CI Fix Flow
 
-On-demand, triggered by a maintainer commenting `@valkeyrie-bot fix <ci-link>`
-on a backport PR. Decoupled from the backport sweep; it shares only the
-common infrastructure.
+On-demand and additive: a maintainer can repair an agent-owned backport PR in
+place or ask the agent to turn an open issue plus a failed default-branch run
+into a new draft PR. Test Failure Detector issues created by the configured App
+may infer runs recorded by that same App; ordinary issues require an explicit
+CI link. Both modes share diagnosis and verification after separate fail-closed
+gates.
 
 ```text
-ci_fix/main.py (workflow_dispatch event)
-  -> gate.build_fix_request(...)        fail-closed auth (contributors team)
-                                        + SHA-bound run gating
-  -> pipeline.run_ci_fix(...)
+PR comment / manual dispatch
+  -> ci_fix/main.py
+  -> gate.build_fix_request(...)        team auth + exact PR-head/run binding
+
+source-issue comment / manual dispatch
+  -> ci_fix/issue_main.py
+  -> issue_gate.build_issue_fix_request(...)
+                                        team auth + explicit run link, or
+                                        configured-App detector marker/label fallback
+                                        + same-repo default-branch ancestry
+                                        + prior-PR guard
+
+both -> pipeline.run_fix_request(...)
        verify.github_runs        -> list the jobs that actually failed (code,
                                     not the AI, owns this)
        common.workflow_artifacts -> download the failed run's logs
@@ -161,11 +173,15 @@ ci_fix/main.py (workflow_dispatch event)
          apply + build_and_review_patch, then
          verify.macos.MacosVerifier -> dispatch the agent's verify-macos job,
                                        wait, conclusion is the verdict
-       push.commit_and_push_fix  -> extract approved patch
-                                    -> apply in a fresh trusted clone
-                                    -> commit (no sign-off), push to the PR's own
-                                       agent/backport/... branch (never merge)
-  -> comment.render_comment(outcome) -> posted on the PR
+       PR publication:
+         push.commit_and_push_fix -> exact patch onto gated PR head,
+                                     fast-forward-only agent/backport/... push
+       issue publication:
+         push.commit_and_push_issue_patch -> exact reviewed patch onto latest
+                                             default-branch tip
+         issue_publish.create_issue_fix_pull_request
+                                  -> agent/ci-fix/issue-... draft PR
+  -> outcome comment on the triggering PR or issue
 ```
 
 The defining invariant is the AI/code split plus a hard checkout boundary: the
@@ -199,16 +215,26 @@ Every failure mode - un-runnable variant, a real product bug, a flaky test, a
 moved branch, a non-member commenter - returns a `FixOutcome` that becomes an
 explanatory PR comment rather than a silent failure or an unsafe push.
 
-For local and Docker verification, a push requires a failing baseline first. If
-the command passes before the fix, the agent treats the CI failure as flaky or
-environment-specific and refuses. If the baseline cannot be established because
-the local verifier is missing setup dependencies, the agent may still author and
-skeptically review a patch, but it is returned as a handoff rather than pushed.
+For local and Docker verification, a push requires a failing baseline first.
+PR repair refuses when the command passes before the fix. Issue repair repeats
+the clean baseline because non-reproduction is expected for flaky failures; it
+may still author and skeptically review a causal patch, but publishes it only as
+an explicitly unverified draft handoff. Issue-driven macOS repair enforces the
+same rule remotely: repeat the unpatched command first, then repeat the approved
+patch. Only an observed baseline failure followed by all-green post-change runs
+is labeled verified. If the default branch has advanced since the failing run,
+that verification is identified as historical and the draft PR's CI remains
+authoritative for the exact published branch. Issue mode is capped below the
+one-hour App-token and AWS-session lifetime so publication cannot begin with
+expired credentials.
 
 ### Entry Points
 
 - `scripts/ci_fix/main.py` - workflow_dispatch entry point; mints the target and agent-repo tokens
 - `scripts/ci_fix/gate.py` - command parsing, fail-closed team auth, SHA-bound run gating
+- `scripts/ci_fix/issue_main.py` - issue-to-draft-PR orchestration and outcome reporting
+- `scripts/ci_fix/issue_gate.py` - detector marker, run ancestry, auth, and duplicate-PR gate
+- `scripts/ci_fix/issue_publish.py` - draft-PR creation and provenance rendering
 - `scripts/ci_fix/diagnose.py` - read-only AI diagnosis into a structured proposal (fix + job hint)
 - `scripts/ci_fix/apply.py` - edit-only AI fix application
 - `scripts/ci_fix/runner.py` - sanitized local/Docker command execution that owns the verdict
@@ -309,7 +335,7 @@ main.py (daily cron or manual dispatch)
 Future sibling modules and extensions:
 
 - **PR Reviewer** - two-stage code review with skeptic pass
-- **Autonomous CI-fix poller** - the CI-fix engine, driven by a poller that
-  detects red backport PRs (or test-failure issues) instead of a maintainer
-  `@`-mention. Same pipeline, a different front door.
+- **Autonomous CI-fix selection** - let the existing CI-fix poller select
+  eligible red agent PRs and recurring detector issues without requiring a
+  maintainer `@`-mention. Same gates and pipeline, a different front door.
 - **Additional Daily CI Analysis** - detect flaky tests, generate fix PRs

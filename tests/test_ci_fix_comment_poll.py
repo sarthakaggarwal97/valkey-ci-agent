@@ -23,11 +23,20 @@ from scripts.ci_fix.comment_poll import (
     poll_once,
     poll_repositories,
 )
+from scripts.ci_fix.issue_gate import IssueFixInvocation
 
 _RUN_URL = "https://github.com/valkey-io/valkey/actions/runs/27559908167"
 
 
-def _comment(*, body, login="alice", user_type="User", comment_id=1, is_pr=True):
+def _comment(
+    *,
+    body,
+    login="alice",
+    user_type="User",
+    comment_id=1,
+    is_pr=True,
+    detector_issue=True,
+):
     # A real listed IssueComment exposes url and issue_url but NOT a repository
     # attribute. The repo is supplied to poll_once separately, so the fake must
     # not carry one or it would hide a real bug.
@@ -38,6 +47,7 @@ def _comment(*, body, login="alice", user_type="User", comment_id=1, is_pr=True)
         url=f"https://api.github.com/repos/valkey-io/valkey/issues/comments/{comment_id}",
         issue_url="https://api.github.com/repos/valkey-io/valkey/issues/42",
         _is_pr=is_pr,
+        _detector_issue=detector_issue,
     )
 
 
@@ -48,7 +58,17 @@ def _gh(comments):
 
     def get_issue(_n):
         is_pr = listed[0]._is_pr if listed else True
-        return SimpleNamespace(pull_request={"url": "..."} if is_pr else None)
+        detector = listed[0]._detector_issue if listed else False
+        return SimpleNamespace(
+            pull_request={"url": "..."} if is_pr else None,
+            state="open",
+            body=(
+                "<!-- valkey-ci-agent:test-failure:abc -->"
+                if detector else "ordinary issue"
+            ),
+            labels=[SimpleNamespace(name="test-failure")] if detector else [],
+            user=SimpleNamespace(login="valkeyrie-ops[bot]", type="Bot"),
+        )
 
     repo = SimpleNamespace(
         full_name="valkey-io/valkey",
@@ -64,7 +84,15 @@ def _claim(_comment):
     return Claim(release=MagicMock())
 
 
-def _run(gh, *, claim=_claim, dispatch=None, authorized=True):
+def _run(
+    gh,
+    *,
+    claim=_claim,
+    dispatch=None,
+    issue_dispatch=None,
+    authorized=True,
+    bot_login="valkeyrie-ops[bot]",
+):
     dispatch = dispatch or MagicMock()
     # Patch is_authorized and the already-claimed check at module scope.
     orig_auth = comment_poll.is_authorized
@@ -74,8 +102,8 @@ def _run(gh, *, claim=_claim, dispatch=None, authorized=True):
     try:
         n = poll_once(
             gh, target_repo="valkey-io/valkey", org="valkey-io",
-            team_slug="contributors", bot_login="valkeyrie-ops[bot]", lookback_minutes=30,
-            dispatch=dispatch, claim=claim,
+            team_slug="contributors", bot_login=bot_login, lookback_minutes=30,
+            dispatch=dispatch, issue_dispatch=issue_dispatch, claim=claim,
         )
     finally:
         comment_poll.is_authorized = orig_auth
@@ -115,6 +143,141 @@ def test_skips_issue_comment_not_pr():
     n, dispatch = _run(gh)
     assert n == 0
     dispatch.assert_not_called()
+
+
+def test_dispatches_detector_issue_with_ci_link():
+    gh = _gh([_comment(body=f"@valkeyrie-ops fix {_RUN_URL}", is_pr=False)])
+    issue_dispatch = MagicMock()
+    n, pr_dispatch = _run(gh, issue_dispatch=issue_dispatch)
+
+    assert n == 1
+    pr_dispatch.assert_not_called()
+    repo, issue, invocation, commenter, comment_id = issue_dispatch.call_args.args
+    assert repo == "valkey-io/valkey"
+    assert issue == 42
+    assert invocation.run_url == _RUN_URL
+    assert commenter == "alice"
+    assert comment_id == 1
+
+
+def test_dispatches_detector_issue_without_link_for_gate_fallback():
+    gh = _gh([
+        _comment(
+            body="@valkeyrie-ops fix inspect the replication wait",
+            is_pr=False,
+        )
+    ])
+    issue_dispatch = MagicMock()
+    n, _dispatch = _run(gh, issue_dispatch=issue_dispatch)
+
+    assert n == 1
+    invocation = issue_dispatch.call_args.args[2]
+    assert invocation.run_url == ""
+    assert invocation.hint == "inspect the replication wait"
+
+
+def test_detector_fallback_requires_configured_app_identity():
+    gh = _gh([
+        _comment(
+            body="@valkeyrie-ops fix inspect the replication wait",
+            is_pr=False,
+        )
+    ])
+    issue_dispatch = MagicMock()
+    n, _dispatch = _run(
+        gh,
+        issue_dispatch=issue_dispatch,
+        bot_login="different-app[bot]",
+    )
+
+    assert n == 0
+    issue_dispatch.assert_not_called()
+
+
+def test_issue_dispatch_sends_issue_workflow_inputs():
+    workflow = MagicMock()
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow.return_value = workflow
+    dispatch = comment_poll.dispatch_issue_fix(
+        gh,
+        agent_repo="valkey-io/valkey-ci-agent",
+        workflow="ci-fix.yml",
+        ref="main",
+    )
+
+    dispatch(
+        "valkey-io/valkey",
+        4149,
+        IssueFixInvocation(run_url=_RUN_URL, hint="inspect the wait"),
+        "alice",
+        12345,
+    )
+
+    gh.get_repo.assert_called_once_with("valkey-io/valkey-ci-agent")
+    gh.get_repo.return_value.get_workflow.assert_called_once_with("ci-fix.yml")
+    workflow.create_dispatch.assert_called_once_with(
+        "main",
+        {
+            "repo": "valkey-io/valkey",
+            "issue": "4149",
+            "run_url": _RUN_URL,
+            "hint": "inspect the wait",
+            "commenter": "alice",
+            "comment_id": "12345",
+        },
+    )
+
+
+def test_issue_dispatch_raises_when_github_rejects_request():
+    gh = MagicMock()
+    workflow = gh.get_repo.return_value.get_workflow.return_value
+    workflow.create_dispatch.return_value = False
+    dispatch = comment_poll.dispatch_issue_fix(
+        gh,
+        agent_repo="valkey-io/valkey-ci-agent",
+        workflow="ci-fix.yml",
+        ref="main",
+    )
+
+    with pytest.raises(WorkflowDispatchRejected, match="GitHub rejected"):
+        dispatch(
+            "valkey-io/valkey",
+            4149,
+            IssueFixInvocation(run_url=_RUN_URL),
+            "alice",
+            12345,
+        )
+
+
+def test_dispatches_explicit_ci_link_from_ordinary_open_issue():
+    gh = _gh([
+        _comment(
+            body=f"@valkeyrie-ops fix {_RUN_URL}",
+            is_pr=False,
+            detector_issue=False,
+        )
+    ])
+    issue_dispatch = MagicMock()
+    n, _dispatch = _run(gh, issue_dispatch=issue_dispatch)
+
+    assert n == 1
+    issue_dispatch.assert_called_once()
+    assert issue_dispatch.call_args.args[2].run_url == _RUN_URL
+
+
+def test_skips_ordinary_issue_without_explicit_ci_link():
+    gh = _gh([
+        _comment(
+            body="@valkeyrie-ops fix inspect this",
+            is_pr=False,
+            detector_issue=False,
+        )
+    ])
+    issue_dispatch = MagicMock()
+    n, _dispatch = _run(gh, issue_dispatch=issue_dispatch)
+
+    assert n == 0
+    issue_dispatch.assert_not_called()
 
 
 def test_skips_unauthorized():
@@ -169,6 +332,32 @@ def test_dispatch_failure_releases_claim_for_retry():
     n, _dispatch = _run(gh, claim=claim, dispatch=dispatch)
     assert n == 0
     assert order == ["claim", "dispatch", "release"]
+
+
+def test_issue_dispatch_failure_releases_claim_for_retry():
+    order = []
+    gh = _gh([
+        _comment(
+            body=f"@valkeyrie-ops fix {_RUN_URL}",
+            is_pr=False,
+        )
+    ])
+
+    def claim(_comment):
+        order.append("claim")
+        return Claim(release=lambda: order.append("release"))
+
+    def issue_dispatch(*_args):
+        order.append("issue-dispatch")
+        raise RuntimeError("dispatch rejected")
+
+    n, _dispatch = _run(
+        gh,
+        claim=claim,
+        issue_dispatch=issue_dispatch,
+    )
+    assert n == 0
+    assert order == ["claim", "issue-dispatch", "release"]
 
 
 # --- claim_via_status: the atomic 201-vs-200 win condition ---
