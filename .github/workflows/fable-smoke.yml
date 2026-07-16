@@ -7,6 +7,9 @@ name: Fable 5 Smoke Test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - test-pr61
 
 permissions: {}
 
