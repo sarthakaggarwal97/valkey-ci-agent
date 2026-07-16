@@ -1,0 +1,82 @@
+name: Backport Registry Preflight
+
+on:
+  schedule:
+    # Finish before the daily sweep starts at 09:00 UTC.
+    - cron: "30 8 * * *"
+  workflow_call:
+    inputs:
+      repo:
+        description: "Filter to one registered repository (empty = all)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      VALKEYRIE_BOT_APP_ID:
+        required: true
+      VALKEYRIE_BOT_PRIVATE_KEY:
+        required: true
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Filter to one registered repository (empty = all)"
+        required: false
+        type: string
+        default: ""
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  preflight:
+    if: github.repository == 'valkey-io/valkey-ci-agent'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate read-only preflight token
+        id: token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          permission-contents: read
+          permission-issues: read
+          permission-organization-projects: read
+          permission-metadata: read
+
+      - name: Resolve registry dependencies
+        shell: bash
+        env:
+          REGISTRY_PREFLIGHT_GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          REPO_FILTER: ${{ inputs.repo || '' }}
+        run: |
+          set -euo pipefail
+          args=(--registry repos.yml)
+          if [[ -n "${REPO_FILTER}" ]]; then
+            args+=(--repo "${REPO_FILTER}")
+          fi
+          python -m scripts.backport.registry_preflight "${args[@]}" \
+            | tee backport-registry-preflight.json
+
+      - name: Upload preflight report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backport-registry-preflight-${{ github.run_id }}
+          path: backport-registry-preflight.json
+          if-no-files-found: warn
+          retention-days: 30

@@ -25,8 +25,18 @@ on:
 permissions: {}
 
 jobs:
-  preflight:
+  registry-preflight:
+    if: github.repository == 'valkey-io/valkey-ci-agent'
+    uses: ./.github/workflows/backport-registry-preflight.yml
+    with:
+      repo: ${{ inputs.repo || '' }}
+    secrets:
+      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+
+  matrix:
     name: "Generate matrix"
+    needs: registry-preflight
     if: github.repository == 'valkey-io/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -64,13 +74,13 @@ jobs:
 
   reconcile:
     name: "mark-done/${{ matrix.repo }}/${{ matrix.branch }}"
-    needs: preflight
-    if: needs.preflight.outputs.has_entries == 'true'
+    needs: matrix
+    if: needs.matrix.outputs.has_entries == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 70
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.preflight.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
     concurrency:
       group: backport-mark-done-${{ matrix.repo }}-${{ matrix.branch }}
       cancel-in-progress: false

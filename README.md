@@ -78,6 +78,15 @@ The sweep branch is always kept green: a candidate is only kept if the whole bra
 
 See [`examples/repos.yml`](examples/repos.yml) for a multi-module example.
 
+`backport-registry-preflight.yml` runs before the daily sweep, can be dispatched
+for one repository, and is a required prerequisite of the sweep, poll, and
+mark-done workflows. It is read-only: it verifies the App's effective permission
+grant with a separately minted least-privilege token, then checks repository and
+label access, release branches, Project v2 `Status` options
+(`To be backported` and `Done`), and validation-repair configuration. Those
+scheduled workflows do not begin mutating branches or project metadata when
+the live preflight fails.
+
 ### Setup and Usage
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for local setup, local validation commands,
