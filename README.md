@@ -12,6 +12,7 @@ scripts/
   backport/    Automated backports (active)
   fuzzer/      Fuzzer run monitoring (active)
   ci_fix/      On-demand CI test-fix bot (active)
+  release_notes/  Release cutter: AI notes + version bump (active)
   common/      Shared infrastructure (git auth, GitHub client, safety guards)
 .github/actions/setup-agent
               Shared workflow setup for Python deps and optional Claude Code
@@ -28,6 +29,7 @@ New workflows are added as sibling directories to `backport/`. Each workflow pic
 | Fuzzer Monitor | Active | Analyzes scheduled fuzzer runs and files issues for anomalous failures |
 | CI Fix | Active | On-demand `@valkeyrie-bot fix <ci-link>` - diagnoses and fixes a failing test on a backport PR |
 | Test Failure Detector | Active | Detects test failures from Daily CI, files/updates GitHub issues |
+| Release Notes | Active | Cuts a release: AI-generates notes from labelled PRs plus AI-triaged label-less ones, promotes them onto a release line branch, bumps `src/version.h`, opens a PR (held as a draft when the cut flags issues) |
 | PR Reviewer | Planned | Two-stage code review with skeptic pass |
 | Additional Daily CI Analysis | Planned | Detects flaky tests, generates fix PRs |
 
@@ -265,9 +267,200 @@ Linux/Docker fix must pass the verify command before it is trusted (default 2,
 maximum 10). The build runs once regardless, so raising it only repeats the
 verify step. macOS verification runs once on its dedicated runner.
 
+## Release Notes Workflow
+
+Cuts a Valkey release in one shot. A maintainer dispatches the source branch, the
+target version, stage, and urgency; the agent generates the release notes from the
+labelled PRs plus the label-less ones AI triage judges user-facing (Claude via
+Bedrock), renders them onto the long-running
+release line as a dated section, bumps `src/version.h`, refreshes the running
+contributor list, and opens one PR for review (as a draft, holding the merge, when
+the cut flags anything a maintainer should address first; see [Edge-case
+handling](#edge-case-handling)). Nothing accumulates notes on a branch; the notes
+for a release are generated all at once. The source branch is never modified.
+
+Dispatch it from this agent repository (rc1 of a new minor line):
+
+```bash
+gh workflow run release-notes-cut.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field version=9.1.0 \
+  --field stage=rc1 \
+  --field urgency=LOW
+```
+
+The target branch (`9.1`) is derived automatically from the version. The other
+stages differ only in `stage`; see [Common recipes](#common-recipes) for how each
+baseline resolves:
+
+```bash
+# Next RC (the 9.1.0-rc1 tag must exist on the 9.1 branch)
+gh workflow run release-notes-cut.yml --repo valkey-io/valkey-ci-agent \
+  --field version=9.1.0 --field stage=rc2 --field urgency=LOW
+
+# GA after the final RC (the last rc tag must exist on the 9.1 branch)
+gh workflow run release-notes-cut.yml --repo valkey-io/valkey-ci-agent \
+  --field version=9.1.0 --field stage=ga --field urgency=LOW
+
+# Patch GA (the 9.1.0 tag must exist on the 9.1 branch)
+gh workflow run release-notes-cut.yml --repo valkey-io/valkey-ci-agent \
+  --field version=9.1.1 --field stage=ga --field urgency=LOW
+```
+
+Optional inputs: `date` (defaults to today), `base_ref` (explicit baseline ref
+overriding tag resolution), `contrib_base_ref` (contributor range start),
+`security_fixes` (manual Security Fixes bullets, one `--security-fix` per entry),
+`security_from_advisories` (also render published GitHub security advisories
+fixed by this version into Security Fixes), `force_ready` (open the PR ready even
+when the cut flags issues, instead of holding it as a draft; see [Edge-case
+handling](#edge-case-handling)), and `dry_run` (compute and log the cut without
+pushing or opening a PR). Stage is `rc1..rcN` or `ga`, case-insensitive.
+
+**Branch model** (tag-driven, one M.m branch per minor):
+
+| Dispatch | Target branch | Range baseline |
+|----------|---------------|----------------|
+| rc1 of M.m.p | `M.m` | Previous release tag (auto-resolved) |
+| rcN (N>1) | `M.m` | The `M.m.p-rc(N-1)` tag on M.m |
+| ga of M.m.p | `M.m` | The last rc tag on M.m |
+| later patches | `M.m` | The previous patch tag (e.g. `M.m.(p-1)`) |
+
+Maintainers create the M.m branch and push tags before dispatching. The agent
+never creates or deletes branches.
+
+### Common recipes
+
+Only `version`, `stage`, and `urgency` are required. The target branch (`M.m`) is
+derived from the version. The baseline resolves itself for every case except rc1 of
+an `M.0.0` (first release of a new major), so leave `base_ref` empty unless a recipe
+below sets it.
+
+| Cutting | `version` | `stage` | `base_ref` | Baseline the notes span |
+|---------|-----------|---------|-----------|--------------------------|
+| First RC of a new minor | `9.2.0` | `rc1` | *(empty)* | Auto: previous release tag (e.g. `9.1.0`) |
+| Next RC on the same line | `9.2.0` | `rc2` | *(empty)* | Auto: the `9.2.0-rc1` tag on the `9.2` branch |
+| GA after the final RC | `9.2.0` | `ga` | *(empty)* | Auto: the last rc tag (e.g. `9.2.0-rc2`) on `9.2` |
+| Patch GA | `9.1.9` | `ga` | *(empty)* | Auto: the previous patch tag (`9.1.8`) |
+| First RC of a new **major** | `9.0.0` | `rc1` | *(set it)* | You must pass the prior major's final release |
+
+Distinctions that are easy to get wrong:
+
+- **`version` is the target you are cutting, always `M.m.p`**: use `9.2.0` for
+  every RC of that release (`rc1`, `rc2`, ...) and its GA, not `9.2.0-rc2`. The
+  `-rcN` suffix comes from `stage`, not `version`. The M.m branch is derived from
+  the version automatically; maintainers must create it and push tags before dispatch.
+- **`base_ref` stays empty except for rc1 of `M.0.0`.** For every other case, the
+  tool resolves the baseline from tags on the target branch (and shows the resolved
+  range in the PR body, so you can confirm it). Setting `base_ref` by hand on those
+  cases is how a wrong range gets cut; only use it when a cut's PR body flags an
+  unanchored or over-broad baseline.
+
+When unsure, dispatch with `dry_run` first: it logs the resolved plan and the exact
+`base..head` range (both refs and their SHAs) without pushing or opening a PR.
+
+### How it works
+
+The rendered commit lands on an agent-namespaced `agent/release-cut/...` prep
+branch that opens a PR into the release line, so the line only advances when a
+human merges.
+
+1. **Resolve the plan** (code) - map `(version, stage)` onto the branch model
+   above. The version is canonicalized once (`M.m.p`, no leading zeros / stray
+   whitespace) so `version.h`, the dated heading, the commit title, and the branch
+   names all agree.
+2. **Discover the range** (code) - resolve `base..head` and walk it by graph
+   reachability, deduplicating to one entry per originating PR number. The head is
+   always the M.m branch tip (derived from the version). The base is an explicit
+   `--base-ref`, else tag resolution on the M.m branch: for rc1 it is the previous
+   release tag (resolved from all tags in the repo), for rc2+ it is the prior RC
+   tag (e.g. `9.2.0-rc1`), and for a patch GA it is the previous patch tag (e.g.
+   `9.1.8`). Tags are created by maintainers before dispatch.
+3. **Classify** (code) - split PRs by the `release-notes` label: labelled PRs are
+   included directly, everything else is a triage candidate.
+4. **Triage** (AI) - Claude decides, per label-less candidate, whether the change
+   is user-facing enough to note (include) or purely internal (exclude), with a
+   short reason for each. Included candidates join the labelled PRs; the model's
+   include/exclude table is surfaced in the PR body for a maintainer to confirm.
+   A candidate the model returns no verdict for falls back to human triage.
+5. **Generate** (AI) - Claude writes one categorized, user-facing bullet per
+   included PR (labelled + triaged-in). The model never emits the `(#N)` reference
+   or `by @handle` - code appends those in `scripts/release_notes/render.py`
+   (`format_bullet`), so the bullet format stays fixed in one place.
+6. **Render + bump** (code) - render the categorized bullets into a new dated
+   section prepended before any existing sections on the release line via
+   `render_release_notes` (`release_format.py`) / `set_version`
+   (`version_bump.py`), append the cumulative contributor list
+   (`contributors.py`), and bump `src/version.h`. These format primitives live
+   in-repo rather than being imported from valkey, because upstream
+   `valkey-io/valkey` ships no such tooling, so a cut runs against unmodified
+   upstream (a plaintext `00-RELEASENOTES` placeholder and a `src/version.h`
+   with the `VALKEY_VERSION*` macros).
+7. **Open the PR** (code) - commit on the prep branch, push it (force-with-lease),
+   and open/update a PR into the release line with a body that explains the cut and
+   surfaces any advisories (below). When the cut flags anything a maintainer should
+   address first, the PR opens as a draft to hold the merge (see [Edge-case
+   handling](#edge-case-handling)).
+
+### Edge-case handling
+
+Malformed dispatch inputs fail fast at argparse (exit 2), before the clone + AI
+run: a non-`M.m.p` or out-of-range version, a bad stage, an urgency outside
+`LOW/MODERATE/HIGH/CRITICAL/SECURITY`, or a non-ISO date. An explicit `--base-ref`
+that resolves to nothing aborts right after the clone with a clear error. A cut
+dispatched against a non-existent M.m branch is refused immediately.
+
+When the cut raises anything a maintainer should address before merging, the
+release PR opens as a draft (GitHub refuses to merge a draft) so a shipped
+change can never be released while a warning goes unread. The body leads with a
+banner naming the held items, and each has its own section below. Resolve them and
+click **Ready for review** to release, re-dispatch with the flag cleared (a re-cut
+with no flags flips the draft ready on its own), or dispatch `force_ready` to open
+ready anyway (the banner then records that N items were overridden). `--dry-run`
+prints the same hold decision without opening a PR. The signals that hold:
+
+- **RC out of sequence** - a re-cut rc or a skipped rc number.
+- **Unanchored baseline** - rc1 of `M.0.0` with no `--base-ref` fell back to the
+  nearest tag, which may over-broaden the range.
+- **Empty release notes** - no PRs in range, or no PR was labelled and AI triage
+  included none of the label-less ones; the body says which, so an empty dated
+  section is not mistaken for a generation miss.
+- **Duplicate / declined / low-confidence** - a PR credited in more than one
+  bullet, a labelled PR the model declined to note, or a note the model flagged
+  as low-confidence.
+- **AI triage** - the model decided inclusion for label-less PRs (a call that used
+  to require a human label), so the PR holds until a maintainer confirms the
+  include/exclude table; a low-confidence triage call also holds.
+- **Security** - a `--security-fix` also noted as a normal bullet, `SECURITY`
+  urgency with no security fixes, or advisories that could not be read (a clean
+  advisory match is informational and does not hold).
+- **Unresolved changes** - a shipped change that would otherwise slip past
+  valkey's label-only gate: a range commit with no resolvable PR (absent from the
+  notes entirely), a commit whose resolved PR could not be fetched, or a note
+  credited to a backport PR because the original author's PR could not be recovered.
+- **Triage** - label-less PRs AI triage could not decide (no verdict returned), so
+  a maintainer must decide whether to include them.
+
+The body always shows the resolved notes range so an over-broad baseline is
+visible: the resolved mode (e.g. `rc2`), the source and target branches, and both
+ends as `ref @ <sha>`, so a reviewer can audit the exact commits the notes were
+computed over, not just the branch-model names. `--dry-run` prints the same range
+and advisories to the log.
+
+### Configuration
+
+Reuses the same secrets and OIDC role as the other workflows (see
+[DEVELOPMENT.md](DEVELOPMENT.md)). The workflow mints one
+short-lived App token on `valkey-io/valkey` with `contents:write` (push the prep
+branch), `pull-requests:write` (open the release PR),
+and `metadata:read`. When `security_from_advisories` is set, it mints a token
+that additionally holds `repository-advisories:read`; that permission is
+requested only for an advisory cut, so an ordinary cut is never blocked when the
+App installation lacks it. The App installation must hold
+`repository-advisories:read` for an advisory cut to read the advisories.
+
 ## Safety
 
-- **Branch namespace** - the agent writes only `agent/backport/...` branches and opens PRs for maintainer review.
+- **Branch namespace** - the agent writes only `agent/backport/...` (backports) and `agent/release-cut/...` (release cuts) branches and opens PRs for maintainer review. It never force-pushes a release line directly.
 - **Credential isolation** - all GitHub auth uses `GIT_ASKPASS`; tokens never appear in `.git/config` or URLs
 - **Claude Code env isolation** - `GITHUB_TOKEN`, `GH_TOKEN`, and `*_SECRET` are stripped from the subprocess environment. Claude cannot see credentials.
 - **Deterministic validation** - registry-configured build commands run before push. A validation failure blocks the push.
@@ -277,5 +470,5 @@ verify step. macOS verification runs once on its dedicated runner.
 
 ## Documentation
 
-- [docs/architecture.md](docs/architecture.md) — full system design including planned workflows
-- [DEVELOPMENT.md](DEVELOPMENT.md) — local setup, testing, and GitHub Actions usage
+- [docs/architecture.md](docs/architecture.md) - full system design including planned workflows
+- [DEVELOPMENT.md](DEVELOPMENT.md) - local setup, testing, and GitHub Actions usage
