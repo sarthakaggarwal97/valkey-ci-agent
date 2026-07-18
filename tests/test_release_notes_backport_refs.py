@@ -12,6 +12,7 @@ from scripts.release_notes.backport_refs import (
     applied_source_prs_from_body,
     cherry_pick_source_shas,
     is_backport_title,
+    source_pr_from_backport_title,
     source_pr_from_branch,
     source_title_from_backport_title,
     summary_source_pr_from_body,
@@ -195,6 +196,19 @@ class TestSourceTitleFromBackportTitle:
 
     def test_empty(self) -> None:
         assert source_title_from_backport_title("") is None
+
+
+class TestSourcePrFromBackportTitle:
+    def test_reads_manual_source_suffix(self) -> None:
+        assert source_pr_from_backport_title(
+            "[Backport 7.2] Allow Tcl 9.0 for tests (#1673)"
+        ) == 1673
+
+    def test_requires_backport_prefix(self) -> None:
+        assert source_pr_from_backport_title("Allow Tcl 9.0 for tests (#1673)") is None
+
+    def test_requires_trailing_source_ref(self) -> None:
+        assert source_pr_from_backport_title("[Backport 7.2] Allow Tcl 9.0 for tests") is None
 
 
 class TestSummarySourceTitleFromBody:

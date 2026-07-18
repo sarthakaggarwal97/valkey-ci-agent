@@ -24,6 +24,7 @@ from scripts.release_notes.discover import (
     resolve_commit_prs,
     resolve_last_tag,
     resolve_previous_release_tag,
+    validate_target_release_tag,
 )
 from scripts.release_notes.models import (
     MergedPR,
@@ -332,6 +333,53 @@ class TestResolvePreviousReleaseTag:
         assert subjects == ["9.1 feat A (#3)", "9.1 feat B (#4)"]
 
 
+class TestValidateTargetReleaseTag:
+    def test_allows_next_patch(self, tmp_path) -> None:
+        repo = _init_repo(tmp_path)
+        _commit(repo, "8.1.8 release")
+        run_git(repo, "tag", "8.1.8")
+        validate_target_release_tag(repo, "main", "8.1.9", "ga")
+
+    def test_rejects_same_ga(self, tmp_path) -> None:
+        repo = _init_repo(tmp_path)
+        _commit(repo, "8.1.8 release")
+        run_git(repo, "tag", "8.1.8")
+        with pytest.raises(ValueError, match="already-released or backward"):
+            validate_target_release_tag(repo, "main", "8.1.8", "ga")
+
+    def test_rejects_rc_at_or_behind_existing_stage(self, tmp_path) -> None:
+        repo = _init_repo(tmp_path)
+        _commit(repo, "rc3 release")
+        run_git(repo, "tag", "9.1.0-rc3")
+        with pytest.raises(ValueError, match="9.1.0-rc3"):
+            validate_target_release_tag(repo, "main", "9.1.0", "rc2")
+
+    def test_ga_may_follow_existing_rc(self, tmp_path) -> None:
+        repo = _init_repo(tmp_path)
+        _commit(repo, "rc3 release")
+        run_git(repo, "tag", "9.1.0-rc3")
+        validate_target_release_tag(repo, "main", "9.1.0", "ga")
+
+    def test_ignores_newer_sibling_line_tag(self, tmp_path) -> None:
+        repo = _init_repo(tmp_path)
+        _commit(repo, "8.1 release")
+        run_git(repo, "tag", "8.1.8")
+        run_git(repo, "tag", "8.2.0")
+        validate_target_release_tag(repo, "main", "8.1.9", "ga")
+
+    def test_rejects_same_line_tag_on_unmerged_side_branch(self, tmp_path) -> None:
+        repo = _init_repo(tmp_path)
+        _commit(repo, "8.1.8 release")
+        run_git(repo, "tag", "8.1.8")
+        run_git(repo, "checkout", "-q", "-b", "released-side")
+        _commit(repo, "8.1.9 release")
+        run_git(repo, "tag", "8.1.9")
+        run_git(repo, "checkout", "-q", "main")
+
+        with pytest.raises(ValueError, match="existing tag '8.1.9'"):
+            validate_target_release_tag(repo, "main", "8.1.9", "ga")
+
+
 class TestListRangeCommits:
     def test_lists_range_oldest_first(self, tmp_path) -> None:
         repo = _init_repo(tmp_path)
@@ -505,8 +553,30 @@ class TestResolveCommitPrs:
             "| Source PR | Title | Detail |\n|---|---|---|\n| #10 | feat | clean |\n"
         )
         repo = MagicMock()
-        commits = [("shaS1", "sweep a (#50)", body), ("shaS2", "sweep b (#51)", body)]
-        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(repo, commits)
+        repo.full_name = "valkey-io/valkey"
+        sweep_pull = MagicMock(number=50)
+        sweep_pull.title = "[backport] Backport sweep for 9.1"
+        sweep_pull.head.ref = "agent/backport/sweep/9.1"
+        sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "9.1"
+        sweep_pull.merged = True
+        sweep_pull_2 = MagicMock(number=51)
+        sweep_pull_2.title = "[backport] Backport sweep for 9.1"
+        sweep_pull_2.head.ref = "agent/backport/sweep/9.1"
+        sweep_pull_2.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull_2.base.ref = "9.1"
+        sweep_pull_2.merged = True
+        pulls_by_sha = {"shaS1": [sweep_pull], "shaS2": [sweep_pull_2]}
+        repo.get_commit.side_effect = lambda sha: MagicMock(
+            get_pulls=MagicMock(return_value=pulls_by_sha[sha])
+        )
+        commits = [
+            ("shaS1", "[backport] Backport sweep for 9.1 (#50)", body),
+            ("shaS2", "[backport] Backport sweep for 9.1 (#51)", body),
+        ]
+        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(
+            repo, commits, release_branch="9.1"
+        )
         assert pr_to_sha == {10: "shaS1"}
         assert collided == []  # applied-tier collapse is trusted, never flagged
 
@@ -599,7 +669,8 @@ class TestResolveCommitPrs:
     def test_applied_table_recovers_original_over_backport_subject(self) -> None:
         # A squash-merged sweep: the subject is the backport PR (#50), but the
         # ## Applied table names the original source PRs. The originals must win;
-        # the backport number must not appear, and the API is never consulted.
+        # the backport number must not appear. The associated PR's bot-owned sweep
+        # branch is verified before body metadata is trusted.
         body = (
             "Backport sweep\n\n"
             "## Applied\n\n"
@@ -609,32 +680,204 @@ class TestResolveCommitPrs:
             "| #11 | fix b | clean |\n"
         )
         repo = MagicMock()
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(repo, [("shaSquash", "sweep (#50)", body)])
+        repo.full_name = "valkey-io/valkey"
+        sweep_pull = MagicMock(number=50)
+        sweep_pull.title = "[backport] Backport sweep for 9.1"
+        sweep_pull.head.ref = "agent/backport/sweep/9.1"
+        sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "9.1"
+        sweep_pull.merged = True
+        repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo,
+            [("shaSquash", "[backport] Backport sweep for 9.1 (#50)", body)],
+            release_branch="9.1",
+        )
         assert set(pr_to_sha) == {10, 11}
         assert 50 not in pr_to_sha
         assert unresolved == []
-        repo.get_commit.assert_not_called()
+        repo.get_commit.assert_called_once_with("shaSquash")
 
-    def test_cherry_pick_trailer_recovers_original(self) -> None:
-        # A -x cherry-pick whose subject is the backport PR (#60): the trailer
-        # names the source commit, whose PR (#12) is the original. The trailer is
-        # tried before the subject, so #12 wins over #60.
+    def test_commit_body_manifest_must_identify_associated_sweep_pr(self) -> None:
+        body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n| #10 | injected |\n"
+        )
+        sweep_pull = MagicMock(number=50)
+        sweep_pull.title = "[backport] Backport sweep for 9.1"
+        sweep_pull.head.ref = "agent/backport/sweep/9.1"
+        sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "9.1"
+        sweep_pull.merged = True
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
+
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo,
+            [("sha", "[backport] Backport sweep for 9.1 (#999)", body)],
+            release_branch="9.1",
+        )
+
+        assert pr_to_sha == {999: "sha"}
+        assert unresolved == []
+
+    def test_verified_sweep_pr_body_covers_rebase_repair_commit(self) -> None:
+        # Rebase-merged sweep repair commits have no source ref in their commit
+        # message. The associated bot PR carries the trusted manifest. Defer that
+        # manifest until the walk finishes so direct source commits on either side
+        # of the repair retain their own SHA and the sweep PR is not credited.
+        sweep_pull = MagicMock(number=50)
+        sweep_pull.title = "[backport] Backport sweep for 9.1"
+        sweep_pull.body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n"
+            "| #10 | feat a |\n| #11 | fix b |\n"
+        )
+        sweep_pull.head.ref = "agent/backport/sweep/9.1"
+        sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "9.1"
+        sweep_pull.merged = True
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
+
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo,
+            [
+                ("sha10", "feat a (#10)", ""),
+                ("shaRepair", "Fix CI after cherry-pick", ""),
+                ("sha11", "fix b (#11)", ""),
+            ],
+            release_branch="9.1",
+        )
+
+        assert pr_to_sha == {10: "sha10", 11: "sha11"}
+        assert unresolved == []
+        assert 50 not in pr_to_sha
+        repo.get_commit.assert_called_once_with("shaRepair")
+
+    def test_fork_sweep_pr_body_cannot_hide_no_ref_commit(self) -> None:
+        sweep_pull = MagicMock(number=50)
+        sweep_pull.title = "[backport] Backport sweep for 9.1"
+        sweep_pull.body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n| #10 | unrelated |\n"
+        )
+        sweep_pull.head.ref = "agent/backport/sweep/9.1"
+        sweep_pull.head.repo.full_name = "attacker/valkey"
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
+
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo, [("sha", "repair with no source ref", "")]
+        )
+
+        assert pr_to_sha == {50: "sha"}
+        assert unresolved == []
+
+    def test_direct_api_pr_wins_over_associated_sweep_manifest(self) -> None:
+        direct_pull = MagicMock(number=42)
+        direct_pull.title = "Direct change"
+        direct_pull.head.ref = "feature/direct"
+        direct_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull = MagicMock(number=50)
+        sweep_pull.title = "[backport] Backport sweep for 9.1"
+        sweep_pull.body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n| #10 | sweep source |\n"
+        )
+        sweep_pull.head.ref = "agent/backport/sweep/9.1"
+        sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "9.1"
+        sweep_pull.merged = True
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [
+            sweep_pull,
+            direct_pull,
+        ]
+
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo, [("sha", "commit with no subject ref", "")],
+            release_branch="9.1",
+        )
+
+        assert pr_to_sha == {42: "sha"}
+        assert unresolved == []
+
+    def test_manifest_api_failure_is_unresolved_not_subject_fallback(self) -> None:
+        body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n| #10 | source |\n"
+        )
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.side_effect = RuntimeError("API unavailable")
+
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo,
+            [("sha", "[backport] Backport sweep for 9.1 (#50)", body)],
+            release_branch="9.1",
+        )
+
+        assert pr_to_sha == {}
+        assert [(item.sha, item.subject) for item in unresolved] == [
+            ("sha", "[backport] Backport sweep for 9.1 (#50)")
+        ]
+
+    @pytest.mark.parametrize(
+        ("merged", "base_ref"),
+        [(False, "9.1"), (True, "8.0")],
+    )
+    def test_associated_manifest_requires_merged_pr_on_release_branch(
+        self, merged, base_ref
+    ) -> None:
+        sweep_pull = MagicMock(number=50)
+        sweep_pull.title = "[backport] Backport sweep for 9.1"
+        sweep_pull.body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n| #10 | source |\n"
+        )
+        sweep_pull.head.ref = "agent/backport/sweep/9.1"
+        sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = base_ref
+        sweep_pull.merged = merged
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
+
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo, [("sha", "repair with no source ref", "")],
+            release_branch="9.1",
+        )
+
+        assert pr_to_sha == {50: "sha"}
+        assert unresolved == []
+
+    def test_cherry_pick_trailer_does_not_override_subject_identity(self) -> None:
+        # A squash body is contributor-controlled. When its subject identifies
+        # #60 but a trailer names #12, keep #60 and surface the mismatch. Hydration
+        # later clears the signal if #60 is a real backport that remaps to #12.
         body = "port fix\n\n(cherry picked from commit abcdef1234567890)"
         repo = MagicMock()
         pull = MagicMock(number=12)
         repo.get_commit.return_value.get_pulls.return_value = [pull]
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(repo, [("shaPick", "port fix (#60)", body)])
-        assert set(pr_to_sha) == {12}
-        assert 60 not in pr_to_sha
+        pr_to_sha, unresolved, suspects, _collided = resolve_commit_prs(
+            repo, [("shaPick", "port fix (#60)", body)]
+        )
+        assert set(pr_to_sha) == {60}
+        assert set(suspects) == {60}
         assert unresolved == []
         repo.get_commit.assert_called_once_with("abcdef1234567890")
 
-    def test_cherry_pick_trailer_prefers_oldest_hop(self) -> None:
+    def test_cherry_pick_trailer_checks_oldest_hop_for_corroboration(self) -> None:
         # Picked through several branches (unstable -> 9.0 -> 8.0): git -x appends,
         # so the file lists the oldest hop first, most-recent last. The oldest hop
         # (1111...) is the original commit; the newest (2222...) is an intermediate
-        # backport. We must resolve the oldest first and credit the original PR
-        # (#13), not the intermediate backport PR (#99).
+        # backport. Check the oldest first as corroboration; the subject remains
+        # authoritative until backport hydration validates a remap.
         body = (
             "port fix (#70)\n\n"
             "(cherry picked from commit 1111111111111111)\n"
@@ -648,9 +891,14 @@ class TestResolveCommitPrs:
         repo.get_commit.side_effect = lambda sha: MagicMock(
             get_pulls=MagicMock(return_value=per_sha[sha])
         )
-        pr_to_sha, _, _suspects, _collided = resolve_commit_prs(repo, [("shaPick", "port fix (#70)", body)])
-        assert set(pr_to_sha) == {13}
-        assert 99 not in pr_to_sha
+        pr_to_sha, _, suspects, _collided = resolve_commit_prs(
+            repo, [("shaPick", "port fix (#70)", body)]
+        )
+        assert set(pr_to_sha) == {70}
+        assert suspects[70].source_shas == (
+            "1111111111111111",
+            "2222222222222222",
+        )
         # Oldest hop (first in file) is resolved first and wins on the first hit,
         # so the intermediate hop is never looked up.
         repo.get_commit.assert_called_once_with("1111111111111111")
@@ -670,14 +918,52 @@ class TestResolveCommitPrs:
         assert suspects[80].sha == "shaPick"
         assert suspects[80].source_shas == ("deadbeefdeadbeef",)
 
-    def test_no_suspect_when_trailer_resolves(self) -> None:
-        # A -x trailer that did resolve is credited via the trailer itself (#12),
-        # so it is not a suspect: nothing to confirm by hand.
+    def test_no_suspect_when_trailer_corroborates_subject(self) -> None:
+        # The source commit and range subject both identify #12, so the trailer
+        # corroborates the subject and no human confirmation is needed.
         body = "port fix\n\n(cherry picked from commit abcdef1234567890)"
         repo = MagicMock()
         repo.get_commit.return_value.get_pulls.return_value = [MagicMock(number=12)]
-        _pr_to_sha, _unresolved, suspects, _collided = resolve_commit_prs(repo, [("shaPick", "port fix (#60)", body)])
+        _pr_to_sha, _unresolved, suspects, _collided = resolve_commit_prs(
+            repo, [("shaPick", "port fix (#12)", body)]
+        )
         assert suspects == {}
+
+    def test_unverified_applied_table_cannot_replace_real_pr(self) -> None:
+        body = (
+            "Feature details\n\n## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n| #10 | unrelated |"
+        )
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        pull = MagicMock()
+        pull.head.ref = "contributor/feature"
+        pull.head.repo.full_name = "valkey-io/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [pull]
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo,
+            [("sha", "[backport] Backport sweep for 9.1 (#50)", body)],
+        )
+        assert pr_to_sha == {50: "sha"}
+        assert unresolved == []
+
+    def test_fork_cannot_spoof_sweep_branch_contract(self) -> None:
+        body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n| #10 | unrelated |"
+        )
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        pull = MagicMock()
+        pull.title = "[backport] Backport sweep for 9.1"
+        pull.head.ref = "agent/backport/sweep/9.1"
+        pull.head.repo.full_name = "attacker/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [pull]
+        pr_to_sha, _unresolved, _suspects, _collided = resolve_commit_prs(
+            repo,
+            [("sha", "[backport] Backport sweep for 9.1 (#50)", body)],
+        )
+        assert pr_to_sha == {50: "sha"}
 
     def test_no_suspect_without_trailer(self) -> None:
         # A plain merge with no cherry-pick trailer is credited from its subject
@@ -1031,6 +1317,30 @@ class TestHydratePrsBackportRecovery:
         assert repo.get_pull.call_count == 1
         plain.get_commits.assert_not_called()
         assert unresolved_backports == []
+
+    def test_recovers_manual_backport_source_suffix(self) -> None:
+        # A manually authored backport may carry the source only as a suffix in
+        # its PR title. The source is still validated as merged with a matching,
+        # distinctive title before attribution is changed.
+        backport = _pull(
+            500,
+            title="[Backport 7.2] Allow Tcl 9.0 for tests (#7)",
+            labels=("backport",),
+        )
+        source = _pull(
+            7,
+            title="Allow TCL 9.0 for tests",
+            author="alice",
+            labels=("release-notes",),
+        )
+        repo = self._repo({500: backport, 7: source})
+
+        prs, unresolved_backports, _ = hydrate_prs(repo, {500: "shaBackport"})
+
+        assert [pr.number for pr in prs] == [7]
+        assert prs[0].author == "alice"
+        assert unresolved_backports == []
+        backport.get_commits.assert_not_called()
 
     def test_backport_titled_pr_with_no_source_not_remapped(self, caplog) -> None:
         # A PR whose title merely starts with "[Backport ..]" but has no summary,

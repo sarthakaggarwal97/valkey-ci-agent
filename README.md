@@ -29,7 +29,7 @@ New workflows are added as sibling directories to `backport/`. Each workflow pic
 | Fuzzer Monitor | Active | Analyzes scheduled fuzzer runs and files issues for anomalous failures |
 | CI Fix | Active | On-demand `@valkeyrie-bot fix <ci-link>` - diagnoses and fixes a failing test on a backport PR |
 | Test Failure Detector | Active | Detects test failures from Daily CI, files/updates GitHub issues |
-| Release Notes | Active | Cuts a release: AI-generates notes from labelled PRs plus AI-triaged label-less ones, promotes them onto a release line branch, bumps `src/version.h`, opens a PR (held as a draft when the cut flags issues) |
+| Release Notes | Active | Cuts a release: AI-generates notes from `release-notes` PRs plus AI-triaged candidates without that label, promotes them onto a release line branch, bumps `src/version.h`, opens a PR (held as a draft when the cut flags issues) |
 | PR Reviewer | Planned | Two-stage code review with skeptic pass |
 | Additional Daily CI Analysis | Planned | Detects flaky tests, generates fix PRs |
 
@@ -269,15 +269,16 @@ verify step. macOS verification runs once on its dedicated runner.
 
 ## Release Notes Workflow
 
-Cuts a Valkey release in one shot. A maintainer dispatches the source branch, the
-target version, stage, and urgency; the agent generates the release notes from the
-labelled PRs plus the label-less ones AI triage judges user-facing (Claude via
+Cuts a Valkey release in one shot. A maintainer dispatches the target version,
+stage, and urgency; the agent derives the M.m release line and generates notes from the
+`release-notes` PRs plus candidates without that label that AI triage judges user-facing (Claude via
 Bedrock), renders them onto the long-running
 release line as a dated section, bumps `src/version.h`, refreshes the running
 contributor list, and opens one PR for review (as a draft, holding the merge, when
 the cut flags anything a maintainer should address first; see [Edge-case
 handling](#edge-case-handling)). Nothing accumulates notes on a branch; the notes
-for a release are generated all at once. The source branch is never modified.
+for a release are generated all at once. The release line is changed only when a
+maintainer merges the generated PR.
 
 Dispatch it from this agent repository (rc1 of a new minor line):
 
@@ -325,8 +326,9 @@ pushing or opening a PR). Stage is `rc1..rcN` or `ga`, case-insensitive.
 | ga of M.m.p | `M.m` | The last rc tag on M.m |
 | later patches | `M.m` | The previous patch tag (e.g. `M.m.(p-1)`) |
 
-Maintainers create the M.m branch and push tags before dispatching. The agent
-never creates or deletes branches.
+Maintainers create the M.m branch and push release tags before dispatching. The
+agent never creates, deletes, or force-pushes a release-line branch; it creates
+or updates only its namespaced prep branch.
 
 ### Common recipes
 
@@ -367,17 +369,23 @@ human merges.
 1. **Resolve the plan** (code) - map `(version, stage)` onto the branch model
    above. The version is canonicalized once (`M.m.p`, no leading zeros / stray
    whitespace) so `version.h`, the dated heading, the commit title, and the branch
-   names all agree.
+   names all agree. The requested state must be newer than both `src/version.h`
+   and every existing tag on that release line; an already-released stage or
+   downgrade is rejected before the AI runs.
 2. **Discover the range** (code) - resolve `base..head` and walk it by graph
-   reachability, deduplicating to one entry per originating PR number. The head is
-   always the M.m branch tip (derived from the version). The base is an explicit
+   reachability, deduplicating to one entry per originating PR number. The M.m
+   branch tip is fetched once and pinned to an immutable SHA used by discovery,
+   contributors, and the prep worktree. The base is an explicit
    `--base-ref`, else tag resolution on the M.m branch: for rc1 it is the previous
    release tag (resolved from all tags in the repo), for rc2+ it is the prior RC
    tag (e.g. `9.2.0-rc1`), and for a patch GA it is the previous patch tag (e.g.
    `9.1.8`). Tags are created by maintainers before dispatch.
-3. **Classify** (code) - split PRs by the `release-notes` label: labelled PRs are
-   included directly, everything else is a triage candidate.
-4. **Triage** (AI) - Claude decides, per label-less candidate, whether the change
+3. **Classify** (code) - split PRs by label: `release-notes` PRs are included
+   directly, `no-release-notes` PRs are hard-excluded (dropped before triage, never
+   noted, and listed in the PR body so a maintainer can catch a mislabel), and
+   everything else is a triage candidate. If a PR carries both labels,
+   `no-release-notes` wins.
+4. **Triage** (AI) - Claude decides, per candidate without `release-notes`, whether the change
    is user-facing enough to note (include) or purely internal (exclude), with a
    short reason for each. Included candidates join the labelled PRs; the model's
    include/exclude table is surfaced in the PR body for a maintainer to confirm.
@@ -399,7 +407,8 @@ human merges.
    and open/update a PR into the release line with a body that explains the cut and
    surfaces any advisories (below). When the cut flags anything a maintainer should
    address first, the PR opens as a draft to hold the merge (see [Edge-case
-   handling](#edge-case-handling)).
+   handling](#edge-case-handling)). Immediately before changing the prep branch,
+   the agent re-fetches M.m and aborts if its tip differs from the pinned SHA.
 
 ### Edge-case handling
 
@@ -407,7 +416,9 @@ Malformed dispatch inputs fail fast at argparse (exit 2), before the clone + AI
 run: a non-`M.m.p` or out-of-range version, a bad stage, an urgency outside
 `LOW/MODERATE/HIGH/CRITICAL/SECURITY`, or a non-ISO date. An explicit `--base-ref`
 that resolves to nothing aborts right after the clone with a clear error. A cut
-dispatched against a non-existent M.m branch is refused immediately.
+dispatched against a non-existent M.m branch is refused immediately. A target
+that is equal to or older than the branch's current release state, or at or
+behind an existing tag on that M.m line, is also refused before note generation.
 
 When the cut raises anything a maintainer should address before merging, the
 release PR opens as a draft (GitHub refuses to merge a draft) so a shipped
@@ -421,13 +432,13 @@ prints the same hold decision without opening a PR. The signals that hold:
 - **RC out of sequence** - a re-cut rc or a skipped rc number.
 - **Unanchored baseline** - rc1 of `M.0.0` with no `--base-ref` fell back to the
   nearest tag, which may over-broaden the range.
-- **Empty release notes** - no PRs in range, or no PR was labelled and AI triage
-  included none of the label-less ones; the body says which, so an empty dated
+- **Empty release notes** - no PRs in range, or no PR carried `release-notes` and AI triage
+  included none of the remaining candidates; the body says which, so an empty dated
   section is not mistaken for a generation miss.
 - **Duplicate / declined / low-confidence** - a PR credited in more than one
   bullet, a labelled PR the model declined to note, or a note the model flagged
   as low-confidence.
-- **AI triage** - the model decided inclusion for label-less PRs (a call that used
+- **AI triage** - the model decided inclusion for PRs without `release-notes` (a call that used
   to require a human label), so the PR holds until a maintainer confirms the
   include/exclude table; a low-confidence triage call also holds.
 - **Security** - a `--security-fix` also noted as a normal bullet, `SECURITY`
@@ -437,7 +448,7 @@ prints the same hold decision without opening a PR. The signals that hold:
   valkey's label-only gate: a range commit with no resolvable PR (absent from the
   notes entirely), a commit whose resolved PR could not be fetched, or a note
   credited to a backport PR because the original author's PR could not be recovered.
-- **Triage** - label-less PRs AI triage could not decide (no verdict returned), so
+- **Triage** - PRs without `release-notes` that AI triage could not decide (no verdict returned), so
   a maintainer must decide whether to include them.
 
 The body always shows the resolved notes range so an over-broad baseline is

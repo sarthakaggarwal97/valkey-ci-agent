@@ -49,6 +49,9 @@ def patched(monkeypatch, tmp_path):
     monkeypatch.setattr(main_mod, "run_git", lambda *a, **k: MagicMock())
     monkeypatch.setattr(main_mod.tempfile, "mkdtemp", lambda *a, **k: str(tmp_path / "clone"))
     monkeypatch.setattr(main_mod.shutil, "rmtree", lambda *a, **k: None)
+    # The orchestration tests mock clone and never materialize version.h or tags.
+    # Target progression has focused real-repository tests below.
+    monkeypatch.setattr(main_mod, "_validate_release_target", lambda *a, **k: None)
     # Default the rc1 previous-release resolver to a no-op (no earlier release), so
     # a generic rc1 test does not shell out to real git against the fake clone dir.
     # Tests that exercise the resolver override this with their own stub.
@@ -66,6 +69,34 @@ def _capture_cut(patched):
 
     patched.setattr(main_mod.cut_mod, "cut", _cut)
     return captured
+
+
+def test_release_target_validation_runs_after_tag_fetch_before_cut(patched):
+    events = []
+
+    def _run_git(repo_dir, *args, **kwargs):
+        if args[:2] == ("fetch", "--tags"):
+            events.append("fetch-tags")
+        return MagicMock()
+
+    def _validate(*args, **kwargs):
+        events.append("validate-target")
+
+    def _cut(repo, **kwargs):
+        events.append("cut")
+        return 0
+
+    patched.setattr(main_mod, "run_git", _run_git)
+    patched.setattr(main_mod, "_validate_release_target", _validate)
+    patched.setattr(main_mod.cut_mod, "cut", _cut)
+
+    result = main([
+        "--token", "t", "--version", "9.1.1", "--stage", "ga",
+        "--urgency", "LOW",
+    ])
+
+    assert result == 0
+    assert events == ["fetch-tags", "validate-target", "cut"]
 
 
 # --- argument validation ---
@@ -360,6 +391,42 @@ def test_calledprocesserror_stderr_logged(patched, caplog):
                    "--stage", "rc2", "--urgency", "LOW"])
     assert rc == 1
     assert any("protected ref" in r.message for r in caplog.records)
+
+
+class TestValidateReleaseTarget:
+    def _repo(self, tmp_path, version: str, stage: str | None = "ga"):
+        repo = tmp_path / "repo"
+        (repo / "src").mkdir(parents=True)
+        lines = [
+            f'#define VALKEY_VERSION "{version}"',
+            "#define VALKEY_VERSION_NUM 0x00000000",
+        ]
+        if stage is not None:
+            lines.append(f'#define VALKEY_RELEASE_STAGE "{stage}"')
+        (repo / "src" / "version.h").write_text("\n".join(lines) + "\n")
+        run_git(str(repo), "init", "-q", "-b", "main")
+        run_git(str(repo), "config", "user.email", "t@t")
+        run_git(str(repo), "config", "user.name", "t")
+        run_git(str(repo), "add", "src/version.h")
+        run_git(str(repo), "commit", "-q", "-m", "base")
+        return repo
+
+    def test_patch_target_advances_current_release(self, tmp_path):
+        repo = self._repo(tmp_path, "8.1.8")
+        run_git(str(repo), "tag", "8.1.8")
+        main_mod._validate_release_target(str(repo), "main", "8.1.9", "ga")
+
+    def test_rejects_downgrade_before_cut(self, tmp_path):
+        repo = self._repo(tmp_path, "8.1.8")
+        run_git(str(repo), "tag", "8.1.8")
+        with pytest.raises(ValueError, match="newer than the branch's current state"):
+            main_mod._validate_release_target(str(repo), "main", "8.1.7", "ga")
+
+    def test_rejects_already_tagged_target(self, tmp_path):
+        repo = self._repo(tmp_path, "9.1.0", "rc1")
+        run_git(str(repo), "tag", "9.1.0-rc2")
+        with pytest.raises(ValueError, match="existing tag '9.1.0-rc2'"):
+            main_mod._validate_release_target(str(repo), "main", "9.1.0", "rc2")
 
 
 # --- baseline glob / base-ref resolution ---
