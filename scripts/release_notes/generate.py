@@ -1,31 +1,30 @@
 """Ask Claude (via Bedrock) to turn merged PRs into categorized note bullets.
 
 The model writes a concise user-facing description per PR and assigns it to a
-canonical category. It runs with no tools: PR diffs are gathered in code
-(_collect_pr_diff) and inlined into the prompt, so the model has no filesystem
-access to attacker-influenceable clone content.
+canonical category. It runs with no tools: PR diffs are gathered in code and
+inlined into the prompt, so the model has no filesystem access to
+attacker-influenceable clone content.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import re
-import subprocess
 from typing import Callable, Sequence
 
 from scripts.ai.claude_code import run_claude_code
 from scripts.common.ai_output import extract_json_object
-from scripts.common.proc import git_output
+from scripts.release_notes.ai_inputs import (
+    PRDiffCollector,
+    build_prompt_payload,
+    exact_pr_number,
+)
 from scripts.release_notes.models import CategorizedBullet, GenerationResult, MergedPR
 
 logger = logging.getLogger(__name__)
 
 # Max PRs per Claude call; results from each batch are merged.
 _BATCH_SIZE = 80
-
-# Per-PR diff budget (characters) inlined into the prompt.
-_MAX_DIFF_CHARS = 6000
 
 _OBSERVABILITY_CATEGORY = "Observability and Logging"
 _OBSERVABILITY_EVIDENCE_RE = re.compile(
@@ -118,51 +117,6 @@ Every "pr" must be one of the input PR numbers. Emit at most one bullet per PR.
 """
 
 
-def _collect_pr_diff(repo_dir: str, sha: str) -> str:
-    """Return a bounded diff (diffstat + clipped patch) for *sha*, or "".
-
-    Uses --first-parent so merge commits diff against their first parent (showing
-    the PR's change). Degrades to "" on any error rather than aborting the cut.
-    """
-    if not sha:
-        return ""
-    try:
-        diff = git_output(repo_dir, "show", "--format=", "--stat", "--patch", "--first-parent", sha)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-        logger.warning("Could not read diff for %s: %s", sha[:12], exc)
-        return ""
-    diff = diff.strip()
-    if len(diff) <= _MAX_DIFF_CHARS:
-        return diff
-    # Clip on a line boundary so the last hunk is not torn mid-line.
-    clipped = diff[:_MAX_DIFF_CHARS]
-    nl = clipped.rfind("\n")
-    if nl > 0:
-        clipped = clipped[:nl]
-    return clipped.rstrip() + "\n… (diff truncated)"
-
-
-def build_prompt_payload(
-    prs: Sequence[MergedPR], *, diffs: dict[int, str] | None = None
-) -> str:
-    """Render the per-PR JSON array (number/title/author/url/body + optional diff).
-
-    ``diffs`` maps PR number to inlined diff text; absent or empty entries omit the
-    diff field. Shared by the generation and triage prompts so the model sees an
-    identically shaped PR record in both passes.
-    """
-    diffs = diffs or {}
-    payload = []
-    for pr in prs:
-        entry = {"number": pr.number, "title": pr.title, "author": pr.author,
-                 "url": pr.url, "body": pr.body}
-        diff = diffs.get(pr.number)
-        if diff:
-            entry["diff"] = diff
-        payload.append(entry)
-    return json.dumps(payload, indent=2)
-
-
 def build_prompt(
     prs: Sequence[MergedPR], *, categories: Sequence[str], diffs: dict[int, str] | None = None
 ) -> str:
@@ -176,16 +130,6 @@ def build_prompt(
         category_guidance=_CATEGORY_GUIDANCE,
         prs_json=build_prompt_payload(prs, diffs=diffs),
     )
-
-
-def _as_pr_number(value: object) -> "int | None":
-    """Return *value* iff it is an exact non-bool int, else None.
-
-    Rejects float/bool/string to avoid silent coercion to a different PR number.
-    """
-    if isinstance(value, bool) or not isinstance(value, int):
-        return None
-    return value
 
 
 def _parse_batch(
@@ -210,7 +154,7 @@ def _parse_batch(
     for raw in raw_bullets:
         if not isinstance(raw, dict):
             continue
-        number = _as_pr_number(raw.get("pr"))
+        number = exact_pr_number(raw.get("pr"))
         if number is None:
             continue
         if number not in valid_numbers:
@@ -248,7 +192,7 @@ def _parse_batch(
 
     skipped: list[int] = []
     for raw in raw_skipped:
-        number = _as_pr_number(raw)
+        number = exact_pr_number(raw)
         if number is None:
             continue
         if number not in valid_numbers:
@@ -298,6 +242,7 @@ def generate(
     categories: Sequence[str],
     timeout: int = 1800,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
+    diff_collector: PRDiffCollector | None = None,
 ) -> GenerationResult:
     """Generate categorized bullets for *prs*, batching large inputs.
 
@@ -312,11 +257,12 @@ def generate(
     valid_categories = set(categories)
     all_bullets: list[CategorizedBullet] = []
     all_skipped: list[int] = []
+    collector = diff_collector or PRDiffCollector(repo_dir, prs)
 
     for start in range(0, len(prs), _BATCH_SIZE):
         batch = prs[start:start + _BATCH_SIZE]
         batch_numbers = {pr.number for pr in batch}
-        diffs = {pr.number: _collect_pr_diff(repo_dir, pr.merge_commit_sha) for pr in batch}
+        diffs = collector.collect(batch)
         prompt = build_prompt(batch, categories=categories, diffs=diffs)
         stdout, stderr, code = run_fn(
             prompt,

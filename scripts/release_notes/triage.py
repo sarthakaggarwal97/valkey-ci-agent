@@ -20,7 +20,11 @@ from typing import Callable, Sequence
 
 from scripts.ai.claude_code import run_claude_code
 from scripts.common.ai_output import extract_json_object
-from scripts.release_notes.generate import _collect_pr_diff, build_prompt_payload
+from scripts.release_notes.ai_inputs import (
+    PRDiffCollector,
+    build_prompt_payload,
+    exact_pr_number,
+)
 from scripts.release_notes.models import MergedPR, TriageDecision, TriageResult
 
 logger = logging.getLogger(__name__)
@@ -255,13 +259,6 @@ def build_prompt(
     )
 
 
-def _as_pr_number(value: object) -> "int | None":
-    """Return *value* iff it is an exact non-bool int, else None."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        return None
-    return value
-
-
 def _parse_batch(
     stdout: str, valid_numbers: set[int]
 ) -> tuple[list[TriageDecision], bool]:
@@ -284,7 +281,7 @@ def _parse_batch(
     for raw in raw_verdicts:
         if not isinstance(raw, dict):
             continue
-        number = _as_pr_number(raw.get("pr"))
+        number = exact_pr_number(raw.get("pr"))
         if number is None:
             continue
         if number not in valid_numbers:
@@ -318,6 +315,7 @@ def triage(
     already_noted: Sequence[int] = (),
     timeout: int = 1800,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
+    diff_collector: PRDiffCollector | None = None,
 ) -> TriageResult:
     """Decide include/exclude for each non-release-notes candidate, batching inputs.
 
@@ -341,11 +339,12 @@ def triage(
     excluded: list[TriageDecision] = []
     undecided: list[int] = []
     already_noted_numbers = set(already_noted)
+    collector = diff_collector or PRDiffCollector(repo_dir, prs)
 
     for start in range(0, len(prs), _BATCH_SIZE):
         batch = prs[start:start + _BATCH_SIZE]
         batch_numbers = {pr.number for pr in batch}
-        diffs = {pr.number: _collect_pr_diff(repo_dir, pr.merge_commit_sha) for pr in batch}
+        diffs = collector.collect(batch)
         prompt = build_prompt(batch, diffs=diffs, base_ref=base_ref, already_noted=already_noted)
         stdout, stderr, code = run_fn(
             prompt,

@@ -14,6 +14,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -22,10 +23,22 @@ _API_ROOT = "https://api.github.com"
 _RETRYABLE_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
 _API_RETRIES = 3
 
-# Captures the display name from a Co-authored-by value: "Name <email>".
-_COAUTHOR_VALUE_RE = re.compile(r"^(.+?)[ \t]*<[^>]*>[ \t]*$")
+# Captures identity fields from a Co-authored-by value: "Name <email>".
+_COAUTHOR_VALUE_RE = re.compile(r"^(.+?)[ \t]*<([^>]*)>[ \t]*$")
 # Commit boundary in the -z git-log stream.
 _NUL = "\x00"
+
+
+@dataclass(frozen=True)
+class _CoauthorIdentity:
+    name: str
+    email: str = ""
+
+
+@dataclass(frozen=True)
+class _ResolvedIdentity:
+    name: str
+    aliases: frozenset[str]
 
 
 def _is_bot(identity: str) -> bool:
@@ -171,11 +184,34 @@ def _git_shortlog_names(base_ref: str, head_ref: str, repo_dir: str) -> List[str
     return names
 
 
-def _coauthors_in_range(base_ref: str, head_ref: str, repo_dir: str) -> List[str]:
-    """Collect display names from Co-authored-by trailers in the range (offline).
+def _identity_aliases(name: str, email: str = "") -> set[str]:
+    """Return conservative normalized keys linking names, handles, and emails."""
+
+    def normalize(value: str) -> str:
+        return "".join(char for char in value.casefold() if char.isalnum())
+
+    aliases = {key for key in (normalize(name),) if key}
+    local = email.partition("@")[0]
+    # A meaningful email local-part often bridges a login-shaped trailer name and
+    # a human display name. Ignore very short locals to limit accidental matches.
+    local_key = normalize(local)
+    if len(local_key) >= 5:
+        aliases.add(local_key)
+    if "+" in local:
+        suffix_key = normalize(local.rsplit("+", 1)[1])
+        if len(suffix_key) >= 5:
+            aliases.add(suffix_key)
+    return aliases
+
+
+def _coauthor_identities_in_range(
+    base_ref: str, head_ref: str, repo_dir: str
+) -> List[_CoauthorIdentity]:
+    """Collect identities from Co-authored-by trailers in the range (offline).
 
     Uses git's trailer parser so body-prose mentions are not misread as trailers.
-    Returns names only (no handles), deduplicated case-insensitively.
+    Exact duplicate name/email pairs are removed while preserving first-seen order.
+    Email is retained so callers can reconcile alternate names for one person.
     """
     try:
         out = subprocess.run(
@@ -189,8 +225,8 @@ def _coauthors_in_range(base_ref: str, head_ref: str, repo_dir: str) -> List[str
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError):
         return []
-    names: List[str] = []
-    seen = set()
+    identities: List[_CoauthorIdentity] = []
+    seen: set[tuple[str, str]] = set()
     for record in out.split(_NUL):
         for line in record.splitlines():
             line = line.strip()
@@ -198,10 +234,65 @@ def _coauthors_in_range(base_ref: str, head_ref: str, repo_dir: str) -> List[str
                 continue
             m = _COAUTHOR_VALUE_RE.match(line)
             name = m.group(1).strip() if m else line
-            if name and not _is_bot(name) and name.casefold() not in seen:
-                seen.add(name.casefold())
-                names.append(name)
-    return names
+            email = m.group(2).strip() if m else ""
+            key = (name.casefold(), email.casefold())
+            if name and not _is_bot(name) and key not in seen:
+                seen.add(key)
+                identities.append(_CoauthorIdentity(name=name, email=email))
+    return identities
+
+
+def _resolve_coauthor_aliases(
+    identities: List[_CoauthorIdentity],
+) -> List[_ResolvedIdentity]:
+    """Join transitive alias matches and retain the clearest display name."""
+    groups: List[_ResolvedIdentity] = []
+    for identity in identities:
+        aliases = _identity_aliases(identity.name, identity.email)
+        matches = [
+            index
+            for index, group in enumerate(groups)
+            if not aliases.isdisjoint(group.aliases)
+        ]
+        if not matches:
+            groups.append(
+                _ResolvedIdentity(identity.name, frozenset(aliases))
+            )
+            continue
+
+        first = matches[0]
+        names = [groups[index].name for index in matches]
+        names.append(identity.name)
+        # A spaced, capitalized display name is clearer than a login-shaped
+        # trailer value. Stable max keeps the first name when quality ties.
+        preferred = max(
+            names,
+            key=lambda name: (
+                any(char.isspace() for char in name),
+                any(char.isupper() for char in name)
+                and any(char.islower() for char in name),
+            ),
+        )
+        merged_aliases = set(aliases)
+        for index in matches:
+            merged_aliases.update(groups[index].aliases)
+        for index in reversed(matches):
+            del groups[index]
+        groups.insert(
+            first,
+            _ResolvedIdentity(preferred, frozenset(merged_aliases)),
+        )
+    return groups
+
+
+def _coauthors_in_range(base_ref: str, head_ref: str, repo_dir: str) -> List[str]:
+    """Return co-author display names, deduplicated by resolved identity aliases."""
+    return [
+        group.name
+        for group in _resolve_coauthor_aliases(
+            _coauthor_identities_in_range(base_ref, head_ref, repo_dir)
+        )
+    ]
 
 
 def _sort_key(entry: str) -> str:
@@ -230,35 +321,40 @@ def list_contributors(
         logins = []
 
     entries: List[str] = []
+    have: set[str] = set()
     if logins:
         for login in logins:
             name = _display_name(login, token) or login
             entries.append("{} @{}".format(name, login))
+            have.update(_identity_aliases(name))
+            have.update(_identity_aliases(login))
     else:
-        seen = set()
         for name in _git_shortlog_names(base_ref, head_ref, repo_dir):
-            key = name.casefold()
-            if key not in seen:
-                seen.add(key)
+            aliases = _identity_aliases(name)
+            if aliases.isdisjoint(have):
                 entries.append(name)
+            have.update(aliases)
 
-    have = {_sort_key(e) for e in entries}
     # Seed git author names so shortlog dedup works when display name differs.
     for gn in git_names:
-        have.add(gn.casefold())
+        have.update(_identity_aliases(gn))
 
     # Supplement from shortlog when the API's 250-commit cap was hit.
     if truncated:
         for name in _git_shortlog_names(base_ref, head_ref, repo_dir):
-            if name.casefold() not in have:
-                have.add(name.casefold())
+            aliases = _identity_aliases(name)
+            if aliases.isdisjoint(have):
                 entries.append(name)
+            have.update(aliases)
 
     # Union in co-authors invisible to both the compare API and shortlog.
-    for name in _coauthors_in_range(base_ref, head_ref, repo_dir):
-        if name.casefold() not in have:
-            have.add(name.casefold())
-            entries.append(name)
+    coauthors = _resolve_coauthor_aliases(
+        _coauthor_identities_in_range(base_ref, head_ref, repo_dir)
+    )
+    for identity in coauthors:
+        if identity.aliases.isdisjoint(have):
+            entries.append(identity.name)
+        have.update(identity.aliases)
 
     entries.sort(key=_sort_key)
     return entries
