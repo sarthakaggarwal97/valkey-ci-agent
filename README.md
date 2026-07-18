@@ -273,10 +273,13 @@ Cuts a Valkey release in one shot. A maintainer dispatches the target version an
 urgency, plus an explicit stage for `.0` releases; patch versions infer `ga`. The
 agent derives the M.m release line and generates notes from the `release-notes`
 PRs plus candidates without that label that AI triage judges user-facing (Claude
-via Bedrock), renders them onto the long-running release line as a dated section,
-bumps `src/version.h`, refreshes the running contributor list, and opens one PR
-for review (as a draft, holding the merge, when the cut flags anything a
-maintainer should address first; see [Edge-case handling](#edge-case-handling)).
+via Bedrock). Deterministic release-impact checks keep crash, memory-safety,
+corruption, access-control, protocol, compatibility, and similar fixes from being
+silently excluded by an AI verdict. The agent renders the result onto the
+long-running release line as a dated section, bumps `src/version.h`, refreshes
+the running contributor list, and opens one PR for review (as a draft, holding
+the merge, when the cut flags anything a maintainer should address first; see
+[Edge-case handling](#edge-case-handling)).
 Nothing accumulates notes on a branch; the notes for a release are generated all
 at once. The release line is changed only when a maintainer merges the generated
 PR.
@@ -317,6 +320,10 @@ Use `release-notes-cut-advanced.yml` only for an explicit date/baseline,
 contributor override, security entries/advisory lookup, or `force_ready`. It
 delegates to the same release workflow as the normal dispatch, so the release
 logic cannot drift between the two interfaces.
+
+An omitted date resolves to the current **UTC** date. Use the advanced workflow's
+explicit `date` input when the intended release date follows another timezone's
+calendar day.
 
 **Branch model** (tag-driven, one M.m branch per minor):
 
@@ -381,6 +388,10 @@ human merges.
    release tag (resolved from all tags in the repo), for rc2+ it is the prior RC
    tag (e.g. `9.2.0-rc1`), and for a patch GA it is the previous patch tag (e.g.
    `9.1.8`). Tags are created by maintainers before dispatch.
+   Per-PR backports are credited to their merged source PR after provenance
+   validation; supported evidence includes the structured backport summary,
+   cherry-pick/subject/branch metadata, and a standalone
+   `backport of <GitHub PR URL>` marker.
 3. **Classify** (code) - split PRs by label: `release-notes` PRs are included
    directly, `no-release-notes` PRs are hard-excluded (dropped before triage, never
    noted, and listed in the PR body so a maintainer can catch a mislabel), and
@@ -388,18 +399,26 @@ human merges.
    `no-release-notes` wins.
 4. **Triage** (AI) - Claude decides, per candidate without `release-notes`, whether the change
    is user-facing enough to note (include) or purely internal (exclude), with a
-   short reason for each. Included candidates join the labelled PRs; the model's
-   include/exclude table is surfaced in the PR body for a maintainer to confirm.
-   A candidate the model returns no verdict for falls back to human triage.
+   short reason for each. Patch-release triage defaults uncertain correctness and
+   safety fixes to inclusion. Code independently scans PR-authored title/body
+   text for release-impact signals; if AI excludes such a candidate or omits its
+   verdict, the guardrail forces it into generation as uncertain. Included
+   candidates join the labelled PRs; all decisions and guardrail overrides are
+   surfaced in the PR body. A candidate with no verdict and no guardrail signal
+   falls back to human triage.
 5. **Generate** (AI) - Claude writes one categorized, user-facing bullet per
-   included PR (labelled + triaged-in). The model never emits the `(#N)` reference
-   or `by @handle` - code appends those in `scripts/release_notes/render.py`
-   (`format_bullet`), so the bullet format stays fixed in one place.
+   included PR (labelled + triaged-in). Category guidance favors the affected
+   user-facing surface; code normalizes generic INFO/metrics/ACL LOG/logging
+   classifications to `Observability and Logging` and flags that correction for
+   review. The model never emits the `(#N)` reference or `by @handle`; code
+   removes accidental duplicate markers and terminal punctuation, then appends
+   the canonical attribution in `scripts/release_notes/render.py`.
 6. **Render + bump** (code) - render the categorized bullets into a new dated
    section prepended before any existing sections on the release line via
    `render_release_notes` (`release_format.py`) / `set_version`
    (`version_bump.py`), append the cumulative contributor list
-   (`contributors.py`), and bump `src/version.h`. These format primitives live
+   (`contributors.py`) deduplicated by case-insensitive display-name/login
+   identity, and bump `src/version.h`. These format primitives live
    in-repo rather than being imported from valkey, because upstream
    `valkey-io/valkey` ships no such tooling, so a cut runs against unmodified
    upstream (a plaintext `00-RELEASENOTES` placeholder and a `src/version.h`
@@ -438,14 +457,19 @@ decision without opening a PR. The signals that hold:
   included none of the remaining candidates; the body says which, so an empty dated
   section is not mistaken for a generation miss.
 - **Duplicate / declined / low-confidence** - a PR credited in more than one
-  bullet, a labelled PR the model declined to note, or a note the model flagged
+  bullet, any included PR for which the model produced no bullet, or a note the model flagged
   as low-confidence.
 - **AI triage** - the model decided inclusion for PRs without `release-notes` (a call that used
   to require a human label), so the PR holds until a maintainer confirms the
   include/exclude table; a low-confidence triage call also holds.
-- **Security** - a `--security-fix` also noted as a normal bullet, `SECURITY`
-  urgency with no security fixes, or advisories that could not be read (a clean
-  advisory match is informational and does not hold).
+- **Release-impact review** - a deterministic guardrail overrode an AI exclusion
+  or missing verdict, or release-impact signals were detected while the requested
+  urgency is `LOW`/`MODERATE`. The body lists every signal so release/security
+  maintainers can choose urgency and any hand-authored Security Fixes entries;
+  code does not assign severity automatically.
+- **Security** - `SECURITY` urgency with no security fixes, or advisories that
+  could not be read (a clean advisory match and normal-note deduplication for a
+  supplied `--security-fix` are informational and do not hold).
 - **Unresolved changes** - a shipped change that would otherwise slip past
   valkey's label-only gate: a range commit with no resolvable PR (absent from the
   notes entirely), a commit whose resolved PR could not be fetched, or a note

@@ -838,7 +838,7 @@ def _print_dry_run(
     if regen.duplicate_prs:
         print(f"⚠️  PR(s) noted more than once (extra bullets dropped): {list(regen.duplicate_prs)}")
     if regen.skipped:
-        print(f"⚠️  model declined (labelled but no bullet): {list(regen.skipped)}")
+        print(f"⚠️  model declined included PR(s) (no bullet): {list(regen.skipped)}")
     if regen.uncertain:
         flagged = [f"#{n.pr_number} ({n.reason or 'no reason'})" for n in regen.uncertain]
         print(f"⚠️  notes to double-check: {flagged}")
@@ -863,9 +863,18 @@ def _print_dry_run(
     if regen.ai_included:
         print("AI-triaged into notes (without release-notes; judged user-facing): "
               f"{[p.number for p in regen.ai_included]}")
+    if regen.guardrail_included:
+        print("⚠️  release-safety guardrail forced into notes after AI exclusion/no verdict: "
+              f"{[p.number for p in regen.guardrail_included]}")
     if regen.ai_excluded:
         print("AI-triaged out (without release-notes; judged internal-only): "
               f"{[p.number for p in regen.ai_excluded]}")
+    if regen.impact_review:
+        print(
+            f"⚠️  release-impact signals (confirm {notes_meta.urgency.strip().upper()} "
+            "urgency and security treatment): "
+            f"{[(p.number, p.reason) for p in regen.impact_review]}"
+        )
     if regen.label_excluded:
         print("hard-excluded (labelled no-release-notes): "
               f"{[p.number for p in regen.label_excluded]}")
@@ -999,13 +1008,20 @@ def _hold_reasons(plan: BranchPlan, notes_meta: "_NotesMeta") -> list[str]:
     if regen.duplicate_prs:
         reasons.append("a PR was noted more than once")
     if regen.skipped:
-        reasons.append("model declined to note some labelled PRs")
+        reasons.append("model declined to note some included PRs")
     if regen.uncertain:
         reasons.append("notes flagged low-confidence")
+    if regen.guardrail_included:
+        reasons.append("release-safety guardrail overrode AI triage")
     # AI decided inclusion for PRs without release-notes, so a maintainer confirms
     # the include/exclude table before shipping.
     if regen.ai_included or regen.ai_excluded:
         reasons.append("AI triaged PRs without release-notes (confirm include/exclude)")
+    if (
+        regen.impact_review
+        and notes_meta.urgency.strip().upper() in ("LOW", "MODERATE")
+    ):
+        reasons.append("release impact may require higher urgency or security treatment")
     sel = notes_meta.advisories
     if sel is not None and sel.fetch_failed:
         reasons.append("security advisories could not be read")
@@ -1090,9 +1106,11 @@ def _build_pr_body(
         + _duplicate_pr_section(regen.duplicate_prs)
         + _skipped_section(regen.skipped)
         + _uncertain_section(regen.uncertain)
+        + _impact_review_section(regen.impact_review, notes_meta.urgency)
         + _advisory_section(notes_meta)
         + _security_dedup_section(notes_meta)
         + _security_warning_section(notes_meta)
+        + _guardrail_included_section(regen.guardrail_included)
         + _ai_included_section(regen.ai_included)
         + _ai_excluded_section(regen.ai_excluded)
         + _label_excluded_section(regen.label_excluded)
@@ -1242,25 +1260,21 @@ def _duplicate_pr_section(duplicate_prs: Sequence[int]) -> str:
 def _skipped_section(skipped: Sequence[int]) -> str:
     """Flag included PRs the model declined to note, so they don't vanish silently.
 
-    A PR in *skipped* carried the ``release-notes`` label (it was included) but the
-    generator produced no bullet for it: it judged the change purely internal or
-    non-user-facing, or its output for that PR was lost/unparseable and folded into
-    skipped as "what was dropped." Either way the PR is absent from the dated
-    section. valkey's ``check_release_notes`` gate is label-only, so a PR the model
-    wrongly declined has no other signal; surface it here for a maintainer to
-    confirm each is truly not user-facing (or was mislabelled) before merging.
+    A PR in *skipped* was included by its label, AI triage, or the release-safety
+    guardrail, but generation produced no bullet. It either judged the change
+    internal or lost the output. Surface every case for review.
     """
     if not skipped:
         return ""
     refs = ", ".join(f"#{n}" for n in sorted(skipped))
     return (
         "\n### ⚠️ Model declined to note these PRs\n\n"
-        f"These PRs carried the `release-notes` label but the generator produced no "
-        f"bullet for them, so they are **absent** from the dated section: {refs}. It "
-        "judged them purely internal / not user-facing (or its output for them was "
-        "lost). Because the label gate is label-only, this is the only signal a "
-        "declined PR gets. Confirm each is truly not user-facing (or was "
-        "mislabelled); if one should be noted, re-cut after correcting it.\n"
+        "These PRs were selected for generation (by `release-notes`, AI triage, or "
+        "the release-safety guardrail), but the generator produced no bullet, so "
+        f"they are **absent** from the dated section: {refs}. It judged them purely "
+        "internal / not user-facing, or its output was lost. Confirm each omission; "
+        "if one should be noted, correct the labels/input or generator result and "
+        "re-cut.\n"
     )
 
 
@@ -1291,6 +1305,54 @@ def _uncertain_section(uncertain: Sequence[Any]) -> str:
         reason = publish_mod.escape_cell(note.reason) if note.reason else "(no reason given)"
         category = publish_mod.escape_cell(note.category) if note.category else "(none)"
         lines.append(f"| #{note.pr_number} | {category} | {reason} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _impact_review_section(impacts: Sequence[Any], urgency: str) -> str:
+    """List deterministic impact signals for urgency and security review."""
+    if not impacts:
+        return ""
+    urgency_upper = urgency.strip().upper()
+    needs_urgency_review = urgency_upper in ("LOW", "MODERATE")
+    heading = (
+        "### ⚠️ Release impact and urgency need review"
+        if needs_urgency_review
+        else "### Release-impact review"
+    )
+    lines = [
+        "",
+        heading,
+        "",
+        "Code detected terms associated with availability, memory safety, data "
+        "integrity, access control, protocol correctness, compatibility, or "
+        "operator-visible correctness. These signals force review; they are not "
+        "automatic severity or security classifications.",
+        "",
+    ]
+    if needs_urgency_review:
+        lines.extend([
+            f"The requested urgency is **{urgency_upper}**. Confirm whether these "
+            "changes require `HIGH`, `CRITICAL`, or `SECURITY`, and whether any need "
+            "a hand-authored **Security Fixes** entry:",
+            "",
+        ])
+    else:
+        lines.extend([
+            f"The requested urgency is **{urgency_upper}**. Confirm it and decide "
+            "whether any change needs a hand-authored **Security Fixes** entry:",
+            "",
+        ])
+    lines.extend([
+        "| PR | Title | Signal |",
+        "|----|-------|--------|",
+    ])
+    for impact in impacts:
+        lines.append(
+            f"| [#{impact.number}]({impact.url}) | "
+            f"{publish_mod.escape_cell(impact.title)} | "
+            f"{publish_mod.escape_cell(impact.reason)} |"
+        )
     lines.append("")
     return "\n".join(lines)
 
@@ -1419,6 +1481,33 @@ def _ai_triage_reason_cell(pr: Any) -> str:
     """Render the reason cell for an AI-triaged PR, flagging low-confidence calls."""
     reason = publish_mod.escape_cell(pr.reason) if pr.reason else "(no reason given)"
     return f"⚠️ {reason}" if pr.uncertain else reason
+
+
+def _guardrail_included_section(guardrail_included: Sequence[Any]) -> str:
+    """Table of risky PRs code kept after an AI exclusion or missing verdict."""
+    if not guardrail_included:
+        return ""
+    lines = [
+        "",
+        "### ⚠️ Release-safety guardrail overrode AI triage",
+        "",
+        "These PRs lacked `release-notes`, and AI excluded them or returned no "
+        "verdict. Their title/body named a release-impact signal, so deterministic "
+        "code forced them into generation instead of allowing a potentially serious "
+        "fix to disappear. Confirm each bullet, category, urgency, and security "
+        "treatment:",
+        "",
+        "| PR | Title | Author | Guardrail reason |",
+        "|----|-------|--------|------------------|",
+    ]
+    for pr in guardrail_included:
+        author = f"@{pr.author}" if pr.author else "(unknown)"
+        lines.append(
+            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
+            f"{author} | {_ai_triage_reason_cell(pr)} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _ai_included_section(ai_included: Sequence[Any]) -> str:

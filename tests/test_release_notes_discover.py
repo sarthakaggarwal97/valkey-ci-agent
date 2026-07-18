@@ -1342,6 +1342,40 @@ class TestHydratePrsBackportRecovery:
         assert unresolved_backports == []
         backport.get_commits.assert_not_called()
 
+    def test_recovers_manual_backport_of_url_without_label_or_prefix(self) -> None:
+        # PR #3957 used this free-form shape: no backport label/prefix/branch
+        # identity, only a first-line URL. Credit the original #3950 after the
+        # distinctive title cross-check, and use the original's labels.
+        backport = _pull(
+            3957,
+            title="Fix crash when active field-expiry leaves a single-entry HT vset buck…",
+            labels=("bug", "release-notes"),
+            head_ref="backport-9.1",
+            body=(
+                "backport of (https://github.com/valkey-io/valkey/pull/3950)\n\n"
+                "When active expiry leaves one entry, a later delete asserts."
+            ),
+        )
+        source = _pull(
+            3950,
+            title="Fix crash when active field-expiry leaves a single-entry HT vset bucket",
+            author="ranshid",
+            labels=(),
+            body="The original production-crash explanation.",
+        )
+        repo = self._repo({3957: backport, 3950: source})
+
+        prs, unresolved_backports, _ = hydrate_prs(
+            repo, {3957: "shaBackport"}
+        )
+
+        assert [pr.number for pr in prs] == [3950]
+        assert prs[0].author == "ranshid"
+        assert prs[0].labels == ()
+        assert prs[0].body == "The original production-crash explanation."
+        assert unresolved_backports == []
+        backport.get_commits.assert_not_called()
+
     def test_backport_titled_pr_with_no_source_not_remapped(self, caplog) -> None:
         # A PR whose title merely starts with "[Backport ..]" but has no summary,
         # no PR-commit (#N), no backport branch is not remapped: credit itself, warn,

@@ -13,8 +13,14 @@ from scripts.release_notes.models import MergedPR
 _CATEGORIES = list(_release_format.CATEGORIES)
 
 
-def _pr(number: int, author: str = "alice", body: str = "", sha: str = "") -> MergedPR:
-    return MergedPR(number=number, title=f"PR {number}", author=author, url=f"https://x/{number}",
+def _pr(
+    number: int,
+    author: str = "alice",
+    body: str = "",
+    sha: str = "",
+    title: str | None = None,
+) -> MergedPR:
+    return MergedPR(number=number, title=title or f"PR {number}", author=author, url=f"https://x/{number}",
                     body=body, labels=("release-notes",), merge_commit_sha=sha)
 
 
@@ -99,6 +105,17 @@ class TestBuildPrompt:
         prompt = build_prompt([_pr(1)], categories=_CATEGORIES)
         rules = prompt.split("## Rules", 1)[1].split("## Pull requests", 1)[0]
         assert "body" in rules
+
+    def test_prompt_defines_observability_precedence(self) -> None:
+        prompt = build_prompt([_pr(3888)], categories=_CATEGORIES)
+        assert "`Observability and Logging` owns" in prompt
+        assert "ACL LOG" in prompt
+        assert "`Bug Fixes` is the fallback" in prompt
+
+    def test_prompt_forbids_final_sentence_punctuation(self) -> None:
+        prompt = build_prompt([_pr(1)], categories=_CATEGORIES)
+        assert "Do not end the text" in prompt
+        assert "sentence punctuation" in prompt
 
 
 class TestGenerate:
@@ -197,6 +214,32 @@ class TestGenerate:
         result = generate([_pr(40)], repo_dir="/c", categories=_CATEGORIES, run_fn=_fake_run(obj))
         assert result.bullets[0].uncertain is False
         assert result.bullets[0].uncertain_reason == ""
+
+    def test_acl_log_fix_normalized_to_observability(self) -> None:
+        pr = _pr(
+            3888,
+            title="Report exact dbid for COPY in ACL LOG when access is denied",
+        )
+        obj = {"bullets": [
+            {"pr": 3888, "category": "Bug Fixes", "text": "Report the denied database in ACL LOG"},
+        ]}
+        result = generate([pr], repo_dir="/c", categories=_CATEGORIES, run_fn=_fake_run(obj))
+        bullet = result.bullets[0]
+        assert bullet.category == "Observability and Logging"
+        assert bullet.uncertain is True
+        assert "normalized" in bullet.uncertain_reason
+
+    def test_specific_non_observability_category_is_not_overridden(self) -> None:
+        pr = _pr(
+            1,
+            title="Validate logging configuration",
+        )
+        obj = {"bullets": [
+            {"pr": 1, "category": "Configuration", "text": "Reject invalid log settings"},
+        ]}
+        result = generate([pr], repo_dir="/c", categories=_CATEGORIES, run_fn=_fake_run(obj))
+        assert result.bullets[0].category == "Configuration"
+        assert result.bullets[0].uncertain is False
 
     def test_noncanonical_category_auto_flags_uncertain(self) -> None:
         # A category the model invented is off-list, so surface it for review even

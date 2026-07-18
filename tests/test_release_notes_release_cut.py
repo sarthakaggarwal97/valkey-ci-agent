@@ -509,10 +509,29 @@ class TestOriginGuard:
 class TestCutOrchestration:
     """End-to-end cut() with git + GitHub + pipeline mocked, real fixture worktree."""
 
-    def _setup(self, monkeypatch, clone, *, line_exists, bullets=True, triage=(),
-               had_prs=True, duplicate_prs=(), uncertain=(), unresolved=(),
-               unresolved_backports=(), unresolved_prs=(), ai_included=(),
-               ai_excluded=(), label_excluded=(), stub_contrib_base=True, writes=None):
+    def _setup(
+        self,
+        monkeypatch,
+        clone,
+        *,
+        line_exists,
+        bullets=True,
+        triage=(),
+        had_prs=True,
+        skipped=(),
+        duplicate_prs=(),
+        uncertain=(),
+        unresolved=(),
+        unresolved_backports=(),
+        unresolved_prs=(),
+        ai_included=(),
+        guardrail_included=(),
+        ai_excluded=(),
+        label_excluded=(),
+        impact_review=(),
+        stub_contrib_base=True,
+        writes=None,
+    ):
         from scripts.release_notes import pipeline as pipeline_mod
         from scripts.release_notes import render as render_mod
         from scripts.release_notes.models import CategorizedBullet
@@ -521,17 +540,27 @@ class TestCutOrchestration:
         bl = ([CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix")]
               if bullets else [])
         grouped = render_mod.group_bullets(bl)
-        # included counts labelled bullets plus AI-triaged-in PRs, mirroring pipeline.
-        included = (1 if bullets else 0) + len(ai_included)
+        # Included counts every PR sent to generation, including ones for which
+        # generation returned no bullet.
+        included = (
+            (1 if bullets else 0)
+            + len(skipped)
+            + len(ai_included)
+            + len(guardrail_included)
+        )
         monkeypatch.setattr(
             pipeline_mod, "regenerate_unreleased",
             lambda *a, **k: RegenResult(
                 base_tag="9.0.0", grouped=grouped,
                 included=included,
-                bullet_count=sum(len(v) for v in grouped.values()), skipped=(),
+                bullet_count=sum(len(v) for v in grouped.values()),
+                skipped=tuple(skipped),
                 triage=tuple(triage), had_prs=had_prs,
-                ai_included=tuple(ai_included), ai_excluded=tuple(ai_excluded),
+                ai_included=tuple(ai_included),
+                guardrail_included=tuple(guardrail_included),
+                ai_excluded=tuple(ai_excluded),
                 label_excluded=tuple(label_excluded),
+                impact_review=tuple(impact_review),
                 duplicate_prs=tuple(duplicate_prs), uncertain=tuple(uncertain),
                 unresolved=tuple(unresolved),
                 unresolved_backports=tuple(unresolved_backports),
@@ -890,15 +919,33 @@ class TestCutOrchestration:
         )
         assert "out of sequence" not in created[0]["body"]
 
-    def _cut_body(self, monkeypatch, clone, *, line_exists, cut_kwargs,
-                  bullets=True, triage=(), had_prs=True, duplicate_prs=(), uncertain=(),
-                  ai_included=(), ai_excluded=(), label_excluded=()):
+    def _cut_body(
+        self,
+        monkeypatch,
+        clone,
+        *,
+        line_exists,
+        cut_kwargs,
+        bullets=True,
+        triage=(),
+        had_prs=True,
+        skipped=(),
+        duplicate_prs=(),
+        uncertain=(),
+        ai_included=(),
+        guardrail_included=(),
+        ai_excluded=(),
+        label_excluded=(),
+        impact_review=(),
+    ):
         """Run cut() with GitHub mocked and return the created PR's body."""
         from unittest.mock import MagicMock
         self._setup(monkeypatch, clone, line_exists=line_exists, bullets=bullets,
-                    triage=triage, had_prs=had_prs, duplicate_prs=duplicate_prs,
-                    uncertain=uncertain, ai_included=ai_included, ai_excluded=ai_excluded,
-                    label_excluded=label_excluded)
+                    triage=triage, had_prs=had_prs, skipped=skipped,
+                    duplicate_prs=duplicate_prs, uncertain=uncertain,
+                    ai_included=ai_included, guardrail_included=guardrail_included,
+                    ai_excluded=ai_excluded, label_excluded=label_excluded,
+                    impact_review=impact_review)
         repo = MagicMock()
         repo.get_pulls.return_value = []
         created = []
@@ -1010,6 +1057,21 @@ class TestCutOrchestration:
         body = self._cut_body(monkeypatch, clone, line_exists={"9.1": True}, cut_kwargs={},
                               ai_included=ai_included)
         assert "AI triaged PRs without release-notes (confirm include/exclude)" in body
+
+    def test_skipped_section_does_not_claim_every_pr_was_labelled(
+        self, monkeypatch, clone
+    ):
+        body = self._cut_body(
+            monkeypatch,
+            clone,
+            line_exists={"9.1": True},
+            cut_kwargs={},
+            skipped=(41,),
+        )
+
+        assert "selected for generation" in body
+        assert "by `release-notes`, AI triage, or the release-safety guardrail" in body
+        assert "carried the `release-notes` label" not in body
 
     def test_uncertain_notes_flagged_in_body(self, monkeypatch, clone):
         from scripts.release_notes.models import UncertainNote
@@ -1204,8 +1266,21 @@ class TestCutOrchestration:
         assert "⚠️" not in body
         assert "Empty release notes" not in body
 
-    def _cut_created(self, monkeypatch, clone, *, line_exists, cut_kwargs,
-                     bullets=True, triage=(), had_prs=True, duplicate_prs=(), uncertain=()):
+    def _cut_created(
+        self,
+        monkeypatch,
+        clone,
+        *,
+        line_exists,
+        cut_kwargs,
+        bullets=True,
+        triage=(),
+        had_prs=True,
+        duplicate_prs=(),
+        uncertain=(),
+        guardrail_included=(),
+        impact_review=(),
+    ):
         """Run cut() with GitHub mocked and return the created PR's full kwargs.
 
         Like :meth:`_cut_body` but returns the whole ``create_pull`` kwargs dict so
@@ -1214,7 +1289,8 @@ class TestCutOrchestration:
         from unittest.mock import MagicMock
         self._setup(monkeypatch, clone, line_exists=line_exists, bullets=bullets,
                     triage=triage, had_prs=had_prs, duplicate_prs=duplicate_prs,
-                    uncertain=uncertain)
+                    uncertain=uncertain, guardrail_included=guardrail_included,
+                    impact_review=impact_review)
         repo = MagicMock()
         repo.get_pulls.return_value = []
         created = []
@@ -1270,6 +1346,85 @@ class TestCutOrchestration:
                                triage=triage)
         assert kw["draft"] is True
         assert "AI triage could not decide some PRs" in kw["body"]
+
+    def test_guardrail_inclusion_is_listed_and_held(self, monkeypatch, clone):
+        from scripts.release_notes.models import TriagedPR
+
+        guarded = (
+            TriagedPR(
+                number=3921,
+                title="Fix crash on crafted RESTORE payload",
+                author="dev",
+                url="https://x/3921",
+                included=True,
+                reason="availability impact: crash",
+                uncertain=True,
+                guardrail=True,
+            ),
+        )
+        kw = self._cut_created(
+            monkeypatch,
+            clone,
+            line_exists={"9.1": True},
+            cut_kwargs={},
+            guardrail_included=guarded,
+        )
+
+        assert kw["draft"] is True
+        assert "release-safety guardrail overrode AI triage" in kw["body"]
+        assert "[#3921](https://x/3921)" in kw["body"]
+        assert "availability impact: crash" in kw["body"]
+
+    def test_low_urgency_impact_is_listed_and_held(self, monkeypatch, clone):
+        from scripts.release_notes.models import ReleaseImpact
+
+        impacts = (
+            ReleaseImpact(
+                number=4073,
+                title="Fix use-after-free while loading corrupt RDB",
+                url="https://x/4073",
+                reason="memory-safety impact: use-after-free",
+            ),
+        )
+        kw = self._cut_created(
+            monkeypatch,
+            clone,
+            line_exists={"9.1": True},
+            cut_kwargs={"urgency": "LOW"},
+            impact_review=impacts,
+        )
+
+        assert kw["draft"] is True
+        assert "release impact may require higher urgency or security treatment" in kw["body"]
+        assert "Release impact and urgency need review" in kw["body"]
+        assert "[#4073](https://x/4073)" in kw["body"]
+        assert "requested urgency is **LOW**" in kw["body"]
+
+    def test_high_urgency_impact_is_listed_without_urgency_hold(
+        self, monkeypatch, clone
+    ):
+        from scripts.release_notes.models import ReleaseImpact
+
+        impacts = (
+            ReleaseImpact(
+                number=4073,
+                title="Fix use-after-free while loading corrupt RDB",
+                url="https://x/4073",
+                reason="memory-safety impact: use-after-free",
+            ),
+        )
+        kw = self._cut_created(
+            monkeypatch,
+            clone,
+            line_exists={"9.1": True},
+            cut_kwargs={"urgency": "HIGH"},
+            impact_review=impacts,
+        )
+
+        assert kw["draft"] is False
+        assert "Release-impact review" in kw["body"]
+        assert "requested urgency is **HIGH**" in kw["body"]
+        assert "release impact may require higher urgency" not in kw["body"]
 
     def test_dry_run_previews_hold(self, monkeypatch, clone, capsys):
         # --dry-run shows the hold decision the real cut would make.
@@ -1737,7 +1892,8 @@ class TestSecurityOnlyCutNotEmpty:
         return SimpleNamespace(
             bullet_count=bullet_count, had_prs=had_prs, triage=triage,
             included=0, skipped=(), duplicate_prs=(), uncertain=(),
-            ai_included=(), ai_excluded=(),
+            ai_included=(), guardrail_included=(), ai_excluded=(),
+            label_excluded=(), impact_review=(),
             unresolved=(), unresolved_backports=(), unresolved_prs=(),
             unresolved_cherry_picks=(), collided=(), base_tag="9.0.0",
         )

@@ -15,6 +15,7 @@ clone content, and all PR text is treated as untrusted data.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Callable, Sequence
 
 from scripts.ai.claude_code import run_claude_code
@@ -27,168 +28,179 @@ logger = logging.getLogger(__name__)
 # Max PRs per Claude call; verdicts from each batch are merged.
 _BATCH_SIZE = 80
 
+# A deterministic backstop for effects that must not disappear because of an AI
+# exclusion or malformed response. This is deliberately based on PR-authored
+# title/body text, not the collected diff: several source PRs in a squash-merged
+# backport sweep share one range commit and therefore the same combined diff.
+_TEST_ONLY_TITLE_RE = re.compile(
+    r"\b(?:ci|deflake|flaky|test(?:s|ing)?|valgrind)\b", re.IGNORECASE
+)
+_TEST_ONLY_BODY_RE = re.compile(
+    r"\b(?:tests?[- ]only|flaky tests?|tests? (?:is|are|was|were) flaky|"
+    r"production (?:code|behavio(?:u)?r) (?:is |was )?unchanged)\b",
+    re.IGNORECASE,
+)
+_RELEASE_IMPACT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "memory-safety risk",
+        re.compile(
+            r"\b(?:use[- ]after[- ]free|heap[- ]use[- ]after[- ]free|"
+            r"out[- ]of[- ]bounds|double[- ]free|buffer (?:over|under)flow|"
+            r"memory corruption)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "server crash, assertion, or availability failure",
+        re.compile(
+            r"\b(?:crash(?:es|ed|ing)?|segfault|sig(?:abrt|segv)|"
+            r"(?:server|process) aborts?|serverassert|debugserverassert|"
+            r"assert(?:ion)?(?: failure)?|hang(?:s|ing)?|livelock|deadlock|"
+            r"infinite loop)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "data or persisted-state corruption risk",
+        re.compile(
+            r"\b(?:data (?:loss|corruption)|corrupt(?:ed|ion|s)?|nodes\.conf)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "security, access-control, or injection hardening",
+        re.compile(
+            r"\b(?:security|CVE-\d+|inject(?:ion)?|bypass(?:es|ed|ing)?|"
+            r"access control|ACL|auth(?:entication|orization)?|permissions?|"
+            r"privilege|attacker|crafted payload|control[- ]character|"
+            r"information disclosure|sensitive data)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "wire-protocol or reply correctness",
+        re.compile(
+            r"\b(?:protocol (?:type )?violation|RESP[23] (?:type|reply)|"
+            r"(?:wrong|incorrect) (?:reply|response)|reply corruption|"
+            r"corrupts? replies)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "undefined behavior or unsafe arithmetic",
+        re.compile(
+            r"\b(?:integer overflow|undefined behavio(?:u)?r|modulo by zero|"
+            r"division by zero|numeric truncation|off_t to int truncation)\b|%\s*0",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "upgrade or downgrade compatibility",
+        re.compile(
+            r"\b(?:downgrad(?:e|es|ed|ing)|backward compatibility|"
+            r"backwards compatibility|previous versions? (?:cannot|could not|"
+            r"no longer))\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "incorrect operator-visible reporting",
+        re.compile(
+            r"\b(?:negative .{0,40}(?:report|bytes)|"
+            r"(?:incorrect|wrong) .{0,40}(?:INFO|metric|log))\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+def release_impact_reason(pr: MergedPR) -> str | None:
+    """Return a deterministic release-review signal for *pr*, if present.
+
+    This is not a severity or security classification. It only identifies PR text
+    that names an impact release notes should not silently omit. Obvious test-only
+    titles are excluded before scanning so a flaky assertion test does not look
+    like a production assertion fix.
+    """
+    title = pr.title or ""
+    body = pr.body or ""
+    if _TEST_ONLY_TITLE_RE.search(title) and _TEST_ONLY_BODY_RE.search(body):
+        return None
+    evidence = f"{title}\n{body}"
+    for reason, pattern in _RELEASE_IMPACT_PATTERNS:
+        if pattern.search(evidence):
+            return reason
+    return None
+
+
 _PROMPT_TEMPLATE = """\
-You are triaging pull requests for the release notes of the open-source project
-Valkey (a high-performance key-value datastore). You are given a list of PRs that
-merged into a release line since {base_ref} and that were NOT labelled
-`release-notes` by their author. Your job is to find the few that are genuinely
-important enough to warrant a changelog line. Most PRs will be excluded.
+You are triaging pull requests for the release notes of Valkey, a production
+key-value datastore. These PRs merged after {base_ref} without a `release-notes`
+label. Decide whether each change needs a patch-release changelog line.
 
-## The bar is very high
+## Release-safety principle
 
-Release notes exist to tell operators and application developers about changes that
-matter to them. Authors who know their change is noteworthy label it `release-notes`;
-you are only seeing the PRs where they did not. Almost all of these are correctly
-unlabelled: internal work, minor fixes, and incremental follow-ups. Typically fewer
-than 1 in 20 of the PRs you are given belongs in the notes. You are looking for the
-rare miss, not building a changelog from scratch.
+For bug fixes, omission is more costly than an extra reviewable bullet. Do not
+assume a missing label means a change is unimportant. INCLUDE a fix whenever its
+documented effect can matter to an operator, application, client library, module
+author, or supported platform. Rarity is not a reason to exclude a correctness or
+safety fix.
 
-## Decision test
+When evidence is incomplete, INCLUDE with `"uncertain": true`. EXCLUDE only when
+the change is clearly internal and has no shipped user or operator effect.
 
-Ask: "If I were writing a one-page summary of this release for someone upgrading
-from {base_ref}, would I mention this change?" Most changes are not worth mentioning
-even though they are technically user-visible. A user would be glad it happened, but
-they would never notice its absence from the changelog.
+## Include
 
-**Default is EXCLUDE.** Only include when the evidence clearly demonstrates the PR
-crosses one of the thresholds below.
+- New or changed commands, arguments, replies, configuration, CLI behavior, module
+  APIs, protocol behavior, or operational output.
+- Correctness fixes for crashes, assertions, hangs, data loss/corruption, memory
+  safety, wrong replies, protocol violations, ACL/authentication behavior,
+  configuration corruption/injection, compatibility, or misleading observability.
+- The fixes above even when they require an edge case, crafted/invalid input,
+  startup or RDB loading, a rare race, module interaction, a small legal config
+  value, a large data set, or a supported non-default platform.
+- Security-sensitive hardening whether or not a CVE/advisory has been published.
+  Advisory text is handled separately, but that must never make the underlying PR
+  disappear. Keep the PR in the best normal category and set `uncertain` when a
+  release/security maintainer should decide urgency or Security Fixes wording.
+- Meaningful performance improvements and operator-facing diagnostics, INFO fields,
+  metrics, logs, and process-title changes.
 
-## INCLUDE thresholds (a PR must clearly cross ONE)
+## Exclude only when clear
 
-1. **New capability**: A new command, subcommand, argument, reply field, config
-   option, or CLI feature that did not exist in {base_ref}, and that an ordinary
-   user or operator would adopt. Something a user can now DO that they could not do
-   before. Support added only so the project's own tooling, tests, or developer
-   workflows (fuzzing, benchmarking internals, debugging engine state) can exercise a
-   feature does not qualify. Module-API additions qualify ONLY when they expose a
-   capability a third-party module author would realistically use; internal or hidden
-   APIs, and APIs that exist solely to support the project's own scripting-engine
-   module, do not.
+- Test-only changes, flaky-test fixes, CI/workflow changes, comments/docs, formatting,
+  dependency maintenance, and developer tooling with no shipped behavior.
+- Pure refactors or cleanup with no observable correctness, compatibility,
+  performance, safety, or operational effect.
+- A fix solely for a feature introduced and fixed after {base_ref}, when users of
+  {base_ref} could never encounter it.
+- A PR already listed in the explicit Already released section below.
 
-2. **Behavior change**: A change to how an existing command, config, protocol, or
-   API works that could surprise a user upgrading from {base_ref}, or that requires
-   action from them. Backward incompatible changes, changed defaults, deprecations,
-   removals. The following do NOT qualify:
-   - Fixes or tweaks to an internal protocol's edge-case handling (cluster bus,
-     replication handshake, full-sync negotiation) that no user or client must act on.
-   - Internal optimizations to how an existing command iterates or scans data, when
-     the command's documented inputs and outputs are unchanged.
-   A change qualifies only if a user's commands, configuration, or client code would
-   behave differently in a way they could observe through documented interfaces.
+Do not exclude a fix merely because it is rare, defensive, described as hardening,
+affects an internal code path behind a public operation, lacks a published advisory,
+or may require malformed persisted/network input.
 
-3. **Major bug fix**: A fix for a bug with ALL of:
-   (a) the bug existed in {base_ref} or earlier, so users of that release could hit
-       it;
-   (b) a user could plausibly hit it in **normal production operation** (not only
-       during server startup/shutdown, not only with a misused or undocumented API,
-       not only on a niche platform with a non-default build, not only under an
-       internal protocol race that self-heals);
-   (c) the consequence is severe and immediate (crash, data loss/corruption, wrong
-       reply that an application would consume incorrectly, hang/livelock, or
-       persistent connection failure affecting availability). Resource leaks (FDs,
-       memory) that require accumulation over many operations before causing harm do
-       NOT meet this bar.
-   Fixes for minor leaks, edge-case assertions, cosmetic issues, rare startup
-   races, debug commands, or platform-specific build issues do NOT qualify.
+## Examples
 
-4. **Significant performance gain**: A measurable improvement (>10%) demonstrated on
-   a realistic workload or standard end-to-end benchmark, affecting request
-   throughput, command latency, or steady-state memory that users observe **while the
-   server is handling traffic**. One-time costs (startup time, shutdown, RDB load)
-   and speedups measured only on a micro-benchmark of an internal function do NOT
-   qualify, however large the percentage. Treat numbers quoted in the PR body as
-   claims, not proof: the change itself must plausibly deliver an effect a user would
-   notice during normal operation.
-
-5. **New operational observability**: A new INFO field, metric, or logging output
-   that an operator would monitor, alert on, or use to debug production issues.
-   Purely informational or cosmetic additions (version strings, build details,
-   relabelled output) do NOT qualify.
-
-## EXCLUDE (even if technically user-visible)
-
-- Internal refactors, code cleanup, comment/doc edits, test changes, CI/build changes.
-- Dependency bumps, tooling changes not visible in the shipped binary.
-- Bug fixes that do NOT meet ALL THREE criteria of threshold 3. This includes:
-  - Fixes for bugs introduced after {base_ref} (in this same range).
-  - Fixes for crashes that occur only during server startup or shutdown sequences.
-  - Fixes for crashes triggered only by misuse of an internal/module API (passing
-    NULL to a function that documents non-NULL, calling an API outside its valid
-    context).
-  - Fixes for issues on niche platforms or non-default build configurations.
-  - Fixes for cluster-bus or replication-protocol internal issues that self-heal or
-    that no client/operator action can trigger directly.
-- Performance work without realistic-workload evidence, including micro-benchmark
-  results and unquantified "should be faster" changes.
-- Internal limits, throttles, or recovery-behavior tuning that requires no user
-  action and adds no new configuration: hardening, not a feature.
-- Incremental follow-ups that polish or complete a feature already introduced by
-  another PR in this range; the parent entry covers the change.
-- Security fixes with a CVE (handled separately outside this process).
-- Changes to valkey-cli/valkey-benchmark that are minor fixes, or additions that
-  exist to exercise, test, or fuzz another feature, rather than a capability an
-  operator would reach for in production.
-- Module-API changes that are internal plumbing for the project's own scripting
-  engine module, or that are marked hidden/experimental/internal.
-- PRs whose fix was already released in a patch release of a prior stable line
-  (e.g. already noted in a 9.0.x patch); those users already have the fix.
-
-## Boundary examples (invented, for calibration)
-
-These illustrate where the line falls. They are not real PRs from this range.
-
-- "Refactor expiry callback to take a context struct" touches db.c and expire.c and
-  the diff looks substantial, but nothing a client or operator observes changes.
-  -> EXCLUDE: internal refactor.
-- "Fix flaky CLUSTER SLOTS test on slow runners" exercises a user-facing command,
-  but only the test changes. -> EXCLUDE: test-only.
-- "Fix crash in LPOS when count argument is negative" and LPOS shipped in
-  {base_ref}: a user can hit this with a plain command and the server crashes.
-  -> INCLUDE: major bug fix (threshold 3).
-- "Fix crash in the new streaming import introduced earlier in this range": the bug
-  never existed in {base_ref}, so no user of {base_ref} can hit it.
-  -> EXCLUDE: fix for a bug introduced in this same range.
-- "Fix SIGSEGV when module calls VM_GetFoo on a NULL key pointer": crash requires
-  passing NULL to an API that documents non-NULL input; only a buggy module triggers
-  it. -> EXCLUDE: API misuse, not normal operation.
-- "Fix crash in clusterInit when node ID is uninitialized during startup": crash
-  during cluster bootstrap, not during normal operation after the node is running.
-  -> EXCLUDE: startup-only, not normal operation.
-- "Add fuzzing mode to valkey-benchmark": this helps developers test valkey, not
-  operators running it. -> EXCLUDE: developer tooling.
-- "Rewrite intset lookup, 40% faster in a lookup micro-benchmark" is a large number,
-  but measured only on an internal function; end-to-end effect on a real workload is
-  unknown. -> EXCLUDE: micro-optimization without realistic-workload evidence.
-- "Add new `maxmemory-eviction-tenacity` config to tune eviction effort":
-  a new knob an operator can set. -> INCLUDE: new capability (threshold 1).
-- "Add ValkeyModule_InternalEngineHelper for scripting engine module": internal API
-  for the project's own engine. Third-party modules would not use it.
-  -> EXCLUDE: internal module API.
-- "Handle EAGAIN in cluster bus write handler to avoid dropping link": internal
-  protocol robustness; no client or operator action, no observable command behavior
-  change. -> EXCLUDE: cluster-bus internal hardening.
-- "Add build-target field to INFO server output": informational only; no operator
-  monitors or alerts on it. -> EXCLUDE: not operational observability.
+- A crafted RESTORE payload can crash the server or cause out-of-bounds access:
+  INCLUDE, even without a CVE and even on one supported architecture.
+- Sentinel or nodes.conf control-character injection is rejected: INCLUDE and mark
+  uncertain for security/urgency review.
+- A RESP3 collection has the wrong wire type, an INFO counter wraps negative, or
+  ACL output prevents downgrade compatibility: INCLUDE.
+- A rare command/module-notification sequence trips a server assertion: INCLUDE.
+- A test retries a timing-sensitive assertion but production code is unchanged:
+  EXCLUDE as test-only.
+- A function is renamed with no behavior change: EXCLUDE as internal refactoring.
 
 ## How to decide
 
-1. Read the PR body first (primary evidence), then the title.
-2. Use the diff field as supporting evidence when available. A diff that touches only
-   tests/, .github/, or docs is a strong exclude signal. A large or central-looking
-   diff is NOT an include signal by itself; judge the effect, not the location or
-   size of the change.
-3. Apply the thresholds strictly. "A user could theoretically notice" is NOT enough.
-   "A crash could theoretically happen" is NOT enough if it requires API misuse,
-   happens only at startup, or is a cluster-internal self-healing race.
-4. When uncertain, default to EXCLUDE with "uncertain": true. A human reviews all
-   uncertain verdicts. A false exclude is caught in that review; a false include
-   pollutes the changelog and costs maintainer time. Set "uncertain": true on an
-   INCLUDE too when the evidence is thin; such includes are held for human review
-   rather than published directly.
-5. Give a short reason naming the threshold crossed ("new HGETDEL command", "crash
-   in released LPOS via normal use") or the exclude reason ("minor leak in edge
-   case", "micro-benchmark only", "test-only", "startup crash only", "internal
-   module API", "cluster bus hardening").
+1. Read the body first, then the title. Use the diff as supporting evidence.
+2. Judge the shipped effect, not file size. A tests/.github/docs-only diff strongly
+   supports exclusion.
+3. If a potentially serious claim is plausible but not fully proven, INCLUDE it
+   with `uncertain: true`; the release PR is held for human review.
+4. Give a short, factual reason naming the effect or the clearly internal scope.
 
 ## Untrusted input
 
@@ -216,8 +228,9 @@ def build_prompt(
     """Render the triage prompt for a batch of candidate PRs.
 
     ``base_ref`` is the tag or ref the release range builds on (e.g. "9.0.0" for a
-    9.1.0-rc1 cut). It is substituted into threshold 3(a) so the temporal rule is
-    correct at every release stage. Falls back to "the previous release" when empty.
+    9.1.0-rc1 cut). It anchors the prompt's temporal rule so fixes introduced and
+    resolved wholly after the baseline can be excluded. Falls back to generic
+    wording when empty.
 
     ``already_noted`` is a list of PR numbers whose fixes were already released in a
     prior patch release. When non-empty, a section is injected telling the model to
@@ -315,9 +328,11 @@ def triage(
     ``already_noted`` is a list of PR numbers whose fixes were already released in a
     prior patch release. The model is told to exclude them unconditionally.
 
-    A batch whose output has no parseable JSON object leaves all its PRs undecided;
-    a PR the model returned no verdict for is undecided too. Undecided PRs are
-    surfaced for human triage, never silently included or dropped.
+    A deterministic release-impact guardrail overrides an exclusion (or missing
+    verdict) for PR text that names crash, memory-safety, corruption, injection,
+    protocol, compatibility, or similar risk. Those PRs are included as uncertain
+    and held for human review. Other missing verdicts remain undecided, so no change
+    is silently dropped.
     """
     if not prs:
         return TriageResult()
@@ -325,6 +340,7 @@ def triage(
     included: list[TriageDecision] = []
     excluded: list[TriageDecision] = []
     undecided: list[int] = []
+    already_noted_numbers = set(already_noted)
 
     for start in range(0, len(prs), _BATCH_SIZE):
         batch = prs[start:start + _BATCH_SIZE]
@@ -342,23 +358,45 @@ def triage(
         decisions, parsed_ok = _parse_batch(stdout, batch_numbers)
         if not parsed_ok:
             logger.error(
-                "No parseable triage output for batch %d-%d (exit=%d); leaving %d PR(s) "
-                "undecided. stderr: %s",
-                start, start + len(batch), code, len(batch), stderr[:200],
+                "No parseable triage output for batch %d-%d (exit=%d); applying "
+                "release-safety guardrails before leaving the remainder undecided. stderr: %s",
+                start, start + len(batch), code, stderr[:200],
             )
-            undecided.extend(sorted(batch_numbers))
-            continue
-        for d in decisions:
-            (included if d.included else excluded).append(d)
+        decision_by_number = {d.pr_number: d for d in decisions}
+        missing: list[int] = []
+        for pr in batch:
+            decision = decision_by_number.get(pr.number)
+            impact = release_impact_reason(pr)
+            if (
+                impact
+                and pr.number not in already_noted_numbers
+                and (decision is None or not decision.included)
+            ):
+                prior = "no AI verdict" if decision is None else "AI exclusion"
+                decision = TriageDecision(
+                    pr_number=pr.number,
+                    included=True,
+                    reason=f"release-safety guardrail ({impact}; {prior})",
+                    uncertain=True,
+                    guardrail=True,
+                )
+                logger.warning(
+                    "Including PR #%s via release-safety guardrail after %s: %s",
+                    pr.number, prior, impact,
+                )
+            if decision is None:
+                missing.append(pr.number)
+            elif decision.included:
+                included.append(decision)
+            else:
+                excluded.append(decision)
 
-        # PRs the batch returned no verdict for are undecided, not dropped.
-        unaccounted = batch_numbers - {d.pr_number for d in decisions}
-        if unaccounted:
+        if missing:
             logger.warning(
                 "Triage batch %d-%d returned no verdict for %d PR(s): %s; marking undecided",
-                start, start + len(batch), len(unaccounted), sorted(unaccounted),
+                start, start + len(batch), len(missing), sorted(missing),
             )
-            undecided.extend(sorted(unaccounted))
+            undecided.extend(sorted(missing))
 
     return TriageResult(
         included=tuple(included), excluded=tuple(excluded), undecided=tuple(undecided),

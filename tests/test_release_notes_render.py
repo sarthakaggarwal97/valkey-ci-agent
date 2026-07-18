@@ -73,6 +73,27 @@ class TestFormatBullet:
         assert "by @alicesmith" in line
         assert _AUTHOR_RE.search(line).group(1) == "alicesmith"
 
+    def test_terminal_punctuation_removed_before_attribution(self) -> None:
+        line = format_bullet(
+            _bullet(7, "alice", "Bug Fixes", "Fix reply corruption in I/O threads.")
+        )
+        assert line == "* Fix reply corruption in I/O threads by @alice (#7)"
+        assert ". by @" not in line
+
+    def test_model_supplied_bullet_attribution_and_ref_are_not_duplicated(self) -> None:
+        line = format_bullet(
+            _bullet(7, "alice", "Bug Fixes", "* Fix a crash. by @wrong (#999).")
+        )
+        assert line == "* Fix a crash by @alice (#7)"
+        assert line.count("by @") == 1
+        assert line.count("(#") == 1
+
+    def test_model_supplied_ref_before_attribution_is_not_duplicated(self) -> None:
+        line = format_bullet(
+            _bullet(7, "alice", "Bug Fixes", "Fix a crash (#999) by @wrong.")
+        )
+        assert line == "* Fix a crash by @alice (#7)"
+
 
 class TestGroupBullets:
     def test_canonical_order_preserved(self) -> None:

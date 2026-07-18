@@ -23,6 +23,7 @@ from scripts.release_notes.classify import classify
 from scripts.release_notes.models import (
     CollidedCommit,
     MergedPR,
+    ReleaseImpact,
     TriagedPR,
     UncertainNote,
     UnresolvedBackport,
@@ -49,8 +50,10 @@ class RegenResult:
     triage: tuple[MergedPR, ...]  # non-release-notes PRs AI could not decide -> human triage
     had_prs: bool               # whether the range contained any PR at all
     ai_included: tuple[TriagedPR, ...] = ()  # non-release-notes PRs AI judged user-facing
+    guardrail_included: tuple[TriagedPR, ...] = ()  # AI-excluded/missing risky PRs code forced into notes
     ai_excluded: tuple[TriagedPR, ...] = ()  # non-release-notes PRs AI judged internal-only
     label_excluded: tuple[TriagedPR, ...] = ()  # PRs hard-excluded by the no-release-notes label
+    impact_review: tuple[ReleaseImpact, ...] = ()  # deterministic impact signals for urgency/security review
     duplicate_prs: tuple[int, ...] = ()  # PR numbers the model emitted more than once (extra bullets dropped)
     uncertain: tuple[UncertainNote, ...] = ()  # low-confidence notes the model flagged, for the PR body
     unresolved: tuple[UnresolvedCommit, ...] = ()  # range commits that resolved to no PR (shipped un-noted)
@@ -92,6 +95,16 @@ def regenerate_unreleased(
     # Labelled PRs are included directly; no-release-notes PRs are hard-excluded
     # before triage; the rest are candidates AI triage judges.
     labelled, candidates, hard_excluded = classify(discovery.prs)
+    impact_review = tuple(
+        ReleaseImpact(
+            number=pr.number,
+            title=pr.title,
+            url=pr.url,
+            reason=reason,
+        )
+        for pr in discovery.prs
+        if (reason := triage_mod.release_impact_reason(pr)) is not None
+    )
     triage_result = triage_mod.triage(
         candidates, repo_dir=clone_dir, base_ref=discovery.base_tag
     )
@@ -99,7 +112,9 @@ def regenerate_unreleased(
     # Join each verdict back to its PR facts for the body, and collect the PRs the
     # model judged user-facing so they flow into generation with the labelled ones.
     by_number = {pr.number: pr for pr in candidates}
-    ai_included = _triaged_prs(triage_result.included, by_number)
+    included_decisions = _triaged_prs(triage_result.included, by_number)
+    ai_included = tuple(pr for pr in included_decisions if not pr.guardrail)
+    guardrail_included = tuple(pr for pr in included_decisions if pr.guardrail)
     ai_excluded = _triaged_prs(triage_result.excluded, by_number)
     # PRs the author opted out of via no-release-notes, surfaced (not silently
     # dropped) so a maintainer can catch a mislabelled user-facing change.
@@ -160,7 +175,9 @@ def regenerate_unreleased(
         base_tag=discovery.base_tag, grouped=grouped,
         included=len(include), bullet_count=promoted_count, skipped=skipped,
         triage=human_triage, had_prs=True,
-        ai_included=ai_included, ai_excluded=ai_excluded, label_excluded=label_excluded,
+        ai_included=ai_included, guardrail_included=guardrail_included,
+        ai_excluded=ai_excluded, label_excluded=label_excluded,
+        impact_review=impact_review,
         duplicate_prs=duplicate_prs, uncertain=uncertain,
         unresolved=discovery.unresolved,
         unresolved_backports=discovery.unresolved_backports,
@@ -184,6 +201,7 @@ def _triaged_prs(decisions, by_number):
         out.append(TriagedPR(
             number=pr.number, title=pr.title, author=pr.author, url=pr.url,
             included=d.included, reason=d.reason, uncertain=d.uncertain,
+            guardrail=d.guardrail,
         ))
     return tuple(out)
 

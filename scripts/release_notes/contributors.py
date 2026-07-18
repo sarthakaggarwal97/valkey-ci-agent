@@ -110,9 +110,12 @@ def _compare_logins(
                         if key not in seen_git_names and not _is_bot(git_name):
                             seen_git_names.add(key)
                             git_names.append(git_name.strip())
-            if not isinstance(login, str) or not login or login in seen or _is_bot(login):
+            if not isinstance(login, str) or not login or _is_bot(login):
                 continue
-            seen.add(login)
+            login_key = login.casefold()
+            if login_key in seen:
+                continue
+            seen.add(login_key)
             logins.append(login)
         if len(commits) < per_page:
             break
@@ -234,8 +237,9 @@ def list_contributors(
     else:
         seen = set()
         for name in _git_shortlog_names(base_ref, head_ref, repo_dir):
-            if name not in seen:
-                seen.add(name)
+            key = name.casefold()
+            if key not in seen:
+                seen.add(key)
                 entries.append(name)
 
     have = {_sort_key(e) for e in entries}

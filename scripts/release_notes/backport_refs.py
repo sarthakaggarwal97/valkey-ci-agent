@@ -23,6 +23,14 @@ _BACKPORT_TITLE_PREFIX_RE = re.compile(r"^\s*\[Backport\b[^\]]*\]\s*", re.IGNORE
 # Some manually authored backport PRs append the source PR to the copied title.
 _BACKPORT_SOURCE_SUFFIX_RE = re.compile(r"\s+\(#(\d+)\)\s*$")
 
+# Manual backports sometimes identify the source only with a first-line
+# ``backport of (https://github.com/owner/repo/pull/N)`` statement.
+_BACKPORT_OF_BODY_RE = re.compile(
+    r"(?im)^\s*backport(?:ed)?\s+of\s+\(?\s*"
+    r"https://github\.com/[^/\s)]+/[^/\s)]+/pull/(\d+)"
+    r"(?:[/?#][^\s)]*)?\s*\)?\s*[.!]?\s*$"
+)
+
 # Matches a PR reference cell: "#123" or "[#123](url)".
 _PR_CELL_RE = re.compile(r"^(?:\[)?#(\d+)(?:\]\([^)]*\))?$")
 
@@ -50,6 +58,12 @@ def source_pr_from_backport_title(title: str) -> int | None:
     if source_title is None:
         return None
     match = _BACKPORT_SOURCE_SUFFIX_RE.search(source_title)
+    return int(match.group(1)) if match else None
+
+
+def source_pr_from_backport_body(body: str) -> int | None:
+    """Return ``N`` from a standalone ``backport of <GitHub PR URL>`` line."""
+    match = _BACKPORT_OF_BODY_RE.search(body or "")
     return int(match.group(1)) if match else None
 
 

@@ -78,6 +78,18 @@ class TestComparePagination:
         )
         assert contrib._compare_logins("r", "base", "head", None)[:2] == (["a"], False)
 
+    def test_login_dedup_is_case_insensitive(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            contrib, "_api_get",
+            lambda url, token: {"total_commits": 2, "commits": [
+                {"author": {"login": "Alice"}},
+                {"author": {"login": "alice"}},
+            ]},
+        )
+        assert contrib._compare_logins("r", "base", "head", None)[:2] == (
+            ["Alice"], False,
+        )
+
     def test_cap_hit_flags_truncated_and_warns(self, monkeypatch, caplog) -> None:
         # total_commits exceeds what the endpoint returns: warn and flag truncated
         # so the caller supplements from git shortlog rather than shipping short.

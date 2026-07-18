@@ -8,8 +8,14 @@ from scripts.release_notes.models import MergedPR
 from scripts.release_notes.triage import build_prompt, triage
 
 
-def _pr(number: int, author: str = "alice", body: str = "", sha: str = "") -> MergedPR:
-    return MergedPR(number=number, title=f"PR {number}", author=author, url=f"https://x/{number}",
+def _pr(
+    number: int,
+    author: str = "alice",
+    body: str = "",
+    sha: str = "",
+    title: str | None = None,
+) -> MergedPR:
+    return MergedPR(number=number, title=title or f"PR {number}", author=author, url=f"https://x/{number}",
                     body=body, labels=(), merge_commit_sha=sha)
 
 
@@ -51,6 +57,13 @@ class TestBuildPrompt:
     def test_prompt_treats_pr_text_as_untrusted(self) -> None:
         prompt = build_prompt([_pr(1)])
         assert "untrusted" in prompt.lower()
+
+    def test_prompt_defaults_uncertain_safety_fixes_to_include(self) -> None:
+        prompt = build_prompt([_pr(1)])
+        assert "omission is more costly" in prompt
+        assert 'INCLUDE with `"uncertain": true`' in prompt
+        assert "lacks a published advisory" in prompt
+        assert "crafted RESTORE payload" in prompt
 
 
 class TestTriage:
@@ -110,3 +123,86 @@ class TestTriage:
         result = triage([_pr(1), _pr(2)], repo_dir="/tmp", run_fn=run)
         assert result.included == () and result.excluded == ()
         assert result.undecided == (1, 2)
+
+    def test_safety_signal_overrides_ai_exclusion(self) -> None:
+        pr = _pr(
+            3921,
+            title="Reject NAN scores in sorted sets on RDB load",
+            body="A crafted RESTORE payload can remotely crash the server.",
+        )
+        run = _fake_run({"verdicts": [
+            {"pr": 3921, "include": False, "reason": "crafted input is rare"},
+        ]})
+        result = triage([pr], repo_dir="/tmp", run_fn=run)
+        assert result.excluded == ()
+        assert result.undecided == ()
+        assert result.included[0].guardrail is True
+        assert result.included[0].uncertain is True
+        assert "server crash" in result.included[0].reason
+
+    def test_safety_signal_overrides_missing_or_unparseable_verdict(self) -> None:
+        risky = _pr(
+            3848,
+            title="Fix cluster AUX-field control-character injection",
+        )
+        ordinary = _pr(2, title="Refactor an internal helper")
+        result = triage(
+            [risky, ordinary],
+            repo_dir="/tmp",
+            run_fn=_fake_run_raw("not json", exit_code=1),
+        )
+        assert [decision.pr_number for decision in result.included] == [3848]
+        assert result.included[0].guardrail is True
+        assert result.undecided == (2,)
+
+    def test_test_only_assertion_remains_excluded(self) -> None:
+        pr = _pr(
+            4115,
+            title="Fix racy remaining_repl_size assertion in slot migration test",
+            body="The test is flaky; production code is unchanged.",
+        )
+        run = _fake_run({"verdicts": [
+            {"pr": 4115, "include": False, "reason": "test-only"},
+        ]})
+        result = triage([pr], repo_dir="/tmp", run_fn=run)
+        assert result.included == ()
+        assert [decision.pr_number for decision in result.excluded] == [4115]
+
+    def test_test_word_does_not_suppress_a_production_crash_signal(self) -> None:
+        pr = _pr(
+            12,
+            title="Fix RESTORE crash and add regression tests",
+            body="A crafted RESTORE payload can remotely crash the server.",
+        )
+        run = _fake_run({"verdicts": [
+            {"pr": 12, "include": False, "reason": "title mentions tests"},
+        ]})
+
+        result = triage([pr], repo_dir="/tmp", run_fn=run)
+
+        assert [decision.pr_number for decision in result.included] == [12]
+        assert result.included[0].guardrail is True
+
+    def test_9_1_1_regression_set_cannot_all_be_excluded(self) -> None:
+        prs = [
+            _pr(3743, title="Fix buffered_reply assert in HFE commands"),
+            _pr(3847, title="Harden SENTINEL config against control-character injection"),
+            _pr(3848, title="Fix nodes.conf delimiter injection"),
+            _pr(3920, title="Reject integer overflow in RESTORE validation"),
+            _pr(3921, title="Reject crafted RESTORE payload that can crash the server"),
+            _pr(3939, title="Fix RESP3 protocol type violation"),
+            _pr(3941, title="Avoid modulo by zero undefined behaviour"),
+            _pr(3964, title="Restore ACL downgrade compatibility"),
+            _pr(4073, title="Reject corrupt RDB that causes use-after-free"),
+            _pr(3811, title="Fix off_t to int truncation in replication reporting"),
+        ]
+        run = _fake_run({"verdicts": [
+            {"pr": pr.number, "include": False, "reason": "edge case"}
+            for pr in prs
+        ]})
+        result = triage(prs, repo_dir="/tmp", run_fn=run)
+        assert {decision.pr_number for decision in result.included} == {
+            3743, 3847, 3848, 3920, 3921, 3939, 3941, 3964, 4073, 3811,
+        }
+        assert all(decision.guardrail for decision in result.included)
+        assert result.excluded == ()
