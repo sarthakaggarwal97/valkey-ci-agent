@@ -858,6 +858,9 @@ def _print_dry_run(
     if regen.ai_excluded:
         print("AI-triaged out (without release-notes; judged internal-only): "
               f"{[p.number for p in regen.ai_excluded]}")
+    if regen.label_excluded:
+        print("hard-excluded (labelled no-release-notes): "
+              f"{[p.number for p in regen.label_excluded]}")
     if regen.triage:
         print(f"triage PRs (AI undecided): {[p.number for p in regen.triage]}")
     if regen.unresolved:
@@ -1084,6 +1087,7 @@ def _build_pr_body(
         + _security_warning_section(notes_meta)
         + _ai_included_section(regen.ai_included)
         + _ai_excluded_section(regen.ai_excluded)
+        + _label_excluded_section(regen.label_excluded)
         + _triage_section(regen.triage)
         + _unresolved_section(regen.unresolved)
         + _unresolved_prs_section(regen.unresolved_prs)
@@ -1465,6 +1469,37 @@ def _ai_excluded_section(ai_excluded: Sequence[Any]) -> str:
         lines.append(
             f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
             f"{author} | {_ai_triage_reason_cell(pr)} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _label_excluded_section(label_excluded: Sequence[Any]) -> str:
+    """Table of PRs hard-excluded by the ``no-release-notes`` label.
+
+    These PRs carried an explicit ``no-release-notes`` opt-out, so they were dropped
+    before AI triage and are **absent** from the notes. Surfaced so a maintainer can
+    catch a user-facing change that was mislabelled: remove the ``no-release-notes``
+    label (or add ``release-notes``) and re-cut to pull one back in.
+    """
+    if not label_excluded:
+        return ""
+    lines = [
+        "",
+        "### Excluded by `no-release-notes`",
+        "",
+        "These merged PRs carried the `no-release-notes` label, so they were "
+        "hard-excluded before triage and are **absent** from the notes. Scan for any "
+        "user-facing change that was mislabelled; remove the `no-release-notes` label "
+        "(or add `release-notes`) and re-cut to include it:",
+        "",
+        "| PR | Title | Author |",
+        "|----|-------|--------|",
+    ]
+    for pr in label_excluded:
+        author = f"@{pr.author}" if pr.author else "(unknown)"
+        lines.append(
+            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | {author} |"
         )
     lines.append("")
     return "\n".join(lines)

@@ -380,9 +380,11 @@ human merges.
    release tag (resolved from all tags in the repo), for rc2+ it is the prior RC
    tag (e.g. `9.2.0-rc1`), and for a patch GA it is the previous patch tag (e.g.
    `9.1.8`). Tags are created by maintainers before dispatch.
-3. **Classify** (code) - split PRs by the `release-notes` label: labelled PRs are
-   included directly, everything else is a triage candidate. Other labels,
-   including `no-release-notes`, do not hard-exclude a PR.
+3. **Classify** (code) - split PRs by label: `release-notes` PRs are included
+   directly, `no-release-notes` PRs are hard-excluded (dropped before triage, never
+   noted, and listed in the PR body so a maintainer can catch a mislabel), and
+   everything else is a triage candidate. If a PR carries both labels,
+   `no-release-notes` wins.
 4. **Triage** (AI) - Claude decides, per candidate without `release-notes`, whether the change
    is user-facing enough to note (include) or purely internal (exclude), with a
    short reason for each. Included candidates join the labelled PRs; the model's

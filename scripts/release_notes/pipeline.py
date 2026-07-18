@@ -2,8 +2,8 @@
 
 Takes a release line's clone, finds PRs merged since its last tag, and produces
 categorized bullets as a {category: [line, ...]} map. PRs labelled ``release-notes``
-are included directly; the rest go through an AI triage pass that decides which are
-user-facing enough to note. The release_format module renders the resulting map
+are included directly and PRs labelled ``no-release-notes`` are hard-excluded; the
+rest go through an AI triage pass that decides which are user-facing enough to note. The release_format module renders the resulting map
 into a dated section at cut time.
 """
 
@@ -50,6 +50,7 @@ class RegenResult:
     had_prs: bool               # whether the range contained any PR at all
     ai_included: tuple[TriagedPR, ...] = ()  # non-release-notes PRs AI judged user-facing
     ai_excluded: tuple[TriagedPR, ...] = ()  # non-release-notes PRs AI judged internal-only
+    label_excluded: tuple[TriagedPR, ...] = ()  # PRs hard-excluded by the no-release-notes label
     duplicate_prs: tuple[int, ...] = ()  # PR numbers the model emitted more than once (extra bullets dropped)
     uncertain: tuple[UncertainNote, ...] = ()  # low-confidence notes the model flagged, for the PR body
     unresolved: tuple[UnresolvedCommit, ...] = ()  # range commits that resolved to no PR (shipped un-noted)
@@ -65,9 +66,10 @@ def regenerate_unreleased(
 ) -> RegenResult:
     """Discover the range, triage PRs without ``release-notes``, and generate bullets.
 
-    PRs labelled ``release-notes`` are included directly; the rest are run through
-    AI triage (see :mod:`scripts.release_notes.triage`) and the ones judged
-    user-facing join generation. ``base_ref`` overrides tag-based baseline
+    PRs labelled ``release-notes`` are included directly and PRs labelled
+    ``no-release-notes`` are hard-excluded (never triaged, never noted); the rest are
+    run through AI triage (see :mod:`scripts.release_notes.triage`) and the ones
+    judged user-facing join generation. ``base_ref`` overrides tag-based baseline
     resolution. Returns a RegenResult whose ``grouped`` map the cut caller renders
     into a dated section, plus the AI include/exclude decisions for the PR body.
     """
@@ -85,8 +87,9 @@ def regenerate_unreleased(
             collided=discovery.collided,
         )
 
-    # Labelled PRs are included directly; the rest are candidates AI triage judges.
-    labelled, candidates = classify(discovery.prs)
+    # Labelled PRs are included directly; no-release-notes PRs are hard-excluded
+    # before triage; the rest are candidates AI triage judges.
+    labelled, candidates, hard_excluded = classify(discovery.prs)
     triage_result = triage_mod.triage(
         candidates, repo_dir=clone_dir, base_ref=discovery.base_tag
     )
@@ -96,6 +99,15 @@ def regenerate_unreleased(
     by_number = {pr.number: pr for pr in candidates}
     ai_included = _triaged_prs(triage_result.included, by_number)
     ai_excluded = _triaged_prs(triage_result.excluded, by_number)
+    # PRs the author opted out of via no-release-notes, surfaced (not silently
+    # dropped) so a maintainer can catch a mislabelled user-facing change.
+    label_excluded = tuple(
+        TriagedPR(
+            number=pr.number, title=pr.title, author=pr.author, url=pr.url,
+            included=False, reason="labelled `no-release-notes`",
+        )
+        for pr in hard_excluded
+    )
     triaged_in = [
         by_number[d.pr_number] for d in triage_result.included if d.pr_number in by_number
     ]
@@ -106,9 +118,10 @@ def regenerate_unreleased(
 
     include = labelled + triaged_in
     logger.info(
-        "%d labelled, %d candidates -> %d AI-included, %d AI-excluded, %d undecided",
-        len(labelled), len(candidates), len(ai_included), len(ai_excluded),
-        len(human_triage),
+        "%d labelled, %d candidates, %d no-release-notes excluded -> "
+        "%d AI-included, %d AI-excluded, %d undecided",
+        len(labelled), len(candidates), len(label_excluded), len(ai_included),
+        len(ai_excluded), len(human_triage),
     )
 
     gen = generate_mod.generate(
@@ -145,7 +158,7 @@ def regenerate_unreleased(
         base_tag=discovery.base_tag, grouped=grouped,
         included=len(include), bullet_count=promoted_count, skipped=skipped,
         triage=human_triage, had_prs=True,
-        ai_included=ai_included, ai_excluded=ai_excluded,
+        ai_included=ai_included, ai_excluded=ai_excluded, label_excluded=label_excluded,
         duplicate_prs=duplicate_prs, uncertain=uncertain,
         unresolved=discovery.unresolved,
         unresolved_backports=discovery.unresolved_backports,

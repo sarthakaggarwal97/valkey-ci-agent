@@ -1,7 +1,7 @@
 """Typed data model for the release-notes generation pipeline.
 
     discover -> DiscoveryResult     (git/GitHub: which PRs merged since the last tag)
-    classify -> MergedPR.disposition (code: include / candidate, from the label)
+    classify -> MergedPR.disposition (code: include / candidate / exclude, from the label)
     triage   -> TriageResult        (AI: include/exclude each non-release-notes candidate)
     generate -> GenerationResult    (AI: one categorized bullet per included PR)
     render   -> updated 00-RELEASENOTES text (code: canonical format, authoritative)
@@ -21,13 +21,15 @@ from enum import Enum
 class PRDisposition(str, Enum):
     """Label-derived disposition for a discovered PR.
 
-    Only ``release-notes`` hard-includes. Everything else is a CANDIDATE that AI
-    triage judges (see :mod:`scripts.release_notes.triage`), so a change whose
-    author forgot the label is caught rather than silently dropped.
+    ``no-release-notes`` hard-excludes (an explicit author opt-out, honoured even
+    over ``release-notes``). ``release-notes`` hard-includes. Everything else is a
+    CANDIDATE that AI triage judges (see :mod:`scripts.release_notes.triage`), so a
+    change whose author forgot the label is caught rather than silently dropped.
     """
 
-    INCLUDE = "include"      # has 'release-notes' (other labels ignored)
-    CANDIDATE = "candidate"  # no 'release-notes' label -> AI triage decides
+    INCLUDE = "include"      # has 'release-notes' (and not 'no-release-notes')
+    CANDIDATE = "candidate"  # no gating label -> AI triage decides
+    EXCLUDE = "exclude"      # has 'no-release-notes' -> hard-dropped, never noted
 
 
 @dataclass(frozen=True)
