@@ -71,6 +71,9 @@ class TestStageHelpers:
     def test_commit_title_ga(self) -> None:
         assert commit_title("9.1.0", "ga") == "Add release notes entry for Valkey 9.1.0 GA"
 
+    def test_commit_title_patch_ga_omits_suffix(self) -> None:
+        assert commit_title("9.1.1", "ga") == "Add release notes entry for Valkey 9.1.1"
+
 
 class TestResolveBranchPlan:
     def _exists(self, monkeypatch, present):
@@ -200,6 +203,47 @@ class TestCanonicalVersion:
     def test_component_over_255_raises(self, bad) -> None:
         with pytest.raises(ValueError, match="out of range 0-255"):
             rc.canonical_version(bad)
+
+
+class TestValidateReleaseProgression:
+    @staticmethod
+    def _version_h(version: str, stage: str | None = "ga") -> str:
+        text = (
+            f'#define VALKEY_VERSION "{version}"\n'
+            "#define VALKEY_VERSION_NUM 0x00000000\n"
+        )
+        if stage is not None:
+            text += f'#define VALKEY_RELEASE_STAGE "{stage}"\n'
+        return text
+
+    @pytest.mark.parametrize(
+        ("current", "stage", "target"),
+        [
+            ("7.2.13", None, "7.2.14"),
+            ("8.0.9", None, "8.0.10"),
+            ("8.1.8", "ga", "8.1.9"),
+            ("9.0.4", "ga", "9.0.5"),
+            ("9.1.0", "ga", "9.1.1"),
+        ],
+    )
+    def test_live_patch_lines_advance(self, current, stage, target) -> None:
+        rc.validate_release_progression(self._version_h(current, stage), target, "ga")
+
+    def test_rc_and_ga_advance_same_version(self) -> None:
+        rc.validate_release_progression(self._version_h("9.2.0", "rc1"), "9.2.0", "rc2")
+        rc.validate_release_progression(self._version_h("9.2.0", "rc2"), "9.2.0", "ga")
+
+    def test_unstable_sentinel_can_start_release(self) -> None:
+        rc.validate_release_progression(
+            self._version_h("255.255.255", "dev"), "9.2.0", "rc1"
+        )
+
+    @pytest.mark.parametrize(("target", "stage"), [("8.1.8", "ga"), ("8.1.7", "ga")])
+    def test_same_or_older_release_rejected(self, target, stage) -> None:
+        with pytest.raises(ValueError, match="already-released or backward"):
+            rc.validate_release_progression(
+                self._version_h("8.1.8", "ga"), target, stage
+            )
 
 
 
@@ -911,7 +955,7 @@ class TestCutOrchestration:
                                  included=True, reason="user-facing"),)
         body = self._cut_body(monkeypatch, clone, line_exists={"9.1": True}, cut_kwargs={},
                               ai_included=ai_included)
-        assert "AI triaged unlabelled PRs (confirm include/exclude)" in body
+        assert "AI triaged PRs without release-notes (confirm include/exclude)" in body
 
     def test_uncertain_notes_flagged_in_body(self, monkeypatch, clone):
         from scripts.release_notes.models import UncertainNote
@@ -1256,6 +1300,62 @@ class TestCutOrchestration:
             security_fixes=None, token="t", git_env={}, dry_run=True,
         )
         assert [c for c in calls if c[:1] == ("push",)] == []
+        repo.create_pull.assert_not_called()
+
+    def test_worktree_is_based_on_pinned_sha(self, monkeypatch, clone):
+        from unittest.mock import MagicMock
+
+        calls = self._setup(monkeypatch, clone, line_exists={"9.1": True})
+        rc.cut(
+            MagicMock(), repo_full_name="valkey-io/valkey",
+            source_clone_dir=clone, valkey_clone_dir=clone,
+            version="9.1.0", stage="rc1", urgency="LOW",
+            date="2026-06-25", tag_glob=None, base_ref=None,
+            contrib_base_ref=None, security_fixes=None, token="t",
+            git_env={}, dry_run=True,
+        )
+        worktree_add = next(c for c in calls if c[:2] == ("worktree", "add"))
+        assert worktree_add[-1] == "a" * 40
+        assert not worktree_add[-1].startswith("origin/")
+
+    def test_dry_run_fails_if_target_advances(self, monkeypatch, clone):
+        from unittest.mock import MagicMock
+
+        self._setup(monkeypatch, clone, line_exists={"9.1": True})
+        tips = iter(("a" * 40, "b" * 40))
+        monkeypatch.setattr(rc, "_fetch_remote_branch_tip", lambda *a, **k: next(tips))
+        with pytest.raises(RuntimeError, match="advanced during generation"):
+            rc.cut(
+                MagicMock(), repo_full_name="valkey-io/valkey",
+                source_clone_dir=clone, valkey_clone_dir=clone,
+                version="9.1.0", stage="rc1", urgency="LOW",
+                date="2026-06-25", tag_glob=None, base_ref=None,
+                contrib_base_ref=None, security_fixes=None, token="t",
+                git_env={}, dry_run=True,
+            )
+
+    def test_real_cut_fails_before_remote_mutation_if_target_advances(
+        self, monkeypatch, clone
+    ):
+        from unittest.mock import MagicMock
+
+        calls = self._setup(monkeypatch, clone, line_exists={"9.1": True})
+        tips = iter(("a" * 40, "b" * 40))
+        monkeypatch.setattr(rc, "_fetch_remote_branch_tip", lambda *a, **k: next(tips))
+        repo = MagicMock()
+
+        with pytest.raises(RuntimeError, match="advanced during generation"):
+            rc.cut(
+                repo, repo_full_name="valkey-io/valkey",
+                source_clone_dir=clone, valkey_clone_dir=clone,
+                version="9.1.0", stage="rc1", urgency="LOW",
+                date="2026-06-25", tag_glob=None, base_ref=None,
+                contrib_base_ref=None, security_fixes=None, token="t",
+                git_env={}, dry_run=False,
+            )
+
+        assert [c for c in calls if c[:1] == ("push",)] == []
+        repo.get_pulls.assert_not_called()
         repo.create_pull.assert_not_called()
 
     def test_contrib_base_matches_notes_baseline(self, monkeypatch, clone):

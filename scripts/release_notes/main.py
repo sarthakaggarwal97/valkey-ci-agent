@@ -1,8 +1,9 @@
 """Entry point for the AI release-notes cut.
 
-Clones valkey with full tags, discovers release-notes-labelled PRs in the
-range (HEAD back to the previous tag), generates bullets via Claude/Bedrock,
-renders the dated section + version.h bump + contributor list, and opens a PR.
+Clones valkey with full tags, discovers PRs in the range (HEAD back to the
+previous tag), directly includes `release-notes` PRs, AI-triages the rest,
+generates bullets via Claude/Bedrock, renders the dated section + version.h bump
++ contributor list, and opens a PR.
 Returns 0 on success, 1 on failure, 2 on usage error.
 """
 
@@ -279,6 +280,7 @@ def _run_cut(
             run_git(None, "clone", "--branch", source_ref, github_https_url(repo_full_name),
                     clone_dir, env=git_env)
             run_git(clone_dir, "fetch", "--tags", "origin", env=git_env)
+            _validate_release_target(clone_dir, source_ref, version, stage)
             if base_ref:
                 _validate_base_ref(clone_dir, base_ref)
                 _warn_if_base_ref_reaches_past_previous_release(
@@ -317,6 +319,17 @@ def _run_cut(
             )
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)
+
+
+def _validate_release_target(
+    clone_dir: str, source_ref: str, version: str, stage: str
+) -> None:
+    """Fail before AI work if the requested release does not advance the line."""
+    version_h = Path(clone_dir, cut_mod.VERSION_FILE).read_text(encoding="utf-8")
+    cut_mod.validate_release_progression(version_h, version, stage)
+    discover_mod.validate_target_release_tag(
+        clone_dir, source_ref, version, stage
+    )
 
 
 if __name__ == "__main__":

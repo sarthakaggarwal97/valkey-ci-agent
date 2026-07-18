@@ -20,6 +20,9 @@ _BACKPORT_TITLE_RE = re.compile(r"^\s*\[Backport\b", re.IGNORECASE)
 # Captures and strips the "[Backport <branch>] " prefix to reveal the source title.
 _BACKPORT_TITLE_PREFIX_RE = re.compile(r"^\s*\[Backport\b[^\]]*\]\s*", re.IGNORECASE)
 
+# Some manually authored backport PRs append the source PR to the copied title.
+_BACKPORT_SOURCE_SUFFIX_RE = re.compile(r"\s+\(#(\d+)\)\s*$")
+
 # Matches a PR reference cell: "#123" or "[#123](url)".
 _PR_CELL_RE = re.compile(r"^(?:\[)?#(\d+)(?:\]\([^)]*\))?$")
 
@@ -39,6 +42,15 @@ def source_title_from_backport_title(title: str) -> str | None:
         return None
     stripped = stripped.strip()
     return stripped or None
+
+
+def source_pr_from_backport_title(title: str) -> int | None:
+    """Return ``N`` from a manual ``[Backport ...] Title (#N)`` PR title."""
+    source_title = source_title_from_backport_title(title)
+    if source_title is None:
+        return None
+    match = _BACKPORT_SOURCE_SUFFIX_RE.search(source_title)
+    return int(match.group(1)) if match else None
 
 
 def cherry_pick_source_shas(commit_message: str) -> list[str]:

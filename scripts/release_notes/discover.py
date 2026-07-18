@@ -2,7 +2,7 @@
 
 Walks the graph (tag..head, first-parent) to enumerate merge/squash commits,
 then resolves each to the original PR that introduced the change via a tiered
-strategy (## Applied table, -x trailer, subject (#N), commit->PR API). Results
+strategy (trusted sweep manifest, subject (#N), -x trailer, commit->PR API). Results
 are deduplicated by PR number so each change appears once. Backport sweep merges
 are expanded to their per-source cherry-picks. Commits that resolve to no PR are
 tracked in DiscoveryResult.unresolved so shipped changes cannot vanish silently.
@@ -25,6 +25,7 @@ from scripts.release_notes.backport_refs import (
     applied_source_prs_from_body,
     cherry_pick_source_shas,
     is_backport_title,
+    source_pr_from_backport_title,
     source_pr_from_branch,
     source_title_from_backport_title,
     summary_source_pr_from_body,
@@ -51,6 +52,10 @@ _NUL = "\x00"
 # Detects a sweep merge commit so list_range_commits can splice its second-parent
 # cherry-picks back into the walk.
 _SWEEP_MERGE_RE = re.compile(r"agent/backport/sweep")
+# Squash-merged sweep PR title. Its body manifest is trusted only after the
+# associated PR's head branch is verified below.
+_SWEEP_SQUASH_RE = re.compile(r"^\[backport\]\s+Backport sweep for\b", re.IGNORECASE)
+_SWEEP_BRANCH_PREFIX = "agent/backport/sweep/"
 
 # Trailing (#N) in squash/normal merge subjects. Anchored to avoid matching a
 # quoted inner ref (e.g. a reverted title).
@@ -186,6 +191,45 @@ def resolve_previous_release_tag(
     return tag, tag_sha
 
 
+def validate_target_release_tag(
+    repo_dir: str, head_ref: str, target_version: str, target_stage: str
+) -> None:
+    """Reject a target that is not newer than tags already on its release line.
+
+    This is a hard release-safety gate, not baseline selection. It prevents an
+    already-tagged stage from resolving to itself and prevents a dispatch from
+    writing an older version over a newer release. Only tags from the target
+    ``M.m`` line are compared, so tags from sibling branches do not interfere.
+    """
+    stage = target_stage.strip().lower()
+    target_tag = target_version if stage == "ga" else f"{target_version}-{stage}"
+    target_key = _tag_sort_key(target_tag)
+    if target_key is None:
+        raise ValueError(f"invalid release target {target_tag!r}")
+
+    # Tags are repository-global. A same-line tag on a side branch still reserves
+    # that release name and must block a duplicate/backward cut even if the target
+    # branch was accidentally reset behind it.
+    out = git_output(repo_dir, "tag", "--list")
+    target_line = target_key[:2]
+    blockers = [
+        (key, name)
+        for name in out.split()
+        if (key := _tag_sort_key(name)) is not None
+        and key[:2] == target_line
+        and key >= target_key
+    ]
+    if not blockers:
+        return
+
+    _key, latest = max(blockers)
+    raise ValueError(
+        f"target release {target_tag!r} is not newer than existing tag {latest!r} "
+        f"in the repository while validating {head_ref!r}; refusing an "
+        "already-released or backward cut"
+    )
+
+
 def _parse_log_records(out: str) -> list[tuple[str, str, str]]:
     """Parse git log -z --format=_LOG_FORMAT output into [(sha, subject, body)]."""
     records: list[tuple[str, str, str]] = []
@@ -243,8 +287,11 @@ def resolve_commit_prs(
 ]:
     """Map each commit to its original PR number via a tiered resolution.
 
-    Tiers (in priority order): ## Applied table, -x cherry-pick trailer,
-    subject trailing (#N), commit->PR API. First commit seen per PR wins.
+    Tiers (in priority order): verified commit-body sweep manifest, subject
+    trailing (#N), -x cherry-pick trailer, verified associated sweep-PR manifest,
+    commit->PR API. Associated manifests are applied after the full walk so direct
+    commit identities win even when a repair commit appears earlier in the sweep.
+    First commit seen per PR wins.
     Returns (pr_to_sha, unresolved, cherry_pick_suspects, collided).
     """
     pr_to_sha: dict[int, str] = {}
@@ -253,24 +300,48 @@ def resolve_commit_prs(
     unresolved: list[UnresolvedCommit] = []
     collided: list[CollidedCommit] = []
     cherry_pick_suspects: dict[int, UnresolvedCherryPick] = {}
+    deferred_sweep_manifests: list[tuple[str, set[int]]] = []
     for sha, subject, body in commits:
         unconfirmed_source_shas: tuple[str, ...] = ()
         via_subject = False
-        numbers = applied_source_prs_from_body(body)
+        numbers = _trusted_applied_source_prs(repo, sha, subject, body)
         via_applied = bool(numbers)
-        if not numbers:
-            number = _pr_from_cherry_pick_trailer(repo, body)
-            if number is not None:
-                numbers = {number}
-            else:
-                # Trailer SHAs existed but none resolved; mark as unconfirmed.
-                unconfirmed_source_shas = tuple(cherry_pick_source_shas(body))
         if not numbers:
             numbers = _pr_numbers_from_subjects([subject])
             via_subject = bool(numbers)
+            source_shas = tuple(cherry_pick_source_shas(body))
+            if numbers and source_shas:
+                # The subject is tied to the actual range commit. Treat body
+                # trailers as corroboration, not as authority over that identity:
+                # squash-merge bodies are contributor-controlled and can contain
+                # a trailer-shaped line. A mismatch is surfaced for review and is
+                # cleared later if backport hydration remaps the subject PR.
+                trailer_number = _pr_from_cherry_pick_trailer(repo, body)
+                if trailer_number not in numbers:
+                    unconfirmed_source_shas = source_shas
+            elif not numbers and source_shas:
+                trailer_number = _pr_from_cherry_pick_trailer(repo, body)
+                if trailer_number is not None:
+                    numbers = {trailer_number}
+                else:
+                    unconfirmed_source_shas = source_shas
         if not numbers:
-            number = _pr_from_commit_api(repo, sha)
-            numbers = {number} if number is not None else set()
+            pulls = _pulls_from_commit_api(repo, sha)
+            direct_pull = next(
+                (pull for pull in pulls if not _is_trusted_sweep_pull(repo, pull)),
+                None,
+            )
+            if direct_pull is not None:
+                numbers = {int(direct_pull.number)}
+            elif (manifest := _trusted_associated_sweep_source_prs(repo, pulls)):
+                # A rebase-merged sweep can contain repair commits whose messages
+                # have no source identity. Its trusted PR body accounts for those
+                # commits, but defer the manifest so source-labelled cherry-picks
+                # later in the walk retain their exact diff SHA.
+                deferred_sweep_manifests.append((sha, manifest))
+                continue
+            else:
+                numbers = {int(pulls[0].number)} if pulls else set()
         if not numbers:
             logger.warning("Commit %s has no resolvable PR (subject: %s)", sha[:12], subject[:80])
             unresolved.append(UnresolvedCommit(sha=sha, subject=subject))
@@ -296,12 +367,81 @@ def resolve_commit_prs(
                     number=number, sha=sha,
                     source_shas=unconfirmed_source_shas, subject=subject,
                 )
+    for sha, manifest in deferred_sweep_manifests:
+        for number in manifest:
+            if number not in pr_to_sha:
+                pr_to_sha[number] = sha
     logger.info(
         "Resolved %d unique PR(s) from %d commit(s); %d unresolved, %d collided, "
         "%d unconfirmed cherry-pick(s)",
         len(pr_to_sha), len(commits), len(unresolved), len(collided), len(cherry_pick_suspects),
     )
     return pr_to_sha, unresolved, cherry_pick_suspects, collided
+
+
+def _trusted_applied_source_prs(
+    repo: Any, sha: str, subject: str, body: str
+) -> set[int]:
+    """Return a sweep manifest only when the associated PR uses the bot branch.
+
+    A normal squash-merged PR can place arbitrary text in its commit body, so an
+    ``## Applied`` heading alone is not proof that the listed PRs were backported.
+    """
+    numbers = applied_source_prs_from_body(body)
+    if not numbers:
+        return set()
+    if not (
+        _SWEEP_MERGE_RE.search(subject)
+        or _SWEEP_SQUASH_RE.search(subject)
+    ):
+        logger.warning(
+            "Ignoring ## Applied table in non-sweep commit %s (%s)",
+            sha[:12], subject[:80],
+        )
+        return set()
+
+    for pull in _pulls_from_commit_api(repo, sha):
+        # The commit subject must identify this exact associated PR. Otherwise a
+        # contributor-controlled commit cherry-picked into a real sweep could
+        # imitate the sweep title and inject its own ## Applied table.
+        subject_numbers = _pr_numbers_from_subjects([subject])
+        if (
+            _is_trusted_sweep_pull(repo, pull)
+            and int(pull.number) in subject_numbers
+        ):
+            return numbers
+    logger.warning(
+        "Ignoring unverified ## Applied table in commit %s; associated PR does "
+        "not use %s in the target repository",
+        sha[:12], _SWEEP_BRANCH_PREFIX,
+    )
+    return set()
+
+
+def _is_trusted_sweep_pull(repo: Any, pull: Any) -> bool:
+    """True for a sweep PR whose head branch belongs to the target repository."""
+    expected_repo = getattr(repo, "full_name", "") or ""
+    head = getattr(pull, "head", None)
+    head_ref = getattr(head, "ref", "") or ""
+    head_repo = getattr(getattr(head, "repo", None), "full_name", "") or ""
+    title = getattr(pull, "title", "") or ""
+    return bool(
+        expected_repo
+        and head_repo == expected_repo
+        and head_ref.startswith(_SWEEP_BRANCH_PREFIX)
+        and _SWEEP_SQUASH_RE.search(title)
+    )
+
+
+def _trusted_associated_sweep_source_prs(
+    repo: Any, pulls: list[Any]
+) -> set[int]:
+    """Read source PRs from the body of a verified associated sweep PR."""
+    numbers: set[int] = set()
+    for pull in pulls:
+        if _is_trusted_sweep_pull(repo, pull):
+            numbers.update(applied_source_prs_from_body(getattr(pull, "body", "") or ""))
+    return numbers
 
 
 def _same_change_subject(a: str, b: str) -> bool:
@@ -330,17 +470,22 @@ def _pr_from_cherry_pick_trailer(repo: Any, body: str) -> int | None:
 
 def _pr_from_commit_api(repo: Any, sha: str) -> int | None:
     """Return the first PR number associated with sha via Commit.get_pulls(), or None."""
-    def _lookup() -> int | None:
+    for pull in _pulls_from_commit_api(repo, sha):
+        return int(pull.number)
+    return None
+
+
+def _pulls_from_commit_api(repo: Any, sha: str) -> list[Any]:
+    """Return PRs associated with *sha*, degrading API failures to an empty list."""
+    def _lookup() -> list[Any]:
         commit = repo.get_commit(sha)
-        for pull in commit.get_pulls():
-            return int(pull.number)
-        return None
+        return list(commit.get_pulls())
 
     try:
         return retry_github_call(_lookup, retries=3, description=f"PRs for commit {sha[:12]}")
     except Exception as exc:  # noqa: BLE001 - a lookup miss must not abort discovery
         logger.warning("Could not resolve PR for commit %s: %s", sha[:12], exc)
-        return None
+        return []
 
 
 # Cap backport-of-backport depth to prevent loops from cyclic metadata.
@@ -411,11 +556,14 @@ def _is_distinctive_title(normalized: str) -> bool:
 
 
 def _title_core(title: Any) -> str:
-    """Strip [Backport ...] prefix to get the underlying source title."""
+    """Strip backport prefix and trailing PR refs to get the source title."""
     if not isinstance(title, str):
         return ""
     stripped = source_title_from_backport_title(title)
-    return stripped if stripped is not None else title
+    core = stripped if stripped is not None else title
+    while match := _TRAILING_REF_RE.search(core):
+        core = core[:match.start()].rstrip()
+    return core
 
 
 def _expected_source_titles(backport_pull: Any) -> set[str]:
@@ -467,6 +615,9 @@ def _recover_source_pr(repo: Any, pull: Any) -> int | None:
     backport/<n>-to-<branch> head branch. Returns None when unrecoverable.
     """
     source = summary_source_pr_from_body(pull.body or "")
+    if source is not None:
+        return source
+    source = source_pr_from_backport_title(pull.title or "")
     if source is not None:
         return source
     try:

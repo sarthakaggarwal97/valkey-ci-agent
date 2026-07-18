@@ -2,7 +2,7 @@
 
     discover -> DiscoveryResult     (git/GitHub: which PRs merged since the last tag)
     classify -> MergedPR.disposition (code: include / candidate, from the label)
-    triage   -> TriageResult        (AI: include/exclude each label-less candidate)
+    triage   -> TriageResult        (AI: include/exclude each non-release-notes candidate)
     generate -> GenerationResult    (AI: one categorized bullet per included PR)
     render   -> updated 00-RELEASENOTES text (code: canonical format, authoritative)
     publish  -> PR url              (code: branch + PR on valkey)
@@ -82,7 +82,7 @@ class GenerationResult:
 
 @dataclass(frozen=True)
 class TriageDecision:
-    """AI verdict on one label-less candidate PR: keep it in the notes or drop it.
+    """AI verdict on one non-release-notes candidate: keep it or drop it.
 
     ``included`` True means the change is user-facing and should be noted despite
     the missing ``release-notes`` label; False means it is internal-only. ``reason``
@@ -99,7 +99,7 @@ class TriageDecision:
 
 @dataclass(frozen=True)
 class TriageResult:
-    """AI triage output for the label-less candidates in a range.
+    """AI triage output for candidates without the ``release-notes`` label.
 
     ``included`` and ``excluded`` partition every candidate the model returned a
     verdict for; ``undecided`` holds candidates the model gave no verdict for (a
@@ -114,7 +114,7 @@ class TriageResult:
 
 @dataclass(frozen=True)
 class TriagedPR:
-    """A label-less PR paired with its AI triage verdict, for the release PR body.
+    """A non-release-notes PR paired with its AI verdict, for the release PR body.
 
     Joins the factual fields the body table needs (number/title/author/url) with
     the model's ``included`` call, ``reason``, and ``uncertain`` flag, so a

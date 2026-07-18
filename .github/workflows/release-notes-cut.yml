@@ -1,11 +1,11 @@
 # Cut a Valkey release: generate notes all at once + bump version + carry prior RCs.
 #
-# A maintainer dispatches this with the source branch (the M.m release branch,
-# e.g. 9.1), the target version, stage, and urgency. The agent generates the release
-# notes in one shot from the labelled PRs in range (Claude via Bedrock). It renders
-# them onto the release branch as a dated section, bumps src/version.h, and refreshes
-# the running contributor list. It opens one PR (from an agent/ prep branch) into the
-# M.m release branch for review; the source branch is never force-pushed.
+# A maintainer dispatches this with the target version, stage, and urgency. The M.m
+# release branch is derived from the version. The agent generates the release notes
+# in one shot from `release-notes` PRs plus AI-triaged candidates (Claude via
+# Bedrock), renders a dated section, bumps src/version.h, and refreshes the running
+# contributor list. It opens one PR from an agent-namespaced prep branch into M.m;
+# the release line is never force-pushed.
 #
 # Branch model: all stages target the existing M.m branch (created by maintainers).
 # Tags determine the discovery range:
@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Target version MAJOR.MINOR.PATCH, e.g. 9.1.0"
+        description: "Target MAJOR.MINOR.PATCH, which must advance the current release line (e.g. 9.1.1 after 9.1.0)"
         required: true
         type: string
       stage:
@@ -135,7 +135,7 @@ jobs:
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey
-          # contents:write to push the prep branch and create/delete release lines;
+          # contents:write to push the agent-namespaced prep branch;
           # pull-requests:write to open the release PR; metadata:read is always required.
           permission-contents: write
           permission-pull-requests: write

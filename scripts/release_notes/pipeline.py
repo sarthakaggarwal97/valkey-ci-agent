@@ -46,10 +46,10 @@ class RegenResult:
     included: int               # PRs fed to generate (labelled release-notes + AI-triaged in)
     bullet_count: int           # bullets actually rendered (post group_bullets: after dup-PR dedup and reserved-category drops)
     skipped: tuple[int, ...]    # PR numbers with no rendered note: model-declined, parse-failure batches, or reserved-category drops (see regenerate_unreleased)
-    triage: tuple[MergedPR, ...]  # label-less PRs AI triage could not decide -> human triage
+    triage: tuple[MergedPR, ...]  # non-release-notes PRs AI could not decide -> human triage
     had_prs: bool               # whether the range contained any PR at all
-    ai_included: tuple[TriagedPR, ...] = ()  # label-less PRs AI triage judged user-facing and added to the notes
-    ai_excluded: tuple[TriagedPR, ...] = ()  # label-less PRs AI triage judged internal-only and dropped
+    ai_included: tuple[TriagedPR, ...] = ()  # non-release-notes PRs AI judged user-facing
+    ai_excluded: tuple[TriagedPR, ...] = ()  # non-release-notes PRs AI judged internal-only
     duplicate_prs: tuple[int, ...] = ()  # PR numbers the model emitted more than once (extra bullets dropped)
     uncertain: tuple[UncertainNote, ...] = ()  # low-confidence notes the model flagged, for the PR body
     unresolved: tuple[UnresolvedCommit, ...] = ()  # range commits that resolved to no PR (shipped un-noted)
@@ -63,7 +63,7 @@ def regenerate_unreleased(
     repo: Any, clone_dir: str, *, head_ref: str, tag_glob: str | None,
     base_ref: str | None = None,
 ) -> RegenResult:
-    """Discover the range, triage label-less PRs, and generate categorized bullets.
+    """Discover the range, triage PRs without ``release-notes``, and generate bullets.
 
     PRs labelled ``release-notes`` are included directly; the rest are run through
     AI triage (see :mod:`scripts.release_notes.triage`) and the ones judged

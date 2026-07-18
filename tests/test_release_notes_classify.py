@@ -21,6 +21,9 @@ class TestDispositionFor:
     def test_arbitrary_labels_are_candidates(self) -> None:
         assert disposition_for(("bug", "area/cluster")) is PRDisposition.CANDIDATE
 
+    def test_no_release_notes_is_still_an_ai_candidate(self) -> None:
+        assert disposition_for(("no-release-notes",)) is PRDisposition.CANDIDATE
+
     def test_empty_is_a_candidate(self) -> None:
         assert disposition_for(()) is PRDisposition.CANDIDATE
 

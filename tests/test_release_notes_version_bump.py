@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.release_notes.version_bump import set_version, version_num
+from scripts.release_notes.version_bump import current_release_state, set_version, version_num
 
 _SAMPLE = (
     '#define SERVER_NAME "valkey"\n'
@@ -103,3 +103,19 @@ class TestSetVersion:
         )
         with pytest.raises(ValueError, match="VALKEY_VERSION"):
             set_version(doubled, "9.1.0", "rc1")
+
+
+class TestCurrentReleaseState:
+    def test_reads_modern_version_and_stage(self) -> None:
+        assert current_release_state(_SAMPLE) == ("255.255.255", "dev")
+
+    def test_legacy_branch_without_stage_is_ga(self) -> None:
+        legacy = (
+            '#define VALKEY_VERSION "7.2.13"\n'
+            "#define VALKEY_VERSION_NUM 0x0007020d\n"
+        )
+        assert current_release_state(legacy) == ("7.2.13", "ga")
+
+    def test_rejects_duplicate_version(self) -> None:
+        with pytest.raises(ValueError, match="exactly one VALKEY_VERSION"):
+            current_release_state(_SAMPLE + '#define VALKEY_VERSION "9.1.0"\n')

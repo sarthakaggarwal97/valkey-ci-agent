@@ -1,4 +1,4 @@
-"""Ask Claude (via Bedrock) whether each label-less PR belongs in the release notes.
+"""Ask Claude whether each PR without ``release-notes`` belongs in the notes.
 
 valkey's ``check_release_notes`` gate is label-only: a PR is in the notes iff it
 carries the ``release-notes`` label. That misses changes an author forgot to label.
@@ -306,7 +306,7 @@ def triage(
     timeout: int = 1800,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
 ) -> TriageResult:
-    """Decide include/exclude for each label-less candidate PR, batching large inputs.
+    """Decide include/exclude for each non-release-notes candidate, batching inputs.
 
     ``base_ref`` is the tag the release range builds on (passed through to the
     prompt so the temporal threshold is stage-correct). When empty, the prompt

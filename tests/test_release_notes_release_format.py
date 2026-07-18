@@ -139,6 +139,13 @@ class TestRenderVersionSection:
         assert "This is the first stable release of Valkey 9.1." in out
         assert "### Bug Fixes\n* fix (#1)" in out
 
+    def test_patch_heading_omits_ga_suffix(self) -> None:
+        out = rf.render_version_section(
+            "9.1.1", "ga", "LOW", "2026-06-02", {"Bug Fixes": ["fix"]}
+        )
+        assert "Valkey 9.1.1  -  Released Tue 02 June 2026" in out
+        assert "Valkey 9.1.1 GA" not in out
+
     def test_security_fixes_render_first_from_argument(self) -> None:
         out = rf.render_version_section(
             "9.1.0", "rc1", "SECURITY", "2026-06-02",
