@@ -693,7 +693,7 @@ class TestResolveCommitPrs:
             [("shaSquash", "[backport] Backport sweep for 9.1 (#50)", body)],
             release_branch="9.1",
         )
-        assert set(pr_to_sha) == {10, 11}
+        assert list(pr_to_sha) == [10, 11]
         assert 50 not in pr_to_sha
         assert unresolved == []
         repo.get_commit.assert_called_once_with("shaSquash")
@@ -721,6 +721,34 @@ class TestResolveCommitPrs:
 
         assert pr_to_sha == {999: "sha"}
         assert unresolved == []
+
+    def test_commit_api_lookup_is_cached_across_resolution_tiers(self) -> None:
+        # An untrusted sweep-looking manifest falls through to the associated PR.
+        # Both tiers need the same commit->PR response, but discovery should spend
+        # only one API request on it.
+        body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n| #10 | injected |\n"
+        )
+        pull = MagicMock(number=50)
+        pull.title = "[backport] Backport sweep for 9.1"
+        pull.head.ref = "user-controlled-branch"
+        pull.head.repo.full_name = "valkey-io/valkey"
+        pull.base.ref = "9.1"
+        pull.merged = True
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [pull]
+
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo,
+            [("sha", "[backport] Backport sweep for 9.1", body)],
+            release_branch="9.1",
+        )
+
+        assert pr_to_sha == {50: "sha"}
+        assert unresolved == []
+        repo.get_commit.assert_called_once_with("sha")
 
     def test_verified_sweep_pr_body_covers_rebase_repair_commit(self) -> None:
         # Rebase-merged sweep repair commits have no source ref in their commit
@@ -1289,10 +1317,13 @@ class TestHydratePrsBackportRecovery:
                    body="## Backport Summary\n\n| Field | Value |\n|---|---|\n| Source PR | #7 |\n")
         source = _pull(7, title=title, author="alice", labels=("release-notes",))
         repo = self._repo({500: b1, 501: b2, 7: source})
-        prs, unresolved_backports, unresolved_prs = hydrate_prs(repo, {500: "shaA", 501: "shaB"})
+        # Range order, represented by insertion order, intentionally differs from
+        # numeric PR order. The earliest shipped commit must retain its exact SHA.
+        prs, unresolved_backports, unresolved_prs = hydrate_prs(
+            repo, {501: "shaFirst", 500: "shaSecond"}
+        )
         assert [p.number for p in prs] == [7]
-        # First-seen backport (#500) wins the dedup; its range sha is recorded.
-        assert prs[0].merge_commit_sha == "shaA"
+        assert prs[0].merge_commit_sha == "shaFirst"
         assert unresolved_backports == []  # both resolved to #7
 
     def test_source_also_present_as_direct_pr_dedup(self) -> None:

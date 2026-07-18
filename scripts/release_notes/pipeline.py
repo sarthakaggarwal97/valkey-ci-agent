@@ -19,6 +19,7 @@ from scripts.release_notes import generate as generate_mod
 from scripts.release_notes import release_format as release_format_mod
 from scripts.release_notes import render as render_mod
 from scripts.release_notes import triage as triage_mod
+from scripts.release_notes.ai_inputs import PRDiffCollector
 from scripts.release_notes.classify import classify
 from scripts.release_notes.models import (
     CollidedCommit,
@@ -105,8 +106,15 @@ def regenerate_unreleased(
         for pr in discovery.prs
         if (reason := triage_mod.release_impact_reason(pr)) is not None
     )
+    # Sweep-expanded source PRs can share one combined range commit, while
+    # triaged-in PRs appear in both AI stages. One collector omits ambiguous
+    # shared patches and caches attributable commits across both stages.
+    diff_collector = PRDiffCollector(clone_dir, discovery.prs)
     triage_result = triage_mod.triage(
-        candidates, repo_dir=clone_dir, base_ref=discovery.base_tag
+        candidates,
+        repo_dir=clone_dir,
+        base_ref=discovery.base_tag,
+        diff_collector=diff_collector,
     )
 
     # Join each verdict back to its PR facts for the body, and collect the PRs the
@@ -142,7 +150,10 @@ def regenerate_unreleased(
     )
 
     gen = generate_mod.generate(
-        include, repo_dir=clone_dir, categories=release_format_mod.CATEGORIES
+        include,
+        repo_dir=clone_dir,
+        categories=release_format_mod.CATEGORIES,
+        diff_collector=diff_collector,
     )
     # Keep one bullet per PR; prefer a renderable bullet over a reserved-category one.
     bullets, duplicate_prs = _dedup_bullets_by_pr(gen.bullets)

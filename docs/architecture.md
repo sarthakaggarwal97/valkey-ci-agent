@@ -318,6 +318,7 @@ main.py (manual dispatch: version, optional stage, urgency, dry_run)
        -> pipeline.regenerate_unreleased()
             -> discover()  PRs over base..HEAD, deduped by PR number
             -> classify()  include, AI candidate, or no-release-notes hard exclusion
+            -> PRDiffCollector  bounded, attributable commit diffs cached once
             -> triage()    completeness-first AI decision + deterministic
                             release-impact override for risky exclusions/no verdicts
             -> generate()  AI: one categorized bullet per included PR
@@ -361,6 +362,7 @@ calendar date.
 - `scripts/release_notes/discover.py` - range resolution and PR discovery by graph reachability
 - `scripts/release_notes/backport_refs.py` - recover the original PR of a backported commit (verified sweep Applied table, standalone backport-of URL, subject, -x trailer, branch name)
 - `scripts/release_notes/classify.py` - label split: release-notes -> include, no-release-notes -> exclude, else -> triage
+- `scripts/release_notes/ai_inputs.py` - shared, bounded PR prompt payloads and SHA-cached diffs; combined sweep diffs are omitted when they cannot be attributed to one source PR
 - `scripts/release_notes/triage.py` - completeness-first Claude include/exclude plus deterministic release-impact guardrail for PRs without `release-notes` (no tools; PR data inlined in prompt)
 - `scripts/release_notes/generate.py` - Claude bullet generation (no tools; PR data inlined in prompt)
 - `scripts/release_notes/models.py` - typed dataclasses for the pipeline
@@ -369,7 +371,7 @@ calendar date.
 - `scripts/release_notes/publish.py` - find/open/update the release PR; `_reconcile_draft` flips draft state on re-dispatch
 - `scripts/release_notes/release_format.py` - `00-RELEASENOTES` dated-section rendering
 - `scripts/release_notes/version_bump.py` - `src/version.h` macro rewriting
-- `scripts/release_notes/contributors.py` - contributor discovery; cumulative rendering deduplicates display-name/login identities
+- `scripts/release_notes/contributors.py` - contributor discovery; cumulative rendering reconciles display-name, login, and co-author email aliases
 
 ## Planned Workflows
 

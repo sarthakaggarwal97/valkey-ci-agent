@@ -373,6 +373,25 @@ class TestCoauthorsInRange:
         )
         assert contrib._coauthors_in_range("base", "main", repo) == ["Real Human"]
 
+    def test_transitive_email_aliases_prefer_display_name(self, tmp_path) -> None:
+        repo = _init_repo(tmp_path)
+        _commit(repo, "base", name="Root", email="root@x")
+        run_git(repo, "tag", "base")
+        _commit(
+            repo,
+            "sweep",
+            name="valkeyrie-ops[bot]",
+            email="bot@x",
+            body=(
+                "Co-authored-by: jjuleslasarte <jules.lasarte@gmail.com>\n"
+                "Co-authored-by: Jules Lasarte <lasartej@amazon.com>"
+            ),
+        )
+
+        assert contrib._coauthors_in_range(
+            "base", "main", repo
+        ) == ["Jules Lasarte"]
+
 
 class TestIsBot:
     def test_bot_login_suffix(self) -> None:
@@ -437,3 +456,59 @@ class TestCoauthorUnion:
         result = contrib.list_contributors("r", "base", "main", repo_dir=repo)
         # Bob (shortlog author) and Cara (co-author trailer), both name-only, sorted.
         assert result == ["Bob Dev", "Cara Fixer"]
+
+    def test_email_aliases_collapse_login_and_display_name(self, monkeypatch, tmp_path) -> None:
+        # A sweep can carry two trailers for one person under a login-shaped name
+        # and a display name. The first trailer links the known GitHub login to an
+        # email local-part; the second name matches that local-part, so it must not
+        # create an obvious duplicate contributor.
+        repo = _init_repo(tmp_path)
+        _commit(repo, "base", name="Root", email="root@x")
+        run_git(repo, "tag", "base")
+        _commit(
+            repo,
+            "sweep",
+            name="valkeyrie-ops[bot]",
+            email="bot@x",
+            body=(
+                "Co-authored-by: jjuleslasarte <jules.lasarte@gmail.com>\n"
+                "Co-authored-by: Jules Lasarte <lasartej@amazon.com>"
+            ),
+        )
+
+        monkeypatch.setattr(
+            contrib,
+            "_compare_logins",
+            lambda *a, **k: (["jjuleslasarte"], False, []),
+        )
+        monkeypatch.setattr(contrib, "_display_name", lambda login, token: None)
+
+        assert contrib.list_contributors(
+            "r", "base", "main", repo_dir=repo
+        ) == ["jjuleslasarte @jjuleslasarte"]
+
+    def test_email_aliases_use_display_name_without_api_identity(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        repo = _init_repo(tmp_path)
+        _commit(repo, "base", name="Root", email="root@x")
+        run_git(repo, "tag", "base")
+        _commit(
+            repo,
+            "sweep",
+            name="valkeyrie-ops[bot]",
+            email="bot@x",
+            body=(
+                "Co-authored-by: jjuleslasarte <jules.lasarte@gmail.com>\n"
+                "Co-authored-by: Jules Lasarte <lasartej@amazon.com>"
+            ),
+        )
+        monkeypatch.setattr(
+            contrib,
+            "_compare_logins",
+            lambda *a, **k: ([], False, []),
+        )
+
+        assert contrib.list_contributors(
+            "r", "base", "main", repo_dir=repo
+        ) == ["Jules Lasarte"]

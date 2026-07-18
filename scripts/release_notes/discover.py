@@ -306,11 +306,17 @@ def resolve_commit_prs(
     collided: list[CollidedCommit] = []
     cherry_pick_suspects: dict[int, UnresolvedCherryPick] = {}
     deferred_sweep_manifests: list[tuple[str, set[int]]] = []
+    pulls_cache: dict[str, list[Any]] = {}
     for sha, subject, body in commits:
         unconfirmed_source_shas: tuple[str, ...] = ()
         via_subject = False
         numbers, manifest_lookup_failed = _trusted_applied_source_prs(
-            repo, sha, subject, body, release_branch=release_branch
+            repo,
+            sha,
+            subject,
+            body,
+            release_branch=release_branch,
+            pulls_cache=pulls_cache,
         )
         if manifest_lookup_failed:
             logger.warning(
@@ -331,17 +337,21 @@ def resolve_commit_prs(
                 # squash-merge bodies are contributor-controlled and can contain
                 # a trailer-shaped line. A mismatch is surfaced for review and is
                 # cleared later if backport hydration remaps the subject PR.
-                trailer_number = _pr_from_cherry_pick_trailer(repo, body)
+                trailer_number = _pr_from_cherry_pick_trailer(
+                    repo, body, pulls_cache=pulls_cache
+                )
                 if trailer_number not in numbers:
                     unconfirmed_source_shas = source_shas
             elif not numbers and source_shas:
-                trailer_number = _pr_from_cherry_pick_trailer(repo, body)
+                trailer_number = _pr_from_cherry_pick_trailer(
+                    repo, body, pulls_cache=pulls_cache
+                )
                 if trailer_number is not None:
                     numbers = {trailer_number}
                 else:
                     unconfirmed_source_shas = source_shas
         if not numbers:
-            pulls = _pulls_from_commit_api(repo, sha)
+            pulls = _pulls_from_commit_api(repo, sha, cache=pulls_cache)
             if pulls is None:
                 unresolved.append(UnresolvedCommit(sha=sha, subject=subject))
                 continue
@@ -374,7 +384,10 @@ def resolve_commit_prs(
             logger.warning("Commit %s has no resolvable PR (subject: %s)", sha[:12], subject[:80])
             unresolved.append(UnresolvedCommit(sha=sha, subject=subject))
             continue
-        for number in numbers:
+        # Resolution helpers return sets because one sweep commit can name many
+        # source PRs. Sort within that commit so insertion order remains stable;
+        # insertion order across commits still represents the release range.
+        for number in sorted(numbers):
             if number in pr_to_sha:
                 # Detect distinct-subject collisions on the same (#N).
                 won = winner_subject.get(number)
@@ -396,7 +409,7 @@ def resolve_commit_prs(
                     source_shas=unconfirmed_source_shas, subject=subject,
                 )
     for sha, manifest in deferred_sweep_manifests:
-        for number in manifest:
+        for number in sorted(manifest):
             if number not in pr_to_sha:
                 pr_to_sha[number] = sha
     logger.info(
@@ -414,6 +427,7 @@ def _trusted_applied_source_prs(
     body: str,
     *,
     release_branch: str | None,
+    pulls_cache: dict[str, list[Any]] | None = None,
 ) -> tuple[set[int], bool]:
     """Return ``(manifest, lookup_failed)`` after verifying the associated PR.
 
@@ -435,7 +449,7 @@ def _trusted_applied_source_prs(
         )
         return set(), False
 
-    pulls = _pulls_from_commit_api(repo, sha)
+    pulls = _pulls_from_commit_api(repo, sha, cache=pulls_cache)
     if pulls is None:
         return set(), True
     for pull in pulls:
@@ -505,7 +519,12 @@ def _same_change_subject(a: str, b: str) -> bool:
     return difflib.SequenceMatcher(None, na, nb).ratio() >= _TITLE_SIMILARITY_MIN
 
 
-def _pr_from_cherry_pick_trailer(repo: Any, body: str) -> int | None:
+def _pr_from_cherry_pick_trailer(
+    repo: Any,
+    body: str,
+    *,
+    pulls_cache: dict[str, list[Any]] | None = None,
+) -> int | None:
     """Return the original PR from a -x cherry-pick trailer, or None.
 
     Tries source SHAs oldest-hop-first; the first that resolves to a PR is the
@@ -513,31 +532,53 @@ def _pr_from_cherry_pick_trailer(repo: Any, body: str) -> int | None:
     """
     source_shas = cherry_pick_source_shas(body)
     for source_sha in source_shas:  # oldest hop (the original) first
-        number = _pr_from_commit_api(repo, source_sha)
+        number = _pr_from_commit_api(repo, source_sha, pulls_cache=pulls_cache)
         if number is not None:
             return number
     return None
 
 
-def _pr_from_commit_api(repo: Any, sha: str) -> int | None:
+def _pr_from_commit_api(
+    repo: Any,
+    sha: str,
+    *,
+    pulls_cache: dict[str, list[Any]] | None = None,
+) -> int | None:
     """Return the first PR number associated with sha via Commit.get_pulls(), or None."""
-    pulls = _pulls_from_commit_api(repo, sha)
+    pulls = _pulls_from_commit_api(repo, sha, cache=pulls_cache)
     for pull in pulls or ():
         return int(pull.number)
     return None
 
 
-def _pulls_from_commit_api(repo: Any, sha: str) -> list[Any] | None:
-    """Return associated PRs, or ``None`` when the API lookup itself failed."""
+def _pulls_from_commit_api(
+    repo: Any,
+    sha: str,
+    *,
+    cache: dict[str, list[Any]] | None = None,
+) -> list[Any] | None:
+    """Return associated PRs, or ``None`` when the API lookup itself failed.
+
+    Successful and empty responses may be cached for one discovery pass. Failures
+    are not cached so a later reference to the same SHA can retry a transient error.
+    """
+    if cache is not None and sha in cache:
+        return cache[sha]
+
     def _lookup() -> list[Any]:
         commit = repo.get_commit(sha)
         return list(commit.get_pulls())
 
     try:
-        return retry_github_call(_lookup, retries=3, description=f"PRs for commit {sha[:12]}")
+        pulls = retry_github_call(
+            _lookup, retries=3, description=f"PRs for commit {sha[:12]}"
+        )
     except Exception as exc:  # noqa: BLE001 - a lookup miss must not abort discovery
         logger.warning("Could not resolve PR for commit %s: %s", sha[:12], exc)
         return None
+    if cache is not None:
+        cache[sha] = pulls
+    return pulls
 
 
 # Cap backport-of-backport depth to prevent loops from cyclic metadata.
@@ -745,8 +786,7 @@ def hydrate_prs(
     final: dict[int, MergedPR] = {}
     unresolved_backports: list[UnresolvedBackport] = []
     unresolved_prs: list[UnresolvedPR] = []
-    for number in sorted(pr_to_sha):
-        sha = pr_to_sha[number]
+    for number, sha in pr_to_sha.items():
         pull = _fetch_pull(repo, number, pull_cache)
         if pull is None:
             # PR not fetchable; record as unresolved so the shipped change is visible.

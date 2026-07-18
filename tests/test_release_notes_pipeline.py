@@ -177,6 +177,56 @@ def test_labelled_pr_bypasses_triage(monkeypatch, clone):
     assert r.ai_included == () and r.ai_excluded == () and r.triage == ()
 
 
+def test_diff_collector_sees_hard_excluded_peers(monkeypatch, clone):
+    # A no-release-notes source can share a combined sweep SHA with an included
+    # source. It is not sent to either AI stage, but the collector still needs to
+    # see it so the combined patch is not misattributed to the included PR.
+    prs = (
+        MergedPR(
+            number=40,
+            title="included",
+            author="a",
+            url="u",
+            labels=("release-notes",),
+            merge_commit_sha="shared",
+        ),
+        MergedPR(
+            number=41,
+            title="excluded",
+            author="b",
+            url="u",
+            labels=("no-release-notes",),
+            merge_commit_sha="shared",
+        ),
+    )
+    _patch(
+        monkeypatch,
+        prs=prs,
+        bullets=(
+            CategorizedBullet(
+                pr_number=40,
+                author="a",
+                category="Bug Fixes",
+                text="fix",
+            ),
+        ),
+    )
+    seen = []
+    real_collector = pipeline_mod.PRDiffCollector
+
+    def recording_collector(repo_dir, all_prs):
+        seen.extend(pr.number for pr in all_prs)
+        return real_collector(repo_dir, all_prs)
+
+    monkeypatch.setattr(pipeline_mod, "PRDiffCollector", recording_collector)
+
+    pipeline_mod.regenerate_unreleased(
+        object(), clone, head_ref="9.1", tag_glob=None
+    )
+
+    assert seen == [40, 41]
+
+
 def test_unresolved_backports_passthrough(monkeypatch, clone):
     # An unresolved backport flagged by hydrate_prs must reach RegenResult so the
     # release-cut PR body can surface the suspect credit to a reviewer.
