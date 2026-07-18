@@ -416,10 +416,10 @@ human merges.
 Malformed dispatch inputs fail fast at argparse (exit 2), before the clone + AI
 run: a non-`M.m.p` or out-of-range version, an omitted stage for `M.m.0`, a bad
 explicit stage, an urgency outside `LOW/MODERATE/HIGH/CRITICAL/SECURITY`, or a
-non-ISO date. An explicit `--base-ref` that resolves to nothing aborts right
-after the clone with a clear error. A cut dispatched against a non-existent M.m
-branch is refused immediately. A target that is equal to or older than the
-branch's current release state, or at or behind an existing tag on that M.m
+non-ISO date. Repository-state validation runs after the clone: an explicit
+`--base-ref` that resolves to nothing aborts with a clear error, and a cut
+against a non-existent M.m branch is refused immediately. A target that is equal
+to or older than `src/version.h`, or at or behind an existing tag on that M.m
 line, is also refused before note generation.
 
 When the cut raises anything a maintainer should address before merging, the

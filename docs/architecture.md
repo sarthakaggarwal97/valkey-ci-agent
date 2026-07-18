@@ -308,8 +308,9 @@ main.py (daily cron or manual dispatch)
 ## Release Notes Flow
 
 ```text
-main.py (manual dispatch: version, optional stage, urgency)
+main.py (manual dispatch: version, optional stage, urgency, dry_run)
   -> validate + canonicalize inputs; infer patch GA only when PATCH > 0
+  -> dry_run selects preview (true) or PR-opening execution (false)
   -> clone valkey (full depth + tags), validate --base-ref
   -> release_cut.cut()
        -> collect_advisory_fixes()   (if --security-from-advisories)
