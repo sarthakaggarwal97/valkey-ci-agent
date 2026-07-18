@@ -25,6 +25,7 @@ from scripts.release_notes.backport_refs import (
     applied_source_prs_from_body,
     cherry_pick_source_shas,
     is_backport_title,
+    source_pr_from_backport_body,
     source_pr_from_backport_title,
     source_pr_from_branch,
     source_title_from_backport_title,
@@ -627,6 +628,11 @@ def _expected_source_titles(backport_pull: Any) -> set[str]:
     for raw in (
         source_title_from_backport_title(backport_pull.title or ""),
         summary_source_title_from_body(backport_pull.body or ""),
+        (
+            backport_pull.title or ""
+            if source_pr_from_backport_body(backport_pull.body or "") is not None
+            else None
+        ),
     ):
         normalized = _norm_title(_title_core(raw)) if raw else ""
         if normalized and _is_distinctive_title(normalized):
@@ -662,13 +668,17 @@ def _source_is_trusted(src_pull: Any, backport_pull: Any) -> bool:
 def _recover_source_pr(repo: Any, pull: Any) -> int | None:
     """Return the original PR of a per-PR backport, or None.
 
-    Tries: ## Backport Summary Source PR row, PR's own commits' trailing (#N),
-    backport/<n>-to-<branch> head branch. Returns None when unrecoverable.
+    Tries: ## Backport Summary Source PR row, a manual ``backport of <PR URL>``
+    marker, PR's own commits' trailing (#N), and backport/<n>-to-<branch> head
+    branch. Returns None when unrecoverable.
     """
     source = summary_source_pr_from_body(pull.body or "")
     if source is not None:
         return source
     source = source_pr_from_backport_title(pull.title or "")
+    if source is not None:
+        return source
+    source = source_pr_from_backport_body(pull.body or "")
     if source is not None:
         return source
     try:
@@ -693,7 +703,10 @@ def _is_backport_pull(pull: Any) -> bool:
     labels = tuple(label.name for label in pull.labels)
     if is_backport_title(title) or "backport" in labels:
         return True
-    if summary_source_pr_from_body(pull.body or "") is not None:
+    if (
+        summary_source_pr_from_body(pull.body or "") is not None
+        or source_pr_from_backport_body(pull.body or "") is not None
+    ):
         return True
     head_ref = getattr(getattr(pull, "head", None), "ref", "") or ""
     return source_pr_from_branch(head_ref) is not None
@@ -785,8 +798,9 @@ def hydrate_prs(
             logger.warning(
                 "PR #%s credited for a range commit is itself a backport (%r); "
                 "the original PR could not be recovered from an ## Applied table, a "
-                "-x trailer, the subject, its ## Backport Summary, its own commits, "
-                "or its branch name. The note will credit this backport.",
+                "-x trailer, the subject, its ## Backport Summary, a backport-of "
+                "URL, its own commits, or its branch name. The note will credit "
+                "this backport.",
                 target_number, (target_pull.title or "")[:80],
             )
             unresolved_backports.append(

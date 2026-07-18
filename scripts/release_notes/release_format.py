@@ -232,23 +232,51 @@ def _split_contributors_footer(text: str) -> "tuple[str, List[str]]":
 
 
 def render_contributors_footer(contributors: Sequence[str]) -> str:
-    """Render the cumulative ``### Contributors`` footer, deduped and alpha-sorted.
+    """Render the cumulative footer, deduped by login/display-name identity.
 
     Returns ``""`` when the list is empty.
     """
-    seen: set = set()
-    unique: List[str] = []
+    records: List[tuple[str, str, str]] = []
     for entry in contributors:
-        name = _strip_bullet(entry)
-        if not name:
+        rendered = _strip_bullet(entry)
+        if not rendered:
             continue
-        key = name.casefold()
-        if key not in seen:
-            seen.add(key)
-            unique.append(name)
-    if not unique:
+        handle_match = re.search(r"\s+@([A-Za-z0-9-]+)$", rendered)
+        handle = handle_match.group(1).casefold() if handle_match else ""
+        display = (
+            rendered[:handle_match.start()].strip()
+            if handle_match
+            else rendered
+        )
+        display_key = display.casefold()
+        matches = [
+            index
+            for index, (known_name, known_handle, _known_rendered) in enumerate(records)
+            if (handle and known_handle == handle)
+            or (display_key and known_name == display_key)
+        ]
+        if not matches:
+            records.append((display_key, handle, rendered))
+            continue
+
+        # A later handled entry is the freshest API identity and replaces stale
+        # profile names or name-only fallbacks carried from an older footer.
+        winner = (display_key, handle, rendered)
+        if not handle:
+            winner = next(
+                (records[index] for index in matches if records[index][1]),
+                records[matches[0]],
+            )
+        for index in reversed(matches):
+            del records[index]
+        records.append(winner)
+
+    if not records:
         return ""
-    unique.sort(key=lambda e: e.rsplit(" @", 1)[0].casefold())
+    unique = sorted(
+        (rendered for _name, _handle, rendered in records),
+        key=lambda entry: entry.rsplit(" @", 1)[0].casefold(),
+    )
     out = ["### Contributors"]
     out.extend("* {}".format(name) for name in unique)
     return "\n".join(out)

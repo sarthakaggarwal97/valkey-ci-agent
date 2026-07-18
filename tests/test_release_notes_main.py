@@ -221,6 +221,25 @@ def test_valid_iso_date_accepted(patched):
     assert rc == 0
 
 
+def test_omitted_date_uses_current_utc_date(patched):
+    captured = _capture_cut(patched)
+    real_datetime = main_mod.datetime.datetime
+
+    class FixedDateTime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            assert tz is main_mod.datetime.timezone.utc
+            return cls(2026, 7, 18, 0, 30, tzinfo=tz)
+
+    patched.setattr(main_mod.datetime, "datetime", FixedDateTime)
+    rc = main([
+        "--token", "t", "--version", "9.1.1", "--urgency", "LOW",
+    ])
+
+    assert rc == 0
+    assert captured["date"] == "2026-07-18"
+
+
 def test_rc1_no_prior_release_marks_baseline_unanchored(patched, caplog):
     # rc1 whose repo carries no earlier release tag (first release ever, or a
     # tagless fork): resolve_previous_release_tag returns None, so the cut falls

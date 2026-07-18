@@ -102,6 +102,70 @@ def test_ai_excluded_candidate_dropped_and_surfaced(monkeypatch, clone):
     assert r.ai_included == () and r.triage == ()
 
 
+def test_guardrail_included_candidate_is_separate_from_ai_included(monkeypatch, clone):
+    prs = (MergedPR(
+        number=52,
+        title="Reject crafted payload that can crash the server",
+        author="z",
+        url="u",
+        labels=(),
+    ),)
+    _patch(
+        monkeypatch,
+        prs=prs,
+        bullets=(
+            CategorizedBullet(
+                pr_number=52, author="z", category="Bug Fixes", text="Reject the payload"
+            ),
+        ),
+        triage_result=TriageResult(included=(
+            TriageDecision(
+                pr_number=52,
+                included=True,
+                reason="release-safety guardrail (server crash; AI exclusion)",
+                uncertain=True,
+                guardrail=True,
+            ),
+        )),
+    )
+    result = pipeline_mod.regenerate_unreleased(
+        object(), clone, head_ref="9.1", tag_glob=None
+    )
+    assert [pr.number for pr in result.guardrail_included] == [52]
+    assert result.ai_included == ()
+    assert [(impact.number, impact.reason) for impact in result.impact_review] == [
+        (52, "server crash, assertion, or availability failure"),
+    ]
+    assert result.bullet_count == 1
+
+
+def test_labelled_risky_pr_still_surfaces_for_urgency_review(monkeypatch, clone):
+    prs = (MergedPR(
+        number=53,
+        title="Fix RESP3 protocol type violation",
+        author="z",
+        url="u",
+        labels=("release-notes",),
+    ),)
+    _patch(
+        monkeypatch,
+        prs=prs,
+        bullets=(
+            CategorizedBullet(
+                pr_number=53,
+                author="z",
+                category="Command and API Updates",
+                text="Return the correct RESP3 type",
+            ),
+        ),
+    )
+    result = pipeline_mod.regenerate_unreleased(
+        object(), clone, head_ref="9.1", tag_glob=None
+    )
+    assert [impact.number for impact in result.impact_review] == [53]
+    assert result.guardrail_included == ()
+
+
 def test_labelled_pr_bypasses_triage(monkeypatch, clone):
     # A release-notes-labelled PR is included directly and never appears in any
     # AI-triage bucket, even though the stub would leave a candidate undecided.

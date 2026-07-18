@@ -80,10 +80,11 @@ class TestRenderContributorsFooter:
         out = rf.render_contributors_footer(["zoe Q @zoe", "Amy P @amy", "bob @bob"])
         assert out == "### Contributors\n* Amy P @amy\n* bob @bob\n* zoe Q @zoe"
 
-    def test_dedup_first_spelling_wins(self) -> None:
-        # Same person, two spellings differing only by case: the first is kept.
+    def test_dedup_latest_handled_identity_wins(self) -> None:
+        # Later entries come from the current compare API after the prior footer,
+        # so their profile spelling replaces stale carried-forward text.
         out = rf.render_contributors_footer(["Jane Doe @jane", "jane doe @jane"])
-        assert out == "### Contributors\n* Jane Doe @jane"
+        assert out == "### Contributors\n* jane doe @jane"
 
     def test_strips_existing_bullet_markers(self) -> None:
         # Entries carried from a prior footer already start with "* "; not doubled.
@@ -92,6 +93,27 @@ class TestRenderContributorsFooter:
 
     def test_blank_entries_dropped(self) -> None:
         assert rf.render_contributors_footer(["", "  ", "\t"]) == ""
+
+    def test_same_handle_with_changed_display_name_is_one_identity(self) -> None:
+        out = rf.render_contributors_footer([
+            "Old Profile Name @same-login",
+            "Current Profile Name @same-login",
+        ])
+        assert out == "### Contributors\n* Current Profile Name @same-login"
+
+    def test_same_display_name_with_old_and_new_handles_is_one_identity(self) -> None:
+        out = rf.render_contributors_footer([
+            "Quanye Yang @Ada-Church-Closure",
+            "Quanye Yang @quanyeyang",
+        ])
+        assert out == "### Contributors\n* Quanye Yang @quanyeyang"
+
+    def test_handled_entry_replaces_name_only_fallback(self) -> None:
+        out = rf.render_contributors_footer([
+            "Amy P",
+            "Amy P @amy",
+        ])
+        assert out == "### Contributors\n* Amy P @amy"
 
 
 class TestSplitContributorsFooter:

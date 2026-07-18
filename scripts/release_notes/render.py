@@ -32,7 +32,22 @@ def format_bullet(bullet: CategorizedBullet) -> str:
     line, and omits the ``by @`` segment when the author is unknown.
     """
     text = _one_line(bullet.text)
-    text = re.sub(r"\s*\(#[^)]*\)\s*$", "", text).strip()
+    text = re.sub(r"^\s*[*-]\s+", "", text)
+    text = re.sub(r"\s*\(#[^)]*\)[\s.,;:!?]*$", "", text).strip()
+    text = re.sub(
+        r"\s+by\s+@[A-Za-z0-9-]+[\s.,;:!?]*$",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip()
+    # Handle the inverse accidental order too: "(#N) by @user".
+    text = re.sub(r"\s*\(#[^)]*\)[\s.,;:!?]*$", "", text).strip()
+    # Valkey's canonical form ends at "(#N)", so sentence punctuation before the
+    # generated attribution reads awkwardly ("Fixed X. by @user"). Drop it here
+    # even when the model ignored the prompt's no-final-punctuation rule.
+    without_terminal_punctuation = text.rstrip(" .,:;!?")
+    if without_terminal_punctuation:
+        text = without_terminal_punctuation
     parts = [f"* {text}"]
     handle = _HANDLE_SAFE_RE.sub("", bullet.author)
     if handle:

@@ -54,7 +54,7 @@ on:
         required: true
         type: string
       date:
-        description: "Release date YYYY-MM-DD; empty uses today"
+        description: "Release date YYYY-MM-DD; empty uses the current UTC date"
         required: false
         type: string
         default: ""

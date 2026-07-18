@@ -318,8 +318,10 @@ main.py (manual dispatch: version, optional stage, urgency, dry_run)
        -> pipeline.regenerate_unreleased()
             -> discover()  PRs over base..HEAD, deduped by PR number
             -> classify()  include, AI candidate, or no-release-notes hard exclusion
-            -> triage()    AI: include/exclude each candidate without a gating label (+reason)
+            -> triage()    completeness-first AI decision + deterministic
+                            release-impact override for risky exclusions/no verdicts
             -> generate()  AI: one categorized bullet per included PR
+            -> normalize operator-output categories and canonical bullet format
             -> dedup bullets by PR number (surfaces duplicate_prs)
             -> group_bullets()  {category: [canonical bullet line, ...]}
        -> _drop_already_credited()   dedup against PRs the line already ships
@@ -338,12 +340,16 @@ requires an explicit stage. The advanced dispatch is a thin wrapper around the
 same reusable workflow.
 
 Signals fall into two tiers. Malformed inputs, a missing target branch, an
-already-released/backward target, or a target branch that advances during generation are hard
-errors that abort before any PR. Warnings (out-of-sequence stages, unresolved PRs,
-empty notes, security mismatches, and AI-triage include/exclude decisions on PRs
-without `release-notes`) hold the PR as a draft with a banner naming them; re-dispatch reconciles draft
-state automatically. `force_ready`, available only on the advanced dispatch,
-bypasses holds.
+already-released/backward target, or a target branch that advances during
+generation are hard errors that abort before any PR. Warnings (out-of-sequence
+stages, unresolved PRs, empty notes, security mismatches, AI-triage decisions,
+deterministic triage overrides, and `LOW`/`MODERATE` urgency paired with
+release-impact signals) hold the PR as a draft with a banner naming them. Impact
+detection is a review trigger, not an automatic security or severity
+classification. Re-dispatch reconciles draft state automatically. `force_ready`,
+available only on the advanced dispatch, bypasses holds. An omitted release date
+is explicitly the current UTC date; the advanced dispatch accepts an explicit
+calendar date.
 
 ### Entry Points
 
@@ -353,9 +359,9 @@ bypasses holds.
 - `scripts/release_notes/release_cut.py` - branch-plan resolution, notes rendering, PR body + `_hold_reasons` (draft-hold decision)
 - `scripts/release_notes/pipeline.py` - discover -> classify -> triage -> generate -> render orchestration
 - `scripts/release_notes/discover.py` - range resolution and PR discovery by graph reachability
-- `scripts/release_notes/backport_refs.py` - recover the original PR of a backported commit (verified sweep Applied table, subject, -x trailer, branch name)
+- `scripts/release_notes/backport_refs.py` - recover the original PR of a backported commit (verified sweep Applied table, standalone backport-of URL, subject, -x trailer, branch name)
 - `scripts/release_notes/classify.py` - label split: release-notes -> include, no-release-notes -> exclude, else -> triage
-- `scripts/release_notes/triage.py` - Claude include/exclude for PRs without `release-notes` (no tools; PR data inlined in prompt)
+- `scripts/release_notes/triage.py` - completeness-first Claude include/exclude plus deterministic release-impact guardrail for PRs without `release-notes` (no tools; PR data inlined in prompt)
 - `scripts/release_notes/generate.py` - Claude bullet generation (no tools; PR data inlined in prompt)
 - `scripts/release_notes/models.py` - typed dataclasses for the pipeline
 - `scripts/release_notes/security.py` - Security Fixes from published GitHub advisories (never AI-authored)
@@ -363,7 +369,7 @@ bypasses holds.
 - `scripts/release_notes/publish.py` - find/open/update the release PR; `_reconcile_draft` flips draft state on re-dispatch
 - `scripts/release_notes/release_format.py` - `00-RELEASENOTES` dated-section rendering
 - `scripts/release_notes/version_bump.py` - `src/version.h` macro rewriting
-- `scripts/release_notes/contributors.py` - deduplicated contributor list
+- `scripts/release_notes/contributors.py` - contributor discovery; cumulative rendering deduplicates display-name/login identities
 
 ## Planned Workflows
 

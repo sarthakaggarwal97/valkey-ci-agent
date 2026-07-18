@@ -97,6 +97,7 @@ class TriageDecision:
     included: bool
     reason: str = ""
     uncertain: bool = False
+    guardrail: bool = False
 
 
 @dataclass(frozen=True)
@@ -130,6 +131,23 @@ class TriagedPR:
     included: bool
     reason: str = ""
     uncertain: bool = False
+    guardrail: bool = False
+
+
+@dataclass(frozen=True)
+class ReleaseImpact:
+    """A PR whose text names an impact that warrants release-manager review.
+
+    These are deterministic signals, not severity or security classifications.
+    They make potentially serious changes visible when maintainers choose the
+    release urgency and decide whether a hand-authored Security Fixes entry is
+    required.
+    """
+
+    number: int
+    title: str
+    url: str
+    reason: str
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 from typing import Callable, Sequence
 
@@ -26,6 +27,28 @@ _BATCH_SIZE = 80
 # Per-PR diff budget (characters) inlined into the prompt.
 _MAX_DIFF_CHARS = 6000
 
+_OBSERVABILITY_CATEGORY = "Observability and Logging"
+_OBSERVABILITY_EVIDENCE_RE = re.compile(
+    r"\bACL LOG\b|\bINFO(?:\s+[A-Z][A-Z_]*)?\b|"
+    r"\b(?:metrics?|telemetry|observability|logging|log output|"
+    r"process title|proctitle|reporting)\b",
+    re.IGNORECASE,
+)
+_CATEGORY_GUIDANCE = """\
+- Prefer the category for the user-visible surface over the fact that the PR is
+  a bug fix. `Bug Fixes` is the fallback, not the automatic category for every
+  title beginning with "Fix".
+- `Observability and Logging` owns INFO fields, metrics, ACL LOG, server logs,
+  diagnostics, process titles, and corrections to those outputs.
+- `Command and API Updates` owns command arguments/results, wire reply schemas,
+  and public APIs. `Module API Changes` owns third-party module APIs.
+- `Cluster and Replication` owns cluster, Sentinel, failover, migration, and
+  replication behavior unless Configuration or Observability is more specific.
+- `Configuration` owns config parsing, validation, persistence, and defaults.
+- `Build and Tooling` is for shipped build/packaging/tool changes; test-only and
+  CI-only PRs should be skipped.
+"""
+
 _PROMPT_TEMPLATE = """\
 You are writing release notes for the open-source project Valkey. You are given
 a list of pull requests that merged into a release line since the last release.
@@ -34,6 +57,9 @@ it to exactly one category.
 
 ## Categories (use these EXACT strings, nothing else)
 {categories}
+
+## Category boundaries
+{category_guidance}
 
 ## Rules
 - Write for an end user reading a changelog: what changed and why it matters,
@@ -55,7 +81,8 @@ it to exactly one category.
   not the code). The field is absent when no diff was available; do not treat its
   absence as meaningful.
 - Do NOT include the PR number, the author, "by @...", or any "(#N)". Those
-  are added automatically. Write the description text ONLY.
+  are added automatically. Write the description text ONLY. Do not end the text
+  with sentence punctuation; attribution follows it in the canonical format.
 - Choose the single best-fitting category from the list above, copied verbatim.
   The list is exhaustive: every user-facing change has a home. Use "Other
   Changes" only when a change fits none of the specific categories.
@@ -67,6 +94,11 @@ it to exactly one category.
 - If a PR is purely internal with no user-facing effect (and so should not have
   been labelled for release notes), put its number in "skipped" instead of
   inventing a note.
+- Do not skip a crash, assertion, memory-safety, corrupt-input, injection,
+  access-control, protocol, reply-correctness, compatibility, or operator-reporting
+  fix because it is rare or lacks a published advisory. Put it in the best normal
+  category. The separate Security Fixes section is maintained from factual,
+  reviewer-approved input.
 - If you are NOT confident about a note (unsure which category fits, or unsure
   whether the change is really user-facing), still emit the bullet with your
   best guess, but set "uncertain": true and give a short "uncertain_reason"
@@ -141,6 +173,7 @@ def build_prompt(
     """
     return _PROMPT_TEMPLATE.format(
         categories="\n".join(f"- {name}" for name in categories),
+        category_guidance=_CATEGORY_GUIDANCE,
         prs_json=build_prompt_payload(prs, diffs=diffs),
     )
 
@@ -225,6 +258,39 @@ def _parse_batch(
     return bullets, skipped, True
 
 
+def _apply_category_guardrail(
+    bullet: CategorizedBullet, pr: MergedPR
+) -> CategorizedBullet:
+    """Place operator-output fixes in the observability category.
+
+    Models often classify every title beginning with "Fix" as ``Bug Fixes``.
+    For an INFO field, metric, ACL LOG, or similar output, the release-note
+    taxonomy is more useful when the affected surface wins. Limit the override to
+    generic categories and flag it for review rather than rewriting a specific
+    model choice such as Configuration.
+    """
+    if bullet.category not in ("", "Bug Fixes", "Other Changes"):
+        return bullet
+    evidence = f"{pr.title or ''}\n{pr.body or ''}"
+    if not _OBSERVABILITY_EVIDENCE_RE.search(evidence):
+        return bullet
+    old = bullet.category or "(none)"
+    correction = (
+        f"category normalized from {old!r} for operator-visible output"
+    )
+    reason = "; ".join(
+        part for part in (bullet.uncertain_reason, correction) if part
+    )
+    return CategorizedBullet(
+        pr_number=bullet.pr_number,
+        author=bullet.author,
+        category=_OBSERVABILITY_CATEGORY,
+        text=bullet.text,
+        uncertain=True,
+        uncertain_reason=reason,
+    )
+
+
 def generate(
     prs: Sequence[MergedPR],
     *,
@@ -241,6 +307,7 @@ def generate(
     if not prs:
         return GenerationResult()
 
+    pr_by_number = {pr.number: pr for pr in prs}
     authors = {pr.number: pr.author for pr in prs}
     valid_categories = set(categories)
     all_bullets: list[CategorizedBullet] = []
@@ -268,17 +335,18 @@ def generate(
             all_skipped.extend(sorted(batch_numbers))
             continue
         # Re-stamp each bullet with the factual author from the PR.
-        all_bullets.extend(
-            CategorizedBullet(
-                pr_number=b.pr_number,
-                author=authors.get(b.pr_number, ""),
-                category=b.category,
-                text=b.text,
-                uncertain=b.uncertain,
-                uncertain_reason=b.uncertain_reason,
+        for bullet in bullets:
+            reviewed = _apply_category_guardrail(
+                bullet, pr_by_number[bullet.pr_number]
             )
-            for b in bullets
-        )
+            all_bullets.append(CategorizedBullet(
+                pr_number=reviewed.pr_number,
+                author=authors.get(reviewed.pr_number, ""),
+                category=reviewed.category,
+                text=reviewed.text,
+                uncertain=reviewed.uncertain,
+                uncertain_reason=reviewed.uncertain_reason,
+            ))
         all_skipped.extend(skipped)
 
         # PRs absent from both bullets and skipped are folded into skipped.

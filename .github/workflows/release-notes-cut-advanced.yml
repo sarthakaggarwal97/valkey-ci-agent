@@ -26,7 +26,7 @@ on:
           - CRITICAL
           - SECURITY
       date:
-        description: "Release date YYYY-MM-DD (default: today)"
+        description: "Release date YYYY-MM-DD (default: current UTC date)"
         required: false
         type: string
       contrib_base_ref:

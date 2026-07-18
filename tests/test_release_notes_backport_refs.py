@@ -12,6 +12,7 @@ from scripts.release_notes.backport_refs import (
     applied_source_prs_from_body,
     cherry_pick_source_shas,
     is_backport_title,
+    source_pr_from_backport_body,
     source_pr_from_backport_title,
     source_pr_from_branch,
     source_title_from_backport_title,
@@ -209,6 +210,27 @@ class TestSourcePrFromBackportTitle:
 
     def test_requires_trailing_source_ref(self) -> None:
         assert source_pr_from_backport_title("[Backport 7.2] Allow Tcl 9.0 for tests") is None
+
+
+class TestSourcePrFromBackportBody:
+    def test_reads_manual_backport_url(self) -> None:
+        body = (
+            "backport of (https://github.com/valkey-io/valkey/pull/3950)\n\n"
+            "Fixes a production crash."
+        )
+        assert source_pr_from_backport_body(body) == 3950
+
+    def test_case_and_optional_parentheses(self) -> None:
+        assert source_pr_from_backport_body(
+            "BACKPORT OF https://github.com/valkey-io/valkey/pull/77."
+        ) == 77
+
+    def test_ignores_incidental_pull_url(self) -> None:
+        body = "This follows https://github.com/valkey-io/valkey/pull/3950."
+        assert source_pr_from_backport_body(body) is None
+
+    def test_ignores_bare_pr_reference(self) -> None:
+        assert source_pr_from_backport_body("backport of #3950") is None
 
 
 class TestSummarySourceTitleFromBody:

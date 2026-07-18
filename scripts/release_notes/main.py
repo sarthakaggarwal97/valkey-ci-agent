@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--urgency", default=os.environ.get("RELEASE_NOTES_URGENCY", ""),
                         help="Upgrade urgency: LOW, MODERATE, HIGH, CRITICAL, SECURITY")
     parser.add_argument("--date", default=os.environ.get("RELEASE_NOTES_DATE", ""),
-                        help="Release date YYYY-MM-DD (default: today)")
+                        help="Release date YYYY-MM-DD (default: current UTC date)")
     parser.add_argument("--tag-glob", default=os.environ.get("RELEASE_NOTES_TAG_GLOB", ""),
                         help="Optional --match glob restricting the baseline tag, e.g. '9.1.0-rc*'")
     parser.add_argument("--base-ref", default=os.environ.get("RELEASE_NOTES_BASE_REF", ""),
@@ -289,7 +289,7 @@ def _run_cut(
     repo = retry_github_call(
         lambda: gh.get_repo(repo_full_name), retries=3, description=f"get repo {repo_full_name}",
     )
-    resolved_date = date or datetime.date.today().isoformat()
+    resolved_date = date or datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     baseline_unanchored = False
     with GitAuth(token, prefix="release-cut-git-askpass-") as auth:
         git_env = auth.env()
