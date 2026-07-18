@@ -110,10 +110,49 @@ def test_missing_token_is_usage_error(monkeypatch):
     assert exc.value.code == 2
 
 
-def test_missing_version_stage_urgency_is_usage_error():
+def test_missing_version_and_urgency_is_usage_error():
     with pytest.raises(SystemExit) as exc:
         main(["--token", "t", ])
     assert exc.value.code == 2
+
+
+def test_missing_stage_for_dot_zero_release_is_usage_error():
+    with pytest.raises(SystemExit) as exc:
+        main(["--token", "t", "--version", "9.2.0", "--urgency", "LOW"])
+    assert exc.value.code == 2
+
+
+@pytest.mark.parametrize(
+    ("version", "tag_glob"),
+    [
+        ("7.2.14", "7.2.*"),
+        ("8.0.10", "8.0.*"),
+        ("8.1.9", "8.1.*"),
+        ("9.0.5", "9.0.*"),
+        ("9.1.1", "9.1.*"),
+    ],
+)
+def test_live_patch_versions_infer_ga_and_line_baseline(patched, version, tag_glob):
+    captured = _capture_cut(patched)
+
+    result = main([
+        "--token", "t", "--version", version, "--urgency", "LOW",
+    ])
+
+    assert result == 0
+    assert captured["stage"] == "ga"
+    assert captured["tag_glob"] == tag_glob
+    assert captured["base_ref"] is None
+
+
+def test_explicit_patch_stage_is_preserved(patched):
+    captured = _capture_cut(patched)
+    main([
+        "--token", "t", "--version", "9.1.1", "--stage", "rc1",
+        "--urgency", "LOW",
+    ])
+    assert captured["stage"] == "rc1"
+    assert captured["tag_glob"] is None
 
 
 @pytest.mark.parametrize("bad_version", ["9.1", "v9.1.0", "9.1.0-rc1", "9.256.0", "nope"])

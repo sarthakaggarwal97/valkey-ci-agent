@@ -269,18 +269,19 @@ verify step. macOS verification runs once on its dedicated runner.
 
 ## Release Notes Workflow
 
-Cuts a Valkey release in one shot. A maintainer dispatches the target version,
-stage, and urgency; the agent derives the M.m release line and generates notes from the
-`release-notes` PRs plus candidates without that label that AI triage judges user-facing (Claude via
-Bedrock), renders them onto the long-running
-release line as a dated section, bumps `src/version.h`, refreshes the running
-contributor list, and opens one PR for review (as a draft, holding the merge, when
-the cut flags anything a maintainer should address first; see [Edge-case
-handling](#edge-case-handling)). Nothing accumulates notes on a branch; the notes
-for a release are generated all at once. The release line is changed only when a
-maintainer merges the generated PR.
+Cuts a Valkey release in one shot. A maintainer dispatches the target version and
+urgency, plus an explicit stage for `.0` releases; patch versions infer `ga`. The
+agent derives the M.m release line and generates notes from the `release-notes`
+PRs plus candidates without that label that AI triage judges user-facing (Claude
+via Bedrock), renders them onto the long-running release line as a dated section,
+bumps `src/version.h`, refreshes the running contributor list, and opens one PR
+for review (as a draft, holding the merge, when the cut flags anything a
+maintainer should address first; see [Edge-case handling](#edge-case-handling)).
+Nothing accumulates notes on a branch; the notes for a release are generated all
+at once. The release line is changed only when a maintainer merges the generated
+PR.
 
-Dispatch it from this agent repository (rc1 of a new minor line):
+The normal dispatch defaults to a read-only preview. For rc1 of a new minor line:
 
 ```bash
 gh workflow run release-notes-cut.yml \
@@ -290,9 +291,8 @@ gh workflow run release-notes-cut.yml \
   --field urgency=LOW
 ```
 
-The target branch (`9.1`) is derived automatically from the version. The other
-stages differ only in `stage`; see [Common recipes](#common-recipes) for how each
-baseline resolves:
+The target branch (`9.1`) and baseline are derived automatically. Other `.0`
+stages differ only in `stage`; a patch release leaves it empty:
 
 ```bash
 # Next RC (the 9.1.0-rc1 tag must exist on the 9.1 branch)
@@ -305,17 +305,18 @@ gh workflow run release-notes-cut.yml --repo valkey-io/valkey-ci-agent \
 
 # Patch GA (the 9.1.0 tag must exist on the 9.1 branch)
 gh workflow run release-notes-cut.yml --repo valkey-io/valkey-ci-agent \
-  --field version=9.1.1 --field stage=ga --field urgency=LOW
+  --field version=9.1.1 --field urgency=LOW
 ```
 
-Optional inputs: `date` (defaults to today), `base_ref` (explicit baseline ref
-overriding tag resolution), `contrib_base_ref` (contributor range start),
-`security_fixes` (manual Security Fixes bullets, one `--security-fix` per entry),
-`security_from_advisories` (also render published GitHub security advisories
-fixed by this version into Security Fixes), `force_ready` (open the PR ready even
-when the cut flags issues, instead of holding it as a draft; see [Edge-case
-handling](#edge-case-handling)), and `dry_run` (compute and log the cut without
-pushing or opening a PR). Stage is `rc1..rcN` or `ga`, case-insensitive.
+After reviewing the preview, repeat the same dispatch with
+`--field dry_run=false` to open or update the release PR. The normal workflow
+exposes only `version`, `stage`, `urgency`, and `dry_run`; `stage` is
+case-insensitive and is required only when the patch component is zero.
+
+Use `release-notes-cut-advanced.yml` only for an explicit date/baseline,
+contributor override, security entries/advisory lookup, or `force_ready`. It
+delegates to the same release workflow as the normal dispatch, so the release
+logic cannot drift between the two interfaces.
 
 **Branch model** (tag-driven, one M.m branch per minor):
 
@@ -324,7 +325,7 @@ pushing or opening a PR). Stage is `rc1..rcN` or `ga`, case-insensitive.
 | rc1 of M.m.p | `M.m` | Previous release tag (auto-resolved) |
 | rcN (N>1) | `M.m` | The `M.m.p-rc(N-1)` tag on M.m |
 | ga of M.m.p | `M.m` | The last rc tag on M.m |
-| later patches | `M.m` | The previous patch tag (e.g. `M.m.(p-1)`) |
+| later patches (`stage` omitted -> `ga`) | `M.m` | The previous patch tag (e.g. `M.m.(p-1)`) |
 
 Maintainers create the M.m branch and push release tags before dispatching. The
 agent never creates, deletes, or force-pushes a release-line branch; it creates
@@ -332,18 +333,18 @@ or updates only its namespaced prep branch.
 
 ### Common recipes
 
-Only `version`, `stage`, and `urgency` are required. The target branch (`M.m`) is
-derived from the version. The baseline resolves itself for every case except rc1 of
-an `M.0.0` (first release of a new major), so leave `base_ref` empty unless a recipe
-below sets it.
+`version` and `urgency` are always required. `stage` is required for `M.m.0`
+because the same version can mean rc1, a later RC, or GA; it is omitted for a
+patch and inferred as `ga`. The target branch (`M.m`) and baseline resolve from
+the version and repository tags.
 
 | Cutting | `version` | `stage` | `base_ref` | Baseline the notes span |
 |---------|-----------|---------|-----------|--------------------------|
 | First RC of a new minor | `9.2.0` | `rc1` | *(empty)* | Auto: previous release tag (e.g. `9.1.0`) |
 | Next RC on the same line | `9.2.0` | `rc2` | *(empty)* | Auto: the `9.2.0-rc1` tag on the `9.2` branch |
 | GA after the final RC | `9.2.0` | `ga` | *(empty)* | Auto: the last rc tag (e.g. `9.2.0-rc2`) on `9.2` |
-| Patch GA | `9.1.9` | `ga` | *(empty)* | Auto: the previous patch tag (`9.1.8`) |
-| First RC of a new **major** | `9.0.0` | `rc1` | *(set it)* | You must pass the prior major's final release |
+| Patch GA | `9.1.9` | *(empty -> `ga`)* | *(empty)* | Auto: the previous patch tag (`9.1.8`) |
+| First RC of a new **major** | `10.0.0` | `rc1` | *(empty)* | Auto: the highest earlier release tag |
 
 Distinctions that are easy to get wrong:
 
@@ -351,14 +352,13 @@ Distinctions that are easy to get wrong:
   every RC of that release (`rc1`, `rc2`, ...) and its GA, not `9.2.0-rc2`. The
   `-rcN` suffix comes from `stage`, not `version`. The M.m branch is derived from
   the version automatically; maintainers must create it and push tags before dispatch.
-- **`base_ref` stays empty except for rc1 of `M.0.0`.** For every other case, the
-  tool resolves the baseline from tags on the target branch (and shows the resolved
-  range in the PR body, so you can confirm it). Setting `base_ref` by hand on those
-  cases is how a wrong range gets cut; only use it when a cut's PR body flags an
-  unanchored or over-broad baseline.
+- **`base_ref` stays empty for normal cuts.** The tool resolves the baseline from
+  release tags and shows the exact range in the PR body. Use the advanced
+  workflow's override only to correct a range the preview proves is wrong.
 
-When unsure, dispatch with `dry_run` first: it logs the resolved plan and the exact
-`base..head` range (both refs and their SHAs) without pushing or opening a PR.
+Every normal dispatch defaults to `dry_run=true`: it logs the resolved plan and
+the exact `base..head` range (both refs and their SHAs) without pushing or
+opening a PR.
 
 ### How it works
 
@@ -366,12 +366,13 @@ The rendered commit lands on an agent-namespaced `agent/release-cut/...` prep
 branch that opens a PR into the release line, so the line only advances when a
 human merges.
 
-1. **Resolve the plan** (code) - map `(version, stage)` onto the branch model
-   above. The version is canonicalized once (`M.m.p`, no leading zeros / stray
-   whitespace) so `version.h`, the dated heading, the commit title, and the branch
-   names all agree. The requested state must be newer than both `src/version.h`
-   and every existing tag on that release line; an already-released stage or
-   downgrade is rejected before the AI runs.
+1. **Resolve the plan** (code) - normalize an explicit stage, or infer `ga` when
+   `PATCH > 0`; an omitted stage for `M.m.0` is rejected. Map that
+   `(version, stage)` onto the branch model above. The version is canonicalized
+   once (`M.m.p`, no leading zeros / stray whitespace) so `version.h`, the dated
+   heading, the commit title, and the branch names all agree. The requested state
+   must be newer than both `src/version.h` and every existing tag on that release
+   line; an already-released stage or downgrade is rejected before the AI runs.
 2. **Discover the range** (code) - resolve `base..head` and walk it by graph
    reachability, deduplicating to one entry per originating PR number. The M.m
    branch tip is fetched once and pinned to an immutable SHA used by discovery,
@@ -413,21 +414,22 @@ human merges.
 ### Edge-case handling
 
 Malformed dispatch inputs fail fast at argparse (exit 2), before the clone + AI
-run: a non-`M.m.p` or out-of-range version, a bad stage, an urgency outside
-`LOW/MODERATE/HIGH/CRITICAL/SECURITY`, or a non-ISO date. An explicit `--base-ref`
-that resolves to nothing aborts right after the clone with a clear error. A cut
-dispatched against a non-existent M.m branch is refused immediately. A target
-that is equal to or older than the branch's current release state, or at or
-behind an existing tag on that M.m line, is also refused before note generation.
+run: a non-`M.m.p` or out-of-range version, an omitted stage for `M.m.0`, a bad
+explicit stage, an urgency outside `LOW/MODERATE/HIGH/CRITICAL/SECURITY`, or a
+non-ISO date. Repository-state validation runs after the clone: an explicit
+`--base-ref` that resolves to nothing aborts with a clear error, and a cut
+against a non-existent M.m branch is refused immediately. A target that is equal
+to or older than `src/version.h`, or at or behind an existing tag on that M.m
+line, is also refused before note generation.
 
 When the cut raises anything a maintainer should address before merging, the
 release PR opens as a draft (GitHub refuses to merge a draft) so a shipped
 change can never be released while a warning goes unread. The body leads with a
 banner naming the held items, and each has its own section below. Resolve them and
-click **Ready for review** to release, re-dispatch with the flag cleared (a re-cut
-with no flags flips the draft ready on its own), or dispatch `force_ready` to open
-ready anyway (the banner then records that N items were overridden). `--dry-run`
-prints the same hold decision without opening a PR. The signals that hold:
+click **Ready for review** to release, re-dispatch after resolving the signals,
+or use `force_ready` from the advanced workflow to open ready anyway (the banner
+then records that N items were overridden). `--dry-run` prints the same hold
+decision without opening a PR. The signals that hold:
 
 - **RC out of sequence** - a re-cut rc or a skipped rc number.
 - **Unanchored baseline** - rc1 of `M.0.0` with no `--base-ref` fell back to the
@@ -463,11 +465,12 @@ Reuses the same secrets and OIDC role as the other workflows (see
 [DEVELOPMENT.md](DEVELOPMENT.md)). The workflow mints one
 short-lived App token on `valkey-io/valkey` with `contents:write` (push the prep
 branch), `pull-requests:write` (open the release PR),
-and `metadata:read`. When `security_from_advisories` is set, it mints a token
-that additionally holds `repository-advisories:read`; that permission is
-requested only for an advisory cut, so an ordinary cut is never blocked when the
-App installation lacks it. The App installation must hold
-`repository-advisories:read` for an advisory cut to read the advisories.
+and `metadata:read`. The advanced workflow exposes
+`security_from_advisories`; when set, it mints a token that additionally holds
+`repository-advisories:read`. That permission is requested only for an advisory
+cut, so an ordinary cut is never blocked when the App installation lacks it.
+The App installation must hold `repository-advisories:read` for an advisory cut
+to read the advisories.
 
 ## Safety
 

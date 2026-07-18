@@ -1,11 +1,9 @@
 # Cut a Valkey release: generate notes all at once + bump version + carry prior RCs.
 #
-# A maintainer dispatches this with the target version, stage, and urgency. The M.m
-# release branch is derived from the version. The agent generates the release notes
-# in one shot from `release-notes` PRs plus AI-triaged candidates (Claude via
-# Bedrock), renders a dated section, bumps src/version.h, and refreshes the running
-# contributor list. It opens one PR from an agent-namespaced prep branch into M.m;
-# the release line is never force-pushed.
+# The normal dispatch asks only for the release decision: version, stage, urgency,
+# and whether to preview. Patch versions infer stage=ga when stage is left empty.
+# Advanced overrides live in release-notes-cut-advanced.yml, which calls this same
+# workflow through workflow_call so both paths execute identical release code.
 #
 # Branch model: all stages target the existing M.m branch (created by maintainers).
 # Tags determine the discovery range:
@@ -22,8 +20,8 @@ on:
         required: true
         type: string
       stage:
-        description: "Release stage: rc1..rcN or ga (rc1 anchors to the previous release tag; rc2+ finds the prior rc tag on the target branch)"
-        required: true
+        description: "rc1..rcN or ga. Leave empty for a patch version (PATCH > 0), which infers ga"
+        required: false
         type: string
       urgency:
         description: "Upgrade urgency"
@@ -35,50 +33,68 @@ on:
           - HIGH
           - CRITICAL
           - SECURITY
+      dry_run:
+        description: "Preview without pushing or opening a PR. Disable only after reviewing a preview"
+        required: false
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      version:
+        description: "Target MAJOR.MINOR.PATCH"
+        required: true
+        type: string
+      stage:
+        description: "rc1..rcN or ga; empty infers ga only for patch versions"
+        required: false
+        type: string
+        default: ""
+      urgency:
+        description: "LOW, MODERATE, HIGH, CRITICAL, or SECURITY"
+        required: true
+        type: string
       date:
-        description: "Release date YYYY-MM-DD (default: today)"
+        description: "Release date YYYY-MM-DD; empty uses today"
         required: false
         type: string
+        default: ""
       contrib_base_ref:
-        description: "Contributor range start (default: last tag, else root commit)"
+        description: "Contributor range start"
         required: false
         type: string
+        default: ""
       base_ref:
-        description: "Explicit baseline ref overriding tag resolution (branch/tag/SHA).
-          Leave empty for rc2+/ga: tag resolution finds the previous rc/patch tag on
-          the target branch. For rc1 it auto-defaults to the previous release tag. Set
-          this only for rc1 of M.0.0 (no derivable baseline), or to correct an
-          over-broad range."
+        description: "Explicit release-notes baseline"
         required: false
         type: string
+        default: ""
       security_fixes:
-        description: "Manual Security Fixes bullets. One per line, or separate with ';;'
-          since this field is single-line in the UI. E.g. (CVE-2026-1) UAF in unblock
-          flow;;(CVE-2026-2) overflow in parser. Merged with --security-from-advisories;
-          a manual bullet wins on CVE/GHSA collision."
+        description: "Manual security bullets separated by newlines or ;;"
         required: false
         type: string
+        default: ""
       security_from_advisories:
-        description: "Auto-render PUBLISHED GitHub security advisories fixed by this version
-          into Security Fixes (merged with any manual bullets; the PR body disclaims that
-          embargoed/draft CVEs must be added by hand)."
+        description: "Include published GitHub advisories fixed by this version"
         required: false
         type: boolean
         default: false
       force_ready:
-        description: "Open the release PR ready for review even when the cut flags issues.
-          By default a cut that raises any reviewer-facing signal (out-of-sequence rc,
-          unanchored baseline, empty/duplicate notes, triage/unresolved PRs, security
-          mismatches, ...) opens as a draft so the merge is held until a maintainer
-          resolves the flagged items and marks it ready. Set this to open ready anyway."
+        description: "Open ready despite reviewer-facing signals"
         required: false
         type: boolean
         default: false
       dry_run:
-        description: "Compute and log the cut without pushing or opening PRs"
+        description: "Preview without pushing or opening a PR"
         required: false
         type: boolean
-        default: false
+        default: true
+    secrets:
+      VALKEYRIE_BOT_APP_ID:
+        required: true
+      VALKEYRIE_BOT_PRIVATE_KEY:
+        required: true
+      AWS_ROLE_ARN:
+        required: true
 
 permissions: {}
 
@@ -93,16 +109,9 @@ jobs:
       contents: read
       id-token: write
     concurrency:
-      # One cut per version+stage; a re-run replaces the release branch tip.
-      # NOTE: stage is interpolated raw here (GitHub expressions have no lower()),
-      # so a dispatch of "RC1" and one of "rc1" land in different groups. The cut
-      # step lowercases stage, so both still cut the same line, same prep branch,
-      # and same PR; nothing duplicates or corrupts. The only edge is that these
-      # two won't serialize against each other, so if they somehow overlap in time
-      # (same version, case-variant stage, dispatched seconds apart) the second's
-      # force-with-lease push just loses the race and that run fails; re-running it
-      # picks up the winner's PR cleanly. Not worth normalizing for.
-      group: release-cut-${{ inputs.version }}-${{ inputs.stage }}
+      # Serialize every stage of a target version. This also makes an inferred patch
+      # GA, an explicit ga, and case variants share one lock.
+      group: release-cut-${{ inputs.version }}
       cancel-in-progress: false
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -215,12 +224,19 @@ jobs:
             echo "Invalid version (want MAJOR.MINOR.PATCH, no leading zeros): ${RELEASE_NOTES_VERSION}" >&2
             exit 1
           fi
-          # Stage is case-insensitive: lowercase it (RC1/GA/Rc2 -> rc1/ga/rc2)
-          # before the gate, and re-export so Python reads one canonical form.
-          # The Python layer also lowercases, but normalizing here keeps the gate
-          # and every downstream value (version.h, branch names, titles) aligned.
+          # Stage is case-insensitive. An empty stage is valid only for a patch
+          # version, where it unambiguously means GA; a .0 version still requires
+          # an explicit RC or GA decision. Python repeats this check authoritatively.
           stage_lc="${RELEASE_NOTES_STAGE,,}"
-          if [[ ! "${stage_lc}" =~ ^(ga|rc[1-9][0-9]*)$ ]]; then
+          if [[ -z "${stage_lc}" ]]; then
+            patch="${RELEASE_NOTES_VERSION##*.}"
+            if [[ "${patch}" == "0" ]]; then
+              echo "Stage is required for a .0 release (use rc1..rcN or ga)" >&2
+              exit 1
+            fi
+            stage_lc="ga"
+            echo "No stage supplied for patch version ${RELEASE_NOTES_VERSION}; using ga"
+          elif [[ ! "${stage_lc}" =~ ^(ga|rc[1-9][0-9]*)$ ]]; then
             echo "Invalid stage (want ga or rcN): ${RELEASE_NOTES_STAGE}" >&2
             exit 1
           fi
