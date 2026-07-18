@@ -558,10 +558,14 @@ class TestResolveCommitPrs:
         sweep_pull.title = "[backport] Backport sweep for 9.1"
         sweep_pull.head.ref = "agent/backport/sweep/9.1"
         sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "9.1"
+        sweep_pull.merged = True
         sweep_pull_2 = MagicMock(number=51)
         sweep_pull_2.title = "[backport] Backport sweep for 9.1"
         sweep_pull_2.head.ref = "agent/backport/sweep/9.1"
         sweep_pull_2.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull_2.base.ref = "9.1"
+        sweep_pull_2.merged = True
         pulls_by_sha = {"shaS1": [sweep_pull], "shaS2": [sweep_pull_2]}
         repo.get_commit.side_effect = lambda sha: MagicMock(
             get_pulls=MagicMock(return_value=pulls_by_sha[sha])
@@ -570,7 +574,9 @@ class TestResolveCommitPrs:
             ("shaS1", "[backport] Backport sweep for 9.1 (#50)", body),
             ("shaS2", "[backport] Backport sweep for 9.1 (#51)", body),
         ]
-        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(repo, commits)
+        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(
+            repo, commits, release_branch="9.1"
+        )
         assert pr_to_sha == {10: "shaS1"}
         assert collided == []  # applied-tier collapse is trusted, never flagged
 
@@ -679,10 +685,13 @@ class TestResolveCommitPrs:
         sweep_pull.title = "[backport] Backport sweep for 9.1"
         sweep_pull.head.ref = "agent/backport/sweep/9.1"
         sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "9.1"
+        sweep_pull.merged = True
         repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
         pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
             repo,
             [("shaSquash", "[backport] Backport sweep for 9.1 (#50)", body)],
+            release_branch="9.1",
         )
         assert set(pr_to_sha) == {10, 11}
         assert 50 not in pr_to_sha
@@ -698,6 +707,8 @@ class TestResolveCommitPrs:
         sweep_pull.title = "[backport] Backport sweep for 9.1"
         sweep_pull.head.ref = "agent/backport/sweep/9.1"
         sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "9.1"
+        sweep_pull.merged = True
         repo = MagicMock()
         repo.full_name = "valkey-io/valkey"
         repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
@@ -705,6 +716,7 @@ class TestResolveCommitPrs:
         pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
             repo,
             [("sha", "[backport] Backport sweep for 9.1 (#999)", body)],
+            release_branch="9.1",
         )
 
         assert pr_to_sha == {999: "sha"}
@@ -724,6 +736,8 @@ class TestResolveCommitPrs:
         )
         sweep_pull.head.ref = "agent/backport/sweep/9.1"
         sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "9.1"
+        sweep_pull.merged = True
         repo = MagicMock()
         repo.full_name = "valkey-io/valkey"
         repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
@@ -735,6 +749,7 @@ class TestResolveCommitPrs:
                 ("shaRepair", "Fix CI after cherry-pick", ""),
                 ("sha11", "fix b (#11)", ""),
             ],
+            release_branch="9.1",
         )
 
         assert pr_to_sha == {10: "sha10", 11: "sha11"}
@@ -775,6 +790,8 @@ class TestResolveCommitPrs:
         )
         sweep_pull.head.ref = "agent/backport/sweep/9.1"
         sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "9.1"
+        sweep_pull.merged = True
         repo = MagicMock()
         repo.full_name = "valkey-io/valkey"
         repo.get_commit.return_value.get_pulls.return_value = [
@@ -783,10 +800,60 @@ class TestResolveCommitPrs:
         ]
 
         pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
-            repo, [("sha", "commit with no subject ref", "")]
+            repo, [("sha", "commit with no subject ref", "")],
+            release_branch="9.1",
         )
 
         assert pr_to_sha == {42: "sha"}
+        assert unresolved == []
+
+    def test_manifest_api_failure_is_unresolved_not_subject_fallback(self) -> None:
+        body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n| #10 | source |\n"
+        )
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.side_effect = RuntimeError("API unavailable")
+
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo,
+            [("sha", "[backport] Backport sweep for 9.1 (#50)", body)],
+            release_branch="9.1",
+        )
+
+        assert pr_to_sha == {}
+        assert [(item.sha, item.subject) for item in unresolved] == [
+            ("sha", "[backport] Backport sweep for 9.1 (#50)")
+        ]
+
+    @pytest.mark.parametrize(
+        ("merged", "base_ref"),
+        [(False, "9.1"), (True, "8.0")],
+    )
+    def test_associated_manifest_requires_merged_pr_on_release_branch(
+        self, merged, base_ref
+    ) -> None:
+        sweep_pull = MagicMock(number=50)
+        sweep_pull.title = "[backport] Backport sweep for 9.1"
+        sweep_pull.body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n| #10 | source |\n"
+        )
+        sweep_pull.head.ref = "agent/backport/sweep/9.1"
+        sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = base_ref
+        sweep_pull.merged = merged
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
+
+        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+            repo, [("sha", "repair with no source ref", "")],
+            release_branch="9.1",
+        )
+
+        assert pr_to_sha == {50: "sha"}
         assert unresolved == []
 
     def test_cherry_pick_trailer_does_not_override_subject_identity(self) -> None:

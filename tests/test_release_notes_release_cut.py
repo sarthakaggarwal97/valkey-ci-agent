@@ -479,13 +479,40 @@ class TestPromoteAndBump:
         assert rc._compare_ref(repo, "no-such-ref") == "no-such-ref"  # graceful fallback
 
 
+class TestOriginGuard:
+    def test_rejects_non_github_origin(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            rc, "git_output", lambda *a, **k: "/tmp/attacker-controlled-repo"
+        )
+
+        with pytest.raises(RuntimeError, match="origin URL was modified"):
+            rc._assert_origin_url("/repo", "valkey-io/valkey")
+
+    def test_freshness_check_revalidates_before_fetch(self, monkeypatch) -> None:
+        events = []
+        monkeypatch.setattr(
+            rc, "_assert_origin_url",
+            lambda repo_dir, repo_full_name: events.append("origin"),
+        )
+        monkeypatch.setattr(
+            rc, "_fetch_remote_branch_tip",
+            lambda repo_dir, branch, git_env: events.append("fetch") or "a" * 40,
+        )
+
+        rc._assert_remote_branch_unchanged(
+            "/repo", "9.1", "a" * 40, {}, "valkey-io/valkey"
+        )
+
+        assert events == ["origin", "fetch"]
+
+
 class TestCutOrchestration:
     """End-to-end cut() with git + GitHub + pipeline mocked, real fixture worktree."""
 
     def _setup(self, monkeypatch, clone, *, line_exists, bullets=True, triage=(),
                had_prs=True, duplicate_prs=(), uncertain=(), unresolved=(),
                unresolved_backports=(), unresolved_prs=(), ai_included=(),
-               ai_excluded=(), stub_contrib_base=True, writes=None):
+               ai_excluded=(), label_excluded=(), stub_contrib_base=True, writes=None):
         from scripts.release_notes import pipeline as pipeline_mod
         from scripts.release_notes import render as render_mod
         from scripts.release_notes.models import CategorizedBullet
@@ -504,6 +531,7 @@ class TestCutOrchestration:
                 bullet_count=sum(len(v) for v in grouped.values()), skipped=(),
                 triage=tuple(triage), had_prs=had_prs,
                 ai_included=tuple(ai_included), ai_excluded=tuple(ai_excluded),
+                label_excluded=tuple(label_excluded),
                 duplicate_prs=tuple(duplicate_prs), uncertain=tuple(uncertain),
                 unresolved=tuple(unresolved),
                 unresolved_backports=tuple(unresolved_backports),
@@ -528,7 +556,12 @@ class TestCutOrchestration:
         # cut() reads the OID it creates the release line at (git rev-parse
         # origin/<base>^{commit}) so a rollback can lease-guard its delete. The
         # fixture clone has no such ref, so stub it to a deterministic OID.
-        monkeypatch.setattr(rc, "git_output", lambda *a, **k: "a" * 40)
+        def _fake_git_output(repo_dir, *args, **kwargs):
+            if args == ("remote", "get-url", "origin"):
+                return "https://github.com/valkey-io/valkey.git"
+            return "a" * 40
+
+        monkeypatch.setattr(rc, "git_output", _fake_git_output)
         # Capture every _write(path, text) so a test can assert on the notes cut()
         # actually produces, rather than reading a post-cleanup filesystem path
         # that only survives if the worktree-remove was stubbed to a no-op.
@@ -859,12 +892,13 @@ class TestCutOrchestration:
 
     def _cut_body(self, monkeypatch, clone, *, line_exists, cut_kwargs,
                   bullets=True, triage=(), had_prs=True, duplicate_prs=(), uncertain=(),
-                  ai_included=(), ai_excluded=()):
+                  ai_included=(), ai_excluded=(), label_excluded=()):
         """Run cut() with GitHub mocked and return the created PR's body."""
         from unittest.mock import MagicMock
         self._setup(monkeypatch, clone, line_exists=line_exists, bullets=bullets,
                     triage=triage, had_prs=had_prs, duplicate_prs=duplicate_prs,
-                    uncertain=uncertain, ai_included=ai_included, ai_excluded=ai_excluded)
+                    uncertain=uncertain, ai_included=ai_included, ai_excluded=ai_excluded,
+                    label_excluded=label_excluded)
         repo = MagicMock()
         repo.get_pulls.return_value = []
         created = []
@@ -914,8 +948,28 @@ class TestCutOrchestration:
         body = self._cut_body(monkeypatch, clone, line_exists={"9.1": True}, cut_kwargs={},
                               bullets=False, had_prs=True, triage=triage)
         assert "Empty release notes" in body
-        assert "No PR in range was labelled" in body
+        assert "1 candidate PR(s) need human triage" in body
         assert "Needs triage" in body  # the table is still rendered
+
+    def test_all_label_excluded_empty_notes_explained_in_body(self, monkeypatch, clone):
+        from scripts.release_notes.models import TriagedPR
+
+        label_excluded = (
+            TriagedPR(
+                number=9, title="internal refactor", author="dev",
+                url="https://x/9", included=False,
+                reason="labelled `no-release-notes`",
+            ),
+        )
+        body = self._cut_body(
+            monkeypatch, clone, line_exists={"9.1": True}, cut_kwargs={},
+            bullets=False, had_prs=True, label_excluded=label_excluded,
+        )
+
+        assert "1 PR(s) were labelled `no-release-notes`" in body
+        assert "0 candidate PR(s) were judged internal-only" in body
+        assert "Excluded by `no-release-notes`" in body
+        assert "(or add `release-notes`)" not in body
 
     def test_duplicate_pr_warned_in_body(self, monkeypatch, clone):
         body = self._cut_body(monkeypatch, clone, line_exists={"9.1": True}, cut_kwargs={},
@@ -1631,7 +1685,15 @@ class TestDedupAgainstDestination:
         monkeypatch.setattr(rcmod, "resolve_branch_plan", lambda *a, **k: self._GA_PLAN)
         monkeypatch.setattr(rcmod, "_remote_branch_exists", lambda d, b: b == "9.1")
         monkeypatch.setattr(rcmod, "run_git", lambda *a, **k: None)
-        monkeypatch.setattr(rcmod, "git_output", lambda *a, **k: "a" * 40)
+        monkeypatch.setattr(
+            rcmod,
+            "git_output",
+            lambda _repo, *args, **k: (
+                "https://github.com/valkey-io/valkey.git"
+                if args == ("remote", "get-url", "origin")
+                else "a" * 40
+            ),
+        )
         monkeypatch.setattr(rcmod, "_read",
                             lambda p: dest_notes if p.endswith("00-RELEASENOTES")
                             else open(os.path.join(clone, "src", "version.h")).read())

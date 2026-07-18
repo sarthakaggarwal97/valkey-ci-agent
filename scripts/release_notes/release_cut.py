@@ -142,14 +142,15 @@ def _assert_origin_url(repo_dir: str, repo_full_name: str) -> None:
 
     Defense-in-depth against a tampered remote (the primary defense is --safe-mode
     on Claude subprocess invocations, which prevents hooks from modifying the clone).
-    Skips the check for non-GitHub URLs (local test fixtures).
+    The origin must match exactly. This guard runs immediately before every
+    authenticated fetch so a tampered remote cannot receive the GitHub token.
     """
     try:
         actual = git_output(repo_dir, "remote", "get-url", "origin").strip()
-    except subprocess.CalledProcessError:
-        return  # no origin remote (local test fixture)
-    if not actual.startswith("https://github.com/"):
-        return  # local path or non-GitHub remote (test fixture)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "Clone origin URL could not be read; aborting before authenticated fetch."
+        ) from exc
     expected = github_https_url(repo_full_name)
     if actual != expected:
         raise RuntimeError(
@@ -283,9 +284,14 @@ def _fetch_remote_branch_tip(
 
 
 def _assert_remote_branch_unchanged(
-    repo_dir: str, branch: str, expected_sha: str, git_env: dict[str, str]
+    repo_dir: str,
+    branch: str,
+    expected_sha: str,
+    git_env: dict[str, str],
+    repo_full_name: str,
 ) -> None:
     """Raise if *branch* no longer points at the SHA used for generation."""
+    _assert_origin_url(repo_dir, repo_full_name)
     current_sha = _fetch_remote_branch_tip(repo_dir, branch, git_env)
     if current_sha != expected_sha:
         raise RuntimeError(
@@ -664,6 +670,7 @@ def cut(
     regen = pipeline_mod.regenerate_unreleased(
         repo, source_clone_dir, head_ref=notes_head_ref,
         tag_glob=notes_tag_glob, base_ref=notes_base_ref,
+        release_branch=source_ref,
     )
     if regen.included and not regen.bullet_count:
         logger.error(
@@ -774,7 +781,8 @@ def cut(
 
         if dry_run:
             _assert_remote_branch_unchanged(
-                source_clone_dir, plan.target, pinned_head_sha, git_env
+                source_clone_dir, plan.target, pinned_head_sha, git_env,
+                repo_full_name,
             )
             _print_dry_run(plan, version, new_dest_notes, new_version, notes_meta,
                            force_ready=force_ready)
@@ -921,7 +929,7 @@ def _commit_push_release_pr(
         # Check at the last practical point before remote mutation. The local
         # commit is harmless if this fails; no prep branch or PR was changed.
         _assert_remote_branch_unchanged(
-            dest_dir, plan.target, expected_base_sha, git_env
+            dest_dir, plan.target, expected_base_sha, git_env, repo_full_name
         )
     existing = publish_mod.find_existing_pr(
         repo, base_repo=repo_full_name, push_repo=None, branch=prep_branch,
@@ -1207,11 +1215,13 @@ def _empty_notes_section(notes_meta: "_NotesMeta", plan: BranchPlan) -> str:
     if not regen.included:
         return (
             "\n### Empty release notes\n\n"
-            "No PR in range was labelled `release-notes`, and AI triage judged the "
-            f"{len(regen.ai_excluded)} candidate PR(s) internal-only or could not "
-            "decide (see the **AI-triaged** / **Needs triage** tables below), so "
-            "none were included and the dated section has no bullets. Add the "
-            "`release-notes` label to any that should appear and re-cut.\n"
+            "No PR in range was included: "
+            f"{len(regen.label_excluded)} PR(s) were labelled `no-release-notes`, "
+            f"{len(regen.ai_excluded)} candidate PR(s) were judged internal-only, "
+            f"and {len(regen.triage)} candidate PR(s) need human triage. Therefore "
+            "the dated section has no bullets. See the exclusion and triage tables "
+            "below; remove `no-release-notes` or add `release-notes` as appropriate, "
+            "then re-cut.\n"
         )
     return ""
 
@@ -1480,7 +1490,7 @@ def _label_excluded_section(label_excluded: Sequence[Any]) -> str:
     These PRs carried an explicit ``no-release-notes`` opt-out, so they were dropped
     before AI triage and are **absent** from the notes. Surfaced so a maintainer can
     catch a user-facing change that was mislabelled: remove the ``no-release-notes``
-    label (or add ``release-notes``) and re-cut to pull one back in.
+    label and re-cut to pull one back in.
     """
     if not label_excluded:
         return ""
@@ -1491,7 +1501,7 @@ def _label_excluded_section(label_excluded: Sequence[Any]) -> str:
         "These merged PRs carried the `no-release-notes` label, so they were "
         "hard-excluded before triage and are **absent** from the notes. Scan for any "
         "user-facing change that was mislabelled; remove the `no-release-notes` label "
-        "(or add `release-notes`) and re-cut to include it:",
+        "and re-cut to include it:",
         "",
         "| PR | Title | Author |",
         "|----|-------|--------|",

@@ -62,7 +62,7 @@ class RegenResult:
 
 def regenerate_unreleased(
     repo: Any, clone_dir: str, *, head_ref: str, tag_glob: str | None,
-    base_ref: str | None = None,
+    base_ref: str | None = None, release_branch: str | None = None,
 ) -> RegenResult:
     """Discover the range, triage PRs without ``release-notes``, and generate bullets.
 
@@ -70,11 +70,13 @@ def regenerate_unreleased(
     ``no-release-notes`` are hard-excluded (never triaged, never noted); the rest are
     run through AI triage (see :mod:`scripts.release_notes.triage`) and the ones
     judged user-facing join generation. ``base_ref`` overrides tag-based baseline
-    resolution. Returns a RegenResult whose ``grouped`` map the cut caller renders
-    into a dated section, plus the AI include/exclude decisions for the PR body.
+    resolution. ``release_branch`` binds trusted sweep manifests to the active M.m
+    line. Returns a RegenResult whose ``grouped`` map the cut caller renders into a
+    dated section, plus the AI include/exclude decisions for the PR body.
     """
     discovery = discover_mod.discover(
-        repo, clone_dir, head_ref, tag_glob=tag_glob, base_ref=base_ref
+        repo, clone_dir, head_ref, tag_glob=tag_glob, base_ref=base_ref,
+        release_branch=release_branch,
     )
     if not discovery.prs:
         return RegenResult(

@@ -316,8 +316,8 @@ main.py (manual dispatch: version, stage, urgency)
        -> resolve_branch_plan()      verify M.m branch exists, derive target
        -> pipeline.regenerate_unreleased()
             -> discover()  PRs over base..HEAD, deduped by PR number
-            -> classify()  include (release-notes label) vs. every other candidate
-            -> triage()    AI: include/exclude each candidate without that label (+reason)
+            -> classify()  include, AI candidate, or no-release-notes hard exclusion
+            -> triage()    AI: include/exclude each candidate without a gating label (+reason)
             -> generate()  AI: one categorized bullet per included PR
             -> dedup bullets by PR number (surfaces duplicate_prs)
             -> group_bullets()  {category: [canonical bullet line, ...]}
@@ -336,8 +336,8 @@ advances when a human merges.
 Signals fall into two tiers. Malformed inputs, a missing target branch, an
 already-released/backward target, or a target branch that advances during generation are hard
 errors that abort before any PR. Warnings (out-of-sequence stages, unresolved PRs,
-empty notes, security mismatches, AI-triage include/exclude decisions on PRs without `release-notes`
-PRs) hold the PR as a draft with a banner naming them; re-dispatch reconciles draft
+empty notes, security mismatches, and AI-triage include/exclude decisions on PRs
+without `release-notes`) hold the PR as a draft with a banner naming them; re-dispatch reconciles draft
 state automatically. `force_ready` bypasses holds.
 
 ### Entry Points
@@ -347,7 +347,7 @@ state automatically. `force_ready` bypasses holds.
 - `scripts/release_notes/pipeline.py` - discover -> classify -> triage -> generate -> render orchestration
 - `scripts/release_notes/discover.py` - range resolution and PR discovery by graph reachability
 - `scripts/release_notes/backport_refs.py` - recover the original PR of a backported commit (verified sweep Applied table, subject, -x trailer, branch name)
-- `scripts/release_notes/classify.py` - label-based split: release-notes -> include, else -> triage candidate
+- `scripts/release_notes/classify.py` - label split: release-notes -> include, no-release-notes -> exclude, else -> triage
 - `scripts/release_notes/triage.py` - Claude include/exclude for PRs without `release-notes` (no tools; PR data inlined in prompt)
 - `scripts/release_notes/generate.py` - Claude bullet generation (no tools; PR data inlined in prompt)
 - `scripts/release_notes/models.py` - typed dataclasses for the pipeline

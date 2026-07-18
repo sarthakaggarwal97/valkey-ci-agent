@@ -71,6 +71,34 @@ def _capture_cut(patched):
     return captured
 
 
+def test_release_target_validation_runs_after_tag_fetch_before_cut(patched):
+    events = []
+
+    def _run_git(repo_dir, *args, **kwargs):
+        if args[:2] == ("fetch", "--tags"):
+            events.append("fetch-tags")
+        return MagicMock()
+
+    def _validate(*args, **kwargs):
+        events.append("validate-target")
+
+    def _cut(repo, **kwargs):
+        events.append("cut")
+        return 0
+
+    patched.setattr(main_mod, "run_git", _run_git)
+    patched.setattr(main_mod, "_validate_release_target", _validate)
+    patched.setattr(main_mod.cut_mod, "cut", _cut)
+
+    result = main([
+        "--token", "t", "--version", "9.1.1", "--stage", "ga",
+        "--urgency", "LOW",
+    ])
+
+    assert result == 0
+    assert events == ["fetch-tags", "validate-target", "cut"]
+
+
 # --- argument validation ---
 
 def test_missing_token_is_usage_error(monkeypatch):
