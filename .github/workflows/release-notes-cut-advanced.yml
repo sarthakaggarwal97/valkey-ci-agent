@@ -1,0 +1,79 @@
+# Advanced release-cut escape hatches. Normal releases should use
+# release-notes-cut.yml, whose dispatch exposes only version, stage, urgency, and
+# dry-run. This wrapper calls that same workflow so advanced and normal releases
+# cannot drift onto different implementations.
+name: Cut Release Notes (Advanced)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Target MAJOR.MINOR.PATCH"
+        required: true
+        type: string
+      stage:
+        description: "rc1..rcN or ga. Leave empty for a patch version, which infers ga"
+        required: false
+        type: string
+      urgency:
+        description: "Upgrade urgency"
+        required: true
+        type: choice
+        options:
+          - LOW
+          - MODERATE
+          - HIGH
+          - CRITICAL
+          - SECURITY
+      date:
+        description: "Release date YYYY-MM-DD (default: today)"
+        required: false
+        type: string
+      contrib_base_ref:
+        description: "Contributor range start (default: release-notes baseline)"
+        required: false
+        type: string
+      base_ref:
+        description: "Explicit baseline ref overriding automatic tag resolution"
+        required: false
+        type: string
+      security_fixes:
+        description: "Manual Security Fixes bullets separated by newlines or ;;"
+        required: false
+        type: string
+      security_from_advisories:
+        description: "Include published GitHub advisories fixed by this version"
+        required: false
+        type: boolean
+        default: false
+      force_ready:
+        description: "Open ready despite reviewer-facing signals"
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: "Preview without pushing or opening a PR"
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  cut:
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/release-notes-cut.yml
+    with:
+      version: ${{ inputs.version }}
+      stage: ${{ inputs.stage }}
+      urgency: ${{ inputs.urgency }}
+      date: ${{ inputs.date }}
+      contrib_base_ref: ${{ inputs.contrib_base_ref }}
+      base_ref: ${{ inputs.base_ref }}
+      security_fixes: ${{ inputs.security_fixes }}
+      security_from_advisories: ${{ inputs.security_from_advisories }}
+      force_ready: ${{ inputs.force_ready }}
+      dry_run: ${{ inputs.dry_run }}
+    secrets: inherit

@@ -70,6 +70,25 @@ def _default_tag_glob(version: str, stage: str) -> str | None:
     return None
 
 
+def _resolve_stage(version: str, stage: str) -> str:
+    """Normalize an explicit stage, or infer GA for a patch release.
+
+    A patch component greater than zero unambiguously identifies a normal patch
+    release in Valkey's release model, so an omitted stage safely means ``ga``.
+    ``M.m.0`` is shared by every RC and the initial GA; those releases must keep
+    an explicit stage so dispatch cannot guess the maintainer's intent.
+    """
+    if stage.strip():
+        return cut_mod._normalize_stage(stage)
+    _major, _minor, patch = cut_mod._split_version(version)
+    if patch > 0:
+        return "ga"
+    raise ValueError(
+        "--stage is required for a .0 release; pass rc1..rcN or ga "
+        "(patch versions infer ga when stage is omitted)"
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--token", default=_token(), help="GitHub token (App installation or PAT)")
@@ -77,8 +96,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="Target repo, owner/name")
     parser.add_argument("--version", default=os.environ.get("RELEASE_NOTES_VERSION", ""),
                         help="Target version MAJOR.MINOR.PATCH, e.g. 9.1.0")
-    parser.add_argument("--stage", default=os.environ.get("RELEASE_NOTES_STAGE", ""),
-                        help="Release stage: rc1..rcN or ga")
+    parser.add_argument(
+        "--stage",
+        default=os.environ.get("RELEASE_NOTES_STAGE", ""),
+        help="Release stage: rc1..rcN or ga. Optional for patch versions, which infer ga.",
+    )
     parser.add_argument("--urgency", default=os.environ.get("RELEASE_NOTES_URGENCY", ""),
                         help="Upgrade urgency: LOW, MODERATE, HIGH, CRITICAL, SECURITY")
     parser.add_argument("--date", default=os.environ.get("RELEASE_NOTES_DATE", ""),
@@ -87,12 +109,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="Optional --match glob restricting the baseline tag, e.g. '9.1.0-rc*'")
     parser.add_argument("--base-ref", default=os.environ.get("RELEASE_NOTES_BASE_REF", ""),
                         help="Explicit baseline ref (branch/tag/SHA) overriding tag resolution. "
-                             "Leave empty for rc2+/ga: tag resolution finds the previous rc/patch "
-                             "tag on the target branch. For rc1 it auto-defaults to the previous "
-                             "release. Set this only for rc1 of M.0.0 (no derivable baseline), "
-                             "or to correct an over-broad range.")
+                             "Leave empty for normal cuts; tags resolve the previous release, "
+                             "RC, or patch automatically. Set only to correct a range that the "
+                             "dry-run preview proves is wrong.")
     parser.add_argument("--contrib-base-ref", default=os.environ.get("RELEASE_NOTES_CONTRIB_BASE", ""),
-                        help="Contributor range start (default: last tag, else root commit)")
+                        help="Contributor range start (default: notes baseline, then tag/root)")
     parser.add_argument("--security-fix", action="append", default=None, dest="security_fixes",
                         help="A Security Fixes bullet (repeatable)")
     parser.add_argument("--security-from-advisories", action="store_true",
@@ -113,8 +134,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.token:
         parser.error("a GitHub token is required (--token or RELEASE_NOTES_GITHUB_TOKEN/GITHUB_TOKEN)")
-    if not (args.version and args.stage and args.urgency):
-        parser.error("--version, --stage, and --urgency are required")
+    if not (args.version and args.urgency):
+        parser.error("--version and --urgency are required")
 
     # Validate and canonicalize inputs before the expensive clone + AI run.
     try:
@@ -122,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
     try:
-        stage = cut_mod._normalize_stage(args.stage)
+        stage = _resolve_stage(version, args.stage)
     except ValueError as exc:
         parser.error(str(exc))
     urgency = args.urgency.strip().upper()

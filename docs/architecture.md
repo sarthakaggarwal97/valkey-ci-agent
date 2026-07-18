@@ -308,8 +308,8 @@ main.py (daily cron or manual dispatch)
 ## Release Notes Flow
 
 ```text
-main.py (manual dispatch: version, stage, urgency)
-  -> validate + canonicalize inputs (fail fast, exit 2 on malformed)
+main.py (manual dispatch: version, optional stage, urgency)
+  -> validate + canonicalize inputs; infer patch GA only when PATCH > 0
   -> clone valkey (full depth + tags), validate --base-ref
   -> release_cut.cut()
        -> collect_advisory_fixes()   (if --security-from-advisories)
@@ -331,18 +331,24 @@ M.m branch (e.g. `9.1`). Maintainers create the branch and push tags before
 dispatching. Tags determine the discovery range (rc1 uses the previous release tag,
 rc2+ finds the prior rc tag, ga finds the last rc/patch tag). The cut lands on an
 `agent/release-cut/...` prep branch and opens a PR into M.m, so the line only
-advances when a human merges.
+advances when a human merges. The normal dispatch has four inputs and defaults to
+a dry run; patch versions may omit stage and infer `ga`, while `M.m.0` always
+requires an explicit stage. The advanced dispatch is a thin wrapper around the
+same reusable workflow.
 
 Signals fall into two tiers. Malformed inputs, a missing target branch, an
 already-released/backward target, or a target branch that advances during generation are hard
 errors that abort before any PR. Warnings (out-of-sequence stages, unresolved PRs,
 empty notes, security mismatches, and AI-triage include/exclude decisions on PRs
 without `release-notes`) hold the PR as a draft with a banner naming them; re-dispatch reconciles draft
-state automatically. `force_ready` bypasses holds.
+state automatically. `force_ready`, available only on the advanced dispatch,
+bypasses holds.
 
 ### Entry Points
 
 - `scripts/release_notes/main.py` - CLI entry point, input validation, clone
+- `.github/workflows/release-notes-cut.yml` - simple dispatch and shared reusable release job
+- `.github/workflows/release-notes-cut-advanced.yml` - advanced-input wrapper around the shared job
 - `scripts/release_notes/release_cut.py` - branch-plan resolution, notes rendering, PR body + `_hold_reasons` (draft-hold decision)
 - `scripts/release_notes/pipeline.py` - discover -> classify -> triage -> generate -> render orchestration
 - `scripts/release_notes/discover.py` - range resolution and PR discovery by graph reachability
