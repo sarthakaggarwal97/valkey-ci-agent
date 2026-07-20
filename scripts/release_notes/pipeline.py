@@ -25,6 +25,7 @@ from scripts.release_notes.models import (
     CollidedCommit,
     MergedPR,
     ReleaseImpact,
+    RevertedSourcePR,
     TriagedPR,
     UncertainNote,
     UnresolvedBackport,
@@ -62,6 +63,7 @@ class RegenResult:
     unresolved_prs: tuple[UnresolvedPR, ...] = ()  # range commits whose resolved PR number could not be fetched (shipped un-noted)
     unresolved_cherry_picks: tuple[UnresolvedCherryPick, ...] = ()  # notes credited past an unresolvable -x trailer (origin unconfirmed)
     collided: tuple[CollidedCommit, ...] = ()  # distinct commits dropped by a reused subject (#N) (shipped un-noted)
+    reverted: tuple[RevertedSourcePR, ...] = ()  # Revert-titled sweep manifest rows (the range ships the revert, not the change)
 
 
 def regenerate_unreleased(
@@ -91,6 +93,7 @@ def regenerate_unreleased(
             unresolved_prs=discovery.unresolved_prs,
             unresolved_cherry_picks=discovery.unresolved_cherry_picks,
             collided=discovery.collided,
+            reverted=discovery.reverted,
         )
 
     # Labelled PRs are included directly; no-release-notes PRs are hard-excluded
@@ -195,6 +198,7 @@ def regenerate_unreleased(
         unresolved_prs=discovery.unresolved_prs,
         unresolved_cherry_picks=discovery.unresolved_cherry_picks,
         collided=discovery.collided,
+        reverted=discovery.reverted,
     )
 
 

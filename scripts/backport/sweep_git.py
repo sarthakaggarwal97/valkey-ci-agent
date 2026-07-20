@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 from github.GithubException import GithubException
 
-from scripts.backport.main import BOT_EMAIL, BOT_NAME
+from scripts.common.identity import BOT_EMAIL, BOT_NAME
 from scripts.backport.main import _run_git as run_git_default
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,

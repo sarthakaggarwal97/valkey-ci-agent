@@ -118,14 +118,35 @@ _RELEASE_IMPACT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 
+# Paths whose changes ship nothing: a PR touching only these cannot carry a
+# release-impact effect, however alarming its title reads (e.g. a deflake fix
+# for an "assertion" in a test). Matched by top-level directory prefix.
+_NON_SHIPPED_PATH_PREFIXES = ("tests/", ".github/")
+
+
+def _is_test_or_ci_only(pr: MergedPR) -> bool:
+    """True when every changed file of *pr* is under tests/ or .github/.
+
+    False when the file list is empty (lookup failed): unknown must not exempt.
+    """
+    if not pr.changed_files:
+        return False
+    return all(
+        path.startswith(_NON_SHIPPED_PATH_PREFIXES) for path in pr.changed_files
+    )
+
+
 def release_impact_reason(pr: MergedPR) -> str | None:
     """Return a deterministic release-review signal for *pr*, if present.
 
     This is not a severity or security classification. It only identifies PR text
-    that names an impact release notes should not silently omit. Obvious test-only
-    titles are excluded before scanning so a flaky assertion test does not look
-    like a production assertion fix.
+    that names an impact release notes should not silently omit. PRs whose changed
+    files are all under tests/ or .github/ ship nothing and are exempt, so a flaky
+    assertion test does not look like a production assertion fix; the title/body
+    phrase check remains as a fallback when the file list is unavailable.
     """
+    if _is_test_or_ci_only(pr):
+        return None
     title = pr.title or ""
     body = pr.body or ""
     if _TEST_ONLY_TITLE_RE.search(title) and _TEST_ONLY_BODY_RE.search(body):

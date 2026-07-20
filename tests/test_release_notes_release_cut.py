@@ -1895,7 +1895,7 @@ class TestSecurityOnlyCutNotEmpty:
             ai_included=(), guardrail_included=(), ai_excluded=(),
             label_excluded=(), impact_review=(),
             unresolved=(), unresolved_backports=(), unresolved_prs=(),
-            unresolved_cherry_picks=(), collided=(), base_tag="9.0.0",
+            unresolved_cherry_picks=(), collided=(), reverted=(), base_tag="9.0.0",
         )
 
     def _meta(self, *, security_fixes=None, already_credited=(), noted_bullet_count=0,

@@ -26,17 +26,20 @@ from typing import Any
 
 from scripts.ci_fix.models import FixRequest
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import APP_LOGIN, BOT_LOGIN
 
 logger = logging.getLogger(__name__)
 
 # The comment must *begin* with the invocation (after optional leading
 # whitespace) so quoting or mentioning the command mid-discussion does not
-# trigger a fix. Either bot identity may drive it: @valkeyrie-bot (manual
-# dispatch) or @valkeyrie-ops (the App that opens the PRs, used by the comment
-# poller). The hint is only the remainder of the invocation line, not the whole
-# comment, so a multi-line conversational reply is not folded into the hint.
+# trigger a fix. Either bot identity may drive it: the manual-dispatch bot or
+# the App that opens the PRs (used by the comment poller); both come from
+# scripts.common.identity so the accepted mentions track the real accounts. The
+# hint is only the remainder of the invocation line, not the whole comment, so
+# a multi-line conversational reply is not folded into the hint.
 _COMMAND_RE = re.compile(
-    r"^\s*@valkeyrie-(?:bot|ops)\s+fix\s+(?P<url>\S+)(?:[^\S\n]+(?P<hint>[^\n]*))?",
+    r"^\s*@(?:" + "|".join(re.escape(login) for login in (BOT_LOGIN, APP_LOGIN))
+    + r")\s+fix\s+(?P<url>\S+)(?:[^\S\n]+(?P<hint>[^\n]*))?",
     re.IGNORECASE,
 )
 # Actions run URL: .../<owner>/<repo>/actions/runs/<run_id>

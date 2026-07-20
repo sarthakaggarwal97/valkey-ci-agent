@@ -22,6 +22,7 @@ from github.GithubException import GithubException, UnknownObjectException
 from scripts.common.github_client import retry_github_call
 from scripts.common.proc import git_output
 from scripts.release_notes.backport_refs import (
+    applied_revert_source_prs_from_body,
     applied_source_prs_from_body,
     cherry_pick_source_shas,
     is_backport_title,
@@ -36,6 +37,7 @@ from scripts.release_notes.models import (
     CollidedCommit,
     DiscoveryResult,
     MergedPR,
+    RevertedSourcePR,
     UnresolvedBackport,
     UnresolvedCherryPick,
     UnresolvedCommit,
@@ -288,6 +290,7 @@ def resolve_commit_prs(
     list[UnresolvedCommit],
     dict[int, UnresolvedCherryPick],
     list[CollidedCommit],
+    list[RevertedSourcePR],
 ]:
     """Map each commit to its original PR number via a tiered resolution.
 
@@ -296,8 +299,10 @@ def resolve_commit_prs(
     commit->PR API. Associated manifests are applied after the full walk so direct
     commit identities win even when a repair commit appears earlier in the sweep.
     ``release_branch`` binds trusted sweep PRs to the active release line. First
-    commit seen per PR wins.
-    Returns (pr_to_sha, unresolved, cherry_pick_suspects, collided).
+    commit seen per PR wins. Revert-titled manifest rows never enter pr_to_sha:
+    the range ships a revert of those PRs, so they are returned separately as
+    review items instead of being attributed as shipped changes.
+    Returns (pr_to_sha, unresolved, cherry_pick_suspects, collided, reverted).
     """
     pr_to_sha: dict[int, str] = {}
     # Winner subject for collision detection (not stored for Applied-table claims).
@@ -306,11 +311,12 @@ def resolve_commit_prs(
     collided: list[CollidedCommit] = []
     cherry_pick_suspects: dict[int, UnresolvedCherryPick] = {}
     deferred_sweep_manifests: list[tuple[str, set[int]]] = []
+    reverted: dict[int, RevertedSourcePR] = {}
     pulls_cache: dict[str, list[Any]] = {}
     for sha, subject, body in commits:
         unconfirmed_source_shas: tuple[str, ...] = ()
         via_subject = False
-        numbers, manifest_lookup_failed = _trusted_applied_source_prs(
+        numbers, revert_rows, manifest_lookup_failed = _trusted_applied_source_prs(
             repo,
             sha,
             subject,
@@ -318,6 +324,14 @@ def resolve_commit_prs(
             release_branch=release_branch,
             pulls_cache=pulls_cache,
         )
+        for number, title in revert_rows.items():
+            if number not in reverted:
+                logger.warning(
+                    "Sweep manifest row for #%s is a revert (%r); surfacing it for "
+                    "review instead of noting the original change",
+                    number, title[:80],
+                )
+                reverted[number] = RevertedSourcePR(number=number, title=title, sha=sha)
         if manifest_lookup_failed:
             logger.warning(
                 "Commit %s has a sweep manifest whose associated PR could not be "
@@ -367,18 +381,25 @@ def resolve_commit_prs(
             )
             if direct_pull is not None:
                 numbers = {int(direct_pull.number)}
-            elif (
-                manifest := _trusted_associated_sweep_source_prs(
+            else:
+                manifest, assoc_reverts = _trusted_associated_sweep_source_prs(
                     repo, pulls, release_branch=release_branch
                 )
-            ):
-                # A rebase-merged sweep can contain repair commits whose messages
-                # have no source identity. Its trusted PR body accounts for those
-                # commits, but defer the manifest so source-labelled cherry-picks
-                # later in the walk retain their exact diff SHA.
-                deferred_sweep_manifests.append((sha, manifest))
-                continue
-            else:
+                for number, title in assoc_reverts.items():
+                    if number not in reverted:
+                        logger.warning(
+                            "Sweep manifest row for #%s is a revert (%r); surfacing it "
+                            "for review instead of noting the original change",
+                            number, title[:80],
+                        )
+                        reverted[number] = RevertedSourcePR(number=number, title=title, sha=sha)
+                if manifest:
+                    # A rebase-merged sweep can contain repair commits whose messages
+                    # have no source identity. Its trusted PR body accounts for those
+                    # commits, but defer the manifest so source-labelled cherry-picks
+                    # later in the walk retain their exact diff SHA.
+                    deferred_sweep_manifests.append((sha, manifest))
+                    continue
                 numbers = {int(pulls[0].number)} if pulls else set()
         if not numbers:
             logger.warning("Commit %s has no resolvable PR (subject: %s)", sha[:12], subject[:80])
@@ -412,12 +433,16 @@ def resolve_commit_prs(
         for number in sorted(manifest):
             if number not in pr_to_sha:
                 pr_to_sha[number] = sha
+    # A PR that also resolved as shipped (its change re-landed via another range
+    # commit) is not a pure revert: keep the attribution and drop the review item.
+    reverted_out = [r for n, r in sorted(reverted.items()) if n not in pr_to_sha]
     logger.info(
         "Resolved %d unique PR(s) from %d commit(s); %d unresolved, %d collided, "
-        "%d unconfirmed cherry-pick(s)",
-        len(pr_to_sha), len(commits), len(unresolved), len(collided), len(cherry_pick_suspects),
+        "%d unconfirmed cherry-pick(s), %d reverted manifest row(s)",
+        len(pr_to_sha), len(commits), len(unresolved), len(collided),
+        len(cherry_pick_suspects), len(reverted_out),
     )
-    return pr_to_sha, unresolved, cherry_pick_suspects, collided
+    return pr_to_sha, unresolved, cherry_pick_suspects, collided, reverted_out
 
 
 def _trusted_applied_source_prs(
@@ -428,17 +453,20 @@ def _trusted_applied_source_prs(
     *,
     release_branch: str | None,
     pulls_cache: dict[str, list[Any]] | None = None,
-) -> tuple[set[int], bool]:
-    """Return ``(manifest, lookup_failed)`` after verifying the associated PR.
+) -> tuple[set[int], dict[int, str], bool]:
+    """Return ``(manifest, revert_rows, lookup_failed)`` after verifying the associated PR.
 
     A normal squash-merged PR can place arbitrary text in its commit body, so an
     ``## Applied`` heading alone is not proof that the listed PRs were backported.
     A failed associated-PR lookup is distinct from a successful lookup with no
     matching PR: callers must surface the former instead of trusting a lower tier.
+    ``revert_rows`` maps Revert-titled row source PRs to their row title: the range
+    ships a revert of those PRs, so they are review items, not attributions.
     """
     numbers = applied_source_prs_from_body(body)
-    if not numbers:
-        return set(), False
+    reverts = applied_revert_source_prs_from_body(body)
+    if not numbers and not reverts:
+        return set(), {}, False
     if not (
         _SWEEP_MERGE_RE.search(subject)
         or _SWEEP_SQUASH_RE.search(subject)
@@ -447,11 +475,11 @@ def _trusted_applied_source_prs(
             "Ignoring ## Applied table in non-sweep commit %s (%s)",
             sha[:12], subject[:80],
         )
-        return set(), False
+        return set(), {}, False
 
     pulls = _pulls_from_commit_api(repo, sha, cache=pulls_cache)
     if pulls is None:
-        return set(), True
+        return set(), {}, True
     for pull in pulls:
         # The commit subject must identify this exact associated PR. Otherwise a
         # contributor-controlled commit cherry-picked into a real sweep could
@@ -463,13 +491,13 @@ def _trusted_applied_source_prs(
             )
             and int(pull.number) in subject_numbers
         ):
-            return numbers, False
+            return numbers, reverts, False
     logger.warning(
         "Ignoring unverified ## Applied table in commit %s; associated PR does "
         "not use %s in the target repository",
         sha[:12], _SWEEP_BRANCH_PREFIX,
     )
-    return set(), False
+    return set(), {}, False
 
 
 def _is_trusted_sweep_pull(
@@ -498,15 +526,18 @@ def _is_trusted_sweep_pull(
 
 def _trusted_associated_sweep_source_prs(
     repo: Any, pulls: list[Any], *, release_branch: str | None
-) -> set[int]:
-    """Read source PRs from the body of a verified associated sweep PR."""
+) -> tuple[set[int], dict[int, str]]:
+    """Read (source PRs, revert rows) from the body of a verified associated sweep PR."""
     numbers: set[int] = set()
+    reverts: dict[int, str] = {}
     for pull in pulls:
         if _is_trusted_sweep_pull(
             repo, pull, release_branch=release_branch
         ):
-            numbers.update(applied_source_prs_from_body(getattr(pull, "body", "") or ""))
-    return numbers
+            body = getattr(pull, "body", "") or ""
+            numbers.update(applied_source_prs_from_body(body))
+            reverts.update(applied_revert_source_prs_from_body(body))
+    return numbers, reverts
 
 
 def _same_change_subject(a: str, b: str) -> bool:
@@ -753,6 +784,23 @@ def _is_backport_pull(pull: Any) -> bool:
     return source_pr_from_branch(head_ref) is not None
 
 
+def _pull_changed_files(pull: Any) -> tuple[str, ...]:
+    """Return the PR's changed file paths from the files API, or () on failure.
+
+    A miss degrades to an empty tuple: callers that gate on file paths (the
+    test-only guardrail exemption) must treat "unknown" as "not exempt".
+    """
+    try:
+        files = retry_github_call(
+            lambda: list(pull.get_files()), retries=3,
+            description=f"files of PR #{pull.number}",
+        )
+        return tuple(f.filename for f in files if getattr(f, "filename", None))
+    except Exception as exc:  # noqa: BLE001 - a lookup miss must not abort discovery
+        logger.warning("Could not read files of PR #%s: %s", pull.number, exc)
+        return ()
+
+
 def _build_merged_pr(pull: Any, number: int, merge_commit_sha: str) -> MergedPR:
     """Build a MergedPR from pull using the given number and merge_commit_sha.
 
@@ -770,6 +818,7 @@ def _build_merged_pr(pull: Any, number: int, merge_commit_sha: str) -> MergedPR:
         body=_clean_pr_body(pull.body),
         labels=tuple(label.name for label in pull.labels),
         merge_commit_sha=merge_commit_sha,
+        changed_files=_pull_changed_files(pull),
     )
 
 
@@ -886,7 +935,7 @@ def discover(
     else:
         base_tag, _base_sha = resolve_last_tag(repo_dir, head_ref, tag_glob=tag_glob)
     commits = list_range_commits(repo_dir, base_tag, head_ref)
-    pr_to_sha, unresolved, cherry_pick_suspects, collided = resolve_commit_prs(
+    pr_to_sha, unresolved, cherry_pick_suspects, collided, reverted = resolve_commit_prs(
         repo, commits, release_branch=release_branch
     )
     prs, unresolved_backports, unresolved_prs = hydrate_prs(repo, pr_to_sha)
@@ -902,6 +951,7 @@ def discover(
         unresolved_prs=tuple(unresolved_prs),
         unresolved_cherry_picks=tuple(unresolved_cherry_picks),
         collided=tuple(collided),
+        reverted=tuple(reverted),
     )
 
 

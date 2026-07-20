@@ -33,6 +33,7 @@ from scripts.ci_fix.pipeline import run_ci_fix
 from scripts.ci_fix.review import DEFAULT_VERIFY_RUNS
 from scripts.ci_fix.verify.macos import MacosVerifier
 from scripts.common.git_auth import GitAuth
+from scripts.common.identity import BOT_LOGIN
 from scripts.common.github_client import retry_github_call
 from scripts.common.polling import env_int
 from scripts.common.workflow_artifacts import ArtifactClient
@@ -163,7 +164,7 @@ def _request_from_event(args: argparse.Namespace) -> tuple[str, int, str, Parsed
 def _request_from_dispatch(args: argparse.Namespace) -> tuple[str, int, str, ParsedCommand, int] | None:
     if not (args.repo and args.pr and args.commenter):
         return None
-    command = parse_command(f"@valkeyrie-bot fix {args.run_url} {args.hint}".strip())
+    command = parse_command(f"@{BOT_LOGIN} fix {args.run_url} {args.hint}".strip())
     if command is None:
         return None
     return args.repo, args.pr, args.commenter, command, args.comment_id

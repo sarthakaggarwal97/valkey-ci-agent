@@ -9,6 +9,7 @@ system stays untouched; these tests pin the behavior discovery relies on.
 from __future__ import annotations
 
 from scripts.release_notes.backport_refs import (
+    applied_revert_source_prs_from_body,
     applied_source_prs_from_body,
     cherry_pick_source_shas,
     is_backport_title,
@@ -91,9 +92,21 @@ class TestAppliedSourcePrsFromBody:
         body = (
             "## Applied\n\n"
             "| Source PR | Title |\n|---|---|\n"
-            "| #10 | Revert \"X (#3)\" |\n"
+            "| #10 | Fix \"X (#3)\" |\n"
         )
         assert applied_source_prs_from_body(body) == {10}
+
+    def test_revert_titled_row_excluded(self) -> None:
+        # A Revert-titled row means the range ships the revert, not the PR's
+        # change: it is excluded from attribution and surfaced separately.
+        body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n"
+            "| #10 | Revert \"X (#3)\" |\n"
+            "| #11 | feat |\n"
+        )
+        assert applied_source_prs_from_body(body) == {11}
+        assert applied_revert_source_prs_from_body(body) == {10: 'Revert "X (#3)"'}
 
     def test_no_applied_section(self) -> None:
         assert applied_source_prs_from_body("just a normal PR body (#5)") == set()

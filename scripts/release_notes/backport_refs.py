@@ -84,11 +84,19 @@ def _markdown_section(body: str, heading: str) -> str:
     return match.group(1) if match else ""
 
 
-def applied_source_prs_from_body(body: str) -> set[int]:
-    """Extract source PR numbers from the ``## Applied`` markdown table in *body*."""
+# Matches a Revert-titled manifest row: the sweep cherry-picked a revert of the
+# named PR, so the PR's change is absent from (not shipped by) this range.
+_REVERT_TITLE_RE = re.compile(r"^\s*revert\b", re.IGNORECASE)
+
+
+def _applied_rows(body: str) -> list[tuple[int, str]]:
+    """Return ``(source_pr, title)`` for each row of the ``## Applied`` table.
+
+    Title is "" when the table has no Title column.
+    """
     applied = _markdown_section(body, "Applied")
     if not applied:
-        return set()
+        return []
     rows: list[str] = []
     for line in applied.splitlines():
         if line.lstrip().startswith("|"):
@@ -97,7 +105,8 @@ def applied_source_prs_from_body(body: str) -> set[int]:
             rows[-1] += " " + line.strip()  # fold wrapped cell
 
     column: int | None = None
-    numbers: set[int] = set()
+    title_column = 1  # fallback: sweep lists title second
+    parsed: list[tuple[int, str]] = []
     for row in rows:
         cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
         if column is None:
@@ -107,6 +116,10 @@ def applied_source_prs_from_body(body: str) -> set[int]:
                     break
             else:
                 column = 0  # fallback: sweep lists source PR first
+            for index, cell in enumerate(cells):
+                if cell.strip().lower() == "title":
+                    title_column = index
+                    break
             if any(cell.strip().lower() == "source pr" for cell in cells):
                 continue  # skip the header row
         if all(set(cell) <= set("-: ") for cell in cells if cell):
@@ -114,8 +127,33 @@ def applied_source_prs_from_body(body: str) -> set[int]:
         if column < len(cells):
             match = _PR_CELL_RE.match(cells[column])
             if match:
-                numbers.add(int(match.group(1)))
-    return numbers
+                title = cells[title_column] if title_column < len(cells) else ""
+                parsed.append((int(match.group(1)), title))
+    return parsed
+
+
+def applied_source_prs_from_body(body: str) -> set[int]:
+    """Extract source PR numbers from the ``## Applied`` markdown table in *body*.
+
+    Rows whose Title begins with ``Revert`` are excluded: the sweep shipped a
+    revert of that PR, so attributing the original PR's change to this range
+    would note a change the range does not contain. Those rows are available via
+    :func:`applied_revert_source_prs_from_body` for maintainer review.
+    """
+    return {
+        number
+        for number, title in _applied_rows(body)
+        if not _REVERT_TITLE_RE.match(title)
+    }
+
+
+def applied_revert_source_prs_from_body(body: str) -> dict[int, str]:
+    """Return ``{source_pr: title}`` for Revert-titled ``## Applied`` rows."""
+    return {
+        number: title
+        for number, title in _applied_rows(body)
+        if _REVERT_TITLE_RE.match(title)
+    }
 
 
 def summary_source_pr_from_body(body: str) -> int | None:
