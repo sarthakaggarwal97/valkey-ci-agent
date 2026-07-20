@@ -1069,8 +1069,7 @@ class TestCutOrchestration:
             skipped=(41,),
         )
 
-        assert "selected for generation" in body
-        assert "by `release-notes`, AI triage, or the release-safety guardrail" in body
+        assert "Selected for the notes" in body
         assert "carried the `release-notes` label" not in body
 
     def test_uncertain_notes_flagged_in_body(self, monkeypatch, clone):
@@ -1203,7 +1202,7 @@ class TestCutOrchestration:
         assert "Rendered 1 published advisory fix" in created[0]["body"]
         assert "CVE-2026-23479" in created[0]["body"]
         # The disclaimer to add embargoed CVEs is present.
-        assert "embargoed or draft CVEs" in created[0]["body"]
+        assert "embargoed or missed CVEs" in created[0]["body"]
         # cut() cleaned up its throwaway worktree (no leak).
         self._assert_worktree_removed(calls, clone)
 

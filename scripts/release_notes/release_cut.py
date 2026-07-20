@@ -1324,12 +1324,9 @@ def _skipped_section(skipped: Sequence[int]) -> str:
     refs = ", ".join(f"#{n}" for n in sorted(skipped))
     return (
         "\n### ⚠️ Model declined to note these PRs\n\n"
-        "These PRs were selected for generation (by `release-notes`, AI triage, or "
-        "the release-safety guardrail), but the generator produced no bullet, so "
-        f"they are **absent** from the dated section: {refs}. It judged them purely "
-        "internal / not user-facing, or its output was lost. Confirm each omission; "
-        "if one should be noted, correct the labels/input or generator result and "
-        "re-cut.\n"
+        f"Selected for the notes but no bullet was generated, so they are "
+        f"**absent** from the dated section: {refs}. Confirm each omission and "
+        "re-cut if one should be noted.\n"
     )
 
 
@@ -1349,9 +1346,8 @@ def _uncertain_section(uncertain: Sequence[Any]) -> str:
         "",
         "### ⚠️ Notes to double-check",
         "",
-        "The generator was not fully confident about these notes. They are included "
-        "in the dated section above with its best guess; confirm the category and "
-        "wording (or recategorize) before merging:",
+        "The generator flagged these notes low-confidence; confirm category and "
+        "wording before merging:",
         "",
         "| PR | Category | Why flagged |",
         "|----|----------|-------------|",
@@ -1379,10 +1375,9 @@ def _impact_review_section(impacts: Sequence[Any], urgency: str) -> str:
         "",
         heading,
         "",
-        "Code detected terms associated with availability, memory safety, data "
-        "integrity, access control, protocol correctness, compatibility, or "
-        "operator-visible correctness. These signals force review; they are not "
-        "automatic severity or security classifications.",
+        "Code detected release-impact terms (availability, memory safety, data "
+        "integrity, access control, protocol, compatibility) in these PRs; this "
+        "forces review, it is not a severity classification.",
         "",
     ]
     if needs_urgency_review:
@@ -1398,16 +1393,17 @@ def _impact_review_section(impacts: Sequence[Any], urgency: str) -> str:
             "whether any change needs a hand-authored **Security Fixes** entry:",
             "",
         ])
-    lines.extend([
+    table = [
         "| PR | Title | Signal |",
         "|----|-------|--------|",
-    ])
+    ]
     for impact in impacts:
-        lines.append(
+        table.append(
             f"| [#{impact.number}]({impact.url}) | "
             f"{publish_mod.escape_cell(impact.title)} | "
             f"{publish_mod.escape_cell(impact.reason)} |"
         )
+    lines.extend(_details(f"{len(impacts)} PR(s) with impact signals", table))
     lines.append("")
     return "\n".join(lines)
 
@@ -1457,10 +1453,9 @@ def _advisory_section(notes_meta: "_NotesMeta") -> str:
             "version. Check each by hand and add it with `--security-fix` if it applies."
         )
     lines.append(
-        "\nOnly **published** advisories are visible here, and the match is on the "
-        "advisory's author-entered patched-version, so treat this as a starting "
-        "point: confirm the list, and add any embargoed or draft CVEs (and any the "
-        "match missed) by hand with `--security-fix` before merging."
+        "\nOnly **published** advisories are matched (on author-entered patched "
+        "versions), so confirm the list and add any embargoed or missed CVEs with "
+        "`--security-fix` before merging."
     )
     return "\n".join(lines) + "\n"
 
@@ -1538,6 +1533,15 @@ def _ai_triage_reason_cell(pr: Any) -> str:
     return f"⚠️ {reason}" if pr.uncertain else reason
 
 
+def _details(summary: str, table_lines: Sequence[str]) -> list[str]:
+    """Wrap *table_lines* in a collapsed ``<details>`` block.
+
+    The blank line after ``</summary>`` is required for GitHub to render the
+    Markdown table inside the block.
+    """
+    return ["<details>", f"<summary>{summary}</summary>", "", *table_lines, "", "</details>"]
+
+
 def _guardrail_included_section(guardrail_included: Sequence[Any]) -> str:
     """Table of risky PRs code kept after an AI exclusion or missing verdict."""
     if not guardrail_included:
@@ -1546,11 +1550,9 @@ def _guardrail_included_section(guardrail_included: Sequence[Any]) -> str:
         "",
         "### ⚠️ Release-safety guardrail overrode AI triage",
         "",
-        "These PRs lacked `release-notes`, and AI excluded them or returned no "
-        "verdict. Their title/body named a release-impact signal, so deterministic "
-        "code forced them into generation instead of allowing a potentially serious "
-        "fix to disappear. Confirm each bullet, category, urgency, and security "
-        "treatment:",
+        "AI excluded these PRs (or gave no verdict) but their text names a "
+        "release-impact signal, so code forced them into the notes; confirm each "
+        "bullet, category, urgency, and security treatment:",
         "",
         "| PR | Title | Guardrail reason |",
         "|----|-------|------------------|",
@@ -1574,23 +1576,25 @@ def _ai_included_section(ai_included: Sequence[Any]) -> str:
     """
     if not ai_included:
         return ""
-    lines = [
-        "",
-        "### AI-triaged into the notes",
-        "",
-        "These merged PRs were **not** labelled `release-notes`, but AI triage "
-        "judged them user-facing and noted them in the dated section above. Confirm "
-        "each belongs; if one does not, remove its note before merging:",
-        "",
+    table = [
         "| PR | Title | Why included |",
         "|----|-------|--------------|",
     ]
     for pr in ai_included:
-        lines.append(
+        table.append(
             f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
             f"{_ai_triage_reason_cell(pr)} |"
         )
-    lines.append("")
+    lines = [
+        "",
+        "### AI-triaged into the notes",
+        "",
+        "These PRs had no `release-notes` label but were noted in the dated "
+        "section; remove any note that does not belong before merging.",
+        "",
+        *_details(f"{len(ai_included)} PR(s) triaged in", table),
+        "",
+    ]
     return "\n".join(lines)
 
 
@@ -1604,24 +1608,25 @@ def _ai_excluded_section(ai_excluded: Sequence[Any]) -> str:
     """
     if not ai_excluded:
         return ""
-    lines = [
-        "",
-        "### AI-triaged out of the notes",
-        "",
-        "These merged PRs were not labelled `release-notes`, and AI triage judged "
-        "them internal-only, so they are **absent** from the notes. Scan for any "
-        "user-facing change the model wrongly dropped; label it `release-notes` and "
-        "re-cut to include it:",
-        "",
+    table = [
         "| PR | Title | Why excluded |",
         "|----|-------|--------------|",
     ]
     for pr in ai_excluded:
-        lines.append(
+        table.append(
             f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
             f"{_ai_triage_reason_cell(pr)} |"
         )
-    lines.append("")
+    lines = [
+        "",
+        "### AI-triaged out of the notes",
+        "",
+        "These PRs are **absent** from the notes; label a wrongly-dropped one "
+        "`release-notes` and re-cut to include it.",
+        "",
+        *_details(f"{len(ai_excluded)} PR(s) triaged out", table),
+        "",
+    ]
     return "\n".join(lines)
 
 
@@ -1635,23 +1640,24 @@ def _label_excluded_section(label_excluded: Sequence[Any]) -> str:
     """
     if not label_excluded:
         return ""
-    lines = [
-        "",
-        "### Excluded by `no-release-notes`",
-        "",
-        "These merged PRs carried the `no-release-notes` label, so they were "
-        "hard-excluded before triage and are **absent** from the notes. Scan for any "
-        "user-facing change that was mislabelled; remove the `no-release-notes` label "
-        "and re-cut to include it:",
-        "",
+    table = [
         "| PR | Title |",
         "|----|-------|",
     ]
     for pr in label_excluded:
-        lines.append(
+        table.append(
             f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} |"
         )
-    lines.append("")
+    lines = [
+        "",
+        "### Excluded by `no-release-notes`",
+        "",
+        "These PRs opted out via the `no-release-notes` label and are **absent** "
+        "from the notes; remove the label and re-cut if one was mislabelled.",
+        "",
+        *_details(f"{len(label_excluded)} PR(s) hard-excluded", table),
+        "",
+    ]
     return "\n".join(lines)
 
 
@@ -1663,10 +1669,8 @@ def _triage_section(triage: Sequence[Any]) -> str:
         "",
         "### Needs triage",
         "",
-        "These merged PRs were not labelled `release-notes`, and AI triage returned "
-        "no verdict for them (a parse failure or a dropped entry), so they were "
-        "**not** included. A maintainer should decide each: label it `release-notes` "
-        "and re-cut to include it, or leave it out.",
+        "AI triage returned no verdict for these PRs, so they are **not** in the "
+        "notes; label one `release-notes` and re-cut to include it.",
         "",
         "| PR | Title |",
         "|----|-------|",
@@ -1695,10 +1699,8 @@ def _unresolved_section(unresolved: Sequence[Any]) -> str:
         "",
         "### ⚠️ Commits with no resolvable PR",
         "",
-        "These commits are in range but could not be tied to a PR (rewritten "
-        "cherry-pick, unusual merge, or pre-dating PR history), so they are "
-        "**absent** from the notes and the triage table. Confirm whether any is "
-        "user-facing and note it by hand if so:",
+        "These range commits could not be tied to a PR and are **absent** from the "
+        "notes; note any user-facing change by hand:",
         "",
         "| Commit | Subject |",
         "|--------|---------|",
@@ -1729,10 +1731,8 @@ def _unresolved_prs_section(unresolved_prs: Sequence[Any]) -> str:
         "",
         "### ⚠️ Commits whose PR could not be fetched",
         "",
-        "These commits are in range and name a PR, but that PR could not be fetched "
-        "(a moved or deleted PR, an issue number, or a `(#N)` from another repo), so "
-        "they are **absent** from the notes and the triage table. Confirm whether "
-        "any is user-facing and note it by hand if so:",
+        "These range commits name a PR that could not be fetched and are **absent** "
+        "from the notes; note any user-facing change by hand:",
         "",
         "| Commit | PR referenced |",
         "|--------|---------------|",
@@ -1762,9 +1762,7 @@ def _unresolved_backports_section(unresolved_backports: Sequence[Any]) -> str:
         "",
         "### ⚠️ Notes credited to a backport (original PR not recovered)",
         "",
-        "These notes are credited to a **backport** PR because the original PR "
-        "that introduced the change could not be recovered. The `(#N)` and author "
-        "shown for them are the backport's, not the change's author. Confirm the "
+        "These notes credit the backport PR, not the change's author; confirm the "
         "original PR and correct the credit before merging:",
         "",
         "| Backport PR | Title |",
@@ -1799,12 +1797,9 @@ def _unresolved_cherry_picks_section(unresolved_cherry_picks: Sequence[Any]) -> 
         "",
         "### ⚠️ Notes with an unconfirmed cherry-pick origin",
         "",
-        "These notes come from commits with a `(cherry picked from commit ...)` "
-        "trailer whose source commit is not in this repo (a hand-applied pick from "
-        "a fork, or history predating PR association), so the credit could not be "
-        "confirmed against the original. The credited `(#N)` may be the PR that "
-        "landed the change on this line rather than the change's author. Confirm the "
-        "origin and correct the credit if needed before merging:",
+        "These notes carry a `-x` trailer whose source commit is unreachable, so "
+        "the credited `(#N)` may not be the change's author; confirm the origin "
+        "and correct the credit if needed:",
         "",
         "| Credited PR | Range commit | Subject | Source commit(s) |",
         "|-------------|--------------|---------|------------------|",
@@ -1836,11 +1831,9 @@ def _collided_section(collided: Sequence[Any]) -> str:
         "",
         "### \u26a0\ufe0f Commits dropped by a reused PR number",
         "",
-        "Two different commits resolved to the same `(#N)` (a backport reused a "
-        "source PR's number on an unrelated commit), so the change below was "
-        "**dropped** in favor of the commit that claimed the number first, and is "
-        "**absent** from the notes. Confirm whether it is a separate user-facing "
-        "change and note it by hand if so:",
+        "Two commits resolved to the same `(#N)`; the one below was **dropped** and "
+        "is absent from the notes, so note it by hand if it is a separate "
+        "user-facing change:",
         "",
         "| Dropped commit | Subject | Reused # | Kept commit |",
         "|----------------|---------|----------|-------------|",
@@ -1873,11 +1866,9 @@ def _reverted_section(reverted: Sequence[Any]) -> str:
         "",
         "### \u26a0\ufe0f Reverted sweep manifest rows",
         "",
-        "These sweep `## Applied` rows are titled as reverts, so the range ships "
-        "the **revert** of each PR, not its change, and no bullet was generated. "
-        "Confirm each: if the reverted change shipped in a previous release, the "
-        "revert itself may need a hand-authored note; if a re-land in this range "
-        "already covers it, no action is needed:",
+        "These sweep rows are reverts, so the range ships the **revert**, not the "
+        "PR's change, and no bullet was generated; confirm whether the revert "
+        "needs a hand-authored note or a re-land in range already covers it:",
         "",
         "| Source PR | Manifest row title | Sweep commit |",
         "|-----------|--------------------|--------------|",
