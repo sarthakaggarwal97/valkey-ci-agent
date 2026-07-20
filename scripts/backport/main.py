@@ -37,12 +37,10 @@ from scripts.backport.validation import (
 )
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import BOT_EMAIL, BOT_NAME
 from scripts.common.job_summary import emit_job_summary
 
 logger = logging.getLogger(__name__)
-
-BOT_NAME = "valkeyrie-bot[bot]"
-BOT_EMAIL = "3692572+valkeyrie-bot[bot]@users.noreply.github.com"
 
 # Login that authors the AI-diff comments. Defaults to the bot, but the comment
 # author follows the token identity, so a fork run using a personal PAT sets

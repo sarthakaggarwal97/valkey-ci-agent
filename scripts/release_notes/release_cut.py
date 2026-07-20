@@ -624,8 +624,9 @@ def cut(
     :func:`_hold_reasons`) opens its release PR as a draft, which GitHub
     refuses to merge, holding the release line until a maintainer resolves what was
     flagged and marks it ready. Set *force_ready* to open the PR ready for review
-    regardless (the banner records that the flags were overridden). A clean cut
-    always opens ready.
+    regardless (the banner records that the flags were overridden), except for
+    security signals, which are human-owned and hold the PR as a draft even under
+    *force_ready* (see :func:`_should_hold`). A clean cut always opens ready.
     """
     # Canonicalize once at the boundary so version.h, the dated heading, the commit
     # title, the prep-branch ref, and the release line all carry the same string.
@@ -814,9 +815,14 @@ def _print_dry_run(
     print(f"target branch: {plan.target}  base: {plan.base_ref}")
     # Preview the hold decision the real cut would make: a draft PR (held) when any
     # reviewer-facing signal fired and force_ready was not set, else opened ready.
+    # Security signals hold even under force_ready (see _should_hold).
     hold_reasons = _hold_reasons(plan, notes_meta)
+    security_holds = _security_hold_reasons(hold_reasons)
     if hold_reasons and not force_ready:
         print(f"PR would open: DRAFT (held) - {len(hold_reasons)} item(s): {'; '.join(hold_reasons)}")
+    elif security_holds:
+        print(f"PR would open: DRAFT (held) - force_ready cannot override "
+              f"{len(security_holds)} security item(s): {'; '.join(security_holds)}")
     elif hold_reasons:
         print(f"PR would open: ready (force_ready overrides {len(hold_reasons)} flagged item(s))")
     else:
@@ -896,6 +902,9 @@ def _print_dry_run(
     if regen.collided:
         print("⚠️  distinct commits dropped by a reused PR number: "
               f"{[(c.sha[:12], c.number) for c in regen.collided]}")
+    if regen.reverted:
+        print("⚠️  reverted sweep manifest rows (no bullet generated): "
+              f"{[r.number for r in regen.reverted]}")
     print(f"\n===== {NOTES_FILE} (release branch, dry run) =====\n{dest_notes}")
     print(f"\n===== {VERSION_FILE} (dry run) =====\n{version_h}")
 
@@ -932,8 +941,9 @@ def _commit_push_release_pr(
     # force-pushing. This prevents a window where the PR has new content but
     # retains its old body and ready-for-merge state (which could auto-merge if
     # branch protection allows it). The PR is marked ready only after BOTH the
-    # branch push and the body update succeed.
-    hold = bool(_hold_reasons(plan, notes_meta)) and not force_ready
+    # branch push and the body update succeed. force_ready cannot override a
+    # security-signal hold (see _should_hold).
+    hold = _should_hold(_hold_reasons(plan, notes_meta), force_ready)
     title = commit_title(version, plan.stage)
     body = _build_pr_body(plan, version, notes_meta, force_ready=force_ready)
     if expected_base_sha:
@@ -1054,7 +1064,39 @@ def _hold_reasons(plan: BranchPlan, notes_meta: "_NotesMeta") -> list[str]:
         reasons.append("notes with an unconfirmed cherry-pick origin")
     if regen.collided:
         reasons.append("a distinct commit was dropped by a reused PR number")
+    if regen.reverted:
+        reasons.append("a sweep manifest row is a revert (confirm coverage)")
     return reasons
+
+
+# Hold reasons that name a security signal. Security classification is
+# human-owned: these survive ``force_ready``, so no dispatch input can open a
+# cut ready while a security question is unresolved. Labels must match
+# _hold_reasons verbatim.
+_SECURITY_HOLD_REASONS = frozenset({
+    "release impact may require higher urgency or security treatment",
+    "security advisories could not be read",
+    "some security advisories could not be read",
+    "SECURITY urgency with no security-fix entries",
+})
+
+
+def _security_hold_reasons(reasons: Sequence[str]) -> list[str]:
+    """The subset of *reasons* that ``force_ready`` must not override."""
+    return [r for r in reasons if r in _SECURITY_HOLD_REASONS]
+
+
+def _should_hold(reasons: Sequence[str], force_ready: bool) -> bool:
+    """Whether the release PR opens as a draft.
+
+    Any reason holds by default; ``force_ready`` overrides all of them except
+    security signals, which only resolving the signal (and re-cutting) clears.
+    """
+    if not reasons:
+        return False
+    if not force_ready:
+        return True
+    return bool(_security_hold_reasons(reasons))
 
 
 def _hold_banner(reasons: Sequence[str], force_ready: bool) -> str:
@@ -1063,7 +1105,9 @@ def _hold_banner(reasons: Sequence[str], force_ready: bool) -> str:
     Returns "" on a clean cut (no reasons). When reasons exist, the banner tells a
     reviewer either that the PR was held as a draft (the default) or that it was
     opened ready despite the flags because the cut was dispatched with
-    ``force_ready``. Either way it lists the flagged items so the decision is
+    ``force_ready``. Security signals are exempt from ``force_ready`` (see
+    :func:`_should_hold`): when one fired, the banner records that the PR stayed a
+    draft and why. Either way it lists the flagged items so the decision is
     visible without scrolling the sections below.
     """
     if not reasons:
@@ -1071,6 +1115,16 @@ def _hold_banner(reasons: Sequence[str], force_ready: bool) -> str:
     items = "; ".join(reasons)
     n = len(reasons)
     plural = "item" if n == 1 else "items"
+    security_holds = _security_hold_reasons(reasons)
+    if force_ready and security_holds:
+        sec_items = "; ".join(security_holds)
+        return (
+            "> [!WARNING]\n"
+            f"> **Held as a draft despite `force_ready`.** Security classification is "
+            f"human-owned, so `force_ready` cannot override: {sec_items}. Resolve the "
+            f"security {'item' if len(security_holds) == 1 else 'items'} and re-cut to "
+            f"open ready. All {n} flagged {plural}: {items}.\n\n"
+        )
     if force_ready:
         return (
             "> [!NOTE]\n"
@@ -1130,6 +1184,7 @@ def _build_pr_body(
         + _unresolved_backports_section(regen.unresolved_backports)
         + _unresolved_cherry_picks_section(regen.unresolved_cherry_picks)
         + _collided_section(regen.collided)
+        + _reverted_section(regen.reverted)
         + "\n*Generated by valkey-ci-agent. Review before merging into the release line.*"
     )
 
@@ -1279,12 +1334,9 @@ def _skipped_section(skipped: Sequence[int]) -> str:
     refs = ", ".join(f"#{n}" for n in sorted(skipped))
     return (
         "\n### ⚠️ Model declined to note these PRs\n\n"
-        "These PRs were selected for generation (by `release-notes`, AI triage, or "
-        "the release-safety guardrail), but the generator produced no bullet, so "
-        f"they are **absent** from the dated section: {refs}. It judged them purely "
-        "internal / not user-facing, or its output was lost. Confirm each omission; "
-        "if one should be noted, correct the labels/input or generator result and "
-        "re-cut.\n"
+        f"Selected for the notes but no bullet was generated, so they are "
+        f"**absent** from the dated section: {refs}. Confirm each omission and "
+        "re-cut if one should be noted.\n"
     )
 
 
@@ -1304,9 +1356,8 @@ def _uncertain_section(uncertain: Sequence[Any]) -> str:
         "",
         "### ⚠️ Notes to double-check",
         "",
-        "The generator was not fully confident about these notes. They are included "
-        "in the dated section above with its best guess; confirm the category and "
-        "wording (or recategorize) before merging:",
+        "The generator flagged these notes low-confidence; confirm category and "
+        "wording before merging:",
         "",
         "| PR | Category | Why flagged |",
         "|----|----------|-------------|",
@@ -1334,10 +1385,9 @@ def _impact_review_section(impacts: Sequence[Any], urgency: str) -> str:
         "",
         heading,
         "",
-        "Code detected terms associated with availability, memory safety, data "
-        "integrity, access control, protocol correctness, compatibility, or "
-        "operator-visible correctness. These signals force review; they are not "
-        "automatic severity or security classifications.",
+        "Code detected release-impact terms (availability, memory safety, data "
+        "integrity, access control, protocol, compatibility) in these PRs; this "
+        "forces review, it is not a severity classification.",
         "",
     ]
     if needs_urgency_review:
@@ -1353,16 +1403,17 @@ def _impact_review_section(impacts: Sequence[Any], urgency: str) -> str:
             "whether any change needs a hand-authored **Security Fixes** entry:",
             "",
         ])
-    lines.extend([
+    table = [
         "| PR | Title | Signal |",
         "|----|-------|--------|",
-    ])
+    ]
     for impact in impacts:
-        lines.append(
+        table.append(
             f"| [#{impact.number}]({impact.url}) | "
             f"{publish_mod.escape_cell(impact.title)} | "
             f"{publish_mod.escape_cell(impact.reason)} |"
         )
+    lines.extend(_details(f"{len(impacts)} PR(s) with impact signals", table))
     lines.append("")
     return "\n".join(lines)
 
@@ -1412,10 +1463,9 @@ def _advisory_section(notes_meta: "_NotesMeta") -> str:
             "version. Check each by hand and add it with `--security-fix` if it applies."
         )
     lines.append(
-        "\nOnly **published** advisories are visible here, and the match is on the "
-        "advisory's author-entered patched-version, so treat this as a starting "
-        "point: confirm the list, and add any embargoed or draft CVEs (and any the "
-        "match missed) by hand with `--security-fix` before merging."
+        "\nOnly **published** advisories are matched (on author-entered patched "
+        "versions), so confirm the list and add any embargoed or missed CVEs with "
+        "`--security-fix` before merging."
     )
     return "\n".join(lines) + "\n"
 
@@ -1493,6 +1543,15 @@ def _ai_triage_reason_cell(pr: Any) -> str:
     return f"⚠️ {reason}" if pr.uncertain else reason
 
 
+def _details(summary: str, table_lines: Sequence[str]) -> list[str]:
+    """Wrap *table_lines* in a collapsed ``<details>`` block.
+
+    The blank line after ``</summary>`` is required for GitHub to render the
+    Markdown table inside the block.
+    """
+    return ["<details>", f"<summary>{summary}</summary>", "", *table_lines, "", "</details>"]
+
+
 def _guardrail_included_section(guardrail_included: Sequence[Any]) -> str:
     """Table of risky PRs code kept after an AI exclusion or missing verdict."""
     if not guardrail_included:
@@ -1501,20 +1560,17 @@ def _guardrail_included_section(guardrail_included: Sequence[Any]) -> str:
         "",
         "### ⚠️ Release-safety guardrail overrode AI triage",
         "",
-        "These PRs lacked `release-notes`, and AI excluded them or returned no "
-        "verdict. Their title/body named a release-impact signal, so deterministic "
-        "code forced them into generation instead of allowing a potentially serious "
-        "fix to disappear. Confirm each bullet, category, urgency, and security "
-        "treatment:",
+        "AI excluded these PRs (or gave no verdict) but their text names a "
+        "release-impact signal, so code forced them into the notes; confirm each "
+        "bullet, category, urgency, and security treatment:",
         "",
-        "| PR | Title | Author | Guardrail reason |",
-        "|----|-------|--------|------------------|",
+        "| PR | Title | Guardrail reason |",
+        "|----|-------|------------------|",
     ]
     for pr in guardrail_included:
-        author = f"@{pr.author}" if pr.author else "(unknown)"
         lines.append(
             f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
-            f"{author} | {_ai_triage_reason_cell(pr)} |"
+            f"{_ai_triage_reason_cell(pr)} |"
         )
     lines.append("")
     return "\n".join(lines)
@@ -1530,24 +1586,25 @@ def _ai_included_section(ai_included: Sequence[Any]) -> str:
     """
     if not ai_included:
         return ""
+    table = [
+        "| PR | Title | Why included |",
+        "|----|-------|--------------|",
+    ]
+    for pr in ai_included:
+        table.append(
+            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
+            f"{_ai_triage_reason_cell(pr)} |"
+        )
     lines = [
         "",
         "### AI-triaged into the notes",
         "",
-        "These merged PRs were **not** labelled `release-notes`, but AI triage "
-        "judged them user-facing and noted them in the dated section above. Confirm "
-        "each belongs; if one does not, remove its note before merging:",
+        "These PRs had no `release-notes` label but were noted in the dated "
+        "section; remove any note that does not belong before merging.",
         "",
-        "| PR | Title | Author | Why included |",
-        "|----|-------|--------|--------------|",
+        *_details(f"{len(ai_included)} PR(s) triaged in", table),
+        "",
     ]
-    for pr in ai_included:
-        author = f"@{pr.author}" if pr.author else "(unknown)"
-        lines.append(
-            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
-            f"{author} | {_ai_triage_reason_cell(pr)} |"
-        )
-    lines.append("")
     return "\n".join(lines)
 
 
@@ -1561,25 +1618,25 @@ def _ai_excluded_section(ai_excluded: Sequence[Any]) -> str:
     """
     if not ai_excluded:
         return ""
+    table = [
+        "| PR | Title | Why excluded |",
+        "|----|-------|--------------|",
+    ]
+    for pr in ai_excluded:
+        table.append(
+            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
+            f"{_ai_triage_reason_cell(pr)} |"
+        )
     lines = [
         "",
         "### AI-triaged out of the notes",
         "",
-        "These merged PRs were not labelled `release-notes`, and AI triage judged "
-        "them internal-only, so they are **absent** from the notes. Scan for any "
-        "user-facing change the model wrongly dropped; label it `release-notes` and "
-        "re-cut to include it:",
+        "These PRs are **absent** from the notes; label a wrongly-dropped one "
+        "`release-notes` and re-cut to include it.",
         "",
-        "| PR | Title | Author | Why excluded |",
-        "|----|-------|--------|--------------|",
+        *_details(f"{len(ai_excluded)} PR(s) triaged out", table),
+        "",
     ]
-    for pr in ai_excluded:
-        author = f"@{pr.author}" if pr.author else "(unknown)"
-        lines.append(
-            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
-            f"{author} | {_ai_triage_reason_cell(pr)} |"
-        )
-    lines.append("")
     return "\n".join(lines)
 
 
@@ -1593,24 +1650,24 @@ def _label_excluded_section(label_excluded: Sequence[Any]) -> str:
     """
     if not label_excluded:
         return ""
+    table = [
+        "| PR | Title |",
+        "|----|-------|",
+    ]
+    for pr in label_excluded:
+        table.append(
+            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} |"
+        )
     lines = [
         "",
         "### Excluded by `no-release-notes`",
         "",
-        "These merged PRs carried the `no-release-notes` label, so they were "
-        "hard-excluded before triage and are **absent** from the notes. Scan for any "
-        "user-facing change that was mislabelled; remove the `no-release-notes` label "
-        "and re-cut to include it:",
+        "These PRs opted out via the `no-release-notes` label and are **absent** "
+        "from the notes; remove the label and re-cut if one was mislabelled.",
         "",
-        "| PR | Title | Author |",
-        "|----|-------|--------|",
+        *_details(f"{len(label_excluded)} PR(s) hard-excluded", table),
+        "",
     ]
-    for pr in label_excluded:
-        author = f"@{pr.author}" if pr.author else "(unknown)"
-        lines.append(
-            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | {author} |"
-        )
-    lines.append("")
     return "\n".join(lines)
 
 
@@ -1622,17 +1679,14 @@ def _triage_section(triage: Sequence[Any]) -> str:
         "",
         "### Needs triage",
         "",
-        "These merged PRs were not labelled `release-notes`, and AI triage returned "
-        "no verdict for them (a parse failure or a dropped entry), so they were "
-        "**not** included. A maintainer should decide each: label it `release-notes` "
-        "and re-cut to include it, or leave it out.",
+        "AI triage returned no verdict for these PRs, so they are **not** in the "
+        "notes; label one `release-notes` and re-cut to include it.",
         "",
-        "| PR | Title | Author |",
-        "|----|-------|--------|",
+        "| PR | Title |",
+        "|----|-------|",
     ]
     for pr in triage:
-        author = f"@{pr.author}" if pr.author else "(unknown)"
-        lines.append(f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | {author} |")
+        lines.append(f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} |")
     lines.append("")
     return "\n".join(lines)
 
@@ -1655,10 +1709,8 @@ def _unresolved_section(unresolved: Sequence[Any]) -> str:
         "",
         "### ⚠️ Commits with no resolvable PR",
         "",
-        "These commits are in range but could not be tied to a PR (rewritten "
-        "cherry-pick, unusual merge, or pre-dating PR history), so they are "
-        "**absent** from the notes and the triage table. Confirm whether any is "
-        "user-facing and note it by hand if so:",
+        "These range commits could not be tied to a PR and are **absent** from the "
+        "notes; note any user-facing change by hand:",
         "",
         "| Commit | Subject |",
         "|--------|---------|",
@@ -1689,10 +1741,8 @@ def _unresolved_prs_section(unresolved_prs: Sequence[Any]) -> str:
         "",
         "### ⚠️ Commits whose PR could not be fetched",
         "",
-        "These commits are in range and name a PR, but that PR could not be fetched "
-        "(a moved or deleted PR, an issue number, or a `(#N)` from another repo), so "
-        "they are **absent** from the notes and the triage table. Confirm whether "
-        "any is user-facing and note it by hand if so:",
+        "These range commits name a PR that could not be fetched and are **absent** "
+        "from the notes; note any user-facing change by hand:",
         "",
         "| Commit | PR referenced |",
         "|--------|---------------|",
@@ -1722,9 +1772,7 @@ def _unresolved_backports_section(unresolved_backports: Sequence[Any]) -> str:
         "",
         "### ⚠️ Notes credited to a backport (original PR not recovered)",
         "",
-        "These notes are credited to a **backport** PR because the original PR "
-        "that introduced the change could not be recovered. The `(#N)` and author "
-        "shown for them are the backport's, not the change's author. Confirm the "
+        "These notes credit the backport PR, not the change's author; confirm the "
         "original PR and correct the credit before merging:",
         "",
         "| Backport PR | Title |",
@@ -1759,12 +1807,9 @@ def _unresolved_cherry_picks_section(unresolved_cherry_picks: Sequence[Any]) -> 
         "",
         "### ⚠️ Notes with an unconfirmed cherry-pick origin",
         "",
-        "These notes come from commits with a `(cherry picked from commit ...)` "
-        "trailer whose source commit is not in this repo (a hand-applied pick from "
-        "a fork, or history predating PR association), so the credit could not be "
-        "confirmed against the original. The credited `(#N)` may be the PR that "
-        "landed the change on this line rather than the change's author. Confirm the "
-        "origin and correct the credit if needed before merging:",
+        "These notes carry a `-x` trailer whose source commit is unreachable, so "
+        "the credited `(#N)` may not be the change's author; confirm the origin "
+        "and correct the credit if needed:",
         "",
         "| Credited PR | Range commit | Subject | Source commit(s) |",
         "|-------------|--------------|---------|------------------|",
@@ -1796,11 +1841,9 @@ def _collided_section(collided: Sequence[Any]) -> str:
         "",
         "### \u26a0\ufe0f Commits dropped by a reused PR number",
         "",
-        "Two different commits resolved to the same `(#N)` (a backport reused a "
-        "source PR's number on an unrelated commit), so the change below was "
-        "**dropped** in favor of the commit that claimed the number first, and is "
-        "**absent** from the notes. Confirm whether it is a separate user-facing "
-        "change and note it by hand if so:",
+        "Two commits resolved to the same `(#N)`; the one below was **dropped** and "
+        "is absent from the notes, so note it by hand if it is a separate "
+        "user-facing change:",
         "",
         "| Dropped commit | Subject | Reused # | Kept commit |",
         "|----------------|---------|----------|-------------|",
@@ -1810,6 +1853,40 @@ def _collided_section(collided: Sequence[Any]) -> str:
         kept = (c.kept_sha or "")[:12]
         lines.append(
             f"| `{sha}` | {publish_mod.escape_cell(c.subject)} | #{c.number} | `{kept}` |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _reverted_section(reverted: Sequence[Any]) -> str:
+    """Flag Revert-titled sweep manifest rows for maintainer review.
+
+    Each entry is a :class:`~scripts.release_notes.models.RevertedSourcePR`: a
+    sweep's ``## Applied`` table listed the PR, but the row title marks a revert,
+    so the range ships the *revert* of that change, not the change itself. No
+    bullet was generated for it (attributing the original PR's description would
+    describe a change the range does not contain). A maintainer confirms coverage:
+    if the reverted change was noted in a previous release, the revert itself may
+    need a hand-authored note; if a re-land elsewhere in the range covers it, no
+    action is needed.
+    """
+    if not reverted:
+        return ""
+    lines = [
+        "",
+        "### \u26a0\ufe0f Reverted sweep manifest rows",
+        "",
+        "These sweep rows are reverts, so the range ships the **revert**, not the "
+        "PR's change, and no bullet was generated; confirm whether the revert "
+        "needs a hand-authored note or a re-land in range already covers it:",
+        "",
+        "| Source PR | Manifest row title | Sweep commit |",
+        "|-----------|--------------------|--------------|",
+    ]
+    for r in reverted:
+        sha = (r.sha or "")[:12]
+        lines.append(
+            f"| #{r.number} | {publish_mod.escape_cell(r.title)} | `{sha}` |"
         )
     lines.append("")
     return "\n".join(lines)

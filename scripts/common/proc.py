@@ -5,11 +5,8 @@ from __future__ import annotations
 import os
 import subprocess
 
-# Bot identity for agent-authored commits. Lives here (not in any one
-# workflow) because it is cross-cutting: backport and ci_fix both author
-# commits as the bot.
-BOT_NAME = "valkeyrie-bot[bot]"
-BOT_EMAIL = "3692572+valkeyrie-bot[bot]@users.noreply.github.com"
+# Re-exported for existing importers; canonical definition lives in identity.py.
+from scripts.common.identity import BOT_EMAIL, BOT_NAME  # noqa: F401
 
 # Bound every git invocation so a hung network/lock cannot stall the run.
 # Generous enough for a clone or push, short enough to fail fast on a hang.

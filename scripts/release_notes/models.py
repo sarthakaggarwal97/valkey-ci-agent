@@ -38,6 +38,9 @@ class MergedPR:
 
     For backports resolved to their original, number/title/author/body/labels come
     from the original PR while merge_commit_sha stays the range (backport) commit.
+    ``changed_files`` are the source PR's own changed paths (from the PR files
+    API), so a sweep-squashed PR keeps its exact file set rather than the
+    combined range diff. Empty when the lookup failed.
     """
 
     number: int
@@ -48,6 +51,7 @@ class MergedPR:
     labels: tuple[str, ...] = ()
     merge_commit_sha: str = ""
     disposition: PRDisposition = PRDisposition.CANDIDATE
+    changed_files: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -162,6 +166,21 @@ class UnresolvedCommit:
 
 
 @dataclass(frozen=True)
+class RevertedSourcePR:
+    """A sweep-manifest row whose title marks a revert of the named source PR.
+
+    The range ships the *revert*, not the PR's change, so no positive bullet is
+    generated. Surfaced for maintainer review: the maintainer decides whether
+    the revert itself needs a note (e.g. when the reverted change was in the
+    previous release) or whether a later re-land in the range already covers it.
+    """
+
+    number: int
+    title: str
+    sha: str = ""
+
+
+@dataclass(frozen=True)
 class CollidedCommit:
     """A range commit dropped because another commit already claimed its PR number.
 
@@ -230,3 +249,4 @@ class DiscoveryResult:
     unresolved_prs: tuple[UnresolvedPR, ...] = field(default_factory=tuple)
     unresolved_cherry_picks: tuple[UnresolvedCherryPick, ...] = field(default_factory=tuple)
     collided: tuple[CollidedCommit, ...] = field(default_factory=tuple)
+    reverted: tuple[RevertedSourcePR, ...] = field(default_factory=tuple)

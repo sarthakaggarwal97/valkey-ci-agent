@@ -503,7 +503,7 @@ class TestResolveCommitPrs:
             ("sha3", "fix (#11)", ""),
         ]
         repo = MagicMock()
-        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(repo, commits)
+        pr_to_sha, unresolved, _suspects, collided, _reverted = resolve_commit_prs(repo, commits)
         assert set(pr_to_sha) == {10, 11}
         assert pr_to_sha[10] == "sha1"  # first occurrence wins
         assert unresolved == []
@@ -521,7 +521,7 @@ class TestResolveCommitPrs:
             ("shaFix", "Fix a comment typo in cluster.c (#3380)", ""),
         ]
         repo = MagicMock()
-        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(repo, commits)
+        pr_to_sha, unresolved, _suspects, collided, _reverted = resolve_commit_prs(repo, commits)
         assert pr_to_sha == {3380: "shaFeat"}  # first (feature) wins the credit
         assert unresolved == []
         assert [(c.sha, c.number, c.kept_sha) for c in collided] == [
@@ -540,7 +540,7 @@ class TestResolveCommitPrs:
             ("shaA", "first commit of PR, no ref", ""),
             ("shaB", "second commit of PR, no ref", ""),
         ]
-        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(repo, commits)
+        pr_to_sha, unresolved, _suspects, collided, _reverted = resolve_commit_prs(repo, commits)
         assert pr_to_sha == {42: "shaA"}
         assert unresolved == []
         assert collided == []  # API-tier collapse is trusted, never flagged
@@ -574,7 +574,7 @@ class TestResolveCommitPrs:
             ("shaS1", "[backport] Backport sweep for 9.1 (#50)", body),
             ("shaS2", "[backport] Backport sweep for 9.1 (#51)", body),
         ]
-        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(
+        pr_to_sha, unresolved, _suspects, collided, _reverted = resolve_commit_prs(
             repo, commits, release_branch="9.1"
         )
         assert pr_to_sha == {10: "shaS1"}
@@ -591,7 +591,7 @@ class TestResolveCommitPrs:
             ("shaAPI", "direct push, no ref", ""),           # wins #42 via API
             ("shaSubj", "Unrelated follow-up fix (#42)", ""),  # distinct change reusing (#42)
         ]
-        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(repo, commits)
+        pr_to_sha, unresolved, _suspects, collided, _reverted = resolve_commit_prs(repo, commits)
         assert pr_to_sha == {42: "shaAPI"}
         assert unresolved == []
         assert [(c.sha, c.number, c.kept_sha) for c in collided] == [
@@ -608,7 +608,7 @@ class TestResolveCommitPrs:
             ("shaTrailer", "port fix, no trailing ref", body_with_trailer),  # wins #42 via -x
             ("shaSubj", "Totally different change (#42)", ""),               # distinct loser
         ]
-        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(repo, commits)
+        pr_to_sha, unresolved, _suspects, collided, _reverted = resolve_commit_prs(repo, commits)
         assert 42 in pr_to_sha
         assert [(c.sha, c.number) for c in collided] == [("shaSubj", 42)]
 
@@ -621,7 +621,7 @@ class TestResolveCommitPrs:
             ("shaAPI", "Add cluster slot migration (#42)", ""),  # wins via subject
             ("shaRepick", "Add cluster slot migration (#42)", ""),  # same change re-picked
         ]
-        pr_to_sha, unresolved, _suspects, collided = resolve_commit_prs(repo, commits)
+        pr_to_sha, unresolved, _suspects, collided, _reverted = resolve_commit_prs(repo, commits)
         assert pr_to_sha == {42: "shaAPI"}
         assert collided == []  # same subject -> correct collapse, no flag
 
@@ -629,7 +629,7 @@ class TestResolveCommitPrs:
         repo = MagicMock()
         pull = MagicMock(number=77)
         repo.get_commit.return_value.get_pulls.return_value = [pull]
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(repo, [("shaX", "direct push, no ref", "")])
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(repo, [("shaX", "direct push, no ref", "")])
         assert pr_to_sha == {77: "shaX"}
         assert unresolved == []
 
@@ -639,14 +639,14 @@ class TestResolveCommitPrs:
         # silently dropped.
         repo = MagicMock()
         repo.get_commit.return_value.get_pulls.return_value = []
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(repo, [("shaX", "no ref and no pr", "")])
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(repo, [("shaX", "no ref and no pr", "")])
         assert pr_to_sha == {}
         assert [(u.sha, u.subject) for u in unresolved] == [("shaX", "no ref and no pr")]
 
     def test_revert_uses_trailing_not_inner_ref(self) -> None:
         # 'Revert "X (#3)" (#9)' belongs to PR 9, not 3.
         repo = MagicMock()
-        pr_to_sha, _, _suspects, _collided = resolve_commit_prs(repo, [("sha", 'Revert "X (#3)" (#9)', "")])
+        pr_to_sha, _, _suspects, _collided, _reverted = resolve_commit_prs(repo, [("sha", 'Revert "X (#3)" (#9)', "")])
         assert set(pr_to_sha) == {9}
 
     def test_api_failure_is_unresolved_without_aborting(self) -> None:
@@ -661,7 +661,7 @@ class TestResolveCommitPrs:
             ("shaX", "hand-applied cherry-pick, no ref", ""),
             ("sha2", "fix (#11)", ""),
         ]
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(repo, commits)
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(repo, commits)
         # shaX unresolved; the well-formed commit is still resolved.
         assert pr_to_sha == {11: "sha2"}
         assert [u.sha for u in unresolved] == ["shaX"]
@@ -688,7 +688,7 @@ class TestResolveCommitPrs:
         sweep_pull.base.ref = "9.1"
         sweep_pull.merged = True
         repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(
             repo,
             [("shaSquash", "[backport] Backport sweep for 9.1 (#50)", body)],
             release_branch="9.1",
@@ -713,7 +713,7 @@ class TestResolveCommitPrs:
         repo.full_name = "valkey-io/valkey"
         repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
 
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(
             repo,
             [("sha", "[backport] Backport sweep for 9.1 (#999)", body)],
             release_branch="9.1",
@@ -740,7 +740,7 @@ class TestResolveCommitPrs:
         repo.full_name = "valkey-io/valkey"
         repo.get_commit.return_value.get_pulls.return_value = [pull]
 
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(
             repo,
             [("sha", "[backport] Backport sweep for 9.1", body)],
             release_branch="9.1",
@@ -770,7 +770,7 @@ class TestResolveCommitPrs:
         repo.full_name = "valkey-io/valkey"
         repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
 
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(
             repo,
             [
                 ("sha10", "feat a (#10)", ""),
@@ -798,7 +798,7 @@ class TestResolveCommitPrs:
         repo.full_name = "valkey-io/valkey"
         repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
 
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(
             repo, [("sha", "repair with no source ref", "")]
         )
 
@@ -827,7 +827,7 @@ class TestResolveCommitPrs:
             direct_pull,
         ]
 
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(
             repo, [("sha", "commit with no subject ref", "")],
             release_branch="9.1",
         )
@@ -844,7 +844,7 @@ class TestResolveCommitPrs:
         repo.full_name = "valkey-io/valkey"
         repo.get_commit.side_effect = RuntimeError("API unavailable")
 
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(
             repo,
             [("sha", "[backport] Backport sweep for 9.1 (#50)", body)],
             release_branch="9.1",
@@ -876,7 +876,7 @@ class TestResolveCommitPrs:
         repo.full_name = "valkey-io/valkey"
         repo.get_commit.return_value.get_pulls.return_value = [sweep_pull]
 
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(
             repo, [("sha", "repair with no source ref", "")],
             release_branch="9.1",
         )
@@ -892,7 +892,7 @@ class TestResolveCommitPrs:
         repo = MagicMock()
         pull = MagicMock(number=12)
         repo.get_commit.return_value.get_pulls.return_value = [pull]
-        pr_to_sha, unresolved, suspects, _collided = resolve_commit_prs(
+        pr_to_sha, unresolved, suspects, _collided, _reverted = resolve_commit_prs(
             repo, [("shaPick", "port fix (#60)", body)]
         )
         assert set(pr_to_sha) == {60}
@@ -919,7 +919,7 @@ class TestResolveCommitPrs:
         repo.get_commit.side_effect = lambda sha: MagicMock(
             get_pulls=MagicMock(return_value=per_sha[sha])
         )
-        pr_to_sha, _, suspects, _collided = resolve_commit_prs(
+        pr_to_sha, _, suspects, _collided, _reverted = resolve_commit_prs(
             repo, [("shaPick", "port fix (#70)", body)]
         )
         assert set(pr_to_sha) == {70}
@@ -937,7 +937,7 @@ class TestResolveCommitPrs:
         body = "port fix (#80)\n\n(cherry picked from commit deadbeefdeadbeef)"
         repo = MagicMock()
         repo.get_commit.return_value.get_pulls.return_value = []
-        pr_to_sha, unresolved, suspects, _collided = resolve_commit_prs(repo, [("shaPick", "port fix (#80)", body)])
+        pr_to_sha, unresolved, suspects, _collided, _reverted = resolve_commit_prs(repo, [("shaPick", "port fix (#80)", body)])
         assert set(pr_to_sha) == {80}
         assert unresolved == []
         # The credit fell through an unresolvable -x trailer: #80 is recorded as a
@@ -952,7 +952,7 @@ class TestResolveCommitPrs:
         body = "port fix\n\n(cherry picked from commit abcdef1234567890)"
         repo = MagicMock()
         repo.get_commit.return_value.get_pulls.return_value = [MagicMock(number=12)]
-        _pr_to_sha, _unresolved, suspects, _collided = resolve_commit_prs(
+        _pr_to_sha, _unresolved, suspects, _collided, _reverted = resolve_commit_prs(
             repo, [("shaPick", "port fix (#12)", body)]
         )
         assert suspects == {}
@@ -968,7 +968,7 @@ class TestResolveCommitPrs:
         pull.head.ref = "contributor/feature"
         pull.head.repo.full_name = "valkey-io/valkey"
         repo.get_commit.return_value.get_pulls.return_value = [pull]
-        pr_to_sha, unresolved, _suspects, _collided = resolve_commit_prs(
+        pr_to_sha, unresolved, _suspects, _collided, _reverted = resolve_commit_prs(
             repo,
             [("sha", "[backport] Backport sweep for 9.1 (#50)", body)],
         )
@@ -987,7 +987,7 @@ class TestResolveCommitPrs:
         pull.head.ref = "agent/backport/sweep/9.1"
         pull.head.repo.full_name = "attacker/valkey"
         repo.get_commit.return_value.get_pulls.return_value = [pull]
-        pr_to_sha, _unresolved, _suspects, _collided = resolve_commit_prs(
+        pr_to_sha, _unresolved, _suspects, _collided, _reverted = resolve_commit_prs(
             repo,
             [("sha", "[backport] Backport sweep for 9.1 (#50)", body)],
         )
@@ -996,7 +996,7 @@ class TestResolveCommitPrs:
     def test_no_suspect_without_trailer(self) -> None:
         # A plain merge with no cherry-pick trailer is credited from its subject
         # with full confidence: no suspect.
-        _pr_to_sha, _unresolved, suspects, _collided = resolve_commit_prs(
+        _pr_to_sha, _unresolved, suspects, _collided, _reverted = resolve_commit_prs(
             MagicMock(), [("sha", "feature (#10)", "")]
         )
         assert suspects == {}
@@ -1013,7 +1013,7 @@ class TestResolveCommitPrs:
                 return_value=[MagicMock(number=90)] if sha == "shaPick" else []
             )
         )
-        pr_to_sha, _unresolved, suspects, _collided = resolve_commit_prs(repo, [("shaPick", "no subject ref", body)])
+        pr_to_sha, _unresolved, suspects, _collided, _reverted = resolve_commit_prs(repo, [("shaPick", "no subject ref", body)])
         assert set(pr_to_sha) == {90}
         assert set(suspects) == {90}
         assert suspects[90].source_shas == ("deadbeefdeadbeef",)
