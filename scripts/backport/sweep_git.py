@@ -10,7 +10,6 @@ from typing import Any, Callable
 
 from github.GithubException import GithubException
 
-from scripts.common.identity import BOT_EMAIL, BOT_NAME
 from scripts.backport.main import _run_git as run_git_default
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
@@ -19,6 +18,7 @@ from scripts.backport.sweep_models import (
 from scripts.backport.utils import pr_numbers_from_commit_subjects
 from scripts.common.git_auth import github_https_url
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import BOT_EMAIL, BOT_NAME
 
 logger = logging.getLogger(__name__)
 
