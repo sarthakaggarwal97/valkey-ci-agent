@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -28,12 +29,16 @@ def _comment(
     *,
     login: str = "alice",
     user_type: str = "User",
+    created_at: datetime | None = None,
+    in_reply_to_id: int | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=comment_id,
         body=body,
         html_url=f"https://example.test/comments/{comment_id}",
         user=SimpleNamespace(login=login, type=user_type),
+        created_at=created_at,
+        in_reply_to_id=in_reply_to_id,
     )
 
 
@@ -118,6 +123,7 @@ class TestCollectFeedback:
             ),
             _comment(12, "@valkeyrie-ops revise-release-notes rewrite #40"),
         ]
+        pr.get_review_comments.return_value = []
         states = {
             "alice": AuthorizationState.AUTHORIZED,
             "outsider": AuthorizationState.UNAUTHORIZED,
@@ -135,6 +141,61 @@ class TestCollectFeedback:
         assert [item.comment_id for item in result] == [12, 30]
         assert [item.body for item in result] == ["rewrite #40", "rewrite #41"]
         assert calls == ["alice", "outsider"]  # alice is cached across comments
+
+    def test_collects_top_level_inline_comments_and_ignores_replies(
+        self, monkeypatch
+    ) -> None:
+        pr = MagicMock(number=77)
+        pr.get_issue_comments.return_value = [
+            _comment(
+                30,
+                "@valkeyrie-ops revise-release-notes rewrite #41",
+                created_at=datetime(2026, 7, 21, 12, 30, tzinfo=timezone.utc),
+            )
+        ]
+        pr.get_review_comments.return_value = [
+            _comment(
+                40,
+                "@valkeyrie-ops revise-release-notes rewrite #40",
+                created_at=datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc),
+            ),
+            _comment(
+                41,
+                "@valkeyrie-ops revise-release-notes " + "x" * 5000,
+                login="outsider",
+                created_at=datetime(2026, 7, 21, 12, 15, tzinfo=timezone.utc),
+                in_reply_to_id=40,
+            ),
+        ]
+        calls: list[str] = []
+
+        def _authorize(_gh, _org, _team, login):
+            calls.append(login)
+            return AuthorizationState.AUTHORIZED
+
+        monkeypatch.setattr(feedback_mod, "authorization_state", _authorize)
+
+        result = collect_feedback(MagicMock(), pr)
+
+        assert [item.comment_id for item in result] == [40, 30]
+        assert [item.body for item in result] == ["rewrite #40", "rewrite #41"]
+        # alice is cached across both APIs; the oversized outsider reply is
+        # discarded before authorization and cannot abort collection.
+        assert calls == ["alice"]
+
+    def test_duplicate_ids_across_comment_apis_abort(self, monkeypatch) -> None:
+        command = "@valkeyrie-ops revise-release-notes rewrite #40"
+        pr = MagicMock(number=77)
+        pr.get_issue_comments.return_value = [_comment(12, command)]
+        pr.get_review_comments.return_value = [_comment(12, command)]
+        monkeypatch.setattr(
+            feedback_mod,
+            "authorization_state",
+            lambda *_args: AuthorizationState.AUTHORIZED,
+        )
+
+        with pytest.raises(FeedbackError, match="duplicate feedback comment id 12"):
+            collect_feedback(MagicMock(), pr)
 
     def test_authorization_error_aborts_instead_of_dropping_feedback(
         self, monkeypatch

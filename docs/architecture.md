@@ -348,8 +348,10 @@ updates the existing PR. Full regeneration is intentional: it includes new
 merges and also re-evaluates changed labels and PR metadata without treating a
 previous AI-generated branch as durable input.
 
-On a rerun with an open release PR, `feedback.py` reads only top-level comments
-whose body starts with `@valkeyrie-ops revise-release-notes`. The existing
+On a rerun with an open release PR, `feedback.py` reads top-level conversation
+comments and top-level inline review comments whose body starts with
+`@valkeyrie-ops revise-release-notes`; replies in inline review threads are
+ignored. The existing
 contributors-team authorization gate filters authors. All eligible comments are
 replayed oldest-first because the release cut regenerates from scratch; a
 processed marker alone would allow an earlier requested edit to disappear. The
@@ -382,7 +384,7 @@ calendar date.
 - `scripts/release_notes/ai_inputs.py` - shared, bounded PR prompt payloads and SHA-cached diffs; combined sweep diffs are omitted when they cannot be attributed to one source PR
 - `scripts/release_notes/triage.py` - completeness-first Claude include/exclude plus deterministic release-impact guardrail for PRs without `release-notes` (no tools; PR data inlined in prompt)
 - `scripts/release_notes/generate.py` - Claude bullet generation (no tools; PR data inlined in prompt)
-- `scripts/release_notes/feedback.py` - authorized top-level PR feedback collection and constrained no-tools bullet revision
+- `scripts/release_notes/feedback.py` - authorized conversation and inline-review feedback collection and constrained no-tools bullet revision
 - `scripts/release_notes/models.py` - typed dataclasses for the pipeline
 - `scripts/release_notes/security.py` - Security Fixes from published GitHub advisories (never AI-authored)
 - `scripts/release_notes/render.py` - canonical `00-RELEASENOTES` rendering

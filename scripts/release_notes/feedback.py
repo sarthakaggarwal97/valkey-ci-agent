@@ -1,9 +1,11 @@
 """Apply explicit maintainer feedback to generated release-note bullets.
 
-Only top-level comments beginning with ``@valkeyrie-ops revise-release-notes``
-are considered. Comment authors must be active members of the configured team.
-Every eligible comment is replayed on every rerun so full regeneration cannot
-silently discard an earlier requested revision.
+Top-level PR conversation comments and top-level inline review comments
+beginning with ``@valkeyrie-ops revise-release-notes`` are considered. Inline
+replies are ignored so review discussion cannot accidentally become a command.
+Comment authors must be active members of the configured team. Every eligible
+comment is replayed on every rerun so full regeneration cannot silently discard
+an earlier requested revision.
 """
 
 from __future__ import annotations
@@ -90,19 +92,35 @@ def collect_feedback(
     org: str = "valkey-io",
     team_slug: str = "contributors",
 ) -> tuple[ReleaseFeedback, ...]:
-    """Collect authorized top-level revision commands from an open release PR.
+    """Collect authorized revision commands from an open release PR.
 
-    A confirmed non-member is ignored. An authorization API error aborts the
-    refresh so a transient permission/network failure cannot erase feedback that
-    an earlier full-regeneration run applied.
+    Top-level conversation comments and top-level inline review comments are
+    accepted; replies in inline review threads are ignored. A confirmed
+    non-member is ignored. An authorization API error aborts the refresh so a
+    transient permission/network failure cannot erase feedback that an earlier
+    full-regeneration run applied.
     """
-    comments = retry_github_call(
+    issue_comments = retry_github_call(
         lambda: list(pr.get_issue_comments()),
         retries=3,
-        description=f"list comments on release PR #{pr.number}",
+        description=f"list conversation comments on release PR #{pr.number}",
     )
+    review_comments = retry_github_call(
+        lambda: list(pr.get_review_comments()),
+        retries=3,
+        description=f"list inline comments on release PR #{pr.number}",
+    )
+    comments = list(issue_comments)
+    comments.extend(
+        comment
+        for comment in review_comments
+        if exact_pr_number(getattr(comment, "in_reply_to_id", None)) is None
+    )
+    comments.sort(key=_comment_order)
+
     auth_cache: dict[str, AuthorizationState] = {}
     feedback: list[ReleaseFeedback] = []
+    feedback_ids: set[int] = set()
     for comment in comments:
         instruction = parse_feedback_command(getattr(comment, "body", "") or "")
         if instruction is None:
@@ -141,6 +159,12 @@ def collect_feedback(
         if comment_id is None:
             logger.warning("Ignoring release-note feedback with an invalid comment id")
             continue
+        if comment_id in feedback_ids:
+            raise FeedbackError(
+                f"Release PR #{pr.number} returned duplicate feedback comment id "
+                f"{comment_id}; leaving the existing PR unchanged."
+            )
+        feedback_ids.add(comment_id)
         feedback.append(
             ReleaseFeedback(
                 comment_id=comment_id,
@@ -154,13 +178,26 @@ def collect_feedback(
             )
         )
 
-    feedback.sort(key=lambda item: item.comment_id)
     if len(feedback) > _MAX_FEEDBACK_ITEMS:
         raise FeedbackError(
             f"Release PR #{pr.number} has {len(feedback)} authorized feedback "
             f"commands; the safe limit is {_MAX_FEEDBACK_ITEMS}."
         )
     return tuple(feedback)
+
+
+def _comment_order(comment: Any) -> tuple[float, int]:
+    """Return a stable oldest-first key across conversation and review APIs."""
+    created_at = getattr(comment, "created_at", None)
+    if created_at is None:
+        timestamp = float("inf")
+    else:
+        try:
+            timestamp = float(created_at.timestamp())
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            timestamp = float("inf")
+    comment_id = exact_pr_number(getattr(comment, "id", None))
+    return timestamp, comment_id if comment_id is not None else 2**63 - 1
 
 
 _PROMPT_TEMPLATE = """\

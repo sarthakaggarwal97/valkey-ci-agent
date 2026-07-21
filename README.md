@@ -326,7 +326,8 @@ Because the prep branch is replaced with `--force-with-lease`, manual edits made
 directly on that generated branch are not retained.
 
 Before that rerun, an active `valkey-io/contributors` member can request a
-revision in a top-level comment on the open release PR:
+revision in either a top-level conversation comment or a top-level inline review
+comment on the open release PR:
 
 ```text
 @valkeyrie-ops revise-release-notes
@@ -334,8 +335,9 @@ Rewrite #4123 to emphasize replication compatibility.
 Move #4150 to Configuration.
 ```
 
-The rerun replays every authorized command against the fully regenerated
-bullets, so an earlier requested edit is not lost when newer changes arrive.
+Replies in inline review threads are ignored. The rerun replays every
+authorized command against the fully regenerated bullets, so an earlier
+requested edit is not lost when newer changes arrive.
 The feedback AI may rewrite, recategorize, or drop an already-generated bullet;
 it cannot add a missing PR or change version, urgency, contributor, advisory, or
 Security Fixes data. Add or correct the PR labels to include a missing entry,
@@ -443,7 +445,8 @@ human merges.
    removes accidental duplicate markers and terminal punctuation, then appends
    the canonical attribution in `scripts/release_notes/render.py`.
 6. **Apply PR feedback** (AI + code, reruns only) - collect top-level
-   `@valkeyrie-ops revise-release-notes` commands from active contributors,
+   conversation and inline-review `@valkeyrie-ops revise-release-notes`
+   commands from active contributors,
    replay them through a no-tools structured revision pass, and validate that
    every operation targets an existing generated bullet and canonical category.
 7. **Render + bump** (code) - render the categorized bullets into a new dated
