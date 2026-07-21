@@ -399,3 +399,89 @@ class TestGenerate:
         assert {b.pr_number for b in result.bullets} == {40}
         payload = seen["prompt"].split("## Pull requests", 1)[1]
         assert '"diff"' not in payload
+
+
+class TestGenerateRetry:
+    """A PR the model drops from a batch is retried once before being skipped."""
+
+    def test_dropped_pr_recovered_by_retry(self) -> None:
+        # First response omits #42 entirely (no bullet, no skip); the retry
+        # batch contains only #42 and its bullet is merged into the result.
+        prompts: list[str] = []
+
+        def _run(prompt, **kwargs):
+            prompts.append(prompt)
+            if len(prompts) == 1:
+                return _stream({"bullets": [
+                    {"pr": 40, "category": "Bug Fixes", "text": "fix forty"},
+                ], "skipped": []}), "", 0
+            return _stream({"bullets": [
+                {"pr": 42, "category": "Bug Fixes", "text": "fix forty-two"},
+            ], "skipped": []}), "", 0
+
+        result = generate([_pr(40), _pr(42, author="bob")], repo_dir="/tmp",
+                          categories=_CATEGORIES, run_fn=_run)
+        assert {b.pr_number for b in result.bullets} == {40, 42}
+        assert result.skipped == ()
+        # The retry prompt carries only the dropped PR.
+        assert len(prompts) == 2
+        assert '"number": 42' in prompts[1]
+        assert '"number": 40' not in prompts[1]
+        # Factual author is re-stamped on the retried bullet.
+        assert next(b.author for b in result.bullets if b.pr_number == 42) == "bob"
+
+    def test_dropped_pr_skipped_when_retry_fails(self) -> None:
+        prompts: list[str] = []
+
+        def _run(prompt, **kwargs):
+            prompts.append(prompt)
+            if len(prompts) == 1:
+                return _stream({"bullets": [
+                    {"pr": 40, "category": "Bug Fixes", "text": "fix forty"},
+                ], "skipped": []}), "", 0
+            return "no json at all", "", 0
+
+        result = generate([_pr(40), _pr(42)], repo_dir="/tmp",
+                          categories=_CATEGORIES, run_fn=_run)
+        assert {b.pr_number for b in result.bullets} == {40}
+        assert result.skipped == (42,)
+
+    def test_clean_batch_makes_no_retry_call(self) -> None:
+        prompts: list[str] = []
+
+        def _run(prompt, **kwargs):
+            prompts.append(prompt)
+            return _stream({"bullets": [
+                {"pr": 40, "category": "Bug Fixes", "text": "fix forty"},
+            ], "skipped": []}), "", 0
+
+        generate([_pr(40)], repo_dir="/tmp", categories=_CATEGORIES, run_fn=_run)
+        assert len(prompts) == 1
+
+
+class TestCrashCategoryExemption:
+    """A crash/memory-safety fix stays in Bug Fixes even for operator output."""
+
+    def test_crash_in_info_path_stays_bug_fixes(self) -> None:
+        # The #3787 shape: a startup crash whose surface is INFO formatting.
+        pr = _pr(3787, title="Fix time_t typedef on 32-bit systems",
+                 body="Fixes a startup crash and INFO output format mismatch")
+        run = _fake_run({"bullets": [
+            {"pr": 3787, "category": "Bug Fixes", "text": "Fix 32-bit crash"},
+        ], "skipped": []})
+        result = generate([pr], repo_dir="/tmp", categories=_CATEGORIES, run_fn=run)
+        (bullet,) = result.bullets
+        assert bullet.category == "Bug Fixes"
+        assert not bullet.uncertain
+
+    def test_non_crash_operator_output_still_normalized(self) -> None:
+        # The #3811 shape: wrong INFO reporting, no crash -> Observability.
+        pr = _pr(3811, title="Fix off_t truncation in repl transfer size reporting",
+                 body="INFO replication reported negative sync sizes")
+        run = _fake_run({"bullets": [
+            {"pr": 3811, "category": "Bug Fixes", "text": "Fix negative INFO sizes"},
+        ], "skipped": []})
+        result = generate([pr], repo_dir="/tmp", categories=_CATEGORIES, run_fn=run)
+        (bullet,) = result.bullets
+        assert bullet.category == "Observability and Logging"
+        assert bullet.uncertain

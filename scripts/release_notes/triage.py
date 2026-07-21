@@ -136,6 +136,18 @@ def _is_test_or_ci_only(pr: MergedPR) -> bool:
     )
 
 
+# A CVE id named in PR text. Unlike the impact patterns this is not a heuristic:
+# a named CVE is a factual security reference that must reach the Security Fixes
+# decision regardless of the requested urgency.
+_CVE_ID_RE = re.compile(r"\bCVE-\d{4}-\d{4,}\b", re.IGNORECASE)
+
+
+def named_cve(pr: MergedPR) -> str:
+    """Return the first CVE id named in *pr*'s title or body, or ""."""
+    match = _CVE_ID_RE.search(f"{pr.title or ''}\n{pr.body or ''}")
+    return match.group(0).upper() if match else ""
+
+
 def release_impact_reason(pr: MergedPR) -> str | None:
     """Return a deterministic release-review signal for *pr*, if present.
 
@@ -373,7 +385,7 @@ def triage(
             timeout=timeout,
             model=None,  # let CI_AGENT_CLAUDE_MODEL env override win
             allowed_tools="",
-            disallowed_tools="Read,Grep,Glob,Bash,Write,Edit,MultiEdit",
+            disallowed_tools="Read,Grep,Glob,Bash,Write,Edit",
         )
         decisions, parsed_ok = _parse_batch(stdout, batch_numbers)
         if not parsed_ok:

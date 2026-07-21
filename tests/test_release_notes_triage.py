@@ -206,3 +206,63 @@ class TestTriage:
         }
         assert all(decision.guardrail for decision in result.included)
         assert result.excluded == ()
+
+
+class TestNamedCve:
+    """named_cve extracts a factual CVE reference from PR text."""
+
+    def test_cve_in_title(self) -> None:
+        from scripts.release_notes.triage import named_cve
+        pr = _pr(3619, title="Fix invalid memory access in RESTORE (CVE-2026-25243)")
+        assert named_cve(pr) == "CVE-2026-25243"
+
+    def test_cve_in_body_and_case_normalized(self) -> None:
+        from scripts.release_notes.triage import named_cve
+        pr = _pr(1, body="tracked as cve-2025-1234 by the security team")
+        assert named_cve(pr) == "CVE-2025-1234"
+
+    def test_no_cve(self) -> None:
+        from scripts.release_notes.triage import named_cve
+        pr = _pr(2, title="Fix a crash in RESTORE", body="memory-safety issue")
+        assert named_cve(pr) == ""
+
+    def test_short_id_not_matched(self) -> None:
+        # A CVE id has a 4+ digit sequence number; "CVE-2026-1" is not one.
+        from scripts.release_notes.triage import named_cve
+        assert named_cve(_pr(3, body="see CVE-2026-1")) == ""
+
+
+class TestTestOnlyGuardrailExemption:
+    """PRs whose changed files are all tests/CI never trip the impact guardrail."""
+
+    def test_tests_only_pr_exempt(self) -> None:
+        from scripts.release_notes.triage import release_impact_reason
+        # The #3764/#4115 shape: an "assertion" deflake touching only tests.
+        pr = MergedPR(
+            number=4115, title="Fix racy remaining_repl_size assertion in slot migration test",
+            author="a", url="u",
+            changed_files=("tests/unit/cluster/slot-migration.tcl",),
+        )
+        assert release_impact_reason(pr) is None
+
+    def test_ci_only_pr_exempt(self) -> None:
+        from scripts.release_notes.triage import release_impact_reason
+        pr = MergedPR(
+            number=1, title="Fix crash reporting workflow", author="a", url="u",
+            changed_files=(".github/workflows/daily.yml",),
+        )
+        assert release_impact_reason(pr) is None
+
+    def test_mixed_files_not_exempt(self) -> None:
+        from scripts.release_notes.triage import release_impact_reason
+        pr = MergedPR(
+            number=2, title="Fix crash in expire", author="a", url="u",
+            changed_files=("src/expire.c", "tests/unit/expire.tcl"),
+        )
+        assert release_impact_reason(pr) is not None
+
+    def test_unknown_files_not_exempt(self) -> None:
+        # A failed files lookup (empty tuple) must not exempt: unknown is unsafe.
+        from scripts.release_notes.triage import release_impact_reason
+        pr = MergedPR(number=3, title="Fix crash in expire", author="a", url="u")
+        assert release_impact_reason(pr) is not None

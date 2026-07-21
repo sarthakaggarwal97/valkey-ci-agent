@@ -2001,3 +2001,47 @@ class TestDiscover:
         _commit(repo, "root (#1)")
         with pytest.raises(ValueError, match="no-such-ref"):
             _resolve_base_ref(repo, "no-such-ref")
+
+
+class TestUnmergedPullNeverCredited:
+    """Commit->PR API resolution must not credit an open or unmerged PR."""
+
+    @staticmethod
+    def _open_sweep(number: int = 4226):
+        pull = MagicMock(number=number, merged=False, merged_at=None)
+        pull.title = "[backport] Backport sweep for 9.0"
+        pull.head.ref = "agent/backport/sweep/9.0"
+        pull.head.repo.full_name = "valkey-io/valkey"
+        pull.base.ref = "9.0"
+        pull.body = ""
+        return pull
+
+    def test_open_pr_not_credited_goes_unresolved(self) -> None:
+        # The 9.0.5 dry-run shape: a range commit whose only associated PR is
+        # an in-flight sweep containing the already-landed commit.
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [self._open_sweep()]
+        pr_to_sha, unresolved, _s, _c, _reverted = resolve_commit_prs(
+            repo, [("shaX", "repair commit, no ref", "")], release_branch="9.0")
+        assert pr_to_sha == {}
+        assert [(u.sha, u.subject) for u in unresolved] == [("shaX", "repair commit, no ref")]
+
+    def test_merged_pr_wins_over_open_pr(self) -> None:
+        merged = MagicMock(number=4104, merged=True)
+        merged.title = "Avoid offloading writes"
+        merged.head.ref = "feature/x"
+        merged.head.repo.full_name = "valkey-io/valkey"
+        merged.base.ref = "9.0"
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.return_value.get_pulls.return_value = [self._open_sweep(), merged]
+        pr_to_sha, _u, _s, _c, _reverted = resolve_commit_prs(
+            repo, [("shaY", "commit, no ref", "")], release_branch="9.0")
+        assert pr_to_sha == {4104: "shaY"}
+
+    def test_cherry_pick_trailer_path_skips_open_pr(self) -> None:
+        from scripts.release_notes.discover import _pr_from_commit_api
+        repo = MagicMock()
+        repo.get_commit.return_value.get_pulls.return_value = [self._open_sweep()]
+        assert _pr_from_commit_api(repo, "shaZ") is None

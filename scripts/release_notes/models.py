@@ -145,13 +145,15 @@ class ReleaseImpact:
     These are deterministic signals, not severity or security classifications.
     They make potentially serious changes visible when maintainers choose the
     release urgency and decide whether a hand-authored Security Fixes entry is
-    required.
+    required. ``cve`` carries the CVE id named in the PR text ("" when none):
+    a named CVE holds the cut at any urgency short of SECURITY.
     """
 
     number: int
     title: str
     url: str
     reason: str
+    cve: str = ""
 
 
 @dataclass(frozen=True)

@@ -886,6 +886,9 @@ def _print_dry_run(
             "urgency and security treatment): "
             f"{[(p.number, p.reason) for p in regen.impact_review]}"
         )
+        named = [(p.number, p.cve) for p in regen.impact_review if p.cve]
+        if named:
+            print(f"⚠️  PR(s) naming a CVE (needs SECURITY urgency + Security Fixes entry): {named}")
     if regen.label_excluded:
         print("hard-excluded (labelled no-release-notes): "
               f"{[p.number for p in regen.label_excluded]}")
@@ -1045,6 +1048,14 @@ def _hold_reasons(plan: BranchPlan, notes_meta: "_NotesMeta") -> list[str]:
         and notes_meta.urgency.strip().upper() in ("LOW", "MODERATE")
     ):
         reasons.append("release impact may require higher urgency or security treatment")
+    # A named CVE is factual, not a heuristic signal, so it holds at ANY urgency:
+    # a CVE fix shipping as a plain bullet without SECURITY urgency and a
+    # hand-authored Security Fixes entry is exactly the mistake to block.
+    named_cves = [p for p in regen.impact_review if p.cve]
+    if named_cves and not (
+        notes_meta.urgency.strip().upper() == _SECURITY_URGENCY and notes_meta.security_fixes
+    ):
+        reasons.append("a PR names a CVE (needs SECURITY urgency and a Security Fixes entry)")
     sel = notes_meta.advisories
     if sel is not None and sel.fetch_failed:
         reasons.append("security advisories could not be read")
@@ -1078,6 +1089,7 @@ def _hold_reasons(plan: BranchPlan, notes_meta: "_NotesMeta") -> list[str]:
 # _hold_reasons verbatim.
 _SECURITY_HOLD_REASONS = frozenset({
     "release impact may require higher urgency or security treatment",
+    "a PR names a CVE (needs SECURITY urgency and a Security Fixes entry)",
     "security advisories could not be read",
     "some security advisories could not be read",
     "SECURITY urgency with no security-fix entries",
@@ -1404,6 +1416,17 @@ def _impact_review_section(impacts: Sequence[Any], urgency: str) -> str:
         lines.extend([
             f"The requested urgency is **{urgency_upper}**. Confirm it and decide "
             "whether any change needs a hand-authored **Security Fixes** entry:",
+            "",
+        ])
+    named = [p for p in impacts if getattr(p, "cve", "")]
+    if named:
+        refs = "; ".join(
+            f"[#{p.number}]({p.url}) names **{p.cve}**" for p in named
+        )
+        lines.extend([
+            f"⚠️ {refs}. A named CVE normally ships with `SECURITY` urgency and a "
+            "hand-authored **Security Fixes** entry; this holds the cut at any "
+            "other urgency.",
             "",
         ])
     table = [

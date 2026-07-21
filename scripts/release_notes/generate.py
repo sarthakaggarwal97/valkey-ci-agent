@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 # Max PRs per Claude call; results from each batch are merged.
 _BATCH_SIZE = 80
 
+# No-tools runs: deny everything. "MultiEdit" no longer exists as a tool name
+# (Claude Code warns "matches no known tool"), so it is not listed.
+_DISALLOWED_TOOLS = "Read,Grep,Glob,Bash,Write,Edit"
+
 _OBSERVABILITY_CATEGORY = "Observability and Logging"
 _OBSERVABILITY_EVIDENCE_RE = re.compile(
     r"\bACL LOG\b|\bINFO(?:\s+[A-Z][A-Z_]*)?\b|"
@@ -33,10 +37,23 @@ _OBSERVABILITY_EVIDENCE_RE = re.compile(
     r"process title|proctitle|reporting)\b",
     re.IGNORECASE,
 )
+# A crash or memory-safety fix stays in Bug Fixes even when the crash surface is
+# operator output (e.g. a segfault while generating INFO): the severity is the
+# story, not the surface. Without this, #3787 (32-bit time_t startup crash in
+# INFO formatting) was normalized into Observability on every cut.
+_CRASH_EVIDENCE_RE = re.compile(
+    r"\b(?:crash(?:es|ed|ing)?|segfault|sig(?:abrt|segv)|use[- ]after[- ]free|"
+    r"double[- ]free|out[- ]of[- ]bounds|memory corruption|"
+    r"(?:server|process) aborts?|assert(?:ion)?(?: failure)?)\b",
+    re.IGNORECASE,
+)
 _CATEGORY_GUIDANCE = """\
 - Prefer the category for the user-visible surface over the fact that the PR is
   a bug fix. `Bug Fixes` is the fallback, not the automatic category for every
   title beginning with "Fix".
+- EXCEPTION: a crash, assertion, or memory-safety fix belongs in `Bug Fixes`
+  even when the crash happens in an operator-output path (INFO, logging,
+  metrics). The severity is the story, not the surface.
 - `Observability and Logging` owns INFO fields, metrics, ACL LOG, server logs,
   diagnostics, process titles, and corrections to those outputs.
 - `Command and API Updates` owns command arguments/results, wire reply schemas,
@@ -218,6 +235,8 @@ def _apply_category_guardrail(
     evidence = f"{pr.title or ''}\n{pr.body or ''}"
     if not _OBSERVABILITY_EVIDENCE_RE.search(evidence):
         return bullet
+    if _CRASH_EVIDENCE_RE.search(evidence):
+        return bullet  # crash/memory-safety fix: Bug Fixes wins over the surface
     old = bullet.category or "(none)"
     correction = (
         f"category normalized from {old!r} for operator-visible output"
@@ -270,7 +289,7 @@ def generate(
             timeout=timeout,
             model=None,  # let CI_AGENT_CLAUDE_MODEL env override win
             allowed_tools="",
-            disallowed_tools="Read,Grep,Glob,Bash,Write,Edit,MultiEdit",
+            disallowed_tools=_DISALLOWED_TOOLS,
         )
         bullets, skipped, parsed_ok = _parse_batch(stdout, batch_numbers, valid_categories)
         if not parsed_ok:
@@ -295,13 +314,51 @@ def generate(
             ))
         all_skipped.extend(skipped)
 
-        # PRs absent from both bullets and skipped are folded into skipped.
+        # PRs absent from both bullets and skipped: on a large batch the model
+        # sometimes drops an entry (observed: 1 of 51). Retry the remainder once
+        # in its own small batch before declaring it skipped, so a real
+        # user-facing fix is not lost to a truncated response.
         unaccounted = batch_numbers - {b.pr_number for b in bullets} - set(skipped)
         if unaccounted:
             logger.warning(
-                "Batch %d-%d returned no bullet or skip for %d PR(s): %s; marking skipped",
+                "Batch %d-%d returned no bullet or skip for %d PR(s): %s; retrying them once",
                 start, start + len(batch), len(unaccounted), sorted(unaccounted),
             )
-            all_skipped.extend(sorted(unaccounted))
+            retry_batch = [pr for pr in batch if pr.number in unaccounted]
+            retry_prompt = build_prompt(
+                retry_batch, categories=categories, diffs=collector.collect(retry_batch)
+            )
+            retry_stdout, _retry_stderr, _retry_code = run_fn(
+                retry_prompt,
+                cwd=repo_dir,
+                timeout=timeout,
+                model=None,
+                allowed_tools="",
+                disallowed_tools=_DISALLOWED_TOOLS,
+            )
+            retry_bullets, retry_skipped, retry_ok = _parse_batch(
+                retry_stdout, unaccounted, valid_categories
+            )
+            if retry_ok:
+                for bullet in retry_bullets:
+                    reviewed = _apply_category_guardrail(
+                        bullet, pr_by_number[bullet.pr_number]
+                    )
+                    all_bullets.append(CategorizedBullet(
+                        pr_number=reviewed.pr_number,
+                        author=authors.get(reviewed.pr_number, ""),
+                        category=reviewed.category,
+                        text=reviewed.text,
+                        uncertain=reviewed.uncertain,
+                        uncertain_reason=reviewed.uncertain_reason,
+                    ))
+                all_skipped.extend(retry_skipped)
+                unaccounted -= {b.pr_number for b in retry_bullets} | set(retry_skipped)
+            if unaccounted:
+                logger.warning(
+                    "Still no bullet or skip for %d PR(s) after retry: %s; marking skipped",
+                    len(unaccounted), sorted(unaccounted),
+                )
+                all_skipped.extend(sorted(unaccounted))
 
     return GenerationResult(bullets=tuple(all_bullets), skipped=tuple(all_skipped))
