@@ -15,6 +15,7 @@ from scripts.release_notes.models import (
     MergedPR,
     TriageDecision,
     TriageResult,
+    UnresolvedBackport,
 )
 
 _FIXTURE_CLONE = os.path.join(os.path.dirname(__file__), "fixtures", "valkey_clone")
@@ -27,9 +28,15 @@ def clone(tmp_path):
     return str(dest)
 
 
-def _patch(monkeypatch, *, prs, bullets=(), skipped=(), triage_result=None):
+def _patch(
+    monkeypatch, *, prs, bullets=(), skipped=(), triage_result=None,
+    unresolved_backports=(),
+):
     monkeypatch.setattr(pipeline_mod.discover_mod, "discover",
-                        lambda *a, **k: DiscoveryResult(base_tag="9.1.0-rc1", head_ref="9.1", prs=prs))
+                        lambda *a, **k: DiscoveryResult(
+                            base_tag="9.1.0-rc1", head_ref="9.1", prs=prs,
+                            unresolved_backports=unresolved_backports,
+                        ))
     monkeypatch.setattr(pipeline_mod.generate_mod, "generate",
                         lambda *a, **k: GenerationResult(bullets=bullets, skipped=skipped))
 
@@ -62,6 +69,31 @@ def test_generates_and_renders(monkeypatch, clone):
     r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
     assert r.had_prs and r.included == 1 and r.bullet_count == 1
     assert r.grouped["Bug Fixes"] == ["* fix by @a (#40)"]
+
+
+def test_contributor_authors_exclude_bots_and_unresolved_backports(
+    monkeypatch, clone
+):
+    prs = (
+        MergedPR(number=40, title="source", author="original-author", url="u",
+                 labels=("release-notes",)),
+        MergedPR(number=50, title="unresolved backport", author="backport-operator",
+                 url="u", labels=("release-notes",)),
+        MergedPR(number=60, title="bot PR", author="automation[bot]", url="u",
+                 labels=("release-notes",)),
+    )
+    _patch(
+        monkeypatch, prs=prs,
+        unresolved_backports=(
+            UnresolvedBackport(number=50, title="unresolved backport"),
+        ),
+    )
+
+    result = pipeline_mod.regenerate_unreleased(
+        object(), clone, head_ref="9.1", tag_glob=None
+    )
+
+    assert result.pr_authors == ("original-author",)
 
 
 def test_undecided_candidate_surfaced_as_triage(monkeypatch, clone):

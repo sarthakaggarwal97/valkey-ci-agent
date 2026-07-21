@@ -64,7 +64,7 @@ class RegenResult:
     unresolved_cherry_picks: tuple[UnresolvedCherryPick, ...] = ()  # notes credited past an unresolvable -x trailer (origin unconfirmed)
     collided: tuple[CollidedCommit, ...] = ()  # distinct commits dropped by a reused subject (#N) (shipped un-noted)
     reverted: tuple[RevertedSourcePR, ...] = ()  # Revert-titled sweep manifest rows (the range ships the revert, not the change)
-    pr_authors: tuple[str, ...] = ()  # GitHub logins of all resolved PR authors in the range (for contributor list)
+    pr_authors: tuple[str, ...] = ()  # GitHub logins of resolved source-PR authors; unresolved backports excluded
 
 
 def regenerate_unreleased(
@@ -197,9 +197,14 @@ def regenerate_unreleased(
     # Only flag duplicates for PRs that actually rendered.
     duplicate_prs = tuple(pr for pr in duplicate_prs if pr in rendered_prs)
 
+    unresolved_backport_numbers = {
+        item.number for item in discovery.unresolved_backports
+    }
     all_pr_authors = tuple(dict.fromkeys(
         pr.author for pr in discovery.prs
-        if pr.author and not pr.author.endswith("[bot]")
+        if pr.number not in unresolved_backport_numbers
+        and pr.author
+        and not pr.author.endswith("[bot]")
     ))
 
     return RegenResult(
