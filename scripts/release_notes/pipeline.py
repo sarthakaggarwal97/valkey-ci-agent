@@ -107,6 +107,7 @@ def regenerate_unreleased(
             title=pr.title,
             url=pr.url,
             reason=reason,
+            cve=triage_mod.named_cve(pr),
         )
         for pr in discovery.prs
         if (reason := triage_mod.release_impact_reason(pr)) is not None
@@ -171,10 +172,19 @@ def regenerate_unreleased(
         for line in lines
         if (m := _TRAILING_PR_RE.search(line))
     }
+    # A note whose PR diff could not be read was judged on title/body alone;
+    # flag it for review even when the model itself was confident.
+    def _reason(b: Any) -> str:
+        parts = [b.uncertain_reason] if b.uncertain else []
+        if b.pr_number in diff_collector.failed_reads:
+            parts.append("diff could not be read; note judged on title/body alone")
+        return "; ".join(p for p in parts if p)
+
     uncertain = tuple(
-        UncertainNote(pr_number=b.pr_number, category=b.category, reason=b.uncertain_reason)
+        UncertainNote(pr_number=b.pr_number, category=b.category, reason=_reason(b))
         for b in bullets
-        if b.uncertain and b.pr_number in rendered_prs
+        if (b.uncertain or b.pr_number in diff_collector.failed_reads)
+        and b.pr_number in rendered_prs
     )
 
     # Count rendered bullets (group_bullets drops reserved-category ones).

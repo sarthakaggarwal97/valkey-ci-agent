@@ -43,11 +43,17 @@ def build_prompt_payload(prs: Sequence[MergedPR], *, diffs: dict[int, str] | Non
 
 
 class PRDiffCollector:
-    """Collect bounded, unambiguous PR diffs with a SHA-keyed cache."""
+    """Collect bounded, unambiguous PR diffs with a SHA-keyed cache.
+
+    ``failed_reads`` records PR numbers whose diff could not be read (e.g. a
+    sweep-expanded source SHA absent from this branch's clone): those PRs were
+    judged on title/body alone, so callers flag their notes low-confidence.
+    """
 
     def __init__(self, repo_dir: str, prs: Sequence[MergedPR]) -> None:
         self._repo_dir = repo_dir
-        self._cache: dict[str, str] = {}
+        self._cache: dict[str, str | None] = {}
+        self.failed_reads: set[int] = set()
         sha_prs: dict[str, set[int]] = {}
         for pr in prs:
             if pr.merge_commit_sha:
@@ -67,7 +73,8 @@ class PRDiffCollector:
 
         Sweep expansion can map several source PRs to one combined range commit.
         Such a patch cannot be attributed to any one PR and is omitted rather than
-        duplicated into every PR record. Failed and empty reads are cached too.
+        duplicated into every PR record. Failed and empty reads are cached too;
+        failures also record the PR in ``failed_reads``.
         """
         diffs: dict[int, str] = {}
         for pr in prs:
@@ -77,13 +84,15 @@ class PRDiffCollector:
             if sha not in self._cache:
                 self._cache[sha] = _collect_commit_diff(self._repo_dir, sha)
             diff = self._cache[sha]
-            if diff:
+            if diff is None:
+                self.failed_reads.add(pr.number)
+            elif diff:
                 diffs[pr.number] = diff
         return diffs
 
 
-def _collect_commit_diff(repo_dir: str, sha: str) -> str:
-    """Return a bounded first-parent diff for *sha*, or ``""`` on error."""
+def _collect_commit_diff(repo_dir: str, sha: str) -> str | None:
+    """Return a bounded first-parent diff for *sha*, or ``None`` on read failure."""
     try:
         diff = git_output(
             repo_dir,
@@ -96,7 +105,7 @@ def _collect_commit_diff(repo_dir: str, sha: str) -> str:
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         logger.warning("Could not read diff for %s: %s", sha[:12], exc)
-        return ""
+        return None
     diff = diff.strip()
     if len(diff) <= _MAX_DIFF_CHARS:
         return diff

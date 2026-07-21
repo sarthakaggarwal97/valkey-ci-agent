@@ -1946,3 +1946,67 @@ class TestSecurityOnlyCutNotEmpty:
         )
         reasons = rc._hold_reasons(self._GA_PLAN, meta)
         assert "no new release notes (every PR already credited)" not in reasons
+
+
+class TestNamedCveHold:
+    """A PR naming a CVE holds the cut at any urgency short of resolved SECURITY."""
+
+    _PLAN = BranchPlan("ga", "7.2", "7.2")
+    _CVE_REASON = "a PR names a CVE (needs SECURITY urgency and a Security Fixes entry)"
+
+    @staticmethod
+    def _regen(impacts):
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            bullet_count=1, had_prs=True, triage=(), included=1, skipped=(),
+            duplicate_prs=(), uncertain=(), ai_included=(), guardrail_included=(),
+            ai_excluded=(), label_excluded=(), impact_review=impacts,
+            unresolved=(), unresolved_backports=(), unresolved_prs=(),
+            unresolved_cherry_picks=(), collided=(), reverted=(), base_tag="7.2.13",
+        )
+
+    def _meta(self, urgency, security_fixes, impacts):
+        return rc._NotesMeta(
+            regen=self._regen(impacts), already_credited=(), noted_bullet_count=1,
+            urgency=urgency, security_fixes=security_fixes, security_noted_prs=(),
+            baseline_unanchored=False,
+        )
+
+    @staticmethod
+    def _cve_impact():
+        from scripts.release_notes.models import ReleaseImpact
+        return (ReleaseImpact(
+            number=3619, title="Fix zipmap validation (CVE-2026-25243)", url="u",
+            reason="security, access-control, or injection hardening",
+            cve="CVE-2026-25243",
+        ),)
+
+    def test_holds_at_high_urgency(self) -> None:
+        # The 7.2.14 dry-run gap: a CVE fix at HIGH shipped with no hold.
+        reasons = rc._hold_reasons(self._PLAN, self._meta("HIGH", None, self._cve_impact()))
+        assert self._CVE_REASON in reasons
+
+    def test_hold_survives_force_ready(self) -> None:
+        reasons = rc._hold_reasons(self._PLAN, self._meta("HIGH", None, self._cve_impact()))
+        assert rc._should_hold(reasons, force_ready=True)
+
+    def test_released_by_security_urgency_with_fixes(self) -> None:
+        reasons = rc._hold_reasons(self._PLAN, self._meta(
+            "SECURITY", ["Fix zipmap OOB (CVE-2026-25243) (#3619)"], self._cve_impact()))
+        assert self._CVE_REASON not in reasons
+
+    def test_security_urgency_without_fixes_still_holds(self) -> None:
+        reasons = rc._hold_reasons(self._PLAN, self._meta("SECURITY", None, self._cve_impact()))
+        assert self._CVE_REASON in reasons
+
+    def test_non_cve_impact_at_high_not_held(self) -> None:
+        from scripts.release_notes.models import ReleaseImpact
+        impacts = (ReleaseImpact(number=1, title="Fix crash", url="u",
+                                 reason="server crash", cve=""),)
+        reasons = rc._hold_reasons(self._PLAN, self._meta("HIGH", None, impacts))
+        assert self._CVE_REASON not in reasons
+
+    def test_body_section_names_the_cve(self) -> None:
+        body = rc._impact_review_section(self._cve_impact(), "HIGH")
+        assert "CVE-2026-25243" in body
+        assert "holds the cut" in body

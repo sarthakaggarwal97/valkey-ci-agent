@@ -121,3 +121,29 @@ def test_exact_pr_number_rejects_coercible_values() -> None:
     assert ai_inputs.exact_pr_number(40) == 40
     for value in (True, 40.0, "40", None):
         assert ai_inputs.exact_pr_number(value) is None
+
+
+class TestFailedDiffReads:
+    """A failed diff read marks the PR for low-confidence review; empty is not failed."""
+
+    def test_failed_read_recorded(self, monkeypatch) -> None:
+        def _fake(repo_dir, sha):
+            return "diff --git a b" if sha == "sha_ok" else None
+
+        monkeypatch.setattr(ai_inputs, "_collect_commit_diff", _fake)
+        prs = [
+            MergedPR(number=1, title="a", author="x", url="u", merge_commit_sha="sha_ok"),
+            MergedPR(number=2, title="b", author="x", url="u", merge_commit_sha="sha_fail"),
+            MergedPR(number=3, title="c", author="x", url="u"),  # no sha
+        ]
+        collector = ai_inputs.PRDiffCollector("/tmp", prs)
+        diffs = collector.collect(prs)
+        assert diffs == {1: "diff --git a b"}
+        assert collector.failed_reads == {2}
+
+    def test_empty_diff_is_not_a_failure(self, monkeypatch) -> None:
+        monkeypatch.setattr(ai_inputs, "_collect_commit_diff", lambda repo_dir, sha: "")
+        prs = [MergedPR(number=1, title="a", author="x", url="u", merge_commit_sha="sha_empty")]
+        collector = ai_inputs.PRDiffCollector("/tmp", prs)
+        assert collector.collect(prs) == {}
+        assert collector.failed_reads == set()

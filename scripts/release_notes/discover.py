@@ -369,10 +369,13 @@ def resolve_commit_prs(
             if pulls is None:
                 unresolved.append(UnresolvedCommit(sha=sha, subject=subject))
                 continue
+            # An unmerged PR (e.g. an in-flight sweep containing this already-landed
+            # commit) shipped nothing and must not be credited.
+            merged_pulls = [pull for pull in pulls if _is_merged_pull(pull)]
             direct_pull = next(
                 (
                     pull
-                    for pull in pulls
+                    for pull in merged_pulls
                     if not _is_trusted_sweep_pull(
                         repo, pull, release_branch=release_branch
                     )
@@ -400,7 +403,7 @@ def resolve_commit_prs(
                     # later in the walk retain their exact diff SHA.
                     deferred_sweep_manifests.append((sha, manifest))
                     continue
-                numbers = {int(pulls[0].number)} if pulls else set()
+                numbers = {int(merged_pulls[0].number)} if merged_pulls else set()
         if not numbers:
             logger.warning("Commit %s has no resolvable PR (subject: %s)", sha[:12], subject[:80])
             unresolved.append(UnresolvedCommit(sha=sha, subject=subject))
@@ -569,16 +572,28 @@ def _pr_from_cherry_pick_trailer(
     return None
 
 
+def _is_merged_pull(pull: Any) -> bool:
+    """True unless *pull* is known-unmerged. An open or closed-unmerged PR (e.g.
+    an in-flight sweep containing an already-landed commit) must never be
+    credited for a range commit: the note would reference a PR that shipped
+    nothing. Follows the same truthiness convention as _source_is_trusted."""
+    return bool(
+        getattr(pull, "merged", None)
+        or getattr(pull, "merged_at", None) is not None
+    )
+
+
 def _pr_from_commit_api(
     repo: Any,
     sha: str,
     *,
     pulls_cache: dict[str, list[Any]] | None = None,
 ) -> int | None:
-    """Return the first PR number associated with sha via Commit.get_pulls(), or None."""
+    """Return the first merged PR number associated with sha via Commit.get_pulls(), or None."""
     pulls = _pulls_from_commit_api(repo, sha, cache=pulls_cache)
     for pull in pulls or ():
-        return int(pull.number)
+        if _is_merged_pull(pull):
+            return int(pull.number)
     return None
 
 
