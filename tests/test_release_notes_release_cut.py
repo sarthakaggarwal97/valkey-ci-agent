@@ -426,41 +426,27 @@ class TestPromoteAndBump:
         assert "### Contributors" in new_notes
         assert "Jane Doe @jane" in new_notes
 
-    def test_contributor_refs_resolved_for_compare_api(self, clone, monkeypatch) -> None:
-        # Regression: the contributor base is a remote-tracking ref
-        # (origin/unstable) and the head is a branch ref. Both resolve for git but
-        # 404 the GitHub compare API, which silently drops to the names-only
-        # git-shortlog fallback. promote_and_bump must dereference both to SHAs
-        # (via _compare_ref) before calling list_contributors, so the API path,
-        # and thus the "Full Name @handle" format, is preserved.
+    def test_contributors_use_only_resolved_source_pr_authors(
+        self, clone, monkeypatch
+    ) -> None:
         grouped = self._grouped_with_bullet(clone)
         version_text = open(os.path.join(clone, "src", "version.h"), encoding="utf-8").read()
         captured: dict = {}
 
-        def _list(repo, base, head, token, *, repo_dir=None, pr_logins=None):
-            captured["base"] = base
-            captured["head"] = head
+        def _list(original_pr_logins, token=None):
+            captured["logins"] = original_pr_logins
             return ["Jane Doe @jane"]
 
         monkeypatch.setattr(rc.gc, "list_contributors", _list)
-        # Stub ref resolution so no real git repo is needed: prove the values
-        # passed to list_contributors are what _compare_ref returned, not the
-        # raw branch refs.
-        monkeypatch.setattr(
-            rc, "_compare_ref",
-            lambda repo_dir, ref: {
-                "origin/unstable": "base_sha", "origin/9.1": "head_sha"
-            }[ref],
-        )
         promote_and_bump(
             clone, grouped=grouped, dest_notes_text="",
             dest_version_text=version_text, version="9.1.0", stage_lc="rc2",
             urgency="LOW", date="2026-06-25", repo_full_name="valkey-io/valkey",
             contrib_base="origin/unstable",
             contrib_head="origin/9.1", token="t", security_fixes=None,
+            pr_authors=("jane", "bob"),
         )
-        assert captured["base"] == "base_sha"
-        assert captured["head"] == "head_sha"  # the resolved head SHA, not a raw ref
+        assert captured["logins"] == ["jane", "bob"]
 
     def test_compare_ref_dereferences_to_sha(self, tmp_path) -> None:
         # _compare_ref turns a branch name into the commit SHA the compare API

@@ -29,6 +29,7 @@ from scripts.release_notes.backport_refs import (
     source_pr_from_backport_body,
     source_pr_from_backport_title,
     source_pr_from_branch,
+    source_prs_from_backport_body,
     source_title_from_backport_title,
     summary_source_pr_from_body,
     summary_source_title_from_body,
@@ -65,6 +66,13 @@ _SWEEP_BRANCH_PREFIX = "agent/backport/sweep/"
 _TRAILING_REF_RE = re.compile(r"\(#(\d+)\)[)\s.]*$")
 # GitHub merge-commit subject: ``Merge pull request #N from ...``.
 _MERGE_COMMIT_RE = re.compile(r"^Merge pull request #(\d+)\b")
+# Canonical git-revert shape without a trailing PR number of its own. A revert
+# merged through an ordinary PR has ``... (#container)`` after the quote and is
+# intentionally left to the normal subject/API tiers.
+_CANONICAL_REVERT_SUBJECT_RE = re.compile(r'^Revert "(.+)"$')
+_CANONICAL_REVERT_BODY_RE = re.compile(
+    r"(?im)^This reverts commit ([0-9a-f]{7,40})\.\s*$"
+)
 
 
 def _pr_numbers_from_subjects(subjects: list[str]) -> set[int]:
@@ -77,6 +85,42 @@ def _pr_numbers_from_subjects(subjects: list[str]) -> set[int]:
         if m:
             numbers.add(int(m.group(1)))
     return numbers
+
+
+def _canonical_revert_source_pr(repo: Any, subject: str, body: str) -> int | None:
+    """Return the source PR undone by a verified canonical revert commit.
+
+    The quoted title alone is contributor-controlled and is not enough. Verify
+    that the body names an existing commit and that commit's actual subject is
+    exactly the quoted title before trusting its trailing ``(#N)`` identity.
+    This catches release-branch sweeps that cherry-pick a revert whose target SHA
+    came from a sibling sweep history, as happened for 8.0/#2811.
+    """
+    subject_match = _CANONICAL_REVERT_SUBJECT_RE.fullmatch(subject.strip())
+    body_match = _CANONICAL_REVERT_BODY_RE.search(body or "")
+    if subject_match is None or body_match is None:
+        return None
+    target_sha = body_match.group(1)
+    try:
+        target = retry_github_call(
+            lambda: repo.get_commit(target_sha), retries=3,
+            description=f"reverted commit {target_sha[:12]}",
+        )
+        message = getattr(getattr(target, "commit", None), "message", None)
+    except Exception as exc:  # noqa: BLE001 - failed proof falls through safely
+        logger.warning("Could not verify reverted commit %s: %s", target_sha[:12], exc)
+        return None
+    if not isinstance(message, str):
+        return None
+    target_subject = message.splitlines()[0].strip()
+    if target_subject != subject_match.group(1).strip():
+        logger.warning(
+            "Revert %s quoted title does not match target %s; not trusting its PR identity",
+            subject[:80], target_sha[:12],
+        )
+        return None
+    numbers = _pr_numbers_from_subjects([target_subject])
+    return next(iter(numbers)) if len(numbers) == 1 else None
 
 
 # Cap PR body length for prompt context; strip HTML comments and DCO trailers.
@@ -313,9 +357,25 @@ def resolve_commit_prs(
     deferred_sweep_manifests: list[tuple[str, set[int]]] = []
     reverted: dict[int, RevertedSourcePR] = {}
     pulls_cache: dict[str, list[Any]] = {}
+
+    def mark_reverted(number: int, title: str, sha: str) -> None:
+        logger.warning(
+            "Range commit %s reverts source PR #%s (%r); removing any earlier "
+            "positive attribution and surfacing it for review",
+            sha[:12], number, title[:80],
+        )
+        pr_to_sha.pop(number, None)
+        winner_subject.pop(number, None)
+        cherry_pick_suspects.pop(number, None)
+        reverted[number] = RevertedSourcePR(number=number, title=title, sha=sha)
+
     for sha, subject, body in commits:
         unconfirmed_source_shas: tuple[str, ...] = ()
         via_subject = False
+        canonical_revert = _canonical_revert_source_pr(repo, subject, body)
+        if canonical_revert is not None:
+            mark_reverted(canonical_revert, subject, sha)
+            continue
         numbers, revert_rows, manifest_lookup_failed = _trusted_applied_source_prs(
             repo,
             sha,
@@ -325,13 +385,7 @@ def resolve_commit_prs(
             pulls_cache=pulls_cache,
         )
         for number, title in revert_rows.items():
-            if number not in reverted:
-                logger.warning(
-                    "Sweep manifest row for #%s is a revert (%r); surfacing it for "
-                    "review instead of noting the original change",
-                    number, title[:80],
-                )
-                reverted[number] = RevertedSourcePR(number=number, title=title, sha=sha)
+            mark_reverted(number, title, sha)
         if manifest_lookup_failed:
             logger.warning(
                 "Commit %s has a sweep manifest whose associated PR could not be "
@@ -389,13 +443,7 @@ def resolve_commit_prs(
                     repo, pulls, release_branch=release_branch
                 )
                 for number, title in assoc_reverts.items():
-                    if number not in reverted:
-                        logger.warning(
-                            "Sweep manifest row for #%s is a revert (%r); surfacing it "
-                            "for review instead of noting the original change",
-                            number, title[:80],
-                        )
-                        reverted[number] = RevertedSourcePR(number=number, title=title, sha=sha)
+                    mark_reverted(number, title, sha)
                 if manifest:
                     # A rebase-merged sweep can contain repair commits whose messages
                     # have no source identity. Its trusted PR body accounts for those
@@ -412,6 +460,9 @@ def resolve_commit_prs(
         # source PRs. Sort within that commit so insertion order remains stable;
         # insertion order across commits still represents the release range.
         for number in sorted(numbers):
+            # A later re-land supersedes an earlier revert; order, rather than
+            # mere co-occurrence in the range, determines the final shipped state.
+            reverted.pop(number, None)
             if number in pr_to_sha:
                 # Detect distinct-subject collisions on the same (#N).
                 won = winner_subject.get(number)
@@ -434,11 +485,13 @@ def resolve_commit_prs(
                 )
     for sha, manifest in deferred_sweep_manifests:
         for number in sorted(manifest):
-            if number not in pr_to_sha:
+            # An associated sweep manifest summarizes the whole PR and is applied
+            # only after the walk, so its commit position cannot prove a re-land.
+            # Keep a verified revert authoritative; a later directly resolved
+            # source commit above is the evidence that can clear it.
+            if number not in reverted and number not in pr_to_sha:
                 pr_to_sha[number] = sha
-    # A PR that also resolved as shipped (its change re-landed via another range
-    # commit) is not a pure revert: keep the attribution and drop the review item.
-    reverted_out = [r for n, r in sorted(reverted.items()) if n not in pr_to_sha]
+    reverted_out = [r for _, r in sorted(reverted.items())]
     logger.info(
         "Resolved %d unique PR(s) from %d commit(s); %d unresolved, %d collided, "
         "%d unconfirmed cherry-pick(s), %d reverted manifest row(s)",
@@ -784,6 +837,30 @@ def _recover_source_pr(repo: Any, pull: Any) -> int | None:
     return source_pr_from_branch(head_ref)
 
 
+def _recover_multi_source_prs(pull: Any) -> tuple[int, ...]:
+    """Return corroborated sources for a manually assembled container backport.
+
+    Trust the expansion only when an explicit leading ``Backports #...`` line
+    and the PR's actual commit subjects name the same multiple source PRs. This
+    prevents a body-only claim from suppressing the container or minting notes
+    for unrelated PRs.
+    """
+    body_sources = source_prs_from_backport_body(pull.body or "")
+    if len(body_sources) < 2:
+        return ()
+    try:
+        commits = retry_github_call(
+            lambda: list(pull.get_commits()), retries=3,
+            description=f"commits of multi-source PR #{pull.number}",
+        )
+        subjects = [c.commit.message.splitlines()[0] for c in commits if c.commit.message]
+    except Exception as exc:  # noqa: BLE001 - failed proof falls back safely
+        logger.warning("Could not read commits of multi-source PR #%s: %s", pull.number, exc)
+        return ()
+    commit_sources = _pr_numbers_from_subjects(subjects)
+    return body_sources if set(body_sources) == commit_sources else ()
+
+
 def _is_backport_pull(pull: Any) -> bool:
     """True if pull is a backport (by title, label, summary table, or branch name)."""
     title = pull.title or ""
@@ -793,6 +870,7 @@ def _is_backport_pull(pull: Any) -> bool:
     if (
         summary_source_pr_from_body(pull.body or "") is not None
         or source_pr_from_backport_body(pull.body or "") is not None
+        or bool(source_prs_from_backport_body(pull.body or ""))
     ):
         return True
     head_ref = getattr(getattr(pull, "head", None), "ref", "") or ""
@@ -864,6 +942,26 @@ def hydrate_prs(
 
         target_pull, target_number = pull, number
         if _is_backport_pull(pull):
+            multi_sources = _recover_multi_source_prs(pull)
+            if multi_sources:
+                source_pulls: list[tuple[int, Any]] = []
+                for source_number in multi_sources:
+                    source_pull = _fetch_pull(repo, source_number, pull_cache)
+                    if source_pull is None or not _is_merged_pull(source_pull):
+                        source_pulls = []
+                        break
+                    source_pulls.append((source_number, source_pull))
+                if source_pulls:
+                    logger.info(
+                        "Backport container PR #%s expanded to source PRs %s.",
+                        number, list(multi_sources),
+                    )
+                    for source_number, source_pull in source_pulls:
+                        if source_number not in final:
+                            final[source_number] = _build_merged_pr(
+                                source_pull, source_number, sha
+                            )
+                    continue
             source = _recover_source_pr(repo, pull)
             depth = 0
             visited = {number}

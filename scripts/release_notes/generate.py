@@ -47,6 +47,55 @@ _CRASH_EVIDENCE_RE = re.compile(
     r"(?:server|process) aborts?|assert(?:ion)?(?: failure)?)\b",
     re.IGNORECASE,
 )
+
+
+def _explicit_scope_evidence(scope: str) -> re.Pattern[str]:
+    """Match evidence that clearly limits an effect to a named environment."""
+    return re.compile(
+        rf"\b(?:on|for|affects?|limited to|specific to|only on)\s+(?:{scope})\b|"
+        rf"\b(?:{scope})(?:[- ]only|\s+(?:builds?|platforms?|systems?|"
+        rf"architectures?|hosts?))\b",
+        re.IGNORECASE,
+    )
+
+
+# Declarative, reusable checks for material environment boundaries. These are
+# intentionally limited to explicit evidence ("on ARM", "Windows-only", etc.)
+# so a passing mention such as "x86 is unaffected" does not create a false hold.
+_MATERIAL_SCOPE_RULES: tuple[
+    tuple[str, re.Pattern[str], re.Pattern[str]], ...
+] = (
+    (
+        "32-bit",
+        _explicit_scope_evidence(r"32[- ]bit"),
+        re.compile(r"\b32[- ]bit\b", re.IGNORECASE),
+    ),
+    (
+        "ARM/aarch64",
+        _explicit_scope_evidence(r"(?:ARM(?:32|64)?|aarch64)"),
+        re.compile(r"\b(?:ARM(?:32|64)?|aarch64)\b", re.IGNORECASE),
+    ),
+    (
+        "big-endian",
+        _explicit_scope_evidence(r"big[- ]endian"),
+        re.compile(r"\bbig[- ]endian\b", re.IGNORECASE),
+    ),
+    (
+        "Windows",
+        _explicit_scope_evidence(r"Windows"),
+        re.compile(r"\bWindows\b", re.IGNORECASE),
+    ),
+    (
+        "macOS",
+        _explicit_scope_evidence(r"(?:macOS|OS X)"),
+        re.compile(r"\b(?:macOS|OS X)\b", re.IGNORECASE),
+    ),
+    (
+        "Linux",
+        _explicit_scope_evidence(r"Linux"),
+        re.compile(r"\bLinux\b", re.IGNORECASE),
+    ),
+)
 _CATEGORY_GUIDANCE = """\
 - Prefer the category for the user-visible surface over the fact that the PR is
   a bug fix. `Bug Fixes` is the fallback, not the automatic category for every
@@ -96,6 +145,10 @@ it to exactly one category.
   title and body are thin, but keep the note user-facing (describe the effect,
   not the code). The field is absent when no diff was available; do not treat its
   absence as meaningful.
+- Preserve material scope and preconditions from the evidence. Never broaden a
+  consequence from one architecture, platform, command path, or configuration to
+  all users. For example, if the body says out-of-bounds access occurs on 32-bit
+  platforms while 64-bit builds reject the payload, the note must say 32-bit.
 - Do NOT include the PR number, the author, "by @...", or any "(#N)". Those
   are added automatically. Write the description text ONLY. Do not end the text
   with sentence punctuation; attribution follows it in the canonical format.
@@ -254,6 +307,42 @@ def _apply_category_guardrail(
     )
 
 
+def _apply_factual_scope_guardrail(
+    bullet: CategorizedBullet, pr: MergedPR
+) -> CategorizedBullet:
+    """Flag a note that drops an explicit material environment boundary.
+
+    The model may still choose concise wording, but it must not turn an
+    architecture-limited consequence into a general claim. A flagged note holds
+    the release PR for review instead of silently publishing the broader claim.
+    """
+    evidence = f"{pr.title or ''}\n{pr.body or ''}"
+    omitted = [
+        label
+        for label, evidence_re, note_re in _MATERIAL_SCOPE_RULES
+        if evidence_re.search(evidence) and not note_re.search(bullet.text)
+    ]
+    if not omitted:
+        return bullet
+    correction = "explicit impact scope omitted: {}".format(", ".join(omitted))
+    reason = "; ".join(
+        part for part in (bullet.uncertain_reason, correction) if part
+    )
+    return CategorizedBullet(
+        pr_number=bullet.pr_number,
+        author=bullet.author,
+        category=bullet.category,
+        text=bullet.text,
+        uncertain=True,
+        uncertain_reason=reason,
+    )
+
+
+def _review_bullet(bullet: CategorizedBullet, pr: MergedPR) -> CategorizedBullet:
+    """Apply deterministic category and factual-scope review guardrails."""
+    return _apply_factual_scope_guardrail(_apply_category_guardrail(bullet, pr), pr)
+
+
 def generate(
     prs: Sequence[MergedPR],
     *,
@@ -301,7 +390,7 @@ def generate(
             continue
         # Re-stamp each bullet with the factual author from the PR.
         for bullet in bullets:
-            reviewed = _apply_category_guardrail(
+            reviewed = _review_bullet(
                 bullet, pr_by_number[bullet.pr_number]
             )
             all_bullets.append(CategorizedBullet(
@@ -341,7 +430,7 @@ def generate(
             )
             if retry_ok:
                 for bullet in retry_bullets:
-                    reviewed = _apply_category_guardrail(
+                    reviewed = _review_bullet(
                         bullet, pr_by_number[bullet.pr_number]
                     )
                     all_bullets.append(CategorizedBullet(

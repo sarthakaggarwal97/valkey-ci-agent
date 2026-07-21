@@ -325,25 +325,18 @@ def promote_and_bump(
     Returns ``(new_dest_notes, new_version_h)``. ``render_release_notes`` renders
     the categorized bullets into a new dated section atop the destination's running
     changelog, and ``set_version`` rewrites the three version macros. The contributor
-    list is generated over ``contrib_base..contrib_head`` and merged into the
-    cumulative footer. *valkey_clone_dir* is needed for the git range resolution
-    behind the contributor lookup.
+    list comes only from authors of source PRs resolved for this release range and
+    is merged into the cumulative footer. Commit authors and co-author trailers
+    are deliberately excluded because merges and backports can add incidental
+    identities.
     """
     contributors: list[str] = []
     if contrib_base:
-        # Resolve both ends to SHAs the GitHub compare API accepts. contrib_base
-        # is typically a remote-tracking ref (origin/unstable) and contrib_head a
-        # branch ref; both 404 the API and silently fall back to git shortlog
-        # (names only, no @handle, bots not filtered). See _compare_ref.
-        base_sha = _compare_ref(valkey_clone_dir, contrib_base)
-        head_sha = _compare_ref(valkey_clone_dir, contrib_head)
         contributors = gc.list_contributors(
-            repo_full_name, base_sha, head_sha, token, repo_dir=valkey_clone_dir,
-            pr_logins=list(pr_authors) if pr_authors else None,
+            list(pr_authors or ()), token=token
         )
         logger.info(
-            "Collected %d contributor(s) over %s..%s",
-            len(contributors), contrib_base, contrib_head,
+            "Collected %d original source-PR author(s)", len(contributors)
         )
     else:
         logger.warning("No contributor base ref/tag found; skipping contributor list")
