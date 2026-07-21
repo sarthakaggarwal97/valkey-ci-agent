@@ -354,12 +354,11 @@ def resolve_commit_prs(
     unresolved: list[UnresolvedCommit] = []
     collided: list[CollidedCommit] = []
     cherry_pick_suspects: dict[int, UnresolvedCherryPick] = {}
-    deferred_sweep_manifests: list[tuple[int, str, set[int]]] = []
+    deferred_sweep_manifests: list[tuple[str, set[int]]] = []
     reverted: dict[int, RevertedSourcePR] = {}
-    reverted_order: dict[int, int] = {}
     pulls_cache: dict[str, list[Any]] = {}
 
-    def mark_reverted(number: int, title: str, sha: str, order: int) -> None:
+    def mark_reverted(number: int, title: str, sha: str) -> None:
         logger.warning(
             "Range commit %s reverts source PR #%s (%r); removing any earlier "
             "positive attribution and surfacing it for review",
@@ -369,14 +368,13 @@ def resolve_commit_prs(
         winner_subject.pop(number, None)
         cherry_pick_suspects.pop(number, None)
         reverted[number] = RevertedSourcePR(number=number, title=title, sha=sha)
-        reverted_order[number] = order
 
-    for order, (sha, subject, body) in enumerate(commits):
+    for sha, subject, body in commits:
         unconfirmed_source_shas: tuple[str, ...] = ()
         via_subject = False
         canonical_revert = _canonical_revert_source_pr(repo, subject, body)
         if canonical_revert is not None:
-            mark_reverted(canonical_revert, subject, sha, order)
+            mark_reverted(canonical_revert, subject, sha)
             continue
         numbers, revert_rows, manifest_lookup_failed = _trusted_applied_source_prs(
             repo,
@@ -387,7 +385,7 @@ def resolve_commit_prs(
             pulls_cache=pulls_cache,
         )
         for number, title in revert_rows.items():
-            mark_reverted(number, title, sha, order)
+            mark_reverted(number, title, sha)
         if manifest_lookup_failed:
             logger.warning(
                 "Commit %s has a sweep manifest whose associated PR could not be "
@@ -445,13 +443,13 @@ def resolve_commit_prs(
                     repo, pulls, release_branch=release_branch
                 )
                 for number, title in assoc_reverts.items():
-                    mark_reverted(number, title, sha, order)
+                    mark_reverted(number, title, sha)
                 if manifest:
                     # A rebase-merged sweep can contain repair commits whose messages
                     # have no source identity. Its trusted PR body accounts for those
                     # commits, but defer the manifest so source-labelled cherry-picks
                     # later in the walk retain their exact diff SHA.
-                    deferred_sweep_manifests.append((order, sha, manifest))
+                    deferred_sweep_manifests.append((sha, manifest))
                     continue
                 numbers = {int(merged_pulls[0].number)} if merged_pulls else set()
         if not numbers:
@@ -465,7 +463,6 @@ def resolve_commit_prs(
             # A later re-land supersedes an earlier revert; order, rather than
             # mere co-occurrence in the range, determines the final shipped state.
             reverted.pop(number, None)
-            reverted_order.pop(number, None)
             if number in pr_to_sha:
                 # Detect distinct-subject collisions on the same (#N).
                 won = winner_subject.get(number)
@@ -486,12 +483,14 @@ def resolve_commit_prs(
                     number=number, sha=sha,
                     source_shas=unconfirmed_source_shas, subject=subject,
                 )
-    for order, sha, manifest in deferred_sweep_manifests:
+    for sha, manifest in deferred_sweep_manifests:
         for number in sorted(manifest):
-            if order > reverted_order.get(number, -1) and number not in pr_to_sha:
+            # An associated sweep manifest summarizes the whole PR and is applied
+            # only after the walk, so its commit position cannot prove a re-land.
+            # Keep a verified revert authoritative; a later directly resolved
+            # source commit above is the evidence that can clear it.
+            if number not in reverted and number not in pr_to_sha:
                 pr_to_sha[number] = sha
-                reverted.pop(number, None)
-                reverted_order.pop(number, None)
     reverted_out = [r for _, r in sorted(reverted.items())]
     logger.info(
         "Resolved %d unique PR(s) from %d commit(s); %d unresolved, %d collided, "

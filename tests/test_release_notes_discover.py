@@ -536,6 +536,51 @@ class TestResolveCommitPrs:
         assert pr_to_sha == {7: "shaReland"}
         assert reverted == []
 
+    def test_deferred_sweep_manifest_cannot_resurrect_verified_revert(self) -> None:
+        # An associated sweep manifest summarizes the full PR; its repair commit
+        # appearing after a revert is not evidence that the source was re-landed.
+        title = "Enhance stale packet detection (#2811)"
+        target_sha = "956fbe96152d3fad41ac98eefc9a878e81a2063d"
+        target = MagicMock()
+        target.commit.message = title
+        sweep_pull = MagicMock(number=50)
+        sweep_pull.title = "[backport] Backport sweep for 8.0"
+        sweep_pull.body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n"
+            "| #2811 | Enhance stale packet detection |\n"
+        )
+        sweep_pull.head.ref = "agent/backport/sweep/8.0"
+        sweep_pull.head.repo.full_name = "valkey-io/valkey"
+        sweep_pull.base.ref = "8.0"
+        sweep_pull.merged = True
+        repair = MagicMock()
+        repair.get_pulls.return_value = [sweep_pull]
+        repo = MagicMock()
+        repo.full_name = "valkey-io/valkey"
+        repo.get_commit.side_effect = lambda sha: (
+            target if sha == target_sha else repair
+        )
+        commits = [
+            ("shaApplied", title, ""),
+            (
+                "shaRevert",
+                f'Revert "{title}"',
+                f"This reverts commit {target_sha}.",
+            ),
+            ("shaRepair", "Fix CI after cherry-pick", ""),
+        ]
+
+        pr_to_sha, unresolved, _suspects, _collided, reverted = resolve_commit_prs(
+            repo, commits, release_branch="8.0"
+        )
+
+        assert pr_to_sha == {}
+        assert unresolved == []
+        assert [(item.number, item.sha) for item in reverted] == [
+            (2811, "shaRevert")
+        ]
+
     def test_subject_parse_and_dedup(self, tmp_path) -> None:
         # Two commits carrying the same trailing (#N) for the *same* change (a
         # tool-made backport preserves the source subject verbatim) collapse to one

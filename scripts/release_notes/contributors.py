@@ -1,6 +1,6 @@
 """Build a deduplicated, alpha-sorted contributor list for a release range.
 
-Uses the GitHub compare API for logins (with git-shortlog fallback) and unions
+Uses the GitHub compare API for logins (with local-git fallback) and unions
 in Co-authored-by trailers to credit authors collapsed by squash merges.
 Stdlib only (urllib), no third-party dependencies.
 """
@@ -78,16 +78,17 @@ def _api_get_with_retry(url: str, token: Optional[str], label: str) -> object:
 
 def _compare_logins(
     repo: str, base_ref: str, head_ref: str, token: Optional[str]
-) -> "tuple[List[str], bool, List[str]]":
-    """Return ``(logins, truncated, git_names)`` via the GitHub compare API.
+) -> "tuple[List[str], bool, List[_CoauthorIdentity]]":
+    """Return ``(logins, truncated, git_identities)`` via the compare API.
 
     ``truncated`` is True when the API's 250-commit cap was hit, signaling the
-    caller to supplement from git-shortlog.
+    caller to supplement from local git history. Git author emails are retained so a
+    commit author can be reconciled with an alternate co-author name or handle.
     """
     logins: List[str] = []
-    git_names: List[str] = []
+    git_identities: List[_CoauthorIdentity] = []
     seen = set()
-    seen_git_names: "set[str]" = set()
+    seen_git_identities: "set[tuple[str, str]]" = set()
     page = 1
     per_page = 100  # GitHub max per_page
     max_pages = 5  # compare endpoint caps at 250 commits total
@@ -119,10 +120,21 @@ def _compare_logins(
                 if isinstance(git_author, dict):
                     git_name = git_author.get("name")
                     if isinstance(git_name, str) and git_name.strip():
-                        key = git_name.strip().casefold()
-                        if key not in seen_git_names and not _is_bot(git_name):
-                            seen_git_names.add(key)
-                            git_names.append(git_name.strip())
+                        git_email = git_author.get("email")
+                        email = (
+                            git_email.strip()
+                            if isinstance(git_email, str)
+                            else ""
+                        )
+                        key = (git_name.strip().casefold(), email.casefold())
+                        if (
+                            key not in seen_git_identities
+                            and not _is_bot(git_name)
+                        ):
+                            seen_git_identities.add(key)
+                            git_identities.append(
+                                _CoauthorIdentity(git_name.strip(), email)
+                            )
             if not isinstance(login, str) or not login or _is_bot(login):
                 continue
             login_key = login.casefold()
@@ -137,10 +149,10 @@ def _compare_logins(
     if truncated:
         logger.warning(
             "Contributor range %s..%s spans %d commits but the compare API "
-            "returned only %d; supplementing the tail from git shortlog.",
+            "returned only %d; supplementing the tail from local git.",
             base_ref, head_ref, total_commits, seen_commits,
         )
-    return logins, truncated, git_names
+    return logins, truncated, git_identities
 
 
 def _display_name(repo_login: str, token: Optional[str]) -> Optional[str]:
@@ -160,11 +172,18 @@ def _display_name(repo_login: str, token: Optional[str]) -> Optional[str]:
     return None
 
 
-def _git_shortlog_names(base_ref: str, head_ref: str, repo_dir: str) -> List[str]:
-    """Author names from ``git shortlog -sn`` over the range. Bots filtered out."""
+def _git_author_identities(
+    base_ref: str, head_ref: str, repo_dir: str
+) -> List[_CoauthorIdentity]:
+    """Author names and emails from local git history, with bots filtered out."""
     try:
         out = subprocess.run(
-            ["git", "shortlog", "-sn", "{}..{}".format(base_ref, head_ref)],
+            [
+                "git",
+                "log",
+                "--format=%aN%x09%aE",
+                "{}..{}".format(base_ref, head_ref),
+            ],
             cwd=repo_dir,
             check=True,
             capture_output=True,
@@ -172,16 +191,18 @@ def _git_shortlog_names(base_ref: str, head_ref: str, repo_dir: str) -> List[str
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError):
         return []
-    names = []
+    identities: List[_CoauthorIdentity] = []
+    seen: set[tuple[str, str]] = set()
     for line in out.splitlines():
-        line = line.strip()
-        if not line:
+        name, separator, email = line.partition("\t")
+        name = name.strip()
+        email = email.strip() if separator else ""
+        key = (name.casefold(), email.casefold())
+        if not name or _is_bot(name) or key in seen:
             continue
-        # Format: "<count>\t<name>"
-        parts = line.split("\t", 1)
-        if len(parts) == 2 and parts[1].strip() and not _is_bot(parts[1]):
-            names.append(parts[1].strip())
-    return names
+        seen.add(key)
+        identities.append(_CoauthorIdentity(name, email))
+    return identities
 
 
 def _identity_aliases(name: str, email: str = "") -> set[str]:
@@ -312,19 +333,22 @@ def list_contributors(
 ) -> List[str]:
     """Return alpha-sorted ``"Full Name @handle"`` strings for the commit range.
 
-    Falls back to name-only entries from git-shortlog when the API is unavailable.
+    Falls back to name-only entries from local git when the API is unavailable.
     *pr_logins* are GitHub logins resolved from PR metadata, giving contributors
     inside squash-merged commits proper @handles instead of bare trailer names.
     """
     truncated = False
-    git_names: List[str] = []
+    git_identities: List[_CoauthorIdentity] = []
     try:
-        logins, truncated, git_names = _compare_logins(repo, base_ref, head_ref, token)
+        logins, truncated, git_identities = _compare_logins(
+            repo, base_ref, head_ref, token
+        )
     except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError):
         logins = []
 
     entries: List[str] = []
     have: set[str] = set()
+    local_git_identities = _git_author_identities(base_ref, head_ref, repo_dir)
     if logins:
         for login in logins:
             name = _display_name(login, token) or login
@@ -332,18 +356,18 @@ def list_contributors(
             have.update(_identity_aliases(name))
             have.update(_identity_aliases(login))
     else:
-        for name in _git_shortlog_names(base_ref, head_ref, repo_dir):
-            aliases = _identity_aliases(name)
+        for identity in local_git_identities:
+            aliases = _identity_aliases(identity.name, identity.email)
             if aliases.isdisjoint(have):
-                entries.append(name)
+                entries.append(identity.name)
             have.update(aliases)
 
-    # Seed git author names so shortlog dedup works when display name differs.
-    for gn in git_names:
-        have.update(_identity_aliases(gn))
+    # Seed compare-API git author names/email aliases before adding PR identities.
+    for git_identity in git_identities:
+        have.update(_identity_aliases(git_identity.name, git_identity.email))
 
     # PR-resolved logins: resolve to Name @handle, upgrading any existing
-    # bare-name entry from shortlog that matches.
+    # bare-name entry from local git that matches.
     if pr_logins:
         for login in pr_logins:
             if _is_bot(login):
@@ -364,22 +388,28 @@ def list_contributors(
                         break
             have.update(combined)
 
-    # Supplement from shortlog when the API's 250-commit cap was hit.
+    # Supplement from local git when the API's 250-commit cap was hit.
     if truncated:
-        for name in _git_shortlog_names(base_ref, head_ref, repo_dir):
-            aliases = _identity_aliases(name)
+        for identity in local_git_identities:
+            aliases = _identity_aliases(identity.name, identity.email)
             if aliases.isdisjoint(have):
-                entries.append(name)
+                entries.append(identity.name)
             have.update(aliases)
 
-    # Union in co-authors invisible to both the compare API and shortlog.
+    # Keep the local email bridge available even when the compare API is
+    # unavailable or omits an email. Do this after the truncated supplement so
+    # tail-only authors are still added rather than merely marked as seen.
+    for git_identity in local_git_identities:
+        have.update(_identity_aliases(git_identity.name, git_identity.email))
+
+    # Union in co-authors invisible to both the compare API and local git authors.
     coauthors = _resolve_coauthor_aliases(
         _coauthor_identities_in_range(base_ref, head_ref, repo_dir)
     )
-    for identity in coauthors:
-        if identity.aliases.isdisjoint(have):
-            entries.append(identity.name)
-        have.update(identity.aliases)
+    for coauthor_identity in coauthors:
+        if coauthor_identity.aliases.isdisjoint(have):
+            entries.append(coauthor_identity.name)
+        have.update(coauthor_identity.aliases)
 
     entries.sort(key=_sort_key)
     return entries

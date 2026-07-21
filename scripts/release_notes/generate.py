@@ -47,10 +47,54 @@ _CRASH_EVIDENCE_RE = re.compile(
     r"(?:server|process) aborts?|assert(?:ion)?(?: failure)?)\b",
     re.IGNORECASE,
 )
-_LIMITED_32_BIT_SCOPE_RE = re.compile(
-    r"\b(?:on|for|affects?|limited to)\s+32-bit\b|\b32-bit\s+"
-    r"(?:builds?|platforms?|systems?|architectures?)\b",
-    re.IGNORECASE,
+
+
+def _explicit_scope_evidence(scope: str) -> re.Pattern[str]:
+    """Match evidence that clearly limits an effect to a named environment."""
+    return re.compile(
+        rf"\b(?:on|for|affects?|limited to|specific to|only on)\s+(?:{scope})\b|"
+        rf"\b(?:{scope})(?:[- ]only|\s+(?:builds?|platforms?|systems?|"
+        rf"architectures?|hosts?))\b",
+        re.IGNORECASE,
+    )
+
+
+# Declarative, reusable checks for material environment boundaries. These are
+# intentionally limited to explicit evidence ("on ARM", "Windows-only", etc.)
+# so a passing mention such as "x86 is unaffected" does not create a false hold.
+_MATERIAL_SCOPE_RULES: tuple[
+    tuple[str, re.Pattern[str], re.Pattern[str]], ...
+] = (
+    (
+        "32-bit",
+        _explicit_scope_evidence(r"32[- ]bit"),
+        re.compile(r"\b32[- ]bit\b", re.IGNORECASE),
+    ),
+    (
+        "ARM/aarch64",
+        _explicit_scope_evidence(r"(?:ARM(?:32|64)?|aarch64)"),
+        re.compile(r"\b(?:ARM(?:32|64)?|aarch64)\b", re.IGNORECASE),
+    ),
+    (
+        "big-endian",
+        _explicit_scope_evidence(r"big[- ]endian"),
+        re.compile(r"\bbig[- ]endian\b", re.IGNORECASE),
+    ),
+    (
+        "Windows",
+        _explicit_scope_evidence(r"Windows"),
+        re.compile(r"\bWindows\b", re.IGNORECASE),
+    ),
+    (
+        "macOS",
+        _explicit_scope_evidence(r"(?:macOS|OS X)"),
+        re.compile(r"\b(?:macOS|OS X)\b", re.IGNORECASE),
+    ),
+    (
+        "Linux",
+        _explicit_scope_evidence(r"Linux"),
+        re.compile(r"\bLinux\b", re.IGNORECASE),
+    ),
 )
 _CATEGORY_GUIDANCE = """\
 - Prefer the category for the user-visible surface over the fact that the PR is
@@ -266,18 +310,21 @@ def _apply_category_guardrail(
 def _apply_factual_scope_guardrail(
     bullet: CategorizedBullet, pr: MergedPR
 ) -> CategorizedBullet:
-    """Flag a note that drops an explicit 32-bit impact boundary.
+    """Flag a note that drops an explicit material environment boundary.
 
     The model may still choose concise wording, but it must not turn an
     architecture-limited consequence into a general claim. A flagged note holds
     the release PR for review instead of silently publishing the broader claim.
     """
     evidence = f"{pr.title or ''}\n{pr.body or ''}"
-    if not _LIMITED_32_BIT_SCOPE_RE.search(evidence):
+    omitted = [
+        label
+        for label, evidence_re, note_re in _MATERIAL_SCOPE_RULES
+        if evidence_re.search(evidence) and not note_re.search(bullet.text)
+    ]
+    if not omitted:
         return bullet
-    if re.search(r"\b32-bit\b", bullet.text, re.IGNORECASE):
-        return bullet
-    correction = "explicit 32-bit impact scope omitted"
+    correction = "explicit impact scope omitted: {}".format(", ".join(omitted))
     reason = "; ".join(
         part for part in (bullet.uncertain_reason, correction) if part
     )

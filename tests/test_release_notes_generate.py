@@ -512,7 +512,7 @@ class TestFactualScopeGuardrail:
 
         (bullet,) = result.bullets
         assert bullet.uncertain
-        assert "32-bit impact scope omitted" in bullet.uncertain_reason
+        assert "impact scope omitted: 32-bit" in bullet.uncertain_reason
 
     def test_preserved_32_bit_scope_is_not_flagged(self) -> None:
         pr = _pr(
@@ -524,6 +524,41 @@ class TestFactualScopeGuardrail:
             "pr": 3920,
             "category": "Bug Fixes",
             "text": "Reject crafted payloads that can cause out-of-bounds access on 32-bit builds",
+        }], "skipped": []})
+
+        result = generate([pr], repo_dir="/tmp", categories=_CATEGORIES, run_fn=run)
+
+        (bullet,) = result.bullets
+        assert not bullet.uncertain
+
+    def test_missing_arm_scope_is_flagged(self) -> None:
+        pr = _pr(
+            5000,
+            title="Fix atomic alignment on aarch64",
+            body="On ARM64 systems an unaligned access can crash the server.",
+        )
+        run = _fake_run({"bullets": [{
+            "pr": 5000,
+            "category": "Bug Fixes",
+            "text": "Prevent unaligned atomic accesses from crashing the server",
+        }], "skipped": []})
+
+        result = generate([pr], repo_dir="/tmp", categories=_CATEGORIES, run_fn=run)
+
+        (bullet,) = result.bullets
+        assert bullet.uncertain
+        assert "impact scope omitted: ARM/aarch64" in bullet.uncertain_reason
+
+    def test_preserved_windows_scope_is_not_flagged(self) -> None:
+        pr = _pr(
+            5001,
+            title="Fix path handling for Windows builds",
+            body="Windows builds used the wrong path separator.",
+        )
+        run = _fake_run({"bullets": [{
+            "pr": 5001,
+            "category": "Bug Fixes",
+            "text": "Use the correct path separator on Windows",
         }], "skipped": []})
 
         result = generate([pr], repo_dir="/tmp", categories=_CATEGORIES, run_fn=run)

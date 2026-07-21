@@ -52,7 +52,9 @@ class TestComparePagination:
             return _page(calls["n"])
 
         monkeypatch.setattr(contrib, "_api_get", _fake_api_get)
-        logins, truncated, _git_names = contrib._compare_logins("r", "base", "head", "tok")
+        logins, truncated, _git_identities = contrib._compare_logins(
+            "r", "base", "head", "tok"
+        )
         assert calls["n"] == 3               # walked all three pages
         assert len(logins) == 250            # nobody past the first page dropped
         assert "u3_49" in logins             # a third-page author is present
@@ -99,31 +101,38 @@ class TestComparePagination:
                                 "commits": [{"author": {"login": "a"}}]},
         )
         with caplog.at_level("WARNING"):
-            logins, truncated, _git_names = contrib._compare_logins("r", "base", "head", None)
+            logins, truncated, _git_identities = contrib._compare_logins(
+                "r", "base", "head", None
+            )
         assert logins == ["a"]
         assert truncated is True
-        assert _git_names == []
+        assert _git_identities == []
         assert any("compare API returned only" in r.message for r in caplog.records)
 
-    def test_git_names_extracted_from_inner_commit(self, monkeypatch) -> None:
+    def test_git_identities_extracted_from_inner_commit(self, monkeypatch) -> None:
         # The compare payload carries both a top-level author (GitHub user) and an
-        # inner commit.commit.author (git-level name). git_names collects the latter
-        # for shortlog dedup.
+        # inner commit.commit.author (git-level identity). The name and email are
+        # retained for shortlog/co-author dedup.
         monkeypatch.setattr(
             contrib, "_api_get",
             lambda url, token: {"total_commits": 2, "commits": [
                 {"author": {"login": "bob"},
-                 "commit": {"author": {"name": "Bob Dev"}}},
+                 "commit": {"author": {"name": "Bob Dev", "email": "bob@x"}}},
                 {"author": {"login": "ann"},
-                 "commit": {"author": {"name": "Ann Coder"}}},
+                 "commit": {"author": {"name": "Ann Coder", "email": "ann@x"}}},
             ]},
         )
-        logins, truncated, git_names = contrib._compare_logins("r", "base", "head", None)
+        logins, truncated, git_identities = contrib._compare_logins(
+            "r", "base", "head", None
+        )
         assert logins == ["bob", "ann"]
         assert truncated is False
-        assert set(git_names) == {"Bob Dev", "Ann Coder"}
+        assert set(git_identities) == {
+            contrib._CoauthorIdentity("Bob Dev", "bob@x"),
+            contrib._CoauthorIdentity("Ann Coder", "ann@x"),
+        }
 
-    def test_git_names_deduped_and_bots_excluded(self, monkeypatch) -> None:
+    def test_git_identities_deduped_and_bots_excluded(self, monkeypatch) -> None:
         monkeypatch.setattr(
             contrib, "_api_get",
             lambda url, token: {"total_commits": 3, "commits": [
@@ -135,8 +144,10 @@ class TestComparePagination:
                  "commit": {"author": {"name": "github-actions[bot]"}}},  # bot
             ]},
         )
-        _logins, _truncated, git_names = contrib._compare_logins("r", "base", "head", None)
-        assert git_names == ["Bob Dev"]
+        _logins, _truncated, git_identities = contrib._compare_logins(
+            "r", "base", "head", None
+        )
+        assert git_identities == [contrib._CoauthorIdentity("Bob Dev")]
 
     def test_non_list_commits_does_not_raise(self, monkeypatch) -> None:
         # A malformed 200 (commits as a scalar/dict) must not be iterated into an
@@ -212,7 +223,10 @@ class TestListContributors:
         _commit(repo, "late", name="Zed", email="zed@x")
 
         monkeypatch.setattr(contrib, "_compare_logins",
-                            lambda *a, **k: (["bob"], True, ["Bob Dev"]))
+                            lambda *a, **k: (
+                                ["bob"], True,
+                                [contrib._CoauthorIdentity("Bob Dev")],
+                            ))
         monkeypatch.setattr(contrib, "_display_name",
                             lambda login, token: {"bob": "Bob Dev"}.get(login))
         result = contrib.list_contributors("r", "base", "main", repo_dir=repo)
@@ -222,7 +236,7 @@ class TestListContributors:
 
     def test_display_name_differs_from_git_name_not_doubled(self, monkeypatch, tmp_path) -> None:
         # The bug: profile display name ("Bob Developer") differs from git author
-        # name ("Bob Dev"). Without git_names dedup, shortlog's "Bob Dev" would not
+        # name ("Bob Dev"). Without git identity dedup, shortlog's "Bob Dev" would not
         # match the API entry "Bob Developer @bob" and the person appears twice.
         repo = _init_repo(tmp_path)
         _commit(repo, "base", name="Root", email="root@x")
@@ -231,14 +245,17 @@ class TestListContributors:
         _commit(repo, "late", name="Zed", email="zed@x")
 
         # API sees Bob's login and resolves to "Bob Developer" (profile name).
-        # git_names carries "Bob Dev" (the commit-level author name the API saw).
+        # The compare identity carries "Bob Dev" (the git author name the API saw).
         monkeypatch.setattr(contrib, "_compare_logins",
-                            lambda *a, **k: (["bob"], True, ["Bob Dev"]))
+                            lambda *a, **k: (
+                                ["bob"], True,
+                                [contrib._CoauthorIdentity("Bob Dev")],
+                            ))
         monkeypatch.setattr(contrib, "_display_name",
                             lambda login, token: {"bob": "Bob Developer"}.get(login))
         result = contrib.list_contributors("r", "base", "main", repo_dir=repo)
         # Bob credited once (with handle under display name); shortlog's "Bob Dev"
-        # matches git_names and is not re-added. Zed (not in API window) is added.
+        # matches the git identity and is not re-added. Zed is added.
         assert result == ["Bob Developer @bob", "Zed"]
 
     def test_untruncated_compare_not_supplemented_from_shortlog(self, monkeypatch, tmp_path) -> None:
@@ -250,7 +267,10 @@ class TestListContributors:
         _commit(repo, "late", name="Zed", email="zed@x")
 
         monkeypatch.setattr(contrib, "_compare_logins",
-                            lambda *a, **k: (["bob"], False, ["Bob Dev"]))
+                            lambda *a, **k: (
+                                ["bob"], False,
+                                [contrib._CoauthorIdentity("Bob Dev")],
+                            ))
         monkeypatch.setattr(contrib, "_display_name",
                             lambda login, token: {"bob": "Bob Dev"}.get(login))
         result = contrib.list_contributors("r", "base", "main", repo_dir=repo)
@@ -487,6 +507,39 @@ class TestCoauthorUnion:
             "r", "base", "main", repo_dir=repo
         ) == ["jjuleslasarte @jjuleslasarte"]
 
+    def test_commit_author_email_links_alternate_coauthor_name(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        # A real release-range shape: GitHub/login and git-author name agree, but
+        # the co-author trailer uses a human display name. The commit email's
+        # normalized local part is the only bridge, so retaining it prevents a
+        # duplicate credit without hard-coding either spelling.
+        repo = _init_repo(tmp_path)
+        _commit(repo, "base", name="Root", email="root@x")
+        run_git(repo, "tag", "base")
+        _commit(
+            repo,
+            "direct",
+            name="jjuleslasarte",
+            email="jules.lasarte@gmail.com",
+        )
+        _commit(
+            repo,
+            "sweep",
+            name="valkeyrie-ops[bot]",
+            email="bot@x",
+            body="Co-authored-by: Jules Lasarte <lasartej@amazon.com>",
+        )
+
+        def _offline(*args, **kwargs):
+            raise urllib.error.URLError("rate limited")
+
+        monkeypatch.setattr(contrib, "_compare_logins", _offline)
+
+        assert contrib.list_contributors(
+            "r", "base", "main", repo_dir=repo
+        ) == ["jjuleslasarte"]
+
     def test_email_aliases_use_display_name_without_api_identity(
         self, monkeypatch, tmp_path
     ) -> None:
@@ -611,7 +664,10 @@ class TestPRLogins:
                      "Co-authored-by: Unknown Person <unknown@x>")
 
         monkeypatch.setattr(contrib, "_compare_logins",
-                            lambda *a, **k: (["alice123"], False, ["Alice"]))
+                            lambda *a, **k: (
+                                ["alice123"], False,
+                                [contrib._CoauthorIdentity("Alice")],
+                            ))
 
         def _mock_display(login, token):
             return {"alice123": "Alice", "devnick": None}.get(login)
