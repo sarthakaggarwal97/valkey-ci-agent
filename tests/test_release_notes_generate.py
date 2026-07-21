@@ -79,6 +79,11 @@ class TestBuildPrompt:
         assert "by @" in rule
         assert "(#" in rule
 
+    def test_prompt_requires_material_platform_scope(self) -> None:
+        prompt = build_prompt([_pr(1)], categories=_CATEGORIES)
+        assert "Never broaden" in prompt
+        assert "32-bit" in prompt
+
     def test_author_supplied_as_data_not_in_text_rules(self) -> None:
         # The author is given to the model as context (JSON payload) so it can
         # understand the change, but it lives in the ## Pull requests data block,
@@ -485,3 +490,43 @@ class TestCrashCategoryExemption:
         (bullet,) = result.bullets
         assert bullet.category == "Observability and Logging"
         assert bullet.uncertain
+
+
+class TestFactualScopeGuardrail:
+    def test_missing_32_bit_scope_is_flagged(self) -> None:
+        pr = _pr(
+            3920,
+            title="Reject integer overflow in zipmap validation",
+            body=(
+                "On 32-bit platforms this leads to out-of-bounds access. "
+                "On 64-bit builds the downstream size cap rejects it."
+            ),
+        )
+        run = _fake_run({"bullets": [{
+            "pr": 3920,
+            "category": "Bug Fixes",
+            "text": "Reject crafted payloads that could cause out-of-bounds access",
+        }], "skipped": []})
+
+        result = generate([pr], repo_dir="/tmp", categories=_CATEGORIES, run_fn=run)
+
+        (bullet,) = result.bullets
+        assert bullet.uncertain
+        assert "32-bit impact scope omitted" in bullet.uncertain_reason
+
+    def test_preserved_32_bit_scope_is_not_flagged(self) -> None:
+        pr = _pr(
+            3920,
+            title="Reject integer overflow in zipmap validation",
+            body="On 32-bit platforms this can cause out-of-bounds access.",
+        )
+        run = _fake_run({"bullets": [{
+            "pr": 3920,
+            "category": "Bug Fixes",
+            "text": "Reject crafted payloads that can cause out-of-bounds access on 32-bit builds",
+        }], "skipped": []})
+
+        result = generate([pr], repo_dir="/tmp", categories=_CATEGORIES, run_fn=run)
+
+        (bullet,) = result.bullets
+        assert not bullet.uncertain

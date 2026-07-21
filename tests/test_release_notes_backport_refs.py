@@ -16,6 +16,7 @@ from scripts.release_notes.backport_refs import (
     source_pr_from_backport_body,
     source_pr_from_backport_title,
     source_pr_from_branch,
+    source_prs_from_backport_body,
     source_title_from_backport_title,
     summary_source_pr_from_body,
     summary_source_title_from_body,
@@ -66,6 +67,18 @@ class TestCherryPickSourceShas:
         # Only a line that is exactly the trailer counts, not prose that happens
         # to mention a cherry-pick.
         assert cherry_pick_source_shas("this was a (cherry picked from commit) note") == []
+
+
+class TestMultiSourceBackportBody:
+    def test_reads_explicit_leading_backports_line_in_order(self) -> None:
+        body = "Backports #1826, #2750, and #3846 to 7.2.\n\nTwo fixes."
+        assert source_prs_from_backport_body(body) == (1826, 2750, 3846)
+
+    def test_deduplicates_repeated_sources(self) -> None:
+        assert source_prs_from_backport_body("Backport #7 and #7 to 8.0") == (7,)
+
+    def test_ignores_references_outside_leading_backport_line(self) -> None:
+        assert source_prs_from_backport_body("Fix the release branch\n\nSee #7 and #8") == ()
 
 
 class TestAppliedSourcePrsFromBody:

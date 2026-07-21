@@ -31,6 +31,13 @@ _BACKPORT_OF_BODY_RE = re.compile(
     r"(?:[/?#][^\s)]*)?\s*\)?\s*[.!]?\s*$"
 )
 
+# A manually assembled multi-PR backport can identify its sources on the first
+# non-empty line (for example, ``Backports #1826, #2750, and #3846 to 7.2``).
+# Keep this deliberately narrow: arbitrary PR references elsewhere in a body are
+# discussion, not attribution evidence.
+_BACKPORTS_BODY_LINE_RE = re.compile(r"^\s*backports?\b", re.IGNORECASE)
+_INLINE_PR_RE = re.compile(r"#(\d+)\b")
+
 # Matches a PR reference cell: "#123" or "[#123](url)".
 _PR_CELL_RE = re.compile(r"^(?:\[)?#(\d+)(?:\]\([^)]*\))?$")
 
@@ -65,6 +72,19 @@ def source_pr_from_backport_body(body: str) -> int | None:
     """Return ``N`` from a standalone ``backport of <GitHub PR URL>`` line."""
     match = _BACKPORT_OF_BODY_RE.search(body or "")
     return int(match.group(1)) if match else None
+
+
+def source_prs_from_backport_body(body: str) -> tuple[int, ...]:
+    """Return ordered ``#N`` sources from an explicit leading Backport(s) line.
+
+    This handles container PRs that intentionally carry several source changes.
+    A single source is returned too, but callers that expand containers should
+    require multiple entries plus corroborating commit subjects.
+    """
+    first_line = next((line.strip() for line in (body or "").splitlines() if line.strip()), "")
+    if not _BACKPORTS_BODY_LINE_RE.match(first_line):
+        return ()
+    return tuple(dict.fromkeys(int(number) for number in _INLINE_PR_RE.findall(first_line)))
 
 
 def cherry_pick_source_shas(commit_message: str) -> list[str]:

@@ -493,6 +493,49 @@ class TestListRangeCommits:
 
 
 class TestResolveCommitPrs:
+    def test_canonical_revert_removes_earlier_source_attribution(self) -> None:
+        # The 8.0/#2811 shape: a sweep carried the source change under one SHA,
+        # then a later canonical revert named an equivalent sibling-history SHA.
+        # Verify the target's real subject before removing the positive note.
+        title = "Enhance stale packet detection (#2811)"
+        target = MagicMock()
+        target.commit.message = title + "\n\nDetails"
+        repo = MagicMock()
+        repo.get_commit.return_value = target
+        commits = [
+            ("shaApplied", title, ""),
+            ("shaRevert", f'Revert "{title}"',
+             "This reverts commit 956fbe96152d3fad41ac98eefc9a878e81a2063d."),
+        ]
+
+        pr_to_sha, unresolved, _suspects, _collided, reverted = resolve_commit_prs(
+            repo, commits
+        )
+
+        assert pr_to_sha == {}
+        assert unresolved == []
+        assert [(item.number, item.sha) for item in reverted] == [(2811, "shaRevert")]
+
+    def test_reland_after_canonical_revert_is_credited(self) -> None:
+        title = "Fix a crash (#7)"
+        target = MagicMock()
+        target.commit.message = title
+        repo = MagicMock()
+        repo.get_commit.return_value = target
+        commits = [
+            ("shaOld", title, ""),
+            ("shaRevert", f'Revert "{title}"',
+             "This reverts commit abcdef1234567890."),
+            ("shaReland", title, ""),
+        ]
+
+        pr_to_sha, _unresolved, _suspects, _collided, reverted = resolve_commit_prs(
+            repo, commits
+        )
+
+        assert pr_to_sha == {7: "shaReland"}
+        assert reverted == []
+
     def test_subject_parse_and_dedup(self, tmp_path) -> None:
         # Two commits carrying the same trailing (#N) for the *same* change (a
         # tool-made backport preserves the source subject verbatim) collapse to one
@@ -1338,6 +1381,52 @@ class TestHydratePrsBackportRecovery:
         prs, _, _ = hydrate_prs(repo, {7: "shaDirect", 500: "shaBackport"})
         assert [p.number for p in prs] == [7]
         assert prs[0].author == "alice"
+
+    def test_expands_corroborated_multi_source_container_and_dedups(self) -> None:
+        # The #4205 shape: a manually assembled container names three sources in
+        # its leading body line and its actual commit subjects corroborate all
+        # three. Expand to the real PRs and never emit a fourth container bullet.
+        container = _pull(
+            4205,
+            title="[7.2] Backport FUNCTION FLUSH and cluster receiver fixes",
+            body="Backports #1826, #2750, and #3846 to the 7.2 branch.",
+            commit_subjects=[
+                "Fix FUNCTION FLUSH crash (#1826)",
+                "Initialize Lua attributes (#2750)",
+                "Fix cluster receiver use-after-free (#3846)",
+                "7.2-only allocator repair",
+            ],
+        )
+        sources = {
+            1826: _pull(1826, title="Fix FUNCTION FLUSH crash", author="a"),
+            2750: _pull(2750, title="Initialize Lua attributes", author="b"),
+            3846: _pull(3846, title="Fix cluster receiver use-after-free", author="c"),
+        }
+        repo = self._repo({4205: container, **sources})
+
+        prs, unresolved_backports, _ = hydrate_prs(
+            repo,
+            {1826: "shaDirectA", 3846: "shaDirectC", 4205: "shaContainer"},
+        )
+
+        assert [pr.number for pr in prs] == [1826, 3846, 2750]
+        assert 4205 not in {pr.number for pr in prs}
+        assert unresolved_backports == []
+
+    def test_multi_source_body_without_commit_corroboration_fails_closed(self) -> None:
+        container = _pull(
+            500,
+            title="[7.2] Backport assorted fixes",
+            body="Backports #7 and #8 to the 7.2 branch.",
+            commit_subjects=["Only one claimed source (#7)"],
+        )
+        source = _pull(7, title="Only one claimed source")
+        repo = self._repo({500: container, 7: source})
+
+        prs, unresolved_backports, _ = hydrate_prs(repo, {500: "shaContainer"})
+
+        assert [pr.number for pr in prs] == [500]
+        assert [item.number for item in unresolved_backports] == [500]
 
     def test_plain_pr_never_reads_commits_or_remaps(self) -> None:
         # A normal (non-backport) PR: exactly one get_pull, commits never read.

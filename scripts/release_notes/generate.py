@@ -47,6 +47,11 @@ _CRASH_EVIDENCE_RE = re.compile(
     r"(?:server|process) aborts?|assert(?:ion)?(?: failure)?)\b",
     re.IGNORECASE,
 )
+_LIMITED_32_BIT_SCOPE_RE = re.compile(
+    r"\b(?:on|for|affects?|limited to)\s+32-bit\b|\b32-bit\s+"
+    r"(?:builds?|platforms?|systems?|architectures?)\b",
+    re.IGNORECASE,
+)
 _CATEGORY_GUIDANCE = """\
 - Prefer the category for the user-visible surface over the fact that the PR is
   a bug fix. `Bug Fixes` is the fallback, not the automatic category for every
@@ -96,6 +101,10 @@ it to exactly one category.
   title and body are thin, but keep the note user-facing (describe the effect,
   not the code). The field is absent when no diff was available; do not treat its
   absence as meaningful.
+- Preserve material scope and preconditions from the evidence. Never broaden a
+  consequence from one architecture, platform, command path, or configuration to
+  all users. For example, if the body says out-of-bounds access occurs on 32-bit
+  platforms while 64-bit builds reject the payload, the note must say 32-bit.
 - Do NOT include the PR number, the author, "by @...", or any "(#N)". Those
   are added automatically. Write the description text ONLY. Do not end the text
   with sentence punctuation; attribution follows it in the canonical format.
@@ -254,6 +263,39 @@ def _apply_category_guardrail(
     )
 
 
+def _apply_factual_scope_guardrail(
+    bullet: CategorizedBullet, pr: MergedPR
+) -> CategorizedBullet:
+    """Flag a note that drops an explicit 32-bit impact boundary.
+
+    The model may still choose concise wording, but it must not turn an
+    architecture-limited consequence into a general claim. A flagged note holds
+    the release PR for review instead of silently publishing the broader claim.
+    """
+    evidence = f"{pr.title or ''}\n{pr.body or ''}"
+    if not _LIMITED_32_BIT_SCOPE_RE.search(evidence):
+        return bullet
+    if re.search(r"\b32-bit\b", bullet.text, re.IGNORECASE):
+        return bullet
+    correction = "explicit 32-bit impact scope omitted"
+    reason = "; ".join(
+        part for part in (bullet.uncertain_reason, correction) if part
+    )
+    return CategorizedBullet(
+        pr_number=bullet.pr_number,
+        author=bullet.author,
+        category=bullet.category,
+        text=bullet.text,
+        uncertain=True,
+        uncertain_reason=reason,
+    )
+
+
+def _review_bullet(bullet: CategorizedBullet, pr: MergedPR) -> CategorizedBullet:
+    """Apply deterministic category and factual-scope review guardrails."""
+    return _apply_factual_scope_guardrail(_apply_category_guardrail(bullet, pr), pr)
+
+
 def generate(
     prs: Sequence[MergedPR],
     *,
@@ -301,7 +343,7 @@ def generate(
             continue
         # Re-stamp each bullet with the factual author from the PR.
         for bullet in bullets:
-            reviewed = _apply_category_guardrail(
+            reviewed = _review_bullet(
                 bullet, pr_by_number[bullet.pr_number]
             )
             all_bullets.append(CategorizedBullet(
@@ -341,7 +383,7 @@ def generate(
             )
             if retry_ok:
                 for bullet in retry_bullets:
-                    reviewed = _apply_category_guardrail(
+                    reviewed = _review_bullet(
                         bullet, pr_by_number[bullet.pr_number]
                     )
                     all_bullets.append(CategorizedBullet(
