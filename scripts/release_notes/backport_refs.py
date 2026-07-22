@@ -14,11 +14,14 @@ _CHERRY_PICK_TRAILER_RE = re.compile(
     r"(?im)^[ \t]*\(cherry picked from commit ([0-9a-f]{7,40})\)[ \t]*$"
 )
 
-# Matches a "[Backport <branch>] ..." PR title prefix.
-_BACKPORT_TITLE_RE = re.compile(r"^\s*\[Backport\b", re.IGNORECASE)
+# Matches explicit "[Backport <branch>] ..." and release-line shorthand such as
+# "[9.0] ...". Valkey uses the latter for manual per-line backports (#4182).
+_BACKPORT_TITLE_RE = re.compile(
+    r"^\s*\[(?:Backport\b[^\]]*|\d+\.\d+)\]\s*", re.IGNORECASE
+)
 
 # Captures and strips the "[Backport <branch>] " prefix to reveal the source title.
-_BACKPORT_TITLE_PREFIX_RE = re.compile(r"^\s*\[Backport\b[^\]]*\]\s*", re.IGNORECASE)
+_BACKPORT_TITLE_PREFIX_RE = _BACKPORT_TITLE_RE
 
 # Some manually authored backport PRs append the source PR to the copied title.
 _BACKPORT_SOURCE_SUFFIX_RE = re.compile(r"\s+\(#(\d+)\)\s*$")
@@ -46,12 +49,12 @@ _BACKPORT_BRANCH_RE = re.compile(r"^(?:agent/)?backport/(\d+)-to-")
 
 
 def is_backport_title(title: str) -> bool:
-    """True if *title* has a ``[Backport ...]`` prefix."""
+    """True if *title* has a backport or release-line prefix."""
     return bool(_BACKPORT_TITLE_RE.match(title))
 
 
 def source_title_from_backport_title(title: str) -> str | None:
-    """Strip the ``[Backport <branch>] `` prefix and return the source title, or None."""
+    """Strip a backport/release-line prefix and return the source title, or None."""
     stripped = _BACKPORT_TITLE_PREFIX_RE.sub("", title or "")
     if stripped == (title or ""):  # no prefix matched
         return None

@@ -168,6 +168,23 @@ class TestRenderVersionSection:
         assert "Valkey 9.1.1  -  Released Tue 02 June 2026" in out
         assert "Valkey 9.1.1 GA" not in out
 
+    def test_security_uses_canonical_rationale_not_release_ordinal(self) -> None:
+        out = rf.render_version_section(
+            "9.1.1", "ga", "SECURITY", "2026-06-02", {"Bug Fixes": ["fix"]}
+        )
+        assert (
+            "Upgrade urgency SECURITY: This release includes security fixes we "
+            "recommend you apply as soon as possible."
+        ) in out
+        assert "second stable release" not in out
+
+    def test_nonsecurity_patch_uses_standard_urgency_rationale(self) -> None:
+        out = rf.render_version_section(
+            "9.1.2", "ga", "MODERATE", "2026-06-02", {"Bug Fixes": ["fix"]}
+        )
+        assert "Program an upgrade of the server, but it's not urgent." in out
+        assert "stable release" not in out
+
     def test_security_fixes_render_first_from_argument(self) -> None:
         out = rf.render_version_section(
             "9.1.0", "rc1", "SECURITY", "2026-06-02",
@@ -234,3 +251,24 @@ class TestRenderReleaseNotes:
         assert out.count("* Amy @amy") == 1
         # Footer is the tail of the file, alpha-sorted.
         assert out.rstrip().endswith("### Contributors\n* Amy @amy\n* Bob @bob")
+
+    def test_canonical_patch_footer_remains_single_and_preserves_preface(self) -> None:
+        prior = (
+            "Valkey 8.1 release notes\n========================\n\n"
+            "Valkey 8.1.9  -  Released Tue 21 July 2026\n"
+            "------------------------------------------\n\n"
+            "### Bug Fixes\n* earlier fix (#1)\n\n"
+            "We appreciate the efforts of all who contributed code to this release!\n\n"
+            "### Contributors\n* Amy @amy\n* Bob @bob\n"
+        )
+        out = rf.render_release_notes(
+            {"Bug Fixes": ["* new fix (#2)"]},
+            version="8.1.10", stage="ga", urgency="LOW", date="2026-08-01",
+            prior_text=prior, contributors=["Amy @amy", "Cara @cara"],
+        )
+        assert out.count("### Contributors") == 1
+        assert out.count("* Amy @amy") == 1
+        assert "We appreciate the efforts" in out
+        assert out.rstrip().endswith(
+            "### Contributors\n* Amy @amy\n* Bob @bob\n* Cara @cara"
+        )

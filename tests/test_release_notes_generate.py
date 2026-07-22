@@ -117,6 +117,16 @@ class TestBuildPrompt:
         assert "ACL LOG" in prompt
         assert "`Bug Fixes` is the fallback" in prompt
 
+    def test_patch_prompt_biases_corrections_to_bug_fixes(self) -> None:
+        prompt = build_prompt([_pr(1)], categories=_CATEGORIES, patch_release=True)
+        assert "This is a patch release" in prompt
+        assert "Prefer `Bug Fixes` for corrections" in prompt
+        assert "Skip build/tooling-only changes" in prompt
+
+    def test_nonpatch_prompt_omits_patch_policy(self) -> None:
+        prompt = build_prompt([_pr(1)], categories=_CATEGORIES)
+        assert "This is a patch release" not in prompt
+
     def test_prompt_forbids_final_sentence_punctuation(self) -> None:
         prompt = build_prompt([_pr(1)], categories=_CATEGORIES)
         assert "Do not end the text" in prompt
@@ -219,6 +229,63 @@ class TestGenerate:
         result = generate([_pr(40)], repo_dir="/c", categories=_CATEGORIES, run_fn=_fake_run(obj))
         assert result.bullets[0].uncertain is False
         assert result.bullets[0].uncertain_reason == ""
+
+    def test_patch_command_correction_is_folded_into_bug_fixes(self) -> None:
+        pr = _pr(40, title="Fix COMMAND INFO reply type")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Command and API Updates",
+            "text": "Return the correct reply type",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        assert result.bullets[0].category == "Bug Fixes"
+
+    def test_patch_observability_fix_stays_bug_fix_without_category_hold(self) -> None:
+        pr = _pr(40, title="Fix INFO replication reporting")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Bug Fixes",
+            "text": "Fix incorrect INFO replication output",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "Bug Fixes"
+        assert bullet.uncertain is False
+
+    def test_patch_performance_regression_is_folded_into_bug_fixes(self) -> None:
+        pr = _pr(40, title="Fix IO thread performance regression")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Performance and Efficiency Improvements",
+            "text": "Restore IO thread throughput",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        assert result.bullets[0].category == "Bug Fixes"
+
+    def test_patch_feature_category_requires_confirmation(self) -> None:
+        pr = _pr(40, title="Add a new command")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "New Features and Enhanced Behavior",
+            "text": "Add a new command",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "New Features and Enhanced Behavior"
+        assert bullet.uncertain is True
+        assert "patch release" in bullet.uncertain_reason
 
     def test_acl_log_fix_normalized_to_observability(self) -> None:
         pr = _pr(
