@@ -122,14 +122,17 @@ _PATCH_RELEASE_GUIDANCE = """\
   they do not introduce features. Prefer `Bug Fixes` for corrections even when
   the affected surface is commands, cluster/replication, configuration,
   observability, modules, or CLI tools.
+- When the evidence does not clearly distinguish a correction from an
+  intentional change, default to `Bug Fixes` and mark the note uncertain.
 - Use `Performance and Efficiency Improvements` only for a deliberate new
   optimization. A regression fix or restored performance belongs in `Bug Fixes`.
 - Use `Behavior Changes` or another specialized category only when the evidence
   clearly describes an intentional non-fix change. Never use `New Features and
   Enhanced Behavior` without clear evidence that maintainers intentionally put a
   feature in the patch release; mark such a note uncertain.
-- Skip build/tooling-only changes unless the PR explicitly carries the
-  `release-notes` label. Test-only and CI-only changes remain skipped.
+- Treat a generated build/tooling-only note without a `release-notes` label as
+  exceptional and flag it for maintainer review. Test-only and CI-only changes
+  remain skipped.
 """
 
 _PATCH_FIX_DEFAULT_CATEGORIES = frozenset({
@@ -389,17 +392,33 @@ def _apply_patch_category_bias(
     if not patch_release or bullet.category == "Bug Fixes":
         return bullet
 
-    evidence = "{}\n{}\n{}".format(pr.title or "", pr.body or "", bullet.text)
+    # Keep deterministic evidence narrow. Generic words such as "error" and
+    # "prevent" are common in explanatory PR bodies and otherwise make almost
+    # every patch entry look like a positive fix match. The model may still use
+    # the full body when it drafts and categorizes the note.
+    evidence = "{}\n{}".format(pr.title or "", bullet.text)
     is_fix = bool(_PATCH_FIX_EVIDENCE_RE.search(evidence))
     intentional = bool(_PATCH_INTENTIONAL_CHANGE_RE.search(evidence))
 
-    should_fold = bullet.category in _PATCH_FIX_DEFAULT_CATEGORIES and (
-        is_fix or not intentional
-    )
-    if bullet.category == "Performance and Efficiency Improvements" and is_fix:
-        should_fold = True
-    if should_fold:
+    if is_fix and (
+        bullet.category in _PATCH_FIX_DEFAULT_CATEGORIES
+        or bullet.category == "Performance and Efficiency Improvements"
+    ):
         return replace(bullet, category="Bug Fixes")
+
+    if bullet.category in _PATCH_FIX_DEFAULT_CATEGORIES and not intentional:
+        reason = "; ".join(
+            part for part in (
+                bullet.uncertain_reason,
+                "ambiguous patch-release category defaulted to Bug Fixes",
+            ) if part
+        )
+        return replace(
+            bullet,
+            category="Bug Fixes",
+            uncertain=True,
+            uncertain_reason=reason,
+        )
 
     exceptional = bullet.category == "New Features and Enhanced Behavior" or (
         bullet.category == "Build and Tooling" and "release-notes" not in pr.labels

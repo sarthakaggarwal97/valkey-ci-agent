@@ -20,7 +20,7 @@ _BACKPORT_TITLE_RE = re.compile(
     r"^\s*\[(?:Backport\b[^\]]*|\d+\.\d+)\]\s*", re.IGNORECASE
 )
 
-# Captures and strips the "[Backport <branch>] " prefix to reveal the source title.
+# Strips either recognized backport prefix to reveal the source title.
 _BACKPORT_TITLE_PREFIX_RE = _BACKPORT_TITLE_RE
 
 # Some manually authored backport PRs append the source PR to the copied title.

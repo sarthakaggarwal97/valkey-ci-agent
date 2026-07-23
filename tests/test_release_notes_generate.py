@@ -19,9 +19,10 @@ def _pr(
     body: str = "",
     sha: str = "",
     title: str | None = None,
+    labels: tuple[str, ...] = ("release-notes",),
 ) -> MergedPR:
     return MergedPR(number=number, title=title or f"PR {number}", author=author, url=f"https://x/{number}",
-                    body=body, labels=("release-notes",), merge_commit_sha=sha)
+                    body=body, labels=labels, merge_commit_sha=sha)
 
 
 def _stream(obj: dict) -> str:
@@ -121,7 +122,9 @@ class TestBuildPrompt:
         prompt = build_prompt([_pr(1)], categories=_CATEGORIES, patch_release=True)
         assert "This is a patch release" in prompt
         assert "Prefer `Bug Fixes` for corrections" in prompt
-        assert "Skip build/tooling-only changes" in prompt
+        assert "default to `Bug Fixes` and mark the note uncertain" in prompt
+        assert "build/tooling-only note" in prompt
+        assert "flag it for maintainer review" in prompt
 
     def test_nonpatch_prompt_omits_patch_policy(self) -> None:
         prompt = build_prompt([_pr(1)], categories=_CATEGORIES)
@@ -270,6 +273,73 @@ class TestGenerate:
             run_fn=_fake_run(obj), patch_release=True,
         )
         assert result.bullets[0].category == "Bug Fixes"
+
+    def test_patch_ambiguous_category_defaults_to_uncertain_bug_fix(self) -> None:
+        pr = _pr(40, title="Update default timeout to 30s")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Configuration",
+            "text": "Update the default timeout to 30 seconds",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "Bug Fixes"
+        assert bullet.uncertain is True
+        assert "defaulted to Bug Fixes" in bullet.uncertain_reason
+
+    def test_patch_fix_evidence_ignores_generic_pr_body_language(self) -> None:
+        pr = _pr(
+            40,
+            title="Update default timeout to 30s",
+            body="Returns an error when unset to prevent confusion.",
+        )
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Configuration",
+            "text": "Update the default timeout to 30 seconds",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "Bug Fixes"
+        assert bullet.uncertain is True
+
+    def test_patch_intentional_change_keeps_category_and_requires_confirmation(self) -> None:
+        pr = _pr(40, title="Add a new timeout option")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Configuration",
+            "text": "Add a new timeout option",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "Configuration"
+        assert bullet.uncertain is True
+        assert "patch release" in bullet.uncertain_reason
+
+    def test_patch_unlabeled_build_tooling_note_requires_confirmation(self) -> None:
+        pr = _pr(40, title="Update packaging tool", labels=())
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Build and Tooling",
+            "text": "Update the packaging tool",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "Build and Tooling"
+        assert bullet.uncertain is True
+        assert "patch release" in bullet.uncertain_reason
 
     def test_patch_feature_category_requires_confirmation(self) -> None:
         pr = _pr(40, title="Add a new command")
