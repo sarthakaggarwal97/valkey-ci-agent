@@ -11,6 +11,7 @@ failing environments is carried forward across recurrences via the publisher's
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from github import Github
 
@@ -19,6 +20,11 @@ from scripts.test_failure_detector import issue_renderer
 from scripts.test_failure_detector.parse_failures import UniqueFailure
 
 logger = logging.getLogger(__name__)
+
+# The detector runs ~23 hours after the Daily CI it analyzes, so a failure can
+# be fixed (and its issue closed) in between. One day covers that gap; a longer
+# window would suppress genuine recurrences.
+CLOSED_ISSUE_LOOKBACK = timedelta(days=1)
 
 
 def process_failures(
@@ -35,14 +41,23 @@ def process_failures(
     occurrence counter or post a duplicate comment.
 
     Returns a summary dict with counts:
-    ``{created, updated, skipped, errors}``. ``errors`` counts failures whose
-    issue could not be processed; they are logged and skipped so one bad
-    failure cannot abort the rest of the batch.
+    ``{created, updated, skipped, skipped_closed, errors}``. ``skipped_closed``
+    counts failures whose matching issue was recently closed (the failure was
+    likely already fixed). ``errors`` counts failures whose issue could not be
+    processed; they are logged and skipped so one bad failure cannot abort the
+    rest of the batch.
     """
-    publisher = IssueDedupPublisher(gh, marker_namespace=issue_renderer.MARKER_NAMESPACE)
+    publisher = IssueDedupPublisher(
+        gh,
+        marker_namespace=issue_renderer.MARKER_NAMESPACE,
+        # Opt in to recently-closed suppression: the detector lags the Daily CI,
+        # so an already-fixed failure must not be re-filed.
+        closed_lookback=CLOSED_ISSUE_LOOKBACK,
+        filter_label=issue_renderer.LABEL_NAME,
+    )
     idempotency_key = str(run_id) if run_id is not None else None
 
-    summary = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
+    summary = {"created": 0, "updated": 0, "skipped": 0, "skipped_closed": 0, "errors": 0}
 
     for failure in failures:
         # Isolate each failure: a raised exception (e.g. a GitHub API error that
@@ -73,6 +88,12 @@ def process_failures(
             elif action == "skipped-duplicate":
                 logger.info("Skipped duplicate for %s: %s", failure.display_name, url)
                 summary["skipped"] += 1
+            elif action == "skipped-recently-closed":
+                logger.info(
+                    "Skipped %s (issue recently closed): %s",
+                    failure.display_name, url,
+                )
+                summary["skipped_closed"] += 1
             else:
                 raise RuntimeError(f"Unexpected upsert action: {action}")
         except Exception:
@@ -84,7 +105,8 @@ def process_failures(
             continue
 
     logger.info(
-        "Done. Created %d, updated %d, skipped %d, errored %d issue(s).",
-        summary["created"], summary["updated"], summary["skipped"], summary["errors"],
+        "Done. Created %d, updated %d, skipped %d, skipped-closed %d, errored %d issue(s).",
+        summary["created"], summary["updated"], summary["skipped"],
+        summary["skipped_closed"], summary["errors"],
     )
     return summary

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,7 +22,10 @@ try:
         renderer_for,
         title_for,
     )
-    from scripts.test_failure_detector.manage_issues import process_failures
+    from scripts.test_failure_detector.manage_issues import (
+        CLOSED_ISSUE_LOOKBACK,
+        process_failures,
+    )
     from scripts.test_failure_detector.parse_failures import JobReference, UniqueFailure
 
     _SKIP_REASON = None
@@ -167,16 +171,20 @@ class TestProcessFailures:
             ("created", "https://x/issues/1"),
             ("updated", "https://x/issues/2"),
             ("skipped-duplicate", "https://x/issues/3"),
+            ("skipped-recently-closed", "https://x/issues/4"),
         ]
 
         failures = [
             _make_failure(test_name="a"),
             _make_failure(test_name="b"),
             _make_failure(test_name="c"),
+            _make_failure(test_name="d"),
         ]
         result = process_failures(MagicMock(), "valkey-io/valkey", failures)
 
-        assert result == {"created": 1, "updated": 1, "skipped": 1, "errors": 0}
+        assert result == {
+            "created": 1, "updated": 1, "skipped": 1, "skipped_closed": 1, "errors": 0,
+        }
 
     @patch("scripts.test_failure_detector.manage_issues.IssueDedupPublisher")
     def test_one_failing_upsert_does_not_abort_the_batch(self, mock_publisher_cls) -> None:
@@ -196,7 +204,9 @@ class TestProcessFailures:
         ]
         result = process_failures(MagicMock(), "valkey-io/valkey", failures)
 
-        assert result == {"created": 1, "updated": 1, "skipped": 0, "errors": 1}
+        assert result == {
+            "created": 1, "updated": 1, "skipped": 0, "skipped_closed": 0, "errors": 1,
+        }
         # All three were attempted despite the middle one raising.
         assert publisher.upsert.call_count == 3
 
@@ -215,7 +225,9 @@ class TestProcessFailures:
             [_make_failure(test_name="a"), _make_failure(test_name="b")],
         )
 
-        assert result == {"created": 1, "updated": 0, "skipped": 0, "errors": 1}
+        assert result == {
+            "created": 1, "updated": 0, "skipped": 0, "skipped_closed": 0, "errors": 1,
+        }
 
     @patch("scripts.test_failure_detector.manage_issues.IssueDedupPublisher")
     def test_passes_run_id_as_idempotency_key(self, mock_publisher_cls) -> None:
@@ -240,6 +252,19 @@ class TestProcessFailures:
         process_failures(MagicMock(), "valkey-io/valkey", [_make_failure()])
 
         assert publisher.upsert.call_args.kwargs["idempotency_key"] is None
+
+    @patch("scripts.test_failure_detector.manage_issues.IssueDedupPublisher")
+    def test_detector_opts_in_to_closed_lookback(self, mock_publisher_cls) -> None:
+        """The recently-closed check is off by default on the shared publisher;
+        the detector must enable it explicitly with its 1-day window."""
+        publisher = mock_publisher_cls.return_value
+        publisher.upsert.return_value = ("created", "https://x/issues/1")
+
+        process_failures(MagicMock(), "valkey-io/valkey", [_make_failure()])
+
+        kwargs = mock_publisher_cls.call_args.kwargs
+        assert kwargs["closed_lookback"] == CLOSED_ISSUE_LOOKBACK
+        assert CLOSED_ISSUE_LOOKBACK == timedelta(days=1)
 
     def test_render_callable_produces_labelled_content(self) -> None:
         content = renderer_for(_make_failure()).render("<!-- m -->", 1)
