@@ -19,9 +19,10 @@ def _pr(
     body: str = "",
     sha: str = "",
     title: str | None = None,
+    labels: tuple[str, ...] = ("release-notes",),
 ) -> MergedPR:
     return MergedPR(number=number, title=title or f"PR {number}", author=author, url=f"https://x/{number}",
-                    body=body, labels=("release-notes",), merge_commit_sha=sha)
+                    body=body, labels=labels, merge_commit_sha=sha)
 
 
 def _stream(obj: dict) -> str:
@@ -116,6 +117,18 @@ class TestBuildPrompt:
         assert "`Observability and Logging` owns" in prompt
         assert "ACL LOG" in prompt
         assert "`Bug Fixes` is the fallback" in prompt
+
+    def test_patch_prompt_biases_corrections_to_bug_fixes(self) -> None:
+        prompt = build_prompt([_pr(1)], categories=_CATEGORIES, patch_release=True)
+        assert "This is a patch release" in prompt
+        assert "Prefer `Bug Fixes` for corrections" in prompt
+        assert "default to `Bug Fixes` and mark the note uncertain" in prompt
+        assert "build/tooling-only note" in prompt
+        assert "flag it for maintainer review" in prompt
+
+    def test_nonpatch_prompt_omits_patch_policy(self) -> None:
+        prompt = build_prompt([_pr(1)], categories=_CATEGORIES)
+        assert "This is a patch release" not in prompt
 
     def test_prompt_forbids_final_sentence_punctuation(self) -> None:
         prompt = build_prompt([_pr(1)], categories=_CATEGORIES)
@@ -219,6 +232,130 @@ class TestGenerate:
         result = generate([_pr(40)], repo_dir="/c", categories=_CATEGORIES, run_fn=_fake_run(obj))
         assert result.bullets[0].uncertain is False
         assert result.bullets[0].uncertain_reason == ""
+
+    def test_patch_command_correction_is_folded_into_bug_fixes(self) -> None:
+        pr = _pr(40, title="Fix COMMAND INFO reply type")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Command and API Updates",
+            "text": "Return the correct reply type",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        assert result.bullets[0].category == "Bug Fixes"
+
+    def test_patch_observability_fix_stays_bug_fix_without_category_hold(self) -> None:
+        pr = _pr(40, title="Fix INFO replication reporting")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Bug Fixes",
+            "text": "Fix incorrect INFO replication output",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "Bug Fixes"
+        assert bullet.uncertain is False
+
+    def test_patch_performance_regression_is_folded_into_bug_fixes(self) -> None:
+        pr = _pr(40, title="Fix IO thread performance regression")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Performance and Efficiency Improvements",
+            "text": "Restore IO thread throughput",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        assert result.bullets[0].category == "Bug Fixes"
+
+    def test_patch_ambiguous_category_defaults_to_uncertain_bug_fix(self) -> None:
+        pr = _pr(40, title="Update default timeout to 30s")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Configuration",
+            "text": "Update the default timeout to 30 seconds",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "Bug Fixes"
+        assert bullet.uncertain is True
+        assert "defaulted to Bug Fixes" in bullet.uncertain_reason
+
+    def test_patch_fix_evidence_ignores_generic_pr_body_language(self) -> None:
+        pr = _pr(
+            40,
+            title="Update default timeout to 30s",
+            body="Returns an error when unset to prevent confusion.",
+        )
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Configuration",
+            "text": "Update the default timeout to 30 seconds",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "Bug Fixes"
+        assert bullet.uncertain is True
+
+    def test_patch_intentional_change_keeps_category_and_requires_confirmation(self) -> None:
+        pr = _pr(40, title="Add a new timeout option")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Configuration",
+            "text": "Add a new timeout option",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "Configuration"
+        assert bullet.uncertain is True
+        assert "patch release" in bullet.uncertain_reason
+
+    def test_patch_unlabeled_build_tooling_note_requires_confirmation(self) -> None:
+        pr = _pr(40, title="Update packaging tool", labels=())
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "Build and Tooling",
+            "text": "Update the packaging tool",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "Build and Tooling"
+        assert bullet.uncertain is True
+        assert "patch release" in bullet.uncertain_reason
+
+    def test_patch_feature_category_requires_confirmation(self) -> None:
+        pr = _pr(40, title="Add a new command")
+        obj = {"bullets": [{
+            "pr": 40,
+            "category": "New Features and Enhanced Behavior",
+            "text": "Add a new command",
+        }]}
+        result = generate(
+            [pr], repo_dir="/c", categories=_CATEGORIES,
+            run_fn=_fake_run(obj), patch_release=True,
+        )
+        bullet = result.bullets[0]
+        assert bullet.category == "New Features and Enhanced Behavior"
+        assert bullet.uncertain is True
+        assert "patch release" in bullet.uncertain_reason
 
     def test_acl_log_fix_normalized_to_observability(self) -> None:
         pr = _pr(

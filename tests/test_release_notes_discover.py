@@ -1507,6 +1507,30 @@ class TestHydratePrsBackportRecovery:
         assert unresolved_backports == []
         backport.get_commits.assert_not_called()
 
+    def test_recovers_release_line_prefixed_backport_source_suffix(self) -> None:
+        backport = _pull(
+            4182,
+            title=(
+                "[9.0] Fix lua-enable-insecure-api default value cannot be changed "
+                "to yes (#3548)"
+            ),
+            labels=("backport",),
+        )
+        source = _pull(
+            3548,
+            title="Fix lua-enable-insecure-api default value cannot be changed to yes",
+            author="enjoy-binbin",
+            labels=("release-notes",),
+        )
+        repo = self._repo({4182: backport, 3548: source})
+
+        prs, unresolved_backports, _ = hydrate_prs(repo, {4182: "shaBackport"})
+
+        assert [pr.number for pr in prs] == [3548]
+        assert prs[0].author == "enjoy-binbin"
+        assert unresolved_backports == []
+        backport.get_commits.assert_not_called()
+
     def test_recovers_manual_backport_of_url_without_label_or_prefix(self) -> None:
         # PR #3957 used this free-form shape: no backport label/prefix/branch
         # identity, only a first-line URL. Credit the original #3950 after the

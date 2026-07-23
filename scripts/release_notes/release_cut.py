@@ -669,6 +669,7 @@ def cut(
         repo, source_clone_dir, head_ref=notes_head_ref,
         tag_glob=notes_tag_glob, base_ref=notes_base_ref,
         release_branch=source_ref,
+        patch_release=rn.parse_version(version)[2] > 0,
     )
     if regen.included and not regen.bullet_count:
         logger.error(

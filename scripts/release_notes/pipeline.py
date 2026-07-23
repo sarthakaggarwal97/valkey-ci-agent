@@ -70,6 +70,7 @@ class RegenResult:
 def regenerate_unreleased(
     repo: Any, clone_dir: str, *, head_ref: str, tag_glob: str | None,
     base_ref: str | None = None, release_branch: str | None = None,
+    patch_release: bool = False,
 ) -> RegenResult:
     """Discover the range, triage PRs without ``release-notes``, and generate bullets.
 
@@ -160,6 +161,7 @@ def regenerate_unreleased(
         repo_dir=clone_dir,
         categories=release_format_mod.CATEGORIES,
         diff_collector=diff_collector,
+        patch_release=patch_release,
     )
     # Keep one bullet per PR; prefer a renderable bullet over a reserved-category one.
     bullets, duplicate_prs = _dedup_bullets_by_pr(gen.bullets)

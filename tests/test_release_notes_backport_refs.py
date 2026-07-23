@@ -33,6 +33,9 @@ class TestIsBackportTitle:
     def test_not_a_backport(self) -> None:
         assert is_backport_title("Fix memory leak (#10)") is False
 
+    def test_release_line_prefix_is_a_backport(self) -> None:
+        assert is_backport_title("[9.0] Fix config handling (#3548)") is True
+
     def test_inner_backport_word_not_matched(self) -> None:
         # Only a leading [Backport ...] tag counts, not the word mid-title.
         assert is_backport_title("Refactor the backport sweep (#12)") is False
@@ -216,6 +219,11 @@ class TestSourceTitleFromBackportTitle:
     def test_not_a_backport_title(self) -> None:
         assert source_title_from_backport_title("Fix a memory leak (#10)") is None
 
+    def test_release_line_prefix(self) -> None:
+        assert source_title_from_backport_title(
+            "[9.0] Fix config handling (#3548)"
+        ) == "Fix config handling (#3548)"
+
     def test_bare_prefix_no_title(self) -> None:
         # A "[Backport 9.1]" with nothing after it has no source title to give.
         assert source_title_from_backport_title("[Backport 9.1]") is None
@@ -233,6 +241,11 @@ class TestSourcePrFromBackportTitle:
 
     def test_requires_backport_prefix(self) -> None:
         assert source_pr_from_backport_title("Allow Tcl 9.0 for tests (#1673)") is None
+
+    def test_reads_source_from_release_line_prefix(self) -> None:
+        assert source_pr_from_backport_title(
+            "[9.0] Fix lua-enable-insecure-api default value (#3548)"
+        ) == 3548
 
     def test_requires_trailing_source_ref(self) -> None:
         assert source_pr_from_backport_title("[Backport 7.2] Allow Tcl 9.0 for tests") is None

@@ -52,6 +52,20 @@ URGENCY_LEGEND = """Upgrade urgency levels:
 
 VALID_URGENCIES = ("LOW", "MODERATE", "HIGH", "CRITICAL", "SECURITY")
 
+# Canonical patch-release rationale. Historical Valkey patch releases explain
+# why a user should upgrade; they do not describe themselves as the Nth stable
+# release. SECURITY is canonical for every stage because the security reason is
+# more important than GA/RC sequencing.
+_PATCH_URGENCY_SENTENCES = {
+    "LOW": "No need to upgrade unless there are new features you want to use.",
+    "MODERATE": "Program an upgrade of the server, but it's not urgent.",
+    "HIGH": "There is a critical bug that may affect a subset of users. Upgrade!",
+    "CRITICAL": "There is a critical bug affecting MOST USERS. Upgrade ASAP.",
+    "SECURITY": (
+        "This release includes security fixes we recommend you apply as soon as possible."
+    ),
+}
+
 _BULLET_RE = re.compile(r"^\s*[*-]\s+\S")
 _DATED_SECTION_RE = re.compile(r"^Valkey\s+\d+\.\d+\.\d+", re.MULTILINE)
 _VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
@@ -139,6 +153,10 @@ def _stage_heading(version: str, stage: str) -> str:
 
 def _urgency_sentence(version: str, stage: str, urgency: str) -> str:
     major, minor, patch = parse_version(version)
+    if urgency == "SECURITY" or (stage == "ga" and patch > 0):
+        return "Upgrade urgency {}: {}".format(
+            urgency, _PATCH_URGENCY_SENTENCES[urgency]
+        )
     if stage == "ga":
         which = ordinal(patch + 1)  # M.m.0 is the first stable release of M.m
         return (

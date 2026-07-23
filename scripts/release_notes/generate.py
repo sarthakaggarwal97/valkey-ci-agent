@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import replace
 from typing import Callable, Sequence
 
 from scripts.ai.claude_code import run_claude_code
@@ -114,6 +115,49 @@ _CATEGORY_GUIDANCE = """\
   CI-only PRs should be skipped.
 """
 
+_PATCH_RELEASE_GUIDANCE = """\
+
+## Patch-release category policy
+- This is a patch release. Patch releases generally correct shipped behavior;
+  they do not introduce features. Prefer `Bug Fixes` for corrections even when
+  the affected surface is commands, cluster/replication, configuration,
+  observability, modules, or CLI tools.
+- When the evidence does not clearly distinguish a correction from an
+  intentional change, default to `Bug Fixes` and mark the note uncertain.
+- Use `Performance and Efficiency Improvements` only for a deliberate new
+  optimization. A regression fix or restored performance belongs in `Bug Fixes`.
+- Use `Behavior Changes` or another specialized category only when the evidence
+  clearly describes an intentional non-fix change. Never use `New Features and
+  Enhanced Behavior` without clear evidence that maintainers intentionally put a
+  feature in the patch release; mark such a note uncertain.
+- Treat a generated build/tooling-only note without a `release-notes` label as
+  exceptional and flag it for maintainer review. Test-only and CI-only changes
+  remain skipped.
+"""
+
+_PATCH_FIX_DEFAULT_CATEGORIES = frozenset({
+    "Behavior Changes",
+    "Command and API Updates",
+    "Cluster and Replication",
+    "Configuration",
+    "Module API Changes",
+    "Observability and Logging",
+    "CLI and Tools",
+    "Other Changes",
+})
+_PATCH_FIX_EVIDENCE_RE = re.compile(
+    r"\b(?:fix(?:es|ed|ing)?|bug|regression|restore|correct|reject|prevent|avoid|"
+    r"crash|leak|race|corrupt|invalid|wrong|fail(?:s|ed|ure)?|error|compatib|"
+    r"malformed|truncat(?:e|es|ed|ing|ion)|assert|use[- ]after[- ]free|"
+    r"double[- ]free)\b",
+    re.IGNORECASE,
+)
+_PATCH_INTENTIONAL_CHANGE_RE = re.compile(
+    r"\b(?:add(?:s|ed|ing)?|introduc(?:e|es|ed|ing)|new feature|support(?:s|ed|ing)?|"
+    r"intentional(?:ly)?|new command|new option|new api)\b",
+    re.IGNORECASE,
+)
+
 _PROMPT_TEMPLATE = """\
 You are writing release notes for the open-source project Valkey. You are given
 a list of pull requests that merged into a release line since the last release.
@@ -188,7 +232,8 @@ Every "pr" must be one of the input PR numbers. Emit at most one bullet per PR.
 
 
 def build_prompt(
-    prs: Sequence[MergedPR], *, categories: Sequence[str], diffs: dict[int, str] | None = None
+    prs: Sequence[MergedPR], *, categories: Sequence[str], diffs: dict[int, str] | None = None,
+    patch_release: bool = False,
 ) -> str:
     """Render the generation prompt for a batch of PRs.
 
@@ -197,7 +242,9 @@ def build_prompt(
     """
     return _PROMPT_TEMPLATE.format(
         categories="\n".join(f"- {name}" for name in categories),
-        category_guidance=_CATEGORY_GUIDANCE,
+        category_guidance=(
+            _CATEGORY_GUIDANCE + (_PATCH_RELEASE_GUIDANCE if patch_release else "")
+        ),
         prs_json=build_prompt_payload(prs, diffs=diffs),
     )
 
@@ -338,9 +385,65 @@ def _apply_factual_scope_guardrail(
     )
 
 
-def _review_bullet(bullet: CategorizedBullet, pr: MergedPR) -> CategorizedBullet:
+def _apply_patch_category_bias(
+    bullet: CategorizedBullet, pr: MergedPR, *, patch_release: bool
+) -> CategorizedBullet:
+    """Bias patch-release corrections into Bug Fixes without hiding exceptions."""
+    if not patch_release or bullet.category == "Bug Fixes":
+        return bullet
+
+    # Keep deterministic evidence narrow. Generic words such as "error" and
+    # "prevent" are common in explanatory PR bodies and otherwise make almost
+    # every patch entry look like a positive fix match. The model may still use
+    # the full body when it drafts and categorizes the note.
+    evidence = "{}\n{}".format(pr.title or "", bullet.text)
+    is_fix = bool(_PATCH_FIX_EVIDENCE_RE.search(evidence))
+    intentional = bool(_PATCH_INTENTIONAL_CHANGE_RE.search(evidence))
+
+    if is_fix and (
+        bullet.category in _PATCH_FIX_DEFAULT_CATEGORIES
+        or bullet.category == "Performance and Efficiency Improvements"
+    ):
+        return replace(bullet, category="Bug Fixes")
+
+    if bullet.category in _PATCH_FIX_DEFAULT_CATEGORIES and not intentional:
+        reason = "; ".join(
+            part for part in (
+                bullet.uncertain_reason,
+                "ambiguous patch-release category defaulted to Bug Fixes",
+            ) if part
+        )
+        return replace(
+            bullet,
+            category="Bug Fixes",
+            uncertain=True,
+            uncertain_reason=reason,
+        )
+
+    exceptional = bullet.category == "New Features and Enhanced Behavior" or (
+        bullet.category == "Build and Tooling" and "release-notes" not in pr.labels
+    ) or (bullet.category in _PATCH_FIX_DEFAULT_CATEGORIES and intentional)
+    if not exceptional:
+        return bullet
+    reason = "; ".join(
+        part for part in (
+            bullet.uncertain_reason,
+            "non-fix category on a patch release needs explicit maintainer confirmation",
+        ) if part
+    )
+    return replace(bullet, uncertain=True, uncertain_reason=reason)
+
+
+def _review_bullet(
+    bullet: CategorizedBullet, pr: MergedPR, *, patch_release: bool = False
+) -> CategorizedBullet:
     """Apply deterministic category and factual-scope review guardrails."""
-    return _apply_factual_scope_guardrail(_apply_category_guardrail(bullet, pr), pr)
+    # For patch releases the patch policy supersedes the general surface-first
+    # taxonomy: a command, INFO, cluster, or config correction should stay a Bug
+    # Fix instead of being normalized away and then flagged low-confidence.
+    reviewed = bullet if patch_release else _apply_category_guardrail(bullet, pr)
+    reviewed = _apply_patch_category_bias(reviewed, pr, patch_release=patch_release)
+    return _apply_factual_scope_guardrail(reviewed, pr)
 
 
 def generate(
@@ -351,6 +454,7 @@ def generate(
     timeout: int = 1800,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
+    patch_release: bool = False,
 ) -> GenerationResult:
     """Generate categorized bullets for *prs*, batching large inputs.
 
@@ -371,7 +475,10 @@ def generate(
         batch = prs[start:start + _BATCH_SIZE]
         batch_numbers = {pr.number for pr in batch}
         diffs = collector.collect(batch)
-        prompt = build_prompt(batch, categories=categories, diffs=diffs)
+        prompt = build_prompt(
+            batch, categories=categories, diffs=diffs,
+            patch_release=patch_release,
+        )
         stdout, stderr, code = run_fn(
             prompt,
             cwd=repo_dir,
@@ -391,7 +498,7 @@ def generate(
         # Re-stamp each bullet with the factual author from the PR.
         for bullet in bullets:
             reviewed = _review_bullet(
-                bullet, pr_by_number[bullet.pr_number]
+                bullet, pr_by_number[bullet.pr_number], patch_release=patch_release
             )
             all_bullets.append(CategorizedBullet(
                 pr_number=reviewed.pr_number,
@@ -415,7 +522,8 @@ def generate(
             )
             retry_batch = [pr for pr in batch if pr.number in unaccounted]
             retry_prompt = build_prompt(
-                retry_batch, categories=categories, diffs=collector.collect(retry_batch)
+                retry_batch, categories=categories, diffs=collector.collect(retry_batch),
+                patch_release=patch_release,
             )
             retry_stdout, _retry_stderr, _retry_code = run_fn(
                 retry_prompt,
@@ -431,7 +539,8 @@ def generate(
             if retry_ok:
                 for bullet in retry_bullets:
                     reviewed = _review_bullet(
-                        bullet, pr_by_number[bullet.pr_number]
+                        bullet, pr_by_number[bullet.pr_number],
+                        patch_release=patch_release,
                     )
                     all_bullets.append(CategorizedBullet(
                         pr_number=reviewed.pr_number,
