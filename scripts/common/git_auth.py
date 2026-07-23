@@ -6,6 +6,7 @@ import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable, Union
 
 from scripts.common.proc import NETWORK_ENV, PROCESS_BASICS, filter_env
 
@@ -15,13 +16,15 @@ def github_https_url(repo_full_name: str) -> str:
 
 
 _GIT_AUTH_ENV_ALLOWLIST = PROCESS_BASICS + NETWORK_ENV
+TokenSource = Union[str, Callable[[], str]]
+GitEnvironment = Union[dict[str, str], Callable[[], dict[str, str]]]
 
 
 @dataclass
 class GitAuth:
     """Context manager that supplies Git credentials via GIT_ASKPASS."""
 
-    token: str
+    token: TokenSource
     username: str = "x-access-token"
     prefix: str = "ci-agent-git-askpass-"
     _askpass_path: str = ""
@@ -60,11 +63,12 @@ class GitAuth:
 
     def env(self, base: dict[str, str] | None = None) -> dict[str, str]:
         env = dict(base) if base is not None else filter_env(_GIT_AUTH_ENV_ALLOWLIST)
-        if self.token:
+        token = self.token() if callable(self.token) else self.token
+        if token:
             env["GIT_TERMINAL_PROMPT"] = "0"
             env["GIT_CONFIG_NOSYSTEM"] = "1"
             env["GIT_CONFIG_GLOBAL"] = os.devnull
-            env["GIT_PASSWORD"] = self.token
+            env["GIT_PASSWORD"] = token
             if self._askpass_path:
                 env["GIT_ASKPASS"] = self._askpass_path
         return env
@@ -77,3 +81,8 @@ class GitAuth:
         except OSError:
             pass
         self._askpass_path = ""
+
+
+def resolve_git_environment(git_env: GitEnvironment) -> dict[str, str]:
+    """Resolve a late-bound credential environment immediately before git."""
+    return git_env() if callable(git_env) else git_env

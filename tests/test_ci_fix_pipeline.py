@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import subprocess
+import threading
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,12 +12,13 @@ import pytest
 from scripts.ci_fix.comment import render_comment
 from scripts.ci_fix.gate import GateRejection, parse_command
 from scripts.ci_fix.models import (
+    BaselineEvidence,
+    BaselineKind,
     FixOutcome,
     FixPath,
     FixProposal,
     OutcomeKind,
     ReviewVerdict,
-    RunResult,
 )
 from scripts.ci_fix.pipeline import run_ci_fix
 from scripts.ci_fix.push import PushRefused, commit_and_push_fix
@@ -32,9 +35,14 @@ def _proposal(path: FixPath = FixPath.AUTHOR) -> FixProposal:
     )
 
 
-def _passed_run() -> RunResult:
-    return RunResult(ran=True, passed=True, exit_code=0,
-                     command="make && ./runtest --single x", output_tail="All tests passed")
+def _deterministic_baseline():
+    return BaselineEvidence(
+        kind=BaselineKind.DETERMINISTIC,
+        attempts=3,
+        passed=0,
+        failed=3,
+        detail="clean baseline failed 3/3 run(s)",
+    )
 
 
 # --- push: namespace guard ---
@@ -182,72 +190,53 @@ def test_push_uses_clean_clone_not_source_git_config(tmp_path, monkeypatch):
 def test_render_pushed_comment_includes_evidence():
     outcome = FixOutcome(
         kind=OutcomeKind.PUSHED, summary="pushed",
-        proposal=_proposal(), run_result=_passed_run(),
+        proposal=_proposal(),
         review=ReviewVerdict(approved=True, reasoning="minimal and correct"),
         commit_sha="abcdef1234567890",
+        verify_backend="local",
+        verification_run_url="https://github.com/o/r/actions/runs/10",
     )
     body = render_comment(outcome)
     assert "NAN score" in body
     assert "abcdef123456" in body
-    assert "make && ./runtest" in body
+    assert "actions/runs/10" in body
     assert "minimal and correct" in body
     assert "do not merge" in body.lower()
 
 
-def test_render_pushed_surfaces_target_check_and_run_link():
-    # The comment should lead with the target check's result, not the noise,
-    # and link the failing run for provenance.
-    noisy = "\n".join(
-        ["[ok]: other test (1 ms)"] * 30
-        + ["[ok]: corrupt payload: zset listpack with NAN score (12 ms)"]
-    )
+def test_render_pushed_links_failing_and_verification_runs():
     outcome = FixOutcome(
         kind=OutcomeKind.PUSHED, summary="pushed",
         proposal=_proposal(),
-        run_result=RunResult(ran=True, passed=True, exit_code=0,
-                             command="make && ./runtest", output_tail=noisy),
         review=ReviewVerdict(approved=True, reasoning="ok"),
         commit_sha="abcdef1234567890",
         failing_run_url="https://github.com/o/r/actions/runs/9",
+        verify_backend="local",
+        verification_run_url="https://github.com/o/r/actions/runs/10",
     )
     body = render_comment(outcome)
-    assert "previously-failing check now passes" in body
-    # The target line appears before the collapsed full output.
-    assert body.index("NAN score") < body.index("Full verification output")
     assert "actions/runs/9" in body
+    assert "actions/runs/10" in body
 
 
-def test_render_port_comment_uses_pr_ci_as_authority():
+def test_render_port_comment_shows_targeted_runner_evidence():
     outcome = FixOutcome(
         kind=OutcomeKind.PUSHED, summary="pushed",
         proposal=_proposal(FixPath.PORT),
-        review=ReviewVerdict(approved=True, reasoning="Ported upstream commit 9f374e15848d"),
+        review=ReviewVerdict(
+            approved=True,
+            reasoning="Commit 9f374e15848d is already merged on unstable",
+        ),
         commit_sha="abcdef1234567890",
-        verify_backend="upstream-port",
+        verify_backend="local",
+        verification_run_url="https://github.com/o/r/actions/runs/10",
+        baseline=_deterministic_baseline(),
     )
     body = render_comment(outcome)
-    assert "ported upstream fix" in body
-    assert "normal CI is the verification authority" in body
-    assert "Targeted verification" not in body
-
-
-def test_render_pushed_comment_escapes_backticks_in_output():
-    # Untrusted output containing a code fence must not break out of the block.
-    malicious = RunResult(
-        ran=True, passed=True, exit_code=0, command="make && ./runtest --single x",
-        output_tail="ok\n```\n## injected heading\n",
-    )
-    outcome = FixOutcome(
-        kind=OutcomeKind.PUSHED, summary="pushed",
-        proposal=_proposal(), run_result=malicious,
-        review=ReviewVerdict(approved=True, reasoning="ok"),
-        commit_sha="abcdef1234567890",
-    )
-    body = render_comment(outcome)
-    # The fence must be longer than the ``` inside, so the injected heading
-    # stays inside the code block (no bare "## injected heading" line).
-    assert "````" in body
-    assert "\n## injected heading" in body  # present, but inside the fence
+    assert "isolated Linux Actions runner" in body
+    assert "actions/runs/10" in body
+    assert "Port provenance" in body
+    assert "upstream fix passed targeted verification" in body
 
 
 def test_render_refused_comment_explains():
@@ -256,12 +245,14 @@ def test_render_refused_comment_explains():
         summary="genuinely flaky timing failure; no safe fix",
         other_failing_checks=("other test",),
         failing_run_url="https://github.com/o/r/actions/runs/9",
+        verification_run_url="https://github.com/o/r/actions/runs/10",
     )
     body = render_comment(outcome)
     assert "did not push" in body.lower()
     assert "flaky" in body
     assert "other test" in body
     assert "actions/runs/9" in body
+    assert "actions/runs/10" in body
 
 
 def test_render_failed_comment():
@@ -301,6 +292,30 @@ def _artifact_client(logs):
     return client
 
 
+def _passing_remote_verifier():
+    from scripts.ci_fix.verify.base import VerificationPhase, VerificationResult
+
+    verifier = MagicMock()
+
+    def verify(_repo, plan, _patch):
+        if plan.phase is VerificationPhase.BASELINE:
+            return VerificationResult(
+                verified=False,
+                ran=True,
+                detail="clean sample reproduced the failure",
+                run_url="https://run/baseline",
+            )
+        return VerificationResult(
+            verified=True,
+            ran=True,
+            detail="candidate sample passed",
+            run_url="https://run/candidate",
+        )
+
+    verifier.verify.side_effect = verify
+    return verifier
+
+
 def _run_pipeline(monkeypatch, **overrides):
     from scripts.ci_fix.verify.base import VerifyEnv
     from scripts.ci_fix.verify.workflow_env import JobEnvironment
@@ -314,29 +329,57 @@ def _run_pipeline(monkeypatch, **overrides):
         "scripts.ci_fix.pipeline.discover_port_candidates",
         overrides.get("discover", lambda *a, **k: ()),
     )
+    monkeypatch.setattr(
+        "scripts.ci_fix.pipeline.reset_worktree",
+        overrides.get("reset", lambda *a, **k: None),
+    )
+    monkeypatch.setattr(
+        "scripts.ci_fix.pipeline.apply_port_commit",
+        overrides.get("apply_port", lambda *a, **k: ("tests/unit/x.tcl",)),
+    )
+    monkeypatch.setattr(
+        "scripts.ci_fix.pipeline.build_approved_patch",
+        overrides.get("build_patch", lambda *a, **k: "port diff\n"),
+    )
+    monkeypatch.setattr(
+        "scripts.ci_fix.pipeline.apply_fix",
+        overrides.get("apply", lambda *a, **k: (True, ("test.tcl",))),
+    )
+    monkeypatch.setattr(
+        "scripts.ci_fix.pipeline.build_and_review_patch",
+        overrides.get("patch_review", lambda *a, **k: _patch_review(True)),
+    )
+    linux_verifier = (
+        overrides["linux_verifier"]
+        if "linux_verifier" in overrides
+        else _passing_remote_verifier()
+    )
     return run_ci_fix(
         _gh_authorized(), command=parse_command(f"@valkeyrie-bot fix {_RUN_URL}"),
         pr_repo_full_name="valkey-io/valkey", pr_number=3988, commenter="alice",
         git_env={}, artifact_client=_artifact_client(overrides.get("logs", {"1.txt": b"err"})),
         diagnose_func=overrides.get("diagnose", lambda *a, **k: _proposal()),
-        run_loop_func=overrides.get("loop", lambda *a, **k: _loop_success()),
         push_func=overrides.get("push", lambda *a, **k: "deadbeef" * 5),
         port_push_func=overrides.get("port_push", lambda *a, **k: "deadbeef" * 5),
+        linux_verifier=linux_verifier,
+        macos_verifier=overrides.get("macos_verifier"),
+        exact_verifier=overrides.get("exact_verifier"),
+        history_branches=overrides.get("history_branches", ()),
         verify_runs=overrides.get("verify_runs", 2),
+        baseline_runs=overrides.get("baseline_runs", 3),
+        flaky_verify_runs=overrides.get("flaky_verify_runs", 10),
+        minimum_confidence=overrides.get("minimum_confidence", 0.8),
+        protected_paths=overrides.get("protected_paths", (".github/workflows/**",)),
+        auto_publish_paths=overrides.get("auto_publish_paths", ("**",)),
+        allowed_branch_prefixes=overrides.get(
+            "allowed_branch_prefixes", ("agent/backport/",),
+        ),
+        remote_parallelism=overrides.get("remote_parallelism", 5),
+        remote_sample_timeout_seconds=overrides.get(
+            "remote_sample_timeout_seconds", 15 * 60,
+        ),
+        remote_budget_seconds=overrides.get("remote_budget_seconds", 45 * 60),
     )
-
-
-def _loop_success():
-    from scripts.ci_fix.review import LoopResult
-    return LoopResult(success=True, run_result=_passed_run(),
-                      review=ReviewVerdict(True, "ok"), changed_paths=("test.tcl",),
-                      attempts=1, detail="ok")
-
-
-def _loop_failure():
-    from scripts.ci_fix.review import LoopResult
-    return LoopResult(success=False, run_result=None, review=None,
-                      changed_paths=(), attempts=3, detail="test still failing")
 
 
 def test_pipeline_happy_path(monkeypatch):
@@ -377,16 +420,36 @@ def test_pipeline_diagnose_refuses(monkeypatch):
     assert outcome.kind is OutcomeKind.REFUSED
 
 
-def test_pipeline_loop_failure(monkeypatch):
-    outcome = _run_pipeline(monkeypatch, loop=lambda *a, **k: _loop_failure())
+def test_pipeline_candidate_failure_refuses(monkeypatch):
+    from scripts.ci_fix.verify.base import VerificationPhase, VerificationResult
+
+    verifier = MagicMock()
+
+    def fail_candidate(_repo, plan, _patch):
+        return VerificationResult(
+            verified=False,
+            ran=True,
+            detail=(
+                "clean sample failed"
+                if plan.phase is VerificationPhase.BASELINE
+                else "candidate still failing"
+            ),
+        )
+
+    verifier.verify.side_effect = fail_candidate
+    outcome = _run_pipeline(monkeypatch, linux_verifier=verifier)
     assert outcome.kind is OutcomeKind.REFUSED
-    assert "still failing" in outcome.summary
+    assert "candidate still failing" in outcome.summary
 
 
-def test_pipeline_port_cherry_pick_pushes_without_local_verify(monkeypatch):
+def test_pipeline_port_runs_repeated_linux_actions_verification_before_push(monkeypatch):
     from scripts.ci_fix.port_discovery import PortCandidate
-    loop = MagicMock(side_effect=AssertionError("PORT must not run local verifier"))
-    classify = MagicMock(side_effect=AssertionError("PORT does not need env classification"))
+    from scripts.ci_fix.verify.base import VerificationPhase, VerifyEnv
+    from scripts.ci_fix.verify.workflow_env import JobEnvironment
+
+    classify = MagicMock(return_value=JobEnvironment(VerifyEnv.LOCAL))
+    apply_port = MagicMock(return_value=("tests/unit/x.tcl",))
+    verifier = _passing_remote_verifier()
     # The model only sees the short SHA the prompt renders; the discovered
     # candidate carries the full 40-char SHA, as it does in the real flow.
     full_sha = "9f374e15848d7b070cdd58a071a741c0a59a6c75"
@@ -394,22 +457,136 @@ def test_pipeline_port_cherry_pick_pushes_without_local_verify(monkeypatch):
         **{**_proposal(FixPath.PORT).__dict__, "unstable_fix_commit": "9f374e15848d"}
     )
     ported = MagicMock(return_value="abc123" * 6)
-    candidate = PortCandidate(sha=full_sha, subject="the upstream fix")
+    candidate = PortCandidate(
+        sha=full_sha,
+        subject="the historical fix",
+        paths=("tests/unit/x.tcl",),
+        source_ref="origin/unstable",
+        source_branch="unstable",
+    )
 
     outcome = _run_pipeline(
         monkeypatch, diagnose=lambda *a, **k: proposal,
-        loop=loop, classify=classify, port_push=ported,
+        classify=classify, port_push=ported,
         discover=lambda *a, **k: (candidate,),
+        apply_port=apply_port,
+        linux_verifier=verifier,
+        baseline_runs=4,
+        verify_runs=3,
+        remote_parallelism=1,
     )
 
     assert outcome.kind is OutcomeKind.PUSHED
-    assert outcome.verify_backend == "upstream-port"
+    assert outcome.verify_backend == "local"
+    assert outcome.baseline is not None
+    assert outcome.baseline.kind is BaselineKind.DETERMINISTIC
     assert outcome.review is not None
-    assert "Ported upstream commit" in outcome.review.reasoning
+    assert "already merged on unstable" in outcome.review.reasoning
+    assert "3 candidate sample(s)" in outcome.review.reasoning
     # the port push got the full upstream SHA, canonicalized from the short hint
     assert ported.call_args.kwargs["unstable_fix_commit"] == full_sha
-    loop.assert_not_called()
-    classify.assert_not_called()
+    assert ported.call_args.kwargs["source_ref"] == "origin/unstable"
+    phases = [call.args[1].phase for call in verifier.verify.call_args_list]
+    assert phases == [VerificationPhase.BASELINE] * 4 + [VerificationPhase.CANDIDATE] * 3
+    assert [call.args[1].repetition for call in verifier.verify.call_args_list] == [
+        1, 2, 3, 4, 1, 2, 3,
+    ]
+    assert [call.args[2] for call in verifier.verify.call_args_list] == [
+        "", "", "", "", "port diff\n", "port diff\n", "port diff\n",
+    ]
+    assert apply_port.call_count == 1
+    assert apply_port.call_args.args[1] == full_sha
+    classify.assert_called_once()
+
+
+def test_pipeline_port_all_green_baseline_is_handoff_only(monkeypatch):
+    from scripts.ci_fix.port_discovery import PortCandidate
+
+    full_sha = "9f374e15848d7b070cdd58a071a741c0a59a6c75"
+    proposal = _proposal(FixPath.PORT).__class__(
+        **{**_proposal(FixPath.PORT).__dict__, "unstable_fix_commit": full_sha[:12]}
+    )
+    candidate = PortCandidate(
+        sha=full_sha,
+        subject="the upstream fix",
+        paths=("tests/unit/x.tcl",),
+        source_ref="origin/unstable",
+        source_branch="unstable",
+    )
+    from scripts.ci_fix.verify.base import VerificationResult
+
+    verifier = MagicMock()
+    verifier.verify.return_value = VerificationResult(
+        verified=True,
+        ran=True,
+        detail="sample passed",
+        run_url="https://run/green",
+    )
+    ported = MagicMock()
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        diagnose=lambda *a, **k: proposal,
+        discover=lambda *a, **k: (candidate,),
+        linux_verifier=verifier,
+        verify_runs=2,
+        flaky_verify_runs=7,
+        remote_parallelism=1,
+        port_push=ported,
+    )
+
+    assert outcome.kind is OutcomeKind.HANDOFF
+    assert outcome.baseline is not None
+    assert outcome.baseline.kind is BaselineKind.NOT_REPRODUCED
+    assert verifier.verify.call_count == 3 + 7
+    assert "not established" in outcome.summary
+    ported.assert_not_called()
+
+
+def test_pipeline_port_candidate_failure_never_pushes(monkeypatch):
+    from scripts.ci_fix.port_discovery import PortCandidate
+
+    full_sha = "9f374e15848d7b070cdd58a071a741c0a59a6c75"
+    proposal = _proposal(FixPath.PORT).__class__(
+        **{**_proposal(FixPath.PORT).__dict__, "unstable_fix_commit": full_sha[:12]}
+    )
+    candidate = PortCandidate(
+        sha=full_sha,
+        subject="the upstream fix",
+        paths=("tests/unit/x.tcl",),
+        source_ref="origin/unstable",
+        source_branch="unstable",
+    )
+    ported = MagicMock()
+    from scripts.ci_fix.verify.base import VerificationPhase, VerificationResult
+
+    verifier = MagicMock()
+
+    def fail_candidate(_repo, plan, _patch):
+        return VerificationResult(
+            verified=False,
+            ran=True,
+            detail=(
+                "baseline failed"
+                if plan.phase is VerificationPhase.BASELINE
+                else "trusted port did not pass candidate verification"
+            ),
+        )
+
+    verifier.verify.side_effect = fail_candidate
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        diagnose=lambda *a, **k: proposal,
+        discover=lambda *a, **k: (candidate,),
+        linux_verifier=verifier,
+        remote_parallelism=1,
+        port_push=ported,
+    )
+
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert "did not pass candidate verification" in outcome.summary
+    ported.assert_not_called()
 
 
 def test_pipeline_port_conflict_refuses(monkeypatch):
@@ -418,7 +595,9 @@ def test_pipeline_port_conflict_refuses(monkeypatch):
         **{**_proposal(FixPath.PORT).__dict__, "unstable_fix_commit": "9f374e15848d"}
     )
     candidate = PortCandidate(
-        sha="9f374e15848d7b070cdd58a071a741c0a59a6c75", subject="the upstream fix",
+        sha="9f374e15848d7b070cdd58a071a741c0a59a6c75",
+        subject="the upstream fix",
+        paths=("tests/unit/x.tcl",),
     )
 
     def refuse(*_a, **_k):
@@ -432,6 +611,45 @@ def test_pipeline_port_conflict_refuses(monkeypatch):
     assert "cherry-pick" in outcome.summary
 
 
+def test_pipeline_port_apply_conflict_refuses_before_verification(monkeypatch):
+    from scripts.ci_fix.apply import PortApplyError
+    from scripts.ci_fix.port_discovery import PortCandidate
+
+    full_sha = "9f374e15848d7b070cdd58a071a741c0a59a6c75"
+    proposal = _proposal(FixPath.PORT).__class__(
+        **{**_proposal(FixPath.PORT).__dict__, "unstable_fix_commit": full_sha[:12]}
+    )
+    candidate = PortCandidate(
+        sha=full_sha,
+        subject="the upstream fix",
+        paths=("tests/unit/x.tcl",),
+        source_ref="origin/unstable",
+        source_branch="unstable",
+    )
+    verifier = _passing_remote_verifier()
+    ported = MagicMock()
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        diagnose=lambda *a, **k: proposal,
+        discover=lambda *a, **k: (candidate,),
+        apply_port=MagicMock(
+            side_effect=PortApplyError("historical fix did not apply cleanly")
+        ),
+        linux_verifier=verifier,
+        remote_parallelism=1,
+        port_push=ported,
+    )
+
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert "did not apply cleanly" in outcome.summary
+    assert all(
+        call.args[1].phase.value == "baseline"
+        for call in verifier.verify.call_args_list
+    )
+    ported.assert_not_called()
+
+
 def test_pipeline_port_refuses_sha_not_in_discovered_candidates(monkeypatch):
     """A PORT SHA the model invents that was not surfaced as a candidate for
     this failure is refused, so PORT cannot bypass verification with an
@@ -443,7 +661,9 @@ def test_pipeline_port_refuses_sha_not_in_discovered_candidates(monkeypatch):
     ported = MagicMock(return_value="abc123" * 6)
     # A different commit was discovered; the model's SHA is not in the set.
     other = PortCandidate(
-        sha="1111111111111111111111111111111111111111", subject="unrelated",
+        sha="1111111111111111111111111111111111111111",
+        subject="unrelated",
+        paths=("tests/unit/other.tcl",),
     )
 
     outcome = _run_pipeline(
@@ -463,8 +683,16 @@ def test_pipeline_port_refuses_ambiguous_short_sha(monkeypatch):
         **{**_proposal(FixPath.PORT).__dict__, "unstable_fix_commit": "9f374e"}
     )
     ported = MagicMock(return_value="abc123" * 6)
-    cand_a = PortCandidate(sha="9f374e15848d7b070cdd58a071a741c0a59a6c75", subject="fix a")
-    cand_b = PortCandidate(sha="9f374eaa00000000000000000000000000000000", subject="fix b")
+    cand_a = PortCandidate(
+        sha="9f374e15848d7b070cdd58a071a741c0a59a6c75",
+        subject="fix a",
+        paths=("tests/a",),
+    )
+    cand_b = PortCandidate(
+        sha="9f374eaa00000000000000000000000000000000",
+        subject="fix b",
+        paths=("tests/b",),
+    )
 
     outcome = _run_pipeline(
         monkeypatch, diagnose=lambda *a, **k: proposal, port_push=ported,
@@ -475,6 +703,23 @@ def test_pipeline_port_refuses_ambiguous_short_sha(monkeypatch):
     ported.assert_not_called()
 
 
+def test_pipeline_passes_configured_history_branches_to_discovery(monkeypatch):
+    seen = {}
+
+    def discover(*_args, **kwargs):
+        seen["history_branches"] = kwargs["history_branches"]
+        return ()
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        discover=discover,
+        history_branches=("7.2", "8.0"),
+    )
+
+    assert outcome.kind is OutcomeKind.PUSHED
+    assert seen["history_branches"] == ("7.2", "8.0")
+
+
 def test_pipeline_push_refused(monkeypatch):
     def refuse(*a, **k):
         raise PushRefused("bad branch namespace")
@@ -483,48 +728,189 @@ def test_pipeline_push_refused(monkeypatch):
     assert "bad branch namespace" in outcome.summary
 
 
-# --- backend routing ---
+def test_verified_authored_product_change_is_handed_off_by_policy(monkeypatch):
+    from scripts.ci_fix.review import PatchReview
 
-def test_pipeline_docker_passes_image_to_loop(monkeypatch):
-    from scripts.ci_fix.verify.base import VerifyEnv
-    from scripts.ci_fix.verify.workflow_env import JobEnvironment
+    pushed = MagicMock()
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        apply=lambda *a, **k: (True, ("src/server.c",)),
+        patch_review=lambda *a, **k: PatchReview(
+            ok=True,
+            patch="--- a/src/server.c\n+++ b/src/server.c\n",
+            review=ReviewVerdict(True, "root cause addressed"),
+        ),
+        push=pushed,
+        auto_publish_paths=("tests/**",),
+    )
+
+    assert outcome.kind is OutcomeKind.HANDOFF
+    assert "src/server.c" in outcome.summary
+    assert outcome.handoff_patch.startswith("--- a/src/server.c")
+    assert outcome.verify_backend == "local"
+    pushed.assert_not_called()
+
+
+def test_historical_workflow_port_is_handed_off_by_policy(monkeypatch):
+    from scripts.ci_fix.port_discovery import PortCandidate
+
+    full_sha = "9f374e15848d7b070cdd58a071a741c0a59a6c75"
+    proposal = _proposal(FixPath.PORT).__class__(
+        **{
+            **_proposal(FixPath.PORT).__dict__,
+            "unstable_fix_commit": full_sha[:12],
+        }
+    )
+    candidate = PortCandidate(
+        sha=full_sha,
+        subject="Fix release workflow",
+        paths=(".github/workflows/daily.yml",),
+        source_ref="origin/unstable",
+        source_branch="unstable",
+    )
+    ported = MagicMock()
+    verifier = _passing_remote_verifier()
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        diagnose=lambda *a, **k: proposal,
+        discover=lambda *a, **k: (candidate,),
+        apply_port=lambda *a, **k: (".github/workflows/daily.yml",),
+        linux_verifier=verifier,
+        remote_parallelism=1,
+        port_push=ported,
+        protected_paths=(".github/workflows/**",),
+    )
+
+    assert outcome.kind is OutcomeKind.HANDOFF
+    assert full_sha in outcome.summary
+    assert "protected" in outcome.summary
+    assert verifier.verify.call_count == 3 + 2
+    ported.assert_not_called()
+
+
+def test_pipeline_passes_registry_branch_prefix_to_publisher(monkeypatch):
     seen = {}
 
-    def loop(repo_dir, proposal, **kwargs):
-        seen["image"] = kwargs.get("container_image")
-        return _loop_success()
+    def push(*_args, **kwargs):
+        seen["prefixes"] = kwargs["allowed_branch_prefixes"]
+        return "deadbeef" * 5
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        push=push,
+        allowed_branch_prefixes=("agent/fix/", "agent/backport/"),
+    )
+
+    assert outcome.kind is OutcomeKind.PUSHED
+    assert seen["prefixes"] == ("agent/fix/", "agent/backport/")
+
+
+# --- backend routing ---
+
+def test_pipeline_docker_dispatches_image_in_every_sample(monkeypatch):
+    from scripts.ci_fix.verify.base import VerifyEnv
+    from scripts.ci_fix.verify.workflow_env import JobEnvironment
+    verifier = _passing_remote_verifier()
 
     outcome = _run_pipeline(
         monkeypatch,
         classify=lambda *a, **k: JobEnvironment(VerifyEnv.DOCKER, image="almalinux:8"),
-        loop=loop,
+        linux_verifier=verifier,
+        remote_parallelism=1,
     )
     assert outcome.kind is OutcomeKind.PUSHED
-    assert seen["image"] == "almalinux:8"
+    assert {
+        (call.args[1].env, call.args[1].image)
+        for call in verifier.verify.call_args_list
+    } == {(VerifyEnv.DOCKER, "almalinux:8")}
     assert outcome.verify_backend == "docker:almalinux:8"
 
 
-def test_pipeline_passes_verify_runs_to_loop(monkeypatch):
-    seen = {}
+def test_pipeline_dispatches_configured_candidate_repetitions(monkeypatch):
+    from scripts.ci_fix.verify.base import VerificationPhase
 
-    def loop(repo_dir, proposal, **kwargs):
-        seen["verify_runs"] = kwargs.get("verify_runs")
-        return _loop_success()
-
-    outcome = _run_pipeline(monkeypatch, loop=loop, verify_runs=5)
+    verifier = _passing_remote_verifier()
+    outcome = _run_pipeline(
+        monkeypatch,
+        linux_verifier=verifier,
+        verify_runs=5,
+        remote_parallelism=1,
+    )
     assert outcome.kind is OutcomeKind.PUSHED
-    assert seen["verify_runs"] == 5
+    candidates = [
+        call.args[1]
+        for call in verifier.verify.call_args_list
+        if call.args[1].phase is VerificationPhase.CANDIDATE
+    ]
+    assert [plan.repetition for plan in candidates] == [1, 2, 3, 4, 5]
+    assert all(plan.repetition_count == 5 for plan in candidates)
 
 
-def test_pipeline_unsupported_env_refuses(monkeypatch):
+def test_pipeline_linux_actions_uses_flaky_sampling_policy(monkeypatch):
+    from scripts.ci_fix.verify.base import VerificationPhase, VerificationResult
+
+    verifier = MagicMock()
+
+    def mixed_baseline(_repo, plan, _patch):
+        verified = (
+            plan.phase is VerificationPhase.CANDIDATE
+            or plan.repetition == 1
+        )
+        return VerificationResult(verified=verified, ran=True, detail="sample")
+
+    verifier.verify.side_effect = mixed_baseline
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        linux_verifier=verifier,
+        baseline_runs=7,
+        flaky_verify_runs=25,
+        remote_parallelism=1,
+    )
+
+    assert outcome.kind is OutcomeKind.PUSHED
+    plans = [call.args[1] for call in verifier.verify.call_args_list]
+    assert sum(plan.phase is VerificationPhase.BASELINE for plan in plans) == 7
+    candidates = [
+        plan for plan in plans if plan.phase is VerificationPhase.CANDIDATE
+    ]
+    assert len(candidates) == 25
+    assert all(plan.repetition_count == 25 for plan in candidates)
+
+
+def test_pipeline_refuses_action_below_repository_confidence_threshold(monkeypatch):
+    low = _proposal()
+    low = low.__class__(**{**low.__dict__, "confidence": 0.74})
+    verifier = MagicMock()
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        diagnose=lambda *a, **k: low,
+        linux_verifier=verifier,
+        minimum_confidence=0.8,
+    )
+
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert "0.74" in outcome.summary
+    assert "0.80" in outcome.summary
+    verifier.verify.assert_not_called()
+
+
+def test_pipeline_unsupported_env_prepares_reviewed_handoff(monkeypatch):
     from scripts.ci_fix.verify.base import VerifyEnv
     from scripts.ci_fix.verify.workflow_env import JobEnvironment
     outcome = _run_pipeline(
         monkeypatch,
         classify=lambda *a, **k: JobEnvironment(VerifyEnv.UNSUPPORTED, reason="self-hosted arm"),
+        reset=lambda *a, **k: None,
+        apply=lambda *a, **k: (True, ("tests/arm.tcl",)),
+        patch_review=lambda *a, **k: _patch_review(True),
     )
-    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.kind is OutcomeKind.HANDOFF
     assert "self-hosted arm" in outcome.summary
+    assert outcome.handoff_patch == "diff\n"
 
 
 def test_pipeline_refuses_job_not_in_failed_set(monkeypatch):
@@ -555,6 +941,7 @@ def _macos_pipeline(monkeypatch, verifier, *, apply_ok=True, review_ok=True):
         diagnose_func=lambda *a, **k: _proposal(),
         push_func=lambda *a, **k: "cafe" * 10,
         macos_verifier=verifier,
+        auto_publish_paths=("**",),
     )
 
 
@@ -568,11 +955,41 @@ def _patch_review(ok):
 def test_pipeline_macos_green_pushes(monkeypatch):
     from scripts.ci_fix.verify.base import VerificationResult
     verifier = MagicMock()
-    verifier.verify.return_value = VerificationResult(verified=True, ran=True, detail="ok", run_url="https://run/9")
+    failed = VerificationResult(
+        verified=False, ran=True, detail="baseline failed", run_url="https://run/base",
+    )
+    passed = VerificationResult(
+        verified=True, ran=True, detail="ok", run_url="https://run/9",
+    )
+    verifier.verify.side_effect = [failed] * 3 + [passed] * 2
     outcome = _macos_pipeline(monkeypatch, verifier)
     assert outcome.kind is OutcomeKind.PUSHED
     assert outcome.verify_backend == "macos"
-    assert outcome.macos_run_url == "https://run/9"
+    assert outcome.verification_run_url == "https://run/9"
+    assert outcome.baseline is not None
+    assert outcome.baseline.kind.value == "deterministic"
+
+
+def test_pipeline_macos_all_green_baseline_is_handoff_only(monkeypatch):
+    from scripts.ci_fix.models import BaselineKind
+    from scripts.ci_fix.verify.base import VerificationResult
+
+    verifier = MagicMock()
+    verifier.verify.return_value = VerificationResult(
+        verified=True,
+        ran=True,
+        detail="passed",
+        run_url="https://run/green",
+    )
+
+    outcome = _macos_pipeline(monkeypatch, verifier)
+
+    assert outcome.kind is OutcomeKind.HANDOFF
+    assert outcome.baseline is not None
+    assert outcome.baseline.kind is BaselineKind.NOT_REPRODUCED
+    # Three clean samples plus the stronger default flaky candidate campaign.
+    assert verifier.verify.call_count == 3 + 10
+    assert "not established" in outcome.summary
 
 
 def test_pipeline_macos_cleanup_failure_preserves_push(monkeypatch):
@@ -596,8 +1013,13 @@ def test_pipeline_macos_cleanup_failure_preserves_push(monkeypatch):
     monkeypatch.setattr("scripts.ci_fix.pipeline.build_and_review_patch",
                         lambda *a, **k: _patch_review(True))
     verifier = MagicMock()
-    verifier.verify.return_value = VerificationResult(
-        verified=True, ran=True, detail="ok", run_url="https://run/9")
+    failed = VerificationResult(
+        verified=False, ran=True, detail="baseline failed", run_url="https://run/base",
+    )
+    passed = VerificationResult(
+        verified=True, ran=True, detail="ok", run_url="https://run/9",
+    )
+    verifier.verify.side_effect = [failed] * 3 + [passed] * 2
 
     outcome = run_ci_fix(
         _gh_authorized(), command=parse_command(f"@valkeyrie-bot fix {_RUN_URL}"),
@@ -606,10 +1028,11 @@ def test_pipeline_macos_cleanup_failure_preserves_push(monkeypatch):
         diagnose_func=lambda *a, **k: _proposal(),
         push_func=lambda *a, **k: "cafe" * 10,
         macos_verifier=verifier,
+        auto_publish_paths=("**",),
     )
     # A cleanup failure must not mask the successful push.
     assert outcome.kind is OutcomeKind.PUSHED
-    assert outcome.macos_run_url == "https://run/9"
+    assert outcome.verification_run_url == "https://run/9"
 
 
 def test_pipeline_macos_red_refuses(monkeypatch):
@@ -619,8 +1042,8 @@ def test_pipeline_macos_red_refuses(monkeypatch):
     outcome = _macos_pipeline(monkeypatch, verifier)
     assert outcome.kind is OutcomeKind.REFUSED
     assert "did not pass" in outcome.summary
-    from scripts.ci_fix.pipeline import _MACOS_FIX_MAX_ATTEMPTS
-    assert verifier.verify.call_count == _MACOS_FIX_MAX_ATTEMPTS
+    from scripts.ci_fix.pipeline import _REMOTE_FIX_MAX_ATTEMPTS
+    assert verifier.verify.call_count == 3 + 2 * _REMOTE_FIX_MAX_ATTEMPTS
 
 
 def test_pipeline_macos_red_retries_with_feedback(monkeypatch):
@@ -643,9 +1066,20 @@ def test_pipeline_macos_red_retries_with_feedback(monkeypatch):
     verifier = MagicMock()
     verifier.verify.side_effect = [
         VerificationResult(
+            verified=False, ran=True, detail="baseline failed", run_url="https://run/base",
+        ),
+        VerificationResult(
+            verified=False, ran=True, detail="baseline failed", run_url="https://run/base",
+        ),
+        VerificationResult(
+            verified=False, ran=True, detail="baseline failed", run_url="https://run/base",
+        ),
+        VerificationResult(
             verified=False, ran=True, detail="did not pass", run_url="https://run/1",
             output_tail="unit/test_vset.c:137:25: error: variable length array folded",
         ),
+        VerificationResult(verified=True, ran=True, detail="ok", run_url="https://run/1b"),
+        VerificationResult(verified=True, ran=True, detail="ok", run_url="https://run/2"),
         VerificationResult(verified=True, ran=True, detail="ok", run_url="https://run/2"),
     ]
 
@@ -656,19 +1090,342 @@ def test_pipeline_macos_red_retries_with_feedback(monkeypatch):
         diagnose_func=lambda *a, **k: _proposal(),
         push_func=lambda *a, **k: "cafe" * 10,
         macos_verifier=verifier,
+        auto_publish_paths=("**",),
     )
 
     assert outcome.kind is OutcomeKind.PUSHED
     assert feedback_seen[0] == ""
     assert "unit/test_vset.c:137" in feedback_seen[1]
     assert "https://run/1" in feedback_seen[1]
-    assert verifier.verify.call_count == 2
+    assert verifier.verify.call_count == 7
 
 
-def test_pipeline_macos_unavailable_refuses(monkeypatch):
+def test_pipeline_macos_unavailable_hands_off_reviewed_patch(monkeypatch):
     outcome = _macos_pipeline(monkeypatch, None)
-    assert outcome.kind is OutcomeKind.REFUSED
+    assert outcome.kind is OutcomeKind.HANDOFF
     assert "not configured" in outcome.summary
+    assert outcome.handoff_patch == "diff\n"
+
+
+def test_pipeline_port_uses_repeated_target_workflow_before_push(monkeypatch):
+    from scripts.ci_fix.port_discovery import PortCandidate
+    from scripts.ci_fix.verify.base import VerificationPhase, VerificationResult
+
+    full_sha = "9f374e15848d7b070cdd58a071a741c0a59a6c75"
+    proposal = _proposal(FixPath.PORT).__class__(
+        **{**_proposal(FixPath.PORT).__dict__, "unstable_fix_commit": full_sha[:12]}
+    )
+    candidate = PortCandidate(
+        sha=full_sha,
+        subject="the unstable fix",
+        paths=("tests/unit/x.tcl",),
+        source_ref="origin/unstable",
+        source_branch="unstable",
+    )
+    classifier = MagicMock(side_effect=AssertionError("target verifier owns the environment"))
+    verifier = MagicMock()
+    baseline_failed = VerificationResult(
+        verified=False,
+        ran=True,
+        detail="reproduced",
+        run_url="https://run/base",
+    )
+    candidate_passed = VerificationResult(
+        verified=True,
+        ran=True,
+        detail="fixed",
+        run_url="https://run/fixed",
+    )
+    verifier.verify.side_effect = [baseline_failed] * 2 + [candidate_passed] * 3
+    ported = MagicMock(return_value="cafe" * 10)
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        diagnose=lambda *a, **k: proposal,
+        discover=lambda *a, **k: (candidate,),
+        exact_verifier=verifier,
+        classify=classifier,
+        baseline_runs=2,
+        verify_runs=3,
+        remote_parallelism=1,
+        build_patch=lambda *a, **k: "exact port diff\n",
+        port_push=ported,
+    )
+
+    assert outcome.kind is OutcomeKind.PUSHED
+    assert outcome.verify_backend == "target-workflow"
+    assert outcome.verification_run_url == "https://run/fixed"
+    assert outcome.baseline is not None
+    assert outcome.baseline.kind is BaselineKind.DETERMINISTIC
+    phases = [call.args[1].phase for call in verifier.verify.call_args_list]
+    assert phases == [
+        VerificationPhase.BASELINE,
+        VerificationPhase.BASELINE,
+        VerificationPhase.CANDIDATE,
+        VerificationPhase.CANDIDATE,
+        VerificationPhase.CANDIDATE,
+    ]
+    patches = [call.args[2] for call in verifier.verify.call_args_list]
+    assert patches == ["", "", "exact port diff\n", "exact port diff\n", "exact port diff\n"]
+    assert ported.call_args.kwargs["unstable_fix_commit"] == full_sha
+    classifier.assert_not_called()
+
+
+def test_pipeline_port_unavailable_target_baseline_hands_off(monkeypatch):
+    from scripts.ci_fix.port_discovery import PortCandidate
+    from scripts.ci_fix.verify.base import VerificationResult
+
+    full_sha = "9f374e15848d7b070cdd58a071a741c0a59a6c75"
+    proposal = _proposal(FixPath.PORT).__class__(
+        **{**_proposal(FixPath.PORT).__dict__, "unstable_fix_commit": full_sha[:12]}
+    )
+    candidate = PortCandidate(
+        sha=full_sha,
+        subject="the unstable fix",
+        paths=("tests/unit/x.tcl",),
+        source_ref="origin/unstable",
+        source_branch="unstable",
+    )
+    verifier = MagicMock(
+        **{
+            "verify.return_value": VerificationResult(
+                verified=False,
+                ran=False,
+                detail="runner unavailable",
+                run_url="https://run/unavailable",
+            )
+        }
+    )
+    ported = MagicMock()
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        diagnose=lambda *a, **k: proposal,
+        discover=lambda *a, **k: (candidate,),
+        exact_verifier=verifier,
+        baseline_runs=1,
+        remote_parallelism=1,
+        port_push=ported,
+    )
+
+    assert outcome.kind is OutcomeKind.HANDOFF
+    assert outcome.baseline is not None
+    assert outcome.baseline.kind is BaselineKind.UNAVAILABLE
+    assert outcome.verification_run_url == "https://run/unavailable"
+    assert verifier.verify.call_count == 1
+    ported.assert_not_called()
+
+
+def test_pipeline_exact_verifier_is_preferred_and_receives_remote_phases(monkeypatch):
+    from scripts.ci_fix.verify.base import VerificationPhase, VerificationResult
+
+    classifier = MagicMock(side_effect=AssertionError("exact verifier bypasses YAML guessing"))
+    verifier = MagicMock()
+    baseline_failed = VerificationResult(
+        verified=False, ran=True, detail="reproduced", run_url="https://run/base",
+    )
+    candidate_passed = VerificationResult(
+        verified=True, ran=True, detail="fixed", run_url="https://run/fixed",
+    )
+    verifier.verify.side_effect = [baseline_failed] * 2 + [candidate_passed] * 2
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        exact_verifier=verifier,
+        classify=classifier,
+        baseline_runs=2,
+        verify_runs=2,
+        reset=lambda *a, **k: None,
+        apply=lambda *a, **k: (True, ("tests/exact.tcl",)),
+        patch_review=lambda *a, **k: _patch_review(True),
+    )
+
+    assert outcome.kind is OutcomeKind.PUSHED
+    assert outcome.verify_backend == "target-workflow"
+    assert outcome.verification_run_url == "https://run/fixed"
+    phases = [call.args[1].phase for call in verifier.verify.call_args_list]
+    assert phases == [
+        VerificationPhase.BASELINE,
+        VerificationPhase.BASELINE,
+        VerificationPhase.CANDIDATE,
+        VerificationPhase.CANDIDATE,
+    ]
+    assert all(
+        call.args[1].source_run_id == 27559908167
+        for call in verifier.verify.call_args_list
+    )
+    classifier.assert_not_called()
+
+
+def test_pipeline_remote_mixed_baseline_uses_flaky_repetition_policy(monkeypatch):
+    from scripts.ci_fix.models import BaselineKind
+    from scripts.ci_fix.verify.base import VerificationResult
+
+    verifier = MagicMock()
+    failed = VerificationResult(verified=False, ran=True, detail="failed")
+    passed = VerificationResult(verified=True, ran=True, detail="passed")
+    verifier.verify.side_effect = [failed, passed, failed] + [passed] * 4
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        exact_verifier=verifier,
+        baseline_runs=3,
+        verify_runs=1,
+        flaky_verify_runs=4,
+        reset=lambda *a, **k: None,
+        apply=lambda *a, **k: (True, ("tests/flaky.tcl",)),
+        patch_review=lambda *a, **k: _patch_review(True),
+    )
+
+    assert outcome.kind is OutcomeKind.PUSHED
+    assert outcome.baseline is not None
+    assert outcome.baseline.kind is BaselineKind.FLAKY
+    assert verifier.verify.call_count == 7
+    candidate_plans = [call.args[1] for call in verifier.verify.call_args_list[3:]]
+    assert [plan.repetition for plan in candidate_plans] == [1, 2, 3, 4]
+    assert all(plan.repetition_count == 4 for plan in candidate_plans)
+
+
+def test_pipeline_unavailable_exact_baseline_hands_off(monkeypatch):
+    from scripts.ci_fix.verify.base import VerificationResult
+
+    verifier = MagicMock()
+    verifier.verify.return_value = VerificationResult(
+        verified=False,
+        ran=False,
+        detail="workflow dispatch unavailable",
+        run_url="https://run/unavailable",
+    )
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        exact_verifier=verifier,
+        reset=lambda *a, **k: None,
+        apply=lambda *a, **k: (True, ("tests/exact.tcl",)),
+        patch_review=lambda *a, **k: _patch_review(True),
+    )
+
+    assert outcome.kind is OutcomeKind.HANDOFF
+    assert "baseline verifier was unavailable" in outcome.summary
+    assert outcome.handoff_patch == "diff\n"
+    # The unavailable result stops subsequent batches; samples already in the
+    # first bounded batch may all have been dispatched concurrently.
+    assert verifier.verify.call_count == 3
+
+
+def test_pipeline_unavailable_exact_candidate_hands_off_with_run_link(monkeypatch):
+    from scripts.ci_fix.verify.base import VerificationResult
+
+    baseline_failed = VerificationResult(
+        verified=False,
+        ran=True,
+        detail="reproduced",
+        run_url="https://run/base",
+    )
+    candidate_unavailable = VerificationResult(
+        verified=False,
+        ran=False,
+        detail="runner was cancelled",
+        run_url="https://run/cancelled",
+    )
+    verifier = MagicMock()
+    verifier.verify.side_effect = [baseline_failed, candidate_unavailable]
+
+    outcome = _run_pipeline(
+        monkeypatch,
+        exact_verifier=verifier,
+        baseline_runs=1,
+        verify_runs=2,
+        reset=lambda *a, **k: None,
+        apply=lambda *a, **k: (True, ("tests/exact.tcl",)),
+        patch_review=lambda *a, **k: _patch_review(True),
+    )
+
+    assert outcome.kind is OutcomeKind.HANDOFF
+    assert "missing remote evidence" in outcome.summary
+    assert outcome.verification_run_url == "https://run/cancelled"
+    assert outcome.handoff_patch == "diff\n"
+
+
+def test_remote_candidate_samples_are_bounded_and_result_order_is_deterministic():
+    from scripts.ci_fix.pipeline import _verify_remote_repeatedly
+    from scripts.ci_fix.verify.base import (
+        VerificationPlan,
+        VerificationResult,
+        VerifyEnv,
+    )
+
+    barrier = threading.Barrier(2)
+    lock = threading.Lock()
+    state = {"active": 0, "max_active": 0}
+    seen = []
+
+    class Verifier:
+        def verify(self, _repo, sample_plan, _patch):
+            with lock:
+                state["active"] += 1
+                state["max_active"] = max(state["max_active"], state["active"])
+                seen.append((sample_plan.repetition, sample_plan.timeout_seconds))
+            barrier.wait(timeout=2)
+            # Repetition 2 completes first, but repetition 1 must still define
+            # the deterministic first failure returned to retry feedback.
+            if sample_plan.repetition == 1:
+                time.sleep(0.02)
+            with lock:
+                state["active"] -= 1
+            return VerificationResult(
+                verified=False,
+                ran=True,
+                detail=f"failed repetition {sample_plan.repetition}",
+            )
+
+    result = _verify_remote_repeatedly(
+        "/repo",
+        VerificationPlan(env=VerifyEnv.TARGET, command=""),
+        "diff\n",
+        verifier=Verifier(),
+        runs=4,
+        parallelism=2,
+        sample_timeout_seconds=37,
+        deadline=time.monotonic() + 5,
+    )
+
+    assert state["max_active"] == 2
+    assert sorted(repetition for repetition, _timeout in seen) == [1, 2]
+    assert all(1 <= timeout <= 37 for _repetition, timeout in seen)
+    assert result.detail == "failed repetition 1"
+
+
+def test_remote_candidate_budget_stops_before_next_batch():
+    from scripts.ci_fix.pipeline import _verify_remote_repeatedly
+    from scripts.ci_fix.verify.base import (
+        VerificationPlan,
+        VerificationResult,
+        VerifyEnv,
+    )
+
+    calls = []
+
+    class Verifier:
+        def verify(self, _repo, sample_plan, _patch):
+            calls.append(sample_plan.repetition)
+            time.sleep(0.08)
+            return VerificationResult(verified=True, ran=True, detail="passed")
+
+    result = _verify_remote_repeatedly(
+        "/repo",
+        VerificationPlan(env=VerifyEnv.TARGET, command=""),
+        "diff\n",
+        verifier=Verifier(),
+        runs=5,
+        parallelism=2,
+        sample_timeout_seconds=30,
+        deadline=time.monotonic() + 0.03,
+    )
+
+    assert sorted(calls) == [1, 2]
+    assert result.ran is False
+    assert "budget was exhausted" in result.detail
 
 
 # --- _classify_failing_job over real workflow files ---
@@ -691,6 +1448,78 @@ def test_classify_finds_job_in_workflow(tmp_path):
     assert env.env is VerifyEnv.MACOS
 
 
+def test_valkey_daily_host_jobs_select_agent_actions_verifiers(tmp_path):
+    from scripts.ci_fix.models import FixRequest
+    from scripts.ci_fix.pipeline import _plan_verification, _verifier_for_plan
+    from scripts.ci_fix.verify.base import VerificationPlan, VerifyEnv
+
+    repo = _write_workflows(tmp_path, {
+        "daily.yml": """
+jobs:
+  test-ubuntu-jemalloc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: ${{ inputs.use_repo || github.repository }}
+          ref: ${{ inputs.use_git_ref || github.ref }}
+      - name: Install libbacktrace
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: ianlancetaylor/libbacktrace
+          ref: b9e40069c0b47a722286b94eb5231f7f05c08713
+          path: libbacktrace
+      - run: cd libbacktrace && ./configure && make && sudo make install
+  test-macos-latest:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Install libbacktrace
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: ianlancetaylor/libbacktrace
+          ref: b9e40069c0b47a722286b94eb5231f7f05c08713
+          path: libbacktrace
+""",
+    })
+    request = FixRequest(
+        repo_full_name="valkey-io/valkey",
+        pr_number=3988,
+        head_repo_full_name="valkey-io/valkey",
+        head_branch="agent/backport/sweep/8.0",
+        head_sha="a" * 40,
+        run_id=123,
+        requested_by="maintainer",
+    )
+    linux_verifier = MagicMock(name="linux-actions-verifier")
+    macos_verifier = MagicMock(name="macos-actions-verifier")
+
+    for job, expected_env, expected_verifier in (
+        ("test-ubuntu-jemalloc", VerifyEnv.LOCAL, linux_verifier),
+        ("test-macos-latest", VerifyEnv.MACOS, macos_verifier),
+    ):
+        proposal = FixProposal(
+            path=FixPath.AUTHOR,
+            failing_check="targeted test",
+            root_cause="known race",
+            reasoning="fix the race",
+            confidence=0.9,
+            failing_job_hint=job,
+            build_command="make",
+            verify_command="./runtest --single unit/x",
+        )
+        plan = _plan_verification(repo, request, proposal, (job,))
+
+        assert isinstance(plan, VerificationPlan)
+        assert plan.env is expected_env
+        assert _verifier_for_plan(
+            plan,
+            linux_verifier=linux_verifier,
+            macos_verifier=macos_verifier,
+            exact_verifier=None,
+        ) is expected_verifier
+
+
 def test_classify_ambiguous_cross_workflow_refuses(tmp_path):
     from scripts.ci_fix.pipeline import _classify_failing_job
     from scripts.ci_fix.verify.base import VerifyEnv
@@ -701,6 +1530,29 @@ def test_classify_ambiguous_cross_workflow_refuses(tmp_path):
     env = _classify_failing_job(repo, "test")
     assert env.env is VerifyEnv.UNSUPPORTED
     assert "multiple workflows" in env.reason
+
+
+def test_classify_supported_and_exact_only_duplicate_fails_closed(tmp_path):
+    from scripts.ci_fix.pipeline import _classify_failing_job
+    from scripts.ci_fix.verify.base import VerifyEnv
+
+    repo = _write_workflows(tmp_path, {
+        "a.yml": "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make\n",
+        "b.yml": (
+            "jobs:\n"
+            "  test:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    services:\n"
+            "      valkey:\n"
+            "        image: valkey/valkey:latest\n"
+        ),
+    })
+
+    env = _classify_failing_job(repo, "test")
+
+    assert env.env is VerifyEnv.UNSUPPORTED
+    assert "matching workflow definition" in env.reason
+    assert "services" in env.reason
 
 
 def test_classify_missing_job_refuses(tmp_path):
@@ -752,18 +1604,20 @@ def test_read_workflow_safely_skips_symlink_and_oversized(tmp_path):
     assert _read_workflow_safely(tmp_path / "missing.yml") is None
 
 
-def test_pipeline_handoff_when_verify_cannot_run(monkeypatch):
-    """A loop that could not verify the fix yields a HANDOFF outcome carrying
-    the patch, not a refusal or a push."""
-    from scripts.ci_fix.review import LoopResult
+def test_pipeline_linux_verifier_unavailable_hands_off_without_local_fallback(monkeypatch):
+    from scripts.ci_fix.review import PatchReview
 
-    handoff_loop = LoopResult(
-        success=False, run_result=None, review=ReviewVerdict(True, "looks sane"),
-        changed_paths=("src/x.c",), attempts=1,
-        detail="could not verify the fix here (missing dep); handing off",
-        handoff=True, handoff_patch="--- a/src/x.c\n+++ b/src/x.c\n",
+    patch = "--- a/src/x.c\n+++ b/src/x.c\n"
+    outcome = _run_pipeline(
+        monkeypatch,
+        linux_verifier=None,
+        apply=lambda *a, **k: (True, ("src/x.c",)),
+        patch_review=lambda *a, **k: PatchReview(
+            ok=True,
+            patch=patch,
+            review=ReviewVerdict(True, "looks sane"),
+        ),
     )
-    outcome = _run_pipeline(monkeypatch, loop=lambda *a, **k: handoff_loop)
     assert outcome.kind is OutcomeKind.HANDOFF
-    assert outcome.handoff_patch == "--- a/src/x.c\n+++ b/src/x.c\n"
-    assert "could not verify" in outcome.summary
+    assert outcome.handoff_patch == patch
+    assert "Linux Actions verification is not configured" in outcome.summary

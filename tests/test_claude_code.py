@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import logging
 import subprocess
+from unittest.mock import MagicMock
 
 from scripts.ai import claude_code
 
@@ -136,6 +137,8 @@ def test_run_claude_code_does_not_inherit_github_tokens(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "github-secret")
     monkeypatch.setenv("GH_TOKEN", "gh-secret")
     monkeypatch.setenv("BACKPORT_GITHUB_TOKEN", "backport-secret")
+    monkeypatch.setenv("CI_FIX_APP_PRIVATE_KEY", "app-private-key")
+    monkeypatch.setenv("CI_FIX_TARGET_INSTALLATION_ID", "123")
     monkeypatch.setenv("AWS_REGION", "us-west-2")
     monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
 
@@ -146,6 +149,8 @@ def test_run_claude_code_does_not_inherit_github_tokens(monkeypatch):
     assert "GITHUB_TOKEN" not in captured["env"]
     assert "GH_TOKEN" not in captured["env"]
     assert "BACKPORT_GITHUB_TOKEN" not in captured["env"]
+    assert "CI_FIX_APP_PRIVATE_KEY" not in captured["env"]
+    assert "CI_FIX_TARGET_INSTALLATION_ID" not in captured["env"]
 
 
 def test_run_claude_code_denies_bash_and_write_when_not_allowed(monkeypatch):
@@ -259,3 +264,183 @@ def test_run_claude_code_reports_missing_cli(monkeypatch):
     monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
 
     assert claude_code.run_claude_code("prompt") == ("", "claude not found", 127)
+
+
+def test_run_claude_code_uses_minimal_pid_and_filesystem_sandbox(tmp_path, monkeypatch):
+    captured = {}
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    def fake_which(name):
+        return {
+            "bwrap": "/usr/bin/bwrap",
+            "claude": "/usr/bin/true",
+        }.get(name)
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        return _FakeProcess(
+            cmd,
+            stdout_text='{"type":"result","result":"ok"}\n',
+            **kwargs,
+        )
+
+    monkeypatch.setattr(claude_code.shutil, "which", fake_which)
+    monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
+
+    result = claude_code.run_claude_code(
+        "prompt",
+        cwd=str(repo),
+        sandbox_root=str(tmp_path),
+    )
+
+    assert result == ('{"type":"result","result":"ok"}\n', "", 0)
+    command = captured["cmd"]
+    assert command[0] == "/usr/bin/bwrap"
+    assert "--unshare-user" in command
+    assert "--unshare-pid" in command
+    assert command[command.index("--proc") + 1] == "/proc"
+    assert command[command.index("--tmpfs") + 1] == "/tmp"
+    bind = command.index("--bind")
+    assert command[bind + 1:bind + 3] == [str(tmp_path), str(tmp_path)]
+    assert [
+        "--ro-bind",
+        str(repo / ".git"),
+        str(repo / ".git"),
+    ] == command[bind + 3:bind + 6]
+    assert command[command.index("--chdir") + 1] == str(repo)
+    assert command[command.index("--") + 1] == "/usr/bin/true"
+    assert captured["kwargs"]["cwd"] == "/"
+    assert "--ro-bind-try" in command
+    assert "/home" not in command
+    assert "/var" not in command
+
+
+def test_readonly_sandbox_mounts_workspace_readonly(tmp_path, monkeypatch):
+    captured = {}
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    monkeypatch.setattr(
+        claude_code.shutil,
+        "which",
+        lambda name: {
+            "bwrap": "/usr/bin/bwrap",
+            "claude": "/usr/bin/true",
+        }.get(name),
+    )
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return _FakeProcess(
+            cmd,
+            stdout_text='{"type":"result","result":"ok"}\n',
+            **kwargs,
+        )
+
+    monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
+
+    result = claude_code.run_claude_code(
+        "prompt",
+        cwd=str(repo),
+        sandbox_root=str(tmp_path),
+        sandbox_writes_allowed=False,
+    )
+
+    assert result == ('{"type":"result","result":"ok"}\n', "", 0)
+    command = captured["cmd"]
+    workspace_mount = [
+        "--ro-bind",
+        str(tmp_path),
+        str(tmp_path),
+    ]
+    git_mount = [
+        "--ro-bind",
+        str(repo / ".git"),
+        str(repo / ".git"),
+    ]
+    assert any(
+        command[index:index + 3] == workspace_mount
+        for index in range(len(command) - 2)
+    )
+    assert any(
+        command[index:index + 3] == git_mount
+        for index in range(len(command) - 2)
+    )
+    assert not any(
+        command[index:index + 3] == ["--bind", str(tmp_path), str(tmp_path)]
+        for index in range(len(command) - 2)
+    )
+
+
+def test_run_claude_code_fails_closed_without_bubblewrap(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    popen = MagicMock()
+
+    monkeypatch.setattr(
+        claude_code.shutil,
+        "which",
+        lambda name: None if name == "bwrap" else "/usr/bin/true",
+    )
+    monkeypatch.setattr(claude_code.subprocess, "Popen", popen)
+
+    stdout, stderr, rc = claude_code.run_claude_code(
+        "prompt",
+        cwd=str(repo),
+        sandbox_root=str(tmp_path),
+    )
+
+    assert stdout == ""
+    assert "bubblewrap" in stderr
+    assert rc == 126
+    popen.assert_not_called()
+
+
+def test_run_claude_code_rejects_symlinked_git_metadata(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    (repo / ".git").symlink_to(metadata, target_is_directory=True)
+    popen = MagicMock()
+
+    monkeypatch.setattr(
+        claude_code.shutil,
+        "which",
+        lambda name: {
+            "bwrap": "/usr/bin/bwrap",
+            "claude": "/usr/bin/true",
+        }.get(name),
+    )
+    monkeypatch.setattr(claude_code.subprocess, "Popen", popen)
+
+    stdout, stderr, rc = claude_code.run_claude_code(
+        "prompt",
+        cwd=str(repo),
+        sandbox_root=str(tmp_path),
+    )
+
+    assert stdout == ""
+    assert "symlinked Git metadata" in stderr
+    assert rc == 126
+    popen.assert_not_called()
+
+
+def test_run_claude_code_rejects_overbroad_sandbox_root(monkeypatch):
+    popen = MagicMock()
+    monkeypatch.setattr(claude_code.subprocess, "Popen", popen)
+
+    stdout, stderr, rc = claude_code.run_claude_code(
+        "prompt",
+        cwd="/tmp",
+        sandbox_root="/",
+    )
+
+    assert stdout == ""
+    assert "non-root ancestor" in stderr
+    assert rc == 126
+    popen.assert_not_called()

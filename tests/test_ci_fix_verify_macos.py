@@ -6,21 +6,30 @@ GitHub client; no real dispatch happens.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from scripts.ci_fix.verify.base import VerificationPlan, VerifyEnv
 from scripts.ci_fix.verify.macos import MacosVerifier, normalize_macos_verify_command
 
+_HEAD_SHA = "a" * 40
+
 
 def _plan(command="make test", workdir=""):
     return VerificationPlan(
         env=VerifyEnv.MACOS, command=command, workdir=workdir,
-        head_sha="abc1234", target_repo="owner/target",
+        head_sha=_HEAD_SHA, target_repo="owner/target",
     )
 
 
-def _gh_with_run(*, conclusion, name_has_token=True, status="completed"):
+def _gh_with_run(
+    *,
+    conclusion,
+    name_has_token=True,
+    status="completed",
+    step_conclusion=None,
+):
     """A GitHub mock whose verify-macos workflow returns one run."""
     from datetime import datetime, timezone
     captured = {}
@@ -31,6 +40,11 @@ def _gh_with_run(*, conclusion, name_has_token=True, status="completed"):
         return True
 
     # created far in the future so it always passes the created_at>=since gate.
+    verdict_step = SimpleNamespace(
+        name="Run targeted verification",
+        conclusion=step_conclusion or conclusion,
+    )
+    job = SimpleNamespace(steps=[verdict_step])
     run = SimpleNamespace(
         id=1, status=status, conclusion=conclusion,
         html_url="https://example/run/1",
@@ -40,6 +54,7 @@ def _gh_with_run(*, conclusion, name_has_token=True, status="completed"):
         display_title="verify-macos PLACEHOLDER",
         created_at=datetime(2999, 1, 1, tzinfo=timezone.utc),
     )
+    run.jobs = lambda: [job]
 
     workflow = MagicMock()
     workflow.create_dispatch.side_effect = make_dispatch
@@ -80,8 +95,12 @@ def test_green_run_verifies(monkeypatch):
     assert result.verified is True
     assert result.run_url == "https://example/run/1"
     # The patch and SHA were transported as inputs.
-    assert captured["inputs"]["head_sha"] == "abc1234"
+    assert captured["inputs"]["head_sha"] == _HEAD_SHA
     assert captured["inputs"]["target_repo"] == "owner/target"
+    assert captured["inputs"]["container_image"] == ""
+    assert captured["inputs"]["phase"] == "candidate"
+    assert captured["inputs"]["repetition"] == "1"
+    assert captured["inputs"]["repetition_count"] == "1"
 
 
 def test_dispatch_normalizes_root_src_object_make(monkeypatch):
@@ -141,7 +160,7 @@ def test_failed_run_refuses(monkeypatch):
 
     result = _verifier(gh).verify("/repo", _plan(), "diff\n")
     assert result.verified is False
-    assert "did not pass" in result.detail
+    assert "failed" in result.detail
 
 
 def test_failed_run_includes_log_tail(monkeypatch):
@@ -249,6 +268,27 @@ def test_run_never_appears_times_out(monkeypatch):
     result = _verifier(gh).verify("/repo", _plan(), "diff\n")
     assert result.verified is False
     assert "did not complete" in result.detail
+
+
+def test_plan_timeout_caps_macos_wait(monkeypatch):
+    monkeypatch.setattr("scripts.ci_fix.verify.macos.time.sleep", lambda *_: None)
+    monkeypatch.setattr(
+        "scripts.ci_fix.verify.macos.time.time",
+        _advancing_clock(step=2),
+    )
+    gh, _captured, _set, _run = _gh_with_run(
+        conclusion="success",
+        name_has_token=False,
+    )
+
+    result = _verifier(gh).verify(
+        "/repo",
+        replace(_plan(), timeout_seconds=1),
+        "diff\n",
+    )
+
+    assert result.ran is False
+    assert "within 1s" in result.detail
 
 
 def test_stale_run_before_dispatch_is_ignored(monkeypatch):

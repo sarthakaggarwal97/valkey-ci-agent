@@ -14,6 +14,10 @@ inputs:
     description: Install the Claude Code CLI used by AI-backed agent jobs.
     required: false
     default: "false"
+  install-sandbox:
+    description: Install bubblewrap for AI profiles that require process isolation.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -29,6 +33,7 @@ runs:
       env:
         INSTALL_MODE: ${{ inputs['install-mode'] }}
         INSTALL_CLAUDE: ${{ inputs['install-claude'] }}
+        INSTALL_SANDBOX: ${{ inputs['install-sandbox'] }}
       run: |
         set -euo pipefail
         case "${INSTALL_MODE}" in
@@ -42,6 +47,13 @@ runs:
           true|false) ;;
           *)
             echo "::error::install-claude must be 'true' or 'false'"
+            exit 1
+            ;;
+        esac
+        case "${INSTALL_SANDBOX}" in
+          true|false) ;;
+          *)
+            echo "::error::install-sandbox must be 'true' or 'false'"
             exit 1
             ;;
         esac
@@ -60,3 +72,14 @@ runs:
       if: ${{ inputs['install-claude'] == 'true' }}
       shell: bash
       run: npm install -g @anthropic-ai/claude-code@2.1.175
+
+    - name: Install Claude process sandbox
+      if: ${{ inputs['install-sandbox'] == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! command -v bwrap >/dev/null 2>&1; then
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes bubblewrap
+        fi
+        bwrap --version

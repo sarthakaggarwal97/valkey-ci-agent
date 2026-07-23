@@ -27,7 +27,7 @@ New workflows are added as sibling directories to `backport/`. Each workflow pic
 |----------|--------|-------------|
 | Backport | Active | Cherry-picks merged PRs onto release branches with AI conflict resolution |
 | Fuzzer Monitor | Active | Analyzes scheduled fuzzer runs and files issues for anomalous failures |
-| CI Fix | Active | On-demand `@valkeyrie-bot fix <ci-link>` - diagnoses and fixes a failing test on a backport PR |
+| CI Fix | Active | Registry-driven `@valkeyrie-bot fix <ci-link>` - ports, authors, verifies, or hands off one CI fix |
 | Test Failure Detector | Active | Detects test failures from Daily CI, files/updates GitHub issues |
 | Release Notes | Active | Cuts a release: AI-generates notes from `release-notes` PRs plus AI-triaged candidates without that label, promotes them onto a release line branch, bumps `src/version.h`, opens a PR (held as a draft when the cut flags issues) |
 | PR Reviewer | Planned | Two-stage code review with skeptic pass |
@@ -163,8 +163,9 @@ gh workflow run test-failure-detector-sweep.yml \
 
 ## CI Fix Workflow
 
-An on-demand workflow that fixes a single failing test on a backport PR when a
-maintainer asks for it. From this agent repository, run it explicitly:
+An on-demand workflow that fixes or prepares a reviewed patch for one failed
+check on a registered Valkey repository PR. From this agent repository, run it
+explicitly:
 
 ```bash
 gh workflow run ci-fix.yml \
@@ -174,12 +175,12 @@ gh workflow run ci-fix.yml \
   --field run_url=https://github.com/valkey-io/valkey/actions/runs/<run_id>
 ```
 
-The workflow is scoped to `valkey-io/valkey`, matching the GitHub App token it
-mints. Maintainers can dispatch it manually, or comment on a `valkey-io/valkey`
-PR and let `ci-fix-comment-poll.yml` dispatch it. The invocation must start the
-comment, and the hint is only the rest of that line, so a conversational comment
-that merely quotes or mentions the command does not trigger a run. The intended
-comment shape is:
+`repos.yml` controls which repositories are enabled, authorization policy,
+release-branch fallback search, verifier policy, publication paths, and comment
+polling. Maintainers can dispatch manually or comment on an
+enabled repository's PR and let `ci-fix-comment-poll.yml` dispatch it. The
+invocation must start the comment, so quoted or conversational mentions do not
+trigger a run:
 
 ```text
 @valkeyrie-bot fix https://github.com/valkey-io/valkey/actions/runs/<run_id>
@@ -200,72 +201,121 @@ owns every verdict.** The AI never runs a command and never pushes.
    moved since the run, it refuses - the log no longer describes the code.
 2. **Fetch** (code) - downloads the failed run's logs and shallow-clones the
    repo at the exact failed commit.
-3. **Diagnose** (AI, read-only) - reads the log and the repo, including the
-   project's *own* CI workflow files to learn how it builds and tests, then
-   returns a structured proposal: port an existing upstream fix, author a
-   test-scaffolding fix, or refuse. Nothing about the test framework is
-   hardcoded, so the same engine works for any repo.
+3. **Diagnose** (AI, read-only) - reads the log and repository and returns a
+   structured proposal: port a discovered existing fix, author a causal fix,
+   or refuse. Code searches the default branch first (`unstable` for Valkey
+   core). Only when that produces no candidate does it search configured
+   release branches. It retains the source ref needed to prove the selected
+   commit is reachable.
 4. **Select the verifier** (code) - code, not the AI, decides where the fix is
-   verified. It lists the jobs that actually failed in the linked run, requires
-   the AI's job hint to match one of them, and classifies that job's runner from
-   its workflow definition: an x86 Linux job verifies locally, a container job
-   verifies inside that image via Docker, a macOS job verifies on a macOS
-   runner. Anything it cannot classify safely (arm, self-hosted, dynamic) is
-   refused.
+   verified. It requires the job hint to match a job that actually failed. A
+   configured target-owned workflow is preferred for every candidate, including
+   an existing fix selected for porting.
+   Otherwise, jobs using exactly `ubuntu-latest` or `macos-latest`, plus static
+   containers on `ubuntu-latest`, use credential-free workflows in the agent
+   repository. A host job may include an unconditional auxiliary checkout only
+   when its action, repository, full commit SHA, and relative path are static;
+   the targeted build recipe must recreate that checkout and its required
+   setup. Auxiliary checkouts in the network-disabled container verifier remain
+   unsupported. Versioned runner labels, ARM, s390x emulation, FreeBSD, dynamic
+   matrices/containers, services, reusable workflows, and specialized setup are
+   never approximated with a different hosted image.
 5. **Verify + review** - the verification policy depends on the fix path:
-   - PORT: when the fix is an existing default-branch commit that cherry-picks
-     cleanly, the bot may push the port and rely on this PR's normal CI as the
-     authority. This exception is limited to already-merged upstream fixes.
-   - Linux/Docker: first run the AI's targeted build+verify recipe on the clean
-     checkout. If it passes before any fix, the bot treats the linked failure
-     as flaky or environment-specific and refuses. If the local environment
-     cannot establish a baseline because a setup dependency is missing, any
-     authored patch is handoff-only. Otherwise, apply the fix and run it in a
-     **sanitized subprocess** (scrubbed environment, locked working directory,
-     timeout, output cap; Docker adds no-network, dropped capabilities,
-     non-root), where the real exit code is the verdict. The build runs once
-     and the verify command must pass `CI_FIX_VERIFY_RUNS` times in a row
-     (default 2). This path retries on failure.
-   - macOS: send the approved patch to a macOS runner the agent controls, which
-     checks out the PR head, applies the patch, and runs the command; its CI
-     conclusion is the verdict.
-   A skeptic review (read-only AI) judges whether the fix addresses the root
-   cause rather than silencing the symptom. A push requires both a passing
-   verification and an approving review.
-6. **Push** (code) - extracts only the approved patch, applies it in a fresh
-   trusted clone at the gated SHA, commits authored as the bot (no DCO
-   sign-off - a human must certify before merge), and pushes to the PR's own
-   `agent/backport/...` branch. The checkout that ran tests never receives
-   credentials. The PR's normal CI re-runs as the authoritative check. The bot
-   never merges.
+   - PORT: only a code-discovered commit reachable from its recorded default or
+     release ref can be selected. The bot samples the clean checkout, applies
+     the commit without committing, and requires the same repeated candidate
+     evidence as an authored fix. Publication cherry-picks the original commit
+     in a fresh clone so its authorship and provenance are preserved.
+   - Linux/Docker: each clean or candidate sample is a separate
+     `ubuntu-latest` run of `ci-fix-verify-linux.yml`. The workflow has
+     `permissions: {}`, no secrets or cloud identity, checks out the gated SHA,
+     conditionally applies the exact patch, and runs the targeted recipe.
+     Only the targeted verification step supplies a test verdict; checkout,
+     setup, patch-application, and runner failures are unavailable evidence.
+     Recipe phases run fail-fast. Static containers additionally use no
+     network, dropped capabilities, `no-new-privileges`, an explicit shell
+     entrypoint, and the runner's non-root UID/GID.
+   - Target workflow: dispatch a separate GitHub Actions run in the target
+     repository's protected verifier with failed run/job identity, SHA, patch,
+     phase, and repetition index. The target owns setup and commands; no
+     AI-authored command is sent. A UUID marker and creation timestamp bind each
+     conclusion to this invocation.
+   - macOS fallback: each sample is a separate no-secret agent-owned
+     `macos-latest` run using the same dispatch contract and repeated baseline
+     and candidate policy when no target verifier is configured. It uses the
+     same step-level verdict rule as Linux.
+   Mixed clean samples confirm a flake and select `flaky_verify_runs`; a
+   deterministic failure uses `CI_FIX_VERIFY_RUNS`. An all-green or unavailable
+   baseline can still yield a reviewed handoff patch or identified historical
+   commit, but never a false success claim or automatic push. For authored
+   changes, a skeptic review (read-only AI) judges whether the fix addresses the
+   root cause rather than weakening assertions, adding longer sleeps/timeouts,
+   or reducing flaky-test coverage.
+6. **Publication policy** (code) - authored changes auto-publish only when all
+   paths match `auto_publish_paths`. Workflow, local-action, and CODEOWNERS
+   changes are protected and always become human handoffs, including when they
+   come from a historical port.
+7. **Push** (code) - publishes from a fresh trusted clone at the gated SHA and
+   pushes to the PR's own `agent/backport/...` branch. Authored changes apply
+   only the approved patch and are committed by the bot (no DCO sign-off - a
+   human must certify before merge); ports cherry-pick the trusted commit with
+   original authorship. Candidate code never executes in this
+   credential-bearing controller job. The target-verifier contract requires
+   its candidate jobs to use read-only repository permissions and no cloud
+   identity; that is a property target maintainers must enforce in their
+   workflow, not one this agent can impose on a separately owned job. The PR's
+   normal CI re-runs as the authoritative check. The bot never merges.
 
-This is targeted verification of the one failing check, not a replay of the
-whole CI job. Every refusal posts a PR comment explaining why, with evidence,
-so when the bot can't safely fix something (a real product bug, a flaky test,
-an unverifiable environment), a maintainer can take over immediately.
+The target-owned backend reuses repository setup rather than reconstructing CI
+from YAML. See [CI Fix Target Verifier](docs/ci-fix-verifier.md) for its exact
+input, correlation, credential, and sampling contract.
 
 ### Configuration
 
-Reuses the same secrets and OIDC role as the other workflows (see
-[Step 1](#step-1-configure-secrets-and-variables)). The workflow mints two
-short-lived App tokens:
+Reuses the same secrets and OIDC role as the other workflows. The target token
+is scoped to the registry-selected repository:
 
-- On `valkey-io/valkey`: `members:read` (team authorization), `actions:read`
-  (run logs and failed-job listing), `contents:write` (push the fix),
-  `issues:write` (PR comments), `pull-requests:write` (PR metadata).
-- On `valkey-io/valkey-ci-agent`: `actions:write` (dispatch and read the
-  macOS verification workflow). Used only for the macOS backend.
+- `members:read` for team authorization, `contents:write` for a permitted
+  branch push, `issues:write` and `pull-requests:write` for PR reporting.
+- `actions:read` for normal targets; the workflow requests `actions:write`
+  only when `verification_workflow` is configured, so it can dispatch that
+  fixed target workflow. It receives no workflow-file write permission.
+- On `valkey-io/valkey-ci-agent`: `actions:write` to dispatch and read the
+  no-secret Linux/macOS verifier workflows. This token is skipped when the
+  target verifier is configured.
+
+The workflow action first mints those repository-scoped tokens. During a long
+remote campaign, the Python control plane refreshes them before expiry using the
+same exact permissions and `repositories: [selected-name]`; it never requests an
+installation-wide token. Artifact downloads and the final git push resolve the
+current token at call time. Candidate tests run in separate jobs that receive
+neither App credentials nor AWS credentials. CI-fix AI subprocesses run inside
+a fail-closed bubblewrap sandbox with a private PID namespace, fresh `/proc` and
+`/tmp`, read-only system runtime, and only the disposable CI-fix workspace
+mounted. Read-only profiles receive a read-only workspace; edit profiles can
+write the worktree but Git metadata remains read-only. Their filtered
+environment contains the temporary Bedrock credentials they need, but no GitHub
+credential. Environment filtering alone is not treated as isolation because
+same-user Linux processes can inspect controller state through `/proc` and
+runner temporary files.
 
 `ci-fix-comment-poll.yml` runs hourly and polls twice inside the same runner,
 30 minutes apart. The in-run loop is capped below the GitHub App token lifetime,
 so the second tick does not depend on GitHub scheduling another workflow exactly
-on time. Optional poller tuning lives in `CI_FIX_POLL_INTERVAL_SECONDS` and
-`CI_FIX_POLL_DURATION_SECONDS`.
+on time. An atomic `eyes` reaction claims a comment, while the dispatched run
+name carries the comment id. A later serialized tick reconciles that marker
+before retrying, so a lost dispatch response neither suppresses the request
+forever nor causes an immediate duplicate. Optional poller tuning lives in
+`CI_FIX_POLL_INTERVAL_SECONDS` and `CI_FIX_POLL_DURATION_SECONDS`.
 
-Optional verification tuning: `CI_FIX_VERIFY_RUNS` sets how many times a
-Linux/Docker fix must pass the verify command before it is trusted (default 2,
-maximum 10). The build runs once regardless, so raising it only repeats the
-verify step. macOS verification runs once on its dedicated runner.
+`CI_FIX_VERIFY_RUNS` controls deterministic candidate repetitions (default 2,
+maximum 10). Per-repository `baseline_runs` and `flaky_verify_runs` control
+clean sampling and the stronger flaky campaign. Remote repetitions run in
+bounded batches controlled by `remote_parallelism`; each sample and the whole
+campaign are capped by `remote_sample_timeout_minutes` and
+`remote_budget_minutes`. Exhausting either produces a reviewed handoff instead
+of a workflow timeout. `minimum_confidence` gates model-authored action. See
+`examples/repos.yml` for the complete `ci_fix` registry shape.
 
 ## Release Notes Workflow
 

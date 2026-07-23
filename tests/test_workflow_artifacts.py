@@ -58,6 +58,30 @@ def test_download_keeps_token_off_cross_host_redirects(monkeypatch):
     assert req.unredirected_hdrs.get("Authorization") == "Bearer secret"
 
 
+def test_download_resolves_token_provider_for_each_request(monkeypatch):
+    from scripts.common import workflow_artifacts as artifacts_mod
+
+    captured = []
+    tokens = iter(["first", "refreshed"])
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b"zipbytes"
+
+    def fake_urlopen(req, timeout=0):
+        captured.append(req.unredirected_hdrs["Authorization"])
+        return _Resp()
+
+    monkeypatch.setattr(artifacts_mod, "urlopen", fake_urlopen)
+    client = ArtifactClient(MagicMock(), token=lambda: next(tokens))
+
+    client._download("/first")
+    client._download("/second")
+
+    assert captured == ["Bearer first", "Bearer refreshed"]
+
+
 def test_client_requires_token():
     with pytest.raises(ValueError, match="token is required"):
         ArtifactClient(MagicMock(), token="")

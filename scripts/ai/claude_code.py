@@ -6,8 +6,10 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import threading
+from pathlib import Path
 from typing import Any
 
 from scripts.common.proc import filter_env
@@ -58,6 +60,8 @@ def run_claude_code(
     allowed_tools: str = "Read,Edit,MultiEdit,Write,Bash,Glob,Grep",
     disallowed_tools: str | None = None,
     env_allowlist: tuple[str, ...] | None = None,
+    sandbox_root: str | None = None,
+    sandbox_writes_allowed: bool = True,
 ) -> tuple[str, str, int]:
     """Run claude CLI and return (stdout, stderr, exit_code).
 
@@ -113,6 +117,19 @@ def run_claude_code(
     if effort:
         cmd.extend(["--effort", effort])
 
+    process_cwd = cwd
+    if sandbox_root is not None:
+        try:
+            cmd, process_cwd = _sandboxed_command(
+                cmd,
+                cwd=cwd,
+                sandbox_root=sandbox_root,
+                writes_allowed=sandbox_writes_allowed,
+            )
+        except (OSError, ValueError) as exc:
+            logger.error("Claude sandbox setup failed: %s", exc)
+            return "", f"Claude sandbox setup failed: {exc}", 126
+
     logger.info("Running claude: cwd=%s, timeout=%d, prompt=%s…", cwd, timeout, prompt[:120])
     stdout_parts: list[str] = []
     process = None
@@ -123,7 +140,7 @@ def run_claude_code(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            cwd=cwd,
+            cwd=process_cwd,
             env=env,
             bufsize=1,
         )
@@ -160,6 +177,94 @@ def run_claude_code(
     except FileNotFoundError:
         logger.error("claude CLI not found on PATH.")
         return "", "claude not found", 127
+
+
+_SANDBOX_RUNTIME_ROOTS = ("/usr", "/bin", "/lib", "/lib64", "/etc", "/opt")
+_CLAUDE_INSTALL_ROOTS = (Path("/usr"), Path("/opt"))
+
+
+def _sandboxed_command(
+    command: list[str],
+    *,
+    cwd: str | None,
+    sandbox_root: str,
+    writes_allowed: bool = True,
+) -> tuple[list[str], str]:
+    """Wrap Claude in a minimal bubblewrap filesystem and PID namespace."""
+    if cwd is None:
+        raise ValueError("sandboxed Claude requires a working directory")
+
+    root = Path(sandbox_root).resolve(strict=True)
+    working_dir = Path(cwd).resolve(strict=True)
+    if root == Path(root.anchor) or not working_dir.is_relative_to(root):
+        raise ValueError("sandbox root must be a non-root ancestor of the working directory")
+    if not root.is_dir() or not working_dir.is_dir():
+        raise ValueError("sandbox root and working directory must be directories")
+
+    bwrap = shutil.which("bwrap")
+    claude = shutil.which(command[0])
+    if not bwrap:
+        raise OSError("bubblewrap (bwrap) is required for this agent profile")
+    if not claude:
+        raise OSError("claude CLI not found on PATH")
+
+    resolved_claude = Path(claude).resolve(strict=True)
+    if not any(resolved_claude.is_relative_to(prefix) for prefix in _CLAUDE_INSTALL_ROOTS):
+        raise ValueError("sandboxed Claude must be installed under /usr or /opt")
+
+    git_metadata = working_dir / ".git"
+    if git_metadata.is_symlink():
+        raise ValueError("sandboxed Claude cannot use symlinked Git metadata")
+
+    wrapped = [
+        bwrap,
+        "--die-with-parent",
+        "--new-session",
+        "--unshare-user",
+        "--unshare-pid",
+        "--unshare-uts",
+        "--unshare-ipc",
+        "--disable-userns",
+        "--cap-drop",
+        "ALL",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+    ]
+    for runtime_root in _SANDBOX_RUNTIME_ROOTS:
+        wrapped.extend(["--ro-bind-try", runtime_root, runtime_root])
+    wrapped.extend([
+        "--tmpfs",
+        "/tmp",
+        "--dir",
+        "/tmp/ci-agent-home",
+        "--bind" if writes_allowed else "--ro-bind",
+        str(root),
+        str(root),
+    ])
+    if git_metadata.exists():
+        wrapped.extend([
+            "--ro-bind",
+            str(git_metadata),
+            str(git_metadata),
+        ])
+    wrapped.extend([
+        "--chdir",
+        str(working_dir),
+        "--setenv",
+        "HOME",
+        "/tmp/ci-agent-home",
+        "--setenv",
+        "TMPDIR",
+        "/tmp",
+        "--",
+        claude,
+        *command[1:],
+    ])
+    # Launch bubblewrap outside the untrusted checkout. It performs the chdir
+    # only after constructing the restricted mount namespace.
+    return wrapped, "/"
 
 
 def _build_claude_env(env_allowlist: tuple[str, ...] | None = None) -> dict[str, str]:

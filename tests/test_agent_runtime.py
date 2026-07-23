@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from scripts.ai import runtime as agent_runtime
 
 
@@ -29,6 +31,7 @@ def test_run_agent_applies_profile_and_writes_hashed_evidence(tmp_path, monkeypa
     assert "GITHUB_TOKEN" not in calls["env_allowlist"]
     assert calls["timeout"] == agent_runtime.AGENT_PROFILES["conflict_resolve_edit_only"].timeout
     assert calls["effort"] == "max"
+    assert calls["sandbox_writes_allowed"] is True
 
     evidence_files = list(tmp_path.glob("*.json"))
     assert len(evidence_files) == 1
@@ -75,3 +78,44 @@ def test_fuzzer_profile_is_readonly() -> None:
     assert "Edit" not in profile.allowed_tools
     assert "Bash" not in profile.allowed_tools
     assert "Read" in profile.allowed_tools
+
+
+def test_ci_fix_profiles_require_process_sandbox() -> None:
+    diagnose = agent_runtime.AGENT_PROFILES["ci_fix_diagnose_readonly"]
+    apply = agent_runtime.AGENT_PROFILES["ci_fix_apply_edit_only"]
+
+    assert diagnose.sandbox_required is True
+    assert apply.sandbox_required is True
+    assert apply.allowed_tools == "Read,Edit,MultiEdit,Grep,Glob"
+    assert apply.disallowed_tools == "Bash,Write"
+
+
+def test_required_sandbox_cannot_be_omitted() -> None:
+    with pytest.raises(ValueError, match="requires a filesystem sandbox"):
+        agent_runtime.run_agent(
+            "ci_fix_diagnose_readonly",
+            "diagnose",
+            cwd="/tmp/repo",
+        )
+
+
+def test_run_agent_forwards_required_sandbox(tmp_path, monkeypatch) -> None:
+    calls = {}
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def fake_run_claude_code(_prompt, **kwargs):
+        calls.update(kwargs)
+        return "{}", "", 0
+
+    monkeypatch.setattr(agent_runtime, "run_claude_code", fake_run_claude_code)
+    result = agent_runtime.run_agent(
+        "ci_fix_diagnose_readonly",
+        "diagnose",
+        cwd=str(repo),
+        sandbox_root=tmp_path,
+    )
+
+    assert result.returncode == 0
+    assert calls["sandbox_root"] == str(tmp_path)
+    assert calls["sandbox_writes_allowed"] is False

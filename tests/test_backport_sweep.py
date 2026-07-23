@@ -75,6 +75,16 @@ def test_git_auth_default_env_strips_ambient_tokens(monkeypatch):
     assert "GH_TOKEN" not in env
 
 
+def test_git_auth_resolves_refreshing_token_when_environment_is_requested():
+    tokens = iter(["first", "refreshed"])
+    with GitAuth(lambda: next(tokens), prefix="test-git-auth-") as git_auth:
+        first = git_auth.env()
+        second = git_auth.env()
+
+    assert first["GIT_PASSWORD"] == "first"
+    assert second["GIT_PASSWORD"] == "refreshed"
+
+
 def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
     candidate = ProjectBackportCandidate(
         source_pr_number=10,

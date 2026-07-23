@@ -26,7 +26,11 @@ from pathlib import Path
 
 from scripts.ci_fix.models import FixProposal
 from scripts.ci_fix.port_discovery import resolve_default_branch
-from scripts.common.git_auth import github_https_url
+from scripts.common.git_auth import (
+    GitEnvironment,
+    github_https_url,
+    resolve_git_environment,
+)
 from scripts.common.git_clone import REPO_RE, SHA_RE
 from scripts.common.proc import BOT_EMAIL, BOT_NAME, EmptyPatch, build_approved_patch, git_output, run_git
 
@@ -47,7 +51,8 @@ def commit_and_push_fix(
     head_sha: str,
     proposal: FixProposal,
     changed_paths: tuple[str, ...],
-    git_env: dict[str, str],
+    git_env: GitEnvironment,
+    allowed_branch_prefixes: tuple[str, ...] = (ALLOWED_BRANCH_PREFIX,),
 ) -> str:
     """Commit the working-tree fix and push it to the PR head branch.
 
@@ -57,14 +62,14 @@ def commit_and_push_fix(
     clone is the only checkout that receives credentials. Returns the new
     commit SHA. Raises ``PushRefused`` if any trust-boundary check fails.
     """
-    if not head_branch.startswith(ALLOWED_BRANCH_PREFIX):
+    if not _branch_is_allowed(head_branch, allowed_branch_prefixes):
         # The prefix is a convention, not proof the branch is bot-owned: the
         # push is contained by the fast-forward-only refspec (can only append,
         # never rewrite), the gate's same-repo head requirement, and the App
         # token being scoped to the one target repo.
         raise PushRefused(
             f"Refusing to push to {head_branch!r}: ci_fix only pushes to branches "
-            f"under {ALLOWED_BRANCH_PREFIX}."
+            f"under one of {allowed_branch_prefixes!r}."
         )
     if not REPO_RE.fullmatch(head_repo_full_name):
         raise PushRefused(f"Refusing to push to malformed repo {head_repo_full_name!r}.")
@@ -100,7 +105,13 @@ def commit_and_push_fix(
             run_git(str(clean_repo), "commit", "-m", _commit_message(proposal))
 
             run_git(str(clean_repo), "remote", "set-url", "origin", github_https_url(head_repo_full_name))
-            run_git(str(clean_repo), "push", "origin", f"HEAD:{head_branch}", env=git_env)
+            run_git(
+                str(clean_repo),
+                "push",
+                "origin",
+                f"HEAD:{head_branch}",
+                env=resolve_git_environment(git_env),
+            )
         except subprocess.CalledProcessError as exc:
             # Keep the pipeline's "every outcome is a comment" guarantee: a git
             # failure in the clean clone (unreachable SHA, non-fast-forward
@@ -118,21 +129,22 @@ def commit_and_push_port(
     head_branch: str,
     head_sha: str,
     unstable_fix_commit: str,
-    git_env: dict[str, str],
+    git_env: GitEnvironment,
+    source_ref: str = "",
+    allowed_branch_prefixes: tuple[str, ...] = (ALLOWED_BRANCH_PREFIX,),
 ) -> str:
-    """Cherry-pick an existing upstream fix onto the PR branch and push it.
+    """Cherry-pick a trusted historical fix onto the PR branch and push it.
 
-    Unlike an authored fix, a PORT carries an already-merged upstream commit, so
-    we preserve its original authorship and add the standard ``cherry picked
-    from`` trailer rather than re-authoring it as the bot. The same push
-    discipline applies: namespaced branch, validated repo/SHA, fast-forward-only
-    push from a fresh clone. A conflicting or empty cherry-pick, or any git
-    failure, becomes ``PushRefused`` so the outcome is always a comment.
+    Unlike an authored fix, a PORT carries a commit already merged on a
+    code-discovered default or release branch. We preserve its original
+    authorship and add the standard ``cherry picked from`` trailer. The same
+    push discipline applies: namespaced branch, validated repo/SHA,
+    fast-forward-only push from a fresh clone.
     """
-    if not head_branch.startswith(ALLOWED_BRANCH_PREFIX):
+    if not _branch_is_allowed(head_branch, allowed_branch_prefixes):
         raise PushRefused(
             f"Refusing to push to {head_branch!r}: ci_fix only pushes to branches "
-            f"under {ALLOWED_BRANCH_PREFIX}."
+            f"under one of {allowed_branch_prefixes!r}."
         )
     if not REPO_RE.fullmatch(head_repo_full_name):
         raise PushRefused(f"Refusing to push to malformed repo {head_repo_full_name!r}.")
@@ -140,6 +152,8 @@ def commit_and_push_port(
         raise PushRefused(f"Refusing to push from malformed head SHA {head_sha!r}.")
     if not SHA_RE.fullmatch(unstable_fix_commit):
         raise PushRefused(f"Refusing to port malformed commit {unstable_fix_commit!r}.")
+    if source_ref and not _valid_source_ref(source_ref):
+        raise PushRefused(f"Refusing to port from malformed source ref {source_ref!r}.")
     if not _is_valid_branch_name(head_branch):
         raise PushRefused(f"Refusing to push to malformed branch {head_branch!r}.")
 
@@ -152,12 +166,13 @@ def commit_and_push_port(
             run_git(str(clean_repo), "fetch", "origin", unstable_fix_commit)
             run_git(str(clean_repo), "checkout", head_sha)
             run_git(str(clean_repo), "checkout", "-B", head_branch)
-            # Code, not the AI, owns "this is a real already-merged upstream
-            # fix". Verify the commit is reachable from the default branch and
-            # is not already on the PR head, so a model-chosen SHA cannot skip
-            # local verification by pointing at an arbitrary or already-present
-            # commit. A SHA that fails this is refused, not ported.
-            _verify_portable_commit(str(clean_repo), unstable_fix_commit, head_sha)
+            # Code, not the AI, owns "this is a real already-merged historical
+            # fix". Verify reachability from the exact source ref discovered
+            # from the registry's trusted branches.
+            _verify_portable_commit(
+                str(clean_repo), unstable_fix_commit, head_sha,
+                source_ref=source_ref,
+            )
             # The cherry-pick keeps the upstream commit's author and sign-off,
             # but it still needs a committer identity to create the commit (a
             # fresh clone has none). The bot is the committer, the human stays
@@ -168,7 +183,13 @@ def commit_and_push_port(
             run_git(str(clean_repo), "cherry-pick", "-x", unstable_fix_commit)
 
             run_git(str(clean_repo), "remote", "set-url", "origin", github_https_url(head_repo_full_name))
-            run_git(str(clean_repo), "push", "origin", f"HEAD:{head_branch}", env=git_env)
+            run_git(
+                str(clean_repo),
+                "push",
+                "origin",
+                f"HEAD:{head_branch}",
+                env=resolve_git_environment(git_env),
+            )
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or str(exc)).strip()[:300]
             raise PushRefused(f"Refusing to push: git failed: {detail}") from exc
@@ -176,29 +197,39 @@ def commit_and_push_port(
         return git_output(str(clean_repo), "rev-parse", "HEAD").strip()
 
 
-def _verify_portable_commit(clean_repo: str, fix_commit: str, head_sha: str) -> None:
-    """Refuse unless ``fix_commit`` is a genuine upstream fix missing from head.
+def _verify_portable_commit(
+    clean_repo: str,
+    fix_commit: str,
+    head_sha: str,
+    *,
+    source_ref: str = "",
+) -> None:
+    """Refuse unless ``fix_commit`` is a trusted historical fix missing from head.
 
-    A PORT skips local verification because the commit is already merged and
-    tested on the default branch. That exception is only safe if *code*, not the
-    AI, proves the SHA is exactly that. Two deterministic checks:
+    A PORT is eligible for pre-push verification because the commit was already
+    discovered on a trusted branch. Publication still proves two facts:
 
-    - the commit is reachable from the default branch (it really is merged
-      upstream, not an arbitrary or fabricated SHA); and
+    - the commit is reachable from the code-discovered source branch (or the
+      default branch for compatibility with older callers); and
     - the commit is not already an ancestor of the PR head (porting it actually
       adds the missing fix rather than being a no-op).
 
     A SHA that fails either check raises ``PushRefused`` instead of being
     cherry-picked.
     """
-    default_branch = resolve_default_branch(clean_repo)
-    ref = f"origin/{default_branch}"
+    ref = source_ref
+    if not ref:
+        default_branch = resolve_default_branch(clean_repo)
+        ref = f"origin/{default_branch}"
+    if not _valid_source_ref(ref):
+        raise PushRefused(f"Refusing to port from malformed source ref {ref!r}.")
+    branch = ref[len("origin/"):]
     try:
         git_output(clean_repo, "rev-parse", "--verify", ref)
     except subprocess.CalledProcessError:
         run_git(
             clean_repo, "fetch", "origin",
-            f"refs/heads/{default_branch}:refs/remotes/origin/{default_branch}",
+            f"refs/heads/{branch}:refs/remotes/origin/{branch}",
         )
     if not _is_ancestor(clean_repo, fix_commit, ref):
         raise PushRefused(
@@ -209,6 +240,39 @@ def _verify_portable_commit(clean_repo: str, fix_commit: str, head_sha: str) -> 
         raise PushRefused(
             f"Refusing to port {fix_commit[:12]}: it is already present on the PR head."
         )
+
+
+def _valid_source_ref(ref: str) -> bool:
+    """True for a non-ambiguous remote branch ref under ``origin``."""
+    if not ref.startswith("origin/"):
+        return False
+    branch = ref[len("origin/"):]
+    return bool(
+        branch
+        and re.fullmatch(r"[A-Za-z0-9._/-]+", branch)
+        and ".." not in branch
+        and "//" not in branch
+        and not branch.startswith("/")
+        and not branch.endswith(("/", "."))
+    )
+
+
+def _branch_is_allowed(branch: str, prefixes: tuple[str, ...]) -> bool:
+    """Require a valid, non-empty configured namespace prefix."""
+    valid_prefixes = tuple(
+        prefix
+        for prefix in prefixes
+        if (
+            prefix
+            and re.fullmatch(r"[A-Za-z0-9._/-]+", prefix)
+            and ".." not in prefix
+            and not prefix.startswith("/")
+            and "//" not in prefix
+        )
+    )
+    return len(valid_prefixes) == len(prefixes) and any(
+        branch.startswith(prefix) for prefix in valid_prefixes
+    )
 
 
 def _is_ancestor(repo_dir: str, maybe_ancestor: str, descendant: str) -> bool:

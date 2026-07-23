@@ -30,7 +30,12 @@ _RATE_LIMIT_403_INDICATORS = (
 )
 
 
-def _is_retryable_error(exc: Exception) -> bool:
+def is_retryable_github_error(exc: Exception) -> bool:
+    """Return whether a GitHub API failure is transient.
+
+    Callers that mutate state can use this classification to reconcile an
+    ambiguous response instead of replaying the mutation.
+    """
     if not isinstance(exc, GithubException):
         return False
     if exc.status in RETRYABLE_HTTP_STATUS:
@@ -58,7 +63,7 @@ def retry_github_call(
         try:
             return operation()
         except Exception as exc:
-            if not _is_retryable_error(exc) or attempt == retries - 1:
+            if not is_retryable_github_error(exc) or attempt == retries - 1:
                 raise
             wait_seconds = transient_backoff_delay(attempt)
             logger.warning(

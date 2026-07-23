@@ -12,7 +12,7 @@ import time
 import zipfile
 from dataclasses import dataclass
 from itertools import islice
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable, Union
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from github import Github
 
 logger = logging.getLogger(__name__)
+TokenSource = Union[str, Callable[[], str]]
 
 
 @dataclass(frozen=True)
@@ -39,11 +40,11 @@ class WorkflowArtifact:
 class ArtifactClient:
     """Fetches workflow artifacts and logs from GitHub Actions."""
 
-    def __init__(self, github_client: Github, *, token: str, retries: int = 3) -> None:
-        if not token:
+    def __init__(self, github_client: Github, *, token: TokenSource, retries: int = 3) -> None:
+        if not token or not (isinstance(token, str) or callable(token)):
             raise ValueError("GitHub token is required")
         self._gh = github_client
-        self._token = token
+        self._token_source = token
         self._retries = retries
 
     def list_recent_runs(
@@ -105,20 +106,27 @@ class ArtifactClient:
 
     def _download(self, path: str) -> bytes:
         url = f"https://api.github.com{path}"
-        req = Request(url, headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "valkey-ci-agent",
-        })
-        # Use an unredirected header for the token: urllib forwards normal
-        # headers on cross-host redirects, but GitHub redirects to signed S3
-        # URLs that must not receive our token. add_unredirected_header keeps
-        # the Authorization off the redirected request.
-        req.add_unredirected_header("Authorization", f"Bearer {self._token}")
         # Hand-rolled retry rather than retry_github_call: this is a raw urllib
         # call (not a PyGithub operation) and needs HTTP-status-specific
         # handling for the 404/expired case below. Retry classification and
         # backoff are shared with retry_github_call so behavior stays uniform.
         for attempt in range(self._retries + 1):
+            token = (
+                self._token_source()
+                if callable(self._token_source)
+                else self._token_source
+            )
+            if not token:
+                raise ValueError("GitHub token provider returned an empty token")
+            req = Request(url, headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "valkey-ci-agent",
+            })
+            # Use an unredirected header for the token: urllib forwards normal
+            # headers on cross-host redirects, but GitHub redirects to signed S3
+            # URLs that must not receive our token. add_unredirected_header keeps
+            # the Authorization off the redirected request.
+            req.add_unredirected_header("Authorization", f"Bearer {token}")
             try:
                 with urlopen(req, timeout=120) as resp:
                     return resp.read()

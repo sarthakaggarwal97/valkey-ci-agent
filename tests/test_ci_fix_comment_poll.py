@@ -12,6 +12,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from scripts.ci_fix import comment_poll
 from scripts.ci_fix.comment_poll import poll_once
 
@@ -55,9 +57,12 @@ def _run(gh, *, claim=lambda c: True, dispatch=None, authorized=True):
     dispatch = dispatch or MagicMock()
     # Patch is_authorized and the already-claimed check at module scope.
     orig_auth = comment_poll.is_authorized
-    orig_claimed = comment_poll._already_claimed
+    orig_reaction_state = comment_poll._bot_reaction_state
     comment_poll.is_authorized = lambda *a, **k: authorized
-    comment_poll._already_claimed = lambda c, bot_login: getattr(c, "_claimed", False)
+    comment_poll._bot_reaction_state = lambda c, bot_login: (
+        getattr(c, "_claimed", False),
+        getattr(c, "_completed", False),
+    )
     try:
         n = poll_once(
             gh, target_repo="valkey-io/valkey", org="valkey-io",
@@ -66,7 +71,7 @@ def _run(gh, *, claim=lambda c: True, dispatch=None, authorized=True):
         )
     finally:
         comment_poll.is_authorized = orig_auth
-        comment_poll._already_claimed = orig_claimed
+        comment_poll._bot_reaction_state = orig_reaction_state
     return n, dispatch
 
 
@@ -111,12 +116,28 @@ def test_skips_unauthorized():
     dispatch.assert_not_called()
 
 
-def test_skips_already_claimed():
+def test_already_claimed_comment_is_reconciled_without_reclaiming():
     c = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}")
     c._claimed = True
     gh = _gh([c])
     claim = MagicMock()
-    n, dispatch = _run(gh, claim=claim)
+    dispatch = MagicMock(return_value=False)  # correlated run already exists
+    n, dispatch = _run(gh, claim=claim, dispatch=dispatch)
+    assert n == 0
+    claim.assert_not_called()
+    dispatch.assert_called_once()
+
+
+def test_completed_claim_is_not_reconciled_again():
+    c = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}")
+    c._claimed = True
+    c._completed = True
+    gh = _gh([c])
+    claim = MagicMock()
+    dispatch = MagicMock()
+
+    n, _ = _run(gh, claim=claim, dispatch=dispatch)
+
     assert n == 0
     claim.assert_not_called()
     dispatch.assert_not_called()
@@ -137,8 +158,23 @@ def test_claim_precedes_dispatch():
         return True
     def dispatch(*a):
         order.append("dispatch")
+        return True
     _run(gh, claim=claim, dispatch=dispatch)
     assert order == ["claim", "dispatch"]
+
+
+def test_claimed_comment_retries_dispatch_after_previous_failure():
+    c = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}")
+    c._claimed = True
+    gh = _gh([c])
+    claim = MagicMock()
+    dispatch = MagicMock(side_effect=RuntimeError("ambiguous transport failure"))
+
+    n, _ = _run(gh, claim=claim, dispatch=dispatch)
+
+    assert n == 0
+    claim.assert_not_called()
+    dispatch.assert_called_once()
 
 
 # --- claim_via_status: the atomic 201-vs-200 win condition ---
@@ -221,6 +257,19 @@ def test_already_claimed_matches_bot_reaction():
     assert comment_poll._already_claimed(unclaimed, "valkeyrie-ops[bot]") is False
 
 
+def test_bot_reaction_state_recognizes_terminal_outcome():
+    reactions = [
+        SimpleNamespace(content="eyes", user=SimpleNamespace(login="valkeyrie-ops[bot]")),
+        SimpleNamespace(content="-1", user=SimpleNamespace(login="valkeyrie-ops[bot]")),
+        SimpleNamespace(content="+1", user=SimpleNamespace(login="alice")),
+    ]
+    comment = SimpleNamespace(id=1, get_reactions=lambda: reactions)
+
+    assert comment_poll._bot_reaction_state(
+        comment, "valkeyrie-ops[bot]",
+    ) == (True, True)
+
+
 def test_one_bad_comment_does_not_abort_the_tick():
     """An error processing one comment must not stop the others in the tick."""
     good = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}", comment_id=1)
@@ -268,3 +317,77 @@ def test_poll_loop_env_clamped_below_token_ttl(monkeypatch):
     monkeypatch.setenv("CI_FIX_POLL_DURATION_SECONDS", str(_MAX_LOOP_SECONDS * 10))
     assert _poll_interval_seconds() == 1800
     assert _poll_duration_seconds() == _MAX_LOOP_SECONDS
+
+
+def test_dispatch_correlates_comment_before_creating_run():
+    workflow = MagicMock()
+    workflow.get_runs.return_value = []
+    workflow.create_dispatch.return_value = True
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow.return_value = workflow
+    dispatch = comment_poll.dispatch_ci_fix(
+        gh,
+        agent_repo="valkey-io/valkey-ci-agent",
+        workflow="ci-fix.yml",
+        ref="main",
+    )
+    command = comment_poll.parse_command(f"@valkeyrie-ops fix {_RUN_URL}")
+
+    assert dispatch("valkey-io/valkey", 42, command, "alice", 77) is True
+    workflow.create_dispatch.assert_called_once()
+    ref, inputs = workflow.create_dispatch.call_args.args
+    assert ref == "main"
+    assert inputs["comment_id"] == "77"
+
+
+def test_dispatch_existing_comment_marker_is_not_duplicated():
+    workflow = MagicMock()
+    workflow.get_runs.return_value = [
+        SimpleNamespace(
+            display_title=(
+                "CI fix valkey-io/valkey#42 "
+                "[ci-fix-comment:valkey-io/valkey:77]"
+            ),
+            name="CI Fix Bot",
+        )
+    ]
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow.return_value = workflow
+    dispatch = comment_poll.dispatch_ci_fix(
+        gh,
+        agent_repo="valkey-io/valkey-ci-agent",
+        workflow="ci-fix.yml",
+        ref="main",
+    )
+    command = comment_poll.parse_command(f"@valkeyrie-ops fix {_RUN_URL}")
+
+    assert dispatch("valkey-io/valkey", 42, command, "alice", 77) is False
+    workflow.create_dispatch.assert_not_called()
+
+
+def test_ambiguous_dispatch_is_not_replayed_in_same_tick_and_reconciles_later():
+    workflow = MagicMock()
+    workflow.get_runs.return_value = []
+    workflow.create_dispatch.side_effect = RuntimeError("connection reset after POST")
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow.return_value = workflow
+    dispatch = comment_poll.dispatch_ci_fix(
+        gh,
+        agent_repo="valkey-io/valkey-ci-agent",
+        workflow="ci-fix.yml",
+        ref="main",
+    )
+    command = comment_poll.parse_command(f"@valkeyrie-ops fix {_RUN_URL}")
+
+    with pytest.raises(RuntimeError, match="connection reset"):
+        dispatch("valkey-io/valkey", 42, command, "alice", 77)
+    assert workflow.create_dispatch.call_count == 1
+
+    workflow.get_runs.return_value = [
+        SimpleNamespace(
+            display_title="[ci-fix-comment:valkey-io/valkey:77]",
+            name="CI Fix Bot",
+        )
+    ]
+    assert dispatch("valkey-io/valkey", 42, command, "alice", 77) is False
+    assert workflow.create_dispatch.call_count == 1

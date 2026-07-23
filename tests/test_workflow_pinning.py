@@ -113,7 +113,6 @@ def test_push_capable_app_tokens_can_update_workflows():
         ".github/workflows/backport.yml": "Generate GitHub App token",
         ".github/workflows/backport-poll.yml": "Generate GitHub App token",
         ".github/workflows/backport-sweep.yml": "Generate GitHub App token",
-        ".github/workflows/ci-fix.yml": "Generate GitHub App token",
         ".github/workflows/manual-revert-commit.yml": "Generate GitHub App token",
     }
     offenders = []
@@ -135,3 +134,137 @@ def test_push_capable_app_tokens_can_update_workflows():
             offenders.append(f"{path}: missing token step {step_name!r}")
 
     assert offenders == []
+
+
+def test_ci_fix_push_token_cannot_update_workflows():
+    """Authored workflow changes are handoff-only and the token enforces it."""
+    text = Path(".github/workflows/ci-fix.yml").read_text(encoding="utf-8")
+    step = text.split("- name: Generate GitHub App token", 1)[1].split(
+        "      - name:", 1,
+    )[0]
+    assert "permission-contents: write" in step
+    assert "permission-workflows: write" not in step
+
+
+def test_ci_fix_agent_verifier_token_has_only_actions_and_metadata():
+    text = Path(".github/workflows/ci-fix.yml").read_text(encoding="utf-8")
+    step = text.split("- name: Generate agent-repo verifier token", 1)[1].split(
+        "      - name:", 1,
+    )[0]
+    requested = {
+        line.strip()
+        for line in step.splitlines()
+        if line.strip().startswith("permission-")
+    }
+
+    assert requested == {
+        "permission-actions: write",
+        "permission-metadata: read",
+    }
+    assert "permission-contents:" not in step
+
+
+def test_ci_fix_refreshes_restricted_tokens_and_trusts_only_poller_comment_ids():
+    text = Path(".github/workflows/ci-fix.yml").read_text(encoding="utf-8")
+
+    assert "steps.generate-token.outputs.installation-id" in text
+    assert "steps.agent-token.outputs.installation-id" in text
+    assert "CI_FIX_APP_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}" in text
+    comment_id_line = next(
+        line for line in text.splitlines() if "CI_FIX_COMMENT_ID:" in line
+    )
+    assert "github.actor == 'valkeyrie-ops[bot]'" in comment_id_line
+    assert "inputs.comment_id" in comment_id_line
+    assert "[ci-fix-comment:" in text
+
+
+def test_ci_fix_verification_uses_github_hosted_runners():
+    ci_fix = yaml.safe_load(
+        Path(".github/workflows/ci-fix.yml").read_text(encoding="utf-8")
+    )
+    linux = yaml.safe_load(
+        Path(".github/workflows/ci-fix-verify-linux.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    macos = yaml.safe_load(
+        Path(".github/workflows/ci-fix-verify-macos.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert ci_fix["jobs"]["ci-fix"]["runs-on"] == "ubuntu-latest"
+    assert linux["jobs"]["verify-linux"]["runs-on"] == "ubuntu-latest"
+    assert macos["jobs"]["verify-macos"]["runs-on"] == "macos-latest"
+
+
+def test_agent_owned_verifiers_are_no_secret_read_only_jobs():
+    for name in ("linux", "macos"):
+        path = Path(f".github/workflows/ci-fix-verify-{name}.yml")
+        text = path.read_text(encoding="utf-8")
+        workflow = yaml.safe_load(text)
+
+        assert workflow["permissions"] == {}
+        assert "${{ secrets." not in text
+        assert "id-token:" not in text
+        assert "GITHUB_TOKEN" not in text
+        assert "github.token" not in text
+        assert "persist-credentials: false" in text
+
+    macos = Path(".github/workflows/ci-fix-verify-macos.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "base64 -D" in macos
+    assert "base64 --decode" not in macos
+
+
+def test_agent_owned_verifiers_share_sampling_input_contract():
+    required = {
+        "target_repo",
+        "head_sha",
+        "patch_b64",
+        "verify_command",
+        "workdir",
+        "container_image",
+        "phase",
+        "repetition",
+        "repetition_count",
+        "correlation",
+    }
+    for name in ("linux", "macos"):
+        workflow = yaml.safe_load(
+            Path(f".github/workflows/ci-fix-verify-{name}.yml").read_text(
+                encoding="utf-8"
+            )
+        )
+        trigger = workflow.get("on", workflow.get(True))
+        assert set(trigger["workflow_dispatch"]["inputs"]) == required
+
+
+def test_linux_verifier_keeps_container_execution_sandboxed():
+    text = Path(".github/workflows/ci-fix-verify-linux.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "--network none" in text
+    assert "--cap-drop ALL" in text
+    assert "--security-opt no-new-privileges" in text
+    assert '--user "$(id -u):$(id -g)"' in text
+    assert "--entrypoint /bin/sh" in text
+    assert "/bin/sh -e -c" in text
+
+
+def test_agent_owned_verifiers_run_host_recipes_fail_fast():
+    for name in ("linux", "macos"):
+        text = Path(
+            f".github/workflows/ci-fix-verify-{name}.yml"
+        ).read_text(encoding="utf-8")
+
+        assert "/bin/bash --noprofile --norc -e -o pipefail -c" in text
+
+
+def test_ci_fix_controller_has_no_in_process_verification_fallback():
+    pipeline = Path("scripts/ci_fix/pipeline.py").read_text(encoding="utf-8")
+
+    assert "run_verification_command" not in pipeline
+    assert "run_fix_loop" not in pipeline

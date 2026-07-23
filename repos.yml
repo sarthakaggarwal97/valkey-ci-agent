@@ -3,6 +3,34 @@ repos:
     project_owner: valkey-io
     project_owner_type: organization
     language: c
+    ci_fix:
+      enabled: true
+      poll_comments: true
+      authorization_org: valkey-io
+      authorization_team: contributors
+      allowed_branch_prefixes:
+        - "agent/backport/"
+      history_branches:
+        - "7.2"
+        - "8.0"
+        - "8.1"
+        - "9.0"
+        - "9.1"
+      baseline_runs: 5
+      flaky_verify_runs: 20
+      remote_parallelism: 5
+      remote_sample_timeout_minutes: 15
+      remote_budget_minutes: 45
+      minimum_confidence: 0.8
+      protected_paths:
+        - ".github/workflows/**"
+        - ".github/actions/**"
+        - ".github/CODEOWNERS"
+        - "CODEOWNERS"
+        - "**/CODEOWNERS"
+      auto_publish_paths:
+        - "tests/**"
+        - "src/unit/**"
     build_commands:
       - "make -j$(nproc)"
     repair_validation_failures: true
@@ -25,6 +53,32 @@ repos:
     project_owner: valkey-io
     project_owner_type: organization
     language: c++
+    ci_fix:
+      enabled: true
+      poll_comments: true
+      authorization_org: valkey-io
+      authorization_team: contributors
+      allowed_branch_prefixes:
+        - "agent/backport/"
+      history_branches:
+        - "1.0"
+        - "1.1"
+        - "1.2"
+      baseline_runs: 5
+      flaky_verify_runs: 20
+      remote_parallelism: 5
+      remote_sample_timeout_minutes: 15
+      remote_budget_minutes: 45
+      minimum_confidence: 0.8
+      protected_paths:
+        - ".github/workflows/**"
+        - ".github/actions/**"
+        - ".github/CODEOWNERS"
+        - "CODEOWNERS"
+        - "**/CODEOWNERS"
+      auto_publish_paths:
+        - "tests/**"
+        - "src/**/tests/**"
     # Use the upstream devcontainer image because release branches depend on
     # its system packages; --privileged mirrors the repository's CI container.
     validation_setup_commands:

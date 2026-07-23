@@ -15,7 +15,7 @@ import pytest
 
 from scripts.ci_fix import diagnose as diagnose_mod
 from scripts.ci_fix.diagnose import diagnose_failure, write_logs_to_workspace
-from scripts.ci_fix.models import FixPath
+from scripts.ci_fix.models import FailureMode, FixPath
 from scripts.ci_fix.port_discovery import PortCandidate
 
 
@@ -43,6 +43,7 @@ def test_author_proposal_nan_payload(monkeypatch):
         "reasoning": "Test scaffolding: set the payload's RDB version byte to the "
                      "branch RDB_VERSION and zero the checksum. Assertion unchanged.",
         "confidence": 0.9,
+        "failure_mode": "deterministic",
         "build_command": "make -j4",
         "verify_command": "./runtest --single integration/corrupt-dump --dump-logs",
         "workdir": "",
@@ -56,6 +57,41 @@ def test_author_proposal_nan_payload(monkeypatch):
     assert "NAN score" in proposal.failing_check
     assert proposal.verify_command.startswith("./runtest")
     assert proposal.confidence == 0.9
+    assert proposal.failure_mode is FailureMode.DETERMINISTIC
+
+
+def test_flaky_author_proposal_is_actionable(monkeypatch):
+    payload = {
+        "path": "author",
+        "failing_check": "cluster failover waits for primary",
+        "root_cause": "the assertion races asynchronous failover propagation",
+        "reasoning": "poll the primary state with a bounded deadline",
+        "confidence": 0.93,
+        "failure_mode": "flaky",
+        "build_command": "make",
+        "verify_command": "./runtest --single cluster/failover",
+    }
+    _mock_agent(monkeypatch, _stream_json_result(payload))
+
+    proposal = diagnose_failure("/tmp/ci.log", "/tmp/repo")
+    assert proposal.path is FixPath.AUTHOR
+    assert proposal.failure_mode is FailureMode.FLAKY
+
+
+def test_unknown_failure_mode_fails_closed_to_typed_unknown(monkeypatch):
+    payload = {
+        "path": "author",
+        "failing_check": "some check",
+        "root_cause": "known cause",
+        "reasoning": "known fix",
+        "confidence": 0.9,
+        "failure_mode": "sometimes-ish",
+        "verify_command": "make test",
+    }
+    _mock_agent(monkeypatch, _stream_json_result(payload))
+    assert diagnose_failure(
+        "/tmp/ci.log", "/tmp/repo",
+    ).failure_mode is FailureMode.UNKNOWN
 
 
 def test_port_proposal_carries_commit(monkeypatch):
@@ -135,7 +171,9 @@ def test_hint_is_included_in_prompt(monkeypatch):
     captured = {}
 
     def fake_run_agent(profile, prompt, **kwargs):
+        captured["profile"] = profile
         captured["prompt"] = prompt
+        captured["kwargs"] = kwargs
         return MagicMock(
             stdout=_stream_json_result({"path": "refuse", "confidence": 0.0}),
             stderr="", returncode=0,
@@ -151,7 +189,9 @@ def test_port_candidates_are_included_in_prompt(monkeypatch):
     captured = {}
 
     def fake_run_agent(profile, prompt, **kwargs):
+        captured["profile"] = profile
         captured["prompt"] = prompt
+        captured["kwargs"] = kwargs
         return MagicMock(
             stdout=_stream_json_result({"path": "refuse", "confidence": 0.0}),
             stderr="", returncode=0,
@@ -168,9 +208,34 @@ def test_port_candidates_are_included_in_prompt(monkeypatch):
             ),
         ),
     )
-    assert "Default-branch candidate fixes" in captured["prompt"]
+    assert "Existing fix candidates" in captured["prompt"]
     assert "9f374e15848d" in captured["prompt"]
     assert "src/logreqres.c" in captured["prompt"]
+
+
+def test_prompt_requires_host_runner_setup_in_build_command(monkeypatch):
+    captured = {}
+
+    def fake_run_agent(profile, prompt, **kwargs):
+        captured["profile"] = profile
+        captured["prompt"] = prompt
+        captured["kwargs"] = kwargs
+        return MagicMock(
+            stdout=_stream_json_result({"path": "refuse", "confidence": 0.0}),
+            stderr="", returncode=0,
+        )
+
+    monkeypatch.setattr(diagnose_mod, "run_agent", fake_run_agent)
+    diagnose_failure("/tmp/ci.log", "/tmp/repo")
+
+    assert captured["profile"] == "ci_fix_diagnose_readonly"
+    assert captured["kwargs"]["sandbox_root"] == "/tmp"
+    assert "does NOT replay the job's other workflow steps" in captured["prompt"]
+    assert "Put every" in captured["prompt"]
+    assert "prerequisite needed" in captured["prompt"]
+    assert "auxiliary `actions/checkout`" in captured["prompt"]
+    assert "full commit SHA" in captured["prompt"]
+    assert "Do not include the primary target checkout" in captured["prompt"]
 
 
 def test_long_hint_is_truncated(monkeypatch):

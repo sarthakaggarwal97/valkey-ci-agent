@@ -1,9 +1,8 @@
 # Development Guide
 
 This guide covers local setup, local validation, and the GitHub Actions workflows
-used to test and run `valkey-ci-agent`. The workflow examples focus on the
-backport subsystem; the ci-fix, fuzzer-monitor, and test-failure-detector
-subsystems follow the same local setup and validation steps.
+used to test and run `valkey-ci-agent`. It includes registry and verifier
+onboarding for the CI-fix subsystem.
 
 For how the system is designed (the layers, per-workflow flows, and shared
 infrastructure), see [docs/architecture.md](docs/architecture.md).
@@ -72,6 +71,30 @@ mypy scripts/
 
 CI splits these across its matrix: `pytest -v` runs on 3.9, while ruff, the
 coverage run, and mypy run on 3.11.
+
+For a focused CI-fix iteration:
+
+```bash
+python -m pytest -q \
+  tests/test_ci_fix_registry.py \
+  tests/test_ci_fix_pipeline.py \
+  tests/test_ci_fix_review.py \
+  tests/test_ci_fix_verify_linux.py \
+  tests/test_ci_fix_verify_target_workflow.py \
+  tests/test_ci_fix_verify_macos.py \
+  tests/test_ci_fix_workflow_env.py
+```
+
+Resolve the live CI-fix policy without minting a token or dispatching a
+workflow:
+
+```bash
+python -m scripts.ci_fix.registry resolve \
+  --registry repos.yml \
+  --repo valkey-io/valkey
+
+python -m scripts.ci_fix.registry poll-matrix --registry repos.yml
+```
 
 ## Commit Requirements
 
@@ -200,6 +223,38 @@ correct.
 Both backport workflows upload result JSON and `agent-evidence` artifacts when
 available.
 
+### CI Fix
+
+Dispatch one registered repository and failing run:
+
+```bash
+gh workflow run ci-fix.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey \
+  --field pr=<pr-number> \
+  --field run_url=https://github.com/valkey-io/valkey/actions/runs/<run-id>
+```
+
+The linked run must be complete and must match the PR's current head SHA and
+branch. The requesting actor must satisfy the repository's configured
+organization/team policy. `ci-fix-comment-poll.yml` provides the equivalent
+comment-driven path for entries with `poll_comments: true`.
+
+Remote verifier load and wall time are repository policy:
+`remote_parallelism` limits concurrent samples,
+`remote_sample_timeout_minutes` limits one sample, and
+`remote_budget_minutes` limits the complete remote campaign. Budget exhaustion
+returns a reviewed handoff. Production passes the App installation ids and key
+to the control plane so API, artifact, and final push credentials can refresh
+without broadening beyond the registry-selected repository.
+
+Do not test a new target verifier by pointing `verification_ref` at a candidate
+branch. Install the workflow on the target's default branch, put the trusted
+implementation on a protected ref, validate its input and credential policy,
+then add both registry fields in one change. The complete input/run-name
+contract and a safety checklist are in
+[docs/ci-fix-verifier.md](docs/ci-fix-verifier.md).
+
 ### Mark Merged Backports Done
 
 `.github/workflows/backport-mark-done-poll.yml` runs hourly (cron `30 * * * *`)
@@ -221,9 +276,28 @@ gh workflow run backport-mark-done-poll.yml \
 ## Registry Changes
 
 `repos.yml` is the source of truth for onboarded repositories, release branches,
-project boards, labels, and validation commands. Use `examples/repos.yml` as a
-reference for multi-repository configuration.
+project boards, labels, validation commands, and CI-fix policy. Use
+`examples/repos.yml` as a multi-repository reference.
 
 Registry-configured `build_commands` run before pushing a generated backport
 branch. A non-zero exit blocks the push. Repositories with no `build_commands`
 configured rely on their upstream CI for validation.
+
+To onboard CI Fix:
+
+1. Add `ci_fix.enabled`, authorization, and at least one
+   `allowed_branch_prefixes` value.
+2. Add maintained release lines to `history_branches` only as a rare fallback.
+   Discovery returns default-branch candidates first and does not inspect these
+   branches unless the default branch yields none.
+3. Set `baseline_runs`, `flaky_verify_runs`, and `minimum_confidence`.
+4. Restrict `auto_publish_paths` to test/scaffolding ownership and retain
+   workflow, local-action, and CODEOWNERS patterns in `protected_paths`.
+5. Set `poll_comments: true` only after the App is installed on the target.
+6. For exact environment coverage, install the protected target workflow and
+   set `verification_workflow` plus `verification_ref` together.
+
+The target App installation needs `actions:write` only when exact verification
+is enabled. CI Fix never requests workflow-file write permission. Without a
+target verifier, unsupported environments produce reviewed handoff patches
+instead of early refusals or approximate passes.

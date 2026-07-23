@@ -5,14 +5,13 @@ The pipeline is a chain of small, explicit handoffs:
     gate    -> FixRequest        (who asked, which run, which SHA)
     diagnose-> FixProposal       (AI: what failed, how to fix, how to run it)
     apply   -> (edits on disk)
-    run     -> RunResult         (code: the AI-proposed command's real verdict)
-    review  -> ReviewVerdict     (AI: is the fix good, not just green)
+    review  -> ReviewVerdict     (AI: is the proposed patch good)
+    verify  -> workflow verdicts (code: repeated baseline/candidate evidence)
     push    -> FixOutcome        (what the agent did, for the PR comment)
 
 AI populates the judgment fields (``FixProposal``, ``ReviewVerdict``); code
-populates the factual fields (``RunResult``, ``FixOutcome``). The split is
-deliberate: an AI never decides whether a test passed or whether a push
-happened.
+populates workflow evidence and ``FixOutcome``. The split is deliberate: an AI
+never decides whether a test passed or whether a push happened.
 """
 
 from __future__ import annotations
@@ -27,6 +26,16 @@ class FixPath(str, Enum):
     PORT = "port"        # an existing fix on the default branch ports cleanly
     AUTHOR = "author"    # a deterministic scaffolding fix the agent writes
     REFUSE = "refuse"    # not safely fixable; report with evidence, change nothing
+
+
+class FailureMode(str, Enum):
+    """The diagnosed behavior of the failing check."""
+
+    DETERMINISTIC = "deterministic"
+    FLAKY = "flaky"
+    ENVIRONMENT = "environment"
+    INFRASTRUCTURE = "infrastructure"
+    UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
@@ -57,6 +66,7 @@ class FixProposal:
     root_cause: str
     reasoning: str
     confidence: float
+    failure_mode: FailureMode = FailureMode.UNKNOWN
     # The CI job the AI thinks the failure belongs to. A non-authoritative hint:
     # code fetches the real failed jobs from the run and requires this to match
     # one of them before trusting it. Code, not the AI, selects the environment.
@@ -76,22 +86,25 @@ class FixProposal:
     other_failing_checks: tuple[str, ...] = ()
 
 
+class BaselineKind(str, Enum):
+    """Code-observed behavior of the unmodified checkout."""
+
+    DETERMINISTIC = "deterministic"
+    FLAKY = "flaky"
+    NOT_REPRODUCED = "not_reproduced"
+    UNAVAILABLE = "unavailable"
+
+
 @dataclass(frozen=True)
-class RunResult:
-    """The factual outcome of executing a proposed command.
+class BaselineEvidence:
+    """Repeated clean-tree observations made before applying a fix."""
 
-    ``passed`` is derived from the subprocess exit code, never from any AI
-    claim. ``ran`` is False only when the command could not be executed at
-    all (e.g. an un-runnable variant), which the gate treats as a refusal
-    rather than a pass.
-    """
-
-    ran: bool
-    passed: bool
-    exit_code: int
-    command: str
-    output_tail: str
-    timed_out: bool = False
+    kind: BaselineKind
+    attempts: int
+    passed: int
+    failed: int
+    unavailable: int = 0
+    detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -117,18 +130,18 @@ class FixOutcome:
     kind: OutcomeKind
     summary: str
     proposal: FixProposal | None = None
-    run_result: RunResult | None = None
     review: ReviewVerdict | None = None
     commit_sha: str = ""
     # The failing CI run this invocation acted on, linked in the comment for
     # provenance.
     failing_run_url: str = ""
-    # Which verifier proved the fix ("local", "docker:<image>", "macos"), shown
-    # as evidence in the PR comment.
+    # Which remote verifier judged the fix ("local", "docker:<image>",
+    # "macos", "target-workflow"), shown as evidence in the PR comment.
     verify_backend: str = ""
-    # For the macOS backend: the URL of the verification run that proved the fix.
-    macos_run_url: str = ""
-    # For HANDOFF: the unverified candidate patch, posted for a human to apply
-    # and let real CI judge.
+    # URL of the remote verification run that most recently judged the fix.
+    verification_run_url: str = ""
+    # For an authored HANDOFF: the candidate patch posted for a human to apply.
+    # Historical-port handoffs identify the trusted commit in ``summary``.
     handoff_patch: str = ""
     other_failing_checks: tuple[str, ...] = ()
+    baseline: BaselineEvidence | None = None

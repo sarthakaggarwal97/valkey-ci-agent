@@ -26,12 +26,17 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
+from scripts.ci_fix.auth import RepositoryInstallationAuth
 from scripts.ci_fix.comment import render_comment
 from scripts.ci_fix.gate import ParsedCommand, parse_command
 from scripts.ci_fix.models import FixOutcome, OutcomeKind
 from scripts.ci_fix.pipeline import run_ci_fix
+from scripts.ci_fix.policy import DEFAULT_PROTECTED_PATTERNS
+from scripts.ci_fix.registry import CiFixRepoConfig, load_ci_fix_registry
 from scripts.ci_fix.review import DEFAULT_VERIFY_RUNS
+from scripts.ci_fix.verify.linux import LinuxVerifier
 from scripts.ci_fix.verify.macos import MacosVerifier
+from scripts.ci_fix.verify.target_workflow import TargetWorkflowVerifier
 from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import BOT_LOGIN
@@ -46,16 +51,36 @@ logger = logging.getLogger(__name__)
 _AUTH_ORG = os.environ.get("CI_FIX_AUTH_ORG", "valkey-io")
 _AUTH_TEAM = os.environ.get("CI_FIX_AUTH_TEAM", "contributors")
 
-# The agent repo hosting the verify-macos workflow, and the ref to dispatch it
-# on. When unset, macOS verification is unavailable and macOS failures refuse.
-_MACOS_AGENT_REPO = os.environ.get("CI_FIX_MACOS_AGENT_REPO", "")
-_MACOS_AGENT_REF = os.environ.get("CI_FIX_MACOS_AGENT_REF", "main")
-_MACOS_TOKEN = os.environ.get("CI_FIX_MACOS_TOKEN", "")
+# The agent repo hosts credential-free Linux and macOS verification workflows.
+# Legacy macOS-only names remain accepted for one deployment transition.
+_AGENT_REPO = os.environ.get(
+    "CI_FIX_AGENT_REPO",
+    os.environ.get("CI_FIX_MACOS_AGENT_REPO", ""),
+)
+_AGENT_REF = os.environ.get(
+    "CI_FIX_AGENT_REF",
+    os.environ.get("CI_FIX_MACOS_AGENT_REF", "main"),
+)
+_AGENT_TOKEN = os.environ.get(
+    "CI_FIX_AGENT_TOKEN",
+    os.environ.get("CI_FIX_MACOS_TOKEN", ""),
+)
 _MAX_VERIFY_RUNS = 10
+_TARGET_PERMISSIONS_BASE = {
+    "members": "read",
+    "contents": "write",
+    "pull_requests": "write",
+    "issues": "write",
+    "metadata": "read",
+}
+_AGENT_PERMISSIONS = {
+    "actions": "write",
+    "metadata": "read",
+}
 
 
 def _verify_runs() -> int:
-    """Return the local/Docker verification repeat count."""
+    """Return the required candidate verification repeat count."""
     return env_int(
         "CI_FIX_VERIFY_RUNS",
         DEFAULT_VERIFY_RUNS,
@@ -79,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hint", default="", help="Optional diagnosis hint")
     parser.add_argument("--comment-id", type=int, default=env_int("CI_FIX_COMMENT_ID", 0, minimum=0),
                         help="Triggering comment id, reacted to with the outcome")
+    parser.add_argument("--registry", default=os.environ.get("CI_FIX_REGISTRY", ""),
+                        help="repos.yml path used to authorize target repositories")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -92,8 +119,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     repo_full_name, pr_number, commenter, command, comment_id = request
+    config = _load_repo_config(args.registry, repo_full_name)
+    if args.registry and config is None:
+        return 2
     return _run_and_comment(
         args.target_token, repo_full_name, pr_number, commenter, command, comment_id,
+        config=config,
     )
 
 
@@ -104,33 +135,100 @@ def _run_and_comment(
     commenter: str,
     command: ParsedCommand,
     comment_id: int = 0,
+    *,
+    config: CiFixRepoConfig | None = None,
 ) -> int:
-    gh = Github(auth=Auth.Token(token))
-    artifact_client = ArtifactClient(gh, token=token)
+    target_permissions = {
+        **_TARGET_PERMISSIONS_BASE,
+        "actions": "write" if config and config.verification_workflow else "read",
+    }
+    target_auth = _repository_auth(
+        token,
+        repo_full_name=repo_full_name,
+        installation_id_env="CI_FIX_TARGET_INSTALLATION_ID",
+        permissions=target_permissions,
+    )
+
+    def target_token() -> str:
+        return target_auth.token
+
+    gh = Github(auth=target_auth)
+    artifact_client = ArtifactClient(gh, token=target_token)
+    exact_verifier = None
+    if config and config.verification_workflow:
+        exact_verifier = TargetWorkflowVerifier(
+            gh,
+            repo_full_name=repo_full_name,
+            workflow=config.verification_workflow,
+            ref=config.verification_ref,
+            artifact_client=artifact_client,
+        )
+    linux_verifier = None
     macos_verifier = None
-    if _MACOS_AGENT_REPO and _MACOS_TOKEN:
-        # Dispatching the verify-macos workflow needs actions:write on the agent
-        # repo, which the target (valkey-scoped) token does not carry; use the
-        # dedicated agent-repo token for that client.
-        agent_gh = Github(auth=Auth.Token(_MACOS_TOKEN))
+    if exact_verifier is None and _AGENT_REPO and _AGENT_TOKEN:
+        # Dispatching agent-owned verifier workflows needs actions:write on the
+        # agent repo. The target-scoped token does not carry that permission.
+        agent_auth = _repository_auth(
+            _AGENT_TOKEN,
+            repo_full_name=_AGENT_REPO,
+            installation_id_env="CI_FIX_AGENT_INSTALLATION_ID",
+            permissions=_AGENT_PERMISSIONS,
+        )
+
+        def agent_token() -> str:
+            return agent_auth.token
+
+        agent_gh = Github(auth=agent_auth)
+        agent_artifacts = ArtifactClient(agent_gh, token=agent_token)
+        linux_verifier = LinuxVerifier(
+            agent_gh,
+            agent_repo_full_name=_AGENT_REPO,
+            ref=_AGENT_REF,
+            artifact_client=agent_artifacts,
+        )
         macos_verifier = MacosVerifier(
-            agent_gh, agent_repo_full_name=_MACOS_AGENT_REPO, ref=_MACOS_AGENT_REF,
-            artifact_client=ArtifactClient(agent_gh, token=_MACOS_TOKEN),
+            agent_gh,
+            agent_repo_full_name=_AGENT_REPO,
+            ref=_AGENT_REF,
+            artifact_client=agent_artifacts,
         )
     try:
-        with GitAuth(token=token) as auth:
+        with GitAuth(token=target_token) as auth:
             outcome = run_ci_fix(
                 gh,
                 command=command,
                 pr_repo_full_name=repo_full_name,
                 pr_number=pr_number,
                 commenter=commenter,
-                git_env=auth.env(),
+                git_env=auth.env,
                 artifact_client=artifact_client,
-                org=_AUTH_ORG,
-                auth_team=_AUTH_TEAM,
+                org=config.authorization_org if config else _AUTH_ORG,
+                auth_team=config.authorization_team if config else _AUTH_TEAM,
                 verify_runs=_verify_runs(),
+                linux_verifier=linux_verifier,
                 macos_verifier=macos_verifier,
+                exact_verifier=exact_verifier,
+                history_branches=config.history_branches if config else (),
+                baseline_runs=config.baseline_runs if config else 3,
+                flaky_verify_runs=config.flaky_verify_runs if config else 10,
+                minimum_confidence=config.minimum_confidence if config else 0.8,
+                protected_paths=(
+                    config.protected_paths if config else DEFAULT_PROTECTED_PATTERNS
+                ),
+                auto_publish_paths=config.auto_publish_paths if config else (),
+                allowed_branch_prefixes=(
+                    config.allowed_branch_prefixes
+                    if config else ("agent/backport/",)
+                ),
+                remote_parallelism=config.remote_parallelism if config else 5,
+                remote_sample_timeout_seconds=(
+                    config.remote_sample_timeout_minutes * 60
+                    if config else 15 * 60
+                ),
+                remote_budget_seconds=(
+                    config.remote_budget_minutes * 60
+                    if config else 45 * 60
+                ),
             )
     except Exception:  # noqa: BLE001 - never crash without telling the PR
         logger.exception("ci_fix pipeline raised unexpectedly")
@@ -145,6 +243,60 @@ def _run_and_comment(
     _react_outcome(gh, repo_full_name, comment_id, outcome.kind)
     logger.info("ci_fix outcome: %s - %s", outcome.kind.value, outcome.summary)
     return 1 if outcome.kind is OutcomeKind.FAILED else 0
+
+
+def _repository_auth(
+    fallback_token: str,
+    *,
+    repo_full_name: str,
+    installation_id_env: str,
+    permissions: dict[str, str],
+) -> Auth.Auth:
+    """Build refreshing restricted auth, retaining static-token compatibility."""
+    app_id = os.environ.get("CI_FIX_APP_ID", "").strip()
+    private_key = os.environ.get("CI_FIX_APP_PRIVATE_KEY", "")
+    installation_id_raw = os.environ.get(installation_id_env, "").strip()
+    supplied = (bool(app_id), bool(private_key.strip()), bool(installation_id_raw))
+    if not any(supplied):
+        return Auth.Token(fallback_token)
+    if not all(supplied):
+        logger.warning(
+            "Incomplete refreshing GitHub App credentials for %s; using the "
+            "already repository-scoped workflow token",
+            repo_full_name,
+        )
+        return Auth.Token(fallback_token)
+    try:
+        installation_id = int(installation_id_raw)
+        return RepositoryInstallationAuth(
+            app_id=app_id,
+            private_key=private_key,
+            installation_id=installation_id,
+            repository=repo_full_name,
+            permissions=permissions,
+            initial_token=fallback_token,
+        )
+    except (TypeError, ValueError) as exc:
+        logger.warning(
+            "Invalid refreshing GitHub App credentials for %s (%s); using the "
+            "already repository-scoped workflow token",
+            repo_full_name,
+            exc,
+        )
+        return Auth.Token(fallback_token)
+
+
+def _load_repo_config(
+    registry_path: str, repo_full_name: str,
+) -> CiFixRepoConfig | None:
+    """Resolve an enabled target from the registry, failing closed on errors."""
+    if not registry_path:
+        return None
+    try:
+        return load_ci_fix_registry(registry_path).get_repo(repo_full_name)
+    except (OSError, KeyError, ValueError) as exc:
+        logger.error("CI-fix registry rejected %s: %s", repo_full_name, exc)
+        return None
 
 
 def _request_from_event(args: argparse.Namespace) -> tuple[str, int, str, ParsedCommand, int] | None:

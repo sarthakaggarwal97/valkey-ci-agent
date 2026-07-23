@@ -1,45 +1,38 @@
-name: CI Fix Verify macOS
+name: CI Fix Verify Linux
 
-# Samples a clean baseline or verifies a ci_fix candidate on a real macOS
-# runner. The main agent dispatches this with the target repo, PR head SHA,
-# optional approved patch (empty for baseline), and targeted command. The job
-# checks out the gated SHA, conditionally applies the patch, and runs the
-# command. The controller trusts only that named command step's conclusion, so
-# checkout/setup/patch failures are unavailable evidence rather than test
-# failures. A correlation token in the run name binds the result to the dispatch.
-#
-# No secrets are used and permissions are minimal: this job only reads a public
-# repo and runs a build. It never pushes.
+# Runs one clean-baseline or candidate sample away from the credential-bearing
+# controller. The dispatched job has no repository permissions, secrets, or
+# cloud identity. Each repetition gets a fresh GitHub-hosted runner.
 
-run-name: "verify-macos [token:${{ inputs.correlation }}]"
+run-name: "verify-linux [token:${{ inputs.correlation }}]"
 
 on:
   workflow_dispatch:
     inputs:
       target_repo:
-        description: "Target repo (owner/name) to verify"
+        description: "Public target repo (owner/name) to verify"
         required: true
         type: string
       head_sha:
-        description: "Commit SHA to check out and apply the patch onto"
+        description: "Commit SHA to check out"
         required: true
         type: string
       patch_b64:
-        description: "base64-encoded patch to apply"
+        description: "Base64 candidate patch; empty for a baseline"
         required: false
         type: string
         default: ""
       verify_command:
-        description: "Targeted verification command to run"
+        description: "Targeted build and test command"
         required: true
         type: string
       workdir:
-        description: "Relative working directory for the command"
+        description: "Relative command working directory"
         required: false
         type: string
         default: ""
       container_image:
-        description: "Must be empty for macOS verification"
+        description: "Static container image; empty for host Linux"
         required: false
         type: string
         default: ""
@@ -56,16 +49,16 @@ on:
         required: true
         type: string
       correlation:
-        description: "Correlation token (echoed in the run name)"
+        description: "Correlation token echoed in the run name"
         required: true
         type: string
 
 permissions: {}
 
 jobs:
-  verify-macos:
-    runs-on: macos-latest
-    timeout-minutes: 90
+  verify-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Validate inputs
         env:
@@ -82,34 +75,44 @@ jobs:
           target_owner="${TARGET_REPO%%/*}"
           target_name="${TARGET_REPO#*/}"
           if [[ ! "${TARGET_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ || "${target_owner}" == "." || "${target_owner}" == ".." || "${target_name}" == "." || "${target_name}" == ".." ]]; then
-            echo "Invalid target_repo" >&2; exit 1
+            echo "Invalid target_repo" >&2
+            exit 1
           fi
           if [[ ! "${HEAD_SHA}" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "Invalid head_sha" >&2; exit 1
+            echo "Invalid head_sha" >&2
+            exit 1
           fi
           if [[ -n "${PATCH_B64}" && ! "${PATCH_B64}" =~ ^[A-Za-z0-9+/]+={0,2}$ ]]; then
-            echo "Invalid patch_b64" >&2; exit 1
+            echo "Invalid patch_b64" >&2
+            exit 1
           fi
           if [[ "${VERIFY_WORKDIR}" == *..* || "${VERIFY_WORKDIR}" == /* || "${VERIFY_WORKDIR}" == *\\* || "${VERIFY_WORKDIR}" == *$'\n'* || "${VERIFY_WORKDIR}" == *$'\r'* ]]; then
-            echo "Invalid workdir" >&2; exit 1
+            echo "Invalid workdir" >&2
+            exit 1
           fi
-          if [[ -n "${CONTAINER_IMAGE}" ]]; then
-            echo "macOS verification cannot use a container image" >&2; exit 1
+          if [[ -n "${CONTAINER_IMAGE}" && ! "${CONTAINER_IMAGE}" =~ ^[a-z0-9][a-z0-9._/-]*(:[0-9]+)?([a-z0-9._/-]*)(:[a-zA-Z0-9._-]+)?(@sha256:[a-f0-9]{64})?$ ]]; then
+            echo "Invalid container_image" >&2
+            exit 1
           fi
           if [[ "${VERIFY_PHASE}" != "baseline" && "${VERIFY_PHASE}" != "candidate" ]]; then
-            echo "Invalid phase" >&2; exit 1
+            echo "Invalid phase" >&2
+            exit 1
           fi
           if [[ ! "${REPETITION}" =~ ^[1-9][0-9]*$ || ! "${REPETITION_COUNT}" =~ ^[1-9][0-9]*$ ]]; then
-            echo "Invalid repetition" >&2; exit 1
+            echo "Invalid repetition" >&2
+            exit 1
           fi
           if (( REPETITION > REPETITION_COUNT || REPETITION_COUNT > 100 )); then
-            echo "Invalid repetition range" >&2; exit 1
+            echo "Invalid repetition range" >&2
+            exit 1
           fi
           if [[ "${VERIFY_PHASE}" == "baseline" && -n "${PATCH_B64}" ]]; then
-            echo "A baseline cannot include a patch" >&2; exit 1
+            echo "A baseline cannot include a patch" >&2
+            exit 1
           fi
           if [[ "${VERIFY_PHASE}" == "candidate" && -z "${PATCH_B64}" ]]; then
-            echo "A candidate requires a patch" >&2; exit 1
+            echo "A candidate requires a patch" >&2
+            exit 1
           fi
 
       - name: Check out target repo at head SHA
@@ -120,28 +123,6 @@ jobs:
           persist-credentials: false
           path: target
 
-      - name: Install Homebrew LLVM when requested
-        # The verifier currently runs on GitHub's arm64 macOS image, where
-        # Homebrew LLVM is installed under /opt/homebrew/opt/llvm.
-        if: >-
-          ${{
-            contains(inputs.verify_command, '/opt/homebrew/opt/llvm/bin/') ||
-            contains(inputs.verify_command, 'llvm-ar') ||
-            contains(inputs.verify_command, 'llvm-ranlib')
-          }}
-        run: |
-          set -euo pipefail
-          if ! brew list --formula llvm >/dev/null 2>&1; then
-            brew install llvm
-          fi
-          llvm_prefix="$(brew --prefix llvm)"
-          if [[ "${llvm_prefix}" != "/opt/homebrew/opt/llvm" ]]; then
-            echo "Homebrew llvm installed at ${llvm_prefix}, but the verification command expects /opt/homebrew/opt/llvm" >&2
-            exit 1
-          fi
-          test -x /opt/homebrew/opt/llvm/bin/llvm-ar
-          test -x /opt/homebrew/opt/llvm/bin/llvm-ranlib
-
       - name: Apply candidate patch
         if: inputs.patch_b64 != ''
         working-directory: target
@@ -149,15 +130,42 @@ jobs:
           PATCH_B64: ${{ inputs.patch_b64 }}
         run: |
           set -euo pipefail
-          printf '%s' "${PATCH_B64}" | base64 -D > "${RUNNER_TEMP}/ci-fix.patch"
+          printf '%s' "${PATCH_B64}" | base64 --decode > "${RUNNER_TEMP}/ci-fix.patch"
           git -c core.hooksPath=/dev/null apply --index --whitespace=nowarn "${RUNNER_TEMP}/ci-fix.patch"
 
       - name: Run targeted verification
-        working-directory: target
         env:
           VERIFY_COMMAND: ${{ inputs.verify_command }}
           VERIFY_WORKDIR: ${{ inputs.workdir }}
+          CONTAINER_IMAGE: ${{ inputs.container_image }}
         run: |
           set -euo pipefail
-          cd "${VERIFY_WORKDIR:-.}"
-          /bin/bash --noprofile --norc -e -o pipefail -c "${VERIFY_COMMAND}"
+          repo="${GITHUB_WORKSPACE}/target"
+          host_workdir="${repo}"
+          container_workdir="/src"
+          if [[ -n "${VERIFY_WORKDIR}" ]]; then
+            host_workdir="${repo}/${VERIFY_WORKDIR}"
+            container_workdir="/src/${VERIFY_WORKDIR}"
+          fi
+          if [[ ! -d "${host_workdir}" ]]; then
+            echo "Verification workdir does not exist" >&2
+            exit 1
+          fi
+
+          if [[ -z "${CONTAINER_IMAGE}" ]]; then
+            cd "${host_workdir}"
+            /bin/bash --noprofile --norc -e -o pipefail -c "${VERIFY_COMMAND}"
+            exit
+          fi
+
+          docker run --rm \
+            --network none \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --user "$(id -u):$(id -g)" \
+            --volume "${repo}:/src" \
+            --workdir /src \
+            --entrypoint /bin/sh \
+            "${CONTAINER_IMAGE}" \
+            -e -c 'cd "$1" && /bin/sh -e -c "$2"' -- \
+            "${container_workdir}" "${VERIFY_COMMAND}"

@@ -135,34 +135,43 @@ ci_fix/main.py (workflow_dispatch event)
        common.workflow_artifacts -> download the failed run's logs
        common.git_clone          -> shallow-clone the repo at the failed SHA
        port_discovery            -> code-discovers default-branch candidates
-                                    for likely missing backports
+                                    first; configured release branches are
+                                    searched only as a no-candidate fallback
        diagnose.diagnose_failure -> read-only AI returns a FixProposal
                                     (port | author | refuse) + a failing-job hint,
                                     using the discovered port candidates so
                                     missing backports are preferred over refusals
        pipeline._plan_verification
                                  -> code matches the hint to a real failed job
-                                    and classifies its workflow environment
-                                    (verify.workflow_env) into a VerificationPlan:
-                                    local | docker(image) | macos | refuse
+                                    -> configured target workflow (preferred), or
+                                    -> conservative workflow classification:
+                                       local | docker(image) | macos |
+                                       unsupported/handoff
        port:
-         apply.apply_port_commit -> cherry-pick the upstream fix commit without
-                                    committing; push and rely on this PR's
-                                    normal CI as the verification authority
-       local/docker:
-         review.run_fix_loop     -> reproduce the failure on a clean checkout
-                                    -> apply (edit-only AI)
-                                    -> runner.run_verification_command (code runs
-                                       the AI command in a sanitized subprocess,
-                                       inside the job's container for docker;
-                                       exit code is the verdict; build once,
-                                       verify K times)
-                                    -> build_and_review_patch (skeptic AI)
-                                    retry on feedback; needs pass AND approve
-       macos:
-         apply + build_and_review_patch, then
-         verify.macos.MacosVerifier -> dispatch the agent's verify-macos job,
-                                       wait, conclusion is the verdict
+         pipeline._verify_port_and_push
+                                 -> sample the clean checkout with the selected
+                                    backend
+                                 -> apply.apply_port_commit without committing
+                                 -> require repeated candidate samples
+                                 -> enforce protected-path policy
+                                 -> push.commit_and_push_port in a fresh clone,
+                                    preserving original authorship
+       all backends (separate GitHub Actions runs):
+         pipeline._remote_fix_loop
+                                 -> dispatch repeated clean baseline samples
+                                    -> apply + skeptic review
+                                    -> dispatch repeated candidate samples
+         verify.agent_workflow   -> shared patch/input transport and verdicts
+         verify.linux            -> no-secret ubuntu runner; optional sandboxed
+                                    static container
+         verify.macos            -> no-secret macOS runner
+         verify.target_workflow  -> target-owned recipe, protected ref,
+                                    UUID + creation-time run correlation
+       unsupported without target integration:
+         apply + skeptic review  -> HANDOFF patch; never an unverified push
+       policy.authored_publication_decision
+                                 -> only allowlisted test paths can auto-publish;
+                                    workflows/actions/CODEOWNERS are protected
        push.commit_and_push_fix  -> extract approved patch
                                     -> apply in a fresh trusted clone
                                     -> commit (no sign-off), push to the PR's own
@@ -170,60 +179,105 @@ ci_fix/main.py (workflow_dispatch event)
   -> comment.render_comment(outcome) -> posted on the PR
 ```
 
-The defining invariant is the AI/code split plus a hard checkout boundary: the
-AI proposes (which check failed, how to fix, a targeted command, a job hint,
-whether the fix is sound) and code disposes (selects the verifier environment
-from the real failed job, runs the command, owns pass/fail, performs the push).
-The AI never selects where verification runs, never executes a command, and
-never touches the remote. The checkout that runs untrusted test code never
-receives push credentials; publishing applies the approved patch in a fresh
-clone at the gated SHA. This is targeted verification of the one failing check,
-not a replay of the whole CI job.
+The defining invariant is the AI/code split. The AI proposes a diagnosis, edit,
+targeted command, and failed-job hint. Code confirms that the hinted job really
+failed, chooses the backend, executes verification, owns every pass/fail fact,
+evaluates publication policy, and performs any push. The model never selects an
+authoritative environment and never receives a repository token.
 
-Nothing about the test framework is hardcoded. The diagnosis reads the target
-repo's own CI workflow files to learn how it builds and runs tests, and the
-port-discovery and verification logic resolve the default branch from the
-clone (so a repo whose default is `main`, like Valkey Search, works the same as
-Valkey core's `unstable`). The engine is repo-agnostic in principle.
+For a configured target verifier, the AI-authored command is not part of the
+dispatch at all. The protected workflow receives only failed run/job identity,
+the gated SHA, patch, phase, and repetition index. It maps those values to a
+target-owned recipe shared with normal CI. This is the only path that can claim
+environment fidelity for ARM, s390x emulation, FreeBSD, dynamic containers,
+macOS/Xcode matrices, services, and specialized setup. See
+[`ci-fix-verifier.md`](ci-fix-verifier.md).
 
-The deployment is not yet fully registry-driven. `ci-fix.yml` and
-`ci-fix-comment-poll.yml` are operationally scoped to `valkey-io/valkey`: the
-workflow guards on the repo, mints a token for it, and the poller watches only
-it. The comment poller runs hourly but uses a shared in-run polling loop to scan
-immediately and again 30 minutes later, avoiding dependence on GitHub's
-scheduled-workflow queue for every half-hour tick. The loop is capped below the
-GitHub App token lifetime. Onboarding another repo (e.g. Valkey Search) still
-needs a registry-driven token/poll/dispatch path in the workflows; the Python
-engine being repo-agnostic is a precondition, not the whole job.
+Jobs using exactly `ubuntu-latest` or `macos-latest`, plus static containers on
+`ubuntu-latest`, can run in agent-owned workflows with `permissions: {}`, no
+secrets, and no cloud identity. Versioned labels are not approximated with the
+corresponding `*-latest` image. Every sample gets a fresh hosted runner, checks
+out the gated SHA with persisted credentials disabled, and conditionally
+applies the reviewed patch. The generic workflow does not replay target YAML
+steps. The diagnosis recipe must include the prerequisites needed by its
+targeted command. On host Linux and macOS, classification permits an auxiliary
+checkout only when the checkout action, repository, full commit SHA, and
+relative path are static and the step is unconditional. Dynamic checkout setup
+is unsupported, as is any auxiliary checkout in a container because Docker
+samples disable networking. Recipe phases run fail-fast. Docker samples also
+override the image entrypoint, drop capabilities, set `no-new-privileges`, and
+run as the hosted runner's UID/GID. Only the named targeted-verification step
+supplies a verdict; workflow checkout, patch, or runner failures are unavailable
+evidence. This separate job boundary is required.
 
-Every failure mode - un-runnable variant, a real product bug, a flaky test, a
-moved branch, a non-member commenter - returns a `FixOutcome` that becomes an
-explanatory PR comment rather than a silent failure or an unsafe push.
+Diagnosis, editing, and skeptic review also consume untrusted checkout/log
+content in the credential-bearing controller, so CI-fix gives those Claude
+processes a second boundary: bubblewrap creates private PID and mount
+namespaces, fresh `/proc` and `/tmp`, read-only system directories, and one
+mount containing only the disposable CI-fix workspace. Read-only profiles mount
+that workspace read-only; edit profiles can modify the worktree but Git
+metadata is overlaid read-only so later controller Git commands cannot consume
+AI-planted repository configuration. Bubblewrap is
+required by the CI-fix agent profiles and missing/invalid sandbox setup fails
+closed. The subprocess environment is filtered to Bedrock credentials, but
+filtering is only defense in depth: by itself it would not stop same-user
+access through `/proc` or reads of runner temporary files.
 
-For local and Docker verification, a push requires a failing baseline first. If
-the command passes before the fix, the agent treats the CI failure as flaky or
-environment-specific and refuses. If the baseline cannot be established because
-the local verifier is missing setup dependencies, the agent may still author and
-skeptically review a patch, but it is returned as a handoff rather than pushed.
+Publication never reuses a verification checkout: authored publication applies
+the approved patch in a fresh clone, while a port cherry-picks the selected
+commit and preserves authorship. The target-workflow contract likewise requires
+read-only repository permissions and no cloud identity. Target maintainers
+enforce that contract in their workflow; the agent can restrict its dispatch
+token and validate the correlated conclusion, but cannot impose permissions
+inside the target-owned job.
+
+Every backend samples the unmodified checkout first.
+Repeated observations classify deterministic failures, confirmed flakes,
+all-green/not-reproduced failures, and unavailable environments. Confirmed or
+diagnosed flakes use the repository's stronger repetition count. All-green or
+unavailable baselines may produce a reviewed patch or identified port, but only
+as `HANDOFF`. Remote samples run in bounded concurrent batches with per-sample
+and total campaign deadlines. Missing or timed-out evidence is never success.
+
+The registry is the control plane. `ci-fix.yml` resolves an enabled target
+before minting its token; `ci-fix-comment-poll.yml` builds one polling matrix
+leg per enabled repository. Target polling and agent-workflow dispatch use
+separate scoped tokens. Per-repository settings cover authorization, branch
+namespaces, rare release-branch fallback search, confidence and sampling
+thresholds, remote concurrency/time budgets, target verifier workflow/ref,
+protected paths, and auto-publication paths. Long campaigns refresh installation
+tokens with the same exact repository and permission restrictions; artifact and
+git operations resolve the refreshed token only when they execute.
+
+Every terminal condition becomes a `FixOutcome` and PR comment. This includes
+unrunnable environments, unavailable target integration, real product bugs,
+flakes, stale branch heads, unauthorized callers, review rejection, and
+publication-policy handoffs.
 
 ### Entry Points
 
-- `scripts/ci_fix/main.py` - workflow_dispatch entry point; mints the target and agent-repo tokens
+- `scripts/ci_fix/main.py` - registry-aware workflow entry point and verifier construction
+- `scripts/ci_fix/registry.py` - typed CI-fix target, sampling, verifier, and publication policy
 - `scripts/ci_fix/gate.py` - command parsing, fail-closed team auth, SHA-bound run gating
 - `scripts/ci_fix/diagnose.py` - read-only AI diagnosis into a structured proposal (fix + job hint)
 - `scripts/ci_fix/apply.py` - edit-only AI fix application
-- `scripts/ci_fix/runner.py` - sanitized local/Docker command execution that owns the verdict
-- `scripts/ci_fix/review.py` - skeptic review, the apply/run/review loop, and the shared patch helpers
+- `scripts/ci_fix/review.py` - skeptic review, command guards, patch bounds, and sampling policy
 - `scripts/ci_fix/push.py` - patch handoff, commit (no sign-off), namespace-restricted push
 - `scripts/ci_fix/comment.py` - render the outcome into a PR comment
 - `scripts/ci_fix/pipeline.py` - top-level orchestration; code-owned verifier selection
 - `scripts/ci_fix/models.py` - typed dataclasses for the pipeline
 - `scripts/ci_fix/verify/` - the verifier layer:
   - `base.py` - VerifyEnv, FailedJob, VerificationPlan, VerificationResult, the VerifyBackend protocol
-  - `workflow_env.py` - classify a failed job's runner (x86 Linux / Docker / macOS / unsupported)
+  - `workflow_env.py` - classify a failed job's runner and reproducible static checkout setup
   - `github_runs.py` - list the jobs that actually failed in a run (code-owned)
-  - `macos.py` - the macOS verifier: dispatch the verify-macos job and wait
-- `.github/workflows/ci-fix-verify-macos.yml` - the macOS verification job
+  - `actions.py` - shared workflow dispatch, UUID correlation, polling, and log transport
+  - `agent_workflow.py` - shared no-secret agent-workflow input and verdict contract
+  - `linux.py` - agent-owned Linux and static-container verification
+  - `target_workflow.py` - dispatch/correlate a target-owned exact-environment recipe
+  - `macos.py` - macOS-specific workflow inputs and verdict mapping
+- `scripts/ci_fix/policy.py` - protected-path and test-only auto-publication decisions
+- `.github/workflows/ci-fix-verify-linux.yml` - no-secret Linux/container verifier
+- `.github/workflows/ci-fix-verify-macos.yml` - no-secret macOS verifier
 
 ## AI Layer
 

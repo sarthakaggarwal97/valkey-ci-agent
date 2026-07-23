@@ -2,6 +2,7 @@
 
 from scripts.ci_fix.verify.base import (
     FailedJob,
+    VerificationPhase,
     VerificationPlan,
     VerificationResult,
     VerifyBackend,
@@ -11,6 +12,7 @@ from scripts.ci_fix.verify.base import (
 __all__ = [
     "FailedJob",
     "VerificationPlan",
+    "VerificationPhase",
     "VerificationResult",
     "VerifyBackend",
     "VerifyEnv",

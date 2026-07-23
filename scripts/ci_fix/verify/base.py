@@ -8,9 +8,10 @@ a backend. A backend takes a ``VerificationPlan`` and returns a
 CI run conclusion), never from the model.
 
 Backends:
-- ``local`` runs the command on this Linux runner.
-- ``docker`` runs it inside the failed job's container image.
+- ``local`` dispatches host-Linux verification to an agent-owned runner.
+- ``docker`` dispatches a sandboxed static container on that Linux runner.
 - ``macos`` dispatches it to a macOS runner the agent controls and waits.
+- ``target`` dispatches a target-repository-owned exact-environment workflow.
 
 Each is a thin implementation of the same ``VerifyBackend`` protocol, so the
 pipeline selects one and calls ``verify`` without knowing the mechanics.
@@ -26,10 +27,18 @@ from typing import Protocol
 class VerifyEnv(str, Enum):
     """The environment a failed job runs in, as classification supports it."""
 
-    LOCAL = "local"          # plain Linux runner: run the command directly
-    DOCKER = "docker"        # Linux runner + container: run inside the image
+    LOCAL = "local"          # plain Linux job: agent-owned ubuntu runner
+    DOCKER = "docker"        # Linux container job: sandboxed on that runner
     MACOS = "macos"          # macOS runner: verify via the macOS backend
+    TARGET = "target-workflow"  # target-owned workflow replays the failed environment
     UNSUPPORTED = "unsupported"  # cannot be classified/verified safely
+
+
+class VerificationPhase(str, Enum):
+    """Which candidate state a remote workflow must verify."""
+
+    BASELINE = "baseline"
+    CANDIDATE = "candidate"
 
 
 @dataclass(frozen=True)
@@ -54,17 +63,24 @@ class VerificationPlan:
     workdir: str = ""
     image: str = ""          # set only for DOCKER
     job_name: str = ""       # the failed job this plan verifies
-    head_sha: str = ""       # the PR head SHA (macOS verifies against it)
-    target_repo: str = ""    # the repo to check out for remote (macOS) verification
+    head_sha: str = ""       # the PR head SHA a remote backend verifies
+    target_repo: str = ""    # repository whose protected verifier is dispatched
+    source_run_id: int = 0    # linked failing run, for target-owned recipe selection
+    phase: VerificationPhase = VerificationPhase.CANDIDATE
+    repetition: int = 1
+    repetition_count: int = 1
+    timeout_seconds: int = 0  # per-sample cap supplied by remote orchestration
+    unsupported_reason: str = ""
 
 
 @dataclass(frozen=True)
 class VerificationResult:
     """The factual outcome of running a plan. ``verified`` is never AI-decided.
 
-    ``command`` and ``output_tail`` carry local evidence; ``run_url`` carries a
-    remote CI run link (macOS). ``ran`` is False only when verification could
-    not be attempted at all, which the pipeline treats as a refusal.
+    ``output_tail`` carries bounded failure feedback; ``run_url`` identifies
+    the remote CI run. ``ran`` is False only when verification could not be
+    attempted or did not produce a test verdict, which the pipeline treats as
+    unavailable evidence rather than a pass.
     """
 
     verified: bool
@@ -76,11 +92,11 @@ class VerificationResult:
 
 
 class VerifyBackend(Protocol):
-    """Verifies a candidate fix already applied to ``repo_dir``.
+    """Verify one clean baseline or exact candidate patch selected by code.
 
-    ``patch`` is the approved patch (the artifact under test); ``plan`` is the
-    code-selected where/how. Local/Docker verification ignores ``patch`` (the
-    fix is already in the working tree); the macOS backend transports it.
+    Remote backends check out ``plan.head_sha`` and independently apply
+    ``patch`` for candidate samples. They do not trust controller worktree
+    state.
     """
 
     def verify(self, repo_dir: str, plan: VerificationPlan, patch: str) -> VerificationResult:

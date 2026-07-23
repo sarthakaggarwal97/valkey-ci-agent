@@ -106,6 +106,151 @@ def test_main_runs_dispatch_request_and_comments(monkeypatch):
     assert posted["num"] == 3988
 
 
+def test_main_registry_rejects_unconfigured_repo(tmp_path, monkeypatch):
+    registry = tmp_path / "repos.yml"
+    registry.write_text(
+        "repos:\n"
+        "  - repo: valkey-io/valkey\n"
+        "    branches: []\n"
+        "    ci_fix:\n"
+        "      enabled: true\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(main_mod, "Github", MagicMock())
+
+    rc = main([
+        "--target-token", "tok",
+        "--registry", str(registry),
+        "--repo", "valkey-io/not-configured",
+        "--pr", "3988",
+        "--run-url", "https://github.com/valkey-io/not-configured/actions/runs/99",
+        "--commenter", "alice",
+    ])
+
+    assert rc == 2
+
+
+def test_main_registry_supplies_authorization_policy(tmp_path, monkeypatch):
+    registry = tmp_path / "repos.yml"
+    registry.write_text(
+        "repos:\n"
+        "  - repo: valkey-io/valkey\n"
+        "    branches: []\n"
+        "    ci_fix:\n"
+        "      enabled: true\n"
+        "      authorization_org: release-maintainers\n"
+        "      authorization_team: ci-fixers\n",
+        encoding="utf-8",
+    )
+    fake_run = MagicMock(
+        return_value=FixOutcome(kind=OutcomeKind.REFUSED, summary="not today"),
+    )
+    monkeypatch.setattr(main_mod, "Github", MagicMock())
+    monkeypatch.setattr(main_mod, "ArtifactClient", MagicMock())
+    monkeypatch.setattr(main_mod, "run_ci_fix", fake_run)
+    monkeypatch.setattr(main_mod, "_post_comment", lambda *a, **k: None)
+
+    rc = main([
+        "--target-token", "tok",
+        "--registry", str(registry),
+        "--repo", "valkey-io/valkey",
+        "--pr", "3988",
+        "--run-url", _RUN_URL,
+        "--commenter", "alice",
+    ])
+
+    assert rc == 0
+    assert fake_run.call_args.kwargs["org"] == "release-maintainers"
+    assert fake_run.call_args.kwargs["auth_team"] == "ci-fixers"
+    assert fake_run.call_args.kwargs["baseline_runs"] == 3
+    assert fake_run.call_args.kwargs["flaky_verify_runs"] == 10
+    assert fake_run.call_args.kwargs["remote_parallelism"] == 5
+    assert fake_run.call_args.kwargs["remote_sample_timeout_seconds"] == 15 * 60
+    assert fake_run.call_args.kwargs["remote_budget_seconds"] == 45 * 60
+    assert fake_run.call_args.kwargs["minimum_confidence"] == 0.8
+    assert fake_run.call_args.kwargs["allowed_branch_prefixes"] == ("agent/backport/",)
+    assert ".github/workflows/**" in fake_run.call_args.kwargs["protected_paths"]
+
+
+def test_main_builds_registry_configured_target_verifier(tmp_path, monkeypatch):
+    registry = tmp_path / "repos.yml"
+    registry.write_text(
+        "repos:\n"
+        "  - repo: valkey-io/valkey\n"
+        "    branches: []\n"
+        "    ci_fix:\n"
+        "      enabled: true\n"
+        "      verification_workflow: .github/workflows/ci-agent-verify.yml\n"
+        "      verification_ref: protected-verifier\n",
+        encoding="utf-8",
+    )
+    verifier = object()
+    verifier_factory = MagicMock(return_value=verifier)
+    fake_run = MagicMock(
+        return_value=FixOutcome(kind=OutcomeKind.REFUSED, summary="not today"),
+    )
+    monkeypatch.setattr(main_mod, "Github", MagicMock())
+    monkeypatch.setattr(main_mod, "ArtifactClient", MagicMock())
+    monkeypatch.setattr(main_mod, "TargetWorkflowVerifier", verifier_factory)
+    monkeypatch.setattr(main_mod, "run_ci_fix", fake_run)
+    monkeypatch.setattr(main_mod, "_post_comment", lambda *a, **k: None)
+
+    rc = main([
+        "--target-token", "tok",
+        "--registry", str(registry),
+        "--repo", "valkey-io/valkey",
+        "--pr", "3988",
+        "--run-url", _RUN_URL,
+        "--commenter", "alice",
+    ])
+
+    assert rc == 0
+    assert verifier_factory.call_args.kwargs["repo_full_name"] == "valkey-io/valkey"
+    assert verifier_factory.call_args.kwargs["workflow"].endswith("ci-agent-verify.yml")
+    assert verifier_factory.call_args.kwargs["ref"] == "protected-verifier"
+    assert fake_run.call_args.kwargs["exact_verifier"] is verifier
+
+
+def test_main_builds_linux_and_macos_verifiers_from_one_agent_token(monkeypatch):
+    linux_verifier = object()
+    macos_verifier = object()
+    linux_factory = MagicMock(return_value=linux_verifier)
+    macos_factory = MagicMock(return_value=macos_verifier)
+    fake_run = MagicMock(
+        return_value=FixOutcome(kind=OutcomeKind.REFUSED, summary="not today"),
+    )
+    auth = MagicMock()
+    auth.token = "refreshed-token"
+    artifacts = MagicMock()
+
+    monkeypatch.setattr(main_mod, "_AGENT_REPO", "owner/agent")
+    monkeypatch.setattr(main_mod, "_AGENT_REF", "protected-main")
+    monkeypatch.setattr(main_mod, "_AGENT_TOKEN", "initial-token")
+    monkeypatch.setattr(main_mod, "_repository_auth", MagicMock(return_value=auth))
+    monkeypatch.setattr(main_mod, "Github", MagicMock())
+    monkeypatch.setattr(main_mod, "ArtifactClient", MagicMock(return_value=artifacts))
+    monkeypatch.setattr(main_mod, "LinuxVerifier", linux_factory)
+    monkeypatch.setattr(main_mod, "MacosVerifier", macos_factory)
+    monkeypatch.setattr(main_mod, "run_ci_fix", fake_run)
+    monkeypatch.setattr(main_mod, "_post_comment", lambda *a, **k: None)
+
+    rc = main([
+        "--target-token", "target-token",
+        "--repo", "valkey-io/valkey",
+        "--pr", "3988",
+        "--run-url", _RUN_URL,
+        "--commenter", "alice",
+    ])
+
+    assert rc == 0
+    for factory in (linux_factory, macos_factory):
+        assert factory.call_args.kwargs["agent_repo_full_name"] == "owner/agent"
+        assert factory.call_args.kwargs["ref"] == "protected-main"
+        assert factory.call_args.kwargs["artifact_client"] is artifacts
+    assert fake_run.call_args.kwargs["linux_verifier"] is linux_verifier
+    assert fake_run.call_args.kwargs["macos_verifier"] is macos_verifier
+
+
 def test_main_returns_nonzero_on_failed_outcome(tmp_path, monkeypatch):
     event_path = _write_event(tmp_path, _event())
     failed = FixOutcome(kind=OutcomeKind.FAILED, summary="clone failed")
@@ -156,6 +301,54 @@ def test_verify_runs_env_parsing(monkeypatch):
 
     monkeypatch.setenv("CI_FIX_VERIFY_RUNS", "not-a-number")
     assert _verify_runs() == DEFAULT_VERIFY_RUNS
+
+
+def test_repository_auth_uses_exact_refresh_scope_when_credentials_complete(monkeypatch):
+    from scripts.ci_fix.main import _repository_auth
+
+    refreshing = object()
+    factory = MagicMock(return_value=refreshing)
+    monkeypatch.setattr(main_mod, "RepositoryInstallationAuth", factory)
+    monkeypatch.setenv("CI_FIX_APP_ID", "123")
+    monkeypatch.setenv("CI_FIX_APP_PRIVATE_KEY", "private")
+    monkeypatch.setenv("CI_FIX_TARGET_INSTALLATION_ID", "456")
+
+    result = _repository_auth(
+        "fallback",
+        repo_full_name="valkey-io/valkey",
+        installation_id_env="CI_FIX_TARGET_INSTALLATION_ID",
+        permissions={"contents": "write"},
+    )
+
+    assert result is refreshing
+    factory.assert_called_once_with(
+        app_id="123",
+        private_key="private",
+        installation_id=456,
+        repository="valkey-io/valkey",
+        permissions={"contents": "write"},
+        initial_token="fallback",
+    )
+
+
+def test_repository_auth_incomplete_refresh_config_uses_scoped_fallback(monkeypatch):
+    from github import Auth
+
+    from scripts.ci_fix.main import _repository_auth
+
+    monkeypatch.setenv("CI_FIX_APP_ID", "123")
+    monkeypatch.delenv("CI_FIX_APP_PRIVATE_KEY", raising=False)
+    monkeypatch.setenv("CI_FIX_TARGET_INSTALLATION_ID", "456")
+
+    result = _repository_auth(
+        "fallback",
+        repo_full_name="valkey-io/valkey",
+        installation_id_env="CI_FIX_TARGET_INSTALLATION_ID",
+        permissions={"contents": "write"},
+    )
+
+    assert isinstance(result, Auth.Token)
+    assert result.token == "fallback"
 
 
 def _reaction_gh():

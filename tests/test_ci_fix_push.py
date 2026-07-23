@@ -122,6 +122,47 @@ def test_port_push_refuses_commit_not_on_default_branch(tmp_path, monkeypatch):
         )
 
 
+def test_port_push_accepts_commit_on_code_discovered_release_ref(tmp_path, monkeypatch):
+    """A fix unique to an older release branch is trusted when that exact
+    code-discovered ref is supplied and independently ancestry-checked."""
+    work, _bare, _default_fix, head_sha = _make_origin(tmp_path)
+
+    _git(work, "checkout", "-qb", "7.2", head_sha)
+    (work / "release-fix.txt").write_text("historical deflake\n")
+    _git(work, "add", "release-fix.txt")
+    _git(
+        work,
+        "-c", "user.email=release@example.com",
+        "-c", "user.name=Release Author",
+        "commit", "-qm", "Deflake release test",
+    )
+    release_fix = _git(work, "rev-parse", "HEAD").strip()
+    _git(work, "checkout", "-q", "agent/backport/sweep/9.0")
+
+    remote = tmp_path / "historical.git"
+    _git(work, "clone", "-q", "--bare", str(work), str(remote))
+    _git(remote, "symbolic-ref", "HEAD", "refs/heads/unstable")
+
+    def fake_clone(_full_name, dest: Path):
+        _git(dest.parent, "clone", "-q", str(remote), str(dest))
+
+    monkeypatch.setattr(push_mod, "_clone_clean", fake_clone)
+    monkeypatch.setattr(push_mod, "github_https_url", lambda _n: str(remote))
+
+    pushed = commit_and_push_port(
+        str(work),
+        head_repo_full_name="valkey-io/valkey",
+        head_branch="agent/backport/sweep/9.0",
+        head_sha=head_sha,
+        unstable_fix_commit=release_fix,
+        source_ref="origin/7.2",
+        git_env={},
+    )
+
+    assert _git(remote, "log", "-1", "--format=%an", pushed).strip() == "Release Author"
+    assert "historical deflake" in _git(remote, "show", f"{pushed}:release-fix.txt")
+
+
 def test_port_push_refuses_commit_already_on_head(tmp_path, monkeypatch):
     """Porting a commit already present on the PR head is a no-op and refused."""
     work, bare, fix_sha, _head_sha = _make_origin(tmp_path)
@@ -161,6 +202,60 @@ def test_port_push_refuses_malformed_commit(tmp_path):
             head_branch="agent/backport/sweep/9.0", head_sha="a" * 40,
             unstable_fix_commit="not-a-sha", git_env={},
         )
+
+
+def test_port_push_refuses_malformed_source_ref(tmp_path):
+    with pytest.raises(PushRefused, match="malformed source ref"):
+        commit_and_push_port(
+            str(tmp_path),
+            head_repo_full_name="valkey-io/valkey",
+            head_branch="agent/backport/sweep/9.0",
+            head_sha="a" * 40,
+            unstable_fix_commit="b" * 40,
+            source_ref="../../heads/main",
+            git_env={},
+        )
+
+
+def test_author_push_accepts_registry_configured_namespace(tmp_path, monkeypatch):
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    repo = tmp_path / "repo"
+    subprocess.run(
+        ["git", "init", "-b", "agent/fix/release", str(repo)],
+        check=True,
+        capture_output=True,
+    )
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    (repo / "seed").write_text("seed\n")
+    _git(repo, "add", "seed")
+    _git(repo, "commit", "-qm", "seed")
+    head = _git(repo, "rev-parse", "HEAD").strip()
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "origin", "HEAD:agent/fix/release")
+    monkeypatch.setattr(push_mod, "github_https_url", lambda _n: str(remote))
+    (repo / "tests").mkdir()
+    (repo / "tests" / "fix.tcl").write_text("fix\n")
+
+    pushed = push_mod.commit_and_push_fix(
+        str(repo),
+        head_repo_full_name="valkey-io/valkey",
+        head_branch="agent/fix/release",
+        head_sha=head,
+        proposal=FixProposal(
+            path=FixPath.AUTHOR,
+            failing_check="test",
+            root_cause="cause",
+            reasoning="fix",
+            confidence=0.9,
+        ),
+        changed_paths=("tests/fix.tcl",),
+        git_env={},
+        allowed_branch_prefixes=("agent/fix/",),
+    )
+
+    assert len(pushed) == 40
 
 
 def test_author_fix_commit_message_uses_source_file_for_build_failure():

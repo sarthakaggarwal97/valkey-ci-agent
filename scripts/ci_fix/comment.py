@@ -1,18 +1,15 @@
 """Render a ``FixOutcome`` into a PR comment.
 
-The comment is the agent's accountability surface: for a push it shows exactly
-what was changed, the command that was run, its captured output, and the
-review rationale - the evidence a maintainer needs to trust (or reject) the
-fix. For a refusal it explains why, so the maintainer can take over.
+The comment is the agent's accountability surface: for a push it identifies
+the independent verification run and records the review rationale. For a
+refusal it explains why, so the maintainer can take over.
 """
 
 from __future__ import annotations
 
 import re
 
-from scripts.ci_fix.models import FixOutcome, OutcomeKind
-
-_OUTPUT_TAIL_IN_COMMENT = 3000
+from scripts.ci_fix.models import BaselineKind, FixOutcome, FixPath, OutcomeKind
 
 
 def _fenced(body: str, *, lang: str = "") -> str:
@@ -38,7 +35,6 @@ def render_comment(outcome: FixOutcome) -> str:
 
 def _render_pushed(outcome: FixOutcome) -> str:
     proposal = outcome.proposal
-    run = outcome.run_result
     review = outcome.review
     lines = [
         f"Fixed **{proposal.failing_check if proposal else 'the failing check'}** "
@@ -51,34 +47,18 @@ def _render_pushed(outcome: FixOutcome) -> str:
         f"**Root cause:** {proposal.root_cause if proposal else ''}",
         "",
     ]
-    if run is not None:
-        check_name = proposal.failing_check if proposal else ""
-        highlight = _result_lines_for(run.output_tail, check_name)
-        if highlight:
-            lines += [
-                "The previously-failing check now passes:",
-                "",
-                _fenced(highlight),
-                "",
-            ]
-        block = f"$ {run.command}\nexit {run.exit_code}\n{run.output_tail[-_OUTPUT_TAIL_IN_COMMENT:]}"
-        lines += [
-            "<details><summary>Full verification output</summary>",
-            "",
-            _fenced(block),
-            "</details>",
-            "",
-        ]
+    lines += _baseline_lines(outcome)
     if outcome.verify_backend:
         where = _backend_label(outcome)
         lines += [f"**Verified by:** {where}", ""]
     if review is not None and review.reasoning:
-        lines += [f"**Review:** {review.reasoning}", ""]
+        label = "Port provenance" if proposal and proposal.path is FixPath.PORT else "Review"
+        lines += [f"**{label}:** {review.reasoning}", ""]
     lines += _remaining_checks(outcome)
-    if outcome.verify_backend == "upstream-port":
+    if proposal and proposal.path is FixPath.PORT:
         lines.append(
-            "_This is a port of an upstream fix; this PR's normal CI is the "
-            "verification authority. I do not merge._"
+            "_The upstream fix passed targeted verification of the failing "
+            "check; this PR's full CI will confirm. I do not merge._"
         )
     else:
         lines.append(
@@ -88,42 +68,24 @@ def _render_pushed(outcome: FixOutcome) -> str:
     return "\n".join(lines)
 
 
-def _result_lines_for(output: str, check_name: str) -> str:
-    """Pull the lines that show the target check's result out of the output.
-
-    A verification run can emit hundreds of lines for other passing tests; a
-    maintainer wants the one line proving the previously-failing check now
-    passes. Prefer lines mentioning the check name; otherwise fall back to the
-    last few result-marker lines. Returns an empty string if nothing matches,
-    in which case the caller just shows the full output.
-    """
-    lines = output.splitlines()
-    if check_name:
-        # Match on a distinctive slice of the check name (the AI's name and the
-        # log's wording can differ slightly), longest word first.
-        words = sorted((w for w in re.split(r"\W+", check_name) if len(w) > 3), key=len, reverse=True)
-        for w in words:
-            hits = [ln for ln in lines if w in ln and _RESULT_MARKER.search(ln)]
-            if hits:
-                return "\n".join(hits[-5:])
-    markers = [ln for ln in lines if _RESULT_MARKER.search(ln)]
-    return "\n".join(markers[-3:]) if markers else ""
-
-
-_RESULT_MARKER = re.compile(r"\[ok\]|\[err\]|\[exception\]|\bPASS\b|\bFAIL\b", re.IGNORECASE)
-
-
 def _backend_label(outcome: FixOutcome) -> str:
     backend = outcome.verify_backend
+    run = (
+        f" ([run]({outcome.verification_run_url}))"
+        if outcome.verification_run_url
+        else ""
+    )
     if backend == "local":
-        return "targeted verification on a Linux runner"
+        return f"targeted verification on an isolated Linux Actions runner{run}"
     if backend.startswith("docker:"):
-        return f"targeted verification in the `{backend[len('docker:'):]}` container"
+        return (
+            f"targeted verification in the `{backend[len('docker:'):]}` "
+            f"container on an isolated Actions runner{run}"
+        )
     if backend == "macos":
-        run = f" ([run]({outcome.macos_run_url}))" if outcome.macos_run_url else ""
         return f"targeted verification on a macOS runner{run}"
-    if backend == "upstream-port":
-        return "ported upstream fix; awaiting this PR's normal CI"
+    if backend == "target-workflow":
+        return f"the target repository's exact-environment workflow{run}"
     return backend
 
 
@@ -131,14 +93,12 @@ def _render_refused(outcome: FixOutcome) -> str:
     lines = [f"I did not push a fix: {outcome.summary}", ""]
     if outcome.failing_run_url:
         lines += [f"Looked at the failure from [this run]({outcome.failing_run_url}).", ""]
-    if outcome.run_result is not None and outcome.run_result.output_tail:
+    if outcome.verification_run_url:
         lines += [
-            "<details><summary>Evidence</summary>",
-            "",
-            _fenced(outcome.run_result.output_tail[-_OUTPUT_TAIL_IN_COMMENT:]),
-            "</details>",
+            f"Latest candidate evidence: [verification run]({outcome.verification_run_url}).",
             "",
         ]
+    lines += _baseline_lines(outcome)
     lines += _remaining_checks(outcome)
     return "\n".join(lines)
 
@@ -149,18 +109,48 @@ def _render_failed(outcome: FixOutcome) -> str:
 
 def _render_handoff(outcome: FixOutcome) -> str:
     proposal = outcome.proposal
-    lines = [
-        "I diagnosed this and prepared a fix, but I could not verify it in my "
-        "environment, so I am handing it off rather than pushing it unverified.",
-        "",
-    ]
+    if proposal is not None and proposal.path is FixPath.PORT:
+        lines = [
+            "I found a fix already merged on a trusted branch, but the available "
+            "evidence or repository policy requires a human to port it.",
+            "",
+        ]
+    elif outcome.verify_backend:
+        lines = [
+            "I diagnosed, prepared, and remotely checked a fix, but the "
+            "available evidence or repository policy does not permit an "
+            "automatic push.",
+            "",
+        ]
+    else:
+        lines = [
+            "I diagnosed this and prepared a fix, but I could not verify it in my "
+            "environment, so I am handing it off rather than pushing it unverified.",
+            "",
+        ]
     if outcome.failing_run_url:
         lines += [f"From the failure in [this run]({outcome.failing_run_url}).", ""]
+    if (
+        outcome.verification_run_url
+        and outcome.verify_backend not in {"macos", "target-workflow"}
+    ):
+        lines += [
+            f"Latest candidate evidence: [verification run]({outcome.verification_run_url}).",
+            "",
+        ]
     if proposal is not None and proposal.root_cause:
         lines += [f"**Root cause:** {proposal.root_cause}", ""]
-    lines += [f"**Why not verified:** {outcome.summary}", ""]
+    lines += _baseline_lines(outcome)
+    lines += [f"**Why not pushed:** {outcome.summary}", ""]
+    if outcome.verify_backend:
+        lines += [f"**Verified by:** {_backend_label(outcome)}", ""]
     if outcome.review is not None and outcome.review.reasoning:
-        lines += [f"**Review:** {outcome.review.reasoning}", ""]
+        label = (
+            "Port provenance"
+            if proposal is not None and proposal.path is FixPath.PORT
+            else "Review"
+        )
+        lines += [f"**{label}:** {outcome.review.reasoning}", ""]
     if outcome.handoff_patch:
         lines += [
             "Proposed patch (apply and let this PR's CI judge it):",
@@ -183,3 +173,27 @@ def _remaining_checks(outcome: FixOutcome) -> list[str]:
         listed,
         "",
     ]
+
+
+def _baseline_lines(outcome: FixOutcome) -> list[str]:
+    evidence = outcome.baseline
+    if evidence is None:
+        return []
+    if evidence.kind is BaselineKind.FLAKY:
+        summary = (
+            f"confirmed flaky: {evidence.failed} failure(s), "
+            f"{evidence.passed} pass(es) across {evidence.attempts} clean run(s)"
+        )
+    elif evidence.kind is BaselineKind.DETERMINISTIC:
+        summary = (
+            f"reproduced deterministically: {evidence.failed}/"
+            f"{evidence.attempts} clean run(s) failed"
+        )
+    elif evidence.kind is BaselineKind.NOT_REPRODUCED:
+        summary = (
+            f"not reproduced: {evidence.passed}/"
+            f"{evidence.attempts} clean run(s) passed"
+        )
+    else:
+        summary = "baseline unavailable"
+    return [f"**Clean baseline:** {summary}.", ""]

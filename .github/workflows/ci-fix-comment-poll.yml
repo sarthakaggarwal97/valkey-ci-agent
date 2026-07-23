@@ -1,9 +1,8 @@
 name: CI Fix Comment Poll
 
-# Scans recent valkey-io/valkey PR comments for "@valkeyrie-ops fix <ci-link>"
-# and dispatches the ci-fix workflow for each new one. The trigger only; the
-# fix itself runs in ci-fix.yml. Idempotency is a reaction marker on the
-# comment, so overlapping or replayed ticks never double-dispatch.
+# Scans PR comments in every registry entry with ci_fix.poll_comments enabled.
+# Each matrix leg receives a target-only token and a separate agent-repository
+# dispatch token. Idempotency is an atomic reaction marker on the comment.
 
 on:
   schedule:
@@ -21,13 +20,46 @@ on:
 permissions: {}
 
 jobs:
+  registry:
+    name: Build repository matrix
+    if: github.repository == 'valkey-io/valkey-ci-agent'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has_entries: ${{ steps.matrix.outputs.has_entries }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Build CI-fix poll matrix
+        id: matrix
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.registry poll-matrix \
+            --registry repos.yml \
+            --output-file "${GITHUB_OUTPUT}"
+
   poll:
     name: "Poll for fix commands"
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    needs: registry
+    if: needs.registry.outputs.has_entries == 'true'
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.registry.outputs.matrix) }}
     runs-on: ubuntu-latest
     timeout-minutes: 70
     concurrency:
-      group: ci-fix-comment-poll
+      group: ci-fix-comment-poll-${{ matrix.repo_slug }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -41,26 +73,38 @@ jobs:
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
 
-      - name: Generate App token
-        id: token
+      - name: Generate target-repository token
+        id: target-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ matrix.owner }}
+          repositories: ${{ matrix.name }}
+          permission-members: read
+          permission-issues: write
+          permission-pull-requests: read
+          permission-metadata: read
+
+      - name: Generate agent-repository dispatch token
+        id: dispatch-token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
-          repositories: |
-            valkey
-            valkey-ci-agent
-          permission-members: read
-          permission-issues: write
-          permission-pull-requests: read
+          repositories: valkey-ci-agent
           permission-actions: write
           permission-metadata: read
 
       - name: Poll and dispatch
         env:
-          CI_FIX_POLL_TOKEN: ${{ steps.token.outputs.token }}
-          CI_FIX_POLL_APP_SLUG: ${{ steps.token.outputs.app-slug }}
+          CI_FIX_POLL_TOKEN: ${{ steps.target-token.outputs.token }}
+          CI_FIX_DISPATCH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+          CI_FIX_POLL_APP_SLUG: ${{ steps.target-token.outputs.app-slug }}
+          CI_FIX_POLL_TARGET_REPO: ${{ matrix.repo }}
+          CI_FIX_AUTH_ORG: ${{ matrix.authorization_org }}
+          CI_FIX_AUTH_TEAM: ${{ matrix.authorization_team }}
           CI_FIX_POLL_LOOKBACK_MINUTES: ${{ inputs.lookback_minutes || '180' }}
           CI_FIX_POLL_INTERVAL_SECONDS: ${{ github.event_name == 'schedule' && '1800' || '0' }}
           CI_FIX_POLL_DURATION_SECONDS: ${{ github.event_name == 'schedule' && '3300' || '0' }}
