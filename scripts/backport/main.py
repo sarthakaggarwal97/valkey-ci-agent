@@ -17,6 +17,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 from github.GithubException import GithubException
 
+from scripts.backport.auth import consume_github_token
 from scripts.backport.cherry_pick import cherry_pick
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.diff_comments import reconcile_diff_comments
@@ -637,14 +638,6 @@ def main() -> None:
         help="Path to registry YAML (default: repos.yml)",
     )
     parser.add_argument(
-        "--token",
-        default="",
-        help=(
-            "GitHub token. Prefer BACKPORT_GITHUB_TOKEN or GITHUB_TOKEN in CI "
-            "to avoid putting secrets in process arguments."
-        ),
-    )
-    parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable debug logging",
     )
     parser.add_argument(
@@ -659,15 +652,7 @@ def main() -> None:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
 
-    github_token = (
-        args.token
-        or os.environ.get("BACKPORT_GITHUB_TOKEN", "")
-        or os.environ.get("GITHUB_TOKEN", "")
-    )
-    if not github_token:
-        parser.error(
-            "GitHub token is required via --token, BACKPORT_GITHUB_TOKEN, or GITHUB_TOKEN."
-        )
+    github_token = consume_github_token(parser)
 
     from scripts.backport.registry import load_registry
     registry = load_registry(args.registry)

@@ -76,7 +76,7 @@ jobs:
       - name: Revert commit
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
+          BACKPORT_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
           REPO: ${{ inputs.repo }}
           BRANCH: ${{ inputs.branch }}
           COMMIT_SHA: ${{ inputs.commit_sha }}
@@ -110,7 +110,6 @@ jobs:
             --branch "${BRANCH}"
             --commit-sha "${COMMIT_SHA}"
             --base-branch "${BASE_BRANCH}"
-            --token "${TARGET_TOKEN}"
             --verbose
           )
           if [[ -n "${PUSH_REPO}" ]]; then

@@ -39,6 +39,7 @@ class AgentProfile:
     failure_policy: str = "fail-closed"
     disallowed_tools: str = ""
     env_allowlist: tuple[str, ...] = DEFAULT_CLAUDE_ENV_ALLOWLIST
+    sandbox_required: bool = False
 
 
 @dataclass(frozen=True)
@@ -60,13 +61,14 @@ class AgentRunResult:
 AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
     "conflict_resolve_edit_only": AgentProfile(
         name="conflict_resolve_edit_only",
-        allowed_tools="Read,Edit,MultiEdit,Grep,Glob,Bash",
+        allowed_tools="Read,Edit,MultiEdit,Grep,Glob",
         timeout=3600,
         effort="max",
         max_turns=240,
         writes_allowed=True,
         output_schema="edited-files",
-        disallowed_tools="Write",
+        disallowed_tools="Bash,Write",
+        sandbox_required=True,
     ),
     "test_adaptation_edit_only": AgentProfile(
         name="test_adaptation_edit_only",
@@ -77,6 +79,7 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
         writes_allowed=True,
         output_schema="edited-files",
         disallowed_tools="Bash,Write",
+        sandbox_required=True,
     ),
     "validation_repair_edit_only": AgentProfile(
         name="validation_repair_edit_only",
@@ -87,6 +90,7 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
         writes_allowed=True,
         output_schema="edited-files",
         disallowed_tools="Bash,Write",
+        sandbox_required=True,
     ),
     "fuzzer_analysis_readonly": AgentProfile(
         name="fuzzer_analysis_readonly",
@@ -121,6 +125,7 @@ def run_agent(
     timeout: int | None = None,
     model: str | None = None,
     evidence_dir: str | Path | None = None,
+    sandbox_root: str | Path | None = None,
 ) -> AgentRunResult:
     """Run Claude Code under a named capability profile.
 
@@ -129,6 +134,8 @@ def run_agent(
     the working tree cannot influence the prompt that just ran.
     """
     profile = get_agent_profile(profile_name)
+    if profile.sandbox_required and sandbox_root is None:
+        raise ValueError(f"agent profile {profile_name!r} requires a filesystem sandbox")
     started_at = datetime.now(timezone.utc).isoformat()
     resolved_model = _resolve_claude_model(model)
     stdout, stderr, rc = run_claude_code(
@@ -141,6 +148,8 @@ def run_agent(
         allowed_tools=profile.allowed_tools,
         disallowed_tools=profile.disallowed_tools,
         env_allowlist=profile.env_allowlist,
+        sandbox_root=str(sandbox_root) if sandbox_root is not None else None,
+        sandbox_writes_allowed=profile.writes_allowed,
     )
     finished_at = datetime.now(timezone.utc).isoformat()
     result = AgentRunResult(

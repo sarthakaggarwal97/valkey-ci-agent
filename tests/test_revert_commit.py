@@ -77,3 +77,29 @@ def test_refuses_base_branch_commit(fork):
 def test_rejects_non_agent_branch():
     with pytest.raises(ValueError, match="non-namespaced branch"):
         rc.revert_commit("o/r", "8.0", "abc1234", token="")
+
+
+def test_main_reads_token_from_environment_not_arguments(monkeypatch):
+    captured = {}
+
+    def fake_revert(repo, branch, commit_sha, token, **kwargs):
+        captured.update(
+            repo=repo,
+            branch=branch,
+            commit_sha=commit_sha,
+            token=token,
+            kwargs=kwargs,
+        )
+
+    monkeypatch.setenv("BACKPORT_GITHUB_TOKEN", "env-token")
+    monkeypatch.setattr(rc, "revert_commit", fake_revert)
+
+    result = rc.main([
+        "--repo", "o/r",
+        "--branch", "agent/backport/sweep/8.0",
+        "--commit-sha", "abcdef1",
+        "--base-branch", "8.0",
+    ])
+
+    assert result == 0
+    assert captured["token"] == "env-token"

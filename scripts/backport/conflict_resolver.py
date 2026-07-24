@@ -396,7 +396,12 @@ def resolve_conflicts_with_claude(
         "Calling Claude Code to resolve %d conflict(s) for PR #%d onto %s...",
         len(llm_files), pr_context.source_pr_number, pr_context.target_branch,
     )
-    agent_result = run_agent("conflict_resolve_edit_only", prompt, cwd=repo_dir)
+    agent_result = run_agent(
+        "conflict_resolve_edit_only",
+        prompt,
+        cwd=repo_dir,
+        sandbox_root=repo_dir,
+    )
 
     result_text = _agent_result_text(agent_result.stdout)
 
@@ -456,7 +461,12 @@ def resolve_conflicts_with_claude(
         "inside the allowed cherry-pick file set. Do NOT edit any other files. "
         "Do NOT run `git add` or `git commit`."
     )
-    retry_result = run_agent("conflict_resolve_edit_only", retry_prompt, cwd=repo_dir)
+    retry_result = run_agent(
+        "conflict_resolve_edit_only",
+        retry_prompt,
+        cwd=repo_dir,
+        sandbox_root=repo_dir,
+    )
     retry_summary = _agent_result_text(retry_result.stdout)
     if retry_result.returncode != 0:
         retry_detail = (retry_result.stderr or "")[:200]

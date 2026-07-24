@@ -284,6 +284,7 @@ def test_main_surfaces_sustained_poll_failure(monkeypatch, capsys) -> None:
         )
 
     monkeypatch.setattr(mark_done, "run_poll_loop_from_args", fail_after_success)
+    monkeypatch.setenv("BACKPORT_GITHUB_TOKEN", "tok")
     monkeypatch.setattr(
         sys,
         "argv",
@@ -291,7 +292,6 @@ def test_main_surfaces_sustained_poll_failure(monkeypatch, capsys) -> None:
             "mark_done",
             "--repo", "valkey-io/valkey",
             "--target-branch", "9.1",
-            "--target-token", "tok",
         ],
     )
 

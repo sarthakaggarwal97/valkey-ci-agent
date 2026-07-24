@@ -459,7 +459,12 @@ def adapt_target_missing_tests_with_claude(
                 candidate.source_pr_number,
                 candidate.target_branch,
             )
-            agent_result = run_agent_func("test_adaptation_edit_only", prompt, cwd=str(sandbox_dir))
+            agent_result = run_agent_func(
+                "test_adaptation_edit_only",
+                prompt,
+                cwd=str(sandbox_dir),
+                sandbox_root=temp_dir,
+            )
             result_text = extract_agent_result_text(agent_result)
             logger.info(
                 "Claude Code test adaptation finished (rc=%d). Result: %s",

@@ -68,7 +68,7 @@ def validate_branch_with_optional_repair(
     repair helper removes its own repair commit on failure, so on a red
     return the branch is left exactly as the caller handed it in.
     """
-    log_path = create_validation_log_path() if repair else None
+    log_path = create_validation_log_path(repo_dir) if repair else None
     try:
         ok, output = validate_backport_branch(
             repo_dir,
@@ -112,7 +112,7 @@ def repair_validation_failure_with_claude(
         return False, validation_output
 
     owns_log_path = validation_log_path is None
-    log_path = validation_log_path or create_validation_log_path()
+    log_path = validation_log_path or create_validation_log_path(repo_dir)
     try:
         if owns_log_path:
             Path(log_path).write_text(validation_output, encoding="utf-8")
@@ -133,6 +133,7 @@ def repair_validation_failure_with_claude(
             "validation_repair_edit_only",
             prompt,
             cwd=repo_dir,
+            sandbox_root=str(Path(repo_dir).resolve().parent),
         )
         diagnosis = extract_agent_result_text(getattr(agent_result, "stdout", ""))
         if agent_result.returncode != 0:
@@ -222,10 +223,14 @@ def validation_output_with_diagnosis(
     )
 
 
-def create_validation_log_path() -> str:
+def create_validation_log_path(repo_dir: str) -> str:
+    workspace_root = Path(repo_dir).resolve().parent
+    if workspace_root == Path(workspace_root.anchor):
+        raise ValueError("backport validation requires a non-root workspace directory")
     log_fd, log_path = tempfile.mkstemp(
         prefix="backport-validation-",
         suffix=".log",
+        dir=workspace_root,
     )
     os.close(log_fd)
     return log_path

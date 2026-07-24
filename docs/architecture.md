@@ -235,9 +235,19 @@ runtime.run_agent(profile, prompt, cwd=...)
 
 Profiles registered today:
 
-- `conflict_resolve_edit_only` - backport conflict resolution (Read/Edit/Bash, writes allowed)
+- `conflict_resolve_edit_only` - sandboxed backport conflict resolution (Read/Edit/Grep/Glob, writes allowed)
+- `test_adaptation_edit_only` - sandboxed missing-test adaptation (Read/Edit/Grep/Glob, writes allowed)
+- `validation_repair_edit_only` - sandboxed validation repair (Read/Edit/Grep/Glob, writes allowed)
 - `fuzzer_analysis_readonly` - fuzzer triage (Read/Grep/Glob only, no writes)
 - `ci_fix_diagnose_readonly` - CI-fix diagnosis and skeptic review (Read/Grep/Glob only, no writes)
+
+Backport AI profiles fail closed unless their caller supplies a private
+bubblewrap workspace. The sandbox has private PID, mount, and temporary
+filesystems, read-only system paths and Git metadata, and no GitHub credential.
+Backport setup/build/test commands do not run in that sandbox because registered
+repositories may require Docker; instead, their direct subprocess environment
+is allowlisted and excludes GitHub, AWS, and Bedrock credentials. Same-runner
+filesystem and process side channels remain outside that narrower guarantee.
 
 ## Common Infrastructure
 

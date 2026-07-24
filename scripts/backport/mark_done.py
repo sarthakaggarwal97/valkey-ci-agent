@@ -24,6 +24,7 @@ import tempfile
 from dataclasses import dataclass, field
 from typing import Any
 
+from scripts.backport.auth import consume_github_token
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.utils import pr_numbers_from_commit_subjects
 from scripts.common.git_auth import GitAuth, github_https_url
@@ -530,7 +531,6 @@ def main() -> None:
         help="Release branch to reconcile. Omit to reconcile every branch "
         "configured for the repo.",
     )
-    parser.add_argument("--target-token", required=True)
     parser.add_argument("--status-field", default=_DEFAULT_STATUS_FIELD)
     parser.add_argument("--from-status", default=_DEFAULT_FROM_STATUS)
     parser.add_argument("--done-status", default=_DEFAULT_DONE_STATUS)
@@ -548,16 +548,17 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
+    github_token = consume_github_token(parser)
     from scripts.backport.registry import load_registry
 
     registry = load_registry(args.registry)
-    gql = GitHubGraphQLClient(args.target_token)
+    gql = GitHubGraphQLClient(github_token)
 
     def _poll() -> dict[str, Any]:
         return _run_poll(
             registry, gql, repo=args.repo, target_branch=args.target_branch,
             status_field=args.status_field, from_status=args.from_status,
-            done_status=args.done_status, token=args.target_token, dry_run=args.dry_run,
+            done_status=args.done_status, token=github_token, dry_run=args.dry_run,
         )
 
     try:

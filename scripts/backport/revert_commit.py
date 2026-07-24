@@ -10,6 +10,7 @@ import tempfile
 
 from github import Auth, Github
 
+from scripts.backport.auth import consume_github_token
 from scripts.backport.main import _run_git as run_git_default
 from scripts.backport.sweep_git import BRANCH_PREFIX, clone_target_branch
 from scripts.backport.sweep_prs import find_existing_pr
@@ -110,7 +111,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", required=True)
     parser.add_argument("--branch", required=True)
     parser.add_argument("--commit-sha", required=True)
-    parser.add_argument("--token", required=True)
     parser.add_argument("--push-repo", default="")
     parser.add_argument("--base-branch", default="")
     parser.add_argument("--verbose", action="store_true")
@@ -121,9 +121,10 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
+    token = consume_github_token(parser)
     try:
         revert_commit(
-            args.repo, args.branch, args.commit_sha, args.token,
+            args.repo, args.branch, args.commit_sha, token,
             push_repo=args.push_repo or None,
             base_branch=args.base_branch or None,
         )

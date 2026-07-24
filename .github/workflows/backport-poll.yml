@@ -104,6 +104,7 @@ jobs:
         uses: ./.github/actions/setup-agent
         with:
           install-claude: "true"
+          install-sandbox: "true"
 
       - name: Generate GitHub App token
         id: generate-token
@@ -129,7 +130,7 @@ jobs:
       - name: Run backport poll
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
+          BACKPORT_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           set -euo pipefail
           # Pass --max-candidates unconditionally, including 0, which the
@@ -139,7 +140,6 @@ jobs:
             --registry repos.yml \
             --repo "${{ matrix.repo }}" \
             --branch "${{ matrix.branch }}" \
-            --target-token "${TARGET_TOKEN}" \
             --max-candidates "${MAX_CANDIDATES}" \
             --poll-interval-seconds "${POLL_INTERVAL_SECONDS}" \
             --poll-duration-seconds "${POLL_DURATION_SECONDS}" \

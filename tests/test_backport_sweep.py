@@ -1843,7 +1843,9 @@ def test_adapt_target_missing_tests_stages_branch_native_test(tmp_path):
     def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
         sandbox = Path(kwargs["cwd"])
+        sandbox_root = Path(kwargs["sandbox_root"])
         assert sandbox != repo
+        assert sandbox.parent == sandbox_root
         (sandbox / "tests" / "unit" / "networking.tcl").write_text(
             "start_server {} {}\n# adapted coverage\n",
             encoding="utf-8",
@@ -2856,8 +2858,21 @@ def test_validation_repair_prompt_is_narrowly_scoped():
     assert "Read tool" in prompt
 
 
-def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
-    agent_calls: list[tuple[str, str, str]] = []
+def test_validation_log_stays_inside_private_agent_workspace(tmp_path):
+    repo = tmp_path / "workspace" / "repo"
+    repo.mkdir(parents=True)
+
+    log_path = Path(sweep_validation.create_validation_log_path(str(repo)))
+    try:
+        assert log_path.parent == repo.parent
+    finally:
+        sweep_validation.remove_validation_log_path(str(log_path))
+
+
+def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch, tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    agent_calls: list[tuple[str, str, str, str]] = []
     git_calls: list[tuple[str, ...]] = []
     validation_calls: list[list[str]] = []
     log_paths: list[str | None] = []
@@ -2865,8 +2880,8 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     def changed_paths_since_base_func(*_args, **_kwargs):
         return ("src/a.c",)
 
-    def fake_run_agent(profile, prompt, *, cwd):
-        agent_calls.append((profile, prompt, cwd))
+    def fake_run_agent(profile, prompt, *, cwd, sandbox_root):
+        agent_calls.append((profile, prompt, cwd, sandbox_root))
         return SimpleNamespace(returncode=0, stderr="")
 
     def fake_validate(_repo_dir, _target_branch, commands, _rules, log_path=None):
@@ -2875,7 +2890,7 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
         return True, "ok"
 
     ok, output = repair_validation_failure_with_claude(
-        "/repo",
+        str(repo),
         "8.1",
         ["make"],
         [],
@@ -2891,6 +2906,8 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     assert ok is True
     assert output == "ok"
     assert agent_calls[0][0] == "validation_repair_edit_only"
+    assert agent_calls[0][2] == str(repo)
+    assert agent_calls[0][3] == str(tmp_path)
     # The prompt points Claude at the validation log path it should Read,
     # rather than embedding a truncated tail.
     assert "Read tool" in agent_calls[0][1]

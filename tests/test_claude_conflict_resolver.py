@@ -58,6 +58,7 @@ def test_claude_resolves_conflict(tmp_path: Path) -> None:
 
     def mock_agent(_profile, prompt, **kw):
         captured["prompt"] = prompt
+        captured["kwargs"] = kw
         # Simulate Claude editing the file
         conflicted.write_text("new code\n")
         result_event = json.dumps({"type": "result", "result": "Resolved conflict in src/cluster.c"})
@@ -78,6 +79,8 @@ def test_claude_resolves_conflict(tmp_path: Path) -> None:
     assert "-old code" in results[0].resolution_diff
     assert ">>>>>>> abc123" in results[0].resolution_diff
     assert "untrusted data" in captured["prompt"]
+    assert captured["kwargs"]["cwd"] == str(tmp_path)
+    assert captured["kwargs"]["sandbox_root"] == str(tmp_path)
 
 
 def test_claude_can_adapt_allowed_auto_merged_file(tmp_path: Path) -> None:
@@ -207,9 +210,11 @@ def test_validation_failure_retries_claude_once(tmp_path: Path) -> None:
         source_branch_content="new",
     )
     prompts: list[str] = []
+    sandbox_roots: list[str] = []
 
     def mock_agent(_profile, prompt, **kw):
         prompts.append(prompt)
+        sandbox_roots.append(kw["sandbox_root"])
         if len(prompts) == 1:
             # Pass 1: leave conflict markers in the file → triggers retry.
             conflicted.write_text(
@@ -224,6 +229,7 @@ def test_validation_failure_retries_claude_once(tmp_path: Path) -> None:
         results = resolve_conflicts_with_claude(str(tmp_path), [cf], _pr_context())
 
     assert len(prompts) == 2
+    assert sandbox_roots == [str(tmp_path), str(tmp_path)]
     assert "failed validation" in prompts[1]
     assert len(results) == 1
     assert results[0].resolved_content == "proc f {} { return ok }\n"

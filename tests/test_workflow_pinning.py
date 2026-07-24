@@ -88,6 +88,44 @@ def test_workflows_use_shared_agent_setup_action():
     assert offenders == []
 
 
+def test_backport_ai_workflows_install_process_sandbox():
+    for workflow in (
+        ".github/workflows/backport.yml",
+        ".github/workflows/backport-poll.yml",
+        ".github/workflows/backport-sweep.yml",
+    ):
+        text = Path(workflow).read_text(encoding="utf-8")
+        assert 'install-claude: "true"' in text
+        assert 'install-sandbox: "true"' in text
+
+
+def test_backport_tokens_are_not_passed_in_process_arguments():
+    workflows = (
+        ".github/workflows/backport.yml",
+        ".github/workflows/backport-poll.yml",
+        ".github/workflows/backport-sweep.yml",
+        ".github/workflows/backport-mark-done-poll.yml",
+        ".github/workflows/manual-revert-commit.yml",
+    )
+    for workflow in workflows:
+        text = Path(workflow).read_text(encoding="utf-8")
+        assert "BACKPORT_GITHUB_TOKEN:" in text
+        assert "--target-token" not in text
+        assert '--token "${' not in text
+
+    entrypoints = (
+        "scripts/backport/main.py",
+        "scripts/backport/poller.py",
+        "scripts/backport/sweep.py",
+        "scripts/backport/mark_done.py",
+        "scripts/backport/revert_commit.py",
+    )
+    for entrypoint in entrypoints:
+        text = Path(entrypoint).read_text(encoding="utf-8")
+        assert 'add_argument("--target-token"' not in text
+        assert 'add_argument("--token"' not in text
+
+
 def test_github_app_tokens_request_explicit_permissions():
     offenders = []
     token_action = "uses: actions/create-github-app-token@"

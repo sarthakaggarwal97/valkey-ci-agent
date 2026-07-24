@@ -512,8 +512,9 @@ to read the advisories.
 ## Safety
 
 - **Branch namespace** - the agent writes only `agent/backport/...` (backports) and `agent/release-cut/...` (release cuts) branches and opens PRs for maintainer review. It never force-pushes a release line directly.
-- **Credential isolation** - all GitHub auth uses `GIT_ASKPASS`; tokens never appear in `.git/config` or URLs
-- **Claude Code env isolation** - `GITHUB_TOKEN`, `GH_TOKEN`, and `*_SECRET` are stripped from the subprocess environment. Claude cannot see credentials.
+- **Credential isolation** - all GitHub auth uses `GIT_ASKPASS`; backport tokens are read from a dedicated environment variable and never appear in process arguments, `.git/config`, or URLs
+- **Claude Code sandboxing** - backport conflict resolution, test adaptation, and validation repair run in a required bubblewrap PID/filesystem sandbox with only their private workspace mounted; Git metadata is read-only and GitHub credentials are absent
+- **Credential-free validation environment** - registry-configured setup, build, and test commands receive an allowlisted environment with no GitHub, AWS, or Bedrock credentials. This does not claim isolation from same-runner filesystem or process side channels.
 - **Deterministic validation** - registry-configured build commands run before push. A validation failure blocks the push.
 - **Fork sync** - when a different-owner `push_repo` is configured, the agent fast-forwards that fork's release branch to match upstream before cherry-picking
 - **Stale branch pruning** - if a previous backport PR was closed without merging, the agent deletes the orphaned branch before starting fresh

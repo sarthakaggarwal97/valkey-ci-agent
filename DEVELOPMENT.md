@@ -17,7 +17,11 @@ infrastructure), see [docs/architecture.md](docs/architecture.md).
 - AWS credentials with Bedrock access when running workflows that invoke Claude
   Code through Bedrock.
 - Claude Code CLI 2.1.170 or later when running AI-backed flows locally. The
-  workflows pin 2.1.175 because the default model is Fable 5:
+  workflows pin 2.1.175 because the default model is Fable 5.
+- Bubblewrap (`bwrap`) on Linux when running AI-backed backport flows. These
+  profiles fail closed on platforms where the process sandbox is unavailable.
+
+Install the pinned Claude Code version with:
 
 ```bash
 npm install -g @anthropic-ai/claude-code@2.1.175
@@ -92,11 +96,10 @@ python -m scripts.backport.matrix --registry repos.yml --repo valkey-io/valkey -
 To test backport sweep discovery locally without cherry-picking or pushing:
 
 ```bash
-python -m scripts.backport.sweep \
+BACKPORT_GITHUB_TOKEN="$GITHUB_TOKEN" python -m scripts.backport.sweep \
   --registry repos.yml \
   --repo valkey-io/valkey \
   --branch 9.0 \
-  --target-token "$GITHUB_TOKEN" \
   --discover-only \
   --verbose
 ```
@@ -118,11 +121,10 @@ mark-done step in dry-run mode. Omit `--target-branch` to reconcile every branch
 configured for the repo:
 
 ```bash
-python -m scripts.backport.mark_done \
+BACKPORT_GITHUB_TOKEN="$GITHUB_TOKEN" python -m scripts.backport.mark_done \
   --registry repos.yml \
   --repo valkey-io/valkey \
   --target-branch 9.0 \
-  --target-token "$GITHUB_TOKEN" \
   --dry-run \
   --verbose
 ```

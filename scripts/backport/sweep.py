@@ -18,6 +18,7 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
+from scripts.backport.auth import consume_github_token
 from scripts.backport.main import _run_git
 from scripts.backport.sweep_apply import (
     apply_candidate,
@@ -295,7 +296,10 @@ def _process_branch(
         target_branch=target_branch,
         candidates_found=len(candidates),
     )
-    tmpdir = tempfile.mkdtemp(prefix=f"backport-{safe_tmp_component(target_branch)}-")
+    workspace_dir = tempfile.mkdtemp(
+        prefix=f"backport-{safe_tmp_component(target_branch)}-"
+    )
+    tmpdir = str(Path(workspace_dir, "repo"))
 
     try:
         with GitAuth(github_token, prefix="backport-sweep-git-askpass-") as git_auth:
@@ -491,7 +495,7 @@ def _process_branch(
             )
         )
     finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
+        shutil.rmtree(workspace_dir, ignore_errors=True)
 
     return result
 
@@ -604,7 +608,6 @@ def main() -> None:
         required=True,
         help="Target branch (must exist in registry for this repo)",
     )
-    parser.add_argument("--target-token", required=True)
     parser.add_argument("--status-field", default=_DEFAULT_STATUS_FIELD)
     parser.add_argument("--status-value", default=_DEFAULT_STATUS_VALUE)
     parser.add_argument("--branch-fields", default=",".join(_DEFAULT_BRANCH_FIELDS))
@@ -629,6 +632,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
+    github_token = consume_github_token(parser)
     from scripts.backport.registry import load_registry
 
     registry = load_registry(args.registry)
@@ -645,7 +649,7 @@ def main() -> None:
     result = run_backport_sweep(
         repo_entry=repo_entry,
         branch_entry=branch_entry,
-        github_token=args.target_token,
+        github_token=github_token,
         status_field=args.status_field,
         status_value=args.status_value,
         branch_fields=[
@@ -689,4 +693,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

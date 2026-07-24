@@ -101,6 +101,7 @@ jobs:
         uses: ./.github/actions/setup-agent
         with:
           install-claude: "true"
+          install-sandbox: "true"
 
       - name: Generate GitHub App token
         id: generate-token
@@ -126,7 +127,7 @@ jobs:
       - name: Run backport sweep
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
+          BACKPORT_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           set -euo pipefail
           args=(
@@ -134,7 +135,6 @@ jobs:
             --registry repos.yml
             --repo "${{ matrix.repo }}"
             --branch "${{ matrix.branch }}"
-            --target-token "${TARGET_TOKEN}"
             --verbose
           )
 

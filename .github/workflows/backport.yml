@@ -79,6 +79,7 @@ jobs:
         uses: ./.github/actions/setup-agent
         with:
           install-claude: "true"
+          install-sandbox: "true"
 
       - name: Generate GitHub App token
         id: generate-token

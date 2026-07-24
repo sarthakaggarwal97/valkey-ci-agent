@@ -6,7 +6,26 @@ import logging
 import subprocess
 from pathlib import Path
 
+from scripts.common.proc import PROCESS_BASICS, filter_env
+
 logger = logging.getLogger(__name__)
+
+_VALIDATION_ENV_ALLOWLIST = PROCESS_BASICS + (
+    "CI",
+    "GITHUB_ACTIONS",
+    "RUNNER_ARCH",
+    "RUNNER_OS",
+    "CC",
+    "CXX",
+    "CFLAGS",
+    "CXXFLAGS",
+    "CPPFLAGS",
+    "LDFLAGS",
+    "MAKEFLAGS",
+    "SHELL",
+    "TERM",
+    "TZ",
+)
 
 
 def run_build_commands(
@@ -45,6 +64,7 @@ def run_build_commands(
                 capture_output=True,
                 text=True,
                 timeout=1800,
+                env=filter_env(_VALIDATION_ENV_ALLOWLIST),
             )
         except subprocess.TimeoutExpired as exc:
             full_stdout = _decode(exc.stdout)

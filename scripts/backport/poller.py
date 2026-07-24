@@ -30,6 +30,7 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
+from scripts.backport.auth import consume_github_token
 from scripts.backport.registry import load_registry
 from scripts.backport.sweep import _BRANCH_PREFIX, run_backport_sweep
 from scripts.backport.sweep_prs import find_existing_pr
@@ -143,7 +144,6 @@ def main() -> None:
         required=True,
         help="Target branch (must exist in registry for this repo)",
     )
-    parser.add_argument("--target-token", required=True)
     parser.add_argument(
         "--max-candidates",
         type=nonnegative_int,
@@ -164,6 +164,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
+    github_token = consume_github_token(parser)
     registry = load_registry(args.registry)
     repo_entry, branch_entry = registry.get_branch(args.repo, args.branch)
 
@@ -171,7 +172,7 @@ def main() -> None:
         return poll_branch(
             repo_entry=repo_entry,
             branch_entry=branch_entry,
-            github_token=args.target_token,
+            github_token=github_token,
             max_candidates=args.max_candidates,
             dry_run=args.dry_run,
         )

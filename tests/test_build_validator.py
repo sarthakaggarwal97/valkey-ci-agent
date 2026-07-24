@@ -81,3 +81,37 @@ def test_run_build_commands_overwrites_existing_log(tmp_path) -> None:
     text = log_path.read_text()
     assert "stale content" not in text
     assert "$ make" in text
+
+
+def test_run_build_commands_excludes_controller_credentials(monkeypatch, tmp_path) -> None:
+    secrets = {
+        "BACKPORT_GITHUB_TOKEN": "github-publication-secret",
+        "GITHUB_TOKEN": "github-actions-secret",
+        "GH_TOKEN": "github-cli-secret",
+        "AWS_ACCESS_KEY_ID": "aws-access-key",
+        "AWS_SECRET_ACCESS_KEY": "aws-secret-key",
+        "AWS_SESSION_TOKEN": "aws-session-token",
+        "AWS_WEB_IDENTITY_TOKEN_FILE": "/tmp/aws-web-identity",
+        "AWS_ROLE_ARN": "arn:aws:iam::123456789012:role/controller",
+        "CLAUDE_CODE_USE_BEDROCK": "bedrock-controller-flag",
+        "CI_AGENT_CLAUDE_MODEL": "controller-model",
+        "UNRELATED_CONTROLLER_SECRET": "unrelated-secret",
+    }
+    for name, value in secrets.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("CI", "true")
+    log_path = tmp_path / "validation-env.log"
+
+    ok, output = run_build_commands(
+        str(tmp_path),
+        ["env"],
+        log_path=str(log_path),
+    )
+
+    assert ok is True
+    assert output == ""
+    child_env = log_path.read_text(encoding="utf-8")
+    assert "CI=true" in child_env
+    for name, value in secrets.items():
+        assert name not in child_env
+        assert value not in child_env
