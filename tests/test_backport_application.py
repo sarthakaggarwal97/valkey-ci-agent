@@ -481,3 +481,73 @@ def test_hard_cherry_pick_failure_is_not_reported_as_empty(
     assert "cherry-pick failed" in result.detail
     assert result.applied_commits == []
     assert _git(repo, "rev-parse", "HEAD") == starting_head
+
+
+def test_series_identity_appends_even_when_subject_references_pr_mid_text(
+    tmp_path: Path,
+) -> None:
+    """Only a *trailing* (#N) marks a commit as belonging to PR N. A subject
+    that merely references (#N) mid-text (e.g. a revert of the PR's earlier
+    attempt) must still be amended, or downstream dedup and mark-done will
+    key off the wrong signal."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, "base.txt", "base\n", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    source_sha = _commit(
+        repo,
+        "one.txt",
+        "one\n",
+        'Revert "broken attempt (#42)" and redo',
+    )
+    _git(repo, "checkout", "-q", "-b", "release", base)
+
+    result = apply_candidate(
+        str(repo),
+        _candidate(merge_commit_sha=None, commit_shas=[source_sha]),
+        "example/repo",
+        dict(os.environ),
+        source_plan=_series_plan(source_sha),
+    )
+
+    assert result.outcome == "applied"
+    subject = _git(repo, "show", "-s", "--format=%s", "HEAD")
+    assert subject == 'Revert "broken attempt (#42)" and redo (#42)'
+
+
+def test_single_commit_series_identity_failure_rolls_back(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, "base.txt", "base\n", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    source_sha = _commit(repo, "one.txt", "one\n", "source one")
+    _git(repo, "checkout", "-q", "-b", "release", base)
+    starting_head = _git(repo, "rev-parse", "HEAD")
+
+    def fail_identity(*_args, **_kwargs):
+        raise RuntimeError("identity write failed")
+
+    monkeypatch.setattr(
+        application,
+        "_append_source_pr_to_head_subject",
+        fail_identity,
+    )
+    result = apply_candidate(
+        str(repo),
+        _candidate(merge_commit_sha=None, commit_shas=[source_sha]),
+        "example/repo",
+        dict(os.environ),
+        source_plan=_series_plan(source_sha),
+    )
+
+    assert result.outcome == "error"
+    assert "could not record source PR identity" in result.detail
+    assert _git(repo, "rev-parse", "HEAD") == starting_head
+    assert not (repo / "one.txt").exists()

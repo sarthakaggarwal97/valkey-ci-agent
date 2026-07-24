@@ -2752,6 +2752,25 @@ def test_empty_skip_reason_generic_fallback():
     assert "no net change" in reason
 
 
+def test_empty_skip_reason_requires_every_resolution_to_match_target():
+    from scripts.backport.application import _empty_skip_reason
+    from scripts.backport.models import ConflictedFile, ResolutionResult
+
+    # One file matched target but another did not: the provable-cause claim
+    # requires ALL resolutions to match, so this must use the generic reason.
+    cf = [
+        ConflictedFile("src/server.c", "TARGET-A", "SOURCE-A"),
+        ConflictedFile("src/db.c", "TARGET-B", "SOURCE-B"),
+    ]
+    res = [
+        ResolutionResult("src/server.c", "TARGET-A", "r"),
+        ResolutionResult("src/db.c", "DIFFERENT", "r"),
+    ]
+    reason = _empty_skip_reason(cf, res)
+    assert "no net change" in reason
+    assert "does not apply" not in reason
+
+
 def test_build_pr_body_omits_skipped_section_when_none():
     """No Skipped section is rendered when every candidate applied cleanly."""
     result = BranchSweepResult(

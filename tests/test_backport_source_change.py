@@ -359,3 +359,54 @@ def test_series_evil_merge_with_extra_content_fails_closed(
 
     with pytest.raises(SourceChangeError, match="carries changes of its own"):
         plan_source_change(str(repo), None, [first, sync, second])
+
+
+def test_duplicate_source_commits_are_refused(
+    history: tuple[Path, str, str, str],
+) -> None:
+    repo, _base, first, second = history
+
+    with pytest.raises(SourceChangeError, match="duplicate SHAs"):
+        plan_source_change(str(repo), None, [first, second, first])
+
+
+def test_source_commit_absent_from_pr_head_fails_after_fetch(
+    tmp_path: Path,
+) -> None:
+    """A commit the API listed but the PR head ref does not contain must fail
+    loudly after the fetch, not silently plan around it."""
+    remote = tmp_path / "origin.git"
+    subprocess.run(
+        ["git", "init", "--bare", "-q", str(remote)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    source = tmp_path / "source"
+    source.mkdir()
+    _git(source, "init", "-q", "-b", "main")
+    _git(source, "config", "user.name", "Test")
+    _git(source, "config", "user.email", "test@example.com")
+    _commit(source, "base.txt", "base\n", "base")
+    _git(source, "remote", "add", "origin", str(remote))
+    _git(source, "push", "-q", "origin", "main:refs/pull/42/head")
+
+    worktree = tmp_path / "worktree"
+    subprocess.run(
+        ["git", "clone", "-q", str(remote), str(worktree)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    phantom = "d" * 40
+    with pytest.raises(
+        SourceChangeError,
+        match=f"PR head does not contain source commit\\(s\\): {phantom}",
+    ):
+        prepare_source_change(
+            str(worktree),
+            42,
+            None,
+            [phantom],
+        )
