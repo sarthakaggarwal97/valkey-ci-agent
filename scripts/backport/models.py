@@ -27,6 +27,7 @@ DETAIL_RESOLVED_BY_AI = "conflicts resolved by Claude Code"
 DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX = "dropped target-missing test file(s):"
 DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX = "ported target-missing test coverage to:"
 DETAIL_EMPTY_ON_TARGET = "resolution was already satisfied on target branch"
+DETAIL_VALIDATION_REPAIRED_PREFIX = "validation repaired by Claude Code:"
 
 
 @dataclass
@@ -115,6 +116,9 @@ class CandidateResult:
     applied_commits: list[str] = field(default_factory=list)
     conflicting_files: list[ConflictedFile] = field(default_factory=list)
     conflicting_commit_sha: str | None = None
+    validation_repaired: bool = False
+    validation_repair_commit_sha: str | None = None
+    validation_repair_paths: list[str] = field(default_factory=list)
 
 
 @dataclass

@@ -33,12 +33,16 @@ from scripts.backport.models import (
 )
 from scripts.backport.pr_creator import BackportPRCreator
 from scripts.backport.registry import ValidationRule
-from scripts.backport.utils import build_branch_name
-from scripts.backport.validation import (
-    changed_paths_since_base,
-    select_validation_commands,
+from scripts.backport.sweep_validation import (
+    run_test_commands,
+    validate_backport_branch,
+    validate_branch_with_optional_repair,
 )
-from scripts.common.build_validator import run_build_commands
+from scripts.backport.transaction import (
+    apply_candidate_transaction,
+    validate_baseline,
+)
+from scripts.backport.utils import build_branch_name
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import BOT_EMAIL, BOT_NAME
@@ -232,40 +236,64 @@ def run_backport(
                     git_env=git_env,
                 )
 
-                if validation_setup_commands:
-                    setup_ok, setup_output = run_build_commands(
-                        tmp_dir,
-                        validation_setup_commands,
+                baseline = validate_baseline(
+                    tmp_dir,
+                    target_branch,
+                    validation_setup_commands or [],
+                    build_commands or [],
+                    validation_rules or [],
+                    run_commands=run_test_commands,
+                    validate_func=validate_backport_branch,
+                )
+                if not baseline.ok:
+                    msg = (
+                        f"Validation baseline {baseline.phase} failed: "
+                        + (baseline.output[:500] or "validation command failed")
                     )
-                    if not setup_ok:
-                        msg = (
-                            "Validation setup failed: "
-                            + (setup_output[:500] or "setup command failed")
-                        )
-                        logger.error(msg)
-                        _post_comment(
-                            repo,
-                            source_pr_number,
-                            f"Backport failed: {msg}",
-                        )
-                        return BackportResult(
-                            outcome="error",
-                            error_message=msg,
-                        )
+                    logger.error(msg)
+                    _post_comment(
+                        repo,
+                        source_pr_number,
+                        f"Backport failed: {msg}",
+                    )
+                    return BackportResult(
+                        outcome="error",
+                        error_message=msg,
+                    )
 
                 # Create the backport branch locally from target branch HEAD
                 _run_git(tmp_dir, "checkout", "-b", branch_name)
 
-                application_result = apply_candidate(
-                    tmp_dir,
-                    candidate,
-                    repo_full_name,
-                    git_env,
-                    language=language,
-                    build_commands=build_commands,
-                    validation_rules=validation_rules,
-                    max_conflicting_files=config.max_conflicting_files,
-                )
+                try:
+                    application_result = apply_candidate_transaction(
+                        tmp_dir,
+                        candidate,
+                        repo_full_name,
+                        git_env,
+                        target_branch=target_branch,
+                        setup_commands=validation_setup_commands or [],
+                        test_commands=build_commands or [],
+                        validation_rules=validation_rules or [],
+                        repair_validation_failures=False,
+                        language=language,
+                        build_commands=build_commands,
+                        max_conflicting_files=config.max_conflicting_files,
+                        run_commands=run_test_commands,
+                        apply_func=apply_candidate,
+                        validate_func=validate_branch_with_optional_repair,
+                    )
+                except RuntimeError as exc:
+                    msg = f"Candidate transaction failed: {exc}"
+                    logger.error(msg)
+                    _post_comment(
+                        repo,
+                        source_pr_number,
+                        f"Backport failed: {msg}",
+                    )
+                    return BackportResult(
+                        outcome="error",
+                        error_message=msg,
+                    )
                 resolution_results = application_result.resolutions or None
                 resolved_commit_sha = application_result.resolved_commit_sha
                 cherry_result = CherryPickResult(
@@ -294,6 +322,27 @@ def run_backport(
                     _post_comment(repo, source_pr_number, f"Backport failed: {msg}")
                     return BackportResult(
                         outcome="error",
+                        error_message=msg,
+                    )
+                if application_result.outcome == "skipped-validation-failed":
+                    msg = (
+                        "Build validation failed: "
+                        + application_result.detail[:500]
+                    )
+                    logger.error(msg)
+                    _post_comment(
+                        repo,
+                        source_pr_number,
+                        f"Backport skipped: {msg}",
+                    )
+                    return BackportResult(
+                        outcome="error",
+                        commits_cherry_picked=len(
+                            application_result.applied_commits,
+                        ),
+                        files_conflicted=len(
+                            application_result.conflicting_files,
+                        ),
                         error_message=msg,
                     )
                 if application_result.outcome == "skipped-conflict":
@@ -340,26 +389,6 @@ def run_backport(
                         outcome="error",
                         error_message=msg,
                     )
-
-                commands: list[str] = []
-                if build_commands or validation_rules:
-                    commands = select_validation_commands(
-                        build_commands or [],
-                        validation_rules or [],
-                        changed_paths_since_base(tmp_dir, f"origin/{target_branch}"),
-                    )
-                if commands:
-                    ok, output = run_build_commands(tmp_dir, commands)
-                    if not ok:
-                        msg = f"Build validation failed: {output[:500]}"
-                        logger.error(msg)
-                        _post_comment(repo, source_pr_number, f"Backport skipped: {msg}")
-                        return BackportResult(
-                            outcome="error",
-                            commits_cherry_picked=len(cherry_result.applied_commits),
-                            files_conflicted=len(cherry_result.conflicting_files),
-                            error_message=msg,
-                        )
 
                 # Push the backport branch to the remote
                 push_remote = "origin"

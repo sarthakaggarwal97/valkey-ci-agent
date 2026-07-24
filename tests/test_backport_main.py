@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from hypothesis import given, settings
@@ -26,6 +26,7 @@ from scripts.backport.models import (
     ResolutionResult,
 )
 from scripts.backport.registry import ValidationRule
+from scripts.backport.transaction import BaselineValidationResult
 
 # ======================================================================
 # ======================================================================
@@ -169,7 +170,9 @@ def test_run_backport_allows_different_owner_push_repo(mock_github) -> None:
         patch(f"{_PATCH_PREFIX}._clone_repo"),
         patch(f"{_PATCH_PREFIX}._run_git"),
         patch(f"{_PATCH_PREFIX}.BackportPRCreator") as mock_creator_cls,
-        patch(f"{_PATCH_PREFIX}.apply_candidate") as mock_apply_candidate,
+        patch(
+            f"{_PATCH_PREFIX}.apply_candidate_transaction",
+        ) as mock_apply_candidate,
     ):
         mock_apply_candidate.return_value = CandidateResult(
             source_pr_number=100,
@@ -237,7 +240,9 @@ def test_run_backport_defaults_to_direct_upstream_push(mock_github) -> None:
         patch(f"{_PATCH_PREFIX}._clone_repo"),
         patch(f"{_PATCH_PREFIX}._run_git") as mock_run_git,
         patch(f"{_PATCH_PREFIX}.BackportPRCreator") as mock_creator_cls,
-        patch(f"{_PATCH_PREFIX}.apply_candidate") as mock_apply_candidate,
+        patch(
+            f"{_PATCH_PREFIX}.apply_candidate_transaction",
+        ) as mock_apply_candidate,
     ):
         mock_apply_candidate.return_value = CandidateResult(
             source_pr_number=100,
@@ -280,11 +285,17 @@ def test_validation_setup_failure_blocks_manual_application(mock_github) -> None
         patch(f"{_PATCH_PREFIX}._clone_repo"),
         patch(f"{_PATCH_PREFIX}._run_git") as mock_run_git,
         patch(f"{_PATCH_PREFIX}.BackportPRCreator") as mock_creator_cls,
-        patch(f"{_PATCH_PREFIX}.apply_candidate") as mock_apply_candidate,
-        patch(f"{_PATCH_PREFIX}.run_build_commands") as mock_run_commands,
+        patch(
+            f"{_PATCH_PREFIX}.apply_candidate_transaction",
+        ) as mock_apply_candidate,
+        patch(f"{_PATCH_PREFIX}.validate_baseline") as mock_validate_baseline,
     ):
         mock_creator_cls.return_value.check_duplicate.return_value = None
-        mock_run_commands.return_value = (False, "configure failed")
+        mock_validate_baseline.return_value = BaselineValidationResult(
+            False,
+            "setup",
+            "configure failed",
+        )
 
         result = run_backport(
             repo_full_name="valkey-io/valkey",
@@ -297,8 +308,8 @@ def test_validation_setup_failure_blocks_manual_application(mock_github) -> None
         )
 
     assert result.outcome == "error"
-    assert "Validation setup failed" in (result.error_message or "")
-    mock_run_commands.assert_called_once_with(ANY, ["./configure"])
+    assert "Validation baseline setup failed" in (result.error_message or "")
+    mock_validate_baseline.assert_called_once()
     mock_apply_candidate.assert_not_called()
     assert not any(
         len(call.args) > 1 and call.args[1] == "push"
@@ -312,7 +323,7 @@ class TestRunBackportCleanCherryPick:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate_transaction")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_clean_cherry_pick_returns_success(
         self,
@@ -379,12 +390,14 @@ class TestRunBackportCleanCherryPick:
             llm_conflict_label="ai-resolved-conflicts",
         )
 
-    @patch(f"{_PATCH_PREFIX}.run_build_commands")
-    @patch(f"{_PATCH_PREFIX}.changed_paths_since_base", return_value=("src/server.c",))
+    @patch(
+        f"{_PATCH_PREFIX}.validate_baseline",
+        return_value=BaselineValidationResult(True, "validation"),
+    )
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate_transaction")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_build_validation_failure_blocks_push_and_pr(
         self,
@@ -393,8 +406,7 @@ class TestRunBackportCleanCherryPick:
         mock_pr_creator_cls: MagicMock,
         mock_run_git: MagicMock,
         mock_clone: MagicMock,
-        mock_changed_paths: MagicMock,
-        mock_run_build_commands: MagicMock,
+        mock_validate_baseline: MagicMock,
     ) -> None:
         mock_gh = MagicMock()
         mock_gh_cls.return_value = mock_gh
@@ -410,10 +422,10 @@ class TestRunBackportCleanCherryPick:
         mock_executor_cls.return_value = CandidateResult(
             source_pr_number=100,
             source_pr_title="Fix bug",
-            outcome="applied",
+            outcome="skipped-validation-failed",
+            detail="compile failed",
             applied_commits=["commit_sha_1"],
         )
-        mock_run_build_commands.return_value = (False, "compile failed")
 
         result = run_backport(
             repo_full_name="valkey-io/valkey",
@@ -433,11 +445,7 @@ class TestRunBackportCleanCherryPick:
 
         assert result.outcome == "error"
         assert "Build validation failed" in (result.error_message or "")
-        mock_changed_paths.assert_called_once()
-        mock_run_build_commands.assert_called_once_with(
-            ANY,
-            ["make", "./runtest --single unit/cluster/slot-migration"],
-        )
+        mock_validate_baseline.assert_called_once()
         mock_pr_creator.create_backport_pr.assert_not_called()
         assert not any(
             len(call_args.args) > 1 and call_args.args[1] == "push"
@@ -451,7 +459,7 @@ class TestRunBackportConflictedCherryPick:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate_transaction")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_conflicted_cherry_pick_with_resolution(
         self,
@@ -523,7 +531,7 @@ class TestRunBackportDuplicateDetection:
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate_transaction")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_duplicate_pr_skips_processing(
         self,
@@ -564,7 +572,7 @@ class TestRunBackportMergedPrValidation:
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate_transaction")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_unmerged_pr_skips_processing(
         self,
@@ -606,7 +614,7 @@ class TestRunBackportMissingBranch:
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate_transaction")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_missing_branch_skips_processing(
         self,
@@ -647,7 +655,7 @@ class TestRunBackportGitHubAPIError:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate_transaction")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_pr_creation_failure_returns_error(
         self,
@@ -703,7 +711,7 @@ class TestRunBackportCherryPickFailure:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate_transaction")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_cherry_pick_failure_without_conflicts_does_not_push_or_create_pr(
         self,
@@ -759,7 +767,7 @@ class TestRunBackportAlreadyApplied:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate_transaction")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_already_applied_does_not_push_or_create_pr(
         self,

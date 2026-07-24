@@ -48,7 +48,12 @@ from scripts.backport.sweep_reporting import (
 )
 from scripts.backport.sweep_validation import (
     run_test_commands,
+    validate_backport_branch,
     validate_branch_with_optional_repair,
+)
+from scripts.backport.transaction import (
+    apply_candidate_transaction,
+    validate_baseline,
 )
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.job_summary import emit_job_summary
@@ -306,21 +311,6 @@ def _process_branch(
             git_env = git_auth.env()
             clone_target_branch(repo_full_name, target_branch, tmpdir, git_env)
 
-            setup_ok, setup_output = run_test_commands(
-                tmpdir,
-                validation_setup_commands or [],
-            )
-            if not setup_ok:
-                logger.warning(
-                    "Validation setup failed for %s.\nOutput (last 4000 chars):\n%s",
-                    target_branch,
-                    setup_output[-4000:],
-                )
-                raise RuntimeError(
-                    "validation setup failed: "
-                    + (setup_output[:500] or "setup command failed")
-                )
-
             if push_repo != repo_full_name:
                 sync_target_branch_to_source(
                     gh,
@@ -371,6 +361,28 @@ def _process_branch(
                 push_url = github_https_url(push_repo)
                 _run_git(tmpdir, "remote", "add", "push_target", push_url, env=git_env)
 
+            baseline = validate_baseline(
+                tmpdir,
+                target_branch,
+                validation_setup_commands or [],
+                test_commands,
+                validation_rules or [],
+                run_commands=run_test_commands,
+                validate_func=validate_backport_branch,
+            )
+            if not baseline.ok:
+                logger.warning(
+                    "Validation baseline failed for %s during %s.\n"
+                    "Output (last 4000 chars):\n%s",
+                    target_branch,
+                    baseline.phase,
+                    baseline.output[-4000:],
+                )
+                raise RuntimeError(
+                    f"validation baseline {baseline.phase} failed: "
+                    + (baseline.output[:500] or "validation command failed")
+                )
+
             already_applied = list_already_applied(
                 tmpdir,
                 target_branch,
@@ -401,51 +413,37 @@ def _process_branch(
                     )
                     continue
 
-                candidate_result = apply_candidate(
+                candidate_result = apply_candidate_transaction(
                     tmpdir,
                     candidate,
                     repo_full_name,
                     git_env,
+                    target_branch=target_branch,
+                    setup_commands=validation_setup_commands or [],
+                    test_commands=test_commands,
+                    validation_rules=validation_rules or [],
+                    repair_validation_failures=repair_validation_failures,
                     language=language,
                     build_commands=build_commands,
-                    validation_rules=validation_rules,
                     max_conflicting_files=max_conflicting_files,
+                    run_commands=run_test_commands,
+                    apply_func=apply_candidate,
+                    validate_func=validate_branch_with_optional_repair,
                 )
                 result.results.append(candidate_result)
 
-                if candidate_result.outcome != "applied":
-                    continue
-
-                # The sweep branch must stay green: only keep a cherry-pick if
-                # the whole branch still validates. A red commit left on the
-                # branch would block every later candidate, so we always reset
-                # a failure off the branch and move on to the next candidate.
-                ok, output = validate_branch_with_optional_repair(
-                    tmpdir,
-                    target_branch,
-                    test_commands,
-                    validation_rules or [],
-                    repair=repair_validation_failures,
-                    run_git=_run_git,
-                )
-                if not ok:
-                    candidate_result.outcome = "skipped-validation-failed"
-                    candidate_result.detail = validation_failure_detail(output)
-                    applied_commit_count = max(
-                        1,
-                        len(candidate_result.applied_commits),
+                if candidate_result.outcome == "skipped-validation-failed":
+                    candidate_result.detail = validation_failure_detail(
+                        candidate_result.detail,
                     )
-                    rollback_ref = (
-                        "HEAD^"
-                        if applied_commit_count == 1
-                        else f"HEAD~{applied_commit_count}"
-                    )
-                    _run_git(tmpdir, "reset", "--hard", rollback_ref)
                     logger.warning(
-                        "Validation failed for candidate #%d on %s; removed candidate and continuing.",
+                        "Validation failed for candidate #%d on %s; "
+                        "discarded isolated candidate and continuing.",
                         candidate.source_pr_number,
                         target_branch,
                     )
+                    continue
+                if candidate_result.outcome != "applied":
                     continue
 
                 applied_count += 1

@@ -46,7 +46,9 @@ from scripts.backport.sweep_validation import (
     repair_validation_failure_with_claude,
     run_test_commands,
     validate_backport_branch,
+    validate_branch_with_optional_repair,
 )
+from scripts.backport.transaction import BaselineValidationResult
 from scripts.common.git_auth import GitAuth
 
 DETAIL = backport_sweep.DETAIL_ALREADY_ON_SWEEP_BRANCH
@@ -1572,12 +1574,14 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: {"2"})
     monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr(sweep_validation, "changed_paths_since_base", lambda *_args, **_kwargs: [], raising=False)
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
     monkeypatch.setattr(
         backport_sweep,
-        "validate_branch_with_optional_repair",
-        lambda *_args, **_kwargs: (True, ""),
+        "validate_baseline",
+        lambda *_args, **_kwargs: BaselineValidationResult(
+            True,
+            "validation",
+        ),
     )
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_args, **_kwargs: True)
 
@@ -1608,7 +1612,11 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
             detail="conflict",
         )
 
-    monkeypatch.setattr(backport_sweep, "apply_candidate", fake_apply)
+    monkeypatch.setattr(
+        backport_sweep,
+        "apply_candidate_transaction",
+        fake_apply,
+    )
 
     result = backport_sweep._process_branch(
         gh=MagicMock(),
@@ -1647,13 +1655,16 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
     monkeypatch.setattr(
         backport_sweep,
-        "validate_branch_with_optional_repair",
-        lambda *_args, **_kwargs: (True, ""),
+        "validate_baseline",
+        lambda *_args, **_kwargs: BaselineValidationResult(
+            True,
+            "validation",
+        ),
     )
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(
         backport_sweep,
-        "apply_candidate",
+        "apply_candidate_transaction",
         lambda _repo_dir, c, *_args, **_kwargs: CandidateResult(c.source_pr_number, c.source_pr_title, "applied"),
     )
 
@@ -1678,6 +1689,67 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     assert sum(1 for r in result.results if r.outcome == "applied") == 0
 
 
+def test_process_branch_stops_before_candidates_when_baseline_is_red(
+    monkeypatch,
+):
+    candidate = ProjectBackportCandidate(
+        source_pr_number=1,
+        source_pr_title="PR 1",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/1",
+        target_branch="8.1",
+        merge_commit_sha="sha1",
+    )
+    transaction = MagicMock()
+
+    monkeypatch.setattr(
+        backport_sweep,
+        "clone_target_branch",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "_run_git",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "find_existing_pr",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "delete_stale_backport_branch",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "validate_baseline",
+        lambda *_args, **_kwargs: BaselineValidationResult(
+            False,
+            "validation",
+            "target is red",
+        ),
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "apply_candidate_transaction",
+        transaction,
+    )
+
+    result = backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="8.1",
+        candidates=[candidate],
+        push_repo="valkey-io/valkey",
+        test_commands=["make"],
+    )
+
+    assert "validation baseline validation failed" in result.error
+    transaction.assert_not_called()
+
+
 def _green_only_process_branch(
     monkeypatch,
     *,
@@ -1690,9 +1762,8 @@ def _green_only_process_branch(
 ):
     """Run _process_branch with the common green-only mocks wired up.
 
-    Tests supply how each candidate applies (apply_fn) and how the branch
-    validates after each kept cherry-pick (validate_fn). Returns
-    (result, pushed, upserts, reset_count, reset_refs).
+    Tests supply how each isolated candidate transaction applies and validates.
+    Returns (result, pushed, upserts, reset_count, reset_refs).
     """
     monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_a, **_k: None)
@@ -1705,8 +1776,35 @@ def _green_only_process_branch(
     monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_a, **_k: [])
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
-    monkeypatch.setattr(backport_sweep, "apply_candidate", apply_fn)
-    monkeypatch.setattr(backport_sweep, "validate_branch_with_optional_repair", validate_fn)
+    monkeypatch.setattr(
+        backport_sweep,
+        "validate_baseline",
+        lambda *_args, **_kwargs: BaselineValidationResult(
+            True,
+            "validation",
+        ),
+    )
+
+    def fake_transaction(repo_dir, candidate, *args, **kwargs):
+        candidate_result = apply_fn(
+            repo_dir,
+            candidate,
+            *args,
+            **kwargs,
+        )
+        if candidate_result.outcome != "applied":
+            return candidate_result
+        ok, output = validate_fn(repo_dir, candidate, *args, **kwargs)
+        if not ok:
+            candidate_result.outcome = "skipped-validation-failed"
+            candidate_result.detail = output
+        return candidate_result
+
+    monkeypatch.setattr(
+        backport_sweep,
+        "apply_candidate_transaction",
+        fake_transaction,
+    )
 
     reset_count = {"n": 0}
     reset_refs: list[str] = []
@@ -1762,7 +1860,7 @@ def _applied(_repo_dir, candidate, *_args, **_kwargs):
 
 
 def test_process_branch_does_not_push_when_only_candidate_fails_validation(monkeypatch):
-    """A red cherry-pick is reset off the branch and never pushed."""
+    """A red isolated candidate is discarded and never pushed."""
     result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
         monkeypatch,
         candidates=[_candidate(10)],
@@ -1773,8 +1871,8 @@ def test_process_branch_does_not_push_when_only_candidate_fails_validation(monke
     assert pushed == []
     assert upserts == []
     assert result.pr_url == ""
-    assert resets == 1  # the failed cherry-pick was reset off the branch
-    assert reset_refs == ["HEAD^"]
+    assert resets == 0
+    assert reset_refs == []
     assert result.results[0].outcome == "skipped-validation-failed"
     assert "compiler error" in result.results[0].detail
 
@@ -1822,8 +1920,8 @@ def test_process_branch_rolls_back_all_commits_from_failed_candidate(
     assert result.results[0].outcome == "skipped-validation-failed"
     assert pushed == []
     assert upserts == []
-    assert resets == 1
-    assert reset_refs == ["HEAD~2"]
+    assert resets == 0
+    assert reset_refs == []
 
 
 def test_process_branch_keeps_trying_until_green(monkeypatch):
@@ -1845,8 +1943,8 @@ def test_process_branch_keeps_trying_until_green(monkeypatch):
         "skipped-validation-failed",
         "applied",
     ]
-    assert resets == 2  # two red cherry-picks reset off the branch
-    assert reset_refs == ["HEAD^", "HEAD^"]
+    assert resets == 0
+    assert reset_refs == []
     assert pushed == [("agent/backport/sweep/8.1", False)]
     assert len(upserts) == 1
     # The pushed PR is never a draft - the branch is green.
@@ -2984,6 +3082,7 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
         changed_paths_func=lambda *_args: ("src/a.c",),
         changed_paths_since_base_func=changed_paths_since_base_func,
         has_staged_changes_func=lambda *_args: True,
+        tracked_changes_func=lambda *_args: (),
     )
 
     assert ok is True
@@ -2999,6 +3098,69 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     # after Claude edits.
     assert validation_calls == [["make"]]
     assert log_paths == [None]
+
+
+def test_validation_repair_rejects_edits_to_prior_candidate_paths():
+    agent_calls: list[str] = []
+    git_calls: list[tuple[str, ...]] = []
+
+    def fake_agent(_profile, prompt, *, cwd):
+        assert cwd == "/repo"
+        agent_calls.append(prompt)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    ok, output = repair_validation_failure_with_claude(
+        "/repo",
+        "8.1",
+        ["make"],
+        [],
+        "compiler error",
+        repair_paths=("src/current.c",),
+        run_git=lambda _repo_dir, *args, **_kwargs: git_calls.append(args),
+        run_agent_func=fake_agent,
+        changed_paths_func=lambda *_args: ("src/prior.c",),
+        has_staged_changes_func=lambda *_args: True,
+        tracked_changes_func=lambda *_args: (),
+    )
+
+    assert ok is False
+    assert "outside the backport diff" in output
+    assert "src/current.c" in agent_calls[0]
+    assert "src/prior.c" not in agent_calls[0]
+    assert ("reset", "--hard", "HEAD") in git_calls
+
+
+def test_validation_does_not_repair_command_generated_tracked_changes(
+    monkeypatch,
+):
+    repair = MagicMock()
+    git_calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        sweep_validation,
+        "validate_backport_branch",
+        lambda *_args, **_kwargs: (False, "compiler error"),
+    )
+    monkeypatch.setattr(
+        sweep_validation,
+        "repair_validation_failure_with_claude",
+        repair,
+    )
+
+    ok, output = validate_branch_with_optional_repair(
+        "/repo",
+        "8.1",
+        ["make"],
+        [],
+        repair=True,
+        repair_paths=("src/current.c",),
+        run_git=lambda _repo_dir, *args, **_kwargs: git_calls.append(args),
+        tracked_changes_func=lambda *_args: ("generated.c",),
+    )
+
+    assert ok is False
+    assert "validation command modified tracked file(s): generated.c" == output
+    assert ("reset", "--hard", "HEAD") in git_calls
+    repair.assert_not_called()
 
 
 def test_worktree_changed_paths_handles_spaces(tmp_path):

@@ -11,6 +11,7 @@ from scripts.backport.models import (
     DETAIL_EMPTY_ON_TARGET,
     DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX,
     DETAIL_RESOLVED_BY_AI,
+    DETAIL_VALIDATION_REPAIRED_PREFIX,
     CandidateOutcome,
     CandidateResult,
 )
@@ -23,11 +24,12 @@ AI_DETAIL_MARKERS = (
     DETAIL_RESOLVED_BY_AI,
     DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX,
     DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX,
+    DETAIL_VALIDATION_REPAIRED_PREFIX,
 )
 
 
 def _is_ai_resolved(result: CandidateResult | None) -> bool:
-    """Whether *result* records an AI conflict resolution, durably or by detail."""
+    """Whether *result* records an AI-authored adaptation or repair."""
     if result is None:
         return False
     return result.resolved_by_ai or _detail_records_ai(result.detail)

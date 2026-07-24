@@ -1,4 +1,4 @@
-"""Validation and repair helpers for scheduled backport sweeps."""
+"""Validation and repair helpers for backport branches."""
 
 from __future__ import annotations
 
@@ -6,16 +6,16 @@ import json
 import logging
 import os
 import tempfile
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Callable, Union
 
 from scripts.ai.runtime import run_agent
 from scripts.backport.git import (
     has_staged_changes,
+    tracked_worktree_changes,
 )
-from scripts.backport.git import (
-    run_git as run_git_default,
-)
+from scripts.backport.git import run_git as run_git_default
 from scripts.backport.sweep_git import worktree_changed_paths
 from scripts.backport.validation import (
     changed_paths_since_base,
@@ -31,6 +31,7 @@ RunAgent = Callable[..., Any]
 ChangedPaths = Callable[[str], tuple[str, ...]]
 ChangedPathsSinceBase = Callable[[str, str], Union[tuple[str, ...], list[str]]]
 HasStagedChanges = Callable[[str], bool]
+TrackedChanges = Callable[[str], tuple[str, ...]]
 
 
 def run_test_commands(
@@ -63,7 +64,9 @@ def validate_branch_with_optional_repair(
     validation_rules: list[Any],
     *,
     repair: bool,
+    repair_paths: Iterable[str] | None = None,
     run_git: RunGit = run_git_default,
+    tracked_changes_func: TrackedChanges = tracked_worktree_changes,
 ) -> tuple[bool, str]:
     """Validate the current branch, attempting one Claude repair if enabled.
 
@@ -81,6 +84,14 @@ def validate_branch_with_optional_repair(
             validation_rules,
             log_path=log_path,
         )
+        validation_changes = tracked_changes_func(repo_dir)
+        if validation_changes:
+            run_git(repo_dir, "reset", "--hard", "HEAD")
+            return (
+                False,
+                "validation command modified tracked file(s): "
+                + ", ".join(validation_changes[:10]),
+            )
         if ok or not repair:
             return ok, output
         return repair_validation_failure_with_claude(
@@ -89,8 +100,10 @@ def validate_branch_with_optional_repair(
             test_commands,
             validation_rules,
             output,
+            repair_paths=repair_paths,
             validation_log_path=log_path,
             run_git=run_git,
+            tracked_changes_func=tracked_changes_func,
         )
     finally:
         remove_validation_log_path(log_path)
@@ -103,6 +116,7 @@ def repair_validation_failure_with_claude(
     validation_rules: list[Any],
     validation_output: str,
     *,
+    repair_paths: Iterable[str] | None = None,
     validation_log_path: str | None = None,
     run_git: RunGit = run_git_default,
     run_agent_func: RunAgent = run_agent,
@@ -110,8 +124,18 @@ def repair_validation_failure_with_claude(
     changed_paths_func: ChangedPaths = worktree_changed_paths,
     changed_paths_since_base_func: ChangedPathsSinceBase = changed_paths_since_base,
     has_staged_changes_func: HasStagedChanges = has_staged_changes,
+    tracked_changes_func: TrackedChanges = tracked_worktree_changes,
 ) -> tuple[bool, str]:
-    changed_paths = tuple(changed_paths_since_base_func(repo_dir, f"origin/{target_branch}"))
+    changed_paths = (
+        tuple(dict.fromkeys(repair_paths))
+        if repair_paths is not None
+        else tuple(
+            changed_paths_since_base_func(
+                repo_dir,
+                f"origin/{target_branch}",
+            )
+        )
+    )
     if not changed_paths:
         return False, validation_output
 
@@ -177,10 +201,16 @@ def repair_validation_failure_with_claude(
             test_commands,
             validation_rules,
         )
-        if ok:
+        validation_changes = tracked_changes_func(repo_dir)
+        if ok and not validation_changes:
             logger.info("Claude Code validation repair passed for %s", target_branch)
             return True, output
 
+        if validation_changes:
+            output = (
+                "validation command modified tracked file(s) after repair: "
+                + ", ".join(validation_changes[:10])
+            )
         logger.warning(
             "Claude Code validation repair did not fix %s; removing repair commit.",
             target_branch,
