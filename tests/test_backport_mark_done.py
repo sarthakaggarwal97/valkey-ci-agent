@@ -246,6 +246,50 @@ def test_verify_detects_squash_merged_applied_table(tmp_path, monkeypatch) -> No
     assert present == {3801, 3847}
 
 
+def test_verify_excludes_reverted_source_commit(tmp_path, monkeypatch) -> None:
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+    }
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            check=True,
+            env=env,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    git("init", "-q")
+    (repo / "f").write_text("applied\n", encoding="utf-8")
+    git("add", "f")
+    git("commit", "-qm", "Applied source (#3801)")
+    applied_sha = git("rev-parse", "HEAD")
+    git("revert", "--no-edit", applied_sha)
+
+    def fake_clone(repo_full_name, target_branch, dest_dir, git_env):
+        subprocess.run(
+            ["git", "clone", "-q", str(repo), dest_dir],
+            check=True,
+            env=env,
+        )
+
+    monkeypatch.setattr(mark_done, "_shallow_clone", fake_clone)
+
+    assert mark_done.verify_prs_on_branch(
+        "valkey-io/valkey",
+        "9.1",
+        {3801},
+    ) == set()
+
+
 def test_dry_run_reports_without_mutating() -> None:
     gql = FakeGraphQLClient(
         project_items=[

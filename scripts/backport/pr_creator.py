@@ -13,6 +13,7 @@ from scripts.backport.models import (
     CherryPickResult,
     ResolutionResult,
 )
+from scripts.backport.provenance import ManifestEntry, render_manifest
 from scripts.backport.utils import build_branch_name, build_pr_title
 from scripts.common.github_client import retry_github_call
 
@@ -350,6 +351,16 @@ class BackportPRCreator:
                 "the intent of the original pull request."
             )
 
+        sections.append(
+            render_manifest(
+                [
+                    ManifestEntry(
+                        context.source_pr_number,
+                        context.source_pr_title,
+                    )
+                ]
+            )
+        )
         return "\n\n".join(sections)
 
     def check_duplicate(

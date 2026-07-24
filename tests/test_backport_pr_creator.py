@@ -15,6 +15,7 @@ from scripts.backport.pr_creator import (
     create_pull_from_push_repo,
     pull_matches_push_repo,
 )
+from scripts.backport.provenance import ManifestEntry, parse_manifest
 from scripts.backport.utils import build_branch_name, build_pr_title
 
 # ── Shared strategies ─────────────────────────────────────────────────
@@ -183,6 +184,9 @@ def test_build_pr_body_includes_checklist_and_plain_status_labels() -> None:
         context,
         had_conflicts=True,
         resolution_results=results,
+    )
+    assert parse_manifest(body) == (
+        ManifestEntry(context.source_pr_number, context.source_pr_title),
     )
 
     assert "Reviewer Checklist" in body

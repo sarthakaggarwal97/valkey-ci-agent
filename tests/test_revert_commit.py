@@ -6,6 +6,16 @@ import pytest
 
 from scripts.backport import revert_commit as rc
 from scripts.backport import sweep_git
+from scripts.backport.provenance import (
+    ManifestEntry,
+    parse_manifest,
+    parse_trailers,
+    render_manifest,
+)
+from scripts.backport.provenance_history import (
+    AppliedBackport,
+    scan_applied_backports,
+)
 
 
 def _git(cwd, *args):
@@ -40,7 +50,7 @@ def fork(tmp_path, monkeypatch):
     _git(work, "checkout", "-q", "-b", "agent/backport/sweep/8.0")
     (work / "feature.txt").write_text("feature\n")
     _git(work, "add", "feature.txt")
-    _git(work, "commit", "-q", "-m", "backported feature")
+    _git(work, "commit", "-q", "-m", "backported feature (#42)")
     agent_sha = _git(work, "rev-parse", "HEAD")
     _git(work, "push", "-q", "origin", "agent/backport/sweep/8.0")
 
@@ -60,8 +70,22 @@ def test_reverts_agent_commit(fork):
 
     _git(work, "fetch", "-q", "origin")
     subjects = _git(work, "log", "--format=%s", "origin/agent/backport/sweep/8.0").splitlines()
-    assert subjects[0] == 'Revert "backported feature"'
-    assert "backported feature" in subjects
+    assert subjects[0] == 'Revert "backported feature (#42)"'
+    assert "backported feature (#42)" in subjects
+    records = parse_trailers(
+        _git(
+            work,
+            "show",
+            "-s",
+            "--format=%B",
+            "origin/agent/backport/sweep/8.0",
+        )
+    )
+    assert records and all(record.kind == "inverse" for record in records)
+    assert scan_applied_backports(
+        str(work),
+        "origin/8.0..origin/agent/backport/sweep/8.0",
+    ) == []
 
 
 def test_refuses_base_branch_commit(fork):
@@ -77,3 +101,39 @@ def test_refuses_base_branch_commit(fork):
 def test_rejects_non_agent_branch():
     with pytest.raises(ValueError, match="non-namespaced branch"):
         rc.revert_commit("o/r", "8.0", "abc1234", token="")
+
+
+def test_note_pr_replaces_stale_manifest(monkeypatch):
+    class Pull:
+        number = 12
+        body = (
+            "Report\n\n"
+            + render_manifest(
+                [
+                    ManifestEntry(41, "Reverted source"),
+                    ManifestEntry(42, "Still applied"),
+                ]
+            )
+        )
+
+        def edit(self, *, body):
+            self.body = body
+
+    pull = Pull()
+    monkeypatch.setattr(rc, "Github", lambda **_kwargs: object())
+    monkeypatch.setattr(rc, "find_existing_pr", lambda *_args: pull)
+
+    rc._note_pr(
+        "o/r",
+        "fork/r",
+        "agent/backport/sweep/8.0",
+        "a" * 40,
+        "Reverted source",
+        "token",
+        [AppliedBackport(42, "Still applied")],
+    )
+
+    assert parse_manifest(pull.body) == (
+        ManifestEntry(42, "Still applied"),
+    )
+    assert "Reverted `aaaaaaaaaaaa`" in pull.body

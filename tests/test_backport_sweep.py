@@ -19,6 +19,7 @@ from scripts.backport.missing_test_adaptation import (
     build_missing_test_context,
 )
 from scripts.backport.models import ResolutionResult
+from scripts.backport.provenance import ManifestEntry, parse_manifest
 from scripts.backport.source_change import SourceChangePlan, SourceChangeStrategy
 from scripts.backport.sweep import (
     BranchSweepResult,
@@ -2726,6 +2727,20 @@ def test_build_pr_body_lists_already_on_branch_under_applied():
     applied_section = body.split("## Applied", 1)[1].split("## ", 1)[0]
     assert "#4001" not in applied_section
     assert "#4002" not in applied_section
+    assert parse_manifest(body) == (
+        ManifestEntry(
+            3654,
+            "Use full hash-seed bytes when deriving SipHash seed",
+        ),
+        ManifestEntry(
+            3380,
+            "CLUSTERSCAN MATCH pattern maps to a specific slot optimizations",
+        ),
+        ManifestEntry(
+            3619,
+            "Fix invalid memory access in RESTORE with malformed zipmap",
+        ),
+    )
 
     # A conflict resolution that collapsed to a no-op is surfaced under
     # "Skipped" so maintainers see it was

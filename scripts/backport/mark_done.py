@@ -6,10 +6,10 @@ only the verified ones. It runs from the scheduled poller and is self-healing:
 it reconciles the whole board against branch reality on every run, so it does
 not depend on any merge hook firing.
 
-Done is gated on the branch genuinely containing the source PR's commit (the
-same ``(#<pr>)`` signal the sweep uses to skip already-applied PRs), so a
-backport PR body that merely *claims* a PR was applied can never mark it Done
-on its own.
+Done is gated on effective branch history. New backports carry versioned
+provenance, squash merges carry a versioned manifest, and reverts remove the
+corresponding source change from the effective set. Historical subject and
+structured-table signals remain supported.
 """
 
 from __future__ import annotations
@@ -18,14 +18,13 @@ import argparse
 import json
 import logging
 import os
-import re
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from typing import Any
 
+from scripts.backport.provenance_history import scan_applied_backports
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
-from scripts.backport.utils import pr_numbers_from_commit_subjects
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.polling import (
     PollLoopError,
@@ -76,18 +75,10 @@ def verify_prs_on_branch(
 ) -> set[int]:
     """Return which of ``pr_numbers`` actually landed on ``target_branch``.
 
-    A PR is considered present if either:
-
-    * a commit on the branch carries the PR's trailing ``(#N)`` in its subject
-      (a cherry-pick that kept the source PR's title), or
-    * a backport commit on the branch lists the PR in an ``## Applied`` table
-      in its body. The sweep squash-merges a batch of cherry-picks into one
-      commit whose subject is the *backport* PR; the source PRs it carried are
-      only recoverable from that ``## Applied`` table.
-
-    Subject matching uses the trailing ``(#N)`` only; body matching reads only
-    the structured ``## Applied`` section, so a stray ``(#N)`` reference in a
-    ``## Needs attention`` row or in prose never counts.
+    Versioned commit trailers and squash manifests are authoritative when
+    present. Historical trailing ``(#N)`` subjects, ``## Applied`` tables, and
+    manual ``## Backport Summary`` tables remain valid fallbacks. Standard and
+    durable agent reverts are evaluated before membership is returned.
 
     ``token`` authenticates the clone for private/auth-required repos.
     """
@@ -101,48 +92,12 @@ def verify_prs_on_branch(
             repo_dir = os.path.join(tmp, "repo")
             _shallow_clone(repo_full_name, target_branch, repo_dir, env)
 
-            applied = pr_numbers_from_commit_subjects(_branch_commit_subjects(repo_dir))
-            applied |= _applied_prs_from_commit_bodies(repo_dir)
+            applied = {
+                item.source_pr
+                for item in scan_applied_backports(repo_dir, "HEAD")
+            }
 
     return pr_numbers & applied
-
-
-def _branch_commit_subjects(repo_dir: str) -> list[str]:
-    result = subprocess.run(
-        ["git", "log", "--format=%s", "HEAD"],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout.splitlines()
-
-
-# git log -z NUL-separates commit records, letting us split multi-line bodies.
-_COMMIT_RECORD_DELIM = "\x00"
-
-
-def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
-    """Source PR numbers listed in ``## Applied`` tables of backport commits.
-
-    Squash-merged backport sweeps record the cherry-picked source PRs only in
-    the commit body's ``## Applied`` section. Only that section's table cells
-    are read, so a ``(#N)`` in a later ``## Needs attention`` row or in prose is
-    never treated as applied.
-    """
-    result = subprocess.run(
-        ["git", "log", "-z", "--format=%B", "HEAD"],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    numbers: set[int] = set()
-    for message in result.stdout.split(_COMMIT_RECORD_DELIM):
-        applied_section = _markdown_section(message, "Applied")
-        if applied_section:
-            numbers.update(_pr_numbers_from_table_cells(applied_section))
-    return numbers
 
 
 def _shallow_clone(
@@ -270,9 +225,9 @@ def reconcile_project_board(
 
     Unlike :func:`mark_backport_items_done`, this does not need a merged-PR body
     or a merge hook. It scans the board, clones the branch once, verifies each
-    candidate by ``(#N)`` presence, and flips only the verified items. Items not
-    yet on the branch are recorded as ``unverified`` and left untouched so a
-    later run can pick them up.
+    candidate against effective provenance, and flips only verified items.
+    Items not yet on the branch are recorded as ``unverified`` and left
+    untouched so a later run can pick them up.
     """
     project = _load_project(
         gql,
@@ -320,54 +275,6 @@ def reconcile_project_board(
         project=project,
         dry_run=dry_run,
     )
-
-
-def _markdown_section(body: str, heading: str) -> str:
-    pattern = re.compile(
-        rf"(?ims)^##\s+{re.escape(heading)}\s*$([\s\S]*?)(?=^##\s+|\Z)"
-    )
-    match = pattern.search(body)
-    return match.group(1) if match else ""
-
-
-def _pr_numbers_from_table_cells(markdown: str) -> set[int]:
-    """Source PR numbers from the ``Source PR`` column of a markdown table.
-
-    Only the ``Source PR`` column is read, so a ``#N`` appearing in a Title or
-    Detail cell (e.g. a revert subject, or a "depends on #N" note) is never
-    counted. Cells whose text wraps across newlines are reassembled first: a
-    logical row begins at a line starting with ``|`` and absorbs the lines that
-    follow until the next row. When no ``Source PR`` header is present the first
-    column is used, since the sweep always lists the source PR first.
-    """
-    rows: list[str] = []
-    for line in markdown.splitlines():
-        if line.lstrip().startswith("|"):
-            rows.append(line)
-        elif rows:
-            rows[-1] += " " + line.strip()
-
-    pr_cell = re.compile(r"^(?:\[)?#(\d+)(?:\]\([^)]*\))?$")
-    column: int | None = None
-    numbers: set[int] = set()
-    for row in rows:
-        cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
-        if column is None:
-            for index, cell in enumerate(cells):
-                if _normalize(cell) == "source pr":
-                    column = index
-                    break
-            else:
-                column = 0  # no header row; sweep lists the source PR first
-            if any(_normalize(cell) == "source pr" for cell in cells):
-                continue  # consumed the header row itself
-        if all(set(cell) <= set("-: ") for cell in cells if cell):
-            continue  # separator row (|---|---|)
-        if column < len(cells):
-            match = pr_cell.match(cells[column])
-            if match:
-                numbers.add(int(match.group(1)))
-    return numbers
 
 
 def _normalize(value: object) -> str:

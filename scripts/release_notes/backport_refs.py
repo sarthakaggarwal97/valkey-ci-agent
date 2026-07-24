@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 
+from scripts.backport.provenance import inspect_manifest
+
 # Matches the ``(cherry picked from commit <sha>)`` trailer git appends with -x.
 _CHERRY_PICK_TRAILER_RE = re.compile(
     r"(?im)^[ \t]*\(cherry picked from commit ([0-9a-f]{7,40})\)[ \t]*$"
@@ -158,11 +160,24 @@ def _applied_rows(body: str) -> list[tuple[int, str]]:
 def applied_source_prs_from_body(body: str) -> set[int]:
     """Extract source PR numbers from the ``## Applied`` markdown table in *body*.
 
+    A versioned backport manifest takes precedence when present. Malformed or
+    unsupported reserved manifest data fails closed instead of falling back to
+    a potentially stale visible table.
+
     Rows whose Title begins with ``Revert`` are excluded: the sweep shipped a
     revert of that PR, so attributing the original PR's change to this range
     would note a change the range does not contain. Those rows are available via
     :func:`applied_revert_source_prs_from_body` for maintainer review.
     """
+    manifest = inspect_manifest(body)
+    if manifest.status == "valid":
+        return {
+            entry.source_pr
+            for entry in manifest.entries
+            if not _REVERT_TITLE_RE.match(entry.title)
+        }
+    if manifest.status == "invalid":
+        return set()
     return {
         number
         for number, title in _applied_rows(body)
@@ -172,6 +187,15 @@ def applied_source_prs_from_body(body: str) -> set[int]:
 
 def applied_revert_source_prs_from_body(body: str) -> dict[int, str]:
     """Return ``{source_pr: title}`` for Revert-titled ``## Applied`` rows."""
+    manifest = inspect_manifest(body)
+    if manifest.status == "valid":
+        return {
+            entry.source_pr: entry.title
+            for entry in manifest.entries
+            if _REVERT_TITLE_RE.match(entry.title)
+        }
+    if manifest.status == "invalid":
+        return {}
     return {
         number: title
         for number, title in _applied_rows(body)

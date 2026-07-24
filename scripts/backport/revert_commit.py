@@ -11,6 +11,16 @@ import tempfile
 from github import Auth, Github
 
 from scripts.backport.git import run_git as run_git_default
+from scripts.backport.provenance import (
+    ManifestEntry,
+    replace_manifest,
+)
+from scripts.backport.provenance_git import amend_head_with_records
+from scripts.backport.provenance_history import (
+    AppliedBackport,
+    inverse_records_for_commit,
+    scan_applied_backports,
+)
 from scripts.backport.sweep_git import BRANCH_PREFIX, clone_target_branch
 from scripts.backport.sweep_prs import find_existing_pr
 from scripts.common.git_auth import GitAuth
@@ -44,6 +54,12 @@ def revert_commit(
         if _is_merge(repo_dir, commit_sha):
             raise RuntimeError(f"Commit {commit_sha} is a merge commit; refusing to revert.")
 
+        branch_range = f"origin/{base_branch}..HEAD"
+        inverse_records = inverse_records_for_commit(
+            repo_dir,
+            branch_range,
+            commit_sha,
+        )
         subject = _git(repo_dir, "log", "-1", "--format=%s", commit_sha)
         revert = subprocess.run(
             ["git", "revert", "--no-edit", commit_sha],
@@ -58,13 +74,31 @@ def revert_commit(
                 "Branch left untouched."
             )
 
+        amend_head_with_records(repo_dir, inverse_records)
+        applied = scan_applied_backports(repo_dir, branch_range)
         run_git_default(repo_dir, "push", "origin", branch, env=env)
         logger.info("Reverted %s (%r) on %s:%s", commit_sha[:12], subject, target_repo, branch)
 
-    _note_pr(repo, target_repo, branch, commit_sha, subject, token)
+    _note_pr(
+        repo,
+        target_repo,
+        branch,
+        commit_sha,
+        subject,
+        token,
+        applied,
+    )
 
 
-def _note_pr(base_repo: str, push_repo: str, branch: str, commit_sha: str, subject: str, token: str) -> None:
+def _note_pr(
+    base_repo: str,
+    push_repo: str,
+    branch: str,
+    commit_sha: str,
+    subject: str,
+    token: str,
+    applied: list[AppliedBackport],
+) -> None:
     """Append a revert note to the branch's open PR, if one exists.
 
     The revert already landed; a missing PR or a GitHub hiccup here must
@@ -76,7 +110,14 @@ def _note_pr(base_repo: str, push_repo: str, branch: str, commit_sha: str, subje
         if pull is None:
             return
         note = f"\n\nReverted `{commit_sha[:12]}` ({subject})."
-        pull.edit(body=(pull.body or "") + note)
+        body = replace_manifest(
+            (pull.body or "") + note,
+            [
+                ManifestEntry(item.source_pr, item.title)
+                for item in applied
+            ],
+        )
+        pull.edit(body=body)
         logger.info("Noted revert on PR #%d", pull.number)
     except Exception as exc:  # noqa: BLE001 - best-effort annotation
         logger.warning("Could not annotate PR for %s: %s", branch, exc)

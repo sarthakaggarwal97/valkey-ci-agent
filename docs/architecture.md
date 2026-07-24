@@ -27,20 +27,43 @@ sweep.py (daily cron or manual dispatch)
   -> discovers PRs from each branch's GitHub Project board
   -> for each registered release branch:
       source_change.py -> resolves the complete merge/squash/rebase source
-      application.py -> applies commits and resolves conflicts with Claude Code
-      pr_creator.py -> opens/updates PR on the upstream repo
+      application.py -> applies the candidate and resolves conflicts with Claude Code
+      transaction.py -> validates in an isolated worktree and promotes atomically
+      provenance_*.py -> records and reconciles source identity
+      sweep_prs.py -> opens/updates the rolling PR
 ```
 
-Validation first runs the registry's optional `validation_setup_commands`,
-then validates the branch after each cherry-pick. The sweep branch is kept
-green: a cherry-pick is only kept if the whole branch still validates, and a
-failure is reset off the branch so it can never block later candidates. The
-run keeps up to two validated cherry-picks (`--max-candidates 2`) and records
-skipped or failed candidates in the PR's "Needs attention" section without
-committing them. When `repair_validation_failures` is enabled, Claude Code
-gets one edit-only repair attempt scoped to the backport diff before a failing
-cherry-pick is dropped. Repos with no `build_commands` configured rely on
-upstream CI for verification.
+Validation first proves the target baseline in a disposable worktree. Each
+candidate then gets its own detached worktree for application, validation, and
+an optional path-scoped repair. A successful candidate is promoted by
+fast-forward only; a failed candidate's tracked, untracked, and ignored files
+are discarded with that worktree. The run keeps up to two validated candidates
+(`--max-candidates 2`) and records skipped or failed candidates in the PR's
+"Needs attention" section without committing them. Repos with no
+`build_commands` configured rely on upstream CI for verification.
+
+### Provenance and Reconciliation
+
+Every commit produced by a validated candidate carries a
+`Valkey-CI-Backport` JSON trailer with contract version `1`, source PR, stable
+series identity, and `part`/`parts` values. Rewriting adds metadata only: the
+validated tree and original author/committer identities are preserved. A
+candidate is considered present only while every part of at least one series
+has a positive effective balance.
+
+Rolling and manual PR bodies also contain a hidden
+`valkey-ci-agent-backport-manifest:v1` JSON block. This preserves source
+identity when GitHub squash-merges the PR and discards individual commit
+trailers. Both formats reject unknown versions and malformed reserved data
+instead of falling through to a weaker interpretation.
+
+`provenance_history.py` evaluates normal reverts, partial series reverts,
+relands, revert-of-revert, and merge-commit reverts. The agent's revert command
+adds explicit inverse records so the relationship survives a later branch
+rebase, then refreshes the PR manifest. Historical trailing `(#N)` subjects,
+`## Applied` tables, and manual `## Backport Summary` tables remain supported.
+The sweep skip check and Project-board mark-done reconciliation consume this
+same effective-history result.
 
 ### Poll
 
@@ -74,6 +97,9 @@ scheduled runs use the sustained in-run cadence.
 - `scripts/backport/main.py` - single-PR backport (manual dispatch)
 - `scripts/backport/matrix.py` - GitHub Actions matrix generation from `repos.yml`
 - `scripts/backport/registry.py` - typed registry loader and validation
+- `scripts/backport/provenance.py` - versioned trailer/manifest contract
+- `scripts/backport/provenance_git.py` - tree-neutral provenance writes
+- `scripts/backport/provenance_history.py` - revert-aware history evaluation
 - `scripts/backport/sweep_*.py` - focused sweep support modules:
   typed sweep results, Git workspace operations, GitHub PR operations,
   GraphQL access, validation command execution, and Markdown reporting

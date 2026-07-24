@@ -45,7 +45,7 @@ The currently active workflow. Cherry-picks merged PRs onto release branches wit
 4. **AI conflict resolution** - when cherry-pick conflicts, Claude Code reads both sides and resolves the conflict in place
 5. **Validation** - registry-configured build commands run before push; any failure blocks the push
 6. **PR creation** - pushes the branch and opens (or updates) a PR with a summary table
-7. **Status sync** - after a backport PR is merged into the release branch, the source PR's Project v2 status can be moved from "To be backported" to "Done"
+7. **Status sync** - after a backport PR is merged into the release branch, versioned commit/PR provenance is reconciled with reverts before the source PR's Project v2 status moves from "To be backported" to "Done"
 
 Manual single-PR backports are also supported via `workflow_dispatch`.
 
@@ -77,6 +77,13 @@ repos:
 By default, agent branches are pushed directly to `repo` under the `agent/backport/...` namespace and PRs are opened in that same upstream repository. `push_repo` is optional and only exists as an escape hatch for a real different-owner fork; same-owner `push_repo` values are rejected so staging repositories do not become the normal model.
 
 The sweep branch is always kept green: a candidate is only kept if the whole branch still validates after the cherry-pick, so one bad commit can never block later candidates. Each scheduled run keeps up to two validated cherry-picks (`--max-candidates 2`) and reports candidates that were skipped or failed validation in the PR's "Needs attention" section without committing them. When `repair_validation_failures` is enabled, Claude Code gets one narrow edit-only attempt to fix a failing cherry-pick before it is dropped.
+
+Validated candidate commits carry versioned source-PR provenance, and PR
+bodies carry a hidden versioned manifest for squash merges. Sweep membership
+and mark-done reconciliation evaluate partial reverts, relands, and
+revert-of-revert while retaining historical commit-subject/table fallbacks.
+The exact contract and history rules are documented in
+[`docs/architecture.md`](docs/architecture.md#provenance-and-reconciliation).
 
 See [`examples/repos.yml`](examples/repos.yml) for a multi-module example.
 

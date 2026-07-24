@@ -1,13 +1,14 @@
 """Unit tests for recovering the original PR of a backported commit.
 
 These parsers let release-note discovery credit the PR that introduced a change
-rather than the backport PR that carried it onto the line. The module is
-vendored inside release_notes (not shared with scripts.backport) so the backport
-system stays untouched; these tests pin the behavior discovery relies on.
+rather than the backport PR that carried it onto the line. The versioned
+manifest contract is shared with backport reconciliation; historical formats
+remain local fallbacks.
 """
 
 from __future__ import annotations
 
+from scripts.backport.provenance import ManifestEntry, render_manifest
 from scripts.release_notes.backport_refs import (
     applied_revert_source_prs_from_body,
     applied_source_prs_from_body,
@@ -85,6 +86,43 @@ class TestMultiSourceBackportBody:
 
 
 class TestAppliedSourcePrsFromBody:
+    def test_versioned_manifest_overrides_stale_visible_table(self) -> None:
+        body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n"
+            "| #10 | stale reverted source |\n\n"
+            + render_manifest([ManifestEntry(11, "Current source")])
+        )
+
+        assert applied_source_prs_from_body(body) == {11}
+
+    def test_manifest_preserves_revert_title_classification(self) -> None:
+        body = render_manifest(
+            [
+                ManifestEntry(10, 'Revert "Old change (#3)"'),
+                ManifestEntry(11, "Current source"),
+            ]
+        )
+
+        assert applied_source_prs_from_body(body) == {11}
+        assert applied_revert_source_prs_from_body(body) == {
+            10: 'Revert "Old change (#3)"',
+        }
+
+    def test_malformed_reserved_manifest_fails_closed(self) -> None:
+        body = (
+            "## Applied\n\n"
+            "| Source PR | Title |\n|---|---|\n"
+            "| #10 | stale source |\n\n"
+            + render_manifest([ManifestEntry(11, "Current source")]).replace(
+                ":v1",
+                ":v2",
+                1,
+            )
+        )
+
+        assert applied_source_prs_from_body(body) == set()
+
     def test_reads_source_pr_column(self) -> None:
         body = (
             "## Applied\n\n"

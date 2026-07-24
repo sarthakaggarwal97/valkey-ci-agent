@@ -18,6 +18,7 @@ from scripts.backport.models import (
     BackportCandidate,
     CandidateResult,
 )
+from scripts.backport.provenance_git import stamp_candidate_commits
 from scripts.backport.sweep_validation import (
     run_test_commands,
     validate_backport_branch,
@@ -196,6 +197,29 @@ def apply_candidate_transaction(
                 + ", ".join(repair_paths)
             )
             result.detail = _append_detail(result.detail, repair_detail)
+
+        stamped = stamp_candidate_commits(
+            workspace,
+            starting_head,
+            validated_head,
+            repo_full_name=repo_full_name,
+            source_pr=candidate.source_pr_number,
+            title=(
+                candidate.source_pr_title
+                or f"Source PR #{candidate.source_pr_number}"
+            ),
+            merge_commit_sha=candidate.merge_commit_sha,
+            source_commit_shas=candidate.commit_shas,
+        )
+        if result.resolved_commit_sha in stamped.rewritten:
+            result.resolved_commit_sha = stamped.rewritten[
+                result.resolved_commit_sha
+            ]
+        if result.validation_repair_commit_sha in stamped.rewritten:
+            result.validation_repair_commit_sha = stamped.rewritten[
+                result.validation_repair_commit_sha
+            ]
+        validated_head = stamped.tip
 
         promote_detached_head(
             repo_dir,
