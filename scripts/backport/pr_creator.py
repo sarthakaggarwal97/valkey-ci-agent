@@ -121,6 +121,8 @@ class BackportPRCreator:
         cherry_pick_result: CherryPickResult,
         resolution_results: list[ResolutionResult] | None,
         branch_name: str | None = None,
+        *,
+        ai_involved: bool = False,
     ) -> str:
         """Create backport PR from an already-pushed branch.
 
@@ -146,12 +148,15 @@ class BackportPRCreator:
         title = build_pr_title(context.source_pr_title, context.target_branch)
 
         had_conflicts = not cherry_pick_result.success
-        any_llm_resolved = bool(
+        # AI involvement is broader than per-file conflict resolutions: test
+        # adaptation also writes AI-generated content with no resolution row.
+        any_llm_resolved = ai_involved or bool(
             resolution_results and any(_was_llm_resolved(r) for r in resolution_results)
         )
 
         body = self.build_pr_body(context, had_conflicts, resolution_results,
-                                  applied_commits=cherry_pick_result.applied_commits)
+                                  applied_commits=cherry_pick_result.applied_commits,
+                                  ai_involved=any_llm_resolved)
 
         # Open the pull request (branch already exists on remote).
         logger.info(
@@ -256,6 +261,7 @@ class BackportPRCreator:
         *,
         applied_commits: list[str] | None = None,
         comment_links: dict[str, str] | None = None,
+        ai_involved: bool = False,
     ) -> str:
         """Build the PR body with links, commit list, conflict info.
 
@@ -339,8 +345,10 @@ class BackportPRCreator:
                 "### Conflict Details\n\n" + conflict_details
             )
 
-        # Human review disclaimer (when any file was LLM-resolved).
-        any_llm_resolved = bool(results and any(_was_llm_resolved(r) for r in results))
+        # Human review disclaimer (when AI wrote any content).
+        any_llm_resolved = ai_involved or bool(
+            results and any(_was_llm_resolved(r) for r in results)
+        )
         if any_llm_resolved:
             sections.append(
                 "### Human Review Required\n\n"

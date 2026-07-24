@@ -17,14 +17,17 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 from github.GithubException import GithubException
 
-from scripts.backport.cherry_pick import cherry_pick
-from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
+from scripts.backport.application import apply_candidate
 from scripts.backport.diff_comments import reconcile_diff_comments
+from scripts.backport.git import run_git as _run_git
 from scripts.backport.models import (
+    DETAIL_EMPTY_ON_TARGET,
+    BackportCandidate,
     BackportConfig,
     BackportOutcome,
     BackportPRContext,
     BackportResult,
+    CandidateResult,
     CherryPickResult,
     ResolutionResult,
 )
@@ -35,6 +38,7 @@ from scripts.backport.validation import (
     changed_paths_since_base,
     select_validation_commands,
 )
+from scripts.common.build_validator import run_build_commands
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import BOT_EMAIL, BOT_NAME
@@ -65,6 +69,28 @@ def build_summary(result: BackportResult) -> str:
     return "\n".join(lines)
 
 
+def _skipped_existing_message(
+    result: CandidateResult,
+    target_branch: str,
+) -> str:
+    """Describe why a skipped candidate does not need a backport PR."""
+
+    if result.detail == DETAIL_EMPTY_ON_TARGET:
+        reason = (
+            result.skip_reason
+            or "The change produces no net change on this branch."
+        )
+        return (
+            f"Source PR #{result.source_pr_number} does not require a "
+            f"backport to `{target_branch}`; no backport PR was "
+            f"created. {reason}"
+        )
+    return (
+        f"Source PR #{result.source_pr_number} is already applied to "
+        f"`{target_branch}`; no backport PR was created."
+    )
+
+
 def run_backport(
     repo_full_name: str,
     source_pr_number: int,
@@ -74,6 +100,7 @@ def run_backport(
     push_repo: str | None = None,
     language: str = "c",
     build_commands: list[str] | None = None,
+    validation_setup_commands: list[str] | None = None,
     validation_rules: list[ValidationRule] | None = None,
 ) -> BackportResult:
     """Execute the backport pipeline end-to-end.
@@ -181,14 +208,16 @@ def run_backport(
             logger.warning("Could not fetch PR diff for #%s: %s", source_pr_number, exc)
             diff_content = ""
 
-        pr_context = BackportPRContext(
+        candidate = BackportCandidate(
             source_pr_number=source_pr_number,
             source_pr_title=source_pr.title or "",
             source_pr_url=source_pr.html_url,
             source_pr_diff=diff_content,
             target_branch=target_branch,
-            commits=commits,
+            merge_commit_sha=merge_commit_sha,
+            commit_shas=commits,
         )
+        pr_context = candidate.to_pr_context()
 
         logger.info("Executing cherry-pick onto %s.", target_branch)
         branch_name = build_branch_name(source_pr_number, target_branch)
@@ -203,25 +232,55 @@ def run_backport(
                     git_env=git_env,
                 )
 
+                if validation_setup_commands:
+                    setup_ok, setup_output = run_build_commands(
+                        tmp_dir,
+                        validation_setup_commands,
+                    )
+                    if not setup_ok:
+                        msg = (
+                            "Validation setup failed: "
+                            + (setup_output[:500] or "setup command failed")
+                        )
+                        logger.error(msg)
+                        _post_comment(
+                            repo,
+                            source_pr_number,
+                            f"Backport failed: {msg}",
+                        )
+                        return BackportResult(
+                            outcome="error",
+                            error_message=msg,
+                        )
+
                 # Create the backport branch locally from target branch HEAD
                 _run_git(tmp_dir, "checkout", "-b", branch_name)
 
-                try:
-                    cherry_result = cherry_pick(
-                        tmp_dir, branch_name, merge_commit_sha, commits,
-                    )
-                except subprocess.CalledProcessError as exc:
-                    msg = f"Cherry-pick failed: {exc}"
-                    logger.error(msg)
-                    _post_comment(repo, source_pr_number, f"Backport failed: {msg}")
-                    return BackportResult(outcome="error", error_message=msg)
+                application_result = apply_candidate(
+                    tmp_dir,
+                    candidate,
+                    repo_full_name,
+                    git_env,
+                    language=language,
+                    build_commands=build_commands,
+                    validation_rules=validation_rules,
+                    max_conflicting_files=config.max_conflicting_files,
+                )
+                resolution_results = application_result.resolutions or None
+                resolved_commit_sha = application_result.resolved_commit_sha
+                cherry_result = CherryPickResult(
+                    success=not application_result.conflicting_files,
+                    conflicting_files=application_result.conflicting_files,
+                    applied_commits=application_result.applied_commits,
+                    conflicting_commit_sha=(
+                        application_result.conflicting_commit_sha
+                    ),
+                )
 
-                resolution_results = None
-                resolved_commit_sha: str | None = None
-                if cherry_result.success and not cherry_result.applied_commits:
-                    msg = (
-                        f"Source PR #{source_pr_number} is already applied to "
-                        f"`{target_branch}`; no backport PR was created."
+                if application_result.outcome == "skipped-existing":
+                    msg = _skipped_existing_message(
+                        application_result,
+                        target_branch,
                     )
                     logger.info(msg)
                     _post_comment(repo, source_pr_number, f"Backport skipped: {msg}")
@@ -229,98 +288,58 @@ def run_backport(
                         outcome="already-applied",
                         error_message=msg,
                     )
-                if not cherry_result.success and not cherry_result.conflicting_files:
-                    msg = (
-                        "Cherry-pick failed without conflicted files; refusing to "
-                        "push an unresolved or unchanged backport branch."
-                    )
+                if application_result.outcome == "error":
+                    msg = application_result.detail or "Candidate application failed."
                     logger.error(msg)
                     _post_comment(repo, source_pr_number, f"Backport failed: {msg}")
                     return BackportResult(
                         outcome="error",
-                        commits_cherry_picked=len(cherry_result.applied_commits),
                         error_message=msg,
                     )
-                if not cherry_result.success and cherry_result.conflicting_files:
-                    if len(cherry_result.conflicting_files) > config.max_conflicting_files:
-                        msg = (
-                            f"Too many conflicting files "
-                            f"({len(cherry_result.conflicting_files)} > "
-                            f"max_conflicting_files={config.max_conflicting_files}). "
-                            f"Refusing to invoke conflict resolver."
-                        )
-                        logger.warning(msg)
-                        _post_comment(repo, source_pr_number, f"Backport skipped: {msg}")
-                        return BackportResult(
-                            outcome="conflicts-unresolved",
-                            commits_cherry_picked=len(cherry_result.applied_commits),
-                            files_conflicted=len(cherry_result.conflicting_files),
-                            files_unresolved=len(cherry_result.conflicting_files),
-                            error_message=msg,
-                        )
-                    logger.info(
-                        "Cherry-pick produced %d conflict(s). Invoking conflict resolver.",
-                        len(cherry_result.conflicting_files),
+                if application_result.outcome == "skipped-conflict":
+                    conflict_paths = {
+                        item.path
+                        for item in application_result.conflicting_files
+                    }
+                    resolved_paths = {
+                        item.path
+                        for item in application_result.resolutions
+                        if item.resolved_content is not None
+                        and item.path in conflict_paths
+                    }
+                    unresolved_paths = conflict_paths - resolved_paths
+                    result = BackportResult(
+                        outcome="conflicts-unresolved",
+                        files_conflicted=len(conflict_paths),
+                        files_resolved=len(resolved_paths),
+                        files_unresolved=len(unresolved_paths),
+                        error_message=application_result.detail,
                     )
-                    resolver_validation_commands = select_validation_commands(
-                        build_commands or [],
-                        validation_rules or [],
-                        [f.path for f in cherry_result.conflicting_files],
+                    summary_text = build_summary(result)
+                    _post_comment(
+                        repo,
+                        source_pr_number,
+                        "## Backport Result\n\n"
+                        "Backport could not be completed automatically.\n\n"
+                        f"### Overview\n{summary_text}",
                     )
-                    resolution_results = resolve_conflicts_with_claude(
-                        tmp_dir,
-                        cherry_result.conflicting_files,
-                        pr_context,
-                        language=language,
-                        build_commands=resolver_validation_commands or None,
+                    emit_job_summary(
+                        "## Backport Result: conflicts-unresolved\n\n"
+                        f"- Source PR: #{source_pr_number}\n"
+                        f"- Target branch: `{target_branch}`\n\n"
+                        f"### Overview\n{summary_text}"
                     )
-                    unresolved = [
-                        r for r in resolution_results
-                        if r.resolved_content is None
-                    ]
-                    if unresolved:
-                        files_resolved = len(resolution_results) - len(unresolved)
-                        files_unresolved = len(unresolved)
-                        result = BackportResult(
-                            outcome="conflicts-unresolved",
-                            commits_cherry_picked=len(cherry_result.applied_commits),
-                            files_conflicted=len(cherry_result.conflicting_files),
-                            files_resolved=files_resolved,
-                            files_unresolved=files_unresolved,
-                            error_message=(
-                                "Unresolved conflict(s): "
-                                + ", ".join(r.path for r in unresolved)
-                            ),
-                        )
-                        summary_text = build_summary(result)
-                        _post_comment(
-                            repo,
-                            source_pr_number,
-                            "## Backport Result\n\n"
-                            "Backport could not be completed automatically.\n\n"
-                            f"### Overview\n{summary_text}",
-                        )
-                        emit_job_summary(
-                            f"## Backport Result: conflicts-unresolved\n\n"
-                            f"- Source PR: #{source_pr_number}\n"
-                            f"- Target branch: `{target_branch}`\n\n"
-                            f"### Overview\n{summary_text}"
-                        )
-                        return result
-
-                    # Apply resolved files to the working tree and commit
-                    _apply_resolutions(
-                        tmp_dir,
-                        resolution_results,
+                    return result
+                if application_result.outcome != "applied":
+                    msg = (
+                        "Candidate application returned unexpected outcome: "
+                        f"{application_result.outcome}"
                     )
-                    # Record the resolution commit so diff comments can link
-                    # each file to its native diff in the commit view.
-                    head = subprocess.run(
-                        ["git", "rev-parse", "HEAD"],
-                        cwd=tmp_dir, capture_output=True, text=True,
+                    logger.error(msg)
+                    return BackportResult(
+                        outcome="error",
+                        error_message=msg,
                     )
-                    if head.returncode == 0:
-                        resolved_commit_sha = head.stdout.strip()
 
                 commands: list[str] = []
                 if build_commands or validation_rules:
@@ -330,7 +349,6 @@ def run_backport(
                         changed_paths_since_base(tmp_dir, f"origin/{target_branch}"),
                     )
                 if commands:
-                    from scripts.common.build_validator import run_build_commands
                     ok, output = run_build_commands(tmp_dir, commands)
                     if not ok:
                         msg = f"Build validation failed: {output[:500]}"
@@ -375,6 +393,7 @@ def run_backport(
         try:
             backport_pr_url = pr_creator.create_backport_pr(
                 pr_context, cherry_result, resolution_results, branch_name,
+                ai_involved=application_result.resolved_by_ai,
             )
         except (GithubException, subprocess.CalledProcessError) as exc:
             msg = f"Failed to create backport PR: {exc}"
@@ -565,60 +584,6 @@ def _clone_repo(
     return git_env
 
 
-def _run_git(repo_dir: str, *args: str, env: dict[str, str] | None = None) -> None:
-    """Run a git command in *repo_dir*, raising on failure."""
-    cmd = ["git", *args]
-    logger.debug("Running: %s (cwd=%s)", " ".join(cmd), repo_dir)
-    result = subprocess.run(cmd, cwd=repo_dir, capture_output=True, text=True, env=env)
-    if result.returncode != 0:
-        logger.error("git %s failed (rc=%d)\nstdout: %s\nstderr: %s",
-                     args[0], result.returncode,
-                     result.stdout.strip()[-500:] if result.stdout else "",
-                     result.stderr.strip()[-500:] if result.stderr else "")
-        result.check_returncode()
-
-
-def _apply_resolutions(
-    repo_dir: str,
-    resolution_results: list[ResolutionResult],
-) -> None:
-    """Write resolved file contents to the working tree and commit.
-
-    For each successfully resolved file, writes the content, stages it
-    with ``git add``, then aborts the failed cherry-pick and commits
-    the resolved state.
-    """
-    for result in resolution_results:
-        if result.resolved_content is not None:
-            file_path = os.path.join(repo_dir, result.path)
-            parent = os.path.dirname(file_path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            with open(file_path, "w", encoding="utf-8") as fh:
-                fh.write(result.resolved_content)
-            _run_git(repo_dir, "add", result.path)
-        else:
-            raise ValueError(f"Cannot apply unresolved conflict for {result.path}")
-
-    # Complete the cherry-pick with resolved content.
-    # Set core.editor=true to prevent git from opening an editor
-    # in the non-interactive CI environment.
-    try:
-        _run_git(
-            repo_dir,
-            "-c", "core.editor=true",
-            "cherry-pick",
-            "--continue",
-        )
-    except subprocess.CalledProcessError as exc:
-        # Let the caller see the failure and skip this candidate rather than
-        # leaving a half-applied cherry-pick behind.
-        logger.warning("cherry-pick --continue failed: %s", exc)
-        raise
-
-
-
-
 def main() -> None:
     """CLI entry point for the backport agent."""
     parser = argparse.ArgumentParser(description="Backport Agent Pipeline")
@@ -689,6 +654,7 @@ def main() -> None:
         push_repo=args.push_repo or repo_entry.push_repo,
         language=repo_entry.language,
         build_commands=list(repo_entry.build_commands) or None,
+        validation_setup_commands=list(repo_entry.validation_setup_commands),
         validation_rules=list(repo_entry.validation_rules),
     )
 

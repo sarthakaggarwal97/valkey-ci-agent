@@ -836,3 +836,32 @@ def test_backport_summary_roundtrips_with_pipe_in_source_title() -> None:
         context, had_conflicts=False, resolution_results=None,
     )
     assert summary_source_pr_from_body(body) == 77
+
+
+def test_ai_involved_without_resolutions_gets_disclaimer() -> None:
+    """AI involvement is broader than conflict resolutions: test adaptation
+    writes AI-generated content with no resolution rows. The disclaimer and
+    label decision must honor the flag, not just the resolution list."""
+    context = BackportPRContext(
+        source_pr_number=42,
+        source_pr_title="Fix flaky ordering",
+        source_pr_url="https://github.com/example/repo/pull/42",
+        source_pr_diff="",
+        target_branch="8.1",
+        commits=["a" * 40],
+    )
+    body = BackportPRCreator.build_pr_body(
+        context,
+        had_conflicts=True,
+        resolution_results=None,
+        ai_involved=True,
+    )
+    assert "Human Review Required" in body
+
+    body_without = BackportPRCreator.build_pr_body(
+        context,
+        had_conflicts=True,
+        resolution_results=None,
+        ai_involved=False,
+    )
+    assert "Human Review Required" not in body_without

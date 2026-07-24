@@ -18,10 +18,8 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
-from scripts.backport.main import _run_git
-from scripts.backport.sweep_apply import (
-    apply_candidate,
-)
+from scripts.backport.application import apply_candidate
+from scripts.backport.git import run_git as _run_git
 from scripts.backport.sweep_git import (
     branch_has_changes,
     clone_target_branch,
@@ -165,6 +163,7 @@ class ProjectBackportDiscovery:
             node.get("commit", {}).get("oid", "")
             for node in (content.get("commits", {}).get("nodes") or [])
         ]
+        commits_page = content.get("commits") or {}
         merge_sha = (content.get("mergeCommit") or {}).get("oid")
         return ProjectBackportCandidate(
             source_pr_number=int(content["number"]),
@@ -174,6 +173,9 @@ class ProjectBackportDiscovery:
             merge_commit_sha=merge_sha,
             commit_shas=[sha for sha in commits if sha],
             merged_at=str(content.get("mergedAt") or ""),
+            source_commits_complete=not bool(
+                (commits_page.get("pageInfo") or {}).get("hasNextPage")
+            ),
         )
 
 
@@ -266,6 +268,7 @@ def run_backport_sweep(
         build_commands=list(repo_entry.build_commands) or None,
         validation_rules=validation_rules,
         repair_validation_failures=repo_entry.repair_validation_failures,
+        max_conflicting_files=repo_entry.max_conflicting_files,
         backport_label=repo_entry.backport_label,
         llm_conflict_label=repo_entry.llm_conflict_label,
     )
@@ -288,6 +291,7 @@ def _process_branch(
     build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
     repair_validation_failures: bool = False,
+    max_conflicting_files: int = 100,
     backport_label: str = "backport",
     llm_conflict_label: str = "ai-resolved-conflicts",
 ) -> BranchSweepResult:
@@ -405,6 +409,7 @@ def _process_branch(
                     language=language,
                     build_commands=build_commands,
                     validation_rules=validation_rules,
+                    max_conflicting_files=max_conflicting_files,
                 )
                 result.results.append(candidate_result)
 
@@ -426,7 +431,16 @@ def _process_branch(
                 if not ok:
                     candidate_result.outcome = "skipped-validation-failed"
                     candidate_result.detail = validation_failure_detail(output)
-                    _run_git(tmpdir, "reset", "--hard", "HEAD^")
+                    applied_commit_count = max(
+                        1,
+                        len(candidate_result.applied_commits),
+                    )
+                    rollback_ref = (
+                        "HEAD^"
+                        if applied_commit_count == 1
+                        else f"HEAD~{applied_commit_count}"
+                    )
+                    _run_git(tmpdir, "reset", "--hard", rollback_ref)
                     logger.warning(
                         "Validation failed for candidate #%d on %s; removed candidate and continuing.",
                         candidate.source_pr_number,
@@ -514,7 +528,10 @@ query($owner: String!, $number: Int!, $cursor: String) {{
               number title url merged mergedAt
               repository {{ nameWithOwner }}
               mergeCommit {{ oid }}
-              commits(first: 100) {{ nodes {{ commit {{ oid }} }} }}
+              commits(first: 100) {{
+                pageInfo {{ hasNextPage endCursor }}
+                nodes {{ commit {{ oid }} }}
+              }}
             }}
           }}
           fieldValues(first: 50) {{
@@ -689,4 +706,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
