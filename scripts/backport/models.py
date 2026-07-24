@@ -6,6 +6,13 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 ResolutionSource = Literal["llm", "automatic"]
+CandidateOutcome = Literal[
+    "applied",
+    "skipped-existing",
+    "skipped-conflict",
+    "skipped-validation-failed",
+    "error",
+]
 BackportOutcome = Literal[
     "success",
     "conflicts-unresolved",
@@ -15,6 +22,11 @@ BackportOutcome = Literal[
     "already-applied",
     "error",
 ]
+
+DETAIL_RESOLVED_BY_AI = "conflicts resolved by Claude Code"
+DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX = "dropped target-missing test file(s):"
+DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX = "ported target-missing test coverage to:"
+DETAIL_EMPTY_ON_TARGET = "resolution was already satisfied on target branch"
 
 
 @dataclass
@@ -59,6 +71,38 @@ class BackportPRContext:
     source_pr_diff: str
     target_branch: str
     commits: list[str]
+
+
+@dataclass(frozen=True)
+class BackportCandidate:
+    """A merged source pull request selected for one target branch."""
+
+    source_pr_number: int
+    source_pr_title: str
+    source_pr_url: str
+    target_branch: str
+    merge_commit_sha: str | None = None
+    commit_shas: list[str] = field(default_factory=list)
+    merged_at: str = ""
+    source_pr_diff: str = ""
+    source_commits_complete: bool = True
+
+
+@dataclass
+class CandidateResult:
+    """Result of applying one source pull request to a local branch."""
+
+    source_pr_number: int
+    source_pr_title: str
+    outcome: CandidateOutcome
+    detail: str = ""
+    resolutions: list[ResolutionResult] = field(default_factory=list)
+    resolved_by_ai: bool = False
+    skip_reason: str = ""
+    resolved_commit_sha: str | None = None
+    applied_commits: list[str] = field(default_factory=list)
+    conflicting_files: list[ConflictedFile] = field(default_factory=list)
+    conflicting_commit_sha: str | None = None
 
 
 @dataclass

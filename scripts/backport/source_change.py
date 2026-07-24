@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal, Mapping, Sequence
 
 SourceChangeStrategy = Literal["merge", "squash", "single", "series"]
 
@@ -26,6 +26,66 @@ class SourceChangePlan:
     merge_commit_sha: str | None
     source_commits: tuple[str, ...]
     aggregate_patch_id: str
+
+
+def prepare_source_change(
+    repo_dir: str,
+    source_pr_number: int,
+    merge_commit_sha: str | None,
+    commit_shas: Sequence[str],
+    *,
+    source_commits_complete: bool = True,
+    remote: str = "origin",
+    git_env: Mapping[str, str] | None = None,
+) -> SourceChangePlan:
+    """Fetch the authoritative PR objects and return their application plan."""
+
+    if not source_commits_complete:
+        raise SourceChangeError(
+            f"source commit list for PR #{source_pr_number} is incomplete"
+        )
+
+    source_commits = tuple(sha for sha in commit_shas if sha)
+    missing_source_commits = tuple(
+        sha for sha in source_commits if not _commit_exists(repo_dir, sha)
+    )
+    if missing_source_commits:
+        source_ref = (
+            f"+refs/pull/{source_pr_number}/head:"
+            f"refs/valkey-ci-agent/backport/{source_pr_number}/head"
+        )
+        _git(
+            repo_dir,
+            "fetch",
+            "--no-tags",
+            remote,
+            source_ref,
+            env=git_env,
+        )
+        still_missing = tuple(
+            sha for sha in missing_source_commits if not _commit_exists(repo_dir, sha)
+        )
+        if still_missing:
+            raise SourceChangeError(
+                "PR head does not contain source commit(s): "
+                + ", ".join(still_missing)
+            )
+
+    if merge_commit_sha and not _commit_exists(repo_dir, merge_commit_sha):
+        _git(
+            repo_dir,
+            "fetch",
+            "--no-tags",
+            remote,
+            merge_commit_sha,
+            env=git_env,
+        )
+        if not _commit_exists(repo_dir, merge_commit_sha):
+            raise SourceChangeError(
+                f"could not fetch merge commit {merge_commit_sha}"
+            )
+
+    return plan_source_change(repo_dir, merge_commit_sha, source_commits)
 
 
 def plan_source_change(
@@ -182,6 +242,17 @@ def _commit_parents(repo_dir: str, sha: str) -> tuple[str, ...]:
     return tuple(fields[1:])
 
 
+def _commit_exists(repo_dir: str, sha: str) -> bool:
+    result = _git(
+        repo_dir,
+        "cat-file",
+        "-e",
+        f"{sha}^{{commit}}",
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def _exact_patch_id(repo_dir: str, base: str, tip: str) -> str:
     diff = _git_bytes(
         repo_dir,
@@ -212,6 +283,7 @@ def _git(
     repo_dir: str,
     *args: str,
     check: bool = True,
+    env: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
         ["git", *args],
@@ -219,6 +291,7 @@ def _git(
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
     if check and result.returncode != 0:
         raise SourceChangeError(

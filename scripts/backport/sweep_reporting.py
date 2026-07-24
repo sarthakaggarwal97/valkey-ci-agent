@@ -6,15 +6,17 @@ import re
 from collections.abc import Iterator
 from typing import cast
 
-from scripts.backport.sweep_models import (
-    DETAIL_ALREADY_ON_SWEEP_BRANCH,
+from scripts.backport.models import (
     DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX,
     DETAIL_EMPTY_ON_TARGET,
     DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX,
     DETAIL_RESOLVED_BY_AI,
-    BranchSweepResult,
     CandidateOutcome,
     CandidateResult,
+)
+from scripts.backport.sweep_models import (
+    DETAIL_ALREADY_ON_SWEEP_BRANCH,
+    BranchSweepResult,
 )
 
 AI_DETAIL_MARKERS = (

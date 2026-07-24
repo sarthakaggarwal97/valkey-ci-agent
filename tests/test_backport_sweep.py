@@ -9,18 +9,21 @@ from unittest.mock import MagicMock
 import pytest
 from github.GithubException import GithubException
 
+from scripts.backport import application as sweep_apply
 from scripts.backport import sweep as backport_sweep
-from scripts.backport import sweep_apply, sweep_git, sweep_graphql, sweep_validation
+from scripts.backport import sweep_git, sweep_graphql, sweep_validation
+from scripts.backport.application import apply_candidate
+from scripts.backport.missing_test_adaptation import (
+    MissingTestAdaptationResult,
+    adapt_target_missing_tests_with_claude,
+    build_missing_test_context,
+)
 from scripts.backport.models import ResolutionResult
+from scripts.backport.source_change import SourceChangePlan, SourceChangeStrategy
 from scripts.backport.sweep import (
     BranchSweepResult,
     CandidateResult,
     ProjectBackportCandidate,
-)
-from scripts.backport.sweep_apply import (
-    MissingTestAdaptationResult,
-    adapt_target_missing_tests_with_claude,
-    apply_candidate,
 )
 from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
@@ -47,6 +50,20 @@ from scripts.backport.sweep_validation import (
 from scripts.common.git_auth import GitAuth
 
 DETAIL = backport_sweep.DETAIL_ALREADY_ON_SWEEP_BRANCH
+
+
+def _source_plan(
+    candidate: ProjectBackportCandidate,
+    strategy: SourceChangeStrategy = "merge",
+) -> SourceChangePlan:
+    assert candidate.merge_commit_sha
+    return SourceChangePlan(
+        strategy=strategy,
+        commits=(candidate.merge_commit_sha,),
+        merge_commit_sha=candidate.merge_commit_sha,
+        source_commits=tuple(candidate.commit_shas),
+        aggregate_patch_id="test-patch",
+    )
 
 
 def test_git_auth_keeps_askpass_outside_clone_destination(tmp_path):
@@ -113,11 +130,11 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
         git_env={},
         run_git=fake_run_git,
         run_process=fake_subprocess_run,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-existing"
     assert result.detail == "already applied or empty cherry-pick"
-    assert ("fetch", "origin", "abc123") in git_calls
     assert ("cherry-pick", "--abort") in git_calls
 
 
@@ -156,6 +173,7 @@ def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
         run_git=fake_run_git,
         run_process=fake_subprocess_run,
         resolve_conflicts=resolver,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-conflict"
@@ -164,7 +182,7 @@ def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
     assert ("cherry-pick", "--abort") in git_calls
 
 
-def test_apply_candidate_retries_squash_merge_commit_without_mainline(
+def test_apply_candidate_uses_planned_squash_without_mainline_probe(
     monkeypatch,
     tmp_path,
 ):
@@ -183,13 +201,6 @@ def test_apply_candidate_retries_squash_merge_commit_without_mainline(
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
-        if cmd == ["git", "cherry-pick", "-m", "1", "abc123"]:
-            return subprocess.CompletedProcess(
-                cmd,
-                1,
-                stdout="",
-                stderr="fatal: mainline was specified but commit abc123 is not a merge",
-            )
         if cmd == ["git", "cherry-pick", "abc123"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
@@ -203,12 +214,11 @@ def test_apply_candidate_retries_squash_merge_commit_without_mainline(
         git_env={},
         run_git=fake_run_git,
         run_process=fake_subprocess_run,
+        source_plan=_source_plan(candidate, "squash"),
     )
 
     assert result.outcome == "applied"
-    assert ("fetch", "origin", "abc123") in git_calls
-    assert ["git", "cherry-pick", "-m", "1", "abc123"] in subprocess_calls
-    assert ["git", "cherry-pick", "abc123"] in subprocess_calls
+    assert subprocess_calls == [["git", "cherry-pick", "abc123"]]
 
 
 def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
@@ -268,6 +278,7 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
         run_git=fake_run_git,
         run_process=fake_subprocess_run,
         resolve_conflicts=fake_resolve,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-existing"
@@ -323,6 +334,7 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
         run_git=fake_run_git,
         run_process=fake_subprocess_run,
         resolve_conflicts=fake_resolve,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-conflict"
@@ -395,6 +407,7 @@ def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
         run_process=fake_subprocess_run,
         resolve_conflicts=fake_resolve,
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "applied"
@@ -460,6 +473,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
         run_git=fake_run_git,
         run_process=fake_subprocess_run,
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-conflict"
@@ -513,6 +527,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_raises(monke
         run_git=fake_run_git,
         run_process=fake_subprocess_run,
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-conflict"
@@ -564,6 +579,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(m
         run_git=fake_run_git,
         run_process=fake_subprocess_run,
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-conflict"
@@ -621,6 +637,7 @@ def test_apply_candidate_continues_when_test_adaptation_makes_no_changes(monkeyp
         run_git=fake_run_git,
         run_process=fake_subprocess_run,
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "applied"
@@ -711,6 +728,7 @@ def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatc
         run_process=fake_subprocess_run,
         resolve_conflicts=fake_resolve,
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "applied"
@@ -772,6 +790,7 @@ def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
             run_git=fake_run_git,
             run_process=fake_subprocess_run,
             resolve_conflicts=fake_resolve,
+            source_plan=_source_plan(candidate),
         )
 
 
@@ -1659,12 +1678,21 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     assert sum(1 for r in result.results if r.outcome == "applied") == 0
 
 
-def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn, already_applied=None, max_applied=1):
+def _green_only_process_branch(
+    monkeypatch,
+    *,
+    candidates,
+    apply_fn,
+    validate_fn,
+    already_applied=None,
+    max_applied=1,
+    max_conflicting_files=100,
+):
     """Run _process_branch with the common green-only mocks wired up.
 
     Tests supply how each candidate applies (apply_fn) and how the branch
     validates after each kept cherry-pick (validate_fn). Returns
-    (result, pushed, upserts, reset_count).
+    (result, pushed, upserts, reset_count, reset_refs).
     """
     monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_a, **_k: None)
@@ -1681,10 +1709,12 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
     monkeypatch.setattr(backport_sweep, "validate_branch_with_optional_repair", validate_fn)
 
     reset_count = {"n": 0}
+    reset_refs: list[str] = []
 
     def fake_run_git(_repo_dir, *args, **_kwargs):
-        if args[:3] == ("reset", "--hard", "HEAD^"):
+        if args[:2] == ("reset", "--hard"):
             reset_count["n"] += 1
+            reset_refs.append(args[2])
 
     monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
 
@@ -1711,9 +1741,10 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
         push_repo="valkey-io/valkey",
         test_commands=["make"],
         max_applied=max_applied,
+        max_conflicting_files=max_conflicting_files,
         repair_validation_failures=True,
     )
-    return result, pushed, upserts, reset_count["n"]
+    return result, pushed, upserts, reset_count["n"], reset_refs
 
 
 def _candidate(num):
@@ -1732,7 +1763,7 @@ def _applied(_repo_dir, candidate, *_args, **_kwargs):
 
 def test_process_branch_does_not_push_when_only_candidate_fails_validation(monkeypatch):
     """A red cherry-pick is reset off the branch and never pushed."""
-    result, pushed, upserts, resets = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
         monkeypatch,
         candidates=[_candidate(10)],
         apply_fn=_applied,
@@ -1743,15 +1774,63 @@ def test_process_branch_does_not_push_when_only_candidate_fails_validation(monke
     assert upserts == []
     assert result.pr_url == ""
     assert resets == 1  # the failed cherry-pick was reset off the branch
+    assert reset_refs == ["HEAD^"]
     assert result.results[0].outcome == "skipped-validation-failed"
     assert "compiler error" in result.results[0].detail
+
+
+def test_process_branch_forwards_repository_conflict_limit(monkeypatch):
+    limits: list[int] = []
+
+    def apply_with_limit(_repo_dir, candidate, *_args, **kwargs):
+        limits.append(kwargs["max_conflicting_files"])
+        return CandidateResult(
+            candidate.source_pr_number,
+            candidate.source_pr_title,
+            "applied",
+        )
+
+    _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(10)],
+        apply_fn=apply_with_limit,
+        validate_fn=lambda *_args, **_kwargs: (True, ""),
+        max_conflicting_files=7,
+    )
+
+    assert limits == [7]
+
+
+def test_process_branch_rolls_back_all_commits_from_failed_candidate(
+    monkeypatch,
+):
+    def apply_series(_repo_dir, candidate, *_args, **_kwargs):
+        return CandidateResult(
+            candidate.source_pr_number,
+            candidate.source_pr_title,
+            "applied",
+            applied_commits=["source-one", "source-two"],
+        )
+
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(10)],
+        apply_fn=apply_series,
+        validate_fn=lambda *_args, **_kwargs: (False, "compiler error"),
+    )
+
+    assert result.results[0].outcome == "skipped-validation-failed"
+    assert pushed == []
+    assert upserts == []
+    assert resets == 1
+    assert reset_refs == ["HEAD~2"]
 
 
 def test_process_branch_keeps_trying_until_green(monkeypatch):
     """Skip failing candidates, keep the first green one, stop after the cap."""
     validations = iter([(False, "boom"), (False, "boom"), (True, "")])
 
-    result, pushed, upserts, resets = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
         monkeypatch,
         candidates=[_candidate(11), _candidate(12), _candidate(13), _candidate(14)],
         apply_fn=_applied,
@@ -1767,6 +1846,7 @@ def test_process_branch_keeps_trying_until_green(monkeypatch):
         "applied",
     ]
     assert resets == 2  # two red cherry-picks reset off the branch
+    assert reset_refs == ["HEAD^", "HEAD^"]
     assert pushed == [("agent/backport/sweep/8.1", False)]
     assert len(upserts) == 1
     # The pushed PR is never a draft - the branch is green.
@@ -1775,7 +1855,7 @@ def test_process_branch_keeps_trying_until_green(monkeypatch):
 
 def test_process_branch_pushes_green_branch_as_ready(monkeypatch):
     """A single green cherry-pick is pushed as a normal (non-draft) PR."""
-    result, pushed, upserts, resets = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
         monkeypatch,
         candidates=[_candidate(20)],
         apply_fn=_applied,
@@ -1784,6 +1864,7 @@ def test_process_branch_pushes_green_branch_as_ready(monkeypatch):
 
     assert result.results[0].outcome == "applied"
     assert resets == 0
+    assert reset_refs == []
     assert pushed == [("agent/backport/sweep/8.1", False)]
     assert upserts[0].get("draft", False) is False
 
@@ -1796,7 +1877,7 @@ def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
         attempted.append(candidate.source_pr_number)
         return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
 
-    result, pushed, upserts, resets = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
         monkeypatch,
         candidates=[_candidate(40), _candidate(41)],
         apply_fn=fake_apply,
@@ -1936,7 +2017,7 @@ def test_missing_test_context_uses_diff_for_modify_delete_conflict(tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="TEST(old)\n", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    context = sweep_apply.build_missing_test_context(
+    context = build_missing_test_context(
         str(tmp_path),
         "src/unit/test_networking.cpp",
         "TEST(new)\n",
@@ -2203,7 +2284,7 @@ def test_adapt_target_missing_tests_fails_closed_on_conflict_marker_output(tmp_p
 
 
 def test_is_test_path_rejects_metadata_and_build_files():
-    from scripts.backport.sweep_apply import is_test_path
+    from scripts.backport.missing_test_adaptation import is_test_path
 
     # Metadata/build files under test dirs are NOT editable test source.
     assert not is_test_path("tests/CMakeLists.txt")
@@ -2605,8 +2686,8 @@ def test_build_pr_body_surfaces_no_op_resolution_under_skipped():
 
 
 def test_empty_skip_reason_detects_change_not_applicable():
+    from scripts.backport.application import _empty_skip_reason
     from scripts.backport.models import ConflictedFile, ResolutionResult
-    from scripts.backport.sweep_apply import _empty_skip_reason
 
     # Every resolved file matched the target's existing content -> the change
     # does not apply on this branch.
@@ -2616,8 +2697,8 @@ def test_empty_skip_reason_detects_change_not_applicable():
 
 
 def test_empty_skip_reason_generic_fallback():
+    from scripts.backport.application import _empty_skip_reason
     from scripts.backport.models import ConflictedFile, ResolutionResult
-    from scripts.backport.sweep_apply import _empty_skip_reason
 
     # Resolution differs from target -> fall back to the generic no-net-change
     # statement rather than asserting a cause we cannot prove.
@@ -2983,7 +3064,10 @@ def _project_item(
             "merged": True,
             "repository": {"nameWithOwner": repo},
             "mergeCommit": {"oid": merge_sha},
-            "commits": {"nodes": [{"commit": {"oid": merge_sha}}]},
+            "commits": {
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                "nodes": [{"commit": {"oid": merge_sha}}],
+            },
         },
         "fieldValues": {
             "nodes": [
@@ -3033,6 +3117,15 @@ def test_discovery_keeps_matching_repo_pr():
     assert by_branch["9.1"][0].source_pr_number == 3654
 
 
+def test_discovery_marks_truncated_commit_connection_incomplete():
+    item = _project_item(number=3654, repo="valkey-io/valkey")
+    item["content"]["commits"]["pageInfo"]["hasNextPage"] = True
+
+    candidate = _make_discovery([item]).discover(["9.1"])["9.1"][0]
+
+    assert candidate.source_commits_complete is False
+
+
 def test_discovery_drops_unmerged_pr_regardless_of_repo():
     """The merged-only filter is applied before the repo filter."""
     item = _project_item(number=999, repo="valkey-io/valkey")
@@ -3066,3 +3159,4 @@ def test_project_items_query_selects_repository_name_with_owner():
     query = backport_sweep._project_items_query("organization")
     assert "repository {" in query
     assert "nameWithOwner" in query
+    assert "pageInfo { hasNextPage endCursor }" in query

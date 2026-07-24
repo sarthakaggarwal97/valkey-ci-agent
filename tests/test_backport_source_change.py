@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from scripts.backport.source_change import SourceChangeError, plan_source_change
+from scripts.backport.source_change import (
+    SourceChangeError,
+    plan_source_change,
+    prepare_source_change,
+)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -203,3 +207,16 @@ def test_missing_source_identity_is_refused(history: tuple[Path, str, str, str])
 
     with pytest.raises(SourceChangeError, match="neither a merge SHA nor source commits"):
         plan_source_change(str(repo), None, [])
+
+
+def test_incomplete_source_commit_page_is_refused_before_fetch(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(SourceChangeError, match="commit list.*incomplete"):
+        prepare_source_change(
+            str(tmp_path),
+            42,
+            "a" * 40,
+            ["b" * 40],
+            source_commits_complete=False,
+        )
