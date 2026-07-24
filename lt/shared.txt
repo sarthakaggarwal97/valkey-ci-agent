@@ -1,2 +1,2 @@
-shared s4
+shared resolved-by-hand
 common
