@@ -51,8 +51,20 @@ ResolveConflicts = Callable[..., list[ResolutionResult]]
 AdaptMissingTests = Callable[..., MissingTestAdaptationResult]
 
 
-def _abort_cherry_pick(repo_dir: str, run_git: RunGit) -> None:
-    run_git(repo_dir, "cherry-pick", "--abort")
+def _abort_cherry_pick(repo_dir: str, run_process: RunProcess) -> None:
+    """Abort any in-progress cherry-pick without raising.
+
+    A cherry-pick can fail before creating sequencer state (e.g. an
+    untracked file would be overwritten), in which case ``--abort`` itself
+    exits non-zero. There is nothing to abort then, so the failure is not an
+    error — rollback correctness is guaranteed by the caller's reset.
+    """
+    run_process(
+        ["git", "cherry-pick", "--abort"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
 
 
 def _empty_skip_reason(
@@ -120,16 +132,67 @@ def apply_candidate(
         plan.strategy,
         len(plan.commits),
     )
-    starting_head = (
-        _head_sha(repo_dir, run_process=run_process)
-        if plan.strategy == "series"
-        else None
-    )
+    try:
+        starting_head = _head_sha(repo_dir, run_process=run_process)
+    except RuntimeError as exc:
+        return _application_result(candidate, "error", str(exc))
     applied_commits: list[str] = []
     all_conflicts: list[ConflictedFile] = []
     all_resolutions: list[ResolutionResult] = []
     conflict_paths_seen: set[str] = set()
     detail_parts: list[str] = []
+
+    try:
+        return _apply_plan(
+            repo_dir,
+            candidate,
+            plan,
+            starting_head,
+            applied_commits,
+            all_conflicts,
+            all_resolutions,
+            conflict_paths_seen,
+            detail_parts,
+            language=language,
+            build_commands=build_commands,
+            validation_rules=validation_rules,
+            max_conflicting_files=max_conflicting_files,
+            run_git=run_git,
+            resolve_conflicts=resolve_conflicts,
+            adapt_missing_tests=adapt_missing_tests,
+            run_process=run_process,
+        )
+    except Exception as exc:  # noqa: BLE001 - never strand a partial candidate
+        _abort_and_rollback(repo_dir, starting_head, run_git, run_process)
+        return _application_result(
+            candidate,
+            "error",
+            f"unexpected failure while applying: {str(exc)[:300]}",
+            resolutions=all_resolutions,
+            conflicting_files=all_conflicts,
+        )
+
+
+def _apply_plan(
+    repo_dir: str,
+    candidate: BackportCandidate,
+    plan: SourceChangePlan,
+    starting_head: str,
+    applied_commits: list[str],
+    all_conflicts: list[ConflictedFile],
+    all_resolutions: list[ResolutionResult],
+    conflict_paths_seen: set[str],
+    detail_parts: list[str],
+    *,
+    language: str,
+    build_commands: list[str] | None,
+    validation_rules: list[Any] | None,
+    max_conflicting_files: int,
+    run_git: RunGit,
+    resolve_conflicts: ResolveConflicts,
+    adapt_missing_tests: AdaptMissingTests,
+    run_process: RunProcess,
+) -> CandidateResult:
     last_resolved_sha: str | None = None
     no_change_reason = ""
     partial_no_change_reason = ""
@@ -157,7 +220,6 @@ def apply_candidate(
                         run_process=run_process,
                     )
                 except RuntimeError as exc:
-                    assert starting_head is not None
                     run_git(repo_dir, "reset", "--hard", starting_head)
                     return _application_result(
                         candidate,
@@ -174,7 +236,7 @@ def apply_candidate(
             text=True,
         )
         if conflict_result.returncode != 0:
-            _abort_and_rollback(repo_dir, starting_head, run_git)
+            _abort_and_rollback(repo_dir, starting_head, run_git, run_process)
             return _application_result(
                 candidate,
                 "error",
@@ -188,15 +250,14 @@ def apply_candidate(
             if line.strip()
         ]
         if not conflicting_paths:
-            _abort_cherry_pick(repo_dir, run_git)
+            _abort_cherry_pick(repo_dir, run_process)
             if _is_empty_cherry_pick(result):
                 partial_no_change_reason = (
                     "One or more source commits were already satisfied on "
                     "the target branch."
                 )
                 continue
-            if starting_head is not None:
-                run_git(repo_dir, "reset", "--hard", starting_head)
+            run_git(repo_dir, "reset", "--hard", starting_head)
             return _application_result(
                 candidate,
                 "error",
@@ -253,7 +314,7 @@ def apply_candidate(
             )
 
         if not conflicting_files:
-            _abort_and_rollback(repo_dir, starting_head, run_git)
+            _abort_and_rollback(repo_dir, starting_head, run_git, run_process)
             return _application_result(
                 candidate,
                 "skipped-conflict",
@@ -263,7 +324,7 @@ def apply_candidate(
         all_conflicts.extend(conflicting_files)
         conflict_paths_seen.update(item.path for item in conflicting_files)
         if len(conflict_paths_seen) > max_conflicting_files:
-            _abort_and_rollback(repo_dir, starting_head, run_git)
+            _abort_and_rollback(repo_dir, starting_head, run_git, run_process)
             detail = (
                 f"Too many conflicting files ({len(conflict_paths_seen)} > "
                 f"max_conflicting_files={max_conflicting_files}). "
@@ -283,7 +344,7 @@ def apply_candidate(
                 if not is_test_path(path)
             )
             if non_test_missing_paths:
-                _abort_and_rollback(repo_dir, starting_head, run_git)
+                _abort_and_rollback(repo_dir, starting_head, run_git, run_process)
                 paths = ", ".join(non_test_missing_paths)
                 return _application_result(
                     candidate,
@@ -346,7 +407,7 @@ def apply_candidate(
             if resolution.resolved_content is None
         ]
         if unresolved:
-            _abort_and_rollback(repo_dir, starting_head, run_git)
+            _abort_and_rollback(repo_dir, starting_head, run_git, run_process)
             details = "; ".join(
                 f"{item.path}: {(item.resolution_summary or 'unresolved')[:200]}"
                 for item in unresolved
@@ -390,7 +451,7 @@ def apply_candidate(
                     fatal=True,
                 )
             if test_adaptation.fatal:
-                _abort_and_rollback(repo_dir, starting_head, run_git)
+                _abort_and_rollback(repo_dir, starting_head, run_git, run_process)
                 return _application_result(
                     candidate,
                     "skipped-conflict",
@@ -414,7 +475,7 @@ def apply_candidate(
             _append_detail(detail_parts, test_adaptation.summary)
 
         if not has_staged_changes(repo_dir, run_process=run_process):
-            _abort_cherry_pick(repo_dir, run_git)
+            _abort_cherry_pick(repo_dir, run_process)
             if target_missing_paths:
                 paths = ", ".join(sorted(target_missing_paths))
                 no_change_reason = (
@@ -437,13 +498,13 @@ def apply_candidate(
         if commit_result.returncode != 0:
             output = f"{commit_result.stdout}\n{commit_result.stderr}"
             if "nothing to commit" in output.lower():
-                _abort_cherry_pick(repo_dir, run_git)
+                _abort_cherry_pick(repo_dir, run_process)
                 no_change_reason = (
                     "The cherry-pick produced no net change on this branch, "
                     "so there is nothing to backport."
                 )
                 continue
-            _abort_and_rollback(repo_dir, starting_head, run_git)
+            _abort_and_rollback(repo_dir, starting_head, run_git, run_process)
             return _application_result(
                 candidate,
                 "skipped-conflict",
@@ -460,7 +521,6 @@ def apply_candidate(
                     run_process=run_process,
                 )
             except RuntimeError as exc:
-                assert starting_head is not None
                 run_git(repo_dir, "reset", "--hard", starting_head)
                 return _application_result(
                     candidate,
@@ -543,12 +603,12 @@ def _application_result(
 
 def _abort_and_rollback(
     repo_dir: str,
-    starting_head: str | None,
+    starting_head: str,
     run_git: RunGit,
+    run_process: RunProcess,
 ) -> None:
-    _abort_cherry_pick(repo_dir, run_git)
-    if starting_head is not None:
-        run_git(repo_dir, "reset", "--hard", starting_head)
+    _abort_cherry_pick(repo_dir, run_process)
+    run_git(repo_dir, "reset", "--hard", starting_head)
 
 
 def _append_detail(parts: list[str], detail: str) -> None:

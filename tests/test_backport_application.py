@@ -406,3 +406,78 @@ def test_conflict_limit_rolls_back_without_invoking_resolver(
     assert _git(repo, "rev-parse", "HEAD") == starting_head
     assert _git(repo, "status", "--porcelain") == ""
     resolver.assert_not_called()
+
+
+def test_untracked_file_collision_mid_series_rolls_back_cleanly(
+    tmp_path: Path,
+) -> None:
+    """A cherry-pick that fails before creating sequencer state (untracked
+    file would be overwritten) makes ``cherry-pick --abort`` itself fail.
+    The candidate must still report an error and leave HEAD at the start,
+    with earlier series commits rolled back."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, "base.txt", "base\n", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    first = _commit(repo, "one.txt", "one\n", "source one")
+    second = _commit(repo, "collide.txt", "source\n", "source two")
+
+    _git(repo, "checkout", "-q", "-b", "release", base)
+    starting_head = _git(repo, "rev-parse", "HEAD")
+    # Untracked file that the second cherry-pick would overwrite.
+    (repo / "collide.txt").write_text("untracked local\n", encoding="utf-8")
+
+    result = apply_candidate(
+        str(repo),
+        _candidate(merge_commit_sha=None, commit_shas=[first, second]),
+        "example/repo",
+        dict(os.environ),
+        source_plan=_series_plan(first, second),
+    )
+
+    assert result.outcome == "error"
+    assert "cherry-pick failed" in result.detail
+    assert _git(repo, "rev-parse", "HEAD") == starting_head
+    assert not (repo / "one.txt").exists()
+    # The untracked file is the user's; rollback must not delete it.
+    assert (repo / "collide.txt").read_text(encoding="utf-8") == "untracked local\n"
+
+
+def test_hard_cherry_pick_failure_is_not_reported_as_empty(
+    tmp_path: Path,
+) -> None:
+    """A cherry-pick that fails without conflicts and is NOT empty must be an
+    error, never 'already applied' — misclassifying it would silently drop
+    the commit while the sweep reports the PR as applied."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, "base.txt", "base\n", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    source_sha = _commit(repo, "data.txt", "source\n", "source change")
+
+    _git(repo, "checkout", "-q", "-b", "release", base)
+    starting_head = _git(repo, "rev-parse", "HEAD")
+    (repo / "data.txt").write_text("untracked\n", encoding="utf-8")
+
+    result = apply_candidate(
+        str(repo),
+        _candidate(merge_commit_sha=None, commit_shas=[source_sha]),
+        "example/repo",
+        dict(os.environ),
+        source_plan=SourceChangePlan(
+            strategy="single",
+            commits=(source_sha,),
+            merge_commit_sha=None,
+            source_commits=(source_sha,),
+            aggregate_patch_id="test-patch",
+        ),
+    )
+
+    assert result.outcome == "error"
+    assert "cherry-pick failed" in result.detail
+    assert result.applied_commits == []
+    assert _git(repo, "rev-parse", "HEAD") == starting_head
