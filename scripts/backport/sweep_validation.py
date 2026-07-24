@@ -10,8 +10,12 @@ from pathlib import Path
 from typing import Any, Callable, Union
 
 from scripts.ai.runtime import run_agent
-from scripts.backport.main import _run_git as run_git_default
-from scripts.backport.sweep_apply import has_staged_changes
+from scripts.backport.git import (
+    has_staged_changes,
+)
+from scripts.backport.git import (
+    run_git as run_git_default,
+)
 from scripts.backport.sweep_git import worktree_changed_paths
 from scripts.backport.validation import (
     changed_paths_since_base,

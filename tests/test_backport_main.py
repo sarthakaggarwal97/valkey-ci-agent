@@ -9,12 +9,19 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from scripts.backport.main import build_summary, run_backport
+from scripts.backport.main import (
+    _reconcile_diff_comments_best_effort,
+    _skipped_existing_message,
+    build_summary,
+    run_backport,
+)
 from scripts.backport.main import main as backport_main
 from scripts.backport.models import (
+    DETAIL_EMPTY_ON_TARGET,
     BackportConfig,
     BackportPRContext,
     BackportResult,
+    CandidateResult,
     CherryPickResult,
     ConflictedFile,
     ResolutionResult,
@@ -163,11 +170,12 @@ def test_run_backport_allows_different_owner_push_repo(mock_github) -> None:
         patch(f"{_PATCH_PREFIX}._clone_repo"),
         patch(f"{_PATCH_PREFIX}._run_git"),
         patch(f"{_PATCH_PREFIX}.BackportPRCreator") as mock_creator_cls,
-        patch(f"{_PATCH_PREFIX}.cherry_pick") as mock_cherry_pick,
+        patch(f"{_PATCH_PREFIX}.apply_candidate") as mock_apply_candidate,
     ):
-        mock_cherry_pick.return_value = CherryPickResult(
-            success=True,
-            conflicting_files=[],
+        mock_apply_candidate.return_value = CandidateResult(
+            source_pr_number=100,
+            source_pr_title="Fix bug",
+            outcome="applied",
             applied_commits=["abc123"],
         )
         mock_creator_cls.return_value.check_duplicate.return_value = None
@@ -230,11 +238,12 @@ def test_run_backport_defaults_to_direct_upstream_push(mock_github) -> None:
         patch(f"{_PATCH_PREFIX}._clone_repo"),
         patch(f"{_PATCH_PREFIX}._run_git") as mock_run_git,
         patch(f"{_PATCH_PREFIX}.BackportPRCreator") as mock_creator_cls,
-        patch(f"{_PATCH_PREFIX}.cherry_pick") as mock_cherry_pick,
+        patch(f"{_PATCH_PREFIX}.apply_candidate") as mock_apply_candidate,
     ):
-        mock_cherry_pick.return_value = CherryPickResult(
-            success=True,
-            conflicting_files=[],
+        mock_apply_candidate.return_value = CandidateResult(
+            source_pr_number=100,
+            source_pr_title="Fix bug",
+            outcome="applied",
             applied_commits=["abc123"],
         )
         mock_creator_cls.return_value.check_duplicate.return_value = None
@@ -261,13 +270,50 @@ def test_run_backport_defaults_to_direct_upstream_push(mock_github) -> None:
     assert not any(call.args[1:3] == ("remote", "add") for call in mock_run_git.call_args_list)
 
 
+@patch(f"{_PATCH_PREFIX}.Github")
+def test_validation_setup_failure_blocks_manual_application(mock_github) -> None:
+    mock_repo = MagicMock()
+    mock_repo.get_branch.return_value = MagicMock()
+    mock_repo.get_pull.return_value = _make_mock_pr()
+    mock_github.return_value.get_repo.return_value = mock_repo
+
+    with (
+        patch(f"{_PATCH_PREFIX}._clone_repo"),
+        patch(f"{_PATCH_PREFIX}._run_git") as mock_run_git,
+        patch(f"{_PATCH_PREFIX}.BackportPRCreator") as mock_creator_cls,
+        patch(f"{_PATCH_PREFIX}.apply_candidate") as mock_apply_candidate,
+        patch(f"{_PATCH_PREFIX}.run_build_commands") as mock_run_commands,
+    ):
+        mock_creator_cls.return_value.check_duplicate.return_value = None
+        mock_run_commands.return_value = (False, "configure failed")
+
+        result = run_backport(
+            repo_full_name="valkey-io/valkey",
+            source_pr_number=100,
+            target_branch="8.1",
+            config=_default_config(),
+            github_token="fake-token",
+            push_repo=_DEFAULT_PUSH_REPO,
+            validation_setup_commands=["./configure"],
+        )
+
+    assert result.outcome == "error"
+    assert "Validation setup failed" in (result.error_message or "")
+    mock_run_commands.assert_called_once_with(ANY, ["./configure"])
+    mock_apply_candidate.assert_not_called()
+    assert not any(
+        len(call.args) > 1 and call.args[1] == "push"
+        for call in mock_run_git.call_args_list
+    )
+
+
 class TestRunBackportCleanCherryPick:
     """Test clean cherry-pick flow — no conflicts, PR created successfully."""
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_clean_cherry_pick_returns_success(
         self,
@@ -303,9 +349,10 @@ class TestRunBackportCleanCherryPick:
 
 
         # Clean cherry-pick
-        mock_executor_cls.return_value = CherryPickResult(
-            success=True,
-            conflicting_files=[],
+        mock_executor_cls.return_value = CandidateResult(
+            source_pr_number=100,
+            source_pr_title="Fix bug",
+            outcome="applied",
             applied_commits=["commit_sha_1"],
         )
 
@@ -333,12 +380,12 @@ class TestRunBackportCleanCherryPick:
             llm_conflict_label="ai-resolved-conflicts",
         )
 
-    @patch("scripts.common.build_validator.run_build_commands")
+    @patch(f"{_PATCH_PREFIX}.run_build_commands")
     @patch(f"{_PATCH_PREFIX}.changed_paths_since_base", return_value=("src/server.c",))
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_build_validation_failure_blocks_push_and_pr(
         self,
@@ -361,9 +408,10 @@ class TestRunBackportCleanCherryPick:
         mock_pr_creator_cls.return_value = mock_pr_creator
         mock_pr_creator.check_duplicate.return_value = None
 
-        mock_executor_cls.return_value = CherryPickResult(
-            success=True,
-            conflicting_files=[],
+        mock_executor_cls.return_value = CandidateResult(
+            source_pr_number=100,
+            source_pr_title="Fix bug",
+            outcome="applied",
             applied_commits=["commit_sha_1"],
         )
         mock_run_build_commands.return_value = (False, "compile failed")
@@ -403,18 +451,14 @@ class TestRunBackportConflictedCherryPick:
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
-    @patch(f"{_PATCH_PREFIX}._apply_resolutions")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.resolve_conflicts_with_claude")
-    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_conflicted_cherry_pick_with_resolution(
         self,
         mock_gh_cls: MagicMock,
         mock_executor_cls: MagicMock,
-        mock_resolve_conflicts: MagicMock,
         mock_pr_creator_cls: MagicMock,
-        mock_apply_resolutions: MagicMock,
         mock_run_git: MagicMock,
         mock_clone: MagicMock,
     ) -> None:
@@ -444,20 +488,20 @@ class TestRunBackportConflictedCherryPick:
             target_branch_content="old",
             source_branch_content="new",
         )
-        mock_executor_cls.return_value = CherryPickResult(
-            success=False,
+        resolution = ResolutionResult(
+            path="src/server.c",
+            resolved_content="resolved content",
+            resolution_summary="Applied fix",
+        )
+        mock_executor_cls.return_value = CandidateResult(
+            source_pr_number=100,
+            source_pr_title="Fix bug",
+            outcome="applied",
             conflicting_files=[conflicted_file],
             applied_commits=["merge_sha_abc"],
+            resolutions=[resolution],
+            resolved_by_ai=True,
         )
-
-        # Resolver resolves the file
-        mock_resolve_conflicts.return_value = [
-            ResolutionResult(
-                path="src/server.c",
-                resolved_content="resolved content",
-                resolution_summary="Applied fix",
-            ),
-        ]
 
         result = run_backport(
             repo_full_name="valkey-io/valkey",
@@ -472,8 +516,124 @@ class TestRunBackportConflictedCherryPick:
         assert result.files_conflicted == 1
         assert result.files_resolved == 1
         assert result.files_unresolved == 0
-        mock_resolve_conflicts.assert_called_once()
-        mock_apply_resolutions.assert_called_once()
+        mock_executor_cls.assert_called_once()
+
+    @patch(f"{_PATCH_PREFIX}._clone_repo")
+    @patch(f"{_PATCH_PREFIX}._run_git")
+    @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.Github")
+    def test_ai_test_adaptation_is_disclosed_to_pr_creator(
+        self,
+        mock_gh_cls: MagicMock,
+        mock_apply_candidate: MagicMock,
+        mock_pr_creator_cls: MagicMock,
+        _mock_run_git: MagicMock,
+        _mock_clone: MagicMock,
+    ) -> None:
+        mock_gh = MagicMock()
+        mock_gh_cls.return_value = mock_gh
+        mock_repo = MagicMock()
+        mock_gh.get_repo.return_value = mock_repo
+        mock_repo.get_branch.return_value = MagicMock()
+        mock_repo.get_pull.return_value = _make_mock_pr()
+
+        mock_pr_creator = mock_pr_creator_cls.return_value
+        mock_pr_creator.check_duplicate.return_value = None
+        mock_pr_creator.create_backport_pr.return_value = (
+            "https://github.com/valkey-io/valkey/pull/201"
+        )
+
+        ai_summary = (
+            "ported target-missing test coverage to: "
+            "tests/unit/networking.tcl"
+        )
+        mock_apply_candidate.return_value = CandidateResult(
+            source_pr_number=100,
+            source_pr_title="Fix bug",
+            outcome="applied",
+            detail=(
+                "dropped target-missing test file(s): "
+                "src/unit/test_networking.cpp; "
+                + ai_summary
+            ),
+            conflicting_files=[
+                ConflictedFile(
+                    path="src/unit/test_networking.cpp",
+                    target_branch_content="",
+                    source_branch_content="TEST(...)\n",
+                )
+            ],
+            applied_commits=["merge_sha_abc"],
+            resolved_by_ai=True,
+            ai_summary=ai_summary,
+        )
+
+        result = run_backport(
+            repo_full_name="valkey-io/valkey",
+            source_pr_number=100,
+            target_branch="8.1",
+            config=_default_config(),
+            github_token="fake-token",
+            push_repo=_DEFAULT_PUSH_REPO,
+        )
+
+        assert result.outcome == "success"
+        call = mock_pr_creator.create_backport_pr.call_args
+        assert call.kwargs["ai_involved"] is True
+        assert call.kwargs["ai_summary"] == ai_summary
+        assert call.args[2] is None
+
+
+@patch(f"{_PATCH_PREFIX}.reconcile_diff_comments")
+def test_pr_body_rebuild_preserves_ai_adaptation_disclosure(
+    mock_reconcile: MagicMock,
+) -> None:
+    mock_reconcile.return_value = {
+        "src/server.c": "https://github.com/example/repo/pull/201#issuecomment-1"
+    }
+    repo = MagicMock()
+    backport_pr = MagicMock()
+    repo.get_pull.return_value = backport_pr
+    context = BackportPRContext(
+        source_pr_number=100,
+        source_pr_title="Fix bug",
+        source_pr_url="https://github.com/example/repo/pull/100",
+        source_pr_diff="",
+        target_branch="8.1",
+        commits=["source"],
+    )
+    cherry_result = CherryPickResult(
+        success=False,
+        applied_commits=["squash"],
+        conflicting_commit_sha="squash",
+    )
+    resolutions = [
+        ResolutionResult(
+            path="src/server.c",
+            resolved_content="resolved\n",
+            resolution_summary="whitespace-only (no LLM needed)",
+            source="automatic",
+        )
+    ]
+    ai_summary = (
+        "ported target-missing test coverage to: tests/unit/networking.tcl"
+    )
+
+    _reconcile_diff_comments_best_effort(
+        repo,
+        "https://github.com/example/repo/pull/201",
+        context,
+        cherry_result,
+        resolutions,
+        ai_involved=True,
+        ai_summary=ai_summary,
+    )
+
+    rebuilt_body = backport_pr.edit.call_args.kwargs["body"]
+    assert "### AI Adaptation" in rebuilt_body
+    assert ai_summary in rebuilt_body
+    assert "### Human Review Required" in rebuilt_body
 
 
 class TestRunBackportDuplicateDetection:
@@ -481,7 +641,7 @@ class TestRunBackportDuplicateDetection:
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_duplicate_pr_skips_processing(
         self,
@@ -522,7 +682,7 @@ class TestRunBackportMergedPrValidation:
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_unmerged_pr_skips_processing(
         self,
@@ -564,7 +724,7 @@ class TestRunBackportMissingBranch:
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_missing_branch_skips_processing(
         self,
@@ -605,7 +765,7 @@ class TestRunBackportGitHubAPIError:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_pr_creation_failure_returns_error(
         self,
@@ -635,9 +795,10 @@ class TestRunBackportGitHubAPIError:
 
 
         # Clean cherry-pick
-        mock_executor_cls.return_value = CherryPickResult(
-            success=True,
-            conflicting_files=[],
+        mock_executor_cls.return_value = CandidateResult(
+            source_pr_number=100,
+            source_pr_title="Fix bug",
+            outcome="applied",
             applied_commits=["sha1"],
         )
 
@@ -660,7 +821,7 @@ class TestRunBackportCherryPickFailure:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_cherry_pick_failure_without_conflicts_does_not_push_or_create_pr(
         self,
@@ -682,10 +843,14 @@ class TestRunBackportCherryPickFailure:
         mock_pr_creator.check_duplicate.return_value = None
 
 
-        mock_executor_cls.return_value = CherryPickResult(
-            success=False,
-            conflicting_files=[],
-            applied_commits=["sha1"],
+        mock_executor_cls.return_value = CandidateResult(
+            source_pr_number=100,
+            source_pr_title="Fix bug",
+            outcome="error",
+            detail=(
+                "Cherry-pick failed without conflicted files; refusing to "
+                "push an unresolved or unchanged backport branch."
+            ),
         )
 
         result = run_backport(
@@ -712,7 +877,7 @@ class TestRunBackportAlreadyApplied:
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
-    @patch(f"{_PATCH_PREFIX}.cherry_pick")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
     @patch(f"{_PATCH_PREFIX}.Github")
     def test_already_applied_does_not_push_or_create_pr(
         self,
@@ -733,10 +898,11 @@ class TestRunBackportAlreadyApplied:
         mock_pr_creator_cls.return_value = mock_pr_creator
         mock_pr_creator.check_duplicate.return_value = None
 
-        mock_executor_cls.return_value = CherryPickResult(
-            success=True,
-            conflicting_files=[],
-            applied_commits=[],
+        mock_executor_cls.return_value = CandidateResult(
+            source_pr_number=100,
+            source_pr_title="Fix bug",
+            outcome="skipped-existing",
+            detail="already applied or empty cherry-pick",
         )
 
         result = run_backport(
@@ -755,3 +921,21 @@ class TestRunBackportAlreadyApplied:
             len(call_args.args) > 1 and call_args.args[1] == "push"
             for call_args in mock_run_git.call_args_list
         )
+
+    def test_no_op_candidate_reports_accurate_reason(
+        self,
+    ) -> None:
+        message = _skipped_existing_message(
+            CandidateResult(
+                source_pr_number=100,
+                source_pr_title="Fix code absent from this branch",
+                outcome="skipped-existing",
+                detail=DETAIL_EMPTY_ON_TARGET,
+                skip_reason="The affected code is absent from this release line.",
+            ),
+            "8.1",
+        )
+
+        assert "does not require a backport" in message
+        assert "affected code is absent" in message
+        assert "already applied" not in message
