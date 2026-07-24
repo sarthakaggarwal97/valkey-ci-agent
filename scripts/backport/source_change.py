@@ -234,19 +234,69 @@ def _replayable_series_commits(
     repo_dir: str,
     commits: tuple[str, ...],
 ) -> tuple[str, ...]:
-    """Return the non-merge commits GitHub rebase-and-merge would replay."""
+    """Return the non-merge commits GitHub rebase-and-merge would replay.
 
-    replayable = tuple(
-        sha
-        for sha in commits
-        if len(_commit_parents(repo_dir, sha)) == 1
-    )
+    Merge commits in the series are source-branch syncs whose target-side
+    content is not part of the pull request's change, so they are skipped —
+    but only when they carry no content of their own. A merge whose tree
+    differs from the automatic merge of its parents contains manual edits
+    (conflict resolutions, or fixes slipped into the merge), and replaying
+    only the non-merge commits would silently lose them.
+    """
+
+    replayable: list[str] = []
+    for sha in commits:
+        parents = _commit_parents(repo_dir, sha)
+        if len(parents) == 1:
+            replayable.append(sha)
+            continue
+        if not _merge_is_content_neutral(repo_dir, sha, parents):
+            raise SourceChangeError(
+                f"source merge commit {sha} carries changes of its own "
+                "(e.g. a manual conflict resolution); replaying the series "
+                "would silently drop them, so this pull request must be "
+                "backported manually"
+            )
     if not replayable:
         raise SourceChangeError(
             "source series contains only merge commits; cannot reproduce "
             "rebase-and-merge safely"
         )
-    return replayable
+    return tuple(replayable)
+
+
+def _merge_is_content_neutral(
+    repo_dir: str,
+    sha: str,
+    parents: tuple[str, ...],
+) -> bool:
+    """Whether *sha*'s tree is exactly the automatic merge of its parents.
+
+    A conflicting automatic merge means the commit resolved those conflicts
+    by hand, so it is never neutral.
+    """
+
+    if len(parents) != 2:
+        return False
+    result = _git(
+        repo_dir,
+        "merge-tree",
+        "--write-tree",
+        parents[0],
+        parents[1],
+        check=False,
+    )
+    if result.returncode not in (0, 1):
+        raise SourceChangeError(
+            f"could not compute the automatic merge for {sha}: "
+            f"{result.stderr.strip()[:300]}"
+        )
+    if result.returncode == 1:
+        return False
+    fields = result.stdout.split()
+    auto_tree = fields[0] if fields else ""
+    actual_tree = _git(repo_dir, "rev-parse", f"{sha}^{{tree}}").stdout.strip()
+    return bool(auto_tree) and auto_tree == actual_tree
 
 
 def _unique_merge_base(repo_dir: str, left: str, right: str) -> str:

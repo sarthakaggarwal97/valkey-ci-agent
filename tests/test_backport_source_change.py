@@ -295,3 +295,67 @@ def test_incomplete_source_commit_page_is_refused_before_fetch(
             ["b" * 40],
             source_commits_complete=False,
         )
+
+
+def test_series_sync_merge_with_manual_content_fails_closed(
+    tmp_path: Path,
+) -> None:
+    """A sync merge that resolved conflicts by hand is not replayable.
+
+    Skipping the merge would silently drop the resolution content — the exact
+    silent-loss class this module exists to prevent — so planning must refuse.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    _commit(repo, "shared.txt", "base\n", "base")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    first = _commit(repo, "shared.txt", "source\n", "source one")
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, "shared.txt", "main\n", "advance main")
+    _git(repo, "checkout", "-q", "source")
+    merge = subprocess.run(
+        ["git", "merge", "--no-ff", "-m", "sync main", "main"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert merge.returncode != 0  # conflict on shared.txt
+    (repo / "shared.txt").write_text("resolved by hand\n", encoding="utf-8")
+    _git(repo, "add", "--", "shared.txt")
+    _git(repo, "commit", "-q", "--no-edit")
+    sync = _git(repo, "rev-parse", "HEAD")
+    second = _commit(repo, "two.txt", "two\n", "source two")
+
+    with pytest.raises(SourceChangeError, match="carries changes of its own"):
+        plan_source_change(str(repo), None, [first, sync, second])
+
+
+def test_series_evil_merge_with_extra_content_fails_closed(
+    tmp_path: Path,
+) -> None:
+    """A conflict-free merge with a change smuggled in is not replayable."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    _commit(repo, "base.txt", "base\n", "base")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    first = _commit(repo, "one.txt", "one\n", "source one")
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, "main.txt", "main\n", "advance main")
+    _git(repo, "checkout", "-q", "source")
+    _git(repo, "merge", "-q", "--no-ff", "--no-commit", "main")
+    (repo / "evil.txt").write_text("smuggled\n", encoding="utf-8")
+    _git(repo, "add", "--", "evil.txt")
+    _git(repo, "commit", "-q", "-m", "sync main")
+    sync = _git(repo, "rev-parse", "HEAD")
+    second = _commit(repo, "two.txt", "two\n", "source two")
+
+    with pytest.raises(SourceChangeError, match="carries changes of its own"):
+        plan_source_change(str(repo), None, [first, sync, second])
