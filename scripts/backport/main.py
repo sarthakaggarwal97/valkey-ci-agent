@@ -21,11 +21,13 @@ from scripts.backport.application import apply_candidate
 from scripts.backport.diff_comments import reconcile_diff_comments
 from scripts.backport.git import run_git as _run_git
 from scripts.backport.models import (
+    DETAIL_EMPTY_ON_TARGET,
     BackportCandidate,
     BackportConfig,
     BackportOutcome,
     BackportPRContext,
     BackportResult,
+    CandidateResult,
     CherryPickResult,
     ResolutionResult,
 )
@@ -65,6 +67,28 @@ def build_summary(result: BackportResult) -> str:
         f"- Files unresolved: {result.files_unresolved}",
     ]
     return "\n".join(lines)
+
+
+def _skipped_existing_message(
+    result: CandidateResult,
+    target_branch: str,
+) -> str:
+    """Describe why a skipped candidate does not need a backport PR."""
+
+    if result.detail == DETAIL_EMPTY_ON_TARGET:
+        reason = (
+            result.skip_reason
+            or "The change produces no net change on this branch."
+        )
+        return (
+            f"Source PR #{result.source_pr_number} does not require a "
+            f"backport to `{target_branch}`; no backport PR was "
+            f"created. {reason}"
+        )
+    return (
+        f"Source PR #{result.source_pr_number} is already applied to "
+        f"`{target_branch}`; no backport PR was created."
+    )
 
 
 def run_backport(
@@ -184,14 +208,6 @@ def run_backport(
             logger.warning("Could not fetch PR diff for #%s: %s", source_pr_number, exc)
             diff_content = ""
 
-        pr_context = BackportPRContext(
-            source_pr_number=source_pr_number,
-            source_pr_title=source_pr.title or "",
-            source_pr_url=source_pr.html_url,
-            source_pr_diff=diff_content,
-            target_branch=target_branch,
-            commits=commits,
-        )
         candidate = BackportCandidate(
             source_pr_number=source_pr_number,
             source_pr_title=source_pr.title or "",
@@ -201,6 +217,7 @@ def run_backport(
             merge_commit_sha=merge_commit_sha,
             commit_shas=commits,
         )
+        pr_context = candidate.to_pr_context()
 
         logger.info("Executing cherry-pick onto %s.", target_branch)
         branch_name = build_branch_name(source_pr_number, target_branch)
@@ -261,9 +278,9 @@ def run_backport(
                 )
 
                 if application_result.outcome == "skipped-existing":
-                    msg = (
-                        f"Source PR #{source_pr_number} is already applied to "
-                        f"`{target_branch}`; no backport PR was created."
+                    msg = _skipped_existing_message(
+                        application_result,
+                        target_branch,
                     )
                     logger.info(msg)
                     _post_comment(repo, source_pr_number, f"Backport skipped: {msg}")

@@ -87,6 +87,18 @@ class BackportCandidate:
     source_pr_diff: str = ""
     source_commits_complete: bool = True
 
+    def to_pr_context(self) -> BackportPRContext:
+        """Return the resolver and PR-publication view of this candidate."""
+
+        return BackportPRContext(
+            source_pr_number=self.source_pr_number,
+            source_pr_title=self.source_pr_title,
+            source_pr_url=self.source_pr_url,
+            source_pr_diff=self.source_pr_diff,
+            target_branch=self.target_branch,
+            commits=list(self.commit_shas),
+        )
+
 
 @dataclass
 class CandidateResult:

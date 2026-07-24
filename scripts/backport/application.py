@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -27,7 +29,6 @@ from scripts.backport.models import (
     DETAIL_EMPTY_ON_TARGET,
     DETAIL_RESOLVED_BY_AI,
     BackportCandidate,
-    BackportPRContext,
     CandidateOutcome,
     CandidateResult,
     ConflictedFile,
@@ -51,8 +52,31 @@ ResolveConflicts = Callable[..., list[ResolutionResult]]
 AdaptMissingTests = Callable[..., MissingTestAdaptationResult]
 
 
-def _abort_cherry_pick(repo_dir: str, run_git: RunGit) -> None:
-    run_git(repo_dir, "cherry-pick", "--abort")
+def _abort_cherry_pick(repo_dir: str, run_process: RunProcess) -> None:
+    """Abort any in-progress cherry-pick, guaranteeing a clean tree.
+
+    A cherry-pick can fail before creating sequencer state (e.g. an
+    untracked file would be overwritten), in which case ``--abort`` itself
+    exits non-zero. Callers on their happy path (empty pick, no-net-change)
+    continue applying further commits, so they must never proceed on a
+    dirty tree: when the abort fails, fall back to ``reset --hard HEAD``,
+    which clears CHERRY_PICK_HEAD and any unmerged index while preserving
+    applied commits and untracked files.
+    """
+    result = run_process(
+        ["git", "cherry-pick", "--abort"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return
+    run_process(
+        ["git", "reset", "--hard", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
 
 
 def _empty_skip_reason(
@@ -78,6 +102,23 @@ def _empty_skip_reason(
             "matched the existing code, so the cherry-pick added nothing."
         )
     return "The cherry-pick produced no net change on this branch, so there is nothing to backport."
+
+
+@dataclass
+class _ApplyState:
+    """Everything a partially applied candidate has accumulated.
+
+    Owned by ``apply_candidate`` so its failure handler can report the
+    conflicts and resolutions gathered before an unexpected error, and
+    roll back to ``starting_head``.
+    """
+
+    starting_head: str
+    applied_commits: list[str] = field(default_factory=list)
+    conflicts: list[ConflictedFile] = field(default_factory=list)
+    resolutions: list[ResolutionResult] = field(default_factory=list)
+    conflict_paths_seen: set[str] = field(default_factory=set)
+    detail_parts: list[str] = field(default_factory=list)
 
 
 def apply_candidate(
@@ -120,18 +161,55 @@ def apply_candidate(
         plan.strategy,
         len(plan.commits),
     )
-    starting_head = (
-        _head_sha(repo_dir, run_process=run_process)
-        if len(plan.commits) > 1
-        else None
-    )
-    applied_commits: list[str] = []
-    all_conflicts: list[ConflictedFile] = []
-    all_resolutions: list[ResolutionResult] = []
-    conflict_paths_seen: set[str] = set()
-    detail_parts: list[str] = []
+    try:
+        state = _ApplyState(_head_sha(repo_dir, run_process=run_process))
+    except RuntimeError as exc:
+        return _application_result(candidate, "error", str(exc))
+
+    try:
+        return _apply_plan(
+            repo_dir,
+            candidate,
+            plan,
+            state,
+            language=language,
+            build_commands=build_commands,
+            validation_rules=validation_rules,
+            max_conflicting_files=max_conflicting_files,
+            run_git=run_git,
+            resolve_conflicts=resolve_conflicts,
+            adapt_missing_tests=adapt_missing_tests,
+            run_process=run_process,
+        )
+    except Exception as exc:  # noqa: BLE001 - never strand a partial candidate
+        _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
+        return _application_result(
+            candidate,
+            "error",
+            f"unexpected failure while applying: {str(exc)[:300]}",
+            resolutions=state.resolutions,
+            conflicting_files=state.conflicts,
+        )
+
+
+def _apply_plan(
+    repo_dir: str,
+    candidate: BackportCandidate,
+    plan: SourceChangePlan,
+    state: _ApplyState,
+    *,
+    language: str,
+    build_commands: list[str] | None,
+    validation_rules: list[Any] | None,
+    max_conflicting_files: int,
+    run_git: RunGit,
+    resolve_conflicts: ResolveConflicts,
+    adapt_missing_tests: AdaptMissingTests,
+    run_process: RunProcess,
+) -> CandidateResult:
     last_resolved_sha: str | None = None
     no_change_reason = ""
+    partial_no_change_reason = ""
     adapted_by_ai = False
     first_conflicting_sha: str | None = None
 
@@ -139,6 +217,8 @@ def apply_candidate(
         command = ["git", "cherry-pick", sha]
         if plan.strategy == "merge" and index == 0:
             command[2:2] = ["-m", "1"]
+        elif plan.strategy == "series":
+            command.insert(2, "-x")
         result = run_process(
             command,
             cwd=repo_dir,
@@ -146,7 +226,21 @@ def apply_candidate(
             text=True,
         )
         if result.returncode == 0:
-            applied_commits.append(sha)
+            if plan.strategy == "series":
+                try:
+                    _append_source_pr_to_head_subject(
+                        repo_dir,
+                        candidate.source_pr_number,
+                        run_process=run_process,
+                    )
+                except RuntimeError as exc:
+                    run_git(repo_dir, "reset", "--hard", state.starting_head)
+                    return _application_result(
+                        candidate,
+                        "error",
+                        f"could not record source PR identity: {exc}",
+                    )
+            state.applied_commits.append(sha)
             continue
 
         conflict_result = run_process(
@@ -156,7 +250,7 @@ def apply_candidate(
             text=True,
         )
         if conflict_result.returncode != 0:
-            _abort_and_rollback(repo_dir, starting_head, run_git)
+            _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
             return _application_result(
                 candidate,
                 "error",
@@ -170,11 +264,14 @@ def apply_candidate(
             if line.strip()
         ]
         if not conflicting_paths:
-            _abort_cherry_pick(repo_dir, run_git)
+            _abort_cherry_pick(repo_dir, run_process)
             if _is_empty_cherry_pick(result):
+                partial_no_change_reason = (
+                    "One or more source commits were already satisfied on "
+                    "the target branch."
+                )
                 continue
-            if starting_head is not None:
-                run_git(repo_dir, "reset", "--hard", starting_head)
+            run_git(repo_dir, "reset", "--hard", state.starting_head)
             return _application_result(
                 candidate,
                 "error",
@@ -231,19 +328,19 @@ def apply_candidate(
             )
 
         if not conflicting_files:
-            _abort_and_rollback(repo_dir, starting_head, run_git)
+            _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
             return _application_result(
                 candidate,
                 "skipped-conflict",
                 "only binary file conflicts; nothing the resolver can act on",
             )
 
-        all_conflicts.extend(conflicting_files)
-        conflict_paths_seen.update(item.path for item in conflicting_files)
-        if len(conflict_paths_seen) > max_conflicting_files:
-            _abort_and_rollback(repo_dir, starting_head, run_git)
+        state.conflicts.extend(conflicting_files)
+        state.conflict_paths_seen.update(item.path for item in conflicting_files)
+        if len(state.conflict_paths_seen) > max_conflicting_files:
+            _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
             detail = (
-                f"Too many conflicting files ({len(conflict_paths_seen)} > "
+                f"Too many conflicting files ({len(state.conflict_paths_seen)} > "
                 f"max_conflicting_files={max_conflicting_files}). "
                 "Refusing to invoke conflict resolver."
             )
@@ -251,7 +348,7 @@ def apply_candidate(
                 candidate,
                 "skipped-conflict",
                 detail,
-                conflicting_files=all_conflicts,
+                conflicting_files=state.conflicts,
             )
 
         if target_missing_paths:
@@ -261,13 +358,13 @@ def apply_candidate(
                 if not is_test_path(path)
             )
             if non_test_missing_paths:
-                _abort_and_rollback(repo_dir, starting_head, run_git)
+                _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
                 paths = ", ".join(non_test_missing_paths)
                 return _application_result(
                     candidate,
                     "skipped-conflict",
                     f"target branch lacks conflicted file(s): {paths}",
-                    conflicting_files=all_conflicts,
+                    conflicting_files=state.conflicts,
                 )
 
             for path in sorted(target_missing_paths):
@@ -296,14 +393,6 @@ def apply_candidate(
 
         resolutions: list[ResolutionResult] = []
         if conflicting_files:
-            pr_context = BackportPRContext(
-                source_pr_number=candidate.source_pr_number,
-                source_pr_title=candidate.source_pr_title,
-                source_pr_url=candidate.source_pr_url,
-                source_pr_diff=candidate.source_pr_diff,
-                target_branch=candidate.target_branch,
-                commits=candidate.commit_shas,
-            )
             resolver_validation_commands = select_validation_commands(
                 build_commands or [],
                 validation_rules or [],
@@ -319,12 +408,12 @@ def apply_candidate(
             resolutions = resolve_conflicts(
                 repo_dir,
                 conflicting_files,
-                pr_context,
+                candidate.to_pr_context(),
                 language=language,
                 build_commands=resolver_validation_commands or None,
                 allowed_paths=allowed_resolution_paths,
             )
-            all_resolutions.extend(resolutions)
+            state.resolutions.extend(resolutions)
 
         unresolved = [
             resolution
@@ -332,7 +421,7 @@ def apply_candidate(
             if resolution.resolved_content is None
         ]
         if unresolved:
-            _abort_and_rollback(repo_dir, starting_head, run_git)
+            _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
             details = "; ".join(
                 f"{item.path}: {(item.resolution_summary or 'unresolved')[:200]}"
                 for item in unresolved
@@ -341,8 +430,8 @@ def apply_candidate(
                 candidate,
                 "skipped-conflict",
                 f"unresolved - {details}",
-                resolutions=all_resolutions,
-                conflicting_files=all_conflicts,
+                resolutions=state.resolutions,
+                conflicting_files=state.conflicts,
             )
 
         for resolution in resolutions:
@@ -376,31 +465,31 @@ def apply_candidate(
                     fatal=True,
                 )
             if test_adaptation.fatal:
-                _abort_and_rollback(repo_dir, starting_head, run_git)
+                _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
                 return _application_result(
                     candidate,
                     "skipped-conflict",
                     test_adaptation.summary,
-                    resolutions=all_resolutions,
-                    conflicting_files=all_conflicts,
+                    resolutions=state.resolutions,
+                    conflicting_files=state.conflicts,
                 )
             adapted_by_ai = adapted_by_ai or bool(
                 test_adaptation.adapted_paths
             )
 
         if resolutions:
-            _append_detail(detail_parts, DETAIL_RESOLVED_BY_AI)
+            _append_detail(state.detail_parts, DETAIL_RESOLVED_BY_AI)
         if target_missing_paths:
             paths = ", ".join(sorted(target_missing_paths))
             _append_detail(
-                detail_parts,
+                state.detail_parts,
                 f"{DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX} {paths}",
             )
         if test_adaptation.summary:
-            _append_detail(detail_parts, test_adaptation.summary)
+            _append_detail(state.detail_parts, test_adaptation.summary)
 
         if not has_staged_changes(repo_dir, run_process=run_process):
-            _abort_cherry_pick(repo_dir, run_git)
+            _abort_cherry_pick(repo_dir, run_process)
             if target_missing_paths:
                 paths = ", ".join(sorted(target_missing_paths))
                 no_change_reason = (
@@ -423,32 +512,46 @@ def apply_candidate(
         if commit_result.returncode != 0:
             output = f"{commit_result.stdout}\n{commit_result.stderr}"
             if "nothing to commit" in output.lower():
-                _abort_cherry_pick(repo_dir, run_git)
+                _abort_cherry_pick(repo_dir, run_process)
                 no_change_reason = (
                     "The cherry-pick produced no net change on this branch, "
                     "so there is nothing to backport."
                 )
                 continue
-            _abort_and_rollback(repo_dir, starting_head, run_git)
+            _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
             return _application_result(
                 candidate,
                 "skipped-conflict",
                 f"commit failed: {output.strip()[:200]}",
-                resolutions=all_resolutions,
-                conflicting_files=all_conflicts,
+                resolutions=state.resolutions,
+                conflicting_files=state.conflicts,
             )
 
-        applied_commits.append(sha)
-        head_result = run_process(
-            ["git", "rev-parse", "HEAD"],
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-        )
-        if head_result.returncode == 0:
-            last_resolved_sha = head_result.stdout.strip()
+        if plan.strategy == "series":
+            try:
+                last_resolved_sha = _append_source_pr_to_head_subject(
+                    repo_dir,
+                    candidate.source_pr_number,
+                    run_process=run_process,
+                )
+            except RuntimeError as exc:
+                run_git(repo_dir, "reset", "--hard", state.starting_head)
+                return _application_result(
+                    candidate,
+                    "error",
+                    f"could not record source PR identity: {exc}",
+                    resolutions=state.resolutions,
+                    conflicting_files=state.conflicts,
+                )
+        else:
+            last_resolved_sha = _head_sha(
+                repo_dir,
+                run_process=run_process,
+            )
 
-    if not applied_commits:
+        state.applied_commits.append(sha)
+
+    if not state.applied_commits:
         detail = (
             DETAIL_EMPTY_ON_TARGET
             if no_change_reason
@@ -458,21 +561,28 @@ def apply_candidate(
             candidate,
             "skipped-existing",
             detail,
-            resolutions=all_resolutions,
-            resolved_by_ai=bool(all_resolutions),
+            resolutions=state.resolutions,
+            resolved_by_ai=bool(state.resolutions),
             skip_reason=no_change_reason,
-            conflicting_files=all_conflicts,
+            conflicting_files=state.conflicts,
+        )
+
+    partial_reason = no_change_reason or partial_no_change_reason
+    if partial_reason:
+        _append_detail(
+            state.detail_parts,
+            f"partial source series: {partial_reason}",
         )
 
     return _application_result(
         candidate,
         "applied",
-        "; ".join(detail_parts),
-        resolutions=all_resolutions,
-        resolved_by_ai=bool(all_resolutions or adapted_by_ai),
+        "; ".join(state.detail_parts),
+        resolutions=state.resolutions,
+        resolved_by_ai=bool(state.resolutions or adapted_by_ai),
         resolved_commit_sha=last_resolved_sha,
-        applied_commits=applied_commits,
-        conflicting_files=all_conflicts,
+        applied_commits=state.applied_commits,
+        conflicting_files=state.conflicts,
         conflicting_commit_sha=first_conflicting_sha,
     )
 
@@ -507,12 +617,12 @@ def _application_result(
 
 def _abort_and_rollback(
     repo_dir: str,
-    starting_head: str | None,
+    starting_head: str,
     run_git: RunGit,
+    run_process: RunProcess,
 ) -> None:
-    _abort_cherry_pick(repo_dir, run_git)
-    if starting_head is not None:
-        run_git(repo_dir, "reset", "--hard", starting_head)
+    _abort_cherry_pick(repo_dir, run_process)
+    run_git(repo_dir, "reset", "--hard", starting_head)
 
 
 def _append_detail(parts: list[str], detail: str) -> None:
@@ -537,6 +647,71 @@ def _head_sha(
             + ((result.stderr or "").strip()[:300] or "git rev-parse failed")
         )
     return result.stdout.strip()
+
+
+def _append_source_pr_to_head_subject(
+    repo_dir: str,
+    source_pr_number: int,
+    *,
+    run_process: RunProcess = subprocess.run,
+) -> str:
+    """Make one replayed source commit discoverable as PR ``#N``."""
+
+    current_head = _head_sha(repo_dir, run_process=run_process)
+    message_result = run_process(
+        ["git", "show", "-s", "--format=%B", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
+    if message_result.returncode != 0:
+        raise RuntimeError(
+            "could not read replayed commit message: "
+            + (
+                (message_result.stderr or "").strip()[:300]
+                or "git show failed"
+            )
+        )
+
+    message = message_result.stdout
+    subject, separator, remainder = message.partition("\n")
+    if re.search(rf"\(#{source_pr_number}\)\s*$", subject):
+        return current_head
+
+    subject = subject.rstrip() or f"Backport source PR #{source_pr_number}"
+    updated = f"{subject} (#{source_pr_number})"
+    if separator:
+        updated += f"\n{remainder}"
+    else:
+        updated += "\n"
+
+    amend_result = run_process(
+        [
+            "git",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "commit.gpgSign=false",
+            "commit",
+            "--amend",
+            "--no-verify",
+            "-F",
+            "-",
+        ],
+        cwd=repo_dir,
+        input=updated,
+        capture_output=True,
+        text=True,
+    )
+    if amend_result.returncode != 0:
+        raise RuntimeError(
+            "could not annotate replayed commit: "
+            + (
+                (amend_result.stderr or "").strip()[:300]
+                or "git commit --amend failed"
+            )
+        )
+    return _head_sha(repo_dir, run_process=run_process)
 
 
 def _is_empty_cherry_pick(result: subprocess.CompletedProcess[str]) -> bool:

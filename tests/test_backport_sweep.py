@@ -108,6 +108,10 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:2] == ["git", "cherry-pick"]:
             return subprocess.CompletedProcess(
                 cmd,
@@ -116,8 +120,6 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
                 stderr="The previous cherry-pick is now empty",
             )
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
@@ -135,7 +137,7 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
 
     assert result.outcome == "skipped-existing"
     assert result.detail == "already applied or empty cherry-pick"
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
 def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
@@ -147,20 +149,24 @@ def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
         merge_commit_sha="abc123",
     )
     git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
     resolver = MagicMock()
 
     def fake_run_git(_repo_dir, *args, **_kwargs):
         git_calls.append(args)
 
     def fake_subprocess_run(cmd, **_kwargs):
-        if cmd[:2] == ["git", "cherry-pick"] and cmd[2:3] != ["--abort"]:
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:2] == ["git", "cherry-pick"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="fixture.gz\n", stderr="")
         if cmd[:2] == ["git", "show"]:  # :2:fixture.gz / :3:fixture.gz
             return subprocess.CompletedProcess(cmd, 0, stdout="bin\x00ary", stderr="")
-        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
     monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
@@ -179,7 +185,7 @@ def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
     assert result.outcome == "skipped-conflict"
     assert "binary" in result.detail
     resolver.assert_not_called()
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
 def test_apply_candidate_uses_planned_squash_without_mainline_probe(
@@ -201,6 +207,8 @@ def test_apply_candidate_uses_planned_squash_without_mainline_probe(
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
         if cmd == ["git", "cherry-pick", "abc123"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
@@ -218,7 +226,10 @@ def test_apply_candidate_uses_planned_squash_without_mainline_probe(
     )
 
     assert result.outcome == "applied"
-    assert subprocess_calls == [["git", "cherry-pick", "abc123"]]
+    assert ["git", "cherry-pick", "abc123"] in subprocess_calls
+    assert [
+        cmd for cmd in subprocess_calls if cmd[:2] == ["git", "cherry-pick"]
+    ] == [["git", "cherry-pick", "abc123"]]
 
 
 def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
@@ -239,6 +250,10 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:2] == ["git", "cherry-pick"] and "--abort" not in cmd:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -254,8 +269,6 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
         if cmd[:3] == ["git", "cat-file", "-e"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
@@ -285,7 +298,7 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
     assert result.detail == "resolution was already satisfied on target branch"
     assert ("add", "conflict.txt") in git_calls
     assert ["git", "commit", "--no-edit"] not in subprocess_calls
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
 def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_path):
@@ -307,6 +320,10 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:2] == ["git", "cherry-pick"] and "--abort" not in cmd:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -316,8 +333,6 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
         if cmd[:3] == ["git", "cat-file", "-e"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
         if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
@@ -342,7 +357,7 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
     assert ("add", "src/cluster_legacy.c") not in git_calls
     assert missing_on_target.exists()
     assert ["git", "commit", "--no-edit"] not in subprocess_calls
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
 def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
@@ -440,11 +455,17 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
         merge_commit_sha="269b1c5",
     )
     git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
 
     def fake_run_git(_repo_dir, *args, **_kwargs):
         git_calls.append(args)
 
     def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -478,7 +499,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
 
     assert result.outcome == "skipped-conflict"
     assert result.detail == "test adaptation not applied: Claude Code failed: timeout"
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
     assert (
         "rm",
         "-f",
@@ -497,11 +518,17 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_raises(monke
         merge_commit_sha="269b1c5",
     )
     git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
 
     def fake_run_git(_repo_dir, *args, **_kwargs):
         git_calls.append(args)
 
     def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -532,7 +559,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_raises(monke
 
     assert result.outcome == "skipped-conflict"
     assert result.detail == "test adaptation failed unexpectedly: adapter exploded"
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
 def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(monkeypatch, tmp_path):
@@ -551,6 +578,10 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(m
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -584,7 +615,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(m
 
     assert result.outcome == "skipped-conflict"
     assert result.detail == "test adaptation not applied: invalid generated test path(s): tests/unit/networking.tcl"
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
     assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] not in subprocess_calls
 
 
@@ -738,7 +769,11 @@ def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatc
     assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] in subprocess_calls
 
 
-def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
+def test_apply_candidate_survives_failing_abort_and_still_rolls_back(monkeypatch, tmp_path):
+    """A cherry-pick can fail before creating sequencer state (e.g. an
+    untracked file collision), making ``cherry-pick --abort`` itself fail.
+    That must not escape apply_candidate — the candidate reports its outcome
+    and the worktree is reset so later candidates are unaffected."""
     conflicted_file = tmp_path / "conflict.txt"
     conflicted_file.write_text("<<<<<<< HEAD\ntarget\n=======\nsource\n>>>>>>> source\n", encoding="utf-8")
     candidate = ProjectBackportCandidate(
@@ -748,12 +783,22 @@ def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
         target_branch="1.1",
         merge_commit_sha="abc123",
     )
+    git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
 
     def fake_run_git(_repo_dir, *args, **_kwargs):
-        if args == ("cherry-pick", "--abort"):
-            raise subprocess.CalledProcessError(1, ["git", *args])
+        git_calls.append(args)
 
     def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(
+                cmd, 128, stdout="", stderr="fatal: no cherry-pick or revert in progress",
+            )
+        if cmd == ["git", "reset", "--hard", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:2] == ["git", "cherry-pick"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -781,17 +826,22 @@ def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
             )
         ]
 
-    with pytest.raises(subprocess.CalledProcessError):
-        apply_candidate(
-            repo_dir=str(tmp_path),
-            candidate=candidate,
-            repo_full_name="valkey-io/valkey-search",
-            git_env={},
-            run_git=fake_run_git,
-            run_process=fake_subprocess_run,
-            resolve_conflicts=fake_resolve,
-            source_plan=_source_plan(candidate),
-        )
+    result = apply_candidate(
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey-search",
+        git_env={},
+        run_git=fake_run_git,
+        run_process=fake_subprocess_run,
+        resolve_conflicts=fake_resolve,
+        source_plan=_source_plan(candidate),
+    )
+
+    assert result.outcome == "skipped-conflict"
+    assert "unresolved" in result.detail
+    assert ("reset", "--hard", "start") in git_calls
+    # The failed abort itself must trigger the tree-clearing fallback.
+    assert ["git", "reset", "--hard", "HEAD"] in subprocess_calls
 
 
 def test_run_test_commands_returns_failure_output(tmp_path):
@@ -2706,6 +2756,25 @@ def test_empty_skip_reason_generic_fallback():
     res = [ResolutionResult("src/server.c", "DIFFERENT", "r")]
     reason = _empty_skip_reason(cf, res)
     assert "no net change" in reason
+
+
+def test_empty_skip_reason_requires_every_resolution_to_match_target():
+    from scripts.backport.application import _empty_skip_reason
+    from scripts.backport.models import ConflictedFile, ResolutionResult
+
+    # One file matched target but another did not: the provable-cause claim
+    # requires ALL resolutions to match, so this must use the generic reason.
+    cf = [
+        ConflictedFile("src/server.c", "TARGET-A", "SOURCE-A"),
+        ConflictedFile("src/db.c", "TARGET-B", "SOURCE-B"),
+    ]
+    res = [
+        ResolutionResult("src/server.c", "TARGET-A", "r"),
+        ResolutionResult("src/db.c", "DIFFERENT", "r"),
+    ]
+    reason = _empty_skip_reason(cf, res)
+    assert "no net change" in reason
+    assert "does not apply" not in reason
 
 
 def test_build_pr_body_omits_skipped_section_when_none():

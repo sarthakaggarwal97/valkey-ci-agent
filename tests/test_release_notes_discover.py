@@ -1045,6 +1045,76 @@ class TestResolveCommitPrs:
         )
         assert suspects == {}
 
+    def test_multi_commit_backport_identity_does_not_collide(self) -> None:
+        first_source = "1111111111111111111111111111111111111111"
+        second_source = "2222222222222222222222222222222222222222"
+        commits = [
+            (
+                "range-one",
+                "source one (#42)",
+                f"(cherry picked from commit {first_source})",
+            ),
+            (
+                "range-two",
+                "source two (#42)",
+                f"(cherry picked from commit {second_source})",
+            ),
+        ]
+        repo = MagicMock()
+        repo.get_commit.side_effect = lambda _sha: MagicMock(
+            get_pulls=MagicMock(
+                return_value=[MagicMock(number=42, merged=True)]
+            )
+        )
+
+        pr_to_sha, unresolved, suspects, collided, _reverted = (
+            resolve_commit_prs(repo, commits)
+        )
+
+        assert pr_to_sha == {42: "range-one"}
+        assert unresolved == []
+        assert suspects == {}
+        assert collided == []
+
+    def test_multi_commit_identity_mismatch_still_collides(self) -> None:
+        first_source = "1111111111111111111111111111111111111111"
+        second_source = "2222222222222222222222222222222222222222"
+        commits = [
+            (
+                "range-one",
+                "source one (#42)",
+                f"(cherry picked from commit {first_source})",
+            ),
+            (
+                "range-two",
+                "unrelated source (#42)",
+                f"(cherry picked from commit {second_source})",
+            ),
+        ]
+        repo = MagicMock()
+        source_prs = {
+            first_source: 42,
+            second_source: 99,
+        }
+        repo.get_commit.side_effect = lambda sha: MagicMock(
+            get_pulls=MagicMock(
+                return_value=[
+                    MagicMock(number=source_prs[sha], merged=True)
+                ]
+            )
+        )
+
+        pr_to_sha, unresolved, suspects, collided, _reverted = (
+            resolve_commit_prs(repo, commits)
+        )
+
+        assert pr_to_sha == {42: "range-one"}
+        assert unresolved == []
+        assert suspects == {}
+        assert [(item.sha, item.number) for item in collided] == [
+            ("range-two", 42)
+        ]
+
     def test_unverified_applied_table_cannot_replace_real_pr(self) -> None:
         body = (
             "Feature details\n\n## Applied\n\n"

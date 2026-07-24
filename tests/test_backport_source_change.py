@@ -108,6 +108,45 @@ def test_squash_ignores_target_updates_merged_into_source(tmp_path: Path) -> Non
     assert plan.commits == (squash_sha,)
 
 
+def test_rebase_series_skips_source_branch_sync_merge(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    _commit(repo, "base.txt", "base\n", "base")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    first = _commit(repo, "one.txt", "one\n", "source one")
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, "main.txt", "main update\n", "advance main")
+    _git(repo, "checkout", "-q", "source")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "sync main", "main")
+    sync = _git(repo, "rev-parse", "HEAD")
+    second = _commit(repo, "two.txt", "two\n", "source two")
+
+    _git(repo, "checkout", "-q", "-b", "rebased", "main")
+    _git(repo, "cherry-pick", first, second)
+    rebased_tip = _git(repo, "rev-parse", "HEAD")
+
+    plan = plan_source_change(
+        str(repo),
+        rebased_tip,
+        [first, sync, second],
+    )
+
+    assert plan.strategy == "series"
+    assert plan.commits == (first, second)
+    assert plan.source_commits == (first, sync, second)
+    assert sync not in plan.commits
+
+    _git(repo, "checkout", "-q", "-b", "backport", "main")
+    _git(repo, "cherry-pick", *plan.commits)
+    assert (repo / "one.txt").read_text(encoding="utf-8") == "one\n"
+    assert (repo / "two.txt").read_text(encoding="utf-8") == "two\n"
+    assert (repo / "main.txt").read_text(encoding="utf-8") == "main update\n"
+
+
 def test_multi_commit_rebase_uses_complete_source_series(
     history: tuple[Path, str, str, str],
 ) -> None:
@@ -202,6 +241,42 @@ def test_disconnected_source_history_is_refused(tmp_path: Path) -> None:
         plan_source_change(str(repo), None, [left, right])
 
 
+def test_ambiguous_merge_base_explains_classification_failure(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    base = _commit(repo, "base.txt", "base\n", "base")
+
+    _git(repo, "checkout", "-q", "-b", "left", base)
+    left = _commit(repo, "left.txt", "left\n", "left")
+    _git(repo, "checkout", "-q", "-b", "right", base)
+    right = _commit(repo, "right.txt", "right\n", "right")
+
+    _git(repo, "checkout", "-q", "left")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge right", right)
+    left_merge = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "right")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge left", left)
+    right_merge = _git(repo, "rev-parse", "HEAD")
+
+    _git(repo, "checkout", "-q", left_merge)
+    merged_sha = _commit(repo, "result.txt", "result\n", "merged result")
+
+    with pytest.raises(
+        SourceChangeError,
+        match="ambiguous merge base.*cannot safely classify",
+    ):
+        plan_source_change(
+            str(repo),
+            merged_sha,
+            [right, right_merge],
+        )
+
+
 def test_missing_source_identity_is_refused(history: tuple[Path, str, str, str]) -> None:
     repo, _base, _first, _second = history
 
@@ -219,4 +294,119 @@ def test_incomplete_source_commit_page_is_refused_before_fetch(
             "a" * 40,
             ["b" * 40],
             source_commits_complete=False,
+        )
+
+
+def test_series_sync_merge_with_manual_content_fails_closed(
+    tmp_path: Path,
+) -> None:
+    """A sync merge that resolved conflicts by hand is not replayable.
+
+    Skipping the merge would silently drop the resolution content — the exact
+    silent-loss class this module exists to prevent — so planning must refuse.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    _commit(repo, "shared.txt", "base\n", "base")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    first = _commit(repo, "shared.txt", "source\n", "source one")
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, "shared.txt", "main\n", "advance main")
+    _git(repo, "checkout", "-q", "source")
+    merge = subprocess.run(
+        ["git", "merge", "--no-ff", "-m", "sync main", "main"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert merge.returncode != 0  # conflict on shared.txt
+    (repo / "shared.txt").write_text("resolved by hand\n", encoding="utf-8")
+    _git(repo, "add", "--", "shared.txt")
+    _git(repo, "commit", "-q", "--no-edit")
+    sync = _git(repo, "rev-parse", "HEAD")
+    second = _commit(repo, "two.txt", "two\n", "source two")
+
+    with pytest.raises(SourceChangeError, match="carries changes of its own"):
+        plan_source_change(str(repo), None, [first, sync, second])
+
+
+def test_series_evil_merge_with_extra_content_fails_closed(
+    tmp_path: Path,
+) -> None:
+    """A conflict-free merge with a change smuggled in is not replayable."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    _commit(repo, "base.txt", "base\n", "base")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    first = _commit(repo, "one.txt", "one\n", "source one")
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, "main.txt", "main\n", "advance main")
+    _git(repo, "checkout", "-q", "source")
+    _git(repo, "merge", "-q", "--no-ff", "--no-commit", "main")
+    (repo / "evil.txt").write_text("smuggled\n", encoding="utf-8")
+    _git(repo, "add", "--", "evil.txt")
+    _git(repo, "commit", "-q", "-m", "sync main")
+    sync = _git(repo, "rev-parse", "HEAD")
+    second = _commit(repo, "two.txt", "two\n", "source two")
+
+    with pytest.raises(SourceChangeError, match="carries changes of its own"):
+        plan_source_change(str(repo), None, [first, sync, second])
+
+
+def test_duplicate_source_commits_are_refused(
+    history: tuple[Path, str, str, str],
+) -> None:
+    repo, _base, first, second = history
+
+    with pytest.raises(SourceChangeError, match="duplicate SHAs"):
+        plan_source_change(str(repo), None, [first, second, first])
+
+
+def test_source_commit_absent_from_pr_head_fails_after_fetch(
+    tmp_path: Path,
+) -> None:
+    """A commit the API listed but the PR head ref does not contain must fail
+    loudly after the fetch, not silently plan around it."""
+    remote = tmp_path / "origin.git"
+    subprocess.run(
+        ["git", "init", "--bare", "-q", str(remote)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    source = tmp_path / "source"
+    source.mkdir()
+    _git(source, "init", "-q", "-b", "main")
+    _git(source, "config", "user.name", "Test")
+    _git(source, "config", "user.email", "test@example.com")
+    _commit(source, "base.txt", "base\n", "base")
+    _git(source, "remote", "add", "origin", str(remote))
+    _git(source, "push", "-q", "origin", "main:refs/pull/42/head")
+
+    worktree = tmp_path / "worktree"
+    subprocess.run(
+        ["git", "clone", "-q", str(remote), str(worktree)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    phantom = "d" * 40
+    with pytest.raises(
+        SourceChangeError,
+        match=f"PR head does not contain source commit\\(s\\): {phantom}",
+    ):
+        prepare_source_change(
+            str(worktree),
+            42,
+            None,
+            [phantom],
         )
