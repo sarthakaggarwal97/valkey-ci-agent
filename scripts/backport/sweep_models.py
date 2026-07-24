@@ -3,8 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from scripts.backport.models import ResolutionResult
+
+CandidateOutcome = Literal[
+    "applied",
+    "skipped-existing",
+    "skipped-conflict",
+    "skipped-validation-failed",
+    "error",
+]
 
 
 @dataclass(frozen=True)
@@ -22,9 +31,7 @@ class ProjectBackportCandidate:
 class CandidateResult:
     source_pr_number: int
     source_pr_title: str
-    # One of: applied, skipped-existing, skipped-conflict,
-    # skipped-validation-failed, error.
-    outcome: str
+    outcome: CandidateOutcome
     detail: str = ""
     # Per-file AI resolutions produced for this candidate (empty when the
     # cherry-pick applied cleanly). Used to post diff comments on the sweep PR.

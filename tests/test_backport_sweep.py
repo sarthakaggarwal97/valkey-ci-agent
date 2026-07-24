@@ -2738,6 +2738,23 @@ def test_build_pr_body_round_trips_applied_and_failed_detail():
     ]
 
 
+def test_parse_previous_failed_normalizes_unknown_outcome_to_error():
+    body = "\n".join(
+        [
+            "## Needs attention",
+            "",
+            "| Source PR | Title | Outcome | Reason |",
+            "|---|---|---|---|",
+            "| #4002 | Broken row | human-edited | conflict |",
+        ]
+    )
+
+    parsed = parse_previous_failed(body)
+
+    assert len(parsed) == 1
+    assert parsed[0].outcome == "error"
+
+
 def test_parse_previous_applied_preserves_ai_detail_from_linked_row():
     from scripts.backport.sweep_models import DETAIL_RESOLVED_BY_AI
 

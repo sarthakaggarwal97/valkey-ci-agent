@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
+from typing import cast
 
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
@@ -12,6 +13,7 @@ from scripts.backport.sweep_models import (
     DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX,
     DETAIL_RESOLVED_BY_AI,
     BranchSweepResult,
+    CandidateOutcome,
     CandidateResult,
 )
 
@@ -258,9 +260,16 @@ def _markdown_link_label(value: str) -> str:
 
 def parse_previous_failed(body: str) -> list[CandidateResult]:
     return [
-        CandidateResult(pr_number, cells[1], cells[2] or "error", cells[3])
+        CandidateResult(pr_number, cells[1], _failure_outcome(cells[2]), cells[3])
         for pr_number, cells in _parse_section_rows(body, "## Needs attention", min_cells=4)
     ]
+
+
+def _failure_outcome(value: str) -> CandidateOutcome:
+    outcome = value.strip()
+    if outcome in {"skipped-conflict", "skipped-validation-failed", "error"}:
+        return cast(CandidateOutcome, outcome)
+    return "error"
 
 
 def _parse_section_rows(body: str, heading: str, *, min_cells: int) -> Iterator[tuple[int, list[str]]]:
