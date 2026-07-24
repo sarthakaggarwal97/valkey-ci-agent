@@ -246,6 +246,55 @@ def test_verify_detects_squash_merged_applied_table(tmp_path, monkeypatch) -> No
     assert present == {3801, 3847}
 
 
+def test_verify_detects_default_squash_commit_bullets(tmp_path, monkeypatch) -> None:
+    """GitHub's *default* squash message discards the PR description (and its
+    ## Applied table); the squashed cherry-pick subjects survive only as
+    ``* <subject> (#N)`` bullets. Those must verify, or series PRs stay
+    "To be backported" forever and every sweep re-attempts them."""
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+    }
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=repo, check=True, env=env, capture_output=True, text=True)
+
+    # Default squash format: "<PR title> (#<backport PR>)" subject, then one
+    # bullet per squashed commit. Prose referencing (#N) must not count.
+    body = (
+        "[backport] Backport sweep for 9.1 (#3774)\n\n"
+        "* Fix replication stall (#3801)\n"
+        "* follow-up test hardening (#3801)\n"
+        "* Validate DB clause (#3847)\n"
+        "\n"
+        "This sweep supersedes (#2222) which was abandoned.\n"
+    )
+    git("init", "-q")
+    (repo / "f").write_text("1")
+    git("add", "f")
+    git("commit", "-qm", body)
+
+    def fake_clone(repo_full_name, target_branch, dest_dir, git_env):
+        subprocess.run(["git", "clone", "-q", str(repo), dest_dir], check=True, env=env)
+
+    monkeypatch.setattr(mark_done, "_shallow_clone", fake_clone)
+
+    present = mark_done.verify_prs_on_branch(
+        "valkey-io/valkey",
+        "9.1",
+        {3801, 3847, 2222, 4242},
+    )
+
+    # Bullet-listed subjects count; the prose (#2222) and unreferenced 4242
+    # do not. (#3774 is the backport PR itself, matched by the subject tier.)
+    assert present == {3801, 3847}
+
+
 def test_dry_run_reports_without_mutating() -> None:
     gql = FakeGraphQLClient(
         project_items=[

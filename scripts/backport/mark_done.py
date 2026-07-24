@@ -81,13 +81,17 @@ def verify_prs_on_branch(
     * a commit on the branch carries the PR's trailing ``(#N)`` in its subject
       (a cherry-pick that kept the source PR's title), or
     * a backport commit on the branch lists the PR in an ``## Applied`` table
-      in its body. The sweep squash-merges a batch of cherry-picks into one
-      commit whose subject is the *backport* PR; the source PRs it carried are
-      only recoverable from that ``## Applied`` table.
+      in its body (squash setting "PR title and description"), or
+    * a squashed commit body carries the PR's subject as a ``* ...`` bullet
+      line ending in ``(#N)``. GitHub's *default* squash message discards the
+      PR description and instead lists every squashed commit's subject as a
+      bullet — for a sweep that is the only place the cherry-picked source
+      subjects survive.
 
     Subject matching uses the trailing ``(#N)`` only; body matching reads only
-    the structured ``## Applied`` section, so a stray ``(#N)`` reference in a
-    ``## Needs attention`` row or in prose never counts.
+    the structured ``## Applied`` section and ``* `` bullet lines (mechanical
+    commit subjects under the default squash format), so a stray ``(#N)``
+    reference in a ``## Needs attention`` row or in prose never counts.
 
     ``token`` authenticates the clone for private/auth-required repos.
     """
@@ -102,7 +106,9 @@ def verify_prs_on_branch(
             _shallow_clone(repo_full_name, target_branch, repo_dir, env)
 
             applied = pr_numbers_from_commit_subjects(_branch_commit_subjects(repo_dir))
-            applied |= _applied_prs_from_commit_bodies(repo_dir)
+            bodies = _branch_commit_bodies(repo_dir)
+            applied |= _applied_prs_from_commit_bodies(bodies)
+            applied |= _applied_prs_from_squash_bullets(bodies)
 
     return pr_numbers & applied
 
@@ -121,15 +127,14 @@ def _branch_commit_subjects(repo_dir: str) -> list[str]:
 # git log -z NUL-separates commit records, letting us split multi-line bodies.
 _COMMIT_RECORD_DELIM = "\x00"
 
+# A squashed commit subject listed as a bullet by GitHub's default squash
+# message: ``* <subject> (#N)``. The trailing (#N) is the same signal used for
+# commit subjects; the leading bullet restricts matching to the mechanical
+# commit list, never prose.
+_SQUASH_BULLET_RE = re.compile(r"(?m)^[ \t]*\*[ \t]+.*\(#(\d+)\)[ \t]*$")
 
-def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
-    """Source PR numbers listed in ``## Applied`` tables of backport commits.
 
-    Squash-merged backport sweeps record the cherry-picked source PRs only in
-    the commit body's ``## Applied`` section. Only that section's table cells
-    are read, so a ``(#N)`` in a later ``## Needs attention`` row or in prose is
-    never treated as applied.
-    """
+def _branch_commit_bodies(repo_dir: str) -> list[str]:
     result = subprocess.run(
         ["git", "log", "-z", "--format=%B", "HEAD"],
         cwd=repo_dir,
@@ -137,11 +142,38 @@ def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
         text=True,
         check=True,
     )
+    return result.stdout.split(_COMMIT_RECORD_DELIM)
+
+
+def _applied_prs_from_commit_bodies(bodies: list[str]) -> set[int]:
+    """Source PR numbers listed in ``## Applied`` tables of backport commits.
+
+    Squash-merged backport sweeps record the cherry-picked source PRs only in
+    the commit body's ``## Applied`` section. Only that section's table cells
+    are read, so a ``(#N)`` in a later ``## Needs attention`` row or in prose is
+    never treated as applied.
+    """
     numbers: set[int] = set()
-    for message in result.stdout.split(_COMMIT_RECORD_DELIM):
+    for message in bodies:
         applied_section = _markdown_section(message, "Applied")
         if applied_section:
             numbers.update(_pr_numbers_from_table_cells(applied_section))
+    return numbers
+
+
+def _applied_prs_from_squash_bullets(bodies: list[str]) -> set[int]:
+    """Source PR numbers from default-squash commit-subject bullets.
+
+    Under GitHub's default squash message the PR description (and with it the
+    ``## Applied`` table) is discarded; the squashed commits' subjects survive
+    only as ``* <subject> (#N)`` bullet lines in the body. Those subjects are
+    the same ones subject-tier matching would have accepted before the squash.
+    """
+    numbers: set[int] = set()
+    for message in bodies:
+        numbers.update(
+            int(match) for match in _SQUASH_BULLET_RE.findall(message)
+        )
     return numbers
 
 
