@@ -1,2 +1,2 @@
-shared v1
+shared dev
 common
