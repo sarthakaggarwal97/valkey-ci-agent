@@ -1,0 +1,225 @@
+name: LT Backport Live Test
+
+# THROWAWAY fork-only workflow for live-testing the backport sweep and
+# mark-done poll against synthetic branches/PRs on this fork, driven by a
+# user-owned project board. Uses the fork's PAT secret for GitHub access.
+# Never touches any upstream repository. Not for upstream. Dies with this branch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      op:
+        description: "Operation"
+        required: true
+        type: choice
+        options: [probe, board-setup, board-add, board-status, board-list, sweep, mark-done]
+      project_number:
+        description: "User project board number"
+        required: false
+        type: string
+        default: ""
+      branch:
+        description: "Target release branch (sweep/mark-done/board-add)"
+        required: false
+        type: string
+        default: ""
+      pr:
+        description: "PR number (board-add/board-status)"
+        required: false
+        type: string
+        default: ""
+      status:
+        description: "Status value (board-add/board-status)"
+        required: false
+        type: string
+        default: "To be backported"
+      max_candidates:
+        description: "Cap applied cherry-picks (sweep)"
+        required: false
+        type: string
+        default: "0"
+      dry_run:
+        description: "Discovery only (sweep)"
+        required: false
+        type: boolean
+        default: false
+      test_commands:
+        description: "Newline-separated validation commands override (sweep)"
+        required: false
+        type: string
+        default: ""
+      setup_command:
+        description: "Single validation_setup_command written into the registry (sweep)"
+        required: false
+        type: string
+        default: ""
+      title:
+        description: "Project title (board-setup)"
+        required: false
+        type: string
+        default: "LT Backport Live Test"
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  LT_REPO: sarthakaggarwal97/valkey-ci-agent
+  LT_OWNER: sarthakaggarwal97
+
+jobs:
+  lt:
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Probe token capabilities
+        if: inputs.op == 'probe'
+        env:
+          LT_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python - <<'EOF'
+          import json, os, sys, urllib.request
+
+          token = os.environ.get("LT_TOKEN", "")
+          if not token:
+              print("VALKEY_GITHUB_TOKEN is EMPTY on this fork")
+              sys.exit(2)
+
+          def gql(query):
+              req = urllib.request.Request(
+                  "https://api.github.com/graphql",
+                  data=json.dumps({"query": query}).encode(),
+                  headers={"Authorization": f"Bearer {token}",
+                           "Content-Type": "application/json"},
+                  method="POST")
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.load(r)
+
+          out = gql("query { viewer { login projectsV2(first: 3) { nodes { number title } } } }")
+          print("viewer:", json.dumps(out, indent=2)[:1500])
+          errs = out.get("errors") or []
+          if any(e.get("type") == "FORBIDDEN" for e in errs):
+              print("TOKEN LACKS ProjectsV2 access")
+              sys.exit(3)
+          print("ProjectsV2 access OK")
+          EOF
+
+      - name: Board operation
+        if: startsWith(inputs.op, 'board-')
+        env:
+          LT_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          OP: ${{ inputs.op }}
+          PROJECT_NUMBER: ${{ inputs.project_number }}
+          PR: ${{ inputs.pr }}
+          BRANCH: ${{ inputs.branch }}
+          STATUS: ${{ inputs.status }}
+          TITLE: ${{ inputs.title }}
+        run: |
+          set -euo pipefail
+          case "${OP}" in
+            board-setup)
+              python -m scripts.dev.lt_board setup --title "${TITLE}" ;;
+            board-add)
+              python -m scripts.dev.lt_board add \
+                --project-number "${PROJECT_NUMBER}" --repo "${LT_REPO}" \
+                --pr "${PR}" --branch "${BRANCH}" --status "${STATUS}" ;;
+            board-status)
+              python -m scripts.dev.lt_board status \
+                --project-number "${PROJECT_NUMBER}" --repo "${LT_REPO}" \
+                --pr "${PR}" --status "${STATUS}" ;;
+            board-list)
+              python -m scripts.dev.lt_board list --project-number "${PROJECT_NUMBER}" ;;
+          esac
+
+      - name: Write fork registry
+        if: inputs.op == 'sweep' || inputs.op == 'mark-done'
+        env:
+          BRANCH: ${{ inputs.branch }}
+          PROJECT_NUMBER: ${{ inputs.project_number }}
+          SETUP_COMMAND: ${{ inputs.setup_command }}
+        run: |
+          set -euo pipefail
+          {
+            echo "repos:"
+            echo "  - repo: ${LT_REPO}"
+            echo "    project_owner: ${LT_OWNER}"
+            echo "    project_owner_type: user"
+            echo "    language: text"
+            echo "    build_commands: []"
+            if [[ -n "${SETUP_COMMAND}" ]]; then
+              echo "    validation_setup_commands:"
+              echo "      - \"${SETUP_COMMAND}\""
+            fi
+            echo "    branches:"
+            echo "      - branch: \"${BRANCH}\""
+            echo "        project_number: ${PROJECT_NUMBER}"
+          } > /tmp/lt-repos.yml
+          cat /tmp/lt-repos.yml
+
+      - name: Run backport sweep
+        if: inputs.op == 'sweep'
+        env:
+          TARGET_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          BRANCH: ${{ inputs.branch }}
+          MAX_CANDIDATES: ${{ inputs.max_candidates }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          TEST_COMMANDS: ${{ inputs.test_commands }}
+        run: |
+          set -euo pipefail
+          args=(
+            -m scripts.backport.sweep
+            --registry /tmp/lt-repos.yml
+            --repo "${LT_REPO}"
+            --branch "${BRANCH}"
+            --target-token "${TARGET_TOKEN}"
+            --status-field "LT Status"
+            --verbose
+          )
+          if [[ "${MAX_CANDIDATES}" != "0" ]]; then
+            args+=(--max-candidates "${MAX_CANDIDATES}")
+          fi
+          if [[ -n "${TEST_COMMANDS}" ]]; then
+            args+=(--test-commands "${TEST_COMMANDS}")
+          fi
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            args+=(--discover-only)
+          fi
+          python "${args[@]}" | tee lt-sweep-result.json
+
+      - name: Run mark-done reconcile
+        if: inputs.op == 'mark-done'
+        env:
+          TARGET_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.mark_done \
+            --registry /tmp/lt-repos.yml \
+            --repo "${LT_REPO}" \
+            --target-branch "${BRANCH}" \
+            --target-token "${TARGET_TOKEN}" \
+            --status-field "LT Status" \
+            --verbose | tee lt-mark-done-result.json
+
+      - name: Upload results
+        if: always() && (inputs.op == 'sweep' || inputs.op == 'mark-done')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lt-result-${{ github.run_id }}
+          path: |
+            lt-sweep-result.json
+            lt-mark-done-result.json
+          if-no-files-found: ignore
+          retention-days: 7
