@@ -1,2 +1,2 @@
-shared dev
+shared resolved-by-hand
 common
