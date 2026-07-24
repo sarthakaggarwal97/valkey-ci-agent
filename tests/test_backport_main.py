@@ -9,6 +9,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+import scripts.backport.main as backport_main_module
 from scripts.backport.main import (
     _skipped_existing_message,
     build_summary,
@@ -25,11 +26,21 @@ from scripts.backport.models import (
     ConflictedFile,
     ResolutionResult,
 )
+from scripts.backport.publication import TargetHeadChanged
 from scripts.backport.registry import ValidationRule
 from scripts.backport.transaction import BaselineValidationResult
 
 # ======================================================================
 # ======================================================================
+
+
+@pytest.fixture(autouse=True)
+def _stable_publication_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        backport_main_module,
+        "assert_target_head_unchanged",
+        lambda *_args, **_kwargs: None,
+    )
 
 
 class TestBuildSummaryProperty:
@@ -159,12 +170,21 @@ _DEFAULT_PUSH_REPO = "ci-bot/valkey"
 
 
 @patch(f"{_PATCH_PREFIX}.Github")
-def test_run_backport_allows_different_owner_push_repo(mock_github) -> None:
+def test_run_backport_allows_different_owner_push_repo(
+    mock_github,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     mock_repo = MagicMock()
     mock_repo.get_branch.return_value = MagicMock()
     mock_pr = _make_mock_pr()
     mock_repo.get_pull.return_value = mock_pr
     mock_github.return_value.get_repo.return_value = mock_repo
+    publication_checks: list[str] = []
+    monkeypatch.setattr(
+        backport_main_module,
+        "assert_target_head_unchanged",
+        lambda _gh, _repo, branch, _sha: publication_checks.append(branch),
+    )
 
     with (
         patch(f"{_PATCH_PREFIX}._clone_repo"),
@@ -199,6 +219,7 @@ def test_run_backport_allows_different_owner_push_repo(mock_github) -> None:
     _, kwargs = mock_creator_cls.call_args
     assert kwargs["base_repo"] == "valkey-io/valkey"
     assert kwargs["push_repo"] == _DEFAULT_PUSH_REPO
+    assert publication_checks == ["8.1", "8.1"]
 
 
 def test_run_backport_rejects_redundant_same_repo_push_repo() -> None:
@@ -272,6 +293,58 @@ def test_run_backport_defaults_to_direct_upstream_push(mock_github) -> None:
         for call in mock_run_git.call_args_list
     )
     assert not any(call.args[1:3] == ("remote", "add") for call in mock_run_git.call_args_list)
+
+
+@patch(f"{_PATCH_PREFIX}.Github")
+def test_run_backport_blocks_publication_when_target_moves(
+    mock_github,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_repo = MagicMock()
+    mock_repo.get_branch.return_value = MagicMock()
+    mock_repo.get_pull.return_value = _make_mock_pr()
+    mock_github.return_value.get_repo.return_value = mock_repo
+
+    def reject_target_move(*_args, **_kwargs) -> None:
+        raise TargetHeadChanged("target moved during validation")
+
+    monkeypatch.setattr(
+        backport_main_module,
+        "assert_target_head_unchanged",
+        reject_target_move,
+    )
+
+    with (
+        patch(f"{_PATCH_PREFIX}._clone_repo", return_value="old-target-sha"),
+        patch(f"{_PATCH_PREFIX}._run_git") as mock_run_git,
+        patch(f"{_PATCH_PREFIX}.BackportPRCreator") as mock_creator_cls,
+        patch(
+            f"{_PATCH_PREFIX}.apply_candidate_transaction",
+            return_value=CandidateResult(
+                source_pr_number=100,
+                source_pr_title="Fix bug",
+                outcome="applied",
+                applied_commits=["abc123"],
+            ),
+        ),
+    ):
+        mock_creator_cls.return_value.check_duplicate.return_value = None
+
+        result = run_backport(
+            repo_full_name="valkey-io/valkey",
+            source_pr_number=100,
+            target_branch="8.1",
+            config=_default_config(),
+            github_token="fake-token",
+        )
+
+    assert result.outcome == "error"
+    assert "target moved during validation" in (result.error_message or "")
+    assert not any(
+        len(call.args) > 1 and call.args[1] == "push"
+        for call in mock_run_git.call_args_list
+    )
+    mock_creator_cls.return_value.create_backport_pr.assert_not_called()
 
 
 @patch(f"{_PATCH_PREFIX}.Github")

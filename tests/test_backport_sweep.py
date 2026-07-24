@@ -11,7 +11,12 @@ from github.GithubException import GithubException
 
 from scripts.backport import application as sweep_apply
 from scripts.backport import sweep as backport_sweep
-from scripts.backport import sweep_git, sweep_graphql, sweep_validation
+from scripts.backport import (
+    sweep_discovery,
+    sweep_git,
+    sweep_graphql,
+    sweep_validation,
+)
 from scripts.backport.application import apply_candidate
 from scripts.backport.missing_test_adaptation import (
     MissingTestAdaptationResult,
@@ -53,6 +58,15 @@ from scripts.backport.transaction import BaselineValidationResult
 from scripts.common.git_auth import GitAuth
 
 DETAIL = backport_sweep.DETAIL_ALREADY_ON_SWEEP_BRANCH
+
+
+@pytest.fixture(autouse=True)
+def _stable_publication_boundary(monkeypatch):
+    monkeypatch.setattr(
+        backport_sweep,
+        "assert_target_head_unchanged",
+        lambda *_args, **_kwargs: None,
+    )
 
 
 def _source_plan(
@@ -1478,6 +1492,11 @@ def test_clone_target_branch_invokes_git_clone_without_destination_cwd(
         "run_git_default",
         lambda repo_dir, *args, **_kwargs: calls.append((["git", *args], {})),
     )
+    monkeypatch.setattr(
+        sweep_git,
+        "capture_target_head",
+        lambda repo_dir, branch: f"{repo_dir}:{branch}:sha",
+    )
 
     dest = tmp_path / "checkout"
     clone_target_branch(
@@ -1569,7 +1588,11 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     applied_by_pr = {3, 4, 6, 7, 8, 9}
     attempted: list[int] = []
 
-    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        backport_sweep,
+        "clone_target_branch",
+        lambda *_args, **_kwargs: "target-sha",
+    )
     monkeypatch.setattr(backport_sweep, "_run_git", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
@@ -1648,7 +1671,11 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
         merge_commit_sha="sha1",
     )
 
-    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        backport_sweep,
+        "clone_target_branch",
+        lambda *_args, **_kwargs: "target-sha",
+    )
     monkeypatch.setattr(backport_sweep, "_run_git", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
@@ -1690,6 +1717,34 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     assert sum(1 for r in result.results if r.outcome == "applied") == 0
 
 
+def test_process_branch_rejects_target_move_before_clone_completes(monkeypatch):
+    transaction = MagicMock()
+    monkeypatch.setattr(
+        backport_sweep,
+        "clone_target_branch",
+        lambda *_args, **_kwargs: "new-target-sha",
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "apply_candidate_transaction",
+        transaction,
+    )
+
+    result = backport_sweep._process_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="token",
+        target_branch="8.1",
+        candidates=[_candidate(1)],
+        push_repo="valkey-io/valkey",
+        test_commands=[],
+        expected_target_sha="old-target-sha",
+    )
+
+    assert "moved before the target clone completed" in result.error
+    transaction.assert_not_called()
+
+
 def test_process_branch_stops_before_candidates_when_baseline_is_red(
     monkeypatch,
 ):
@@ -1705,7 +1760,7 @@ def test_process_branch_stops_before_candidates_when_baseline_is_red(
     monkeypatch.setattr(
         backport_sweep,
         "clone_target_branch",
-        lambda *_args, **_kwargs: None,
+        lambda *_args, **_kwargs: "target-sha",
     )
     monkeypatch.setattr(
         backport_sweep,
@@ -1766,7 +1821,11 @@ def _green_only_process_branch(
     Tests supply how each isolated candidate transaction applies and validates.
     Returns (result, pushed, upserts, reset_count, reset_refs).
     """
-    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep,
+        "clone_target_branch",
+        lambda *_a, **_k: "target-sha",
+    )
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_a, **_k: None)
     monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(
@@ -1966,6 +2025,39 @@ def test_process_branch_pushes_green_branch_as_ready(monkeypatch):
     assert reset_refs == []
     assert pushed == [("agent/backport/sweep/8.1", False)]
     assert upserts[0].get("draft", False) is False
+
+
+def test_process_branch_rechecks_target_immediately_before_push(monkeypatch):
+    checks: list[tuple[str, str, str]] = []
+
+    def reject_moved_target(
+        _gh,
+        repo_full_name: str,
+        target_branch: str,
+        expected_sha: str,
+    ) -> None:
+        checks.append((repo_full_name, target_branch, expected_sha))
+        raise backport_sweep.TargetHeadChanged("target moved")
+
+    monkeypatch.setattr(
+        backport_sweep,
+        "assert_target_head_unchanged",
+        reject_moved_target,
+    )
+
+    result, pushed, upserts, _resets, _reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(20)],
+        apply_fn=_applied,
+        validate_fn=lambda *_a, **_k: (True, ""),
+    )
+
+    assert checks == [("valkey-io/valkey", "8.1", "target-sha")]
+    assert pushed == []
+    assert upserts == []
+    assert result.error == "target moved"
+    assert result.results[0].outcome == "error"
+    assert result.results[0].detail == "publication blocked: target moved"
 
 
 def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
@@ -3052,6 +3144,34 @@ def test_build_summary_counts_applied_candidates():
     assert "https://github.com/valkey-io/valkey/pull/100" in summary
 
 
+def test_build_summary_surfaces_scheduled_lifecycle_decisions():
+    summary = build_summary(
+        [
+            BranchSweepResult(
+                target_branch="8.1",
+                pr_url="https://example/pull/1",
+                skipped_open_pr=True,
+            ),
+            BranchSweepResult(
+                target_branch="8.0",
+                candidates_found=2,
+                retry_suppressed=True,
+            ),
+            BranchSweepResult(
+                target_branch="7.2",
+                candidates_found=1,
+                failure_marker_ref=(
+                    "heads/agent/backport/failed-campaign/7.2/ref"
+                ),
+            ),
+        ]
+    )
+
+    assert "preserved existing review PR" in summary
+    assert "unchanged failed campaign suppressed" in summary
+    assert "failed campaign recorded at" in summary
+
+
 def test_validation_repair_prompt_is_narrowly_scoped():
     prompt = build_validation_repair_prompt(
         "8.1",
@@ -3233,8 +3353,10 @@ def _project_item(
 ) -> dict:
     """Build a fake project-item payload shaped like the GraphQL response."""
     return {
+        "id": f"ITEM_{number}",
         "content": {
             "__typename": "PullRequest",
+            "id": f"PR_{number}",
             "number": number,
             "title": f"PR {number}",
             "url": f"https://github.com/{repo}/pull/{number}",
@@ -3247,6 +3369,7 @@ def _project_item(
             },
         },
         "fieldValues": {
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
             "nodes": [
                 {
                     "__typename": "ProjectV2ItemFieldSingleSelectValue",
@@ -3294,13 +3417,12 @@ def test_discovery_keeps_matching_repo_pr():
     assert by_branch["9.1"][0].source_pr_number == 3654
 
 
-def test_discovery_marks_truncated_commit_connection_incomplete():
+def test_discovery_fails_closed_when_commit_page_cursor_is_missing():
     item = _project_item(number=3654, repo="valkey-io/valkey")
     item["content"]["commits"]["pageInfo"]["hasNextPage"] = True
 
-    candidate = _make_discovery([item]).discover(["9.1"])["9.1"][0]
-
-    assert candidate.source_commits_complete is False
+    with pytest.raises(RuntimeError, match="returned no endCursor"):
+        _make_discovery([item]).discover(["9.1"])
 
 
 def test_discovery_drops_unmerged_pr_regardless_of_repo():
@@ -3333,7 +3455,492 @@ def test_project_items_query_selects_repository_name_with_owner():
     the runtime filter sees None for every item and lets cross-repo PRs
     through.
     """
-    query = backport_sweep._project_items_query("organization")
+    query = sweep_discovery.project_items_query("organization")
     assert "repository {" in query
     assert "nameWithOwner" in query
     assert "pageInfo { hasNextPage endCursor }" in query
+    assert "fieldValues(first: 50)" in query
+    assert "\n          id\n" in query
+
+
+class _QueuedGraphQL:
+    def __init__(self, responses: list[dict]) -> None:
+        self.responses = list(responses)
+        self.calls: list[tuple[str, dict]] = []
+
+    def execute(self, query: str, variables: dict) -> dict:
+        self.calls.append((query, variables))
+        if not self.responses:
+            raise AssertionError("unexpected GraphQL request")
+        return self.responses.pop(0)
+
+
+def _project_page(
+    items: list[dict],
+    *,
+    has_next: bool = False,
+    cursor: str | None = None,
+) -> dict:
+    return {
+        "organization": {
+            "projectV2": {
+                "items": {
+                    "nodes": items,
+                    "pageInfo": {
+                        "hasNextPage": has_next,
+                        "endCursor": cursor,
+                    },
+                }
+            }
+        }
+    }
+
+
+def _live_discovery(gql: _QueuedGraphQL) -> backport_sweep.ProjectBackportDiscovery:
+    return backport_sweep.ProjectBackportDiscovery(
+        gql,  # type: ignore[arg-type]
+        project_owner="valkey-io",
+        project_number=1,
+        source_repo="valkey-io/valkey",
+        implicit_target_branch="9.1",
+    )
+
+
+def test_discovery_paginates_all_pull_request_commits():
+    item = _project_item(number=3654, repo="valkey-io/valkey", merge_sha="merge")
+    item["content"]["commits"] = {
+        "nodes": [{"commit": {"oid": "commit-1"}}],
+        "pageInfo": {"hasNextPage": True, "endCursor": "COMMITS_1"},
+    }
+    gql = _QueuedGraphQL(
+        [
+            _project_page([item]),
+            {
+                "node": {
+                    "id": "PR_3654",
+                    "commits": {
+                        "nodes": [
+                            {"commit": {"oid": "commit-2"}},
+                            {"commit": {"oid": "commit-3"}},
+                        ],
+                        "pageInfo": {
+                            "hasNextPage": False,
+                            "endCursor": None,
+                        },
+                    },
+                }
+            },
+        ]
+    )
+
+    candidate = _live_discovery(gql).discover(["9.1"])["9.1"][0]
+
+    assert candidate.commit_shas == ["commit-1", "commit-2", "commit-3"]
+    assert candidate.source_commits_complete
+    assert gql.calls[1][1] == {"id": "PR_3654", "cursor": "COMMITS_1"}
+    assert "... on PullRequest" in gql.calls[1][0]
+
+
+def test_discovery_paginates_project_items():
+    first = _project_item(number=1, repo="valkey-io/valkey")
+    second = _project_item(number=2, repo="valkey-io/valkey")
+    gql = _QueuedGraphQL(
+        [
+            _project_page([first], has_next=True, cursor="ITEMS_1"),
+            _project_page([second]),
+        ]
+    )
+
+    candidates = _live_discovery(gql).discover(["9.1"])["9.1"]
+
+    assert [candidate.source_pr_number for candidate in candidates] == [1, 2]
+    assert gql.calls[0][1]["cursor"] is None
+    assert gql.calls[1][1]["cursor"] == "ITEMS_1"
+
+
+def test_discovery_paginates_field_values_before_filtering_status():
+    item = _project_item(number=3654, repo="valkey-io/valkey")
+    item["fieldValues"] = {
+        "nodes": [
+            {
+                "__typename": "ProjectV2ItemFieldTextValue",
+                "text": "unrelated",
+                "field": {"name": "Notes"},
+            }
+        ],
+        "pageInfo": {"hasNextPage": True, "endCursor": "FIELDS_1"},
+    }
+    gql = _QueuedGraphQL(
+        [
+            _project_page([item]),
+            {
+                "node": {
+                    "id": "ITEM_3654",
+                    "fieldValues": {
+                        "nodes": [
+                            {
+                                "__typename": "ProjectV2ItemFieldSingleSelectValue",
+                                "name": "To be backported",
+                                "field": {"name": "Status"},
+                            }
+                        ],
+                        "pageInfo": {
+                            "hasNextPage": False,
+                            "endCursor": None,
+                        },
+                    },
+                }
+            },
+        ]
+    )
+
+    candidates = _live_discovery(gql).discover(["9.1"])["9.1"]
+
+    assert [candidate.source_pr_number for candidate in candidates] == [3654]
+    assert gql.calls[1][1] == {"id": "ITEM_3654", "cursor": "FIELDS_1"}
+    assert "... on ProjectV2Item" in gql.calls[1][0]
+
+
+def test_discovery_fails_closed_when_nested_node_id_is_missing():
+    item = _project_item(number=3654, repo="valkey-io/valkey")
+    item.pop("id")
+    item["fieldValues"]["pageInfo"] = {
+        "hasNextPage": True,
+        "endCursor": "FIELDS_1",
+    }
+
+    with pytest.raises(RuntimeError, match="GraphQL node ID is missing"):
+        _make_discovery([item]).discover(["9.1"])
+
+
+def test_discovery_fails_closed_when_outer_cursor_is_missing():
+    gql = _QueuedGraphQL(
+        [_project_page([], has_next=True, cursor=None)]
+    )
+
+    with pytest.raises(RuntimeError, match="returned no endCursor"):
+        _live_discovery(gql).discover(["9.1"])
+
+
+def test_discovery_fails_closed_when_outer_cursor_repeats():
+    gql = _QueuedGraphQL(
+        [
+            _project_page([], has_next=True, cursor="SAME"),
+            _project_page([], has_next=True, cursor="SAME"),
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="repeated pagination cursor"):
+        _live_discovery(gql).discover(["9.1"])
+
+
+def test_discovery_fails_closed_when_nested_page_returns_wrong_node():
+    item = _project_item(number=3654, repo="valkey-io/valkey")
+    item["content"]["commits"]["pageInfo"] = {
+        "hasNextPage": True,
+        "endCursor": "COMMITS_1",
+    }
+    gql = _QueuedGraphQL(
+        [
+            _project_page([item]),
+            {
+                "node": {
+                    "id": "PR_OTHER",
+                    "commits": {
+                        "nodes": [],
+                        "pageInfo": {
+                            "hasNextPage": False,
+                            "endCursor": None,
+                        },
+                    },
+                }
+            },
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="wrong GraphQL node"):
+        _live_discovery(gql).discover(["9.1"])
+
+
+def _sweep_registry_entries():
+    repo_entry = SimpleNamespace(
+        repo="org/core",
+        effective_push_repo="org/core",
+        project_owner="org",
+        project_owner_type="organization",
+        build_commands=(),
+        validation_setup_commands=(),
+        validation_rules=(),
+        language="c",
+        repair_validation_failures=False,
+        max_conflicting_files=100,
+        backport_label="backport",
+        llm_conflict_label="ai-resolved-conflicts",
+    )
+    branch_entry = SimpleNamespace(branch="1.0", project_number=1)
+    return repo_entry, branch_entry
+
+
+def _sweep_candidate(number: int) -> ProjectBackportCandidate:
+    return ProjectBackportCandidate(
+        source_pr_number=number,
+        source_pr_title=f"PR {number}",
+        source_pr_url=f"https://example/pull/{number}",
+        target_branch="1.0",
+        merge_commit_sha=f"merge-{number}",
+        commit_shas=[f"commit-{number}"],
+    )
+
+
+def _stub_discovery(monkeypatch, candidates):
+    class StubDiscovery:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def discover(self, _branches):
+            return {"1.0": list(candidates)}
+
+    monkeypatch.setattr(
+        backport_sweep,
+        "ProjectBackportDiscovery",
+        StubDiscovery,
+    )
+
+
+def test_scheduled_sweep_preserves_existing_open_pr_before_discovery(
+    monkeypatch,
+):
+    repo_entry, branch_entry = _sweep_registry_entries()
+    existing = SimpleNamespace(
+        number=42,
+        html_url="https://example/pull/42",
+    )
+    monkeypatch.setattr(backport_sweep, "Github", lambda **_kwargs: object())
+    monkeypatch.setattr(
+        backport_sweep,
+        "find_existing_pr",
+        lambda *_args: existing,
+    )
+
+    class DiscoveryMustNotRun:
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise AssertionError("discovery ran despite an open review PR")
+
+    monkeypatch.setattr(
+        backport_sweep,
+        "ProjectBackportDiscovery",
+        DiscoveryMustNotRun,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "emit_job_summary",
+        lambda *_args: None,
+    )
+
+    result = backport_sweep.run_backport_sweep(
+        repo_entry=repo_entry,
+        branch_entry=branch_entry,
+        github_token="token",
+        skip_if_open_pr=True,
+    )
+
+    assert result.skipped_open_pr
+    assert result.pr_url == "https://example/pull/42"
+    assert result.candidates_found == 0
+
+
+def test_manual_sweep_does_not_apply_scheduled_open_pr_guard(monkeypatch):
+    repo_entry, branch_entry = _sweep_registry_entries()
+    monkeypatch.setattr(backport_sweep, "Github", lambda **_kwargs: object())
+    monkeypatch.setattr(
+        backport_sweep,
+        "find_existing_pr",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("scheduled open-PR guard ran")
+        ),
+    )
+    _stub_discovery(monkeypatch, [])
+    monkeypatch.setattr(
+        backport_sweep,
+        "_clear_failure_markers_best_effort",
+        lambda *_args: None,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "emit_job_summary",
+        lambda *_args: None,
+    )
+
+    result = backport_sweep.run_backport_sweep(
+        repo_entry=repo_entry,
+        branch_entry=branch_entry,
+        github_token="token",
+    )
+
+    assert not result.skipped_open_pr
+
+
+def test_unchanged_failed_campaign_is_suppressed_before_clone(monkeypatch):
+    repo_entry, branch_entry = _sweep_registry_entries()
+    candidates = [_sweep_candidate(1), _sweep_candidate(2)]
+    monkeypatch.setattr(backport_sweep, "Github", lambda **_kwargs: object())
+    _stub_discovery(monkeypatch, candidates)
+    monkeypatch.setattr(
+        backport_sweep,
+        "get_target_head",
+        lambda *_args: "a" * 40,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "failure_marker_exists",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "_process_branch",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("unchanged campaign reached candidate processing")
+        ),
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "emit_job_summary",
+        lambda *_args: None,
+    )
+
+    result = backport_sweep.run_backport_sweep(
+        repo_entry=repo_entry,
+        branch_entry=branch_entry,
+        github_token="token",
+        suppress_unchanged_failures=True,
+    )
+
+    assert result.retry_suppressed
+    assert result.candidates_found == 2
+    assert result.failure_marker_ref.startswith(
+        "heads/agent/backport/failed-campaign/"
+    )
+
+
+def test_manual_sweep_bypasses_failed_campaign_marker(monkeypatch):
+    repo_entry, branch_entry = _sweep_registry_entries()
+    candidates = [_sweep_candidate(1)]
+    monkeypatch.setattr(backport_sweep, "Github", lambda **_kwargs: object())
+    _stub_discovery(monkeypatch, candidates)
+    monkeypatch.setattr(
+        backport_sweep,
+        "get_target_head",
+        lambda *_args: "a" * 40,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "failure_marker_exists",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("manual sweep consulted the automation marker")
+        ),
+    )
+    processed: list[bool] = []
+
+    def fake_process(**_kwargs):
+        processed.append(True)
+        return BranchSweepResult(
+            target_branch="1.0",
+            candidates_found=1,
+            results=[
+                CandidateResult(1, "PR 1", "skipped-conflict"),
+            ],
+        )
+
+    monkeypatch.setattr(backport_sweep, "_process_branch", fake_process)
+    monkeypatch.setattr(
+        backport_sweep,
+        "record_failure_marker",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "emit_job_summary",
+        lambda *_args: None,
+    )
+
+    result = backport_sweep.run_backport_sweep(
+        repo_entry=repo_entry,
+        branch_entry=branch_entry,
+        github_token="token",
+    )
+
+    assert processed == [True]
+    assert not result.retry_suppressed
+
+
+def test_all_failed_campaign_records_durable_marker(monkeypatch):
+    repo_entry, branch_entry = _sweep_registry_entries()
+    candidates = [_sweep_candidate(1), _sweep_candidate(2)]
+    monkeypatch.setattr(backport_sweep, "Github", lambda **_kwargs: object())
+    _stub_discovery(monkeypatch, candidates)
+    monkeypatch.setattr(
+        backport_sweep,
+        "get_target_head",
+        lambda *_args: "a" * 40,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "failure_marker_exists",
+        lambda *_args, **_kwargs: False,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "_process_branch",
+        lambda **_kwargs: BranchSweepResult(
+            target_branch="1.0",
+            candidates_found=2,
+            results=[
+                CandidateResult(1, "PR 1", "skipped-conflict"),
+                CandidateResult(
+                    2,
+                    "PR 2",
+                    "skipped-validation-failed",
+                ),
+            ],
+        ),
+    )
+    recorded: list[tuple[str, str, str]] = []
+
+    def fake_record(
+        _gh,
+        repo: str,
+        marker: str,
+        *,
+        target_branch: str,
+        target_sha: str,
+    ) -> None:
+        recorded.append((repo, target_branch, target_sha))
+        assert marker.startswith("heads/agent/backport/failed-campaign/")
+
+    monkeypatch.setattr(
+        backport_sweep,
+        "record_failure_marker",
+        fake_record,
+    )
+    cleared: list[bool] = []
+    monkeypatch.setattr(
+        backport_sweep,
+        "clear_failure_markers",
+        lambda *_args: cleared.append(True),
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "emit_job_summary",
+        lambda *_args: None,
+    )
+
+    result = backport_sweep.run_backport_sweep(
+        repo_entry=repo_entry,
+        branch_entry=branch_entry,
+        github_token="token",
+    )
+
+    assert recorded == [("org/core", "1.0", "a" * 40)]
+    assert result.failure_marker_ref
+    assert not result.error
+    assert cleared == []

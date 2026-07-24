@@ -1,8 +1,8 @@
 """Poll release branches and run a backport sweep when no sweep PR is open.
 
-The daily sweep tops a rolling backport PR up to ``--max-candidates`` validated
-cherry-picks, then waits for the next cron tick. When that PR merges, the next
-batch of board candidates is not picked up until the following day.
+Scheduled sweeps preserve an open rolling backport PR while a human reviews it.
+When that PR merges, the next candidate batch must wait for another scheduler
+tick.
 
 This poller closes that gap without per-branch workflow files or cross-repo
 dispatch. For each registered ``{repo, branch}`` it applies one rule:
@@ -11,9 +11,9 @@ dispatch. For each registered ``{repo, branch}`` it applies one rule:
     reviewing it and we must not pile more cherry-picks on. Otherwise run a
     sweep, which discovers the current board state and opens a fresh PR.
 
-The open-PR check is the entire state model: a merge closes the sweep PR, the
-next poll sees the gap and tops the board back up, and the new PR self-locks the
-branch again until it too merges. Run it on a short cron for near-merge latency.
+An unchanged candidate set that previously made no progress is also suppressed
+by the sweep's durable failed-campaign marker. Run the poller on a short cron for
+near-merge latency without repeatedly invoking AI for deterministic failures.
 """
 
 from __future__ import annotations
@@ -64,11 +64,12 @@ def poll_branch(
     poller's decision without any writes.
 
     Returns a result dict describing the action taken: ``skipped-open-pr`` when
-    a sweep PR is already open, ``swept`` (or ``would-sweep`` under dry run) when
-    no PR is open, or ``error`` when the open-PR check itself failed. Only the
-    open-PR check is guarded here; once a sweep starts, it owns its own error
-    handling and records failures on the returned result (matching the daily
-    sweep), so a raise from deep inside the sweep still propagates.
+    a sweep PR is already open, ``skipped-unchanged-failures`` for a matching
+    durable marker, ``swept`` (or ``would-sweep`` under dry run) when work runs,
+    or ``error`` when the open-PR check itself failed. Only the open-PR check is
+    guarded here; once a sweep starts, it owns its own error handling and
+    records failures on the returned result (matching the daily sweep), so a
+    raise from deep inside the sweep still propagates.
     """
     repo_full_name = repo_entry.repo
     push_repo = repo_entry.effective_push_repo
@@ -114,14 +115,20 @@ def poll_branch(
         branch_entry=branch_entry,
         github_token=github_token,
         max_candidates=max_candidates,
+        suppress_unchanged_failures=True,
     )
     return {
         "repo": repo_full_name,
         "branch": target_branch,
-        "action": "swept",
+        "action": (
+            "skipped-unchanged-failures"
+            if result.retry_suppressed
+            else "swept"
+        ),
         "found": result.candidates_found,
         "applied": result.applied_count,
         "pr": result.pr_url,
+        "failure_marker": result.failure_marker_ref,
         "error": result.error,
     }
 

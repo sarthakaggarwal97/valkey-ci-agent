@@ -87,6 +87,7 @@ jobs:
       CI_AGENT_EVIDENCE_DIR: agent-evidence
       MAX_CANDIDATES: ${{ inputs.max_candidates || '2' }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
+      SKIP_IF_OPEN_PR: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
     permissions:
       contents: read
       id-token: write
@@ -144,6 +145,12 @@ jobs:
 
           if [[ "${DRY_RUN}" == "true" ]]; then
             args+=(--discover-only)
+          fi
+
+          # Scheduled runs preserve a stable human-review surface, matching the
+          # hourly poller. A manual dispatch remains an explicit PR refresh.
+          if [[ "${SKIP_IF_OPEN_PR}" == "true" ]]; then
+            args+=(--skip-if-open-pr --suppress-unchanged-failures)
           fi
 
           python "${args[@]}" | tee backport-sweep-result.json

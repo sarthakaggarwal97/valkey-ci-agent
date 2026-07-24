@@ -9,7 +9,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,8 +17,21 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
+from scripts.backport import sweep_discovery
 from scripts.backport.application import apply_candidate
 from scripts.backport.git import run_git as _run_git
+from scripts.backport.publication import (
+    TargetHeadChanged,
+    assert_target_head_unchanged,
+    get_target_head,
+)
+from scripts.backport.sweep_failures import (
+    campaign_made_no_progress,
+    clear_failure_markers,
+    failure_marker_exists,
+    failure_marker_ref,
+    record_failure_marker,
+)
 from scripts.backport.sweep_git import (
     branch_has_changes,
     clone_target_branch,
@@ -63,125 +75,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_BRANCH_FIELDS = (
-    "Backport Branch", "Target Branch", "Release Branch",
-    "Branch", "Version", "Release", "Folder",
-)
-_DEFAULT_STATUS_FIELD = "Status"
-_DEFAULT_STATUS_VALUE = "To be backported"
+_DEFAULT_BRANCH_FIELDS = sweep_discovery.DEFAULT_BRANCH_FIELDS
+_DEFAULT_STATUS_FIELD = sweep_discovery.DEFAULT_STATUS_FIELD
+_DEFAULT_STATUS_VALUE = sweep_discovery.DEFAULT_STATUS_VALUE
+ProjectBackportDiscovery = sweep_discovery.ProjectBackportDiscovery
 _BRANCH_PREFIX = "agent/backport/sweep"
-
-
-class ProjectBackportDiscovery:
-    def __init__(
-        self,
-        gql: GitHubGraphQLClient,
-        *,
-        project_owner: str,
-        project_number: int,
-        source_repo: str,
-        project_owner_type: str = "organization",
-        status_field: str = _DEFAULT_STATUS_FIELD,
-        status_value: str = _DEFAULT_STATUS_VALUE,
-        branch_fields: list[str] | None = None,
-        implicit_target_branch: str | None = None,
-    ) -> None:
-        self._gql = gql
-        self._owner = project_owner
-        self._number = project_number
-        self._owner_type = project_owner_type
-        self._source_repo = source_repo
-        self._status_field = status_field
-        self._status_value = status_value
-        self._branch_fields = branch_fields or list(_DEFAULT_BRANCH_FIELDS)
-        self._implicit_target = implicit_target_branch
-
-    def discover(
-        self,
-        release_branches: list[str],
-    ) -> dict[str, list[ProjectBackportCandidate]]:
-        by_branch: dict[str, list[ProjectBackportCandidate]] = {
-            branch: [] for branch in release_branches
-        }
-        for item in self._iter_items():
-            candidate = self._candidate_from_item(item, release_branches)
-            if candidate:
-                by_branch.setdefault(candidate.target_branch, []).append(candidate)
-        return by_branch
-
-    def _iter_items(self) -> list[dict[str, Any]]:
-        owner_field = "user" if self._owner_type == "user" else "organization"
-        query = _project_items_query(owner_field)
-        cursor = None
-        items: list[dict[str, Any]] = []
-        while True:
-            data = self._gql.execute(
-                query,
-                {"owner": self._owner, "number": self._number, "cursor": cursor},
-            )
-            project = (data.get(owner_field) or {}).get("projectV2")
-            if not project:
-                raise RuntimeError(f"Project {self._owner}/{self._number} not found")
-            page = project.get("items") or {}
-            items.extend(page.get("nodes") or [])
-            page_info = page.get("pageInfo") or {}
-            if not page_info.get("hasNextPage"):
-                return items
-            cursor = page_info.get("endCursor")
-
-    def _candidate_from_item(
-        self,
-        item: dict[str, Any],
-        branches: list[str],
-    ) -> ProjectBackportCandidate | None:
-        content = item.get("content") or {}
-        if content.get("__typename") != "PullRequest" or not content.get("merged"):
-            return None
-
-        item_repo = (content.get("repository") or {}).get("nameWithOwner")
-        if item_repo and item_repo != self._source_repo:
-            logger.debug(
-                "Skipping project item PR #%s from %s (sweep target is %s)",
-                content.get("number"),
-                item_repo,
-                self._source_repo,
-            )
-            return None
-
-        fields = _extract_field_values(item)
-        if not _field_has_value(fields, self._status_field, self._status_value):
-            return None
-
-        if self._implicit_target is not None:
-            target_branch = self._implicit_target
-        else:
-            matched_branch = _matching_release_branch(
-                fields,
-                self._branch_fields,
-                branches,
-            )
-            if not matched_branch:
-                return None
-            target_branch = matched_branch
-
-        commits = [
-            node.get("commit", {}).get("oid", "")
-            for node in (content.get("commits", {}).get("nodes") or [])
-        ]
-        commits_page = content.get("commits") or {}
-        merge_sha = (content.get("mergeCommit") or {}).get("oid")
-        return ProjectBackportCandidate(
-            source_pr_number=int(content["number"]),
-            source_pr_title=str(content.get("title") or ""),
-            source_pr_url=str(content.get("url") or ""),
-            target_branch=target_branch,
-            merge_commit_sha=merge_sha,
-            commit_shas=[sha for sha in commits if sha],
-            merged_at=str(content.get("mergedAt") or ""),
-            source_commits_complete=not bool(
-                (commits_page.get("pageInfo") or {}).get("hasNextPage")
-            ),
-        )
 
 
 def run_backport_sweep(
@@ -195,6 +93,8 @@ def run_backport_sweep(
     test_commands_override: list[str] | None = None,
     discover_only: bool = False,
     max_candidates: int = 5,
+    skip_if_open_pr: bool = False,
+    suppress_unchanged_failures: bool = False,
 ) -> BranchSweepResult:
     repo_full_name = repo_entry.repo
     push_repo = repo_entry.effective_push_repo
@@ -214,6 +114,28 @@ def run_backport_sweep(
     )
 
     gh = Github(auth=Auth.Token(github_token))
+
+    if skip_if_open_pr:
+        backport_branch = f"{_BRANCH_PREFIX}/{target_branch}"
+        existing_pr = find_existing_pr(
+            gh,
+            repo_full_name,
+            push_repo,
+            backport_branch,
+        )
+        if existing_pr is not None:
+            logger.info(
+                "Branch %s: open sweep PR #%d exists, preserving it unchanged",
+                target_branch,
+                existing_pr.number,
+            )
+            result = BranchSweepResult(
+                target_branch=target_branch,
+                pr_url=str(existing_pr.html_url),
+                skipped_open_pr=True,
+            )
+            emit_job_summary(build_summary([result]))
+            return result
 
     discovery = ProjectBackportDiscovery(
         GitHubGraphQLClient(github_token),
@@ -256,6 +178,31 @@ def run_backport_sweep(
 
     if not candidates:
         result = BranchSweepResult(target_branch=target_branch)
+        _clear_failure_markers_best_effort(gh, push_repo, target_branch)
+        emit_job_summary(build_summary([result]))
+        return result
+
+    target_head_sha = get_target_head(gh, repo_full_name, target_branch)
+    marker_ref = failure_marker_ref(
+        target_branch,
+        target_head_sha,
+        candidates,
+    )
+    if suppress_unchanged_failures and failure_marker_exists(
+        gh, push_repo, marker_ref, target_sha=target_head_sha,
+    ):
+        logger.info(
+            "Branch %s: unchanged target and candidate set previously made no "
+            "progress; skipping retry (%s)",
+            target_branch,
+            marker_ref,
+        )
+        result = BranchSweepResult(
+            target_branch=target_branch,
+            candidates_found=len(candidates),
+            retry_suppressed=True,
+            failure_marker_ref=marker_ref,
+        )
         emit_job_summary(build_summary([result]))
         return result
 
@@ -276,7 +223,45 @@ def run_backport_sweep(
         max_conflicting_files=repo_entry.max_conflicting_files,
         backport_label=repo_entry.backport_label,
         llm_conflict_label=repo_entry.llm_conflict_label,
+        expected_target_sha=target_head_sha,
     )
+    if campaign_made_no_progress(
+        candidates,
+        result.results,
+        error=result.error,
+        pr_url=result.pr_url,
+    ):
+        try:
+            record_failure_marker(
+                gh,
+                push_repo,
+                marker_ref,
+                target_branch=target_branch,
+                target_sha=target_head_sha,
+            )
+            result.failure_marker_ref = marker_ref
+            logger.info(
+                "Branch %s: recorded failed-campaign marker %s",
+                target_branch,
+                marker_ref,
+            )
+        except Exception as exc:
+            logger.exception(
+                "Branch %s: could not record failed-campaign marker",
+                target_branch,
+            )
+            result.error = f"could not record failed-campaign marker: {exc}"
+            result.results.append(
+                CandidateResult(
+                    source_pr_number=0,
+                    source_pr_title=f"Branch {target_branch}",
+                    outcome="error",
+                    detail=result.error,
+                )
+            )
+    elif not result.error:
+        _clear_failure_markers_best_effort(gh, push_repo, target_branch)
+
     emit_job_summary(build_summary([result]))
     return result
 
@@ -299,6 +284,7 @@ def _process_branch(
     max_conflicting_files: int = 100,
     backport_label: str = "backport",
     llm_conflict_label: str = "ai-resolved-conflicts",
+    expected_target_sha: str | None = None,
 ) -> BranchSweepResult:
     result = BranchSweepResult(
         target_branch=target_branch,
@@ -309,7 +295,25 @@ def _process_branch(
     try:
         with GitAuth(github_token, prefix="backport-sweep-git-askpass-") as git_auth:
             git_env = git_auth.env()
-            clone_target_branch(repo_full_name, target_branch, tmpdir, git_env)
+            cloned_target_sha = clone_target_branch(
+                repo_full_name,
+                target_branch,
+                tmpdir,
+                git_env,
+            )
+            if not cloned_target_sha:
+                raise RuntimeError(
+                    f"could not capture cloned target head for {target_branch}"
+                )
+            if (
+                expected_target_sha is not None
+                and cloned_target_sha != expected_target_sha
+            ):
+                raise TargetHeadChanged(
+                    f"{repo_full_name}:{target_branch} moved before the target "
+                    f"clone completed (expected {expected_target_sha}, cloned "
+                    f"{cloned_target_sha}); retrying from a fresh snapshot is required"
+                )
 
             if push_repo != repo_full_name:
                 sync_target_branch_to_source(
@@ -454,6 +458,19 @@ def _process_branch(
             ]
             if committed and branch_has_changes(tmpdir, target_branch):
                 try:
+                    assert_target_head_unchanged(
+                        gh,
+                        repo_full_name,
+                        target_branch,
+                        cloned_target_sha,
+                    )
+                except Exception as exc:
+                    for item in result.results:
+                        if item.outcome == "applied":
+                            item.outcome = "error"
+                            item.detail = f"publication blocked: {exc}"
+                    raise
+                try:
                     push_backport_branch(
                         tmpdir,
                         backport_branch,
@@ -508,98 +525,20 @@ def _process_branch(
     return result
 
 
-def _normalize(value: object) -> str:
-    return str(value or "").strip().lower()
-
-
-def _project_items_query(owner_field: str) -> str:
-    return f"""
-query($owner: String!, $number: Int!, $cursor: String) {{
-  {owner_field}(login: $owner) {{
-    projectV2(number: $number) {{
-      items(first: 100, after: $cursor) {{
-        pageInfo {{ hasNextPage endCursor }}
-        nodes {{
-          content {{
-            __typename
-            ... on PullRequest {{
-              number title url merged mergedAt
-              repository {{ nameWithOwner }}
-              mergeCommit {{ oid }}
-              commits(first: 100) {{
-                pageInfo {{ hasNextPage endCursor }}
-                nodes {{ commit {{ oid }} }}
-              }}
-            }}
-          }}
-          fieldValues(first: 50) {{
-            nodes {{
-              __typename
-              ... on ProjectV2ItemFieldTextValue {{ text field {{ ... on ProjectV2FieldCommon {{ name }} }} }}
-              ... on ProjectV2ItemFieldSingleSelectValue {{ name field {{ ... on ProjectV2FieldCommon {{ name }} }} }}
-              ... on ProjectV2ItemFieldNumberValue {{ number field {{ ... on ProjectV2FieldCommon {{ name }} }} }}
-              ... on ProjectV2ItemFieldIterationValue {{ title field {{ ... on ProjectV2FieldCommon {{ name }} }} }}
-            }}
-          }}
-        }}
-      }}
-    }}
-  }}
-}}
-"""
-
-
-def _extract_field_values(item: dict[str, Any]) -> dict[str, list[str]]:
-    values: dict[str, list[str]] = defaultdict(list)
-    for field_value in (item.get("fieldValues") or {}).get("nodes") or []:
-        name = (field_value.get("field") or {}).get("name")
-        if not name:
-            continue
-        values[_normalize(name)].extend(_field_value_strings(field_value))
-    return dict(values)
-
-
-def _field_value_strings(field_value: dict[str, Any]) -> list[str]:
-    type_name = field_value.get("__typename")
-    if type_name == "ProjectV2ItemFieldTextValue":
-        return [str(field_value.get("text") or "")]
-    if type_name == "ProjectV2ItemFieldSingleSelectValue":
-        return [str(field_value.get("name") or "")]
-    if type_name == "ProjectV2ItemFieldNumberValue":
-        number = field_value.get("number")
-        return [] if number is None else [str(number)]
-    if type_name == "ProjectV2ItemFieldIterationValue":
-        return [str(field_value.get("title") or "")]
-    return []
-
-
-def _field_has_value(
-    fields: dict[str, list[str]],
-    field_name: str,
-    expected: str,
-) -> bool:
-    return any(
-        _normalize(value) == _normalize(expected)
-        for value in fields.get(_normalize(field_name), [])
-    )
-
-
-def _matching_release_branch(
-    fields: dict[str, list[str]],
-    branch_fields: list[str],
-    branches: list[str],
-) -> str | None:
-    for field_name in branch_fields:
-        values = fields.get(_normalize(field_name), [])
-        for branch in branches:
-            normalized_branch = _normalize(branch)
-            if any(
-                _normalize(value) == normalized_branch
-                or _normalize(value) == f"backport {normalized_branch}"
-                for value in values
-            ):
-                return branch
-    return None
+def _clear_failure_markers_best_effort(
+    gh: Any,
+    push_repo: str,
+    target_branch: str,
+) -> None:
+    try:
+        clear_failure_markers(gh, push_repo, target_branch)
+    except Exception as exc:
+        logger.warning(
+            "Could not clear obsolete failed-campaign markers for %s:%s: %s",
+            push_repo,
+            target_branch,
+            exc,
+        )
 
 
 def main() -> None:
@@ -636,6 +575,16 @@ def main() -> None:
     )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--discover-only", action="store_true")
+    parser.add_argument(
+        "--skip-if-open-pr",
+        action="store_true",
+        help="Preserve an existing rolling PR instead of updating it",
+    )
+    parser.add_argument(
+        "--suppress-unchanged-failures",
+        action="store_true",
+        help="Skip an unchanged campaign already recorded as making no progress",
+    )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -671,13 +620,23 @@ def main() -> None:
         test_commands_override=test_commands_override,
         discover_only=args.discover_only or args.dry_run,
         max_candidates=args.max_candidates,
+        skip_if_open_pr=args.skip_if_open_pr,
+        suppress_unchanged_failures=args.suppress_unchanged_failures,
     )
 
     print(json.dumps({
         "branch": result.target_branch,
+        "action": (
+            "skipped-open-pr"
+            if result.skipped_open_pr
+            else "skipped-unchanged-failures"
+            if result.retry_suppressed
+            else "swept"
+        ),
         "found": result.candidates_found,
         "applied": result.applied_count,
         "pr": result.pr_url,
+        "failure_marker": result.failure_marker_ref,
     }, indent=2))
 
     if args.discover_only or args.dry_run:

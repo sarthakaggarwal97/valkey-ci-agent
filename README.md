@@ -39,12 +39,12 @@ The currently active workflow. Cherry-picks merged PRs onto release branches wit
 
 ### How it works
 
-1. **Daily sweep** - every day at 09:00 UTC, the preflight job reads `repos.yml` and generates one matrix leg per `{repo, branch}` pair
-2. **Project discovery** - each leg queries the GitHub Project v2 board for PRs marked "To be backported"
+1. **Daily sweep** - every day at 09:00 UTC, the preflight job reads `repos.yml` and generates one matrix leg per `{repo, branch}` pair; an open rolling PR is preserved for human review
+2. **Project discovery** - each eligible leg completely paginates the GitHub Project v2 items, field values, and source-PR commits for PRs marked "To be backported"
 3. **Cherry-pick** - attempts `git cherry-pick` for each candidate onto the target release branch
 4. **AI conflict resolution** - when cherry-pick conflicts, Claude Code reads both sides and resolves the conflict in place
-5. **Validation** - registry-configured build commands run before push; any failure blocks the push
-6. **PR creation** - pushes the branch and opens (or updates) a PR with a summary table
+5. **Validation** - registry-configured build commands run before push; any failure blocks the push, and a target-tip change after validation blocks stale publication
+6. **PR creation** - scheduled runs push a fresh rolling branch and open a PR with a summary table; an explicit manual sweep may refresh an existing PR
 7. **Status sync** - after a backport PR is merged into the release branch, versioned commit/PR provenance is reconciled with reverts before the source PR's Project v2 status moves from "To be backported" to "Done"
 
 Manual single-PR backports are also supported via `workflow_dispatch`.
@@ -77,6 +77,12 @@ repos:
 By default, agent branches are pushed directly to `repo` under the `agent/backport/...` namespace and PRs are opened in that same upstream repository. `push_repo` is optional and only exists as an escape hatch for a real different-owner fork; same-owner `push_repo` values are rejected so staging repositories do not become the normal model.
 
 The sweep branch is always kept green: a candidate is only kept if the whole branch still validates after the cherry-pick, so one bad commit can never block later candidates. Each scheduled run keeps up to two validated cherry-picks (`--max-candidates 2`) and reports candidates that were skipped or failed validation in the PR's "Needs attention" section without committing them. When `repair_validation_failures` is enabled, Claude Code gets one narrow edit-only attempt to fix a failing cherry-pick before it is dropped.
+
+If every candidate conflicts or fails validation and no PR can be opened, the
+agent records a namespaced Git ref keyed by the target SHA and complete ordered
+candidate set. Scheduled runs suppress that exact failed campaign until the
+target or candidate set changes (or the marker is removed), avoiding repeated
+AI work. A manual dispatch deliberately bypasses this suppression.
 
 Validated candidate commits carry versioned source-PR provenance, and PR
 bodies carry a hidden versioned manifest for squash merges. Sweep membership

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from scripts.backport import poller
@@ -94,8 +95,16 @@ def test_poll_branch_sweeps_when_no_open_pr(monkeypatch, tmp_path):
 
     captured = {}
 
-    def _fake_sweep(*, repo_entry, branch_entry, github_token, max_candidates):
+    def _fake_sweep(
+        *,
+        repo_entry,
+        branch_entry,
+        github_token,
+        max_candidates,
+        suppress_unchanged_failures,
+    ):
         captured["max_candidates"] = max_candidates
+        captured["suppress_unchanged_failures"] = suppress_unchanged_failures
         return BranchSweepResult(
             target_branch=branch_entry.branch,
             candidates_found=3,
@@ -121,6 +130,7 @@ def test_poll_branch_sweeps_when_no_open_pr(monkeypatch, tmp_path):
     assert result["pr"] == "https://example/pr/99"
     assert not result["error"]
     assert captured["max_candidates"] == 2
+    assert captured["suppress_unchanged_failures"] is True
 
 
 def test_poll_branch_degrades_when_pr_check_fails(monkeypatch, tmp_path):
@@ -179,8 +189,16 @@ def test_poll_branch_passes_max_candidates_through(monkeypatch, tmp_path):
 
     captured = {}
 
-    def _fake_sweep(*, repo_entry, branch_entry, github_token, max_candidates):
+    def _fake_sweep(
+        *,
+        repo_entry,
+        branch_entry,
+        github_token,
+        max_candidates,
+        suppress_unchanged_failures,
+    ):
         captured["max_candidates"] = max_candidates
+        assert suppress_unchanged_failures is True
         return _empty_result(branch_entry.branch)
 
     monkeypatch.setattr(poller, "run_backport_sweep", _fake_sweep)
@@ -201,3 +219,47 @@ def test_poll_branch_passes_max_candidates_through(monkeypatch, tmp_path):
         max_candidates=0,
     )
     assert captured["max_candidates"] == 0
+
+
+def test_poll_branch_reports_unchanged_failed_campaign(monkeypatch, tmp_path):
+    repo_entry, branch_entry = _branch(tmp_path)
+
+    monkeypatch.setattr(poller, "Github", lambda *a, **k: object())
+    monkeypatch.setattr(poller, "find_existing_pr", lambda *a, **k: None)
+    monkeypatch.setattr(
+        poller,
+        "run_backport_sweep",
+        lambda **_kwargs: BranchSweepResult(
+            target_branch="1.0",
+            candidates_found=2,
+            retry_suppressed=True,
+            failure_marker_ref="heads/agent/backport/failed-campaign/marker",
+        ),
+    )
+
+    result = poller.poll_branch(
+        repo_entry=repo_entry,
+        branch_entry=branch_entry,
+        github_token="token",
+    )
+
+    assert result["action"] == "skipped-unchanged-failures"
+    assert result["failure_marker"].endswith("/marker")
+    assert not result["error"]
+
+
+def test_daily_workflow_preserves_open_pr_only_for_scheduled_runs():
+    workflow = Path(".github/workflows/backport-sweep.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        "SKIP_IF_OPEN_PR: "
+        "${{ github.event_name == 'schedule' && 'true' || 'false' }}"
+        in workflow
+    )
+    assert 'if [[ "${SKIP_IF_OPEN_PR}" == "true" ]]' in workflow
+    assert (
+        "args+=(--skip-if-open-pr --suppress-unchanged-failures)"
+        in workflow
+    )

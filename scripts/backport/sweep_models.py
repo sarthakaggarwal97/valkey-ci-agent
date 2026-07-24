@@ -31,6 +31,9 @@ class BranchSweepResult:
     results: list[CandidateResult] = field(default_factory=list)
     pr_url: str = ""
     error: str = ""
+    skipped_open_pr: bool = False
+    retry_suppressed: bool = False
+    failure_marker_ref: str = ""
 
     @property
     def applied_count(self) -> int:

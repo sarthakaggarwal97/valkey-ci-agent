@@ -24,12 +24,15 @@ repos.yml      Registry of repos, release branches, and project boards
 ```text
 sweep.py (daily cron or manual dispatch)
   -> reads repos.yml and fans out one job per {repo, branch}
-  -> discovers PRs from each branch's GitHub Project board
+  -> scheduled run preserves an existing rolling PR unchanged
+  -> sweep_discovery.py completely paginates Project items, fields, and PR commits
+  -> scheduled run suppresses an unchanged, previously failed campaign
   -> for each registered release branch:
       source_change.py -> resolves the complete merge/squash/rebase source
       application.py -> applies the candidate and resolves conflicts with Claude Code
       transaction.py -> validates in an isolated worktree and promotes atomically
       provenance_*.py -> records and reconciles source identity
+      publication.py -> rechecks the validated target SHA immediately before push
       sweep_prs.py -> opens/updates the rolling PR
 ```
 
@@ -67,25 +70,31 @@ same effective-history result.
 
 ### Poll
 
-The daily sweep tops a rolling backport PR up to `--max-candidates` validated
-cherry-picks and then waits for the next cron tick, so a merged sweep PR is not
-topped back up until the following day. The poll workflow (`backport-poll.yml`)
-closes that gap by starting hourly and polling immediately, then once more 30
-minutes later inside the same runner. For each registered `{repo, branch}` it
-runs the same sweep, but only when no sweep PR is currently open for that
-branch:
+Both scheduled entry points preserve an open rolling PR unchanged, so human
+review always has a stable branch. The daily workflow checks once at 09:00 UTC.
+The poll workflow (`backport-poll.yml`) closes the post-merge gap by starting
+hourly and polling immediately, then once more 30 minutes later inside the same
+runner. For each registered `{repo, branch}` it runs the same sweep only when no
+sweep PR is currently open:
 
 ```text
 poller.py (short cron or manual dispatch)
   -> reads repos.yml and fans out one job per {repo, branch}
   -> find_existing_pr(...) -> open sweep PR for this branch?
        yes -> skip; a human is reviewing it
-       no  -> run_backport_sweep(...) opens a fresh PR
+       no  -> unchanged failed-campaign marker?
+                yes -> skip repeated AI work
+                no  -> run_backport_sweep(...) opens a fresh PR
 ```
 
-The open-PR check is the entire state model: a merge closes the sweep PR, the
-next poll finds the gap and tops the board back up, and the new PR locks the
-branch again until it too merges. The poll job shares the
+The open-PR gate protects the review lifecycle. If all candidates conflict or
+fail validation and no PR is created, `sweep_failures.py` writes an agent-owned
+ref keyed by the target SHA and complete ordered candidate set. Scheduled runs
+honor that marker; a target or candidate change produces a different key, and
+deleting the marker permits another automated attempt. Explicit manual sweeps
+bypass the marker and may also refresh an existing PR.
+
+The poll job shares the
 `backport-sweep-{repo}-{branch}` concurrency group with the daily sweep so the
 two never race for the same branch. Manual dispatches are one-shot; only
 scheduled runs use the sustained in-run cadence.
@@ -100,6 +109,9 @@ scheduled runs use the sustained in-run cadence.
 - `scripts/backport/provenance.py` - versioned trailer/manifest contract
 - `scripts/backport/provenance_git.py` - tree-neutral provenance writes
 - `scripts/backport/provenance_history.py` - revert-aware history evaluation
+- `scripts/backport/publication.py` - shared target-tip publication guard
+- `scripts/backport/sweep_discovery.py` - complete, fail-closed Project discovery
+- `scripts/backport/sweep_failures.py` - durable failed-campaign circuit breaker
 - `scripts/backport/sweep_*.py` - focused sweep support modules:
   typed sweep results, Git workspace operations, GitHub PR operations,
   GraphQL access, validation command execution, and Markdown reporting

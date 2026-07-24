@@ -202,6 +202,12 @@ def build_summary(results: list[BranchSweepResult]) -> str:
     for r in results:
         applied = sum(1 for c in r.results if result_is_on_backport_branch(c))
         suffix = f" -- [PR]({r.pr_url})" if r.pr_url else ""
+        if r.skipped_open_pr:
+            suffix += " -- preserved existing review PR"
+        if r.retry_suppressed:
+            suffix += " -- unchanged failed campaign suppressed"
+        elif r.failure_marker_ref:
+            suffix += f" -- failed campaign recorded at `{r.failure_marker_ref}`"
         if r.error:
             suffix += f" -- error: {r.error}"
         lines.append(f"- `{r.target_branch}`: {applied}/{r.candidates_found} applied" + suffix)

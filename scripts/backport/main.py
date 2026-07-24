@@ -32,6 +32,10 @@ from scripts.backport.models import (
     ResolutionResult,
 )
 from scripts.backport.pr_creator import BackportPRCreator
+from scripts.backport.publication import (
+    assert_target_head_unchanged,
+    capture_target_head,
+)
 from scripts.backport.registry import ValidationRule
 from scripts.backport.sweep_validation import (
     run_test_commands,
@@ -229,7 +233,7 @@ def run_backport(
             with GitAuth(github_token, prefix="backport-git-askpass-") as git_auth:
                 git_env = git_auth.env()
                 # Clone the repo with full history for cherry-pick
-                _clone_repo(
+                target_head_sha = _clone_repo(
                     repo_full_name,
                     tmp_dir,
                     target_branch,
@@ -390,9 +394,16 @@ def run_backport(
                         error_message=msg,
                     )
 
-                # Push the backport branch to the remote
+                # Push the backport branch to the remote.
                 push_remote = "origin"
                 if effective_push_repo != repo_full_name:
+                    # Synchronizing the fork's base is itself a publication.
+                    assert_target_head_unchanged(
+                        gh,
+                        repo_full_name,
+                        target_branch,
+                        target_head_sha,
+                    )
                     push_remote = "push_target"
                     push_url = github_https_url(effective_push_repo)
                     _run_git(tmp_dir, "remote", "add", push_remote, push_url, env=git_env)
@@ -416,6 +427,12 @@ def run_backport(
                         f"Refusing to push to non-namespaced branch: {branch_name!r}. "
                         f"Agent push targets must start with 'backport/'."
                     )
+                assert_target_head_unchanged(
+                    gh,
+                    repo_full_name,
+                    target_branch,
+                    target_head_sha,
+                )
                 logger.info("Pushing branch %s to %s.", branch_name, effective_push_repo)
                 _run_git(tmp_dir, "push", "--force-with-lease", push_remote, branch_name, env=git_env)
         logger.info("Creating backport PR.")
@@ -573,7 +590,7 @@ def _clone_repo(
     target_branch: str,
     *,
     git_env: dict[str, str],
-) -> dict[str, str]:
+) -> str:
     """Clone the repository with full history into *dest_dir*.
 
     Uses a git credential helper to supply the token, avoiding
@@ -609,7 +626,7 @@ def _clone_repo(
         text=True,
         env=git_env,
     )
-    return git_env
+    return capture_target_head(dest_dir, target_branch)
 
 
 def main() -> None:

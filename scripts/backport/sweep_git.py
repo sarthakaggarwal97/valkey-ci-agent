@@ -12,6 +12,7 @@ from github.GithubException import GithubException
 
 from scripts.backport.git import run_git as run_git_default
 from scripts.backport.provenance_history import scan_applied_backports
+from scripts.backport.publication import capture_target_head
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
     CandidateResult,
@@ -37,7 +38,7 @@ def clone_target_branch(
     target_branch: str,
     dest_dir: str,
     git_env: dict[str, str],
-) -> None:
+) -> str:
     clone_url = github_https_url(repo_full_name)
     subprocess.run(
         ["git", "clone", "--branch", target_branch, clone_url, dest_dir],
@@ -48,6 +49,7 @@ def clone_target_branch(
     )
     run_git_default(dest_dir, "config", "user.name", BOT_NAME)
     run_git_default(dest_dir, "config", "user.email", BOT_EMAIL)
+    return capture_target_head(dest_dir, target_branch)
 
 
 def push_backport_branch(
