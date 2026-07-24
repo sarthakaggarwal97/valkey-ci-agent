@@ -372,6 +372,7 @@ def resolve_commit_prs(
     for sha, subject, body in commits:
         unconfirmed_source_shas: tuple[str, ...] = ()
         via_subject = False
+        corroborated_subject_number: int | None = None
         canonical_revert = _canonical_revert_source_pr(repo, subject, body)
         if canonical_revert is not None:
             mark_reverted(canonical_revert, subject, sha)
@@ -408,7 +409,9 @@ def resolve_commit_prs(
                 trailer_number = _pr_from_cherry_pick_trailer(
                     repo, body, pulls_cache=pulls_cache
                 )
-                if trailer_number not in numbers:
+                if trailer_number in numbers:
+                    corroborated_subject_number = trailer_number
+                else:
                     unconfirmed_source_shas = source_shas
             elif not numbers and source_shas:
                 trailer_number = _pr_from_cherry_pick_trailer(
@@ -466,7 +469,12 @@ def resolve_commit_prs(
             if number in pr_to_sha:
                 # Detect distinct-subject collisions on the same (#N).
                 won = winner_subject.get(number)
-                if via_subject and won is not None and not _same_change_subject(won, subject):
+                if (
+                    via_subject
+                    and corroborated_subject_number != number
+                    and won is not None
+                    and not _same_change_subject(won, subject)
+                ):
                     logger.warning(
                         "Commit %s reuses #%s already claimed by %s; surfacing the dropped change",
                         sha[:12], number, pr_to_sha[number][:12],

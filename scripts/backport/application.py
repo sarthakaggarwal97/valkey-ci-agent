@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, Callable
@@ -27,7 +28,6 @@ from scripts.backport.models import (
     DETAIL_EMPTY_ON_TARGET,
     DETAIL_RESOLVED_BY_AI,
     BackportCandidate,
-    BackportPRContext,
     CandidateOutcome,
     CandidateResult,
     ConflictedFile,
@@ -122,7 +122,7 @@ def apply_candidate(
     )
     starting_head = (
         _head_sha(repo_dir, run_process=run_process)
-        if len(plan.commits) > 1
+        if plan.strategy == "series"
         else None
     )
     applied_commits: list[str] = []
@@ -132,6 +132,7 @@ def apply_candidate(
     detail_parts: list[str] = []
     last_resolved_sha: str | None = None
     no_change_reason = ""
+    partial_no_change_reason = ""
     adapted_by_ai = False
     first_conflicting_sha: str | None = None
 
@@ -139,6 +140,8 @@ def apply_candidate(
         command = ["git", "cherry-pick", sha]
         if plan.strategy == "merge" and index == 0:
             command[2:2] = ["-m", "1"]
+        elif plan.strategy == "series":
+            command.insert(2, "-x")
         result = run_process(
             command,
             cwd=repo_dir,
@@ -146,6 +149,21 @@ def apply_candidate(
             text=True,
         )
         if result.returncode == 0:
+            if plan.strategy == "series":
+                try:
+                    _append_source_pr_to_head_subject(
+                        repo_dir,
+                        candidate.source_pr_number,
+                        run_process=run_process,
+                    )
+                except RuntimeError as exc:
+                    assert starting_head is not None
+                    run_git(repo_dir, "reset", "--hard", starting_head)
+                    return _application_result(
+                        candidate,
+                        "error",
+                        f"could not record source PR identity: {exc}",
+                    )
             applied_commits.append(sha)
             continue
 
@@ -172,6 +190,10 @@ def apply_candidate(
         if not conflicting_paths:
             _abort_cherry_pick(repo_dir, run_git)
             if _is_empty_cherry_pick(result):
+                partial_no_change_reason = (
+                    "One or more source commits were already satisfied on "
+                    "the target branch."
+                )
                 continue
             if starting_head is not None:
                 run_git(repo_dir, "reset", "--hard", starting_head)
@@ -296,14 +318,6 @@ def apply_candidate(
 
         resolutions: list[ResolutionResult] = []
         if conflicting_files:
-            pr_context = BackportPRContext(
-                source_pr_number=candidate.source_pr_number,
-                source_pr_title=candidate.source_pr_title,
-                source_pr_url=candidate.source_pr_url,
-                source_pr_diff=candidate.source_pr_diff,
-                target_branch=candidate.target_branch,
-                commits=candidate.commit_shas,
-            )
             resolver_validation_commands = select_validation_commands(
                 build_commands or [],
                 validation_rules or [],
@@ -319,7 +333,7 @@ def apply_candidate(
             resolutions = resolve_conflicts(
                 repo_dir,
                 conflicting_files,
-                pr_context,
+                candidate.to_pr_context(),
                 language=language,
                 build_commands=resolver_validation_commands or None,
                 allowed_paths=allowed_resolution_paths,
@@ -438,15 +452,30 @@ def apply_candidate(
                 conflicting_files=all_conflicts,
             )
 
+        if plan.strategy == "series":
+            try:
+                last_resolved_sha = _append_source_pr_to_head_subject(
+                    repo_dir,
+                    candidate.source_pr_number,
+                    run_process=run_process,
+                )
+            except RuntimeError as exc:
+                assert starting_head is not None
+                run_git(repo_dir, "reset", "--hard", starting_head)
+                return _application_result(
+                    candidate,
+                    "error",
+                    f"could not record source PR identity: {exc}",
+                    resolutions=all_resolutions,
+                    conflicting_files=all_conflicts,
+                )
+        else:
+            last_resolved_sha = _head_sha(
+                repo_dir,
+                run_process=run_process,
+            )
+
         applied_commits.append(sha)
-        head_result = run_process(
-            ["git", "rev-parse", "HEAD"],
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-        )
-        if head_result.returncode == 0:
-            last_resolved_sha = head_result.stdout.strip()
 
     if not applied_commits:
         detail = (
@@ -462,6 +491,13 @@ def apply_candidate(
             resolved_by_ai=bool(all_resolutions),
             skip_reason=no_change_reason,
             conflicting_files=all_conflicts,
+        )
+
+    partial_reason = no_change_reason or partial_no_change_reason
+    if partial_reason:
+        _append_detail(
+            detail_parts,
+            f"partial source series: {partial_reason}",
         )
 
     return _application_result(
@@ -537,6 +573,71 @@ def _head_sha(
             + ((result.stderr or "").strip()[:300] or "git rev-parse failed")
         )
     return result.stdout.strip()
+
+
+def _append_source_pr_to_head_subject(
+    repo_dir: str,
+    source_pr_number: int,
+    *,
+    run_process: RunProcess = subprocess.run,
+) -> str:
+    """Make one replayed source commit discoverable as PR ``#N``."""
+
+    current_head = _head_sha(repo_dir, run_process=run_process)
+    message_result = run_process(
+        ["git", "show", "-s", "--format=%B", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
+    if message_result.returncode != 0:
+        raise RuntimeError(
+            "could not read replayed commit message: "
+            + (
+                (message_result.stderr or "").strip()[:300]
+                or "git show failed"
+            )
+        )
+
+    message = message_result.stdout
+    subject, separator, remainder = message.partition("\n")
+    if re.search(rf"\(#{source_pr_number}\)\s*$", subject):
+        return current_head
+
+    subject = subject.rstrip() or f"Backport source PR #{source_pr_number}"
+    updated = f"{subject} (#{source_pr_number})"
+    if separator:
+        updated += f"\n{remainder}"
+    else:
+        updated += "\n"
+
+    amend_result = run_process(
+        [
+            "git",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "commit.gpgSign=false",
+            "commit",
+            "--amend",
+            "--no-verify",
+            "-F",
+            "-",
+        ],
+        cwd=repo_dir,
+        input=updated,
+        capture_output=True,
+        text=True,
+    )
+    if amend_result.returncode != 0:
+        raise RuntimeError(
+            "could not annotate replayed commit: "
+            + (
+                (amend_result.stderr or "").strip()[:300]
+                or "git commit --amend failed"
+            )
+        )
+    return _head_sha(repo_dir, run_process=run_process)
 
 
 def _is_empty_cherry_pick(result: subprocess.CompletedProcess[str]) -> bool:

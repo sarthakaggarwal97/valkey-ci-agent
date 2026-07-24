@@ -9,9 +9,14 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from scripts.backport.main import build_summary, run_backport
+from scripts.backport.main import (
+    _skipped_existing_message,
+    build_summary,
+    run_backport,
+)
 from scripts.backport.main import main as backport_main
 from scripts.backport.models import (
+    DETAIL_EMPTY_ON_TARGET,
     BackportConfig,
     BackportPRContext,
     BackportResult,
@@ -798,3 +803,21 @@ class TestRunBackportAlreadyApplied:
             len(call_args.args) > 1 and call_args.args[1] == "push"
             for call_args in mock_run_git.call_args_list
         )
+
+    def test_no_op_candidate_reports_accurate_reason(
+        self,
+    ) -> None:
+        message = _skipped_existing_message(
+            CandidateResult(
+                source_pr_number=100,
+                source_pr_title="Fix code absent from this branch",
+                outcome="skipped-existing",
+                detail=DETAIL_EMPTY_ON_TARGET,
+                skip_reason="The affected code is absent from this release line.",
+            ),
+            "8.1",
+        )
+
+        assert "does not require a backport" in message
+        assert "affected code is absent" in message
+        assert "already applied" not in message

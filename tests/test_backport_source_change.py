@@ -108,6 +108,45 @@ def test_squash_ignores_target_updates_merged_into_source(tmp_path: Path) -> Non
     assert plan.commits == (squash_sha,)
 
 
+def test_rebase_series_skips_source_branch_sync_merge(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    _commit(repo, "base.txt", "base\n", "base")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    first = _commit(repo, "one.txt", "one\n", "source one")
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, "main.txt", "main update\n", "advance main")
+    _git(repo, "checkout", "-q", "source")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "sync main", "main")
+    sync = _git(repo, "rev-parse", "HEAD")
+    second = _commit(repo, "two.txt", "two\n", "source two")
+
+    _git(repo, "checkout", "-q", "-b", "rebased", "main")
+    _git(repo, "cherry-pick", first, second)
+    rebased_tip = _git(repo, "rev-parse", "HEAD")
+
+    plan = plan_source_change(
+        str(repo),
+        rebased_tip,
+        [first, sync, second],
+    )
+
+    assert plan.strategy == "series"
+    assert plan.commits == (first, second)
+    assert plan.source_commits == (first, sync, second)
+    assert sync not in plan.commits
+
+    _git(repo, "checkout", "-q", "-b", "backport", "main")
+    _git(repo, "cherry-pick", *plan.commits)
+    assert (repo / "one.txt").read_text(encoding="utf-8") == "one\n"
+    assert (repo / "two.txt").read_text(encoding="utf-8") == "two\n"
+    assert (repo / "main.txt").read_text(encoding="utf-8") == "main update\n"
+
+
 def test_multi_commit_rebase_uses_complete_source_series(
     history: tuple[Path, str, str, str],
 ) -> None:
@@ -200,6 +239,42 @@ def test_disconnected_source_history_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(SourceChangeError, match="disconnected or out of order"):
         plan_source_change(str(repo), None, [left, right])
+
+
+def test_ambiguous_merge_base_explains_classification_failure(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    base = _commit(repo, "base.txt", "base\n", "base")
+
+    _git(repo, "checkout", "-q", "-b", "left", base)
+    left = _commit(repo, "left.txt", "left\n", "left")
+    _git(repo, "checkout", "-q", "-b", "right", base)
+    right = _commit(repo, "right.txt", "right\n", "right")
+
+    _git(repo, "checkout", "-q", "left")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge right", right)
+    left_merge = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "right")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge left", left)
+    right_merge = _git(repo, "rev-parse", "HEAD")
+
+    _git(repo, "checkout", "-q", left_merge)
+    merged_sha = _commit(repo, "result.txt", "result\n", "merged result")
+
+    with pytest.raises(
+        SourceChangeError,
+        match="ambiguous merge base.*cannot safely classify",
+    ):
+        plan_source_change(
+            str(repo),
+            merged_sha,
+            [right, right_merge],
+        )
 
 
 def test_missing_source_identity_is_refused(history: tuple[Path, str, str, str]) -> None:

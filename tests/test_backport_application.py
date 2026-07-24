@@ -7,12 +7,16 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
+from scripts.backport import application
 from scripts.backport.application import apply_candidate
 from scripts.backport.models import (
     BackportCandidate,
     ResolutionResult,
 )
 from scripts.backport.source_change import SourceChangePlan
+from scripts.backport.sweep_git import list_applied_prs_on_branch
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -137,6 +141,113 @@ def test_fetches_and_applies_every_commit_from_rebase_merge(
     assert (worktree / "one.txt").read_text(encoding="utf-8") == "one\n"
     assert (worktree / "two.txt").read_text(encoding="utf-8") == "two\n"
     assert _git(worktree, "rev-list", "--count", "origin/release..HEAD") == "2"
+    assert _git(
+        worktree,
+        "log",
+        "--reverse",
+        "--format=%s",
+        "origin/release..HEAD",
+    ).splitlines() == [
+        "source one (#42)",
+        "source two (#42)",
+    ]
+    applied = list_applied_prs_on_branch(
+        str(worktree),
+        "release",
+        "HEAD",
+    )
+    assert [item.source_pr_number for item in applied] == [42]
+    assert applied[0].source_pr_title in {"source one", "source two"}
+
+
+def test_series_identity_annotation_preserves_commit_body(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, "base.txt", "base\n", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    source_sha = _commit(repo, "feature.txt", "feature\n", "source feature")
+    _git(
+        repo,
+        "commit",
+        "--amend",
+        "-q",
+        "--author",
+        "Contributor <contributor@example.com>",
+        "-m",
+        "source feature",
+        "-m",
+        "Preserve this explanation.\n\nSigned-off-by: Test <test@example.com>",
+    )
+    source_sha = _git(repo, "rev-parse", "HEAD")
+    follow_up = _commit(repo, "follow-up.txt", "follow-up\n", "follow up")
+
+    _git(repo, "checkout", "-q", "-b", "release", base)
+    result = apply_candidate(
+        str(repo),
+        _candidate(
+            merge_commit_sha=None,
+            commit_shas=[source_sha, follow_up],
+        ),
+        "example/repo",
+        dict(os.environ),
+        source_plan=_series_plan(source_sha, follow_up),
+    )
+
+    assert result.outcome == "applied"
+    first_message = _git(repo, "show", "-s", "--format=%B", "HEAD^")
+    assert first_message.startswith("source feature (#42)\n")
+    assert "Preserve this explanation." in first_message
+    assert "Signed-off-by: Test <test@example.com>" in first_message
+    assert f"(cherry picked from commit {source_sha})" in first_message
+    assert (
+        _git(repo, "show", "-s", "--format=%an <%ae>", "HEAD^")
+        == "Contributor <contributor@example.com>"
+    )
+    second_message = _git(repo, "show", "-s", "--format=%B", "HEAD")
+    assert second_message.startswith("follow up (#42)\n")
+    assert f"(cherry picked from commit {follow_up})" in second_message
+
+
+def test_series_identity_failure_rolls_back_every_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, "base.txt", "base\n", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    first = _commit(repo, "one.txt", "one\n", "source one")
+    second = _commit(repo, "two.txt", "two\n", "source two")
+    _git(repo, "checkout", "-q", "-b", "release", base)
+    starting_head = _git(repo, "rev-parse", "HEAD")
+
+    def fail_identity(*_args, **_kwargs):
+        raise RuntimeError("identity write failed")
+
+    monkeypatch.setattr(
+        application,
+        "_append_source_pr_to_head_subject",
+        fail_identity,
+    )
+    result = apply_candidate(
+        str(repo),
+        _candidate(merge_commit_sha=None, commit_shas=[first, second]),
+        "example/repo",
+        dict(os.environ),
+        source_plan=_series_plan(first, second),
+    )
+
+    assert result.outcome == "error"
+    assert "could not record source PR identity" in result.detail
+    assert _git(repo, "rev-parse", "HEAD") == starting_head
+    assert not (repo / "one.txt").exists()
+    assert not (repo / "two.txt").exists()
 
 
 def test_resolves_conflict_then_continues_remaining_source_commits(
@@ -206,6 +317,7 @@ def test_empty_source_commit_does_not_block_later_commit(
     assert result.outcome == "applied"
     assert result.applied_commits == [second]
     assert (repo / "two.txt").read_text(encoding="utf-8") == "two\n"
+    assert "partial source series:" in result.detail
     assert _git(repo, "status", "--porcelain") == ""
 
 

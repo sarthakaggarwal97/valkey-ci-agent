@@ -17,8 +17,10 @@ class SourceChangeError(RuntimeError):
 class SourceChangePlan:
     """A deterministic plan for applying one pull request.
 
-    ``commits`` is either the authoritative merge/squash commit or the complete
-    ordered source commit series. Callers must not substitute a different SHA.
+    ``commits`` is either the authoritative merge/squash commit or the ordered
+    non-merge commits GitHub would replay for a rebase merge. ``source_commits``
+    retains the complete source identity, including source-branch sync merges.
+    Callers must not substitute a different SHA.
     """
 
     strategy: SourceChangeStrategy
@@ -117,7 +119,11 @@ def plan_source_change(
         strategy: SourceChangeStrategy = "single" if len(source_commits) == 1 else "series"
         return SourceChangePlan(
             strategy=strategy,
-            commits=source_commits,
+            commits=(
+                source_commits
+                if strategy == "single"
+                else _replayable_series_commits(repo_dir, source_commits)
+            ),
             merge_commit_sha=None,
             source_commits=source_commits,
             aggregate_patch_id=source_patch_id,
@@ -158,7 +164,7 @@ def plan_source_change(
         source_patch_id = _series_patch_id(repo_dir, source_commits)
         return SourceChangePlan(
             strategy="series",
-            commits=source_commits,
+            commits=_replayable_series_commits(repo_dir, source_commits),
             merge_commit_sha=merge_commit_sha,
             source_commits=source_commits,
             aggregate_patch_id=source_patch_id,
@@ -186,7 +192,7 @@ def plan_source_change(
     _validate_series(repo_dir, source_commits)
     return SourceChangePlan(
         strategy="series",
-        commits=source_commits,
+        commits=_replayable_series_commits(repo_dir, source_commits),
         merge_commit_sha=merge_commit_sha,
         source_commits=source_commits,
         aggregate_patch_id=source_patch_id,
@@ -224,12 +230,37 @@ def _validate_series(repo_dir: str, commits: tuple[str, ...]) -> str:
     return first_parents[0]
 
 
+def _replayable_series_commits(
+    repo_dir: str,
+    commits: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Return the non-merge commits GitHub rebase-and-merge would replay."""
+
+    replayable = tuple(
+        sha
+        for sha in commits
+        if len(_commit_parents(repo_dir, sha)) == 1
+    )
+    if not replayable:
+        raise SourceChangeError(
+            "source series contains only merge commits; cannot reproduce "
+            "rebase-and-merge safely"
+        )
+    return replayable
+
+
 def _unique_merge_base(repo_dir: str, left: str, right: str) -> str:
     result = _git(repo_dir, "merge-base", "--all", left, right)
     bases = tuple(line for line in result.stdout.splitlines() if line)
-    if len(bases) != 1:
+    if not bases:
         raise SourceChangeError(
-            f"expected one merge base for {left} and {right}, found {len(bases)}"
+            f"no merge base exists for {left} and {right}; source history is "
+            "disconnected"
+        )
+    if len(bases) > 1:
+        raise SourceChangeError(
+            f"ambiguous merge base for {left} and {right}: found {len(bases)}; "
+            "cannot safely classify this pull request as squash or rebase"
         )
     return bases[0]
 
