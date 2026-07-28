@@ -228,7 +228,13 @@ def plan_source_change(
             aggregate_patch_id=merge_patch_id,
         )
 
-    raise SourceChangeError(_REBASE_MERGE_UNSUPPORTED)
+    raise SourceChangeError(
+        f"merge SHA {merge_commit_sha} does not match the aggregate patch "
+        f"of the source commits ({source_base}..{source_commits[-1]}). The "
+        "pull request was either rebase-merged (its merge SHA is only the "
+        "final rewritten commit) or the base branch advanced over the same "
+        "lines before the merge. Backport it manually."
+    )
 
 
 def _unique_merge_base(repo_dir: str, left: str, right: str) -> str:

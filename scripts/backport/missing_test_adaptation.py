@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import hashlib
 import json
 import logging
 import shutil
@@ -46,7 +47,8 @@ class MissingTestAdaptationResult:
 @dataclass(frozen=True)
 class FileSnapshot:
     state: str
-    content: bytes = b""
+    digest: str = ""
+    content: bytes | None = None
 
 
 def is_test_path(path: str) -> bool:
@@ -97,7 +99,11 @@ def adapt_target_missing_tests_with_claude(
     run_agent_func: RunAgent = run_agent,
 ) -> MissingTestAdaptationResult:
     existing_test_paths = set(
-        list_existing_test_paths(repo_dir, run_process=run_process)
+        list_existing_test_paths(
+            repo_dir,
+            limit=None,
+            run_process=run_process,
+        )
     )
     prompt = build_test_adaptation_prompt(
         repo_dir,
@@ -176,7 +182,9 @@ def adapt_target_missing_tests_with_claude(
                 )
 
             import_snapshots = {
-                path: snapshot_path(Path(repo_dir, path))
+                path: snapshot_path(
+                    Path(repo_dir, path), include_content=True
+                )
                 for path in changed_paths
             }
             import_index_entries = index_entries_for_paths(
@@ -274,7 +282,7 @@ def build_test_adaptation_prompt(
 def list_existing_test_paths(
     repo_dir: str,
     *,
-    limit: int = MAX_EXISTING_TEST_PATHS,
+    limit: int | None = MAX_EXISTING_TEST_PATHS,
     run_process: RunProcess = subprocess.run,
 ) -> list[str]:
     result = run_process(
@@ -290,7 +298,7 @@ def list_existing_test_paths(
         for line in result.stdout.splitlines()
         if line.strip() and is_test_path(line.strip())
     ]
-    return paths[:limit]
+    return paths if limit is None else paths[:limit]
 
 
 def extract_agent_result_text(agent_result: AgentRunResult) -> str:
@@ -331,13 +339,31 @@ def snapshot_regular_files(root: Path) -> dict[str, FileSnapshot]:
     return snapshots
 
 
-def snapshot_path(path: Path) -> FileSnapshot:
+def snapshot_path(path: Path, *, include_content: bool = False) -> FileSnapshot:
+    """Snapshot a path for change detection or restoration.
+
+    Change detection across a whole worktree only needs a digest, so file
+    contents are hashed in chunks instead of being buffered in memory.
+    ``include_content`` additionally captures the bytes; it is meant for the
+    small set of paths that ``restore_paths`` may need to write back.
+    """
     if not path.exists():
         return FileSnapshot("absent")
     if not path.is_file():
         return FileSnapshot("special")
     try:
-        return FileSnapshot("file", path.read_bytes())
+        if include_content:
+            content = path.read_bytes()
+            return FileSnapshot(
+                "file",
+                hashlib.sha256(content).hexdigest(),
+                content,
+            )
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        return FileSnapshot("file", digest.hexdigest())
     except OSError:
         return FileSnapshot("unreadable")
 
@@ -451,7 +477,7 @@ def restore_paths(
 ) -> None:
     for path, snapshot in snapshots.items():
         file_path = Path(repo_dir, path)
-        if snapshot.state == "file":
+        if snapshot.state == "file" and snapshot.content is not None:
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_bytes(snapshot.content)
         elif snapshot.state == "absent" and file_path.exists():

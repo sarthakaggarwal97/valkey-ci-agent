@@ -200,8 +200,10 @@ def test_apply_candidate_does_not_invoke_resolver_for_mixed_binary_conflict(
         merge_commit_sha="abc123",
     )
     resolver = MagicMock()
+    subprocess_calls: list[list[str]] = []
 
     def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
         if cmd == ["git", "rev-parse", "HEAD"]:
             return subprocess.CompletedProcess(
                 cmd, 0, stdout="start\n", stderr=""
@@ -257,6 +259,7 @@ def test_apply_candidate_does_not_invoke_resolver_for_mixed_binary_conflict(
         "src/server.c",
     }
     resolver.assert_not_called()
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
 def test_apply_candidate_uses_planned_squash_without_mainline_probe(
@@ -2090,6 +2093,69 @@ def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> subproces
         text=True,
         env=full_env,
     )
+
+
+def test_adapt_target_missing_tests_accepts_edit_beyond_prompt_path_cap(
+    tmp_path,
+):
+    """The prompt listing is capped at MAX_EXISTING_TEST_PATHS, but validation
+    must accept edits to any existing test file — not only the capped subset."""
+    from scripts.backport.missing_test_adaptation import (
+        MAX_EXISTING_TEST_PATHS,
+    )
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Local Committer")
+    _git(repo, "config", "user.email", "committer@local.invalid")
+    _git(repo, "config", "commit.gpgsign", "false")
+    (repo / "src").mkdir()
+    (repo / "tests" / "unit").mkdir(parents=True)
+    (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
+    # zzz.tcl sorts after MAX_EXISTING_TEST_PATHS other test files, so the
+    # capped prompt listing excludes it.
+    for index in range(MAX_EXISTING_TEST_PATHS):
+        (repo / "tests" / "unit" / f"aaa{index:04d}.tcl").write_text(
+            "start_server {} {}\n", encoding="utf-8"
+        )
+    (repo / "tests" / "unit" / "zzz.tcl").write_text(
+        "start_server {} {}\n", encoding="utf-8"
+    )
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
+    _git(repo, "add", "src/networking.c")
+
+    def fake_run_agent(profile, _prompt, **kwargs):
+        assert profile == "test_adaptation_edit_only"
+        sandbox = Path(kwargs["cwd"])
+        (sandbox / "tests" / "unit" / "zzz.tcl").write_text(
+            "start_server {} {}\n# adapted coverage\n",
+            encoding="utf-8",
+        )
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = '{"type":"result","result":"ported"}\n'
+        result.stderr = ""
+        return result
+
+    result = adapt_target_missing_tests_with_claude(
+        str(repo),
+        ProjectBackportCandidate(
+            source_pr_number=3306,
+            source_pr_title="Improve COB memory tracking with copy avoidance",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+            target_branch="9.0",
+            merge_commit_sha="269b1c5",
+        ),
+        {"src/unit/test_networking.cpp": "TEST(...)\n"},
+        language="c",
+        run_agent_func=fake_run_agent,
+    )
+
+    assert result.fatal is False
+    assert result.adapted_paths == ["tests/unit/zzz.tcl"]
 
 
 def test_adapt_target_missing_tests_stages_branch_native_test(tmp_path):
