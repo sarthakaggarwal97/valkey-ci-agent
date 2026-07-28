@@ -2127,8 +2127,9 @@ def test_adapt_target_missing_tests_accepts_edit_beyond_prompt_path_cap(
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
     _git(repo, "add", "src/networking.c")
 
-    def fake_run_agent(profile, _prompt, **kwargs):
+    def fake_run_agent(profile, prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
+        assert "tests/unit/zzz.tcl" not in prompt
         sandbox = Path(kwargs["cwd"])
         (sandbox / "tests" / "unit" / "zzz.tcl").write_text(
             "start_server {} {}\n# adapted coverage\n",
