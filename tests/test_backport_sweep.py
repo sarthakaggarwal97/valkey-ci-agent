@@ -1959,7 +1959,7 @@ def test_process_branch_reports_successful_ai_validation_repair(monkeypatch):
         reviewer_diff="repair diff",
         llm_summary="Adjusted the backport for the target branch API.",
     )
-    monkeypatch.setattr(backport_sweep, "_head_sha", lambda _repo: "repairsha")
+    monkeypatch.setattr(backport_sweep, "head_sha", lambda _repo: "repairsha")
 
     result, pushed, upserts, resets, _reset_refs = _green_only_process_branch(
         monkeypatch,

@@ -14,11 +14,8 @@ from scripts.backport.models import BackportCandidate
 
 SEARCH_TEST_PATTERNS = (
     "testing/*.cc",
-    "testing/**/*.cc",
     "vmsdk/testing/*.cc",
-    "vmsdk/testing/**/*.cc",
     "integration/test_*.py",
-    "integration/**/test_*.py",
 )
 
 

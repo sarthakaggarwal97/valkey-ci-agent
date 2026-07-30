@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -469,12 +470,13 @@ def test_failed_resolution_removes_only_candidate_created_untracked_files(
     source_sha = _commit(repo, "shared.txt", "source\n", "source change")
     _git(repo, "checkout", "-q", "-b", "release", base)
     _commit(repo, "shared.txt", "release\n", "release change")
-    preserved = repo / "validation-output.txt"
+    preserved = repo / "validation-output" / "cache.txt"
+    preserved.parent.mkdir()
     preserved.write_text("original\n", encoding="utf-8")
 
     def resolve(repo_dir, _files, _context, **_kwargs):
         Path(repo_dir, "scratch.txt").write_text("temporary\n", encoding="utf-8")
-        preserved.write_text("modified by resolver\n", encoding="utf-8")
+        shutil.rmtree(preserved.parent)
         return [
             ResolutionResult(
                 path="shared.txt",
@@ -502,7 +504,7 @@ def test_failed_resolution_removes_only_candidate_created_untracked_files(
     assert result.worktree_restored is True
     assert not (repo / "scratch.txt").exists()
     assert preserved.read_text(encoding="utf-8") == "original\n"
-    assert _git(repo, "status", "--porcelain") == "?? validation-output.txt"
+    assert _git(repo, "status", "--porcelain") == "?? validation-output/"
 
 
 def test_merge_commit_subject_is_detected_as_already_applied(

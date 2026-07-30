@@ -74,6 +74,7 @@ jobs:
               return;
             }
             core.setOutput('target-owner', repoParts[0]);
+            core.setOutput('target-repository', repoParts[1]);
 
       - name: Checkout agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -95,6 +96,7 @@ jobs:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: ${{ steps.called-workflow.outputs.target-owner }}
+          repositories: ${{ steps.called-workflow.outputs.target-repository }}
           permission-contents: write
           permission-workflows: write
           permission-pull-requests: write

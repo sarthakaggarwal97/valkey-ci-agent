@@ -33,11 +33,8 @@ repos:
       - "docker run --privileged --rm -v \"$(pwd):/workspace\" --user \"ubuntu:ubuntu\" valkey-search-backport sudo ci/build_ubuntu.sh"
     test_path_patterns:
       - "testing/*.cc"
-      - "testing/**/*.cc"
       - "vmsdk/testing/*.cc"
-      - "vmsdk/testing/**/*.cc"
       - "integration/test_*.py"
-      - "integration/**/test_*.py"
     repair_validation_failures: true
     backport_label: backport
     llm_conflict_label: ai-resolved-conflicts

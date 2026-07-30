@@ -34,7 +34,6 @@ MAX_TEST_CONTEXT_CHARS = 12000
 MAX_EXISTING_TEST_PATHS = 120
 DEFAULT_TEST_PATH_PATTERNS = (
     "tests/*.tcl",
-    "tests/**/*.tcl",
     "src/unit/test_*.c",
     "src/unit/test_*.cc",
     "src/unit/test_*.cpp",

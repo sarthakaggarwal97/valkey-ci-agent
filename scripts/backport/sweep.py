@@ -19,6 +19,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.backport.candidate_apply import apply_candidate
+from scripts.backport.git_commands import head_sha
 from scripts.backport.git_commands import run_git as _run_git
 from scripts.backport.sweep_git import (
     branch_has_changes,
@@ -465,7 +466,7 @@ def _process_branch(
                 if repair_resolutions:
                     candidate_result.resolutions.extend(repair_resolutions)
                     candidate_result.resolved_by_ai = True
-                    candidate_result.resolved_commit_sha = _head_sha(tmpdir)
+                    candidate_result.resolved_commit_sha = head_sha(tmpdir)
                     repair_summary = getattr(
                         validation_outcome,
                         "ai_summary",
@@ -543,17 +544,6 @@ def _process_branch(
         shutil.rmtree(tmpdir, ignore_errors=True)
 
     return result
-
-
-def _head_sha(repo_dir: str) -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout.strip()
 
 
 def _normalize(value: object) -> str:

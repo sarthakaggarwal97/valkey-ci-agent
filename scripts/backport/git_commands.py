@@ -12,6 +12,26 @@ logger = logging.getLogger(__name__)
 RunProcess = Callable[..., subprocess.CompletedProcess[str]]
 
 
+def head_sha(
+    repo_dir: str,
+    *,
+    run_process: RunProcess = subprocess.run,
+) -> str:
+    """Return the commit currently checked out in *repo_dir*."""
+    result = run_process(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "could not resolve candidate start: "
+            + ((result.stderr or "").strip()[:300] or "git rev-parse failed")
+        )
+    return result.stdout.strip()
+
+
 def run_git(
     repo_dir: str,
     *args: str,

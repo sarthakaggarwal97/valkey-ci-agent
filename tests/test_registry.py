@@ -74,7 +74,7 @@ class TestLoadRegistry:
                 }
             ],
             repair_validation_failures=True,
-            test_path_patterns=["testing/**/*.cc", "integration/test_*.py"],
+            test_path_patterns=["testing/*.cc", "integration/test_*.py"],
             backport_label="bp",
             llm_conflict_label="ai",
             max_conflicting_files=50,
@@ -98,7 +98,7 @@ class TestLoadRegistry:
         )
         assert entry.repair_validation_failures is True
         assert entry.test_path_patterns == (
-            "testing/**/*.cc",
+            "testing/*.cc",
             "integration/test_*.py",
         )
         assert entry.backport_label == "bp"

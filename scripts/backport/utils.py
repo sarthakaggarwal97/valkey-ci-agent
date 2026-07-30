@@ -8,6 +8,7 @@ _CONFLICT_MARKERS = re.compile(
     r"^(<{7} \S|={7}$|>{7} \S|<{7}$|>{7}$)",
     re.MULTILINE,
 )
+_TRAILER_LINE = re.compile(r"^[A-Za-z0-9-]+:\s*.*$")
 
 
 def build_branch_name(source_pr_number: int, target_branch: str) -> str:
@@ -45,7 +46,7 @@ def pr_numbers_from_commit_messages(messages: list[str]) -> set[int]:
         lines = message.splitlines()
         if lines:
             numbers.update(pr_numbers_from_commit_subjects([lines[0]]))
-        for line in lines[1:]:
+        for line in _terminal_trailer_block(lines):
             trailer = re.match(
                 r"Backport-Source-PR:\s*#?(\d+)\s*$",
                 line,
@@ -54,6 +55,21 @@ def pr_numbers_from_commit_messages(messages: list[str]) -> set[int]:
             if trailer:
                 numbers.add(int(trailer.group(1)))
     return numbers
+
+
+def _terminal_trailer_block(lines: list[str]) -> list[str]:
+    """Return the final RFC-822-style trailer block, if structurally present."""
+    end = len(lines)
+    while end > 0 and not lines[end - 1].strip():
+        end -= 1
+    start = end
+    while start > 0 and _TRAILER_LINE.match(lines[start - 1]):
+        start -= 1
+    if start == end:
+        return []
+    if start > 0 and lines[start - 1].strip():
+        return []
+    return lines[start:end]
 
 
 def build_pr_title(source_pr_title: str, target_branch: str) -> str:

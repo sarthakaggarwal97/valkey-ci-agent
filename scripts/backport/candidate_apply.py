@@ -11,6 +11,7 @@ from typing import Any, Callable
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.git_commands import (
     has_staged_changes,
+    head_sha,
     index_stage_exists,
     read_index_stage,
 )
@@ -188,7 +189,7 @@ def apply_candidate(
     )
     try:
         state = _ApplyState(
-            _head_sha(repo_dir, run_process=run_process),
+            head_sha(repo_dir, run_process=run_process),
             starting_worktree_paths=set(
                 changed_paths_in_index_or_worktree(
                     repo_dir,
@@ -618,7 +619,7 @@ def _apply_plan(
                 conflicting_files=state.conflicts,
             )
 
-        last_resolved_sha = _head_sha(
+        last_resolved_sha = head_sha(
             repo_dir,
             run_process=run_process,
         )
@@ -709,6 +710,7 @@ def _abort_and_rollback(
         run_git(repo_dir, "clean", "-f", "--", *created_paths)
     for path, content in starting_untracked_files.items():
         destination = _safe_restore_path(Path(repo_dir), path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(content)
 
 
@@ -757,25 +759,6 @@ def _has_llm_resolutions(resolutions: list[ResolutionResult]) -> bool:
     )
 
 
-def _head_sha(
-    repo_dir: str,
-    *,
-    run_process: RunProcess = subprocess.run,
-) -> str:
-    result = run_process(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            "could not resolve candidate start: "
-            + ((result.stderr or "").strip()[:300] or "git rev-parse failed")
-        )
-    return result.stdout.strip()
-
-
 def _add_source_pr_trailer(
     repo_dir: str,
     source_pr_number: int,
@@ -803,7 +786,7 @@ def _add_source_pr_trailer(
             "could not record source PR identity: "
             + ((result.stderr or result.stdout).strip()[:300] or "git commit failed")
         )
-    return _head_sha(repo_dir, run_process=run_process)
+    return head_sha(repo_dir, run_process=run_process)
 
 
 def _is_empty_cherry_pick(result: subprocess.CompletedProcess[str]) -> bool:
