@@ -9,17 +9,16 @@ from unittest.mock import MagicMock
 import pytest
 from github.GithubException import GithubException
 
-from scripts.backport import application as sweep_apply
+from scripts.backport import candidate_apply, sweep_git, sweep_graphql, sweep_validation
 from scripts.backport import sweep as backport_sweep
-from scripts.backport import sweep_git, sweep_graphql, sweep_validation
-from scripts.backport.application import apply_candidate
+from scripts.backport.candidate_apply import apply_candidate
 from scripts.backport.missing_test_adaptation import (
     MissingTestAdaptationResult,
     adapt_target_missing_tests_with_claude,
     build_missing_test_context,
 )
 from scripts.backport.models import ResolutionResult
-from scripts.backport.source_change import SourceChangePlan, SourceChangeStrategy
+from scripts.backport.source_plan import SourceChangePlan, SourceChangeStrategy
 from scripts.backport.sweep import (
     BranchSweepResult,
     CandidateResult,
@@ -42,12 +41,31 @@ from scripts.backport.sweep_reporting import (
     parse_previous_failed,
 )
 from scripts.backport.sweep_validation import (
+    ValidationOutcome,
     build_validation_repair_prompt,
     repair_validation_failure_with_claude,
     run_test_commands,
     validate_backport_branch,
 )
 from scripts.common.git_auth import GitAuth
+
+
+def _candidate_apply_process(fake_run):
+    """Add shared candidate-application Git plumbing to a focused fake."""
+    def run(cmd, **kwargs):
+        if cmd in (
+            ["git", "diff", "--name-only", "-z"],
+            ["git", "diff", "--cached", "--name-only", "-z"],
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+        ):
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+        if cmd[:6] == [
+            "git", "-c", "core.editor=true", "commit", "--amend", "--no-edit",
+        ]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        return fake_run(cmd, **kwargs)
+
+    return run
 
 DETAIL = backport_sweep.DETAIL_ALREADY_ON_SWEEP_BRANCH
 
@@ -123,7 +141,7 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     result = apply_candidate(
         repo_dir=str(tmp_path),
@@ -131,7 +149,7 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         source_plan=_source_plan(candidate),
     )
 
@@ -169,7 +187,7 @@ def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="bin\x00ary", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     result = apply_candidate(
         repo_dir=str(tmp_path),
@@ -177,7 +195,7 @@ def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
         repo_full_name="valkey-io/valkey-search",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=resolver,
         source_plan=_source_plan(candidate),
     )
@@ -247,7 +265,7 @@ def test_apply_candidate_does_not_invoke_resolver_for_mixed_binary_conflict(
         repo_full_name="valkey-io/valkey-search",
         git_env={},
         run_git=lambda *_args, **_kwargs: None,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=resolver,
         source_plan=_source_plan(candidate),
     )
@@ -287,7 +305,7 @@ def test_apply_candidate_uses_planned_squash_without_mainline_probe(
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     result = apply_candidate(
         repo_dir=str(tmp_path),
@@ -295,7 +313,7 @@ def test_apply_candidate_uses_planned_squash_without_mainline_probe(
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         source_plan=_source_plan(candidate, "squash"),
     )
 
@@ -346,7 +364,7 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     def fake_resolve(*_args, **_kwargs):
         return [
@@ -363,7 +381,7 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=fake_resolve,
         source_plan=_source_plan(candidate),
     )
@@ -410,7 +428,7 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     def fake_resolve(*_args, **_kwargs):
         raise AssertionError("should not call Claude")
@@ -421,7 +439,7 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=fake_resolve,
         source_plan=_source_plan(candidate),
     )
@@ -493,7 +511,7 @@ def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=fake_resolve,
         adapt_missing_tests=fake_adapt,
         source_plan=_source_plan(candidate),
@@ -569,7 +587,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         adapt_missing_tests=fake_adapt,
         source_plan=_source_plan(candidate),
     )
@@ -629,7 +647,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_raises(monke
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         adapt_missing_tests=fake_adapt,
         source_plan=_source_plan(candidate),
     )
@@ -685,7 +703,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(m
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         adapt_missing_tests=fake_adapt,
         source_plan=_source_plan(candidate),
     )
@@ -743,7 +761,7 @@ def test_apply_candidate_continues_when_test_adaptation_makes_no_changes(monkeyp
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         adapt_missing_tests=fake_adapt,
         source_plan=_source_plan(candidate),
     )
@@ -833,7 +851,7 @@ def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatc
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=fake_resolve,
         adapt_missing_tests=fake_adapt,
         source_plan=_source_plan(candidate),
@@ -892,7 +910,7 @@ def test_apply_candidate_survives_failing_abort_and_still_rolls_back(monkeypatch
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     def fake_resolve(*_args, **_kwargs):
         return [
@@ -909,7 +927,7 @@ def test_apply_candidate_survives_failing_abort_and_still_rolls_back(monkeypatch
         repo_full_name="valkey-io/valkey-search",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=fake_resolve,
         source_plan=_source_plan(candidate),
     )
@@ -1933,6 +1951,40 @@ def test_process_branch_does_not_push_when_only_candidate_fails_validation(monke
     assert "compiler error" in result.results[0].detail
 
 
+def test_process_branch_reports_successful_ai_validation_repair(monkeypatch):
+    resolution = ResolutionResult(
+        path="src/module.c",
+        resolved_content="fixed\n",
+        resolution_summary="validation failure repaired by Claude Code",
+        reviewer_diff="repair diff",
+        llm_summary="Adjusted the backport for the target branch API.",
+    )
+    monkeypatch.setattr(backport_sweep, "_head_sha", lambda _repo: "repairsha")
+
+    result, pushed, upserts, resets, _reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(10)],
+        apply_fn=_applied,
+        validate_fn=lambda *_a, **_k: ValidationOutcome(
+            True,
+            "ok",
+            resolutions=(resolution,),
+            ai_summary="Adjusted the backport for the target branch API.",
+        ),
+    )
+
+    candidate = result.results[0]
+    assert candidate.outcome == "applied"
+    assert candidate.resolved_by_ai is True
+    assert candidate.resolved_commit_sha == "repairsha"
+    assert candidate.resolutions == [resolution]
+    assert "resolved by Claude Code" in candidate.detail
+    assert candidate.ai_summary.startswith("Adjusted the backport")
+    assert pushed
+    assert len(upserts) == 1
+    assert resets == 0
+
+
 def test_process_branch_forwards_repository_conflict_limit(monkeypatch):
     limits: list[int] = []
 
@@ -2940,7 +2992,7 @@ def test_build_pr_body_surfaces_no_op_resolution_under_skipped():
 
 
 def test_empty_skip_reason_detects_change_not_applicable():
-    from scripts.backport.application import _empty_skip_reason
+    from scripts.backport.candidate_apply import _empty_skip_reason
     from scripts.backport.models import ConflictedFile, ResolutionResult
 
     # Every resolved file matched the target's existing content -> the change
@@ -2951,7 +3003,7 @@ def test_empty_skip_reason_detects_change_not_applicable():
 
 
 def test_empty_skip_reason_generic_fallback():
-    from scripts.backport.application import _empty_skip_reason
+    from scripts.backport.candidate_apply import _empty_skip_reason
     from scripts.backport.models import ConflictedFile, ResolutionResult
 
     # Resolution differs from target -> fall back to the generic no-net-change
@@ -2963,7 +3015,7 @@ def test_empty_skip_reason_generic_fallback():
 
 
 def test_empty_skip_reason_requires_every_resolution_to_match_target():
-    from scripts.backport.application import _empty_skip_reason
+    from scripts.backport.candidate_apply import _empty_skip_reason
     from scripts.backport.models import ConflictedFile, ResolutionResult
 
     # One file matched target but another did not: the provable-cause claim

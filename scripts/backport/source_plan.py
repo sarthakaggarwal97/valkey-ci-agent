@@ -1,4 +1,4 @@
-"""Resolve the complete Git change represented by a merged pull request."""
+"""Plan the complete Git change represented by a merged pull request."""
 
 from __future__ import annotations
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import fnmatch
 import hashlib
 import json
 import logging
@@ -14,11 +15,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from scripts.ai.runtime import AgentRunResult, run_agent
-from scripts.backport.git import (
+from scripts.backport.git_commands import (
     index_stage_exists,
     read_index_stage,
 )
-from scripts.backport.git import (
+from scripts.backport.git_commands import (
     run_git as run_git_default,
 )
 from scripts.backport.models import (
@@ -31,6 +32,13 @@ logger = logging.getLogger(__name__)
 
 MAX_TEST_CONTEXT_CHARS = 12000
 MAX_EXISTING_TEST_PATHS = 120
+DEFAULT_TEST_PATH_PATTERNS = (
+    "tests/*.tcl",
+    "tests/**/*.tcl",
+    "src/unit/test_*.c",
+    "src/unit/test_*.cc",
+    "src/unit/test_*.cpp",
+)
 
 RunGit = Callable[..., Any]
 RunProcess = Callable[..., subprocess.CompletedProcess[str]]
@@ -51,13 +59,16 @@ class FileSnapshot:
     content: bytes | None = None
 
 
-def is_test_path(path: str) -> bool:
-    normalized = path.replace("\\", "/").strip("/")
-    parts = [part.lower() for part in normalized.split("/") if part]
-    name = parts[-1] if parts else ""
-    if len(parts) >= 3 and parts[0] == "src" and parts[1] == "unit":
-        return name.startswith("test_") and name.endswith((".c", ".cc", ".cpp"))
-    return len(parts) >= 2 and parts[0] == "tests" and name.endswith(".tcl")
+def is_test_path(
+    path: str,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
+) -> bool:
+    normalized = path.replace("\\", "/").strip("/").lower()
+    patterns = test_path_patterns or DEFAULT_TEST_PATH_PATTERNS
+    return any(
+        fnmatch.fnmatchcase(normalized, pattern.replace("\\", "/").lower())
+        for pattern in patterns
+    )
 
 
 def build_missing_test_context(
@@ -94,6 +105,7 @@ def adapt_target_missing_tests_with_claude(
     missing_test_sources: dict[str, str],
     *,
     language: str,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
     run_git: RunGit = run_git_default,
     run_process: RunProcess = subprocess.run,
     run_agent_func: RunAgent = run_agent,
@@ -102,6 +114,7 @@ def adapt_target_missing_tests_with_claude(
         list_existing_test_paths(
             repo_dir,
             limit=None,
+            test_path_patterns=test_path_patterns,
             run_process=run_process,
         )
     )
@@ -110,6 +123,7 @@ def adapt_target_missing_tests_with_claude(
         candidate,
         missing_test_sources,
         language=language,
+        test_path_patterns=test_path_patterns,
         run_process=run_process,
     )
 
@@ -171,12 +185,28 @@ def adapt_target_missing_tests_with_claude(
                 changed_paths,
                 sandbox_before=sandbox_before,
                 existing_test_paths=existing_test_paths,
+                test_path_patterns=test_path_patterns,
             )
             if invalid_paths:
                 return MissingTestAdaptationResult(
                     summary=(
                         "test adaptation not applied: invalid generated "
                         "test path(s): " + ", ".join(invalid_paths[:10])
+                    ),
+                    fatal=True,
+                )
+
+            unsafe_destination_paths = [
+                path
+                for path in changed_paths
+                if safe_regular_file(Path(repo_dir), path) is None
+            ]
+            if unsafe_destination_paths:
+                return MissingTestAdaptationResult(
+                    summary=(
+                        "test adaptation not applied: unsafe repository "
+                        "test path(s): "
+                        + ", ".join(unsafe_destination_paths[:10])
                     ),
                     fatal=True,
                 )
@@ -194,11 +224,11 @@ def adapt_target_missing_tests_with_claude(
             )
             try:
                 for path in changed_paths:
-                    destination = Path(repo_dir, path)
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    destination.write_bytes(
-                        Path(sandbox_dir, path).read_bytes()
-                    )
+                    source = safe_regular_file(sandbox_dir, path)
+                    destination = safe_regular_file(Path(repo_dir), path)
+                    if source is None or destination is None:
+                        raise RuntimeError(f"unsafe test adaptation path: {path}")
+                    destination.write_bytes(source.read_bytes())
                     run_git(repo_dir, "add", path)
             except Exception as exc:  # noqa: BLE001
                 restore_paths(
@@ -236,6 +266,7 @@ def build_test_adaptation_prompt(
     missing_test_sources: dict[str, str],
     *,
     language: str,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
     run_process: RunProcess = subprocess.run,
 ) -> str:
     source_sections = "\n\n".join(
@@ -247,6 +278,7 @@ def build_test_adaptation_prompt(
         f"- {path}"
         for path in list_existing_test_paths(
             repo_dir,
+            test_path_patterns=test_path_patterns,
             run_process=run_process,
         )
     )
@@ -283,6 +315,7 @@ def list_existing_test_paths(
     repo_dir: str,
     *,
     limit: int | None = MAX_EXISTING_TEST_PATHS,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
     run_process: RunProcess = subprocess.run,
 ) -> list[str]:
     result = run_process(
@@ -296,7 +329,7 @@ def list_existing_test_paths(
     paths = [
         line.strip()
         for line in result.stdout.splitlines()
-        if line.strip() and is_test_path(line.strip())
+        if line.strip() and is_test_path(line.strip(), test_path_patterns)
     ]
     return paths if limit is None else paths[:limit]
 
@@ -326,15 +359,43 @@ def copy_worktree_for_adaptation(repo_dir: str, sandbox_dir: Path) -> None:
     shutil.copytree(
         repo_dir,
         sandbox_dir,
-        ignore=shutil.ignore_patterns(".git"),
+        ignore=_ignore_git_and_symlinks,
         symlinks=True,
     )
+
+
+def _ignore_git_and_symlinks(directory: str, names: list[str]) -> set[str]:
+    """Keep repository symlinks out of the agent's writable sandbox."""
+    ignored = {".git"} if ".git" in names else set()
+    ignored.update(
+        name for name in names if Path(directory, name).is_symlink()
+    )
+    return ignored
+
+
+def safe_regular_file(root: Path, relative_path: str) -> Path | None:
+    """Return a non-symlink regular file contained by *root*, or ``None``."""
+    normalized = Path(*relative_path.replace("\\", "/").split("/"))
+    if normalized.is_absolute() or ".." in normalized.parts:
+        return None
+    candidate = root / normalized
+    current = root
+    for part in normalized.parts:
+        current = current / part
+        if current.is_symlink():
+            return None
+    try:
+        resolved = candidate.resolve(strict=True)
+        resolved.relative_to(root.resolve(strict=True))
+    except (OSError, ValueError):
+        return None
+    return candidate if candidate.is_file() else None
 
 
 def snapshot_regular_files(root: Path) -> dict[str, FileSnapshot]:
     snapshots: dict[str, FileSnapshot] = {}
     for path in root.rglob("*"):
-        if path.is_file():
+        if not path.is_symlink() and path.is_file():
             snapshots[path.relative_to(root).as_posix()] = snapshot_path(path)
     return snapshots
 
@@ -385,6 +446,7 @@ def invalid_sandbox_test_paths(
     *,
     sandbox_before: dict[str, FileSnapshot],
     existing_test_paths: set[str],
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
 ) -> list[str]:
     invalid_paths = []
     for path in changed_paths:
@@ -392,11 +454,11 @@ def invalid_sandbox_test_paths(
         if (
             path not in sandbox_before
             or path not in existing_test_paths
-            or not is_test_path(path)
+            or not is_test_path(path, test_path_patterns)
         ):
             invalid_paths.append(path)
             continue
-        if not file_path.exists() or not file_path.is_file():
+        if safe_regular_file(sandbox_dir, path) is None:
             invalid_paths.append(path)
             continue
         content = file_path.read_text(encoding="utf-8", errors="replace")

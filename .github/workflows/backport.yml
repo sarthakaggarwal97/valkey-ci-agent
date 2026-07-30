@@ -52,6 +52,8 @@ jobs:
       - name: Resolve called workflow ref
         id: called-workflow
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          TARGET_REPO: ${{ inputs.repo_full_name }}
         with:
           script: |
             const token = await core.getIDToken('valkey-ci-agent');
@@ -66,6 +68,12 @@ jobs:
             }
             core.setOutput('repository', workflowRef.slice(0, markerIndex));
             core.setOutput('ref', workflowRef.slice(refIndex + 1));
+            const repoParts = (process.env.TARGET_REPO || '').split('/');
+            if (repoParts.length !== 2 || !repoParts[0] || !repoParts[1]) {
+              core.setFailed(`Invalid repo_full_name: ${process.env.TARGET_REPO || ''}`);
+              return;
+            }
+            core.setOutput('target-owner', repoParts[0]);
 
       - name: Checkout agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -86,7 +94,7 @@ jobs:
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
+          owner: ${{ steps.called-workflow.outputs.target-owner }}
           permission-contents: write
           permission-workflows: write
           permission-pull-requests: write

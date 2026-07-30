@@ -139,7 +139,7 @@ def _render_body(
     resolved_commit_sha: str | None,
     pr_html_url: str,
 ) -> str:
-    lines = [f"### AI conflict resolution: source PR #{source_pr}", ""]
+    lines = [f"### AI backport resolution: source PR #{source_pr}", ""]
     title_text = _safe_text(source_title, limit=160) if source_title else ""
     if title_text:
         lines.extend([f"**{title_text}**", ""])
@@ -147,13 +147,13 @@ def _render_body(
     if cherry_pick_sha:
         meta_bits.append(f"`{cherry_pick_sha[:12]}`")
     file_word = "file" if len(results) == 1 else "files"
-    meta_bits.append(f"{len(results)} conflicted {file_word}")
+    meta_bits.append(f"{len(results)} AI-edited {file_word}")
     lines.extend([" · ".join(meta_bits), ""])
     summary = _summary_block(results)
     if summary:
         lines.append(summary.rstrip())
         lines.append("")
-    lines.append("**AI-resolved conflicted files**")
+    lines.append("**AI-edited files requiring review**")
     lines.append("")
     lines.extend(
         _file_line(

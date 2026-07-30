@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import os
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Union
 
 from scripts.ai.runtime import run_agent
-from scripts.backport.git import (
+from scripts.backport.git_commands import (
     has_staged_changes,
 )
-from scripts.backport.git import (
+from scripts.backport.git_commands import (
     run_git as run_git_default,
 )
+from scripts.backport.models import ResolutionResult
 from scripts.backport.sweep_git import worktree_changed_paths
 from scripts.backport.validation import (
     changed_paths_since_base,
@@ -31,6 +34,21 @@ RunAgent = Callable[..., Any]
 ChangedPaths = Callable[[str], tuple[str, ...]]
 ChangedPathsSinceBase = Callable[[str, str], Union[tuple[str, ...], list[str]]]
 HasStagedChanges = Callable[[str], bool]
+
+
+@dataclass(frozen=True)
+class ValidationOutcome:
+    """Validation result plus review provenance for a successful AI repair."""
+
+    ok: bool
+    output: str
+    resolutions: tuple[ResolutionResult, ...] = ()
+    ai_summary: str = ""
+
+    def __iter__(self):
+        """Preserve the historical ``ok, output = ...`` calling convention."""
+        yield self.ok
+        yield self.output
 
 
 def run_test_commands(
@@ -64,7 +82,7 @@ def validate_branch_with_optional_repair(
     *,
     repair: bool,
     run_git: RunGit = run_git_default,
-) -> tuple[bool, str]:
+) -> ValidationOutcome:
     """Validate the current branch, attempting one Claude repair if enabled.
 
     Returns (green, output). When ``repair`` is set and the first validation
@@ -82,7 +100,7 @@ def validate_branch_with_optional_repair(
             log_path=log_path,
         )
         if ok or not repair:
-            return ok, output
+            return ValidationOutcome(ok, output)
         return repair_validation_failure_with_claude(
             repo_dir,
             target_branch,
@@ -110,10 +128,15 @@ def repair_validation_failure_with_claude(
     changed_paths_func: ChangedPaths = worktree_changed_paths,
     changed_paths_since_base_func: ChangedPathsSinceBase = changed_paths_since_base,
     has_staged_changes_func: HasStagedChanges = has_staged_changes,
-) -> tuple[bool, str]:
+) -> ValidationOutcome:
     changed_paths = tuple(changed_paths_since_base_func(repo_dir, f"origin/{target_branch}"))
     if not changed_paths:
-        return False, validation_output
+        return ValidationOutcome(False, validation_output)
+
+    before_contents = {
+        path: _read_text_file(Path(repo_dir, path))
+        for path in changed_paths
+    }
 
     owns_log_path = validation_log_path is None
     log_path = validation_log_path or create_validation_log_path()
@@ -146,28 +169,28 @@ def repair_validation_failure_with_claude(
                 or diagnosis
                 or "Claude Code validation repair failed"
             )
-            return False, detail[:500] or validation_output
+            return ValidationOutcome(False, detail[:500] or validation_output)
 
         edited_paths = changed_paths_func(repo_dir)
         unexpected_paths = sorted(set(edited_paths) - set(changed_paths))
         if unexpected_paths:
             run_git(repo_dir, "reset", "--hard", "HEAD")
-            return (
+            return ValidationOutcome(
                 False,
                 "Claude Code validation repair edited files outside the backport "
                 "diff: " + ", ".join(unexpected_paths[:10]),
             )
         if not edited_paths:
-            return False, validation_output_with_diagnosis(
-                validation_output,
-                diagnosis,
+            return ValidationOutcome(
+                False,
+                validation_output_with_diagnosis(validation_output, diagnosis),
             )
 
         run_git(repo_dir, "add", *edited_paths)
         if not has_staged_changes_func(repo_dir):
-            return False, validation_output_with_diagnosis(
-                validation_output,
-                diagnosis,
+            return ValidationOutcome(
+                False,
+                validation_output_with_diagnosis(validation_output, diagnosis),
             )
         run_git(repo_dir, "commit", "-m", "Repair backport validation failure")
 
@@ -179,17 +202,66 @@ def repair_validation_failure_with_claude(
         )
         if ok:
             logger.info("Claude Code validation repair passed for %s", target_branch)
-            return True, output
+            summary = diagnosis or "Claude Code repaired the validation failure."
+            resolutions = tuple(
+                _validation_repair_resolution(
+                    path,
+                    before_contents.get(path, ""),
+                    _read_text_file(Path(repo_dir, path)),
+                    summary,
+                )
+                for path in edited_paths
+            )
+            return ValidationOutcome(
+                True,
+                output,
+                resolutions=resolutions,
+                ai_summary=summary,
+            )
 
         logger.warning(
             "Claude Code validation repair did not fix %s; removing repair commit.",
             target_branch,
         )
         run_git(repo_dir, "reset", "--hard", "HEAD^")
-        return False, validation_output_with_diagnosis(output, diagnosis)
+        return ValidationOutcome(
+            False,
+            validation_output_with_diagnosis(output, diagnosis),
+        )
     finally:
         if owns_log_path:
             remove_validation_log_path(log_path)
+
+
+def _read_text_file(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _validation_repair_resolution(
+    path: str,
+    before: str,
+    after: str,
+    summary: str,
+) -> ResolutionResult:
+    diff = "".join(
+        difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile=f"a/{path} (before AI validation repair)",
+            tofile=f"b/{path} (after AI validation repair)",
+        )
+    ).rstrip("\n")
+    return ResolutionResult(
+        path=path,
+        resolved_content=after,
+        resolution_summary="validation failure repaired by Claude Code",
+        resolution_diff=diff or None,
+        reviewer_diff=diff or None,
+        llm_summary=summary,
+    )
 
 
 def extract_agent_result_text(stdout: str) -> str:

@@ -1,4 +1,4 @@
-"""Apply one merged pull request to a local backport branch."""
+"""Apply one backport candidate to a local target branch."""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
-from scripts.backport.git import (
+from scripts.backport.git_commands import (
     has_staged_changes,
     index_stage_exists,
     read_index_stage,
 )
-from scripts.backport.git import (
+from scripts.backport.git_commands import (
     run_git as run_git_default,
 )
 from scripts.backport.missing_test_adaptation import (
@@ -33,12 +33,15 @@ from scripts.backport.models import (
     ConflictedFile,
     ResolutionResult,
 )
-from scripts.backport.source_change import (
+from scripts.backport.source_plan import (
     SourceChangeError,
     SourceChangePlan,
     prepare_source_change,
 )
-from scripts.backport.sweep_git import changed_paths_in_index_or_worktree
+from scripts.backport.sweep_git import (
+    changed_paths_in_index_or_worktree,
+    untracked_paths,
+)
 from scripts.backport.validation import select_validation_commands
 
 logger = logging.getLogger(__name__)
@@ -133,6 +136,8 @@ class _ApplyState:
     """
 
     starting_head: str
+    starting_worktree_paths: set[str] = field(default_factory=set)
+    starting_untracked_files: dict[str, bytes] = field(default_factory=dict)
     applied_commits: list[str] = field(default_factory=list)
     conflicts: list[ConflictedFile] = field(default_factory=list)
     resolutions: list[ResolutionResult] = field(default_factory=list)
@@ -149,6 +154,7 @@ def apply_candidate(
     language: str = "c",
     build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
     max_conflicting_files: int = 100,
     run_git: RunGit = run_git_default,
     resolve_conflicts: ResolveConflicts = resolve_conflicts_with_claude,
@@ -181,12 +187,24 @@ def apply_candidate(
         len(plan.commits),
     )
     try:
-        state = _ApplyState(_head_sha(repo_dir, run_process=run_process))
+        state = _ApplyState(
+            _head_sha(repo_dir, run_process=run_process),
+            starting_worktree_paths=set(
+                changed_paths_in_index_or_worktree(
+                    repo_dir,
+                    run_process=run_process,
+                )
+            ),
+            starting_untracked_files=_snapshot_untracked_files(
+                repo_dir,
+                untracked_paths(repo_dir, run_process=run_process),
+            ),
+        )
     except RuntimeError as exc:
         return _application_result(candidate, "error", str(exc))
 
     try:
-        return _apply_plan(
+        result = _apply_plan(
             repo_dir,
             candidate,
             plan,
@@ -194,12 +212,22 @@ def apply_candidate(
             language=language,
             build_commands=build_commands,
             validation_rules=validation_rules,
+            test_path_patterns=test_path_patterns,
             max_conflicting_files=max_conflicting_files,
             run_git=run_git,
             resolve_conflicts=resolve_conflicts,
             adapt_missing_tests=adapt_missing_tests,
             run_process=run_process,
         )
+        if result.outcome == "applied":
+            amended_sha = _add_source_pr_trailer(
+                repo_dir,
+                candidate.source_pr_number,
+                run_process=run_process,
+            )
+            if result.resolved_by_ai:
+                result.resolved_commit_sha = amended_sha
+        return result
     except Exception as exc:  # noqa: BLE001 - never strand a partial candidate
         detail = f"unexpected failure while applying: {str(exc)[:300]}"
         worktree_restored = True
@@ -209,6 +237,7 @@ def apply_candidate(
                 state.starting_head,
                 run_git,
                 run_process,
+                state.starting_untracked_files,
             )
         except Exception as cleanup_exc:  # noqa: BLE001 - preserve both failures
             worktree_restored = False
@@ -232,6 +261,7 @@ def _apply_plan(
     language: str,
     build_commands: list[str] | None,
     validation_rules: list[Any] | None,
+    test_path_patterns: tuple[str, ...] | list[str] | None,
     max_conflicting_files: int,
     run_git: RunGit,
     resolve_conflicts: ResolveConflicts,
@@ -265,7 +295,10 @@ def _apply_plan(
             text=True,
         )
         if conflict_result.returncode != 0:
-            _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
+            _abort_and_rollback(
+                repo_dir, state.starting_head, run_git, run_process,
+                state.starting_untracked_files,
+            )
             return _application_result(
                 candidate,
                 "error",
@@ -332,7 +365,7 @@ def _apply_plan(
                 run_process=run_process,
             ):
                 target_missing_paths.add(path)
-                if is_test_path(path):
+                if is_test_path(path, test_path_patterns):
                     target_missing_test_contexts[path] = build_missing_test_context(
                         repo_dir,
                         path,
@@ -346,7 +379,10 @@ def _apply_plan(
             state.conflict_paths_seen.update(
                 item.path for item in state.conflicts
             )
-            _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
+            _abort_and_rollback(
+                repo_dir, state.starting_head, run_git, run_process,
+                state.starting_untracked_files,
+            )
             paths = ", ".join(item.path for item in binary_conflicts)
             return _application_result(
                 candidate,
@@ -359,7 +395,10 @@ def _apply_plan(
         state.conflicts.extend(conflicting_files)
         state.conflict_paths_seen.update(item.path for item in conflicting_files)
         if len(state.conflict_paths_seen) > max_conflicting_files:
-            _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
+            _abort_and_rollback(
+                repo_dir, state.starting_head, run_git, run_process,
+                state.starting_untracked_files,
+            )
             detail = (
                 f"Too many conflicting files ({len(state.conflict_paths_seen)} > "
                 f"max_conflicting_files={max_conflicting_files}). "
@@ -376,10 +415,13 @@ def _apply_plan(
             non_test_missing_paths = sorted(
                 path
                 for path in target_missing_paths
-                if not is_test_path(path)
+                if not is_test_path(path, test_path_patterns)
             )
             if non_test_missing_paths:
-                _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
+                _abort_and_rollback(
+                    repo_dir, state.starting_head, run_git, run_process,
+                    state.starting_untracked_files,
+                )
                 paths = ", ".join(non_test_missing_paths)
                 return _application_result(
                     candidate,
@@ -419,10 +461,10 @@ def _apply_plan(
                 validation_rules or [],
                 conflicting_paths,
             )
-            worktree_paths = changed_paths_in_index_or_worktree(
+            worktree_paths = set(changed_paths_in_index_or_worktree(
                 repo_dir,
                 run_process=run_process,
-            )
+            )) - state.starting_worktree_paths
             allowed_resolution_paths = sorted(
                 set(conflicting_paths) | set(worktree_paths)
             )
@@ -442,7 +484,10 @@ def _apply_plan(
             if resolution.resolved_content is None
         ]
         if unresolved:
-            _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
+            _abort_and_rollback(
+                repo_dir, state.starting_head, run_git, run_process,
+                state.starting_untracked_files,
+            )
             details = "; ".join(
                 f"{item.path}: {(item.resolution_summary or 'unresolved')[:200]}"
                 for item in unresolved
@@ -474,6 +519,7 @@ def _apply_plan(
                     candidate,
                     target_missing_test_contexts,
                     language=language,
+                    test_path_patterns=test_path_patterns,
                     run_git=run_git,
                     run_process=run_process,
                 )
@@ -486,7 +532,10 @@ def _apply_plan(
                     fatal=True,
                 )
             if test_adaptation.fatal:
-                _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
+                _abort_and_rollback(
+                    repo_dir, state.starting_head, run_git, run_process,
+                    state.starting_untracked_files,
+                )
                 return _application_result(
                     candidate,
                     "skipped-conflict",
@@ -557,7 +606,10 @@ def _apply_plan(
                     "so there is nothing to backport."
                 )
                 continue
-            _abort_and_rollback(repo_dir, state.starting_head, run_git, run_process)
+            _abort_and_rollback(
+                repo_dir, state.starting_head, run_git, run_process,
+                state.starting_untracked_files,
+            )
             return _application_result(
                 candidate,
                 "skipped-conflict",
@@ -645,9 +697,51 @@ def _abort_and_rollback(
     starting_head: str,
     run_git: RunGit,
     run_process: RunProcess,
+    starting_untracked_files: dict[str, bytes],
 ) -> None:
     _abort_cherry_pick(repo_dir, run_process)
     run_git(repo_dir, "reset", "--hard", starting_head)
+    created_paths = sorted(
+        set(untracked_paths(repo_dir, run_process=run_process))
+        - set(starting_untracked_files)
+    )
+    if created_paths:
+        run_git(repo_dir, "clean", "-f", "--", *created_paths)
+    for path, content in starting_untracked_files.items():
+        destination = _safe_restore_path(Path(repo_dir), path)
+        destination.write_bytes(content)
+
+
+def _snapshot_untracked_files(
+    repo_dir: str,
+    paths: tuple[str, ...],
+) -> dict[str, bytes]:
+    snapshots: dict[str, bytes] = {}
+    root = Path(repo_dir).resolve()
+    for path in paths:
+        if Path(root, path).is_symlink():
+            continue
+        candidate = _safe_restore_path(root, path)
+        if not candidate.is_file():
+            continue
+        snapshots[path] = candidate.read_bytes()
+    return snapshots
+
+
+def _safe_restore_path(root: Path, relative_path: str) -> Path:
+    normalized = Path(*relative_path.replace("\\", "/").split("/"))
+    if normalized.is_absolute() or ".." in normalized.parts:
+        raise RuntimeError(f"unsafe worktree path: {relative_path}")
+    root = root.resolve()
+    current = root
+    for part in normalized.parts[:-1]:
+        current = current / part
+        if current.is_symlink():
+            raise RuntimeError(f"symlinked worktree parent: {relative_path}")
+    destination = root / normalized
+    if destination.is_symlink():
+        destination.unlink()
+    return destination
 
 
 def _append_detail(parts: list[str], detail: str) -> None:
@@ -680,6 +774,36 @@ def _head_sha(
             + ((result.stderr or "").strip()[:300] or "git rev-parse failed")
         )
     return result.stdout.strip()
+
+
+def _add_source_pr_trailer(
+    repo_dir: str,
+    source_pr_number: int,
+    *,
+    run_process: RunProcess = subprocess.run,
+) -> str:
+    """Persist source-PR identity independently of repository merge style."""
+    result = run_process(
+        [
+            "git",
+            "-c",
+            "core.editor=true",
+            "commit",
+            "--amend",
+            "--no-edit",
+            "--trailer",
+            f"Backport-Source-PR: {source_pr_number}",
+        ],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "could not record source PR identity: "
+            + ((result.stderr or result.stdout).strip()[:300] or "git commit failed")
+        )
+    return _head_sha(repo_dir, run_process=run_process)
 
 
 def _is_empty_cherry_pick(result: subprocess.CompletedProcess[str]) -> bool:

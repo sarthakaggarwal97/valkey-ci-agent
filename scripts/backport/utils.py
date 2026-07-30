@@ -15,21 +15,44 @@ def build_branch_name(source_pr_number: int, target_branch: str) -> str:
 
 
 def pr_numbers_from_commit_subjects(subjects: list[str]) -> set[int]:
-    """Source PR numbers from the *trailing* ``(#N)`` of each commit subject.
+    """Source PR numbers from squash or standard GitHub merge subjects.
 
     Single source of truth for "which PRs does this commit history contain",
     shared by the sweep (to skip already-applied PRs) and mark-done (to verify
     a board item actually landed).
 
-    Only the trailing ``(#N)`` identifies the PR a commit belongs to. An earlier
+    A trailing ``(#N)`` identifies a squash commit's PR. An earlier
     ``(#N)`` in the subject is a reference, not the commit's own PR — e.g.
-    ``Revert "... (#3544)" (#3756)`` is PR 3756, not 3544.
+    ``Revert "... (#3544)" (#3756)`` is PR 3756, not 3544. Standard
+    ``Merge pull request #N from ...`` subjects are also recognized.
     """
     numbers: set[int] = set()
     for line in subjects:
         m = re.search(r"\(#(\d+)\)\s*$", line)
         if m:
             numbers.add(int(m.group(1)))
+            continue
+        merge = re.match(r"Merge pull request #(\d+)\b", line, re.IGNORECASE)
+        if merge:
+            numbers.add(int(merge.group(1)))
+    return numbers
+
+
+def pr_numbers_from_commit_messages(messages: list[str]) -> set[int]:
+    """Source PR numbers from subjects or durable backport trailers."""
+    numbers: set[int] = set()
+    for message in messages:
+        lines = message.splitlines()
+        if lines:
+            numbers.update(pr_numbers_from_commit_subjects([lines[0]]))
+        for line in lines[1:]:
+            trailer = re.match(
+                r"Backport-Source-PR:\s*#?(\d+)\s*$",
+                line,
+                re.IGNORECASE,
+            )
+            if trailer:
+                numbers.add(int(trailer.group(1)))
     return numbers
 
 

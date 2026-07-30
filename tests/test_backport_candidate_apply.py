@@ -1,4 +1,4 @@
-"""Real-Git tests for the shared manual/sweep application engine."""
+"""Real-Git tests for the shared candidate-application engine."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from scripts.backport import application
-from scripts.backport.application import apply_candidate
+from scripts.backport import candidate_apply
+from scripts.backport.candidate_apply import apply_candidate
 from scripts.backport.models import (
     BackportCandidate,
     ResolutionResult,
 )
-from scripts.backport.source_change import SourceChangePlan
+from scripts.backport.source_plan import SourceChangePlan
 from scripts.backport.sweep_git import list_applied_prs_on_branch
 
 
@@ -239,7 +239,7 @@ def test_failed_abort_falls_back_to_hard_reset(tmp_path: Path) -> None:
             )
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-    assert application._abort_cherry_pick(str(tmp_path), run_process) is True
+    assert candidate_apply._abort_cherry_pick(str(tmp_path), run_process) is True
 
     assert ["git", "cherry-pick", "--abort"] in calls
     assert ["git", "reset", "--hard", "HEAD"] in calls
@@ -253,7 +253,7 @@ def test_abort_and_reset_both_failing_reports_unclean(tmp_path: Path) -> None:
     def run_process(cmd, **_kwargs):
         return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="boom")
 
-    assert application._abort_cherry_pick(str(tmp_path), run_process) is False
+    assert candidate_apply._abort_cherry_pick(str(tmp_path), run_process) is False
 
 
 def test_successful_abort_does_not_reset(tmp_path: Path) -> None:
@@ -263,7 +263,7 @@ def test_successful_abort_does_not_reset(tmp_path: Path) -> None:
         calls.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-    assert application._abort_cherry_pick(str(tmp_path), run_process) is True
+    assert candidate_apply._abort_cherry_pick(str(tmp_path), run_process) is True
 
     assert calls == [["git", "cherry-pick", "--abort"]]
 
@@ -283,6 +283,12 @@ def test_cleanup_failure_is_contained_as_an_error(tmp_path: Path) -> None:
             )
         if cmd == ["git", "diff", "--name-only", "--diff-filter=U"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd in (
+            ["git", "diff", "--name-only", "-z"],
+            ["git", "diff", "--cached", "--name-only", "-z"],
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+        ):
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
         if cmd in (
             ["git", "cherry-pick", "--abort"],
             ["git", "reset", "--hard", "HEAD"],
@@ -360,6 +366,15 @@ def test_automatic_resolution_is_not_reported_as_ai(tmp_path: Path) -> None:
             "--continue",
         ]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:6] == [
+            "git",
+            "-c",
+            "core.editor=true",
+            "commit",
+            "--amend",
+            "--no-edit",
+        ]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(cmd)
 
     def resolve(*_args, **_kwargs):
@@ -392,3 +407,119 @@ def test_automatic_resolution_is_not_reported_as_ai(tmp_path: Path) -> None:
     assert result.outcome == "applied"
     assert result.resolved_by_ai is False
     assert "Claude Code" not in result.detail
+
+
+def test_preexisting_untracked_file_is_not_allowed_or_committed(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, "shared.txt", "base\n", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "source")
+    source_sha = _commit(repo, "shared.txt", "source\n", "source change")
+    _git(repo, "checkout", "-q", "-b", "release", base)
+    _commit(repo, "shared.txt", "release\n", "release change")
+    artifact = repo / "validation-output.txt"
+    artifact.write_text("keep me\n", encoding="utf-8")
+    allowed: list[str] = []
+
+    def resolve(_repo_dir, _files, _context, **kwargs):
+        allowed.extend(kwargs["allowed_paths"])
+        return [
+            ResolutionResult(
+                path="shared.txt",
+                resolved_content="resolved\n",
+                resolution_summary="resolved",
+            )
+        ]
+
+    result = apply_candidate(
+        str(repo),
+        _candidate(merge_commit_sha=None, commit_shas=[source_sha]),
+        "example/repo",
+        dict(os.environ),
+        resolve_conflicts=resolve,
+        source_plan=SourceChangePlan(
+            strategy="single",
+            commits=(source_sha,),
+            merge_commit_sha=None,
+            source_commits=(source_sha,),
+            aggregate_patch_id="patch",
+        ),
+    )
+
+    assert result.outcome == "applied"
+    assert allowed == ["shared.txt"]
+    assert artifact.read_text(encoding="utf-8") == "keep me\n"
+    assert "validation-output.txt" not in _git(
+        repo, "show", "--pretty=", "--name-only", "HEAD"
+    ).splitlines()
+    assert "Backport-Source-PR: 42" in _git(repo, "log", "-1", "--format=%B")
+
+
+def test_failed_resolution_removes_only_candidate_created_untracked_files(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, "shared.txt", "base\n", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "source")
+    source_sha = _commit(repo, "shared.txt", "source\n", "source change")
+    _git(repo, "checkout", "-q", "-b", "release", base)
+    _commit(repo, "shared.txt", "release\n", "release change")
+    preserved = repo / "validation-output.txt"
+    preserved.write_text("original\n", encoding="utf-8")
+
+    def resolve(repo_dir, _files, _context, **_kwargs):
+        Path(repo_dir, "scratch.txt").write_text("temporary\n", encoding="utf-8")
+        preserved.write_text("modified by resolver\n", encoding="utf-8")
+        return [
+            ResolutionResult(
+                path="shared.txt",
+                resolved_content=None,
+                resolution_summary="unresolved",
+            )
+        ]
+
+    result = apply_candidate(
+        str(repo),
+        _candidate(merge_commit_sha=None, commit_shas=[source_sha]),
+        "example/repo",
+        dict(os.environ),
+        resolve_conflicts=resolve,
+        source_plan=SourceChangePlan(
+            strategy="single",
+            commits=(source_sha,),
+            merge_commit_sha=None,
+            source_commits=(source_sha,),
+            aggregate_patch_id="patch",
+        ),
+    )
+
+    assert result.outcome == "skipped-conflict"
+    assert result.worktree_restored is True
+    assert not (repo / "scratch.txt").exists()
+    assert preserved.read_text(encoding="utf-8") == "original\n"
+    assert _git(repo, "status", "--porcelain") == "?? validation-output.txt"
+
+
+def test_merge_commit_subject_is_detected_as_already_applied(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, "base.txt", "base\n", "base")
+    _git(repo, "branch", "release")
+    _git(repo, "update-ref", "refs/remotes/origin/release", "release")
+    _commit(
+        repo,
+        "merged.txt",
+        "merged\n",
+        "Merge pull request #42 from owner/feature",
+    )
+
+    applied = list_applied_prs_on_branch(str(repo), "release", "main")
+
+    assert [item.source_pr_number for item in applied] == [42]

@@ -108,7 +108,7 @@ jobs:
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
+          owner: ${{ matrix.repo_owner }}
           permission-contents: write
           permission-workflows: write
           permission-pull-requests: write

@@ -1,4 +1,4 @@
-"""Shared Git command execution for backport worktrees."""
+"""Shared Git commands for backport worktrees."""
 
 from __future__ import annotations
 

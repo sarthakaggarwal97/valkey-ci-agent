@@ -18,8 +18,8 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
-from scripts.backport.application import apply_candidate
-from scripts.backport.git import run_git as _run_git
+from scripts.backport.candidate_apply import apply_candidate
+from scripts.backport.git_commands import run_git as _run_git
 from scripts.backport.sweep_git import (
     branch_has_changes,
     clone_target_branch,
@@ -32,6 +32,7 @@ from scripts.backport.sweep_git import (
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
+    DETAIL_RESOLVED_BY_AI,
     BranchSweepResult,
     CandidateResult,
     ProjectBackportCandidate,
@@ -267,6 +268,7 @@ def run_backport_sweep(
         language=repo_entry.language,
         build_commands=list(repo_entry.build_commands) or None,
         validation_rules=validation_rules,
+        test_path_patterns=repo_entry.test_path_patterns,
         repair_validation_failures=repo_entry.repair_validation_failures,
         max_conflicting_files=repo_entry.max_conflicting_files,
         backport_label=repo_entry.backport_label,
@@ -290,6 +292,7 @@ def _process_branch(
     language: str = "c",
     build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
     repair_validation_failures: bool = False,
     max_conflicting_files: int = 100,
     backport_label: str = "backport",
@@ -409,6 +412,7 @@ def _process_branch(
                     language=language,
                     build_commands=build_commands,
                     validation_rules=validation_rules,
+                    test_path_patterns=test_path_patterns,
                     max_conflicting_files=max_conflicting_files,
                 )
                 result.results.append(candidate_result)
@@ -426,7 +430,7 @@ def _process_branch(
                 # the whole branch still validates. A red commit left on the
                 # branch would block every later candidate, so we always reset
                 # a failure off the branch and move on to the next candidate.
-                ok, output = validate_branch_with_optional_repair(
+                validation_outcome = validate_branch_with_optional_repair(
                     tmpdir,
                     target_branch,
                     test_commands,
@@ -434,6 +438,7 @@ def _process_branch(
                     repair=repair_validation_failures,
                     run_git=_run_git,
                 )
+                ok, output = validation_outcome
                 if not ok:
                     candidate_result.outcome = "skipped-validation-failed"
                     candidate_result.detail = validation_failure_detail(output)
@@ -453,6 +458,30 @@ def _process_branch(
                         target_branch,
                     )
                     continue
+
+                repair_resolutions = list(
+                    getattr(validation_outcome, "resolutions", ())
+                )
+                if repair_resolutions:
+                    candidate_result.resolutions.extend(repair_resolutions)
+                    candidate_result.resolved_by_ai = True
+                    candidate_result.resolved_commit_sha = _head_sha(tmpdir)
+                    repair_summary = getattr(
+                        validation_outcome,
+                        "ai_summary",
+                        "",
+                    )
+                    if repair_summary:
+                        candidate_result.ai_summary = repair_summary
+                    if DETAIL_RESOLVED_BY_AI not in candidate_result.detail:
+                        candidate_result.detail = "; ".join(
+                            part
+                            for part in (
+                                candidate_result.detail,
+                                DETAIL_RESOLVED_BY_AI,
+                            )
+                            if part
+                        )
 
                 applied_count += 1
 
@@ -514,6 +543,17 @@ def _process_branch(
         shutil.rmtree(tmpdir, ignore_errors=True)
 
     return result
+
+
+def _head_sha(repo_dir: str) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
 
 
 def _normalize(value: object) -> str:

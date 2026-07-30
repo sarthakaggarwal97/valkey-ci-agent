@@ -6,10 +6,10 @@ only the verified ones. It runs from the scheduled poller and is self-healing:
 it reconciles the whole board against branch reality on every run, so it does
 not depend on any merge hook firing.
 
-Done is gated on the branch genuinely containing the source PR's commit (the
-same ``(#<pr>)`` signal the sweep uses to skip already-applied PRs), so a
-backport PR body that merely *claims* a PR was applied can never mark it Done
-on its own.
+Done is gated on the branch genuinely containing the source PR's commit (a
+source-PR title, merge subject, durable ``Backport-Source-PR`` trailer, or
+sweep ``## Applied`` table), so a backport PR body that merely *claims* a PR
+was applied can never mark it Done on its own.
 """
 
 from __future__ import annotations
@@ -25,7 +25,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
-from scripts.backport.utils import pr_numbers_from_commit_subjects
+from scripts.backport.utils import (
+    pr_numbers_from_commit_messages,
+    pr_numbers_from_commit_subjects,
+)
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.polling import (
     PollLoopError,
@@ -78,8 +81,8 @@ def verify_prs_on_branch(
 
     A PR is considered present if either:
 
-    * a commit on the branch carries the PR's trailing ``(#N)`` in its subject
-      (a cherry-pick that kept the source PR's title), or
+    * a commit carries a trailing ``(#N)``, a standard GitHub merge subject,
+      or a ``Backport-Source-PR`` trailer, or
     * a backport commit on the branch lists the PR in an ``## Applied`` table
       in its body. The sweep squash-merges a batch of cherry-picks into one
       commit whose subject is the *backport* PR; the source PRs it carried are
@@ -139,6 +142,7 @@ def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
     )
     numbers: set[int] = set()
     for message in result.stdout.split(_COMMIT_RECORD_DELIM):
+        numbers.update(pr_numbers_from_commit_messages([message]))
         applied_section = _markdown_section(message, "Applied")
         if applied_section:
             numbers.update(_pr_numbers_from_table_cells(applied_section))

@@ -1,4 +1,4 @@
-"""Real-Git contract tests for resolving merged pull-request histories."""
+"""Real-Git contract tests for planning merged pull-request histories."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.backport.source_change import (
+from scripts.backport.source_plan import (
     SourceChangeError,
     SourceChangePlan,
     plan_source_change,

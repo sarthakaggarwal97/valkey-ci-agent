@@ -17,9 +17,9 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 from github.GithubException import GithubException
 
-from scripts.backport.application import apply_candidate
+from scripts.backport.candidate_apply import apply_candidate
 from scripts.backport.diff_comments import reconcile_diff_comments
-from scripts.backport.git import run_git as _run_git
+from scripts.backport.git_commands import run_git as _run_git
 from scripts.backport.models import (
     DETAIL_EMPTY_ON_TARGET,
     BackportCandidate,
@@ -102,6 +102,7 @@ def run_backport(
     build_commands: list[str] | None = None,
     validation_setup_commands: list[str] | None = None,
     validation_rules: list[ValidationRule] | None = None,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
 ) -> BackportResult:
     """Execute the backport pipeline end-to-end.
 
@@ -264,6 +265,7 @@ def run_backport(
                     language=language,
                     build_commands=build_commands,
                     validation_rules=validation_rules,
+                    test_path_patterns=test_path_patterns,
                     max_conflicting_files=config.max_conflicting_files,
                 )
                 resolution_results = application_result.resolutions or None
@@ -666,6 +668,7 @@ def main() -> None:
         build_commands=list(repo_entry.build_commands) or None,
         validation_setup_commands=list(repo_entry.validation_setup_commands),
         validation_rules=list(repo_entry.validation_rules),
+        test_path_patterns=repo_entry.test_path_patterns,
     )
 
     logger.info("Backport outcome: %s", result.outcome)
