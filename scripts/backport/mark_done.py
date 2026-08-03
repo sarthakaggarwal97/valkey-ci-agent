@@ -88,9 +88,10 @@ def verify_prs_on_branch(
       commit whose subject is the *backport* PR; the source PRs it carried are
       only recoverable from that ``## Applied`` table.
 
-    Subject matching uses the trailing ``(#N)`` only; body matching reads only
-    the structured ``## Applied`` section, so a stray ``(#N)`` reference in a
-    ``## Needs attention`` row or in prose never counts.
+    Subject matching recognizes trailing ``(#N)`` and standard GitHub merge
+    subjects. Full-message matching recognizes terminal ``Backport-Source-PR``
+    trailers and the structured ``## Applied`` section, so a stray ``(#N)``
+    reference in a ``## Needs attention`` row or in prose never counts.
 
     ``token`` authenticates the clone for private/auth-required repos.
     """
@@ -126,12 +127,11 @@ _COMMIT_RECORD_DELIM = "\x00"
 
 
 def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
-    """Source PR numbers listed in ``## Applied`` tables of backport commits.
+    """Source PR numbers recorded in full backport commit messages.
 
-    Squash-merged backport sweeps record the cherry-picked source PRs only in
-    the commit body's ``## Applied`` section. Only that section's table cells
-    are read, so a ``(#N)`` in a later ``## Needs attention`` row or in prose is
-    never treated as applied.
+    Terminal ``Backport-Source-PR`` trailers are parsed from every message.
+    Squash-merged sweep batches are also read from the structured ``## Applied``
+    table; references in ``## Needs attention`` or prose are ignored.
     """
     result = subprocess.run(
         ["git", "log", "-z", "--format=%B", "HEAD"],

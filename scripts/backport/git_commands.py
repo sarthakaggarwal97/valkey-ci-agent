@@ -94,7 +94,21 @@ def index_stage_exists(
         capture_output=True,
         text=True,
     )
-    return result.returncode == 0
+    if result.returncode == 0:
+        return True
+    error = (result.stderr or "").strip().lower()
+    if result.returncode == 1 or any(
+        marker in error
+        for marker in (
+            "but not at stage",
+            "does not exist",
+        )
+    ):
+        return False
+    raise RuntimeError(
+        f"could not inspect index stage {stage} of {path}: "
+        + (error[:300] or "git cat-file failed")
+    )
 
 
 def read_index_stage(
@@ -111,4 +125,16 @@ def read_index_stage(
         text=True,
         errors="replace",
     )
-    return result.stdout if result.returncode == 0 else ""
+    if result.returncode == 0:
+        return result.stdout
+    if not index_stage_exists(
+        repo_dir,
+        path,
+        stage,
+        run_process=run_process,
+    ):
+        return ""
+    raise RuntimeError(
+        f"could not read index stage {stage} of {path}: "
+        + ((result.stderr or "").strip()[:300] or "git show failed")
+    )

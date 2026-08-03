@@ -85,9 +85,10 @@ def validate_branch_with_optional_repair(
 ) -> ValidationOutcome:
     """Validate the current branch, attempting one Claude repair if enabled.
 
-    Returns (green, output). When ``repair`` is set and the first validation
-    fails, Claude Code gets one scoped repair attempt before giving up. The
-    repair helper removes its own repair commit on failure, so on a red
+    Returns a ``ValidationOutcome`` whose ``resolutions`` and ``ai_summary``
+    describe a successful repair. When ``repair`` is set and the first
+    validation fails, Claude Code gets one scoped repair attempt before giving
+    up. The repair helper removes its own repair commit on failure, so on a red
     return the branch is left exactly as the caller handed it in.
     """
     log_path = create_validation_log_path() if repair else None

@@ -48,6 +48,7 @@ def test_adaptation_rejects_repository_symlink_without_touching_target(
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "config", "user.name", "Test")
     _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "commit.gpgsign", "false")
     tests_dir = repo / "testing"
     tests_dir.mkdir()
     victim = tmp_path / "outside.cc"
@@ -84,3 +85,48 @@ def test_adaptation_rejects_repository_symlink_without_touching_target(
     assert result.fatal is True
     assert "invalid generated test path" in result.summary
     assert victim.read_text(encoding="utf-8") == "outside original\n"
+
+
+def test_adaptation_reports_removed_existing_test_without_deleting_it(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "commit.gpgsign", "false")
+    test_path = repo / "testing" / "acl_test.cc"
+    test_path.parent.mkdir()
+    test_path.write_text("TEST(ACL, Existing) {}\n", encoding="utf-8")
+    _git(repo, "add", "testing/acl_test.cc")
+    _git(repo, "commit", "-q", "-m", "existing test")
+
+    def fake_agent(_profile, _prompt, *, cwd):
+        Path(cwd, "testing", "acl_test.cc").unlink()
+        return SimpleNamespace(
+            returncode=0,
+            stdout='{"type":"result","result":"adapted"}\n',
+            stderr="",
+        )
+
+    result = adapt_target_missing_tests_with_claude(
+        str(repo),
+        BackportCandidate(
+            source_pr_number=42,
+            source_pr_title="test",
+            source_pr_url="https://example.test/pull/42",
+            target_branch="1.2",
+        ),
+        {"testing/new_test.cc": "TEST(NewTest, Works) {}\n"},
+        language="c++",
+        test_path_patterns=SEARCH_TEST_PATTERNS,
+        run_agent_func=fake_agent,
+    )
+
+    assert result.fatal is True
+    assert result.summary == (
+        "test adaptation not applied: removed existing test path(s): "
+        "testing/acl_test.cc"
+    )
+    assert test_path.read_text(encoding="utf-8") == "TEST(ACL, Existing) {}\n"

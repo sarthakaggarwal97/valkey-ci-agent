@@ -405,6 +405,7 @@ def _process_branch(
                     )
                     continue
 
+                pre_candidate_head = head_sha(tmpdir)
                 candidate_result = apply_candidate(
                     tmpdir,
                     candidate,
@@ -443,16 +444,7 @@ def _process_branch(
                 if not ok:
                     candidate_result.outcome = "skipped-validation-failed"
                     candidate_result.detail = validation_failure_detail(output)
-                    applied_commit_count = max(
-                        1,
-                        len(candidate_result.applied_commits),
-                    )
-                    rollback_ref = (
-                        "HEAD^"
-                        if applied_commit_count == 1
-                        else f"HEAD~{applied_commit_count}"
-                    )
-                    _run_git(tmpdir, "reset", "--hard", rollback_ref)
+                    _run_git(tmpdir, "reset", "--hard", pre_candidate_head)
                     logger.warning(
                         "Validation failed for candidate #%d on %s; removed candidate and continuing.",
                         candidate.source_pr_number,
@@ -460,18 +452,12 @@ def _process_branch(
                     )
                     continue
 
-                repair_resolutions = list(
-                    getattr(validation_outcome, "resolutions", ())
-                )
+                repair_resolutions = list(validation_outcome.resolutions)
                 if repair_resolutions:
                     candidate_result.resolutions.extend(repair_resolutions)
                     candidate_result.resolved_by_ai = True
                     candidate_result.resolved_commit_sha = head_sha(tmpdir)
-                    repair_summary = getattr(
-                        validation_outcome,
-                        "ai_summary",
-                        "",
-                    )
+                    repair_summary = validation_outcome.ai_summary
                     if repair_summary:
                         candidate_result.ai_summary = repair_summary
                     if DETAIL_RESOLVED_BY_AI not in candidate_result.detail:

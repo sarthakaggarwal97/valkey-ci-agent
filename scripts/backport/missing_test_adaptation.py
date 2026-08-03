@@ -179,6 +179,22 @@ def adapt_target_missing_tests_with_claude(
                     ),
                 )
 
+            removed_paths = [
+                path
+                for path in changed_paths
+                if path in sandbox_before
+                and not Path(sandbox_dir, path).exists()
+                and not Path(sandbox_dir, path).is_symlink()
+            ]
+            if removed_paths:
+                return MissingTestAdaptationResult(
+                    summary=(
+                        "test adaptation not applied: removed existing test "
+                        "path(s): " + ", ".join(removed_paths[:10])
+                    ),
+                    fatal=True,
+                )
+
             invalid_paths = invalid_sandbox_test_paths(
                 sandbox_dir,
                 changed_paths,

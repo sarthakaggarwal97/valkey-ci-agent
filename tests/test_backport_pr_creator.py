@@ -863,7 +863,7 @@ def test_ai_adaptation_without_resolutions_gets_summary_and_disclaimer() -> None
     assert "### AI Adaptation" in body
     assert "tests/unit/networking.tcl" in body
     assert "Human Review Required" in body
-    assert "conflicts in this backport were resolved" not in body
+    assert "### Conflict Details" not in body
 
     body_without = BackportPRCreator.build_pr_body(
         context,
@@ -899,3 +899,21 @@ def test_automatic_resolution_does_not_get_ai_disclosure() -> None:
 
     assert "Human Review Required" not in body
     assert "AI-authored" not in body
+
+    llm_body = BackportPRCreator.build_pr_body(
+        context,
+        had_conflicts=True,
+        resolution_results=[
+            ResolutionResult(
+                path="src/server.c",
+                resolved_content="resolved\n",
+                resolution_summary="resolved with target-branch API",
+                source="llm",
+            )
+        ],
+        ai_involved=False,
+        ai_summary="Adjusted the resolution for the target branch API.",
+    )
+
+    assert "### AI Adaptation" in llm_body
+    assert "Human Review Required" in llm_body

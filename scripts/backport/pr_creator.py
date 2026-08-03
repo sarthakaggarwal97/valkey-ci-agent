@@ -359,7 +359,7 @@ class BackportPRCreator:
                 "### Conflict Details\n\n" + conflict_details
             )
 
-        if ai_summary and ai_involved:
+        if ai_summary and any_ai_changes:
             sections.append("### AI Adaptation\n\n" + ai_summary)
 
         if any_ai_changes:

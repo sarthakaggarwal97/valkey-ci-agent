@@ -318,7 +318,7 @@ class TestRunBackportCleanCherryPick:
     def test_clean_cherry_pick_returns_success(
         self,
         mock_gh_cls: MagicMock,
-        mock_executor_cls: MagicMock,
+        mock_apply_candidate: MagicMock,
         mock_pr_creator_cls: MagicMock,
         mock_run_git: MagicMock,
         mock_clone: MagicMock,
@@ -349,7 +349,7 @@ class TestRunBackportCleanCherryPick:
 
 
         # Clean cherry-pick
-        mock_executor_cls.return_value = CandidateResult(
+        mock_apply_candidate.return_value = CandidateResult(
             source_pr_number=100,
             source_pr_title="Fix bug",
             outcome="applied",
@@ -390,7 +390,7 @@ class TestRunBackportCleanCherryPick:
     def test_build_validation_failure_blocks_push_and_pr(
         self,
         mock_gh_cls: MagicMock,
-        mock_executor_cls: MagicMock,
+        mock_apply_candidate: MagicMock,
         mock_pr_creator_cls: MagicMock,
         mock_run_git: MagicMock,
         mock_clone: MagicMock,
@@ -408,7 +408,7 @@ class TestRunBackportCleanCherryPick:
         mock_pr_creator_cls.return_value = mock_pr_creator
         mock_pr_creator.check_duplicate.return_value = None
 
-        mock_executor_cls.return_value = CandidateResult(
+        mock_apply_candidate.return_value = CandidateResult(
             source_pr_number=100,
             source_pr_title="Fix bug",
             outcome="applied",
@@ -457,7 +457,7 @@ class TestRunBackportConflictedCherryPick:
     def test_conflicted_cherry_pick_with_resolution(
         self,
         mock_gh_cls: MagicMock,
-        mock_executor_cls: MagicMock,
+        mock_apply_candidate: MagicMock,
         mock_pr_creator_cls: MagicMock,
         mock_run_git: MagicMock,
         mock_clone: MagicMock,
@@ -493,7 +493,7 @@ class TestRunBackportConflictedCherryPick:
             resolved_content="resolved content",
             resolution_summary="Applied fix",
         )
-        mock_executor_cls.return_value = CandidateResult(
+        mock_apply_candidate.return_value = CandidateResult(
             source_pr_number=100,
             source_pr_title="Fix bug",
             outcome="applied",
@@ -516,7 +516,7 @@ class TestRunBackportConflictedCherryPick:
         assert result.files_conflicted == 1
         assert result.files_resolved == 1
         assert result.files_unresolved == 0
-        mock_executor_cls.assert_called_once()
+        mock_apply_candidate.assert_called_once()
 
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")

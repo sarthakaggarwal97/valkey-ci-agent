@@ -269,6 +269,25 @@ def test_successful_abort_does_not_reset(tmp_path: Path) -> None:
     assert calls == [["git", "cherry-pick", "--abort"]]
 
 
+def test_read_index_stage_propagates_unexpected_git_failure(
+    tmp_path: Path,
+) -> None:
+    def run_process(cmd, **_kwargs):
+        if cmd == ["git", "show", ":2:shared.txt"]:
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="I/O error")
+        if cmd == ["git", "cat-file", "-e", ":2:shared.txt"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        raise AssertionError(cmd)
+
+    with pytest.raises(RuntimeError, match="could not read index stage"):
+        candidate_apply.read_index_stage(
+            str(tmp_path),
+            "shared.txt",
+            2,
+            run_process=run_process,
+        )
+
+
 def test_cleanup_failure_is_contained_as_an_error(tmp_path: Path) -> None:
     def run_process(cmd, **_kwargs):
         if cmd == ["git", "rev-parse", "HEAD"]:
@@ -325,11 +344,12 @@ def test_cleanup_failure_is_contained_as_an_error(tmp_path: Path) -> None:
 
 def test_automatic_resolution_is_not_reported_as_ai(tmp_path: Path) -> None:
     (tmp_path / "shared.txt").write_text("conflict\n", encoding="utf-8")
+    head_shas = iter(("starting-head", "resolved-head", "amended-head"))
 
     def run_process(cmd, **_kwargs):
         if cmd == ["git", "rev-parse", "HEAD"]:
             return subprocess.CompletedProcess(
-                cmd, 0, stdout="head\n", stderr=""
+                cmd, 0, stdout=next(head_shas) + "\n", stderr=""
             )
         if cmd == ["git", "cherry-pick", "deadbeef"]:
             return subprocess.CompletedProcess(
@@ -407,7 +427,94 @@ def test_automatic_resolution_is_not_reported_as_ai(tmp_path: Path) -> None:
 
     assert result.outcome == "applied"
     assert result.resolved_by_ai is False
+    assert result.resolved_commit_sha == "amended-head"
     assert "Claude Code" not in result.detail
+
+
+@pytest.mark.parametrize("has_staged_changes", [False, True])
+def test_dirty_no_change_errors_restore_untracked_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    has_staged_changes: bool,
+) -> None:
+    rollback_calls: list[dict[str, bytes]] = []
+
+    def run_process(cmd, **_kwargs):
+        if cmd == ["git", "cherry-pick", "deadbeef"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
+        if cmd == ["git", "diff", "--name-only", "--diff-filter=U"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="shared.txt\n", stderr=""
+            )
+        if cmd[:4] == ["git", "-c", "core.editor=true", "cherry-pick"]:
+            return subprocess.CompletedProcess(
+                cmd, 1, stdout="", stderr="nothing to commit"
+            )
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(
+        candidate_apply,
+        "read_index_stage",
+        lambda _repo, _path, stage, **_kwargs: (
+            "target\n" if stage == 2 else "source\n"
+        ),
+    )
+    monkeypatch.setattr(candidate_apply, "index_stage_exists", lambda *_a, **_k: True)
+    monkeypatch.setattr(
+        candidate_apply,
+        "changed_paths_in_index_or_worktree",
+        lambda *_a, **_k: (),
+    )
+    monkeypatch.setattr(
+        candidate_apply,
+        "has_staged_changes",
+        lambda *_a, **_k: has_staged_changes,
+    )
+    monkeypatch.setattr(candidate_apply, "_abort_cherry_pick", lambda *_a: False)
+    monkeypatch.setattr(
+        candidate_apply,
+        "_abort_and_rollback",
+        lambda _repo, _head, _git, _process, untracked: rollback_calls.append(
+            untracked
+        ),
+    )
+
+    starting_untracked = {"validation-output.txt": b"keep\n"}
+    result = candidate_apply._apply_plan(
+        str(tmp_path),
+        _candidate(merge_commit_sha="deadbeef", commit_shas=["source"]),
+        SourceChangePlan(
+            strategy="single",
+            commits=("deadbeef",),
+            merge_commit_sha="deadbeef",
+            source_commits=("source",),
+            aggregate_patch_id="patch",
+        ),
+        candidate_apply._ApplyState(
+            "starting-head",
+            starting_untracked_files=starting_untracked,
+        ),
+        language="c",
+        build_commands=None,
+        validation_rules=None,
+        test_path_patterns=None,
+        max_conflicting_files=100,
+        run_git=lambda *_a, **_k: None,
+        resolve_conflicts=lambda *_a, **_k: [
+            ResolutionResult(
+                path="shared.txt",
+                resolved_content="source\n",
+                resolution_summary="resolved",
+                source="automatic",
+            )
+        ],
+        adapt_missing_tests=lambda *_a, **_k: None,
+        run_process=run_process,
+    )
+
+    assert result.outcome == "error"
+    assert candidate_apply._DIRTY_TREE_ERROR in result.detail
+    assert rollback_calls == [starting_untracked]
 
 
 def test_preexisting_untracked_file_is_not_allowed_or_committed(

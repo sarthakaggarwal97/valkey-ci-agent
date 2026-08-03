@@ -25,6 +25,13 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
+def _init_repo(repo: Path) -> None:
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "commit.gpgsign", "false")
+
+
 def _commit(repo: Path, path: str, content: str, message: str) -> str:
     destination = repo / path
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -38,9 +45,7 @@ def _commit(repo: Path, path: str, content: str, message: str) -> str:
 def history(tmp_path: Path) -> tuple[Path, str, str, str]:
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "config", "user.email", "test@example.com")
+    _init_repo(repo)
     _commit(repo, "base.txt", "base\n", "base")
     base = _git(repo, "rev-parse", "HEAD")
 
@@ -84,9 +89,7 @@ def test_plans_matching_squash_as_one_aggregate_commit(
 def test_squash_ignores_target_updates_merged_into_source(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "config", "user.email", "test@example.com")
+    _init_repo(repo)
     _commit(repo, "base.txt", "base\n", "base")
 
     _git(repo, "checkout", "-q", "-b", "source")
@@ -140,9 +143,7 @@ def test_rebase_with_whitespace_only_commit_is_refused(tmp_path: Path) -> None:
     picking only the rebased tip drops it silently. Planning refuses now."""
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "config", "user.email", "test@example.com")
+    _init_repo(repo)
     _commit(repo, "value.txt", "value\n", "base")
 
     _git(repo, "checkout", "-q", "-b", "source")
@@ -196,9 +197,7 @@ def test_no_merge_sha_single_commit_plans_single(
 def test_disconnected_multi_commit_history_is_refused(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "config", "user.email", "test@example.com")
+    _init_repo(repo)
     base = _commit(repo, "base.txt", "base\n", "base")
     _git(repo, "checkout", "-q", "-b", "left", base)
     left = _commit(repo, "left.txt", "left\n", "left")
@@ -214,9 +213,7 @@ def test_ambiguous_merge_base_explains_classification_failure(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "config", "user.email", "test@example.com")
+    _init_repo(repo)
     base = _commit(repo, "base.txt", "base\n", "base")
 
     _git(repo, "checkout", "-q", "-b", "left", base)
@@ -287,9 +284,7 @@ def test_incomplete_commit_page_still_classifies_squash(
     )
     source = tmp_path / "source"
     source.mkdir()
-    _git(source, "init", "-q", "-b", "main")
-    _git(source, "config", "user.name", "Test")
-    _git(source, "config", "user.email", "test@example.com")
+    _init_repo(source)
     _commit(source, "base.txt", "base\n", "base")
     base = _git(source, "rev-parse", "HEAD")
 
@@ -314,19 +309,19 @@ def test_incomplete_commit_page_still_classifies_squash(
         text=True,
     )
 
-    # Simulate pagination: only the first commit was listed; the tip is
-    # recovered from the fetched PR head.
+    # Simulate an incomplete page that already contains the tip out of order.
+    # The fetched PR head must still become the final source commit.
     plan = prepare_source_change(
         str(worktree),
         42,
         squash_sha,
-        [first],
+        [second, first],
         source_commits_complete=False,
     )
 
     assert plan.strategy == "squash"
     assert plan.commits == (squash_sha,)
-    assert second in plan.source_commits
+    assert plan.source_commits == (first, second)
 
 
 def test_duplicate_source_commits_are_refused(
@@ -352,9 +347,7 @@ def test_source_commit_absent_from_pr_head_fails_after_fetch(
     )
     source = tmp_path / "source"
     source.mkdir()
-    _git(source, "init", "-q", "-b", "main")
-    _git(source, "config", "user.name", "Test")
-    _git(source, "config", "user.email", "test@example.com")
+    _init_repo(source)
     _commit(source, "base.txt", "base\n", "base")
     _git(source, "remote", "add", "origin", str(remote))
     _git(source, "push", "-q", "origin", "main:refs/pull/42/head")

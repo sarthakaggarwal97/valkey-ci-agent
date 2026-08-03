@@ -226,8 +226,7 @@ def apply_candidate(
                 candidate.source_pr_number,
                 run_process=run_process,
             )
-            if result.resolved_by_ai:
-                result.resolved_commit_sha = amended_sha
+            result.resolved_commit_sha = amended_sha
         return result
     except Exception as exc:  # noqa: BLE001 - never strand a partial candidate
         detail = f"unexpected failure while applying: {str(exc)[:300]}"
@@ -563,7 +562,10 @@ def _apply_plan(
 
         if not has_staged_changes(repo_dir, run_process=run_process):
             if not _abort_cherry_pick(repo_dir, run_process):
-                run_git(repo_dir, "reset", "--hard", state.starting_head)
+                _abort_and_rollback(
+                    repo_dir, state.starting_head, run_git, run_process,
+                    state.starting_untracked_files,
+                )
                 return _application_result(
                     candidate,
                     "error",
@@ -594,7 +596,10 @@ def _apply_plan(
             output = f"{commit_result.stdout}\n{commit_result.stderr}"
             if "nothing to commit" in output.lower():
                 if not _abort_cherry_pick(repo_dir, run_process):
-                    run_git(repo_dir, "reset", "--hard", state.starting_head)
+                    _abort_and_rollback(
+                        repo_dir, state.starting_head, run_git, run_process,
+                        state.starting_untracked_files,
+                    )
                     return _application_result(
                         candidate,
                         "error",

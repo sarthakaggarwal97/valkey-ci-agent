@@ -68,8 +68,10 @@ def prepare_source_change(
             remote,
             git_env,
         )
-        if tip not in source_commits:
-            source_commits = (*source_commits, tip)
+        source_commits = (
+            *(sha for sha in source_commits if sha != tip),
+            tip,
+        )
     missing_source_commits = tuple(
         sha for sha in source_commits if not _commit_exists(repo_dir, sha)
     )
