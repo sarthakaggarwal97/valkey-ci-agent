@@ -56,7 +56,6 @@ class BackportPRContext:
     source_pr_number: int
     source_pr_title: str
     source_pr_url: str
-    source_pr_diff: str
     target_branch: str
     commits: list[str]
 

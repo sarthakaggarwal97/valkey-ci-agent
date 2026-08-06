@@ -36,7 +36,6 @@ _pr_context_strategy = st.builds(
     source_pr_number=st.integers(min_value=1, max_value=999_999),
     source_pr_title=_safe_text,
     source_pr_url=st.from_regex(r"https://github\.com/[a-z]+/[a-z]+/pull/[0-9]+", fullmatch=True),
-    source_pr_diff=_safe_text,
     target_branch=_safe_text,
     commits=st.lists(_sha_strategy, min_size=1, max_size=5),
 )
@@ -167,7 +166,6 @@ def test_build_pr_body_includes_checklist_and_plain_status_labels() -> None:
         source_pr_number=123,
         source_pr_title="Fix failover edge case",
         source_pr_url="https://github.com/owner/repo/pull/123",
-        source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
     )
@@ -197,7 +195,6 @@ def test_build_pr_body_is_lean_and_points_to_diff_comments() -> None:
         source_pr_number=123,
         source_pr_title="Fix failover edge case",
         source_pr_url="https://github.com/owner/repo/pull/123",
-        source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
     )
@@ -229,7 +226,6 @@ def test_build_pr_body_links_to_comments_when_provided() -> None:
         source_pr_number=123,
         source_pr_title="Fix failover edge case",
         source_pr_url="https://github.com/owner/repo/pull/123",
-        source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
     )
@@ -258,7 +254,6 @@ def test_build_pr_body_omits_pointer_when_no_llm_resolution() -> None:
         source_pr_number=123,
         source_pr_title="Whitespace only",
         source_pr_url="https://github.com/owner/repo/pull/123",
-        source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
     )
@@ -283,7 +278,6 @@ def test_automatic_resolution_does_not_get_llm_disclaimer() -> None:
         source_pr_number=123,
         source_pr_title="Whitespace-only conflict",
         source_pr_url="https://github.com/owner/repo/pull/123",
-        source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
     )
@@ -319,7 +313,6 @@ def test_create_backport_pr_uses_configured_labels() -> None:
         source_pr_number=123,
         source_pr_title="Fix failover edge case",
         source_pr_url="https://github.com/owner/repo/pull/123",
-        source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
     )
@@ -366,7 +359,6 @@ def test_create_backport_pr_does_not_apply_llm_label_for_automatic_resolution() 
         source_pr_number=123,
         source_pr_title="Whitespace-only conflict",
         source_pr_url="https://github.com/owner/repo/pull/123",
-        source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
     )
@@ -422,7 +414,6 @@ def _basic_context() -> BackportPRContext:
         source_pr_number=123,
         source_pr_title="Fix something",
         source_pr_url="https://github.com/owner/repo/pull/123",
-        source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
     )
@@ -799,7 +790,6 @@ def test_backport_summary_roundtrips_through_release_notes_parsers() -> None:
         source_pr_number=4242,
         source_pr_title="Fix a memory leak in cluster failover",
         source_pr_url="https://github.com/valkey-io/valkey/pull/4242",
-        source_pr_diff="diff",
         target_branch="9.1",
         commits=["abc1234"],
     )
@@ -828,7 +818,6 @@ def test_backport_summary_roundtrips_with_pipe_in_source_title() -> None:
         source_pr_number=77,
         source_pr_title="Guard against a|b overflow in the parser",
         source_pr_url="https://github.com/valkey-io/valkey/pull/77",
-        source_pr_diff="diff",
         target_branch="8.1",
         commits=["abc1234"],
     )

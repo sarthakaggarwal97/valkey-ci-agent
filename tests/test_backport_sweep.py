@@ -9,19 +9,25 @@ from unittest.mock import MagicMock
 import pytest
 from github.GithubException import GithubException
 
+from scripts.backport import (
+    missing_test_adaptation,
+    sweep_apply,
+    sweep_git,
+    sweep_graphql,
+    sweep_validation,
+)
 from scripts.backport import sweep as backport_sweep
-from scripts.backport import sweep_apply, sweep_git, sweep_graphql, sweep_validation
+from scripts.backport.missing_test_adaptation import (
+    MissingTestAdaptationResult,
+    adapt_target_missing_tests_with_claude,
+)
 from scripts.backport.models import ResolutionResult
 from scripts.backport.sweep import (
     BranchSweepResult,
     CandidateResult,
     ProjectBackportCandidate,
 )
-from scripts.backport.sweep_apply import (
-    MissingTestAdaptationResult,
-    adapt_target_missing_tests_with_claude,
-    apply_candidate,
-)
+from scripts.backport.sweep_apply import apply_candidate
 from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
     clone_target_branch,
@@ -1936,7 +1942,7 @@ def test_missing_test_context_uses_diff_for_modify_delete_conflict(tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="TEST(old)\n", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    context = sweep_apply.build_missing_test_context(
+    context = missing_test_adaptation.build_missing_test_context(
         str(tmp_path),
         "src/unit/test_networking.cpp",
         "TEST(new)\n",
@@ -2203,7 +2209,7 @@ def test_adapt_target_missing_tests_fails_closed_on_conflict_marker_output(tmp_p
 
 
 def test_is_test_path_rejects_metadata_and_build_files():
-    from scripts.backport.sweep_apply import is_test_path
+    from scripts.backport.missing_test_adaptation import is_test_path
 
     # Metadata/build files under test dirs are NOT editable test source.
     assert not is_test_path("tests/CMakeLists.txt")

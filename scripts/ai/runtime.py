@@ -57,6 +57,26 @@ class AgentRunResult:
     finished_at: str
 
 
+def extract_agent_result_text(stdout: str) -> str:
+    """Return the final ``result`` event text from a stream-JSON agent run."""
+    result_text = ""
+    for line in stdout.strip().splitlines():
+        try:
+            event = json.loads(line)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") != "result" or "result" not in event:
+            continue
+        raw_result = event.get("result")
+        if isinstance(raw_result, str):
+            result_text = raw_result.strip()
+        elif raw_result is not None:
+            result_text = json.dumps(raw_result, sort_keys=True, default=str)
+    return result_text
+
+
 AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
     "conflict_resolve_edit_only": AgentProfile(
         name="conflict_resolve_edit_only",

@@ -360,7 +360,3 @@ def marked_source_pr_urls(pr: Any, *, bot_login: str | None = None) -> dict[int,
             found[parsed.source_pr] = url
     return found
 
-
-def list_marked_source_prs(pr: Any, *, bot_login: str | None = None) -> set[int]:
-    """Return source PR numbers that have AI-diff comments on *pr*."""
-    return set(marked_source_pr_urls(pr, bot_login=bot_login))

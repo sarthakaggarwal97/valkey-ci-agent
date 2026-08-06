@@ -20,6 +20,7 @@ from github.GithubException import GithubException
 from scripts.backport.cherry_pick import cherry_pick
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.diff_comments import reconcile_diff_comments
+from scripts.backport.git_commands import run_git as _run_git
 from scripts.backport.models import (
     BackportConfig,
     BackportOutcome,
@@ -160,32 +161,10 @@ def run_backport(
         ]
         merge_commit_sha = source_pr.merge_commit_sha
 
-        # Fetch PR diff
-        try:
-            # PyGithub doesn't have a direct diff method, but we can get
-            # the patch/diff from the PR's files
-            pr_files = retry_github_call(
-                lambda: list(source_pr.get_files()),
-                retries=3,
-                description=f"get files for PR #{source_pr_number}",
-            )
-            diff_parts = []
-            for f in pr_files:
-                if f.patch:
-                    diff_parts.append(
-                        f"diff --git a/{f.filename} b/{f.filename}\n"
-                        f"--- a/{f.filename}\n+++ b/{f.filename}\n{f.patch}"
-                    )
-            diff_content = "\n".join(diff_parts)
-        except GithubException as exc:
-            logger.warning("Could not fetch PR diff for #%s: %s", source_pr_number, exc)
-            diff_content = ""
-
         pr_context = BackportPRContext(
             source_pr_number=source_pr_number,
             source_pr_title=source_pr.title or "",
             source_pr_url=source_pr.html_url,
-            source_pr_diff=diff_content,
             target_branch=target_branch,
             commits=commits,
         )
@@ -563,19 +542,6 @@ def _clone_repo(
         env=git_env,
     )
     return git_env
-
-
-def _run_git(repo_dir: str, *args: str, env: dict[str, str] | None = None) -> None:
-    """Run a git command in *repo_dir*, raising on failure."""
-    cmd = ["git", *args]
-    logger.debug("Running: %s (cwd=%s)", " ".join(cmd), repo_dir)
-    result = subprocess.run(cmd, cwd=repo_dir, capture_output=True, text=True, env=env)
-    if result.returncode != 0:
-        logger.error("git %s failed (rc=%d)\nstdout: %s\nstderr: %s",
-                     args[0], result.returncode,
-                     result.stdout.strip()[-500:] if result.stdout else "",
-                     result.stderr.strip()[-500:] if result.stderr else "")
-        result.check_returncode()
 
 
 def _apply_resolutions(

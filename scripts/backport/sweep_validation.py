@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Union
 
-from scripts.ai.runtime import run_agent
-from scripts.backport.main import _run_git as run_git_default
-from scripts.backport.sweep_apply import has_staged_changes
+from scripts.ai.runtime import extract_agent_result_text, run_agent
+from scripts.backport.git_commands import (
+    has_staged_changes,
+)
+from scripts.backport.git_commands import (
+    run_git as run_git_default,
+)
 from scripts.backport.sweep_git import worktree_changed_paths
 from scripts.backport.validation import (
     changed_paths_since_base,
@@ -187,24 +190,6 @@ def repair_validation_failure_with_claude(
         if owns_log_path:
             remove_validation_log_path(log_path)
 
-
-def extract_agent_result_text(stdout: str) -> str:
-    result_text = ""
-    for line in stdout.strip().splitlines():
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if not isinstance(event, dict):
-            continue
-        if event.get("type") != "result" or "result" not in event:
-            continue
-        raw_result = event.get("result")
-        if isinstance(raw_result, str):
-            result_text = raw_result.strip()
-        elif raw_result is not None:
-            result_text = json.dumps(raw_result, sort_keys=True, default=str)
-    return result_text
 
 
 def validation_output_with_diagnosis(

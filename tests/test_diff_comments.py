@@ -285,18 +285,6 @@ def test_render_diff_comment_stays_small_regardless_of_diff_size() -> None:
     assert body.count("[view diff]") == 20
 
 
-def test_list_marked_source_prs_finds_groups_and_legacy_with_author_gate() -> None:
-    from scripts.backport.diff_comments import list_marked_source_prs
-
-    pr = FakePR([
-        FakeComment(render_diff_comment(1, [_resolved("a.c", "-x\n+y")])),
-        _legacy_comment(2, "b.c", "-x\n+y"),
-        FakeComment(render_diff_comment(3, [_resolved("c.c", "-x\n+y")]), author="someone-else"),
-        FakeComment("plain human comment"),
-    ])
-    assert list_marked_source_prs(pr, bot_login="valkeyrie-bot[bot]") == {1, 2}
-    assert list_marked_source_prs(pr) == {1, 2, 3}
-
 
 def test_marked_source_pr_urls_prefers_grouped_comment_and_author_gate() -> None:
     legacy = _legacy_comment(1, "a.c", "-x\n+y")

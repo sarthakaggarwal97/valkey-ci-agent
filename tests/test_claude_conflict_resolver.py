@@ -17,7 +17,6 @@ def _pr_context() -> BackportPRContext:
         source_pr_number=1234,
         source_pr_title="Fix memory leak in cluster.c",
         source_pr_url="https://github.com/valkey-io/valkey/pull/1234",
-        source_pr_diff="",
         target_branch="8.1",
         commits=["abc123"],
     )
