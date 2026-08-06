@@ -59,6 +59,10 @@ def _candidate_apply_process(fake_run):
             ["git", "ls-files", "--others", "--exclude-standard", "-z"],
         ):
             return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+        if cmd[:6] == [
+            "git", "-c", "core.editor=true", "commit", "--amend", "--no-edit",
+        ]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         return fake_run(cmd, **kwargs)
 
     return run

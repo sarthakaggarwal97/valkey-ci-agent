@@ -17,6 +17,7 @@ from scripts.backport.models import (
     ResolutionResult,
 )
 from scripts.backport.source_plan import SourceChangePlan
+from scripts.backport.sweep_git import list_applied_prs_on_branch
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -325,7 +326,7 @@ def test_cleanup_failure_is_contained_as_an_error(tmp_path: Path) -> None:
 
 def test_automatic_resolution_is_not_reported_as_ai(tmp_path: Path) -> None:
     (tmp_path / "shared.txt").write_text("conflict\n", encoding="utf-8")
-    head_shas = iter(("starting-head", "resolved-head"))
+    head_shas = iter(("starting-head", "amended-head"))
 
     def run_process(cmd, **_kwargs):
         if cmd == ["git", "rev-parse", "HEAD"]:
@@ -368,6 +369,15 @@ def test_automatic_resolution_is_not_reported_as_ai(tmp_path: Path) -> None:
             "--continue",
         ]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:6] == [
+            "git",
+            "-c",
+            "core.editor=true",
+            "commit",
+            "--amend",
+            "--no-edit",
+        ]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(cmd)
 
     def resolve(*_args, **_kwargs):
@@ -393,7 +403,7 @@ def test_automatic_resolution_is_not_reported_as_ai(tmp_path: Path) -> None:
 
     assert result.outcome == "applied"
     assert result.resolved_by_ai is False
-    assert result.resolved_commit_sha == "resolved-head"
+    assert result.resolved_commit_sha == "amended-head"
     assert "Claude Code" not in result.detail
 
 
@@ -517,6 +527,7 @@ def test_preexisting_untracked_file_is_not_allowed_or_committed(
     assert "validation-output.txt" not in _git(
         repo, "show", "--pretty=", "--name-only", "HEAD"
     ).splitlines()
+    assert "Backport-Source-PR: 42" in _git(repo, "log", "-1", "--format=%B")
 
 
 def test_failed_resolution_removes_only_candidate_created_untracked_files(
@@ -561,3 +572,23 @@ def test_failed_resolution_removes_only_candidate_created_untracked_files(
     assert _git(repo, "status", "--porcelain") == "?? validation-output/"
 
 
+
+
+def test_merge_commit_subject_is_detected_as_already_applied(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, "base.txt", "base\n", "base")
+    _git(repo, "branch", "release")
+    _git(repo, "update-ref", "refs/remotes/origin/release", "release")
+    _commit(
+        repo,
+        "merged.txt",
+        "merged\n",
+        "Merge pull request #42 from owner/feature",
+    )
+
+    applied = list_applied_prs_on_branch(str(repo), "release", "main")
+
+    assert [item.source_pr_number for item in applied] == [42]

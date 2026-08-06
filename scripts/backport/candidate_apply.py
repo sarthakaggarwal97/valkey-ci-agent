@@ -213,6 +213,13 @@ def apply_candidate(
             adapt_missing_tests=adapt_missing_tests,
             run_process=run_process,
         )
+        if result.outcome == "applied":
+            amended_sha = _add_source_pr_trailer(
+                repo_dir,
+                candidate.source_pr_number,
+                run_process=run_process,
+            )
+            result.resolved_commit_sha = amended_sha
     except Exception as exc:  # noqa: BLE001 - never strand a partial candidate
         detail = f"unexpected failure while applying: {str(exc)[:300]}"
         worktree_restored = True
@@ -627,7 +634,6 @@ def _apply_plan(
         resolved_by_ai=(
             adapted_by_ai or _has_llm_resolutions(state.resolutions)
         ),
-        resolved_commit_sha=head_sha(repo_dir, run_process=run_process),
         conflicting_files=state.conflicts,
         ai_summary=ai_summary,
     )
@@ -720,6 +726,36 @@ def _has_llm_resolutions(resolutions: list[ResolutionResult]) -> bool:
         and resolution.source == "llm"
         for resolution in resolutions
     )
+
+
+def _add_source_pr_trailer(
+    repo_dir: str,
+    source_pr_number: int,
+    *,
+    run_process: RunProcess = subprocess.run,
+) -> str:
+    """Persist source-PR identity independently of repository merge style."""
+    result = run_process(
+        [
+            "git",
+            "-c",
+            "core.editor=true",
+            "commit",
+            "--amend",
+            "--no-edit",
+            "--trailer",
+            f"Backport-Source-PR: {source_pr_number}",
+        ],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "could not record source PR identity: "
+            + ((result.stderr or result.stdout).strip()[:300] or "git commit failed")
+        )
+    return head_sha(repo_dir, run_process=run_process)
 
 
 def _is_empty_cherry_pick(result: subprocess.CompletedProcess[str]) -> bool:
