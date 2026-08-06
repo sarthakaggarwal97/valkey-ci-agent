@@ -44,6 +44,8 @@ def test_build_matrix_emits_one_leg_per_registered_branch(tmp_path) -> None:
     ]
     assert matrix["include"][0]["branch"] == "1.0"
     assert matrix["include"][0]["repo_slug"] == "org-core"
+    assert matrix["include"][0]["repo_owner"] == "org"
+    assert matrix["include"][0]["repo_name"] == "core"
     assert matrix["include"][0]["project_number"] == 1
     assert matrix["include"][0]["push_repo"] == "org/core"
     assert matrix["include"][0]["language"] == "c"
@@ -63,6 +65,8 @@ def test_build_matrix_filters_by_repo_and_project_number(tmp_path) -> None:
         "include": [
             {
                 "repo": "org/core",
+                "repo_owner": "org",
+                "repo_name": "core",
                 "repo_slug": "org-core",
                 "project_owner": "org",
                 "project_owner_type": "organization",
