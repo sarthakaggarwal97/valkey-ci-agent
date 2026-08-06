@@ -148,6 +148,7 @@ def apply_candidate(
     language: str = "c",
     build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
     max_conflicting_files: int = 100,
     run_git: RunGit = run_git_default,
     resolve_conflicts: ResolveConflicts = resolve_conflicts_with_claude,
@@ -205,6 +206,7 @@ def apply_candidate(
             language=language,
             build_commands=build_commands,
             validation_rules=validation_rules,
+            test_path_patterns=test_path_patterns,
             max_conflicting_files=max_conflicting_files,
             run_git=run_git,
             resolve_conflicts=resolve_conflicts,
@@ -246,6 +248,7 @@ def _apply_plan(
     language: str,
     build_commands: list[str] | None,
     validation_rules: list[Any] | None,
+    test_path_patterns: tuple[str, ...] | list[str] | None,
     max_conflicting_files: int,
     run_git: RunGit,
     resolve_conflicts: ResolveConflicts,
@@ -346,7 +349,7 @@ def _apply_plan(
             continue
         if not target_exists:
             target_missing_paths.add(path)
-            if is_test_path(path):
+            if is_test_path(path, test_path_patterns):
                 target_missing_test_contexts[path] = build_missing_test_context(
                     repo_dir,
                     path,
@@ -392,7 +395,7 @@ def _apply_plan(
         non_test_missing_paths = sorted(
             path
             for path in target_missing_paths
-            if not is_test_path(path)
+            if not is_test_path(path, test_path_patterns)
         )
         if non_test_missing_paths:
             _abort_and_rollback(
@@ -496,6 +499,7 @@ def _apply_plan(
                 candidate,
                 target_missing_test_contexts,
                 language=language,
+                test_path_patterns=test_path_patterns,
                 run_git=run_git,
                 run_process=run_process,
             )

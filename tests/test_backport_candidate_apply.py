@@ -457,6 +457,7 @@ def test_dirty_no_change_errors_restore_untracked_files(
         language="c",
         build_commands=None,
         validation_rules=None,
+        test_path_patterns=None,
         max_conflicting_files=100,
         run_git=lambda *_a, **_k: None,
         resolve_conflicts=lambda *_a, **_k: [

@@ -267,6 +267,7 @@ def run_backport_sweep(
         language=repo_entry.language,
         build_commands=list(repo_entry.build_commands) or None,
         validation_rules=validation_rules,
+        test_path_patterns=repo_entry.test_path_patterns,
         repair_validation_failures=repo_entry.repair_validation_failures,
         max_conflicting_files=repo_entry.max_conflicting_files,
         backport_label=repo_entry.backport_label,
@@ -290,6 +291,7 @@ def _process_branch(
     language: str = "c",
     build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
     repair_validation_failures: bool = False,
     max_conflicting_files: int = 100,
     backport_label: str = "backport",
@@ -410,6 +412,7 @@ def _process_branch(
                     language=language,
                     build_commands=build_commands,
                     validation_rules=validation_rules,
+                    test_path_patterns=test_path_patterns,
                     max_conflicting_files=max_conflicting_files,
                 )
                 result.results.append(candidate_result)

@@ -36,6 +36,7 @@ class RepoEntry:
     build_commands: tuple[str, ...] = ()
     validation_setup_commands: tuple[str, ...] = ()
     validation_rules: tuple[ValidationRule, ...] = ()
+    test_path_patterns: tuple[str, ...] = ()
     repair_validation_failures: bool = False
     backport_label: str = "backport"
     llm_conflict_label: str = "ai-resolved-conflicts"
@@ -149,6 +150,15 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
             )
 
     validation_rules = _parse_validation_rules(raw.get("validation_rules", []), index)
+    test_path_patterns = raw.get("test_path_patterns", [])
+    if not isinstance(test_path_patterns, list):
+        raise ValueError(f"repos[{index}].test_path_patterns must be a list")
+    for j, pattern in enumerate(test_path_patterns):
+        if not isinstance(pattern, str) or not pattern.strip():
+            raise ValueError(
+                f"repos[{index}].test_path_patterns[{j}] "
+                "must be a non-empty string"
+            )
     repair_validation_failures = raw.get("repair_validation_failures", False)
     if not isinstance(repair_validation_failures, bool):
         raise ValueError(
@@ -184,6 +194,7 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         build_commands=tuple(build_commands),
         validation_setup_commands=tuple(validation_setup_commands),
         validation_rules=tuple(validation_rules),
+        test_path_patterns=tuple(test_path_patterns),
         repair_validation_failures=repair_validation_failures,
         backport_label=backport_label,
         llm_conflict_label=llm_conflict_label,

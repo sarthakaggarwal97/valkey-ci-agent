@@ -99,6 +99,7 @@ def run_backport(
     build_commands: list[str] | None = None,
     validation_setup_commands: list[str] | None = None,
     validation_rules: list[ValidationRule] | None = None,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
 ) -> BackportResult:
     """Execute the backport pipeline end-to-end.
 
@@ -238,6 +239,7 @@ def run_backport(
                     language=language,
                     build_commands=build_commands,
                     validation_rules=validation_rules,
+                    test_path_patterns=test_path_patterns,
                     max_conflicting_files=config.max_conflicting_files,
                 )
 
@@ -619,6 +621,7 @@ def main() -> None:
         build_commands=list(repo_entry.build_commands) or None,
         validation_setup_commands=list(repo_entry.validation_setup_commands),
         validation_rules=list(repo_entry.validation_rules),
+        test_path_patterns=repo_entry.test_path_patterns,
     )
 
     logger.info("Backport outcome: %s", result.outcome)

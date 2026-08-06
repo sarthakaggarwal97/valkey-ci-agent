@@ -3404,3 +3404,67 @@ def test_project_items_query_selects_repository_name_with_owner():
     assert "repository {" in query
     assert "nameWithOwner" in query
     assert "pageInfo { hasNextPage endCursor }" in query
+
+def test_adapt_target_missing_tests_accepts_edit_beyond_prompt_path_cap(
+    tmp_path,
+):
+    """The prompt listing is capped at MAX_EXISTING_TEST_PATHS, but validation
+    must accept edits to any existing test file — not only the capped subset."""
+    from scripts.backport.missing_test_adaptation import (
+        MAX_EXISTING_TEST_PATHS,
+    )
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Local Committer")
+    _git(repo, "config", "user.email", "committer@local.invalid")
+    _git(repo, "config", "commit.gpgsign", "false")
+    (repo / "src").mkdir()
+    (repo / "tests" / "unit").mkdir(parents=True)
+    (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
+    # zzz.tcl sorts after MAX_EXISTING_TEST_PATHS other test files, so the
+    # capped prompt listing excludes it.
+    for index in range(MAX_EXISTING_TEST_PATHS):
+        (repo / "tests" / "unit" / f"aaa{index:04d}.tcl").write_text(
+            "start_server {} {}\n", encoding="utf-8"
+        )
+    (repo / "tests" / "unit" / "zzz.tcl").write_text(
+        "start_server {} {}\n", encoding="utf-8"
+    )
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
+    _git(repo, "add", "src/networking.c")
+
+    def fake_run_agent(profile, prompt, **kwargs):
+        assert profile == "test_adaptation_edit_only"
+        assert "tests/unit/zzz.tcl" not in prompt
+        sandbox = Path(kwargs["cwd"])
+        (sandbox / "tests" / "unit" / "zzz.tcl").write_text(
+            "start_server {} {}\n# adapted coverage\n",
+            encoding="utf-8",
+        )
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = '{"type":"result","result":"ported"}\n'
+        result.stderr = ""
+        return result
+
+    result = adapt_target_missing_tests_with_claude(
+        str(repo),
+        BackportCandidate(
+            source_pr_number=3306,
+            source_pr_title="Improve COB memory tracking with copy avoidance",
+            source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
+            target_branch="9.0",
+            merge_commit_sha="269b1c5",
+        ),
+        {"src/unit/test_networking.cpp": "TEST(...)\n"},
+        language="c",
+        run_agent_func=fake_run_agent,
+    )
+
+    assert result.fatal is False
+    assert result.adapted_paths == ["tests/unit/zzz.tcl"]
+
