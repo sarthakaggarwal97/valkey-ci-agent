@@ -11,10 +11,8 @@ from typing import Any, Callable
 from github.GithubException import GithubException
 
 from scripts.backport.git_commands import run_git as run_git_default
-from scripts.backport.sweep_models import (
-    DETAIL_ALREADY_ON_SWEEP_BRANCH,
-    CandidateResult,
-)
+from scripts.backport.models import CandidateResult
+from scripts.backport.sweep_models import DETAIL_ALREADY_ON_SWEEP_BRANCH
 from scripts.backport.utils import pr_numbers_from_commit_subjects
 from scripts.common.git_auth import github_https_url
 from scripts.common.github_client import retry_github_call
@@ -130,6 +128,19 @@ def changed_paths_in_index_or_worktree(
             ("git", "diff", "--cached", "--name-only", "-z"),
             ("git", "ls-files", "--others", "--exclude-standard", "-z"),
         ),
+        run_process=run_process,
+    )
+
+
+def untracked_paths(
+    repo_dir: str,
+    *,
+    run_process: RunProcess = subprocess.run,
+) -> tuple[str, ...]:
+    """Return non-ignored untracked paths with exact Git path names."""
+    return collect_git_paths_z(
+        repo_dir,
+        (("git", "ls-files", "--others", "--exclude-standard", "-z"),),
         run_process=run_process,
     )
 

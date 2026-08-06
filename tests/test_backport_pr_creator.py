@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, PropertyMock
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from scripts.backport.models import BackportPRContext, CherryPickResult, ResolutionResult
+from scripts.backport.models import BackportCandidate, CandidateResult, ResolutionResult
 from scripts.backport.pr_creator import (
     BackportPRCreator,
     build_pull_create_head_ref,
@@ -32,12 +32,12 @@ _sha_strategy = st.text(
 )
 
 _pr_context_strategy = st.builds(
-    BackportPRContext,
+    BackportCandidate,
     source_pr_number=st.integers(min_value=1, max_value=999_999),
     source_pr_title=_safe_text,
     source_pr_url=st.from_regex(r"https://github\.com/[a-z]+/[a-z]+/pull/[0-9]+", fullmatch=True),
     target_branch=_safe_text,
-    commits=st.lists(_sha_strategy, min_size=1, max_size=5),
+    commit_shas=st.lists(_sha_strategy, min_size=1, max_size=5).map(tuple),
 )
 
 _resolved_result_strategy = st.builds(
@@ -77,7 +77,7 @@ class TestPRBodyCompletenessProperty:
     @settings(max_examples=100, deadline=None)
     def test_body_with_conflicts_and_mixed_results(
         self,
-        context: BackportPRContext,
+        context: BackportCandidate,
         resolved: list[ResolutionResult],
         unresolved: list[ResolutionResult],
     ) -> None:
@@ -92,7 +92,7 @@ class TestPRBodyCompletenessProperty:
         assert context.source_pr_url in body
 
         # Cherry-picked commit SHAs
-        for sha in context.commits:
+        for sha in context.commit_shas:
             assert sha in body
 
         # Conflict status indicated
@@ -110,7 +110,7 @@ class TestPRBodyCompletenessProperty:
     @settings(max_examples=100, deadline=None)
     def test_body_without_conflicts(
         self,
-        context: BackportPRContext,
+        context: BackportCandidate,
     ) -> None:
         """When cherry-pick was clean, body still has source link and commits."""
         body = BackportPRCreator.build_pr_body(
@@ -121,7 +121,7 @@ class TestPRBodyCompletenessProperty:
         assert context.source_pr_url in body
 
         # Cherry-picked commit SHAs
-        for sha in context.commits:
+        for sha in context.commit_shas:
             assert sha in body
 
         # No conflict markers section — but conflict status is still mentioned
@@ -137,7 +137,7 @@ class TestPRBodyCompletenessProperty:
     @settings(max_examples=100, deadline=None)
     def test_body_with_all_unresolved(
         self,
-        context: BackportPRContext,
+        context: BackportCandidate,
         unresolved: list[ResolutionResult],
     ) -> None:
         """When all files are unresolved, no human review disclaimer is needed."""
@@ -149,7 +149,7 @@ class TestPRBodyCompletenessProperty:
         assert context.source_pr_url in body
 
         # Cherry-picked commit SHAs
-        for sha in context.commits:
+        for sha in context.commit_shas:
             assert sha in body
 
         # Per-file details present
@@ -162,12 +162,12 @@ class TestPRBodyCompletenessProperty:
 
 
 def test_build_pr_body_includes_checklist_and_plain_status_labels() -> None:
-    context = BackportPRContext(
+    context = BackportCandidate(
         source_pr_number=123,
         source_pr_title="Fix failover edge case",
         source_pr_url="https://github.com/owner/repo/pull/123",
         target_branch="8.1",
-        commits=["abc1234"],
+        commit_shas=("abc1234",),
     )
     results = [
         ResolutionResult(
@@ -191,12 +191,12 @@ def test_build_pr_body_includes_checklist_and_plain_status_labels() -> None:
 
 
 def test_build_pr_body_is_lean_and_points_to_diff_comments() -> None:
-    context = BackportPRContext(
+    context = BackportCandidate(
         source_pr_number=123,
         source_pr_title="Fix failover edge case",
         source_pr_url="https://github.com/owner/repo/pull/123",
         target_branch="8.1",
-        commits=["abc1234"],
+        commit_shas=("abc1234",),
     )
     results = [
         ResolutionResult(
@@ -222,12 +222,12 @@ def test_build_pr_body_is_lean_and_points_to_diff_comments() -> None:
 
 
 def test_build_pr_body_links_to_comments_when_provided() -> None:
-    context = BackportPRContext(
+    context = BackportCandidate(
         source_pr_number=123,
         source_pr_title="Fix failover edge case",
         source_pr_url="https://github.com/owner/repo/pull/123",
         target_branch="8.1",
-        commits=["abc1234"],
+        commit_shas=("abc1234",),
     )
     results = [
         ResolutionResult(
@@ -250,12 +250,12 @@ def test_build_pr_body_links_to_comments_when_provided() -> None:
 
 
 def test_build_pr_body_omits_pointer_when_no_llm_resolution() -> None:
-    context = BackportPRContext(
+    context = BackportCandidate(
         source_pr_number=123,
         source_pr_title="Whitespace only",
         source_pr_url="https://github.com/owner/repo/pull/123",
         target_branch="8.1",
-        commits=["abc1234"],
+        commit_shas=("abc1234",),
     )
     results = [
         ResolutionResult(
@@ -274,12 +274,12 @@ def test_build_pr_body_omits_pointer_when_no_llm_resolution() -> None:
 
 
 def test_automatic_resolution_does_not_get_llm_disclaimer() -> None:
-    context = BackportPRContext(
+    context = BackportCandidate(
         source_pr_number=123,
         source_pr_title="Whitespace-only conflict",
         source_pr_url="https://github.com/owner/repo/pull/123",
         target_branch="8.1",
-        commits=["abc1234"],
+        commit_shas=("abc1234",),
     )
     results = [
         ResolutionResult(
@@ -309,12 +309,12 @@ def test_create_backport_pr_uses_configured_labels() -> None:
     mock_pr.html_url = "https://github.com/owner/repo/pull/456"
     mock_repo.create_pull.return_value = mock_pr
 
-    context = BackportPRContext(
+    context = BackportCandidate(
         source_pr_number=123,
         source_pr_title="Fix failover edge case",
         source_pr_url="https://github.com/owner/repo/pull/123",
         target_branch="8.1",
-        commits=["abc1234"],
+        commit_shas=("abc1234",),
     )
     result = ResolutionResult(
         path="src/server.c",
@@ -331,8 +331,7 @@ def test_create_backport_pr_uses_configured_labels() -> None:
 
     pr_url = creator.create_backport_pr(
         context,
-        CherryPickResult(success=False, conflicting_files=[], applied_commits=["abc1234"]),
-        [result],
+        _candidate_result(context, [result]),
         branch_name="backport/123-to-8.1",
     )
 
@@ -355,12 +354,12 @@ def test_create_backport_pr_does_not_apply_llm_label_for_automatic_resolution() 
     mock_pr.html_url = "https://github.com/owner/repo/pull/456"
     mock_repo.create_pull.return_value = mock_pr
 
-    context = BackportPRContext(
+    context = BackportCandidate(
         source_pr_number=123,
         source_pr_title="Whitespace-only conflict",
         source_pr_url="https://github.com/owner/repo/pull/123",
         target_branch="8.1",
-        commits=["abc1234"],
+        commit_shas=("abc1234",),
     )
     result = ResolutionResult(
         path="src/server.c",
@@ -378,8 +377,7 @@ def test_create_backport_pr_does_not_apply_llm_label_for_automatic_resolution() 
 
     creator.create_backport_pr(
         context,
-        CherryPickResult(success=False, conflicting_files=[], applied_commits=["abc1234"]),
-        [result],
+        _candidate_result(context, [result]),
         branch_name="backport/123-to-8.1",
     )
 
@@ -409,13 +407,26 @@ def _make_creator_with_repo(
     return creator, mock_repo, mock_pr
 
 
-def _basic_context() -> BackportPRContext:
-    return BackportPRContext(
+def _basic_context() -> BackportCandidate:
+    return BackportCandidate(
         source_pr_number=123,
         source_pr_title="Fix something",
         source_pr_url="https://github.com/owner/repo/pull/123",
         target_branch="8.1",
-        commits=["abc1234"],
+        commit_shas=("abc1234",),
+    )
+
+
+def _candidate_result(
+    candidate: BackportCandidate,
+    resolutions: list[ResolutionResult] | None = None,
+) -> CandidateResult:
+    return CandidateResult(
+        source_pr_number=candidate.source_pr_number,
+        source_pr_title=candidate.source_pr_title,
+        outcome="applied",
+        resolutions=list(resolutions or []),
+        source_commit_sha="abc1234",
     )
 
 
@@ -429,8 +440,7 @@ def test_ensure_label_exists_creates_missing_backport_label() -> None:
 
     creator.create_backport_pr(
         _basic_context(),
-        CherryPickResult(success=True, conflicting_files=[], applied_commits=["abc1234"]),
-        None,
+        _candidate_result(_basic_context()),
         branch_name="backport/123-to-8.1",
     )
 
@@ -457,8 +467,7 @@ def test_ensure_label_exists_creates_both_labels_when_llm_resolved() -> None:
     )
     creator.create_backport_pr(
         _basic_context(),
-        CherryPickResult(success=False, conflicting_files=[], applied_commits=["abc1234"]),
-        [result],
+        _candidate_result(_basic_context(), [result]),
         branch_name="backport/123-to-8.1",
     )
 
@@ -480,8 +489,7 @@ def test_ensure_label_skips_create_when_label_exists() -> None:
 
     creator.create_backport_pr(
         _basic_context(),
-        CherryPickResult(success=True, conflicting_files=[], applied_commits=["abc1234"]),
-        None,
+        _candidate_result(_basic_context()),
         branch_name="backport/123-to-8.1",
     )
 
@@ -503,8 +511,7 @@ def test_ensure_label_swallows_create_failure_and_still_attempts_apply() -> None
 
     pr_url = creator.create_backport_pr(
         _basic_context(),
-        CherryPickResult(success=True, conflicting_files=[], applied_commits=["abc1234"]),
-        None,
+        _candidate_result(_basic_context()),
         branch_name="backport/123-to-8.1",
     )
 
@@ -525,8 +532,7 @@ def test_ensure_label_treats_422_as_already_exists() -> None:
 
     pr_url = creator.create_backport_pr(
         _basic_context(),
-        CherryPickResult(success=True, conflicting_files=[], applied_commits=["abc1234"]),
-        None,
+        _candidate_result(_basic_context()),
         branch_name="backport/123-to-8.1",
     )
 
@@ -786,12 +792,12 @@ def test_backport_summary_roundtrips_through_release_notes_parsers() -> None:
         summary_source_title_from_body,
     )
 
-    context = BackportPRContext(
+    context = BackportCandidate(
         source_pr_number=4242,
         source_pr_title="Fix a memory leak in cluster failover",
         source_pr_url="https://github.com/valkey-io/valkey/pull/4242",
         target_branch="9.1",
-        commits=["abc1234"],
+        commit_shas=("abc1234",),
     )
     title = build_pr_title(context.source_pr_title, context.target_branch)
     branch = build_branch_name(context.source_pr_number, context.target_branch)
@@ -814,12 +820,12 @@ def test_backport_summary_roundtrips_with_pipe_in_source_title() -> None:
     # escaping; assert it round-trips even for a pipe-bearing title.
     from scripts.release_notes.backport_refs import summary_source_pr_from_body
 
-    context = BackportPRContext(
+    context = BackportCandidate(
         source_pr_number=77,
         source_pr_title="Guard against a|b overflow in the parser",
         source_pr_url="https://github.com/valkey-io/valkey/pull/77",
         target_branch="8.1",
-        commits=["abc1234"],
+        commit_shas=("abc1234",),
     )
     body = BackportPRCreator.build_pr_body(
         context, had_conflicts=False, resolution_results=None,

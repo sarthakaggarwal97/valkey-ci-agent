@@ -9,8 +9,8 @@ from github import Github
 from github.GithubException import GithubException
 
 from scripts.backport.models import (
-    BackportPRContext,
-    CherryPickResult,
+    BackportCandidate,
+    CandidateResult,
     ResolutionResult,
 )
 from scripts.backport.utils import build_branch_name, build_pr_title
@@ -117,9 +117,8 @@ class BackportPRCreator:
 
     def create_backport_pr(
         self,
-        context: BackportPRContext,
-        cherry_pick_result: CherryPickResult,
-        resolution_results: list[ResolutionResult] | None,
+        candidate: BackportCandidate,
+        result: CandidateResult,
         branch_name: str | None = None,
     ) -> str:
         """Create backport PR from an already-pushed branch.
@@ -140,22 +139,20 @@ class BackportPRCreator:
 
         if branch_name is None:
             branch_name = build_branch_name(
-                context.source_pr_number, context.target_branch,
+                candidate.source_pr_number, candidate.target_branch,
             )
         assert branch_name is not None  # for mypy
-        title = build_pr_title(context.source_pr_title, context.target_branch)
+        title = build_pr_title(candidate.source_pr_title, candidate.target_branch)
 
-        had_conflicts = not cherry_pick_result.success
-        any_llm_resolved = bool(
-            resolution_results and any(_was_llm_resolved(r) for r in resolution_results)
-        )
+        had_conflicts = bool(result.conflicting_files)
+        any_llm_resolved = any(_was_llm_resolved(r) for r in result.resolutions)
 
-        body = self.build_pr_body(context, had_conflicts, resolution_results,
-                                  applied_commits=cherry_pick_result.applied_commits)
+        body = self.build_pr_body(candidate, had_conflicts, result.resolutions,
+                                  applied_commit_sha=result.source_commit_sha)
 
         # Open the pull request (branch already exists on remote).
         logger.info(
-            "Opening backport PR: %s -> %s", branch_name, context.target_branch,
+            "Opening backport PR: %s -> %s", branch_name, candidate.target_branch,
         )
         pr = retry_github_call(
             lambda: create_pull_from_push_repo(
@@ -165,7 +162,7 @@ class BackportPRCreator:
                 title=title,
                 body=body,
                 head_branch=branch_name,
-                base_branch=context.target_branch,
+                base_branch=candidate.target_branch,
             ),
             retries=3,
             description="create backport PR",
@@ -250,11 +247,11 @@ class BackportPRCreator:
 
     @staticmethod
     def build_pr_body(
-        context: BackportPRContext,
+        candidate: BackportCandidate,
         had_conflicts: bool,
         resolution_results: list[ResolutionResult] | None,
         *,
-        applied_commits: list[str] | None = None,
+        applied_commit_sha: str | None = None,
         comment_links: dict[str, str] | None = None,
     ) -> str:
         """Build the PR body with links, commit list, conflict info.
@@ -265,6 +262,9 @@ class BackportPRCreator:
         rebuilt after reconcile with the links filled in.
         """
         links = comment_links or {}
+        listed_commits = (
+            (applied_commit_sha,) if applied_commit_sha else tuple(candidate.commit_shas)
+        )
         sections: list[str] = []
         results = resolution_results or []
         resolved_count = sum(result.resolved_content is not None for result in results)
@@ -291,10 +291,10 @@ class BackportPRCreator:
             "\n".join([
                 "| Field | Value |",
                 "|---|---|",
-                f"| Source PR | [#{context.source_pr_number}]({context.source_pr_url}) |",
-                f"| Source title | {_escape_table_cell(context.source_pr_title)} |",
-                f"| Target branch | `{context.target_branch}` |",
-                f"| Cherry-picked commits | {len(applied_commits or context.commits)} |",
+                f"| Source PR | [#{candidate.source_pr_number}]({candidate.source_pr_url}) |",
+                f"| Source title | {_escape_table_cell(candidate.source_pr_title)} |",
+                f"| Target branch | `{candidate.target_branch}` |",
+                f"| Cherry-picked commits | {len(listed_commits)} |",
                 f"| Conflicts detected | {'yes' if had_conflicts else 'no'} |",
                 f"| Auto-resolved files | {resolved_count} |",
                 f"| Unresolved files | {unresolved_count} |",
@@ -313,7 +313,7 @@ class BackportPRCreator:
             )
         sections.append("### Reviewer Checklist\n\n" + "\n".join(checklist))
 
-        commits_list = "\n".join(f"- `{sha}`" for sha in (applied_commits or context.commits))
+        commits_list = "\n".join(f"- `{sha}`" for sha in listed_commits)
         sections.append(f"### Cherry-Picked Commits\n\n{commits_list}")
 
         # Per-file resolution summaries.

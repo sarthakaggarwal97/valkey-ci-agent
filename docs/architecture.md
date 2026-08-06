@@ -26,8 +26,8 @@ sweep.py (daily cron or manual dispatch)
   -> reads repos.yml and fans out one job per {repo, branch}
   -> discovers PRs from each branch's GitHub Project board
   -> for each registered release branch:
-      cherry_pick.py -> git cherry-pick
-      conflict_resolver.py -> Claude Code resolves conflicts
+      source_plan.py -> resolves merge/squash sources; rejects rebase merges
+      candidate_apply.py -> applies one candidate and resolves conflicts with Claude Code
       pr_creator.py -> opens/updates PR on the upstream repo
 ```
 

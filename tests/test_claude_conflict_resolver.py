@@ -9,16 +9,16 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
-from scripts.backport.models import BackportPRContext, ConflictedFile
+from scripts.backport.models import BackportCandidate, ConflictedFile
 
 
-def _pr_context() -> BackportPRContext:
-    return BackportPRContext(
+def _pr_context() -> BackportCandidate:
+    return BackportCandidate(
         source_pr_number=1234,
         source_pr_title="Fix memory leak in cluster.c",
         source_pr_url="https://github.com/valkey-io/valkey/pull/1234",
         target_branch="8.1",
-        commits=["abc123"],
+        commit_shas=("abc123",),
     )
 
 

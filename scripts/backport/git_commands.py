@@ -24,7 +24,31 @@ def run_git(repo_dir: str, *args: str, env: dict[str, str] | None = None) -> Non
         result.check_returncode()
 
 
-def has_staged_changes(repo_dir: str, *, run_process: RunProcess = subprocess.run) -> bool:
+def head_sha(
+    repo_dir: str,
+    *,
+    run_process: RunProcess = subprocess.run,
+) -> str:
+    """Return the commit currently checked out in *repo_dir*."""
+    result = run_process(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "could not resolve HEAD: "
+            + ((result.stderr or "").strip()[:300] or "git rev-parse failed")
+        )
+    return result.stdout.strip()
+
+
+def has_staged_changes(
+    repo_dir: str,
+    *,
+    run_process: RunProcess = subprocess.run,
+) -> bool:
     result = run_process(
         ["git", "diff", "--cached", "--quiet"],
         cwd=repo_dir,
@@ -36,7 +60,8 @@ def has_staged_changes(repo_dir: str, *, run_process: RunProcess = subprocess.ru
     if result.returncode == 1:
         return True
     raise RuntimeError(
-        "could not inspect staged changes: " + ((result.stderr or "").strip()[:300] or "git diff failed")
+        "could not inspect staged changes: "
+        + ((result.stderr or "").strip()[:300] or "git diff failed")
     )
 
 
@@ -53,7 +78,21 @@ def index_stage_exists(
         capture_output=True,
         text=True,
     )
-    return result.returncode == 0
+    if result.returncode == 0:
+        return True
+    error = (result.stderr or "").strip().lower()
+    if result.returncode == 1 or any(
+        marker in error
+        for marker in (
+            "but not at stage",
+            "does not exist",
+        )
+    ):
+        return False
+    raise RuntimeError(
+        f"could not inspect index stage {stage} of {path}: "
+        + (error[:300] or "git cat-file failed")
+    )
 
 
 def read_index_stage(
@@ -70,4 +109,16 @@ def read_index_stage(
         text=True,
         errors="replace",
     )
-    return result.stdout if result.returncode == 0 else ""
+    if result.returncode == 0:
+        return result.stdout
+    if not index_stage_exists(
+        repo_dir,
+        path,
+        stage,
+        run_process=run_process,
+    ):
+        return ""
+    raise RuntimeError(
+        f"could not read index stage {stage} of {path}: "
+        + ((result.stderr or "").strip()[:300] or "git show failed")
+    )

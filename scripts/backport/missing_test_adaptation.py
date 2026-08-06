@@ -19,9 +19,9 @@ from scripts.backport.git_commands import (
 from scripts.backport.git_commands import (
     run_git as run_git_default,
 )
-from scripts.backport.sweep_models import (
+from scripts.backport.models import (
     DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX,
-    ProjectBackportCandidate,
+    BackportCandidate,
 )
 from scripts.backport.utils import has_conflict_markers
 
@@ -80,7 +80,7 @@ def build_missing_test_context(
 
 def adapt_target_missing_tests_with_claude(
     repo_dir: str,
-    candidate: ProjectBackportCandidate,
+    candidate: BackportCandidate,
     missing_test_sources: dict[str, str],
     *,
     language: str,
@@ -180,7 +180,7 @@ def adapt_target_missing_tests_with_claude(
 
 def build_test_adaptation_prompt(
     repo_dir: str,
-    candidate: ProjectBackportCandidate,
+    candidate: BackportCandidate,
     missing_test_sources: dict[str, str],
     *,
     language: str,

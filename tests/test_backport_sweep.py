@@ -9,25 +9,21 @@ from unittest.mock import MagicMock
 import pytest
 from github.GithubException import GithubException
 
-from scripts.backport import (
-    missing_test_adaptation,
-    sweep_apply,
-    sweep_git,
-    sweep_graphql,
-    sweep_validation,
-)
+from scripts.backport import candidate_apply, sweep_git, sweep_graphql, sweep_validation
 from scripts.backport import sweep as backport_sweep
+from scripts.backport.candidate_apply import apply_candidate
 from scripts.backport.missing_test_adaptation import (
     MissingTestAdaptationResult,
     adapt_target_missing_tests_with_claude,
+    build_missing_test_context,
 )
 from scripts.backport.models import ResolutionResult
+from scripts.backport.source_plan import SourceChangePlan, SourceChangeStrategy
 from scripts.backport.sweep import (
+    BackportCandidate,
     BranchSweepResult,
     CandidateResult,
-    ProjectBackportCandidate,
 )
-from scripts.backport.sweep_apply import apply_candidate
 from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
     clone_target_branch,
@@ -52,7 +48,32 @@ from scripts.backport.sweep_validation import (
 )
 from scripts.common.git_auth import GitAuth
 
+
+def _candidate_apply_process(fake_run):
+    """Add shared candidate-application Git plumbing to a focused fake."""
+    def run(cmd, **kwargs):
+        if cmd in (
+            ["git", "diff", "--name-only", "-z"],
+            ["git", "diff", "--cached", "--name-only", "-z"],
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+        ):
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+        return fake_run(cmd, **kwargs)
+
+    return run
+
 DETAIL = backport_sweep.DETAIL_ALREADY_ON_SWEEP_BRANCH
+
+
+def _source_plan(
+    candidate: BackportCandidate,
+    strategy: SourceChangeStrategy = "merge",
+) -> SourceChangePlan:
+    assert candidate.merge_commit_sha
+    return SourceChangePlan(
+        strategy=strategy,
+        commit_sha=candidate.merge_commit_sha,
+    )
 
 
 def test_git_auth_keeps_askpass_outside_clone_destination(tmp_path):
@@ -82,7 +103,7 @@ def test_git_auth_default_env_strips_ambient_tokens(monkeypatch):
 
 
 def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=10,
         source_pr_title="Already applied",
         source_pr_url="https://github.com/valkey-io/valkey/pull/10",
@@ -97,6 +118,10 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:2] == ["git", "cherry-pick"]:
             return subprocess.CompletedProcess(
                 cmd,
@@ -106,11 +131,9 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
             )
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     result = apply_candidate(
         repo_dir=str(tmp_path),
@@ -118,17 +141,17 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-existing"
     assert result.detail == "already applied or empty cherry-pick"
-    assert ("fetch", "origin", "abc123") in git_calls
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
 def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=12,
         source_pr_title="Binary fixture conflict",
         source_pr_url="https://github.com/valkey-io/valkey-search/pull/12",
@@ -136,23 +159,29 @@ def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
         merge_commit_sha="abc123",
     )
     git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
     resolver = MagicMock()
 
     def fake_run_git(_repo_dir, *args, **_kwargs):
         git_calls.append(args)
 
     def fake_subprocess_run(cmd, **_kwargs):
-        if cmd[:2] == ["git", "cherry-pick"] and cmd[2:3] != ["--abort"]:
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:2] == ["git", "cherry-pick"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="fixture.gz\n", stderr="")
+        if cmd[:3] == ["git", "cat-file", "-e"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:2] == ["git", "show"]:  # :2:fixture.gz / :3:fixture.gz
             return subprocess.CompletedProcess(cmd, 0, stdout="bin\x00ary", stderr="")
-        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     result = apply_candidate(
         repo_dir=str(tmp_path),
@@ -160,21 +189,96 @@ def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
         repo_full_name="valkey-io/valkey-search",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=resolver,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-conflict"
     assert "binary" in result.detail
+    assert [item.path for item in result.conflicting_files] == ["fixture.gz"]
     resolver.assert_not_called()
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
-def test_apply_candidate_retries_squash_merge_commit_without_mainline(
+def test_apply_candidate_does_not_invoke_resolver_for_mixed_binary_conflict(
+    tmp_path,
+):
+    candidate = BackportCandidate(
+        source_pr_number=13,
+        source_pr_title="Mixed binary conflict",
+        source_pr_url="https://github.com/valkey-io/valkey-search/pull/13",
+        target_branch="1.1",
+        merge_commit_sha="abc123",
+    )
+    resolver = MagicMock()
+    subprocess_calls: list[list[str]] = []
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="start\n", stderr=""
+            )
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:2] == ["git", "cherry-pick"]:
+            return subprocess.CompletedProcess(
+                cmd, 1, stdout="", stderr="conflict"
+            )
+        if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="fixture.gz\nsrc/server.c\n",
+                stderr="",
+            )
+        if cmd == ["git", "show", ":2:fixture.gz"] or cmd == [
+            "git",
+            "show",
+            ":3:fixture.gz",
+        ]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="bin\x00ary", stderr=""
+            )
+        if cmd == ["git", "show", ":2:src/server.c"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="target\n", stderr=""
+            )
+        if cmd == ["git", "show", ":3:src/server.c"]:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="source\n", stderr=""
+            )
+        if cmd[:3] == ["git", "cat-file", "-e"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        raise AssertionError(cmd)
+
+    result = apply_candidate(
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey-search",
+        git_env={},
+        run_git=lambda *_args, **_kwargs: None,
+        run_process=_candidate_apply_process(fake_subprocess_run),
+        resolve_conflicts=resolver,
+        source_plan=_source_plan(candidate),
+    )
+
+    assert result.outcome == "skipped-conflict"
+    assert "fixture.gz" in result.detail
+    assert {item.path for item in result.conflicting_files} == {
+        "fixture.gz",
+        "src/server.c",
+    }
+    resolver.assert_not_called()
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
+
+
+def test_apply_candidate_uses_planned_squash_without_mainline_probe(
     monkeypatch,
     tmp_path,
 ):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=11,
         source_pr_title="Squash merged fix",
         source_pr_url="https://github.com/valkey-io/valkey/pull/11",
@@ -189,18 +293,13 @@ def test_apply_candidate_retries_squash_merge_commit_without_mainline(
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
-        if cmd == ["git", "cherry-pick", "-m", "1", "abc123"]:
-            return subprocess.CompletedProcess(
-                cmd,
-                1,
-                stdout="",
-                stderr="fatal: mainline was specified but commit abc123 is not a merge",
-            )
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
         if cmd == ["git", "cherry-pick", "abc123"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     result = apply_candidate(
         repo_dir=str(tmp_path),
@@ -208,19 +307,21 @@ def test_apply_candidate_retries_squash_merge_commit_without_mainline(
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
+        source_plan=_source_plan(candidate, "squash"),
     )
 
     assert result.outcome == "applied"
-    assert ("fetch", "origin", "abc123") in git_calls
-    assert ["git", "cherry-pick", "-m", "1", "abc123"] in subprocess_calls
     assert ["git", "cherry-pick", "abc123"] in subprocess_calls
+    assert [
+        cmd for cmd in subprocess_calls if cmd[:2] == ["git", "cherry-pick"]
+    ] == [["git", "cherry-pick", "abc123"]]
 
 
 def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
     conflicted_file = tmp_path / "conflict.txt"
     conflicted_file.write_text("target content\n", encoding="utf-8")
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3317,
         source_pr_title="Fix macOS workflow",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3317",
@@ -235,6 +336,10 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:2] == ["git", "cherry-pick"] and "--abort" not in cmd:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -251,11 +356,9 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     def fake_resolve(*_args, **_kwargs):
         return [
@@ -272,22 +375,23 @@ def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=fake_resolve,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-existing"
     assert result.detail == "resolution was already satisfied on target branch"
     assert ("add", "conflict.txt") in git_calls
     assert ["git", "commit", "--no-edit"] not in subprocess_calls
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
 def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_path):
     missing_on_target = tmp_path / "src" / "cluster_legacy.c"
     missing_on_target.parent.mkdir()
     missing_on_target.write_text("<<<<<<< HEAD\n=======\nlarge source file\n>>>>>>> source\n", encoding="utf-8")
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=2174,
         source_pr_title="Converge divergent shard-id",
         source_pr_url="https://github.com/valkey-io/valkey/pull/2174",
@@ -302,6 +406,10 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:2] == ["git", "cherry-pick"] and "--abort" not in cmd:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -312,11 +420,9 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
         if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     def fake_resolve(*_args, **_kwargs):
         raise AssertionError("should not call Claude")
@@ -327,8 +433,9 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=fake_resolve,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-conflict"
@@ -336,11 +443,11 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
     assert ("add", "src/cluster_legacy.c") not in git_calls
     assert missing_on_target.exists()
     assert ["git", "commit", "--no-edit"] not in subprocess_calls
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
 def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -398,9 +505,10 @@ def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=fake_resolve,
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "applied"
@@ -409,6 +517,9 @@ def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
         "ported target-missing test coverage to: tests/unit/networking.tcl"
     )
     assert result.resolved_by_ai is True
+    assert result.ai_summary == (
+        "ported target-missing test coverage to: tests/unit/networking.tcl"
+    )
     assert result.resolved_commit_sha == "abc123"
     assert adaptation_calls == [
         {"src/unit/test_networking.cpp": "Full upstream test content for a new missing test file:\nTEST(...)\n"}
@@ -425,7 +536,7 @@ def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
 
 
 def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -433,11 +544,17 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
         merge_commit_sha="269b1c5",
     )
     git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
 
     def fake_run_git(_repo_dir, *args, **_kwargs):
         git_calls.append(args)
 
     def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -464,13 +581,14 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-conflict"
     assert result.detail == "test adaptation not applied: Claude Code failed: timeout"
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
     assert (
         "rm",
         "-f",
@@ -481,7 +599,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
 
 
 def test_apply_candidate_aborts_when_target_missing_test_adaptation_raises(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -489,11 +607,17 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_raises(monke
         merge_commit_sha="269b1c5",
     )
     git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
 
     def fake_run_git(_repo_dir, *args, **_kwargs):
         git_calls.append(args)
 
     def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -517,17 +641,18 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_raises(monke
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-conflict"
     assert result.detail == "test adaptation failed unexpectedly: adapter exploded"
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
 
 
 def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -542,6 +667,10 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(m
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -568,18 +697,19 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(m
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "skipped-conflict"
     assert result.detail == "test adaptation not applied: invalid generated test path(s): tests/unit/networking.tcl"
-    assert ("cherry-pick", "--abort") in git_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
     assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] not in subprocess_calls
 
 
 def test_apply_candidate_continues_when_test_adaptation_makes_no_changes(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=4060,
         source_pr_title="Fix io_last_written bookmark desync that corrupts replies with IO threads",
         source_pr_url="https://github.com/valkey-io/valkey/pull/4060",
@@ -625,8 +755,9 @@ def test_apply_candidate_continues_when_test_adaptation_makes_no_changes(monkeyp
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "applied"
@@ -640,7 +771,7 @@ def test_apply_candidate_continues_when_test_adaptation_makes_no_changes(monkeyp
 
 
 def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -714,9 +845,10 @@ def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatc
         repo_full_name="valkey-io/valkey",
         git_env={},
         run_git=fake_run_git,
-        run_process=fake_subprocess_run,
+        run_process=_candidate_apply_process(fake_subprocess_run),
         resolve_conflicts=fake_resolve,
         adapt_missing_tests=fake_adapt,
+        source_plan=_source_plan(candidate),
     )
 
     assert result.outcome == "applied"
@@ -726,22 +858,36 @@ def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatc
     assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] in subprocess_calls
 
 
-def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
+def test_apply_candidate_survives_failing_abort_and_still_rolls_back(monkeypatch, tmp_path):
+    """A cherry-pick can fail before creating sequencer state (e.g. an
+    untracked file collision), making ``cherry-pick --abort`` itself fail.
+    That must not escape apply_candidate — the candidate reports its outcome
+    and the worktree is reset so later candidates are unaffected."""
     conflicted_file = tmp_path / "conflict.txt"
     conflicted_file.write_text("<<<<<<< HEAD\ntarget\n=======\nsource\n>>>>>>> source\n", encoding="utf-8")
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=631,
         source_pr_title="Fix ordering",
         source_pr_url="https://github.com/valkey-io/valkey-search/pull/631",
         target_branch="1.1",
         merge_commit_sha="abc123",
     )
+    git_calls: list[tuple[str, ...]] = []
+    subprocess_calls: list[list[str]] = []
 
     def fake_run_git(_repo_dir, *args, **_kwargs):
-        if args == ("cherry-pick", "--abort"):
-            raise subprocess.CalledProcessError(1, ["git", *args])
+        git_calls.append(args)
 
     def fake_subprocess_run(cmd, **_kwargs):
+        subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
+        if cmd[:3] == ["git", "cherry-pick", "--abort"]:
+            return subprocess.CompletedProcess(
+                cmd, 128, stdout="", stderr="fatal: no cherry-pick or revert in progress",
+            )
+        if cmd == ["git", "reset", "--hard", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:2] == ["git", "cherry-pick"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -758,7 +904,7 @@ def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    monkeypatch.setattr(sweep_apply.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(candidate_apply.subprocess, "run", fake_subprocess_run)
 
     def fake_resolve(*_args, **_kwargs):
         return [
@@ -769,16 +915,22 @@ def test_apply_candidate_fails_closed_when_abort_fails(monkeypatch, tmp_path):
             )
         ]
 
-    with pytest.raises(subprocess.CalledProcessError):
-        apply_candidate(
-            repo_dir=str(tmp_path),
-            candidate=candidate,
-            repo_full_name="valkey-io/valkey-search",
-            git_env={},
-            run_git=fake_run_git,
-            run_process=fake_subprocess_run,
-            resolve_conflicts=fake_resolve,
-        )
+    result = apply_candidate(
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey-search",
+        git_env={},
+        run_git=fake_run_git,
+        run_process=_candidate_apply_process(fake_subprocess_run),
+        resolve_conflicts=fake_resolve,
+        source_plan=_source_plan(candidate),
+    )
+
+    assert result.outcome == "skipped-conflict"
+    assert "unresolved" in result.detail
+    assert ("reset", "--hard", "start") in git_calls
+    # The failed abort itself must trigger the tree-clearing fallback.
+    assert ["git", "reset", "--hard", "HEAD"] in subprocess_calls
 
 
 def test_run_test_commands_returns_failure_output(tmp_path):
@@ -1050,7 +1202,7 @@ def test_upsert_pr_preserves_existing_applied_detail_on_update():
 
 
 def test_sweep_body_points_to_ai_comments_when_ai_resolved():
-    from scripts.backport.sweep_models import DETAIL_RESOLVED_BY_AI
+    from scripts.backport.models import DETAIL_RESOLVED_BY_AI
 
     with_ai = build_pr_body(
         BranchSweepResult(
@@ -1072,7 +1224,7 @@ def test_sweep_body_points_to_ai_comments_when_ai_resolved():
 
 
 def test_sweep_body_links_ai_row_to_comment_when_url_known():
-    from scripts.backport.sweep_models import DETAIL_RESOLVED_BY_AI
+    from scripts.backport.models import DETAIL_RESOLVED_BY_AI
 
     result = BranchSweepResult(
         target_branch="8.1",
@@ -1095,10 +1247,8 @@ def test_sweep_body_links_ai_row_to_comment_when_url_known():
 def test_sweep_body_preserves_ai_resolution_across_unprocessed_runs():
     """A day-0 AI resolution must not flatten to the generic prior-sweep
     string on a later run where the candidate is not re-processed."""
-    from scripts.backport.sweep_models import (
-        DETAIL_ALREADY_ON_SWEEP_BRANCH,
-        DETAIL_RESOLVED_BY_AI,
-    )
+    from scripts.backport.models import DETAIL_RESOLVED_BY_AI
+    from scripts.backport.sweep_models import DETAIL_ALREADY_ON_SWEEP_BRANCH
 
     # Day 0: candidate resolved by the AI this run.
     day0 = BranchSweepResult(
@@ -1190,6 +1340,33 @@ def test_sweep_body_preserves_target_missing_test_adaptation_detail_across_runs(
             resolved_by_ai=True,
         )
     ]
+
+
+def test_dropped_unadapted_test_is_not_reported_as_ai_authored():
+    detail = (
+        "dropped target-missing test file(s): src/unit/test_networking.cpp; "
+        "test adaptation not applied: no branch-native test changes"
+    )
+    body = build_pr_body(
+        BranchSweepResult(
+            target_branch="9.0",
+            candidates_found=1,
+            results=[
+                CandidateResult(
+                    4060,
+                    "Fix networking",
+                    "applied",
+                    detail,
+                    resolved_by_ai=False,
+                )
+            ],
+        )
+    )
+
+    assert "AI resolution details are posted" not in body
+    parsed = parse_previous_applied(body)
+    assert len(parsed) == 1
+    assert parsed[0].resolved_by_ai is False
 
 
 def test_sweep_reconcile_deletes_stale_source_pr_comment_groups():
@@ -1541,7 +1718,7 @@ def test_push_backport_branch_uses_force_with_lease_after_rebase(monkeypatch):
 
 def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     candidates = [
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=i,
             source_pr_title=f"PR {i}",
             source_pr_url=f"https://github.com/valkey-io/valkey/pull/{i}",
@@ -1561,6 +1738,7 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(sweep_validation, "changed_paths_since_base", lambda *_args, **_kwargs: [], raising=False)
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(backport_sweep, "head_sha", lambda _repo: "pre-candidate-head")
     monkeypatch.setattr(
         backport_sweep,
         "validate_branch_with_optional_repair",
@@ -1618,7 +1796,7 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
 
 
 def test_process_branch_push_failure_reconciles_applied(monkeypatch):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=1,
         source_pr_title="PR 1",
         source_pr_url="https://github.com/valkey-io/valkey/pull/1",
@@ -1632,6 +1810,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: set())
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(backport_sweep, "head_sha", lambda _repo: "pre-candidate-head")
     monkeypatch.setattr(
         backport_sweep,
         "validate_branch_with_optional_repair",
@@ -1665,12 +1844,22 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     assert sum(1 for r in result.results if r.outcome == "applied") == 0
 
 
-def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn, already_applied=None, max_applied=1):
+def _green_only_process_branch(
+    monkeypatch,
+    *,
+    candidates,
+    apply_fn,
+    validate_fn,
+    already_applied=None,
+    max_applied=1,
+    max_conflicting_files=100,
+    head_shas=None,
+):
     """Run _process_branch with the common green-only mocks wired up.
 
     Tests supply how each candidate applies (apply_fn) and how the branch
     validates after each kept cherry-pick (validate_fn). Returns
-    (result, pushed, upserts, reset_count).
+    (result, pushed, upserts, reset_count, reset_refs).
     """
     monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_a, **_k: None)
@@ -1685,12 +1874,27 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
     monkeypatch.setattr(backport_sweep, "apply_candidate", apply_fn)
     monkeypatch.setattr(backport_sweep, "validate_branch_with_optional_repair", validate_fn)
+    if head_shas is None:
+        monkeypatch.setattr(
+            backport_sweep,
+            "head_sha",
+            lambda _repo: "pre-candidate-head",
+        )
+    else:
+        head_values = iter(head_shas)
+        monkeypatch.setattr(
+            backport_sweep,
+            "head_sha",
+            lambda _repo: next(head_values),
+        )
 
     reset_count = {"n": 0}
+    reset_refs: list[str] = []
 
     def fake_run_git(_repo_dir, *args, **_kwargs):
-        if args[:3] == ("reset", "--hard", "HEAD^"):
+        if args[:2] == ("reset", "--hard"):
             reset_count["n"] += 1
+            reset_refs.append(args[2])
 
     monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
 
@@ -1717,13 +1921,14 @@ def _green_only_process_branch(monkeypatch, *, candidates, apply_fn, validate_fn
         push_repo="valkey-io/valkey",
         test_commands=["make"],
         max_applied=max_applied,
+        max_conflicting_files=max_conflicting_files,
         repair_validation_failures=True,
     )
-    return result, pushed, upserts, reset_count["n"]
+    return result, pushed, upserts, reset_count["n"], reset_refs
 
 
 def _candidate(num):
-    return ProjectBackportCandidate(
+    return BackportCandidate(
         source_pr_number=num,
         source_pr_title=f"PR {num}",
         source_pr_url=f"https://github.com/valkey-io/valkey/pull/{num}",
@@ -1738,7 +1943,7 @@ def _applied(_repo_dir, candidate, *_args, **_kwargs):
 
 def test_process_branch_does_not_push_when_only_candidate_fails_validation(monkeypatch):
     """A red cherry-pick is reset off the branch and never pushed."""
-    result, pushed, upserts, resets = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
         monkeypatch,
         candidates=[_candidate(10)],
         apply_fn=_applied,
@@ -1749,15 +1954,107 @@ def test_process_branch_does_not_push_when_only_candidate_fails_validation(monke
     assert upserts == []
     assert result.pr_url == ""
     assert resets == 1  # the failed cherry-pick was reset off the branch
+    assert reset_refs == ["pre-candidate-head"]
     assert result.results[0].outcome == "skipped-validation-failed"
     assert "compiler error" in result.results[0].detail
 
 
+
+
+def test_process_branch_forwards_repository_conflict_limit(monkeypatch):
+    limits: list[int] = []
+
+    def apply_with_limit(_repo_dir, candidate, *_args, **kwargs):
+        limits.append(kwargs["max_conflicting_files"])
+        return CandidateResult(
+            candidate.source_pr_number,
+            candidate.source_pr_title,
+            "applied",
+        )
+
+    _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(10)],
+        apply_fn=apply_with_limit,
+        validate_fn=lambda *_args, **_kwargs: (True, ""),
+        max_conflicting_files=7,
+    )
+
+    assert limits == [7]
+
+
+def test_process_branch_stops_after_unrestored_worktree(monkeypatch):
+    attempted: list[int] = []
+
+    def apply_with_cleanup_failure(
+        _repo_dir,
+        candidate,
+        *_args,
+        **_kwargs,
+    ):
+        attempted.append(candidate.source_pr_number)
+        return CandidateResult(
+            candidate.source_pr_number,
+            candidate.source_pr_title,
+            "error",
+            "cleanup failed",
+            worktree_restored=False,
+        )
+
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(10), _candidate(11)],
+        apply_fn=apply_with_cleanup_failure,
+        validate_fn=lambda *_args, **_kwargs: (True, ""),
+        max_applied=2,
+    )
+
+    assert attempted == [10]
+    assert result.error == (
+        "candidate #10 could not restore the worktree; aborting this branch"
+    )
+    assert pushed == []
+    assert upserts == []
+    assert resets == 0
+    assert reset_refs == []
+
+
+def test_process_branch_rolls_back_to_captured_pre_candidate_head(
+    monkeypatch,
+):
+    def apply_one_commit(_repo_dir, candidate, *_args, **_kwargs):
+        return CandidateResult(
+            candidate.source_pr_number,
+            candidate.source_pr_title,
+            "applied",
+            source_commit_sha="source-one",
+        )
+
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(10)],
+        apply_fn=apply_one_commit,
+        validate_fn=lambda *_args, **_kwargs: (False, "compiler error"),
+    )
+
+    assert result.results[0].outcome == "skipped-validation-failed"
+    assert pushed == []
+    assert upserts == []
+    assert resets == 1
+    assert reset_refs == ["pre-candidate-head"]
+
+
 def test_process_branch_keeps_trying_until_green(monkeypatch):
     """Skip failing candidates, keep the first green one, stop after the cap."""
-    validations = iter([(False, "boom"), (False, "boom"), (True, "")])
+    validations = iter(
+        (
+            (False, "boom"),
+            (False, "boom"),
+            (True, ""),
+        )
+    )
 
-    result, pushed, upserts, resets = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
         monkeypatch,
         candidates=[_candidate(11), _candidate(12), _candidate(13), _candidate(14)],
         apply_fn=_applied,
@@ -1773,6 +2070,7 @@ def test_process_branch_keeps_trying_until_green(monkeypatch):
         "applied",
     ]
     assert resets == 2  # two red cherry-picks reset off the branch
+    assert reset_refs == ["pre-candidate-head", "pre-candidate-head"]
     assert pushed == [("agent/backport/sweep/8.1", False)]
     assert len(upserts) == 1
     # The pushed PR is never a draft - the branch is green.
@@ -1781,7 +2079,7 @@ def test_process_branch_keeps_trying_until_green(monkeypatch):
 
 def test_process_branch_pushes_green_branch_as_ready(monkeypatch):
     """A single green cherry-pick is pushed as a normal (non-draft) PR."""
-    result, pushed, upserts, resets = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
         monkeypatch,
         candidates=[_candidate(20)],
         apply_fn=_applied,
@@ -1790,6 +2088,7 @@ def test_process_branch_pushes_green_branch_as_ready(monkeypatch):
 
     assert result.results[0].outcome == "applied"
     assert resets == 0
+    assert reset_refs == []
     assert pushed == [("agent/backport/sweep/8.1", False)]
     assert upserts[0].get("draft", False) is False
 
@@ -1802,7 +2101,7 @@ def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
         attempted.append(candidate.source_pr_number)
         return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
 
-    result, pushed, upserts, resets = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
         monkeypatch,
         candidates=[_candidate(40), _candidate(41)],
         apply_fn=fake_apply,
@@ -1828,6 +2127,7 @@ def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> subproces
         text=True,
         env=full_env,
     )
+
 
 
 def test_adapt_target_missing_tests_stages_branch_native_test(tmp_path):
@@ -1862,7 +2162,7 @@ def test_adapt_target_missing_tests_stages_branch_native_test(tmp_path):
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -1912,7 +2212,7 @@ def test_adapt_target_missing_tests_allows_existing_c_unit_test(tmp_path):
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3263,
             source_pr_title="Fix OOM aborts in large-memory ASAN tests on GitHub Actions",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3263",
@@ -1942,7 +2242,7 @@ def test_missing_test_context_uses_diff_for_modify_delete_conflict(tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="TEST(old)\n", stderr="")
         raise AssertionError(f"unexpected command: {cmd}")
 
-    context = missing_test_adaptation.build_missing_test_context(
+    context = build_missing_test_context(
         str(tmp_path),
         "src/unit/test_networking.cpp",
         "TEST(new)\n",
@@ -1984,7 +2284,7 @@ def test_adapt_target_missing_tests_fails_closed_on_production_edit(tmp_path):
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -2032,7 +2332,7 @@ def test_adapt_target_missing_tests_rejects_ignored_sandbox_edit(tmp_path):
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -2083,7 +2383,7 @@ def test_adapt_target_missing_tests_fails_closed_on_production_unstage(tmp_path)
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -2134,7 +2434,7 @@ def test_adapt_target_missing_tests_rolls_back_on_agent_failure(tmp_path):
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -2188,7 +2488,7 @@ def test_adapt_target_missing_tests_fails_closed_on_conflict_marker_output(tmp_p
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -2278,7 +2578,7 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
     (repo / "file.txt").write_text("line1\nresolved-content\nline3\n", encoding="utf-8")
     _git(repo, "add", "file.txt")
 
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=42,
         source_pr_title="Test PR",
         source_pr_url="https://github.com/example/repo/pull/42",
@@ -2571,7 +2871,7 @@ def test_build_pr_body_surfaces_no_op_resolution_under_skipped():
     ``skip_reason``. It must not appear in Applied, but the body must list it
     under "Skipped" with that reason so maintainers see why it was skipped.
     """
-    from scripts.backport.sweep_models import DETAIL_EMPTY_ON_TARGET
+    from scripts.backport.models import DETAIL_EMPTY_ON_TARGET
 
     result = BranchSweepResult(
         target_branch="8.0",
@@ -2611,8 +2911,8 @@ def test_build_pr_body_surfaces_no_op_resolution_under_skipped():
 
 
 def test_empty_skip_reason_detects_change_not_applicable():
+    from scripts.backport.candidate_apply import _empty_skip_reason
     from scripts.backport.models import ConflictedFile, ResolutionResult
-    from scripts.backport.sweep_apply import _empty_skip_reason
 
     # Every resolved file matched the target's existing content -> the change
     # does not apply on this branch.
@@ -2622,8 +2922,8 @@ def test_empty_skip_reason_detects_change_not_applicable():
 
 
 def test_empty_skip_reason_generic_fallback():
+    from scripts.backport.candidate_apply import _empty_skip_reason
     from scripts.backport.models import ConflictedFile, ResolutionResult
-    from scripts.backport.sweep_apply import _empty_skip_reason
 
     # Resolution differs from target -> fall back to the generic no-net-change
     # statement rather than asserting a cause we cannot prove.
@@ -2631,6 +2931,25 @@ def test_empty_skip_reason_generic_fallback():
     res = [ResolutionResult("src/server.c", "DIFFERENT", "r")]
     reason = _empty_skip_reason(cf, res)
     assert "no net change" in reason
+
+
+def test_empty_skip_reason_requires_every_resolution_to_match_target():
+    from scripts.backport.candidate_apply import _empty_skip_reason
+    from scripts.backport.models import ConflictedFile, ResolutionResult
+
+    # One file matched target but another did not: the provable-cause claim
+    # requires ALL resolutions to match, so this must use the generic reason.
+    cf = [
+        ConflictedFile("src/server.c", "TARGET-A", "SOURCE-A"),
+        ConflictedFile("src/db.c", "TARGET-B", "SOURCE-B"),
+    ]
+    res = [
+        ResolutionResult("src/server.c", "TARGET-A", "r"),
+        ResolutionResult("src/db.c", "DIFFERENT", "r"),
+    ]
+    reason = _empty_skip_reason(cf, res)
+    assert "no net change" in reason
+    assert "does not apply" not in reason
 
 
 def test_build_pr_body_omits_skipped_section_when_none():
@@ -2744,8 +3063,25 @@ def test_build_pr_body_round_trips_applied_and_failed_detail():
     ]
 
 
+def test_parse_previous_failed_normalizes_unknown_outcome_to_error():
+    body = "\n".join(
+        [
+            "## Needs attention",
+            "",
+            "| Source PR | Title | Outcome | Reason |",
+            "|---|---|---|---|",
+            "| #4002 | Broken row | human-edited | conflict |",
+        ]
+    )
+
+    parsed = parse_previous_failed(body)
+
+    assert len(parsed) == 1
+    assert parsed[0].outcome == "error"
+
+
 def test_parse_previous_applied_preserves_ai_detail_from_linked_row():
-    from scripts.backport.sweep_models import DETAIL_RESOLVED_BY_AI
+    from scripts.backport.models import DETAIL_RESOLVED_BY_AI
 
     body = "\n".join(
         [
@@ -2972,7 +3308,10 @@ def _project_item(
             "merged": True,
             "repository": {"nameWithOwner": repo},
             "mergeCommit": {"oid": merge_sha},
-            "commits": {"nodes": [{"commit": {"oid": merge_sha}}]},
+            "commits": {
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                "nodes": [{"commit": {"oid": merge_sha}}],
+            },
         },
         "fieldValues": {
             "nodes": [
@@ -3022,6 +3361,15 @@ def test_discovery_keeps_matching_repo_pr():
     assert by_branch["9.1"][0].source_pr_number == 3654
 
 
+def test_discovery_marks_truncated_commit_connection_incomplete():
+    item = _project_item(number=3654, repo="valkey-io/valkey")
+    item["content"]["commits"]["pageInfo"]["hasNextPage"] = True
+
+    candidate = _make_discovery([item]).discover(["9.1"])["9.1"][0]
+
+    assert candidate.source_commits_complete is False
+
+
 def test_discovery_drops_unmerged_pr_regardless_of_repo():
     """The merged-only filter is applied before the repo filter."""
     item = _project_item(number=999, repo="valkey-io/valkey")
@@ -3055,3 +3403,4 @@ def test_project_items_query_selects_repository_name_with_owner():
     query = backport_sweep._project_items_query("organization")
     assert "repository {" in query
     assert "nameWithOwner" in query
+    assert "pageInfo { hasNextPage endCursor }" in query
