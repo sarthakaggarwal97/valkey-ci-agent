@@ -17,6 +17,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 from github.GithubException import GithubException
 
+from scripts.ai.runtime import default_evidence_dir
 from scripts.backport.candidate_apply import apply_candidate
 from scripts.backport.diff_comments import reconcile_diff_comments
 from scripts.backport.git_commands import run_git as _run_git
@@ -30,6 +31,10 @@ from scripts.backport.models import (
 )
 from scripts.backport.pr_creator import BackportPRCreator
 from scripts.backport.registry import ValidationRule
+from scripts.backport.resolution_evidence import (
+    EVIDENCE_PATCH_NAME,
+    write_resolution_evidence,
+)
 from scripts.backport.utils import build_branch_name
 from scripts.backport.validation import (
     changed_paths_since_base,
@@ -369,6 +374,7 @@ def run_backport(
         # Post AI-resolution details as PR comments (best-effort). The
         # backport already succeeded; a comment failure must never change that.
         if application_result.resolutions:
+            write_resolution_evidence(candidate, application_result)
             _reconcile_diff_comments_best_effort(
                 repo, backport_pr_url, candidate, application_result,
             )
@@ -472,6 +478,9 @@ def _reconcile_diff_comments_best_effort(
             source_title=candidate.source_pr_title,
             cherry_pick_sha=result.source_commit_sha,
             resolved_commit_sha=result.resolved_commit_sha,
+            evidence_patch_name=(
+                EVIDENCE_PATCH_NAME if default_evidence_dir() else None
+            ),
             bot_login=DIFF_COMMENT_LOGIN,
         )
         logger.info("Reconciled AI-diff comments on PR #%d.", pr_number)

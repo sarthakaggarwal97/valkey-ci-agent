@@ -179,14 +179,22 @@ def run_agent(
     return result
 
 
+def default_evidence_dir() -> str:
+    """The evidence directory CI uploads as a workflow artifact, if any."""
+    configured = os.environ.get("CI_AGENT_EVIDENCE_DIR", "")
+    if configured:
+        return configured
+    if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        return "agent-evidence"
+    return ""
+
+
 def _write_evidence(
     result: AgentRunResult,
     profile: AgentProfile,
     evidence_dir: str | Path | None,
 ) -> None:
-    configured_dir = evidence_dir or os.environ.get("CI_AGENT_EVIDENCE_DIR", "")
-    if not configured_dir and os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
-        configured_dir = "agent-evidence"
+    configured_dir = evidence_dir or default_evidence_dir()
     if not configured_dir:
         return
     target_dir = Path(configured_dir)

@@ -8,6 +8,7 @@ from typing import Any
 
 from github.GithubException import GithubException
 
+from scripts.ai.runtime import default_evidence_dir
 from scripts.backport.diff_comments import marked_source_pr_urls, reconcile_diff_comments
 from scripts.backport.pr_creator import (
     _LABEL_DEFAULTS,
@@ -15,6 +16,7 @@ from scripts.backport.pr_creator import (
     create_pull_from_push_repo,
     pull_matches_push_repo,
 )
+from scripts.backport.resolution_evidence import EVIDENCE_PATCH_NAME
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import BranchSweepResult, CandidateResult
 from scripts.backport.sweep_reporting import build_pr_body, result_is_on_backport_branch
@@ -280,6 +282,9 @@ def _reconcile_sweep_diff_comments(
                 source_title=candidate.source_pr_title if candidate else None,
                 resolved_commit_sha=candidate.resolved_commit_sha if candidate else None,
                 bot_login=DIFF_COMMENT_LOGIN,
+                evidence_patch_name=(
+                    EVIDENCE_PATCH_NAME if default_evidence_dir() else None
+                ),
             )
             # All paths for a source PR point at the same grouped comment.
             if links:

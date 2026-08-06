@@ -26,6 +26,7 @@ from scripts.backport.models import (
     BackportCandidate,
     CandidateResult,
 )
+from scripts.backport.resolution_evidence import write_resolution_evidence
 from scripts.backport.sweep_git import (
     branch_has_changes,
     clone_target_branch,
@@ -471,6 +472,9 @@ def _process_branch(
                             )
                             if part
                         )
+
+                if candidate_result.resolutions:
+                    write_resolution_evidence(candidate, candidate_result)
 
                 applied_count += 1
 

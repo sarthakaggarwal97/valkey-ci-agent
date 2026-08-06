@@ -38,6 +38,17 @@ _MARKER_RE = re.compile(
 # runaway summary cannot bloat the body. Diffs are not inlined.
 _MAX_SUMMARY_CHARS = 2000
 
+# GitHub's comment limit is 65,536 characters and <details> content counts
+# toward it. Inline diff content is therefore budgeted: complete diffs for
+# small files, bounded hunk excerpts for medium ones, index-only for huge
+# ones. The total budget leaves generous headroom for the comment skeleton.
+_MAX_INLINE_DIFF_PER_FILE = 12_000
+_MAX_INLINE_DIFF_TOTAL = 48_000
+_SMALL_HUNK_CHARS = 1_500
+_EXCERPT_HUNK_CHARS = 3_000
+_HUNK_EDGE_LINES = 20
+_MIN_INLINE_CHARS = 600
+
 
 @dataclass(frozen=True)
 class DiffCommentMarker:
@@ -124,9 +135,131 @@ def _file_line(
         if resolved_commit_sha else None
     )
     url = commit_url or _files_changed_url(pr_html_url, result.path)
+    stats = ""
+    diff = result.reviewer_diff or result.resolution_diff
+    if diff:
+        additions, deletions, hunks = _diff_stats(diff)
+        hunk_word = "hunk" if hunks == 1 else "hunks"
+        stats = f" — +{additions} / −{deletions} across {hunks} {hunk_word}"
     if url:
-        return f"- {_path_code(result.path)} — [view diff]({url})"
-    return f"- {_path_code(result.path)}"
+        return f"- {_path_code(result.path)}{stats} — [view diff]({url})"
+    return f"- {_path_code(result.path)}{stats}"
+
+
+def _diff_stats(diff: str) -> tuple[int, int, int]:
+    """(additions, deletions, hunk count) of a single-file unified diff.
+
+    Only lines inside hunks are counted, so the file header can never be
+    mistaken for a deletion whose content starts with dashes.
+    """
+    additions = deletions = hunks = 0
+    for line in diff.splitlines():
+        if line.startswith("@@"):
+            hunks += 1
+        elif not hunks:
+            continue
+        elif line.startswith("+"):
+            additions += 1
+        elif line.startswith("-"):
+            deletions += 1
+    return additions, deletions, hunks
+
+
+def _split_hunks(diff: str) -> tuple[str, list[str]]:
+    """Split a unified diff into its file header and one string per hunk."""
+    header_lines: list[str] = []
+    hunks: list[list[str]] = []
+    for line in diff.splitlines():
+        if line.startswith("@@"):
+            hunks.append([line])
+        elif hunks:
+            hunks[-1].append(line)
+        else:
+            header_lines.append(line)
+    return "\n".join(header_lines), ["\n".join(hunk) for hunk in hunks]
+
+
+def _bounded_hunk(hunk: str, max_chars: int) -> str:
+    """A hunk excerpt of at most *max_chars*, never silently truncated.
+
+    Oversized hunks show their beginning and end around an explicit
+    ``... omitted N lines ...`` marker. Pathologically long lines fall back
+    to a character-count marker; the bound holds in every case.
+    """
+    if len(hunk) <= max_chars:
+        return hunk
+    lines = hunk.splitlines()
+    for edge in range(min(_HUNK_EDGE_LINES, len(lines) // 2), 0, -1):
+        omitted = len(lines) - 2 * edge
+        excerpt = "\n".join([
+            *lines[:edge],
+            f"... omitted {omitted} lines ...",
+            *lines[-edge:],
+        ])
+        if len(excerpt) <= max_chars:
+            return excerpt
+    head = hunk[: max_chars // 2 - 40].rstrip()
+    omitted = len(hunk) - len(head)
+    return f"{head}\n... omitted {omitted} characters ..."
+
+
+def _inline_diff_block(result: ResolutionResult, budget: int) -> str:
+    """A ``<details>`` block for one file's diff, sized within *budget*.
+
+    Small diffs embed completely; medium diffs show a bounded excerpt of
+    every hunk that fits, with explicit accounting of anything omitted;
+    when the budget is exhausted the file stays index-only ("" is returned)
+    and its bullet still links to the full diff.
+    """
+    diff = (result.reviewer_diff or result.resolution_diff or "").rstrip("\n")
+    if not diff:
+        return ""
+    limit = min(_MAX_INLINE_DIFF_PER_FILE, budget)
+    if limit < _MIN_INLINE_CHARS:
+        return ""
+
+    if len(diff) <= limit:
+        summary = "Complete resolved diff"
+        content = diff
+        accounting = ""
+    else:
+        header, hunks = _split_hunks(diff)
+        parts = [header] if header else []
+        remaining = limit - len(header)
+        shown = excerpted = 0
+        for hunk in hunks:
+            if remaining <= _MIN_INLINE_CHARS:
+                break
+            if len(hunk) <= min(_SMALL_HUNK_CHARS, remaining):
+                parts.append(hunk)
+                remaining -= len(hunk)
+                shown += 1
+                continue
+            excerpt = _bounded_hunk(hunk, min(_EXCERPT_HUNK_CHARS, remaining))
+            parts.append(excerpt)
+            remaining -= len(excerpt)
+            shown += 1
+            excerpted += 1
+        if not shown:
+            return ""
+        omitted = len(hunks) - shown
+        summary = "Representative conflict hunks"
+        content = "\n".join(parts)
+        bits = [f"Showing {shown} of {len(hunks)} hunks"]
+        if excerpted:
+            bits.append(f"{excerpted} excerpted")
+        if omitted:
+            bits.append(f"{omitted} omitted")
+        accounting = (
+            "\n\n_" + "; ".join(bits)
+            + ". The complete diff is at the link above._"
+        )
+
+    return (
+        f"\n<details>\n<summary>{summary}</summary>\n\n"
+        f"````diff\n{content}\n````"
+        f"{accounting}\n\n</details>"
+    )
 
 
 def _render_body(
@@ -138,6 +271,7 @@ def _render_body(
     repo_html_url: str,
     resolved_commit_sha: str | None,
     pr_html_url: str,
+    evidence_patch_name: str | None,
 ) -> str:
     lines = [f"### AI backport resolution: source PR #{source_pr}", ""]
     title_text = _safe_text(source_title, limit=160) if source_title else ""
@@ -155,15 +289,25 @@ def _render_body(
         lines.append("")
     lines.append("**AI-edited files requiring review**")
     lines.append("")
-    lines.extend(
-        _file_line(
-            result,
-            repo_html_url=repo_html_url,
-            resolved_commit_sha=resolved_commit_sha,
-            pr_html_url=pr_html_url,
+    inline_budget = _MAX_INLINE_DIFF_TOTAL
+    for result in results:
+        lines.append(
+            _file_line(
+                result,
+                repo_html_url=repo_html_url,
+                resolved_commit_sha=resolved_commit_sha,
+                pr_html_url=pr_html_url,
+            )
         )
-        for result in results
-    )
+        block = _inline_diff_block(result, inline_budget)
+        if block:
+            inline_budget -= len(block)
+            lines.append(block)
+    if evidence_patch_name:
+        lines.extend([
+            "",
+            f"Full AI edit trace: workflow artifact `{evidence_patch_name}`.",
+        ])
     if resolved_commit_sha and repo_html_url:
         lines.extend([
             "",
@@ -187,12 +331,14 @@ def render_diff_comment(
     repo_html_url: str = "",
     resolved_commit_sha: str | None = None,
     pr_html_url: str = "",
+    evidence_patch_name: str | None = None,
 ) -> str:
     """Render one grouped diff comment for a source PR.
 
-    The comment links each resolved file to its native diff in the resolution
-    commit view, so it carries no inlined diffs and cannot breach GitHub's
-    comment size limit.
+    Every file links to its native diff in the resolution commit view; inline
+    diff content is tiered and budgeted (complete for small diffs, bounded
+    hunk excerpts for medium ones, index-only for huge ones) so the comment
+    stays well under GitHub's 65,536-character limit.
     """
     results = _commentable_results(resolution_results)
     body = _render_body(
@@ -203,6 +349,7 @@ def render_diff_comment(
         repo_html_url=repo_html_url,
         resolved_commit_sha=resolved_commit_sha,
         pr_html_url=pr_html_url,
+        evidence_patch_name=evidence_patch_name,
     )
     sha = _payload_sha(body)
     marker = f'<!-- {_MARKER_PREFIX} source_pr="{source_pr}" sha="{sha}" -->'
@@ -278,6 +425,7 @@ def reconcile_diff_comments(
     cherry_pick_sha: str | None = None,
     resolved_commit_sha: str | None = None,
     bot_login: str | None = None,
+    evidence_patch_name: str | None = None,
 ) -> dict[str, str]:
     """Make the PR's AI-diff comment for *source_pr* match the resolutions.
 
@@ -307,6 +455,7 @@ def reconcile_diff_comments(
         repo_html_url=repo_html_url,
         resolved_commit_sha=resolved_commit_sha,
         pr_html_url=pr_html_url,
+        evidence_patch_name=evidence_patch_name,
     )
 
     # Prefer an existing grouped comment; otherwise edit the first legacy

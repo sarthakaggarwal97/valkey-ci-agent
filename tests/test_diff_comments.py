@@ -90,11 +90,10 @@ def test_render_and_parse_grouped_comment() -> None:
     assert "### AI backport resolution: source PR #42" in body
     assert "**Fix RESP3 type" in body
     assert "`abcdef123456`" in body
-    # Link-based: no inlined diff, no raw cleanup, links to the commit view.
+    # Tiered: a small diff embeds completely; the commit-view link remains.
     assert "**AI-edited files requiring review**" in body
-    assert "<summary>Resolved hunk</summary>" not in body
+    assert "<summary>Complete resolved diff</summary>" in body
     assert "<summary>Raw conflict cleanup</summary>" not in body
-    assert "```diff" not in body
     assert "/commit/fedcba9876543210#diff-" in body
     assert "[view diff]" in body
     assert "[commit fedcba987654]" in body
