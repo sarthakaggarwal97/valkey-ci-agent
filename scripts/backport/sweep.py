@@ -21,7 +21,11 @@ from github import Auth, Github
 from scripts.backport.candidate_apply import apply_candidate
 from scripts.backport.git_commands import head_sha
 from scripts.backport.git_commands import run_git as _run_git
-from scripts.backport.models import BackportCandidate, CandidateResult
+from scripts.backport.models import (
+    DETAIL_RESOLVED_BY_AI,
+    BackportCandidate,
+    CandidateResult,
+)
 from scripts.backport.sweep_git import (
     branch_has_changes,
     clone_target_branch,
@@ -430,7 +434,7 @@ def _process_branch(
                 # the whole branch still validates. A red commit left on the
                 # branch would block every later candidate, so we always reset
                 # a failure off the branch and move on to the next candidate.
-                ok, output = validate_branch_with_optional_repair(
+                validation_outcome = validate_branch_with_optional_repair(
                     tmpdir,
                     target_branch,
                     test_commands,
@@ -438,9 +442,11 @@ def _process_branch(
                     repair=repair_validation_failures,
                     run_git=_run_git,
                 )
-                if not ok:
+                if not validation_outcome.ok:
                     candidate_result.outcome = "skipped-validation-failed"
-                    candidate_result.detail = validation_failure_detail(output)
+                    candidate_result.detail = validation_failure_detail(
+                        validation_outcome.output
+                    )
                     _run_git(tmpdir, "reset", "--hard", pre_candidate_head)
                     logger.warning(
                         "Validation failed for candidate #%d on %s; removed candidate and continuing.",
@@ -448,6 +454,23 @@ def _process_branch(
                         target_branch,
                     )
                     continue
+
+                repair_resolutions = list(validation_outcome.resolutions)
+                if repair_resolutions:
+                    candidate_result.resolutions.extend(repair_resolutions)
+                    candidate_result.resolved_by_ai = True
+                    candidate_result.resolved_commit_sha = head_sha(tmpdir)
+                    if validation_outcome.ai_summary:
+                        candidate_result.ai_summary = validation_outcome.ai_summary
+                    if DETAIL_RESOLVED_BY_AI not in candidate_result.detail:
+                        candidate_result.detail = "; ".join(
+                            part
+                            for part in (
+                                candidate_result.detail,
+                                DETAIL_RESOLVED_BY_AI,
+                            )
+                            if part
+                        )
 
                 applied_count += 1
 

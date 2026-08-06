@@ -489,6 +489,8 @@ def _reconcile_diff_comments_best_effort(
             bool(result.conflicting_files),
             result.resolutions,
             applied_commit_sha=result.source_commit_sha,
+            ai_involved=result.resolved_by_ai,
+            ai_summary=result.ai_summary,
             comment_links=comment_links,
         )
         retry_github_call(

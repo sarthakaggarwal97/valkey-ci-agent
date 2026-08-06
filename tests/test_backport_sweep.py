@@ -41,6 +41,7 @@ from scripts.backport.sweep_reporting import (
     parse_previous_failed,
 )
 from scripts.backport.sweep_validation import (
+    ValidationOutcome,
     build_validation_repair_prompt,
     repair_validation_failure_with_claude,
     run_test_commands,
@@ -1742,7 +1743,7 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     monkeypatch.setattr(
         backport_sweep,
         "validate_branch_with_optional_repair",
-        lambda *_args, **_kwargs: (True, ""),
+        lambda *_args, **_kwargs: ValidationOutcome(True, ""),
     )
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_args, **_kwargs: True)
 
@@ -1814,7 +1815,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     monkeypatch.setattr(
         backport_sweep,
         "validate_branch_with_optional_repair",
-        lambda *_args, **_kwargs: (True, ""),
+        lambda *_args, **_kwargs: ValidationOutcome(True, ""),
     )
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(
@@ -1947,7 +1948,7 @@ def test_process_branch_does_not_push_when_only_candidate_fails_validation(monke
         monkeypatch,
         candidates=[_candidate(10)],
         apply_fn=_applied,
-        validate_fn=lambda *_a, **_k: (False, "compiler error"),
+        validate_fn=lambda *_a, **_k: ValidationOutcome(False, "compiler error"),
     )
 
     assert pushed == []
@@ -1957,6 +1958,38 @@ def test_process_branch_does_not_push_when_only_candidate_fails_validation(monke
     assert reset_refs == ["pre-candidate-head"]
     assert result.results[0].outcome == "skipped-validation-failed"
     assert "compiler error" in result.results[0].detail
+
+def test_process_branch_reports_successful_ai_validation_repair(monkeypatch):
+    resolution = ResolutionResult(
+        path="src/module.c",
+        resolved_content="fixed\n",
+        resolution_summary="validation failure repaired by Claude Code",
+        reviewer_diff="repair diff",
+        llm_summary="Adjusted the backport for the target branch API.",
+    )
+    result, pushed, upserts, resets, _reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(10)],
+        apply_fn=_applied,
+        validate_fn=lambda *_a, **_k: ValidationOutcome(
+            True,
+            "ok",
+            resolutions=(resolution,),
+            ai_summary="Adjusted the backport for the target branch API.",
+        ),
+        head_shas=("pre-candidate-head", "repairsha"),
+    )
+
+    candidate = result.results[0]
+    assert candidate.outcome == "applied"
+    assert candidate.resolved_by_ai is True
+    assert candidate.resolved_commit_sha == "repairsha"
+    assert candidate.resolutions == [resolution]
+    assert "resolved by Claude Code" in candidate.detail
+    assert candidate.ai_summary.startswith("Adjusted the backport")
+    assert pushed
+    assert len(upserts) == 1
+    assert resets == 0
 
 
 
@@ -1976,7 +2009,7 @@ def test_process_branch_forwards_repository_conflict_limit(monkeypatch):
         monkeypatch,
         candidates=[_candidate(10)],
         apply_fn=apply_with_limit,
-        validate_fn=lambda *_args, **_kwargs: (True, ""),
+        validate_fn=lambda *_args, **_kwargs: ValidationOutcome(True, ""),
         max_conflicting_files=7,
     )
 
@@ -2005,7 +2038,7 @@ def test_process_branch_stops_after_unrestored_worktree(monkeypatch):
         monkeypatch,
         candidates=[_candidate(10), _candidate(11)],
         apply_fn=apply_with_cleanup_failure,
-        validate_fn=lambda *_args, **_kwargs: (True, ""),
+        validate_fn=lambda *_args, **_kwargs: ValidationOutcome(True, ""),
         max_applied=2,
     )
 
@@ -2034,7 +2067,7 @@ def test_process_branch_rolls_back_to_captured_pre_candidate_head(
         monkeypatch,
         candidates=[_candidate(10)],
         apply_fn=apply_one_commit,
-        validate_fn=lambda *_args, **_kwargs: (False, "compiler error"),
+        validate_fn=lambda *_args, **_kwargs: ValidationOutcome(False, "compiler error"),
     )
 
     assert result.results[0].outcome == "skipped-validation-failed"
@@ -2048,9 +2081,9 @@ def test_process_branch_keeps_trying_until_green(monkeypatch):
     """Skip failing candidates, keep the first green one, stop after the cap."""
     validations = iter(
         (
-            (False, "boom"),
-            (False, "boom"),
-            (True, ""),
+            ValidationOutcome(False, "boom"),
+            ValidationOutcome(False, "boom"),
+            ValidationOutcome(True, ""),
         )
     )
 
@@ -2083,7 +2116,7 @@ def test_process_branch_pushes_green_branch_as_ready(monkeypatch):
         monkeypatch,
         candidates=[_candidate(20)],
         apply_fn=_applied,
-        validate_fn=lambda *_a, **_k: (True, ""),
+        validate_fn=lambda *_a, **_k: ValidationOutcome(True, ""),
     )
 
     assert result.results[0].outcome == "applied"
@@ -2105,7 +2138,7 @@ def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
         monkeypatch,
         candidates=[_candidate(40), _candidate(41)],
         apply_fn=fake_apply,
-        validate_fn=lambda *_a, **_k: (True, ""),
+        validate_fn=lambda *_a, **_k: ValidationOutcome(True, ""),
         already_applied={"40"},
         max_applied=1,
     )
@@ -3216,7 +3249,7 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
         log_paths.append(log_path)
         return True, "ok"
 
-    ok, output = repair_validation_failure_with_claude(
+    outcome = repair_validation_failure_with_claude(
         "/repo",
         "8.1",
         ["make"],
@@ -3230,8 +3263,8 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
         has_staged_changes_func=lambda *_args: True,
     )
 
-    assert ok is True
-    assert output == "ok"
+    assert outcome.ok is True
+    assert outcome.output == "ok"
     assert agent_calls[0][0] == "validation_repair_edit_only"
     # The prompt points Claude at the validation log path it should Read,
     # rather than embedding a truncated tail.

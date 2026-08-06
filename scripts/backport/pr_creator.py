@@ -25,7 +25,7 @@ _LABEL_DEFAULTS: dict[str, tuple[str, str]] = {
     "backport": ("0e8a16", "Backport PR opened by valkey-ci-agent"),
     "ai-resolved-conflicts": (
         "fbca04",
-        "Cherry-pick conflicts resolved by AI; needs human review",
+        "Backport contains AI-authored changes; needs human review",
     ),
 }
 
@@ -145,10 +145,16 @@ class BackportPRCreator:
         title = build_pr_title(candidate.source_pr_title, candidate.target_branch)
 
         had_conflicts = bool(result.conflicting_files)
-        any_llm_resolved = any(_was_llm_resolved(r) for r in result.resolutions)
+        # AI involvement is broader than per-file conflict resolutions: test
+        # adaptation and validation repair also write AI-authored content.
+        ai_involved = result.resolved_by_ai or any(
+            _was_llm_resolved(r) for r in result.resolutions
+        )
 
         body = self.build_pr_body(candidate, had_conflicts, result.resolutions,
-                                  applied_commit_sha=result.source_commit_sha)
+                                  applied_commit_sha=result.source_commit_sha,
+                                  ai_involved=ai_involved,
+                                  ai_summary=result.ai_summary)
 
         # Open the pull request (branch already exists on remote).
         logger.info(
@@ -170,7 +176,7 @@ class BackportPRCreator:
 
         # Apply labels (best-effort — don't fail the run if labels are missing).
         labels = [self._backport_label]
-        if any_llm_resolved:
+        if ai_involved:
             labels.append(self._llm_conflict_label)
 
         for label in labels:
@@ -253,6 +259,8 @@ class BackportPRCreator:
         *,
         applied_commit_sha: str | None = None,
         comment_links: dict[str, str] | None = None,
+        ai_involved: bool = False,
+        ai_summary: str = "",
     ) -> str:
         """Build the PR body with links, commit list, conflict info.
 
@@ -303,7 +311,11 @@ class BackportPRCreator:
         checklist = [
             "- Compare this backport against the source PR before merge.",
         ]
-        if resolved_count > 0:
+        if ai_involved:
+            checklist.append(
+                "- Review the AI-authored changes carefully for semantic drift."
+            )
+        elif resolved_count > 0:
             checklist.append(
                 "- Review the automatically resolved files carefully for semantic drift."
             )
@@ -339,15 +351,15 @@ class BackportPRCreator:
                 "### Conflict Details\n\n" + conflict_details
             )
 
-        # Human review disclaimer (when any file was LLM-resolved).
-        any_llm_resolved = bool(results and any(_was_llm_resolved(r) for r in results))
-        if any_llm_resolved:
+        if ai_summary and ai_involved:
+            sections.append("### AI Adaptation\n\n" + ai_summary)
+
+        if ai_involved:
             sections.append(
                 "### Human Review Required\n\n"
-                "Some conflicts in this backport were resolved using an LLM. "
-                "These resolutions require careful human review to ensure "
-                "correctness. Please verify that the resolved code matches "
-                "the intent of the original pull request."
+                "AI was used to resolve conflicts or adapt this backport. "
+                "These changes require careful human review. Verify that they "
+                "match the intent of the original pull request."
             )
 
         return "\n\n".join(sections)
