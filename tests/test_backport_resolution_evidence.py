@@ -154,3 +154,102 @@ def test_evidence_is_skipped_outside_ci(tmp_path: Path, monkeypatch) -> None:
     result = CandidateResult(1, "t", "applied")
 
     assert write_resolution_evidence(candidate, result) is None
+
+
+def test_total_body_is_bounded_for_hundreds_of_files() -> None:
+    """Bullets, paths and links count against the limit too — not only
+    inline diff blocks. Overflow collapses into one explicit count line."""
+    files = [
+        _resolution(
+            f"src/{'x' * 90}/f{i}.cc",
+            _diff(f"f{i}", [_hunk([f"+l{j}" for j in range(40)])]),
+        )
+        for i in range(500)
+    ]
+    body = render_diff_comment(
+        42,
+        files,
+        resolved_commit_sha="a" * 40,
+        repo_html_url="https://github.com/example/repo",
+        pr_html_url="https://github.com/example/repo/pull/1",
+    )
+
+    assert len(body) <= 65_536
+    assert "more AI-edited files" in body
+
+
+def test_file_link_prefers_the_resolution_own_commit() -> None:
+    """A candidate can span two commits (cherry-pick + validation repair);
+    each file must link into the commit that actually contains it."""
+    pick = _resolution("src/a.c", _diff("src/a.c", [_hunk(["+a"])]))
+    pick.commit_sha = "b" * 40
+    repair = _resolution("src/b.c", _diff("src/b.c", [_hunk(["+b"])]))
+    repair.commit_sha = "c" * 40
+    body = render_diff_comment(
+        42,
+        [pick, repair],
+        resolved_commit_sha="c" * 40,
+        repo_html_url="https://github.com/example/repo",
+    )
+
+    assert f"/commit/{'b' * 40}#diff-" in body
+    assert f"/commit/{'c' * 40}#diff-" in body
+
+
+def test_adaptation_edits_become_reviewable_resolutions(tmp_path: Path) -> None:
+    """An AI test adaptation must leave the same diff trail as a conflict
+    resolution: the PR gets the AI label, so the evidence must exist."""
+    import subprocess
+    from types import SimpleNamespace
+
+    from scripts.backport.missing_test_adaptation import (
+        adapt_target_missing_tests_with_claude,
+    )
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for args in (
+        ("init", "-q", "-b", "main"),
+        ("config", "user.name", "T"),
+        ("config", "user.email", "t@example.com"),
+        ("config", "commit.gpgsign", "false"),
+    ):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+    test_file = repo / "tests" / "unit.tcl"
+    test_file.parent.mkdir()
+    test_file.write_text("existing coverage\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "base"], cwd=repo, check=True, capture_output=True
+    )
+
+    def fake_agent(_profile, _prompt, *, cwd):
+        Path(cwd, "tests", "unit.tcl").write_text(
+            "existing coverage\nadapted coverage\n", encoding="utf-8"
+        )
+        return SimpleNamespace(
+            returncode=0,
+            stdout='{"type":"result","result":"adapted"}\n',
+            stderr="",
+        )
+
+    result = adapt_target_missing_tests_with_claude(
+        str(repo),
+        BackportCandidate(
+            source_pr_number=7,
+            source_pr_title="t",
+            source_pr_url="u",
+            target_branch="8.1",
+        ),
+        {"tests/unit/upstream_only.tcl": "TEST\n"},
+        language="c",
+        run_agent_func=fake_agent,
+    )
+
+    assert result.fatal is False
+    assert result.adapted_paths == ["tests/unit.tcl"]
+    assert len(result.resolutions) == 1
+    resolution = result.resolutions[0]
+    assert resolution.path == "tests/unit.tcl"
+    assert "+adapted coverage" in resolution.reviewer_diff
+    assert resolution.resolved_content.endswith("adapted coverage\n")

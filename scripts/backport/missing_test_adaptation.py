@@ -30,6 +30,7 @@ from scripts.backport.git_commands import (
 from scripts.backport.models import (
     DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX,
     BackportCandidate,
+    ResolutionResult,
 )
 from scripts.backport.utils import has_conflict_markers
 
@@ -52,6 +53,10 @@ RunAgent = Callable[..., AgentRunResult]
 @dataclass
 class MissingTestAdaptationResult:
     adapted_paths: list[str] = field(default_factory=list)
+    # One entry per adapted file, carrying the reviewer-facing diff so AI
+    # test adaptations get the same comment/evidence trail as conflict
+    # resolutions.
+    resolutions: list[ResolutionResult] = field(default_factory=list)
     summary: str = ""
     fatal: bool = False
 
@@ -199,14 +204,24 @@ def adapt_target_missing_tests_with_claude(
                     fatal=True,
                 )
 
+            resolutions: list[ResolutionResult] = []
+            summary = (
+                f"{DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX} "
+                + ", ".join(changed_paths)
+            )
             try:
                 for path in changed_paths:
                     source = safe_regular_file(sandbox_dir, path)
                     destination = safe_regular_file(Path(repo_dir), path)
                     if source is None or destination is None:
                         raise RuntimeError(f"unsafe test adaptation path: {path}")
+                    before = destination.read_text(encoding="utf-8", errors="replace")
+                    after = source.read_text(encoding="utf-8", errors="replace")
                     destination.write_bytes(source.read_bytes())
                     run_git(repo_dir, "add", path)
+                    resolutions.append(
+                        _adaptation_resolution(path, before, after, summary)
+                    )
             except Exception as exc:  # noqa: BLE001 - fatal makes the caller roll back
                 return MissingTestAdaptationResult(
                     summary=f"test adaptation import failed: {str(exc)[:200]}",
@@ -215,7 +230,8 @@ def adapt_target_missing_tests_with_claude(
 
             return MissingTestAdaptationResult(
                 adapted_paths=changed_paths,
-                summary=f"{DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX} " + ", ".join(changed_paths),
+                resolutions=resolutions,
+                summary=summary,
             )
     except Exception as exc:  # noqa: BLE001 - adaptation infrastructure failures must fail closed
         return MissingTestAdaptationResult(
@@ -270,6 +286,30 @@ def build_test_adaptation_prompt(
         f"- If equivalent branch-native coverage is not practical, make no file "
         f"changes and explain that in your final result.\n\n"
         f"Do not wrap output in markdown. Edit files directly when safe."
+    )
+
+
+def _adaptation_resolution(
+    path: str,
+    before: str,
+    after: str,
+    summary: str,
+) -> ResolutionResult:
+    diff = "".join(
+        difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+        )
+    ).rstrip("\n")
+    return ResolutionResult(
+        path=path,
+        resolved_content=after,
+        resolution_summary="test coverage adapted by Claude Code",
+        resolution_diff=diff or None,
+        reviewer_diff=diff or None,
+        llm_summary=summary,
     )
 
 

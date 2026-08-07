@@ -42,6 +42,7 @@ _MAX_SUMMARY_CHARS = 2000
 # toward it. Inline diff content is therefore budgeted: complete diffs for
 # small files, bounded hunk excerpts for medium ones, index-only for huge
 # ones. The total budget leaves generous headroom for the comment skeleton.
+_MAX_COMMENT_CHARS = 60_000
 _MAX_INLINE_DIFF_PER_FILE = 12_000
 _MAX_INLINE_DIFF_TOTAL = 48_000
 _SMALL_HUNK_CHARS = 1_500
@@ -130,9 +131,10 @@ def _file_line(
     committed); fall back to the PR's Files changed tab if the commit sha is
     unavailable.
     """
+    link_sha = result.commit_sha or resolved_commit_sha
     commit_url = (
-        _commit_file_url(repo_html_url, resolved_commit_sha, result.path)
-        if resolved_commit_sha else None
+        _commit_file_url(repo_html_url, link_sha, result.path)
+        if link_sha else None
     )
     url = commit_url or _files_changed_url(pr_html_url, result.path)
     stats = ""
@@ -289,32 +291,51 @@ def _render_body(
         lines.append("")
     lines.append("**AI-edited files requiring review**")
     lines.append("")
-    inline_budget = _MAX_INLINE_DIFF_TOTAL
-    for result in results:
-        lines.append(
-            _file_line(
-                result,
-                repo_html_url=repo_html_url,
-                resolved_commit_sha=resolved_commit_sha,
-                pr_html_url=pr_html_url,
-            )
-        )
-        block = _inline_diff_block(result, inline_budget)
-        if block:
-            inline_budget -= len(block)
-            lines.append(block)
+    footer_lines: list[str] = []
     if evidence_patch_name:
-        lines.extend([
+        footer_lines.extend([
             "",
             f"Full AI edit trace: workflow artifact `{evidence_patch_name}`.",
         ])
     if resolved_commit_sha and repo_html_url:
-        lines.extend([
+        footer_lines.extend([
             "",
             f"Full backport commit diff: "
             f"[commit {resolved_commit_sha[:12]}]"
             f"({repo_html_url}/commit/{resolved_commit_sha}).",
         ])
+
+    # The whole body is capped, not just inline diffs: bullets, paths and
+    # links for hundreds of files can breach GitHub's limit on their own.
+    # Files that do not fit collapse into one explicit count line.
+    used = len("\n".join(lines)) + len("\n".join(footer_lines)) + 120
+    inline_budget = _MAX_INLINE_DIFF_TOTAL
+    for index, result in enumerate(results):
+        bullet = _file_line(
+            result,
+            repo_html_url=repo_html_url,
+            resolved_commit_sha=resolved_commit_sha,
+            pr_html_url=pr_html_url,
+        )
+        remaining_files = len(results) - index
+        if used + len(bullet) > _MAX_COMMENT_CHARS - 120:
+            file_word = "file" if remaining_files == 1 else "files"
+            lines.append(
+                f"- ... and {remaining_files} more AI-edited {file_word} - "
+                "see the full commit diff below."
+            )
+            break
+        lines.append(bullet)
+        used += len(bullet) + 1
+        block = _inline_diff_block(
+            result,
+            min(inline_budget, _MAX_COMMENT_CHARS - 120 - used),
+        )
+        if block:
+            inline_budget -= len(block)
+            used += len(block) + 1
+            lines.append(block)
+    lines.extend(footer_lines)
     lines.extend([
         "",
         "> Please review these AI resolutions for correctness before merging.",

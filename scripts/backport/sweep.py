@@ -458,9 +458,12 @@ def _process_branch(
 
                 repair_resolutions = list(validation_outcome.resolutions)
                 if repair_resolutions:
+                    repair_sha = head_sha(tmpdir)
+                    for resolution in repair_resolutions:
+                        resolution.commit_sha = repair_sha
                     candidate_result.resolutions.extend(repair_resolutions)
                     candidate_result.resolved_by_ai = True
-                    candidate_result.resolved_commit_sha = head_sha(tmpdir)
+                    candidate_result.resolved_commit_sha = repair_sha
                     if validation_outcome.ai_summary:
                         candidate_result.ai_summary = validation_outcome.ai_summary
                     if DETAIL_RESOLVED_BY_AI not in candidate_result.detail:

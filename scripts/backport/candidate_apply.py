@@ -220,6 +220,8 @@ def apply_candidate(
                 run_process=run_process,
             )
             result.resolved_commit_sha = amended_sha
+            for resolution in result.resolutions:
+                resolution.commit_sha = amended_sha
     except Exception as exc:  # noqa: BLE001 - never strand a partial candidate
         detail = f"unexpected failure while applying: {str(exc)[:300]}"
         worktree_restored = True
@@ -532,6 +534,8 @@ def _apply_plan(
             )
 
     adapted_by_ai = bool(test_adaptation.adapted_paths)
+    if test_adaptation.resolutions:
+        state.resolutions.extend(test_adaptation.resolutions)
     detail_parts: list[str] = []
     if _has_llm_resolutions(resolutions):
         detail_parts.append(DETAIL_RESOLVED_BY_AI)

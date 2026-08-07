@@ -55,6 +55,10 @@ class ResolutionResult:
     resolved_content: str | None  # None = resolution failed
     resolution_summary: str
     source: ResolutionSource = "llm"
+    # The commit on the target branch that carries this resolution. Set once
+    # the commit exists; diff comments link each file into the right commit
+    # when a candidate spans several (cherry-pick + validation repair).
+    commit_sha: str | None = None
     resolution_diff: str | None = None
     reviewer_diff: str | None = None
     llm_summary: str | None = None
