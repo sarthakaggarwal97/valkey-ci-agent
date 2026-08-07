@@ -14,6 +14,7 @@ import pytest
 
 from scripts.common.proc import git_output, run_git
 from scripts.release_notes import main as main_mod
+from scripts.release_notes import projects as projects_mod
 from scripts.release_notes.main import main
 
 # Every RELEASE_NOTES_* env var main() reads as an argparse default. The
@@ -472,19 +473,19 @@ class TestValidateReleaseTarget:
     def test_patch_target_advances_current_release(self, tmp_path):
         repo = self._repo(tmp_path, "8.1.8")
         run_git(str(repo), "tag", "8.1.8")
-        main_mod._validate_release_target(str(repo), "main", "8.1.9", "ga")
+        main_mod._validate_release_target(str(repo), "main", "8.1.9", "ga", projects_mod.VALKEY_PROFILE)
 
     def test_rejects_downgrade_before_cut(self, tmp_path):
         repo = self._repo(tmp_path, "8.1.8")
         run_git(str(repo), "tag", "8.1.8")
         with pytest.raises(ValueError, match="newer than the branch's current state"):
-            main_mod._validate_release_target(str(repo), "main", "8.1.7", "ga")
+            main_mod._validate_release_target(str(repo), "main", "8.1.7", "ga", projects_mod.VALKEY_PROFILE)
 
     def test_rejects_already_tagged_target(self, tmp_path):
         repo = self._repo(tmp_path, "9.1.0", "rc1")
         run_git(str(repo), "tag", "9.1.0-rc2")
         with pytest.raises(ValueError, match="existing tag '9.1.0-rc2'"):
-            main_mod._validate_release_target(str(repo), "main", "9.1.0", "rc2")
+            main_mod._validate_release_target(str(repo), "main", "9.1.0", "rc2", projects_mod.VALKEY_PROFILE)
 
 
 # --- baseline glob / base-ref resolution ---

@@ -8,6 +8,7 @@ import shutil
 import pytest
 
 from scripts.release_notes import pipeline as pipeline_mod
+from scripts.release_notes import projects
 from scripts.release_notes.models import (
     CategorizedBullet,
     DiscoveryResult,
@@ -57,7 +58,7 @@ def _all_lines(grouped):
 
 def test_empty_range(monkeypatch, clone):
     _patch(monkeypatch, prs=())
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.had_prs is False
     assert r.grouped == {}
 
@@ -66,7 +67,7 @@ def test_generates_and_renders(monkeypatch, clone):
     prs = (MergedPR(number=40, title="t", author="a", url="u", labels=("release-notes",)),)
     _patch(monkeypatch, prs=prs,
            bullets=(CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix"),))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.had_prs and r.included == 1 and r.bullet_count == 1
     assert r.grouped["Bug Fixes"] == ["* fix by @a (#40)"]
 
@@ -90,7 +91,7 @@ def test_contributor_authors_exclude_bots_and_unresolved_backports(
     )
 
     result = pipeline_mod.regenerate_unreleased(
-        object(), clone, head_ref="9.1", tag_glob=None
+        object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE
     )
 
     assert result.pr_authors == ("original-author",)
@@ -100,7 +101,7 @@ def test_undecided_candidate_surfaced_as_triage(monkeypatch, clone):
     # A label-less PR AI triage returns no verdict for falls back to human triage.
     prs = (MergedPR(number=50, title="untagged", author="z", url="u", labels=()),)
     _patch(monkeypatch, prs=prs)  # default stub leaves all candidates undecided
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert [p.number for p in r.triage] == [50]
     assert r.ai_included == () and r.ai_excluded == ()
     assert r.included == 0
@@ -114,7 +115,7 @@ def test_ai_included_candidate_generates_a_bullet(monkeypatch, clone):
            bullets=(CategorizedBullet(pr_number=50, author="z", category="Bug Fixes", text="fix"),),
            triage_result=TriageResult(included=(
                TriageDecision(pr_number=50, included=True, reason="adds CONFIG x"),)))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.included == 1 and r.bullet_count == 1
     assert r.grouped["Bug Fixes"] == ["* fix by @z (#50)"]
     assert [(p.number, p.reason, p.included) for p in r.ai_included] == [(50, "adds CONFIG x", True)]
@@ -128,7 +129,7 @@ def test_ai_excluded_candidate_dropped_and_surfaced(monkeypatch, clone):
     _patch(monkeypatch, prs=prs,
            triage_result=TriageResult(excluded=(
                TriageDecision(pr_number=51, included=False, reason="internal refactor"),)))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.included == 0 and r.bullet_count == 0
     assert [(p.number, p.reason) for p in r.ai_excluded] == [(51, "internal refactor")]
     assert r.ai_included == () and r.triage == ()
@@ -161,7 +162,7 @@ def test_guardrail_included_candidate_is_separate_from_ai_included(monkeypatch, 
         )),
     )
     result = pipeline_mod.regenerate_unreleased(
-        object(), clone, head_ref="9.1", tag_glob=None
+        object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE
     )
     assert [pr.number for pr in result.guardrail_included] == [52]
     assert result.ai_included == ()
@@ -192,7 +193,7 @@ def test_labelled_risky_pr_still_surfaces_for_urgency_review(monkeypatch, clone)
         ),
     )
     result = pipeline_mod.regenerate_unreleased(
-        object(), clone, head_ref="9.1", tag_glob=None
+        object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE
     )
     assert [impact.number for impact in result.impact_review] == [53]
     assert result.guardrail_included == ()
@@ -204,7 +205,7 @@ def test_labelled_pr_bypasses_triage(monkeypatch, clone):
     prs = (MergedPR(number=40, title="t", author="a", url="u", labels=("release-notes",)),)
     _patch(monkeypatch, prs=prs,
            bullets=(CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix"),))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.included == 1 and r.bullet_count == 1
     assert r.ai_included == () and r.ai_excluded == () and r.triage == ()
 
@@ -253,7 +254,7 @@ def test_diff_collector_sees_hard_excluded_peers(monkeypatch, clone):
     monkeypatch.setattr(pipeline_mod, "PRDiffCollector", recording_collector)
 
     pipeline_mod.regenerate_unreleased(
-        object(), clone, head_ref="9.1", tag_glob=None
+        object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE
     )
 
     assert seen == [40, 41]
@@ -275,7 +276,7 @@ def test_unresolved_backports_passthrough(monkeypatch, clone):
     )
     monkeypatch.setattr(pipeline_mod.generate_mod, "generate",
                         lambda *a, **k: GenerationResult(bullets=(), skipped=()))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert [b.number for b in r.unresolved_backports] == [500]
 
 
@@ -295,7 +296,7 @@ def test_unresolved_cherry_picks_passthrough(monkeypatch, clone):
     )
     monkeypatch.setattr(pipeline_mod.generate_mod, "generate",
                         lambda *a, **k: GenerationResult(bullets=(), skipped=()))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert [c.number for c in r.unresolved_cherry_picks] == [80]
 
 
@@ -305,7 +306,7 @@ def test_no_usable_bullets_yields_empty_grouped(monkeypatch, clone):
     # keys on to refuse the cut.
     prs = (MergedPR(number=40, title="t", author="a", url="u", labels=("release-notes",)),)
     _patch(monkeypatch, prs=prs, bullets=(), skipped=(40,))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.bullet_count == 0
     assert r.grouped == {}
 
@@ -320,7 +321,7 @@ def test_reserved_only_bullets_count_as_zero(monkeypatch, clone):
     _patch(monkeypatch, prs=prs, bullets=(
         CategorizedBullet(pr_number=40, author="a", category="Security Fixes", text="hallucinated"),
     ))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.bullet_count == 0        # the reserved-category bullet was dropped, not rendered
     assert r.grouped == {}
     # The dropped PR is folded into skipped so the cut's PR body names it; the
@@ -340,7 +341,7 @@ def test_reserved_dropped_pr_folded_into_skipped_others_render(monkeypatch, clon
         CategorizedBullet(pr_number=40, author="a", category="Security Fixes", text="dropped"),
         CategorizedBullet(pr_number=41, author="b", category="Bug Fixes", text="kept"),
     ))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.bullet_count == 1
     assert r.skipped == (40,)
     assert any("kept" in line for line in _all_lines(r.grouped))
@@ -354,7 +355,7 @@ def test_duplicate_pr_bullets_deduped_and_recorded(monkeypatch, clone):
         CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="first"),
         CategorizedBullet(pr_number=40, author="a", category="New Features", text="second"),
     ))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.bullet_count == 1            # second dropped
     assert r.duplicate_prs == (40,)
     lines = _all_lines(r.grouped)
@@ -371,7 +372,7 @@ def test_reserved_bullet_does_not_shadow_real_note(monkeypatch, clone):
         CategorizedBullet(pr_number=40, author="a", category="Security Fixes", text="reserved"),
         CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="real note"),
     ))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.bullet_count == 1
     assert any("real note" in line for line in _all_lines(r.grouped))
     assert not any("reserved" in line for line in _all_lines(r.grouped))
@@ -389,7 +390,7 @@ def test_all_reserved_multi_bullet_pr_declined_not_duplicate(monkeypatch, clone)
         CategorizedBullet(pr_number=40, author="a", category="Security Fixes", text="one"),
         CategorizedBullet(pr_number=40, author="a", category="Contributors", text="two"),
     ))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.bullet_count == 0
     assert r.skipped == (40,)         # rendered nowhere -> declined
     assert r.duplicate_prs == ()      # not also flagged as a duplicate
@@ -403,7 +404,7 @@ def test_uncertain_bullet_surfaced(monkeypatch, clone):
         CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix",
                           uncertain=True, uncertain_reason="could be Behavior Changes"),
     ))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.bullet_count == 1
     assert [(n.pr_number, n.category, n.reason) for n in r.uncertain] == [
         (40, "Bug Fixes", "could be Behavior Changes")
@@ -415,7 +416,7 @@ def test_confident_bullets_produce_no_uncertain_notes(monkeypatch, clone):
     _patch(monkeypatch, prs=prs, bullets=(
         CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix"),
     ))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.uncertain == ()
 
 
@@ -428,7 +429,7 @@ def test_uncertain_dropped_bullet_not_surfaced(monkeypatch, clone):
         CategorizedBullet(pr_number=40, author="a", category="Security Fixes", text="dropped",
                           uncertain=True, uncertain_reason="should not surface"),
     ))
-    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
+    r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.grouped == {}
     assert r.uncertain == ()
 

@@ -68,19 +68,24 @@ def is_reserved_category(category: str) -> bool:
 
 def group_bullets(
     bullets: Sequence[CategorizedBullet],
+    categories: Sequence[str] | None = None,
 ) -> dict[str, list[str]]:
     """Group bullets into ``{category: [rendered line, ...]}``.
 
-    Non-canonical categories are coerced into the catch-all. Bullets under
-    reserved sections (Security Fixes, Contributors) are refused and logged.
-    Output keys are in CATEGORIES order.
+    *categories* is the profile's canonical list (defaulting to the core
+    CATEGORIES). Non-canonical categories are coerced into the catch-all.
+    Bullets under reserved sections (Security Fixes, Contributors) are refused
+    and logged. Output keys are in *categories* order.
     """
+    ordered_categories: Sequence[str] = (
+        _release_format.CATEGORIES if categories is None else categories
+    )
     reserved = _reserved_sections()
-    canonical = set(_release_format.CATEGORIES)
+    canonical = set(ordered_categories)
     # Fallback if CATCH_ALL_CATEGORY were edited off-list.
     catch_all = _release_format.CATCH_ALL_CATEGORY
     if catch_all not in canonical:
-        catch_all = _release_format.CATEGORIES[-1]
+        catch_all = ordered_categories[-1]
     grouped: dict[str, list[str]] = {}
     for bullet in bullets:
         category = _one_line(bullet.category)
@@ -100,7 +105,7 @@ def group_bullets(
 
     # Emit in canonical order.
     ordered: dict[str, list[str]] = {}
-    for name in _release_format.CATEGORIES:
+    for name in ordered_categories:
         if grouped.get(name):
             ordered[name] = grouped[name]
     return ordered

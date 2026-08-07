@@ -16,7 +16,7 @@ from typing import Any
 
 from scripts.release_notes import discover as discover_mod
 from scripts.release_notes import generate as generate_mod
-from scripts.release_notes import release_format as release_format_mod
+from scripts.release_notes import projects as projects_mod
 from scripts.release_notes import render as render_mod
 from scripts.release_notes import triage as triage_mod
 from scripts.release_notes.ai_inputs import PRDiffCollector
@@ -71,6 +71,7 @@ def regenerate_unreleased(
     repo: Any, clone_dir: str, *, head_ref: str, tag_glob: str | None,
     base_ref: str | None = None, release_branch: str | None = None,
     patch_release: bool = False,
+    profile: projects_mod.ProjectProfile,
 ) -> RegenResult:
     """Discover the range, triage PRs without ``release-notes``, and generate bullets.
 
@@ -79,8 +80,9 @@ def regenerate_unreleased(
     run through AI triage (see :mod:`scripts.release_notes.triage`) and the ones
     judged user-facing join generation. ``base_ref`` overrides tag-based baseline
     resolution. ``release_branch`` binds trusted sweep manifests to the active M.m
-    line. Returns a RegenResult whose ``grouped`` map the cut caller renders into a
-    dated section, plus the AI include/exclude decisions for the PR body.
+    line. ``profile`` carries the target repository's categories and prompt
+    wording. Returns a RegenResult whose ``grouped`` map the cut caller renders
+    into a dated section, plus the AI include/exclude decisions for the PR body.
     """
     discovery = discover_mod.discover(
         repo, clone_dir, head_ref, tag_glob=tag_glob, base_ref=base_ref,
@@ -122,6 +124,7 @@ def regenerate_unreleased(
         repo_dir=clone_dir,
         base_ref=discovery.base_tag,
         diff_collector=diff_collector,
+        project_description=profile.prompt_description,
     )
 
     # Join each verdict back to its PR facts for the body, and collect the PRs the
@@ -159,13 +162,15 @@ def regenerate_unreleased(
     gen = generate_mod.generate(
         include,
         repo_dir=clone_dir,
-        categories=release_format_mod.CATEGORIES,
+        categories=profile.categories,
         diff_collector=diff_collector,
         patch_release=patch_release,
+        project_description=profile.prompt_description,
+        category_guidance=profile.category_guidance,
     )
     # Keep one bullet per PR; prefer a renderable bullet over a reserved-category one.
     bullets, duplicate_prs = _dedup_bullets_by_pr(gen.bullets)
-    grouped = render_mod.group_bullets(bullets)
+    grouped = render_mod.group_bullets(bullets, categories=profile.categories)
 
     # Only report uncertainty for bullets that survive into grouped.
     rendered_prs = {

@@ -272,3 +272,163 @@ class TestRenderReleaseNotes:
         assert out.rstrip().endswith(
             "### Contributors\n* Amy @amy\n* Bob @bob\n* Cara @cara"
         )
+
+
+class TestModuleRepoRendering:
+    """Display-name-parameterized rendering for the module repos."""
+
+    def test_module_heading_and_urgency_sentence(self) -> None:
+        out = rf.render_version_section(
+            "1.2.0", "ga", "LOW", "2026-06-02", {"Bug Fixes": ["* fix (#1)"]},
+            display_name="Valkey Search",
+        )
+        assert "Valkey Search 1.2.0 GA  -  Released Tue 02 June 2026" in out
+        assert "This is the first stable release of Valkey Search 1.2." in out
+
+    def test_module_rc_heading(self) -> None:
+        out = rf.render_version_section(
+            "1.2.0", "rc1", "LOW", "2026-06-02", {"Bug Fixes": ["* fix (#1)"]},
+            display_name="Valkey Search",
+        )
+        assert "Valkey Search 1.2.0-rc1  -  Released Tue 02 June 2026" in out
+        assert "This is the first release candidate of Valkey Search 1.2.0." in out
+
+    def test_profile_categories_control_section_order(self) -> None:
+        out = rf.render_version_section(
+            "1.2.0", "ga", "LOW", "2026-06-02",
+            {"Bug Fixes": ["* fix (#1)"], "Behavior Changes": ["* change (#2)"]},
+            display_name="Valkey Search",
+            categories=("Behavior Changes", "Bug Fixes", "Other Changes"),
+        )
+        assert out.index("### Behavior Changes") < out.index("### Bug Fixes")
+
+    def test_prior_module_history_preserved(self) -> None:
+        # Regression: with the fixed "Valkey M.m.p" splitter, a module heading
+        # like "Valkey Search 1.2.1" never matched and the ENTIRE prior
+        # changelog was silently dropped from the render.
+        prior = (
+            "Valkey Search 1.2 release notes\n"
+            "===============================\n\n"
+            "Valkey Search 1.2.1 GA - Released Tue 07 July 2026\n"
+            "--------------------------------------------------\n\n"
+            "* Fixed a race condition (#1079)\n"
+        )
+        out = rf.render_release_notes(
+            {"Bug Fixes": ["* new fix (#1300)"]},
+            version="1.2.2", stage="ga", urgency="LOW", date="2026-08-06",
+            prior_text=prior, contributors=[],
+            display_name="Valkey Search",
+        )
+        assert "Valkey Search 1.2.1 GA - Released Tue 07 July 2026" in out
+        assert "* Fixed a race condition (#1079)" in out
+        assert out.index("Valkey Search 1.2.2") < out.index("Valkey Search 1.2.1 GA")
+
+    def test_default_display_name_still_drops_foreign_headings(self) -> None:
+        # Core behavior is unchanged: prior text without a "Valkey M.m.p"
+        # heading contributes no dated sections.
+        out = rf.render_release_notes(
+            {"Bug Fixes": ["* fix (#1)"]},
+            version="9.1.1", stage="ga", urgency="LOW", date="2026-08-06",
+            prior_text="Some unrelated placeholder text\n", contributors=[],
+        )
+        assert "placeholder" not in out
+
+
+class TestLegacyContributorMigration:
+    """First automated cut on a pre-tool changelog must absorb the hand-written
+    Contributors block into the cumulative footer — not strand it in history
+    beside a second, incomplete footer (review finding on PR #44)."""
+
+    # Golden input mirroring valkey-search's real 1.2 file shape: title,
+    # dated sections, and a trailing ====-boxed comma-separated block.
+    _SEARCH_STYLE = (
+        "Valkey Search 1.2 release notes\n"
+        "===============================\n\n"
+        "================================================================================\n"
+        "Valkey Search 1.2.1 GA - Released Tue 07 July 2026\n"
+        "================================================================================\n\n"
+        "* Fixed a race condition (#1079)\n\n"
+        "================================================================================\n"
+        "Contributors\n"
+        "================================================================================\n\n"
+        "@yairgott, @murphyjacob4, @KarthikSubbarao\n"
+    )
+
+    def test_golden_search_cut_produces_one_cumulative_footer(self) -> None:
+        out = rf.render_release_notes(
+            {"Bug Fixes": ["* new fix by @newperson (#1300)"]},
+            version="1.2.2", stage="ga", urgency="LOW", date="2026-08-06",
+            prior_text=self._SEARCH_STYLE,
+            contributors=["New Person @newperson"],
+            display_name="Valkey Search",
+        )
+        # Exactly one Contributors section, the modern footer.
+        assert out.count("Contributors") == 1
+        footer = out[out.index("### Contributors"):]
+        # Legacy handles absorbed, new contributor merged.
+        for name in ("@yairgott", "@murphyjacob4", "@KarthikSubbarao",
+                     "New Person @newperson"):
+            assert name in footer
+        # The legacy block is gone from the history; the dated history is not.
+        assert "Valkey Search 1.2.1 GA - Released Tue 07 July 2026" in out
+        assert "* Fixed a race condition (#1079)" in out
+
+    def test_absorbed_handle_upgraded_by_full_identity_on_a_later_cut(self) -> None:
+        first = rf.render_release_notes(
+            {"Bug Fixes": ["* fix (#1)"]},
+            version="1.2.2", stage="ga", urgency="LOW", date="2026-08-06",
+            prior_text=self._SEARCH_STYLE, contributors=[],
+            display_name="Valkey Search",
+        )
+        second = rf.render_release_notes(
+            {"Bug Fixes": ["* fix (#2)"]},
+            version="1.2.3", stage="ga", urgency="LOW", date="2026-09-01",
+            prior_text=first, contributors=["Yair Gott @yairgott"],
+            display_name="Valkey Search",
+        )
+        footer = second[second.index("### Contributors"):]
+        assert "Yair Gott @yairgott" in footer
+        assert footer.count("@yairgott") == 1  # replaced, not duplicated
+
+    def test_underlined_header_with_bullet_names(self) -> None:
+        prior = (
+            "Contributors\n------------\n\n"
+            "* Jane Doe @jane\n* @bob\n"
+        )
+        body, names = rf._split_legacy_contributors_block(prior)
+        assert names == ["Jane Doe @jane", "@bob"]
+        assert "Contributors" not in body
+
+    def test_unrecognized_prose_fails_closed(self) -> None:
+        prior = (
+            "Contributors\n============\n\n"
+            "Thanks to everyone who reported issues this cycle.\n"
+        )
+        body, names = rf._split_legacy_contributors_block(prior)
+        assert names == []
+        assert body == prior  # untouched: never mangle what we cannot parse
+
+    def test_bare_contributors_prose_line_is_not_a_header(self) -> None:
+        prior = "See the list of\nContributors\nin the wiki.\n"
+        body, names = rf._split_legacy_contributors_block(prior)
+        assert names == []
+        assert body == prior
+
+    def test_name_only_coauthor_merges_with_its_handle(self) -> None:
+        # Live dry-run finding: a co-author trailer with no resolvable login
+        # ("KarthikSubbarao") must merge with the "@KarthikSubbarao" handle
+        # entry, keeping the handled identity; spaced names merge too.
+        footer = rf.render_contributors_footer(
+            ["@KarthikSubbarao", "KarthikSubbarao", "Karthik Subbarao"]
+        )
+        assert footer.count("KarthikSubbarao") == 1
+        assert "* @KarthikSubbarao" in footer
+
+    def test_modern_footer_takes_precedence_over_legacy_remnant(self) -> None:
+        text = (
+            "Contributors\n============\n\n@old\n\n"
+            "### Contributors\n* New Person @new\n"
+        )
+        body, names = rf._split_contributors_footer(text)
+        assert names == ["New Person @new"]
+        assert "@old" in body  # legacy remnant stays in body once modern exists
