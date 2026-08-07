@@ -29,9 +29,11 @@ on:
       AWS_ROLE_ARN:
         required: true
       VALKEYRIE_BOT_APP_ID:
-        required: true
+        required: false
       VALKEYRIE_BOT_PRIVATE_KEY:
-        required: true
+        required: false
+      VALKEY_GITHUB_TOKEN:
+        required: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -89,19 +91,18 @@ jobs:
         with:
           install-claude: "true"
 
-      - name: Generate GitHub App token
+      # citest: fork has no GitHub App installation; use the fork-test PAT
+      # secret that the May-era rig used. Throwaway change, not for merge.
+      - name: Use fork-test PAT
         id: generate-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ steps.called-workflow.outputs.target-owner }}
-          repositories: ${{ steps.called-workflow.outputs.target-repository }}
-          permission-contents: write
-          permission-workflows: write
-          permission-pull-requests: write
-          permission-issues: write
-          permission-metadata: read
+        env:
+          VALKEY_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+        run: |
+          if [ -z "${VALKEY_GITHUB_TOKEN}" ]; then
+            echo "::error::VALKEY_GITHUB_TOKEN secret is not set on this fork"
+            exit 1
+          fi
+          echo "token=${VALKEY_GITHUB_TOKEN}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials from OIDC role
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
