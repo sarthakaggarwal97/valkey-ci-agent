@@ -38,8 +38,11 @@ def build_matrix(
         for branch_entry in repo_entry.branches:
             if project_number_filter is not None and branch_entry.project_number != project_number_filter:
                 continue
+            repo_owner, repo_name = repo_entry.repo.split("/", 1)
             entries.append({
                 "repo": repo_entry.repo,
+                "repo_owner": repo_owner,
+                "repo_name": repo_name,
                 "repo_slug": repo_entry.repo.replace("/", "-"),
                 "project_owner": repo_entry.project_owner,
                 "project_owner_type": repo_entry.project_owner_type,
