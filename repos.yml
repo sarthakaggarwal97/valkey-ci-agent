@@ -1,48 +1,9 @@
+# Throwaway registry for live runner testing. Not for merge.
 repos:
-  - repo: valkey-io/valkey
-    project_owner: valkey-io
-    project_owner_type: organization
-    language: c
-    build_commands:
-      - "make -j$(nproc)"
-    repair_validation_failures: true
-    backport_label: backport
-    llm_conflict_label: ai-resolved-conflicts
-    max_conflicting_files: 100
+  - repo: "sarthakaggarwal97/valkey"
+    project_owner: "sarthakaggarwal97"
+    project_owner_type: "user"
+    language: "c"
     branches:
-      - branch: "7.2"
-        project_number: 1
-      - branch: "8.0"
-        project_number: 2
-      - branch: "8.1"
-        project_number: 14
-      - branch: "9.0"
-        project_number: 18
-      - branch: "9.1"
-        project_number: 41
-
-  - repo: valkey-io/valkey-search
-    project_owner: valkey-io
-    project_owner_type: organization
-    language: c++
-    # Use the upstream devcontainer image because release branches depend on
-    # its system packages; --privileged mirrors the repository's CI container.
-    validation_setup_commands:
-      - "docker build -t valkey-search-backport -f .devcontainer/Dockerfile ."
-    build_commands:
-      - "docker run --privileged --rm -v \"$(pwd):/workspace\" --user \"ubuntu:ubuntu\" valkey-search-backport sudo ci/build_ubuntu.sh"
-    test_path_patterns:
-      - "testing/*.cc"
-      - "vmsdk/testing/*.cc"
-      - "integration/test_*.py"
-    repair_validation_failures: true
-    backport_label: backport
-    llm_conflict_label: ai-resolved-conflicts
-    max_conflicting_files: 100
-    branches:
-      - branch: "1.0"
-        project_number: 36
-      - branch: "1.1"
-        project_number: 34
-      - branch: "1.2"
-        project_number: 58
+      - branch: "citest-8.1"
+        project_number: 0
