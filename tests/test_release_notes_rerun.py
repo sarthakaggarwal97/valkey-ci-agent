@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 from scripts.common.proc import git_output, run_git
 from scripts.release_notes import pipeline as pipeline_mod
+from scripts.release_notes import projects
 from scripts.release_notes import release_cut as cut_mod
 from scripts.release_notes.models import CategorizedBullet, GenerationResult
 
@@ -38,7 +39,7 @@ def _cut(repo: MagicMock, clone_dir: str) -> int:
         repo,
         repo_full_name="valkey-io/valkey",
         source_clone_dir=clone_dir,
-        valkey_clone_dir=clone_dir,
+        profile=projects.VALKEY_PROFILE,
         version="9.1.0",
         stage="rc1",
         urgency="LOW",

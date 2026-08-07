@@ -1,9 +1,10 @@
 """Entry point for the AI release-notes cut.
 
-Clones valkey with full tags, discovers PRs in the range (HEAD back to the
-previous tag), directly includes `release-notes` PRs, AI-triages the rest,
-generates bullets via Claude/Bedrock, renders the dated section + version.h bump
-+ contributor list, and opens a PR.
+Clones the target repo with full tags, discovers PRs in the range (HEAD back to
+the previous tag), directly includes `release-notes` PRs, AI-triages the rest,
+generates bullets via Claude/Bedrock, renders the dated section + version bump
++ contributor list, and opens a PR. Supported repositories and their
+conventions live in scripts.release_notes.projects.
 Returns 0 on success, 1 on failure, 2 on usage error.
 """
 
@@ -29,6 +30,7 @@ from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
 from scripts.common.proc import git_output, run_git
 from scripts.release_notes import discover as discover_mod
+from scripts.release_notes import projects as projects_mod
 from scripts.release_notes import release_cut as cut_mod
 
 logger = logging.getLogger(__name__)
@@ -154,6 +156,13 @@ def main(argv: list[str] | None = None) -> int:
 
     base_ref = args.base_ref or None
 
+    # Resolve the target repository's release conventions up front so an
+    # unsupported repo fails before the expensive clone + AI run.
+    try:
+        profile = projects_mod.profile_for(args.repo)
+    except ValueError as exc:
+        parser.error(str(exc))
+
     # rc1 baseline is resolved from the repo's tags after clone (no same-version RC to anchor to).
     resolve_rc1_baseline = stage == "rc1" and base_ref is None and not args.tag_glob
 
@@ -175,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             force_ready=args.force_ready,
             resolve_rc1_baseline=resolve_rc1_baseline,
+            profile=profile,
         )
     except subprocess.CalledProcessError as exc:
         stderr = (exc.stderr or "").strip()
@@ -284,6 +294,7 @@ def _run_cut(
     dry_run: bool,
     force_ready: bool = False,
     resolve_rc1_baseline: bool = False,
+    profile: projects_mod.ProjectProfile,
 ) -> int:
     gh = Github(auth=Auth.Token(token))
     repo = retry_github_call(
@@ -301,7 +312,7 @@ def _run_cut(
             run_git(None, "clone", "--branch", source_ref, github_https_url(repo_full_name),
                     clone_dir, env=git_env)
             run_git(clone_dir, "fetch", "--tags", "origin", env=git_env)
-            _validate_release_target(clone_dir, source_ref, version, stage)
+            _validate_release_target(clone_dir, source_ref, version, stage, profile)
             if base_ref:
                 _validate_base_ref(clone_dir, base_ref)
                 _warn_if_base_ref_reaches_past_previous_release(
@@ -329,7 +340,6 @@ def _run_cut(
                 repo,
                 repo_full_name=repo_full_name,
                 source_clone_dir=clone_dir,
-                valkey_clone_dir=clone_dir,
                 version=version, stage=stage, urgency=urgency, date=resolved_date,
                 tag_glob=tag_glob,
                 base_ref=base_ref, contrib_base_ref=contrib_base_ref,
@@ -337,17 +347,24 @@ def _run_cut(
                 token=token, git_env=git_env, dry_run=dry_run,
                 force_ready=force_ready,
                 baseline_unanchored=baseline_unanchored,
+                profile=profile,
             )
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)
 
 
 def _validate_release_target(
-    clone_dir: str, source_ref: str, version: str, stage: str
+    clone_dir: str,
+    source_ref: str,
+    version: str,
+    stage: str,
+    profile: projects_mod.ProjectProfile,
 ) -> None:
     """Fail before AI work if the requested release does not advance the line."""
-    version_h = Path(clone_dir, cut_mod.VERSION_FILE).read_text(encoding="utf-8")
-    cut_mod.validate_release_progression(version_h, version, stage)
+    version_text = cut_mod._read_version_file(clone_dir, profile)
+    cut_mod.validate_release_progression(
+        version_text, version, stage, bumper=profile.bumper
+    )
     discover_mod.validate_target_release_tag(
         clone_dir, source_ref, version, stage
     )

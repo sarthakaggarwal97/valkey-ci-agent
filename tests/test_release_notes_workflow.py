@@ -22,7 +22,12 @@ def _workflow(path: Path) -> dict:
 def test_simple_dispatch_exposes_only_normal_release_decisions() -> None:
     inputs = _workflow(_SIMPLE)["on"]["workflow_dispatch"]["inputs"]
 
-    assert list(inputs) == ["version", "stage", "urgency", "dry_run"]
+    assert list(inputs) == ["repo", "version", "stage", "urgency", "dry_run"]
+    assert inputs["repo"]["required"] == "true"
+    assert inputs["repo"]["default"] == "valkey"
+    assert inputs["repo"]["options"] == [
+        "valkey", "valkey-search", "valkey-json", "valkey-bloom",
+    ]
     assert inputs["version"]["required"] == "true"
     assert inputs["stage"]["required"] == "false"
     assert inputs["urgency"]["required"] == "true"
@@ -33,6 +38,7 @@ def test_shared_workflow_keeps_advanced_inputs_available() -> None:
     inputs = _workflow(_SIMPLE)["on"]["workflow_call"]["inputs"]
 
     assert set(inputs) == {
+        "repo",
         "version",
         "stage",
         "urgency",
@@ -44,6 +50,7 @@ def test_shared_workflow_keeps_advanced_inputs_available() -> None:
         "force_ready",
         "dry_run",
     }
+    assert inputs["repo"]["default"] == "valkey"
     assert inputs["stage"]["default"] == ""
     assert inputs["dry_run"]["default"] == "true"
 
@@ -54,6 +61,7 @@ def test_advanced_dispatch_delegates_to_the_shared_release_job() -> None:
     job = workflow["jobs"]["cut"]
 
     assert set(inputs) == {
+        "repo",
         "version",
         "stage",
         "urgency",
@@ -76,12 +84,41 @@ def test_advanced_dispatch_delegates_to_the_shared_release_job() -> None:
 def test_release_concurrency_serializes_inferred_and_explicit_ga() -> None:
     concurrency = _workflow(_SIMPLE)["jobs"]["cut"]["concurrency"]
 
-    assert concurrency["group"] == "release-cut-${{ inputs.version }}"
+    assert concurrency["group"] == "release-cut-${{ inputs.repo }}-${{ inputs.version }}"
     assert concurrency["cancel-in-progress"] == "false"
 
 
+def test_repo_gate_runs_before_any_token_is_minted() -> None:
+    # The allowlist must reject a bad repo name before an App token could be
+    # minted for it (defense-in-depth on top of the dispatch choice list).
+    steps = _workflow(_SIMPLE)["jobs"]["cut"]["steps"]
+    names = [step.get("name", "") for step in steps]
+    gate = names.index("Validate target repository")
+    tokens = [i for i, step in enumerate(steps)
+              if "create-github-app-token" in step.get("uses", "")]
+    assert tokens, "expected App token steps in the release job"
+    assert gate < min(tokens)
+
+
+def test_repo_gate_rejects_unsupported_repo(tmp_path) -> None:
+    steps = _workflow(_SIMPLE)["jobs"]["cut"]["steps"]
+    gate = next(s for s in steps if s.get("name") == "Validate target repository")
+    for repo, ok in (("valkey", True), ("valkey-bloom", True),
+                     ("valkey-evil", False), ("", False)):
+        env = os.environ.copy()
+        env["RELEASE_NOTES_TARGET_REPO_NAME"] = repo
+        result = subprocess.run(
+            ["bash", "-c", gate["run"]], env=env, text=True,
+            capture_output=True, check=False,
+        )
+        assert (result.returncode == 0) == ok, (repo, result.stderr)
+        if not ok:
+            assert "Invalid repo" in result.stderr
+
+
 def _run_cut_step(
-    tmp_path: Path, *, version: str, stage: str
+    tmp_path: Path, *, version: str, stage: str, repo: str = "valkey",
+    env_overrides: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], str]:
     capture = tmp_path / "python-invocation"
     fake_bin = tmp_path / "bin"
@@ -89,7 +126,7 @@ def _run_cut_step(
     fake_python = fake_bin / "python"
     fake_python.write_text(
         "#!/bin/sh\n"
-        'printf "%s\\n" "$RELEASE_NOTES_STAGE" "$@" > "$CAPTURE"\n',
+        'printf "%s\\n" "$RELEASE_NOTES_REPO" "$RELEASE_NOTES_STAGE" "$@" > "$CAPTURE"\n',
         encoding="utf-8",
     )
     fake_python.chmod(0o755)
@@ -99,6 +136,9 @@ def _run_cut_step(
         {
             "PATH": f"{fake_bin}:{env['PATH']}",
             "CAPTURE": str(capture),
+            "RELEASE_NOTES_TARGET_REPO_NAME": repo,
+            "RELEASE_NOTES_GITHUB_TOKEN": "dummy-token",
+            "RELEASE_NOTES_DRY_RUN_FALLBACK_TOKEN": "false",
             "RELEASE_NOTES_VERSION": version,
             "RELEASE_NOTES_STAGE": stage,
             "RELEASE_NOTES_BASE_REF": "",
@@ -107,6 +147,7 @@ def _run_cut_step(
             "RELEASE_NOTES_DRY_RUN": "true",
         }
     )
+    env.update(env_overrides or {})
     run_script = _workflow(_SIMPLE)["jobs"]["cut"]["steps"][-1]["run"]
     result = subprocess.run(
         ["bash", "-c", run_script],
@@ -127,11 +168,66 @@ def test_workflow_shell_infers_patch_ga_and_preserves_dry_run(tmp_path) -> None:
 
         assert result.returncode == 0, result.stderr
         assert invocation.splitlines() == [
+            "valkey-io/valkey",
             "ga",
             "-m",
             "scripts.release_notes.main",
             "--dry-run",
         ]
+
+
+def test_workflow_shell_builds_module_repo_full_name(tmp_path) -> None:
+    result, invocation = _run_cut_step(
+        tmp_path, version="1.2.2", stage="", repo="valkey-search"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert invocation.splitlines()[0] == "valkey-io/valkey-search"
+
+
+def test_workflow_shell_fallback_token_refuses_non_dry_run(tmp_path) -> None:
+    # The personal-token fallback (fork testing without App creds) is read-only:
+    # a real publish must never run on it.
+    result, invocation = _run_cut_step(
+        tmp_path, version="1.2.2", stage="", repo="valkey-search",
+        env_overrides={
+            "RELEASE_NOTES_DRY_RUN_FALLBACK_TOKEN": "true",
+            "RELEASE_NOTES_DRY_RUN": "false",
+        },
+    )
+    assert result.returncode != 0
+    assert "Refusing a non-dry-run cut" in result.stderr
+    assert invocation == ""
+
+
+def test_workflow_shell_fallback_token_allows_dry_run(tmp_path) -> None:
+    result, _ = _run_cut_step(
+        tmp_path, version="1.2.2", stage="", repo="valkey-search",
+        env_overrides={"RELEASE_NOTES_DRY_RUN_FALLBACK_TOKEN": "true"},
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_workflow_shell_requires_some_token(tmp_path) -> None:
+    result, invocation = _run_cut_step(
+        tmp_path, version="1.2.2", stage="", repo="valkey-search",
+        env_overrides={"RELEASE_NOTES_GITHUB_TOKEN": ""},
+    )
+    assert result.returncode != 0
+    assert "No token available" in result.stderr
+    assert invocation == ""
+
+
+def test_workflow_shell_rejects_path_shaped_repo_name(tmp_path) -> None:
+    # The cut step re-checks shape only (the allowlist gate ran earlier): a
+    # path-like value must never compose into RELEASE_NOTES_REPO.
+    result, invocation = _run_cut_step(
+        tmp_path, version="1.0.1", stage="", repo="valkey-io/valkey"
+    )
+
+    assert result.returncode != 0
+    assert "Invalid repo" in result.stderr
+    assert invocation == ""
 
 
 def test_workflow_shell_rejects_ambiguous_dot_zero_stage(tmp_path) -> None:

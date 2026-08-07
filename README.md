@@ -29,7 +29,7 @@ New workflows are added as sibling directories to `backport/`. Each workflow pic
 | Fuzzer Monitor | Active | Analyzes scheduled fuzzer runs and files issues for anomalous failures |
 | CI Fix | Active | On-demand `@valkeyrie-bot fix <ci-link>` - diagnoses and fixes a failing test on a backport PR |
 | Test Failure Detector | Active | Detects test failures from Daily CI, files/updates GitHub issues |
-| Release Notes | Active | Cuts a release: AI-generates notes from `release-notes` PRs plus AI-triaged candidates without that label, promotes them onto a release line branch, bumps `src/version.h`, opens a PR (held as a draft when the cut flags issues) |
+| Release Notes | Active | Cuts a release for valkey core or a module repo (search/json/bloom): AI-generates notes from `release-notes` PRs plus AI-triaged candidates without that label, promotes them onto a release line branch, bumps the repo's version file, opens a PR (held as a draft when the cut flags issues) |
 | PR Reviewer | Planned | Two-stage code review with skeptic pass |
 | Additional Daily CI Analysis | Planned | Detects flaky tests, generates fix PRs |
 
@@ -270,26 +270,43 @@ verify step. macOS verification runs once on its dedicated runner.
 
 ## Release Notes Workflow
 
-Cuts a Valkey release in one shot. A maintainer dispatches the target version and
-urgency, plus an explicit stage for `.0` releases; patch versions infer `ga`. The
-agent derives the M.m release line and generates notes from the `release-notes`
+Cuts a release in one shot for valkey core or a module repo (`valkey-search`,
+`valkey-json`, `valkey-bloom`). A maintainer dispatches the target repo, version,
+and urgency, plus an explicit stage for `.0` releases; patch versions infer `ga`.
+The agent derives the M.m release line and generates notes from the `release-notes`
 PRs plus candidates without that label that AI triage judges user-facing (Claude
 via Bedrock). Deterministic release-impact checks keep crash, memory-safety,
 corruption, access-control, protocol, compatibility, and similar fixes from being
 silently excluded by an AI verdict. The agent renders the result onto the
-long-running release line as a dated section, bumps `src/version.h`, refreshes
-the running contributor list, and opens one PR for review (as a draft, holding
-the merge, when the cut flags anything a maintainer should address first; see
-[Edge-case handling](#edge-case-handling)).
+long-running release line as a dated section, bumps the repo's version file,
+refreshes the running contributor list, and opens one PR for review (as a draft,
+holding the merge, when the cut flags anything a maintainer should address first;
+see [Edge-case handling](#edge-case-handling)).
 Nothing accumulates notes on a branch; the notes for a release are generated all
 at once. The release line is changed only when a maintainer merges the generated
 PR.
+
+Per-repo conventions (changelog heading name, version file layout, note
+categories, prompt wording) live in `scripts/release_notes/projects.py`:
+
+| Repo | Version file | Stage recorded |
+|---|---|---|
+| valkey | `src/version.h` (`VALKEY_VERSION` macros) | yes |
+| valkey-search | `src/version.h` (`kModuleVersion` + `MODULE_RELEASE_STAGE`) | yes |
+| valkey-json | `CMakeLists.txt` (`project(... VERSION M.m.p)`) | no |
+| valkey-bloom | `Cargo.toml` (`[package] version`) | no |
+
+For repos whose version file records no stage, tag-based validation remains the
+authoritative check against re-cutting an already-tagged stage. The
+valkey-search 1.0 line (version inline in `src/module_loader.cc`) is not
+supported and fails with a clear error.
 
 The normal dispatch defaults to a read-only preview. For rc1 of a new minor line:
 
 ```bash
 gh workflow run release-notes-cut.yml \
   --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey \
   --field version=9.1.0 \
   --field stage=rc1 \
   --field urgency=LOW
@@ -301,20 +318,24 @@ stages differ only in `stage`; a patch release leaves it empty:
 ```bash
 # Next RC (the 9.1.0-rc1 tag must exist on the 9.1 branch)
 gh workflow run release-notes-cut.yml --repo valkey-io/valkey-ci-agent \
-  --field version=9.1.0 --field stage=rc2 --field urgency=LOW
+  --field repo=valkey --field version=9.1.0 --field stage=rc2 --field urgency=LOW
 
 # GA after the final RC (the last rc tag must exist on the 9.1 branch)
 gh workflow run release-notes-cut.yml --repo valkey-io/valkey-ci-agent \
-  --field version=9.1.0 --field stage=ga --field urgency=LOW
+  --field repo=valkey --field version=9.1.0 --field stage=ga --field urgency=LOW
 
 # Patch GA (the 9.1.0 tag must exist on the 9.1 branch)
 gh workflow run release-notes-cut.yml --repo valkey-io/valkey-ci-agent \
-  --field version=9.1.1 --field urgency=LOW
+  --field repo=valkey --field version=9.1.1 --field urgency=LOW
+
+# Module repo patch GA (the 1.2.1 tag must exist on the 1.2 branch)
+gh workflow run release-notes-cut.yml --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-search --field version=1.2.2 --field urgency=LOW
 ```
 
 After reviewing the preview, repeat the same dispatch with
 `--field dry_run=false` to open or update the release PR. The normal workflow
-exposes only `version`, `stage`, `urgency`, and `dry_run`; `stage` is
+exposes only `repo`, `version`, `stage`, `urgency`, and `dry_run`; `stage` is
 case-insensitive and is required only when the patch component is zero.
 
 If more changes merge into `M.m` while that release PR is open, dispatch the
