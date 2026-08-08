@@ -1,0 +1,45 @@
+# Fork policy registry: used automatically when the release workflows run in
+# a fork (repository owner != valkey-io), so live testing never targets
+# valkey-io repositories or requires the App. Authorization uses the explicit
+# user: form because a personal fork has no organization teams.
+#
+# Downstream repos point at same-owner forks; ones that do not exist simply
+# report verification errors, which is expected — fork testing exercises the
+# flow through publication on the fork.
+repos:
+  - repo: sarthakaggarwal97/valkey
+    authorized_team: user:sarthakaggarwal97
+    branches:
+      - "7.2"
+      - "8.0"
+      - "8.1"
+      - "9.0"
+      - "9.1"
+    required_checks:
+      - test-ubuntu-latest
+      - build-debian-old
+    check_timeout_minutes: 360
+    checks_workflow: ci.yml
+    downstream:
+      automation_repo: sarthakaggarwal97/valkey-release-automation
+      build_workflow: build-release.yml
+      qualification_workflow: qualify-release.yml
+      qualification_rpm_jobs: 30
+      qualification_deb_jobs: 10
+      downloads_base_url: https://download.valkey.io/releases
+      tarball_targets:
+        - jammy/x86_64
+        - noble/x86_64
+        - jammy/arm64
+        - noble/arm64
+      hashes_repo: sarthakaggarwal97/valkey-hashes
+      container_repo: sarthakaggarwal97/valkey-container
+      doc_repo: sarthakaggarwal97/valkey-doc
+      website_repo: sarthakaggarwal97/valkey-io.github.io
+      bundle_repo: sarthakaggarwal97/valkey-bundle
+      helm_repo: sarthakaggarwal97/valkey-helm
+      dockerhub_repo: valkey/valkey
+      bundle_dockerhub_repo: valkey/valkey-bundle
+      ghcr_image_repo: valkey-io/valkey
+      ecr_namespace: valkey
+      helm_index_url: https://valkey.io/valkey-helm/index.yaml

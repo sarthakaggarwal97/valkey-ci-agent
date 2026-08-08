@@ -1,0 +1,70 @@
+# Release policy registry for the release controller.
+#
+# This file is the controller's authority for what is *allowed*: releasable
+# repositories, their release branches, the check runs that must pass on the
+# exact candidate SHA, and the GitHub team whose members may start a release
+# or adopt a moved branch head. Membership is verified live against GitHub at
+# every authorization point; editing an issue or this file's rendered output
+# never authorizes anything.
+#
+# required_checks are check-run names as they appear on commits of the release
+# branch. The list must be non-empty (an empty list would make every candidate
+# trivially ready) and should track the repository's required branch checks.
+# checks_workflow names the workflow file the required runs must come from:
+# check-run names are not unique across workflows (ci.yml and daily.yml share
+# job names such as test-sanitizer-address), so runs from other workflows on
+# the candidate SHA are ignored rather than allowed to satisfy or clobber a
+# requirement.
+# NOTE for maintainers: upstream's active tag ruleset protects [89]*.*.* tags
+# but explicitly EXCLUDES 7.x, although 7.2 is a supported release line here;
+# extending the ruleset (and enabling immutable releases) is cutover hardening.
+repos:
+  - repo: valkey-io/valkey
+    authorized_team: valkey-io/core-team
+    checks_workflow: ci.yml
+    branches:
+      - "7.2"
+      - "8.0"
+      - "8.1"
+      - "9.0"
+      - "9.1"
+    required_checks:
+      - test-ubuntu-latest
+      - test-sanitizer-address
+      - build-debian-old
+      - build-macos-latest
+    # A required check still running after this long is reported STALLED
+    # (blocks like a failure, with a rerun instruction) instead of pending.
+    check_timeout_minutes: 360
+    # Where the release's public outputs live and how to verify them.
+    downstream:
+      automation_repo: valkey-io/valkey-release-automation
+      build_workflow: build-release.yml
+      qualification_workflow: qualify-release.yml
+      # The EXACT package matrix inventory (build legs). Qualification
+      # requires exactly these counts of jobs and usable artifacts: a
+      # platform addition or removal is a deliberate edit here, reviewed
+      # alongside the matrix change; a floor would silently tolerate
+      # losing coverage.
+      qualification_rpm_jobs: 30
+      qualification_deb_jobs: 10
+      downloads_base_url: https://download.valkey.io/releases
+      # <platform>/<arch> pairs the tarball builds publish; must mirror the
+      # automation repo's build-config.json matrix.
+      tarball_targets:
+        - jammy/x86_64
+        - noble/x86_64
+        - jammy/arm64
+        - noble/arm64
+      hashes_repo: valkey-io/valkey-hashes
+      container_repo: valkey-io/valkey-container
+      doc_repo: valkey-io/valkey-doc
+      website_repo: valkey-io/valkey-io.github.io
+      bundle_repo: valkey-io/valkey-bundle
+      helm_repo: valkey-io/valkey-helm
+      dockerhub_repo: valkey/valkey
+      bundle_dockerhub_repo: valkey/valkey-bundle
+      # ECR Public registry alias (public.ecr.aws/<alias>/...).
+      ghcr_image_repo: valkey-io/valkey
+      ecr_namespace: valkey
+      helm_index_url: https://valkey.io/valkey-helm/index.yaml

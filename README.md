@@ -510,6 +510,98 @@ cut, so an ordinary cut is never blocked when the App installation lacks it.
 The App installation must hold `repository-advisories:read` for an advisory cut
 to read the advisories.
 
+## Release Controller
+
+`release-start.yml`, `release-reconcile.yml`, and `release-adopt.yml` drive a
+deterministic release controller (`scripts/release/`) that makes a Valkey
+release one coordinated operation. A release tracking issue shows the live
+state, but the controller recomputes truth from GitHub on every pass — it
+never trusts issue text, so editing the issue changes nothing and authorizes
+nothing.
+
+**Start Release** (`release-start.yml`, manual dispatch) takes only the
+release decision: branch, intent (`rc`/`ga`/`patch`), and urgency. It:
+
+1. Refuses a security/embargoed intent before any API call (break-glass only:
+   no public artifact is ever created for an embargoed release).
+2. Rejects branches not configured in [`release_policy.yml`](release_policy.yml),
+   so a release can never target `unstable` or a mistyped branch.
+3. Verifies the dispatching actor's membership in the policy's authorized
+   team, live against GitHub.
+4. Derives the version deterministically from the branch and existing tags
+   (`rc` → next `M.m.0-rcN`, `ga` → `M.m.0`, `patch` → next `M.m.p`); the
+   operator never types a version.
+5. Creates the tracking issue — or, when a release is already active on the
+   branch, reuses its issue without any writes (one active release per
+   branch; concurrent releases on different branches are fine). A duplicate
+   start whose cut never produced a notes PR *resumes*: the version is
+   re-derived and the cut runs again, so recovery never requires a
+   hand-typed version. A duplicate start after the release shipped fails
+   with an instruction to close the tracker.
+6. Chains into the existing release-notes cut with the derived version and
+   stage.
+
+**Candidate tracking** (`release-reconcile.yml`, hourly + manual): the
+release-notes PR's merge commit becomes the candidate SHA, but only while it
+remains the branch head. The notes PR must live in the upstream repo and be
+newer than the tracker, so a fork PR with a look-alike head branch or a
+previous release's merged notes PR can never bind. Required checks (named in
+the policy) are evaluated against that exact SHA and only runs from the
+policy's `checks_workflow` count — check-run names are not unique across
+workflows, so a `daily.yml` dispatch on the candidate can neither satisfy nor
+clobber a `ci.yml` requirement. The latest run per check wins, so a
+maintainer rerun of a failed job on the same SHA is recognized. If the branch
+moves, the candidate is invalidated and qualification stops until an
+authorized owner dispatches `release-adopt.yml` with the exact new head SHA;
+the acknowledgement is recorded as a bot-authored comment, the only adoption
+record reconciliation trusts. The issue reports readiness only when a valid
+candidate passed every required check — and readiness is a display of
+recomputed state, not an authorization to publish.
+
+**Qualification** (stage 3): once required CI is green on the candidate,
+reconciliation dispatches the automation repo's `qualify-release.yml` with
+the version *and the exact candidate SHA* — a no-publish build of the
+archive and package matrix. Evidence is GitHub-native and re-queried live:
+the run (matched by the SHA embedded in its run-name), its conclusion, its
+job results, and a minimum job count so a truncated matrix can never pass
+vacuously. This is the stage that catches the 7.2.14 pattern — a package
+matrix that cannot build — before any release, tag, or upload exists.
+
+**Protected publication** (stage 4, `release-publish.yml`): publication is
+the flow's only production write and fires valkey's build dispatch, so it
+runs as two jobs. `validate` re-runs every check (candidate, CI,
+qualification, `version.h` at the SHA, release-notes section, tag
+availability, explicit latest-release decision) and renders the exact plan
+into the job summary; `publish` — gated by the protected `release`
+environment with required reviewers — revalidates everything again, requires
+the same tag the approver saw, creates the release at the full candidate
+SHA, and verifies the created tag points at exactly that SHA. `make_latest`
+is always explicit: an old line's patch never steals the latest pointer.
+
+**Observed downstream** (stage 5): after publication, reconciliation
+verifies canonical public artifacts, not workflow success: the build run
+(matched by run-name), every tarball and `.sha256` on downloads, the hashes
+repo entry, the container PR *and* the public Docker Hub tags, docs (tag or
+PR by release type), and the website PR. Failures notify the authorized
+team exactly once per distinct failure state (fingerprinted bot comment;
+an unchanged failure never re-notifies).
+
+**Bundle and Helm ordering** (stage 6): Bundle work is *blocked* until the
+Valkey `-trixie`/`-alpine` base images are public, then dispatched through
+valkey-bundle's own update hook and verified through merge and public
+availability in Docker Hub, GHCR, and ECR. The Helm chart bump (which has no
+upstream automation) is opened by the controller itself — `appVersion`,
+chart patch bump, README badges — only after the chart's default image tag
+is public, and verified through the chart release, and the GHCR OCI chart.
+When every output is verified or not-applicable, the tracking issue closes
+itself.
+
+**Fork operation**: every release workflow falls back to `AUTOMATION_PAT`
+and the [`release_policy.fork.yml`](release_policy.fork.yml) registry when
+running outside valkey-io, so the whole flow is testable end-to-end on a
+fork (authorization uses the explicit `user:<login>` policy form, since a
+personal fork has no teams).
+
 ## Safety
 
 - **Branch namespace** - the agent writes only `agent/backport/...` (backports) and `agent/release-cut/...` (release cuts) branches and opens PRs for maintainer review. It never force-pushes a release line directly.

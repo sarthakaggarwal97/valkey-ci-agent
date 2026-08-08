@@ -392,3 +392,46 @@ Future sibling modules and extensions:
   detects red backport PRs (or test-failure issues) instead of a maintainer
   `@`-mention. Same pipeline, a different front door.
 - **Additional Daily CI Analysis** - detect flaky tests, generate fix PRs
+
+
+## Release controller
+
+Makes a Valkey release one coordinated operation: `scripts/release/` plus the
+`release-start`, `release-reconcile`, `release-adopt`, and `release-publish`
+workflows, with `release_policy.yml` as the authority for what is allowed
+(release branches, required checks and their workflow, the exact package
+qualification inventory, downstream targets, the authorized team).
+
+Design rule: truth is recomputed from GitHub every pass. The tracking issue
+is a display surface and label-pair identity (`release-tracker` +
+`release:<branch>`); nothing is parsed from its body to make a decision, and
+the only trusted comment markers are those authored by the controller's own
+identities. The release decision (version + stage) is pinned by the notes
+PR's head branch (`agent/release-cut/<version>-<stage>`), which must live in
+the upstream repo and postdate the tracker.
+
+Lifecycle (each transition gated on live evidence): notes PR merged → its
+merge commit is the candidate while it remains branch head (movement requires
+an authorized owner to adopt the exact new head) → required checks green on
+the exact SHA, scoped to the policy's CI workflow → no-publish qualification
+in valkey-release-automation, dispatched automatically and evaluated against
+the exact reviewed matrix inventory (jobs and unexpired artifacts, not run
+conclusions) → protected publication (two jobs: validate renders the plan as
+approver evidence; the environment-gated publish revalidates everything,
+requires the approver-seen tag and SHA, creates the release at the candidate
+SHA, and verifies the tag) → downstream outputs verified against canonical
+public locations (downloads, three registries, merged PRs, the Helm index),
+with Bundle and Helm gated on the base images being public and stalls or
+failures escalated into a once-per-state team notification → the issue
+closes itself when everything is verified.
+
+Credential model: the hourly reconcile holds a valkey token without
+`contents:write` (publication is capability-blocked outside the protected
+environment) and a separate downstream write token that excludes valkey;
+PAT fallbacks are structurally impossible when the owner is `valkey-io`.
+
+Deliberate scope notes: production builds still check out by tag (publication
+creates the tag, so they cannot diverge; `source_sha` exists for the
+no-publish qualification path), failure notifications mention rather than
+assign, and resume is Start Release re-dispatch plus reconciliation rather
+than a dedicated workflow.
