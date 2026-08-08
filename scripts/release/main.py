@@ -35,6 +35,7 @@ from scripts.release.policy import RepoReleasePolicy, load_policy
 from scripts.release.publish import (
     ensure_environment_protected,
     plan_publication,
+    post_approval_evidence,
     publish_release,
     render_plan_summary,
 )
@@ -58,6 +59,16 @@ def _token() -> str:
         or os.environ.get("TARGET_TOKEN", "")
         or os.environ.get("GITHUB_TOKEN", "")
     )
+
+
+def _actions_run_url() -> str:
+    """The current workflow run's URL, "" outside Actions."""
+    server = os.environ.get("GITHUB_SERVER_URL", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    if not (server and repo and run_id):
+        return ""
+    return f"{server}/{repo}/actions/runs/{run_id}"
 
 
 def _emit_outputs(values: dict[str, str]) -> None:
@@ -217,6 +228,9 @@ def main(argv: list[str] | None = None) -> int:
                 summary = render_plan_summary(plan)
                 emit_job_summary(summary)
                 print(summary)
+                run_url = _actions_run_url()
+                if run_url:
+                    post_approval_evidence(gh, policy, plan, run_url)
                 _emit_outputs({"tag": plan.tag, "sha": plan.sha,
                                "make_latest": plan.make_latest})
                 return 0

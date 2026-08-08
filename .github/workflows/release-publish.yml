@@ -22,6 +22,8 @@
 # reviewers, self-review prevented, and admin bypass disallowed.
 name: Release Publish
 
+run-name: "Publish release on ${{ inputs.branch }} (requested by ${{ github.triggering_actor }})"
+
 on:
   workflow_dispatch:
     inputs:
@@ -63,8 +65,10 @@ jobs:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          repositories: valkey
           permission-contents: read
-          permission-issues: read
+          # issues:write posts the approver's checklist onto the tracker.
+          permission-issues: write
           permission-pull-requests: read
           permission-checks: read
           permission-actions: read

@@ -70,6 +70,8 @@ class PublishPlan:
     make_latest: str  # GitHub expects the string "true"/"false"
     body: str
     issue_number: int
+    tracker_url: str = ""
+    qualification_url: str = ""
 
 
 def plan_publication(
@@ -135,6 +137,8 @@ def plan_publication(
         make_latest=_make_latest_decision(repo, status.version, status.stage),
         body=body,
         issue_number=tracking_issue.number,
+        tracker_url=tracking_issue.html_url,
+        qualification_url=status.qualification.url,
     )
 
 
@@ -268,18 +272,35 @@ def ensure_environment_protected(gh: Any, policy: RepoReleasePolicy,
 
 
 def render_plan_summary(plan: PublishPlan) -> str:
-    """Markdown evidence for the environment approver (job summary)."""
+    """The approver's checklist: what will happen and what to verify.
+
+    GitHub's approval modal shows nothing but the environment name, so this
+    summary — rendered on the run page and posted to the tracker — is the
+    approval evidence. It says explicitly what to check, with links.
+    """
     return "\n".join([
-        "## Publication plan",
+        "## Awaiting approval: publish " + plan.tag,
         "",
-        f"- Tag: `{plan.tag}`",
-        f"- Candidate SHA: `{plan.sha}`",
-        f"- Prerelease: `{plan.prerelease}`",
-        f"- Set as latest: `{plan.make_latest}`",
-        f"- Tracker: issue #{plan.issue_number}",
+        "> [!IMPORTANT]",
+        "> Approving publishes the release, fires the production builds, and",
+        "> creates a tag that cannot be moved or deleted. Verify the items",
+        "> below, then approve the **Publish** job under Review deployments.",
         "",
-        "Publishing fires the production build dispatch and creates a tag",
-        "that cannot be moved or deleted. Release body follows.",
+        "**Verify before approving:**",
+        "",
+        f"- [ ] The tag is the release you expect: `{plan.tag}`",
+        f"- [ ] The commit matches the tracker's candidate SHA: `{plan.sha}`"
+        + (f" ([tracker]({plan.tracker_url}))" if plan.tracker_url else ""),
+        "- [ ] Qualification evidence looks right"
+        + (f" ([qualification run]({plan.qualification_url}))"
+           if plan.qualification_url else ""),
+        f"- [ ] The latest-release decision is correct: `make_latest={plan.make_latest}`"
+        + (" (this release becomes the repo's latest)" if plan.make_latest == "true"
+           else " (an older line: the latest pointer does not move)"),
+        f"- [ ] The release notes below read correctly (prerelease: `{plan.prerelease}`)",
+        "",
+        "Execution re-runs every validation and refuses if the tag or commit",
+        "differ from the values above.",
         "",
         "---",
         "",
@@ -364,3 +385,41 @@ def _previous_tag(repo: Any, version: str, stage: str) -> str | None:
     return None
 
 
+
+
+_APPROVAL_MARKER = f"<!-- {issue_mod.MARKER_NAMESPACE}:approval-evidence -->"
+
+
+def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
+                           plan: PublishPlan, run_url: str) -> None:
+    """Put the approver's checklist on the tracker, linking the waiting run.
+
+    The approver's journey usually starts from the tracker, and GitHub's
+    approval modal shows no context — so the evidence lives where they are,
+    with a pointer to where the button is. Edited in place on re-validation.
+    """
+    repo = retry_github_call(
+        lambda: gh.get_repo(policy.repo),
+        retries=2, description=f"get repo {policy.repo}",
+    )
+    tracking_issue = retry_github_call(
+        lambda: repo.get_issue(plan.issue_number),
+        retries=2, description=f"get issue #{plan.issue_number}",
+    )
+    body = (
+        f"{_APPROVAL_MARKER}\n"
+        + render_plan_summary(plan)
+        + f"\n\n**Approve here:** {run_url} (Review deployments -> `release` "
+        f"-> Approve and deploy)"
+    )
+    for comment in issue_mod.trusted_comments(tracking_issue, gh):
+        if _APPROVAL_MARKER in (comment.body or ""):
+            retry_github_call(
+                lambda: comment.edit(body=body),
+                retries=2, description="update approval evidence comment",
+            )
+            return
+    retry_github_call(
+        lambda: tracking_issue.create_comment(body=body),
+        retries=2, description="post approval evidence comment",
+    )
