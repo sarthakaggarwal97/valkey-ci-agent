@@ -34,6 +34,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
 from github.GithubException import GithubException
@@ -420,7 +421,7 @@ def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
         if _APPROVAL_MARKER in (comment.body or ""):
             retry_github_call(
-                lambda c=comment: c.edit(body=body),
+                partial(comment.edit, body=body),
                 retries=2, description="update approval evidence comment",
             )
             return
