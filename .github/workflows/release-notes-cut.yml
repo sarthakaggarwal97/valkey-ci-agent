@@ -89,10 +89,15 @@ on:
         type: boolean
         default: true
     secrets:
+      # Optional: a fork without the App secrets falls back to
+      # VALKEY_GITHUB_TOKEN; an explicit empty pass must not fail startup.
       VALKEYRIE_BOT_APP_ID:
-        required: true
+        required: false
       VALKEYRIE_BOT_PRIVATE_KEY:
-        required: true
+        required: false
+      VALKEY_GITHUB_TOKEN:
+        description: Fork-testing token fallback when the App secrets are absent
+        required: false
       AWS_ROLE_ARN:
         required: true
 
@@ -138,6 +143,7 @@ jobs:
       - name: Generate GitHub App token
         id: generate-token
         if: ${{ !inputs.security_from_advisories }}
+        continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -153,6 +159,7 @@ jobs:
       - name: Generate GitHub App token (with advisories)
         id: generate-token-advisories
         if: ${{ inputs.security_from_advisories }}
+        continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -182,8 +189,10 @@ jobs:
         env:
           # Exactly one token step ran (gated by security_from_advisories); the
           # skipped one yields "", so this resolves to whichever produced a token.
-          RELEASE_NOTES_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || steps.generate-token-advisories.outputs.token }}
-          RELEASE_NOTES_REPO: valkey-io/valkey
+          RELEASE_NOTES_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || steps.generate-token-advisories.outputs.token || (github.repository_owner != 'valkey-io' && secrets.VALKEY_GITHUB_TOKEN) || '' }}
+          # Owner-scoped: a fork run must operate on the fork's valkey and
+          # must never touch valkey-io/valkey (identical value upstream).
+          RELEASE_NOTES_REPO: ${{ github.repository_owner }}/valkey
           RELEASE_NOTES_VERSION: ${{ inputs.version }}
           RELEASE_NOTES_STAGE: ${{ inputs.stage }}
           RELEASE_NOTES_URGENCY: ${{ inputs.urgency }}

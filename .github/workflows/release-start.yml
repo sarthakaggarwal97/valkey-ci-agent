@@ -1,0 +1,153 @@
+# Start a release: one coordinated entry point for the release flow.
+#
+# The start job authorizes the dispatching actor against the release policy's
+# team (checked live against GitHub), derives the version and stage
+# deterministically from the branch and existing tags, and creates (or, on a
+# duplicate start, reuses) the release tracking issue. A security/embargoed
+# intent is refused before any public artifact is created.
+#
+# When a new release was started (not a duplicate, not a dry run), the cut job
+# chains into the existing release-notes workflow with the derived version and
+# stage; that PR's merge commit becomes the release candidate SHA, tracked by
+# release-reconcile.yml.
+name: Start Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Release branch (must be a policy-configured line, e.g. 9.1)"
+        required: true
+        type: string
+      intent:
+        description: >-
+          Release intent. rc/ga only before the line's initial release; patch
+          after. 'security' is the embargoed path: the controller refuses it
+          BEFORE any public artifact exists — run the manual break-glass
+          process instead.
+        required: true
+        type: choice
+        options:
+          - rc
+          - ga
+          - patch
+          - security
+      urgency:
+        description: >-
+          Upgrade urgency (passed to the release-notes cut). SECURITY is for
+          already-disclosed fixes only; an embargoed fix must use intent
+          'security', which refuses before creating anything public.
+        required: true
+        type: choice
+        options:
+          - LOW
+          - MODERATE
+          - HIGH
+          - CRITICAL
+          - SECURITY
+      dry_run:
+        description: "Authorize and derive without creating the issue or cutting notes"
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  start:
+    name: "Authorize, derive version, open tracker"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: release-start-${{ inputs.branch }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.start.outputs.version }}
+      stage: ${{ steps.start.outputs.stage }}
+      cut_needed: ${{ steps.start.outputs.cut_needed }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate GitHub App token
+        id: generate-token
+        # Runs in forks too: the Valkeyrie App secrets are configured on the
+        # test fork from earlier live workflow testing. continue-on-error
+        # lets a repo without them fall through to the AUTOMATION_PAT.
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # issues:write to create the tracking issue; contents:read for tags
+          # and branch heads; members:read for the live team-membership check.
+          permission-contents: read
+          permission-issues: write
+          permission-members: read
+          permission-metadata: read
+
+      - name: Start release
+        id: start
+        shell: bash
+        env:
+          # Fork operation (owner != valkey-io) falls back to AUTOMATION_PAT,
+          # mirroring the convention in valkey's own trigger workflow.
+          RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          BRANCH: ${{ inputs.branch }}
+          INTENT: ${{ inputs.intent }}
+          # triggering_actor, not actor: on a workflow *re-run* github.actor
+          # remains the original dispatcher, so authorizing it would let a
+          # repo-write user replay an authorized user's dispatch.
+          ACTOR: ${{ github.triggering_actor }}
+          TARGET_REPO: ${{ github.repository_owner }}/valkey
+          # Fork runs use the fork policy registry (fork repos, PAT-readable
+          # team) so live testing never targets valkey-io repositories.
+          POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
+          DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          args=(--policy "${POLICY}" --repo "${TARGET_REPO}" start --branch "${BRANCH}" --intent "${INTENT}" --actor "${ACTOR}")
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          python -m scripts.release.main "${args[@]}"
+
+  cut-notes:
+    name: "Cut release notes"
+    needs: start
+    # cut_needed covers both a fresh start and a resume after a failed cut;
+    # a duplicate start whose notes PR already exists cuts nothing.
+    if: ${{ needs.start.outputs.cut_needed == 'true' && !inputs.dry_run }}
+    # A called workflow cannot exceed the caller's grant: the cut's jobs
+    # request contents:read + id-token:write (OIDC for Bedrock), so this
+    # caller job must grant exactly that.
+    permissions:
+      contents: read
+      id-token: write
+    # REBASE NOTE (PR #80): the module-repos branch adds a `repo` input and a
+    # VALKEY_GITHUB_TOKEN workflow_call secret to the cut. Whichever lands
+    # second adds `repo: valkey` here and keeps the secrets list in sync.
+    uses: ./.github/workflows/release-notes-cut.yml
+    with:
+      version: ${{ needs.start.outputs.version }}
+      stage: ${{ needs.start.outputs.stage }}
+      urgency: ${{ inputs.urgency }}
+      dry_run: false
+    # Explicit mapping, not `inherit`: the called workflow marks AWS_ROLE_ARN
+    # required, and with inherit a fork without that secret fails at startup.
+    # An explicitly passed (possibly empty) secret satisfies the requirement;
+    # a genuinely missing role then fails cleanly at the AWS step.
+    secrets:
+      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+      VALKEY_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

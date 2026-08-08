@@ -1,0 +1,186 @@
+# Publish a ready release — the release flow's only production write path.
+#
+# Two jobs, split so approval evidence exists before the gate:
+#
+#   validate  runs every pre-publication check (candidate SHA, required CI,
+#             qualification, version.h, release notes, tag availability,
+#             latest-release decision) and prints the exact publication plan
+#             (tag, SHA, flags, release body) to the job summary. No secrets
+#             beyond read access; no environment.
+#
+#   publish   gated by the protected `release` environment (required
+#             reviewers approve on the run page after reading the validate
+#             summary). Every step here — including token minting — runs
+#             only after approval. It re-runs the FULL validation and
+#             requires it to reproduce the exact tag the approver saw, then
+#             creates the release at the candidate SHA and verifies the tag.
+#
+# Publishing fires valkey's trigger-build-release dispatch (prod builds) and
+# creates a tag that can never be moved or deleted.
+#
+# The `release` environment must exist in this repository with required
+# reviewers, self-review prevented, and admin bypass disallowed.
+name: Release Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Release branch whose ready release to publish (e.g. 9.1)"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  validate:
+    name: "Validate and produce approval evidence"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      sha: ${{ steps.plan.outputs.sha }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate GitHub App token (read-only validation scope)
+        id: generate-token
+        # Runs in forks too: the Valkeyrie App secrets are configured on the
+        # test fork from earlier live workflow testing. continue-on-error
+        # lets a repo without them fall through to the AUTOMATION_PAT.
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-contents: read
+          permission-issues: read
+          permission-pull-requests: read
+          permission-checks: read
+          permission-actions: read
+          permission-members: read
+          permission-metadata: read
+
+      - name: Generate GitHub App token (downstream reads for revalidation)
+        id: generate-downstream-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # Revalidation reads the qualification runs; without this scope the
+          # valkey-scoped token only works while those repos are public.
+          repositories: |
+            valkey-release-automation
+            valkey-ci-agent
+          permission-actions: read
+          permission-contents: read
+          permission-metadata: read
+
+      - name: Validate and render the publication plan
+        id: plan
+        shell: bash
+        env:
+          RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          BRANCH: ${{ inputs.branch }}
+          ACTOR: ${{ github.triggering_actor }}
+          TARGET_REPO: ${{ github.repository_owner }}/valkey
+          POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.release.main --policy "${POLICY}" --repo "${TARGET_REPO}" \
+            publish --branch "${BRANCH}" --actor "${ACTOR}" --plan-only
+
+  publish:
+    name: "Publish (requires environment approval)"
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    concurrency:
+      group: release-publish-${{ inputs.branch }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate GitHub App token (publication scope)
+        id: generate-token
+        # Runs in forks too: the Valkeyrie App secrets are configured on the
+        # test fork from earlier live workflow testing. continue-on-error
+        # lets a repo without them fall through to the AUTOMATION_PAT.
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # Scoped to the one repository publication writes to; an
+          # owner-wide token here would put every installed repo in blast
+          # radius of the flow's most privileged step.
+          repositories: valkey
+          # contents:write creates the release and its tag.
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: read
+          permission-checks: read
+          permission-actions: read
+          permission-members: read
+          permission-metadata: read
+
+      - name: Generate GitHub App token (downstream reads for revalidation)
+        id: generate-downstream-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # Revalidation reads the qualification runs; without this scope the
+          # valkey-scoped token only works while those repos are public.
+          repositories: |
+            valkey-release-automation
+            valkey-ci-agent
+          permission-actions: read
+          permission-contents: read
+          permission-metadata: read
+
+      - name: Revalidate and publish
+        shell: bash
+        env:
+          RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          BRANCH: ${{ inputs.branch }}
+          ACTOR: ${{ github.triggering_actor }}
+          EXPECTED_TAG: ${{ needs.validate.outputs.tag }}
+          # The approval is bound to the exact commit the reviewer saw, not
+          # just the tag: a candidate adopted while approval was pending must
+          # never publish under the reviewed tag.
+          EXPECTED_SHA: ${{ needs.validate.outputs.sha }}
+          TARGET_REPO: ${{ github.repository_owner }}/valkey
+          POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.release.main --policy "${POLICY}" --repo "${TARGET_REPO}" \
+            publish --branch "${BRANCH}" --actor "${ACTOR}" \
+            --expected-tag "${EXPECTED_TAG}" --expected-sha "${EXPECTED_SHA}"

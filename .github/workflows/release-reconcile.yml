@@ -1,0 +1,115 @@
+# Reconcile active releases: recompute truth from GitHub and update trackers.
+#
+# For every policy-configured release branch with an open tracking issue, the
+# controller recomputes the release state from live GitHub data — the
+# release-notes PR (whose merge commit is the candidate SHA), the branch head
+# (movement invalidates the candidate until an owner adopts the exact new
+# head), and the required check runs on the exact candidate SHA — then
+# re-renders the issue. Nothing is parsed out of issue text; editing the issue
+# changes nothing and is overwritten here.
+#
+# Short and idempotent: a run that finds no change edits nothing.
+name: Release Reconcile
+
+on:
+  schedule:
+    # Hourly, offset from the other pollers.
+    - cron: "15 * * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Reconcile only this release branch (empty = all policy branches)"
+        required: false
+        type: string
+        default: ""
+
+permissions: {}
+
+jobs:
+  reconcile:
+    name: "Reconcile release trackers"
+    # Scheduled runs only in the canonical repo; manual dispatch also works
+    # in forks (against the fork policy registry).
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'valkey-io/valkey-ci-agent'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: release-reconcile
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate GitHub App token (valkey, read + tracker)
+        id: generate-token
+        # Runs in forks too: the Valkeyrie App secrets are configured on the
+        # test fork from earlier live workflow testing. continue-on-error
+        # lets a repo without them fall through to the fork PAT.
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # Deliberately NOT contents:write: reconciliation runs hourly
+          # outside the protected environment, so the token that touches
+          # valkey must be incapable of creating the release or its tag —
+          # publication-only-via-approval is capability-enforced.
+          repositories: valkey
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: read
+          permission-checks: read
+          permission-actions: read
+          permission-metadata: read
+
+      - name: Generate GitHub App token (downstream, write)
+        id: generate-downstream-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # Dispatches the qualification run and the bundle update
+          # (actions:write, contents:write) and opens the helm bump PR
+          # (contents:write + pull-requests:write). valkey itself is
+          # excluded from this token's scope.
+          repositories: |
+            valkey-release-automation
+            valkey-hashes
+            valkey-container
+            valkey-doc
+            valkey-io.github.io
+            valkey-bundle
+            valkey-helm
+          permission-contents: write
+          permission-issues: read
+          permission-pull-requests: write
+          permission-checks: read
+          permission-actions: write
+          permission-metadata: read
+
+      - name: Reconcile
+        shell: bash
+        env:
+          RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          BRANCH: ${{ inputs.branch || '' }}
+          TARGET_REPO: ${{ github.repository_owner }}/valkey
+          POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
+        run: |
+          set -euo pipefail
+          args=(--policy "${POLICY}" --repo "${TARGET_REPO}" reconcile)
+          if [[ -n "${BRANCH}" ]]; then
+            args+=(--branch "${BRANCH}")
+          fi
+          python -m scripts.release.main "${args[@]}"

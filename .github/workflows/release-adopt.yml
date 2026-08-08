@@ -1,0 +1,83 @@
+# Adopt a moved branch head as the release candidate.
+#
+# When the release branch moves past the recorded candidate, reconciliation
+# invalidates the candidate and qualification stops. An authorized owner
+# acknowledges the movement by dispatching this workflow with the *exact*
+# current head SHA. The controller verifies the dispatching actor's team
+# membership live, verifies the SHA equals the current branch head, and then
+# records the adoption as a bot-authored comment on the tracking issue — the
+# only adoption record reconciliation trusts (a marker pasted by anyone else
+# is ignored).
+name: Release Adopt Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Release branch with the invalidated candidate (e.g. 9.1)"
+        required: true
+        type: string
+      sha:
+        description: "Exact current head of the branch (full 40-character SHA)"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  adopt:
+    name: "Verify and record adoption"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: release-adopt-${{ inputs.branch }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate GitHub App token
+        id: generate-token
+        # Runs in forks too: the Valkeyrie App secrets are configured on the
+        # test fork from earlier live workflow testing. continue-on-error
+        # lets a repo without them fall through to the AUTOMATION_PAT.
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # issues:write to record the adoption comment and refresh the tracker;
+          # members:read for the live team check; the rest mirror reconcile.
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: read
+          permission-checks: read
+          permission-actions: read
+          permission-members: read
+          permission-metadata: read
+
+      - name: Adopt candidate
+        shell: bash
+        env:
+          RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          BRANCH: ${{ inputs.branch }}
+          SHA: ${{ inputs.sha }}
+          # triggering_actor, not actor: on a workflow *re-run* github.actor
+          # remains the original dispatcher, so authorizing it would let a
+          # repo-write user replay an authorized user's adoption.
+          ACTOR: ${{ github.triggering_actor }}
+          TARGET_REPO: ${{ github.repository_owner }}/valkey
+          POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.release.main --policy "${POLICY}" --repo "${TARGET_REPO}" \
+            adopt --branch "${BRANCH}" --sha "${SHA}" --actor "${ACTOR}"
