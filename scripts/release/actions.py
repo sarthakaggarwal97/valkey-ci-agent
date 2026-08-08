@@ -41,6 +41,7 @@ from scripts.release.models import (
     release_tag,
 )
 from scripts.release.policy import RepoReleasePolicy
+from scripts.release.release_refs import workflow_handle
 from scripts.release_notes.release_format import parse_version
 
 logger = logging.getLogger(__name__)
@@ -315,19 +316,9 @@ _PUBLISH_WORKFLOW = "release-publish.yml"
 def _publish_run_active(gh_agent: Any, agent_repo: str, branch: str) -> bool:
     """True when a publish run for *branch* is queued, running, or waiting
     at the approval gate — reconcile must not stack duplicates."""
-    repo = retry_github_call(
-        lambda: gh_agent.get_repo(agent_repo),
-        retries=2, description=f"get repo {agent_repo}",
-    )
-    try:
-        workflow = retry_github_call(
-            lambda: repo.get_workflow(_PUBLISH_WORKFLOW),
-            retries=2, description=f"get workflow {_PUBLISH_WORKFLOW}",
-        )
-    except GithubException as exc:
-        if exc.status == 404:
-            return True  # cannot see the workflow: do not dispatch blind
-        raise
+    workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
+    if workflow is None:
+        return True  # cannot see the workflow: do not dispatch blind
     runs = retry_github_call(
         workflow.get_runs,
         retries=2, description="list publish runs",
@@ -343,16 +334,13 @@ def _publish_run_active(gh_agent: Any, agent_repo: str, branch: str) -> bool:
 
 
 def _dispatch_publish(gh_agent: Any, agent_repo: str, branch: str) -> None:
-    repo = retry_github_call(
-        lambda: gh_agent.get_repo(agent_repo),
-        retries=2, description=f"get repo {agent_repo}",
-    )
-    workflow = retry_github_call(
-        lambda: repo.get_workflow(_PUBLISH_WORKFLOW),
-        retries=2, description=f"get workflow {_PUBLISH_WORKFLOW}",
+    workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
+    default_branch = retry_github_call(
+        lambda: gh_agent.get_repo(agent_repo).default_branch,
+        retries=2, description=f"resolve {agent_repo} default branch",
     )
     retry_github_call(
-        lambda: workflow.create_dispatch(repo.default_branch, inputs={"branch": branch}),
+        lambda: workflow.create_dispatch(default_branch, inputs={"branch": branch}),
         retries=2, description="dispatch publish pipeline",
     )
     logger.info("Dispatched the publish pipeline for %s", branch)

@@ -20,6 +20,7 @@ from typing import Any
 from scripts.common.github_client import retry_github_call
 from scripts.release.models import QualificationStatus
 from scripts.release.policy import RepoReleasePolicy
+from scripts.release.release_refs import workflow_handle
 
 logger = logging.getLogger(__name__)
 
@@ -155,13 +156,16 @@ def dispatch_qualification(
     exists for this SHA); this function just fires the dispatch on the
     automation repo's default branch.
     """
+    workflow = workflow_handle(gh, policy.downstream.automation_repo,
+                               policy.downstream.qualification_workflow)
+    if workflow is None:
+        raise RuntimeError(
+            f"{policy.downstream.qualification_workflow} does not exist on "
+            f"{policy.downstream.automation_repo}"
+        )
     repo = retry_github_call(
         lambda: gh.get_repo(policy.downstream.automation_repo),
         retries=2, description=f"get repo {policy.downstream.automation_repo}",
-    )
-    workflow = retry_github_call(
-        lambda: repo.get_workflow(policy.downstream.qualification_workflow),
-        retries=2, description=f"get workflow {policy.downstream.qualification_workflow}",
     )
     dispatched = retry_github_call(
         lambda: workflow.create_dispatch(
@@ -189,20 +193,19 @@ def _find_run(gh: Any, policy: RepoReleasePolicy, tag: str, sha: str) -> Any:
       so a doctored qualify workflow on a side branch cannot manufacture
       evidence.
     """
-    repo = retry_github_call(
-        lambda: gh.get_repo(policy.downstream.automation_repo),
-        retries=2, description=f"get repo {policy.downstream.automation_repo}",
-    )
-    workflow = retry_github_call(
-        lambda: repo.get_workflow(policy.downstream.qualification_workflow),
-        retries=2, description=f"get workflow {policy.downstream.qualification_workflow}",
-    )
+    workflow = workflow_handle(gh, policy.downstream.automation_repo,
+                               policy.downstream.qualification_workflow)
+    if workflow is None:
+        return None
     runs = retry_github_call(
         workflow.get_runs,
         retries=2, description="list qualification runs",
     )
     marker = f"Qualify {tag} @ {sha}"
-    default_branch = repo.default_branch
+    default_branch = retry_github_call(
+        lambda: gh.get_repo(policy.downstream.automation_repo).default_branch,
+        retries=2, description="resolve automation default branch",
+    )
     for index, run in enumerate(runs):
         if index >= _RUN_SCAN_LIMIT:
             break

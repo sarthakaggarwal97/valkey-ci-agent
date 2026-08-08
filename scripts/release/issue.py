@@ -451,19 +451,22 @@ def ensure_tracker_labels(repo: Any, branch: str, tracker_label: str) -> None:
     guarantee; creating them explicitly (mirroring the backport module's
     ensure-label pattern) removes the doubt.
     """
-    for name, color, description in (
-        (tracker_label, "0e8a16", "Release tracking issue maintained by the release controller"),
-        (branch_label(branch), "1d76db", f"Active release on the {branch} line"),
-    ):
-        try:
-            retry_github_call(
-                lambda: repo.get_label(name),
-                retries=2, description=f"get label {name}",
-            )
-        except GithubException as exc:
-            if exc.status != 404:
-                raise
-            retry_github_call(
-                lambda: repo.create_label(name=name, color=color, description=description),
-                retries=2, description=f"create label {name}",
-            )
+    _ensure_label(repo, tracker_label, "0e8a16",
+                  "Release tracking issue maintained by the release controller")
+    _ensure_label(repo, branch_label(branch), "1d76db",
+                  f"Active release on the {branch} line")
+
+
+def _ensure_label(repo: Any, name: str, color: str, description: str) -> None:
+    try:
+        retry_github_call(
+            lambda: repo.get_label(name),
+            retries=2, description=f"get label {name}",
+        )
+    except GithubException as exc:
+        if exc.status != 404:
+            raise
+        retry_github_call(
+            lambda: repo.create_label(name=name, color=color, description=description),
+            retries=2, description=f"create label {name}",
+        )

@@ -399,7 +399,7 @@ _BUILD_OK = DownstreamOutput(name="build-run", state=OutputState.VERIFIED,
 
 class TestPackagesAndTryValkey:
     def test_rc_skips_packages(self) -> None:
-        out = verify._verify_packages(MagicMock(), _POLICY, "9.2.0-rc1", "rc1", _BUILD_OK)
+        out = verify._verify_packages(MagicMock(), _POLICY, "rc1", _BUILD_OK)
         assert out.state is OutputState.SKIPPED
 
     def test_packages_verified_by_publish_and_pages_jobs(self) -> None:
@@ -407,26 +407,26 @@ class TestPackagesAndTryValkey:
             ("release-build-packages / Publish to S3", "success"),
             ("release-build-packages / Deploy Pages", "success"),
         ]))
-        out = verify._verify_packages(gh, _POLICY, "9.1.2", "ga", _BUILD_OK)
+        out = verify._verify_packages(gh, _POLICY, "ga", _BUILD_OK)
         assert out.state is OutputState.VERIFIED
 
     def test_failed_publish_job_fails_packages(self) -> None:
         gh = _gh_with_run_jobs(_jobs([
             ("release-build-packages / Publish to S3", "failure"),
         ]))
-        out = verify._verify_packages(gh, _POLICY, "9.1.2", "ga", _BUILD_OK)
+        out = verify._verify_packages(gh, _POLICY, "ga", _BUILD_OK)
         assert out.state is OutputState.FAILED
 
     def test_packages_blocked_until_build_verified(self) -> None:
         pending = DownstreamOutput(name="build-run", state=OutputState.PENDING)
-        out = verify._verify_packages(MagicMock(), _POLICY, "9.1.2", "ga", pending)
+        out = verify._verify_packages(MagicMock(), _POLICY, "ga", pending)
         assert out.state is OutputState.BLOCKED
 
     def test_try_valkey_skipped_when_workflow_skipped_it(self) -> None:
         gh = _gh_with_run_jobs(_jobs([
             ("update-try-valkey / build-try-valkey", "skipped"),
         ]))
-        out = verify._verify_try_valkey(gh, _POLICY, "9.0.6", "ga", _BUILD_OK)
+        out = verify._verify_try_valkey(gh, _POLICY, "ga", _BUILD_OK)
         assert out.state is OutputState.SKIPPED  # not the latest release
 
     def test_try_valkey_verified_only_with_the_upload_sentinel(self) -> None:
@@ -436,7 +436,7 @@ class TestPackagesAndTryValkey:
         sentinel = MagicMock(expired=False)
         sentinel.name = "try-valkey-uploaded-9.1.2"
         gh.get_repo.return_value.get_workflow_run.return_value.get_artifacts.return_value = [sentinel]
-        out = verify._verify_try_valkey(gh, _POLICY, "9.1.2", "ga", _BUILD_OK)
+        out = verify._verify_try_valkey(gh, _POLICY, "ga", _BUILD_OK)
         assert out.state is OutputState.VERIFIED
 
     def test_green_wrapper_without_sentinel_is_skipped_not_verified(self) -> None:
@@ -446,7 +446,7 @@ class TestPackagesAndTryValkey:
             ("update-try-valkey / build-try-valkey", "success"),
         ]))
         gh.get_repo.return_value.get_workflow_run.return_value.get_artifacts.return_value = []
-        out = verify._verify_try_valkey(gh, _POLICY, "9.1.2", "ga", _BUILD_OK)
+        out = verify._verify_try_valkey(gh, _POLICY, "ga", _BUILD_OK)
         assert out.state is OutputState.SKIPPED
 
     def test_stalled_pending_outputs_escalate_to_failed(self) -> None:

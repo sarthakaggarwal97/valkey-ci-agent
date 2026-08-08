@@ -66,3 +66,24 @@ def read_text_file(repo: Any, path: str, ref: Any = None) -> str:
         retries=2, description=f"read {path}" + (f" at {str(ref)[:12]}" if ref else ""),
     )
     return contents.decoded_content.decode("utf-8")
+
+
+def workflow_handle(gh: Any, repo_name: str, workflow_file: str) -> Any:
+    """The workflow object for *workflow_file* in *repo_name*, or None on 404.
+
+    The one place the get_repo -> get_workflow chain lives; qualification,
+    build observation, and the publish auto-dispatch all start here.
+    """
+    repo = retry_github_call(
+        lambda: gh.get_repo(repo_name),
+        retries=2, description=f"get repo {repo_name}",
+    )
+    try:
+        return retry_github_call(
+            lambda: repo.get_workflow(workflow_file),
+            retries=2, description=f"get workflow {workflow_file}",
+        )
+    except GithubException as exc:
+        if exc.status == 404:
+            return None
+        raise

@@ -28,7 +28,7 @@ from scripts.common.github_client import retry_github_call
 from scripts.release import public_endpoints as pub
 from scripts.release.models import DownstreamOutput, OutputState
 from scripts.release.policy import RepoReleasePolicy
-from scripts.release.release_refs import read_text_file, resolve_tag_commit
+from scripts.release.release_refs import read_text_file, resolve_tag_commit, workflow_handle
 from scripts.release_notes.release_format import parse_version
 
 logger = logging.getLogger(__name__)
@@ -62,8 +62,8 @@ def verify_core_outputs(
     outputs = [
         build,
         _guarded("tarballs", lambda: _verify_tarballs(down, tag)),
-        _guarded("packages", lambda: _verify_packages(gh, policy, tag, stage, build)),
-        _guarded("try-valkey", lambda: _verify_try_valkey(gh, policy, tag, stage, build)),
+        _guarded("packages", lambda: _verify_packages(gh, policy, stage, build)),
+        _guarded("try-valkey", lambda: _verify_try_valkey(gh, policy, stage, build)),
         _guarded("hashes", lambda: _verify_hashes(gh, down, tag)),
     ]
     container = _guarded("container-pr", lambda: _verify_container(gh, down, tag))
@@ -100,8 +100,8 @@ def outputs_all_settled(outputs: tuple[DownstreamOutput, ...]) -> bool:
 
 
 def escalate_stalled_outputs(
-    outputs: "tuple[DownstreamOutput, ...]", published_at: Any, timeout_minutes: int,
-) -> "tuple[DownstreamOutput, ...]":
+    outputs: tuple[DownstreamOutput, ...], published_at: Any, timeout_minutes: int,
+) -> tuple[DownstreamOutput, ...]:
     """PENDING past the deadline becomes FAILED, so stalls enter the
     notification path exactly once instead of staying invisible forever
     (the 'Helm discovered next day' failure mode). BLOCKED outputs are
@@ -119,7 +119,7 @@ def escalate_stalled_outputs(
     )
 
 
-def _guarded(name: str, verifier: "Callable[[], Any]") -> Any:
+def _guarded(name: str, verifier: Callable[[], Any]) -> Any:
     """Degrade a verifier's API failure to a FAILED output.
 
     One missing or renamed downstream repository (a 404 on its first read)
@@ -213,19 +213,9 @@ def _newest_marked_run(gh: Any, repo_name: str, workflow_file: str,
                        marker: str, published_at: Any) -> Any:
     """Newest run of *workflow_file* whose title carries *marker*, created
     at or after *published_at* (when known)."""
-    repo = retry_github_call(
-        lambda: gh.get_repo(repo_name),
-        retries=2, description=f"get repo {repo_name}",
-    )
-    try:
-        workflow = retry_github_call(
-            lambda: repo.get_workflow(workflow_file),
-            retries=2, description=f"get workflow {workflow_file}",
-        )
-    except GithubException as exc:
-        if exc.status == 404:
-            return None
-        raise
+    workflow = workflow_handle(gh, repo_name, workflow_file)
+    if workflow is None:
+        return None
     runs = retry_github_call(
         workflow.get_runs,
         retries=2, description=f"list {workflow_file} runs",
@@ -271,7 +261,7 @@ def _build_run_jobs(gh: Any, policy: RepoReleasePolicy, build: DownstreamOutput)
     )
 
 
-def _verify_packages(gh: Any, policy: RepoReleasePolicy, tag: str, stage: str,
+def _verify_packages(gh: Any, policy: RepoReleasePolicy, stage: str,
                      build: DownstreamOutput) -> DownstreamOutput:
     """RPM/DEB publication (GA only), evidenced by the build run's publish
     and pages jobs succeeding.
@@ -311,7 +301,7 @@ def _verify_packages(gh: Any, policy: RepoReleasePolicy, tag: str, stage: str,
     )
 
 
-def _verify_try_valkey(gh: Any, policy: RepoReleasePolicy, tag: str, stage: str,
+def _verify_try_valkey(gh: Any, policy: RepoReleasePolicy, stage: str,
                        build: DownstreamOutput) -> DownstreamOutput:
     """Try Valkey upload, evidenced by the build run's update-try-valkey job.
 
