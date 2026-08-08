@@ -467,7 +467,7 @@ def _render_tracker(tracking_issue: Any, status: ReleaseStatus) -> None:
 
 def reconcile_branch(
     gh: Any, policy: RepoReleasePolicy, branch: str, *, act: bool = True,
-    gh_downstream: Any = None,
+    gh_downstream: Any = None, gh_agent: Any = None, agent_repo: str = "",
 ) -> ReleaseStatus | None:
     """Reconcile the tracking issue for *branch*; returns None when no
     release is active.
@@ -505,6 +505,7 @@ def reconcile_branch(
     if act:
         for performed in actions_mod.advance(
             gh_downstream, policy, status=status, tracking_issue=tracking_issue,
+            gh_agent=gh_agent, agent_repo=agent_repo,
         ):
             logger.info("Action: %s", performed)
 

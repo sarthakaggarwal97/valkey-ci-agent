@@ -142,6 +142,10 @@ def main(argv: list[str] | None = None) -> int:
     publish_p.add_argument("--branch", required=True, help="Release branch, e.g. 9.1")
     publish_p.add_argument("--actor", required=True,
                            help="GitHub login approving the publication")
+    publish_p.add_argument("--unattended", action="store_true",
+                           help="Plan-only invoked by the controller itself: skip "
+                                "the actor team check (authorization is enforced "
+                                "at the approval gate and again on execute)")
     publish_p.add_argument("--plan-only", action="store_true",
                            help="Run every validation and emit the publication plan "
                                 "as approver evidence, without publishing")
@@ -162,6 +166,11 @@ def main(argv: list[str] | None = None) -> int:
     # the client that touches valkey can be read-only there.
     downstream_token = os.environ.get("RELEASE_DOWNSTREAM_TOKEN", "")
     gh_downstream = Github(auth=Auth.Token(downstream_token)) if downstream_token else gh
+    # The agent client dispatches workflows in the controller's own repo
+    # (the runner's GITHUB_TOKEN); absent locally, auto-dispatch is skipped.
+    agent_token = os.environ.get("AGENT_GITHUB_TOKEN", "")
+    gh_agent = Github(auth=Auth.Token(agent_token)) if agent_token else None
+    agent_repo = os.environ.get("GITHUB_REPOSITORY", "")
 
     try:
         if args.command == "start":
@@ -207,7 +216,8 @@ def main(argv: list[str] | None = None) -> int:
                 # must not skip the remaining branches until the next cron.
                 try:
                     reconcile_branch(gh, policy, branch, act=not args.no_actions,
-                                     gh_downstream=gh_downstream)
+                                     gh_downstream=gh_downstream,
+                                     gh_agent=gh_agent, agent_repo=agent_repo)
                 except Exception:
                     logger.exception("Reconcile failed for %s %s", policy.repo, branch)
                     failed.append(branch)
@@ -224,7 +234,8 @@ def main(argv: list[str] | None = None) -> int:
             ensure_environment_protected(gh_downstream, policy, agent_repo)
             if args.plan_only:
                 plan = plan_publication(gh, policy, branch=args.branch,
-                                        actor=args.actor, gh_downstream=gh_downstream)
+                                        actor=args.actor, gh_downstream=gh_downstream,
+                                        skip_authorization=args.unattended)
                 summary = render_plan_summary(plan)
                 emit_job_summary(summary)
                 print(summary)

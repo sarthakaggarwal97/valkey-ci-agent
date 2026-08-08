@@ -286,3 +286,60 @@ class TestReviewRegressions:
         assert "AppVersion-9.1.1-informational" in out
         assert "Version-0.11.1-informational" in out
         assert "AppVersion-0.11.1" not in out
+
+
+class TestAutoDispatchPublish:
+    def _ready(self) -> ReleaseStatus:
+        return _status(phase=ReleasePhase.READY,
+                       qualification=QualificationStatus(run_id=1, passed=True))
+
+    def _agent(self, active_runs: "list | None" = None) -> MagicMock:
+        gh_agent = MagicMock()
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.get_runs.return_value = active_runs or []
+        return gh_agent
+
+    def test_ready_dispatches_the_publish_pipeline_once(self) -> None:
+        gh_agent = self._agent()
+        performed = actions.advance(gh_mock(MagicMock()), _POLICY,
+                                    status=self._ready(), tracking_issue=tracker(),
+                                    gh_agent=gh_agent, agent_repo="o/agent")
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.create_dispatch.assert_called_once_with(
+            gh_agent.get_repo.return_value.default_branch, inputs={"branch": "9.1"},
+        )
+        assert any("publish pipeline" in p for p in performed)
+
+    def test_waiting_publish_run_blocks_a_duplicate_dispatch(self) -> None:
+        waiting = MagicMock(status="waiting",
+                            display_title="Publish release on 9.1 (requested by x)")
+        gh_agent = self._agent([waiting])
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._ready(), tracking_issue=tracker(),
+                        gh_agent=gh_agent, agent_repo="o/agent")
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.create_dispatch.assert_not_called()
+
+    def test_other_branch_run_does_not_block(self) -> None:
+        other = MagicMock(status="waiting",
+                          display_title="Publish release on 8.0 (requested by x)")
+        gh_agent = self._agent([other])
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._ready(), tracking_issue=tracker(),
+                        gh_agent=gh_agent, agent_repo="o/agent")
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.create_dispatch.assert_called_once()
+
+    def test_no_agent_client_skips_auto_dispatch(self) -> None:
+        performed = actions.advance(gh_mock(MagicMock()), _POLICY,
+                                    status=self._ready(), tracking_issue=tracker())
+        assert not any("publish pipeline" in p for p in performed)
+
+    def test_non_ready_phase_never_dispatches(self) -> None:
+        gh_agent = self._agent()
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=_status(phase=ReleasePhase.PUBLISHED,
+                                       qualification=QualificationStatus(run_id=1, passed=True)),
+                        tracking_issue=tracker(),
+                        gh_agent=gh_agent, agent_repo="o/agent")
+        gh_agent.get_repo.return_value.get_workflow.return_value.create_dispatch.assert_not_called()

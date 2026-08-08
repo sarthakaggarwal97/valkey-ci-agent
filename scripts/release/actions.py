@@ -52,6 +52,7 @@ _CHART_README_PATH = "valkey/README.md"
 def advance(
     gh: Any, policy: RepoReleasePolicy, *,
     status: ReleaseStatus, tracking_issue: Any,
+    gh_agent: Any = None, agent_repo: str = "",
 ) -> list[str]:
     """Perform the actions the recomputed *status* calls for; returns a
     log of what was done (empty when the state needs nothing)."""
@@ -66,6 +67,19 @@ def advance(
             gh, policy, tag=tag, sha=status.candidate.sha,
         )
         performed.append(f"dispatched qualification of {tag} @ {status.candidate.sha[:12]}")
+
+    if (
+        status.phase is ReleasePhase.READY
+        and gh_agent is not None and agent_repo
+        and not _publish_run_active(gh_agent, agent_repo, status.branch)
+    ):
+        # Minimum-clicks: READY auto-starts the publish pipeline. This is
+        # safe to automate because the dispatch was never the gate — the
+        # validate job posts the approval evidence and the publish job holds
+        # at the protected environment until a human approves.
+        _dispatch_publish(gh_agent, agent_repo, status.branch)
+        performed.append(f"dispatched the publish pipeline for {status.branch} "
+                         f"(holds at the approval gate)")
 
     for output in status.outputs:
         if output.action == "dispatch-bundle":
@@ -293,3 +307,52 @@ def _close_when_complete(gh: Any, status: ReleaseStatus, tracking_issue: Any) ->
         retries=2, description=f"close issue #{tracking_issue.number}",
     )
     return True
+
+
+_PUBLISH_WORKFLOW = "release-publish.yml"
+
+
+def _publish_run_active(gh_agent: Any, agent_repo: str, branch: str) -> bool:
+    """True when a publish run for *branch* is queued, running, or waiting
+    at the approval gate — reconcile must not stack duplicates."""
+    repo = retry_github_call(
+        lambda: gh_agent.get_repo(agent_repo),
+        retries=2, description=f"get repo {agent_repo}",
+    )
+    try:
+        workflow = retry_github_call(
+            lambda: repo.get_workflow(_PUBLISH_WORKFLOW),
+            retries=2, description=f"get workflow {_PUBLISH_WORKFLOW}",
+        )
+    except GithubException as exc:
+        if exc.status == 404:
+            return True  # cannot see the workflow: do not dispatch blind
+        raise
+    runs = retry_github_call(
+        workflow.get_runs,
+        retries=2, description="list publish runs",
+    )
+    marker = f" on {branch} "
+    for index, run in enumerate(runs):
+        if index >= 15:
+            break
+        if run.status in ("queued", "in_progress", "waiting", "pending") \
+                and marker in f"{run.display_title or ''} ":
+            return True
+    return False
+
+
+def _dispatch_publish(gh_agent: Any, agent_repo: str, branch: str) -> None:
+    repo = retry_github_call(
+        lambda: gh_agent.get_repo(agent_repo),
+        retries=2, description=f"get repo {agent_repo}",
+    )
+    workflow = retry_github_call(
+        lambda: repo.get_workflow(_PUBLISH_WORKFLOW),
+        retries=2, description=f"get workflow {_PUBLISH_WORKFLOW}",
+    )
+    retry_github_call(
+        lambda: workflow.create_dispatch(repo.default_branch, inputs={"branch": branch}),
+        retries=2, description="dispatch publish pipeline",
+    )
+    logger.info("Dispatched the publish pipeline for %s", branch)

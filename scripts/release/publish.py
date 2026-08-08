@@ -76,14 +76,19 @@ class PublishPlan:
 
 def plan_publication(
     gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: str,
-    gh_downstream: Any = None,
+    gh_downstream: Any = None, skip_authorization: bool = False,
 ) -> PublishPlan:
     """Run every pre-publication validation and return the exact plan.
 
     Raises :class:`ReleaseControlError` when any validation fails. Safe to
     call repeatedly; performs no writes.
     """
-    ensure_authorized(gh, policy, actor)
+    # Unattended planning (the controller auto-dispatched this validate run
+    # as the Actions bot) is read-only evidence generation: authorization is
+    # enforced by the approval gate and re-checked with the approver's
+    # identity on the execute path.
+    if not skip_authorization:
+        ensure_authorized(gh, policy, actor)
 
     repo = retry_github_call(
         lambda: gh.get_repo(policy.repo),

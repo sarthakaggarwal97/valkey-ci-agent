@@ -299,3 +299,16 @@ class TestShaBinding:
                               actor="madolson", expected_tag="9.1.1",
                               expected_sha=MERGE_SHA)
         assert url
+
+
+def test_unattended_planning_skips_the_actor_check_only() -> None:
+    # The controller dispatches validate as the Actions bot; planning is
+    # read-only and the human gate stays at approval + execute.
+    repo = _with_tracker(_ready_repo())
+    gh = gh_mock(repo, member=False)  # the bot is in no team
+    plan = plan_publication(gh, _POLICY, branch="9.1", actor="github-actions[bot]",
+                            skip_authorization=True)
+    assert plan.tag == "9.1.1"
+    from scripts.release.authorize import NotAuthorizedError
+    with pytest.raises(NotAuthorizedError):
+        plan_publication(gh, _POLICY, branch="9.1", actor="github-actions[bot]")

@@ -104,8 +104,15 @@ jobs:
           POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
         run: |
           set -euo pipefail
-          python -m scripts.release.main --policy "${POLICY}" --repo "${TARGET_REPO}" \
-            publish --branch "${BRANCH}" --actor "${ACTOR}" --plan-only
+          args=(--policy "${POLICY}" --repo "${TARGET_REPO}"
+                publish --branch "${BRANCH}" --actor "${ACTOR}" --plan-only)
+          # A run the controller dispatched itself has the Actions bot as its
+          # actor; planning is read-only, and authorization is enforced at
+          # the approval gate and re-checked on execute with the approver.
+          if [[ "${ACTOR}" == "github-actions"* ]]; then
+            args+=(--unattended)
+          fi
+          python -m scripts.release.main "${args[@]}"
 
   publish:
     name: "Publish (requires environment approval)"
@@ -169,13 +176,29 @@ jobs:
           permission-contents: read
           permission-metadata: read
 
+      - name: Resolve the approving human
+        id: approver
+        # The execute path's actor must be the human who approved, not the
+        # dispatcher (which may be the controller itself). The deployment
+        # approval record is the authoritative source.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          APPROVER=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/approvals" \
+            --jq '.[0].user.login' 2>/dev/null || echo "")
+          if [[ -z "$APPROVER" ]]; then
+            APPROVER="${{ github.triggering_actor }}"
+          fi
+          echo "login=$APPROVER" >> "$GITHUB_OUTPUT"
+
       - name: Revalidate and publish
         shell: bash
         env:
           RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
           RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
           BRANCH: ${{ inputs.branch }}
-          ACTOR: ${{ github.triggering_actor }}
+          ACTOR: ${{ steps.approver.outputs.login }}
           EXPECTED_TAG: ${{ needs.validate.outputs.tag }}
           # The approval is bound to the exact commit the reviewer saw, not
           # just the tag: a candidate adopted while approval was pending must

@@ -13,8 +13,10 @@ name: Release Reconcile
 
 on:
   schedule:
-    # Hourly, offset from the other pollers.
-    - cron: "15 * * * *"
+    # Every 10 minutes: an idle pass (no active release) exits in seconds,
+    # and during a release the tracker and its notifications should lag
+    # events by minutes, not an hour.
+    - cron: "*/10 * * * *"
   workflow_dispatch:
     inputs:
       branch:
@@ -38,6 +40,9 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
+      # actions:write lets reconcile dispatch the publish pipeline in this
+      # repo when a release turns READY (it holds at the approval gate).
+      actions: write
     steps:
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -103,6 +108,7 @@ jobs:
         env:
           RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
           RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          AGENT_GITHUB_TOKEN: ${{ github.token }}
           BRANCH: ${{ inputs.branch || '' }}
           TARGET_REPO: ${{ github.repository_owner }}/valkey
           POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
