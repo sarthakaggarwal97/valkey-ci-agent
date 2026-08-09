@@ -205,7 +205,7 @@ def render_body(status: ReleaseStatus) -> str:
         "*Maintained by the release controller: state is recomputed from "
         "GitHub every reconciliation pass, so edits here have no effect and "
         "are overwritten. Failures are raised as a comment mentioning the "
-        "release team — once per distinct failure state.*",
+        "release team, once per distinct failure state.*",
     ]
     return "\n".join(lines) + "\n"
 
@@ -282,7 +282,7 @@ def _callout(status: ReleaseStatus) -> list[str]:
             "> [!NOTE]",
             "> **Published.** Downstream outputs are being verified against "
             "their canonical public locations (registries, downloads, merged "
-            "PRs) — not just workflow success. No action needed unless an "
+            "PRs), not just workflow success. No action needed unless an "
             "output turns failed.",
         ]
     if status.ready:
@@ -295,7 +295,7 @@ def _callout(status: ReleaseStatus) -> list[str]:
             "tag ruleset forbids moving or deleting the created tag).",
         ]
     blocker_lines = [f"> - {blocker}" for blocker in status.blockers] or ["> - (none recorded)"]
-    return ["> [!WARNING]", "> **Not ready — blocked on:**", *blocker_lines]
+    return ["> [!WARNING]", "> **Not ready. Blocked on:**", *blocker_lines]
 
 
 def _phases_done(status: ReleaseStatus) -> set[ReleasePhase]:
@@ -322,7 +322,7 @@ def _notes_pr_cell(status: ReleaseStatus) -> str:
     if not status.notes_pr_number:
         return "_none found_"
     state = "merged" if status.notes_pr_merged else "open (not merged)"
-    return f"[#{status.notes_pr_number}]({status.notes_pr_url}) — {state}"
+    return f"[#{status.notes_pr_number}]({status.notes_pr_url}): {state}"
 
 
 def _candidate_cell(status: ReleaseStatus) -> str:
@@ -332,16 +332,16 @@ def _candidate_cell(status: ReleaseStatus) -> str:
     if status.published:
         # Post-publication the tag pins the candidate; the branch may
         # legitimately move on, so "current branch head" would be a lie.
-        return f"`{candidate.sha}` — pinned by the release tag"
+        return f"`{candidate.sha}`: pinned by the release tag"
     descriptions = {
         CandidateState.CURRENT: "current branch head",
         CandidateState.ADOPTED: "adopted branch head (owner-acknowledged)",
         CandidateState.INVALIDATED: (
-            "**invalidated** — the branch moved; an authorized owner must adopt "
-            "the exact new head before qualification continues"
+            "**invalidated** (the branch moved; an authorized owner must adopt "
+            "the exact new head before qualification continues)"
         ),
     }
-    return f"`{candidate.sha}` — {descriptions[candidate.state]}"
+    return f"`{candidate.sha}`: {descriptions[candidate.state]}"
 
 
 def _qualification_cell(status: ReleaseStatus) -> str:

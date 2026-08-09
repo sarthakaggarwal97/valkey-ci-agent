@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -48,21 +49,38 @@ class TestQualificationDispatch:
         dispatch.assert_called_once()
         assert any("dispatched qualification" in p for p in performed)
 
-    @pytest.mark.parametrize(
-        "qualification",
-        [
-            pytest.param(QualificationStatus(run_id=1, pending=True), id="pending"),
-            pytest.param(QualificationStatus(run_id=1, failed_jobs=("job",)), id="failed"),
-        ],
-    )
-    def test_does_not_redispatch_over_pending_or_failed_run(
-        self, qualification: QualificationStatus,
-    ) -> None:
-        status = _status(qualification=qualification)
+    def test_does_not_redispatch_over_pending_run(self) -> None:
+        status = _status(qualification=QualificationStatus(run_id=1, pending=True))
         with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
             actions.advance(gh_mock(MagicMock()), _POLICY,
                             status=status, tracking_issue=tracker())
         dispatch.assert_not_called()
+
+    @pytest.mark.parametrize("marked", [
+        pytest.param(False, id="unmarked-retries-once"),
+        pytest.param(True, id="marked-never-retries"),
+    ])
+    def test_failed_run_retries_exactly_once_per_candidate(self, marked: bool) -> None:
+        status = _status(qualification=QualificationStatus(
+            run_id=901, url="https://x/qruns/901", failed_jobs=("job",)))
+        issue = tracker()
+        if marked:
+            fingerprint = hashlib.sha256(MERGE_SHA.encode("utf-8")).hexdigest()[:12]
+            posted = MagicMock()
+            posted.user.login = "valkeyrie-ops[bot]"
+            posted.body = (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:"
+                           f"qual-retry:{fingerprint} -->\nretried")
+            issue.get_comments.return_value = [posted]
+        with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
+            performed = actions.advance(gh_mock(MagicMock()), _POLICY,
+                                        status=status, tracking_issue=issue)
+        if marked:
+            dispatch.assert_not_called()
+            assert not any("auto-retried" in p for p in performed)
+        else:
+            dispatch.assert_called_once()
+            assert dispatch.call_args.kwargs == {"tag": "9.1.1", "sha": MERGE_SHA}
+            assert any("auto-retried qualification" in p for p in performed)
 
     def test_no_dispatch_outside_qualification_phase(self) -> None:
         status = _status(phase=ReleasePhase.CANDIDATE)
@@ -70,6 +88,130 @@ class TestQualificationDispatch:
             actions.advance(gh_mock(MagicMock()), _POLICY,
                             status=status, tracking_issue=tracker())
         dispatch.assert_not_called()
+
+
+class TestQualificationRetryComment:
+    def test_retry_posts_the_marker_callout_before_dispatching(self) -> None:
+        status = _status(qualification=QualificationStatus(
+            run_id=901, url="https://x/qruns/901", failed_jobs=("job",)))
+        issue = tracker()
+        with patch.object(actions.qual_mod, "dispatch_qualification"):
+            actions.advance(gh_mock(MagicMock()), _POLICY,
+                            status=status, tracking_issue=issue)
+        fingerprint = hashlib.sha256(MERGE_SHA.encode("utf-8")).hexdigest()[:12]
+        bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
+        autofix = next(b for b in bodies if ":autofix:" in b)
+        assert (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:qual-retry:"
+                f"{fingerprint} -->") in autofix
+        assert "> [!NOTE]" in autofix
+        assert "**Auto-remediation:** retrying qualification for `9.1.1` once" in autofix
+        assert "[run 901](https://x/qruns/901)" in autofix
+        assert "\u2014" not in autofix
+
+    def test_autofix_marker_from_non_bot_author_does_not_suppress(self) -> None:
+        # A drive-by user pasting the marker must not eat the one retry.
+        status = _status(qualification=QualificationStatus(
+            run_id=901, url="https://x/qruns/901", failed_jobs=("job",)))
+        issue = tracker()
+        fingerprint = hashlib.sha256(MERGE_SHA.encode("utf-8")).hexdigest()[:12]
+        spoof = MagicMock()
+        spoof.user.login = "drive-by"
+        spoof.body = f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:qual-retry:{fingerprint} -->"
+        issue.get_comments.return_value = [spoof]
+        with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
+            actions.advance(gh_mock(MagicMock()), _POLICY,
+                            status=status, tracking_issue=issue)
+        dispatch.assert_called_once()
+
+
+class TestAutoDispatchBuildRelease:
+    def _failed_trigger_status(self, version: str = "9.1.1",
+                               stage: str = "ga") -> ReleaseStatus:
+        return _status(
+            version=version, stage=stage,
+            phase=ReleasePhase.PUBLISHED, published=True,
+            qualification=QualificationStatus(run_id=1, passed=True),
+            outputs=(DownstreamOutput(
+                name="build-run", state=OutputState.FAILED,
+                detail="the release trigger run concluded failure before "
+                       "dispatching the build; re-run it (or dispatch "
+                       "build-release for 9.1.1 directly)",
+                url="https://x/runs/55", action="dispatch-build-release"),),
+        )
+
+    def _dispatchable_repo(self) -> MagicMock:
+        repo = MagicMock()
+        repo.default_branch = "main"
+        repo.get_workflow.return_value.create_dispatch.return_value = True
+        return repo
+
+    def test_failed_trigger_dispatches_the_build_once_when_unmarked(self) -> None:
+        repo = self._dispatchable_repo()
+        issue = tracker()
+        performed = actions.advance(gh_mock(repo), _POLICY,
+                                    status=self._failed_trigger_status(),
+                                    tracking_issue=issue)
+        repo.get_workflow.assert_called_with("build-release.yml")
+        repo.get_workflow.return_value.create_dispatch.assert_called_once_with(
+            "main", inputs={"version": "9.1.1", "environment": "prod"},
+        )
+        fingerprint = hashlib.sha256(MERGE_SHA.encode("utf-8")).hexdigest()[:12]
+        bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
+        autofix = next(b for b in bodies if ":autofix:" in b)
+        assert (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:build-dispatch:"
+                f"{fingerprint} -->") in autofix
+        assert "> [!NOTE]" in autofix
+        assert "**Auto-remediation:** dispatching the build pipeline for `9.1.1`" in autofix
+        assert "[release trigger run](https://x/runs/55)" in autofix
+        assert "\u2014" not in autofix
+        assert any("auto-dispatched build-release" in p for p in performed)
+
+    def test_rc_dispatch_carries_the_tag_as_version(self) -> None:
+        repo = self._dispatchable_repo()
+        actions.advance(gh_mock(repo), _POLICY,
+                        status=self._failed_trigger_status(version="9.2.0", stage="rc1"),
+                        tracking_issue=tracker())
+        repo.get_workflow.return_value.create_dispatch.assert_called_once_with(
+            "main", inputs={"version": "9.2.0-rc1", "environment": "prod"},
+        )
+
+    def test_marked_candidate_never_dispatches_again(self) -> None:
+        # Once per candidate SHA, even across distinct failed trigger runs.
+        repo = self._dispatchable_repo()
+        issue = tracker()
+        fingerprint = hashlib.sha256(MERGE_SHA.encode("utf-8")).hexdigest()[:12]
+        posted = MagicMock()
+        posted.user.login = "valkeyrie-ops[bot]"
+        posted.body = (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:build-dispatch:"
+                       f"{fingerprint} -->\ndispatched")
+        issue.get_comments.return_value = [posted]
+        performed = actions.advance(gh_mock(repo), _POLICY,
+                                    status=self._failed_trigger_status(),
+                                    tracking_issue=issue)
+        repo.get_workflow.return_value.create_dispatch.assert_not_called()
+        assert not any("auto-dispatched" in p for p in performed)
+
+    def test_failure_notification_still_fires_alongside_the_autofix(self) -> None:
+        # Auto-remediation must not swallow the visible failure escalation.
+        issue = tracker()
+        actions.advance(gh_mock(self._dispatchable_repo()), _POLICY,
+                        status=self._failed_trigger_status(), tracking_issue=issue)
+        bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
+        assert any(f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:" in b for b in bodies)
+        assert any(":autofix:build-dispatch:" in b for b in bodies)
+
+    def test_pending_build_run_never_triggers_the_dispatch(self) -> None:
+        repo = self._dispatchable_repo()
+        status = _status(
+            phase=ReleasePhase.PUBLISHED, published=True,
+            qualification=QualificationStatus(run_id=1, passed=True),
+            outputs=(DownstreamOutput(name="build-run", state=OutputState.PENDING,
+                                      detail="no run found yet"),),
+        )
+        issue = tracker()
+        actions.advance(gh_mock(repo), _POLICY, status=status, tracking_issue=issue)
+        repo.get_workflow.return_value.create_dispatch.assert_not_called()
+        issue.create_comment.assert_not_called()
 
 
 class TestOutputActions:
@@ -151,9 +293,13 @@ class TestNotifyOnce:
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=status, tracking_issue=issue)
         body = issue.create_comment.call_args.kwargs["body"]
-        assert "@valkey-io/core-team" in body
+        assert "> [!WARNING]" in body
+        assert "**@valkey-io/core-team, release `9.1.1` needs attention.**" in body
+        assert "| # | Problem |" in body
         assert "test-ubuntu-latest" in body
+        assert "<sub>This notification repeats only if the failure state changes.</sub>" in body
         assert f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:" in body
+        assert "\u2014" not in body
 
     def test_same_failure_state_never_notifies_twice(self) -> None:
         status = _status(
@@ -251,9 +397,12 @@ class TestNudgeOnce:
                                     status=self._notes_pr_open(), tracking_issue=issue)
         body = issue.create_comment.call_args.kwargs["body"]
         assert f"<!-- {issue_mod.MARKER_NAMESPACE}:nudge:" in body
-        assert "@valkey-io/core-team — action needed:" in body
-        assert "review and merge the release-notes PR https://x/pull/42" in body
-        assert "to proceed with 9.1.1." in body
+        assert "> [!IMPORTANT]" in body
+        assert "**@valkey-io/core-team, action needed for `9.1.1`.**" in body
+        assert "Review and merge the release-notes PR https://x/pull/42" in body
+        assert "to proceed with `9.1.1`." in body
+        assert "<sub>One-time nudge: posts again only if the state changes.</sub>" in body
+        assert "\u2014" not in body
         assert any("nudged" in p for p in performed)
 
     def test_same_state_never_nudges_twice(self) -> None:
@@ -272,10 +421,11 @@ class TestNudgeOnce:
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=self._branch_moved(), tracking_issue=issue)
         body = issue.create_comment.call_args.kwargs["body"]
-        assert "@valkey-io/core-team — action needed:" in body
-        assert f"branch 9.1 moved to {MOVED_SHA[:12]}" in body
+        assert "**@valkey-io/core-team, action needed for `9.1.1`.**" in body
+        assert f"Branch `9.1` moved to `{MOVED_SHA[:12]}`" in body
         assert "Adopt the new head (Actions → release-adopt)" in body
         assert "or ship the pinned candidate." in body
+        assert "\u2014" not in body
 
     def test_new_head_after_a_nudge_notifies_again(self) -> None:
         issue = tracker()
@@ -306,6 +456,11 @@ class TestAutoClose:
         performed = actions.advance(gh_mock(MagicMock()), _POLICY,
                                     status=status, tracking_issue=issue)
         issue.edit.assert_called_once_with(state="closed")
+        body = issue.create_comment.call_args.kwargs["body"]
+        assert "> [!NOTE]" in body
+        assert "**Release `9.1.1` (ga) is complete.**" in body
+        assert "all verified public. Closing." in body
+        assert "\u2014" not in body
         assert any("closed tracking issue" in p for p in performed)
 
     def test_already_closed_tracker_is_left_alone(self) -> None:

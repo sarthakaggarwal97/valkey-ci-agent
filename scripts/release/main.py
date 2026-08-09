@@ -21,6 +21,7 @@ import argparse
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.common.job_summary import emit_job_summary
+from scripts.common.polling import env_seconds
 from scripts.release.authorize import NotAuthorizedError
 from scripts.release.models import ReleaseIntent
 from scripts.release.policy import RepoReleasePolicy, load_policy
@@ -178,8 +180,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "start":
             return _run_start(gh, policy, args)
         if args.command == "reconcile":
-            return _run_reconcile(gh, gh_downstream, gh_agent, agent_repo,
-                                  policy, parser, args)
+            # Poll knobs follow the backport-poll convention: both default to
+            # 0, which keeps manual dispatch and every existing caller on
+            # today's single-pass behavior.
+            interval = env_seconds("RECONCILE_POLL_INTERVAL_SECONDS", 0)
+            duration = env_seconds("RECONCILE_POLL_DURATION_SECONDS", 0)
+            return _run_reconcile_poll(gh, gh_downstream, gh_agent, agent_repo,
+                                       policy, parser, args,
+                                       interval=interval, duration=duration)
         if args.command == "adopt":
             return _run_adopt(gh, policy, args)
         if args.command == "publish":
@@ -220,6 +228,38 @@ def _run_start(gh: Any, policy: RepoReleasePolicy, args: argparse.Namespace) -> 
             result.tag, args.branch, result.issue_url,
         )
     return 0
+
+
+def _run_reconcile_poll(gh: Any, gh_downstream: Any, gh_agent: Any, agent_repo: str,
+                        policy: RepoReleasePolicy, parser: argparse.ArgumentParser,
+                        args: argparse.Namespace, *,
+                        interval: int, duration: int) -> int:
+    """Run reconcile passes on an in-run cadence until ``duration`` elapses.
+
+    ``duration <= 0`` (the default) is exactly one pass, preserving the
+    original single-shot semantics for manual dispatch and local runs. In
+    loop mode a failing pass is logged and the loop continues (the same
+    containment spirit as the per-branch handling inside a pass); the exit
+    code reflects the LAST pass only.
+    """
+    start = time.monotonic()
+    passes = 0
+    while True:
+        passes += 1
+        logger.info("reconcile pass %d", passes)
+        try:
+            code = _run_reconcile(gh, gh_downstream, gh_agent, agent_repo,
+                                  policy, parser, args)
+        except Exception:
+            if duration <= 0:
+                # Single-pass mode keeps today's behavior: the caller's
+                # handler decides how the exception is reported.
+                raise
+            logger.exception("reconcile pass %d failed", passes)
+            code = 1
+        if duration <= 0 or time.monotonic() - start + interval > duration:
+            return code
+        time.sleep(interval)
 
 
 def _run_reconcile(gh: Any, gh_downstream: Any, gh_agent: Any, agent_repo: str,

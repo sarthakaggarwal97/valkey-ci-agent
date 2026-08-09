@@ -541,8 +541,9 @@ release decision: branch, intent (`rc`/`ga`/`patch`), and urgency. It:
 6. Chains into the existing release-notes cut with the derived version and
    stage.
 
-**Candidate tracking** (`release-reconcile.yml`, scheduled every 10 minutes
-+ manual): the
+**Candidate tracking** (`release-reconcile.yml`, scheduled hourly with each
+run reconciling every 10 minutes internally, since GitHub does not fire
+high-frequency crons reliably; manual dispatch runs one immediate pass): the
 release-notes PR's merge commit becomes the candidate SHA, but only while it
 remains the branch head. The notes PR must live in the upstream repo and be
 newer than the tracker, so a fork PR with a look-alike head branch or a

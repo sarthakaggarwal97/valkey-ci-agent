@@ -15,6 +15,11 @@ completed work:
   notifies twice, a *new* failure does);
 - nudge the authorized team exactly once per distinct awaiting-human state
   (an open notes PR, a moved branch) with the same fingerprint pattern;
+- auto-dispatch build-release once per candidate when the valkey-side
+  release trigger failed before dispatching the build (marker-gated, never
+  loops; the failure notification still stands until the build verifies);
+- retry a failed qualification run exactly once per candidate (same
+  marker gate; a second failure waits for a human);
 - close the tracking issue when every required public output is verified.
 
 Publication is deliberately absent: it only happens through the protected
@@ -62,15 +67,21 @@ def advance(
     log of what was done (empty when the state needs nothing)."""
     performed: list[str] = []
 
-    if (
-        status.phase is ReleasePhase.QUALIFICATION
-        and status.qualification == QualificationStatus()
-    ):
-        tag = release_tag(status.version, status.stage)
-        qual_mod.dispatch_qualification(
-            gh, policy, tag=tag, sha=status.candidate.sha,
-        )
-        performed.append(f"dispatched qualification of {tag} @ {status.candidate.sha[:12]}")
+    if status.phase is ReleasePhase.QUALIFICATION:
+        if status.qualification == QualificationStatus():
+            tag = release_tag(status.version, status.stage)
+            qual_mod.dispatch_qualification(
+                gh, policy, tag=tag, sha=status.candidate.sha,
+            )
+            performed.append(f"dispatched qualification of {tag} @ {status.candidate.sha[:12]}")
+        elif (
+            status.qualification.run_id
+            and not status.qualification.pending
+            and not status.qualification.passed
+        ):
+            retried = _retry_qualification_once(gh, policy, status, tracking_issue)
+            if retried:
+                performed.append(retried)
 
     if (
         status.phase is ReleasePhase.READY
@@ -93,6 +104,10 @@ def advance(
         elif output.action == "open-helm-pr":
             url = _open_helm_pr(gh, policy, status.version)
             performed.append(f"opened helm chart bump PR: {url}")
+        elif output.action == "dispatch-build-release":
+            dispatched = _dispatch_build_once(gh, policy, status, tracking_issue, output)
+            if dispatched:
+                performed.append(dispatched)
 
     note = _notify_once(gh, policy, status, tracking_issue)
     if note:
@@ -128,6 +143,120 @@ def _dispatch_bundle(gh: Any, policy: RepoReleasePolicy, tag: str) -> None:
         retries=2, description="dispatch bundle update",
     )
     logger.info("Dispatched bundle update for valkey %s", tag)
+
+
+def _autofix_once(gh: Any, tracking_issue: Any, *, key: str,
+                  fingerprint_source: str, callout: str) -> bool:
+    """Post the auto-remediation marker comment once per (key, fingerprint).
+
+    Same trusted-marker pattern as the nudges: the marker is stamped into a
+    bot comment, and while one exists for this fingerprint no further
+    remediation fires, so the autofix can never loop. Returns False when the
+    marker already exists (remediation was already attempted).
+
+    The marker posts *before* the remediation runs: a remediation that
+    dispatches but fails to record itself would retry forever, while a
+    marker without a dispatch just leaves the normal failure notification
+    standing. Fail closed.
+    """
+    fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
+    marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:{key}:{fingerprint} -->"
+    for comment in issue_mod.trusted_comments(tracking_issue, gh):
+        if marker in (comment.body or ""):
+            return False
+    retry_github_call(
+        lambda: tracking_issue.create_comment(body=f"{marker}\n{callout}"),
+        retries=2, description=f"post {key} auto-remediation comment",
+    )
+    issue_mod.invalidate_comment_memo(tracking_issue)
+    return True
+
+
+def _dispatch_build_once(
+    gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus,
+    tracking_issue: Any, output: Any,
+) -> str:
+    """Dispatch build-release directly, once per candidate, when the
+    valkey-side release trigger failed before reaching the automation repo.
+
+    The fingerprint is the candidate SHA: strictly one auto-dispatch per
+    candidate, even across distinct failed trigger runs. When the marker
+    already exists nothing happens (the normal failure notification covers
+    the state).
+    """
+    tag = release_tag(status.version, status.stage)
+    posted = _autofix_once(
+        gh, tracking_issue, key="build-dispatch",
+        fingerprint_source=status.candidate.sha,
+        callout=(
+            f"> [!NOTE]\n"
+            f"> **Auto-remediation:** dispatching the build pipeline for "
+            f"`{tag}` directly (the [release trigger run]({output.url}) failed)."
+        ),
+    )
+    if not posted:
+        return ""
+    _dispatch_build_release(gh, policy, tag)
+    logger.info("Auto-dispatched build-release for %s", tag)
+    return f"auto-dispatched build-release for {tag} (release trigger failed)"
+
+
+def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str) -> None:
+    """Fire the automation repo's build workflow for *tag* in prod.
+
+    The inputs mirror the upstream release trigger exactly (it sends the
+    release's tag_name as its version), so the resulting run carries the
+    ``Build Release <tag> (prod)`` run-name the build-run verifier matches.
+    """
+    down = policy.downstream
+    workflow = workflow_handle(gh, down.automation_repo, down.build_workflow)
+    if workflow is None:
+        raise RuntimeError(
+            f"{down.build_workflow} does not exist on {down.automation_repo}"
+        )
+    repo = retry_github_call(
+        lambda: gh.get_repo(down.automation_repo),
+        retries=2, description=f"get repo {down.automation_repo}",
+    )
+    dispatched = retry_github_call(
+        lambda: workflow.create_dispatch(
+            repo.default_branch, inputs={"version": tag, "environment": "prod"},
+        ),
+        retries=2, description="dispatch build-release run",
+    )
+    if not dispatched:
+        raise RuntimeError(
+            f"build-release dispatch was rejected by "
+            f"{down.automation_repo}/{down.build_workflow}"
+        )
+
+
+def _retry_qualification_once(
+    gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus, tracking_issue: Any,
+) -> str:
+    """Re-dispatch qualification exactly once per candidate after a failure.
+
+    The deliberate never-redispatch-over-a-failed-run stance is softened by
+    exactly one step: one automatic retry per candidate SHA. A second
+    failure changes nothing further; the normal failure notification
+    stands and a human decides.
+    """
+    tag = release_tag(status.version, status.stage)
+    run_link = f"[run {status.qualification.run_id}]({status.qualification.url})"
+    posted = _autofix_once(
+        gh, tracking_issue, key="qual-retry",
+        fingerprint_source=status.candidate.sha,
+        callout=(
+            f"> [!NOTE]\n"
+            f"> **Auto-remediation:** retrying qualification for `{tag}` "
+            f"once (previous run failed: {run_link})."
+        ),
+    )
+    if not posted:
+        return ""
+    qual_mod.dispatch_qualification(gh, policy, tag=tag, sha=status.candidate.sha)
+    logger.info("Auto-retried qualification of %s @ %s", tag, status.candidate.sha[:12])
+    return f"auto-retried qualification of {tag} @ {status.candidate.sha[:12]}"
 
 
 def _open_helm_pr(gh: Any, policy: RepoReleasePolicy, version: str) -> str:
@@ -255,13 +384,24 @@ def _notify_once(
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
         if marker in (comment.body or ""):
             return ""
-    lines = "\n".join(f"- {item}" for item in failures)
+    tag = release_tag(status.version, status.stage)
+    rows = "\n".join(
+        f"| {index} | {_problem_cell(item)} |"
+        for index, item in enumerate(failures, start=1)
+    )
     retry_github_call(
         lambda: tracking_issue.create_comment(
             body=(
                 f"{marker}\n"
-                f"{policy.mention} — the release needs attention:\n{lines}\n\n"
-                f"This notification repeats only if the failure state changes."
+                f"> [!WARNING]\n"
+                f"> **{policy.mention}, release `{tag}` needs attention.**\n"
+                f"\n"
+                f"| # | Problem |\n"
+                f"|---|---|\n"
+                f"{rows}\n"
+                f"\n"
+                f"<sub>This notification repeats only if the failure state "
+                f"changes.</sub>"
             )
         ),
         retries=2, description="post failure notification",
@@ -269,6 +409,15 @@ def _notify_once(
     issue_mod.invalidate_comment_memo(tracking_issue)
     logger.info("Notified %s of %d failure(s)", policy.authorized_team, len(failures))
     return f"notified {policy.authorized_team} ({len(failures)} failure(s))"
+
+
+def _problem_cell(item: str) -> str:
+    """One failure item as a table cell: 'name: detail' items get the name
+    bolded; anything else renders verbatim."""
+    name, sep, detail = item.partition(": ")
+    if sep and detail:
+        return f"**{name}:** {detail}"
+    return item
 
 
 def _nudge_once(
@@ -290,9 +439,18 @@ def _nudge_once(
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
         if marker in (comment.body or ""):
             return ""
+    tag = release_tag(status.version, status.stage)
     retry_github_call(
         lambda: tracking_issue.create_comment(
-            body=f"{marker}\n{policy.mention} — action needed: {message}"
+            body=(
+                f"{marker}\n"
+                f"> [!IMPORTANT]\n"
+                f"> **{policy.mention}, action needed for `{tag}`.**\n"
+                f">\n"
+                f"> {message}\n"
+                f"\n"
+                f"<sub>One-time nudge: posts again only if the state changes.</sub>"
+            )
         ),
         retries=2, description="post action-needed nudge",
     )
@@ -313,16 +471,16 @@ def _nudge_item(status: ReleaseStatus) -> "tuple[str, str] | None":
         tag = release_tag(status.version, status.stage)
         return (
             f"notes-pr:{status.notes_pr_number}",
-            f"review and merge the release-notes PR {status.notes_pr_url} "
-            f"to proceed with {tag}.",
+            f"Review and merge the release-notes PR {status.notes_pr_url} "
+            f"to proceed with `{tag}`.",
         )
     if status.candidate.state is CandidateState.INVALIDATED:
         head = status.candidate.branch_head
         return (
             f"branch-moved:{head}",
-            f"branch {status.branch} moved to {head[:12]} after the candidate "
-            f"was established. Adopt the new head (Actions → release-adopt) "
-            f"or ship the pinned candidate.",
+            f"Branch `{status.branch}` moved to `{head[:12]}` after the "
+            f"candidate was established. Adopt the new head "
+            f"(Actions → release-adopt) or ship the pinned candidate.",
         )
     return None
 
@@ -359,10 +517,12 @@ def _close_when_complete(gh: Any, status: ReleaseStatus, tracking_issue: Any) ->
             lambda: tracking_issue.create_comment(
                 body=(
                     f"{marker}\n"
-                    f"Release **{status.version}** ({status.stage}) is complete: the "
-                    f"release, tag, downloads, hashes, container images, docs, "
-                    f"website, Bundle, and Helm outputs are all verified public. "
-                    f"Closing."
+                    f"> [!NOTE]\n"
+                    f"> **Release `{status.version}` ({status.stage}) is complete.**\n"
+                    f">\n"
+                    f"> The release, tag, downloads, hashes, container images, "
+                    f"docs, website, Bundle, and Helm outputs are all verified "
+                    f"public. Closing."
                 )
             ),
             retries=2, description="post completion comment",

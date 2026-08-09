@@ -402,7 +402,11 @@ workflows, with `release_policy.yml` as the authority for what is allowed
 (release branches, required checks and their workflow, the exact package
 qualification inventory, downstream targets, the authorized team).
 
-Design rule: truth is recomputed from GitHub every pass. The tracking issue
+Design rule: truth is recomputed from GitHub every pass. The reconcile
+workflow is scheduled hourly and long-polls internally (a pass every 10
+minutes inside one run, the same pattern as the other pollers, because GitHub
+does not fire high-frequency crons reliably); manual dispatch runs one
+immediate pass. The tracking issue
 is a display surface and label-pair identity (`release-tracker` +
 `release:<branch>`); nothing is parsed from its body to make a decision, and
 the only trusted comment markers are those authored by the controller's own

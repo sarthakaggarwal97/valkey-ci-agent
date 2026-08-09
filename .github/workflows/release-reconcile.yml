@@ -13,10 +13,12 @@ name: Release Reconcile
 
 on:
   schedule:
-    # Every 10 minutes: an idle pass (no active release) exits in seconds,
-    # and during a release the tracker and its notifications should lag
-    # events by minutes, not an hour.
-    - cron: "*/10 * * * *"
+    # Hourly scheduled run that reconciles every 10 minutes INTERNALLY: a
+    # single run long-polls via RECONCILE_POLL_* below instead of trusting a
+    # `*/10` cron, which GitHub fires unreliably at high frequency.
+    # workflow_dispatch runs one immediate pass. Offset from :00 to dodge
+    # GitHub's top-of-hour cron congestion.
+    - cron: "7 * * * *"
   workflow_dispatch:
     inputs:
       branch:
@@ -34,8 +36,12 @@ jobs:
     # in forks (against the fork policy registry).
     if: github.event_name == 'workflow_dispatch' || github.repository == 'valkey-io/valkey-ci-agent'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 58
     concurrency:
+      # cancel-in-progress false: a queued manual dispatch waits for the
+      # current (up to ~50 minute) scheduled pass cycle to finish rather
+      # than killing it mid-pass; immediate need can cancel the scheduled
+      # run from the UI first.
       group: release-reconcile
       cancel-in-progress: false
     permissions:
@@ -120,6 +126,12 @@ jobs:
           BRANCH: ${{ inputs.branch || '' }}
           TARGET_REPO: ${{ github.repository_owner }}/valkey
           POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
+          # Scheduled runs long-poll (a pass every 10 minutes); manual
+          # dispatch is one immediate pass, matching backport-poll. The
+          # 3000s duration cap keeps every pass inside the 60-minute
+          # App-token validity.
+          RECONCILE_POLL_INTERVAL_SECONDS: ${{ github.event_name == 'schedule' && '600' || '0' }}
+          RECONCILE_POLL_DURATION_SECONDS: ${{ github.event_name == 'schedule' && '3000' || '0' }}
         run: |
           set -euo pipefail
           args=(--policy "${POLICY}" --repo "${TARGET_REPO}" reconcile)

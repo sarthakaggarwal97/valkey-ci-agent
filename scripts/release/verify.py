@@ -121,7 +121,7 @@ def escalate_stalled_outputs(
         DownstreamOutput(
             name=o.name, state=OutputState.FAILED,
             detail=f"stalled: still pending {timeout_minutes} minutes after "
-                   f"publication — {o.detail}",
+                   f"publication ({o.detail})",
             # action cleared: an escalated stall pages a human; it must not
             # also keep auto-dispatching every pass.
             url=o.url, action="", run_id=o.run_id,
@@ -190,12 +190,16 @@ def _verify_build_run(gh: Any, gh_source: Any, policy: RepoReleasePolicy,
         )
         if trigger is not None and trigger.status == "completed" \
                 and trigger.conclusion != "success":
+            # action: reconciliation dispatches build-release directly, once
+            # per candidate (marker-gated in actions.advance); the FAILED
+            # state still reaches the notification path unchanged.
             return DownstreamOutput(
                 name="build-run", state=OutputState.FAILED,
                 detail=f"the release trigger run concluded {trigger.conclusion} "
                        f"before dispatching the build; re-run it (or dispatch "
                        f"build-release for {tag} directly)",
                 url=trigger.html_url,
+                action="dispatch-build-release",
             ), None
         if _past_deadline(published_at, policy.check_timeout_minutes):
             return DownstreamOutput(

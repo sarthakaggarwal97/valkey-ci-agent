@@ -355,7 +355,18 @@ class TestBuildRunObservation:
         out, run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
         assert out.state is OutputState.FAILED
         assert "trigger" in out.detail
+        # The exact failed-trigger case requests the bounded auto-dispatch.
+        assert out.action == "dispatch-build-release"
         assert run is None
+
+    def test_dev_dispatch_never_requests_the_auto_dispatch(self) -> None:
+        gh = _run_source({
+            "build-release.yml": [_wf_run("Build Release 9.1.2 (dev)")],
+        })
+        gh_source = _run_source({"trigger-build-release.yml": []})
+        out, _run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
+        assert out.state is OutputState.PENDING
+        assert out.action == ""
 
     def test_successful_build_run_supersedes_a_failed_trigger(self) -> None:
         # Recovery may dispatch build-release directly; the build must win.
@@ -403,6 +414,8 @@ class TestBuildRunObservation:
         out, _run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", published)
         assert out.state is OutputState.FAILED
         assert "within" in out.detail
+        # Absence needs investigation, not a blind dispatch: no auto-action.
+        assert out.action == ""
 
 
 def _jobs(names_conclusions: "list[tuple[str, str]]") -> "list[MagicMock]":

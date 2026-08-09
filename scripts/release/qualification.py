@@ -113,7 +113,7 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
             (" / DEB · ", down.qualification_deb_jobs, "DEB package builds"),
         ]
     gaps = [
-        f"(evidence mismatch: {label} — {count(marker)} succeeded, "
+        f"(evidence mismatch: {label}, {count(marker)} succeeded, "
         f"expected exactly {expected})"
         for marker, expected, label in expectations
         if count(marker) != expected
@@ -133,7 +133,7 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
                          + down.qualification_arm_archive_jobs)
     if archive_artifacts != expected_archives:
         gaps.append(
-            f"(evidence mismatch: usable archive artifacts — "
+            f"(evidence mismatch: usable archive artifacts, "
             f"{archive_artifacts} present, expected exactly {expected_archives})"
         )
     if is_ga:
@@ -141,12 +141,12 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
         deb_artifacts = sum(name.startswith("valkey-debs-") for name in usable)
         if rpm_artifacts != down.qualification_rpm_jobs:
             gaps.append(
-                f"(evidence mismatch: usable RPM artifacts — {rpm_artifacts} "
+                f"(evidence mismatch: usable RPM artifacts, {rpm_artifacts} "
                 f"present, expected exactly {down.qualification_rpm_jobs})"
             )
         if deb_artifacts != down.qualification_deb_jobs:
             gaps.append(
-                f"(evidence mismatch: usable DEB artifacts — {deb_artifacts} "
+                f"(evidence mismatch: usable DEB artifacts, {deb_artifacts} "
                 f"present, expected exactly {down.qualification_deb_jobs})"
             )
     return tuple(gaps)

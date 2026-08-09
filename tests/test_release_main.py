@@ -104,6 +104,106 @@ class TestCLI:
         assert adopt.call_args.kwargs["sha"] == "a" * 40
 
 
+class TestReconcilePoll:
+    """The env-gated in-run poll loop around the reconcile pass."""
+
+    _BRANCHES = ["7.2", "8.0", "8.1", "9.0", "9.1"]
+
+    @staticmethod
+    def _set_poll_env(monkeypatch: pytest.MonkeyPatch,
+                      interval: str, duration: str) -> None:
+        monkeypatch.setenv("RECONCILE_POLL_INTERVAL_SECONDS", interval)
+        monkeypatch.setenv("RECONCILE_POLL_DURATION_SECONDS", duration)
+
+    def test_loop_runs_passes_until_duration_then_stops(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # 3000s duration / 600s interval with instant passes: five passes
+        # (t=0..2400), then elapsed + interval exceeds duration and the loop
+        # stops instead of sleeping into the deadline.
+        self._set_poll_env(monkeypatch, "600", "3000")
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.reconcile_branch") as reconcile, \
+             patch("scripts.release.main.time") as fake_time:
+            fake_time.monotonic.side_effect = [0, 600, 1200, 1800, 2400, 3000]
+            code = main([*_POLICY_ARGS, "reconcile"])
+        assert code == 0
+        assert reconcile.call_count == 5 * len(self._BRANCHES)
+        assert fake_time.sleep.call_count == 4
+        assert all(c.args == (600,) for c in fake_time.sleep.call_args_list)
+
+    def test_failing_pass_does_not_abort_the_loop(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Every branch of pass 1 fails; pass 2 still runs and is clean, so
+        # the loop survives the bad pass and the exit code is the LAST
+        # pass's, not a sticky failure.
+        self._set_poll_env(monkeypatch, "10", "15")
+        calls = {"n": 0}
+
+        def _fail_first_pass(gh, policy, branch, **kwargs):
+            calls["n"] += 1
+            if calls["n"] <= len(self._BRANCHES):
+                raise RuntimeError("transient API error")
+
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.reconcile_branch",
+                   side_effect=_fail_first_pass) as reconcile, \
+             patch("scripts.release.main.time") as fake_time:
+            fake_time.monotonic.side_effect = [0, 5, 20]
+            code = main([*_POLICY_ARGS, "reconcile"])
+        assert code == 0
+        assert reconcile.call_count == 2 * len(self._BRANCHES)
+        assert fake_time.sleep.call_count == 1
+
+    def test_pass_that_raises_is_contained_and_loop_continues(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Even an exception escaping the whole pass (not just one branch)
+        # must not kill the loop in poll mode.
+        self._set_poll_env(monkeypatch, "10", "15")
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main._run_reconcile",
+                   side_effect=[ReleaseControlError("pass blew up"), 0]) as run, \
+             patch("scripts.release.main.time") as fake_time:
+            fake_time.monotonic.side_effect = [0, 5, 20]
+            code = main([*_POLICY_ARGS, "reconcile"])
+        assert code == 0
+        assert run.call_count == 2
+
+    def test_exit_code_reflects_the_last_pass(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Pass 1 clean, pass 2 (the last) fails: the run must exit non-zero.
+        self._set_poll_env(monkeypatch, "10", "15")
+        calls = {"n": 0}
+
+        def _fail_second_pass(gh, policy, branch, **kwargs):
+            calls["n"] += 1
+            if calls["n"] > len(self._BRANCHES):
+                raise RuntimeError("branch gone")
+
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.reconcile_branch",
+                   side_effect=_fail_second_pass) as reconcile, \
+             patch("scripts.release.main.time") as fake_time:
+            fake_time.monotonic.side_effect = [0, 5, 20]
+            code = main([*_POLICY_ARGS, "reconcile"])
+        assert code == 1
+        assert reconcile.call_count == 2 * len(self._BRANCHES)
+
+    def test_defaults_are_a_single_pass_with_no_sleep(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # No env set: exactly today's behavior, one pass and no sleeping,
+        # so manual dispatch and every existing caller are unchanged.
+        monkeypatch.delenv("RECONCILE_POLL_INTERVAL_SECONDS", raising=False)
+        monkeypatch.delenv("RECONCILE_POLL_DURATION_SECONDS", raising=False)
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.reconcile_branch") as reconcile, \
+             patch("scripts.release.main.time") as fake_time:
+            fake_time.monotonic.return_value = 0.0
+            code = main([*_POLICY_ARGS, "reconcile"])
+        assert code == 0
+        assert reconcile.call_count == len(self._BRANCHES)
+        fake_time.sleep.assert_not_called()
+
+
 def _publish_plan() -> MagicMock:
     return MagicMock(tag="9.1.1", sha="a" * 40, make_latest="true",
                      prerelease=False, body="notes body",
@@ -263,13 +363,25 @@ class TestWorkflowContracts:
 
     def test_reconcile_is_scheduled_and_locked_down(self) -> None:
         workflow = _workflow("release-reconcile.yml")
-        assert "schedule" in workflow["on"]
+        # Hourly (off the congested :00 tick), long-polling internally:
+        # GitHub does not fire high-frequency crons reliably, so cadence
+        # comes from the in-run loop, not from `*/10`.
+        assert workflow["on"]["schedule"] == [{"cron": "7 * * * *"}]
         assert workflow["permissions"] == {}
+        job = workflow["jobs"]["reconcile"]
         # Cron runs only in the canonical repo; manual dispatch is allowed in
         # forks (against the fork policy registry).
-        condition = workflow["jobs"]["reconcile"]["if"]
+        condition = job["if"]
         assert "github.repository == 'valkey-io/valkey-ci-agent'" in condition
         assert "workflow_dispatch" in condition
+        # Scheduled runs poll every 10 minutes for 3000s (inside the
+        # 60-minute App-token validity); dispatch is one immediate pass.
+        env = job["steps"][-1]["env"]
+        assert env["RECONCILE_POLL_INTERVAL_SECONDS"] == \
+            "${{ github.event_name == 'schedule' && '600' || '0' }}"
+        assert env["RECONCILE_POLL_DURATION_SECONDS"] == \
+            "${{ github.event_name == 'schedule' && '3000' || '0' }}"
+        assert job["timeout-minutes"] == "58"
 
     def test_adopt_requires_branch_and_sha(self) -> None:
         inputs = _workflow("release-adopt.yml")["on"]["workflow_dispatch"]["inputs"]

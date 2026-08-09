@@ -56,7 +56,7 @@ class TestRender:
     def test_blocked_body_lists_every_blocker(self) -> None:
         body = issue_mod.render_body(_status(ready=False, blockers=("one", "two")))
         assert "[!WARNING]" in body
-        assert "**Not ready — blocked on:**" in body
+        assert "**Not ready. Blocked on:**" in body
         assert "> - one" in body and "> - two" in body
 
     def test_invalidated_candidate_calls_for_adoption(self) -> None:
@@ -172,6 +172,31 @@ class TestAesthetics:
         )
         body = issue_mod.render_body(failing)
         assert "🟥" in body
+
+    def test_rendered_body_never_contains_an_em_dash(self) -> None:
+        from scripts.release.models import DownstreamOutput, OutputState
+        variants = (
+            _status(),
+            _status(ready=False, blockers=("one", "two")),
+            _status(notes_pr_merged=False, ready=False, blockers=("open",)),
+            _status(
+                candidate=Candidate(state=CandidateState.INVALIDATED,
+                                    sha=_SHA_A, branch_head=_SHA_B),
+                checks=(), ready=False, blockers=("moved",),
+            ),
+            _status(
+                phase=ReleasePhase.PUBLISHED, published=True, ready=False,
+                release_url="https://x/releases/9.1.1",
+                outputs=(
+                    DownstreamOutput(name="tarballs", state=OutputState.VERIFIED,
+                                     detail="public"),
+                    DownstreamOutput(name="helm", state=OutputState.FAILED,
+                                     detail="closed without merging"),
+                ),
+            ),
+        )
+        for status in variants:
+            assert "\u2014" not in issue_mod.render_body(status)
 
 
 class TestAuthenticatedIdentityTrust:

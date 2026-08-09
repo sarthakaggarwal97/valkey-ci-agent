@@ -346,8 +346,10 @@ class TestApprovalEvidence:
             post_approval_evidence(gh, _POLICY, _plan(), "https://x/runs/7")
         body = issue.create_comment.call_args.kwargs["body"]
         assert _APPROVAL_MARKER in body
-        assert "@valkey-io/core-team — approval needed to publish 9.1.1:" in body
+        assert "> [!IMPORTANT]" in body
+        assert "**@valkey-io/core-team, approval needed to publish `9.1.1`.**" in body
         assert "**Approve here:** https://x/runs/7" in body
+        assert "\u2014" not in body
 
     def test_revalidation_edits_in_place_without_a_new_ping(self) -> None:
         # An edit does not re-notify: one ping per approval wait, not one
@@ -359,7 +361,7 @@ class TestApprovalEvidence:
             post_approval_evidence(gh, _POLICY, _plan(), "https://x/runs/8")
         issue.create_comment.assert_not_called()
         body = existing.edit.call_args.kwargs["body"]
-        assert "@valkey-io/core-team — approval needed to publish 9.1.1:" in body
+        assert "**@valkey-io/core-team, approval needed to publish `9.1.1`.**" in body
         assert "https://x/runs/8" in body
 
 

@@ -417,7 +417,9 @@ def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
     # per approval wait is the desired behavior.
     body = (
         f"{_APPROVAL_MARKER}\n"
-        f"{policy.mention} — approval needed to publish {plan.tag}:\n\n"
+        f"> [!IMPORTANT]\n"
+        f"> **{policy.mention}, approval needed to publish `{plan.tag}`.**\n"
+        f"\n"
         + render_plan_summary(plan)
         + f"\n\n**Approve here:** {run_url} (Review deployments -> `release` "
         f"-> Approve and deploy)"
