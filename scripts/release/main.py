@@ -21,7 +21,6 @@ import argparse
 import logging
 import os
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +30,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.common.job_summary import emit_job_summary
-from scripts.common.polling import env_seconds
+from scripts.common.polling import PollLoopError, env_seconds, run_poll_loop
 from scripts.release.authorize import NotAuthorizedError
 from scripts.release.models import ReleaseIntent
 from scripts.release.policy import RepoReleasePolicy, load_policy
@@ -237,29 +236,39 @@ def _run_reconcile_poll(gh: Any, gh_downstream: Any, gh_agent: Any, agent_repo: 
     """Run reconcile passes on an in-run cadence until ``duration`` elapses.
 
     ``duration <= 0`` (the default) is exactly one pass, preserving the
-    original single-shot semantics for manual dispatch and local runs. In
-    loop mode a failing pass is logged and the loop continues (the same
-    containment spirit as the per-branch handling inside a pass); the exit
-    code reflects the LAST pass only.
+    original single-shot semantics for manual dispatch and local runs.
+    Loop mode reuses the shared poller machinery (the same
+    ``run_poll_loop`` the backport and ci-fix pollers use): a failing pass
+    is logged and the loop continues, and a run with any failed pass exits
+    non-zero via ``PollLoopError`` so scheduled-run health stays visible.
+    A pass that merely reports per-branch failures (non-zero return, no
+    exception) is promoted to an error for the same reason.
     """
-    start = time.monotonic()
-    passes = 0
-    while True:
-        passes += 1
-        logger.info("reconcile pass %d", passes)
-        try:
-            code = _run_reconcile(gh, gh_downstream, gh_agent, agent_repo,
-                                  policy, parser, args)
-        except Exception:
-            if duration <= 0:
-                # Single-pass mode keeps today's behavior: the caller's
-                # handler decides how the exception is reported.
-                raise
-            logger.exception("reconcile pass %d failed", passes)
-            code = 1
-        if duration <= 0 or time.monotonic() - start + interval > duration:
-            return code
-        time.sleep(interval)
+
+    def poll_once() -> int:
+        code = _run_reconcile(gh, gh_downstream, gh_agent, agent_repo,
+                              policy, parser, args)
+        if code != 0:
+            raise ReleaseControlError("reconcile pass reported failed branches")
+        return code
+
+    if duration <= 0:
+        # Single-pass mode keeps today's behavior: the caller's handler
+        # decides how an exception is reported, and the pass's own exit
+        # code is returned as-is.
+        return _run_reconcile(gh, gh_downstream, gh_agent, agent_repo,
+                              policy, parser, args)
+    try:
+        run_poll_loop(
+            poll_once,
+            interval_seconds=interval,
+            duration_seconds=duration,
+            logger=logger,
+        )
+    except PollLoopError as exc:
+        logger.error("%s", exc)
+        return 1
+    return 0
 
 
 def _run_reconcile(gh: Any, gh_downstream: Any, gh_agent: Any, agent_repo: str,

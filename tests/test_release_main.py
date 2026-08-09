@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
+from scripts.common.polling import run_poll_loop
 from scripts.release.authorize import NotAuthorizedError
 from scripts.release.main import main
 from scripts.release.reconcile import ReleaseControlError, StartResult
@@ -105,7 +106,7 @@ class TestCLI:
 
 
 class TestReconcilePoll:
-    """The env-gated in-run poll loop around the reconcile pass."""
+    """The env-gated poll loop delegates to the shared run_poll_loop."""
 
     _BRANCHES = ["7.2", "8.0", "8.1", "9.0", "9.1"]
 
@@ -115,27 +116,45 @@ class TestReconcilePoll:
         monkeypatch.setenv("RECONCILE_POLL_INTERVAL_SECONDS", interval)
         monkeypatch.setenv("RECONCILE_POLL_DURATION_SECONDS", duration)
 
-    def test_loop_runs_passes_until_duration_then_stops(
+    @staticmethod
+    def _controlled_loop(clock_values: list[float]):
+        """The real run_poll_loop with an injected clock and no sleeping.
+
+        Cadence behavior itself is covered by tests/test_polling.py; these
+        tests verify the reconcile command wires into it correctly.
+        """
+        ticks = iter(clock_values)
+
+        def fake_loop(poll_once, *, interval_seconds, duration_seconds, logger):
+            return run_poll_loop(
+                poll_once,
+                interval_seconds=interval_seconds,
+                duration_seconds=duration_seconds,
+                clock=lambda: next(ticks),
+                sleep=lambda _s: None,
+                logger=logger,
+            )
+
+        return fake_loop
+
+    def test_env_knobs_reach_the_shared_loop(
             self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # 3000s duration / 600s interval with instant passes: five passes
-        # (t=0..2400), then elapsed + interval exceeds duration and the loop
-        # stops instead of sleeping into the deadline.
         self._set_poll_env(monkeypatch, "600", "3000")
         with patch("scripts.release.main.Github"), \
-             patch("scripts.release.main.reconcile_branch") as reconcile, \
-             patch("scripts.release.main.time") as fake_time:
-            fake_time.monotonic.side_effect = [0, 600, 1200, 1800, 2400, 3000]
+             patch("scripts.release.main.reconcile_branch"), \
+             patch("scripts.release.main.run_poll_loop",
+                   return_value=[0]) as loop:
             code = main([*_POLICY_ARGS, "reconcile"])
         assert code == 0
-        assert reconcile.call_count == 5 * len(self._BRANCHES)
-        assert fake_time.sleep.call_count == 4
-        assert all(c.args == (600,) for c in fake_time.sleep.call_args_list)
+        assert loop.call_args.kwargs["interval_seconds"] == 600
+        assert loop.call_args.kwargs["duration_seconds"] == 3000
 
-    def test_failing_pass_does_not_abort_the_loop(
+    def test_failing_pass_continues_but_the_run_exits_nonzero(
             self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # Every branch of pass 1 fails; pass 2 still runs and is clean, so
-        # the loop survives the bad pass and the exit code is the LAST
-        # pass's, not a sticky failure.
+        # Pass 1 fails on every branch, pass 2 is clean: the loop must
+        # survive the bad pass (both passes run) yet the run exits 1 via
+        # PollLoopError, matching the other pollers, so scheduled-run
+        # health stays visible.
         self._set_poll_env(monkeypatch, "10", "15")
         calls = {"n": 0}
 
@@ -147,61 +166,37 @@ class TestReconcilePoll:
         with patch("scripts.release.main.Github"), \
              patch("scripts.release.main.reconcile_branch",
                    side_effect=_fail_first_pass) as reconcile, \
-             patch("scripts.release.main.time") as fake_time:
-            fake_time.monotonic.side_effect = [0, 5, 20]
-            code = main([*_POLICY_ARGS, "reconcile"])
-        assert code == 0
-        assert reconcile.call_count == 2 * len(self._BRANCHES)
-        assert fake_time.sleep.call_count == 1
-
-    def test_pass_that_raises_is_contained_and_loop_continues(
-            self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # Even an exception escaping the whole pass (not just one branch)
-        # must not kill the loop in poll mode.
-        self._set_poll_env(monkeypatch, "10", "15")
-        with patch("scripts.release.main.Github"), \
-             patch("scripts.release.main._run_reconcile",
-                   side_effect=[ReleaseControlError("pass blew up"), 0]) as run, \
-             patch("scripts.release.main.time") as fake_time:
-            fake_time.monotonic.side_effect = [0, 5, 20]
-            code = main([*_POLICY_ARGS, "reconcile"])
-        assert code == 0
-        assert run.call_count == 2
-
-    def test_exit_code_reflects_the_last_pass(
-            self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # Pass 1 clean, pass 2 (the last) fails: the run must exit non-zero.
-        self._set_poll_env(monkeypatch, "10", "15")
-        calls = {"n": 0}
-
-        def _fail_second_pass(gh, policy, branch, **kwargs):
-            calls["n"] += 1
-            if calls["n"] > len(self._BRANCHES):
-                raise RuntimeError("branch gone")
-
-        with patch("scripts.release.main.Github"), \
-             patch("scripts.release.main.reconcile_branch",
-                   side_effect=_fail_second_pass) as reconcile, \
-             patch("scripts.release.main.time") as fake_time:
-            fake_time.monotonic.side_effect = [0, 5, 20]
+             patch("scripts.release.main.run_poll_loop",
+                   side_effect=self._controlled_loop([0, 0, 5, 10, 20])):
             code = main([*_POLICY_ARGS, "reconcile"])
         assert code == 1
         assert reconcile.call_count == 2 * len(self._BRANCHES)
 
-    def test_defaults_are_a_single_pass_with_no_sleep(
+    def test_clean_passes_exit_zero(
             self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # No env set: exactly today's behavior, one pass and no sleeping,
-        # so manual dispatch and every existing caller are unchanged.
+        self._set_poll_env(monkeypatch, "10", "15")
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.reconcile_branch") as reconcile, \
+             patch("scripts.release.main.run_poll_loop",
+                   side_effect=self._controlled_loop([0, 0, 5, 10, 20])):
+            code = main([*_POLICY_ARGS, "reconcile"])
+        assert code == 0
+        assert reconcile.call_count == 2 * len(self._BRANCHES)
+
+    def test_defaults_are_a_single_pass_without_the_loop(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # No env set: exactly today's behavior. The shared loop is not
+        # even entered, so manual dispatch and every existing caller are
+        # unchanged and a pass failure reports through the plain handler.
         monkeypatch.delenv("RECONCILE_POLL_INTERVAL_SECONDS", raising=False)
         monkeypatch.delenv("RECONCILE_POLL_DURATION_SECONDS", raising=False)
         with patch("scripts.release.main.Github"), \
              patch("scripts.release.main.reconcile_branch") as reconcile, \
-             patch("scripts.release.main.time") as fake_time:
-            fake_time.monotonic.return_value = 0.0
+             patch("scripts.release.main.run_poll_loop") as loop:
             code = main([*_POLICY_ARGS, "reconcile"])
         assert code == 0
         assert reconcile.call_count == len(self._BRANCHES)
-        fake_time.sleep.assert_not_called()
+        loop.assert_not_called()
 
 
 def _publish_plan() -> MagicMock:
