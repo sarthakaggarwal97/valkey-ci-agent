@@ -32,9 +32,11 @@ permissions: {}
 jobs:
   reconcile:
     name: "Reconcile release trackers"
-    # Scheduled runs only in the canonical repo; manual dispatch also works
-    # in forks (against the fork policy registry).
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'valkey-io/valkey-ci-agent'
+    # Scheduled runs happen in the canonical repo, or in a fork that has
+    # opted in by setting the repository variable RELEASE_POLL_ENABLED to
+    # 'true' (unattended end-to-end testing). Manual dispatch works
+    # everywhere (against the fork policy registry).
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'valkey-io/valkey-ci-agent' || vars.RELEASE_POLL_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 58
     concurrency:
