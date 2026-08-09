@@ -64,9 +64,10 @@ class TestTarballs:
 
 
 class TestHashes:
-    def test_recorded_hash_line_verifies(self) -> None:
-        repo = _repo_serving({"README": "hash valkey-9.1.1.tar.gz sha256 abc url"})
-        output = verify._verify_hashes(gh_mock(repo), _POLICY.downstream, "9.1.1")
+    @pytest.mark.parametrize("tag", ["9.1.1", "9.2.0-rc1"])
+    def test_recorded_hash_line_verifies(self, tag: str) -> None:
+        repo = _repo_serving({"README": f"hash valkey-{tag}.tar.gz sha256 abc url"})
+        output = verify._verify_hashes(gh_mock(repo), _POLICY.downstream, tag)
         assert output.state is OutputState.VERIFIED
 
     def test_absent_hash_line_is_pending(self) -> None:
@@ -153,6 +154,15 @@ class TestBundle:
         assert output.state is OutputState.PENDING
         assert output.action == ""
 
+    def test_malformed_versions_json_is_failed_not_a_crash(self) -> None:
+        # P1: a malformed downstream file must degrade to this output
+        # failing, not raise through _guarded and abort the pass.
+        repo = _repo_serving({"versions.json": "{not json"})
+        output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
+                                       images_public=True)
+        assert output.state is OutputState.FAILED
+        assert "could not parse `versions.json`" in output.detail
+
     def test_merged_and_public_everywhere_verifies(self) -> None:
         versions = json.dumps({"9.1": {"version": "9.1.2", "valkey-server": {"version": "9.1.1"}}})
         repo = _repo_serving({"versions.json": versions})
@@ -226,6 +236,17 @@ class TestHelm:
         assert output.state is OutputState.PENDING
         assert "valkey-0.12.0" in output.detail
 
+    def test_unparseable_app_version_is_failed_not_a_crash(self) -> None:
+        # P1: CHART_APP_VERSION_RE accepts "9.1", which parse_version
+        # rejects; that must degrade to this output failing, not raise
+        # through _guarded and abort the pass.
+        chart = 'apiVersion: v2\nname: valkey\nversion: 0.12.0\nappVersion: "9.1"\n'
+        repo = _repo_serving({"valkey/Chart.yaml": chart})
+        output = verify._verify_helm(gh_mock(repo), _POLICY.downstream, "9.1.1", "ga",
+                                     image_public=True)
+        assert output.state is OutputState.FAILED
+        assert "could not parse `valkey/Chart.yaml`" in output.detail
+
 
 class TestOrderingGate:
     def test_ordered_outputs_gate_on_container_images(self) -> None:
@@ -263,11 +284,6 @@ class TestRCTagThreading:
         assert output.state is OutputState.VERIFIED
         assert all("valkey-9.2.0-rc1-" in url for url in seen)
 
-    def test_hashes_line_uses_the_tag(self) -> None:
-        repo = _repo_serving({"README": "hash valkey-9.2.0-rc1.tar.gz sha256 abc url"})
-        output = verify._verify_hashes(gh_mock(repo), _POLICY.downstream, "9.2.0-rc1")
-        assert output.state is OutputState.VERIFIED
-
 
 class TestClosedPRsNeedHumans:
     def test_closed_unmerged_bundle_pr_is_failed_with_no_action(self) -> None:
@@ -295,7 +311,8 @@ class TestVerifierDegradation:
         from github.GithubException import GithubException
         gh = MagicMock()
         gh.get_repo.side_effect = GithubException(404, "missing", {})
-        outputs = verify.verify_core_outputs(gh, _POLICY, tag="9.1.2", stage="ga")
+        outputs = verify.verify_core_outputs(gh, _POLICY, tag="9.1.2", stage="ga",
+                                             gh_source=gh, published_at=None)
         hashes = next(o for o in outputs if o.name == "hashes")
         assert hashes.state is OutputState.FAILED
         assert "404" in hashes.detail
@@ -335,9 +352,10 @@ class TestBuildRunObservation:
         gh_source = _run_source({
             "trigger-build-release.yml": [_wf_run("9.1.2", conclusion="failure")],
         })
-        out = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
+        out, run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
         assert out.state is OutputState.FAILED
         assert "trigger" in out.detail
+        assert run is None
 
     def test_successful_build_run_supersedes_a_failed_trigger(self) -> None:
         # Recovery may dispatch build-release directly; the build must win.
@@ -347,16 +365,17 @@ class TestBuildRunObservation:
         gh_source = _run_source({
             "trigger-build-release.yml": [_wf_run("9.1.2", conclusion="failure")],
         })
-        out = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
+        out, run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
         assert out.state is OutputState.VERIFIED
         assert out.run_id == 700
+        assert run is not None and run.id == 700
 
     def test_dev_dispatch_never_satisfies(self) -> None:
         gh = _run_source({
             "build-release.yml": [_wf_run("Build Release 9.1.2 (dev)")],
         })
         gh_source = _run_source({"trigger-build-release.yml": []})
-        out = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
+        out, _run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
         assert out.state is OutputState.PENDING
 
     def test_neighbor_version_does_not_match_the_boundary_anchor(self) -> None:
@@ -364,8 +383,16 @@ class TestBuildRunObservation:
         gh_source = _run_source({
             "trigger-build-release.yml": [_wf_run("9.1.20", conclusion="failure")],
         })
-        out = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
+        out, _run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
         assert out.state is OutputState.PENDING  # 9.1.20 is not 9.1.2
+
+    def test_rc_suffixed_title_does_not_match_the_ga_marker(self) -> None:
+        gh = _run_source({"build-release.yml": []})
+        gh_source = _run_source({
+            "trigger-build-release.yml": [_wf_run("9.1.2-rc1", conclusion="failure")],
+        })
+        out, _run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
+        assert out.state is OutputState.PENDING  # 9.1.2-rc1 is not 9.1.2
 
     def test_bounded_absence_becomes_failed(self) -> None:
         from datetime import datetime, timedelta, timezone
@@ -373,7 +400,7 @@ class TestBuildRunObservation:
             minutes=_POLICY.check_timeout_minutes + 60)
         gh = _run_source({"build-release.yml": []})
         gh_source = _run_source({"trigger-build-release.yml": []})
-        out = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", published)
+        out, _run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", published)
         assert out.state is OutputState.FAILED
         assert "within" in out.detail
 
@@ -387,10 +414,15 @@ def _jobs(names_conclusions: "list[tuple[str, str]]") -> "list[MagicMock]":
     return jobs
 
 
-def _gh_with_run_jobs(jobs: "list[MagicMock]") -> MagicMock:
-    gh = MagicMock()
-    gh.get_repo.return_value.get_workflow_run.return_value.jobs.return_value = jobs
-    return gh
+def _run_with_artifacts(names: "list[str]") -> MagicMock:
+    run = MagicMock(id=700)
+    artifacts = []
+    for name in names:
+        artifact = MagicMock(expired=False)
+        artifact.name = name
+        artifacts.append(artifact)
+    run.get_artifacts.return_value = artifacts
+    return run
 
 
 _BUILD_OK = DownstreamOutput(name="build-run", state=OutputState.VERIFIED,
@@ -399,64 +431,72 @@ _BUILD_OK = DownstreamOutput(name="build-run", state=OutputState.VERIFIED,
 
 class TestPackagesAndTryValkey:
     def test_rc_skips_packages(self) -> None:
-        out = verify._verify_packages(MagicMock(), _POLICY, "rc1", _BUILD_OK)
+        out = verify._verify_packages("rc1", _BUILD_OK, None)
         assert out.state is OutputState.SKIPPED
 
     def test_packages_verified_by_publish_and_pages_jobs(self) -> None:
-        gh = _gh_with_run_jobs(_jobs([
+        jobs = _jobs([
             ("release-build-packages / Publish to S3", "success"),
             ("release-build-packages / Deploy Pages", "success"),
-        ]))
-        out = verify._verify_packages(gh, _POLICY, "ga", _BUILD_OK)
+        ])
+        out = verify._verify_packages("ga", _BUILD_OK, jobs)
         assert out.state is OutputState.VERIFIED
 
     def test_failed_publish_job_fails_packages(self) -> None:
-        gh = _gh_with_run_jobs(_jobs([
+        jobs = _jobs([
             ("release-build-packages / Publish to S3", "failure"),
-        ]))
-        out = verify._verify_packages(gh, _POLICY, "ga", _BUILD_OK)
+        ])
+        out = verify._verify_packages("ga", _BUILD_OK, jobs)
         assert out.state is OutputState.FAILED
 
     def test_packages_blocked_until_build_verified(self) -> None:
         pending = DownstreamOutput(name="build-run", state=OutputState.PENDING)
-        out = verify._verify_packages(MagicMock(), _POLICY, "ga", pending)
+        out = verify._verify_packages("ga", pending, None)
         assert out.state is OutputState.BLOCKED
 
+    def test_unlistable_jobs_fail_packages(self) -> None:
+        # jobs None = the shared job fetch failed for a verified build run.
+        out = verify._verify_packages("ga", _BUILD_OK, None)
+        assert out.state is OutputState.FAILED
+        assert "could not list" in out.detail
+
     def test_try_valkey_skipped_when_workflow_skipped_it(self) -> None:
-        gh = _gh_with_run_jobs(_jobs([
+        jobs = _jobs([
             ("update-try-valkey / build-try-valkey", "skipped"),
-        ]))
-        out = verify._verify_try_valkey(gh, _POLICY, "ga", _BUILD_OK)
+        ])
+        run = _run_with_artifacts([])
+        out = verify._verify_try_valkey("ga", _BUILD_OK, run, jobs)
         assert out.state is OutputState.SKIPPED  # not the latest release
 
     def test_try_valkey_verified_only_with_the_upload_sentinel(self) -> None:
-        gh = _gh_with_run_jobs(_jobs([
+        jobs = _jobs([
             ("update-try-valkey / build-try-valkey", "success"),
-        ]))
-        sentinel = MagicMock(expired=False)
-        sentinel.name = "try-valkey-uploaded-9.1.2"
-        gh.get_repo.return_value.get_workflow_run.return_value.get_artifacts.return_value = [sentinel]
-        out = verify._verify_try_valkey(gh, _POLICY, "ga", _BUILD_OK)
+        ])
+        run = _run_with_artifacts(["try-valkey-uploaded-9.1.2"])
+        out = verify._verify_try_valkey("ga", _BUILD_OK, run, jobs)
         assert out.state is OutputState.VERIFIED
 
     def test_green_wrapper_without_sentinel_is_skipped_not_verified(self) -> None:
         # The live July 21 pattern: four releases, four green wrapper jobs,
         # only one actual upload. Job success alone must never verify.
-        gh = _gh_with_run_jobs(_jobs([
+        jobs = _jobs([
             ("update-try-valkey / build-try-valkey", "success"),
-        ]))
-        gh.get_repo.return_value.get_workflow_run.return_value.get_artifacts.return_value = []
-        out = verify._verify_try_valkey(gh, _POLICY, "ga", _BUILD_OK)
+        ])
+        run = _run_with_artifacts([])
+        out = verify._verify_try_valkey("ga", _BUILD_OK, run, jobs)
         assert out.state is OutputState.SKIPPED
 
     def test_stalled_pending_outputs_escalate_to_failed(self) -> None:
         from datetime import datetime, timedelta, timezone
         old = datetime.now(timezone.utc) - timedelta(minutes=999)
-        outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING, detail="waiting"),
+        outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
+                                    detail="waiting", action="open-helm-pr"),
                    DownstreamOutput(name="bundle", state=OutputState.BLOCKED, detail="gated"))
         escalated = verify.escalate_stalled_outputs(outputs, old, 360)
         assert escalated[0].state is OutputState.FAILED
         assert "stalled" in escalated[0].detail
+        # Escalation pages a human; the auto-action must not keep firing.
+        assert escalated[0].action == ""
         assert escalated[1].state is OutputState.BLOCKED  # prerequisite carries it
 
     def test_open_pr_with_failing_checks_is_failed(self) -> None:

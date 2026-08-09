@@ -5,10 +5,15 @@
 #
 # Downstream repos point at same-owner forks; ones that do not exist simply
 # report verification errors, which is expected — fork testing exercises the
-# flow through publication on the fork.
+# flow through publication on the fork. The public-endpoint fields
+# (dockerhub_repo, bundle_dockerhub_repo, ghcr_image_repo, ecr_namespace,
+# helm_index_url) point at real upstream endpoints, so a fork E2E for a
+# version upstream already shipped can false-VERIFY against upstream's
+# artifacts.
 repos:
   - repo: sarthakaggarwal97/valkey
     authorized_team: user:sarthakaggarwal97
+    checks_workflow: ci.yml
     branches:
       - "7.2"
       - "8.0"
@@ -19,11 +24,12 @@ repos:
       - test-ubuntu-latest
       - build-debian-old
     check_timeout_minutes: 360
-    checks_workflow: ci.yml
     downstream:
       automation_repo: sarthakaggarwal97/valkey-release-automation
       build_workflow: build-release.yml
       qualification_workflow: qualify-release.yml
+      qualification_x86_archive_jobs: 2
+      qualification_arm_archive_jobs: 2
       qualification_rpm_jobs: 30
       qualification_deb_jobs: 10
       downloads_base_url: https://download.valkey.io/releases
@@ -41,5 +47,6 @@ repos:
       dockerhub_repo: valkey/valkey
       bundle_dockerhub_repo: valkey/valkey-bundle
       ghcr_image_repo: valkey-io/valkey
+      # ECR Public registry alias (public.ecr.aws/<alias>/...).
       ecr_namespace: valkey
       helm_index_url: https://valkey.io/valkey-helm/index.yaml

@@ -17,32 +17,46 @@ issue is a *display surface and dedup anchor only*:
 from __future__ import annotations
 
 import re
+import weakref
 from typing import Any
 
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import APP_LOGIN, BOT_LOGIN
+from scripts.common.labels import ensure_label
 from scripts.release.models import (
     CandidateState,
     CheckState,
     OutputState,
     ReleasePhase,
     ReleaseStatus,
+    release_tag,
 )
 
 MARKER_NAMESPACE = "valkey-ci-agent:release"
 
 # Comment authors whose adoption markers are trusted. GitHub Apps and the
-# manual-dispatch bot comment under "<login>[bot]"; the bare logins are
-# accepted for locally driven runs authenticated as those accounts.
-TRUSTED_MARKER_AUTHORS = frozenset(
-    {APP_LOGIN, BOT_LOGIN, f"{APP_LOGIN}[bot]", f"{BOT_LOGIN}[bot]"}
-)
+# manual-dispatch bot comment under "<login>[bot]". Bare logins are excluded:
+# app slugs and user accounts are distinct namespaces, so an outsider could
+# register the bare name as a user and post trusted markers; the
+# controller_login extension in trusted_comments covers PAT-authenticated runs.
+TRUSTED_MARKER_AUTHORS = frozenset({f"{APP_LOGIN}[bot]", f"{BOT_LOGIN}[bot]"})
 
 _ADOPT_MARKER_RE = re.compile(
     rf"<!-- {re.escape(MARKER_NAMESPACE)}:adopt:([0-9a-f]{{40}}) -->"
 )
+
+# Per-issue memo for comment fetches: one reconcile pass reads the same
+# issue's comments several times (adoptions, notifications, completion) and
+# the list only changes when the controller itself posts. Weak keys tie each
+# entry to the issue object's lifetime — one pass — with no TTL machinery.
+_COMMENTS_MEMO: "weakref.WeakKeyDictionary[Any, list[Any]]" = weakref.WeakKeyDictionary()
+
+
+def invalidate_comment_memo(issue: Any) -> None:
+    """Drop the memoized comment list for *issue* (call after posting to it)."""
+    _COMMENTS_MEMO.pop(issue, None)
 
 _CHECK_STATE_DISPLAY = {
     CheckState.PASSED: "✅ passed",
@@ -262,7 +276,7 @@ def _callout(status: ReleaseStatus) -> list[str]:
                 f"> **Published, with downstream failures needing attention: "
                 f"{names}.** Details in the Public outputs table; the release "
                 f"team has been notified. Everything else continues to be "
-                f"observed hourly.",
+                f"observed on every reconciliation pass.",
             ]
         return [
             "> [!NOTE]",
@@ -293,7 +307,7 @@ def _phases_done(status: ReleaseStatus) -> set[ReleasePhase]:
 def _display_tag(status: ReleaseStatus) -> str:
     if not status.version:
         return ""
-    return status.version if status.stage == "ga" else f"{status.version}-{status.stage}"
+    return release_tag(status.version, status.stage)
 
 
 def _code(value: str) -> str:
@@ -315,6 +329,10 @@ def _candidate_cell(status: ReleaseStatus) -> str:
     candidate = status.candidate
     if candidate.state is CandidateState.NONE:
         return "_none (recorded when the release-notes PR merges)_"
+    if status.published:
+        # Post-publication the tag pins the candidate; the branch may
+        # legitimately move on, so "current branch head" would be a lie.
+        return f"`{candidate.sha}` — pinned by the release tag"
     descriptions = {
         CandidateState.CURRENT: "current branch head",
         CandidateState.ADOPTED: "adopted branch head (owner-acknowledged)",
@@ -413,16 +431,23 @@ def trusted_comments(issue: Any, gh: Any = None) -> list[Any]:
     Trust covers the static bot identities plus the *currently authenticated*
     identity when it is a user (fork runs authenticate as the fork owner's
     PAT, and markers the controller wrote must remain readable to it).
+
+    The fetch is memoized per issue object (a reconcile pass reads the same
+    issue's comments up to three times); posting a comment must call
+    :func:`invalidate_comment_memo` so the next read sees it.
     """
     trusted = set(TRUSTED_MARKER_AUTHORS)
     if gh is not None:
         login = controller_login(gh)
         if login:
             trusted.add(login)
-    comments = retry_github_call(
-        lambda: list(issue.get_comments()),
-        retries=2, description=f"list comments on issue #{issue.number}",
-    )
+    comments = _COMMENTS_MEMO.get(issue)
+    if comments is None:
+        comments = retry_github_call(
+            lambda: list(issue.get_comments()),
+            retries=2, description=f"list comments on issue #{issue.number}",
+        )
+        _COMMENTS_MEMO[issue] = comments
     return [
         comment for comment in comments
         if (getattr(comment.user, "login", "") or "") in trusted
@@ -451,22 +476,7 @@ def ensure_tracker_labels(repo: Any, branch: str, tracker_label: str) -> None:
     guarantee; creating them explicitly (mirroring the backport module's
     ensure-label pattern) removes the doubt.
     """
-    _ensure_label(repo, tracker_label, "0e8a16",
-                  "Release tracking issue maintained by the release controller")
-    _ensure_label(repo, branch_label(branch), "1d76db",
-                  f"Active release on the {branch} line")
-
-
-def _ensure_label(repo: Any, name: str, color: str, description: str) -> None:
-    try:
-        retry_github_call(
-            lambda: repo.get_label(name),
-            retries=2, description=f"get label {name}",
-        )
-    except GithubException as exc:
-        if exc.status != 404:
-            raise
-        retry_github_call(
-            lambda: repo.create_label(name=name, color=color, description=description),
-            retries=2, description=f"create label {name}",
-        )
+    ensure_label(repo, tracker_label, "0e8a16",
+                 "Release tracking issue maintained by the release controller")
+    ensure_label(repo, branch_label(branch), "1d76db",
+                 f"Active release on the {branch} line")

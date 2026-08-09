@@ -202,9 +202,7 @@ class TestComputeStatus:
         assert any("not merged" in blocker for blocker in status.blockers)
 
     def test_merged_pr_without_merge_commit_fails_closed(self) -> None:
-        broken = notes_pr()
-        broken.merge_commit_sha = None
-        status = _status(repo_mock(pulls=[broken]))
+        status = _status(repo_mock(pulls=[notes_pr(merge_sha=None)]))
         assert status.candidate.state is CandidateState.NONE
         assert not status.ready
         assert any("no merge commit" in blocker for blocker in status.blockers)
@@ -278,6 +276,17 @@ class TestComputeStatus:
         assert states["test-ubuntu-latest"] is CheckState.STALLED
         assert any("timeout" in blocker for blocker in status.blockers)
 
+    def test_never_started_check_stalls_from_its_creation_time(self) -> None:
+        # A queued run with no started_at must not dodge STALLED forever;
+        # its creation time is the fallback clock.
+        old = datetime.now(timezone.utc) - timedelta(minutes=_POLICY.check_timeout_minutes + 30)
+        runs = [check_run("test-ubuntu-latest", status="queued",
+                          conclusion=None, created=old),
+                check_run("build-macos-latest", run_id=2)]
+        status = _status(repo_mock(runs=runs))
+        states = {check.name: check.state for check in status.checks}
+        assert states["test-ubuntu-latest"] is CheckState.STALLED
+
     def test_same_sha_rerun_supersedes_failed_attempt(self) -> None:
         early = datetime(2026, 8, 7, 10, 0, tzinfo=timezone.utc)
         late = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
@@ -292,21 +301,25 @@ class TestComputeStatus:
                 check_run("build-macos-latest", run_id=2)]
         assert _status(repo_mock(runs=runs)).ready
 
-    def test_same_named_run_from_another_workflow_never_counts(self) -> None:
+    @pytest.mark.parametrize(
+        ("required_conclusion", "daily_conclusion", "expected_ready"),
+        [
+            pytest.param("success", "failure", True, id="daily-failure-invisible"),
+            pytest.param("failure", "success", False, id="daily-pass-cannot-satisfy"),
+        ],
+    )
+    def test_same_named_run_from_another_workflow_never_counts(
+        self, required_conclusion: str, daily_conclusion: str, expected_ready: bool,
+    ) -> None:
         # valkey's ci.yml and daily.yml share job names; a Daily dispatch on
         # the candidate SHA must neither satisfy a requirement nor clobber a
         # passed one.
         late = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
-        runs = [check_run("test-ubuntu-latest", run_id=1),
-                check_run("test-ubuntu-latest", conclusion="failure", run_id=9,
+        runs = [check_run("test-ubuntu-latest", conclusion=required_conclusion, run_id=1),
+                check_run("test-ubuntu-latest", conclusion=daily_conclusion, run_id=9,
                           started=late, suite=DAILY_SUITE),
                 check_run("build-macos-latest", run_id=2)]
-        assert _status(repo_mock(runs=runs)).ready  # daily failure invisible
-
-        runs = [check_run("test-ubuntu-latest", conclusion="failure", run_id=1),
-                check_run("test-ubuntu-latest", run_id=9, started=late, suite=DAILY_SUITE),
-                check_run("build-macos-latest", run_id=2)]
-        assert not _status(repo_mock(runs=runs)).ready  # daily pass can't satisfy
+        assert _status(repo_mock(runs=runs)).ready is expected_ready
 
     def test_no_qualification_workflow_run_means_missing(self) -> None:
         repo = repo_mock()
@@ -403,7 +416,8 @@ class TestPublishedPhases:
     def test_release_existing_enters_published_phase(self) -> None:
         core = (_out("tarballs", OutputState.PENDING),)
         ordered = (_out("bundle", OutputState.BLOCKED),)
-        with _patched_outputs(core, ordered)[0], _patched_outputs(core, ordered)[1]:
+        p1, p2 = _patched_outputs(core, ordered)
+        with p1, p2:
             status = _status(repo_mock(released=True))
         assert status.published
         assert status.phase is ReleasePhase.PUBLISHED

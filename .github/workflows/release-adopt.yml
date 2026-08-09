@@ -46,10 +46,11 @@ jobs:
 
       - name: Generate GitHub App token
         id: generate-token
-        # Runs in forks too: the Valkeyrie App secrets are configured on the
-        # test fork from earlier live workflow testing. continue-on-error
-        # lets a repo without them fall through to the AUTOMATION_PAT.
-        continue-on-error: true
+        # A fork configured with the App secrets uses them; one without
+        # falls through to the AUTOMATION_PAT fallback below.
+        # continue-on-error is fork-only: upstream, a missing or rotated
+        # App secret fails fast here instead of deep in the run.
+        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}

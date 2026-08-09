@@ -8,7 +8,12 @@ import pytest
 from github.GithubException import GithubException
 
 from scripts.release.models import ReleasePhase
-from scripts.release.publish import plan_publication, publish_release, render_plan_summary
+from scripts.release.publish import (
+    PublishPlan,
+    plan_publication,
+    publish_release,
+    render_plan_summary,
+)
 from scripts.release.reconcile import ReleaseControlError
 from tests.release_fixtures import (
     MERGE_SHA,
@@ -51,6 +56,25 @@ def _ready_repo(**overrides: object) -> MagicMock:
 
 def _with_tracker(repo: MagicMock) -> MagicMock:
     repo.get_issues.return_value = [tracker()]
+    return repo
+
+
+def _publishable_repo() -> MagicMock:
+    """A READY repo mock whose create-release call makes the tag resolvable."""
+    repo = _with_tracker(_ready_repo())
+    release = MagicMock(html_url="https://x/releases/9.1.1")
+    repo.create_git_release.return_value = release
+    repo.get_issue.return_value = repo.get_issues.return_value[0]
+
+    def _tag_after_create(*args: object, **kwargs: object) -> MagicMock:
+        ref = MagicMock()
+        ref.object.type = "commit"
+        ref.object.sha = MERGE_SHA
+        repo.get_git_ref.side_effect = None
+        repo.get_git_ref.return_value = ref
+        return release
+
+    repo.create_git_release.side_effect = _tag_after_create
     return repo
 
 
@@ -128,25 +152,8 @@ class TestPlanPublication:
 
 
 class TestPublishRelease:
-    def _publishable_repo(self) -> MagicMock:
-        repo = _with_tracker(_ready_repo())
-        release = MagicMock(html_url="https://x/releases/9.1.1")
-        repo.create_git_release.return_value = release
-        repo.get_issue.return_value = repo.get_issues.return_value[0]
-
-        def _tag_after_create(*args: object, **kwargs: object) -> MagicMock:
-            ref = MagicMock()
-            ref.object.type = "commit"
-            ref.object.sha = MERGE_SHA
-            repo.get_git_ref.side_effect = None
-            repo.get_git_ref.return_value = ref
-            return release
-
-        repo.create_git_release.side_effect = _tag_after_create
-        return repo
-
     def test_publishes_at_exact_sha_with_explicit_flags(self) -> None:
-        repo = self._publishable_repo()
+        repo = _publishable_repo()
         url = publish_release(gh_mock(repo), _POLICY, branch="9.1", actor="madolson")
         assert url == "https://x/releases/9.1.1"
         kwargs = repo.create_git_release.call_args.kwargs
@@ -160,14 +167,14 @@ class TestPublishRelease:
         assert "9.1.1" in comment and MERGE_SHA in comment
 
     def test_expected_tag_mismatch_refuses_before_any_write(self) -> None:
-        repo = self._publishable_repo()
+        repo = _publishable_repo()
         with pytest.raises(ReleaseControlError, match="approval was for"):
             publish_release(gh_mock(repo), _POLICY, branch="9.1",
                             actor="madolson", expected_tag="9.1.2")
         repo.create_git_release.assert_not_called()
 
     def test_tag_pointing_elsewhere_after_create_is_critical(self) -> None:
-        repo = self._publishable_repo()
+        repo = _publishable_repo()
 
         def _wrong_tag(*args: object, **kwargs: object) -> MagicMock:
             ref = MagicMock()
@@ -286,7 +293,7 @@ class TestEnvironmentProtection:
 
 class TestShaBinding:
     def test_expected_sha_mismatch_refuses_before_any_write(self) -> None:
-        repo = TestPublishRelease._publishable_repo(TestPublishRelease())
+        repo = _publishable_repo()
         with pytest.raises(ReleaseControlError, match="candidate changed"):
             publish_release(gh_mock(repo), _POLICY, branch="9.1",
                             actor="madolson", expected_tag="9.1.1",
@@ -294,7 +301,7 @@ class TestShaBinding:
         repo.create_git_release.assert_not_called()
 
     def test_matching_tag_and_sha_publish(self) -> None:
-        repo = TestPublishRelease._publishable_repo(TestPublishRelease())
+        repo = _publishable_repo()
         url = publish_release(gh_mock(repo), _POLICY, branch="9.1",
                               actor="madolson", expected_tag="9.1.1",
                               expected_sha=MERGE_SHA)
@@ -312,3 +319,76 @@ def test_unattended_planning_skips_the_actor_check_only() -> None:
     from scripts.release.authorize import NotAuthorizedError
     with pytest.raises(NotAuthorizedError):
         plan_publication(gh, _POLICY, branch="9.1", actor="github-actions[bot]")
+
+
+def _plan(tag: str = "9.1.1") -> PublishPlan:
+    return PublishPlan(tag=tag, sha=MERGE_SHA, prerelease=False,
+                       make_latest="true", body="notes body", issue_number=11,
+                       tracker_url="https://x/issues/11",
+                       qualification_url="https://x/qruns/900")
+
+
+class TestApprovalEvidence:
+    def _issue_repo(self) -> "tuple[MagicMock, MagicMock]":
+        repo = MagicMock()
+        issue = MagicMock()
+        repo.get_issue.return_value = issue
+        gh = MagicMock()
+        gh.get_repo.return_value = repo
+        return gh, issue
+
+    def test_first_post_mentions_the_approvers(self) -> None:
+        # Creating the comment is what fires the notification; the plan
+        # summary alone pings nobody.
+        from scripts.release.publish import _APPROVAL_MARKER, post_approval_evidence
+        gh, issue = self._issue_repo()
+        with patch("scripts.release.issue.trusted_comments", return_value=[]):
+            post_approval_evidence(gh, _POLICY, _plan(), "https://x/runs/7")
+        body = issue.create_comment.call_args.kwargs["body"]
+        assert _APPROVAL_MARKER in body
+        assert "@valkey-io/core-team — approval needed to publish 9.1.1:" in body
+        assert "**Approve here:** https://x/runs/7" in body
+
+    def test_revalidation_edits_in_place_without_a_new_ping(self) -> None:
+        # An edit does not re-notify: one ping per approval wait, not one
+        # per cron re-validation.
+        from scripts.release.publish import _APPROVAL_MARKER, post_approval_evidence
+        gh, issue = self._issue_repo()
+        existing = MagicMock(body=f"{_APPROVAL_MARKER}\nstale evidence")
+        with patch("scripts.release.issue.trusted_comments", return_value=[existing]):
+            post_approval_evidence(gh, _POLICY, _plan(), "https://x/runs/8")
+        issue.create_comment.assert_not_called()
+        body = existing.edit.call_args.kwargs["body"]
+        assert "@valkey-io/core-team — approval needed to publish 9.1.1:" in body
+        assert "https://x/runs/8" in body
+
+
+class TestMakeLatestDecision:
+    def test_first_ever_release_becomes_latest(self) -> None:
+        from scripts.release.publish import _make_latest_decision
+        repo = MagicMock()
+        repo.get_latest_release.side_effect = GithubException(404, "no releases", {})
+        assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
+
+    def test_non_version_latest_tag_is_taken_over(self) -> None:
+        from scripts.release.publish import _make_latest_decision
+        repo = MagicMock()
+        repo.get_latest_release.return_value = MagicMock(tag_name="nightly-build")
+        assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
+
+
+class TestPreviousTag:
+    def test_rc_follows_the_previous_rc(self) -> None:
+        from scripts.release.publish import _previous_tag
+        repo = repo_mock(tags=["9.2.0-rc1"])
+        assert _previous_tag(repo, "9.2.0", "rc2") == "9.2.0-rc1"
+
+    def test_rc_without_its_predecessor_tag_is_not_guessed(self) -> None:
+        from scripts.release.publish import _previous_tag
+        repo = repo_mock(tags=["9.1.0"])
+        assert _previous_tag(repo, "9.2.0", "rc2") is None
+
+    def test_ga_follows_its_last_rc(self) -> None:
+        from scripts.release.publish import _previous_tag
+        repo = repo_mock(tags=["9.2.0-rc1", "9.2.0-rc2"])
+        assert _previous_tag(repo, "9.2.0", "ga") == "9.2.0-rc2"

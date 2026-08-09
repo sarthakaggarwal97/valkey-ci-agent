@@ -79,10 +79,11 @@ jobs:
 
       - name: Generate GitHub App token
         id: generate-token
-        # Runs in forks too: the Valkeyrie App secrets are configured on the
-        # test fork from earlier live workflow testing. continue-on-error
-        # lets a repo without them fall through to the AUTOMATION_PAT.
-        continue-on-error: true
+        # A fork configured with the App secrets uses them; one without
+        # falls through to the AUTOMATION_PAT fallback below.
+        # continue-on-error is fork-only: upstream, a missing or rotated
+        # App secret fails fast here instead of deep in the run.
+        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -142,10 +143,10 @@ jobs:
       stage: ${{ needs.start.outputs.stage }}
       urgency: ${{ inputs.urgency }}
       dry_run: false
-    # Explicit mapping, not `inherit`: the called workflow marks AWS_ROLE_ARN
-    # required, and with inherit a fork without that secret fails at startup.
-    # An explicitly passed (possibly empty) secret satisfies the requirement;
-    # a genuinely missing role then fails cleanly at the AWS step.
+    # Explicit mapping, not `inherit`: the exact secrets this cut consumes
+    # stay visible and reviewable here. None is marked required in the
+    # called workflow (a possibly-empty pass is fine); a genuinely missing
+    # AWS role then fails cleanly at the AWS credentials step.
     secrets:
       VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
       VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}

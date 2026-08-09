@@ -39,6 +39,9 @@ jobs:
     name: "Validate and produce approval evidence"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: release-validate-${{ inputs.branch }}
+      cancel-in-progress: false
     permissions:
       contents: read
     outputs:
@@ -56,10 +59,11 @@ jobs:
 
       - name: Generate GitHub App token (read-only validation scope)
         id: generate-token
-        # Runs in forks too: the Valkeyrie App secrets are configured on the
-        # test fork from earlier live workflow testing. continue-on-error
-        # lets a repo without them fall through to the AUTOMATION_PAT.
-        continue-on-error: true
+        # A fork configured with the App secrets uses them; one without
+        # falls through to the AUTOMATION_PAT fallback below.
+        # continue-on-error is fork-only: upstream, a missing or rotated
+        # App secret fails fast here instead of deep in the run.
+        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -77,7 +81,7 @@ jobs:
 
       - name: Generate GitHub App token (downstream reads for revalidation)
         id: generate-downstream-token
-        continue-on-error: true
+        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -109,7 +113,7 @@ jobs:
           # A run the controller dispatched itself has the Actions bot as its
           # actor; planning is read-only, and authorization is enforced at
           # the approval gate and re-checked on execute with the approver.
-          if [[ "${ACTOR}" == "github-actions"* ]]; then
+          if [[ "${ACTOR}" == "github-actions[bot]" ]]; then
             args+=(--unattended)
           fi
           python -m scripts.release.main "${args[@]}"
@@ -125,6 +129,8 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
+      # actions:read lets the approver step read the deployment approval record.
+      actions: read
     steps:
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -137,10 +143,11 @@ jobs:
 
       - name: Generate GitHub App token (publication scope)
         id: generate-token
-        # Runs in forks too: the Valkeyrie App secrets are configured on the
-        # test fork from earlier live workflow testing. continue-on-error
-        # lets a repo without them fall through to the AUTOMATION_PAT.
-        continue-on-error: true
+        # A fork configured with the App secrets uses them; one without
+        # falls through to the AUTOMATION_PAT fallback below.
+        # continue-on-error is fork-only: upstream, a missing or rotated
+        # App secret fails fast here instead of deep in the run.
+        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -161,7 +168,7 @@ jobs:
 
       - name: Generate GitHub App token (downstream reads for revalidation)
         id: generate-downstream-token
-        continue-on-error: true
+        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -183,12 +190,15 @@ jobs:
         # approval record is the authoritative source.
         env:
           GH_TOKEN: ${{ github.token }}
+          FALLBACK_ACTOR: ${{ github.triggering_actor }}
         run: |
           set -euo pipefail
+          # The endpoint returns the run's approval records; the last
+          # state=approved entry is the human who clicked Approve.
           APPROVER=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/approvals" \
-            --jq '.[0].user.login' 2>/dev/null || echo "")
+            --jq '[.[] | select(.state == "approved")] | last.user.login // empty' 2>/dev/null || echo "")
           if [[ -z "$APPROVER" ]]; then
-            APPROVER="${{ github.triggering_actor }}"
+            APPROVER="${FALLBACK_ACTOR}"
           fi
           echo "login=$APPROVER" >> "$GITHUB_OUTPUT"
 

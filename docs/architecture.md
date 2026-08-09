@@ -425,7 +425,7 @@ with Bundle and Helm gated on the base images being public and stalls or
 failures escalated into a once-per-state team notification → the issue
 closes itself when everything is verified.
 
-Credential model: the hourly reconcile holds a valkey token without
+Credential model: the scheduled reconcile holds a valkey token without
 `contents:write` (publication is capability-blocked outside the protected
 environment) and a separate downstream write token that excludes valkey;
 PAT fallbacks are structurally impossible when the owner is `valkey-io`.

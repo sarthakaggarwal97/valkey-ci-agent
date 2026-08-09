@@ -72,6 +72,19 @@ class TestRender:
         assert issue_mod.render_title("9.1", "9.1.1", "ga") == "Release 9.1.1"
         assert issue_mod.render_title("9.1", "", "") == "Next release on 9.1"
 
+    def test_published_candidate_renders_as_tag_pinned_not_branch_head(self) -> None:
+        # After publication the branch may legitimately move on; the tracker
+        # must not keep asserting the candidate is the current branch head.
+        published = _status(
+            candidate=Candidate(state=CandidateState.CURRENT, sha=_SHA_A,
+                                branch_head=_SHA_B),
+            phase=ReleasePhase.PUBLISHED, published=True,
+            release_url="https://x/releases/9.1.1", ready=False,
+        )
+        body = issue_mod.render_body(published)
+        assert "pinned by the release tag" in body
+        assert "current branch head" not in body
+
 
 def _comment(author: str, body: str) -> MagicMock:
     comment = MagicMock()
@@ -95,6 +108,17 @@ class TestAdoptedShas:
         tracker.get_comments.return_value = [
             _comment("some-drive-by-user", f"{issue_mod.adopt_marker(_SHA_A)}\nlgtm"),
             _comment("madolson", issue_mod.adopt_marker(_SHA_B)),
+        ]
+        assert issue_mod.adopted_shas(tracker) == ()
+
+    def test_bare_bot_logins_are_not_trusted(self) -> None:
+        # App slugs and user accounts are distinct namespaces: an outsider
+        # registering the bare username could post markers, so only the
+        # "[bot]" forms are trusted.
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [
+            _comment("valkeyrie-ops", issue_mod.adopt_marker(_SHA_A)),
+            _comment("valkeyrie-bot", issue_mod.adopt_marker(_SHA_B)),
         ]
         assert issue_mod.adopted_shas(tracker) == ()
 
@@ -175,3 +199,33 @@ class TestAuthenticatedIdentityTrust:
         gh._release_controller_login = None
         gh.get_user.side_effect = GithubException(403, "no user context", {})
         assert issue_mod.adopted_shas(tracker, gh) == (_SHA_A,)
+
+
+class TestCommentMemo:
+    def test_comments_fetched_once_per_issue_until_invalidated(self) -> None:
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [
+            _comment("valkeyrie-ops[bot]", issue_mod.adopt_marker(_SHA_A)),
+        ]
+        assert issue_mod.adopted_shas(tracker) == (_SHA_A,)
+        assert issue_mod.adopted_shas(tracker) == (_SHA_A,)
+        tracker.get_comments.assert_called_once()
+
+        issue_mod.invalidate_comment_memo(tracker)
+        tracker.get_comments.return_value = []
+        assert issue_mod.adopted_shas(tracker) == ()
+        assert tracker.get_comments.call_count == 2
+
+    def test_memo_caches_raw_comments_so_trust_stays_per_caller(self) -> None:
+        # The memo stores the fetched list; the trust filter still runs per
+        # call, so the same cached comments read differently with a PAT
+        # identity in scope.
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [
+            _comment("sarthakaggarwal97", issue_mod.adopt_marker(_SHA_A)),
+        ]
+        assert issue_mod.adopted_shas(tracker) == ()
+        gh = MagicMock()
+        gh._release_controller_login = "sarthakaggarwal97"
+        assert issue_mod.adopted_shas(tracker, gh) == (_SHA_A,)
+        tracker.get_comments.assert_called_once()

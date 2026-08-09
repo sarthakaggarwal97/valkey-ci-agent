@@ -24,7 +24,7 @@ def evaluate_required_checks(
 ) -> tuple[RequiredCheck, ...]:
     """Evaluate every policy-required check against the exact *sha*.
 
-    Only runs from the policy's qualification workflow count: check-run names
+    Only runs from the policy's ``checks_workflow`` count: check-run names
     are not unique across workflows (valkey's ci.yml and daily.yml share job
     names), so a same-named run from another workflow on the candidate SHA
     must neither satisfy a requirement nor clobber a passed one. The mapping
@@ -35,7 +35,7 @@ def evaluate_required_checks(
     supersedes the failed attempt. A required check with no run at all is
     MISSING, which blocks readiness: absence of evidence is not passing.
     """
-    suite_ids = _qualification_suite_ids(repo, policy, sha)
+    suite_ids = _checks_workflow_suite_ids(repo, policy, sha)
     commit = retry_github_call(
         lambda: repo.get_commit(sha),
         retries=2, description=f"get commit {sha[:12]}",
@@ -61,7 +61,9 @@ def evaluate_required_checks(
         if run is None:
             results.append(RequiredCheck(name=name, state=CheckState.MISSING))
         elif run.status != "completed":
-            started = getattr(run, "started_at", None)
+            # A run that never started has no started_at; fall back to its
+            # creation time so it cannot dodge STALLED forever.
+            started = getattr(run, "started_at", None) or getattr(run, "created_at", None)
             state = (
                 CheckState.STALLED
                 if started is not None and started < stalled_before
@@ -77,8 +79,8 @@ def evaluate_required_checks(
     return tuple(results)
 
 
-def _qualification_suite_ids(repo: Any, policy: RepoReleasePolicy, sha: str) -> set[int]:
-    """Check-suite ids of *sha*'s runs of the policy's qualification workflow.
+def _checks_workflow_suite_ids(repo: Any, policy: RepoReleasePolicy, sha: str) -> set[int]:
+    """Check-suite ids of *sha*'s runs of the policy's ``checks_workflow``.
 
     An empty set (workflow never ran on this SHA) makes every required check
     MISSING — fail closed, mirroring the no-run case.

@@ -68,9 +68,11 @@ def make_policy(**overrides: object) -> RepoReleasePolicy:
 
 def check_run(name: str, *, status: str = "completed",
               conclusion: "str | None" = "success", run_id: int = 1,
-              started: "datetime | None" = None, suite: int = CI_SUITE) -> MagicMock:
+              started: "datetime | None" = None,
+              created: "datetime | None" = None, suite: int = CI_SUITE) -> MagicMock:
     run = MagicMock(status=status, conclusion=conclusion, id=run_id,
-                    html_url=f"https://x/runs/{run_id}", started_at=started)
+                    html_url=f"https://x/runs/{run_id}", started_at=started,
+                    created_at=created)
     run.name = name  # `name` is reserved in the MagicMock constructor
     run._rawData = {"check_suite": {"id": suite}}
     return run
@@ -87,12 +89,12 @@ def workflow_runs() -> "list[MagicMock]":
     return [ci, daily]
 
 
-def qualification_run(sha: str = MERGE_SHA, *, run_id: int = 900,
+def qualification_run(sha: str = MERGE_SHA, *,
                       status: str = "completed", conclusion: str = "success",
                       tag: str = "9.1.1", head_branch: str = "main",
                       jobs: "list[MagicMock] | None" = None) -> MagicMock:
-    run = MagicMock(id=run_id, status=status, conclusion=conclusion,
-                    html_url=f"https://x/qruns/{run_id}",
+    run = MagicMock(id=900, status=status, conclusion=conclusion,
+                    html_url="https://x/qruns/900",
                     head_branch=head_branch,
                     display_title=f"Qualify {tag} @ {sha}")
     if jobs is None:

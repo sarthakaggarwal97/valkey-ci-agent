@@ -28,6 +28,7 @@ from scripts.common.github_client import retry_github_call
 from scripts.release import public_endpoints as pub
 from scripts.release.models import DownstreamOutput, OutputState
 from scripts.release.policy import RepoReleasePolicy
+from scripts.release.qualification import RUN_SCAN_LIMIT
 from scripts.release.release_refs import read_text_file, resolve_tag_commit, workflow_handle
 from scripts.release_notes.release_format import parse_version
 
@@ -41,11 +42,15 @@ CONTAINER_TAG_SUFFIXES = ("", "-trixie", "-alpine")
 CHART_APP_VERSION_RE = re.compile(r'^appVersion:\s*"?([0-9.]+)"?\s*$', re.MULTILINE)
 CHART_VERSION_RE = re.compile(r"^version:\s*([0-9.]+)\s*$", re.MULTILINE)
 _BUNDLE_UPDATE_BRANCH = "valkey-bundle-update"  # fixed reused head branch
+# The valkey repo's release-event workflow that dispatches the production
+# build; observed so a dispatch that dies before reaching the automation
+# repo reads FAILED instead of pending forever.
+_TRIGGER_WORKFLOW = "trigger-build-release.yml"
 
 
 def verify_core_outputs(
     gh: Any, policy: RepoReleasePolicy, *, tag: str, stage: str,
-    gh_source: Any = None, published_at: Any = None,
+    gh_source: Any, published_at: Any,
 ) -> tuple[DownstreamOutput, ...]:
     """Stage-5 outputs: build run, tarballs+hashes, hashes repo, container,
     docs, website. Assumes the GitHub release/tag was already verified by
@@ -56,14 +61,18 @@ def verify_core_outputs(
     hashes lines, container branches, and image tags all carry it.
     """
     down = policy.downstream
-    gh_source = gh_source or gh
-    build = _guarded("build-run", lambda: _verify_build_run(
+    build_result = _guarded("build-run", lambda: _verify_build_run(
         gh, gh_source, policy, tag, published_at))
+    build, build_run = (build_result if isinstance(build_result, tuple)
+                        else (build_result, None))
+    # The run object and its jobs are resolved once and shared by the
+    # packages and Try Valkey verifiers (previously three fetches per pass).
+    jobs = _build_run_jobs(build, build_run)
     outputs = [
         build,
         _guarded("tarballs", lambda: _verify_tarballs(down, tag)),
-        _guarded("packages", lambda: _verify_packages(gh, policy, stage, build)),
-        _guarded("try-valkey", lambda: _verify_try_valkey(gh, policy, stage, build)),
+        _guarded("packages", lambda: _verify_packages(stage, build, jobs)),
+        _guarded("try-valkey", lambda: _verify_try_valkey(stage, build, build_run, jobs)),
         _guarded("hashes", lambda: _verify_hashes(gh, down, tag)),
     ]
     container = _guarded("container-pr", lambda: _verify_container(gh, down, tag))
@@ -82,12 +91,12 @@ def verify_ordered_outputs(
         output.name == "container-images" and output.state is OutputState.VERIFIED
         for output in core
     )
-    bare_tag_public = images_public  # container-images includes the bare tag
     return (
         _guarded("bundle", lambda: _verify_bundle(
             gh, policy.downstream, version, tag, images_public=images_public)),
+        # container-images includes the bare tag (the chart's default image).
         _guarded("helm", lambda: _verify_helm(
-            gh, policy.downstream, version, stage, image_public=bare_tag_public)),
+            gh, policy.downstream, version, stage, image_public=images_public)),
     )
 
 
@@ -113,7 +122,9 @@ def escalate_stalled_outputs(
             name=o.name, state=OutputState.FAILED,
             detail=f"stalled: still pending {timeout_minutes} minutes after "
                    f"publication — {o.detail}",
-            url=o.url, action=o.action, run_id=o.run_id,
+            # action cleared: an escalated stall pages a human; it must not
+            # also keep auto-dispatching every pass.
+            url=o.url, action="", run_id=o.run_id,
         ) if o.state is OutputState.PENDING else o
         for o in outputs
     )
@@ -143,8 +154,12 @@ def _guarded(name: str, verifier: Callable[[], Any]) -> Any:
 
 
 def _verify_build_run(gh: Any, gh_source: Any, policy: RepoReleasePolicy,
-                      tag: str, published_at: Any) -> DownstreamOutput:
+                      tag: str, published_at: Any) -> "tuple[DownstreamOutput, Any]":
     """The production build for this release, observed from the trigger out.
+
+    Returns the output plus the matched run object (None when absent) so
+    the caller can reuse the run for job/artifact evidence without
+    re-fetching it.
 
     Three properties the previous implementation lacked, each of which the
     live E2E showed matters:
@@ -163,13 +178,15 @@ def _verify_build_run(gh: Any, gh_source: Any, policy: RepoReleasePolicy,
     # build that exists (recovery may dispatch build-release directly, or
     # re-run the trigger — either way, a marked build run supersedes the
     # trigger's failure).
+    # Run-name set by
+    # valkey-release-automation/.github/workflows/build-release.yml.
     marker = f"Build Release {tag} (prod)"
     run = _newest_marked_run(
         gh, down.automation_repo, down.build_workflow, marker, published_at,
     )
     if run is None:
         trigger = _newest_marked_run(
-            gh_source, policy.repo, "trigger-build-release.yml", tag, published_at,
+            gh_source, policy.repo, _TRIGGER_WORKFLOW, tag, published_at,
         )
         if trigger is not None and trigger.status == "completed" \
                 and trigger.conclusion != "success":
@@ -179,34 +196,34 @@ def _verify_build_run(gh: Any, gh_source: Any, policy: RepoReleasePolicy,
                        f"before dispatching the build; re-run it (or dispatch "
                        f"build-release for {tag} directly)",
                 url=trigger.html_url,
-            )
+            ), None
         if _past_deadline(published_at, policy.check_timeout_minutes):
             return DownstreamOutput(
                 name="build-run", state=OutputState.FAILED,
                 detail=f"no '{marker}' run appeared within "
                        f"{policy.check_timeout_minutes} minutes of publication; "
                        f"the dispatch chain needs investigation",
-            )
+            ), None
         return DownstreamOutput(
             name="build-run", state=OutputState.PENDING,
             detail=f"no '{marker}' run found yet",
-        )
+        ), None
     if run.status != "completed":
         return DownstreamOutput(
             name="build-run", state=OutputState.PENDING,
             detail=f"build-release run {run.id} still executing", url=run.html_url,
-        )
+        ), run
     if run.conclusion == "success":
         return DownstreamOutput(
             name="build-run", state=OutputState.VERIFIED,
             detail=f"build-release run {run.id} succeeded", url=run.html_url,
             run_id=run.id,
-        )
+        ), run
     return DownstreamOutput(
         name="build-run", state=OutputState.FAILED,
         detail=f"build-release run {run.id} concluded {run.conclusion}",
         url=run.html_url,
-    )
+    ), run
 
 
 def _newest_marked_run(gh: Any, repo_name: str, workflow_file: str,
@@ -220,17 +237,19 @@ def _newest_marked_run(gh: Any, repo_name: str, workflow_file: str,
         workflow.get_runs,
         retries=2, description=f"list {workflow_file} runs",
     )
-    pattern = re.compile(rf"(?<![\w.]){re.escape(marker)}(?![\w.])")
+    pattern = re.compile(rf"(?<![\w.]){re.escape(marker)}(?![\w.-])")
     for index, run in enumerate(runs):
-        if index >= 50:
+        if index >= RUN_SCAN_LIMIT:
             break
         if published_at is not None and run.created_at < published_at:
             continue
         # Boundary-anchored: the bare-tag trigger marker for 9.1.2 must not
-        # match a 9.1.20 run title. (Release-event trigger runs title as the
-        # tag itself — GitHub display-title behavior, not a run-name we set;
-        # a manually dispatched trigger has no tag in its title and is
-        # invisible here, which the FAILED detail's recovery text covers.)
+        # match a 9.1.20 run title, and (the trailing '-') the GA marker
+        # 9.1.2 must never match a 9.1.2-rc1 title. (Release-event trigger
+        # runs title as the tag itself — GitHub display-title behavior, not
+        # a run-name we set; a manually dispatched trigger has no tag in its
+        # title and is invisible here, which the FAILED detail's recovery
+        # text covers.)
         if pattern.search(run.display_title or ""):
             return run
     return None
@@ -242,27 +261,22 @@ def _past_deadline(published_at: Any, timeout_minutes: int) -> bool:
     return datetime.now(timezone.utc) - published_at > timedelta(minutes=timeout_minutes)
 
 
-def _build_run_jobs(gh: Any, policy: RepoReleasePolicy, build: DownstreamOutput) -> Any:
-    """Jobs of the verified build run (run_id 0 means not available)."""
-    run_id = build.run_id
-    if not run_id:
+def _build_run_jobs(build: DownstreamOutput, run: Any) -> Any:
+    """Jobs of the verified build run, fetched once and shared by the
+    packages and Try Valkey verifiers (None when unavailable)."""
+    if run is None or build.state is not OutputState.VERIFIED:
         return None
-    repo = retry_github_call(
-        lambda: gh.get_repo(policy.downstream.automation_repo),
-        retries=2, description=f"get repo {policy.downstream.automation_repo}",
-    )
-    run = retry_github_call(
-        lambda: repo.get_workflow_run(run_id),
-        retries=2, description=f"get run {run_id}",
-    )
-    return retry_github_call(
-        lambda: list(run.jobs()),
-        retries=2, description=f"list jobs of run {run_id}",
-    )
+    try:
+        return retry_github_call(
+            lambda: list(run.jobs()),
+            retries=2, description=f"list jobs of run {run.id}",
+        )
+    except GithubException as exc:
+        logger.warning("Listing jobs of run %s failed: HTTP %s", run.id, exc.status)
+        return None
 
 
-def _verify_packages(gh: Any, policy: RepoReleasePolicy, stage: str,
-                     build: DownstreamOutput) -> DownstreamOutput:
+def _verify_packages(stage: str, build: DownstreamOutput, jobs: Any) -> DownstreamOutput:
     """RPM/DEB publication (GA only), evidenced by the build run's publish
     and pages jobs succeeding.
 
@@ -280,7 +294,13 @@ def _verify_packages(gh: Any, policy: RepoReleasePolicy, stage: str,
             name="packages", state=OutputState.BLOCKED,
             detail="waiting for the build-release run to succeed",
         )
-    jobs = _build_run_jobs(gh, policy, build) or []
+    if jobs is None:
+        return DownstreamOutput(
+            name="packages", state=OutputState.FAILED,
+            detail="could not list the build run's jobs", url=build.url,
+        )
+    # Job names set by
+    # valkey-release-automation/.github/workflows/build-release.yml.
     publish_jobs = [j for j in jobs if "Publish to S3" in j.name or "Deploy Pages" in j.name]
     if not publish_jobs:
         return DownstreamOutput(
@@ -301,8 +321,8 @@ def _verify_packages(gh: Any, policy: RepoReleasePolicy, stage: str,
     )
 
 
-def _verify_try_valkey(gh: Any, policy: RepoReleasePolicy, stage: str,
-                       build: DownstreamOutput) -> DownstreamOutput:
+def _verify_try_valkey(stage: str, build: DownstreamOutput, run: Any,
+                       jobs: Any) -> DownstreamOutput:
     """Try Valkey upload, evidenced by the build run's update-try-valkey job.
 
     The job itself skips for release candidates and for versions that are
@@ -319,7 +339,11 @@ def _verify_try_valkey(gh: Any, policy: RepoReleasePolicy, stage: str,
             name="try-valkey", state=OutputState.BLOCKED,
             detail="waiting for the build-release run to succeed",
         )
-    jobs = _build_run_jobs(gh, policy, build) or []
+    if jobs is None:
+        return DownstreamOutput(
+            name="try-valkey", state=OutputState.FAILED,
+            detail="could not list the build run's jobs", url=build.url,
+        )
     try_jobs = [j for j in jobs if "try-valkey" in j.name.lower() or "try valkey" in j.name.lower()]
     if not try_jobs:
         return DownstreamOutput(
@@ -336,8 +360,9 @@ def _verify_try_valkey(gh: Any, policy: RepoReleasePolicy, stage: str,
     # skips non-latest releases), so job conclusion cannot support a
     # VERIFIED claim. The workflow uploads a native sentinel artifact when
     # (and only when) the upload happened; its absence on a green job means
-    # the upload was intentionally skipped.
-    if _run_has_artifact(gh, policy, build, "try-valkey-uploaded"):
+    # the upload was intentionally skipped. Sentinel name set by
+    # valkey-release-automation/.github/workflows/build-release.yml.
+    if _run_has_artifact(run, "try-valkey-uploaded"):
         return DownstreamOutput(
             name="try-valkey", state=OutputState.VERIFIED,
             detail="Try Valkey upload confirmed by the run's upload sentinel",
@@ -351,26 +376,12 @@ def _verify_try_valkey(gh: Any, policy: RepoReleasePolicy, stage: str,
     )
 
 
-def _run_has_artifact(gh: Any, policy: RepoReleasePolicy,
-                      build: DownstreamOutput, prefix: str) -> bool:
-    if not build.run_id:
-        return False
-    repo = retry_github_call(
-        lambda: gh.get_repo(policy.downstream.automation_repo),
-        retries=2, description=f"get repo {policy.downstream.automation_repo}",
-    )
-    run = retry_github_call(
-        lambda: repo.get_workflow_run(build.run_id),
-        retries=2, description=f"get run {build.run_id}",
-    )
+def _run_has_artifact(run: Any, prefix: str) -> bool:
     artifacts = retry_github_call(
         lambda: list(run.get_artifacts()),
-        retries=2, description=f"list artifacts of run {build.run_id}",
+        retries=2, description=f"list artifacts of run {run.id}",
     )
-    return any(
-        a.name.startswith(prefix) and not getattr(a, "expired", False)
-        for a in artifacts
-    )
+    return any(a.name.startswith(prefix) and not a.expired for a in artifacts)
 
 
 def _verify_tarballs(down: Any, tag: str) -> DownstreamOutput:
@@ -532,7 +543,17 @@ def _verify_bundle(
         retries=2, description=f"get repo {down.bundle_repo}",
     )
     versions_raw = read_text_file(repo, "versions.json")
-    versions = json.loads(versions_raw)
+    try:
+        versions = json.loads(versions_raw)
+    except json.JSONDecodeError:
+        versions = None
+    if not isinstance(versions, dict):
+        # Malformed downstream data is this output failing, not a reconcile
+        # abort (_guarded only catches GithubException).
+        return DownstreamOutput(
+            name="bundle", state=OutputState.FAILED,
+            detail=f"could not parse `versions.json` in {down.bundle_repo}",
+        )
     recorded = versions.get(line, {}).get("valkey-server", {}).get("version")
     if recorded != tag:  # versions.json records the tag form for rc releases
         pr = _find_update_pr(gh, down.bundle_repo, _BUNDLE_UPDATE_BRANCH)
@@ -551,8 +572,9 @@ def _verify_bundle(
             )
         if pr is not None and pr.merged_at is None:
             # A human closed the update PR: that is a decision, not a retry
-            # condition. Re-dispatching hourly would reopen the fight; a
-            # human re-dispatches manually if the closure was unrelated.
+            # condition. Re-dispatching every reconcile pass would reopen
+            # the fight; a human re-dispatches manually if the closure was
+            # unrelated.
             return DownstreamOutput(
                 name="bundle", state=OutputState.FAILED,
                 detail=f"bundle update PR #{pr.number} was closed without "
@@ -574,6 +596,7 @@ def _verify_bundle(
         registry for registry, exists in (
             ("Docker Hub", pub.dockerhub_tag_exists(down.bundle_dockerhub_repo, bundle_version)),
             ("GHCR", pub.ghcr_tag_exists(down.bundle_repo, bundle_version)),
+            # ECR repo mirrors the GitHub repo name.
             ("ECR", pub.ecr_public_tag_exists(
                 f"{down.ecr_namespace}/{down.bundle_repo.split('/')[1]}", bundle_version)),
         ) if not exists
@@ -617,7 +640,17 @@ def _verify_helm(
     app_version, chart_version = app_match.group(1), chart_match.group(1)
 
     if app_version != version:
-        if parse_version(app_version) > parse_version(version):
+        # CHART_APP_VERSION_RE accepts forms parse_version rejects (e.g.
+        # "9.1"); malformed downstream data is this output failing, not a
+        # reconcile abort (_guarded only catches GithubException).
+        try:
+            chart_is_newer = parse_version(app_version) > parse_version(version)
+        except ValueError:
+            return DownstreamOutput(
+                name="helm", state=OutputState.FAILED,
+                detail=f"could not parse `valkey/Chart.yaml` in {down.helm_repo}",
+            )
+        if chart_is_newer:
             return DownstreamOutput(
                 name="helm", state=OutputState.SKIPPED,
                 detail=f"chart already tracks the newer {app_version}",
@@ -642,8 +675,9 @@ def _verify_helm(
                 url=pr.html_url,
             )
         if pr is not None and pr.merged_at is None:
-            # A closed bump PR is a human decision; never reopen it hourly
-            # (which would also force-reset the branch under their feet).
+            # A closed bump PR is a human decision; never reopen it
+            # automatically (which would also force-reset the branch under
+            # their feet).
             return DownstreamOutput(
                 name="helm", state=OutputState.FAILED,
                 detail=f"chart bump PR #{pr.number} was closed without merging; "
@@ -664,15 +698,18 @@ def _verify_helm(
             name="helm", state=OutputState.PENDING,
             detail=f"chart {chart_version} merged but release {chart_tag} not cut yet",
         )
-    org = down.helm_repo.split("/")[0]
-    if not pub.ghcr_tag_exists(f"{org}/valkey-helm/valkey", chart_version):
+    if not pub.ghcr_tag_exists(f"{down.helm_repo}/valkey", chart_version):
         return DownstreamOutput(
             name="helm", state=OutputState.PENDING,
             detail=f"chart release {chart_tag} exists but the GHCR OCI chart "
                    f"{chart_version} is not public yet",
             url=f"https://github.com/{down.helm_repo}/releases/tag/{chart_tag}",
         )
-    if f"version: {chart_version}" not in pub.fetch_text(down.helm_index_url):
+    # Anchored to the line end: "version: 1.0.1" must not be satisfied by a
+    # 1.0.10 entry in the index. The optional dash is the YAML list item.
+    index_entry = re.compile(
+        rf"^\s*(?:- )?version:\s*{re.escape(chart_version)}\s*$", re.MULTILINE)
+    if not index_entry.search(pub.fetch_text(down.helm_index_url)):
         return DownstreamOutput(
             name="helm", state=OutputState.PENDING,
             detail=f"chart {chart_version} not yet listed in the public index "
@@ -751,9 +788,11 @@ def _pr_checks_failing(pr: Any) -> bool:
         lambda: list(commit.get_check_runs()),
         retries=2, description=f"list checks on PR #{pr.number} head",
     )
+    # "cancelled" included: a cancelled required check leaves the PR
+    # unmergeable just like a failure.
     return any(
         run.status == "completed"
-        and run.conclusion in ("failure", "timed_out", "action_required")
+        and run.conclusion in ("failure", "timed_out", "action_required", "cancelled")
         for run in runs
     )
 

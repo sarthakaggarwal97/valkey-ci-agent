@@ -541,7 +541,8 @@ release decision: branch, intent (`rc`/`ga`/`patch`), and urgency. It:
 6. Chains into the existing release-notes cut with the derived version and
    stage.
 
-**Candidate tracking** (`release-reconcile.yml`, hourly + manual): the
+**Candidate tracking** (`release-reconcile.yml`, scheduled every 10 minutes
++ manual): the
 release-notes PR's merge commit becomes the candidate SHA, but only while it
 remains the branch head. The notes PR must live in the upstream repo and be
 newer than the tracker, so a fork PR with a look-alike head branch or a
@@ -601,6 +602,27 @@ and the [`release_policy.fork.yml`](release_policy.fork.yml) registry when
 running outside valkey-io, so the whole flow is testable end-to-end on a
 fork (authorization uses the explicit `user:<login>` policy form, since a
 personal fork has no teams).
+
+### Setup
+
+| Secret / variable | Used by | Purpose |
+|---|---|---|
+| `VALKEYRIE_BOT_APP_ID` / `VALKEYRIE_BOT_PRIVATE_KEY` (secrets) | all release workflows | GitHub App that mints every short-lived token (upstream) |
+| `AWS_ROLE_ARN` (secret) + `AWS_REGION` (variable) | release-notes cut | OIDC role for Bedrock; region defaults to `us-east-1` |
+| `AUTOMATION_PAT` / `VALKEY_GITHUB_TOKEN` (secrets) | all / notes cut | Fork-only fallbacks — structurally unused when the owner is `valkey-io` |
+
+The App installation must cover the org and every repo the flow touches,
+with the union of what the workflows mint: `members:read` on the org;
+`contents:write`, `issues:write`, `pull-requests:write`, `checks:read`, and
+`actions:read` on valkey; `contents:write`, `pull-requests:write`,
+`actions:write`, `issues:read`, and `checks:read` on the downstream repos
+(valkey-release-automation, valkey-hashes, valkey-container, valkey-doc,
+valkey-io.github.io, valkey-bundle, valkey-helm); plus
+`repository-advisories:read` on valkey only if advisory-sourced cuts are
+used. This repository also needs a `release` environment configured with
+required reviewers, self-review prevented, and admin bypass disallowed —
+the controller fail-closes publication when the environment is missing or
+any of those protections is absent.
 
 ## Safety
 

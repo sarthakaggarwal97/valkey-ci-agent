@@ -412,8 +412,12 @@ def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
         lambda: repo.get_issue(plan.issue_number),
         retries=2, description=f"get issue #{plan.issue_number}",
     )
+    # The mention notifies on first creation only: subsequent re-validations
+    # edit the comment in place, which GitHub does not re-notify — one ping
+    # per approval wait is the desired behavior.
     body = (
         f"{_APPROVAL_MARKER}\n"
+        f"{policy.mention} — approval needed to publish {plan.tag}:\n\n"
         + render_plan_summary(plan)
         + f"\n\n**Approve here:** {run_url} (Review deployments -> `release` "
         f"-> Approve and deploy)"

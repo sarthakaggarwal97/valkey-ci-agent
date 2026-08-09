@@ -13,6 +13,8 @@ completed work:
 - notify the authorized team exactly once per distinct failure state
   (keyed on a fingerprint marker in a bot comment; the same failure never
   notifies twice, a *new* failure does);
+- nudge the authorized team exactly once per distinct awaiting-human state
+  (an open notes PR, a moved branch) with the same fingerprint pattern;
 - close the tracking issue when every required public output is verified.
 
 Publication is deliberately absent: it only happens through the protected
@@ -33,6 +35,7 @@ from scripts.release import issue as issue_mod
 from scripts.release import qualification as qual_mod
 from scripts.release import verify as verify_mod
 from scripts.release.models import (
+    CandidateState,
     CheckState,
     OutputState,
     QualificationStatus,
@@ -94,6 +97,10 @@ def advance(
     note = _notify_once(gh, policy, status, tracking_issue)
     if note:
         performed.append(note)
+
+    nudge = _nudge_once(gh, policy, status, tracking_issue)
+    if nudge:
+        performed.append(nudge)
 
     if status.phase is ReleasePhase.COMPLETE:
         closed = _close_when_complete(gh, status, tracking_issue)
@@ -259,8 +266,65 @@ def _notify_once(
         ),
         retries=2, description="post failure notification",
     )
+    issue_mod.invalidate_comment_memo(tracking_issue)
     logger.info("Notified %s of %d failure(s)", policy.authorized_team, len(failures))
     return f"notified {policy.authorized_team} ({len(failures)} failure(s))"
+
+
+def _nudge_once(
+    gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus, tracking_issue: Any,
+) -> str:
+    """Mention the authorized team once per distinct awaiting-human state.
+
+    Failures already escalate through :func:`_notify_once`; this covers the
+    two states that otherwise wait silently on a human — an open notes PR
+    and a moved branch. Same fingerprint-marker pattern: an unchanged state
+    never re-pings, a changed one (new notes PR, new branch head) does.
+    """
+    nudge = _nudge_item(status)
+    if nudge is None:
+        return ""
+    key, message = nudge
+    fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
+    marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:nudge:{fingerprint} -->"
+    for comment in issue_mod.trusted_comments(tracking_issue, gh):
+        if marker in (comment.body or ""):
+            return ""
+    retry_github_call(
+        lambda: tracking_issue.create_comment(
+            body=f"{marker}\n{policy.mention} — action needed: {message}"
+        ),
+        retries=2, description="post action-needed nudge",
+    )
+    issue_mod.invalidate_comment_memo(tracking_issue)
+    logger.info("Nudged %s (%s)", policy.authorized_team, key)
+    return f"nudged {policy.authorized_team} ({key})"
+
+
+def _nudge_item(status: ReleaseStatus) -> "tuple[str, str] | None":
+    """(fingerprint key, message) for the awaiting-human state, or None.
+
+    The awaiting-publish-approval state is deliberately absent: the approval
+    evidence comment posted by the publish pipeline carries the mention.
+    """
+    if status.published:
+        return None
+    if status.notes_pr_number and not status.notes_pr_merged:
+        tag = release_tag(status.version, status.stage)
+        return (
+            f"notes-pr:{status.notes_pr_number}",
+            f"review and merge the release-notes PR {status.notes_pr_url} "
+            f"to proceed with {tag}.",
+        )
+    if status.candidate.state is CandidateState.INVALIDATED:
+        head = status.candidate.branch_head
+        return (
+            f"branch-moved:{head}",
+            f"branch {status.branch} moved to {head[:12]} after the candidate "
+            f"was established. Adopt the new head (Actions → release-adopt) "
+            f"or ship the pinned candidate.",
+        )
+    return None
 
 
 def _failure_items(status: ReleaseStatus) -> list[str]:
@@ -303,6 +367,7 @@ def _close_when_complete(gh: Any, status: ReleaseStatus, tracking_issue: Any) ->
             ),
             retries=2, description="post completion comment",
         )
+        issue_mod.invalidate_comment_memo(tracking_issue)
     retry_github_call(
         lambda: tracking_issue.edit(state="closed"),
         retries=2, description=f"close issue #{tracking_issue.number}",

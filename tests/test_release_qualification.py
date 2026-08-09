@@ -19,6 +19,19 @@ def _gh_with_runs(runs: "list[MagicMock]") -> MagicMock:
     return gh_mock(repo)
 
 
+def _archive_jobs() -> "list[MagicMock]":
+    """The four green archive-build legs (x86 + ARM), no package matrix."""
+    jobs = []
+    for name in ("Qualify x86 archives / Build package ubuntu-22.04 x86_64",
+                 "Qualify x86 archives / Build package ubuntu-24.04 x86_64",
+                 "Qualify ARM archives / Build package ubuntu-22.04-arm arm64",
+                 "Qualify ARM archives / Build package ubuntu-24.04-arm arm64"):
+        job = MagicMock(conclusion="success")
+        job.name = name
+        jobs.append(job)
+    return jobs
+
+
 class TestEvaluate:
     def test_no_run_for_sha_is_empty_status(self) -> None:
         status = evaluate_qualification(_gh_with_runs([]), _POLICY,
@@ -76,30 +89,14 @@ class TestEvaluate:
 
     def test_ga_with_skipped_package_matrix_does_not_pass(self) -> None:
         # The exact reviewed hole: archives green, packages absent, GA tag.
-        jobs = []
-        for name in ("Qualify x86 archives / Build package ubuntu-22.04 x86_64",
-                     "Qualify x86 archives / Build package ubuntu-24.04 x86_64",
-                     "Qualify ARM archives / Build package ubuntu-22.04-arm arm64",
-                     "Qualify ARM archives / Build package ubuntu-24.04-arm arm64"):
-            job = MagicMock(conclusion="success")
-            job.name = name
-            jobs.append(job)
-        run = qualification_run(jobs=jobs)
+        run = qualification_run(jobs=_archive_jobs())
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
                                         tag="9.1.1", sha=MERGE_SHA)
         assert not status.passed
         assert any("RPM package builds" in item for item in status.failed_jobs)
 
     def test_rc_passes_without_the_package_matrix(self) -> None:
-        jobs = []
-        for name in ("Qualify x86 archives / Build package ubuntu-22.04 x86_64",
-                     "Qualify x86 archives / Build package ubuntu-24.04 x86_64",
-                     "Qualify ARM archives / Build package ubuntu-22.04-arm arm64",
-                     "Qualify ARM archives / Build package ubuntu-24.04-arm arm64"):
-            job = MagicMock(conclusion="success")
-            job.name = name
-            jobs.append(job)
-        run = qualification_run(tag="9.2.0-rc1", jobs=jobs)
+        run = qualification_run(tag="9.2.0-rc1", jobs=_archive_jobs())
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
                                         tag="9.2.0-rc1", sha=MERGE_SHA)
         assert status.passed

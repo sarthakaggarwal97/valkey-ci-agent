@@ -89,8 +89,12 @@ on:
         type: boolean
         default: true
     secrets:
-      # Optional: a fork without the App secrets falls back to
-      # VALKEY_GITHUB_TOKEN; an explicit empty pass must not fail startup.
+      # One convention for every secret: none is marked required, because a
+      # caller using `secrets: inherit` (the advanced wrapper) would fail at
+      # startup on a repo missing a required secret. Presence is enforced at
+      # the point of use instead: a fork without the App secrets falls back
+      # to VALKEY_GITHUB_TOKEN, and a genuinely missing AWS role fails
+      # cleanly at the AWS credentials step.
       VALKEYRIE_BOT_APP_ID:
         required: false
       VALKEYRIE_BOT_PRIVATE_KEY:
@@ -99,7 +103,7 @@ on:
         description: Fork-testing token fallback when the App secrets are absent
         required: false
       AWS_ROLE_ARN:
-        required: true
+        required: false
 
 permissions: {}
 
@@ -143,7 +147,7 @@ jobs:
       - name: Generate GitHub App token
         id: generate-token
         if: ${{ !inputs.security_from_advisories }}
-        continue-on-error: true
+        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -159,7 +163,7 @@ jobs:
       - name: Generate GitHub App token (with advisories)
         id: generate-token-advisories
         if: ${{ inputs.security_from_advisories }}
-        continue-on-error: true
+        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}

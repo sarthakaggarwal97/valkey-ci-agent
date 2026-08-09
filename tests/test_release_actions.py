@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+from github.GithubException import GithubException
+
 from scripts.release import actions
 from scripts.release import issue as issue_mod
 from scripts.release.models import (
@@ -17,7 +20,7 @@ from scripts.release.models import (
     ReleaseStatus,
     RequiredCheck,
 )
-from tests.release_fixtures import MERGE_SHA, gh_mock, make_policy, tracker
+from tests.release_fixtures import MERGE_SHA, MOVED_SHA, gh_mock, make_policy, tracker
 
 _POLICY = make_policy()
 
@@ -45,16 +48,21 @@ class TestQualificationDispatch:
         dispatch.assert_called_once()
         assert any("dispatched qualification" in p for p in performed)
 
-    def test_does_not_redispatch_over_pending_or_failed_run(self) -> None:
-        for qualification in (
-            QualificationStatus(run_id=1, pending=True),
-            QualificationStatus(run_id=1, failed_jobs=("job",)),
-        ):
-            status = _status(qualification=qualification)
-            with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
-                actions.advance(gh_mock(MagicMock()), _POLICY,
-                                status=status, tracking_issue=tracker())
-            dispatch.assert_not_called()
+    @pytest.mark.parametrize(
+        "qualification",
+        [
+            pytest.param(QualificationStatus(run_id=1, pending=True), id="pending"),
+            pytest.param(QualificationStatus(run_id=1, failed_jobs=("job",)), id="failed"),
+        ],
+    )
+    def test_does_not_redispatch_over_pending_or_failed_run(
+        self, qualification: QualificationStatus,
+    ) -> None:
+        status = _status(qualification=qualification)
+        with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
+            actions.advance(gh_mock(MagicMock()), _POLICY,
+                            status=status, tracking_issue=tracker())
+        dispatch.assert_not_called()
 
     def test_no_dispatch_outside_qualification_phase(self) -> None:
         status = _status(phase=ReleasePhase.CANDIDATE)
@@ -212,6 +220,84 @@ class TestNotifyOnce:
         issue.create_comment.assert_not_called()
 
 
+class TestNudgeOnce:
+    def _notes_pr_open(self) -> ReleaseStatus:
+        return _status(
+            phase=ReleasePhase.NOTES,
+            notes_pr_number=42, notes_pr_url="https://x/pull/42",
+            notes_pr_merged=False,
+            candidate=Candidate(state=CandidateState.NONE, branch_head=MERGE_SHA),
+        )
+
+    def _branch_moved(self, head: str = MOVED_SHA) -> ReleaseStatus:
+        return _status(
+            phase=ReleasePhase.CANDIDATE,
+            notes_pr_number=42, notes_pr_url="https://x/pull/42",
+            notes_pr_merged=True,
+            candidate=Candidate(state=CandidateState.INVALIDATED, sha=MERGE_SHA,
+                                branch_head=head),
+        )
+
+    def _replay_as_bot(self, issue: MagicMock) -> None:
+        posted = MagicMock()
+        posted.user.login = "valkeyrie-ops[bot]"
+        posted.body = issue.create_comment.call_args.kwargs["body"]
+        issue.get_comments.return_value = [posted]
+        issue.create_comment.reset_mock()
+
+    def test_open_notes_pr_nudges_once_with_link_and_tag(self) -> None:
+        issue = tracker()
+        performed = actions.advance(gh_mock(MagicMock()), _POLICY,
+                                    status=self._notes_pr_open(), tracking_issue=issue)
+        body = issue.create_comment.call_args.kwargs["body"]
+        assert f"<!-- {issue_mod.MARKER_NAMESPACE}:nudge:" in body
+        assert "@valkey-io/core-team — action needed:" in body
+        assert "review and merge the release-notes PR https://x/pull/42" in body
+        assert "to proceed with 9.1.1." in body
+        assert any("nudged" in p for p in performed)
+
+    def test_same_state_never_nudges_twice(self) -> None:
+        issue = tracker()
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._notes_pr_open(), tracking_issue=issue)
+        self._replay_as_bot(issue)
+
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._notes_pr_open(), tracking_issue=issue)
+
+        issue.create_comment.assert_not_called()
+
+    def test_branch_moved_nudge_names_branch_head_and_recovery(self) -> None:
+        issue = tracker()
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._branch_moved(), tracking_issue=issue)
+        body = issue.create_comment.call_args.kwargs["body"]
+        assert "@valkey-io/core-team — action needed:" in body
+        assert f"branch 9.1 moved to {MOVED_SHA[:12]}" in body
+        assert "Adopt the new head (Actions → release-adopt)" in body
+        assert "or ship the pinned candidate." in body
+
+    def test_new_head_after_a_nudge_notifies_again(self) -> None:
+        issue = tracker()
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._branch_moved(), tracking_issue=issue)
+        self._replay_as_bot(issue)
+
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._branch_moved(head="c" * 40), tracking_issue=issue)
+
+        issue.create_comment.assert_called_once()
+        assert ("c" * 40)[:12] in issue.create_comment.call_args.kwargs["body"]
+
+    def test_merged_notes_pr_with_current_candidate_never_nudges(self) -> None:
+        issue = tracker()
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=_status(notes_pr_number=42, notes_pr_merged=True,
+                                       qualification=QualificationStatus(run_id=1, passed=True)),
+                        tracking_issue=issue)
+        issue.create_comment.assert_not_called()
+
+
 class TestAutoClose:
     def test_complete_release_closes_the_tracker(self) -> None:
         status = _status(phase=ReleasePhase.COMPLETE,
@@ -329,6 +415,17 @@ class TestAutoDispatchPublish:
                         gh_agent=gh_agent, agent_repo="o/agent")
         workflow = gh_agent.get_repo.return_value.get_workflow.return_value
         workflow.create_dispatch.assert_called_once()
+
+    def test_unreadable_publish_workflow_blocks_dispatch_fail_closed(self) -> None:
+        # Cannot see the workflow (404): reconcile must not dispatch blind.
+        gh_agent = MagicMock()
+        gh_agent.get_repo.return_value.get_workflow.side_effect = GithubException(
+            404, "not found", {},
+        )
+        performed = actions.advance(gh_mock(MagicMock()), _POLICY,
+                                    status=self._ready(), tracking_issue=tracker(),
+                                    gh_agent=gh_agent, agent_repo="o/agent")
+        assert not any("publish pipeline" in p for p in performed)
 
     def test_no_agent_client_skips_auto_dispatch(self) -> None:
         performed = actions.advance(gh_mock(MagicMock()), _POLICY,

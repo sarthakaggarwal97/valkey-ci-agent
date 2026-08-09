@@ -18,6 +18,7 @@ the edit when nothing changed. It never blocks waiting for CI or merges.
 
 from __future__ import annotations
 
+import itertools
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -43,7 +44,7 @@ from scripts.release.models import (
     release_tag,
 )
 from scripts.release.policy import TRACKER_LABEL, RepoReleasePolicy
-from scripts.release.release_refs import notes_prep_branch_re, resolve_tag_commit
+from scripts.release.release_refs import NOTES_PREP_BRANCH_RE, resolve_tag_commit
 from scripts.release.versioning import derive_version
 
 logger = logging.getLogger(__name__)
@@ -194,12 +195,12 @@ def _reuse_active_release(
             version=derived.version, stage=derived.stage, tag=derived.tag,
         )
 
-    match = notes_prep_branch_re().match(notes_pr.head.ref)
+    match = NOTES_PREP_BRANCH_RE.match(notes_pr.head.ref)
     assert match is not None  # _find_notes_pr only returns matching PRs
     pinned = DerivedRelease(version=match.group(1), stage=match.group(2))
     if pinned.tag in set(_tag_names(repo, policy)):
         raise ReleaseControlError(
-            f"release {pinned.tag} already shipped; close tracking issue "
+            f"tag {pinned.tag} already exists; close tracking issue "
             f"#{existing.number} to start the next release on {branch}"
         )
     return StartResult(
@@ -259,7 +260,7 @@ def compute_status(
             ),
         )
 
-    match = notes_prep_branch_re().match(notes_pr.head.ref)
+    match = NOTES_PREP_BRANCH_RE.match(notes_pr.head.ref)
     assert match is not None  # _find_notes_pr only returns matching PRs
     version, stage = match.group(1), match.group(2)
 
@@ -392,7 +393,7 @@ def _published_status(
         "notes_pr_url": notes_pr.html_url,
         "notes_pr_merged": True,
         "candidate": Candidate(state=CandidateState.CURRENT, sha=tag_sha,
-                            branch_head=branch_head),
+                               branch_head=branch_head),
         "published": True,
         "release_url": release.html_url,
     }
@@ -566,6 +567,7 @@ def adopt_candidate(
         lambda: tracking_issue.create_comment(body=comment),
         retries=2, description=f"record adoption on issue #{tracking_issue.number}",
     )
+    issue_mod.invalidate_comment_memo(tracking_issue)
     logger.info("Recorded adoption of %s on issue #%s", sha, tracking_issue.number)
 
     refreshed = compute_status(gh, policy, branch, tracking_issue=tracking_issue)
@@ -594,20 +596,22 @@ def _find_notes_pr(
     Newest-first listing plus a scan cap bounds the work; hitting the cap is
     logged loudly since it would misreport the notes PR as missing.
     """
-    pattern = notes_prep_branch_re()
     pulls = retry_github_call(
-        lambda: repo.get_pulls(state="all", base=branch, sort="created", direction="desc"),
+        lambda: list(itertools.islice(
+            repo.get_pulls(state="all", base=branch, sort="created", direction="desc"),
+            _NOTES_PR_SCAN_LIMIT + 1,
+        )),
         retries=2, description=f"list PRs into {branch}",
     )
-    for index, pull in enumerate(pulls):
-        if index >= _NOTES_PR_SCAN_LIMIT:
-            logger.warning(
-                "Hit the %d-PR scan limit looking for the notes PR on %s; "
-                "an older notes PR may be misreported as missing",
-                _NOTES_PR_SCAN_LIMIT, branch,
-            )
-            break
-        match = pattern.match(pull.head.ref)
+    if len(pulls) > _NOTES_PR_SCAN_LIMIT:
+        logger.warning(
+            "Hit the %d-PR scan limit looking for the notes PR on %s; "
+            "an older notes PR may be misreported as missing",
+            _NOTES_PR_SCAN_LIMIT, branch,
+        )
+        pulls = pulls[:_NOTES_PR_SCAN_LIMIT]
+    for pull in pulls:
+        match = NOTES_PREP_BRANCH_RE.match(pull.head.ref)
         if not match or not match.group(1).startswith(f"{branch}."):
             continue
         head_repo = pull.head.repo
@@ -627,7 +631,7 @@ def _find_notes_pr(
 
 
 def _resolve_candidate(notes_merge_sha: str, branch_head: str, tracking_issue: Any,
-                       gh: Any = None) -> Candidate:
+                       gh: Any) -> Candidate:
     """Establish the candidate from the notes merge, head, and adoptions.
 
     The notes merge commit is the candidate while it remains the branch head.

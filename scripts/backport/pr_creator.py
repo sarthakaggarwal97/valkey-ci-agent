@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from github import Github
-from github.GithubException import GithubException
 
 from scripts.backport.models import (
     BackportPRContext,
@@ -15,6 +14,7 @@ from scripts.backport.models import (
 )
 from scripts.backport.utils import build_branch_name, build_pr_title
 from scripts.common.github_client import retry_github_call
+from scripts.common.labels import ensure_label
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +177,10 @@ class BackportPRCreator:
             labels.append(self._llm_conflict_label)
 
         for label in labels:
-            self._ensure_label_exists(repo, label)
+            color, description = _LABEL_DEFAULTS.get(
+                label, ("ededed", f"Created by valkey-ci-agent for label {label!r}"),
+            )
+            ensure_label(repo, label, color, description)
 
         try:
             logger.info("Applying labels %s to PR #%d", labels, pr.number)
@@ -191,62 +194,6 @@ class BackportPRCreator:
 
         logger.info("Backport PR created: %s", pr.html_url)
         return pr.html_url
-
-    def _ensure_label_exists(self, repo: Any, label: str) -> None:
-        """Create *label* on *repo* if it does not already exist.
-
-        Best-effort: a failure here is logged and swallowed so the PR
-        creation flow continues. The subsequent ``add_to_labels`` call
-        will surface the same problem if it persists.
-        """
-        try:
-            retry_github_call(
-                lambda: repo.get_label(label),
-                retries=3,
-                description=f"check label {label!r}",
-            )
-            return
-        except GithubException as exc:
-            if exc.status != 404:
-                logger.warning(
-                    "Could not verify label %r on %s: %s",
-                    label, self._base_repo, exc,
-                )
-                return
-        except Exception as exc:
-            # Best-effort: a transport/parse failure must not abort PR creation.
-            logger.warning(
-                "Could not verify label %r on %s: %s",
-                label, self._base_repo, exc,
-            )
-            return
-
-        color, description = _LABEL_DEFAULTS.get(
-            label, ("ededed", f"Created by valkey-ci-agent for label {label!r}"),
-        )
-        try:
-            logger.info("Creating missing label %r on %s", label, self._base_repo)
-            retry_github_call(
-                lambda: repo.create_label(
-                    name=label, color=color, description=description,
-                ),
-                retries=3,
-                description=f"create label {label!r}",
-            )
-        except GithubException as exc:
-            # 422 means the label was created concurrently — fine.
-            if exc.status == 422:
-                return
-            logger.error(
-                "Failed to create label %r on %s: %s",
-                label, self._base_repo, exc,
-            )
-        except Exception as exc:
-            # Best-effort: a transport/parse failure must not abort PR creation.
-            logger.error(
-                "Failed to create label %r on %s: %s",
-                label, self._base_repo, exc,
-            )
 
     @staticmethod
     def build_pr_body(

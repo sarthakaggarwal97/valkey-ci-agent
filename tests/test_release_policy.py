@@ -20,6 +20,8 @@ repos:
       automation_repo: valkey-io/valkey-release-automation
       build_workflow: build-release.yml
       qualification_workflow: qualify-release.yml
+      qualification_x86_archive_jobs: 2
+      qualification_arm_archive_jobs: 2
       qualification_rpm_jobs: 30
       qualification_deb_jobs: 10
       downloads_base_url: https://download.valkey.io/releases
@@ -55,6 +57,8 @@ def test_valid_policy_parses(tmp_path: Path) -> None:
     assert policy.team_slug == "core-team"
     down = policy.downstream
     assert down.qualification_workflow == "qualify-release.yml"
+    assert down.qualification_x86_archive_jobs == 2
+    assert down.qualification_arm_archive_jobs == 2
     assert down.qualification_rpm_jobs == 30
     assert down.qualification_deb_jobs == 10
     assert down.build_workflow == "build-release.yml"
@@ -92,6 +96,7 @@ def test_shipped_fork_registry_is_valid() -> None:
         ("check_timeout_minutes: 0", "check_timeout_minutes"),
         ("check_timeout_minutes: '360'", "check_timeout_minutes"),
         ("qualification_rpm_jobs: 0", "qualification_rpm_jobs"),
+        ("qualification_x86_archive_jobs: 0", "qualification_x86_archive_jobs"),
         ("build_workflow: ''", "build_workflow"),
         ("helm_index_url: http://insecure.example", "helm_index_url"),
         ("downloads_base_url: http://insecure.example", "downloads_base_url"),

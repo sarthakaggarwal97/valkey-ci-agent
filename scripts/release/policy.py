@@ -55,6 +55,12 @@ class DownstreamPolicy:
     ghcr_image_repo: str
     ecr_namespace: str
     helm_index_url: str
+    # Exact archive-build leg counts of the qualification matrix, one per
+    # architecture group (part of the reviewed inventory alongside the
+    # RPM/DEB counts). Defaults exist for direct construction in tests; the
+    # loader still requires both fields in the policy file.
+    qualification_x86_archive_jobs: int = 2
+    qualification_arm_archive_jobs: int = 2
 
 
 @dataclass(frozen=True)
@@ -127,10 +133,9 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
         raise ValueError(f"{path}: 'repo' must be 'owner/name', got {repo!r}")
 
     team = entry.get("authorized_team")
-    valid_team = isinstance(team, str) and (
+    if not isinstance(team, str) or not (
         team.count("/") == 1 or (team.startswith("user:") and len(team) > 5 and "/" not in team)
-    )
-    if not isinstance(team, str) or not valid_team:
+    ):
         raise ValueError(
             f"{path}: {repo}: 'authorized_team' must be 'org/team-slug' or "
             f"'user:<login>' (fork policies only), got {team!r}"
@@ -242,13 +247,14 @@ def _parse_downstream(path: str, repo: str, raw: object) -> DownstreamPolicy:
         )
 
     matrix_counts = {}
-    for field in ("qualification_rpm_jobs", "qualification_deb_jobs"):
+    for field in ("qualification_x86_archive_jobs", "qualification_arm_archive_jobs",
+                  "qualification_rpm_jobs", "qualification_deb_jobs"):
         value = raw.get(field)
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise ValueError(
-                f"{path}: {repo}: downstream.{field} must be the exact package "
-                f"matrix leg count (updated deliberately when platforms change), "
-                f"got {value!r}"
+                f"{path}: {repo}: downstream.{field} must be the exact "
+                f"qualification matrix leg count (updated deliberately when "
+                f"platforms change), got {value!r}"
             )
         matrix_counts[field] = value
 
@@ -276,6 +282,8 @@ def _parse_downstream(path: str, repo: str, raw: object) -> DownstreamPolicy:
         automation_repo=str(values["automation_repo"]),
         build_workflow=build_workflow.strip(),
         qualification_workflow=workflow.strip(),
+        qualification_x86_archive_jobs=matrix_counts["qualification_x86_archive_jobs"],
+        qualification_arm_archive_jobs=matrix_counts["qualification_arm_archive_jobs"],
         qualification_rpm_jobs=matrix_counts["qualification_rpm_jobs"],
         qualification_deb_jobs=matrix_counts["qualification_deb_jobs"],
         downloads_base_url=base_url.rstrip("/"),

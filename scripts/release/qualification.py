@@ -17,6 +17,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from github.GithubException import GithubException
+
 from scripts.common.github_client import retry_github_call
 from scripts.release.models import QualificationStatus
 from scripts.release.policy import RepoReleasePolicy
@@ -25,7 +27,8 @@ from scripts.release.release_refs import workflow_handle
 logger = logging.getLogger(__name__)
 
 # Bound the run scan; qualification runs for an active release are recent.
-_RUN_SCAN_LIMIT = 50
+# Shared with verify.py's build-run scan.
+RUN_SCAN_LIMIT = 50
 
 
 def evaluate_qualification(
@@ -90,14 +93,18 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
         return sum(marker in name for name in succeeded)
 
     # Exact counts, not floors: "the GA matrix ran in full" means exactly
-    # the reviewed inventory (30 RPM / 10 DEB legs today). A platform
-    # addition or removal is a deliberate policy edit, reviewed alongside
-    # the matrix change; a floor would silently tolerate losing a third of
-    # the coverage. The " / RPM · " child-prefix anchor excludes the
+    # the reviewed inventory (from the policy file). A platform addition or
+    # removal is a deliberate policy edit, reviewed alongside the matrix
+    # change; a floor would silently tolerate losing a third of the
+    # coverage. The " / RPM · " child-prefix anchor excludes the
     # "Test RPM · ..." legs from the build count.
+    # Job-name prefixes are set by
+    # valkey-release-automation/.github/workflows/qualify-release.yml.
     expectations = [
-        ("Qualify x86 archives /", 2, "x86 archive builds"),
-        ("Qualify ARM archives /", 2, "ARM archive builds"),
+        ("Qualify x86 archives /", down.qualification_x86_archive_jobs,
+         "x86 archive builds"),
+        ("Qualify ARM archives /", down.qualification_arm_archive_jobs,
+         "ARM archive builds"),
     ]
     is_ga = "-rc" not in tag
     if is_ga:
@@ -119,13 +126,15 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
     # An expired or empty artifact is a name, not evidence.
     usable = [
         a.name for a in artifacts
-        if not getattr(a, "expired", False) and getattr(a, "size_in_bytes", 1) > 0
+        if not a.expired and a.size_in_bytes > 0
     ]
     archive_artifacts = sum(name.startswith("qualify-") for name in usable)
-    if archive_artifacts != 4:
+    expected_archives = (down.qualification_x86_archive_jobs
+                         + down.qualification_arm_archive_jobs)
+    if archive_artifacts != expected_archives:
         gaps.append(
             f"(evidence mismatch: usable archive artifacts — "
-            f"{archive_artifacts} present, expected exactly 4)"
+            f"{archive_artifacts} present, expected exactly {expected_archives})"
         )
     if is_ga:
         rpm_artifacts = sum(name.startswith("valkey-rpms-") for name in usable)
@@ -193,21 +202,32 @@ def _find_run(gh: Any, policy: RepoReleasePolicy, tag: str, sha: str) -> Any:
       so a doctored qualify workflow on a side branch cannot manufacture
       evidence.
     """
-    workflow = workflow_handle(gh, policy.downstream.automation_repo,
-                               policy.downstream.qualification_workflow)
-    if workflow is None:
-        return None
+    # One repo fetch serves both the workflow lookup and the default-branch
+    # check (workflow_handle would hide the repo and force a second fetch).
+    repo = retry_github_call(
+        lambda: gh.get_repo(policy.downstream.automation_repo),
+        retries=2, description=f"get repo {policy.downstream.automation_repo}",
+    )
+    try:
+        workflow = retry_github_call(
+            lambda: repo.get_workflow(policy.downstream.qualification_workflow),
+            retries=2,
+            description=f"get workflow {policy.downstream.qualification_workflow}",
+        )
+    except GithubException as exc:
+        if exc.status == 404:
+            return None
+        raise
     runs = retry_github_call(
         workflow.get_runs,
         retries=2, description="list qualification runs",
     )
+    # Run-name marker set by
+    # valkey-release-automation/.github/workflows/qualify-release.yml.
     marker = f"Qualify {tag} @ {sha}"
-    default_branch = retry_github_call(
-        lambda: gh.get_repo(policy.downstream.automation_repo).default_branch,
-        retries=2, description="resolve automation default branch",
-    )
+    default_branch = repo.default_branch
     for index, run in enumerate(runs):
-        if index >= _RUN_SCAN_LIMIT:
+        if index >= RUN_SCAN_LIMIT:
             break
         if marker not in (run.display_title or ""):
             continue

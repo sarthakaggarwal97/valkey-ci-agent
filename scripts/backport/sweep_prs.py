@@ -19,6 +19,7 @@ from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import BranchSweepResult, CandidateResult
 from scripts.backport.sweep_reporting import build_pr_body, result_is_on_backport_branch
 from scripts.common.github_client import retry_github_call
+from scripts.common.labels import ensure_label
 from scripts.common.proc import BOT_NAME
 
 logger = logging.getLogger(__name__)
@@ -141,7 +142,10 @@ def _apply_labels(repo: Any, pr: Any, labels: list[str]) -> None:
     sweep whose branch is already green and pushed.
     """
     for label in labels:
-        _ensure_label_exists(repo, label)
+        color, description = _LABEL_DEFAULTS.get(
+            label, ("ededed", f"Created by valkey-ci-agent for label {label!r}"),
+        )
+        ensure_label(repo, label, color, description)
     try:
         logger.info("Applying labels %s to PR #%d", labels, pr.number)
         retry_github_call(
@@ -151,41 +155,6 @@ def _apply_labels(repo: Any, pr: Any, labels: list[str]) -> None:
         )
     except Exception as exc:  # noqa: BLE001 - labeling must not fail the sweep
         logger.warning("Failed to apply labels to PR #%d: %s", pr.number, exc)
-
-
-def _ensure_label_exists(repo: Any, label: str) -> None:
-    """Create *label* on *repo* if it does not already exist. Best-effort."""
-    try:
-        retry_github_call(
-            lambda: repo.get_label(label),
-            retries=3,
-            description=f"check label {label!r}",
-        )
-        return
-    except GithubException as exc:
-        if exc.status != 404:
-            logger.warning("Could not verify label %r: %s", label, exc)
-            return
-    except Exception as exc:  # noqa: BLE001 - transport/parse failure is non-fatal
-        logger.warning("Could not verify label %r: %s", label, exc)
-        return
-
-    color, description = _LABEL_DEFAULTS.get(
-        label, ("ededed", f"Created by valkey-ci-agent for label {label!r}"),
-    )
-    try:
-        logger.info("Creating missing label %r", label)
-        retry_github_call(
-            lambda: repo.create_label(name=label, color=color, description=description),
-            retries=3,
-            description=f"create label {label!r}",
-        )
-    except GithubException as exc:
-        if exc.status == 422:  # created concurrently — fine
-            return
-        logger.error("Failed to create label %r: %s", label, exc)
-    except Exception as exc:  # noqa: BLE001 - transport/parse failure is non-fatal
-        logger.error("Failed to create label %r: %s", label, exc)
 
 
 def _relink_body_to_comments(

@@ -30,16 +30,6 @@ class TestDeriveRC:
         derived = derive_version("9.1", ReleaseIntent.RC, tags)
         assert (derived.version, derived.stage) == ("9.1.0", "rc3")
 
-    def test_rc_refused_after_line_released(self) -> None:
-        with pytest.raises(ValueError, match="final release"):
-            derive_version("9.1", ReleaseIntent.RC, ["9.1.0"])
-
-    def test_rc_refused_when_line_has_any_final_even_without_dot_zero(self) -> None:
-        # A deleted .0 tag (or a line seeded at .1) must not reopen the rc
-        # window: deriving 9.1.0-rc1 here would version BELOW the shipped 9.1.1.
-        with pytest.raises(ValueError, match="final release"):
-            derive_version("9.1", ReleaseIntent.RC, ["9.1.1"])
-
     def test_deterministic_regardless_of_tag_order(self) -> None:
         tags = ["9.1.0-rc2", "9.0.3", "9.1.0-rc1", "8.1.0"]
         assert derive_version("9.1", ReleaseIntent.RC, tags) == derive_version(
@@ -53,13 +43,18 @@ class TestDeriveGA:
         assert (derived.version, derived.stage) == ("9.1.0", "ga")
         assert derived.tag == "9.1.0"
 
-    def test_ga_refused_after_line_released(self) -> None:
-        with pytest.raises(ValueError, match="final release"):
-            derive_version("9.1", ReleaseIntent.GA, ["9.1.0"])
 
-    def test_ga_refused_when_line_has_any_final_even_without_dot_zero(self) -> None:
-        with pytest.raises(ValueError, match="final release"):
-            derive_version("9.1", ReleaseIntent.GA, ["9.1.1"])
+@pytest.mark.parametrize("intent", [ReleaseIntent.RC, ReleaseIntent.GA])
+@pytest.mark.parametrize("shipped_tag", ["9.1.0", "9.1.1"])
+def test_rc_and_ga_refused_after_line_released(
+    intent: ReleaseIntent, shipped_tag: str,
+) -> None:
+    # Any final release on the line closes the rc/ga window. That includes a
+    # line without a .0 tag: a deleted .0 tag (or a line seeded at .1) must
+    # not reopen the rc window, since deriving 9.1.0-rc1 there would version
+    # BELOW the shipped 9.1.1.
+    with pytest.raises(ValueError, match="final release"):
+        derive_version("9.1", intent, [shipped_tag])
 
 
 class TestDerivePatch:

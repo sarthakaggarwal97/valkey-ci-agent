@@ -19,12 +19,10 @@ from github.GithubException import GithubException
 from scripts.common.github_client import retry_github_call
 from scripts.release_notes.release_cut import PREP_BRANCH_PREFIX
 
-
-def notes_prep_branch_re() -> re.Pattern[str]:
-    """Match a notes prep branch; group 1 is the version, group 2 the stage."""
-    return re.compile(
-        rf"^{re.escape(PREP_BRANCH_PREFIX)}/(\d+\.\d+\.\d+)-(ga|rc[1-9]\d*)$"
-    )
+# Matches a notes prep branch; group 1 is the version, group 2 the stage.
+NOTES_PREP_BRANCH_RE = re.compile(
+    rf"^{re.escape(PREP_BRANCH_PREFIX)}/(\d+\.\d+\.\d+)-(ga|rc[1-9]\d*)$"
+)
 
 
 def resolve_tag_commit(repo: Any, tag: str) -> str:

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
+from scripts.release.authorize import NotAuthorizedError
 from scripts.release.main import main
 from scripts.release.reconcile import ReleaseControlError, StartResult
 
@@ -103,6 +104,131 @@ class TestCLI:
         assert adopt.call_args.kwargs["sha"] == "a" * 40
 
 
+def _publish_plan() -> MagicMock:
+    return MagicMock(tag="9.1.1", sha="a" * 40, make_latest="true",
+                     prerelease=False, body="notes body",
+                     tracker_url="", qualification_url="")
+
+
+class TestPublishCLI:
+    _PLAN_ONLY = [*_POLICY_ARGS, "publish", "--branch", "9.1",
+                  "--actor", "madolson", "--plan-only"]
+
+    @staticmethod
+    def _clear_actions_env(monkeypatch: pytest.MonkeyPatch) -> None:
+        for var in ("GITHUB_SERVER_URL", "GITHUB_REPOSITORY", "GITHUB_RUN_ID"):
+            monkeypatch.delenv(var, raising=False)
+
+    def test_gate_is_verified_before_planning(self,
+                                              monkeypatch: pytest.MonkeyPatch) -> None:
+        # plan-only must fail early on an unprotected environment, before
+        # any evidence is produced for an approver to act on.
+        self._clear_actions_env(monkeypatch)
+        order = MagicMock()
+        order.plan_publication.return_value = _publish_plan()
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.ensure_environment_protected",
+                   order.ensure_environment_protected), \
+             patch("scripts.release.main.plan_publication", order.plan_publication), \
+             patch("scripts.release.main.post_approval_evidence",
+                   order.post_approval_evidence), \
+             patch("scripts.release.main.emit_job_summary"):
+            code = main(self._PLAN_ONLY)
+        assert code == 0
+        names = [name for name, _, _ in order.mock_calls]
+        assert names.index("ensure_environment_protected") < names.index("plan_publication")
+        # GITHUB_REPOSITORY unset: the gate is checked against the upstream
+        # repo (fail closed), and no run URL means no evidence comment.
+        assert order.ensure_environment_protected.call_args.args[2] == \
+            "valkey-io/valkey-ci-agent"
+        order.post_approval_evidence.assert_not_called()
+
+    def test_plan_only_emits_plan_and_posts_evidence(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        output_file = tmp_path / "out"
+        output_file.touch()
+        monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+        monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+        monkeypatch.setenv("GITHUB_REPOSITORY", "o/agent")
+        monkeypatch.setenv("GITHUB_RUN_ID", "123")
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.ensure_environment_protected"), \
+             patch("scripts.release.main.plan_publication",
+                   return_value=_publish_plan()), \
+             patch("scripts.release.main.post_approval_evidence") as evidence, \
+             patch("scripts.release.main.emit_job_summary"):
+            code = main(self._PLAN_ONLY)
+        assert code == 0
+        outputs = dict(
+            line.split("=", 1) for line in output_file.read_text().splitlines()
+        )
+        assert outputs == {"tag": "9.1.1", "sha": "a" * 40, "make_latest": "true"}
+        assert evidence.call_args.args[3] == \
+            "https://github.com/o/agent/actions/runs/123"
+
+    def test_unattended_skips_the_actor_check_in_planning(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._clear_actions_env(monkeypatch)
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.ensure_environment_protected"), \
+             patch("scripts.release.main.plan_publication",
+                   return_value=_publish_plan()) as plan, \
+             patch("scripts.release.main.emit_job_summary"):
+            code = main([*self._PLAN_ONLY, "--unattended"])
+        assert code == 0
+        assert plan.call_args.kwargs["skip_authorization"] is True
+
+    def test_execute_without_bindings_is_a_usage_error(self) -> None:
+        # An empty binding means the approver's evidence never reached this
+        # job; proceeding unbound would defeat the gate.
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.ensure_environment_protected"), \
+             pytest.raises(SystemExit) as excinfo:
+            main([*_POLICY_ARGS, "publish", "--branch", "9.1",
+                  "--actor", "madolson"])
+        assert excinfo.value.code == 2
+
+    def test_execute_binds_tag_and_sha_and_emits_release_url(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        output_file = tmp_path / "out"
+        output_file.touch()
+        monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.ensure_environment_protected"), \
+             patch("scripts.release.main.publish_release",
+                   return_value="https://x/releases/9.1.1") as publish:
+            code = main([*_POLICY_ARGS, "publish", "--branch", "9.1",
+                         "--actor", "madolson",
+                         "--expected-tag", "9.1.1", "--expected-sha", "a" * 40])
+        assert code == 0
+        kwargs = publish.call_args.kwargs
+        assert kwargs["expected_tag"] == "9.1.1"
+        assert kwargs["expected_sha"] == "a" * 40
+        assert kwargs["branch"] == "9.1"
+        assert kwargs["actor"] == "madolson"
+        outputs = dict(
+            line.split("=", 1) for line in output_file.read_text().splitlines()
+        )
+        assert outputs == {"release_url": "https://x/releases/9.1.1"}
+
+    def test_unprotected_gate_exits_1(self) -> None:
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.ensure_environment_protected",
+                   side_effect=ReleaseControlError("no required reviewers")):
+            code = main(self._PLAN_ONLY)
+        assert code == 1
+
+    def test_unauthorized_actor_exits_1(self,
+                                        monkeypatch: pytest.MonkeyPatch) -> None:
+        self._clear_actions_env(monkeypatch)
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.ensure_environment_protected"), \
+             patch("scripts.release.main.plan_publication",
+                   side_effect=NotAuthorizedError("not a member")):
+            code = main(self._PLAN_ONLY)
+        assert code == 1
+
+
 def _workflow(name: str) -> dict:
     path = _ROOT / ".github" / "workflows" / name
     return yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
@@ -168,14 +294,16 @@ class TestWorkflowContracts:
         assert token_step["with"]["permission-contents"] == "write"
 
     def test_every_release_workflow_supports_fork_operation(self) -> None:
-        # Token minting is attempted everywhere (the App secrets exist on the
-        # test fork from earlier live testing; continue-on-error tolerates
-        # their absence) with an AUTOMATION_PAT last resort, so the whole
-        # flow is testable on a fork before touching upstream.
+        # Token minting is attempted everywhere with an AUTOMATION_PAT last
+        # resort, so the whole flow is testable on a fork before touching
+        # upstream. A missing App secret is tolerated only on forks:
+        # upstream keeps fail-fast semantics at the token step.
         for name in ("release-start.yml", "release-adopt.yml",
                      "release-reconcile.yml", "release-publish.yml"):
             text = (_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
-            assert "continue-on-error: true" in text, name
+            assert ("continue-on-error: "
+                    "${{ github.repository_owner != 'valkey-io' }}") in text, name
+            assert "continue-on-error: true" not in text, name
             assert ("github.repository_owner != 'valkey-io' && "
                     "(secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)") in text, name
             # PAT fallback must be structurally impossible upstream.

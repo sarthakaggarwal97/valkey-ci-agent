@@ -41,11 +41,14 @@ repos:
       automation_repo: valkey-io/valkey-release-automation
       build_workflow: build-release.yml
       qualification_workflow: qualify-release.yml
-      # The EXACT package matrix inventory (build legs). Qualification
-      # requires exactly these counts of jobs and usable artifacts: a
-      # platform addition or removal is a deliberate edit here, reviewed
-      # alongside the matrix change; a floor would silently tolerate
-      # losing coverage.
+      # The EXACT qualification matrix inventory (build legs): archive
+      # builds per architecture group plus the package matrix.
+      # Qualification requires exactly these counts of jobs and usable
+      # artifacts: a platform addition or removal is a deliberate edit
+      # here, reviewed alongside the matrix change; a floor would silently
+      # tolerate losing coverage.
+      qualification_x86_archive_jobs: 2
+      qualification_arm_archive_jobs: 2
       qualification_rpm_jobs: 30
       qualification_deb_jobs: 10
       downloads_base_url: https://download.valkey.io/releases
@@ -64,7 +67,7 @@ repos:
       helm_repo: valkey-io/valkey-helm
       dockerhub_repo: valkey/valkey
       bundle_dockerhub_repo: valkey/valkey-bundle
-      # ECR Public registry alias (public.ecr.aws/<alias>/...).
       ghcr_image_repo: valkey-io/valkey
+      # ECR Public registry alias (public.ecr.aws/<alias>/...).
       ecr_namespace: valkey
       helm_index_url: https://valkey.io/valkey-helm/index.yaml
