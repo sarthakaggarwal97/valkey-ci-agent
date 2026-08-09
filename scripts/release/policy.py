@@ -74,7 +74,7 @@ class RepoReleasePolicy:
     workflow file (basename, e.g. ``ci.yml``) whose runs the required checks
     must come from: check-run names are not unique across workflows (valkey's
     ``ci.yml`` and ``daily.yml`` share job names), so a run from another
-    workflow on the same SHA must never satisfy — or clobber — a requirement.
+    workflow on the same SHA must never satisfy (or clobber) a requirement.
     ``check_timeout_minutes`` bounds how long a still-running required check
     may sit before it is reported STALLED instead of pending.
     """

@@ -2,7 +2,7 @@
 
 The one shared ensure-label helper: the backport PR flows and the release
 tracker all need a label to exist before ``add_to_labels`` (or an issue
-create naming it) can succeed. Best-effort by design — a label problem must
+create naming it) can succeed. Best-effort by design: a label problem must
 never fail the flow that needed it; the subsequent apply surfaces a
 persistent problem.
 """
@@ -49,7 +49,7 @@ def ensure_label(repo: Any, name: str, color: str, description: str) -> None:
             description=f"create label {name!r}",
         )
     except GithubException as exc:
-        if exc.status == 422:  # created concurrently — fine
+        if exc.status == 422:  # created concurrently, which is fine
             return
         logger.error("Failed to create label %r: %s", name, exc)
     except Exception as exc:  # noqa: BLE001 - transport/parse failure is non-fatal

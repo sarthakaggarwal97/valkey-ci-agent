@@ -25,11 +25,11 @@ def ensure_authorized(gh: Any, policy: RepoReleasePolicy, actor: str) -> None:
     """Raise :class:`NotAuthorizedError` unless *actor* is authorized.
 
     ``authorized_team`` is normally ``org/team-slug`` and membership is
-    queried live. The ``user:<login>`` form authorizes exactly that user —
-    for fork policies, where no organization team exists (a personal fork
+    queried live. The ``user:<login>`` form authorizes exactly that user;
+    it exists for fork policies, where no organization team exists (a personal fork
     cannot have teams and a fork PAT cannot read the upstream org's).
 
-    Lookup failures also refuse (fail closed) — with a message naming the
+    Lookup failures also refuse (fail closed), with a message naming the
     failed lookup, since "the token cannot read the org's teams" needs a
     different operator response than "not a member".
     """

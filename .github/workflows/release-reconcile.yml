@@ -1,10 +1,10 @@
 # Reconcile active releases: recompute truth from GitHub and update trackers.
 #
 # For every policy-configured release branch with an open tracking issue, the
-# controller recomputes the release state from live GitHub data — the
+# controller recomputes the release state from live GitHub data: the
 # release-notes PR (whose merge commit is the candidate SHA), the branch head
 # (movement invalidates the candidate until an owner adopts the exact new
-# head), and the required check runs on the exact candidate SHA — then
+# head), and the required check runs on the exact candidate SHA. It then
 # re-renders the issue. Nothing is parsed out of issue text; editing the issue
 # changes nothing and is overwritten here.
 #
@@ -74,7 +74,7 @@ jobs:
           # Deliberately NOT contents:write: reconciliation runs unattended
           # on a schedule outside the protected environment, so the token
           # that touches valkey must be incapable of creating the release or
-          # its tag — publication-only-via-approval is capability-enforced.
+          # its tag; publication-only-via-approval is capability-enforced.
           repositories: valkey
           permission-contents: read
           permission-issues: write

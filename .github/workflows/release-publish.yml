@@ -1,4 +1,4 @@
-# Publish a ready release — the release flow's only production write path.
+# Publish a ready release: the release flow's only production write path.
 #
 # Two jobs, split so approval evidence exists before the gate:
 #
@@ -10,7 +10,7 @@
 #
 #   publish   gated by the protected `release` environment (required
 #             reviewers approve on the run page after reading the validate
-#             summary). Every step here — including token minting — runs
+#             summary). Every step here, including token minting, runs
 #             only after approval. It re-runs the FULL validation and
 #             requires it to reproduce the exact tag the approver saw, then
 #             creates the release at the candidate SHA and verifies the tag.

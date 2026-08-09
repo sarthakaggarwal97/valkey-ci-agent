@@ -4,9 +4,9 @@ Publication is the release's point of no return: creating the release fires
 valkey's ``trigger-build-release`` workflow (``repository_dispatch
 build-release {version, environment: prod}``), and upstream's active tag
 ruleset forbids moving or deleting 8.x/9.x release tags (note: 7.x tags are
-excluded from that ruleset, and forks have no such protection — treat the
+excluded from that ruleset, and forks have no such protection; treat the
 tag as immovable everywhere anyway). The controller therefore
-never publishes from reconciliation — only through this module, invoked by a
+never publishes from reconciliation: publication happens only through this module, invoked by a
 workflow job gated behind a protected ``release`` environment with required
 reviewers.
 
@@ -17,8 +17,8 @@ Everything is revalidated *after* approval, immediately before the write:
   SHA, qualification passed on the exact SHA);
 - the version files at the candidate SHA (``src/version.h`` must record
   exactly the version and stage being published);
-- the release notes at the candidate SHA (the dated section must exist —
-  it becomes the release body);
+- the release notes at the candidate SHA (the dated section must exist,
+  since it becomes the release body);
 - tag availability (the tag must not exist: GitHub silently ignores
   ``target_commitish`` for an existing tag, which is how historical releases
   ended up displaying ``unstable``);
@@ -117,7 +117,7 @@ def plan_publication(
         )
 
     # The version files at the exact candidate SHA must record exactly what
-    # is being published — a stale or wrong version.h means the notes PR and
+    # is being published: a stale or wrong version.h means the notes PR and
     # the branch disagree, and publishing would ship a mislabelled server.
     version_h = read_text_file(repo, _VERSION_H_PATH, ref=sha)
     recorded_version, recorded_stage = current_release_state(version_h)
@@ -154,7 +154,7 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
     """Revalidate everything and publish the release at the candidate SHA.
 
     ``expected_tag`` and ``expected_sha``, when set, must equal the freshly
-    revalidated plan's — they carry exactly what the environment approver
+    revalidated plan's: they carry exactly what the environment approver
     saw. The SHA binding matters independently of the tag: if the branch
     moves and a new head is adopted while approval is pending, revalidation
     would produce the same tag over a different commit, and that commit was
@@ -168,13 +168,13 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
         raise ReleaseControlError(
             f"revalidation produced tag {plan.tag} but approval was for "
             f"{expected_tag}; the release changed between approval and "
-            f"execution — re-run validation"
+            f"execution: re-run validation"
         )
     if expected_sha and expected_sha != plan.sha:
         raise ReleaseControlError(
             f"revalidation produced candidate {plan.sha} but approval was for "
             f"{expected_sha}; the candidate changed between approval and "
-            f"execution — re-run validation and approve the new commit"
+            f"execution: re-run validation and approve the new commit"
         )
 
     repo = retry_github_call(
@@ -281,7 +281,7 @@ def render_plan_summary(plan: PublishPlan) -> str:
     """The approver's checklist: what will happen and what to verify.
 
     GitHub's approval modal shows nothing but the environment name, so this
-    summary — rendered on the run page and posted to the tracker — is the
+    summary, rendered on the run page and posted to the tracker, is the
     approval evidence. It says explicitly what to check, with links.
     """
     return "\n".join([
@@ -401,7 +401,7 @@ def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
     """Put the approver's checklist on the tracker, linking the waiting run.
 
     The approver's journey usually starts from the tracker, and GitHub's
-    approval modal shows no context — so the evidence lives where they are,
+    approval modal shows no context, so the evidence lives where they are,
     with a pointer to where the button is. Edited in place on re-validation.
     """
     repo = retry_github_call(
@@ -413,7 +413,7 @@ def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
         retries=2, description=f"get issue #{plan.issue_number}",
     )
     # The mention notifies on first creation only: subsequent re-validations
-    # edit the comment in place, which GitHub does not re-notify — one ping
+    # edit the comment in place, which GitHub does not re-notify; one ping
     # per approval wait is the desired behavior.
     body = (
         f"{_APPROVAL_MARKER}\n"

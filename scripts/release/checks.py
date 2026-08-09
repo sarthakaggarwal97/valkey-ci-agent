@@ -1,7 +1,7 @@
 """Required-check evaluation on the exact candidate SHA.
 
-Split from reconcile so the one question it answers — "did the policy's
-required checks pass on this exact commit, from the right workflow?" —
+Split from reconcile so the one question it answers ("did the policy's
+required checks pass on this exact commit, from the right workflow?")
 lives behind a two-function interface (:func:`evaluate_required_checks`,
 :func:`check_blockers`).
 """
@@ -83,7 +83,7 @@ def _checks_workflow_suite_ids(repo: Any, policy: RepoReleasePolicy, sha: str) -
     """Check-suite ids of *sha*'s runs of the policy's ``checks_workflow``.
 
     An empty set (workflow never ran on this SHA) makes every required check
-    MISSING — fail closed, mirroring the no-run case.
+    MISSING, failing closed to mirror the no-run case.
     """
     workflow_runs = retry_github_call(
         lambda: list(repo.get_workflow_runs(head_sha=sha)),
@@ -100,8 +100,8 @@ def _suite_id(run: Any) -> int | None:
 
     Read from ``_rawData`` (the already-stored payload) rather than the
     deprecated ``check_suite_id`` property or the ``check_suite`` attribute,
-    either of which can trigger a per-run completion GET — same rationale as
-    issue_dedup's ``_drop_pull_requests``.
+    either of which can trigger a per-run completion GET (same rationale as
+    issue_dedup's ``_drop_pull_requests``).
     """
     suite = run._rawData.get("check_suite") or {}
     return suite.get("id")

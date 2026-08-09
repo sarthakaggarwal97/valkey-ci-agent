@@ -2,7 +2,7 @@
 
 Checks that artifacts the release promises are actually reachable by the
 public: container image tags in Docker Hub / GHCR / ECR Public, and files on
-download.valkey.io. Everything here is unauthenticated by design — the point
+download.valkey.io. Everything here is unauthenticated by design: the point
 is to observe what an anonymous user sees, and no GitHub token may ever leak
 to a third-party endpoint.
 
@@ -45,8 +45,8 @@ def url_exists(url: str, *, method: str = "HEAD",
         with urllib.request.urlopen(request, timeout=_TIMEOUT_S) as response:
             return 200 <= response.status < 300
     except urllib.error.HTTPError as exc:
-        # 429 is rate limiting and 405 an endpoint rejecting the HEAD method
-        # — neither means absence: raising surfaces them as reconcile errors
+        # 429 is rate limiting and 405 an endpoint rejecting the HEAD method;
+        # neither means absence: raising surfaces them as reconcile errors
         # instead of silently stalling an output as missing.
         if 400 <= exc.code < 500 and exc.code not in (405, 429):
             return False
@@ -70,7 +70,7 @@ def ghcr_tag_exists(repo: str, tag: str) -> bool:
     """True when ghcr.io serves *repo*:*tag* to an anonymous pull.
 
     The anonymous token grant itself fails for private packages, which
-    reads as not-public — exactly the answer we need.
+    reads as not-public, which is exactly the answer we need.
     """
     try:
         token = _fetch_json(f"https://ghcr.io/token?scope=repository:{repo}:pull")["token"]

@@ -2,7 +2,7 @@
 
 The release-notes cut pushes its PR from ``agent/release-cut/<version>-<stage>``
 (:data:`scripts.release_notes.release_cut.PREP_BRANCH_PREFIX`). The controller
-identifies the notes PR — and reads the version and stage it pins — from that
+identifies the notes PR (and reads the version and stage it pins) from that
 head branch. Building the regex from the cut's own constant keeps the two
 modules from drifting apart.
 

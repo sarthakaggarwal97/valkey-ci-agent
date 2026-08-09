@@ -5,7 +5,7 @@
 # acknowledges the movement by dispatching this workflow with the *exact*
 # current head SHA. The controller verifies the dispatching actor's team
 # membership live, verifies the SHA equals the current branch head, and then
-# records the adoption as a bot-authored comment on the tracking issue — the
+# records the adoption as a bot-authored comment on the tracking issue, the
 # only adoption record reconciliation trusts (a marker pasted by anyone else
 # is ignored).
 name: Release Adopt Candidate

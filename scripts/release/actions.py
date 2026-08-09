@@ -1,13 +1,13 @@
 """Idempotent progress actions taken during reconciliation.
 
 Reconciliation recomputes state, then performs at most the small set of
-side effects that state calls for — each guarded so a rerun never repeats
+side effects that state calls for, each guarded so a rerun never repeats
 completed work:
 
 - dispatch the qualification run (only when CI is green on the candidate
   and no qualification run exists for that exact SHA);
 - dispatch the Bundle update (only when the verifier says the ordering gate
-  is satisfied and no update is in flight — signalled via ``action``);
+  is satisfied and no update is in flight, signalled via ``action``);
 - open the Helm chart bump PR (same gating, controller-authored since
   valkey-helm has no automation of its own);
 - notify the authorized team exactly once per distinct failure state
@@ -89,7 +89,7 @@ def advance(
         and not _publish_run_active(gh_agent, agent_repo, status.branch)
     ):
         # Minimum-clicks: READY auto-starts the publish pipeline. This is
-        # safe to automate because the dispatch was never the gate — the
+        # safe to automate because the dispatch was never the gate: the
         # validate job posts the approval evidence and the publish job holds
         # at the protected environment until a human approves.
         _dispatch_publish(gh_agent, agent_repo, status.branch)
@@ -374,7 +374,7 @@ def _notify_once(
 
     The failure fingerprint is stamped into the notification comment; while
     the observed failure set is unchanged no further comment is posted, and
-    a different failure set notifies again — exactly once.
+    a different failure set notifies again, exactly once.
     """
     failures = _failure_items(status)
     if not failures:
@@ -426,7 +426,7 @@ def _nudge_once(
     """Mention the authorized team once per distinct awaiting-human state.
 
     Failures already escalate through :func:`_notify_once`; this covers the
-    two states that otherwise wait silently on a human — an open notes PR
+    two states that otherwise wait silently on a human: an open notes PR
     and a moved branch. Same fingerprint-marker pattern: an unchanged state
     never re-pings, a changed one (new notes PR, new branch head) does.
     """
@@ -540,7 +540,7 @@ _PUBLISH_WORKFLOW = "release-publish.yml"
 
 def _publish_run_active(gh_agent: Any, agent_repo: str, branch: str) -> bool:
     """True when a publish run for *branch* is queued, running, or waiting
-    at the approval gate — reconcile must not stack duplicates."""
+    at the approval gate; reconcile must not stack duplicates."""
     workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
     if workflow is None:
         return True  # cannot see the workflow: do not dispatch blind

@@ -23,7 +23,7 @@ on:
         description: >-
           Release intent. rc/ga only before the line's initial release; patch
           after. 'security' is the embargoed path: the controller refuses it
-          BEFORE any public artifact exists — run the manual break-glass
+          BEFORE any public artifact exists; run the manual break-glass
           process instead.
         required: true
         type: choice

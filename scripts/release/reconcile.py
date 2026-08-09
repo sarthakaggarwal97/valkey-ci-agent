@@ -5,7 +5,7 @@ The controller's single source of truth is live GitHub state:
 - The **release decision** (version + stage) is pinned by the release-notes
   PR, the bot-created artifact whose head branch is
   ``agent/release-cut/<version>-<stage>`` into the release branch.
-- The **candidate SHA** is that PR's merge commit — but only while it remains
+- The **candidate SHA** is that PR's merge commit, but only while it remains
   the branch head. If the branch moves, the candidate is invalidated until an
   authorized owner adopts the *exact* new head via the ``adopt`` entry point.
 - **Required checks** are evaluated by exact candidate SHA. The latest check
@@ -66,7 +66,7 @@ class StartResult:
     ``created`` False means an active release already exists for the branch
     and its issue was reused (the duplicate start performed no writes).
     ``cut_needed`` True means no release-notes PR is bound to the tracker
-    yet, so the workflow should (re)run the notes cut — on a fresh start and
+    yet, so the workflow should (re)run the notes cut, both on a fresh start and
     on a resume after a failed cut. A duplicate start whose notes PR already
     exists reports the version that PR pins and ``cut_needed`` False.
     """
@@ -431,7 +431,7 @@ def _published_status(
 def _find_release(repo: Any, tag: str) -> Any:
     """The published GitHub release for *tag*, or None.
 
-    ``GET /releases/tags/{tag}`` does not return drafts — which is the
+    ``GET /releases/tags/{tag}`` does not return drafts, which is the
     correct behavior here, since a draft creates no tag and publishes
     nothing.
     """
@@ -585,7 +585,7 @@ def _find_notes_pr(
     release line. Three guards keep the binding sound:
 
     - the head must live in the upstream repo itself (the cut pushes prep
-      branches upstream) — ``head.ref`` of a fork PR is an attacker-chosen
+      branches upstream): ``head.ref`` of a fork PR is an attacker-chosen
       string, so without this anyone could displace the real notes PR;
     - PRs closed without merging are abandoned cuts, skipped so they neither
       wedge the release nor shadow an older valid PR;
@@ -638,8 +638,8 @@ def _resolve_candidate(notes_merge_sha: str, branch_head: str, tracking_issue: A
     After movement, only a bot-recorded adoption of the *exact current* head
     re-establishes a candidate; adoptions of earlier heads are stale and do
     not count (the branch moved again, so the owner must look again). The
-    INVALIDATED sha reports the last valid candidate — the latest adoption
-    when one exists — so the operator message names what actually lapsed.
+    INVALIDATED sha reports the last valid candidate (the latest adoption
+    when one exists), so the operator message names what actually lapsed.
     """
     if branch_head == notes_merge_sha:
         return Candidate(state=CandidateState.CURRENT, sha=notes_merge_sha,

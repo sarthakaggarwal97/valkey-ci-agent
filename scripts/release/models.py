@@ -95,7 +95,7 @@ def release_tag(version: str, stage: str) -> str:
 
     Every public artifact (tag, dispatch payload, tarball names, hashes
     line, container branch and image tags, run-name markers) carries this
-    form, not the bare version — an rc's artifacts are named after the tag.
+    form, not the bare version: an rc's artifacts are named after the tag.
     """
     return version if stage == "ga" else f"{version}-{stage}"
 
@@ -150,7 +150,7 @@ class QualificationStatus:
     """Evidence of the no-publish qualification run on the candidate SHA.
 
     Evidence is GitHub-native: the run id, its conclusion, and its job
-    results, re-queried live — never a stored assertion. ``run_id`` 0 means
+    results, re-queried live, never a stored assertion. ``run_id`` 0 means
     no qualification run exists for this exact SHA yet.
     """
 
@@ -180,8 +180,8 @@ class DownstreamOutput:
     evidence (PR, workflow run, registry tag, public file) when one exists.
     ``action`` names the idempotent side effect reconciliation should take
     to make progress ("" when none): the verifier is the one place that
-    knows both the ordering gate and the current public state, so it — not
-    the action runner — decides when starting work is safe.
+    knows both the ordering gate and the current public state, so it, not
+    the action runner, decides when starting work is safe.
     """
 
     name: str

@@ -3,7 +3,7 @@
 Qualification runs the archive and package builds against the exact
 candidate SHA *without* any production write, in the automation repo's
 ``qualification_workflow``. Its evidence is GitHub-native and re-queried
-live every time: the run id, the run's conclusion, and its job results —
+live every time: the run id, the run's conclusion, and its job results,
 never a stored assertion.
 
 Correlation: ``workflow_dispatch`` returns no run id, and a run's metadata
@@ -38,7 +38,7 @@ def evaluate_qualification(
 
     The newest matching run wins, so re-dispatching after a failure
     supersedes it. A successful run must also show zero failed jobs and at
-    least ``qualification_min_jobs`` jobs — a truncated matrix (an empty
+    least ``qualification_min_jobs`` jobs: a truncated matrix (an empty
     generate step) must not pass vacuously.
     """
     run = _find_run(gh, policy, tag, sha)
@@ -46,7 +46,7 @@ def evaluate_qualification(
         return QualificationStatus()
 
     # A run that never planned jobs (startup_failure: invalid workflow file,
-    # permission mismatch) is not evidence about the candidate — no build was
+    # permission mismatch) is not evidence about the candidate; no build was
     # attempted. Treat it as absent so reconciliation redispatches once the
     # workflow is fixed; a real build failure still requires a human.
     if run.conclusion == "startup_failure":

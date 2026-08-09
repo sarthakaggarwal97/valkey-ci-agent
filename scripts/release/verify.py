@@ -1,7 +1,7 @@
 """Verify the release's required public outputs (stages 5 and 6).
 
-Every verifier checks the *canonical public artifact* — a registry manifest,
-a public file, a merged PR, a git tag — not merely that some workflow
+Every verifier checks the *canonical public artifact* (a registry manifest,
+a public file, a merged PR, a git tag), not merely that some workflow
 reported success. "PR opened" and "dispatch accepted" are progress states,
 never completion.
 
@@ -134,8 +134,8 @@ def _guarded(name: str, verifier: Callable[[], Any]) -> Any:
     """Degrade a verifier's API failure to a FAILED output.
 
     One missing or renamed downstream repository (a 404 on its first read)
-    must report as that output failing — feeding the checklist and the
-    one-shot notification — rather than aborting the whole reconcile pass
+    must report as that output failing, feeding the checklist and the
+    one-shot notification, rather than aborting the whole reconcile pass
     and freezing the tracker at stale state.
     """
     try:
@@ -168,7 +168,7 @@ def _verify_build_run(gh: Any, gh_source: Any, policy: RepoReleasePolicy,
       that dies before reaching the automation repo reads FAILED instead of
       leaving the output pending forever;
     - the automation run is selected from build-release.yml explicitly and
-      must carry the exact ``Build Release <tag> (prod)`` marker — a dev
+      must carry the exact ``Build Release <tag> (prod)`` marker: a dev
       dispatch or unrelated repository_dispatch run can never satisfy it;
     - absence is bounded: no matching run within the policy check timeout of
       publication is a failure, not an eternal pending.
@@ -176,7 +176,7 @@ def _verify_build_run(gh: Any, gh_source: Any, policy: RepoReleasePolicy,
     down = policy.downstream
     # The build run is looked for FIRST: a failed trigger must never veto a
     # build that exists (recovery may dispatch build-release directly, or
-    # re-run the trigger — either way, a marked build run supersedes the
+    # re-run the trigger; either way, a marked build run supersedes the
     # trigger's failure).
     # Run-name set by
     # valkey-release-automation/.github/workflows/build-release.yml.
@@ -250,7 +250,7 @@ def _newest_marked_run(gh: Any, repo_name: str, workflow_file: str,
         # Boundary-anchored: the bare-tag trigger marker for 9.1.2 must not
         # match a 9.1.20 run title, and (the trailing '-') the GA marker
         # 9.1.2 must never match a 9.1.2-rc1 title. (Release-event trigger
-        # runs title as the tag itself — GitHub display-title behavior, not
+        # runs title as the tag itself: GitHub display-title behavior, not
         # a run-name we set; a manually dispatched trigger has no tag in its
         # title and is invisible here, which the FAILED detail's recovery
         # text covers.)

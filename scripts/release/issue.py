@@ -8,7 +8,7 @@ issue is a *display surface and dedup anchor only*:
 - The body is re-rendered wholesale from :class:`ReleaseStatus` on every
   reconcile pass. Nothing is ever parsed *out* of the body to make a
   decision, so editing the issue cannot authorize or alter anything: the
-  next reconcile simply overwrites the edit with recomputed truth.
+  next reconcile overwrites the edit with recomputed truth.
 - Adoption acknowledgements are read from issue *comments*, and only from
   comments authored by the agent's own accounts (posted by the ``adopt``
   entry point after a live team-membership check).
@@ -50,7 +50,7 @@ _ADOPT_MARKER_RE = re.compile(
 # Per-issue memo for comment fetches: one reconcile pass reads the same
 # issue's comments several times (adoptions, notifications, completion) and
 # the list only changes when the controller itself posts. Weak keys tie each
-# entry to the issue object's lifetime — one pass — with no TTL machinery.
+# entry to the issue object's lifetime (one pass) with no TTL machinery.
 _COMMENTS_MEMO: "weakref.WeakKeyDictionary[Any, list[Any]]" = weakref.WeakKeyDictionary()
 
 
