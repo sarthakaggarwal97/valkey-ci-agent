@@ -99,7 +99,7 @@ class TestRender:
 
     def test_ready_callout_carries_the_approval_link_when_known(self) -> None:
         body = _render(_status(approval_run_url="https://x/actions/runs/500"))
-        assert "> Approve here: https://x/actions/runs/500" in body
+        assert "> **Approve here:** https://x/actions/runs/500" in body
 
     def test_ready_callout_omits_the_approval_line_when_unknown(self) -> None:
         body = _render(_status())
@@ -330,10 +330,10 @@ class TestAesthetics:
 
     def test_footer_carries_the_freshness_stamp(self) -> None:
         body = _render(_status())
-        assert "*Reconciled 2026-08-10 17:30 UTC" in body
+        assert "<sub>Reconciled 2026-08-10 17:30 UTC" in body
         assert "Reconciled " in body and "UTC" in body
-        assert "*Failures are raised as a comment mentioning the release" in body
-        assert body.rstrip().endswith("once per distinct failure state.*")
+        assert "manual edits are overwritten.</sub>" in body
+        assert body.rstrip().endswith("manual edits are overwritten.</sub>")
 
     def test_status_vocabulary_is_the_capitalized_icon_set_only(self) -> None:
         stalled = _status(
@@ -399,8 +399,7 @@ class TestTablesTriageAndCollapse:
             RequiredCheck(name="test-ubuntu-latest", state=CheckState.PASSED),
             RequiredCheck(name="build-macos-latest", state=CheckState.PASSED),
         )))
-        assert (f"<details><summary>All 2 required checks passed on "
-                f"<code>{_SHA_A[:12]}</code></summary>") in body
+        assert "<details><summary>All 2 required checks passed</summary>" in body
         assert "</details>" in body
         assert "| `test-ubuntu-latest` | ✅ Passed |" in body
 

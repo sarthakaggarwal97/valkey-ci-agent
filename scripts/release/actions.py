@@ -448,7 +448,7 @@ def _notify_once(
             body=(
                 f"{marker}\n"
                 f"> [!WARNING]\n"
-                f"> **{policy.mention}, release `{tag}` needs attention.**\n"
+                f"> **{policy.mention}: Release `{tag}` Needs Attention.**\n"
                 f"\n"
                 f"| # | Problem |\n"
                 f"|---|---|\n"
@@ -499,7 +499,7 @@ def _nudge_once(
             body=(
                 f"{marker}\n"
                 f"> [!IMPORTANT]\n"
-                f"> **{policy.mention}, action needed for `{tag}`.**\n"
+                f"> **{policy.mention}: Action Needed for `{tag}`.**\n"
                 f">\n"
                 f"> {message}\n"
                 f"\n"

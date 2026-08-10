@@ -418,7 +418,7 @@ def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
     body = (
         f"{_APPROVAL_MARKER}\n"
         f"> [!IMPORTANT]\n"
-        f"> **{policy.mention}, approval needed to publish `{plan.tag}`.**\n"
+        f"> **{policy.mention}: Approval Needed to Publish `{plan.tag}`.**\n"
         f"\n"
         + render_plan_summary(plan)
         + f"\n\n**Approve here:** {run_url} (Review deployments -> `release` "

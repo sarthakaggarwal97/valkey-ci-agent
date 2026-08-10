@@ -424,7 +424,7 @@ class TestNotifyOnce:
                         status=status, tracking_issue=issue)
         body = issue.create_comment.call_args.kwargs["body"]
         assert "> [!WARNING]" in body
-        assert "**@valkey-io/core-team, release `9.1.1` needs attention.**" in body
+        assert "**@valkey-io/core-team: Release `9.1.1` Needs Attention.**" in body
         assert "| # | Problem |" in body
         assert "test-ubuntu-latest" in body
         assert "<sub>This notification repeats only if the failure state changes.</sub>" in body
@@ -682,7 +682,7 @@ class TestNudgeOnce:
         body = issue.create_comment.call_args.kwargs["body"]
         assert f"<!-- {issue_mod.MARKER_NAMESPACE}:nudge:" in body
         assert "> [!IMPORTANT]" in body
-        assert "**@valkey-io/core-team, action needed for `9.1.1`.**" in body
+        assert "**@valkey-io/core-team: Action Needed for `9.1.1`.**" in body
         assert "Review and merge the release-notes PR https://x/pull/42" in body
         assert "to proceed with `9.1.1`." in body
         assert "<sub>One-time nudge: posts again only if the state changes.</sub>" in body
@@ -705,7 +705,7 @@ class TestNudgeOnce:
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=self._branch_moved(), tracking_issue=issue)
         body = issue.create_comment.call_args.kwargs["body"]
-        assert "**@valkey-io/core-team, action needed for `9.1.1`.**" in body
+        assert "**@valkey-io/core-team: Action Needed for `9.1.1`.**" in body
         assert f"Branch `9.1` moved to `{MOVED_SHA[:12]}`" in body
         assert "Adopt the new head (Actions → release-adopt)" in body
         assert "or ship the pinned candidate." in body

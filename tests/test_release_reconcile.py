@@ -678,7 +678,7 @@ class TestReconcileBranch:
 
         assert status is not None
         assert status.approval_run_url == "https://x/actions/runs/500"
-        assert "> Approve here: https://x/actions/runs/500" in issue.edit.call_args.kwargs["body"]
+        assert "> **Approve here:** https://x/actions/runs/500" in issue.edit.call_args.kwargs["body"]
 
     def test_no_agent_client_renders_the_ready_callout_without_the_link(self) -> None:
         issue = tracker()

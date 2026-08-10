@@ -207,15 +207,14 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
     ]
 
     if status.checks:
-        lines += ["", f"### Required Checks on `{_short(status.candidate.sha)}`", ""]
+        lines += ["", "### Required Checks", ""]
         table = ["| Check | Result |", "|---|---|"]
         for check in status.checks:
             link = f" ([run]({check.url}))" if check.url else ""
             table.append(f"| `{check.name}` | {_CHECK_STATE_DISPLAY[check.state]}{link} |")
         if all(check.state is CheckState.PASSED for check in status.checks):
             lines += _collapsed(
-                f"All {len(status.checks)} required checks passed on "
-                f"<code>{_short(status.candidate.sha)}</code>",
+                f"All {len(status.checks)} required checks passed",
                 table,
             )
         else:
@@ -242,10 +241,8 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
         "",
         "---",
         "",
-        f"*Reconciled {reconciled_at.strftime('%Y-%m-%d %H:%M')} UTC · state is "
-        "recomputed from GitHub on every pass, so manual edits are overwritten.*",
-        "*Failures are raised as a comment mentioning the release team, once "
-        "per distinct failure state.*",
+        f"<sub>Reconciled {reconciled_at.strftime('%Y-%m-%d %H:%M')} UTC · "
+        "auto-generated on every pass; manual edits are overwritten.</sub>",
     ]
     return "\n".join(lines) + "\n"
 
@@ -332,7 +329,7 @@ def _header_line(status: ReleaseStatus) -> str:
     # subtitle carries only identity links, short enough to read at a
     # glance under the heading.
     return (
-        f"[`{status.repo}`]({repo_url}) · line "
+        f"[`{status.repo}`]({repo_url}) · "
         f"[`{status.branch}`]({repo_url}/tree/{status.branch}) · "
         f"[All trackers]({trackers_url})"
     )
@@ -381,16 +378,13 @@ def _callout(status: ReleaseStatus) -> list[str]:
     if status.ready:
         ready = [
             "> [!IMPORTANT]",
-            "> **Ready to publish.** Every pre-publication gate passed on the "
-            "exact candidate SHA. The controller dispatches the **Release "
-            "Publish** workflow automatically; publication waits for "
-            "environment approval, revalidates everything, and is the point "
-            "of no return (upstream's tag ruleset forbids moving or deleting "
-            "the created tag). The approval checklist is posted below when "
-            "the run is waiting.",
+            "> **Ready to publish.** Every gate passed on the candidate. "
+            "Approval publishes the release and creates a permanent tag; "
+            "the checklist is posted below.",
         ]
         if status.approval_run_url:
-            ready.append(f"> Approve here: {status.approval_run_url}")
+            ready.append(">")
+            ready.append(f"> **Approve here:** {status.approval_run_url}")
         return ready
     blocker_lines = [f"> - {blocker}" for blocker in status.blockers] or ["> - (None recorded)"]
     return ["> [!WARNING]", "> **Not ready. Blocked on:**", *blocker_lines]
