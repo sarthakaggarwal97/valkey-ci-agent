@@ -107,20 +107,6 @@ _PHASE_TITLES = {
     ReleasePhase.BUNDLE_HELM: "Bundle and Helm verified",
 }
 
-# What the current phase is DOING, for the live issue title. The checklist
-# uses the completed-form _PHASE_TITLES; the title describes the phase in
-# flight, so it must not assert the outcome ("published" while unpublished).
-_PHASE_TITLE_STATES = {
-    ReleasePhase.NOTES: "Cutting Notes",
-    ReleasePhase.CANDIDATE: "Candidate CI",
-    ReleasePhase.QUALIFICATION: "Qualification",
-    ReleasePhase.READY: "Ready to Publish",
-    ReleasePhase.PUBLISHED: "Verifying Outputs",
-    ReleasePhase.BUNDLE_HELM: "Bundle & Helm",
-    ReleasePhase.COMPLETE: "Complete",
-}
-
-
 def identity_marker(branch: str) -> str:
     """The marker that identifies the active release issue for *branch*."""
     return f"<!-- {MARKER_NAMESPACE}:{branch} -->"
@@ -160,16 +146,15 @@ def render_title(branch: str, version: str, stage: str) -> str:
 
 
 def render_live_title(status: ReleaseStatus) -> str:
-    """The live tracker title: ``Release {tag} · {state}``.
+    """The tracker title: constant ``Release {tag}``.
 
-    Pure function of the status, so reconciliation can compare it against
-    the current title and edit only on change. Identity never depends on
-    it: discovery is the label pair plus the body marker.
+    Deliberately carries no phase or state (owner preference): the phase
+    lives inside the tracker (badge, bar, checklist) and the list-level
+    failure signal is the needs-attention label. Reconciliation compares
+    against the current title and edits only on change, which also heals
+    a manually mangled title.
     """
-    title = f"Release {_display_tag(status)} · {_PHASE_TITLE_STATES[status.phase]}"
-    if has_failures(status):
-        title += " · Needs Attention"
-    return title
+    return f"Release {_display_tag(status)}"
 
 
 def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:

@@ -107,36 +107,25 @@ class TestRender:
 
 
 class TestLiveTitle:
-    @pytest.mark.parametrize(("phase", "state"), [
-        pytest.param(ReleasePhase.NOTES, "Cutting Notes", id="notes"),
-        pytest.param(ReleasePhase.CANDIDATE, "Candidate CI", id="candidate"),
-        pytest.param(ReleasePhase.QUALIFICATION, "Qualification", id="qualification"),
-        pytest.param(ReleasePhase.READY, "Ready to Publish", id="ready"),
-        pytest.param(ReleasePhase.PUBLISHED, "Verifying Outputs", id="published"),
-        pytest.param(ReleasePhase.BUNDLE_HELM, "Bundle & Helm", id="bundle-helm"),
-        pytest.param(ReleasePhase.COMPLETE, "Complete", id="complete"),
-    ])
-    def test_title_names_the_tag_and_phase_state(
-            self, phase: ReleasePhase, state: str) -> None:
-        title = issue_mod.render_live_title(_status(phase=phase))
-        assert title == f"Release 9.1.1 · {state}"
+    @pytest.mark.parametrize("phase", list(ReleasePhase), ids=lambda p: p.name.lower())
+    def test_title_is_constant_across_phases(self, phase: ReleasePhase) -> None:
+        # Owner preference: the title never carries phase or state. The
+        # phase lives inside the tracker; the list-level failure signal
+        # is the needs-attention label.
+        assert issue_mod.render_live_title(_status(phase=phase)) == "Release 9.1.1"
 
     def test_rc_title_carries_the_full_tag(self) -> None:
         title = issue_mod.render_live_title(
             _status(version="9.1.0", stage="rc2", phase=ReleasePhase.QUALIFICATION))
-        assert title == "Release 9.1.0-rc2 · Qualification"
+        assert title == "Release 9.1.0-rc2"
 
-    def test_failures_append_the_needs_attention_suffix(self) -> None:
+    def test_failures_never_change_the_title(self) -> None:
         failing = _status(
             ready=False, phase=ReleasePhase.CANDIDATE,
             checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
             blockers=("Required check failed",),
         )
-        title = issue_mod.render_live_title(failing)
-        assert title == "Release 9.1.1 · Candidate CI · Needs Attention"
-
-    def test_clean_status_has_no_suffix(self) -> None:
-        assert "needs attention" not in issue_mod.render_live_title(_status())
+        assert issue_mod.render_live_title(failing) == "Release 9.1.1"
 
 
 def _comment(author: str, body: str) -> MagicMock:

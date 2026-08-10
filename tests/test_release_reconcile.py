@@ -634,17 +634,20 @@ class TestReconcileBranch:
         assert "title" not in kwargs
         assert issue.title == "Release 9.1.1"
 
-    def test_title_tracks_the_phase_state(self) -> None:
+    def test_title_heals_to_the_constant_form(self) -> None:
+        # The title carries no phase or state; reconcile heals a mangled
+        # or legacy phase-suffixed title back to the constant form.
         issue = tracker()
+        issue.title = "Release 9.1.1 · Ready to Publish"
         repo = repo_mock(issues=[issue])
 
         reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
 
-        assert issue.edit.call_args.kwargs["title"] == "Release 9.1.1 · Ready to Publish"
+        assert issue.edit.call_args.kwargs["title"] == "Release 9.1.1"
 
     def test_title_edit_skipped_when_unchanged(self) -> None:
         issue = tracker()
-        issue.title = "Release 9.1.1 · Ready to Publish"
+        issue.title = "Release 9.1.1"
         issue.body = "stale"
         repo = repo_mock(issues=[issue])
 
@@ -698,34 +701,29 @@ def _issue_with_labels(*names: str) -> MagicMock:
     return issue
 
 
-class TestPhaseLabelSync:
-    def test_reconcile_applies_the_current_phase_label(self) -> None:
+class TestLabelSync:
+    def test_healthy_tracker_gets_no_state_labels(self) -> None:
+        # Titles are constant and the phase lives inside the tracker, so
+        # a healthy tracker carries only its identity labels.
         issue = _issue_with_labels("release-tracker", "release:9.1")
-        repo = repo_mock(issues=[issue])
-
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
-
-        issue.add_to_labels.assert_called_once_with("phase:ready")
-        issue.remove_from_labels.assert_not_called()
-
-    def test_stale_phase_label_is_removed_when_the_phase_moves(self) -> None:
-        issue = _issue_with_labels("release-tracker", "release:9.1",
-                                   "phase:qualification")
-        repo = repo_mock(issues=[issue])
-
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
-
-        issue.add_to_labels.assert_called_once_with("phase:ready")
-        issue.remove_from_labels.assert_called_once_with("phase:qualification")
-
-    def test_matching_label_set_causes_no_label_writes(self) -> None:
-        issue = _issue_with_labels("release-tracker", "release:9.1", "phase:ready")
         repo = repo_mock(issues=[issue])
 
         reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
 
         issue.add_to_labels.assert_not_called()
         issue.remove_from_labels.assert_not_called()
+
+    def test_legacy_phase_label_is_cleaned_up(self) -> None:
+        # Trackers created before the phase:* retirement still carry one;
+        # reconcile strips it without adding a replacement.
+        issue = _issue_with_labels("release-tracker", "release:9.1",
+                                   "phase:qualification")
+        repo = repo_mock(issues=[issue])
+
+        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        issue.add_to_labels.assert_not_called()
+        issue.remove_from_labels.assert_called_once_with("phase:qualification")
 
     def test_failures_add_needs_attention_and_recovery_removes_it(self) -> None:
         failing_runs = [check_run("test-ubuntu-latest", conclusion="failure"),
@@ -735,22 +733,20 @@ class TestPhaseLabelSync:
 
         reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
 
-        added = set(issue.add_to_labels.call_args.args)
-        assert added == {"phase:candidate", "needs-attention"}
+        assert set(issue.add_to_labels.call_args.args) == {"needs-attention"}
 
         recovered = _issue_with_labels("release-tracker", "release:9.1",
-                                       "phase:candidate", "needs-attention")
+                                       "needs-attention")
         repo = repo_mock(issues=[recovered])
 
         reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
 
-        recovered.add_to_labels.assert_called_once_with("phase:ready")
-        removed = {call.args[0] for call in recovered.remove_from_labels.call_args_list}
-        assert removed == {"phase:candidate", "needs-attention"}
+        recovered.add_to_labels.assert_not_called()
+        recovered.remove_from_labels.assert_called_once_with("needs-attention")
 
     def test_labels_outside_the_owned_set_are_never_touched(self) -> None:
         issue = _issue_with_labels("release-tracker", "release:9.1",
-                                   "phase:ready", "bug", "help wanted")
+                                   "bug", "help wanted")
         repo = repo_mock(issues=[issue])
 
         reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
@@ -758,12 +754,15 @@ class TestPhaseLabelSync:
         issue.add_to_labels.assert_not_called()
         issue.remove_from_labels.assert_not_called()
 
-    def test_missing_labels_are_created_through_the_shared_helper(self) -> None:
+    def test_needs_attention_is_created_through_the_shared_helper(self) -> None:
+        failing_runs = [check_run("test-ubuntu-latest", conclusion="failure"),
+                        check_run("build-macos-latest", run_id=2)]
         issue = _issue_with_labels("release-tracker", "release:9.1")
-        repo = repo_mock(issues=[issue])
+        repo = repo_mock(issues=[issue], runs=failing_runs)
         with patch("scripts.release.reconcile.ensure_label") as ensure:
             reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
-        assert any(call.args[1] == "phase:ready" for call in ensure.call_args_list)
+        assert any(call.args[1] == "needs-attention"
+                   for call in ensure.call_args_list)
 
 
 class TestAdoptCandidate:

@@ -450,54 +450,29 @@ def _find_release(repo: Any, tag: str) -> Any:
         raise
 
 
-# Phase labels the controller owns on the tracker (COMPLETE carries none:
-# the tracker closes). needs-attention mirrors the failure state.
-_PHASE_LABELS: "dict[ReleasePhase, str]" = {
-    ReleasePhase.NOTES: "phase:notes",
-    ReleasePhase.CANDIDATE: "phase:candidate",
-    ReleasePhase.QUALIFICATION: "phase:qualification",
-    ReleasePhase.READY: "phase:ready",
-    ReleasePhase.PUBLISHED: "phase:published",
-    ReleasePhase.BUNDLE_HELM: "phase:bundle-helm",
-}
-
+# The only state label: needs-attention mirrors the failure state. The
+# retired phase:* namespace is still recognized for cleanup (see
+# _sync_phase_labels).
 _ATTENTION_LABEL = "needs-attention"
 
-_LABEL_COLORS = {
-    "phase:notes": "d4c5f9",
-    "phase:candidate": "bfd4f2",
-    "phase:qualification": "c5def5",
-    "phase:ready": "0e8a16",
-    "phase:published": "1d76db",
-    "phase:bundle-helm": "5319e7",
-    _ATTENTION_LABEL: "d73a4a",
-}
+_LABEL_COLORS = {_ATTENTION_LABEL: "d73a4a"}
 
 _LABEL_DESCRIPTIONS = {
-    "phase:notes": "Cutting and merging the release notes",
-    "phase:candidate": "Waiting for required CI on the candidate",
-    "phase:qualification": "Qualifying the candidate",
-    "phase:ready": "Ready to publish, awaiting human approval",
-    "phase:published": "Published; verifying core public outputs",
-    "phase:bundle-helm": "Verifying Bundle and Helm",
-    _ATTENTION_LABEL: "The tracked release has failures needing attention",
+    _ATTENTION_LABEL: "The release controller found failures needing a human",
 }
 
 
 def _sync_phase_labels(repo: Any, tracking_issue: Any, status: ReleaseStatus) -> None:
-    """Mirror the phase and failure state into labels, by diff.
+    """Mirror the failure state into the ``needs-attention`` label, by diff.
 
-    Exactly one ``phase:*`` label for the active phase (none once COMPLETE:
-    the tracker closes) plus ``needs-attention`` while failures exist. The
-    desired set is diffed against the current labels and only differences
-    are applied; labels outside the owned set (the known phase labels and
-    needs-attention) are never touched.
+    Titles stay constant and the phase lives inside the tracker, so the
+    only state label is ``needs-attention`` while failures exist. The
+    controller still owns the retired ``phase:*`` namespace solely to
+    strip stale phase labels from trackers created before the retirement;
+    labels outside the owned set are never touched.
     """
     current = {getattr(label, "name", "") for label in tracking_issue.labels}
     desired: set[str] = set()
-    phase_label = _PHASE_LABELS.get(status.phase)
-    if phase_label is not None:
-        desired.add(phase_label)
     if issue_mod.has_failures(status):
         desired.add(_ATTENTION_LABEL)
     # The controller owns the whole phase:* namespace plus needs-attention;
