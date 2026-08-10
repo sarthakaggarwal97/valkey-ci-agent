@@ -91,11 +91,16 @@ def test_shipped_fork_registry_is_valid() -> None:
         ('branches: ["unstable"]', "not a release branch"),
         ("branches: []", "branches"),
         ("authorized_team: core-team", "authorized_team"),
+        ("authorized_team: 'user:'", "authorized_team"),
         ("checks_workflow: ''", "checks_workflow"),
         ("checks_workflow: .github/workflows/ci.yml", "checks_workflow"),
         ("check_timeout_minutes: 0", "check_timeout_minutes"),
         ("check_timeout_minutes: '360'", "check_timeout_minutes"),
         ("qualification_rpm_jobs: 0", "qualification_rpm_jobs"),
+        # YAML quoting slips: '30' is a string and true is a bool; both
+        # would break the exact-count matrix comparison if accepted.
+        ("qualification_rpm_jobs: '30'", "qualification_rpm_jobs"),
+        ("qualification_deb_jobs: true", "qualification_deb_jobs"),
         ("qualification_x86_archive_jobs: 0", "qualification_x86_archive_jobs"),
         ("build_workflow: ''", "build_workflow"),
         ("helm_index_url: http://insecure.example", "helm_index_url"),
@@ -116,6 +121,40 @@ def test_invalid_entries_are_rejected(tmp_path: Path, mutation: str, message: st
             lines.append(line)
     with pytest.raises(ValueError, match=message):
         load_policy(_write(tmp_path, "\n".join(lines)))
+@pytest.mark.parametrize("team", ["valkey-io/", "/core-team"])
+def test_team_with_empty_org_or_slug_is_rejected(tmp_path: Path, team: str) -> None:
+    text = _VALID.replace("authorized_team: valkey-io/core-team",
+                          f"authorized_team: {team}")
+    with pytest.raises(ValueError, match="authorized_team"):
+        load_policy(_write(tmp_path, text))
+def test_user_form_with_whitespace_only_login_is_rejected(tmp_path: Path) -> None:
+    text = _VALID.replace("repo: valkey-io/valkey", "repo: o/valkey").replace(
+        "authorized_team: valkey-io/core-team", "authorized_team: 'user:   '"
+    )
+    with pytest.raises(ValueError, match="authorized_team"):
+        load_policy(_write(tmp_path, text))
+
+
+def test_duplicate_required_checks_are_rejected(tmp_path: Path) -> None:
+    text = _VALID.replace(
+        "required_checks: [test-ubuntu-latest]",
+        "required_checks: [test-ubuntu-latest, test-ubuntu-latest]",
+    )
+    with pytest.raises(ValueError, match="required_checks"):
+        load_policy(_write(tmp_path, text))
+
+
+def test_unknown_extra_keys_are_silently_ignored(tmp_path: Path) -> None:
+    # Documented behavior, deliberately held rather than flagged: every
+    # meaningful key is required, so a typo'd key name surfaces as a
+    # missing-field error anyway; a purely additive stray key cannot
+    # weaken any validation and is ignored.
+    text = _VALID.replace("check_timeout_minutes: 360",
+                          "check_timeout_minutes: 360\n    surprise_key: true")
+    policies = load_policy(_write(tmp_path, text))
+    policy = policies["valkey-io/valkey"]
+    assert policy.check_timeout_minutes == 360
+    assert not hasattr(policy, "surprise_key")
 
 
 def test_duplicate_repo_rejected(tmp_path: Path) -> None:

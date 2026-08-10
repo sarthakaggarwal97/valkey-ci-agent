@@ -105,6 +105,29 @@ class TestCLI:
         assert code == 0
         assert adopt.call_args.kwargs["sha"] == "a" * 40
 
+    def test_multiline_value_never_reaches_github_output(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A newline smuggled into an emitted value (here via the issue URL)
+        # would let it forge extra key=value output lines for downstream
+        # workflow steps; the run must fail and the forged line must never
+        # land in the output file.
+        output_file = tmp_path / "out"
+        output_file.touch()
+        monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+        result = _start_result()
+        forged = StartResult(
+            created=result.created, cut_needed=result.cut_needed,
+            issue_number=result.issue_number,
+            issue_url="https://x/issues/11\nrelease_url=https://evil.example",
+            version=result.version, stage=result.stage, tag=result.tag,
+        )
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.start_release", return_value=forged):
+            code = main([*_POLICY_ARGS, "start", "--branch", "9.1",
+                         "--intent", "patch", "--actor", "madolson"])
+        assert code == 1
+        assert "evil.example" not in output_file.read_text()
+
 
 class TestReconcilePoll:
     """The env-gated poll loop delegates to the shared run_poll_loop."""
@@ -286,6 +309,24 @@ class TestPublishCLI:
             main([*_POLICY_ARGS, "publish", "--branch", "9.1",
                   "--actor", "madolson"])
         assert excinfo.value.code == 2
+
+    @pytest.mark.parametrize("partial_binding", [
+        ["--expected-tag", "9.1.1"],
+        ["--expected-sha", "a" * 40],
+    ])
+    def test_execute_with_only_one_binding_is_also_a_usage_error(
+            self, partial_binding: "list[str]") -> None:
+        # Half the evidence is no evidence: a tag without its SHA (or the
+        # reverse) must not reach publish_release, where an empty binding
+        # silently disables that half of the compare.
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.ensure_environment_protected"), \
+             patch("scripts.release.main.publish_release") as publish, \
+             pytest.raises(SystemExit) as excinfo:
+            main([*_POLICY_ARGS, "publish", "--branch", "9.1",
+                  "--actor", "madolson", *partial_binding])
+        assert excinfo.value.code == 2
+        publish.assert_not_called()
 
     def test_execute_binds_tag_and_sha_and_emits_release_url(
             self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

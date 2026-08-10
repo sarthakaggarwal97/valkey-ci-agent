@@ -38,7 +38,9 @@ from tests.release_fixtures import (
     DAILY_SUITE,
     MERGE_SHA,
     MOVED_SHA,
+    TRACKER_CREATED,
     bot_adoption,
+    bot_comment,
     check_run,
     gh_mock,
     make_policy,
@@ -141,17 +143,20 @@ class TestNotesPRBinding:
             state="all", base="9.1", sort="created", direction="desc",
         )
 
-    def test_backport_prs_are_not_mistaken_for_the_notes_pr(self) -> None:
-        backport = notes_pr(head_ref="agent/backport/3601-to-9.1", number=50)
-        assert _status(repo_mock(pulls=[backport])).notes_pr_number == 0
-
-    def test_notes_pr_for_other_line_is_ignored(self) -> None:
-        wrong_line = notes_pr(head_ref="agent/release-cut/9.0.5-ga")
-        assert _status(repo_mock(pulls=[wrong_line])).notes_pr_number == 0
-
-    def test_line_prefix_is_exact_9_10_does_not_match_9_1(self) -> None:
-        near_miss = notes_pr(head_ref="agent/release-cut/9.10.5-ga")
-        assert _status(repo_mock(pulls=[near_miss])).notes_pr_number == 0
+    # One two-line guard rejects every non-notes head: the prep-branch regex
+    # and the exact-line prefix check (version must start with "<branch>.").
+    # The trailing dot is load-bearing in both directions: a 9.1 tracker must
+    # not bind a 9.10/9.11 PR, and a 9.11 tracker must not bind a 9.1 PR.
+    @pytest.mark.parametrize(("head_ref", "branch"), [
+        pytest.param("agent/backport/3601-to-9.1", "9.1", id="backport-head"),
+        pytest.param("agent/release-cut/9.0.5-ga", "9.1", id="other-line"),
+        pytest.param("agent/release-cut/9.10.5-ga", "9.1", id="9.10-not-9.1"),
+        pytest.param("agent/release-cut/9.11.5-ga", "9.1", id="9.11-not-9.1"),
+        pytest.param("agent/release-cut/9.1.5-ga", "9.11", id="9.1-not-9.11"),
+    ])
+    def test_non_matching_head_refs_never_bind(self, head_ref: str, branch: str) -> None:
+        pr = notes_pr(head_ref=head_ref)
+        assert _status(repo_mock(pulls=[pr]), branch=branch).notes_pr_number == 0
 
     def test_fork_pr_with_notes_style_head_cannot_bind(self) -> None:
         # head.ref of a fork PR is attacker-chosen; only upstream prep
@@ -163,6 +168,35 @@ class TestNotesPRBinding:
 
     def test_headless_pr_cannot_bind(self) -> None:
         assert _status(repo_mock(pulls=[notes_pr(head_repo=None)])).notes_pr_number == 0
+
+    # The head-repo guard is a full-string equality on full_name, so a
+    # crafted repo name sharing the upstream string as a prefix or suffix
+    # must not pass.
+    @pytest.mark.parametrize("full_name", [
+        pytest.param("valkey-io/valkey.evil.com", id="suffix-crafted"),
+        pytest.param("evil-valkey-io/valkey", id="prefix-crafted"),
+        pytest.param("valkey-io/valkey-evil", id="hyphen-extended"),
+    ])
+    def test_crafted_head_repo_full_name_cannot_bind(self, full_name: str) -> None:
+        spoof = notes_pr(head_repo=full_name, number=99)
+        assert _status(repo_mock(pulls=[spoof])).notes_pr_number == 0
+
+    def test_pr_created_at_the_tracker_instant_does_not_bind(self) -> None:
+        # The binding is strict (created_at <= tracker created_at excludes),
+        # so a PR stamped at the exact tracker second fails closed. GitHub
+        # timestamps have second granularity, so this tie is reachable.
+        pr = notes_pr(created=TRACKER_CREATED)
+        status = _status(repo_mock(pulls=[pr]), tracking_issue=tracker())
+        assert status.notes_pr_number == 0
+
+    def test_merged_pr_with_empty_string_merge_commit_fails_closed(self) -> None:
+        # merge_commit_sha "" (not None) must take the same fail-closed path
+        # as a missing merge commit, never become a "" candidate SHA that
+        # compares equal to some other empty field.
+        status = _status(repo_mock(pulls=[notes_pr(merge_sha="")]))
+        assert status.candidate.state is CandidateState.NONE
+        assert not status.ready
+        assert any("no merge commit" in blocker for blocker in status.blockers)
 
     def test_previous_releases_merged_notes_pr_is_not_this_releases(self) -> None:
         # rc2 tracker just opened; the rc1 notes PR (merged, older than the
@@ -301,6 +335,26 @@ class TestComputeStatus:
                 check_run("build-macos-latest", run_id=2)]
         assert _status(repo_mock(runs=runs)).ready
 
+    # Newest-run-wins with EQUAL start timestamps: the ordering key falls
+    # back to the run id (GitHub ids are creation-ordered), independent of
+    # conclusion and of list position (the newer run is listed first here,
+    # so a naive last-listed-wins implementation fails too).
+    @pytest.mark.parametrize(("newest_conclusion", "expected_ready"), [
+        pytest.param("failure", False, id="newer-failure-beats-older-pass"),
+        pytest.param("success", True, id="newer-pass-beats-older-failure"),
+    ])
+    def test_equal_start_times_fall_back_to_run_id(
+        self, newest_conclusion: str, expected_ready: bool,
+    ) -> None:
+        ts = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
+        older_conclusion = "success" if newest_conclusion == "failure" else "failure"
+        runs = [check_run("test-ubuntu-latest", conclusion=newest_conclusion,
+                          run_id=9, started=ts),
+                check_run("test-ubuntu-latest", conclusion=older_conclusion,
+                          run_id=3, started=ts),
+                check_run("build-macos-latest", run_id=2, started=ts)]
+        assert _status(repo_mock(runs=runs)).ready is expected_ready
+
     @pytest.mark.parametrize(
         ("required_conclusion", "daily_conclusion", "expected_ready"),
         [
@@ -364,6 +418,46 @@ class TestComputeStatus:
         # The blocker names the candidate that actually lapsed (the adoption).
         assert status.candidate.sha == MOVED_SHA
 
+    def test_conflicting_adopt_markers_adopt_by_membership_not_order(self) -> None:
+        # One comment carrying two different adopt markers: adoption is a
+        # set-membership test against the live head, so the head matching
+        # the FIRST marker still adopts even with a second marker after it.
+        body = f"{issue_mod.adopt_marker(MOVED_SHA)}\n{issue_mod.adopt_marker('c' * 40)}"
+        repo = repo_mock(branch_head=MOVED_SHA,
+                         qual_runs=[qualification_run(sha=MOVED_SHA)])
+        status = _status(repo, tracking_issue=tracker(comments=[bot_comment(body)]))
+        assert status.candidate.state is CandidateState.ADOPTED
+        assert status.candidate.sha == MOVED_SHA
+
+    def test_conflicting_adopt_markers_matching_neither_head_invalidate(self) -> None:
+        # Neither marker matches the live head: still INVALIDATED, and the
+        # reported lapsed candidate is the LAST recorded adoption, so the
+        # operator message names the most recent acknowledgement.
+        third = "c" * 40
+        body = f"{issue_mod.adopt_marker(MOVED_SHA)}\n{issue_mod.adopt_marker(third)}"
+        status = _status(repo_mock(branch_head="d" * 40),
+                         tracking_issue=tracker(comments=[bot_comment(body)]))
+        assert status.candidate.state is CandidateState.INVALIDATED
+        assert status.candidate.sha == third
+
+    def test_readopted_original_sha_reuses_its_old_passing_qualification(self) -> None:
+        # The subtle revival case: notes merge at A, branch moved to B (B
+        # adopted and qualified), then the branch moved BACK to A. The old
+        # passing qualification run for A revives and the release is READY
+        # again with no fresh run. Judgment: correct. Qualification is a
+        # pure function of (tag, sha); the tree at A is byte-identical to
+        # when run 900 executed, so that run is evidence for exactly this
+        # candidate. The branch's detour history does not change what was
+        # tested. If a rerun were wanted, the key would have to include the
+        # adoption epoch, which nothing in the model supports.
+        stale_adoption = bot_adoption(MOVED_SHA)  # the interim head, now stale
+        repo = repo_mock()  # head back at MERGE_SHA; run 900 passed on it
+        status = _status(repo, tracking_issue=tracker(comments=[stale_adoption]))
+        assert status.candidate.state is CandidateState.CURRENT
+        assert status.candidate.sha == MERGE_SHA
+        assert status.qualification.run_id == 900  # the old run, reused
+        assert status.ready
+
 
 class TestStrayTag:
     def test_tag_without_release_raises_an_unshippable_alert(self) -> None:
@@ -380,6 +474,11 @@ class TestStrayTag:
         assert not status.ready
         assert any("unshippable" in alert for alert in status.alerts)
         assert any("unshippable" in blocker for blocker in status.blockers)
+        # The alert also gates progress: qualification is never consulted or
+        # dispatched for an unshippable version (phase stays CANDIDATE), so
+        # the state machine cannot march toward READY around the alert.
+        assert status.phase is ReleasePhase.CANDIDATE
+        assert status.qualification.run_id == 0
 
 
 class TestQualificationBinding:
@@ -447,6 +546,23 @@ class TestPublishedPhases:
         status = _status(repo)
         assert status.published
         assert any("prerelease flag" in blocker for blocker in status.blockers)
+
+    def test_published_candidate_stays_pinned_when_branch_moves_away(self) -> None:
+        # The tag SHA no longer being the branch head (post-release commits,
+        # even a force-push that dropped it) must not resurrect INVALIDATED
+        # or demand an adoption: publication is the point of no return and
+        # the immutable tag, not the branch, pins the candidate. Judgment:
+        # correct; the branch legitimately moves on after a release, and an
+        # ancestry check would add an unfixable alert for a shipped version.
+        core = (_out("tarballs", OutputState.PENDING),)
+        p1, p2 = _patched_outputs(core, ())
+        with p1, p2:
+            status = _status(repo_mock(released=True, branch_head=MOVED_SHA))
+        assert status.published
+        assert status.candidate.state is CandidateState.CURRENT
+        assert status.candidate.sha == MERGE_SHA  # the tag's commit
+        assert status.candidate.branch_head == MOVED_SHA
+        assert status.phase is ReleasePhase.PUBLISHED
 
 
 class TestReconcileBranch:

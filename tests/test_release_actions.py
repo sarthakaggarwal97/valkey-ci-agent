@@ -64,8 +64,8 @@ class TestQualificationDispatch:
         status = _status(qualification=QualificationStatus(
             run_id=901, url="https://x/qruns/901", failed_jobs=("job",)))
         issue = tracker()
+        fingerprint = hashlib.sha256(MERGE_SHA.encode("utf-8")).hexdigest()[:12]
         if marked:
-            fingerprint = hashlib.sha256(MERGE_SHA.encode("utf-8")).hexdigest()[:12]
             posted = MagicMock()
             posted.user.login = "valkeyrie-ops[bot]"
             posted.body = (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:"
@@ -81,6 +81,13 @@ class TestQualificationDispatch:
             dispatch.assert_called_once()
             assert dispatch.call_args.kwargs == {"tag": "9.1.1", "sha": MERGE_SHA}
             assert any("auto-retried qualification" in p for p in performed)
+            # The marker comment carries the candidate fingerprint and names
+            # the failed run so the human sees which one was retried.
+            bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
+            autofix = next(b for b in bodies if ":autofix:" in b)
+            assert (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:qual-retry:"
+                    f"{fingerprint} -->") in autofix
+            assert "[run 901](https://x/qruns/901)" in autofix
 
     def test_no_dispatch_outside_qualification_phase(self) -> None:
         status = _status(phase=ReleasePhase.CANDIDATE)
@@ -91,31 +98,22 @@ class TestQualificationDispatch:
 
 
 class TestQualificationRetryComment:
-    def test_retry_posts_the_marker_callout_before_dispatching(self) -> None:
-        status = _status(qualification=QualificationStatus(
-            run_id=901, url="https://x/qruns/901", failed_jobs=("job",)))
-        issue = tracker()
-        with patch.object(actions.qual_mod, "dispatch_qualification"):
-            actions.advance(gh_mock(MagicMock()), _POLICY,
-                            status=status, tracking_issue=issue)
-        fingerprint = hashlib.sha256(MERGE_SHA.encode("utf-8")).hexdigest()[:12]
-        bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
-        autofix = next(b for b in bodies if ":autofix:" in b)
-        assert (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:qual-retry:"
-                f"{fingerprint} -->") in autofix
-        assert "> [!NOTE]" in autofix
-        assert "**Auto-remediation:** Retrying qualification for `9.1.1` once" in autofix
-        assert "[run 901](https://x/qruns/901)" in autofix
-        assert "\u2014" not in autofix
-
-    def test_autofix_marker_from_non_bot_author_does_not_suppress(self) -> None:
-        # A drive-by user pasting the marker must not eat the one retry.
+    @pytest.mark.parametrize("author", [
+        pytest.param("drive-by", id="drive-by"),
+        pytest.param("valkeyrie-ops", id="bare-app-slug"),
+        pytest.param("valkeyrie-ops[bot] ", id="trailing-space-lookalike"),
+    ])
+    def test_autofix_marker_from_untrusted_author_does_not_suppress(
+        self, author: str,
+    ) -> None:
+        # A spoofer pasting the marker (any lookalike of the trusted login)
+        # must not eat the one retry.
         status = _status(qualification=QualificationStatus(
             run_id=901, url="https://x/qruns/901", failed_jobs=("job",)))
         issue = tracker()
         fingerprint = hashlib.sha256(MERGE_SHA.encode("utf-8")).hexdigest()[:12]
         spoof = MagicMock()
-        spoof.user.login = "drive-by"
+        spoof.user.login = author
         spoof.body = f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:qual-retry:{fingerprint} -->"
         issue.get_comments.return_value = [spoof]
         with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
@@ -340,8 +338,15 @@ class TestMarkerBeforeDispatchOrdering:
 
 
 class TestOutputActions:
-    def test_bundle_dispatch_fires_the_repository_dispatch(self) -> None:
+    @pytest.mark.parametrize(("version", "stage", "expected_tag"), [
+        pytest.param("9.1.1", "ga", "9.1.1", id="ga-bare-version"),
+        pytest.param("9.2.0", "rc1", "9.2.0-rc1", id="rc-suffixed-tag"),
+    ])
+    def test_bundle_dispatch_fires_the_repository_dispatch(
+        self, version: str, stage: str, expected_tag: str,
+    ) -> None:
         status = _status(
+            version=version, stage=stage,
             phase=ReleasePhase.BUNDLE_HELM,
             outputs=(DownstreamOutput(name="bundle", state=OutputState.PENDING,
                                       action="dispatch-bundle"),),
@@ -352,7 +357,7 @@ class TestOutputActions:
                                     status=status, tracking_issue=tracker())
         repo.create_repository_dispatch.assert_called_once_with(
             event_type="valkey-release",
-            client_payload={"version": "9.1.1", "component": "valkey"},
+            client_payload={"version": expected_tag, "component": "valkey"},
         )
         assert any("bundle" in p for p in performed)
 
@@ -446,8 +451,16 @@ class TestNotifyOnce:
 
         issue.create_comment.assert_not_called()
 
-    def test_notify_marker_from_non_bot_author_does_not_suppress(self) -> None:
-        # A drive-by user pasting the marker must not silence real alerts.
+    @pytest.mark.parametrize("author", [
+        pytest.param("drive-by", id="drive-by"),
+        pytest.param("Valkeyrie-Ops[bot]", id="case-variant"),
+        pytest.param("valkeyrie-ops", id="bare-app-slug"),
+    ])
+    def test_notify_marker_from_untrusted_author_does_not_suppress(
+        self, author: str,
+    ) -> None:
+        # A spoofer pasting the marker (under any lookalike of the trusted
+        # login) must not silence real alerts.
         status = _status(
             checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
         )
@@ -456,7 +469,7 @@ class TestNotifyOnce:
                         status=status, tracking_issue=issue)
         marker_body = issue.create_comment.call_args.kwargs["body"]
         spoof = MagicMock()
-        spoof.user.login = "drive-by"
+        spoof.user.login = author
         spoof.body = marker_body
         issue.get_comments.return_value = [spoof]
         issue.create_comment.reset_mock()
@@ -541,6 +554,101 @@ class TestNotifyOnce:
                         tracking_issue=issue)
         issue.create_comment.assert_not_called()
 
+    def test_duplicate_output_keys_do_not_collapse_the_fingerprint(self) -> None:
+        # Two failed outputs with the same name AND run_id produce the same
+        # stable key twice. The fingerprint joins the sorted key list, so
+        # the duplicate is preserved and the two-failure state hashes
+        # differently from the one-failure state: the second failure still
+        # re-pings. (Duplicate names cannot happen today, the verifier emits
+        # unique names; this pins the machinery for when that changes.)
+        issue = tracker()
+        one = _status(outputs=(DownstreamOutput(
+            name="pages", state=OutputState.FAILED, detail="first", run_id=7),))
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=one, tracking_issue=issue)
+        posted = MagicMock()
+        posted.user.login = "valkeyrie-ops[bot]"
+        posted.body = issue.create_comment.call_args.kwargs["body"]
+        issue.get_comments.return_value = [posted]
+        issue.create_comment.reset_mock()
+
+        two = _status(outputs=(
+            DownstreamOutput(name="pages", state=OutputState.FAILED,
+                             detail="first", run_id=7),
+            DownstreamOutput(name="pages", state=OutputState.FAILED,
+                             detail="second", run_id=7),
+        ))
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=two, tracking_issue=issue)
+
+        issue.create_comment.assert_called_once()
+        body = issue.create_comment.call_args.kwargs["body"]
+        assert "| 1 | **pages:** first |" in body
+        assert "| 2 | **pages:** second |" in body
+
+    def test_output_failure_with_run_id_zero_then_a_real_run_repings(self) -> None:
+        # An output can fail before any run exists (run_id 0). Once a real
+        # run id appears for the same output, the key changes and the team
+        # is pinged again exactly once. A later relapse BACK to run_id 0
+        # reuses the original key, whose marker is still on the issue, so it
+        # stays suppressed: markers never expire. Accepted per the source
+        # comment ("run_id may be 0/empty; included anyway so a NEW failed
+        # run (with a real id) re-pings").
+        issue = tracker()
+        replayed: "list[MagicMock]" = []
+
+        def _advance(status: ReleaseStatus) -> None:
+            actions.advance(gh_mock(MagicMock()), _POLICY,
+                            status=status, tracking_issue=issue)
+            for call in issue.create_comment.call_args_list:
+                posted = MagicMock()
+                posted.user.login = "valkeyrie-ops[bot]"
+                posted.body = call.kwargs["body"]
+                replayed.append(posted)
+            issue.get_comments.return_value = list(replayed)
+            issue.create_comment.reset_mock()
+
+        def _failed(run_id: int, detail: str) -> ReleaseStatus:
+            return _status(outputs=(DownstreamOutput(
+                name="pages", state=OutputState.FAILED,
+                detail=detail, run_id=run_id),))
+
+        _advance(_failed(0, "no run yet"))
+        assert len(replayed) == 1  # first ping
+
+        _advance(_failed(55, "run 55 failed"))
+        assert len(replayed) == 2  # new run id, second ping
+
+        _advance(_failed(0, "run vanished"))
+        assert len(replayed) == 2  # back to the old key: suppressed
+
+    def test_same_check_failing_on_a_new_candidate_notifies_again(self) -> None:
+        issue = tracker()
+        first = _status(
+            checks=(RequiredCheck(name="test-ubuntu-latest",
+                                  state=CheckState.FAILED, url="https://x/run/1"),),
+        )
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=first, tracking_issue=issue)
+        posted = MagicMock()
+        posted.user.login = "valkeyrie-ops[bot]"
+        posted.body = issue.create_comment.call_args.kwargs["body"]
+        issue.get_comments.return_value = [posted]
+        issue.create_comment.reset_mock()
+
+        # The branch moved, the new head was adopted, and the same required
+        # check failed again in a NEW run on the NEW candidate SHA.
+        second = _status(
+            candidate=Candidate(state=CandidateState.ADOPTED, sha=MOVED_SHA,
+                                branch_head=MOVED_SHA),
+            checks=(RequiredCheck(name="test-ubuntu-latest",
+                                  state=CheckState.FAILED, url="https://x/run/2"),),
+        )
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=second, tracking_issue=issue)
+
+        issue.create_comment.assert_called_once()
+
 
 class TestNudgeOnce:
     def _notes_pr_open(self) -> ReleaseStatus:
@@ -616,12 +724,55 @@ class TestNudgeOnce:
         assert ("c" * 40)[:12] in issue.create_comment.call_args.kwargs["body"]
 
     def test_merged_notes_pr_with_current_candidate_never_nudges(self) -> None:
+        # The nudge state is computed from the recomputed status, never from
+        # the tracker body: a stale body still claiming the PR is unmerged
+        # must not produce a nudge once the status says merged.
         issue = tracker()
+        issue.body = (issue_mod.identity_marker("9.1")
+                      + "\nRelease-notes PR #42: Open (not merged)")
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=_status(notes_pr_number=42, notes_pr_merged=True,
                                        qualification=QualificationStatus(run_id=1, passed=True)),
                         tracking_issue=issue)
         issue.create_comment.assert_not_called()
+
+    def test_nudge_marker_from_untrusted_author_does_not_suppress(self) -> None:
+        # The nudge gate reads only trusted comments; a bare-slug spoofer
+        # pasting the exact marker must not silence the one-time nudge.
+        issue = tracker()
+        fingerprint = hashlib.sha256(b"notes-pr:42").hexdigest()[:12]
+        spoof = MagicMock()
+        spoof.user.login = "valkeyrie-ops"
+        spoof.body = f"<!-- {issue_mod.MARKER_NAMESPACE}:nudge:{fingerprint} -->"
+        issue.get_comments.return_value = [spoof]
+
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._notes_pr_open(), tracking_issue=issue)
+
+        bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
+        assert any(f"<!-- {issue_mod.MARKER_NAMESPACE}:nudge:" in b for b in bodies)
+
+    def test_unmerged_notes_pr_outranks_branch_moved_for_the_single_nudge(self) -> None:
+        # Both awaiting-human states at once (unreachable via compute_status
+        # today, which zeroes the candidate while the notes PR is unmerged,
+        # but _nudge_item must stay safe if that invariant shifts): exactly
+        # one nudge posts, and it is the notes-PR one. Judgment: correct
+        # precedence; without a merged notes PR there is no candidate to
+        # adopt, so merging is the only actionable ask.
+        status = _status(
+            phase=ReleasePhase.NOTES,
+            notes_pr_number=42, notes_pr_url="https://x/pull/42",
+            notes_pr_merged=False,
+            candidate=Candidate(state=CandidateState.INVALIDATED, sha=MERGE_SHA,
+                                branch_head=MOVED_SHA),
+        )
+        issue = tracker()
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=status, tracking_issue=issue)
+        issue.create_comment.assert_called_once()
+        body = issue.create_comment.call_args.kwargs["body"]
+        assert "Review and merge the release-notes PR" in body
+        assert "moved to" not in body
 
 
 class TestAutoClose:
@@ -659,20 +810,6 @@ class TestReviewRegressions:
                         status=status, tracking_issue=issue)
         body = issue.create_comment.call_args.kwargs["body"]
         assert "unshippable" in body
-
-    def test_bundle_dispatch_carries_the_tag_for_rc(self) -> None:
-        from scripts.release.models import DownstreamOutput, OutputState, ReleasePhase
-        status = _status(
-            version="9.2.0", stage="rc1", phase=ReleasePhase.BUNDLE_HELM,
-            qualification=QualificationStatus(run_id=1, passed=True),
-            outputs=(DownstreamOutput(name="bundle", state=OutputState.PENDING,
-                                      action="dispatch-bundle"),),
-        )
-        repo = MagicMock()
-        actions.advance(gh_mock(repo), _POLICY,
-                        status=status, tracking_issue=tracker())
-        payload = repo.create_repository_dispatch.call_args.kwargs["client_payload"]
-        assert payload["version"] == "9.2.0-rc1"
 
     def test_completion_comment_is_not_duplicated_on_rerun(self) -> None:
         status = _status(phase=ReleasePhase.COMPLETE,

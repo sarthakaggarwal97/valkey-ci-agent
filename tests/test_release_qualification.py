@@ -44,11 +44,7 @@ class TestEvaluate:
             _POLICY, tag="9.1.1", sha=MERGE_SHA,
         )
         assert status.run_id == 900 and status.passed
-
-    def test_successful_run_with_enough_jobs_passes(self) -> None:
-        status = evaluate_qualification(_gh_with_runs([qualification_run()]),
-                                        _POLICY, tag="9.1.1", sha=MERGE_SHA)
-        assert status.passed and not status.failed_jobs
+        assert not status.failed_jobs
 
     def test_in_progress_run_is_pending(self) -> None:
         run = qualification_run(status="in_progress", conclusion=None)
@@ -112,14 +108,75 @@ class TestEvaluate:
                                         tag="9.1.1", sha=MERGE_SHA)
         assert not status.passed
 
-    def test_expired_artifacts_are_not_evidence(self) -> None:
+    @pytest.mark.parametrize("mutate", ["expired", "empty"])
+    def test_expired_or_empty_artifacts_are_not_evidence(self, mutate: str) -> None:
+        # An artifact with size 0 but expired False is still a name, not
+        # evidence, exactly like an expired one.
         run = qualification_run()
         for artifact in run.get_artifacts.return_value:
-            artifact.expired = True
+            if mutate == "expired":
+                artifact.expired = True
+            else:
+                artifact.size_in_bytes = 0
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
                                         tag="9.1.1", sha=MERGE_SHA)
         assert not status.passed
         assert any("usable" in item for item in status.failed_jobs)
+
+    def test_all_jobs_skipped_with_the_right_names_does_not_pass(self) -> None:
+        # A run whose every job skipped concludes success on GitHub and
+        # shows exactly the right job names; zero jobs SUCCEEDED, so the
+        # exact-count evidence must fail it.
+        run = qualification_run()
+        for job in run.jobs.return_value:
+            job.conclusion = "skipped"
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("Evidence mismatch" in item for item in status.failed_jobs)
+
+    def test_duplicate_job_names_do_not_inflate_the_inventory(self) -> None:
+        jobs = _archive_jobs()
+        dropped = jobs.pop(1)  # lose the second x86 platform entirely
+        assert "x86" in dropped.name
+        duplicate = MagicMock(conclusion="success")
+        duplicate.name = jobs[0].name  # same platform, listed twice
+        run = qualification_run(tag="9.2.0-rc1", jobs=jobs + [duplicate])
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.2.0-rc1", sha=MERGE_SHA)
+        assert not status.passed
+
+    @pytest.mark.parametrize("hostile_title", [
+        None,                                    # GitHub can serve a null title
+        f"Qualify 9.1.10 @ {MERGE_SHA}",         # superset tag
+        f"Qualify 9.1.1-rc1 @ {MERGE_SHA}",      # rc of the same version
+        f"Qualify 9.1.1 @ {MERGE_SHA[:12]}",     # truncated sha
+        f"Qualify 9.1.1 @ {MOVED_SHA}",          # right tag, wrong sha
+    ])
+    def test_neighbor_run_titles_are_never_evidence(self, hostile_title) -> None:
+        run = qualification_run()
+        run.display_title = hostile_title
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert status.run_id == 0 and not status.passed and not status.pending
+
+    def test_run_from_a_non_default_branch_is_never_evidence(self) -> None:
+        # The binding this proves: a doctored qualify workflow on a side
+        # branch, run-name and all, must not manufacture evidence. If the
+        # head_branch check regressed, this run would pass.
+        run = qualification_run(head_branch="attacker/qualify-fork")
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert status.run_id == 0 and not status.passed and not status.pending
+
+    def test_missing_qualification_workflow_reads_as_no_evidence(self) -> None:
+        from github.GithubException import GithubException
+        repo = MagicMock()
+        repo.default_branch = "main"
+        repo.get_workflow.side_effect = GithubException(404, "missing", {})
+        status = evaluate_qualification(gh_mock(repo), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert status == type(status)()
 
 
 class TestDispatch:

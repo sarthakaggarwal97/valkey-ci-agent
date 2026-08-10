@@ -63,7 +63,10 @@ def evaluate_qualification(
         lambda: list(run.jobs()),
         retries=2, description=f"list jobs of qualification run {run.id}",
     )
-    failed = tuple(j.name for j in jobs if j.conclusion not in ("success", "skipped"))
+    # (j.name or ""): a job served with a null name must read as unnamed,
+    # not raise through the caller and abort the pass.
+    failed = tuple((j.name or "") for j in jobs
+                   if j.conclusion not in ("success", "skipped"))
     if run.conclusion != "success" or failed:
         return QualificationStatus(
             run_id=run.id, url=run.html_url, passed=False,
@@ -87,10 +90,13 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
     package matrix by design; a GA must have it in full.
     """
     down = policy.downstream
-    succeeded = [j.name for j in jobs if j.conclusion == "success"]
+    succeeded = [(j.name or "") for j in jobs if j.conclusion == "success"]
 
     def count(marker: str) -> int:
-        return sum(marker in name for name in succeeded)
+        # Distinct names, not occurrences: the same job listed twice (rerun
+        # attempts served together) must not satisfy the exact inventory
+        # with a platform missing.
+        return len({name for name in succeeded if marker in name})
 
     # Exact counts, not floors: "the GA matrix ran in full" means exactly
     # the reviewed inventory (from the policy file). A platform addition or

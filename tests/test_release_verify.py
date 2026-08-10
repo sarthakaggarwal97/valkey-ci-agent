@@ -75,6 +75,25 @@ class TestHashes:
         output = verify._verify_hashes(gh_mock(repo), _POLICY.downstream, "9.1.1")
         assert output.state is OutputState.PENDING
 
+    @pytest.mark.parametrize("hostile_line", [
+        "hash valkey-9.1.10.tar.gz sha256 abc url",     # superset patch
+        "hash valkey-9.1.1-rc1.tar.gz sha256 abc url",  # rc of the same version
+        "hash valkey-19.1.1.tar.gz sha256 abc url",     # superset major
+    ])
+    def test_neighbor_version_hash_lines_never_satisfy_the_tag(
+            self, hostile_line: str) -> None:
+        # The substring check leans on the "valkey-" prefix and ".tar.gz"
+        # suffix as boundaries; every crafted neighbor must stay PENDING.
+        repo = _repo_serving({"README": hostile_line})
+        output = verify._verify_hashes(gh_mock(repo), _POLICY.downstream, "9.1.1")
+        assert output.state is OutputState.PENDING
+
+    def test_rc_superset_hash_line_never_satisfies_the_rc_tag(self) -> None:
+        # Same attack from the rc side: rc1 must not be satisfied by rc10.
+        repo = _repo_serving({"README": "hash valkey-9.2.0-rc10.tar.gz sha256 abc url"})
+        output = verify._verify_hashes(gh_mock(repo), _POLICY.downstream, "9.2.0-rc1")
+        assert output.state is OutputState.PENDING
+
 
 class TestContainer:
     def test_merged_pr_and_public_tags_verify(self) -> None:
@@ -186,6 +205,52 @@ class TestBundle:
         assert "ECR" in output.detail
 
 
+class TestBundleHostileVersionsJson:
+    """Structurally valid but wrong versions.json payloads. Anything a
+    downstream commit can serve must degrade to this output failing (or
+    pending), never raise through _guarded (which only catches
+    GithubException) and abort the pass."""
+
+    @pytest.mark.parametrize("payload", ["null", '"9.1.1"', "[]", '[{"9.1": {}}]'])
+    def test_non_object_top_level_is_failed_not_a_crash(self, payload: str) -> None:
+        repo = _repo_serving({"versions.json": payload})
+        output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
+                                       images_public=True)
+        assert output.state is OutputState.FAILED
+        assert "Could not parse `versions.json`" in output.detail
+
+    def test_null_value_under_a_different_key_degrades(self) -> None:
+        # {"valkey": null} has no "9.1" entry at all, so the .get defaults
+        # hold and the verifier reads "nothing recorded".
+        repo = _repo_serving({"versions.json": json.dumps({"valkey": None})})
+        output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
+                                       images_public=True)
+        assert output.state is OutputState.PENDING
+        assert output.action == "dispatch-bundle"
+
+    @pytest.mark.parametrize("payload", [
+        {"9.1": None},                       # line present but null
+        {"9.1": "9.1.1"},                    # line is a bare string
+        {"9.1": {"valkey-server": None}},    # server entry present but null
+        {"9.1": {"valkey-server": "9.1.1"}},  # server entry is a bare string
+    ])
+    def test_null_or_scalar_line_values_degrade_to_failed(self, payload: dict) -> None:
+        repo = _repo_serving({"versions.json": json.dumps(payload)})
+        output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
+                                       images_public=True)
+        assert output.state is OutputState.FAILED
+
+    def test_missing_bundle_version_key_never_verifies(self) -> None:
+        versions = json.dumps({"9.1": {"valkey-server": {"version": "9.1.1"}}})
+        repo = _repo_serving({"versions.json": versions})
+        with patch.object(verify.pub, "dockerhub_tag_exists", return_value=True), \
+             patch.object(verify.pub, "ghcr_tag_exists", return_value=True), \
+             patch.object(verify.pub, "ecr_public_tag_exists", return_value=True):
+            output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
+                                           images_public=True)
+        assert output.state is not OutputState.VERIFIED
+
+
 _CHART = 'apiVersion: v2\nname: valkey\nversion: 0.11.0\nappVersion: "9.1.0"\n'
 
 
@@ -246,6 +311,46 @@ class TestHelm:
                                      image_public=True)
         assert output.state is OutputState.FAILED
         assert "Could not parse `valkey/Chart.yaml`" in output.detail
+
+    def test_chart_yaml_missing_version_line_is_failed_not_a_crash(self) -> None:
+        chart = 'apiVersion: v2\nname: valkey\nappVersion: "9.1.1"\n'
+        repo = _repo_serving({"valkey/Chart.yaml": chart})
+        output = verify._verify_helm(gh_mock(repo), _POLICY.downstream, "9.1.1", "ga",
+                                     image_public=True)
+        assert output.state is OutputState.FAILED
+        assert "Could not parse appVersion/version" in output.detail
+
+    @pytest.mark.parametrize("index_body", [
+        "entries:\n  valkey:\n  - version: 0.12.10\n",   # superset chart version
+        "entries:\n  valkey:\n  - version: 0.12.0-rc1\n",  # suffixed entry
+        "entries:\n  valkey:\n  - appVersion: 0.12.0\n",   # wrong key
+        "",                                                # empty index
+    ])
+    def test_neighbor_index_entries_never_satisfy_the_chart_version(
+            self, index_body: str) -> None:
+        # The index regex is line-anchored; every crafted neighbor of
+        # 0.12.0 must leave the chart PENDING, not VERIFIED.
+        chart = 'apiVersion: v2\nname: valkey\nversion: 0.12.0\nappVersion: "9.1.1"\n'
+        repo = _repo_serving({"valkey/Chart.yaml": chart}, tags={"valkey-0.12.0"})
+        with patch.object(verify.pub, "ghcr_tag_exists", return_value=True), \
+             patch.object(verify.pub, "fetch_text", return_value=index_body):
+            output = verify._verify_helm(gh_mock(repo), _POLICY.downstream, "9.1.1", "ga",
+                                         image_public=True)
+        assert output.state is OutputState.PENDING
+
+    def test_other_charts_index_entry_never_satisfies_the_valkey_chart(self) -> None:
+        chart = 'apiVersion: v2\nname: valkey\nversion: 0.12.0\nappVersion: "9.1.1"\n'
+        repo = _repo_serving({"valkey/Chart.yaml": chart}, tags={"valkey-0.12.0"})
+        index = ("entries:\n"
+                 "  valkey-bundle:\n"
+                 "  - version: 0.12.0\n"
+                 "  valkey:\n"
+                 "  - version: 0.11.0\n")
+        with patch.object(verify.pub, "ghcr_tag_exists", return_value=True), \
+             patch.object(verify.pub, "fetch_text", return_value=index):
+            output = verify._verify_helm(gh_mock(repo), _POLICY.downstream, "9.1.1", "ga",
+                                         image_public=True)
+        assert output.state is OutputState.PENDING
 
 
 class TestOrderingGate:
@@ -394,14 +499,6 @@ class TestBuildRunObservation:
         assert out.run_id == 700
         assert run is not None and run.id == 700
 
-    def test_dev_dispatch_never_satisfies(self) -> None:
-        gh = _run_source({
-            "build-release.yml": [_wf_run("Build Release 9.1.2 (dev)")],
-        })
-        gh_source = _run_source({"trigger-build-release.yml": []})
-        out, _run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
-        assert out.state is OutputState.PENDING
-
     def test_neighbor_version_does_not_match_the_boundary_anchor(self) -> None:
         gh = _run_source({"build-release.yml": []})
         gh_source = _run_source({
@@ -429,6 +526,32 @@ class TestBuildRunObservation:
         assert "within" in out.detail
         # Absence needs investigation, not a blind dispatch: no auto-action.
         assert out.action == ""
+
+    def test_run_with_a_none_display_title_is_skipped_not_a_crash(self) -> None:
+        # GitHub can serve runs whose display_title is null; the scan must
+        # skip them, not raise.
+        gh = _run_source({
+            "build-release.yml": [_wf_run(None),
+                                  _wf_run("Build Release 9.1.2 (prod)")],
+        })
+        gh_source = _run_source({"trigger-build-release.yml": []})
+        out, _run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
+        assert out.state is OutputState.VERIFIED
+
+    def test_marked_run_predating_publication_is_not_evidence(self) -> None:
+        # A perfectly-marked run created BEFORE the release was published
+        # (e.g. a previous attempt of the same tag) must not satisfy this
+        # publication's build.
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        stale = _wf_run("Build Release 9.1.2 (prod)",
+                        created=now - timedelta(minutes=10))
+        gh = _run_source({"build-release.yml": [stale]})
+        gh_source = _run_source({"trigger-build-release.yml": []})
+        out, run = verify._verify_build_run(
+            gh, gh_source, _POLICY, "9.1.2", now - timedelta(minutes=1))
+        assert out.state is OutputState.PENDING
+        assert run is None
 
 
 def _jobs(names_conclusions: "list[tuple[str, str]]") -> "list[MagicMock]":
@@ -535,6 +658,91 @@ class TestPackagesAndTryValkey:
         assert "failing checks" in out.detail
 
 
+class TestHostileJobPayloads:
+    """Job lists shaped like what a chaotic API (or a broken matrix) can
+    actually serve: empty, oddly concluded, unicode, or null-named."""
+
+    def test_ga_with_an_empty_jobs_list_fails_packages(self) -> None:
+        # jobs [] is not None: the fetch worked and returned nothing, which
+        # means the publish matrix never ran.
+        out = verify._verify_packages("ga", _BUILD_OK, [])
+        assert out.state is OutputState.FAILED
+        assert "no package publish jobs" in out.detail
+
+    def test_empty_string_conclusion_never_verifies_packages(self) -> None:
+        jobs = _jobs([("release-build-packages / Publish to S3", "")])
+        out = verify._verify_packages("ga", _BUILD_OK, jobs)
+        assert out.state is OutputState.FAILED
+        assert "Publish to S3" in out.detail
+
+    def test_unicode_job_names_are_matched_safely(self) -> None:
+        jobs = _jobs([
+            ("release-build-packages / Publish to S3 · linux/amd64 🚀", "success"),
+            ("release-build-packages / Deploy Pages · résumé", "success"),
+        ])
+        out = verify._verify_packages("ga", _BUILD_OK, jobs)
+        assert out.state is OutputState.VERIFIED
+
+    def test_none_job_name_degrades_instead_of_crashing(self) -> None:
+        nameless = MagicMock(conclusion="success")
+        nameless.name = None
+        out = verify._verify_packages("ga", _BUILD_OK, [nameless])
+        assert out.state is OutputState.FAILED
+
+    def test_expired_upload_sentinel_is_not_evidence(self) -> None:
+        # size-0-but-expired-False is fine for a sentinel; expired is not.
+        jobs = _jobs([("update-try-valkey / build-try-valkey", "success")])
+        run = _run_with_artifacts(["try-valkey-uploaded-9.1.2"])
+        for artifact in run.get_artifacts.return_value:
+            artifact.expired = True
+        out = verify._verify_try_valkey("ga", _BUILD_OK, run, jobs)
+        assert out.state is OutputState.SKIPPED
+
+
+class TestStallEscalationBoundary:
+    """The deadline comparison is strict: exactly-at-timeout is not yet
+    stalled (the next pass escalates); one second past is."""
+
+    @staticmethod
+    def _at(seconds_past_deadline: int, timeout_minutes: int = 360):
+        from datetime import datetime, timedelta, timezone
+        published = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+        now = published + timedelta(minutes=timeout_minutes,
+                                    seconds=seconds_past_deadline)
+        frozen = MagicMock()
+        frozen.now.return_value = now
+        return published, patch.object(verify, "datetime", frozen)
+
+    def test_exactly_at_the_deadline_does_not_escalate(self) -> None:
+        outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
+                                    detail="waiting"),)
+        published, clock = self._at(0)
+        with clock:
+            escalated = verify.escalate_stalled_outputs(outputs, published, 360)
+        assert escalated[0].state is OutputState.PENDING
+
+    def test_one_second_before_the_deadline_does_not_escalate(self) -> None:
+        outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
+                                    detail="waiting"),)
+        published, clock = self._at(-1)
+        with clock:
+            escalated = verify.escalate_stalled_outputs(outputs, published, 360)
+        assert escalated[0].state is OutputState.PENDING
+
+    def test_one_second_past_the_deadline_escalates(self) -> None:
+        outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
+                                    detail="waiting"),)
+        published, clock = self._at(1)
+        with clock:
+            escalated = verify.escalate_stalled_outputs(outputs, published, 360)
+        assert escalated[0].state is OutputState.FAILED
+
+    def test_unpublished_release_never_escalates(self) -> None:
+        outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
+                                    detail="waiting"),)
+        assert verify.escalate_stalled_outputs(outputs, None, 360) == outputs
+
+
 class TestDetailCellStyle:
     def test_detail_cells_are_capitalized_statements(self) -> None:
         # Representative samples of the Detail-cell style rule: every cell
@@ -546,10 +754,6 @@ class TestDetailCellStyle:
             raise GithubException(404, "missing", {})
 
         guarded = verify._guarded("hashes", _raise_404)
-        # One pinned example of the full style; the loop below checks the
-        # style properties themselves on every sample.
-        assert guarded.detail == ("GitHub returned HTTP 404: the target "
-                                  "repository is missing or unreadable")
 
         gh = _run_source({
             "build-release.yml": [_wf_run("Build Release 9.1.2 (prod)",

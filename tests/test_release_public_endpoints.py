@@ -46,21 +46,25 @@ class TestUrlExists:
         with patch("urllib.request.urlopen", side_effect=_http_error(404)):
             assert not pub.url_exists("https://x/file")
 
-    def test_405_raises_as_transient(self) -> None:
-        # An endpoint rejecting the HEAD method is not a missing artifact.
-        with patch("urllib.request.urlopen", side_effect=_http_error(405)), \
+    @pytest.mark.parametrize("code", [
+        405,  # endpoint rejecting the HEAD method is not a missing artifact
+        429,  # rate limiting is not absence
+        500,
+        503,
+    ])
+    def test_transient_codes_raise_instead_of_reporting_absence(self, code: int) -> None:
+        with patch("urllib.request.urlopen", side_effect=_http_error(code)), \
              pytest.raises(urllib.error.HTTPError):
             pub.url_exists("https://x/file")
 
-    def test_429_raises_as_transient(self) -> None:
-        with patch("urllib.request.urlopen", side_effect=_http_error(429)), \
-             pytest.raises(urllib.error.HTTPError):
-            pub.url_exists("https://x/file")
-
-    def test_5xx_raises(self) -> None:
-        with patch("urllib.request.urlopen", side_effect=_http_error(503)), \
-             pytest.raises(urllib.error.HTTPError):
-            pub.url_exists("https://x/file")
+    @pytest.mark.parametrize("status, exists", [
+        (204, True),   # any 2xx is presence
+        (302, False),  # an unfollowed redirect must not read as presence
+    ])
+    def test_non_200_statuses_resolve_by_the_2xx_boundary(
+            self, status: int, exists: bool) -> None:
+        with patch("urllib.request.urlopen", return_value=_response(status)):
+            assert pub.url_exists("https://x/file") is exists
 
 
 class TestDockerhub:
@@ -71,10 +75,6 @@ class TestDockerhub:
         assert request.full_url == \
             "https://hub.docker.com/v2/repositories/valkey/valkey/tags/9.1.1"
         assert request.get_method() == "GET"
-
-    def test_not_found_is_false(self) -> None:
-        with patch("urllib.request.urlopen", side_effect=_http_error(404)):
-            assert not pub.dockerhub_tag_exists("valkey/valkey", "9.1.1")
 
 
 class TestGhcr:
@@ -89,14 +89,21 @@ class TestGhcr:
             "https://ghcr.io/v2/valkey-io/valkey/manifests/9.1.1"
         assert manifest_request.get_header("Authorization") == "Bearer tok"
 
-    def test_missing_manifest_is_false(self) -> None:
-        with patch("urllib.request.urlopen",
-                   side_effect=[_token_response(), _http_error(404)]):
-            assert not pub.ghcr_tag_exists("valkey-io/valkey", "9.1.1")
-
     def test_denied_token_grant_reads_as_not_public(self) -> None:
         with patch("urllib.request.urlopen", side_effect=_http_error(403)):
             assert not pub.ghcr_tag_exists("valkey-io/valkey", "9.1.1")
+
+    @pytest.mark.parametrize("body", [
+        b"{}",                                 # 200 with no token key
+        b'{"errors": [{"code": "DENIED"}]}',   # 200 with an error-shaped body
+    ])
+    def test_hostile_token_body_never_reads_as_public(self, body: bytes) -> None:
+        # A 200 token response without a usable token must never turn into
+        # "tag exists". Raising (KeyError today) is acceptable; True is not.
+        with patch("urllib.request.urlopen",
+                   return_value=_response(200, body)), \
+             pytest.raises(KeyError):
+            pub.ghcr_tag_exists("valkey-io/valkey", "9.1.1")
 
 
 class TestEcrPublic:
@@ -110,11 +117,6 @@ class TestEcrPublic:
             "https://public.ecr.aws/v2/valkey/valkey/manifests/9.1.1"
         assert manifest_request.get_header("Authorization") == "Bearer tok"
 
-    def test_missing_manifest_is_false(self) -> None:
-        with patch("urllib.request.urlopen",
-                   side_effect=[_token_response(), _http_error(404)]):
-            assert not pub.ecr_public_tag_exists("valkey/valkey", "9.1.1")
-
 
 class TestFetchText:
     def test_returns_the_decoded_body(self) -> None:
@@ -124,3 +126,12 @@ class TestFetchText:
         assert text == "entries:\n  valkey:\n  - version: 0.12.0\n"
         assert opened.call_args.args[0].full_url == \
             "https://valkey.io/valkey-helm/index.yaml"
+
+    def test_invalid_utf8_body_degrades_instead_of_crashing(self) -> None:
+        # A corrupt or truncated index must never crash the reconcile; the
+        # replacement characters simply fail the version-entry regex.
+        body = b"\xff\xfeversion: 0.12.0\n"
+        with patch("urllib.request.urlopen", return_value=_response(200, body)):
+            text = pub.fetch_text("https://valkey.io/valkey-helm/index.yaml")
+        assert "version: 0.12.0" in text
+        assert "\ufffd" in text

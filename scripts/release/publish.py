@@ -425,7 +425,7 @@ def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
         f"-> Approve and deploy)"
     )
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if _APPROVAL_MARKER in (comment.body or ""):
+        if issue_mod.marker_present(comment.body or "", _APPROVAL_MARKER):
             retry_github_call(
                 partial(comment.edit, body=body),
                 retries=2, description="update approval evidence comment",

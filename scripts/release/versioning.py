@@ -21,7 +21,9 @@ from typing import Iterable
 
 from scripts.release.models import DerivedRelease, ReleaseIntent
 
-_BRANCH_RE = re.compile(r"^(\d+)\.(\d+)$")
+# No leading zeros: git treats 9.01 and 9.1 as distinct refs, so accepting
+# a zero-padded component would derive versions for the wrong branch.
+_BRANCH_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 _FINAL_TAG_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 _RC_TAG_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)-rc([1-9]\d*)$")
 

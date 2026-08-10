@@ -133,9 +133,11 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
         raise ValueError(f"{path}: 'repo' must be 'owner/name', got {repo!r}")
 
     team = entry.get("authorized_team")
-    if not isinstance(team, str) or not (
-        team.count("/") == 1 or (team.startswith("user:") and len(team) > 5 and "/" not in team)
-    ):
+    valid_team_form = isinstance(team, str) and (
+        (team.count("/") == 1 and all(part.strip() for part in team.split("/")))
+        or (team.startswith("user:") and team[len("user:"):].strip() != "" and "/" not in team)
+    )
+    if not isinstance(team, str) or not valid_team_form:
         raise ValueError(
             f"{path}: {repo}: 'authorized_team' must be 'org/team-slug' or "
             f"'user:<login>' (fork policies only), got {team!r}"
@@ -168,6 +170,12 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
         raise ValueError(
             f"{path}: {repo}: 'required_checks' must be a non-empty list of check "
             f"names; an empty list would make every candidate trivially ready"
+        )
+    if len(set(checks)) != len(checks):
+        # A duplicate usually means a copy-paste error hid the check that
+        # was actually meant; fail loudly at load time.
+        raise ValueError(
+            f"{path}: {repo}: 'required_checks' contains duplicate entries"
         )
 
     workflow = entry.get("checks_workflow")

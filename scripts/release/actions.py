@@ -162,7 +162,7 @@ def _autofix_once(gh: Any, tracking_issue: Any, *, key: str,
     fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
     marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:{key}:{fingerprint} -->"
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if marker in (comment.body or ""):
+        if issue_mod.marker_present(comment.body, marker):
             return False
     retry_github_call(
         lambda: tracking_issue.create_comment(body=f"{marker}\n{callout}"),
@@ -436,7 +436,7 @@ def _notify_once(
     ).hexdigest()[:12]
     marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:{fingerprint} -->"
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if marker in (comment.body or ""):
+        if issue_mod.marker_present(comment.body, marker):
             return ""
     tag = release_tag(status.version, status.stage)
     rows = "\n".join(
@@ -491,7 +491,7 @@ def _nudge_once(
     fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
     marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:nudge:{fingerprint} -->"
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if marker in (comment.body or ""):
+        if issue_mod.marker_present(comment.body, marker):
             return ""
     tag = release_tag(status.version, status.stage)
     retry_github_call(
@@ -552,8 +552,13 @@ def _failure_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
         CheckState.STALLED: "has stalled",
     }
     items: "list[tuple[str, str]]" = [(alert, alert) for alert in status.alerts]
+    # Check keys carry the candidate SHA: unlike qualification and output
+    # failures, whose keys carry run ids and so re-ping on a new run, a
+    # check has no run id, and without the SHA the same check failing on a
+    # NEW candidate (after branch movement and adoption) would be
+    # suppressed forever by the old marker.
     items += [
-        (f"check:{check.name}:{check.state.value}",
+        (f"check:{status.candidate.sha}:{check.name}:{check.state.value}",
          f"Required check `{check.name}` {check_phrases[check.state]}")
         for check in status.checks
         if check.state in (CheckState.FAILED, CheckState.STALLED)
@@ -581,7 +586,7 @@ def _close_when_complete(gh: Any, status: ReleaseStatus, tracking_issue: Any) ->
         return False
     marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:complete -->"
     already_commented = any(
-        marker in (comment.body or "")
+        issue_mod.marker_present(comment.body, marker)
         for comment in issue_mod.trusted_comments(tracking_issue, gh)
     )
     if not already_commented:

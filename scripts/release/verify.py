@@ -22,6 +22,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+import yaml
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
@@ -323,7 +324,10 @@ def _verify_packages(stage: str, build: DownstreamOutput, jobs: Any) -> Downstre
         )
     # Job names set by
     # valkey-release-automation/.github/workflows/build-release.yml.
-    publish_jobs = [j for j in jobs if "Publish to S3" in j.name or "Deploy Pages" in j.name]
+    # A hostile payload can serve a job with a null name; (j.name or "")
+    # keeps the match a str test instead of a TypeError through _guarded.
+    publish_jobs = [j for j in jobs
+                    if "Publish to S3" in (j.name or "") or "Deploy Pages" in (j.name or "")]
     if not publish_jobs:
         return DownstreamOutput(
             name="packages", state=OutputState.FAILED,
@@ -366,7 +370,9 @@ def _verify_try_valkey(stage: str, build: DownstreamOutput, run: Any,
             name="try-valkey", state=OutputState.FAILED,
             detail="Could not list the build run's jobs", url=build.url,
         )
-    try_jobs = [j for j in jobs if "try-valkey" in j.name.lower() or "try valkey" in j.name.lower()]
+    try_jobs = [j for j in jobs
+                if "try-valkey" in (j.name or "").lower()
+                or "try valkey" in (j.name or "").lower()]
     if not try_jobs:
         return DownstreamOutput(
             name="try-valkey", state=OutputState.FAILED,
@@ -570,14 +576,26 @@ def _verify_bundle(
         versions = json.loads(versions_raw)
     except json.JSONDecodeError:
         versions = None
+    # Shape-validate every access: dict.get(key, {}) returns None (not the
+    # default) when the key exists with a null value, and a scalar where a
+    # mapping belongs would raise through _guarded (which only catches
+    # GithubException) and abort the pass. Malformed downstream data is
+    # this output failing, not a reconcile abort.
+    parse_failed = DownstreamOutput(
+        name="bundle", state=OutputState.FAILED,
+        detail=f"Could not parse `versions.json` in {down.bundle_repo}",
+    )
     if not isinstance(versions, dict):
-        # Malformed downstream data is this output failing, not a reconcile
-        # abort (_guarded only catches GithubException).
-        return DownstreamOutput(
-            name="bundle", state=OutputState.FAILED,
-            detail=f"Could not parse `versions.json` in {down.bundle_repo}",
-        )
-    recorded = versions.get(line, {}).get("valkey-server", {}).get("version")
+        return parse_failed
+    line_info = versions.get(line, {})
+    if not isinstance(line_info, dict):
+        return parse_failed
+    server_info = line_info.get("valkey-server", {})
+    if not isinstance(server_info, dict):
+        return parse_failed
+    recorded = server_info.get("version")
+    if recorded is not None and not isinstance(recorded, str):
+        return parse_failed
     if recorded != tag:  # versions.json records the tag form for rc releases
         pr = _find_update_pr(gh, down.bundle_repo, _BUNDLE_UPDATE_BRANCH)
         if pr is not None and pr.state == "open":
@@ -614,7 +632,12 @@ def _verify_bundle(
             action="dispatch-bundle",
         )
 
-    bundle_version = versions.get(line, {}).get("version", "")
+    bundle_version = line_info.get("version")
+    if not isinstance(bundle_version, str) or not bundle_version:
+        # An empty or missing bundle version must never reach the registry
+        # probes: Docker Hub answers 200 on the bare tags/ list URL, so an
+        # empty tag would verify vacuously.
+        return parse_failed
     missing = [
         registry for registry, exists in (
             ("Docker Hub", pub.dockerhub_tag_exists(down.bundle_dockerhub_repo, bundle_version)),
@@ -731,11 +754,13 @@ def _verify_helm(
                    f"{chart_version} is not public yet",
             url=f"https://github.com/{down.helm_repo}/releases/tag/{chart_tag}",
         )
-    # Anchored to the line end: "version: 1.0.1" must not be satisfied by a
-    # 1.0.10 entry in the index. The optional dash is the YAML list item.
-    index_entry = re.compile(
-        rf"^\s*(?:- )?version:\s*{re.escape(chart_version)}\s*$", re.MULTILINE)
-    if not index_entry.search(pub.fetch_text(down.helm_index_url)):
+    listed = _chart_listed_in_index(pub.fetch_text(down.helm_index_url), chart_version)
+    if listed is None:
+        return DownstreamOutput(
+            name="helm", state=OutputState.FAILED,
+            detail=f"Could not parse the public chart index ({down.helm_index_url})",
+        )
+    if not listed:
         return DownstreamOutput(
             name="helm", state=OutputState.PENDING,
             detail=f"Chart {chart_version} is not yet listed in the public "
@@ -753,6 +778,32 @@ def _verify_helm(
 def helm_update_branch(version: str) -> str:
     """The controller's head branch for the Helm chart bump PR."""
     return f"agent/release-controller/valkey-{version}"
+
+
+def _chart_listed_in_index(index_text: str, chart_version: str) -> "bool | None":
+    """Whether the public index lists *chart_version* under the valkey chart.
+
+    Scoped to ``entries['valkey']``: a matching version under a different
+    chart (e.g. valkey-bundle) must never satisfy the valkey chart. Returns
+    None when the index cannot be parsed (malformed YAML, missing entries
+    mapping), which the caller degrades to the output failing. An empty
+    index is simply not-listed-yet, not a parse failure.
+    """
+    if not index_text.strip():
+        return False
+    try:
+        index = yaml.safe_load(index_text)
+    except yaml.YAMLError:
+        return None
+    if not isinstance(index, dict) or not isinstance(index.get("entries"), dict):
+        return None
+    charts = index["entries"].get("valkey", [])
+    if not isinstance(charts, list):
+        return None
+    return any(
+        isinstance(entry, dict) and entry.get("version") == chart_version
+        for entry in charts
+    )
 
 
 # ---------------------------------------------------------------------------

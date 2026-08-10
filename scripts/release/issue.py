@@ -129,6 +129,26 @@ def adopt_marker(sha: str) -> str:
     return f"<!-- {MARKER_NAMESPACE}:adopt:{sha} -->"
 
 
+def marker_present(body: Any, marker: str) -> bool:
+    """True when *marker* starts a line of *body* outside any code fence.
+
+    The controller always posts markers as their own line at column 0, so
+    this matches every real marker, while a trusted comment that merely
+    QUOTES one (indented, or inside a ``` fence as example text) can never
+    forge the state the marker records. Every marker read-back (adopt,
+    notify, nudge, autofix, complete, approval) must scan through this
+    helper, never a raw substring test.
+    """
+    fenced = False
+    for line in (body or "").splitlines():
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+            continue
+        if not fenced and line.startswith(marker):
+            return True
+    return False
+
+
 def render_title(branch: str, version: str, stage: str) -> str:
     """Issue title. Falls back to the branch while no notes PR pins a version."""
     if version:
@@ -495,6 +515,7 @@ def adopted_shas(issue: Any, gh: Any = None) -> tuple[str, ...]:
         match.group(1)
         for comment in trusted_comments(issue, gh)
         for match in _ADOPT_MARKER_RE.finditer(comment.body or "")
+        if marker_present(comment.body, match.group(0))
     )
 
 

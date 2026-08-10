@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from scripts.release import issue as issue_mod
 from scripts.release.models import (
     Candidate,
@@ -13,6 +15,7 @@ from scripts.release.models import (
     ReleaseStatus,
     RequiredCheck,
 )
+from tests.release_fixtures import BEFORE_TRACKER
 
 _SHA_A = "a" * 40
 _SHA_B = "b" * 40
@@ -101,26 +104,100 @@ class TestAdoptedShas:
         ]
         assert issue_mod.adopted_shas(tracker) == (_SHA_A,)
 
-    def test_markers_from_other_authors_are_ignored(self) -> None:
-        # A marker pasted by anyone else must not acknowledge a branch move:
-        # commenting on (or editing) the issue cannot authorize actions.
+    # Trust is an exact-string membership check on the author login. Every
+    # lookalike of the trusted "[bot]" forms must stay untrusted: bare app
+    # slugs and user accounts are distinct namespaces (an outsider could
+    # register the bare name), and GitHub returns canonical login casing so
+    # a case or whitespace variant can only be a spoof.
+    @pytest.mark.parametrize("author", [
+        pytest.param("some-drive-by-user", id="drive-by"),
+        pytest.param("madolson", id="maintainer"),
+        pytest.param("valkeyrie-ops", id="bare-app-slug"),
+        pytest.param("valkeyrie-bot", id="bare-bot-login"),
+        pytest.param("Valkeyrie-Ops[bot]", id="case-variant"),
+        pytest.param("valkeyrie-ops[bot] ", id="trailing-space"),
+        pytest.param("valkeyrie-ops[bot]x", id="suffix-lookalike"),
+        pytest.param("", id="empty-login"),
+    ])
+    def test_untrusted_authors_cannot_forge_an_adoption(self, author: str) -> None:
         tracker = MagicMock()
         tracker.get_comments.return_value = [
-            _comment("some-drive-by-user", f"{issue_mod.adopt_marker(_SHA_A)}\nlgtm"),
-            _comment("madolson", issue_mod.adopt_marker(_SHA_B)),
+            _comment(author, issue_mod.adopt_marker(_SHA_A)),
         ]
         assert issue_mod.adopted_shas(tracker) == ()
 
-    def test_bare_bot_logins_are_not_trusted(self) -> None:
-        # App slugs and user accounts are distinct namespaces: an outsider
-        # registering the bare username could post markers, so only the
-        # "[bot]" forms are trusted.
+    def test_deleted_user_comment_is_untrusted(self) -> None:
+        # A comment whose author account was deleted has user None; the
+        # login getter must degrade to "" and stay outside the trusted set.
+        ghost = MagicMock()
+        ghost.user = None
+        ghost.body = issue_mod.adopt_marker(_SHA_A)
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [ghost]
+        assert issue_mod.adopted_shas(tracker) == ()
+
+    @pytest.mark.parametrize("env_value", [
+        pytest.param("", id="empty"),
+        pytest.param("   ", id="whitespace"),
+    ])
+    def test_blank_release_bot_login_adds_nothing_to_the_trusted_set(
+            self, monkeypatch: pytest.MonkeyPatch, env_value: str) -> None:
+        # A workflow exporting RELEASE_BOT_LOGIN="" (unset secret, template
+        # miss) must not add "" to the trusted set, or every ghost/empty
+        # login would become a trusted author.
+        monkeypatch.setenv("RELEASE_BOT_LOGIN", env_value)
         tracker = MagicMock()
         tracker.get_comments.return_value = [
-            _comment("valkeyrie-ops", issue_mod.adopt_marker(_SHA_A)),
-            _comment("valkeyrie-bot", issue_mod.adopt_marker(_SHA_B)),
+            _comment("", issue_mod.adopt_marker(_SHA_A)),
+            _comment(env_value, issue_mod.adopt_marker(_SHA_B)),
         ]
         assert issue_mod.adopted_shas(tracker) == ()
+
+    # The marker regex demands exactly 40 lowercase hex characters; any
+    # malformed SHA in a marker (even one a trusted author posted) must not
+    # record an adoption of anything.
+    @pytest.mark.parametrize("sha_text", [
+        pytest.param(_SHA_A[:39], id="39-chars"),
+        pytest.param(_SHA_A.upper(), id="uppercase"),
+        pytest.param(_SHA_A + "a", id="41-chars"),
+        pytest.param("g" * 40, id="non-hex"),
+    ])
+    def test_malformed_sha_markers_record_nothing(self, sha_text: str) -> None:
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [
+            _comment("valkeyrie-ops[bot]", issue_mod.adopt_marker(sha_text)),
+        ]
+        assert issue_mod.adopted_shas(tracker) == ()
+
+    def test_quoted_marker_in_a_bot_comment_is_not_an_adoption(self) -> None:
+        body = (
+            "Never paste adoption markers by hand. For reference, they "
+            "look like:\n```\n" + issue_mod.adopt_marker(_SHA_A) + "\n```"
+        )
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [_comment("valkeyrie-ops[bot]", body)]
+        assert issue_mod.adopted_shas(tracker) == ()
+
+    def test_indented_marker_in_a_bot_comment_is_not_an_adoption(self) -> None:
+        # The controller always posts markers at the start of their own
+        # line; an indented quotation of one must never count.
+        body = ("For reference, adoption markers look like:\n    "
+                + issue_mod.adopt_marker(_SHA_A))
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [_comment("valkeyrie-ops[bot]", body)]
+        assert issue_mod.adopted_shas(tracker) == ()
+
+    def test_comment_timestamps_are_not_consulted(self) -> None:
+        # adopted_shas applies no created_at filter. Held acceptable:
+        # comments are scoped to the tracker issue itself, so none can
+        # predate the tracker the way a pre-existing PR can. If trackers are
+        # ever reused across releases this needs a created_at binding like
+        # the notes-PR search has.
+        comment = _comment("valkeyrie-ops[bot]", issue_mod.adopt_marker(_SHA_A))
+        comment.created_at = BEFORE_TRACKER
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [comment]
+        assert issue_mod.adopted_shas(tracker) == (_SHA_A,)
 
 
 class TestFindReleaseIssue:

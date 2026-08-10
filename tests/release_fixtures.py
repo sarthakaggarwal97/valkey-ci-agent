@@ -151,11 +151,17 @@ def tracker(branch: str = "9.1", comments: "list[MagicMock] | None" = None) -> M
     return issue
 
 
-def bot_adoption(sha: str) -> MagicMock:
+def bot_comment(body: str, *, author: str = "valkeyrie-ops[bot]",
+                created: datetime = AFTER_TRACKER) -> MagicMock:
     comment = MagicMock()
-    comment.user.login = "valkeyrie-ops[bot]"
-    comment.body = f"{issue_mod.adopt_marker(sha)}\nadopted"
+    comment.user.login = author
+    comment.body = body
+    comment.created_at = created
     return comment
+
+
+def bot_adoption(sha: str) -> MagicMock:
+    return bot_comment(f"{issue_mod.adopt_marker(sha)}\nadopted")
 
 
 def repo_mock(*, branch_head: str = MERGE_SHA,

@@ -153,8 +153,12 @@ class TestPlanPublication:
 
 class TestPublishRelease:
     def test_publishes_at_exact_sha_with_explicit_flags(self) -> None:
+        # Bindings matching the revalidated plan exactly must publish: this
+        # is the approved path (main.py always passes both bindings).
         repo = _publishable_repo()
-        url = publish_release(gh_mock(repo), _POLICY, branch="9.1", actor="madolson")
+        url = publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                              actor="madolson", expected_tag="9.1.1",
+                              expected_sha=MERGE_SHA)
         assert url == "https://x/releases/9.1.1"
         kwargs = repo.create_git_release.call_args.kwargs
         assert repo.create_git_release.call_args.args[0] == "9.1.1"
@@ -268,6 +272,69 @@ class TestEnvironmentProtection:
         with pytest.raises(ReleaseControlError, match="no required reviewers"):
             ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
 
+    def test_reviewer_rule_with_empty_reviewers_list_is_refused(self) -> None:
+        # A required_reviewers rule whose reviewers were all removed still
+        # exists as a rule; it must count as "no required reviewers", not
+        # as protection.
+        from scripts.release.publish import ensure_environment_protected
+        repo = _env_repo([{"type": "required_reviewers",
+                           "prevent_self_review": True, "reviewers": []}])
+        with pytest.raises(ReleaseControlError, match="no required reviewers"):
+            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+
+    def test_absent_prevent_self_review_key_fails_closed(self) -> None:
+        # Older API payloads may omit prevent_self_review entirely; absence
+        # must read as "not prevented", never as protected.
+        from scripts.release.publish import ensure_environment_protected
+        repo = _env_repo([{"type": "required_reviewers",
+                           "reviewers": [{"type": "User"}]}])
+        with pytest.raises(ReleaseControlError, match="self-review"):
+            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+
+    def test_one_lax_rule_among_compliant_rules_is_refused(self) -> None:
+        # Every reviewer rule must prevent self-review: an approval can
+        # satisfy whichever rule is laxest.
+        from scripts.release.publish import ensure_environment_protected
+        repo = _env_repo([
+            {"type": "required_reviewers", "prevent_self_review": True,
+             "reviewers": [{"type": "Team"}]},
+            {"type": "required_reviewers",
+             "reviewers": [{"type": "User"}]},  # key absent on this rule
+        ])
+        with pytest.raises(ReleaseControlError, match="self-review"):
+            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+
+    def test_empty_200_payload_fails_closed_on_every_dimension(self) -> None:
+        # An environment endpoint answering 200 with {} (proxy stripping,
+        # API drift) carries no evidence of protection; both the reviewer
+        # requirement and the bypass default must fail closed.
+        from scripts.release.publish import ensure_environment_protected
+        repo = MagicMock()
+        env = MagicMock()
+        env.raw_data = {}
+        repo.get_environment.return_value = env
+        with pytest.raises(ReleaseControlError) as excinfo:
+            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+        assert "no required reviewers" in str(excinfo.value)
+        assert "bypass" in str(excinfo.value)
+
+    def test_absent_can_admins_bypass_key_fails_closed(self) -> None:
+        from scripts.release.publish import ensure_environment_protected
+        repo = _env_repo()
+        del repo.get_environment.return_value.raw_data["can_admins_bypass"]
+        with pytest.raises(ReleaseControlError, match="bypass"):
+            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+
+    def test_team_only_reviewers_satisfy_the_reviewer_requirement(self) -> None:
+        # A Team reviewer is a real gate (any team member can approve, and
+        # prevent_self_review still applies); it must be accepted, not
+        # refused for lacking a User entry.
+        from scripts.release.publish import ensure_environment_protected
+        repo = _env_repo([{"type": "required_reviewers",
+                           "prevent_self_review": True,
+                           "reviewers": [{"type": "Team", "reviewer": {"slug": "core-team"}}]}])
+        ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+
     def test_self_review_not_prevented_is_refused(self) -> None:
         from scripts.release.publish import ensure_environment_protected
         repo = _env_repo([{"type": "required_reviewers",
@@ -300,12 +367,45 @@ class TestShaBinding:
                             expected_sha="f" * 40)
         repo.create_git_release.assert_not_called()
 
-    def test_matching_tag_and_sha_publish(self) -> None:
+    @pytest.mark.parametrize("mangled_sha", [
+        MERGE_SHA.upper(),        # case-changed copy of the same commit
+        MERGE_SHA[:12],           # abbreviated: prefixes must not bind
+        f"{MERGE_SHA}\n",         # trailing newline from a copy-paste
+        f" {MERGE_SHA}",          # leading whitespace
+    ])
+    def test_any_deviation_in_the_expected_sha_refuses(self, mangled_sha: str) -> None:
+        # The binding must be an exact string compare of the full SHA: no
+        # case folding, no prefix acceptance, no whitespace tolerance.
+        # Refusing the uppercase twin of the right commit is deliberate
+        # fail-closed behavior; the operator re-copies the exact value.
         repo = _publishable_repo()
-        url = publish_release(gh_mock(repo), _POLICY, branch="9.1",
-                              actor="madolson", expected_tag="9.1.1",
-                              expected_sha=MERGE_SHA)
-        assert url
+        with pytest.raises(ReleaseControlError, match="candidate changed"):
+            publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                            actor="madolson", expected_tag="9.1.1",
+                            expected_sha=mangled_sha)
+        repo.create_git_release.assert_not_called()
+
+    @pytest.mark.parametrize("mangled_tag", ["9.1.1\n", " 9.1.1", "9.1.1 "])
+    def test_whitespace_in_the_expected_tag_refuses(self, mangled_tag: str) -> None:
+        repo = _publishable_repo()
+        with pytest.raises(ReleaseControlError, match="approval was for"):
+            publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                            actor="madolson", expected_tag=mangled_tag,
+                            expected_sha=MERGE_SHA)
+        repo.create_git_release.assert_not_called()
+
+    def test_plan_approved_for_one_branch_cannot_execute_on_another(self) -> None:
+        # A plan produced for 9.1 (tag 9.1.1) executed with --branch 8.0:
+        # even when the 9.1 tracker leaks through the issue lookup (the
+        # mock ignores label filters, mimicking a mislabeled tracker), the
+        # notes-PR version must not match the 8.0 line, so revalidation
+        # refuses before the tag/SHA binding is even consulted.
+        repo = _publishable_repo()
+        with pytest.raises(ReleaseControlError):
+            publish_release(gh_mock(repo), _POLICY, branch="8.0",
+                            actor="madolson", expected_tag="9.1.1",
+                            expected_sha=MERGE_SHA)
+        repo.create_git_release.assert_not_called()
 
 
 def test_unattended_planning_skips_the_actor_check_only() -> None:
@@ -377,6 +477,46 @@ class TestMakeLatestDecision:
         repo = MagicMock()
         repo.get_latest_release.return_value = MagicMock(tag_name="nightly-build")
         assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
+
+    def test_latest_equal_to_the_publishing_tag_does_not_move_the_pointer(self) -> None:
+        # Latest already IS this tag (a republish attempt that slipped past
+        # the tag-exists gate): equal is not greater, so the decision must
+        # be false, not a >= slip.
+        from scripts.release.publish import _make_latest_decision
+        repo = MagicMock()
+        repo.get_latest_release.return_value = MagicMock(tag_name="9.1.1")
+        assert _make_latest_decision(repo, "9.1.1", "ga") == "false"
+
+    def test_ga_above_a_numerically_lower_line_becomes_latest(self) -> None:
+        from scripts.release.publish import _make_latest_decision
+        repo = MagicMock()
+        repo.get_latest_release.return_value = MagicMock(tag_name="8.2.9")
+        assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
+
+    def test_two_digit_patch_compares_numerically_not_lexically(self) -> None:
+        # A string sort would call '9.1.10' < '9.1.9' and strand the latest
+        # pointer on the older release.
+        from scripts.release.publish import _make_latest_decision
+        repo = MagicMock()
+        repo.get_latest_release.return_value = MagicMock(tag_name="9.1.9")
+        assert _make_latest_decision(repo, "9.1.10", "ga") == "true"
+
+    def test_rc_shaped_latest_tag_is_treated_as_unparseable_takeover(self) -> None:
+        # parse_version is anchored, so '9.2.0-rc1' raises and the GA takes
+        # over the pointer. GitHub never marks a prerelease as the latest
+        # release, so a higher-line rc sitting at latest is unreachable
+        # through the API; the takeover branch is the documented fallback
+        # for any non-M.m.p tag.
+        from scripts.release.publish import _make_latest_decision
+        repo = MagicMock()
+        repo.get_latest_release.return_value = MagicMock(tag_name="9.2.0-rc1")
+        assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
+
+    def test_rc_stage_never_asks_github_and_never_takes_latest(self) -> None:
+        from scripts.release.publish import _make_latest_decision
+        repo = MagicMock()
+        assert _make_latest_decision(repo, "9.2.0", "rc1") == "false"
+        repo.get_latest_release.assert_not_called()
 
 
 class TestPreviousTag:
