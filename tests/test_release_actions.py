@@ -104,7 +104,7 @@ class TestQualificationRetryComment:
         assert (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:qual-retry:"
                 f"{fingerprint} -->") in autofix
         assert "> [!NOTE]" in autofix
-        assert "**Auto-remediation:** retrying qualification for `9.1.1` once" in autofix
+        assert "**Auto-remediation:** Retrying qualification for `9.1.1` once" in autofix
         assert "[run 901](https://x/qruns/901)" in autofix
         assert "\u2014" not in autofix
 
@@ -133,9 +133,9 @@ class TestAutoDispatchBuildRelease:
             qualification=QualificationStatus(run_id=1, passed=True),
             outputs=(DownstreamOutput(
                 name="build-run", state=OutputState.FAILED,
-                detail="the release trigger run concluded failure before "
-                       "dispatching the build; re-run it (or dispatch "
-                       "build-release for 9.1.1 directly)",
+                detail="The release trigger run failed before dispatching "
+                       "the build. Re-run it, or dispatch build-release for "
+                       "9.1.1 directly.",
                 url="https://x/runs/55", action="dispatch-build-release"),),
         )
 
@@ -161,7 +161,7 @@ class TestAutoDispatchBuildRelease:
         assert (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:build-dispatch:"
                 f"{fingerprint} -->") in autofix
         assert "> [!NOTE]" in autofix
-        assert "**Auto-remediation:** dispatching the build pipeline for `9.1.1`" in autofix
+        assert "**Auto-remediation:** Dispatching the build pipeline for `9.1.1`" in autofix
         assert "[release trigger run](https://x/runs/55)" in autofix
         assert "\u2014" not in autofix
         assert any("auto-dispatched build-release" in p for p in performed)
@@ -206,7 +206,7 @@ class TestAutoDispatchBuildRelease:
             phase=ReleasePhase.PUBLISHED, published=True,
             qualification=QualificationStatus(run_id=1, passed=True),
             outputs=(DownstreamOutput(name="build-run", state=OutputState.PENDING,
-                                      detail="no run found yet"),),
+                                      detail="No run found yet"),),
         )
         issue = tracker()
         actions.advance(gh_mock(repo), _POLICY, status=status, tracking_issue=issue)

@@ -190,7 +190,7 @@ def _dispatch_build_once(
         fingerprint_source=status.candidate.sha,
         callout=(
             f"> [!NOTE]\n"
-            f"> **Auto-remediation:** dispatching the build pipeline for "
+            f"> **Auto-remediation:** Dispatching the build pipeline for "
             f"`{tag}` directly (the [release trigger run]({output.url}) failed)."
         ),
     )
@@ -248,8 +248,8 @@ def _retry_qualification_once(
         fingerprint_source=status.candidate.sha,
         callout=(
             f"> [!NOTE]\n"
-            f"> **Auto-remediation:** retrying qualification for `{tag}` "
-            f"once (previous run failed: {run_link})."
+            f"> **Auto-remediation:** Retrying qualification for `{tag}` "
+            f"once (the previous run failed: {run_link})."
         ),
     )
     if not posted:
@@ -486,15 +486,20 @@ def _nudge_item(status: ReleaseStatus) -> "tuple[str, str] | None":
 
 
 def _failure_items(status: ReleaseStatus) -> list[str]:
+    # Failure states rendered as verb phrases, not raw enum values.
+    check_phrases = {
+        CheckState.FAILED: "failed",
+        CheckState.STALLED: "has stalled",
+    }
     items = list(status.alerts)
     items += [
-        f"required check `{check.name}` is {check.state.value}"
+        f"Required check `{check.name}` {check_phrases[check.state]}"
         for check in status.checks
         if check.state in (CheckState.FAILED, CheckState.STALLED)
     ]
     if status.qualification.failed_jobs:
         items.append(
-            "qualification failed: " + ", ".join(status.qualification.failed_jobs[:5])
+            "Qualification failed: " + ", ".join(status.qualification.failed_jobs[:5])
         )
     items.extend(
         f"{output.name}: {output.detail}"

@@ -48,7 +48,7 @@ class TestRender:
 
     def test_ready_body_shows_checks_and_readiness(self) -> None:
         body = issue_mod.render_body(_status())
-        assert "| `test-ubuntu-latest` | ✅ passed" in body
+        assert "| `test-ubuntu-latest` | ✅ Passed" in body
         assert "[!IMPORTANT]" in body
         assert "**Ready to publish.**" in body
         assert "- [x] Release notes cut and merged" in body  # progress checklist
@@ -65,7 +65,7 @@ class TestRender:
         )
         body = issue_mod.render_body(_status(candidate=candidate, checks=(), ready=False,
                                              blockers=("branch moved",)))
-        assert "invalidated" in body
+        assert "**Invalidated**" in body
 
     def test_title_uses_version_or_branch(self) -> None:
         assert issue_mod.render_title("9.1", "9.1.0", "rc2") == "Release 9.1.0-rc2"
@@ -82,8 +82,8 @@ class TestRender:
             release_url="https://x/releases/9.1.1", ready=False,
         )
         body = issue_mod.render_body(published)
-        assert "pinned by the release tag" in body
-        assert "current branch head" not in body
+        assert "Pinned by the release tag" in body
+        assert "Current branch head" not in body
 
 
 def _comment(author: str, body: str) -> MagicMock:

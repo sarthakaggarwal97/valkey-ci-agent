@@ -248,7 +248,7 @@ class TestComputeStatus:
         truncated = qualification_run(jobs=[one_job])
         status = _status(repo_mock(qual_runs=[truncated]))
         assert not status.qualification.passed
-        assert any("evidence mismatch" in job for job in status.qualification.failed_jobs)
+        assert any("Evidence mismatch" in job for job in status.qualification.failed_jobs)
 
     def test_failed_required_check_blocks_before_qualification(self) -> None:
         runs = [check_run("test-ubuntu-latest", conclusion="failure"),

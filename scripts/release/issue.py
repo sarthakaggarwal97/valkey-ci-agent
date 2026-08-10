@@ -59,19 +59,19 @@ def invalidate_comment_memo(issue: Any) -> None:
     _COMMENTS_MEMO.pop(issue, None)
 
 _CHECK_STATE_DISPLAY = {
-    CheckState.PASSED: "✅ passed",
-    CheckState.FAILED: "❌ failed",
-    CheckState.PENDING: "⏳ pending",
-    CheckState.MISSING: "⚠️ missing",
-    CheckState.STALLED: "🛑 stalled",
+    CheckState.PASSED: "✅ Passed",
+    CheckState.FAILED: "❌ Failed",
+    CheckState.PENDING: "⏳ Pending",
+    CheckState.MISSING: "⚠️ Missing",
+    CheckState.STALLED: "🛑 Stalled",
 }
 
 _OUTPUT_STATE_DISPLAY = {
-    OutputState.VERIFIED: "✅ verified",
-    OutputState.PENDING: "⏳ pending",
-    OutputState.FAILED: "❌ failed",
-    OutputState.BLOCKED: "⛔ blocked",
-    OutputState.SKIPPED: "➖ n/a",
+    OutputState.VERIFIED: "✅ Verified",
+    OutputState.PENDING: "⏳ Pending",
+    OutputState.FAILED: "❌ Failed",
+    OutputState.BLOCKED: "⛔ Blocked",
+    OutputState.SKIPPED: "➖ N/A",
 }
 
 # Render order for the progress checklist. COMPLETE is the terminal state of
@@ -163,8 +163,8 @@ def render_body(status: ReleaseStatus) -> str:
         "",
         "| | |",
         "|---|---|",
-        f"| Version | {_code(status.version) if status.version else '_awaiting release-notes PR_'} |",
-        f"| Stage | {_code(status.stage) if status.stage else '_awaiting release-notes PR_'} |",
+        f"| Version | {_code(status.version) if status.version else '_Awaiting the release-notes PR_'} |",
+        f"| Stage | {_code(status.stage) if status.stage else '_Awaiting the release-notes PR_'} |",
         f"| Release-notes PR | {_notes_pr_cell(status)} |",
         f"| Candidate SHA | {_candidate_cell(status)} |",
         f"| Qualification | {_qualification_cell(status)} |",
@@ -294,7 +294,7 @@ def _callout(status: ReleaseStatus) -> list[str]:
             "revalidates everything, and is the point of no return (upstream's "
             "tag ruleset forbids moving or deleting the created tag).",
         ]
-    blocker_lines = [f"> - {blocker}" for blocker in status.blockers] or ["> - (none recorded)"]
+    blocker_lines = [f"> - {blocker}" for blocker in status.blockers] or ["> - (None recorded)"]
     return ["> [!WARNING]", "> **Not ready. Blocked on:**", *blocker_lines]
 
 
@@ -320,24 +320,24 @@ def _short(sha: str) -> str:
 
 def _notes_pr_cell(status: ReleaseStatus) -> str:
     if not status.notes_pr_number:
-        return "_none found_"
-    state = "merged" if status.notes_pr_merged else "open (not merged)"
+        return "_None found_"
+    state = "Merged" if status.notes_pr_merged else "Open (not merged)"
     return f"[#{status.notes_pr_number}]({status.notes_pr_url}): {state}"
 
 
 def _candidate_cell(status: ReleaseStatus) -> str:
     candidate = status.candidate
     if candidate.state is CandidateState.NONE:
-        return "_none (recorded when the release-notes PR merges)_"
+        return "_None (recorded when the release-notes PR merges)_"
     if status.published:
         # Post-publication the tag pins the candidate; the branch may
         # legitimately move on, so "current branch head" would be a lie.
-        return f"`{candidate.sha}`: pinned by the release tag"
+        return f"`{candidate.sha}`: Pinned by the release tag"
     descriptions = {
-        CandidateState.CURRENT: "current branch head",
-        CandidateState.ADOPTED: "adopted branch head (owner-acknowledged)",
+        CandidateState.CURRENT: "Current branch head",
+        CandidateState.ADOPTED: "Adopted branch head (owner-acknowledged)",
         CandidateState.INVALIDATED: (
-            "**invalidated** (the branch moved; an authorized owner must adopt "
+            "**Invalidated** (the branch moved; an authorized owner must adopt "
             "the exact new head before qualification continues)"
         ),
     }
@@ -350,9 +350,9 @@ def _qualification_cell(status: ReleaseStatus) -> str:
         if status.published:
             # Post-publication the gate is history (publication revalidated
             # it); "no run yet" would misread as a missing prerequisite.
-            return "_gated before publication; not re-evaluated after_"
-        return "_no run for the candidate SHA yet_"
-    link = f"[run {qualification.run_id}]({qualification.url})"
+            return "_Gated before publication; not re-evaluated afterward_"
+        return "_No run for the candidate SHA yet_"
+    link = f"[Run {qualification.run_id}]({qualification.url})"
     if qualification.pending:
         return f"⏳ {link} in progress"
     if qualification.passed:
@@ -363,8 +363,8 @@ def _qualification_cell(status: ReleaseStatus) -> str:
 
 def _release_cell(status: ReleaseStatus) -> str:
     if not status.published:
-        return "_not published_"
-    return f"[published]({status.release_url})"
+        return "_Not published_"
+    return f"[Published]({status.release_url})"
 
 
 def branch_label(branch: str) -> str:

@@ -161,7 +161,7 @@ class TestBundle:
         output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
                                        images_public=True)
         assert output.state is OutputState.FAILED
-        assert "could not parse `versions.json`" in output.detail
+        assert "Could not parse `versions.json`" in output.detail
 
     def test_merged_and_public_everywhere_verifies(self) -> None:
         versions = json.dumps({"9.1": {"version": "9.1.2", "valkey-server": {"version": "9.1.1"}}})
@@ -245,7 +245,7 @@ class TestHelm:
         output = verify._verify_helm(gh_mock(repo), _POLICY.downstream, "9.1.1", "ga",
                                      image_public=True)
         assert output.state is OutputState.FAILED
-        assert "could not parse `valkey/Chart.yaml`" in output.detail
+        assert "Could not parse `valkey/Chart.yaml`" in output.detail
 
 
 class TestOrderingGate:
@@ -471,7 +471,7 @@ class TestPackagesAndTryValkey:
         # jobs None = the shared job fetch failed for a verified build run.
         out = verify._verify_packages("ga", _BUILD_OK, None)
         assert out.state is OutputState.FAILED
-        assert "could not list" in out.detail
+        assert "Could not list" in out.detail
 
     def test_try_valkey_skipped_when_workflow_skipped_it(self) -> None:
         jobs = _jobs([
@@ -507,7 +507,7 @@ class TestPackagesAndTryValkey:
                    DownstreamOutput(name="bundle", state=OutputState.BLOCKED, detail="gated"))
         escalated = verify.escalate_stalled_outputs(outputs, old, 360)
         assert escalated[0].state is OutputState.FAILED
-        assert "stalled" in escalated[0].detail
+        assert "Stalled:" in escalated[0].detail
         # Escalation pages a human; the auto-action must not keep firing.
         assert escalated[0].action == ""
         assert escalated[1].state is OutputState.BLOCKED  # prerequisite carries it
@@ -519,3 +519,33 @@ class TestPackagesAndTryValkey:
         out = verify._pr_progress_output("website", pr, "b", "o/r")
         assert out.state is OutputState.FAILED
         assert "failing checks" in out.detail
+
+
+class TestDetailCellStyle:
+    def test_detail_cells_are_capitalized_statements(self) -> None:
+        # Representative samples of the Detail-cell style rule: every cell
+        # starts with a capital letter, reads as a statement, and never asks
+        # a rhetorical question.
+        from github.GithubException import GithubException
+
+        def _raise_404() -> None:
+            raise GithubException(404, "missing", {})
+
+        guarded = verify._guarded("hashes", _raise_404)
+        assert guarded.detail == ("GitHub returned HTTP 404: the target "
+                                  "repository is missing or unreadable")
+
+        gh = _run_source({
+            "build-release.yml": [_wf_run("Build Release 9.1.2 (prod)",
+                                          conclusion="failure")],
+        })
+        gh_source = _run_source({"trigger-build-release.yml": []})
+        failed_build, _run = verify._verify_build_run(gh, gh_source, _POLICY,
+                                                      "9.1.2", None)
+        assert failed_build.detail == "Build-release run 700 failed"
+
+        for detail in (guarded.detail, failed_build.detail):
+            assert detail[0].isupper()
+            assert "?" not in detail
+            assert "!" not in detail
+            assert "\u2014" not in detail

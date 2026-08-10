@@ -214,7 +214,7 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
         lambda: tracking_issue.create_comment(
             body=(
                 f"Published **{plan.tag}** at `{plan.sha}` "
-                f"(approved publication by @{actor}): {release.html_url}\n"
+                f"(publication approved by @{actor}): {release.html_url}\n"
                 f"Downstream outputs are now observed by reconciliation."
             )
         ),

@@ -120,7 +120,7 @@ def escalate_stalled_outputs(
     return tuple(
         DownstreamOutput(
             name=o.name, state=OutputState.FAILED,
-            detail=f"stalled: still pending {timeout_minutes} minutes after "
+            detail=f"Stalled: still pending {timeout_minutes} minutes after "
                    f"publication ({o.detail})",
             # action cleared: an escalated stall pages a human; it must not
             # also keep auto-dispatching every pass.
@@ -144,8 +144,8 @@ def _guarded(name: str, verifier: Callable[[], Any]) -> Any:
         logger.warning("Verifier %s failed: HTTP %s", name, exc.status)
         return DownstreamOutput(
             name=name, state=OutputState.FAILED,
-            detail=f"verification failed against GitHub (HTTP {exc.status}); "
-                   f"is the target repository present and readable?",
+            detail=f"GitHub returned HTTP {exc.status}: the target repository "
+                   f"is missing or unreadable",
         )
 
 
@@ -195,39 +195,52 @@ def _verify_build_run(gh: Any, gh_source: Any, policy: RepoReleasePolicy,
             # state still reaches the notification path unchanged.
             return DownstreamOutput(
                 name="build-run", state=OutputState.FAILED,
-                detail=f"the release trigger run concluded {trigger.conclusion} "
-                       f"before dispatching the build; re-run it (or dispatch "
-                       f"build-release for {tag} directly)",
+                detail=f"The release trigger run {_concluded(trigger.conclusion)} "
+                       f"before dispatching the build. Re-run it, or dispatch "
+                       f"build-release for {tag} directly.",
                 url=trigger.html_url,
                 action="dispatch-build-release",
             ), None
         if _past_deadline(published_at, policy.check_timeout_minutes):
             return DownstreamOutput(
                 name="build-run", state=OutputState.FAILED,
-                detail=f"no '{marker}' run appeared within "
+                detail=f"No '{marker}' run appeared within "
                        f"{policy.check_timeout_minutes} minutes of publication; "
                        f"the dispatch chain needs investigation",
             ), None
         return DownstreamOutput(
             name="build-run", state=OutputState.PENDING,
-            detail=f"no '{marker}' run found yet",
+            detail=f"No '{marker}' run found yet",
         ), None
     if run.status != "completed":
         return DownstreamOutput(
             name="build-run", state=OutputState.PENDING,
-            detail=f"build-release run {run.id} still executing", url=run.html_url,
+            detail=f"Build-release run {run.id} is still executing", url=run.html_url,
         ), run
     if run.conclusion == "success":
         return DownstreamOutput(
             name="build-run", state=OutputState.VERIFIED,
-            detail=f"build-release run {run.id} succeeded", url=run.html_url,
+            detail=f"Build-release run {run.id} succeeded", url=run.html_url,
             run_id=run.id,
         ), run
     return DownstreamOutput(
         name="build-run", state=OutputState.FAILED,
-        detail=f"build-release run {run.id} concluded {run.conclusion}",
+        detail=f"Build-release run {run.id} {_concluded(run.conclusion)}",
         url=run.html_url,
     ), run
+
+
+# Render a workflow-run conclusion as a proper verb phrase instead of the
+# raw enum-ish "concluded <value>" fragment.
+_CONCLUSION_PHRASES = {
+    "failure": "failed",
+    "cancelled": "was cancelled",
+    "timed_out": "timed out",
+}
+
+
+def _concluded(conclusion: str) -> str:
+    return _CONCLUSION_PHRASES.get(conclusion, f"concluded {conclusion}")
 
 
 def _newest_marked_run(gh: Any, repo_name: str, workflow_file: str,
@@ -291,17 +304,17 @@ def _verify_packages(stage: str, build: DownstreamOutput, jobs: Any) -> Downstre
     if stage != "ga":
         return DownstreamOutput(
             name="packages", state=OutputState.SKIPPED,
-            detail="distro packages are not built for release candidates",
+            detail="Distro packages are not built for release candidates",
         )
     if build.state is not OutputState.VERIFIED:
         return DownstreamOutput(
             name="packages", state=OutputState.BLOCKED,
-            detail="waiting for the build-release run to succeed",
+            detail="Waiting for the build-release run to succeed",
         )
     if jobs is None:
         return DownstreamOutput(
             name="packages", state=OutputState.FAILED,
-            detail="could not list the build run's jobs", url=build.url,
+            detail="Could not list the build run's jobs", url=build.url,
         )
     # Job names set by
     # valkey-release-automation/.github/workflows/build-release.yml.
@@ -309,14 +322,14 @@ def _verify_packages(stage: str, build: DownstreamOutput, jobs: Any) -> Downstre
     if not publish_jobs:
         return DownstreamOutput(
             name="packages", state=OutputState.FAILED,
-            detail="the build run has no package publish jobs; the matrix "
+            detail="The build run has no package publish jobs; the matrix "
                    "may not have run", url=build.url,
         )
     failed = [j.name for j in publish_jobs if j.conclusion != "success"]
     if failed:
         return DownstreamOutput(
             name="packages", state=OutputState.FAILED,
-            detail=f"package publication jobs failed: {', '.join(failed)}",
+            detail=f"Package publication jobs failed: {', '.join(failed)}",
             url=build.url,
         )
     return DownstreamOutput(
@@ -341,18 +354,18 @@ def _verify_try_valkey(stage: str, build: DownstreamOutput, run: Any,
     if build.state is not OutputState.VERIFIED:
         return DownstreamOutput(
             name="try-valkey", state=OutputState.BLOCKED,
-            detail="waiting for the build-release run to succeed",
+            detail="Waiting for the build-release run to succeed",
         )
     if jobs is None:
         return DownstreamOutput(
             name="try-valkey", state=OutputState.FAILED,
-            detail="could not list the build run's jobs", url=build.url,
+            detail="Could not list the build run's jobs", url=build.url,
         )
     try_jobs = [j for j in jobs if "try-valkey" in j.name.lower() or "try valkey" in j.name.lower()]
     if not try_jobs:
         return DownstreamOutput(
             name="try-valkey", state=OutputState.FAILED,
-            detail="the build run has no Try Valkey job", url=build.url,
+            detail="The build run has no Try Valkey job", url=build.url,
         )
     failed = [j.name for j in try_jobs if j.conclusion not in ("success", "skipped")]
     if failed:
@@ -374,7 +387,7 @@ def _verify_try_valkey(stage: str, build: DownstreamOutput, run: Any,
         )
     return DownstreamOutput(
         name="try-valkey", state=OutputState.SKIPPED,
-        detail="no upload sentinel on the run: Try Valkey was intentionally "
+        detail="No upload sentinel on the run: Try Valkey was intentionally "
                "skipped (release candidate or not the latest release)",
         url=build.url,
     )
@@ -403,11 +416,11 @@ def _verify_tarballs(down: Any, tag: str) -> DownstreamOutput:
     if missing:
         return DownstreamOutput(
             name="tarballs", state=OutputState.PENDING,
-            detail=f"not yet public: {', '.join(missing)}",
+            detail=f"Not yet public: {', '.join(missing)}",
         )
     return DownstreamOutput(
         name="tarballs", state=OutputState.VERIFIED,
-        detail=f"all {len(down.tarball_targets)} tarballs + hashes public",
+        detail=f"All {len(down.tarball_targets)} tarballs and their hashes are public",
         url=f"{down.downloads_base_url}/",
     )
 
@@ -422,12 +435,12 @@ def _verify_hashes(gh: Any, down: Any, tag: str) -> DownstreamOutput:
     if f"valkey-{tag}.tar.gz" in readme:
         return DownstreamOutput(
             name="hashes", state=OutputState.VERIFIED,
-            detail=f"hash line for valkey-{tag}.tar.gz recorded",
+            detail=f"Hash line for valkey-{tag}.tar.gz recorded",
             url=f"https://github.com/{down.hashes_repo}",
         )
     return DownstreamOutput(
         name="hashes", state=OutputState.PENDING,
-        detail=f"no hash line for valkey-{tag}.tar.gz yet",
+        detail=f"No hash line for valkey-{tag}.tar.gz yet",
     )
 
 
@@ -437,7 +450,7 @@ def _verify_container(gh: Any, down: Any, tag: str) -> list[DownstreamOutput]:
     if pr is None:
         pr_output = DownstreamOutput(
             name="container-pr", state=OutputState.PENDING,
-            detail=f"no update-{tag} PR on {down.container_repo} yet",
+            detail=f"No update-{tag} PR on {down.container_repo} yet",
         )
     elif pr.merged_at is not None:
         pr_output = DownstreamOutput(
@@ -447,12 +460,12 @@ def _verify_container(gh: Any, down: Any, tag: str) -> list[DownstreamOutput]:
     elif pr.state == "closed":
         pr_output = DownstreamOutput(
             name="container-pr", state=OutputState.FAILED,
-            detail=f"PR #{pr.number} closed without merging", url=pr.html_url,
+            detail=f"PR #{pr.number} was closed without merging", url=pr.html_url,
         )
     else:
         pr_output = DownstreamOutput(
             name="container-pr", state=OutputState.PENDING,
-            detail=f"PR #{pr.number} open, awaiting merge", url=pr.html_url,
+            detail=f"PR #{pr.number} is open, awaiting merge", url=pr.html_url,
         )
 
     checks = {
@@ -470,12 +483,13 @@ def _verify_container(gh: Any, down: Any, tag: str) -> list[DownstreamOutput]:
     if missing:
         images = DownstreamOutput(
             name="container-images", state=OutputState.PENDING,
-            detail=f"not yet public: {', '.join(missing)}",
+            detail=f"Not yet public: {', '.join(missing)}",
         )
     else:
         images = DownstreamOutput(
             name="container-images", state=OutputState.VERIFIED,
-            detail=f"{tag} public in Docker Hub (incl. -trixie/-alpine), GHCR, and ECR",
+            detail=f"Tag {tag} is public in Docker Hub (including "
+                   f"-trixie/-alpine), GHCR, and ECR",
             url=f"https://hub.docker.com/r/{down.dockerhub_repo}/tags?name={tag}",
         )
     return [pr_output, images]
@@ -486,7 +500,7 @@ def _verify_docs(gh: Any, down: Any, tag: str, stage: str) -> DownstreamOutput:
     if stage != "ga":
         return DownstreamOutput(
             name="docs", state=OutputState.SKIPPED,
-            detail="documentation is not updated for release candidates",
+            detail="Documentation is not updated for release candidates",
         )
     _major, _minor, patch = parse_version(tag)  # ga only: tag == version
     repo = retry_github_call(
@@ -497,12 +511,12 @@ def _verify_docs(gh: Any, down: Any, tag: str, stage: str) -> DownstreamOutput:
         if _tag_exists(repo, tag):
             return DownstreamOutput(
                 name="docs", state=OutputState.VERIFIED,
-                detail=f"docs tag {tag} exists",
+                detail=f"Docs tag {tag} exists",
                 url=f"https://github.com/{down.doc_repo}/releases/tag/{tag}",
             )
         return DownstreamOutput(
             name="docs", state=OutputState.PENDING,
-            detail=f"docs tag {tag} not pushed yet",
+            detail=f"Docs tag {tag} has not been pushed yet",
         )
     pr = _find_update_pr(gh, down.doc_repo, f"update-docs-{tag}")
     return _pr_progress_output("docs", pr, f"update-docs-{tag}", down.doc_repo)
@@ -512,7 +526,7 @@ def _verify_website(gh: Any, down: Any, tag: str, stage: str) -> DownstreamOutpu
     if stage != "ga":
         return DownstreamOutput(
             name="website", state=OutputState.SKIPPED,
-            detail="the website release page is not updated for release candidates",
+            detail="The website release page is not updated for release candidates",
         )
     pr = _find_update_pr(gh, down.website_repo, f"update-website-{tag}")
     return _pr_progress_output("website", pr, f"update-website-{tag}", down.website_repo)
@@ -533,13 +547,13 @@ def _verify_bundle(
     if (major, minor) < (8, 1):
         return DownstreamOutput(
             name="bundle", state=OutputState.SKIPPED,
-            detail=f"valkey-bundle does not track the {line} line",
+            detail=f"The `valkey-bundle` repo does not track the {line} line",
         )
     if not images_public:
         return DownstreamOutput(
             name="bundle", state=OutputState.BLOCKED,
-            detail="waiting for the Valkey base images to be public "
-                   "(bundle builds FROM the -trixie/-alpine tags)",
+            detail="Waiting for the Valkey base images to be public "
+                   "(the bundle builds FROM the -trixie/-alpine tags)",
         )
 
     repo = retry_github_call(
@@ -556,7 +570,7 @@ def _verify_bundle(
         # abort (_guarded only catches GithubException).
         return DownstreamOutput(
             name="bundle", state=OutputState.FAILED,
-            detail=f"could not parse `versions.json` in {down.bundle_repo}",
+            detail=f"Could not parse `versions.json` in {down.bundle_repo}",
         )
     recorded = versions.get(line, {}).get("valkey-server", {}).get("version")
     if recorded != tag:  # versions.json records the tag form for rc releases
@@ -565,13 +579,13 @@ def _verify_bundle(
             if _pr_checks_failing(pr):
                 return DownstreamOutput(
                     name="bundle", state=OutputState.FAILED,
-                    detail=f"bundle update PR #{pr.number} is open with failing "
+                    detail=f"Bundle update PR #{pr.number} is open with failing "
                            f"checks", url=pr.html_url,
                 )
             return DownstreamOutput(
                 name="bundle", state=OutputState.PENDING,
-                detail=f"bundle update PR #{pr.number} open (versions.json still "
-                       f"records {recorded or 'nothing'} for {line})",
+                detail=f"Bundle update PR #{pr.number} is open (`versions.json` "
+                       f"still records {recorded or 'nothing'} for {line})",
                 url=pr.html_url,
             )
         if pr is not None and pr.merged_at is None:
@@ -581,17 +595,17 @@ def _verify_bundle(
             # unrelated.
             return DownstreamOutput(
                 name="bundle", state=OutputState.FAILED,
-                detail=f"bundle update PR #{pr.number} was closed without "
-                       f"merging; needs a human decision (re-dispatch the "
-                       f"bundle update manually if the closure was unrelated)",
+                detail=f"Bundle update PR #{pr.number} was closed without "
+                       f"merging and needs a human decision. Re-dispatch the "
+                       f"bundle update manually if the closure was unrelated.",
                 url=pr.html_url,
             )
         # Images are public, versions.json is stale, and no update PR is in
         # flight: the ordering gate is satisfied and the dispatch is safe.
         return DownstreamOutput(
             name="bundle", state=OutputState.PENDING,
-            detail=f"versions.json records {recorded or 'nothing'} for {line}; "
-                   f"bundle update not started yet",
+            detail=f"`versions.json` records {recorded or 'nothing'} for {line}; "
+                   f"the bundle update has not started yet",
             action="dispatch-bundle",
         )
 
@@ -608,12 +622,12 @@ def _verify_bundle(
     if missing:
         return DownstreamOutput(
             name="bundle", state=OutputState.PENDING,
-            detail=f"bundle {bundle_version} merged but not yet public in: "
+            detail=f"Bundle {bundle_version} is merged but not yet public in: "
                    f"{', '.join(missing)}",
         )
     return DownstreamOutput(
         name="bundle", state=OutputState.VERIFIED,
-        detail=f"bundle {bundle_version} public in Docker Hub, GHCR, and ECR",
+        detail=f"Bundle {bundle_version} is public in Docker Hub, GHCR, and ECR",
         url=f"https://hub.docker.com/r/{down.bundle_dockerhub_repo}/tags?name={bundle_version}",
     )
 
@@ -626,7 +640,7 @@ def _verify_helm(
     if stage != "ga":
         return DownstreamOutput(
             name="helm", state=OutputState.SKIPPED,
-            detail="the chart does not track release candidates",
+            detail="The chart does not track release candidates",
         )
 
     repo = retry_github_call(
@@ -639,7 +653,7 @@ def _verify_helm(
     if app_match is None or chart_match is None:
         return DownstreamOutput(
             name="helm", state=OutputState.FAILED,
-            detail="could not parse appVersion/version from valkey/Chart.yaml",
+            detail="Could not parse appVersion/version from valkey/Chart.yaml",
         )
     app_version, chart_version = app_match.group(1), chart_match.group(1)
 
@@ -652,17 +666,17 @@ def _verify_helm(
         except ValueError:
             return DownstreamOutput(
                 name="helm", state=OutputState.FAILED,
-                detail=f"could not parse `valkey/Chart.yaml` in {down.helm_repo}",
+                detail=f"Could not parse `valkey/Chart.yaml` in {down.helm_repo}",
             )
         if chart_is_newer:
             return DownstreamOutput(
                 name="helm", state=OutputState.SKIPPED,
-                detail=f"chart already tracks the newer {app_version}",
+                detail=f"The chart already tracks the newer {app_version}",
             )
         if not image_public:
             return DownstreamOutput(
                 name="helm", state=OutputState.BLOCKED,
-                detail=f"waiting for docker.io/{down.dockerhub_repo}:{version} "
+                detail=f"Waiting for docker.io/{down.dockerhub_repo}:{version} "
                        f"to be public (the chart's default image)",
             )
         pr = _find_update_pr(gh, down.helm_repo, helm_update_branch(version))
@@ -670,12 +684,12 @@ def _verify_helm(
             if _pr_checks_failing(pr):
                 return DownstreamOutput(
                     name="helm", state=OutputState.FAILED,
-                    detail=f"chart bump PR #{pr.number} is open with failing "
+                    detail=f"Chart bump PR #{pr.number} is open with failing "
                            f"checks", url=pr.html_url,
                 )
             return DownstreamOutput(
                 name="helm", state=OutputState.PENDING,
-                detail=f"chart bump PR #{pr.number} open, awaiting merge",
+                detail=f"Chart bump PR #{pr.number} is open, awaiting merge",
                 url=pr.html_url,
             )
         if pr is not None and pr.merged_at is None:
@@ -684,14 +698,15 @@ def _verify_helm(
             # their feet).
             return DownstreamOutput(
                 name="helm", state=OutputState.FAILED,
-                detail=f"chart bump PR #{pr.number} was closed without merging; "
-                       f"needs a human decision",
+                detail=f"Chart bump PR #{pr.number} was closed without merging "
+                       f"and needs a human decision",
                 url=pr.html_url,
             )
         # Image public, chart stale, no PR in flight: safe to open the bump PR.
         return DownstreamOutput(
             name="helm", state=OutputState.PENDING,
-            detail=f"chart appVersion is {app_version}; bump to {version} not started yet",
+            detail=f"The chart appVersion is {app_version}; the bump to "
+                   f"{version} has not started yet",
             action="open-helm-pr",
         )
 
@@ -700,12 +715,13 @@ def _verify_helm(
     if not _tag_exists(repo, chart_tag):
         return DownstreamOutput(
             name="helm", state=OutputState.PENDING,
-            detail=f"chart {chart_version} merged but release {chart_tag} not cut yet",
+            detail=f"Chart {chart_version} is merged but release {chart_tag} "
+                   f"has not been cut yet",
         )
     if not pub.ghcr_tag_exists(f"{down.helm_repo}/valkey", chart_version):
         return DownstreamOutput(
             name="helm", state=OutputState.PENDING,
-            detail=f"chart release {chart_tag} exists but the GHCR OCI chart "
+            detail=f"Chart release {chart_tag} exists but the GHCR OCI chart "
                    f"{chart_version} is not public yet",
             url=f"https://github.com/{down.helm_repo}/releases/tag/{chart_tag}",
         )
@@ -716,14 +732,14 @@ def _verify_helm(
     if not index_entry.search(pub.fetch_text(down.helm_index_url)):
         return DownstreamOutput(
             name="helm", state=OutputState.PENDING,
-            detail=f"chart {chart_version} not yet listed in the public index "
-                   f"({down.helm_index_url})",
+            detail=f"Chart {chart_version} is not yet listed in the public "
+                   f"index ({down.helm_index_url})",
             url=f"https://github.com/{down.helm_repo}/releases/tag/{chart_tag}",
         )
     return DownstreamOutput(
         name="helm", state=OutputState.VERIFIED,
-        detail=f"chart {chart_version} (appVersion {version}) released, in the "
-               f"public index, and on GHCR",
+        detail=f"Chart {chart_version} (appVersion {version}) is released, in "
+               f"the public index, and on GHCR",
         url=f"https://github.com/{down.helm_repo}/releases/tag/{chart_tag}",
     )
 
@@ -756,7 +772,7 @@ def _pr_progress_output(name: str, pr: Any, branch: str, repo_name: str) -> Down
     if pr is None:
         return DownstreamOutput(
             name=name, state=OutputState.PENDING,
-            detail=f"no {branch} PR on {repo_name} yet",
+            detail=f"No {branch} PR on {repo_name} yet",
         )
     if pr.merged_at is not None:
         return DownstreamOutput(
@@ -766,7 +782,7 @@ def _pr_progress_output(name: str, pr: Any, branch: str, repo_name: str) -> Down
     if pr.state == "closed":
         return DownstreamOutput(
             name=name, state=OutputState.FAILED,
-            detail=f"PR #{pr.number} closed without merging", url=pr.html_url,
+            detail=f"PR #{pr.number} was closed without merging", url=pr.html_url,
         )
     if _pr_checks_failing(pr):
         # An open PR whose CI is red will not merge on its own; leaving it
@@ -778,7 +794,7 @@ def _pr_progress_output(name: str, pr: Any, branch: str, repo_name: str) -> Down
         )
     return DownstreamOutput(
         name=name, state=OutputState.PENDING,
-        detail=f"PR #{pr.number} open, awaiting merge", url=pr.html_url,
+        detail=f"PR #{pr.number} is open, awaiting merge", url=pr.html_url,
     )
 
 

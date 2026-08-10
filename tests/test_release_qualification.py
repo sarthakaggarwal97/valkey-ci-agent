@@ -85,7 +85,7 @@ class TestEvaluate:
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
                                         tag="9.1.1", sha=MERGE_SHA)
         assert not status.passed
-        assert any("evidence mismatch" in item for item in status.failed_jobs)
+        assert any("Evidence mismatch" in item for item in status.failed_jobs)
 
     def test_ga_with_skipped_package_matrix_does_not_pass(self) -> None:
         # The exact reviewed hole: archives green, packages absent, GA tag.

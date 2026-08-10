@@ -399,8 +399,8 @@ def _published_status(
     }
     if bool(release.prerelease) != (stage != "ga"):
         alert = (
-            f"Release {tag} prerelease flag is {release.prerelease} but the "
-            f"stage is {stage}; fix the release metadata."
+            f"The prerelease flag on release {tag} is {release.prerelease} but "
+            f"the stage is {stage}; fix the release metadata."
         )
         return ReleaseStatus(
             phase=ReleasePhase.PUBLISHED,
