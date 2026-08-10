@@ -643,11 +643,35 @@ class TestPackagesAndTryValkey:
                    DownstreamOutput(name="bundle", state=OutputState.BLOCKED, detail="gated"))
         escalated = verify.escalate_stalled_outputs(outputs, old, 360)
         assert escalated[0].state is OutputState.FAILED
-        assert escalated[0].detail == ("Stalled: still pending 360 minutes "
-                                       "after publication: waiting")
+        assert escalated[0].detail == "Stalled after 6 hours: waiting"
         # Escalation pages a human; the auto-action must not keep firing.
         assert escalated[0].action == ""
         assert escalated[1].state is OutputState.BLOCKED  # prerequisite carries it
+
+    def test_stall_detail_strips_the_trailing_period(self) -> None:
+        from datetime import datetime, timedelta, timezone
+        old = datetime.now(timezone.utc) - timedelta(minutes=999)
+        outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
+                                    detail="waiting for the chart PR."),)
+        escalated = verify.escalate_stalled_outputs(outputs, old, 360)
+        assert escalated[0].detail == "Stalled after 6 hours: waiting for the chart PR"
+
+    # Humanized durations flip to whole hours at two hours, flooring:
+    # 359 minutes reads "5 hours", 360 reads "6 hours".
+    @pytest.mark.parametrize(("minutes", "rendered"), [
+        pytest.param(90, "90 minutes", id="under-two-hours"),
+        pytest.param(119, "119 minutes", id="last-minutes-value"),
+        pytest.param(120, "2 hours", id="first-hours-value"),
+        pytest.param(359, "5 hours", id="359-floors-to-5-hours"),
+        pytest.param(360, "6 hours", id="360-is-6-hours"),
+    ])
+    def test_humanized_duration_boundaries(self, minutes: int, rendered: str) -> None:
+        from datetime import datetime, timedelta, timezone
+        old = datetime.now(timezone.utc) - timedelta(minutes=minutes + 1)
+        outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
+                                    detail="waiting"),)
+        escalated = verify.escalate_stalled_outputs(outputs, old, minutes)
+        assert escalated[0].detail == f"Stalled after {rendered}: waiting"
 
     def test_open_pr_with_failing_checks_is_failed(self) -> None:
         pr = _pr(merged=False, state="open")

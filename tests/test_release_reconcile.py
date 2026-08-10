@@ -582,18 +582,45 @@ class TestReconcileBranch:
         assert issue_mod.identity_marker("9.1") in kwargs["body"]
         assert "stale hand-edited text" not in kwargs["body"]
 
-    def test_reconcile_skips_noop_edit(self) -> None:
-        repo = repo_mock(issues=[tracker()])
-        first = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
-        assert first is not None
-        issue = repo.get_issues.return_value[0]
-        issue.body = issue_mod.render_body(first)
-        issue.title = issue_mod.render_title("9.1", first.version, first.stage)
-        issue.edit.reset_mock()
+    @staticmethod
+    def _frozen_clock():
+        # The body's freshness footer has minute resolution; freezing the
+        # reconcile clock keeps same-minute comparisons deterministic.
+        now = datetime(2026, 8, 10, 17, 30, tzinfo=timezone.utc)
+        frozen = MagicMock()
+        frozen.now.return_value = now
+        return now, patch("scripts.release.reconcile.datetime", frozen)
 
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+    def test_reconcile_skips_noop_edit_within_the_same_minute(self) -> None:
+        repo = repo_mock(issues=[tracker()])
+        now, clock = self._frozen_clock()
+        with clock:
+            first = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+            assert first is not None
+            issue = repo.get_issues.return_value[0]
+            issue.body = issue_mod.render_body(first, now)
+            issue.title = issue_mod.render_live_title(first)
+            issue.edit.reset_mock()
+
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
 
         issue.edit.assert_not_called()
+
+    def test_a_new_minute_edits_the_body_as_the_freshness_signal(self) -> None:
+        # Accepted churn: the footer timestamp IS the staleness signal, so
+        # a pass in a new minute edits the body even with no state change.
+        repo = repo_mock(issues=[tracker()])
+        now, clock = self._frozen_clock()
+        with clock:
+            first = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        assert first is not None
+        issue = repo.get_issues.return_value[0]
+        issue.body = issue_mod.render_body(first, now - timedelta(minutes=5))
+        issue.title = issue_mod.render_live_title(first)
+        issue.edit.reset_mock()
+        with clock:
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        issue.edit.assert_called_once()
 
     def test_title_kept_while_no_notes_pr_pins_a_version(self) -> None:
         issue = tracker()
@@ -601,13 +628,142 @@ class TestReconcileBranch:
 
         reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
 
-        assert issue.edit.call_args.kwargs["title"] == "Release 9.1.1"
+        # The body still edits (freshness footer) but the start-time title
+        # is never clobbered: the edit carries no title at all.
+        kwargs = issue.edit.call_args.kwargs
+        assert "title" not in kwargs
+        assert issue.title == "Release 9.1.1"
+
+    def test_title_tracks_the_phase_state(self) -> None:
+        issue = tracker()
+        repo = repo_mock(issues=[issue])
+
+        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        assert issue.edit.call_args.kwargs["title"] == "Release 9.1.1 · ready to publish"
+
+    def test_title_edit_skipped_when_unchanged(self) -> None:
+        issue = tracker()
+        issue.title = "Release 9.1.1 · ready to publish"
+        issue.body = "stale"
+        repo = repo_mock(issues=[issue])
+
+        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        kwargs = issue.edit.call_args.kwargs
+        assert "title" not in kwargs
+        assert "body" in kwargs
 
     def test_reconcile_runs_actions_by_default(self) -> None:
         repo = repo_mock(issues=[tracker()])
         with patch("scripts.release.actions.advance", return_value=[]) as advance:
             reconcile_branch(gh_mock(repo), _POLICY, "9.1")
         advance.assert_called_once()
+
+    def test_ready_reconcile_threads_the_approval_run_url(self) -> None:
+        issue = tracker()
+        repo = repo_mock(issues=[issue])
+        gh_agent = MagicMock()
+        waiting = MagicMock(status="waiting",
+                            display_title="Publish release on 9.1 (requested by x)",
+                            html_url="https://x/actions/runs/500")
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.get_runs.return_value = [waiting]
+
+        status = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False,
+                                  gh_agent=gh_agent, agent_repo="o/agent")
+
+        assert status is not None
+        assert status.approval_run_url == "https://x/actions/runs/500"
+        assert "> Approve here: https://x/actions/runs/500" in issue.edit.call_args.kwargs["body"]
+
+    def test_no_agent_client_renders_the_ready_callout_without_the_link(self) -> None:
+        issue = tracker()
+        repo = repo_mock(issues=[issue])
+
+        status = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        assert status is not None and status.approval_run_url == ""
+        assert "Approve here:" not in issue.edit.call_args.kwargs["body"]
+
+
+class _Label:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+def _issue_with_labels(*names: str) -> MagicMock:
+    issue = tracker()
+    issue.labels = [_Label(name) for name in names]
+    return issue
+
+
+class TestPhaseLabelSync:
+    def test_reconcile_applies_the_current_phase_label(self) -> None:
+        issue = _issue_with_labels("release-tracker", "release:9.1")
+        repo = repo_mock(issues=[issue])
+
+        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        issue.add_to_labels.assert_called_once_with("phase:ready")
+        issue.remove_from_labels.assert_not_called()
+
+    def test_stale_phase_label_is_removed_when_the_phase_moves(self) -> None:
+        issue = _issue_with_labels("release-tracker", "release:9.1",
+                                   "phase:qualification")
+        repo = repo_mock(issues=[issue])
+
+        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        issue.add_to_labels.assert_called_once_with("phase:ready")
+        issue.remove_from_labels.assert_called_once_with("phase:qualification")
+
+    def test_matching_label_set_causes_no_label_writes(self) -> None:
+        issue = _issue_with_labels("release-tracker", "release:9.1", "phase:ready")
+        repo = repo_mock(issues=[issue])
+
+        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        issue.add_to_labels.assert_not_called()
+        issue.remove_from_labels.assert_not_called()
+
+    def test_failures_add_needs_attention_and_recovery_removes_it(self) -> None:
+        failing_runs = [check_run("test-ubuntu-latest", conclusion="failure"),
+                        check_run("build-macos-latest", run_id=2)]
+        issue = _issue_with_labels("release-tracker", "release:9.1")
+        repo = repo_mock(issues=[issue], runs=failing_runs)
+
+        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        added = set(issue.add_to_labels.call_args.args)
+        assert added == {"phase:candidate", "needs-attention"}
+
+        recovered = _issue_with_labels("release-tracker", "release:9.1",
+                                       "phase:candidate", "needs-attention")
+        repo = repo_mock(issues=[recovered])
+
+        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        recovered.add_to_labels.assert_called_once_with("phase:ready")
+        removed = {call.args[0] for call in recovered.remove_from_labels.call_args_list}
+        assert removed == {"phase:candidate", "needs-attention"}
+
+    def test_labels_outside_the_owned_set_are_never_touched(self) -> None:
+        issue = _issue_with_labels("release-tracker", "release:9.1",
+                                   "phase:ready", "bug", "help wanted")
+        repo = repo_mock(issues=[issue])
+
+        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        issue.add_to_labels.assert_not_called()
+        issue.remove_from_labels.assert_not_called()
+
+    def test_missing_labels_are_created_through_the_shared_helper(self) -> None:
+        issue = _issue_with_labels("release-tracker", "release:9.1")
+        repo = repo_mock(issues=[issue])
+        with patch("scripts.release.reconcile.ensure_label") as ensure:
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        assert any(call.args[1] == "phase:ready" for call in ensure.call_args_list)
 
 
 class TestAdoptCandidate:

@@ -20,12 +20,15 @@ from __future__ import annotations
 
 import itertools
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+from functools import partial
 from typing import Any
 
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
+from scripts.common.labels import ensure_label
 from scripts.release import actions as actions_mod
 from scripts.release import checks as checks_mod
 from scripts.release import issue as issue_mod
@@ -145,7 +148,7 @@ def start_release(
         ),
     )
     title = issue_mod.render_title(branch, derived.version, derived.stage)
-    body = issue_mod.render_body(status)
+    body = issue_mod.render_body(status, datetime.now(timezone.utc))
     if dry_run:
         logger.info("[dry-run] would create issue %r on %s", title, policy.repo)
         return StartResult(
@@ -447,24 +450,104 @@ def _find_release(repo: Any, tag: str) -> Any:
         raise
 
 
+# Phase labels the controller owns on the tracker (COMPLETE carries none:
+# the tracker closes). needs-attention mirrors the failure state.
+_PHASE_LABELS: "dict[ReleasePhase, str]" = {
+    ReleasePhase.NOTES: "phase:notes",
+    ReleasePhase.CANDIDATE: "phase:candidate",
+    ReleasePhase.QUALIFICATION: "phase:qualification",
+    ReleasePhase.READY: "phase:ready",
+    ReleasePhase.PUBLISHED: "phase:published",
+    ReleasePhase.BUNDLE_HELM: "phase:bundle-helm",
+}
+
+_ATTENTION_LABEL = "needs-attention"
+
+_LABEL_COLORS = {
+    "phase:notes": "d4c5f9",
+    "phase:candidate": "bfd4f2",
+    "phase:qualification": "c5def5",
+    "phase:ready": "0e8a16",
+    "phase:published": "1d76db",
+    "phase:bundle-helm": "5319e7",
+    _ATTENTION_LABEL: "d73a4a",
+}
+
+_LABEL_DESCRIPTIONS = {
+    "phase:notes": "Cutting and merging the release notes",
+    "phase:candidate": "Waiting for required CI on the candidate",
+    "phase:qualification": "Qualifying the candidate",
+    "phase:ready": "Ready to publish, awaiting human approval",
+    "phase:published": "Published; verifying core public outputs",
+    "phase:bundle-helm": "Verifying Bundle and Helm",
+    _ATTENTION_LABEL: "The tracked release has failures needing attention",
+}
+
+
+def _sync_phase_labels(repo: Any, tracking_issue: Any, status: ReleaseStatus) -> None:
+    """Mirror the phase and failure state into labels, by diff.
+
+    Exactly one ``phase:*`` label for the active phase (none once COMPLETE:
+    the tracker closes) plus ``needs-attention`` while failures exist. The
+    desired set is diffed against the current labels and only differences
+    are applied; labels outside the owned set (the known phase labels and
+    needs-attention) are never touched.
+    """
+    current = {getattr(label, "name", "") for label in tracking_issue.labels}
+    desired: set[str] = set()
+    phase_label = _PHASE_LABELS.get(status.phase)
+    if phase_label is not None:
+        desired.add(phase_label)
+    if issue_mod.has_failures(status):
+        desired.add(_ATTENTION_LABEL)
+    # The controller owns the whole phase:* namespace plus needs-attention;
+    # everything else on the issue is out of bounds.
+    owned = {name for name in current if name.startswith("phase:")}
+    owned.add(_ATTENTION_LABEL)
+    to_add = sorted(desired - current)
+    to_remove = sorted((current & owned) - desired)
+    for name in to_add:
+        ensure_label(repo, name, _LABEL_COLORS[name], _LABEL_DESCRIPTIONS[name])
+    if to_add:
+        retry_github_call(
+            lambda: tracking_issue.add_to_labels(*to_add),
+            retries=2, description=f"add labels {', '.join(to_add)}",
+        )
+    for name in to_remove:
+        retry_github_call(
+            partial(tracking_issue.remove_from_labels, name),
+            retries=2, description=f"remove label {name}",
+        )
+
+
 def _render_tracker(tracking_issue: Any, status: ReleaseStatus) -> None:
     """Re-render the tracking issue from *status*, skipping no-op edits.
 
-    Keeps the start-time title until a notes PR pins the version, so the
-    title never flaps between derived and recomputed forms.
+    The body's freshness footer has minute resolution, so a pass in a new
+    minute edits the body even when nothing else changed. Accepted churn:
+    the timestamp is the tracker's staleness signal; passes within the same
+    minute that change nothing still skip. The title is edited only when it
+    differs, and keeps the start-time title until a notes PR pins a
+    version, so it never flaps between derived and recomputed forms.
     """
-    body = issue_mod.render_body(status)
+    body = issue_mod.render_body(status, datetime.now(timezone.utc))
     title = (
-        issue_mod.render_title(status.branch, status.version, status.stage)
+        issue_mod.render_live_title(status)
         if status.version else tracking_issue.title
     )
     if tracking_issue.body == body and tracking_issue.title == title:
         logger.info("Issue #%s already reflects current state", tracking_issue.number)
         return
-    retry_github_call(
-        lambda: tracking_issue.edit(title=title, body=body),
-        retries=2, description=f"update issue #{tracking_issue.number}",
-    )
+    if tracking_issue.title == title:
+        retry_github_call(
+            lambda: tracking_issue.edit(body=body),
+            retries=2, description=f"update issue #{tracking_issue.number}",
+        )
+    else:
+        retry_github_call(
+            lambda: tracking_issue.edit(title=title, body=body),
+            retries=2, description=f"update issue #{tracking_issue.number}",
+        )
 
 
 def reconcile_branch(
@@ -511,6 +594,17 @@ def reconcile_branch(
         ):
             logger.info("Action: %s", performed)
 
+    # Display-only: link the waiting publish run so the READY callout can
+    # say exactly where to approve. Fetched after advance() so a run the
+    # dispatch just created has its best chance of being visible.
+    if status.phase is ReleasePhase.READY and gh_agent is not None and agent_repo:
+        approval_url = actions_mod.waiting_publish_run_url(
+            gh_agent, agent_repo, branch,
+        )
+        if approval_url:
+            status = replace(status, approval_run_url=approval_url)
+
+    _sync_phase_labels(repo, tracking_issue, status)
     _render_tracker(tracking_issue, status)
     logger.info("Reconciled issue #%s (phase=%s)", tracking_issue.number, status.phase.value)
     return status

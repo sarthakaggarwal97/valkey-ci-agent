@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import re
 import weakref
+from datetime import datetime
 from typing import Any
 
 from github.GithubException import GithubException
@@ -59,12 +60,14 @@ def invalidate_comment_memo(issue: Any) -> None:
     """Drop the memoized comment list for *issue* (call after posting to it)."""
     _COMMENTS_MEMO.pop(issue, None)
 
+# Status vocabulary: the pipeline checkboxes plus these capitalized table
+# icons (✅ ❌ ⏳ ⛔ ➖) are the only state symbols the tracker renders.
 _CHECK_STATE_DISPLAY = {
     CheckState.PASSED: "✅ Passed",
     CheckState.FAILED: "❌ Failed",
     CheckState.PENDING: "⏳ Pending",
-    CheckState.MISSING: "⚠️ Missing",
-    CheckState.STALLED: "🛑 Stalled",
+    CheckState.MISSING: "⛔ Missing",
+    CheckState.STALLED: "❌ Stalled",
 }
 
 _OUTPUT_STATE_DISPLAY = {
@@ -73,6 +76,15 @@ _OUTPUT_STATE_DISPLAY = {
     OutputState.FAILED: "❌ Failed",
     OutputState.BLOCKED: "⛔ Blocked",
     OutputState.SKIPPED: "➖ N/A",
+}
+
+# Triage order for the Public outputs table: what needs a human first.
+_OUTPUT_TRIAGE_ORDER = {
+    OutputState.FAILED: 0,
+    OutputState.BLOCKED: 1,
+    OutputState.PENDING: 2,
+    OutputState.SKIPPED: 3,
+    OutputState.VERIFIED: 4,
 }
 
 # Render order for the progress checklist. COMPLETE is the terminal state of
@@ -95,26 +107,16 @@ _PHASE_TITLES = {
     ReleasePhase.BUNDLE_HELM: "Bundle and Helm verified",
 }
 
-# What the current phase is DOING, for the progress-bar label. The checklist
-# uses the completed-form _PHASE_TITLES; the bar describes the phase in
-# flight, so it must not assert the outcome ("Published" while unpublished).
-_PHASE_ACTIVE = {
-    ReleasePhase.NOTES: "Cutting and merging the release notes",
-    ReleasePhase.CANDIDATE: "Waiting for required CI on the candidate",
-    ReleasePhase.QUALIFICATION: "Qualifying the candidate",
-    ReleasePhase.READY: "Ready to publish: awaiting human approval",
-    ReleasePhase.PUBLISHED: "Verifying core public outputs",
-    ReleasePhase.BUNDLE_HELM: "Verifying Bundle and Helm",
-}
-
-# Short names for the phase badge in the header.
-_PHASE_SHORT = {
-    ReleasePhase.NOTES: "1/6 notes",
-    ReleasePhase.CANDIDATE: "2/6 candidate CI",
-    ReleasePhase.QUALIFICATION: "3/6 qualification",
-    ReleasePhase.READY: "4/6 ready to publish",
-    ReleasePhase.PUBLISHED: "5/6 public outputs",
-    ReleasePhase.BUNDLE_HELM: "6/6 bundle & helm",
+# What the current phase is DOING, for the live issue title. The checklist
+# uses the completed-form _PHASE_TITLES; the title describes the phase in
+# flight, so it must not assert the outcome ("published" while unpublished).
+_PHASE_TITLE_STATES = {
+    ReleasePhase.NOTES: "cutting notes",
+    ReleasePhase.CANDIDATE: "candidate CI",
+    ReleasePhase.QUALIFICATION: "qualification",
+    ReleasePhase.READY: "ready to publish",
+    ReleasePhase.PUBLISHED: "verifying outputs",
+    ReleasePhase.BUNDLE_HELM: "bundle & helm",
     ReleasePhase.COMPLETE: "complete",
 }
 
@@ -157,29 +159,35 @@ def render_title(branch: str, version: str, stage: str) -> str:
     return f"Next release on {branch}"
 
 
-def render_body(status: ReleaseStatus) -> str:
+def render_live_title(status: ReleaseStatus) -> str:
+    """The live tracker title: ``Release {tag} · {state}``.
+
+    Pure function of the status, so reconciliation can compare it against
+    the current title and edit only on change. Identity never depends on
+    it: discovery is the label pair plus the body marker.
+    """
+    title = f"Release {_display_tag(status)} · {_PHASE_TITLE_STATES[status.phase]}"
+    if has_failures(status):
+        title += " · needs attention"
+    return title
+
+
+def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
     """Render the full issue body from recomputed state.
 
-    Deterministic for a given status, so reconciliation can compare the
-    rendered body against the current one and skip no-op edits. Layout
-    mirrors the release-notes PR body: an alert callout stating exactly
-    what happens next, a progress checklist, and evidence tables.
+    Deterministic for a given (status, reconciled_at), so reconciliation
+    can compare the rendered body against the current one and skip no-op
+    edits within the same minute. Layout is native left-aligned markdown:
+    a header naming the release line, an alert callout stating exactly
+    what happens next, the Pipeline checklist (the sole progress
+    rendering), and evidence tables.
     """
     done = _phases_done(status)
     lines: list[str] = [
         identity_marker(status.branch),
         "",
-        '<div align="center">',
-        "",
-        f"## Valkey {_display_tag(status) or '(version pending)'}",
-        "",
-        _badge_row(status),
-        "",
-        f"`{status.repo}` · release line `{status.branch}`",
-        "",
-        f"{_progress_bar(status, done)}",
-        "",
-        "</div>",
+        f"## Valkey {status.version or '(version pending)'}",
+        _header_line(status),
         "",
     ]
     lines += _callout(status)
@@ -194,10 +202,10 @@ def render_body(status: ReleaseStatus) -> str:
         "",
         "### Details",
         "",
-        "| | |",
+        "| Field | Value |",
         "|---|---|",
         f"| Version | {_code(status.version) if status.version else '_Awaiting the release-notes PR_'} |",
-        f"| Stage | {_code(status.stage) if status.stage else '_Awaiting the release-notes PR_'} |",
+        f"| Stage | {_code(status.stage.upper()) if status.stage else '_Awaiting the release-notes PR_'} |",
         f"| Release-notes PR | {_notes_pr_cell(status)} |",
         f"| Candidate SHA | {_candidate_cell(status)} |",
         f"| Qualification | {_qualification_cell(status)} |",
@@ -205,88 +213,73 @@ def render_body(status: ReleaseStatus) -> str:
     ]
 
     if status.checks:
-        lines += [
-            "",
-            f"### Required checks on `{_short(status.candidate.sha)}`",
-            "",
-            "| Check | Result |",
-            "|---|---|",
-        ]
+        lines += ["", f"### Required checks on `{_short(status.candidate.sha)}`", ""]
+        table = ["| Check | Result |", "|---|---|"]
         for check in status.checks:
             link = f" ([run]({check.url}))" if check.url else ""
-            lines.append(f"| `{check.name}` | {_CHECK_STATE_DISPLAY[check.state]}{link} |")
+            table.append(f"| `{check.name}` | {_CHECK_STATE_DISPLAY[check.state]}{link} |")
+        if all(check.state is CheckState.PASSED for check in status.checks):
+            lines += _collapsed(
+                f"✅ All {len(status.checks)} required checks passed on "
+                f"<code>{_short(status.candidate.sha)}</code>",
+                table,
+            )
+        else:
+            lines += table
 
     if status.outputs:
-        lines += [
-            "",
-            "### Public outputs",
-            "",
-            "| Output | Status | Detail |",
-            "|---|---|---|",
-        ]
-        for output in status.outputs:
+        lines += ["", "### Public outputs", ""]
+        table = ["| Output | Status | Detail |", "|---|---|---|"]
+        # Triage order (stable within groups): what needs a human first.
+        for output in sorted(status.outputs,
+                             key=lambda o: _OUTPUT_TRIAGE_ORDER[o.state]):
             link = f" ([evidence]({output.url}))" if output.url else ""
-            lines.append(
+            table.append(
                 f"| **{output.name}** | {_OUTPUT_STATE_DISPLAY[output.state]} | "
                 f"{output.detail}{link} |"
             )
+        if all(output.state in (OutputState.VERIFIED, OutputState.SKIPPED)
+               for output in status.outputs):
+            lines += _collapsed("✅ All public outputs verified", table)
+        else:
+            lines += table
 
     lines += [
         "",
         "---",
         "",
-        "*Maintained by the release controller: state is recomputed from "
-        "GitHub every reconciliation pass, so edits here have no effect and "
-        "are overwritten. Failures are raised as a comment mentioning the "
-        "release team, once per distinct failure state.*",
+        f"*Reconciled {reconciled_at.strftime('%Y-%m-%d %H:%M')} UTC · state is "
+        "recomputed from GitHub on every pass, so manual edits are overwritten.*",
+        "*Failures are raised as a comment mentioning the release team, once "
+        "per distinct failure state.*",
     ]
     return "\n".join(lines) + "\n"
 
 
-def _badge(label: str, message: str, color: str) -> str:
-    """A shields.io static badge (deterministic URL, proxied by GitHub)."""
-    def escape(text: str) -> str:
-        # shields.io static-badge escaping: dash and underscore double, and
-        # space/slash must be percent-encoded or they break the URL path.
-        return (text.replace("-", "--").replace("_", "__")
-                    .replace(" ", "%20").replace("/", "%2F"))
+def _repo_url(status: ReleaseStatus) -> str:
+    return f"https://github.com/{status.repo}"
+
+
+def _header_line(status: ReleaseStatus) -> str:
+    """The one-line header under the H2: stage, release line, and the
+    cross-tracker link. No badges, no HTML."""
+    repo_url = _repo_url(status)
+    stage_prefix = f"{status.stage.upper()} release" if status.stage else "Release"
+    trackers_url = (
+        f"{repo_url}/issues?q=is%3Aissue+is%3Aopen+label%3Arelease-tracker"
+    )
     return (
-        f"![{label}](https://img.shields.io/badge/"
-        f"{escape(label)}-{escape(message)}-{color}?style=flat-square)"
+        f"{stage_prefix} on line [`{status.branch}`]({repo_url}/tree/{status.branch}) "
+        f"of [{status.repo}]({repo_url}) · [All release trackers]({trackers_url})"
     )
 
 
-def _badge_row(status: ReleaseStatus) -> str:
-    version_badge = _badge("version", _display_tag(status) or "pending", "0969da")
-    stage_badge = _badge("stage", status.stage or "pending", "8250df")
-    if status.phase is ReleasePhase.COMPLETE:
-        phase_color = "1a7f37"
-    elif _has_failures(status):
-        phase_color = "cf222e"
-    elif status.ready:
-        phase_color = "1a7f37"
-    else:
-        phase_color = "d29922"
-    phase_badge = _badge("phase", _PHASE_SHORT[status.phase], phase_color)
-    return f"{version_badge} {stage_badge} {phase_badge}"
+def _collapsed(summary: str, table: list[str]) -> list[str]:
+    """An all-green table folded behind a one-line summary."""
+    return [f"<details><summary>{summary}</summary>", "", *table, "", "</details>"]
 
 
-def _progress_bar(status: ReleaseStatus, done: set[ReleasePhase]) -> str:
-    """Six-segment bar: 🟩 done, 🟦 current (🟥 when failing), ⬜ ahead."""
-    current_block = "🟥" if _has_failures(status) else "🟦"
-    blocks = "".join(
-        "🟩" if phase in done else (current_block if phase is status.phase else "⬜")
-        for phase in _PHASE_ORDER
-    )
-    if status.phase is ReleasePhase.COMPLETE:
-        return f"{blocks} **Complete**"
-    label = _PHASE_ACTIVE[status.phase]
-    if _has_failures(status):
-        label = f"{label} (failures need attention)"
-    return f"{blocks} **{label}**"
-
-
-def _has_failures(status: ReleaseStatus) -> bool:
+def has_failures(status: ReleaseStatus) -> bool:
     return bool(
         status.alerts
         or any(o.state is OutputState.FAILED for o in status.outputs)
@@ -322,7 +315,7 @@ def _callout(status: ReleaseStatus) -> list[str]:
             "output turns failed.",
         ]
     if status.ready:
-        return [
+        ready = [
             "> [!IMPORTANT]",
             "> **Ready to publish.** Every pre-publication gate passed on the "
             "exact candidate SHA. The controller dispatches the **Release "
@@ -332,6 +325,9 @@ def _callout(status: ReleaseStatus) -> list[str]:
             "the created tag). The approval checklist is posted below when "
             "the run is waiting.",
         ]
+        if status.approval_run_url:
+            ready.append(f"> Approve here: {status.approval_run_url}")
+        return ready
     blocker_lines = [f"> - {blocker}" for blocker in status.blockers] or ["> - (None recorded)"]
     return ["> [!WARNING]", "> **Not ready. Blocked on:**", *blocker_lines]
 
@@ -367,10 +363,11 @@ def _candidate_cell(status: ReleaseStatus) -> str:
     candidate = status.candidate
     if candidate.state is CandidateState.NONE:
         return "_None (recorded when the release-notes PR merges)_"
+    link = f"[`{_short(candidate.sha)}`]({_repo_url(status)}/commit/{candidate.sha})"
     if status.published:
         # Post-publication the tag pins the candidate; the branch may
         # legitimately move on, so "current branch head" would be a lie.
-        return f"`{candidate.sha}`: Pinned by the release tag"
+        return f"{link}: Pinned by the release tag"
     descriptions = {
         CandidateState.CURRENT: "Current branch head",
         CandidateState.ADOPTED: "Adopted branch head (owner-acknowledged)",
@@ -379,7 +376,7 @@ def _candidate_cell(status: ReleaseStatus) -> str:
             "the exact new head before qualification continues)"
         ),
     }
-    return f"`{candidate.sha}`: {descriptions[candidate.state]}"
+    return f"{link}: {descriptions[candidate.state]}"
 
 
 def _qualification_cell(status: ReleaseStatus) -> str:
@@ -390,7 +387,7 @@ def _qualification_cell(status: ReleaseStatus) -> str:
             # it); "no run yet" would misread as a missing prerequisite.
             return "_Gated before publication; not re-evaluated afterward_"
         return "_No run for the candidate SHA yet_"
-    link = f"[Run {qualification.run_id}]({qualification.url})"
+    link = f"[Qualification run]({qualification.url})"
     if qualification.pending:
         return f"⏳ {link} in progress"
     if qualification.passed:

@@ -614,6 +614,27 @@ def _close_when_complete(gh: Any, status: ReleaseStatus, tracking_issue: Any) ->
 
 _PUBLISH_WORKFLOW = "release-publish.yml"
 
+_PUBLISH_RUN_SCAN_LIMIT = 15
+
+_PUBLISH_RUN_ACTIVE_STATUSES = ("queued", "in_progress", "waiting", "pending")
+
+
+def _active_publish_run(workflow: Any, branch: str) -> Any:
+    """The newest publish run for *branch* that is queued, running, or
+    waiting at the approval gate; None when no such run exists."""
+    runs = retry_github_call(
+        workflow.get_runs,
+        retries=2, description="list publish runs",
+    )
+    marker = f" on {branch} "
+    for index, run in enumerate(runs):
+        if index >= _PUBLISH_RUN_SCAN_LIMIT:
+            break
+        if run.status in _PUBLISH_RUN_ACTIVE_STATUSES \
+                and marker in f"{run.display_title or ''} ":
+            return run
+    return None
+
 
 def _publish_run_active(gh_agent: Any, agent_repo: str, branch: str) -> bool:
     """True when a publish run for *branch* is queued, running, or waiting
@@ -621,18 +642,23 @@ def _publish_run_active(gh_agent: Any, agent_repo: str, branch: str) -> bool:
     workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
     if workflow is None:
         return True  # cannot see the workflow: do not dispatch blind
-    runs = retry_github_call(
-        workflow.get_runs,
-        retries=2, description="list publish runs",
-    )
-    marker = f" on {branch} "
-    for index, run in enumerate(runs):
-        if index >= 15:
-            break
-        if run.status in ("queued", "in_progress", "waiting", "pending") \
-                and marker in f"{run.display_title or ''} ":
-            return True
-    return False
+    return _active_publish_run(workflow, branch) is not None
+
+
+def waiting_publish_run_url(gh_agent: Any, agent_repo: str, branch: str) -> str:
+    """The html_url of the active publish run for *branch*, "" when none
+    is visible (including when the workflow itself is unreadable).
+
+    Display-only companion to :func:`_publish_run_active`: reconciliation
+    threads it into the READY callout's approval link; nothing gates on it.
+    """
+    workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
+    if workflow is None:
+        return ""
+    run = _active_publish_run(workflow, branch)
+    if run is None:
+        return ""
+    return run.html_url or ""
 
 
 def _dispatch_publish(gh_agent: Any, agent_repo: str, branch: str) -> None:

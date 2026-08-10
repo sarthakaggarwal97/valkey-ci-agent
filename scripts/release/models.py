@@ -220,6 +220,10 @@ class ReleaseStatus:
     phase: ReleasePhase = ReleasePhase.NOTES
     published: bool = False
     release_url: str = ""
+    # URL of the publish run waiting at the approval gate, populated by
+    # reconciliation when the phase is READY and the run is visible; ""
+    # otherwise. Display-only: nothing gates on it.
+    approval_run_url: str = ""
     outputs: tuple[DownstreamOutput, ...] = ()
     ready: bool = False
     blockers: tuple[str, ...] = ()

@@ -908,3 +908,42 @@ class TestAutoDispatchPublish:
                         tracking_issue=tracker(),
                         gh_agent=gh_agent, agent_repo="o/agent")
         gh_agent.get_repo.return_value.get_workflow.return_value.create_dispatch.assert_not_called()
+
+
+class TestWaitingPublishRunUrl:
+    """The display-only sibling of _publish_run_active: same matching, but
+    yields the run's URL for the READY callout's approval link."""
+
+    def _agent(self, runs: "list | None" = None) -> MagicMock:
+        gh_agent = MagicMock()
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.get_runs.return_value = runs or []
+        return gh_agent
+
+    def test_waiting_run_for_the_branch_yields_its_url(self) -> None:
+        waiting = MagicMock(status="waiting",
+                            display_title="Publish release on 9.1 (requested by x)",
+                            html_url="https://x/actions/runs/500")
+        url = actions.waiting_publish_run_url(self._agent([waiting]), "o/agent", "9.1")
+        assert url == "https://x/actions/runs/500"
+
+    def test_no_active_run_yields_empty(self) -> None:
+        done = MagicMock(status="completed",
+                         display_title="Publish release on 9.1 (requested by x)",
+                         html_url="https://x/actions/runs/400")
+        assert actions.waiting_publish_run_url(self._agent([done]), "o/agent", "9.1") == ""
+
+    def test_other_branch_run_yields_empty(self) -> None:
+        other = MagicMock(status="waiting",
+                          display_title="Publish release on 8.0 (requested by x)",
+                          html_url="https://x/actions/runs/300")
+        assert actions.waiting_publish_run_url(self._agent([other]), "o/agent", "9.1") == ""
+
+    def test_unreadable_workflow_yields_empty_not_an_error(self) -> None:
+        # _publish_run_active fails closed (True) here; the URL companion
+        # is display-only, so it degrades to "no link" instead.
+        gh_agent = MagicMock()
+        gh_agent.get_repo.return_value.get_workflow.side_effect = GithubException(
+            404, "not found", {},
+        )
+        assert actions.waiting_publish_run_url(gh_agent, "o/agent", "9.1") == ""

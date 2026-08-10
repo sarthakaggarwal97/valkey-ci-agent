@@ -109,6 +109,14 @@ def outputs_all_settled(outputs: tuple[DownstreamOutput, ...]) -> bool:
     )
 
 
+def _humanize_minutes(minutes: int) -> str:
+    """Operator-facing duration: minutes below two hours, whole hours from
+    there (floor, so 359 renders as 5 hours and 360 as 6 hours)."""
+    if minutes >= 120:
+        return f"{minutes // 60} hours"
+    return f"{minutes} minutes"
+
+
 def escalate_stalled_outputs(
     outputs: tuple[DownstreamOutput, ...], published_at: Any, timeout_minutes: int,
 ) -> tuple[DownstreamOutput, ...]:
@@ -121,8 +129,8 @@ def escalate_stalled_outputs(
     return tuple(
         DownstreamOutput(
             name=o.name, state=OutputState.FAILED,
-            detail=f"Stalled: still pending {timeout_minutes} minutes after "
-                   f"publication: {o.detail.rstrip('.')}",
+            detail=f"Stalled after {_humanize_minutes(timeout_minutes)}: "
+                   f"{o.detail.rstrip('.')}",
             # action cleared: an escalated stall pages a human; it must not
             # also keep auto-dispatching every pass.
             url=o.url, action="", run_id=o.run_id,

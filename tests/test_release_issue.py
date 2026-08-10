@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,6 +12,8 @@ from scripts.release.models import (
     Candidate,
     CandidateState,
     CheckState,
+    DownstreamOutput,
+    OutputState,
     ReleasePhase,
     ReleaseStatus,
     RequiredCheck,
@@ -19,6 +22,12 @@ from tests.release_fixtures import BEFORE_TRACKER
 
 _SHA_A = "a" * 40
 _SHA_B = "b" * 40
+
+_NOW = datetime(2026, 8, 10, 17, 30, tzinfo=timezone.utc)
+
+
+def _render(status: ReleaseStatus) -> str:
+    return issue_mod.render_body(status, _NOW)
 
 
 def _status(**overrides: object) -> ReleaseStatus:
@@ -45,19 +54,19 @@ def _status(**overrides: object) -> ReleaseStatus:
 class TestRender:
     def test_body_carries_identity_marker_and_is_deterministic(self) -> None:
         status = _status()
-        body = issue_mod.render_body(status)
+        body = _render(status)
         assert issue_mod.identity_marker("9.1") in body
-        assert body == issue_mod.render_body(status)
+        assert body == _render(status)
 
     def test_ready_body_shows_checks_and_readiness(self) -> None:
-        body = issue_mod.render_body(_status())
+        body = _render(_status())
         assert "| `test-ubuntu-latest` | ✅ Passed" in body
         assert "[!IMPORTANT]" in body
         assert "**Ready to publish.**" in body
         assert "- [x] Release notes cut and merged" in body  # progress checklist
 
     def test_blocked_body_lists_every_blocker(self) -> None:
-        body = issue_mod.render_body(_status(ready=False, blockers=("one", "two")))
+        body = _render(_status(ready=False, blockers=("one", "two")))
         assert "[!WARNING]" in body
         assert "**Not ready. Blocked on:**" in body
         assert "> - one" in body and "> - two" in body
@@ -66,8 +75,8 @@ class TestRender:
         candidate = Candidate(
             state=CandidateState.INVALIDATED, sha=_SHA_A, branch_head=_SHA_B,
         )
-        body = issue_mod.render_body(_status(candidate=candidate, checks=(), ready=False,
-                                             blockers=("branch moved",)))
+        body = _render(_status(candidate=candidate, checks=(), ready=False,
+                               blockers=("branch moved",)))
         assert "**Invalidated**" in body
 
     def test_title_uses_version_or_branch(self) -> None:
@@ -84,9 +93,50 @@ class TestRender:
             phase=ReleasePhase.PUBLISHED, published=True,
             release_url="https://x/releases/9.1.1", ready=False,
         )
-        body = issue_mod.render_body(published)
+        body = _render(published)
         assert "Pinned by the release tag" in body
         assert "Current branch head" not in body
+
+    def test_ready_callout_carries_the_approval_link_when_known(self) -> None:
+        body = _render(_status(approval_run_url="https://x/actions/runs/500"))
+        assert "> Approve here: https://x/actions/runs/500" in body
+
+    def test_ready_callout_omits_the_approval_line_when_unknown(self) -> None:
+        body = _render(_status())
+        assert "Approve here:" not in body
+
+
+class TestLiveTitle:
+    @pytest.mark.parametrize(("phase", "state"), [
+        pytest.param(ReleasePhase.NOTES, "cutting notes", id="notes"),
+        pytest.param(ReleasePhase.CANDIDATE, "candidate CI", id="candidate"),
+        pytest.param(ReleasePhase.QUALIFICATION, "qualification", id="qualification"),
+        pytest.param(ReleasePhase.READY, "ready to publish", id="ready"),
+        pytest.param(ReleasePhase.PUBLISHED, "verifying outputs", id="published"),
+        pytest.param(ReleasePhase.BUNDLE_HELM, "bundle & helm", id="bundle-helm"),
+        pytest.param(ReleasePhase.COMPLETE, "complete", id="complete"),
+    ])
+    def test_title_names_the_tag_and_phase_state(
+            self, phase: ReleasePhase, state: str) -> None:
+        title = issue_mod.render_live_title(_status(phase=phase))
+        assert title == f"Release 9.1.1 · {state}"
+
+    def test_rc_title_carries_the_full_tag(self) -> None:
+        title = issue_mod.render_live_title(
+            _status(version="9.1.0", stage="rc2", phase=ReleasePhase.QUALIFICATION))
+        assert title == "Release 9.1.0-rc2 · qualification"
+
+    def test_failures_append_the_needs_attention_suffix(self) -> None:
+        failing = _status(
+            ready=False, phase=ReleasePhase.CANDIDATE,
+            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
+            blockers=("Required check failed",),
+        )
+        title = issue_mod.render_live_title(failing)
+        assert title == "Release 9.1.1 · candidate CI · needs attention"
+
+    def test_clean_status_has_no_suffix(self) -> None:
+        assert "needs attention" not in issue_mod.render_live_title(_status())
 
 
 def _comment(author: str, body: str) -> MagicMock:
@@ -233,42 +283,59 @@ class TestFindReleaseIssue:
 
 
 class TestAesthetics:
-    def test_header_carries_badges_and_progress_bar(self) -> None:
-        body = issue_mod.render_body(_status())
-        assert '<div align="center">' in body
-        assert "img.shields.io/badge/version-9.1.1-" in body
-        # Phase message slashes must be percent-encoded or the badge 404s.
-        assert "img.shields.io/badge/phase-4%2F6" in body
-        assert "🟩🟩🟩🟦⬜⬜" in body  # READY: three done, current, two ahead
+    def test_body_is_native_markdown_without_badges_or_html_blocks(self) -> None:
+        body = _render(_status())
+        assert "img.shields.io" not in body
+        assert "<div" not in body
+        for square in ("🟩", "🟦", "🟥", "⬜"):
+            assert square not in body
 
-    def test_progress_bar_turns_red_on_failure(self) -> None:
-        failing = _status(
-            ready=False,
-            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
-            blockers=("Required check failed",),
-        )
-        body = issue_mod.render_body(failing)
-        assert "🟥" in body
+    def test_header_links_the_branch_and_the_tracker_search(self) -> None:
+        body = _render(_status())
+        assert "## Valkey 9.1.1" in body
+        assert "[`9.1`](https://github.com/valkey-io/valkey/tree/9.1)" in body
+        assert ("[All release trackers](https://github.com/valkey-io/valkey/"
+                "issues?q=is%3Aissue+is%3Aopen+label%3Arelease-tracker)") in body
 
-    def test_progress_bar_label_never_asserts_the_unfinished_outcome(self) -> None:
-        # The bar describes the phase in flight; the checklist owns the
-        # completed-form titles. A READY tracker must not read "Published"
-        # and a failing phase must say failures need attention.
-        ready_body = issue_mod.render_body(_status())
-        assert "⬜ **Published (human-approved)**" not in ready_body
-        assert "**Ready to publish: awaiting human approval**" in ready_body
-        failing = _status(
+    def test_stage_renders_uppercase(self) -> None:
+        assert "GA release on line" in _render(_status())
+        assert "| Stage | `GA` |" in _render(_status())
+        rc = _render(_status(version="9.1.0", stage="rc2"))
+        assert "RC2 release on line" in rc
+        assert "| Stage | `RC2` |" in rc
+
+    def test_candidate_sha_links_to_the_commit(self) -> None:
+        body = _render(_status())
+        assert (f"[`{_SHA_A[:12]}`](https://github.com/valkey-io/valkey/"
+                f"commit/{_SHA_A})") in body
+
+    def test_qualification_link_carries_no_raw_run_id(self) -> None:
+        from scripts.release.models import QualificationStatus
+        body = _render(_status(qualification=QualificationStatus(
+            run_id=900, url="https://x/qruns/900", passed=True)))
+        assert "✅ [Qualification run](https://x/qruns/900) passed" in body
+        assert "Run 900" not in body
+
+    def test_footer_carries_the_freshness_stamp(self) -> None:
+        body = _render(_status())
+        assert "*Reconciled 2026-08-10 17:30 UTC" in body
+        assert "Reconciled " in body and "UTC" in body
+        assert "*Failures are raised as a comment mentioning the release" in body
+        assert body.rstrip().endswith("once per distinct failure state.*")
+
+    def test_status_vocabulary_is_the_capitalized_icon_set_only(self) -> None:
+        stalled = _status(
             ready=False,
-            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
-            blockers=("Required check failed",),
+            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.STALLED),
+                    RequiredCheck(name="build-macos-latest", state=CheckState.MISSING)),
+            blockers=("stalled",),
         )
-        failing_body = issue_mod.render_body(failing)
-        assert "(failures need attention)**" in failing_body
-        # The checklist still uses the completed-form title unchanged.
-        assert "- [ ] **Published (human-approved)**" in ready_body
+        body = _render(stalled)
+        assert "❌ Stalled" in body
+        assert "⛔ Missing" in body
+        assert "⚠️" not in body and "🛑" not in body
 
     def test_rendered_body_never_contains_an_em_dash(self) -> None:
-        from scripts.release.models import DownstreamOutput, OutputState
         variants = (
             _status(),
             _status(ready=False, blockers=("one", "two")),
@@ -290,7 +357,66 @@ class TestAesthetics:
             ),
         )
         for status in variants:
-            assert "\u2014" not in issue_mod.render_body(status)
+            assert "\u2014" not in _render(status)
+
+
+def _output(name: str, state: OutputState) -> DownstreamOutput:
+    return DownstreamOutput(name=name, state=state, detail=f"{name} detail")
+
+
+class TestTablesTriageAndCollapse:
+    def _published(self, outputs: tuple[DownstreamOutput, ...]) -> ReleaseStatus:
+        return _status(phase=ReleasePhase.PUBLISHED, published=True, ready=False,
+                       release_url="https://x/releases/9.1.1", outputs=outputs)
+
+    def test_outputs_sort_in_triage_order_stable_within_groups(self) -> None:
+        body = _render(self._published((
+            _output("v-one", OutputState.VERIFIED),
+            _output("p-one", OutputState.PENDING),
+            _output("f-one", OutputState.FAILED),
+            _output("n-one", OutputState.SKIPPED),
+            _output("b-one", OutputState.BLOCKED),
+            _output("f-two", OutputState.FAILED),
+        )))
+        order = [body.index(f"| **{name}** |")
+                 for name in ("f-one", "f-two", "b-one", "p-one", "n-one", "v-one")]
+        assert order == sorted(order)
+
+    def test_all_passed_checks_collapse_behind_a_summary(self) -> None:
+        body = _render(_status(checks=(
+            RequiredCheck(name="test-ubuntu-latest", state=CheckState.PASSED),
+            RequiredCheck(name="build-macos-latest", state=CheckState.PASSED),
+        )))
+        assert (f"<details><summary>✅ All 2 required checks passed on "
+                f"<code>{_SHA_A[:12]}</code></summary>") in body
+        assert "</details>" in body
+        assert "| `test-ubuntu-latest` | ✅ Passed |" in body
+
+    def test_any_unfinished_check_keeps_the_table_open(self) -> None:
+        body = _render(_status(
+            ready=False,
+            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.PASSED),
+                    RequiredCheck(name="build-macos-latest", state=CheckState.PENDING)),
+            blockers=("pending",),
+        ))
+        assert "<details>" not in body
+        assert "| `build-macos-latest` | ⏳ Pending |" in body
+
+    def test_all_settled_outputs_collapse_behind_a_summary(self) -> None:
+        body = _render(self._published((
+            _output("tarballs", OutputState.VERIFIED),
+            _output("packages", OutputState.SKIPPED),
+        )))
+        assert "<details><summary>✅ All public outputs verified</summary>" in body
+        assert "| **tarballs** | ✅ Verified |" in body
+
+    def test_any_failed_output_keeps_the_table_open(self) -> None:
+        body = _render(self._published((
+            _output("tarballs", OutputState.VERIFIED),
+            _output("helm", OutputState.FAILED),
+        )))
+        assert "✅ All public outputs verified" not in body
+        assert "| **helm** | ❌ Failed |" in body
 
 
 class TestAuthenticatedIdentityTrust:
