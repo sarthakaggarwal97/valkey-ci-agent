@@ -108,13 +108,13 @@ class TestRender:
 
 class TestLiveTitle:
     @pytest.mark.parametrize(("phase", "state"), [
-        pytest.param(ReleasePhase.NOTES, "cutting notes", id="notes"),
-        pytest.param(ReleasePhase.CANDIDATE, "candidate CI", id="candidate"),
-        pytest.param(ReleasePhase.QUALIFICATION, "qualification", id="qualification"),
-        pytest.param(ReleasePhase.READY, "ready to publish", id="ready"),
-        pytest.param(ReleasePhase.PUBLISHED, "verifying outputs", id="published"),
-        pytest.param(ReleasePhase.BUNDLE_HELM, "bundle & helm", id="bundle-helm"),
-        pytest.param(ReleasePhase.COMPLETE, "complete", id="complete"),
+        pytest.param(ReleasePhase.NOTES, "Cutting Notes", id="notes"),
+        pytest.param(ReleasePhase.CANDIDATE, "Candidate CI", id="candidate"),
+        pytest.param(ReleasePhase.QUALIFICATION, "Qualification", id="qualification"),
+        pytest.param(ReleasePhase.READY, "Ready to Publish", id="ready"),
+        pytest.param(ReleasePhase.PUBLISHED, "Verifying Outputs", id="published"),
+        pytest.param(ReleasePhase.BUNDLE_HELM, "Bundle & Helm", id="bundle-helm"),
+        pytest.param(ReleasePhase.COMPLETE, "Complete", id="complete"),
     ])
     def test_title_names_the_tag_and_phase_state(
             self, phase: ReleasePhase, state: str) -> None:
@@ -124,7 +124,7 @@ class TestLiveTitle:
     def test_rc_title_carries_the_full_tag(self) -> None:
         title = issue_mod.render_live_title(
             _status(version="9.1.0", stage="rc2", phase=ReleasePhase.QUALIFICATION))
-        assert title == "Release 9.1.0-rc2 · qualification"
+        assert title == "Release 9.1.0-rc2 · Qualification"
 
     def test_failures_append_the_needs_attention_suffix(self) -> None:
         failing = _status(
@@ -133,7 +133,7 @@ class TestLiveTitle:
             blockers=("Required check failed",),
         )
         title = issue_mod.render_live_title(failing)
-        assert title == "Release 9.1.1 · candidate CI · needs attention"
+        assert title == "Release 9.1.1 · Candidate CI · Needs Attention"
 
     def test_clean_status_has_no_suffix(self) -> None:
         assert "needs attention" not in issue_mod.render_live_title(_status())
@@ -300,7 +300,7 @@ class TestAesthetics:
         # completed-form titles. A READY tracker must not read "Published".
         ready_body = _render(_status())
         assert "⬜ **Published (human-approved)**" not in ready_body
-        assert "**Ready to publish: awaiting human approval**" in ready_body
+        assert "**Ready to Publish: Awaiting Approval**" in ready_body
         failing = _status(
             ready=False,
             checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
@@ -308,20 +308,23 @@ class TestAesthetics:
         )
         failing_body = _render(failing)
         assert "🟥" in failing_body
-        assert "(failures need attention)**" in failing_body
+        assert "(Failures Need Attention)**" in failing_body
 
     def test_header_links_the_branch_and_the_tracker_search(self) -> None:
         body = _render(_status())
         assert "## Valkey 9.1.1" in body
         assert "[`9.1`](https://github.com/valkey-io/valkey/tree/9.1)" in body
-        assert ("[All release trackers](https://github.com/valkey-io/valkey/"
+        assert ("[All trackers](https://github.com/valkey-io/valkey/"
                 "issues?q=is%3Aissue+is%3Aopen+label%3Arelease-tracker)") in body
 
     def test_stage_renders_uppercase(self) -> None:
-        assert "GA release on line" in _render(_status())
-        assert "| Stage | `GA` |" in _render(_status())
+        # The stage lives in the badge row and the Details table; the
+        # compact subtitle carries identity links only.
+        body = _render(_status())
+        assert "img.shields.io/badge/stage-GA-" in body
+        assert "| Stage | `GA` |" in body
         rc = _render(_status(version="9.1.0", stage="rc2"))
-        assert "RC2 release on line" in rc
+        assert "img.shields.io/badge/stage-RC2-" in rc
         assert "| Stage | `RC2` |" in rc
 
     def test_candidate_sha_links_to_the_commit(self) -> None:
@@ -333,7 +336,7 @@ class TestAesthetics:
         from scripts.release.models import QualificationStatus
         body = _render(_status(qualification=QualificationStatus(
             run_id=900, url="https://x/qruns/900", passed=True)))
-        assert "✅ [Qualification run](https://x/qruns/900) passed" in body
+        assert "Passed ([qualification run](https://x/qruns/900))" in body
         assert "Run 900" not in body
 
     def test_footer_carries_the_freshness_stamp(self) -> None:
@@ -407,7 +410,7 @@ class TestTablesTriageAndCollapse:
             RequiredCheck(name="test-ubuntu-latest", state=CheckState.PASSED),
             RequiredCheck(name="build-macos-latest", state=CheckState.PASSED),
         )))
-        assert (f"<details><summary>✅ All 2 required checks passed on "
+        assert (f"<details><summary>All 2 required checks passed on "
                 f"<code>{_SHA_A[:12]}</code></summary>") in body
         assert "</details>" in body
         assert "| `test-ubuntu-latest` | ✅ Passed |" in body
@@ -427,7 +430,7 @@ class TestTablesTriageAndCollapse:
             _output("tarballs", OutputState.VERIFIED),
             _output("packages", OutputState.SKIPPED),
         )))
-        assert "<details><summary>✅ All public outputs verified</summary>" in body
+        assert "<details><summary>All public outputs verified</summary>" in body
         assert "| **tarballs** | ✅ Verified |" in body
 
     def test_any_failed_output_keeps_the_table_open(self) -> None:
@@ -435,7 +438,7 @@ class TestTablesTriageAndCollapse:
             _output("tarballs", OutputState.VERIFIED),
             _output("helm", OutputState.FAILED),
         )))
-        assert "✅ All public outputs verified" not in body
+        assert "All public outputs verified" not in body
         assert "| **helm** | ❌ Failed |" in body
 
 

@@ -640,11 +640,11 @@ class TestReconcileBranch:
 
         reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
 
-        assert issue.edit.call_args.kwargs["title"] == "Release 9.1.1 · ready to publish"
+        assert issue.edit.call_args.kwargs["title"] == "Release 9.1.1 · Ready to Publish"
 
     def test_title_edit_skipped_when_unchanged(self) -> None:
         issue = tracker()
-        issue.title = "Release 9.1.1 · ready to publish"
+        issue.title = "Release 9.1.1 · Ready to Publish"
         issue.body = "stale"
         repo = repo_mock(issues=[issue])
 

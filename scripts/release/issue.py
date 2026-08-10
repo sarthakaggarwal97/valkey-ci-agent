@@ -111,13 +111,13 @@ _PHASE_TITLES = {
 # uses the completed-form _PHASE_TITLES; the title describes the phase in
 # flight, so it must not assert the outcome ("published" while unpublished).
 _PHASE_TITLE_STATES = {
-    ReleasePhase.NOTES: "cutting notes",
-    ReleasePhase.CANDIDATE: "candidate CI",
-    ReleasePhase.QUALIFICATION: "qualification",
-    ReleasePhase.READY: "ready to publish",
-    ReleasePhase.PUBLISHED: "verifying outputs",
-    ReleasePhase.BUNDLE_HELM: "bundle & helm",
-    ReleasePhase.COMPLETE: "complete",
+    ReleasePhase.NOTES: "Cutting Notes",
+    ReleasePhase.CANDIDATE: "Candidate CI",
+    ReleasePhase.QUALIFICATION: "Qualification",
+    ReleasePhase.READY: "Ready to Publish",
+    ReleasePhase.PUBLISHED: "Verifying Outputs",
+    ReleasePhase.BUNDLE_HELM: "Bundle & Helm",
+    ReleasePhase.COMPLETE: "Complete",
 }
 
 
@@ -168,7 +168,7 @@ def render_live_title(status: ReleaseStatus) -> str:
     """
     title = f"Release {_display_tag(status)} · {_PHASE_TITLE_STATES[status.phase]}"
     if has_failures(status):
-        title += " · needs attention"
+        title += " · Needs Attention"
     return title
 
 
@@ -222,14 +222,14 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
     ]
 
     if status.checks:
-        lines += ["", f"### Required checks on `{_short(status.candidate.sha)}`", ""]
+        lines += ["", f"### Required Checks on `{_short(status.candidate.sha)}`", ""]
         table = ["| Check | Result |", "|---|---|"]
         for check in status.checks:
             link = f" ([run]({check.url}))" if check.url else ""
             table.append(f"| `{check.name}` | {_CHECK_STATE_DISPLAY[check.state]}{link} |")
         if all(check.state is CheckState.PASSED for check in status.checks):
             lines += _collapsed(
-                f"✅ All {len(status.checks)} required checks passed on "
+                f"All {len(status.checks)} required checks passed on "
                 f"<code>{_short(status.candidate.sha)}</code>",
                 table,
             )
@@ -237,7 +237,7 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
             lines += table
 
     if status.outputs:
-        lines += ["", "### Public outputs", ""]
+        lines += ["", "### Public Outputs", ""]
         table = ["| Output | Status | Detail |", "|---|---|---|"]
         # Triage order (stable within groups): what needs a human first.
         for output in sorted(status.outputs,
@@ -249,7 +249,7 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
             )
         if all(output.state in (OutputState.VERIFIED, OutputState.SKIPPED)
                for output in status.outputs):
-            lines += _collapsed("✅ All public outputs verified", table)
+            lines += _collapsed("All public outputs verified", table)
         else:
             lines += table
 
@@ -271,24 +271,24 @@ def _repo_url(status: ReleaseStatus) -> str:
 
 # Short names for the phase badge in the header.
 _PHASE_SHORT = {
-    ReleasePhase.NOTES: "1/6 notes",
-    ReleasePhase.CANDIDATE: "2/6 candidate CI",
-    ReleasePhase.QUALIFICATION: "3/6 qualification",
-    ReleasePhase.READY: "4/6 ready to publish",
-    ReleasePhase.PUBLISHED: "5/6 public outputs",
-    ReleasePhase.BUNDLE_HELM: "6/6 bundle & helm",
-    ReleasePhase.COMPLETE: "complete",
+    ReleasePhase.NOTES: "1/6 Notes",
+    ReleasePhase.CANDIDATE: "2/6 Candidate CI",
+    ReleasePhase.QUALIFICATION: "3/6 Qualification",
+    ReleasePhase.READY: "4/6 Ready to Publish",
+    ReleasePhase.PUBLISHED: "5/6 Public Outputs",
+    ReleasePhase.BUNDLE_HELM: "6/6 Bundle & Helm",
+    ReleasePhase.COMPLETE: "Complete",
 }
 
 # What the current phase is DOING, for the progress-bar label. The checklist
 # uses the completed-form _PHASE_TITLES; the bar describes the phase in
 # flight, so it must not assert the outcome ("Published" while unpublished).
 _PHASE_ACTIVE = {
-    ReleasePhase.NOTES: "Cutting and merging the release notes",
-    ReleasePhase.CANDIDATE: "Waiting for required CI on the candidate",
-    ReleasePhase.QUALIFICATION: "Qualifying the candidate",
-    ReleasePhase.READY: "Ready to publish: awaiting human approval",
-    ReleasePhase.PUBLISHED: "Verifying core public outputs",
+    ReleasePhase.NOTES: "Cutting Release Notes",
+    ReleasePhase.CANDIDATE: "Waiting for Candidate CI",
+    ReleasePhase.QUALIFICATION: "Qualifying the Candidate",
+    ReleasePhase.READY: "Ready to Publish: Awaiting Approval",
+    ReleasePhase.PUBLISHED: "Verifying Public Outputs",
     ReleasePhase.BUNDLE_HELM: "Verifying Bundle and Helm",
 }
 
@@ -332,7 +332,7 @@ def _progress_bar(status: ReleaseStatus, done: "set[ReleasePhase]") -> str:
         return f"{blocks} **Complete**"
     label = _PHASE_ACTIVE[status.phase]
     if has_failures(status):
-        label = f"{label} (failures need attention)"
+        label = f"{label} (Failures Need Attention)"
     return f"{blocks} **{label}**"
 
 
@@ -340,13 +340,16 @@ def _header_line(status: ReleaseStatus) -> str:
     """The one-line header under the H2: stage, release line, and the
     cross-tracker link. No badges, no HTML."""
     repo_url = _repo_url(status)
-    stage_prefix = f"{status.stage.upper()} release" if status.stage else "Release"
     trackers_url = (
         f"{repo_url}/issues?q=is%3Aissue+is%3Aopen+label%3Arelease-tracker"
     )
+    # Compact: the stage already lives in the badge row above, so the
+    # subtitle carries only identity links, short enough to read at a
+    # glance under the heading.
     return (
-        f"{stage_prefix} on line [`{status.branch}`]({repo_url}/tree/{status.branch}) "
-        f"of [{status.repo}]({repo_url}) · [All release trackers]({trackers_url})"
+        f"[`{status.repo}`]({repo_url}) · line "
+        f"[`{status.branch}`]({repo_url}/tree/{status.branch}) · "
+        f"[All trackers]({trackers_url})"
     )
 
 
@@ -379,7 +382,7 @@ def _callout(status: ReleaseStatus) -> list[str]:
             return [
                 "> [!CAUTION]",
                 f"> **Published, with downstream failures needing attention: "
-                f"{names}.** Details in the Public outputs table; the release "
+                f"{names}.** Details in the Public Outputs table; the release "
                 f"team has been notified. Everything else continues to be "
                 f"observed on every reconciliation pass.",
             ]
@@ -463,13 +466,13 @@ def _qualification_cell(status: ReleaseStatus) -> str:
             # it); "no run yet" would misread as a missing prerequisite.
             return "_Gated before publication; not re-evaluated afterward_"
         return "_No run for the candidate SHA yet_"
-    link = f"[Qualification run]({qualification.url})"
+    link = f"[qualification run]({qualification.url})"
     if qualification.pending:
-        return f"⏳ {link} in progress"
+        return f"In progress ({link})"
     if qualification.passed:
-        return f"✅ {link} passed"
+        return f"Passed ({link})"
     failed = ", ".join(qualification.failed_jobs[:3])
-    return f"❌ {link} failed ({failed})"
+    return f"Failed ({link}): {failed}"
 
 
 def _release_cell(status: ReleaseStatus) -> str:
