@@ -288,6 +288,24 @@ class TestPublishCLI:
         assert evidence.call_args.args[3] == \
             "https://github.com/o/agent/actions/runs/123"
 
+    def test_plan_only_threads_the_controller_sha_from_github_sha(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+        monkeypatch.setenv("GITHUB_REPOSITORY", "o/agent")
+        monkeypatch.setenv("GITHUB_RUN_ID", "123")
+        monkeypatch.setenv("GITHUB_SHA", "f" * 40)
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.ensure_environment_protected"), \
+             patch("scripts.release.main.plan_publication",
+                   return_value=_publish_plan()), \
+             patch("scripts.release.main.post_approval_evidence") as evidence, \
+             patch("scripts.release.main.render_plan_summary") as summary, \
+             patch("scripts.release.main.emit_job_summary"):
+            code = main(self._PLAN_ONLY)
+        assert code == 0
+        assert summary.call_args.kwargs["controller_sha"] == "f" * 40
+        assert evidence.call_args.kwargs["controller_sha"] == "f" * 40
+
     def test_unattended_skips_the_actor_check_in_planning(
             self, monkeypatch: pytest.MonkeyPatch) -> None:
         self._clear_actions_env(monkeypatch)

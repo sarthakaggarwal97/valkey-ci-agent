@@ -293,7 +293,7 @@ def compute_status(
         return _published_status(
             gh, gh_downstream, repo, policy, branch=branch, version=version,
             stage=stage, tag=tag, release=release, branch_head=branch_head,
-            notes_pr=notes_pr,
+            notes_pr=notes_pr, tracking_issue=tracking_issue,
         )
 
     notes_merge_sha = notes_pr.merge_commit_sha or ""
@@ -383,11 +383,23 @@ def compute_status(
 def _published_status(
     gh: Any, gh_downstream: Any, repo: Any, policy: RepoReleasePolicy, *,
     branch: str, version: str, stage: str, tag: str, release: Any,
-    branch_head: str, notes_pr: Any,
+    branch_head: str, notes_pr: Any, tracking_issue: Any = None,
 ) -> ReleaseStatus:
     """Status once the release exists: verify the tag pins the release and
-    observe every downstream public output through completion."""
+    observe every downstream public output through completion.
+
+    The tag's commit is trusted only when it is a SHA the release process
+    actually vetted: the notes-PR merge commit or an owner-adopted head
+    recorded on the tracker. Any other commit means the tag was created (or
+    moved) outside the controller; that alerts loudly, blocks completion,
+    and skips downstream verification so no untrusted artifact is pushed
+    further downstream.
+    """
     tag_sha = resolve_tag_commit(repo, tag)
+    trusted_shas = {sha for sha in (notes_pr.merge_commit_sha,) if sha}
+    if tracking_issue is not None:
+        trusted_shas.update(issue_mod.adopted_shas(tracking_issue, gh))
+    tag_trusted = tag_sha in trusted_shas
     base = {
         "repo": policy.repo,
         "branch": branch,
@@ -400,7 +412,20 @@ def _published_status(
                                branch_head=branch_head),
         "published": True,
         "release_url": release.html_url,
+        "tag_trusted": tag_trusted,
     }
+    if not tag_trusted:
+        alert = (
+            f"Release tag {tag} points at {tag_sha[:12] or '<unresolvable>'}, "
+            f"which was never a trusted candidate (notes merge or "
+            f"owner-adopted). Manual investigation required."
+        )
+        return ReleaseStatus(
+            phase=ReleasePhase.PUBLISHED,
+            blockers=(alert,),
+            alerts=(alert,),
+            **base,
+        )
     if bool(release.prerelease) != (stage != "ga"):
         alert = (
             f"The prerelease flag on release {tag} is {release.prerelease} but "
@@ -562,10 +587,17 @@ def reconcile_branch(
     status = compute_status(gh, policy, branch, tracking_issue=tracking_issue,
                             gh_downstream=gh_downstream)
 
+    # The trusted controller version, resolved once per pass: publish runs
+    # parked at the approval gate on any other commit are stale and get
+    # cancelled instead of blocking (or serving) a fresh dispatch.
+    agent_head = ""
+    if status.phase is ReleasePhase.READY and gh_agent is not None and agent_repo:
+        agent_head = actions_mod.agent_head_sha(gh_agent, agent_repo)
+
     if act:
         for performed in actions_mod.advance(
             gh_downstream, policy, status=status, tracking_issue=tracking_issue,
-            gh_agent=gh_agent, agent_repo=agent_repo,
+            gh_agent=gh_agent, agent_repo=agent_repo, agent_head_sha=agent_head,
         ):
             logger.info("Action: %s", performed)
 
@@ -574,7 +606,7 @@ def reconcile_branch(
     # dispatch just created has its best chance of being visible.
     if status.phase is ReleasePhase.READY and gh_agent is not None and agent_repo:
         approval_url = actions_mod.waiting_publish_run_url(
-            gh_agent, agent_repo, branch,
+            gh_agent, agent_repo, branch, agent_head,
         )
         if approval_url:
             status = replace(status, approval_run_url=approval_url)

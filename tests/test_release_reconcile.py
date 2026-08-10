@@ -565,6 +565,74 @@ class TestPublishedPhases:
         assert status.phase is ReleasePhase.PUBLISHED
 
 
+class TestPublishedTagTrust:
+    """The release tag must point at a SHA the process vetted: the notes-PR
+    merge commit or an owner-adopted head recorded on the tracker. Any
+    other commit alerts loudly, renders untrusted, skips downstream
+    verification, and never reaches COMPLETE."""
+
+    _HOSTILE_SHA = "c" * 40
+
+    def _released_repo(self, tag_sha: str) -> MagicMock:
+        repo = repo_mock(released=True)
+        repo.get_git_ref.return_value.object.sha = tag_sha
+        return repo
+
+    def test_tag_at_a_never_trusted_sha_alerts_and_never_completes(self) -> None:
+        # Hostile case: notes merge is MERGE_SHA but the tag points at a
+        # SHA nobody vetted. Even with every downstream output verified
+        # this must never read as a valid publication.
+        core_verifier = MagicMock()
+        with patch("scripts.release.reconcile.verify_mod.verify_core_outputs",
+                   core_verifier):
+            status = _status(self._released_repo(self._HOSTILE_SHA),
+                             tracking_issue=tracker())
+        assert not status.tag_trusted
+        assert status.phase is ReleasePhase.PUBLISHED  # never COMPLETE
+        expected = (
+            f"Release tag 9.1.1 points at {self._HOSTILE_SHA[:12]}, which "
+            f"was never a trusted candidate (notes merge or owner-adopted). "
+            f"Manual investigation required."
+        )
+        assert status.alerts == (expected,)
+        assert status.blockers == (expected,)
+        # The alert makes has_failures true, so needs-attention and the
+        # one-shot notification fire through the existing alert plumbing.
+        assert issue_mod.has_failures(status)
+        # No downstream verification (and so no bundle/helm actions) runs
+        # against an untrusted artifact.
+        core_verifier.assert_not_called()
+        assert status.outputs == ()
+
+    def test_tag_at_the_notes_merge_stays_clean(self) -> None:
+        core = (DownstreamOutput(name="tarballs", state=OutputState.VERIFIED),)
+        p1, p2 = _patched_outputs(core, ())
+        with p1, p2:
+            status = _status(self._released_repo(MERGE_SHA),
+                             tracking_issue=tracker())
+        assert status.tag_trusted
+        assert status.alerts == ()
+        assert status.phase is ReleasePhase.COMPLETE
+
+    def test_tag_at_an_owner_adopted_sha_stays_clean(self) -> None:
+        issue = tracker(comments=[bot_adoption(MOVED_SHA)])
+        core = (DownstreamOutput(name="tarballs", state=OutputState.PENDING),)
+        p1, p2 = _patched_outputs(core, ())
+        with p1, p2:
+            status = _status(self._released_repo(MOVED_SHA),
+                             tracking_issue=issue)
+        assert status.tag_trusted
+        assert status.alerts == ()
+        assert status.phase is ReleasePhase.PUBLISHED
+
+    def test_no_tracker_still_trusts_the_notes_merge_only(self) -> None:
+        # Without a tracker (no adoption record) the notes merge is the
+        # sole trusted SHA; the hostile SHA still alerts.
+        status = _status(self._released_repo(self._HOSTILE_SHA))
+        assert not status.tag_trusted
+        assert issue_mod.has_failures(status)
+
+
 class TestReconcileBranch:
     def test_no_active_release_is_a_noop(self) -> None:
         repo = repo_mock(issues=[])
@@ -667,7 +735,9 @@ class TestReconcileBranch:
         issue = tracker()
         repo = repo_mock(issues=[issue])
         gh_agent = MagicMock()
-        waiting = MagicMock(status="waiting",
+        agent_head = "d" * 40
+        gh_agent.get_repo.return_value.get_branch.return_value.commit.sha = agent_head
+        waiting = MagicMock(status="waiting", head_sha=agent_head,
                             display_title="Publish release on 9.1 (requested by x)",
                             html_url="https://x/actions/runs/500")
         workflow = gh_agent.get_repo.return_value.get_workflow.return_value

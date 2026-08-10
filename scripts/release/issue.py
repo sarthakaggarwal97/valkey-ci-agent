@@ -379,7 +379,7 @@ def _callout(status: ReleaseStatus) -> list[str]:
         ready = [
             "> [!IMPORTANT]",
             "> **Ready to publish.** Every gate passed on the candidate. "
-            "Approval publishes the release and creates a permanent tag; "
+            "Approval publishes the release and creates the release tag; "
             "the checklist is posted below.",
         ]
         if status.approval_run_url:
@@ -423,6 +423,12 @@ def _candidate_cell(status: ReleaseStatus) -> str:
         return "_None (recorded when the release-notes PR merges)_"
     link = f"[`{_short(candidate.sha)}`]({_repo_url(status)}/commit/{candidate.sha})"
     if status.published:
+        if not status.tag_trusted:
+            return (
+                f"{link}: **Untrusted** (the release tag points at a commit "
+                f"that was never a trusted candidate; manual investigation "
+                f"required)"
+            )
         # Post-publication the tag pins the candidate; the branch may
         # legitimately move on, so "current branch head" would be a lie.
         return f"{link}: Pinned by the release tag"

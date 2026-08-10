@@ -910,6 +910,125 @@ class TestAutoDispatchPublish:
         gh_agent.get_repo.return_value.get_workflow.return_value.create_dispatch.assert_not_called()
 
 
+_AGENT_HEAD = "d" * 40
+_STALE_HEAD = "e" * 40
+
+
+def _publish_run(*, head_sha: str, status: str = "waiting",
+                 branch: str = "9.1") -> MagicMock:
+    run = MagicMock(status=status, head_sha=head_sha, id=77,
+                    display_title=f"Publish release on {branch} (requested by x)",
+                    html_url="https://x/actions/runs/77")
+    run.cancel.return_value = True
+    return run
+
+
+class TestStalePublishRuns:
+    """A publish run parked at the approval gate on old controller code is
+    stale: it is cancelled and replaced, never left to publish stale logic."""
+
+    def _agent(self, runs: "list") -> MagicMock:
+        gh_agent = MagicMock()
+        gh_agent.get_repo.return_value.get_branch.return_value.commit.sha = _AGENT_HEAD
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.get_runs.return_value = runs
+        return gh_agent
+
+    def _ready(self) -> ReleaseStatus:
+        return _status(phase=ReleasePhase.READY,
+                       qualification=QualificationStatus(run_id=1, passed=True))
+
+    def test_stale_run_is_cancelled_and_a_fresh_dispatch_proceeds(self) -> None:
+        stale = _publish_run(head_sha=_STALE_HEAD)
+        gh_agent = self._agent([stale])
+        performed = actions.advance(gh_mock(MagicMock()), _POLICY,
+                                    status=self._ready(), tracking_issue=tracker(),
+                                    gh_agent=gh_agent, agent_repo="o/agent",
+                                    agent_head_sha=_AGENT_HEAD)
+        stale.cancel.assert_called_once()
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.create_dispatch.assert_called_once()
+        assert any("publish pipeline" in p for p in performed)
+
+    def test_matching_head_waiting_run_still_blocks(self) -> None:
+        current = _publish_run(head_sha=_AGENT_HEAD)
+        gh_agent = self._agent([current])
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._ready(), tracking_issue=tracker(),
+                        gh_agent=gh_agent, agent_repo="o/agent",
+                        agent_head_sha=_AGENT_HEAD)
+        current.cancel.assert_not_called()
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.create_dispatch.assert_not_called()
+
+    def test_cancel_failure_means_the_run_stays_active_fail_safe(self) -> None:
+        stale = _publish_run(head_sha=_STALE_HEAD)
+        stale.cancel.side_effect = GithubException(403, "forbidden", {})
+        gh_agent = self._agent([stale])
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._ready(), tracking_issue=tracker(),
+                        gh_agent=gh_agent, agent_repo="o/agent",
+                        agent_head_sha=_AGENT_HEAD)
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.create_dispatch.assert_not_called()
+
+    def test_rejected_cancel_means_the_run_stays_active_fail_safe(self) -> None:
+        stale = _publish_run(head_sha=_STALE_HEAD)
+        stale.cancel.return_value = False
+        gh_agent = self._agent([stale])
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._ready(), tracking_issue=tracker(),
+                        gh_agent=gh_agent, agent_repo="o/agent",
+                        agent_head_sha=_AGENT_HEAD)
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.create_dispatch.assert_not_called()
+
+    def test_no_head_sha_disables_staleness_detection(self) -> None:
+        # "" means the trusted head could not be resolved: fail safe, the
+        # waiting run blocks and nothing is cancelled (today's behavior).
+        stale = _publish_run(head_sha=_STALE_HEAD)
+        gh_agent = self._agent([stale])
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._ready(), tracking_issue=tracker(),
+                        gh_agent=gh_agent, agent_repo="o/agent")
+        stale.cancel.assert_not_called()
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.create_dispatch.assert_not_called()
+
+    def test_stale_run_is_never_presented_as_the_approval_link(self) -> None:
+        stale = _publish_run(head_sha=_STALE_HEAD)
+        gh_agent = self._agent([stale])
+        url = actions.waiting_publish_run_url(gh_agent, "o/agent", "9.1",
+                                              _AGENT_HEAD)
+        assert url == ""
+
+    def test_agent_head_sha_resolves_the_default_branch_head(self) -> None:
+        gh_agent = self._agent([])
+        assert actions.agent_head_sha(gh_agent, "o/agent") == _AGENT_HEAD
+
+    def test_agent_head_sha_is_empty_when_unresolvable(self) -> None:
+        gh_agent = MagicMock()
+        gh_agent.get_repo.side_effect = GithubException(404, "not found", {})
+        assert actions.agent_head_sha(gh_agent, "o/agent") == ""
+
+
+class TestAlertsBlockCompletion:
+    def test_complete_phase_with_a_standing_alert_never_closes(self) -> None:
+        # Defense in depth for the untrusted-tag alert: even if a status
+        # ever reported COMPLETE alongside an alert, the tracker must stay
+        # open for a human.
+        status = _status(
+            phase=ReleasePhase.COMPLETE, published=True,
+            alerts=("Release tag 9.1.1 points at eeeeeeeeeeee, which was "
+                    "never a trusted candidate (notes merge or "
+                    "owner-adopted). Manual investigation required.",),
+        )
+        issue = tracker()
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=status, tracking_issue=issue)
+        issue.edit.assert_not_called()
+
+
 class TestWaitingPublishRunUrl:
     """The display-only sibling of _publish_run_active: same matching, but
     yields the run's URL for the READY callout's approval link."""

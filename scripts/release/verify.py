@@ -12,6 +12,10 @@ rather than silently absent.
 
 All verifiers are read-only. Side effects (dispatching Bundle, opening the
 Helm PR, notifications) live in :mod:`scripts.release.actions`.
+
+Verification proves public existence and workflow-run evidence, not
+cryptographic provenance: digest/checksum binding of the published
+artifacts to the candidate SHA is a known follow-up.
 """
 
 from __future__ import annotations

@@ -240,7 +240,8 @@ jobs:
           # Stage is case-insensitive. An empty stage is valid only for a patch
           # version, where it unambiguously means GA; a .0 version still requires
           # an explicit RC or GA decision. Python repeats this check authoritatively.
-          stage_lc="${RELEASE_NOTES_STAGE,,}"
+          # tr, not the Bash 4 lowercase expansion: macOS ships Bash 3.2.
+          stage_lc=$(printf '%s' "${RELEASE_NOTES_STAGE}" | tr '[:upper:]' '[:lower:]')
           if [[ -z "${stage_lc}" ]]; then
             patch="${RELEASE_NOTES_VERSION##*.}"
             if [[ "${patch}" == "0" ]]; then

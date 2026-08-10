@@ -109,6 +109,10 @@ jobs:
           RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
           BRANCH: ${{ inputs.branch }}
           ACTOR: ${{ github.triggering_actor }}
+          # The controller commit this run executes; the Python side stamps
+          # it into the approval evidence so approver and executor can be
+          # shown to have run the same controller code.
+          CONTROLLER_SHA: ${{ github.sha }}
           TARGET_REPO: ${{ github.repository_owner }}/valkey
           POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
         run: |
@@ -196,6 +200,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FALLBACK_ACTOR: ${{ github.triggering_actor }}
+          GATE_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           # The endpoint returns the run's approval records; the last
@@ -203,6 +208,18 @@ jobs:
           APPROVER=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/approvals" \
             --jq '[.[] | select(.state == "approved")] | last.user.login // empty' 2>/dev/null || echo "")
           if [[ -z "$APPROVER" ]]; then
+            # Upstream the protected `release` environment always exists, so
+            # a missing approval record means either the gate was bypassed or
+            # the record could not be read; treating the dispatcher as the
+            # approver would misattribute the approval. Fail closed.
+            if [[ "$GATE_OWNER" == "valkey-io" ]]; then
+              echo "The deployment approval record did not identify a human approver; refusing to publish." >&2
+              exit 1
+            fi
+            # Fork carve-out: fork policies authorize via explicit user:
+            # entries and may run without a protected release environment,
+            # so no approval record exists; there the dispatcher is the
+            # accountable human.
             APPROVER="${FALLBACK_ACTOR}"
           fi
           echo "login=$APPROVER" >> "$GITHUB_OUTPUT"
@@ -219,6 +236,10 @@ jobs:
           RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
           BRANCH: ${{ inputs.branch }}
           ACTOR: ${{ steps.approver.outputs.login }}
+          # The controller commit this run executes; the Python side stamps
+          # it into the approval evidence so approver and executor can be
+          # shown to have run the same controller code.
+          CONTROLLER_SHA: ${{ github.sha }}
           EXPECTED_TAG: ${{ needs.validate.outputs.tag }}
           # The approval is bound to the exact commit the reviewer saw, not
           # just the tag: a candidate adopted while approval was pending must

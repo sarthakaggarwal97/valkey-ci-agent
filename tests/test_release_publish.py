@@ -421,11 +421,96 @@ def test_unattended_planning_skips_the_actor_check_only() -> None:
         plan_publication(gh, _POLICY, branch="9.1", actor="github-actions[bot]")
 
 
-def _plan(tag: str = "9.1.1") -> PublishPlan:
-    return PublishPlan(tag=tag, sha=MERGE_SHA, prerelease=False,
-                       make_latest="true", body="notes body", issue_number=11,
-                       tracker_url="https://x/issues/11",
-                       qualification_url="https://x/qruns/900")
+def _plan(tag: str = "9.1.1", **overrides: object) -> PublishPlan:
+    values: "dict[str, object]" = dict(
+        tag=tag, sha=MERGE_SHA, prerelease=False,
+        make_latest="true", body="notes body", issue_number=11,
+        tracker_url="https://x/issues/11",
+        qualification_url="https://x/qruns/900")
+    values.update(overrides)
+    return PublishPlan(**values)  # type: ignore[arg-type]
+
+
+def _ruleset_repo(rulesets: "list[dict]", details: "dict[int, dict]") -> MagicMock:
+    """A repo mock whose rulesets endpoints serve the given payloads."""
+    repo = MagicMock()
+    repo.url = "https://api.github.com/repos/o/r"
+
+    def _request(verb: str, url: str) -> "tuple[dict, object]":
+        if url.endswith("/rulesets"):
+            return {}, rulesets
+        return {}, details[int(url.rsplit("/", 1)[1])]
+
+    repo._requester.requestJsonAndCheck.side_effect = _request
+    return repo
+
+
+class TestTagRulesetProbe:
+    def test_active_tag_ruleset_covering_the_tag_is_protected(self) -> None:
+        from scripts.release.publish import tag_ruleset_protected
+        repo = _ruleset_repo(
+            [{"id": 1, "target": "tag", "enforcement": "active"}],
+            {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
+                                             "exclude": []}}}},
+        )
+        assert tag_ruleset_protected(repo, "9.1.1") is True
+
+    def test_excluded_tag_is_not_protected(self) -> None:
+        # Mirrors upstream: the ruleset excludes 1-7.* tags, so a 7.x
+        # release must never claim immutability.
+        from scripts.release.publish import tag_ruleset_protected
+        repo = _ruleset_repo(
+            [{"id": 1, "target": "tag", "enforcement": "active"}],
+            {1: {"conditions": {"ref_name": {
+                "include": ["~ALL"],
+                "exclude": ["refs/tags/[1-7].*"]}}}},
+        )
+        assert tag_ruleset_protected(repo, "7.2.11") is False
+        assert tag_ruleset_protected(repo, "9.1.1") is True
+
+    def test_no_tag_ruleset_is_not_protected(self) -> None:
+        from scripts.release.publish import tag_ruleset_protected
+        repo = _ruleset_repo(
+            [{"id": 2, "target": "branch", "enforcement": "active"},
+             {"id": 3, "target": "tag", "enforcement": "disabled"}],
+            {},
+        )
+        assert tag_ruleset_protected(repo, "9.1.1") is False
+
+    def test_api_failure_is_unknown(self) -> None:
+        from scripts.release.publish import tag_ruleset_protected
+        repo = MagicMock()
+        repo.url = "https://api.github.com/repos/o/r"
+        repo._requester.requestJsonAndCheck.side_effect = GithubException(
+            403, "forbidden", {},
+        )
+        assert tag_ruleset_protected(repo, "9.1.1") is None
+
+
+class TestPlanSummaryHonesty:
+    def test_protected_tag_states_verified_immutability(self) -> None:
+        summary = render_plan_summary(_plan(tag_protected=True))
+        assert ("The created tag is ruleset-protected and cannot be moved "
+                "or deleted.") in summary
+        assert "NOT ruleset-protected" not in summary
+        assert "creates the release tag" in summary
+        assert "cannot be moved or deleted. Verify" not in summary
+
+    @pytest.mark.parametrize("protection", [False, None],
+                             ids=["unprotected", "unknown"])
+    def test_unprotected_or_unknown_tag_warns(self, protection: "bool | None") -> None:
+        summary = render_plan_summary(_plan(tag_protected=protection))
+        assert ("**WARNING:** The created tag is NOT ruleset-protected in "
+                "this repository; extend tag protection before relying on "
+                "immutability.") in summary
+        assert "ruleset-protected and cannot be moved" not in summary
+
+    def test_controller_sha_is_in_the_checklist_when_provided(self) -> None:
+        summary = render_plan_summary(_plan(), controller_sha="f" * 40)
+        assert f"- [ ] Controller code: `{'f' * 12}`" in summary
+
+    def test_controller_sha_line_is_omitted_when_empty(self) -> None:
+        assert "Controller code:" not in render_plan_summary(_plan())
 
 
 class TestApprovalEvidence:
@@ -463,6 +548,22 @@ class TestApprovalEvidence:
         body = existing.edit.call_args.kwargs["body"]
         assert "**@valkey-io/core-team: Approval Needed to Publish `9.1.1`.**" in body
         assert "https://x/runs/8" in body
+
+    def test_evidence_carries_the_controller_sha_when_provided(self) -> None:
+        from scripts.release.publish import post_approval_evidence
+        gh, issue = self._issue_repo()
+        with patch("scripts.release.issue.trusted_comments", return_value=[]):
+            post_approval_evidence(gh, _POLICY, _plan(), "https://x/runs/9",
+                                   controller_sha="f" * 40)
+        body = issue.create_comment.call_args.kwargs["body"]
+        assert f"- [ ] Controller code: `{'f' * 12}`" in body
+
+    def test_evidence_omits_the_controller_line_when_unknown(self) -> None:
+        from scripts.release.publish import post_approval_evidence
+        gh, issue = self._issue_repo()
+        with patch("scripts.release.issue.trusted_comments", return_value=[]):
+            post_approval_evidence(gh, _POLICY, _plan(), "https://x/runs/9")
+        assert "Controller code:" not in issue.create_comment.call_args.kwargs["body"]
 
 
 class TestMakeLatestDecision:

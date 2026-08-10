@@ -97,6 +97,30 @@ class TestRender:
         assert "Pinned by the release tag" in body
         assert "Current branch head" not in body
 
+    def test_untrusted_tag_renders_the_candidate_as_untrusted(self) -> None:
+        # A tag at a SHA that was never a trusted candidate must not read
+        # as a valid pinned publication.
+        untrusted = _status(
+            candidate=Candidate(state=CandidateState.CURRENT, sha=_SHA_B,
+                                branch_head=_SHA_A),
+            phase=ReleasePhase.PUBLISHED, published=True, tag_trusted=False,
+            release_url="https://x/releases/9.1.1", ready=False,
+            alerts=("Release tag 9.1.1 points at bbbbbbbbbbbb, which was "
+                    "never a trusted candidate (notes merge or "
+                    "owner-adopted). Manual investigation required.",),
+        )
+        body = _render(untrusted)
+        assert "**Untrusted**" in body
+        assert "Pinned by the release tag" not in body
+        assert issue_mod.has_failures(untrusted)
+
+    def test_ready_callout_does_not_assert_tag_immutability(self) -> None:
+        # Whether the tag is immutable depends on the repository's rulesets
+        # (verified on the publish plan path); the callout must not claim it.
+        body = _render(_status())
+        assert "creates the release tag" in body
+        assert "permanent tag" not in body
+
     def test_ready_callout_carries_the_approval_link_when_known(self) -> None:
         body = _render(_status(approval_run_url="https://x/actions/runs/500"))
         assert "> **Approve here:** https://x/actions/runs/500" in body

@@ -220,6 +220,11 @@ class ReleaseStatus:
     phase: ReleasePhase = ReleasePhase.NOTES
     published: bool = False
     release_url: str = ""
+    # False when the release tag points at a commit that was never a trusted
+    # candidate (neither the notes-PR merge commit nor an owner-adopted SHA).
+    # Renders the candidate as untrusted and carries an alert; the release
+    # never reaches COMPLETE while it stands.
+    tag_trusted: bool = True
     # URL of the publish run waiting at the approval gate, populated by
     # reconciliation when the phase is READY and the run is visible; ""
     # otherwise. Display-only: nothing gates on it.

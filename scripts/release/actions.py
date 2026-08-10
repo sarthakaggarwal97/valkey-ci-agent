@@ -62,9 +62,16 @@ def advance(
     gh: Any, policy: RepoReleasePolicy, *,
     status: ReleaseStatus, tracking_issue: Any,
     gh_agent: Any = None, agent_repo: str = "",
+    agent_head_sha: str = "",
 ) -> list[str]:
     """Perform the actions the recomputed *status* calls for; returns a
-    log of what was done (empty when the state needs nothing)."""
+    log of what was done (empty when the state needs nothing).
+
+    ``agent_head_sha`` is the agent repo's default-branch head (resolved
+    once per pass by the caller): a publish run parked at the approval
+    gate on any other commit is stale and gets cancelled rather than
+    blocking a fresh dispatch. "" disables staleness detection.
+    """
     performed: list[str] = []
 
     if status.phase is ReleasePhase.QUALIFICATION:
@@ -86,7 +93,8 @@ def advance(
     if (
         status.phase is ReleasePhase.READY
         and gh_agent is not None and agent_repo
-        and not _publish_run_active(gh_agent, agent_repo, status.branch)
+        and not _publish_run_active(gh_agent, agent_repo, status.branch,
+                                    agent_head_sha)
     ):
         # Minimum-clicks: READY auto-starts the publish pipeline. This is
         # safe to automate because the dispatch was never the gate: the
@@ -117,7 +125,10 @@ def advance(
     if nudge:
         performed.append(nudge)
 
-    if status.phase is ReleasePhase.COMPLETE:
+    # Alerts block completion: a standing alert (an untrusted tag, broken
+    # release metadata) must keep the tracker open for a human even if the
+    # phase machine were ever to report COMPLETE alongside one.
+    if status.phase is ReleasePhase.COMPLETE and not status.alerts:
         closed = _close_when_complete(gh, status, tracking_issue)
         if closed:
             performed.append(f"closed tracking issue #{tracking_issue.number}")
@@ -619,9 +630,63 @@ _PUBLISH_RUN_SCAN_LIMIT = 15
 _PUBLISH_RUN_ACTIVE_STATUSES = ("queued", "in_progress", "waiting", "pending")
 
 
-def _active_publish_run(workflow: Any, branch: str) -> Any:
+def agent_head_sha(gh_agent: Any, agent_repo: str) -> str:
+    """The agent repo's default-branch head SHA, "" when unresolvable.
+
+    The trusted controller version for publish runs: a run parked at the
+    approval gate on any other commit would publish stale logic. "" means
+    staleness cannot be judged, so no run is cancelled and any waiting run
+    still counts as active (fail-safe: today's behavior).
+    """
+    try:
+        repo = retry_github_call(
+            lambda: gh_agent.get_repo(agent_repo),
+            retries=2, description=f"get repo {agent_repo}",
+        )
+        return retry_github_call(
+            lambda: repo.get_branch(repo.default_branch).commit.sha,
+            retries=2, description=f"resolve {agent_repo} default-branch head",
+        ) or ""
+    except Exception:
+        logger.exception("Cannot resolve the %s default-branch head; "
+                         "skipping stale publish-run detection", agent_repo)
+        return ""
+
+
+def _cancel_stale_run(run: Any) -> bool:
+    """Cancel a publish run whose head SHA is not the controller head.
+
+    True when the cancel succeeded (the run no longer counts as active);
+    False when it failed, in which case the caller treats the run as
+    active so a fresh dispatch never races a gate that might still fire.
+    """
+    try:
+        cancelled = retry_github_call(
+            run.cancel,
+            retries=2, description=f"cancel stale publish run {run.id}",
+        )
+    except Exception:
+        logger.exception("Failed to cancel stale publish run %s; "
+                         "treating it as active", run.id)
+        return False
+    if not cancelled:
+        logger.error("Cancel of stale publish run %s was rejected; "
+                     "treating it as active", run.id)
+        return False
+    logger.info("Cancelled stale publish run %s (head %s is not the "
+                "controller head)", run.id, (run.head_sha or "")[:12])
+    return True
+
+
+def _active_publish_run(workflow: Any, branch: str, head_sha: str = "") -> Any:
     """The newest publish run for *branch* that is queued, running, or
-    waiting at the approval gate; None when no such run exists."""
+    waiting at the approval gate; None when no such run exists.
+
+    With *head_sha* (the agent repo's default-branch head), a run on any
+    other commit is STALE controller code parked at the gate: it is
+    cancelled and not counted as active, so a fresh dispatch replaces it.
+    A failed cancel counts as active (fail-safe).
+    """
     runs = retry_github_call(
         workflow.get_runs,
         retries=2, description="list publish runs",
@@ -630,32 +695,43 @@ def _active_publish_run(workflow: Any, branch: str) -> Any:
     for index, run in enumerate(runs):
         if index >= _PUBLISH_RUN_SCAN_LIMIT:
             break
-        if run.status in _PUBLISH_RUN_ACTIVE_STATUSES \
-                and marker in f"{run.display_title or ''} ":
-            return run
+        if run.status not in _PUBLISH_RUN_ACTIVE_STATUSES:
+            continue
+        if marker not in f"{run.display_title or ''} ":
+            continue
+        if head_sha and (run.head_sha or "") != head_sha:
+            if _cancel_stale_run(run):
+                continue
+        return run
     return None
 
 
-def _publish_run_active(gh_agent: Any, agent_repo: str, branch: str) -> bool:
+def _publish_run_active(gh_agent: Any, agent_repo: str, branch: str,
+                        head_sha: str = "") -> bool:
     """True when a publish run for *branch* is queued, running, or waiting
-    at the approval gate; reconcile must not stack duplicates."""
+    at the approval gate; reconcile must not stack duplicates. Runs on a
+    stale controller commit are cancelled and do not count (see
+    :func:`_active_publish_run`)."""
     workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
     if workflow is None:
         return True  # cannot see the workflow: do not dispatch blind
-    return _active_publish_run(workflow, branch) is not None
+    return _active_publish_run(workflow, branch, head_sha) is not None
 
 
-def waiting_publish_run_url(gh_agent: Any, agent_repo: str, branch: str) -> str:
+def waiting_publish_run_url(gh_agent: Any, agent_repo: str, branch: str,
+                            head_sha: str = "") -> str:
     """The html_url of the active publish run for *branch*, "" when none
     is visible (including when the workflow itself is unreadable).
 
     Display-only companion to :func:`_publish_run_active`: reconciliation
     threads it into the READY callout's approval link; nothing gates on it.
+    *head_sha* keeps the two views consistent: a stale run is never
+    presented as the place to approve.
     """
     workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
     if workflow is None:
         return ""
-    run = _active_publish_run(workflow, branch)
+    run = _active_publish_run(workflow, branch, head_sha)
     if run is None:
         return ""
     return run.html_url or ""

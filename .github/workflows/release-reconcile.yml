@@ -95,23 +95,17 @@ jobs:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # Dispatches the qualification run and the bundle update
-          # (actions:write, contents:write) and opens the helm bump PR
-          # (contents:write + pull-requests:write). valkey itself is
-          # excluded from this token's scope.
-          # One mint cannot scope permissions per repository, so the write
-          # grants are a union: contents:write is exercised only on
-          # valkey-bundle (its update hook is a repository_dispatch) and
-          # valkey-helm (bump branch + PR), actions:write only on
-          # valkey-release-automation (qualification dispatch); the other
-          # four repos are read-only verification targets carrying the
-          # write grants as a tradeoff.
+          # Scoped to exactly the repos reconciliation writes to (the write
+          # set in scripts/release/actions.py): the qualification and
+          # build-release dispatches (actions:write) on
+          # valkey-release-automation, the bundle update hook
+          # (repository_dispatch needs contents:write) on valkey-bundle, and
+          # the helm bump branch + PR (contents:write, pull-requests:write)
+          # on valkey-helm. valkey itself is excluded from this token's
+          # scope. The read-only verification targets get their own
+          # read-scoped mint below instead of riding along here.
           repositories: |
             valkey-release-automation
-            valkey-hashes
-            valkey-container
-            valkey-doc
-            valkey-io.github.io
             valkey-bundle
             valkey-helm
           permission-contents: write
@@ -121,11 +115,45 @@ jobs:
           permission-actions: write
           permission-metadata: read
 
+      - name: Generate GitHub App token (downstream, read-only verification)
+        id: generate-downstream-read-token
+        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # The remaining downstream repos are read-only verification
+          # targets; this token cannot write anywhere.
+          repositories: |
+            valkey-hashes
+            valkey-container
+            valkey-doc
+            valkey-io.github.io
+          permission-contents: read
+          permission-issues: read
+          permission-pull-requests: read
+          permission-checks: read
+          permission-actions: read
+          permission-metadata: read
+
       - name: Reconcile
         shell: bash
         env:
           RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          # main.py consumes RELEASE_DOWNSTREAM_TOKEN as its single
+          # downstream client today, so the write-scoped token goes there;
+          # write calls on repos outside its scope now fail at the token
+          # level, and reads on the four verification repos still work
+          # while they are public (an App installation token can read any
+          # public repo regardless of its repository scoping).
+          # RELEASE_DOWNSTREAM_READ_TOKEN carries the read-only mint for the
+          # Python side to adopt as a second, read-only client; until it
+          # does, it falls back to the write token so nothing breaks if a
+          # consumer lands before this comment is updated. Wiring the
+          # Python-side split is a follow-up.
           RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          RELEASE_DOWNSTREAM_READ_TOKEN: ${{ steps.generate-downstream-read-token.outputs.token || steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
           AGENT_GITHUB_TOKEN: ${{ github.token }}
           # The controller's own comment identity: markers it posts must be
           # readable back through the trusted-author filter even when a fork

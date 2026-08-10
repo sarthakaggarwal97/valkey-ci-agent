@@ -31,6 +31,7 @@ candidate SHA, or the failure is reported as critical.
 
 from __future__ import annotations
 
+import fnmatch
 import logging
 import re
 from dataclasses import dataclass
@@ -73,6 +74,49 @@ class PublishPlan:
     issue_number: int
     tracker_url: str = ""
     qualification_url: str = ""
+    # Whether an active tag ruleset protects the created tag: True/False
+    # when the probe answered, None when it could not (treated as
+    # unprotected in the evidence, never claimed protected).
+    tag_protected: "bool | None" = None
+
+
+def _ref_matches(ref: str, patterns: "list[str]") -> bool:
+    """fnmatch-style ruleset pattern matching, plus the ~ALL token."""
+    return any(
+        pattern == "~ALL" or fnmatch.fnmatchcase(ref, pattern)
+        for pattern in patterns
+    )
+
+
+def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
+    """Whether an active tag ruleset protects ``refs/tags/{tag}``.
+
+    True when an active ruleset targeting tags includes the ref and does
+    not exclude it; False when none does; None when the API could not
+    answer (rulesets endpoint unavailable, insufficient scope). The
+    approval evidence treats None like False: never claim immutability
+    that was not verified.
+    """
+    ref = f"refs/tags/{tag}"
+    try:
+        _, listing = repo._requester.requestJsonAndCheck(
+            "GET", f"{repo.url}/rulesets",
+        )
+        for entry in listing or []:
+            if entry.get("target") != "tag" or entry.get("enforcement") != "active":
+                continue
+            _, ruleset = repo._requester.requestJsonAndCheck(
+                "GET", f"{repo.url}/rulesets/{entry['id']}",
+            )
+            conditions = (ruleset.get("conditions") or {}).get("ref_name") or {}
+            if _ref_matches(ref, conditions.get("include") or []) \
+                    and not _ref_matches(ref, conditions.get("exclude") or []):
+                return True
+        return False
+    except Exception:
+        logger.warning("Cannot determine tag ruleset protection for %s; "
+                       "treating it as unknown", tag, exc_info=True)
+        return None
 
 
 def plan_publication(
@@ -145,6 +189,7 @@ def plan_publication(
         issue_number=tracking_issue.number,
         tracker_url=tracking_issue.html_url,
         qualification_url=status.qualification.url,
+        tag_protected=tag_ruleset_protected(repo, tag),
     )
 
 
@@ -277,23 +322,27 @@ def ensure_environment_protected(gh: Any, policy: RepoReleasePolicy,
         )
 
 
-def render_plan_summary(plan: PublishPlan) -> str:
+def render_plan_summary(plan: PublishPlan, *, controller_sha: str = "") -> str:
     """The approver's checklist: what will happen and what to verify.
 
     GitHub's approval modal shows nothing but the environment name, so this
     summary, rendered on the run page and posted to the tracker, is the
-    approval evidence. It says explicitly what to check, with links.
+    approval evidence. It says explicitly what to check, with links. The
+    tag-immutability line states only what the ruleset probe verified;
+    ``controller_sha`` (the commit the controller runs from) is included
+    when known so the approver can see exactly which code executes.
     """
-    return "\n".join([
-        "## Awaiting approval: publish " + plan.tag,
-        "",
-        "> [!IMPORTANT]",
-        "> Approving publishes the release, fires the production builds, and",
-        "> creates a tag that cannot be moved or deleted. Verify the items",
-        "> below, then approve the **Publish** job under Review deployments.",
-        "",
-        "**Verify before approving:**",
-        "",
+    if plan.tag_protected:
+        protection_line = (
+            "> The created tag is ruleset-protected and cannot be moved or "
+            "deleted."
+        )
+    else:
+        protection_line = (
+            "> **WARNING:** The created tag is NOT ruleset-protected in this "
+            "repository; extend tag protection before relying on immutability."
+        )
+    checklist = [
         f"- [ ] The tag is the release you expect: `{plan.tag}`",
         f"- [ ] The commit matches the tracker's candidate SHA: `{plan.sha}`"
         + (f" ([tracker]({plan.tracker_url}))" if plan.tracker_url else ""),
@@ -304,6 +353,22 @@ def render_plan_summary(plan: PublishPlan) -> str:
         + (" (this release becomes the repo's latest)" if plan.make_latest == "true"
            else " (an older line: the latest pointer does not move)"),
         f"- [ ] The release notes below read correctly (prerelease: `{plan.prerelease}`)",
+    ]
+    if controller_sha:
+        checklist.append(f"- [ ] Controller code: `{controller_sha[:12]}`")
+    return "\n".join([
+        "## Awaiting approval: publish " + plan.tag,
+        "",
+        "> [!IMPORTANT]",
+        "> Approving publishes the release, fires the production builds, and",
+        "> creates the release tag. Verify the items below, then approve the",
+        "> **Publish** job under Review deployments.",
+        ">",
+        protection_line,
+        "",
+        "**Verify before approving:**",
+        "",
+        *checklist,
         "",
         "Execution re-runs every validation and refuses if the tag or commit",
         "differ from the values above.",
@@ -397,12 +462,15 @@ _APPROVAL_MARKER = f"<!-- {issue_mod.MARKER_NAMESPACE}:approval-evidence -->"
 
 
 def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
-                           plan: PublishPlan, run_url: str) -> None:
+                           plan: PublishPlan, run_url: str,
+                           controller_sha: str = "") -> None:
     """Put the approver's checklist on the tracker, linking the waiting run.
 
     The approver's journey usually starts from the tracker, and GitHub's
     approval modal shows no context, so the evidence lives where they are,
     with a pointer to where the button is. Edited in place on re-validation.
+    ``controller_sha`` (the workflow's GITHUB_SHA) binds the evidence to
+    the exact controller code that will execute; "" omits the line.
     """
     repo = retry_github_call(
         lambda: gh.get_repo(policy.repo),
@@ -420,7 +488,7 @@ def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
         f"> [!IMPORTANT]\n"
         f"> **{policy.mention}: Approval Needed to Publish `{plan.tag}`.**\n"
         f"\n"
-        + render_plan_summary(plan)
+        + render_plan_summary(plan, controller_sha=controller_sha)
         + f"\n\n**Approve here:** {run_url} (Review deployments -> `release` "
         f"-> Approve and deploy)"
     )

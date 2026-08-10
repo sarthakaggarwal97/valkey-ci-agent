@@ -317,12 +317,16 @@ def _run_publish(gh: Any, gh_downstream: Any, agent_repo: str,
         plan = plan_publication(gh, policy, branch=args.branch,
                                 actor=args.actor, gh_downstream=gh_downstream,
                                 skip_authorization=args.unattended)
-        summary = render_plan_summary(plan)
+        # The commit this controller runs from, for the approval evidence;
+        # empty outside Actions and the evidence omits the line.
+        controller_sha = os.environ.get("GITHUB_SHA", "")
+        summary = render_plan_summary(plan, controller_sha=controller_sha)
         emit_job_summary(summary)
         print(summary)
         run_url = _actions_run_url()
         if run_url:
-            post_approval_evidence(gh, policy, plan, run_url)
+            post_approval_evidence(gh, policy, plan, run_url,
+                                   controller_sha=controller_sha)
         _emit_outputs({"tag": plan.tag, "sha": plan.sha,
                        "make_latest": plan.make_latest})
         return 0
