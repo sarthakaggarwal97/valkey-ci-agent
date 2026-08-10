@@ -283,12 +283,32 @@ class TestFindReleaseIssue:
 
 
 class TestAesthetics:
-    def test_body_is_native_markdown_without_badges_or_html_blocks(self) -> None:
+    def test_header_carries_badges_and_progress_bar(self) -> None:
+        # The centered badge header is a deliberate product choice
+        # (restored by owner request after the native-markdown redesign).
         body = _render(_status())
-        assert "img.shields.io" not in body
-        assert "<div" not in body
-        for square in ("🟩", "🟦", "🟥", "⬜"):
-            assert square not in body
+        assert '<div align="center">' in body
+        assert "img.shields.io/badge/version-9.1.1-" in body
+        # Stage badge renders uppercase, and the phase message is
+        # percent-encoded or the badge 404s.
+        assert "img.shields.io/badge/stage-GA-" in body
+        assert "img.shields.io/badge/phase-4%2F6" in body
+        assert "🟩🟩🟩🟦⬜⬜" in body  # READY: three done, current, two ahead
+
+    def test_progress_bar_label_never_asserts_the_unfinished_outcome(self) -> None:
+        # The bar describes the phase in flight; the checklist owns the
+        # completed-form titles. A READY tracker must not read "Published".
+        ready_body = _render(_status())
+        assert "⬜ **Published (human-approved)**" not in ready_body
+        assert "**Ready to publish: awaiting human approval**" in ready_body
+        failing = _status(
+            ready=False,
+            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
+            blockers=("Required check failed",),
+        )
+        failing_body = _render(failing)
+        assert "🟥" in failing_body
+        assert "(failures need attention)**" in failing_body
 
     def test_header_links_the_branch_and_the_tracker_search(self) -> None:
         body = _render(_status())

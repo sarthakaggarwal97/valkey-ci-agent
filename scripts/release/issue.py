@@ -186,8 +186,17 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
     lines: list[str] = [
         identity_marker(status.branch),
         "",
+        '<div align="center">',
+        "",
         f"## Valkey {status.version or '(version pending)'}",
+        "",
+        _badge_row(status),
+        "",
         _header_line(status),
+        "",
+        _progress_bar(status, done),
+        "",
+        "</div>",
         "",
     ]
     lines += _callout(status)
@@ -258,6 +267,73 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
 
 def _repo_url(status: ReleaseStatus) -> str:
     return f"https://github.com/{status.repo}"
+
+
+# Short names for the phase badge in the header.
+_PHASE_SHORT = {
+    ReleasePhase.NOTES: "1/6 notes",
+    ReleasePhase.CANDIDATE: "2/6 candidate CI",
+    ReleasePhase.QUALIFICATION: "3/6 qualification",
+    ReleasePhase.READY: "4/6 ready to publish",
+    ReleasePhase.PUBLISHED: "5/6 public outputs",
+    ReleasePhase.BUNDLE_HELM: "6/6 bundle & helm",
+    ReleasePhase.COMPLETE: "complete",
+}
+
+# What the current phase is DOING, for the progress-bar label. The checklist
+# uses the completed-form _PHASE_TITLES; the bar describes the phase in
+# flight, so it must not assert the outcome ("Published" while unpublished).
+_PHASE_ACTIVE = {
+    ReleasePhase.NOTES: "Cutting and merging the release notes",
+    ReleasePhase.CANDIDATE: "Waiting for required CI on the candidate",
+    ReleasePhase.QUALIFICATION: "Qualifying the candidate",
+    ReleasePhase.READY: "Ready to publish: awaiting human approval",
+    ReleasePhase.PUBLISHED: "Verifying core public outputs",
+    ReleasePhase.BUNDLE_HELM: "Verifying Bundle and Helm",
+}
+
+
+def _badge(label: str, message: str, color: str) -> str:
+    """A shields.io static badge (deterministic URL, proxied by GitHub)."""
+    def escape(text: str) -> str:
+        # shields.io static-badge escaping: dash and underscore double, and
+        # space/slash must be percent-encoded or they break the URL path.
+        return (text.replace("-", "--").replace("_", "__")
+                    .replace(" ", "%20").replace("/", "%2F"))
+    return (
+        f"![{label}](https://img.shields.io/badge/"
+        f"{escape(label)}-{escape(message)}-{color}?style=flat-square)"
+    )
+
+
+def _badge_row(status: ReleaseStatus) -> str:
+    version_badge = _badge("version", _display_tag(status) or "pending", "0969da")
+    stage_badge = _badge("stage", status.stage.upper() if status.stage else "pending", "8250df")
+    if status.phase is ReleasePhase.COMPLETE:
+        phase_color = "1a7f37"
+    elif has_failures(status):
+        phase_color = "cf222e"
+    elif status.ready:
+        phase_color = "1a7f37"
+    else:
+        phase_color = "d29922"
+    phase_badge = _badge("phase", _PHASE_SHORT[status.phase], phase_color)
+    return f"{version_badge} {stage_badge} {phase_badge}"
+
+
+def _progress_bar(status: ReleaseStatus, done: "set[ReleasePhase]") -> str:
+    """Six-segment bar: 🟩 done, 🟦 current (🟥 when failing), ⬜ ahead."""
+    current_block = "🟥" if has_failures(status) else "🟦"
+    blocks = "".join(
+        "🟩" if phase in done else (current_block if phase is status.phase else "⬜")
+        for phase in _PHASE_ORDER
+    )
+    if status.phase is ReleasePhase.COMPLETE:
+        return f"{blocks} **Complete**"
+    label = _PHASE_ACTIVE[status.phase]
+    if has_failures(status):
+        label = f"{label} (failures need attention)"
+    return f"{blocks} **{label}**"
 
 
 def _header_line(status: ReleaseStatus) -> str:
