@@ -191,6 +191,23 @@ class TestAutoDispatchBuildRelease:
         repo.get_workflow.return_value.create_dispatch.assert_not_called()
         assert not any("auto-dispatched" in p for p in performed)
 
+    def test_marker_for_a_different_candidate_does_not_suppress(self) -> None:
+        # Positive re-arm: the once-per-candidate gate is per SHA, so a
+        # marker from a previous candidate must not eat the new dispatch.
+        repo = self._dispatchable_repo()
+        issue = tracker()
+        other_fingerprint = hashlib.sha256(MOVED_SHA.encode("utf-8")).hexdigest()[:12]
+        posted = MagicMock()
+        posted.user.login = "valkeyrie-ops[bot]"
+        posted.body = (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:build-dispatch:"
+                       f"{other_fingerprint} -->\ndispatched")
+        issue.get_comments.return_value = [posted]
+        performed = actions.advance(gh_mock(repo), _POLICY,
+                                    status=self._failed_trigger_status(),
+                                    tracking_issue=issue)
+        repo.get_workflow.return_value.create_dispatch.assert_called_once()
+        assert any("auto-dispatched build-release" in p for p in performed)
+
     def test_failure_notification_still_fires_alongside_the_autofix(self) -> None:
         # Auto-remediation must not swallow the visible failure escalation.
         issue = tracker()
@@ -212,6 +229,114 @@ class TestAutoDispatchBuildRelease:
         actions.advance(gh_mock(repo), _POLICY, status=status, tracking_issue=issue)
         repo.get_workflow.return_value.create_dispatch.assert_not_called()
         issue.create_comment.assert_not_called()
+
+
+class TestAutofixDispatchFailure:
+    """A failing dispatch must not escape advance(): notify/nudge/render
+    still run, and a plain follow-up comment tells the human the tracker's
+    'Dispatching' callout did not land."""
+
+    def _failed_trigger_status(self) -> ReleaseStatus:
+        return _status(
+            phase=ReleasePhase.PUBLISHED, published=True,
+            qualification=QualificationStatus(run_id=1, passed=True),
+            outputs=(DownstreamOutput(
+                name="build-run", state=OutputState.FAILED,
+                detail="The release trigger run failed before dispatching "
+                       "the build.",
+                url="https://x/runs/55", action="dispatch-build-release"),),
+        )
+
+    def _failed_qualification_status(self) -> ReleaseStatus:
+        return _status(qualification=QualificationStatus(
+            run_id=901, url="https://x/qruns/901", failed_jobs=("job",)))
+
+    def test_rejected_build_dispatch_posts_followup_and_still_notifies(self) -> None:
+        repo = MagicMock()
+        repo.default_branch = "main"
+        # The rejected-dispatch path: create_dispatch returns False, so
+        # _dispatch_build_release raises RuntimeError.
+        repo.get_workflow.return_value.create_dispatch.return_value = False
+        issue = tracker()
+        performed = actions.advance(gh_mock(repo), _POLICY,
+                                    status=self._failed_trigger_status(),
+                                    tracking_issue=issue)
+        assert not any("auto-dispatched" in p for p in performed)
+        bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
+        # Marker-first ordering is preserved: the autofix marker posted.
+        assert any(":autofix:build-dispatch:" in b for b in bodies)
+        followup = next(b for b in bodies if "Auto-remediation failed:" in b)
+        assert "> [!WARNING]" in followup
+        assert "The dispatch itself failed." in followup
+        assert "Dispatch build-release for `9.1.1` manually." in followup
+        assert ":autofix:" not in followup
+        assert "\u2014" not in followup
+        # The failure notification in the same advance() call still fires.
+        assert any(f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:" in b for b in bodies)
+
+    def test_raising_qualification_dispatch_posts_followup_and_still_notifies(self) -> None:
+        issue = tracker()
+        with patch.object(actions.qual_mod, "dispatch_qualification",
+                          side_effect=RuntimeError("boom")):
+            performed = actions.advance(gh_mock(MagicMock()), _POLICY,
+                                        status=self._failed_qualification_status(),
+                                        tracking_issue=issue)
+        assert not any("auto-retried" in p for p in performed)
+        bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
+        assert any(":autofix:qual-retry:" in b for b in bodies)
+        followup = next(b for b in bodies if "Auto-remediation failed:" in b)
+        assert "> [!WARNING]" in followup
+        assert "The dispatch itself failed." in followup
+        assert "Dispatch the qualification workflow for `9.1.1` manually." in followup
+        assert ":autofix:" not in followup
+        assert "\u2014" not in followup
+        assert any(f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:" in b for b in bodies)
+
+
+class TestMarkerBeforeDispatchOrdering:
+    """The documented safety crux: the autofix marker posts BEFORE the
+    dispatch runs (fail closed), so a refactor to dispatch-first fails here."""
+
+    def test_build_dispatch_runs_only_after_the_marker_posted(self) -> None:
+        repo = MagicMock()
+        repo.default_branch = "main"
+        issue = tracker()
+
+        def _assert_marker_already_posted(*args: object, **kwargs: object) -> bool:
+            bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
+            assert any(":autofix:build-dispatch:" in b for b in bodies), \
+                "dispatch ran before the autofix marker posted"
+            return True
+
+        repo.get_workflow.return_value.create_dispatch.side_effect = \
+            _assert_marker_already_posted
+        status = _status(
+            phase=ReleasePhase.PUBLISHED, published=True,
+            qualification=QualificationStatus(run_id=1, passed=True),
+            outputs=(DownstreamOutput(
+                name="build-run", state=OutputState.FAILED,
+                detail="The release trigger run failed before dispatching "
+                       "the build.",
+                url="https://x/runs/55", action="dispatch-build-release"),),
+        )
+        actions.advance(gh_mock(repo), _POLICY, status=status, tracking_issue=issue)
+        repo.get_workflow.return_value.create_dispatch.assert_called_once()
+
+    def test_qualification_retry_runs_only_after_the_marker_posted(self) -> None:
+        issue = tracker()
+
+        def _assert_marker_already_posted(*args: object, **kwargs: object) -> None:
+            bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
+            assert any(":autofix:qual-retry:" in b for b in bodies), \
+                "dispatch ran before the autofix marker posted"
+
+        status = _status(qualification=QualificationStatus(
+            run_id=901, url="https://x/qruns/901", failed_jobs=("job",)))
+        with patch.object(actions.qual_mod, "dispatch_qualification",
+                          side_effect=_assert_marker_already_posted) as dispatch:
+            actions.advance(gh_mock(MagicMock()), _POLICY,
+                            status=status, tracking_issue=issue)
+        dispatch.assert_called_once()
 
 
 class TestOutputActions:
@@ -357,6 +482,57 @@ class TestNotifyOnce:
                         status=second, tracking_issue=issue)
 
         issue.create_comment.assert_called_once()
+
+    def test_output_wording_change_does_not_notify_again(self) -> None:
+        # The fingerprint hashes stable keys, not prose: a reworded detail
+        # for the same failed output must not re-ping the team.
+        issue = tracker()
+        first = _status(outputs=(DownstreamOutput(
+            name="helm", state=OutputState.FAILED, detail="Old wording"),))
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=first, tracking_issue=issue)
+        posted = MagicMock()
+        posted.user.login = "valkeyrie-ops[bot]"
+        posted.body = issue.create_comment.call_args.kwargs["body"]
+        issue.get_comments.return_value = [posted]
+        issue.create_comment.reset_mock()
+
+        second = _status(outputs=(DownstreamOutput(
+            name="helm", state=OutputState.FAILED, detail="New wording"),))
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=second, tracking_issue=issue)
+
+        issue.create_comment.assert_not_called()
+
+    def test_qualification_notification_names_the_run_and_a_new_run_repings(self) -> None:
+        # A failed retry produces a NEW run id: it must re-notify exactly
+        # once, and the text must name the run so the human sees which one.
+        issue = tracker()
+        first = _status(qualification=QualificationStatus(
+            run_id=901, url="https://x/qruns/901", failed_jobs=("job",)))
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=first, tracking_issue=issue)
+        bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
+        notify = next(b for b in bodies if ":notify:" in b)
+        assert "**Qualification run 901 failed:** job" in notify
+        replayed = []
+        for body in bodies:
+            posted = MagicMock()
+            posted.user.login = "valkeyrie-ops[bot]"
+            posted.body = body
+            replayed.append(posted)
+        issue.get_comments.return_value = replayed
+        issue.create_comment.reset_mock()
+
+        second = _status(qualification=QualificationStatus(
+            run_id=902, url="https://x/qruns/902", failed_jobs=("job",)))
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=second, tracking_issue=issue)
+
+        renotify = next(b for b in (c.kwargs["body"] for c in
+                                    issue.create_comment.call_args_list)
+                        if ":notify:" in b)
+        assert "**Qualification run 902 failed:** job" in renotify
 
     def test_no_failures_means_no_notification(self) -> None:
         issue = tracker()

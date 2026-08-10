@@ -200,6 +200,23 @@ class TestAesthetics:
 
 
 class TestAuthenticatedIdentityTrust:
+    def test_env_provided_app_login_becomes_trusted(
+            self, monkeypatch) -> None:
+        # A fork running its OWN GitHub App posts as "<forkslug>[bot]",
+        # which is not in the static set, and App tokens have no user
+        # context; the workflows pass the minted App's slug so the
+        # controller can read back its own markers.
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [
+            _comment("myapp[bot]", issue_mod.adopt_marker(_SHA_A)),
+        ]
+        monkeypatch.setenv("RELEASE_BOT_LOGIN", "myapp[bot]")
+        assert issue_mod.adopted_shas(tracker) == (_SHA_A,)
+        # Unset, the same comment stays untrusted: nothing else changes.
+        monkeypatch.delenv("RELEASE_BOT_LOGIN")
+        issue_mod.invalidate_comment_memo(tracker)
+        assert issue_mod.adopted_shas(tracker) == ()
+
     def test_pat_identity_comments_become_trusted(self) -> None:
         # Fork runs authenticate as the fork owner; markers the controller
         # wrote through that PAT must be readable back (the live dup-notify

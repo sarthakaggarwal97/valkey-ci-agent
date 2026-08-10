@@ -102,6 +102,11 @@ jobs:
         env:
           RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
           RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          # The controller's own comment identity: markers it posts must be
+          # readable back through the trusted-author filter even when a fork
+          # runs its own App (whose "<slug>[bot]" login is not in the static
+          # trusted set). Empty when the token step was skipped.
+          RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
           BRANCH: ${{ inputs.branch }}
           ACTOR: ${{ github.triggering_actor }}
           TARGET_REPO: ${{ github.repository_owner }}/valkey
@@ -207,6 +212,11 @@ jobs:
         env:
           RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
           RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
+          # The controller's own comment identity: markers it posts must be
+          # readable back through the trusted-author filter even when a fork
+          # runs its own App (whose "<slug>[bot]" login is not in the static
+          # trusted set). Empty when the token step was skipped.
+          RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
           BRANCH: ${{ inputs.branch }}
           ACTOR: ${{ steps.approver.outputs.login }}
           EXPECTED_TAG: ${{ needs.validate.outputs.tag }}

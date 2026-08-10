@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -121,9 +122,12 @@ class TestReconcilePoll:
         """The real run_poll_loop with an injected clock and no sleeping.
 
         Cadence behavior itself is covered by tests/test_polling.py; these
-        tests verify the reconcile command wires into it correctly.
+        tests verify the reconcile command wires into it correctly. The
+        clock repeats its last tick forever, so a loop that legitimately
+        reads the clock one extra time never exhausts the iterator.
         """
-        ticks = iter(clock_values)
+        ticks = itertools.chain(iter(clock_values),
+                                itertools.repeat(clock_values[-1]))
 
         def fake_loop(poll_once, *, interval_seconds, duration_seconds, logger):
             return run_poll_loop(
@@ -139,7 +143,7 @@ class TestReconcilePoll:
 
     def test_env_knobs_reach_the_shared_loop(
             self, monkeypatch: pytest.MonkeyPatch) -> None:
-        self._set_poll_env(monkeypatch, "600", "3000")
+        self._set_poll_env(monkeypatch, "600", "2400")
         with patch("scripts.release.main.Github"), \
              patch("scripts.release.main.reconcile_branch"), \
              patch("scripts.release.main.run_poll_loop",
@@ -147,7 +151,7 @@ class TestReconcilePoll:
             code = main([*_POLICY_ARGS, "reconcile"])
         assert code == 0
         assert loop.call_args.kwargs["interval_seconds"] == 600
-        assert loop.call_args.kwargs["duration_seconds"] == 3000
+        assert loop.call_args.kwargs["duration_seconds"] == 2400
 
     def test_failing_pass_continues_but_the_run_exits_nonzero(
             self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -364,18 +368,22 @@ class TestWorkflowContracts:
         assert workflow["on"]["schedule"] == [{"cron": "7 * * * *"}]
         assert workflow["permissions"] == {}
         job = workflow["jobs"]["reconcile"]
-        # Cron runs only in the canonical repo; manual dispatch is allowed in
-        # forks (against the fork policy registry).
+        # Cron runs in the canonical repo or in a fork that opted in via the
+        # RELEASE_POLL_ENABLED repository variable (exactly 'true'); manual
+        # dispatch is allowed everywhere (against the fork policy registry).
         condition = job["if"]
         assert "github.repository == 'valkey-io/valkey-ci-agent'" in condition
+        assert "vars.RELEASE_POLL_ENABLED == 'true'" in condition
         assert "workflow_dispatch" in condition
-        # Scheduled runs poll every 10 minutes for 3000s (inside the
-        # 60-minute App-token validity); dispatch is one immediate pass.
+        # Scheduled runs poll every 10 minutes; the 2400s cap bounds when
+        # the last pass STARTS (passes at t=0,10,20,30,40), leaving the
+        # final pass roughly 19 minutes of App-token validity. Dispatch is
+        # one immediate pass.
         env = job["steps"][-1]["env"]
         assert env["RECONCILE_POLL_INTERVAL_SECONDS"] == \
             "${{ github.event_name == 'schedule' && '600' || '0' }}"
         assert env["RECONCILE_POLL_DURATION_SECONDS"] == \
-            "${{ github.event_name == 'schedule' && '3000' || '0' }}"
+            "${{ github.event_name == 'schedule' && '2400' || '0' }}"
         assert job["timeout-minutes"] == "58"
 
     def test_adopt_requires_branch_and_sha(self) -> None:

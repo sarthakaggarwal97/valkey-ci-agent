@@ -347,9 +347,10 @@ def compute_status(
                     failed = ", ".join(qualification.failed_jobs[:5])
                     blockers.append(
                         f"Qualification run {qualification.run_id} failed "
-                        f"({failed}); fix the cause, then re-dispatch the "
-                        f"qualification workflow manually (a new run for the "
-                        f"same SHA supersedes this one)."
+                        f"({failed}); the first failure is retried once "
+                        f"automatically. After a failed retry, fix the cause "
+                        f"and re-dispatch the qualification workflow (a new "
+                        f"run for the same SHA supersedes this one)."
                     )
                 else:
                     blockers.append(

@@ -368,6 +368,19 @@ class TestBuildRunObservation:
         assert out.state is OutputState.PENDING
         assert out.action == ""
 
+    def test_cancelled_trigger_never_requests_the_auto_dispatch(self) -> None:
+        # A human cancelling the trigger is a decision, not a retry
+        # condition: FAILED with the correct phrase, but no auto-action.
+        gh = _run_source({"build-release.yml": []})
+        gh_source = _run_source({
+            "trigger-build-release.yml": [_wf_run("9.1.2", conclusion="cancelled")],
+        })
+        out, run = verify._verify_build_run(gh, gh_source, _POLICY, "9.1.2", None)
+        assert out.state is OutputState.FAILED
+        assert "was cancelled" in out.detail
+        assert out.action == ""
+        assert run is None
+
     def test_successful_build_run_supersedes_a_failed_trigger(self) -> None:
         # Recovery may dispatch build-release directly; the build must win.
         gh = _run_source({
@@ -507,7 +520,8 @@ class TestPackagesAndTryValkey:
                    DownstreamOutput(name="bundle", state=OutputState.BLOCKED, detail="gated"))
         escalated = verify.escalate_stalled_outputs(outputs, old, 360)
         assert escalated[0].state is OutputState.FAILED
-        assert "Stalled:" in escalated[0].detail
+        assert escalated[0].detail == ("Stalled: still pending 360 minutes "
+                                       "after publication: waiting")
         # Escalation pages a human; the auto-action must not keep firing.
         assert escalated[0].action == ""
         assert escalated[1].state is OutputState.BLOCKED  # prerequisite carries it
@@ -532,6 +546,8 @@ class TestDetailCellStyle:
             raise GithubException(404, "missing", {})
 
         guarded = verify._guarded("hashes", _raise_404)
+        # One pinned example of the full style; the loop below checks the
+        # style properties themselves on every sample.
         assert guarded.detail == ("GitHub returned HTTP 404: the target "
                                   "repository is missing or unreadable")
 
@@ -542,10 +558,20 @@ class TestDetailCellStyle:
         gh_source = _run_source({"trigger-build-release.yml": []})
         failed_build, _run = verify._verify_build_run(gh, gh_source, _POLICY,
                                                       "9.1.2", None)
-        assert failed_build.detail == "Build-release run 700 failed"
 
         for detail in (guarded.detail, failed_build.detail):
             assert detail[0].isupper()
             assert "?" not in detail
             assert "!" not in detail
             assert "\u2014" not in detail
+
+    def test_no_em_dash_in_release_module_sources(self) -> None:
+        # The real regression guard: no em-dash character may appear in any
+        # release-module source, so no rendered string can ever carry one.
+        from pathlib import Path
+
+        module_dir = Path(verify.__file__).parent
+        sources = sorted(module_dir.glob("*.py"))
+        assert sources
+        for source in sources:
+            assert "\u2014" not in source.read_text(encoding="utf-8"), source.name

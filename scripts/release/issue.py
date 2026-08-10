@@ -16,6 +16,7 @@ issue is a *display surface and dedup anchor only*:
 
 from __future__ import annotations
 
+import os
 import re
 import weakref
 from typing import Any
@@ -428,15 +429,26 @@ def trusted_comments(issue: Any, gh: Any = None) -> list[Any]:
 
     The trust filter for every marker the controller reads back (adoptions,
     notification fingerprints): a marker pasted by anyone else is invisible.
-    Trust covers the static bot identities plus the *currently authenticated*
-    identity when it is a user (fork runs authenticate as the fork owner's
-    PAT, and markers the controller wrote must remain readable to it).
+    Trust covers the static bot identities, an env-provided App login
+    (``RELEASE_BOT_LOGIN``, set by the release workflows from the minted
+    App's slug so a fork's own App is trusted), plus the *currently
+    authenticated* identity when it is a user (fork runs authenticate as the
+    fork owner's PAT, and markers the controller wrote must remain readable
+    to it).
 
     The fetch is memoized per issue object (a reconcile pass reads the same
     issue's comments up to three times); posting a comment must call
     :func:`invalidate_comment_memo` so the next read sees it.
     """
     trusted = set(TRUSTED_MARKER_AUTHORS)
+    # A fork running its OWN GitHub App posts as "<forkslug>[bot]", which is
+    # not in the static set, and controller_login() is empty for App tokens,
+    # so without this the controller could not read back its own markers
+    # (the autofix would re-fire every pass). The release workflows pass the
+    # minted App's slug as RELEASE_BOT_LOGIN (formatted "<slug>[bot]").
+    env_login = os.environ.get("RELEASE_BOT_LOGIN", "").strip()
+    if env_login:
+        trusted.add(env_login)
     if gh is not None:
         login = controller_login(gh)
         if login:

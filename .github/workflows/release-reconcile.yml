@@ -34,14 +34,16 @@ jobs:
     name: "Reconcile release trackers"
     # Scheduled runs happen in the canonical repo, or in a fork that has
     # opted in by setting the repository variable RELEASE_POLL_ENABLED to
-    # 'true' (unattended end-to-end testing). Manual dispatch works
-    # everywhere (against the fork policy registry).
+    # 'true' (unattended end-to-end testing). The variable must be exactly
+    # 'true', and an opted-in fork needs the App secrets or a PAT fallback
+    # configured, otherwise the hourly run fails at startup. Manual dispatch
+    # works everywhere (against the fork policy registry).
     if: github.event_name == 'workflow_dispatch' || github.repository == 'valkey-io/valkey-ci-agent' || vars.RELEASE_POLL_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 58
     concurrency:
       # cancel-in-progress false: a queued manual dispatch waits for the
-      # current (up to ~50 minute) scheduled pass cycle to finish rather
+      # current (up to ~45 minute) scheduled pass cycle to finish rather
       # than killing it mid-pass; immediate need can cancel the scheduled
       # run from the UI first.
       group: release-reconcile
@@ -125,15 +127,23 @@ jobs:
           RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
           RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
           AGENT_GITHUB_TOKEN: ${{ github.token }}
+          # The controller's own comment identity: markers it posts must be
+          # readable back through the trusted-author filter even when a fork
+          # runs its own App (whose "<slug>[bot]" login is not in the static
+          # trusted set). Empty when the token step was skipped.
+          RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
           BRANCH: ${{ inputs.branch || '' }}
           TARGET_REPO: ${{ github.repository_owner }}/valkey
           POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
           # Scheduled runs long-poll (a pass every 10 minutes); manual
           # dispatch is one immediate pass, matching backport-poll. The
-          # 3000s duration cap keeps every pass inside the 60-minute
-          # App-token validity.
+          # duration cap bounds when the last pass STARTS (run_poll_loop
+          # stops only when the next start would exceed the deadline):
+          # 2400 allows passes at t=0,10,20,30,40 minutes, leaving the
+          # final pass roughly 19 minutes of App-token validity before the
+          # 60-minute token expiry and the 58-minute job timeout.
           RECONCILE_POLL_INTERVAL_SECONDS: ${{ github.event_name == 'schedule' && '600' || '0' }}
-          RECONCILE_POLL_DURATION_SECONDS: ${{ github.event_name == 'schedule' && '3000' || '0' }}
+          RECONCILE_POLL_DURATION_SECONDS: ${{ github.event_name == 'schedule' && '2400' || '0' }}
         run: |
           set -euo pipefail
           args=(--policy "${POLICY}" --repo "${TARGET_REPO}" reconcile)

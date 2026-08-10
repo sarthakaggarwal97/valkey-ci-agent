@@ -172,6 +172,28 @@ def _autofix_once(gh: Any, tracking_issue: Any, *, key: str,
     return True
 
 
+def _post_dispatch_failure(gh: Any, tracking_issue: Any, *, key: str,
+                           instruction: str) -> None:
+    """Post the plain follow-up comment when an auto-remediation's dispatch
+    itself failed.
+
+    No autofix marker: the marker already posted (marker-first, fail
+    closed), so the autofix never re-fires for this candidate; this comment
+    only tells the human the tracker's 'Dispatching' callout did not land.
+    """
+    retry_github_call(
+        lambda: tracking_issue.create_comment(
+            body=(
+                f"> [!WARNING]\n"
+                f"> **Auto-remediation failed:** The dispatch itself failed. "
+                f"{instruction}"
+            )
+        ),
+        retries=2, description=f"post {key} dispatch-failure comment",
+    )
+    issue_mod.invalidate_comment_memo(tracking_issue)
+
+
 def _dispatch_build_once(
     gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus,
     tracking_issue: Any, output: Any,
@@ -191,12 +213,25 @@ def _dispatch_build_once(
         callout=(
             f"> [!NOTE]\n"
             f"> **Auto-remediation:** Dispatching the build pipeline for "
-            f"`{tag}` directly (the [release trigger run]({output.url}) failed)."
+            f"`{tag}` directly (the [release trigger run]({output.url}) "
+            f"did not succeed)."
         ),
     )
     if not posted:
         return ""
-    _dispatch_build_release(gh, policy, tag)
+    # The dispatch must not escape advance(): an exception here would skip
+    # the notify/nudge/render steps and leave the tracker's 'Dispatching'
+    # callout as a false last word. The marker stays (once per candidate);
+    # the follow-up comment tells the human to dispatch manually.
+    try:
+        _dispatch_build_release(gh, policy, tag)
+    except Exception:
+        logger.exception("Auto-dispatch of build-release for %s failed", tag)
+        _post_dispatch_failure(
+            gh, tracking_issue, key="build-dispatch",
+            instruction=f"Dispatch build-release for `{tag}` manually.",
+        )
+        return ""
     logger.info("Auto-dispatched build-release for %s", tag)
     return f"auto-dispatched build-release for {tag} (release trigger failed)"
 
@@ -218,6 +253,9 @@ def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str) -> Non
         lambda: gh.get_repo(down.automation_repo),
         retries=2, description=f"get repo {down.automation_repo}",
     )
+    # Accepted non-idempotency window: retry_github_call around
+    # create_dispatch can rarely double-dispatch when a success response is
+    # lost; the verifier takes the newest run so verification stays correct.
     dispatched = retry_github_call(
         lambda: workflow.create_dispatch(
             repo.default_branch, inputs={"version": tag, "environment": "prod"},
@@ -254,7 +292,18 @@ def _retry_qualification_once(
     )
     if not posted:
         return ""
-    qual_mod.dispatch_qualification(gh, policy, tag=tag, sha=status.candidate.sha)
+    # Same containment as the build auto-dispatch: a dispatch failure must
+    # not escape advance() and skip the notify/nudge/render steps.
+    try:
+        qual_mod.dispatch_qualification(gh, policy, tag=tag, sha=status.candidate.sha)
+    except Exception:
+        logger.exception("Auto-retry qualification dispatch for %s failed", tag)
+        _post_dispatch_failure(
+            gh, tracking_issue, key="qual-retry",
+            instruction=f"Dispatch the qualification workflow for `{tag}` "
+                        f"manually.",
+        )
+        return ""
     logger.info("Auto-retried qualification of %s @ %s", tag, status.candidate.sha[:12])
     return f"auto-retried qualification of {tag} @ {status.candidate.sha[:12]}"
 
@@ -379,15 +428,20 @@ def _notify_once(
     failures = _failure_items(status)
     if not failures:
         return ""
-    fingerprint = hashlib.sha256("\n".join(sorted(failures)).encode("utf-8")).hexdigest()[:12]
+    # Fingerprint over the stable keys, not the rendered prose: a wording
+    # tweak in a detail string must never re-ping the team, while a NEW
+    # failure (a new failed run id, a new failing check) must.
+    fingerprint = hashlib.sha256(
+        "\n".join(sorted(key for key, _ in failures)).encode("utf-8")
+    ).hexdigest()[:12]
     marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:{fingerprint} -->"
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
         if marker in (comment.body or ""):
             return ""
     tag = release_tag(status.version, status.stage)
     rows = "\n".join(
-        f"| {index} | {_problem_cell(item)} |"
-        for index, item in enumerate(failures, start=1)
+        f"| {index} | {_problem_cell(text)} |"
+        for index, (_, text) in enumerate(failures, start=1)
     )
     retry_github_call(
         lambda: tracking_issue.create_comment(
@@ -485,24 +539,37 @@ def _nudge_item(status: ReleaseStatus) -> "tuple[str, str] | None":
     return None
 
 
-def _failure_items(status: ReleaseStatus) -> list[str]:
+def _failure_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
+    """(stable key, rendered text) per failure.
+
+    Keys are identifiers, not prose: they feed the notification fingerprint,
+    so rewording a detail never re-pings, while a new failed run id or a
+    newly failing check does. Texts render into the comment body.
+    """
     # Failure states rendered as verb phrases, not raw enum values.
     check_phrases = {
         CheckState.FAILED: "failed",
         CheckState.STALLED: "has stalled",
     }
-    items = list(status.alerts)
+    items: "list[tuple[str, str]]" = [(alert, alert) for alert in status.alerts]
     items += [
-        f"Required check `{check.name}` {check_phrases[check.state]}"
+        (f"check:{check.name}:{check.state.value}",
+         f"Required check `{check.name}` {check_phrases[check.state]}")
         for check in status.checks
         if check.state in (CheckState.FAILED, CheckState.STALLED)
     ]
     if status.qualification.failed_jobs:
-        items.append(
-            "Qualification failed: " + ", ".join(status.qualification.failed_jobs[:5])
-        )
+        run_id = status.qualification.run_id
+        items.append((
+            f"qual:{run_id}",
+            f"Qualification run {run_id} failed: "
+            + ", ".join(status.qualification.failed_jobs[:5]),
+        ))
+    # run_id may be 0/empty; included anyway so a NEW failed run (with a
+    # real id) re-pings exactly once.
     items.extend(
-        f"{output.name}: {output.detail}"
+        (f"output:{output.name}:{output.run_id}",
+         f"{output.name}: {output.detail}")
         for output in status.outputs
         if output.state is OutputState.FAILED
     )

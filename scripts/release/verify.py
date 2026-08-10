@@ -121,7 +121,7 @@ def escalate_stalled_outputs(
         DownstreamOutput(
             name=o.name, state=OutputState.FAILED,
             detail=f"Stalled: still pending {timeout_minutes} minutes after "
-                   f"publication ({o.detail})",
+                   f"publication: {o.detail.rstrip('.')}",
             # action cleared: an escalated stall pages a human; it must not
             # also keep auto-dispatching every pass.
             url=o.url, action="", run_id=o.run_id,
@@ -192,14 +192,19 @@ def _verify_build_run(gh: Any, gh_source: Any, policy: RepoReleasePolicy,
                 and trigger.conclusion != "success":
             # action: reconciliation dispatches build-release directly, once
             # per candidate (marker-gated in actions.advance); the FAILED
-            # state still reaches the notification path unchanged.
+            # state still reaches the notification path unchanged. A
+            # cancelled trigger is a human decision, not a retry condition
+            # (the same stance the closed-PR verifiers take), so it renders
+            # FAILED without requesting the auto-dispatch.
+            action = ("dispatch-build-release"
+                      if trigger.conclusion in ("failure", "timed_out") else "")
             return DownstreamOutput(
                 name="build-run", state=OutputState.FAILED,
                 detail=f"The release trigger run {_concluded(trigger.conclusion)} "
                        f"before dispatching the build. Re-run it, or dispatch "
                        f"build-release for {tag} directly.",
                 url=trigger.html_url,
-                action="dispatch-build-release",
+                action=action,
             ), None
         if _past_deadline(published_at, policy.check_timeout_minutes):
             return DownstreamOutput(
@@ -699,7 +704,8 @@ def _verify_helm(
             return DownstreamOutput(
                 name="helm", state=OutputState.FAILED,
                 detail=f"Chart bump PR #{pr.number} was closed without merging "
-                       f"and needs a human decision",
+                       f"and needs a human decision. Re-open it or bump the "
+                       f"chart manually if the closure was unrelated.",
                 url=pr.html_url,
             )
         # Image public, chart stale, no PR in flight: safe to open the bump PR.
