@@ -173,6 +173,23 @@ class TestAesthetics:
         body = issue_mod.render_body(failing)
         assert "🟥" in body
 
+    def test_progress_bar_label_never_asserts_the_unfinished_outcome(self) -> None:
+        # The bar describes the phase in flight; the checklist owns the
+        # completed-form titles. A READY tracker must not read "Published"
+        # and a failing phase must say failures need attention.
+        ready_body = issue_mod.render_body(_status())
+        assert "⬜ **Published (human-approved)**" not in ready_body
+        assert "**Ready to publish: awaiting human approval**" in ready_body
+        failing = _status(
+            ready=False,
+            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
+            blockers=("Required check failed",),
+        )
+        failing_body = issue_mod.render_body(failing)
+        assert "(failures need attention)**" in failing_body
+        # The checklist still uses the completed-form title unchanged.
+        assert "- [ ] **Published (human-approved)**" in ready_body
+
     def test_rendered_body_never_contains_an_em_dash(self) -> None:
         from scripts.release.models import DownstreamOutput, OutputState
         variants = (

@@ -95,6 +95,18 @@ _PHASE_TITLES = {
     ReleasePhase.BUNDLE_HELM: "Bundle and Helm verified",
 }
 
+# What the current phase is DOING, for the progress-bar label. The checklist
+# uses the completed-form _PHASE_TITLES; the bar describes the phase in
+# flight, so it must not assert the outcome ("Published" while unpublished).
+_PHASE_ACTIVE = {
+    ReleasePhase.NOTES: "Cutting and merging the release notes",
+    ReleasePhase.CANDIDATE: "Waiting for required CI on the candidate",
+    ReleasePhase.QUALIFICATION: "Qualifying the candidate",
+    ReleasePhase.READY: "Ready to publish: awaiting human approval",
+    ReleasePhase.PUBLISHED: "Verifying core public outputs",
+    ReleasePhase.BUNDLE_HELM: "Verifying Bundle and Helm",
+}
+
 # Short names for the phase badge in the header.
 _PHASE_SHORT = {
     ReleasePhase.NOTES: "1/6 notes",
@@ -248,7 +260,10 @@ def _progress_bar(status: ReleaseStatus, done: set[ReleasePhase]) -> str:
     )
     if status.phase is ReleasePhase.COMPLETE:
         return f"{blocks} **Complete**"
-    return f"{blocks} **{_PHASE_TITLES[status.phase]}**"
+    label = _PHASE_ACTIVE[status.phase]
+    if _has_failures(status):
+        label = f"{label} (failures need attention)"
+    return f"{blocks} **{label}**"
 
 
 def _has_failures(status: ReleaseStatus) -> bool:
@@ -290,10 +305,12 @@ def _callout(status: ReleaseStatus) -> list[str]:
         return [
             "> [!IMPORTANT]",
             "> **Ready to publish.** Every pre-publication gate passed on the "
-            "exact candidate SHA. A release owner dispatches the **Release "
-            "Publish** workflow; publication waits for environment approval, "
-            "revalidates everything, and is the point of no return (upstream's "
-            "tag ruleset forbids moving or deleting the created tag).",
+            "exact candidate SHA. The controller dispatches the **Release "
+            "Publish** workflow automatically; publication waits for "
+            "environment approval, revalidates everything, and is the point "
+            "of no return (upstream's tag ruleset forbids moving or deleting "
+            "the created tag). The approval checklist is posted below when "
+            "the run is waiting.",
         ]
     blocker_lines = [f"> - {blocker}" for blocker in status.blockers] or ["> - (None recorded)"]
     return ["> [!WARNING]", "> **Not ready. Blocked on:**", *blocker_lines]
