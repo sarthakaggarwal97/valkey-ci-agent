@@ -122,7 +122,7 @@ def qualification_run(sha: str = MERGE_SHA, *,
         ]
         jobs = []
         for name in names:
-            job = MagicMock(conclusion="success")
+            job = MagicMock(status="completed", conclusion="success")
             job.name = name
             jobs.append(job)
     run.jobs.return_value = jobs

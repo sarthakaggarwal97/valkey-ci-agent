@@ -173,17 +173,17 @@ def read_binding(issue: Any, gh: Any = None) -> "ReleaseBinding | None":
 
 def _binding_body(binding: ReleaseBinding) -> str:
     line = (
-        f"Release identity binding: version `{binding.version}`, stage "
-        f"`{binding.stage.upper()}`"
+        f"Identity binding: `{binding.version}` ({binding.stage.upper()})"
     )
     if binding.notes_pr_number:
-        line += f", notes PR #{binding.notes_pr_number}"
+        line += f" · notes PR #{binding.notes_pr_number}"
     if binding.merge_sha:
-        line += f", candidate merge `{binding.merge_sha[:12]}`"
+        line += f" · candidate `{binding.merge_sha[:12]}`"
+    # One small-type line: the receipt is plumbing for reconciliation, not
+    # reading material; the machine identity lives in the hidden marker.
     return (
-        f"{binding_marker(binding)}\n{line}.\n"
-        f"Controller receipt; reconciliation reads this binding before any "
-        f"PR scan. Do not edit."
+        f"{binding_marker(binding)}\n<sub>{line} · Controller receipt, "
+        f"read before any PR scan. Do not edit.</sub>"
     )
 
 

@@ -576,8 +576,8 @@ def _record_recovery(gh: Any, tracking_issue: Any) -> None:
         return
     body = (
         f"<!-- {issue_mod.MARKER_NAMESPACE}:notify-gen:{generation + 1} -->\n"
-        f"<sub>Notification bookkeeping: recovery generation "
-        f"{generation + 1}. Edited in place by the controller.</sub>"
+        f"<sub>Notification bookkeeping: generation "
+        f"{generation + 1} (edited in place).</sub>"
     )
     if comment is None:
         retry_github_call(

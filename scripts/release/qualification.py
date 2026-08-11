@@ -83,6 +83,13 @@ def evaluate_qualification(
         lambda: list(run.jobs()),
         retries=2, description=f"list jobs of qualification run {run.id}",
     )
+    # GitHub can report the run completed while individual jobs are still
+    # finishing (observed live: run.conclusion success with two test jobs
+    # in_progress). An incomplete job means the verdict is not in yet:
+    # report pending, never failed, so nobody gets paged for a job that
+    # is merely still running.
+    if any((j.status or "") != "completed" for j in jobs):
+        return QualificationStatus(run_id=run.id, url=run.html_url, pending=True)
     # (j.name or ""): a job served with a null name must read as unnamed,
     # not raise through the caller and abort the pass.
     failed = tuple((j.name or "") for j in jobs

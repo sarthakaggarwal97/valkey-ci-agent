@@ -49,7 +49,7 @@ def _archive_jobs() -> "list[MagicMock]":
                  "Qualify x86 archives / Build package ubuntu-24.04 x86_64",
                  "Qualify ARM archives / Build package ubuntu-22.04-arm arm64",
                  "Qualify ARM archives / Build package ubuntu-24.04-arm arm64"):
-        job = MagicMock(conclusion="success")
+        job = MagicMock(status="completed", conclusion="success")
         job.name = name
         jobs.append(job)
     return jobs
@@ -76,8 +76,22 @@ class TestEvaluate:
                                         tag="9.1.1", sha=MERGE_SHA)
         assert status.pending and not status.passed
 
+    def test_incomplete_job_reads_as_pending_never_failed(self) -> None:
+        # Observed live: GitHub reported run.conclusion success while two
+        # test jobs were still in_progress. The verdict is not in yet:
+        # pending, never a failure page.
+        straggler = MagicMock(status="in_progress", conclusion="")
+        straggler.name = "Qualify RPM/DEB packages / Test RPM · AL2023"
+        done = MagicMock(status="completed", conclusion="success")
+        done.name = "Qualify x86 archives / Build package ubuntu-22.04 x86_64"
+        run = qualification_run(jobs=[straggler, done])
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert status.pending
+        assert not status.failed_jobs
+
     def test_failed_run_reports_failed_job_names(self) -> None:
-        bad = MagicMock(conclusion="failure")
+        bad = MagicMock(status="completed", conclusion="failure")
         bad.name = "DEB · Debian 12 (arm64)"
         run = qualification_run(conclusion="failure", jobs=[bad])
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
@@ -88,7 +102,7 @@ class TestEvaluate:
     def test_successful_run_with_hidden_failed_job_does_not_pass(self) -> None:
         # A run can conclude success while a job was cancelled if the
         # workflow mishandles it; job-level evidence is required.
-        bad = MagicMock(conclusion="cancelled")
+        bad = MagicMock(status="completed", conclusion="cancelled")
         bad.name = "tarball-jammy-x86_64"
         run = qualification_run(jobs=[bad])
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
@@ -99,7 +113,7 @@ class TestEvaluate:
     def test_truncated_matrix_fails_structural_evidence(self) -> None:
         # A run that succeeded with only a generate job (empty matrix) has
         # no archive or package evidence and must not pass.
-        only = MagicMock(conclusion="success")
+        only = MagicMock(status="completed", conclusion="success")
         only.name = "generate"
         run = qualification_run(jobs=[only])
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
@@ -125,7 +139,7 @@ class TestEvaluate:
         # Exact counts cut both ways: a platform added without the reviewed
         # policy bump is flagged, keeping the inventory deliberate.
         run = qualification_run()
-        extra = MagicMock(conclusion="success")
+        extra = MagicMock(status="completed", conclusion="success")
         extra.name = "Qualify RPM/DEB packages / RPM · Surprise Linux (x86_64) · v9"
         run.jobs.return_value = list(run.jobs.return_value) + [extra]
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
@@ -163,7 +177,7 @@ class TestEvaluate:
         jobs = _archive_jobs()
         dropped = jobs.pop(1)  # lose the second x86 platform entirely
         assert "x86" in dropped.name
-        duplicate = MagicMock(conclusion="success")
+        duplicate = MagicMock(status="completed", conclusion="success")
         duplicate.name = jobs[0].name  # same platform, listed twice
         run = qualification_run(tag="9.2.0-rc1", jobs=jobs + [duplicate])
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
@@ -293,7 +307,7 @@ class TestManifestEvidence:
     def test_manifest_alone_does_not_satisfy_the_other_evidence(self) -> None:
         # The manifest is one more requirement, never a substitute for the
         # job and artifact inventory.
-        only = MagicMock(conclusion="success")
+        only = MagicMock(status="completed", conclusion="success")
         only.name = "generate"
         run = qualification_run(jobs=[only])
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,

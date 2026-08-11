@@ -376,7 +376,7 @@ class TestComputeStatus:
         assert any("still executing" in blocker for blocker in status.blockers)
 
     def test_failed_qualification_blocks_with_job_names(self) -> None:
-        bad_job = MagicMock(conclusion="failure")
+        bad_job = MagicMock(status="completed", conclusion="failure")
         bad_job.name = "RPM · Rocky Linux 9 (x86_64)"
         failed = qualification_run(conclusion="failure", jobs=[bad_job])
         status = _status(repo_mock(qual_runs=[failed]))
@@ -390,7 +390,7 @@ class TestComputeStatus:
         assert status.qualification.run_id == 0
 
     def test_truncated_qualification_matrix_does_not_pass(self) -> None:
-        one_job = MagicMock(conclusion="success")
+        one_job = MagicMock(status="completed", conclusion="success")
         one_job.name = "only-job"
         truncated = qualification_run(jobs=[one_job])
         status = _status(repo_mock(qual_runs=[truncated]))
