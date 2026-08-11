@@ -3,7 +3,9 @@
 Split from reconcile so the one question it answers ("did the policy's
 required checks pass on this exact commit, from the right workflow?")
 lives behind a two-function interface (:func:`evaluate_required_checks`,
-:func:`check_blockers`).
+:func:`check_blockers`). The branch-level daily-CI gate
+(:func:`evaluate_daily`, :func:`daily_blockers`) lives here as its sibling:
+same fail-closed posture, evaluated per branch instead of per commit.
 """
 
 from __future__ import annotations
@@ -12,9 +14,13 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from github.GithubException import GithubException
+
 from scripts.common.github_client import retry_github_call
-from scripts.release.models import CheckState, RequiredCheck
+from scripts.release.models import CheckState, DailyCiState, DailyCiStatus, RequiredCheck
 from scripts.release.policy import RepoReleasePolicy
+from scripts.release.qualification import RUN_SCAN_LIMIT
+from scripts.release.verify import _humanize_minutes
 
 logger = logging.getLogger(__name__)
 
@@ -127,3 +133,90 @@ def check_blockers(checks: tuple[RequiredCheck, ...]) -> list[str]:
         for check in checks
         if check.state is not CheckState.PASSED
     ]
+
+
+def evaluate_daily(
+    repo: Any, policy: RepoReleasePolicy, branch: str, now: datetime,
+) -> DailyCiStatus:
+    """Evaluate the branch-level daily-CI gate for *branch* at *now*.
+
+    Branch-level observation, complementing the per-commit required checks:
+    the scheduled daily workflow does not run per commit, so the question is
+    "is the release branch's most recent completed daily run green and
+    fresh?", never "did it run on the candidate SHA?".
+
+    Binding is by workflow file (the policy's ``daily_workflow``), so a
+    same-named job in another workflow can never satisfy the gate. The scan
+    is capped like the other run scans. Only *completed* runs carry a
+    verdict; a run still executing is mentioned in the detail but ignored
+    otherwise. Staleness compares the newest completed run's creation time
+    to *now* with a strict greater-than, so an age exactly at the bound is
+    still fresh. An unreadable workflow fails closed as MISSING.
+    """
+    if policy.daily_workflow is None:
+        return DailyCiStatus(state=DailyCiState.SKIPPED)
+    try:
+        workflow = retry_github_call(
+            lambda: repo.get_workflow(policy.daily_workflow),
+            retries=2, description=f"get workflow {policy.daily_workflow}",
+        )
+    except GithubException:
+        logger.warning("Cannot read %s on %s; the daily gate fails closed",
+                       policy.daily_workflow, policy.repo)
+        return DailyCiStatus(state=DailyCiState.MISSING,
+                             detail="Cannot read the daily workflow")
+    runs = retry_github_call(
+        workflow.get_runs,
+        retries=2, description=f"list {policy.daily_workflow} runs",
+    )
+    newest_completed = None
+    saw_in_progress = False  # newer branch activity still executing
+    for index, run in enumerate(runs):
+        if index >= RUN_SCAN_LIMIT:
+            break
+        if run.head_branch != branch:
+            continue
+        if run.status != "completed":
+            saw_in_progress = True
+            continue
+        newest_completed = run
+        break
+    if newest_completed is None:
+        detail = f"No completed daily run on branch {branch} yet"
+        if saw_in_progress:
+            detail += " (one is in progress)"
+        return DailyCiStatus(state=DailyCiState.MISSING, detail=detail)
+
+    in_progress_note = "; a newer daily run is in progress" if saw_in_progress else ""
+    age = now - newest_completed.created_at
+    age_text = _humanize_minutes(max(0, int(age.total_seconds() // 60)))
+    if age > timedelta(hours=policy.daily_max_age_hours or 0):
+        return DailyCiStatus(
+            state=DailyCiState.STALE,
+            run_id=newest_completed.id,
+            url=newest_completed.html_url or "",
+            detail=(f"Newest daily run is {age_text} old, older than the "
+                    f"{policy.daily_max_age_hours}-hour freshness bound"
+                    f"{in_progress_note}"),
+        )
+    if newest_completed.conclusion != "success":
+        return DailyCiStatus(
+            state=DailyCiState.FAILED,
+            run_id=newest_completed.id,
+            url=newest_completed.html_url or "",
+            detail=f"Daily run failed{in_progress_note}",
+        )
+    return DailyCiStatus(
+        state=DailyCiState.PASSED,
+        run_id=newest_completed.id,
+        url=newest_completed.html_url or "",
+        detail=f"Passed ({age_text} ago{in_progress_note})",
+    )
+
+
+def daily_blockers(daily: DailyCiStatus) -> list[str]:
+    """The blocker line a non-green daily verdict adds; empty when the gate
+    is satisfied (PASSED) or unconfigured (SKIPPED)."""
+    if daily.state in (DailyCiState.PASSED, DailyCiState.SKIPPED):
+        return []
+    return [f"Daily CI: {daily.detail}"]

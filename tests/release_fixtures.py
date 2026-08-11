@@ -89,6 +89,17 @@ def workflow_runs() -> "list[MagicMock]":
     return [ci, daily]
 
 
+def daily_run(*, run_id: int = 77, status: str = "completed",
+              conclusion: "str | None" = "success", branch: str = "9.1",
+              created: "datetime | None" = None) -> MagicMock:
+    """A run of the branch-level daily workflow, fresh and green by default."""
+    return MagicMock(
+        id=run_id, status=status, conclusion=conclusion, head_branch=branch,
+        html_url=f"https://x/druns/{run_id}",
+        created_at=created or datetime.now(timezone.utc) - timedelta(hours=2),
+    )
+
+
 def qualification_run(sha: str = MERGE_SHA, *,
                       status: str = "completed", conclusion: str = "success",
                       tag: str = "9.1.1", head_branch: str = "main",

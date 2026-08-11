@@ -24,6 +24,7 @@ repos:
       - test-ubuntu-latest
       - build-debian-old
     check_timeout_minutes: 360
+    # daily_workflow / daily_max_age_hours omitted: forks have no scheduled daily runs, so the daily-CI gate is unconfigured.
     downstream:
       automation_repo: sarthakaggarwal97/valkey-release-automation
       build_workflow: build-release.yml

@@ -16,6 +16,8 @@ repos:
     required_checks: [test-ubuntu-latest]
     checks_workflow: ci.yml
     check_timeout_minutes: 360
+    daily_workflow: daily.yml
+    daily_max_age_hours: 30
     downstream:
       automation_repo: valkey-io/valkey-release-automation
       build_workflow: build-release.yml
@@ -53,6 +55,8 @@ def test_valid_policy_parses(tmp_path: Path) -> None:
     assert policy.required_checks == ("test-ubuntu-latest",)
     assert policy.checks_workflow == "ci.yml"
     assert policy.check_timeout_minutes == 360
+    assert policy.daily_workflow == "daily.yml"
+    assert policy.daily_max_age_hours == 30
     assert policy.team_org == "valkey-io"
     assert policy.team_slug == "core-team"
     down = policy.downstream
@@ -73,6 +77,9 @@ def test_shipped_registry_is_valid() -> None:
     policies = load_policy(str(path))
     assert "valkey-io/valkey" in policies
     assert policies["valkey-io/valkey"].required_checks
+    # Upstream configures the daily gate (24-hour cadence + jitter margin).
+    assert policies["valkey-io/valkey"].daily_workflow == "daily.yml"
+    assert policies["valkey-io/valkey"].daily_max_age_hours == 30
 
 
 def test_shipped_fork_registry_is_valid() -> None:
@@ -81,6 +88,9 @@ def test_shipped_fork_registry_is_valid() -> None:
     policy = next(iter(policies.values()))
     assert policy.authorized_team.startswith("user:")
     assert policy.mention == "@sarthakaggarwal97"
+    # Forks have no scheduled daily runs; the gate stays unconfigured.
+    assert policy.daily_workflow is None
+    assert policy.daily_max_age_hours is None
 
 
 @pytest.mark.parametrize(
@@ -96,6 +106,13 @@ def test_shipped_fork_registry_is_valid() -> None:
         ("checks_workflow: .github/workflows/ci.yml", "checks_workflow"),
         ("check_timeout_minutes: 0", "check_timeout_minutes"),
         ("check_timeout_minutes: '360'", "check_timeout_minutes"),
+        ("daily_workflow: ''", "daily_workflow"),
+        ("daily_workflow: .github/workflows/daily.yml", "daily_workflow"),
+        ("daily_max_age_hours: 0", "daily_max_age_hours"),
+        # YAML quoting slips again: '30' is a string and true is a bool;
+        # both would break the freshness comparison if accepted.
+        ("daily_max_age_hours: '30'", "daily_max_age_hours"),
+        ("daily_max_age_hours: true", "daily_max_age_hours"),
         ("qualification_rpm_jobs: 0", "qualification_rpm_jobs"),
         # YAML quoting slips: '30' is a string and true is a bool; both
         # would break the exact-count matrix comparison if accepted.
@@ -142,6 +159,24 @@ def test_duplicate_required_checks_are_rejected(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="required_checks"):
         load_policy(_write(tmp_path, text))
+
+
+@pytest.mark.parametrize("removed", ["daily_workflow", "daily_max_age_hours"])
+def test_daily_gate_fields_must_be_set_together(tmp_path: Path, removed: str) -> None:
+    # One field without the other is a half-configured gate (a workflow with
+    # no freshness bound, or a bound with nothing to measure).
+    lines = [line for line in _VALID.splitlines()
+             if not line.strip().startswith(f"{removed}:")]
+    with pytest.raises(ValueError, match="set together or omitted together"):
+        load_policy(_write(tmp_path, "\n".join(lines)))
+
+
+def test_daily_gate_omitted_entirely_leaves_the_gate_unconfigured(tmp_path: Path) -> None:
+    lines = [line for line in _VALID.splitlines()
+             if not line.strip().startswith(("daily_workflow:", "daily_max_age_hours:"))]
+    policy = load_policy(_write(tmp_path, "\n".join(lines)))["valkey-io/valkey"]
+    assert policy.daily_workflow is None
+    assert policy.daily_max_age_hours is None
 
 
 def test_unknown_extra_keys_are_silently_ignored(tmp_path: Path) -> None:

@@ -30,6 +30,7 @@ from scripts.common.labels import ensure_label
 from scripts.release.models import (
     CandidateState,
     CheckState,
+    DailyCiState,
     OutputState,
     ReleasePhase,
     ReleaseStatus,
@@ -203,6 +204,7 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
         f"| Release-notes PR | {_notes_pr_cell(status)} |",
         f"| Candidate SHA | {_candidate_cell(status)} |",
         f"| Qualification | {_qualification_cell(status)} |",
+        f"| Daily CI | {_daily_cell(status)} |",
         f"| Release | {_release_cell(status)} |",
     ]
 
@@ -346,6 +348,9 @@ def has_failures(status: ReleaseStatus) -> bool:
         or any(o.state is OutputState.FAILED for o in status.outputs)
         or any(c.state in (CheckState.FAILED, CheckState.STALLED) for c in status.checks)
         or status.qualification.failed_jobs
+        # A red daily run is a failure needing a human; STALE/MISSING are
+        # blockers (waiting states), not failures.
+        or status.daily.state is DailyCiState.FAILED
     )
 
 
@@ -458,6 +463,27 @@ def _qualification_cell(status: ReleaseStatus) -> str:
         return f"Passed ({link})"
     failed = ", ".join(qualification.failed_jobs[:3])
     return f"Failed ({link}): {failed}"
+
+
+def _daily_cell(status: ReleaseStatus) -> str:
+    daily = status.daily
+    if status.published:
+        # Mirrors the qualification cell: the gate is history once the
+        # release exists and is never re-evaluated afterward.
+        return "_Gated before publication; not re-evaluated afterward_"
+    if daily.state is DailyCiState.SKIPPED:
+        return "_Not configured for this repository_"
+    link = f"[daily run]({daily.url})"
+    if daily.state is DailyCiState.PASSED:
+        # The detail carries the age baked in as "Passed ({age} ago)";
+        # splice the run link in after the opening parenthesis so render
+        # stays a pure function of the status.
+        return daily.detail.replace("Passed (", f"Passed ({link}, ", 1)
+    if daily.state is DailyCiState.FAILED:
+        return f"Failed ({link})"
+    if daily.state is DailyCiState.STALE:
+        return f"Stale ({link}): {daily.detail}"
+    return f"_{daily.detail}_"  # MISSING: no run to link
 
 
 def _release_cell(status: ReleaseStatus) -> str:

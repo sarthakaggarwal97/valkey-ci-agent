@@ -71,6 +71,39 @@ class CheckState(str, Enum):
     STALLED = "stalled"
 
 
+class DailyCiState(str, Enum):
+    """Verdict of the branch-level daily-CI freshness gate.
+
+    Branch-level observation: the scheduled daily workflow does not run per
+    commit, so this complements the per-commit required checks rather than
+    duplicating them. ``STALE`` means the newest completed run is older than
+    the policy's freshness bound; ``MISSING`` covers both "no completed run
+    on the branch yet" and "the daily workflow cannot be read" (fail
+    closed); ``SKIPPED`` means the policy configures no daily gate.
+    """
+
+    PASSED = "passed"
+    FAILED = "failed"
+    STALE = "stale"
+    MISSING = "missing"
+    SKIPPED = "skipped"
+
+
+@dataclass(frozen=True)
+class DailyCiStatus:
+    """The daily-CI gate's verdict on the release branch.
+
+    ``run_id`` is the newest completed daily run the verdict is based on (0
+    when none exists); ``url`` links it ("" when none). ``detail`` is the
+    human sentence rendered into the tracker's Details cell.
+    """
+
+    state: DailyCiState = DailyCiState.SKIPPED
+    run_id: int = 0
+    url: str = ""
+    detail: str = ""
+
+
 class CandidateState(str, Enum):
     """Lifecycle of the release candidate SHA.
 
@@ -217,6 +250,10 @@ class ReleaseStatus:
     candidate: Candidate = Candidate(state=CandidateState.NONE)
     checks: tuple[RequiredCheck, ...] = ()
     qualification: QualificationStatus = QualificationStatus()
+    # Branch-level daily-CI freshness gate; SKIPPED by default so statuses
+    # built before the gate existed (and post-publication statuses, which
+    # never re-evaluate it) stay valid.
+    daily: DailyCiStatus = DailyCiStatus()
     phase: ReleasePhase = ReleasePhase.NOTES
     published: bool = False
     release_url: str = ""

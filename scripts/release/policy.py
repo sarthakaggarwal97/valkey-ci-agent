@@ -77,6 +77,11 @@ class RepoReleasePolicy:
     workflow on the same SHA must never satisfy (or clobber) a requirement.
     ``check_timeout_minutes`` bounds how long a still-running required check
     may sit before it is reported STALLED instead of pending.
+    ``daily_workflow`` / ``daily_max_age_hours`` configure the optional
+    branch-level daily-CI gate: the newest completed run of that workflow on
+    the release branch must be green and no older than the bound for the
+    release to reach READY. Both fields are set together or omitted
+    together; omitted means the gate is skipped.
     """
 
     repo: str
@@ -86,6 +91,8 @@ class RepoReleasePolicy:
     checks_workflow: str
     check_timeout_minutes: int
     downstream: DownstreamPolicy
+    daily_workflow: "str | None" = None
+    daily_max_age_hours: "int | None" = None
 
     @property
     def team_org(self) -> str:
@@ -193,6 +200,34 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
             f"got {timeout!r}"
         )
 
+    raw_daily_workflow = entry.get("daily_workflow")
+    raw_daily_age = entry.get("daily_max_age_hours")
+    # The two fields configure one gate; one without the other is a
+    # half-configured policy (a workflow with no freshness bound, or a bound
+    # with nothing to measure), not something to default around.
+    if (raw_daily_workflow is None) != (raw_daily_age is None):
+        raise ValueError(
+            f"{path}: {repo}: 'daily_workflow' and 'daily_max_age_hours' "
+            f"configure one gate and must be set together or omitted together"
+        )
+    daily_workflow: "str | None" = None
+    daily_max_age_hours: "int | None" = None
+    if raw_daily_workflow is not None:
+        if (not isinstance(raw_daily_workflow, str) or not raw_daily_workflow.strip()
+                or "/" in raw_daily_workflow):
+            raise ValueError(
+                f"{path}: {repo}: 'daily_workflow' must be a workflow file "
+                f"basename (e.g. 'daily.yml'), got {raw_daily_workflow!r}"
+            )
+        if (not isinstance(raw_daily_age, int) or isinstance(raw_daily_age, bool)
+                or raw_daily_age < 1):
+            raise ValueError(
+                f"{path}: {repo}: 'daily_max_age_hours' must be an integer >= 1, "
+                f"got {raw_daily_age!r}"
+            )
+        daily_workflow = raw_daily_workflow.strip()
+        daily_max_age_hours = raw_daily_age
+
     return RepoReleasePolicy(
         repo=repo,
         authorized_team=team,
@@ -201,6 +236,8 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
         checks_workflow=workflow.strip(),
         check_timeout_minutes=timeout,
         downstream=_parse_downstream(path, repo, entry.get("downstream")),
+        daily_workflow=daily_workflow,
+        daily_max_age_hours=daily_max_age_hours,
     )
 
 

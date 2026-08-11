@@ -427,7 +427,10 @@ SHA, and verifies the tag) → downstream outputs verified against canonical
 public locations (downloads, three registries, merged PRs, the Helm index),
 with Bundle and Helm gated on the base images being public and stalls or
 failures escalated into a once-per-state team notification → the issue
-closes itself when everything is verified.
+closes itself when everything is verified. Alongside the per-commit gates,
+an optional branch-level daily-CI gate (policy `daily_workflow` +
+`daily_max_age_hours`) holds READY unless the release branch's newest
+completed daily run is green and fresh.
 
 Credential model: the scheduled reconcile holds a valkey token without
 `contents:write` (publication is capability-blocked outside the protected

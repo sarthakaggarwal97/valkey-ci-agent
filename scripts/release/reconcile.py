@@ -303,6 +303,14 @@ def compute_status(
     qualification = QualificationStatus()
     phase = ReleasePhase.CANDIDATE
 
+    # Branch-level daily-CI gate (observation-only): the release branch's
+    # newest completed daily run must be green and fresh before READY. It
+    # never stops the per-commit checks or qualification from progressing;
+    # its blockers only hold the READY transition.
+    daily = checks_mod.evaluate_daily(repo, policy, branch,
+                                      datetime.now(timezone.utc))
+    daily_blockers = checks_mod.daily_blockers(daily)
+
     # A tag without a release is a five-alarm state: the ruleset makes the
     # tag unmovable and undeletable, so the version is unshippable through
     # the controller. Surface it loudly instead of marching toward a READY
@@ -340,7 +348,11 @@ def compute_status(
                     gh_downstream, policy, tag=tag, sha=candidate.sha,
                 )
                 if qualification.passed:
-                    phase = ReleasePhase.READY
+                    # The daily gate holds READY (and with it the publish
+                    # dispatch and the protected publish path, both keyed on
+                    # the phase); its blocker below says why.
+                    if not daily_blockers:
+                        phase = ReleasePhase.READY
                 elif qualification.pending:
                     blockers.append(
                         f"Qualification run {qualification.run_id} is still "
@@ -361,6 +373,7 @@ def compute_status(
                         "reconciliation dispatches one."
                     )
 
+    blockers.extend(daily_blockers)
     blockers.extend(alerts)
     return ReleaseStatus(
         repo=policy.repo,
@@ -373,6 +386,7 @@ def compute_status(
         candidate=candidate,
         checks=checks,
         qualification=qualification,
+        daily=daily,
         phase=phase,
         ready=not blockers,
         blockers=tuple(blockers),

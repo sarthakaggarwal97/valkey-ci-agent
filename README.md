@@ -558,7 +558,11 @@ authorized owner dispatches `release-adopt.yml` with the exact new head SHA;
 the acknowledgement is recorded as a bot-authored comment, the only adoption
 record reconciliation trusts. The issue reports readiness only when a valid
 candidate passed every required check — and readiness is a display of
-recomputed state, not an authorization to publish.
+recomputed state, not an authorization to publish. A branch-level daily-CI
+gate complements these per-commit checks: when the policy configures
+`daily_workflow` and `daily_max_age_hours`, the release cannot reach READY
+unless the branch's newest completed daily run is green and no older than
+the freshness bound.
 
 **Qualification** (stage 3): once required CI is green on the candidate,
 reconciliation dispatches the automation repo's `qualify-release.yml` with

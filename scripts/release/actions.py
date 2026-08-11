@@ -42,6 +42,7 @@ from scripts.release import verify as verify_mod
 from scripts.release.models import (
     CandidateState,
     CheckState,
+    DailyCiState,
     OutputState,
     QualificationStatus,
     ReleasePhase,
@@ -580,6 +581,14 @@ def _failure_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
             f"qual:{run_id}",
             f"Qualification run {run_id} failed: "
             + ", ".join(status.qualification.failed_jobs[:5]),
+        ))
+    # Daily FAILED only: STALE and MISSING are blockers (waiting states),
+    # not failures. The key carries the run id, so the same failing run
+    # never re-pings while a NEW failing run does.
+    if status.daily.state is DailyCiState.FAILED:
+        items.append((
+            f"daily:{status.daily.run_id}",
+            f"Daily CI run {status.daily.run_id} failed: {status.daily.url}",
         ))
     # run_id may be 0/empty; included anyway so a NEW failed run (with a
     # real id) re-pings exactly once.
