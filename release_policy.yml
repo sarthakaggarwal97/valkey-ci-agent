@@ -30,12 +30,15 @@ repos:
       - "9.0"
       - "9.1"
     required_checks:
+      # The full ci.yml job set present on every supported release branch
+      # (7.2 through 9.1): the release gate matches what CI itself demands.
       - test-ubuntu-latest
       - test-sanitizer-address
-      - build-debian-old
+      - build-32bit
       - build-macos-latest
-    # A required check still running after this long is reported STALLED
-    # (blocks like a failure, with a rerun instruction) instead of pending.
+      - build-debian-old
+      - build-libc-malloc
+      - build-almalinux8-jemalloc
     check_timeout_minutes: 360
     # Branch-level daily-CI gate (daily_workflow / daily_max_age_hours):
     # Deliberately unconfigured: upstream daily.yml only runs on the default

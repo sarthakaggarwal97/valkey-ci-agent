@@ -22,8 +22,15 @@ repos:
       - "9.0"
       - "9.1"
     required_checks:
+      # The full ci.yml job set present on every supported release branch
+      # (7.2 through 9.1): the release gate matches what CI itself demands.
       - test-ubuntu-latest
+      - test-sanitizer-address
+      - build-32bit
+      - build-macos-latest
       - build-debian-old
+      - build-libc-malloc
+      - build-almalinux8-jemalloc
     check_timeout_minutes: 360
     # daily_workflow / daily_max_age_hours omitted: forks have no scheduled daily runs, so the daily-CI gate is unconfigured.
     downstream:
