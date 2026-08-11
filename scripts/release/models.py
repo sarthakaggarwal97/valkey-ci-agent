@@ -134,6 +134,27 @@ def release_tag(version: str, stage: str) -> str:
 
 
 @dataclass(frozen=True)
+class ReleaseBinding:
+    """The controller's durable receipt binding a tracker to one release identity.
+
+    Written as a trusted marker comment on the tracking issue when the
+    version and stage are first derived, then updated in place when the
+    notes PR is first identified and when its merge SHA becomes known.
+    Reconciliation reads the binding before any PR scan, so a newer PR with
+    a notes-style head can never displace the bound one, and eviction of
+    the bound PR from the scan window cannot unbind it (it is fetched by
+    number).
+
+    ``notes_pr_number`` 0 and ``merge_sha`` "" mean not yet known.
+    """
+
+    version: str
+    stage: str
+    notes_pr_number: int = 0
+    merge_sha: str = ""
+
+
+@dataclass(frozen=True)
 class DerivedRelease:
     """Version derivation output: a pure function of branch + existing tags.
 

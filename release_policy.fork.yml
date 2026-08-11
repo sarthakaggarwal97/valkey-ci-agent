@@ -10,6 +10,7 @@
 # helm_index_url) point at real upstream endpoints, so a fork E2E for a
 # version upstream already shipped can false-VERIFY against upstream's
 # artifacts.
+schema_version: 1
 repos:
   - repo: sarthakaggarwal97/valkey
     authorized_team: user:sarthakaggarwal97

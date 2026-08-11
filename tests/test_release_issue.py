@@ -263,6 +263,113 @@ class TestAdoptedShas:
         assert issue_mod.adopted_shas(tracker) == (_SHA_A,)
 
 
+class TestBinding:
+    """The identity-binding receipt: trusted parse, edit-in-place writes."""
+
+    def _binding(self, **overrides: object) -> issue_mod.ReleaseBinding:
+        values: "dict[str, object]" = {"version": "9.1.1", "stage": "rc1",
+                                       "notes_pr_number": 42,
+                                       "merge_sha": _SHA_A}
+        values.update(overrides)
+        return issue_mod.ReleaseBinding(**values)  # type: ignore[arg-type]
+
+    def test_marker_roundtrips_every_field(self) -> None:
+        binding = self._binding()
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [
+            _comment("valkeyrie-ops[bot]",
+                     f"{issue_mod.binding_marker(binding)}\nreceipt"),
+        ]
+        assert issue_mod.read_binding(tracker) == binding
+
+    def test_version_only_binding_roundtrips(self) -> None:
+        binding = self._binding(notes_pr_number=0, merge_sha="")
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [
+            _comment("valkeyrie-ops[bot]",
+                     f"{issue_mod.binding_marker(binding)}\nreceipt"),
+        ]
+        assert issue_mod.read_binding(tracker) == binding
+
+    def test_untrusted_author_cannot_bind(self) -> None:
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [
+            _comment("drive-by", f"{issue_mod.binding_marker(self._binding())}\nx"),
+        ]
+        assert issue_mod.read_binding(tracker) is None
+
+    def test_quoted_marker_in_a_fence_cannot_bind(self) -> None:
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [
+            _comment("valkeyrie-ops[bot]",
+                     "```\n" + issue_mod.binding_marker(self._binding()) + "\n```"),
+        ]
+        assert issue_mod.read_binding(tracker) is None
+
+    def test_write_updates_the_existing_receipt_in_place(self) -> None:
+        original = self._binding(merge_sha="")
+        existing = _comment("valkeyrie-ops[bot]",
+                            issue_mod._binding_body(original))
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [existing]
+
+        issue_mod.write_binding(tracker, self._binding())
+
+        existing.edit.assert_called_once()
+        tracker.create_comment.assert_not_called()
+        assert issue_mod.binding_marker(self._binding()) in (
+            existing.edit.call_args.kwargs["body"]
+        )
+
+    def test_write_is_a_noop_when_the_receipt_already_matches(self) -> None:
+        binding = self._binding()
+        existing = _comment("valkeyrie-ops[bot]",
+                            issue_mod._binding_body(binding))
+        tracker = MagicMock()
+        tracker.get_comments.return_value = [existing]
+
+        issue_mod.write_binding(tracker, binding)
+
+        existing.edit.assert_not_called()
+        tracker.create_comment.assert_not_called()
+
+    def test_write_creates_the_receipt_when_absent(self) -> None:
+        tracker = MagicMock()
+        tracker.get_comments.return_value = []
+
+        issue_mod.write_binding(tracker, self._binding())
+
+        tracker.create_comment.assert_called_once()
+        body = tracker.create_comment.call_args.kwargs["body"]
+        assert issue_mod.binding_marker(self._binding()) in body
+
+
+class TestNormalizeBodyTimestamp:
+    def test_updated_and_legacy_reconciled_footers_normalize_alike(self) -> None:
+        updated = "state\n<sub>Updated 2026-08-10 17:30 UTC · x</sub>\n"
+        legacy = "state\n<sub>Reconciled 2026-08-09 03:05 UTC · x</sub>\n"
+        assert (issue_mod.normalize_body_timestamp(updated)
+                == issue_mod.normalize_body_timestamp(legacy))
+
+    def test_timestamp_only_difference_compares_equal(self) -> None:
+        status = _status()
+        early = issue_mod.render_body(status, _NOW)
+        late = issue_mod.render_body(
+            status, _NOW.replace(hour=23, minute=59))
+        assert early != late
+        assert (issue_mod.normalize_body_timestamp(early)
+                == issue_mod.normalize_body_timestamp(late))
+
+    def test_real_differences_survive_normalization(self) -> None:
+        early = issue_mod.render_body(_status(), _NOW)
+        changed = issue_mod.render_body(_status(ready=False), _NOW)
+        assert (issue_mod.normalize_body_timestamp(early)
+                != issue_mod.normalize_body_timestamp(changed))
+
+    def test_none_body_normalizes_to_empty(self) -> None:
+        assert issue_mod.normalize_body_timestamp(None) == ""  # type: ignore[arg-type]
+
+
 class TestFindReleaseIssue:
     def test_matches_marker_and_skips_pull_requests(self) -> None:
         marked = MagicMock(number=7)
@@ -354,8 +461,8 @@ class TestAesthetics:
 
     def test_footer_carries_the_freshness_stamp(self) -> None:
         body = _render(_status())
-        assert "<sub>Reconciled 2026-08-10 17:30 UTC" in body
-        assert "Reconciled " in body and "UTC" in body
+        assert "<sub>Updated 2026-08-10 17:30 UTC" in body
+        assert "Updated " in body and "UTC" in body
         assert "manual edits are overwritten.</sub>" in body
         assert body.rstrip().endswith("manual edits are overwritten.</sub>")
 

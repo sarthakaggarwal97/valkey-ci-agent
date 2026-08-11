@@ -16,6 +16,7 @@ from unittest.mock import MagicMock
 from github.GithubException import GithubException
 
 from scripts.release import issue as issue_mod
+from scripts.release.models import ReleaseBinding
 from scripts.release.policy import DownstreamPolicy, RepoReleasePolicy
 
 MERGE_SHA = "a" * 40
@@ -127,7 +128,7 @@ def qualification_run(sha: str = MERGE_SHA, *,
     run.jobs.return_value = jobs
     artifact_names = ["qualify-a", "qualify-b", "qualify-c", "qualify-d",
                       "valkey-rpms-el9-x86_64", "valkey-rpms-alma9-aarch64",
-                      "valkey-debs-debian12-arm64"]
+                      "valkey-debs-debian12-arm64", "qualification-manifest"]
     artifacts = []
     for name in artifact_names:
         artifact = MagicMock(expired=False, size_in_bytes=1024)
@@ -175,6 +176,15 @@ def bot_adoption(sha: str) -> MagicMock:
     return bot_comment(f"{issue_mod.adopt_marker(sha)}\nadopted")
 
 
+def bot_binding(version: str = "9.1.1", stage: str = "ga", *,
+                notes_pr_number: int = 0, merge_sha: str = "") -> MagicMock:
+    """A trusted identity-binding receipt comment, as write_binding posts it."""
+    binding = ReleaseBinding(version=version, stage=stage,
+                             notes_pr_number=notes_pr_number,
+                             merge_sha=merge_sha)
+    return bot_comment(f"{issue_mod.binding_marker(binding)}\nreceipt")
+
+
 def repo_mock(*, branch_head: str = MERGE_SHA,
               pulls: "list[MagicMock] | None" = None,
               issues: "list[MagicMock] | None" = None,
@@ -190,7 +200,16 @@ def repo_mock(*, branch_head: str = MERGE_SHA,
     repo = MagicMock()
     repo.default_branch = "main"
     repo.get_branch.return_value.commit.sha = branch_head
-    repo.get_pulls.return_value = pulls if pulls is not None else [notes_pr()]
+    pr_list = pulls if pulls is not None else [notes_pr()]
+    repo.get_pulls.return_value = pr_list
+
+    def _get_pull(number: int) -> MagicMock:
+        for pr in pr_list:
+            if pr.number == number:
+                return pr
+        raise GithubException(404, "no such PR", {})
+
+    repo.get_pull.side_effect = _get_pull
     repo.get_issues.return_value = issues if issues is not None else []
     repo.get_commit.return_value.get_check_runs.return_value = (
         runs if runs is not None else passing_runs()

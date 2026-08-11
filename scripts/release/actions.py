@@ -31,6 +31,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from functools import partial
 from typing import Any
 
 from github.GithubException import GithubException
@@ -94,16 +95,15 @@ def advance(
     if (
         status.phase is ReleasePhase.READY
         and gh_agent is not None and agent_repo
-        and not _publish_run_active(gh_agent, agent_repo, status.branch,
-                                    agent_head_sha)
     ):
         # Minimum-clicks: READY auto-starts the publish pipeline. This is
         # safe to automate because the dispatch was never the gate: the
         # validate job posts the approval evidence and the publish job holds
         # at the protected environment until a human approves.
-        _dispatch_publish(gh_agent, agent_repo, status.branch)
-        performed.append(f"dispatched the publish pipeline for {status.branch} "
-                         f"(holds at the approval gate)")
+        publish_note = _advance_publish(gh, gh_agent, agent_repo, status,
+                                        tracking_issue, agent_head_sha)
+        if publish_note:
+            performed.append(publish_note)
 
     for output in status.outputs:
         if output.action == "dispatch-bundle":
@@ -118,9 +118,30 @@ def advance(
             if dispatched:
                 performed.append(dispatched)
 
-    note = _notify_once(gh, policy, status, tracking_issue)
-    if note:
-        performed.append(note)
+    # Recovery-aware notifications: the fingerprint of every notify and
+    # wedge comment hashes (generation, sorted keys), and a pass observing
+    # ZERO failure and ZERO wedge items advances the generation, so a
+    # failure that recurs after a clean pass re-notifies exactly once while
+    # a steady failure stays suppressed.
+    failures = _failure_items(status)
+    wedges = _wedge_items(status)
+    if failures or wedges:
+        generation, _ = _notify_generation(gh, tracking_issue)
+    else:
+        generation = 0
+        _record_recovery(gh, tracking_issue)
+
+    if failures:
+        note = _notify_once(gh, policy, status, tracking_issue,
+                            failures, generation)
+        if note:
+            performed.append(note)
+
+    if wedges:
+        wedge_note = _wedge_nudge_once(gh, policy, status, tracking_issue,
+                                       wedges, generation)
+        if wedge_note:
+            performed.append(wedge_note)
 
     nudge = _nudge_once(gh, policy, status, tracking_issue)
     if nudge:
@@ -430,22 +451,23 @@ def _bump_readme_badges(readme: str, chart_version: str, app_version: str) -> st
 
 def _notify_once(
     gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus, tracking_issue: Any,
+    failures: "list[tuple[str, str]]", generation: int,
 ) -> str:
     """Mention the authorized team once per distinct failure state.
 
     The failure fingerprint is stamped into the notification comment; while
     the observed failure set is unchanged no further comment is posted, and
-    a different failure set notifies again, exactly once.
+    a different failure set notifies again, exactly once. *generation* (the
+    recovery generation, see :func:`_record_recovery`) is hashed into the
+    fingerprint so the SAME failure set recurring after a clean pass
+    notifies again.
     """
-    failures = _failure_items(status)
-    if not failures:
-        return ""
-    # Fingerprint over the stable keys, not the rendered prose: a wording
-    # tweak in a detail string must never re-ping the team, while a NEW
-    # failure (a new failed run id, a new failing check) must.
-    fingerprint = hashlib.sha256(
-        "\n".join(sorted(key for key, _ in failures)).encode("utf-8")
-    ).hexdigest()[:12]
+    # Fingerprint over (generation, stable keys), not the rendered prose: a
+    # wording tweak in a detail string must never re-ping the team, while a
+    # NEW failure (a new failed run id, a new failing check) or a recurrence
+    # after recovery must.
+    fingerprint = _notification_fingerprint(generation,
+                                            [key for key, _ in failures])
     marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:{fingerprint} -->"
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
         if issue_mod.marker_present(comment.body, marker):
@@ -484,6 +506,174 @@ def _problem_cell(item: str) -> str:
     if sep and detail:
         return f"**{name}:** {detail}"
     return item
+
+
+def _notification_fingerprint(generation: int, keys: "list[str]") -> str:
+    """The 12-hex fingerprint of (recovery generation, sorted stable keys).
+
+    Hashing the generation in means an identical key set recurring AFTER a
+    recovery (see :func:`_record_recovery`) produces a new fingerprint and
+    so re-notifies exactly once, while an unchanged state within one
+    generation stays suppressed.
+    """
+    return hashlib.sha256(
+        "\n".join([str(generation), *sorted(keys)]).encode("utf-8")
+    ).hexdigest()[:12]
+
+
+_NOTIFY_GEN_MARKER_RE = re.compile(
+    rf"<!-- {re.escape(issue_mod.MARKER_NAMESPACE)}:notify-gen:(\d+) -->"
+)
+
+
+def _marker_prefix_present(body: Any, prefix: str) -> bool:
+    """True when a line of *body*, outside any code fence, starts with
+    *prefix*. Same fence discipline as issue_mod.marker_present, for reads
+    that need a marker family rather than one exact marker."""
+    fenced = False
+    for line in (body or "").splitlines():
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+            continue
+        if not fenced and line.startswith(prefix):
+            return True
+    return False
+
+
+def _notify_generation(gh: Any, tracking_issue: Any) -> "tuple[int, Any]":
+    """(current recovery generation, the trusted comment recording it).
+
+    (0, None) before any recovery was ever recorded. The newest (highest)
+    generation on a trusted comment wins; markers on untrusted comments are
+    ignored exactly like every other marker read-back.
+    """
+    best_generation, best_comment = 0, None
+    for comment in issue_mod.trusted_comments(tracking_issue, gh):
+        fenced = False
+        for line in (comment.body or "").splitlines():
+            if line.lstrip().startswith("```"):
+                fenced = not fenced
+                continue
+            if fenced:
+                continue
+            match = _NOTIFY_GEN_MARKER_RE.match(line)
+            if match and int(match.group(1)) >= best_generation:
+                best_generation, best_comment = int(match.group(1)), comment
+    return best_generation, best_comment
+
+
+def _record_recovery(gh: Any, tracking_issue: Any) -> None:
+    """Advance the recovery generation after a clean pass (zero failure AND
+    zero wedge items), so a later recurrence hashes to a new fingerprint.
+
+    Skipped while the tracker has no notification history at all (no
+    notify, wedge, or generation marker): a healthy release gets no
+    bookkeeping comment. The generation lives in one tiny comment that is
+    edited in place, never duplicated.
+    """
+    generation, comment = _notify_generation(gh, tracking_issue)
+    if comment is None and not _has_notification_history(gh, tracking_issue):
+        return
+    body = (
+        f"<!-- {issue_mod.MARKER_NAMESPACE}:notify-gen:{generation + 1} -->\n"
+        f"<sub>Notification bookkeeping: recovery generation "
+        f"{generation + 1}. Edited in place by the controller.</sub>"
+    )
+    if comment is None:
+        retry_github_call(
+            lambda: tracking_issue.create_comment(body=body),
+            retries=2, description="post recovery-generation comment",
+        )
+    else:
+        retry_github_call(
+            lambda: comment.edit(body=body),
+            retries=2, description="advance recovery-generation comment",
+        )
+    issue_mod.invalidate_comment_memo(tracking_issue)
+
+
+def _has_notification_history(gh: Any, tracking_issue: Any) -> bool:
+    """True when any trusted comment carries a notify or wedge marker."""
+    prefixes = (f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:",
+                f"<!-- {issue_mod.MARKER_NAMESPACE}:wedge:")
+    return any(
+        _marker_prefix_present(comment.body, prefix)
+        for comment in issue_mod.trusted_comments(tracking_issue, gh)
+        for prefix in prefixes
+    )
+
+
+def _wedge_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
+    """(stable key, rendered text) per silently wedged gate.
+
+    A MISSING required check or a MISSING/STALE daily gate is not a
+    failure, so :func:`_failure_items` never escalates it, yet nothing is
+    running that could change it: the release waits silently forever. No
+    time-based grace this round (status carries no tracker age): observing
+    the state at reconcile time is the whole trigger, keyed on the evidence
+    identity so an unchanged wedge nudges once per generation.
+    """
+    items = [
+        (f"wedge:check:{status.candidate.sha}:{check.name}",
+         f"Blocked without progress: Required check `{check.name}` has no "
+         f"run on the candidate SHA. This does not resolve on its own.")
+        for check in status.checks
+        if check.state is CheckState.MISSING
+    ]
+    if status.daily.state in (DailyCiState.MISSING, DailyCiState.STALE):
+        detail = status.daily.detail or (
+            f"Daily CI is {status.daily.state.value} on `{status.branch}`."
+        )
+        if not detail.endswith("."):
+            detail += "."
+        items.append((
+            f"wedge:daily:{status.branch}:{status.daily.state.value}:"
+            f"{status.daily.run_id}",
+            f"Blocked without progress: {detail} "
+            f"This does not resolve on its own.",
+        ))
+    return items
+
+
+def _wedge_nudge_once(
+    gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus, tracking_issue: Any,
+    wedges: "list[tuple[str, str]]", generation: int,
+) -> str:
+    """Mention the authorized team once per distinct wedged state (F24).
+
+    Same fingerprint-marker pattern as :func:`_notify_once`, in its own
+    ``wedge:`` marker family: an unchanged wedge never re-pings within a
+    generation; a resolved-then-recurring one re-pings once through the
+    generation bump.
+    """
+    fingerprint = _notification_fingerprint(generation,
+                                            [key for key, _ in wedges])
+    marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:wedge:{fingerprint} -->"
+    for comment in issue_mod.trusted_comments(tracking_issue, gh):
+        if issue_mod.marker_present(comment.body, marker):
+            return ""
+    tag = release_tag(status.version, status.stage)
+    lines = "\n".join(f"> {text}" for _, text in wedges)
+    retry_github_call(
+        lambda: tracking_issue.create_comment(
+            body=(
+                f"{marker}\n"
+                f"> [!IMPORTANT]\n"
+                f"> **{policy.mention}: Release `{tag}` Is Blocked Without "
+                f"Progress.**\n"
+                f">\n"
+                f"{lines}\n"
+                f"\n"
+                f"<sub>One-time nudge: posts again only if the blocked state "
+                f"changes.</sub>"
+            )
+        ),
+        retries=2, description="post blocked-without-progress nudge",
+    )
+    issue_mod.invalidate_comment_memo(tracking_issue)
+    logger.info("Nudged %s about %d wedged gate(s)", policy.authorized_team,
+                len(wedges))
+    return f"nudged {policy.authorized_team} ({len(wedges)} wedged gate(s))"
 
 
 def _nudge_once(
@@ -551,6 +741,24 @@ def _nudge_item(status: ReleaseStatus) -> "tuple[str, str] | None":
     return None
 
 
+def _alert_key(text: str) -> str:
+    """Stable notification key for an alert string.
+
+    Alerts are produced elsewhere (reconcile, verify) as full prose, out of
+    this module's reach, so the key is derived here: hex ids (7 to 40
+    chars) and then all digit runs are stripped before hashing, so a
+    rewording that only swaps a run id or SHA keeps the alert's identity
+    and never re-pings. Known limitation, accepted: two DIFFERENT alerts
+    whose prose differs only in ids or numbers collapse to one key, so the
+    second one does not re-notify on its own (a recovery generation bump
+    still re-arms it).
+    """
+    normalized = re.sub(r"[0-9a-fA-F]{7,40}", "", text)
+    normalized = re.sub(r"[0-9]+", "", normalized)
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12]
+    return f"alert:{digest}"
+
+
 def _failure_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
     """(stable key, rendered text) per failure.
 
@@ -563,7 +771,8 @@ def _failure_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
         CheckState.FAILED: "failed",
         CheckState.STALLED: "has stalled",
     }
-    items: "list[tuple[str, str]]" = [(alert, alert) for alert in status.alerts]
+    items: "list[tuple[str, str]]" = [(_alert_key(alert), alert)
+                                      for alert in status.alerts]
     # Check keys carry the candidate SHA: unlike qualification and output
     # failures, whose keys carry run ids and so re-ping on a new run, a
     # check has no run id, and without the SHA the same check failing on a
@@ -604,7 +813,7 @@ def _failure_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
 def _close_when_complete(gh: Any, status: ReleaseStatus, tracking_issue: Any) -> bool:
     if tracking_issue.state == "closed":
         return False
-    marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:complete -->"
+    marker = issue_mod.complete_marker()
     already_commented = any(
         issue_mod.marker_present(comment.body, marker)
         for comment in issue_mod.trusted_comments(tracking_issue, gh)
@@ -634,9 +843,30 @@ def _close_when_complete(gh: Any, status: ReleaseStatus, tracking_issue: Any) ->
 
 _PUBLISH_WORKFLOW = "release-publish.yml"
 
-_PUBLISH_RUN_SCAN_LIMIT = 15
+# Per-listing cap on each server-side filtered runs query. The status
+# filter (not this cap) is what keeps a long-waiting run visible: it can
+# never fall out of a newest-N window regardless of how many completed
+# runs pile up above it. The cap only bounds pathological volume within
+# one filtered listing.
+_PUBLISH_RUN_SCAN_LIMIT = 50
 
-_PUBLISH_RUN_ACTIVE_STATUSES = ("queued", "in_progress", "waiting", "pending")
+# Statuses that can hold the slot BEFORE the approval gate; these are the
+# only statuses stale-run cleanup may ever cancel. in_progress is
+# deliberately not here: it is past the gate (a human approved), so it is
+# always active and never cancelled.
+_PUBLISH_RUN_GATED_STATUSES = ("queued", "waiting", "pending")
+
+# in_progress first: when both an in_progress and a gate-parked run match,
+# the in_progress one (past the gate, the publication itself) is the one
+# reported as active.
+_PUBLISH_RUN_ACTIVE_STATUSES = ("in_progress",) + _PUBLISH_RUN_GATED_STATUSES
+
+# The optional candidate binding release-publish.yml stamps into its
+# run-name when dispatched with tag/candidate_sha inputs:
+# "Publish release on <branch> · <tag> @ <sha> (requested by <actor>)".
+_PUBLISH_TITLE_BINDING_RE = re.compile(
+    r" · (?P<tag>\S+) @ (?P<sha>[0-9a-fA-F]{7,40})(?![0-9a-zA-Z])"
+)
 
 
 def agent_head_sha(gh_agent: Any, agent_repo: str) -> str:
@@ -662,8 +892,97 @@ def agent_head_sha(gh_agent: Any, agent_repo: str) -> str:
         return ""
 
 
+def _run_binding(run: Any) -> "tuple[str, str]":
+    """(tag, candidate SHA) the run-name carries, ("", "") when the run was
+    dispatched without bindings (manual dispatch, pre-binding runs)."""
+    match = _PUBLISH_TITLE_BINDING_RE.search(run.display_title or "")
+    if match is None:
+        return "", ""
+    return match.group("tag"), match.group("sha").lower()
+
+
+def _matches_branch(run: Any, branch: str) -> bool:
+    return f" on {branch} " in f"{run.display_title or ''} "
+
+
+def _is_stale_binding(run: Any, head_sha: str, tag: str,
+                      candidate_sha: str) -> bool:
+    """True when a gate-parked run is bound to a different controller head
+    or (via its run-name) a different tag or candidate than the current
+    one. A run whose name carries no binding is never candidate-stale: its
+    target cannot be proven different."""
+    if head_sha and (run.head_sha or "") != head_sha:
+        return True
+    run_tag, run_sha = _run_binding(run)
+    if candidate_sha and run_sha and run_sha != candidate_sha.lower():
+        return True
+    if tag and run_tag and run_tag != tag:
+        return True
+    return False
+
+
+def _list_publish_runs(workflow: Any, statuses: "tuple[str, ...]") -> "list[Any]":
+    """All runs in *statuses*, one server-side filtered listing per status.
+
+    Each listing is re-checked client-side (run.status must equal the
+    queried status) so an unfiltered or cached listing can never smuggle a
+    completed run into the active set, and each run appears exactly once.
+    """
+    runs: "list[Any]" = []
+    for wanted in statuses:
+        listing = retry_github_call(
+            partial(workflow.get_runs, status=wanted),
+            retries=2, description=f"list {wanted} publish runs",
+        )
+        for index, run in enumerate(listing):
+            if index >= _PUBLISH_RUN_SCAN_LIMIT:
+                break
+            if run.status != wanted:
+                continue
+            runs.append(run)
+    return runs
+
+
+def find_publish_runs(workflow: Any, branch: str, head_sha: str = "", *,
+                      tag: str = "", candidate_sha: str = "",
+                      ) -> "tuple[Any, list[Any]]":
+    """Pure lookup of the publish runs currently holding *branch*'s slot.
+
+    Returns ``(active, stale)`` and performs NO side effects (cancellation
+    is :func:`cancel_stale_publish_runs`' job, wired separately by the
+    caller):
+
+    - *active* is a run genuinely in flight for the current controller
+      head and candidate: any in_progress run (past the approval gate,
+      always active regardless of bindings), or a gate-parked run whose
+      head and run-name bindings match. None when no such run exists.
+    - *stale* lists gate-parked runs (queued, waiting, pending ONLY) bound
+      to a different controller head, tag, or candidate.
+
+    With *head_sha* "" head staleness cannot be judged and no run is
+    head-stale (fail-safe); with *tag*/*candidate_sha* "" the run-name
+    binding is not checked. Both views (dispatch idempotency and the
+    approval URL) share this one matcher so a stale or mismatched run is
+    never presented as the place to approve.
+    """
+    active: Any = None
+    stale: "list[Any]" = []
+    for run in _list_publish_runs(workflow, _PUBLISH_RUN_ACTIVE_STATUSES):
+        if not _matches_branch(run, branch):
+            continue
+        # An in_progress run is past the gate: it IS the publication in
+        # progress. Bindings do not matter; it is always active, never
+        # stale, and must never be cancelled.
+        if (run.status != "in_progress"
+                and _is_stale_binding(run, head_sha, tag, candidate_sha)):
+            stale.append(run)
+        elif active is None:
+            active = run
+    return active, stale
+
+
 def _cancel_stale_run(run: Any) -> bool:
-    """Cancel a publish run whose head SHA is not the controller head.
+    """Cancel one gate-parked stale publish run.
 
     True when the cancel succeeded (the run no longer counts as active);
     False when it failed, in which case the caller treats the run as
@@ -682,78 +1001,186 @@ def _cancel_stale_run(run: Any) -> bool:
         logger.error("Cancel of stale publish run %s was rejected; "
                      "treating it as active", run.id)
         return False
-    logger.info("Cancelled stale publish run %s (head %s is not the "
-                "controller head)", run.id, (run.head_sha or "")[:12])
+    logger.info("Cancelled stale publish run %s (head %s)", run.id,
+                (run.head_sha or "")[:12])
     return True
 
 
-def _active_publish_run(workflow: Any, branch: str, head_sha: str = "") -> Any:
-    """The newest publish run for *branch* that is queued, running, or
-    waiting at the approval gate; None when no such run exists.
+def cancel_stale_publish_runs(runs: "list[Any]", *, act: bool = True) -> bool:
+    """Cancel every stale run in *runs* (the side-effect half of the
+    finder/cancel split; :func:`find_publish_runs` never calls this).
 
-    With *head_sha* (the agent repo's default-branch head), a run on any
-    other commit is STALE controller code parked at the gate: it is
-    cancelled and not counted as active, so a fresh dispatch replaces it.
-    A failed cancel counts as active (fail-safe).
+    *runs* must come from the finder's stale list, which only ever contains
+    queued/waiting/pending runs: an in_progress run is past the approval
+    gate and is never staged for cancellation. The guard here is defense in
+    depth for a caller passing a hand-built list.
+
+    With ``act`` False this is a strict no-op returning False (observation
+    mode: the runs still count as active). Returns True only when every run
+    was cancelled; any failure returns False so the caller fails safe.
     """
-    runs = retry_github_call(
-        workflow.get_runs,
-        retries=2, description="list publish runs",
-    )
-    marker = f" on {branch} "
-    for index, run in enumerate(runs):
-        if index >= _PUBLISH_RUN_SCAN_LIMIT:
-            break
-        if run.status not in _PUBLISH_RUN_ACTIVE_STATUSES:
+    if not act:
+        return False
+    all_cancelled = True
+    for run in runs:
+        if run.status not in _PUBLISH_RUN_GATED_STATUSES:
+            logger.error("Refusing to cancel publish run %s (status %s): "
+                         "only gate-parked runs are ever cancelled",
+                         run.id, run.status)
+            all_cancelled = False
             continue
-        if marker not in f"{run.display_title or ''} ":
-            continue
-        if head_sha and (run.head_sha or "") != head_sha:
-            if _cancel_stale_run(run):
-                continue
-        return run
-    return None
+        if not _cancel_stale_run(run):
+            all_cancelled = False
+    return all_cancelled
+
+
+def _active_publish_run(workflow: Any, branch: str, head_sha: str = "", *,
+                        tag: str = "", candidate_sha: str = "",
+                        act: bool = True) -> Any:
+    """The run currently holding *branch*'s publish slot, cancelling stale
+    gate-parked runs along the way; None when the slot is free.
+
+    A stale run that could not (or, with ``act`` False, must not) be
+    cancelled still holds the slot: its gate might still fire, so a fresh
+    dispatch would race it.
+    """
+    active, stale = find_publish_runs(workflow, branch, head_sha,
+                                      tag=tag, candidate_sha=candidate_sha)
+    if stale and not cancel_stale_publish_runs(stale, act=act):
+        return active if active is not None else stale[0]
+    return active
 
 
 def _publish_run_active(gh_agent: Any, agent_repo: str, branch: str,
-                        head_sha: str = "") -> bool:
+                        head_sha: str = "", *, tag: str = "",
+                        candidate_sha: str = "") -> bool:
     """True when a publish run for *branch* is queued, running, or waiting
-    at the approval gate; reconcile must not stack duplicates. Runs on a
-    stale controller commit are cancelled and do not count (see
-    :func:`_active_publish_run`)."""
+    at the approval gate; reconcile must not stack duplicates. Stale
+    gate-parked runs are cancelled and do not count (see
+    :func:`find_publish_runs`)."""
     workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
     if workflow is None:
         return True  # cannot see the workflow: do not dispatch blind
-    return _active_publish_run(workflow, branch, head_sha) is not None
+    return _active_publish_run(workflow, branch, head_sha, tag=tag,
+                               candidate_sha=candidate_sha) is not None
 
 
 def waiting_publish_run_url(gh_agent: Any, agent_repo: str, branch: str,
-                            head_sha: str = "") -> str:
+                            head_sha: str = "", *, tag: str = "",
+                            candidate_sha: str = "") -> str:
     """The html_url of the active publish run for *branch*, "" when none
     is visible (including when the workflow itself is unreadable).
 
     Display-only companion to :func:`_publish_run_active`: reconciliation
     threads it into the READY callout's approval link; nothing gates on it.
-    *head_sha* keeps the two views consistent: a stale run is never
-    presented as the place to approve.
+    Observation only (finder, no cancel step): a stale run or a run bound
+    to a different tag/candidate is simply never presented as the place to
+    approve.
     """
     workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
     if workflow is None:
         return ""
-    run = _active_publish_run(workflow, branch, head_sha)
-    if run is None:
+    active, _stale = find_publish_runs(workflow, branch, head_sha,
+                                       tag=tag, candidate_sha=candidate_sha)
+    if active is None:
         return ""
-    return run.html_url or ""
+    return active.html_url or ""
 
 
-def _dispatch_publish(gh_agent: Any, agent_repo: str, branch: str) -> None:
+def _halted_publish_failure(workflow: Any, branch: str, head_sha: str, *,
+                            tag: str = "", candidate_sha: str = "") -> Any:
+    """The completed publish run that halts re-dispatch, or None.
+
+    The newest COMPLETED publish run for *branch* at the current controller
+    head (and, when its run-name carries bindings, for the current
+    tag/candidate) is inspected: failure or cancelled halts, anything else
+    (or no such run) does not. A run on another controller head or another
+    candidate is skipped entirely, so a new controller head or a new
+    candidate re-arms dispatch by construction. With *head_sha* "" the head
+    filter is skipped: halting on the newest matching failure beats looping
+    when staleness cannot be judged.
+    """
+    listing = retry_github_call(
+        lambda: workflow.get_runs(status="completed"),
+        retries=2, description="list completed publish runs",
+    )
+    for index, run in enumerate(listing):
+        if index >= _PUBLISH_RUN_SCAN_LIMIT:
+            break
+        if run.status != "completed":
+            continue
+        if not _matches_branch(run, branch):
+            continue
+        if head_sha and (run.head_sha or "") != head_sha:
+            continue  # another controller version's run: a new head re-arms
+        run_tag, run_sha = _run_binding(run)
+        if candidate_sha and run_sha and run_sha != candidate_sha.lower():
+            continue  # another candidate's run: a new candidate re-arms
+        if tag and run_tag and run_tag != tag:
+            continue
+        if run.conclusion in ("failure", "cancelled"):
+            return run
+        return None  # the newest relevant completed run did not fail
+    return None
+
+
+def _advance_publish(gh: Any, gh_agent: Any, agent_repo: str,
+                     status: ReleaseStatus, tracking_issue: Any,
+                     head_sha: str) -> str:
+    """Move the READY phase forward: dispatch the publish pipeline unless a
+    run already holds the slot or a failed run halts re-dispatch.
+
+    The halt is deliberate: a publish run that COMPLETED as failure or
+    cancelled at this controller head, for this candidate, would fail the
+    same way again; re-dispatching would loop. The one-shot marker-gated
+    warning tells the human, and a new controller head or a new candidate
+    re-arms dispatch (the failed run then no longer matches).
+    """
+    tag = release_tag(status.version, status.stage)
+    candidate_sha = status.candidate.sha
+    workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
+    if workflow is None:
+        return ""  # cannot see the workflow: do not dispatch blind
+    if _active_publish_run(workflow, status.branch, head_sha, tag=tag,
+                           candidate_sha=candidate_sha) is not None:
+        return ""
+    halted = _halted_publish_failure(workflow, status.branch, head_sha,
+                                     tag=tag, candidate_sha=candidate_sha)
+    if halted is not None:
+        posted = _autofix_once(
+            gh, tracking_issue, key="publish-halt",
+            fingerprint_source=f"{candidate_sha}:{halted.id}",
+            callout=(
+                f"> [!WARNING]\n"
+                f"> **The publish pipeline failed;** the controller will "
+                f"not re-dispatch until the controller code changes or a "
+                f"human re-runs it: [run {halted.id}]({halted.html_url})."
+            ),
+        )
+        if posted:
+            return (f"halted publish re-dispatch for {status.branch} "
+                    f"(publish run {halted.id} concluded {halted.conclusion})")
+        return ""
+    _dispatch_publish(gh_agent, agent_repo, status.branch, tag=tag,
+                      candidate_sha=candidate_sha)
+    return (f"dispatched the publish pipeline for {status.branch} "
+            f"(holds at the approval gate)")
+
+
+def _dispatch_publish(gh_agent: Any, agent_repo: str, branch: str,
+                      tag: str = "", candidate_sha: str = "") -> None:
+    """Dispatch release-publish.yml for *branch*, binding the run to the
+    exact *tag* and *candidate_sha* it was dispatched for (stamped into the
+    run-name so later passes can correlate by candidate, not just branch)."""
     workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
     default_branch = retry_github_call(
         lambda: gh_agent.get_repo(agent_repo).default_branch,
         retries=2, description=f"resolve {agent_repo} default branch",
     )
+    inputs = {"branch": branch, "tag": tag, "candidate_sha": candidate_sha}
     retry_github_call(
-        lambda: workflow.create_dispatch(default_branch, inputs={"branch": branch}),
+        lambda: workflow.create_dispatch(default_branch, inputs=inputs),
         retries=2, description="dispatch publish pipeline",
     )
-    logger.info("Dispatched the publish pipeline for %s", branch)
+    logger.info("Dispatched the publish pipeline for %s (%s @ %s)",
+                branch, tag or "<no tag>", candidate_sha[:12] or "<no sha>")

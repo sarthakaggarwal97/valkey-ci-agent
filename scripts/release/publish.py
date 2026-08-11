@@ -32,6 +32,7 @@ candidate SHA, or the failure is reported as critical.
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import logging
 import re
 from dataclasses import dataclass
@@ -78,6 +79,34 @@ class PublishPlan:
     # when the probe answered, None when it could not (treated as
     # unprotected in the evidence, never claimed protected).
     tag_protected: "bool | None" = None
+    # The qualification run the readiness evidence is based on (0 when the
+    # status carried none) and the controller commit that computed the
+    # plan ("" outside Actions); both are bound into the plan digest.
+    qualification_run_id: int = 0
+    controller_sha: str = ""
+
+
+def plan_digest(plan: PublishPlan) -> str:
+    """A canonical sha256 over everything the approver's decision rests on.
+
+    Emitted by the validate job and recomputed on execute: any drift in the
+    tag, SHA, release flags, body, qualification evidence, tag-protection
+    verdict, or controller code between approval and execution changes the
+    digest and the execute path refuses. The serialization is versioned and
+    newline-delimited with fixed keys, so it is stable across processes.
+    """
+    payload = "\n".join([
+        "plan-digest-v1",
+        f"tag={plan.tag}",
+        f"sha={plan.sha}",
+        f"prerelease={plan.prerelease}",
+        f"make_latest={plan.make_latest}",
+        f"body_sha256={hashlib.sha256(plan.body.encode('utf-8')).hexdigest()}",
+        f"qualification_run_id={plan.qualification_run_id}",
+        f"tag_protected={plan.tag_protected}",
+        f"controller_sha={plan.controller_sha}",
+    ])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _ref_matches(ref: str, patterns: "list[str]") -> bool:
@@ -88,16 +117,40 @@ def _ref_matches(ref: str, patterns: "list[str]") -> bool:
     )
 
 
+def _ruleset_rules_cover_immutability(ruleset: "dict[str, Any]") -> bool:
+    """Whether the ruleset's rules actually forbid moving and deleting the tag.
+
+    A ruleset that matches the ref but carries no ``deletion`` rule and no
+    ``update``/``non_fast_forward`` rule restricts nothing we rely on: the
+    tag could still be moved or deleted despite the ruleset "covering" it.
+    """
+    rule_types = {
+        rule.get("type") for rule in (ruleset.get("rules") or [])
+        if isinstance(rule, dict)
+    }
+    return "deletion" in rule_types and (
+        "update" in rule_types or "non_fast_forward" in rule_types
+    )
+
+
 def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
     """Whether an active tag ruleset protects ``refs/tags/{tag}``.
 
-    True when an active ruleset targeting tags includes the ref and does
-    not exclude it; False when none does; None when the API could not
-    answer (rulesets endpoint unavailable, insufficient scope). The
-    approval evidence treats None like False: never claim immutability
-    that was not verified.
+    True when an active ruleset targeting tags includes the ref, does not
+    exclude it, actually carries deletion plus update (or non_fast_forward)
+    rules, and grants no bypass to a GitHub App. A matching ruleset without
+    those rules restricts nothing and counts as unprotected. A bypass actor
+    of type Integration is treated as unprotected-for-us: the publishing
+    identity is itself a GitHub App, so an App bypass may be exactly the
+    actor whose writes the ruleset is supposed to constrain. When a
+    matching ruleset's bypass data is not visible the verdict degrades to
+    None (unknown) instead of claiming protection. False when no ruleset
+    qualifies; None when the API could not answer (rulesets endpoint
+    unavailable, insufficient scope). The approval evidence treats None
+    like False: never claim immutability that was not verified.
     """
     ref = f"refs/tags/{tag}"
+    bypass_unknown = False
     try:
         _, listing = repo._requester.requestJsonAndCheck(
             "GET", f"{repo.url}/rulesets",
@@ -109,10 +162,19 @@ def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
                 "GET", f"{repo.url}/rulesets/{entry['id']}",
             )
             conditions = (ruleset.get("conditions") or {}).get("ref_name") or {}
-            if _ref_matches(ref, conditions.get("include") or []) \
-                    and not _ref_matches(ref, conditions.get("exclude") or []):
-                return True
-        return False
+            if not (_ref_matches(ref, conditions.get("include") or [])
+                    and not _ref_matches(ref, conditions.get("exclude") or [])):
+                continue
+            if not _ruleset_rules_cover_immutability(ruleset):
+                continue  # matches the ref but restricts nothing we rely on
+            if "bypass_actors" not in ruleset:
+                bypass_unknown = True  # cannot rule out an App bypass
+                continue
+            if any(isinstance(actor, dict) and actor.get("actor_type") == "Integration"
+                   for actor in ruleset.get("bypass_actors") or []):
+                continue  # an App can bypass: unprotected-for-us
+            return True
+        return None if bypass_unknown else False
     except Exception:
         logger.warning("Cannot determine tag ruleset protection for %s; "
                        "treating it as unknown", tag, exc_info=True)
@@ -122,6 +184,7 @@ def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
 def plan_publication(
     gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: str,
     gh_downstream: Any = None, skip_authorization: bool = False,
+    controller_sha: str = "",
 ) -> PublishPlan:
     """Run every pre-publication validation and return the exact plan.
 
@@ -190,11 +253,14 @@ def plan_publication(
         tracker_url=tracking_issue.html_url,
         qualification_url=status.qualification.url,
         tag_protected=tag_ruleset_protected(repo, tag),
+        qualification_run_id=status.qualification.run_id,
+        controller_sha=controller_sha,
     )
 
 
 def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: str,
                     expected_tag: str = "", expected_sha: str = "",
+                    expected_digest: str = "", controller_sha: str = "",
                     gh_downstream: Any = None) -> str:
     """Revalidate everything and publish the release at the candidate SHA.
 
@@ -203,12 +269,17 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
     saw. The SHA binding matters independently of the tag: if the branch
     moves and a new head is adopted while approval is pending, revalidation
     would produce the same tag over a different commit, and that commit was
-    never reviewed. Returns the release URL. Publication fires the
+    never reviewed. ``expected_digest``, when set, must equal the
+    recomputed plan's canonical digest, binding every remaining plan
+    dimension (release flags, body, qualification run, tag-protection
+    verdict, controller code); absent means a legacy caller and only the
+    tag/SHA bindings apply. Returns the release URL. Publication fires the
     production build dispatch; there is deliberately no dry-run on this
     path (use :func:`plan_publication`).
     """
     plan = plan_publication(gh, policy, branch=branch, actor=actor,
-                            gh_downstream=gh_downstream)
+                            gh_downstream=gh_downstream,
+                            controller_sha=controller_sha)
     if expected_tag and expected_tag != plan.tag:
         raise ReleaseControlError(
             f"revalidation produced tag {plan.tag} but approval was for "
@@ -221,13 +292,26 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
             f"{expected_sha}; the candidate changed between approval and "
             f"execution: re-run validation and approve the new commit"
         )
+    if expected_digest and expected_digest != plan_digest(plan):
+        raise ReleaseControlError(
+            f"revalidation produced plan digest {plan_digest(plan)[:12]} but "
+            f"approval was for {expected_digest[:12]}. The plan changed "
+            f"after approval; re-run validation"
+        )
 
     repo = retry_github_call(
         lambda: gh.get_repo(policy.repo),
         retries=2, description=f"get repo {policy.repo}",
     )
-    release = retry_github_call(
-        lambda: repo.create_git_release(
+    # Creating the release is NOT idempotent (it creates the tag and fires
+    # the production build dispatch), so it is attempted exactly once and
+    # never blind-retried: a retry after a lost response would race the
+    # release that the first attempt actually created. On failure, recover
+    # by reading back: if the release now exists and its tag resolves to
+    # exactly the approved SHA, the first attempt succeeded and the
+    # exception was only a lost response; anything else re-raises.
+    try:
+        release = repo.create_git_release(
             plan.tag,
             name=plan.tag,
             message=plan.body,
@@ -235,9 +319,15 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
             prerelease=plan.prerelease,
             target_commitish=plan.sha,
             make_latest=plan.make_latest,
-        ),
-        retries=2, description=f"create release {plan.tag}",
-    )
+        )
+    except Exception:
+        release = _recover_created_release(repo, plan)
+        if release is None:
+            raise
+        logger.warning(
+            "create release %s raised but the release exists at the approved "
+            "SHA; treating the lost response as success", plan.tag,
+        )
     logger.info("Published release %s: %s", plan.tag, release.html_url)
 
     # The create call silently reuses a pre-existing tag; re-resolve and
@@ -268,6 +358,22 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
     return release.html_url
 
 
+def _recover_created_release(repo: Any, plan: PublishPlan) -> Any:
+    """Read-after-write recovery for a failed create-release call.
+
+    Returns the existing release when it exists AND its tag resolves to
+    exactly the approved candidate SHA (the lost-response case); None for
+    every other outcome, so the caller re-raises the original error.
+    """
+    try:
+        release = repo.get_release(plan.tag)
+    except GithubException:
+        return None
+    if resolve_tag_commit(repo, plan.tag) != plan.sha:
+        return None
+    return release
+
+
 def ensure_environment_protected(gh: Any, policy: RepoReleasePolicy,
                                  agent_repo: str, environment: str = "release") -> None:
     """Fail closed unless the publish gate is actually protected.
@@ -276,8 +382,10 @@ def ensure_environment_protected(gh: Any, policy: RepoReleasePolicy,
     protection rules and admin bypass enabled the first time a workflow
     references it, and the job then runs seconds after validation with no
     human in the loop. Publication therefore refuses unless the environment
-    has at least one required reviewer, prevents self-review, and disallows
-    admin bypass.
+    has at least one required reviewer, prevents self-review, disallows
+    admin bypass, and restricts which branches may deploy to it (a null
+    deployment branch policy lets any branch, including an attacker's
+    topic branch, reach the gated job).
 
     Fork policies (``user:<login>`` authorization) skip this check: their
     approval model *is* the single authorized user, and requiring reviewers
@@ -314,6 +422,14 @@ def ensure_environment_protected(gh: Any, policy: RepoReleasePolicy,
         problems.append("self-review is not prevented")
     if payload.get("can_admins_bypass", True):
         problems.append("administrators can bypass the protection rules")
+    branch_policy = payload.get("deployment_branch_policy")
+    if not isinstance(branch_policy, dict) or not (
+            branch_policy.get("protected_branches")
+            or branch_policy.get("custom_branch_policies")):
+        problems.append(
+            "deployments are not restricted to specific branches "
+            "(deployment_branch_policy allows any branch to reach the gate)"
+        )
     if problems:
         raise ReleaseControlError(
             f"the {environment!r} environment on {agent_repo} is not an "
@@ -356,6 +472,7 @@ def render_plan_summary(plan: PublishPlan, *, controller_sha: str = "") -> str:
     ]
     if controller_sha:
         checklist.append(f"- [ ] Controller code: `{controller_sha[:12]}`")
+    checklist.append(f"- [ ] Plan digest: `{plan_digest(plan)[:12]}`")
     return "\n".join([
         "## Awaiting approval: publish " + plan.tag,
         "",

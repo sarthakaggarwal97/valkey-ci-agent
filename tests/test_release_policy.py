@@ -77,9 +77,11 @@ def test_shipped_registry_is_valid() -> None:
     policies = load_policy(str(path))
     assert "valkey-io/valkey" in policies
     assert policies["valkey-io/valkey"].required_checks
-    # Upstream configures the daily gate (24-hour cadence + jitter margin).
-    assert policies["valkey-io/valkey"].daily_workflow == "daily.yml"
-    assert policies["valkey-io/valkey"].daily_max_age_hours == 30
+    # Deliberately unconfigured: upstream daily.yml only runs on the default
+    # branch, so there is no trustworthy per-release-branch producer yet.
+    # The gate code stays and is covered by fixture-based tests.
+    assert policies["valkey-io/valkey"].daily_workflow is None
+    assert policies["valkey-io/valkey"].daily_max_age_hours is None
 
 
 def test_shipped_fork_registry_is_valid() -> None:
@@ -179,17 +181,43 @@ def test_daily_gate_omitted_entirely_leaves_the_gate_unconfigured(tmp_path: Path
     assert policy.daily_max_age_hours is None
 
 
-def test_unknown_extra_keys_are_silently_ignored(tmp_path: Path) -> None:
-    # Documented behavior, deliberately held rather than flagged: every
-    # meaningful key is required, so a typo'd key name surfaces as a
-    # missing-field error anyway; a purely additive stray key cannot
-    # weaken any validation and is ignored.
+def test_unknown_keys_are_rejected_at_every_level(tmp_path: Path) -> None:
+    # A stray key is a misspelled real one until proven otherwise: a typo'd
+    # optional key (daly_workflow) would silently disable the gate it meant
+    # to configure, so every mapping level rejects unknowns by name.
     text = _VALID.replace("check_timeout_minutes: 360",
                           "check_timeout_minutes: 360\n    surprise_key: true")
-    policies = load_policy(_write(tmp_path, text))
-    policy = policies["valkey-io/valkey"]
-    assert policy.check_timeout_minutes == 360
-    assert not hasattr(policy, "surprise_key")
+    with pytest.raises(ValueError, match="surprise_key"):
+        load_policy(_write(tmp_path, text))
+
+
+def test_typoed_daily_workflow_key_fails_loudly(tmp_path: Path) -> None:
+    text = _VALID.replace("daily_workflow: daily.yml",
+                          "daly_workflow: daily.yml")
+    with pytest.raises(ValueError, match="daly_workflow"):
+        load_policy(_write(tmp_path, text))
+
+
+def test_unknown_downstream_key_is_rejected(tmp_path: Path) -> None:
+    text = _VALID.replace("ecr_namespace: valkey",
+                          "ecr_namespace: valkey\n      exr_namespace: valkey")
+    with pytest.raises(ValueError, match="exr_namespace"):
+        load_policy(_write(tmp_path, text))
+
+
+def test_unknown_top_level_key_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="repositories"):
+        load_policy(_write(tmp_path, "repositories: []\n" + _VALID))
+
+
+def test_schema_version_1_is_accepted(tmp_path: Path) -> None:
+    policies = load_policy(_write(tmp_path, "schema_version: 1\n" + _VALID))
+    assert "valkey-io/valkey" in policies
+
+
+def test_unsupported_schema_version_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="schema_version"):
+        load_policy(_write(tmp_path, "schema_version: 2\n" + _VALID))
 
 
 def test_duplicate_repo_rejected(tmp_path: Path) -> None:

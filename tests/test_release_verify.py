@@ -24,18 +24,29 @@ def _content_file(text: str) -> MagicMock:
     return f
 
 
-def _pr(number: int = 5, *, merged: bool = True, state: str = "closed") -> MagicMock:
-    return MagicMock(number=number, merged_at="2026-08-07T00:00:00Z" if merged else None,
-                     state="closed" if merged else state,
-                     html_url=f"https://x/pull/{number}")
+def _pr(number: int = 5, *, merged: bool = True, state: str = "closed",
+        base_ref: str = "main", changed_files: int = 1, title: str = "",
+        head_ref: str = "update-branch", created=None) -> MagicMock:
+    from datetime import datetime, timezone
+    pr = MagicMock(number=number, merged_at="2026-08-07T00:00:00Z" if merged else None,
+                   state="closed" if merged else state,
+                   changed_files=changed_files, title=title,
+                   created_at=created or datetime(2026, 8, 8, tzinfo=timezone.utc),
+                   html_url=f"https://x/pull/{number}")
+    pr.base.ref = base_ref
+    pr.head.ref = head_ref
+    return pr
 
 
 def _repo_serving(contents: "dict[str, str]", *,
                   pulls: "list[MagicMock] | None" = None,
-                  tags: "set[str] | None" = None) -> MagicMock:
+                  tags: "set[str] | None" = None,
+                  compare_status: str = "ahead") -> MagicMock:
     repo = MagicMock()
+    repo.default_branch = "main"
     repo.get_contents.side_effect = lambda path, **kw: _content_file(contents[path])
     repo.get_pulls.return_value = pulls or []
+    repo.compare.return_value.status = compare_status
 
     from github.GithubException import GithubException
 
@@ -97,8 +108,7 @@ class TestHashes:
 
 class TestContainer:
     def test_merged_pr_and_public_tags_verify(self) -> None:
-        repo = MagicMock()
-        repo.get_pulls.return_value = [_pr()]
+        repo = _repo_serving({}, pulls=[_pr()])
         with patch.object(verify.pub, "dockerhub_tag_exists", return_value=True), \
              patch.object(verify.pub, "ghcr_tag_exists", return_value=True), \
              patch.object(verify.pub, "ecr_public_tag_exists", return_value=True):
@@ -107,8 +117,7 @@ class TestContainer:
         assert images.state is OutputState.VERIFIED
 
     def test_missing_variant_tag_blocks_images(self) -> None:
-        repo = MagicMock()
-        repo.get_pulls.return_value = [_pr()]
+        repo = _repo_serving({}, pulls=[_pr()])
         with patch.object(verify.pub, "dockerhub_tag_exists",
                           side_effect=lambda r, t: not t.endswith("-alpine")), \
              patch.object(verify.pub, "ghcr_tag_exists", return_value=True), \
@@ -118,8 +127,7 @@ class TestContainer:
         assert "9.1.1-alpine" in images.detail
 
     def test_closed_unmerged_pr_is_failed(self) -> None:
-        repo = MagicMock()
-        repo.get_pulls.return_value = [_pr(merged=False, state="closed")]
+        repo = _repo_serving({}, pulls=[_pr(merged=False, state="closed")])
         with patch.object(verify.pub, "dockerhub_tag_exists", return_value=False), \
              patch.object(verify.pub, "ghcr_tag_exists", return_value=False), \
              patch.object(verify.pub, "ecr_public_tag_exists", return_value=False):
@@ -134,15 +142,49 @@ class TestDocsAndWebsite:
         assert docs.state is OutputState.SKIPPED
         assert site.state is OutputState.SKIPPED
 
-    def test_patch_release_verifies_by_docs_tag(self) -> None:
+    def test_patch_release_verifies_by_reachable_docs_tag(self) -> None:
         repo = _repo_serving({}, tags={"9.1.1"})
         output = verify._verify_docs(gh_mock(repo), _POLICY.downstream, "9.1.1", "ga")
         assert output.state is OutputState.VERIFIED
+        # Honest evidence level: the tag and its branch placement were
+        # checked; the public deployment was not.
+        assert "not verified" in output.detail
 
-    def test_minor_release_verifies_by_docs_pr(self) -> None:
+    def test_docs_tag_off_the_default_branch_is_failed(self) -> None:
+        # The tag exists but its commit never landed on the default branch:
+        # that is not the release flow's update, not a pending state.
+        repo = _repo_serving({}, tags={"9.1.1"}, compare_status="diverged")
+        output = verify._verify_docs(gh_mock(repo), _POLICY.downstream, "9.1.1", "ga")
+        assert output.state is OutputState.FAILED
+        assert "not reachable" in output.detail
+
+    def test_minor_release_verifies_by_docs_pr_with_honest_detail(self) -> None:
         repo = _repo_serving({}, pulls=[_pr()])
         output = verify._verify_docs(gh_mock(repo), _POLICY.downstream, "9.2.0", "ga")
         assert output.state is OutputState.VERIFIED
+        assert "Merged PR evidence only" in output.detail
+
+    def test_wrong_base_pr_never_satisfies(self) -> None:
+        # A PR retargeted at a side branch never lands the update; it is
+        # not release evidence for docs or website.
+        repo = _repo_serving({}, pulls=[_pr(base_ref="release-9.2")])
+        docs = verify._verify_docs(gh_mock(repo), _POLICY.downstream, "9.2.0", "ga")
+        site = verify._verify_website(gh_mock(repo), _POLICY.downstream, "9.2.0", "ga")
+        assert docs.state is OutputState.PENDING
+        assert site.state is OutputState.PENDING
+
+    def test_zero_file_pr_never_satisfies(self) -> None:
+        repo = _repo_serving({}, pulls=[_pr(changed_files=0)])
+        docs = verify._verify_docs(gh_mock(repo), _POLICY.downstream, "9.2.0", "ga")
+        site = verify._verify_website(gh_mock(repo), _POLICY.downstream, "9.2.0", "ga")
+        assert docs.state is OutputState.PENDING
+        assert site.state is OutputState.PENDING
+
+    def test_website_merged_pr_verifies_with_honest_detail(self) -> None:
+        repo = _repo_serving({}, pulls=[_pr()])
+        output = verify._verify_website(gh_mock(repo), _POLICY.downstream, "9.1.1", "ga")
+        assert output.state is OutputState.VERIFIED
+        assert "public deployment is not verified" in output.detail
 
 
 class TestBundle:
@@ -167,11 +209,58 @@ class TestBundle:
     def test_open_update_pr_means_no_dispatch(self) -> None:
         versions = json.dumps({"9.1": {"version": "9.1.1", "valkey-server": {"version": "9.1.0"}}})
         repo = _repo_serving({"versions.json": versions},
-                             pulls=[_pr(merged=False, state="open")])
+                             pulls=[_pr(merged=False, state="open",
+                                        title="Update valkey-server to 9.1.1")])
         output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
                                        images_public=True)
         assert output.state is OutputState.PENDING
         assert output.action == ""
+
+    def test_old_closed_pr_no_longer_wedges_the_release(self) -> None:
+        # F28: a closed-unmerged PR carrying an OLDER tag is a previous
+        # release's history, not this release's rejection; the not-started
+        # path holds and the dispatch can proceed.
+        versions = json.dumps({"9.1": {"version": "9.1.1", "valkey-server": {"version": "9.1.0"}}})
+        repo = _repo_serving({"versions.json": versions},
+                             pulls=[_pr(merged=False, state="closed",
+                                        title="Update valkey-server to 9.1.0")])
+        output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
+                                       images_public=True)
+        assert output.state is OutputState.PENDING
+        assert output.action == "dispatch-bundle"
+
+    def test_old_open_pr_is_ignored(self) -> None:
+        versions = json.dumps({"9.1": {"version": "9.1.1", "valkey-server": {"version": "9.1.0"}}})
+        repo = _repo_serving({"versions.json": versions},
+                             pulls=[_pr(merged=False, state="open",
+                                        title="Update valkey-server to 9.1.0")])
+        output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
+                                       images_public=True)
+        assert output.state is OutputState.PENDING
+        assert output.action == "dispatch-bundle"
+
+    def test_neighbor_tag_in_pr_title_never_matches(self) -> None:
+        # 9.1.1 must not be satisfied by a 9.1.10 (or 9.1.1-rc1) PR title.
+        versions = json.dumps({"9.1": {"version": "9.1.1", "valkey-server": {"version": "9.1.0"}}})
+        repo = _repo_serving({"versions.json": versions},
+                             pulls=[_pr(merged=False, state="open",
+                                        title="Update valkey-server to 9.1.10")])
+        output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
+                                       images_public=True)
+        assert output.action == "dispatch-bundle"
+
+    def test_pr_created_before_publication_is_ignored(self) -> None:
+        from datetime import datetime, timedelta, timezone
+        published = datetime(2026, 8, 8, tzinfo=timezone.utc)
+        versions = json.dumps({"9.1": {"version": "9.1.1", "valkey-server": {"version": "9.1.0"}}})
+        repo = _repo_serving({"versions.json": versions},
+                             pulls=[_pr(merged=False, state="open",
+                                        title="Update valkey-server to 9.1.1",
+                                        created=published - timedelta(days=2))])
+        output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
+                                       images_public=True, published_at=published)
+        assert output.state is OutputState.PENDING
+        assert output.action == "dispatch-bundle"
 
     def test_malformed_versions_json_is_failed_not_a_crash(self) -> None:
         # P1: a malformed downstream file must degrade to this output
@@ -392,9 +481,12 @@ class TestRCTagThreading:
 
 class TestClosedPRsNeedHumans:
     def test_closed_unmerged_bundle_pr_is_failed_with_no_action(self) -> None:
+        # The PR carries THIS release's tag, so its closure is this
+        # release's human decision (unlike an older tag's leftover PR).
         versions = json.dumps({"9.1": {"version": "9.1.1", "valkey-server": {"version": "9.1.0"}}})
         repo = _repo_serving({"versions.json": versions},
-                             pulls=[_pr(merged=False, state="closed")])
+                             pulls=[_pr(merged=False, state="closed",
+                                        title="Update valkey-server to 9.1.1")])
         output = verify._verify_bundle(gh_mock(repo), _POLICY.downstream, "9.1.1", "9.1.1",
                                        images_public=True)
         assert output.state is OutputState.FAILED
@@ -421,6 +513,34 @@ class TestVerifierDegradation:
         hashes = next(o for o in outputs if o.name == "hashes")
         assert hashes.state is OutputState.FAILED
         assert "404" in hashes.detail
+
+    def test_urlerror_degrades_one_output_and_siblings_still_verify(self) -> None:
+        # F29: public_endpoints deliberately raises on 5xx/429 and network
+        # failures; those must land as a probe error on THAT output only,
+        # never abort the pass.
+        import urllib.error
+
+        repo = _repo_serving({"README": "hash valkey-9.1.2.tar.gz sha256 abc url"},
+                             tags={"9.1.2"})
+        repo.get_workflow.return_value.get_runs.return_value = []
+        gh = gh_mock(repo)
+
+        def _boom(url: str, **kw: object) -> bool:
+            raise urllib.error.URLError("connection timed out")
+
+        with patch.object(verify.pub, "url_exists", side_effect=_boom), \
+             patch.object(verify.pub, "dockerhub_tag_exists", return_value=True), \
+             patch.object(verify.pub, "ghcr_tag_exists", return_value=True), \
+             patch.object(verify.pub, "ecr_public_tag_exists", return_value=True):
+            outputs = verify.verify_core_outputs(gh, _POLICY, tag="9.1.2", stage="ga",
+                                                 gh_source=gh, published_at=None)
+        tarballs = next(o for o in outputs if o.name == "tarballs")
+        assert tarballs.state is OutputState.FAILED
+        assert tarballs.detail.startswith("Probe error: ")
+        hashes = next(o for o in outputs if o.name == "hashes")
+        assert hashes.state is OutputState.VERIFIED
+        docs = next(o for o in outputs if o.name == "docs")
+        assert docs.state is OutputState.VERIFIED
 
 
 def _wf_run(title: str, *, run_id: int = 700, status: str = "completed",
@@ -578,68 +698,131 @@ _BUILD_OK = DownstreamOutput(name="build-run", state=OutputState.VERIFIED,
                              detail="ok", url="https://x/runs/700", run_id=700)
 
 
+def _gh_latest(tag_name: str) -> MagicMock:
+    """A source-repo gh mock whose latest release carries *tag_name*."""
+    gh = MagicMock()
+    gh.get_repo.return_value.get_latest_release.return_value = MagicMock(
+        tag_name=tag_name)
+    return gh
+
+
 class TestPackagesAndTryValkey:
     def test_rc_skips_packages(self) -> None:
-        out = verify._verify_packages("rc1", _BUILD_OK, None)
+        out = verify._verify_packages(_POLICY.downstream, "rc1", _BUILD_OK, None)
         assert out.state is OutputState.SKIPPED
 
-    def test_packages_verified_by_publish_and_pages_jobs(self) -> None:
+    def test_packages_verified_by_the_exact_publish_inventory(self) -> None:
+        # The fixture policy expects exactly 2 RPM and 1 DEB publish jobs.
         jobs = _jobs([
-            ("release-build-packages / Publish to S3", "success"),
+            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
+            ("release-build-packages / RPM · el9 (aarch64) · Publish to S3", "success"),
+            ("release-build-packages / DEB · bookworm (x86_64) · Publish to S3", "success"),
             ("release-build-packages / Deploy Pages", "success"),
         ])
-        out = verify._verify_packages("ga", _BUILD_OK, jobs)
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
         assert out.state is OutputState.VERIFIED
+
+    def test_dropped_platform_fails_packages_despite_green_jobs(self) -> None:
+        # F21: a green-but-smaller matrix (one RPM platform silently
+        # dropped) must read FAILED, not VERIFIED.
+        jobs = _jobs([
+            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
+            ("release-build-packages / DEB · bookworm (x86_64) · Publish to S3", "success"),
+            ("release-build-packages / Deploy Pages", "success"),
+        ])
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
+        assert out.state is OutputState.FAILED
+        assert ("(Evidence mismatch: 1 RPM publish jobs succeeded, "
+                "expected exactly 2)") in out.detail
+
+    def test_dropped_deb_platform_fails_packages(self) -> None:
+        jobs = _jobs([
+            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
+            ("release-build-packages / RPM · el9 (aarch64) · Publish to S3", "success"),
+            ("release-build-packages / Deploy Pages", "success"),
+        ])
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
+        assert out.state is OutputState.FAILED
+        assert ("(Evidence mismatch: 0 DEB publish jobs succeeded, "
+                "expected exactly 1)") in out.detail
 
     def test_failed_publish_job_fails_packages(self) -> None:
         jobs = _jobs([
-            ("release-build-packages / Publish to S3", "failure"),
+            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "failure"),
         ])
-        out = verify._verify_packages("ga", _BUILD_OK, jobs)
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
         assert out.state is OutputState.FAILED
 
     def test_packages_blocked_until_build_verified(self) -> None:
         pending = DownstreamOutput(name="build-run", state=OutputState.PENDING)
-        out = verify._verify_packages("ga", pending, None)
+        out = verify._verify_packages(_POLICY.downstream, "ga", pending, None)
         assert out.state is OutputState.BLOCKED
 
     def test_unlistable_jobs_fail_packages(self) -> None:
         # jobs None = the shared job fetch failed for a verified build run.
-        out = verify._verify_packages("ga", _BUILD_OK, None)
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, None)
         assert out.state is OutputState.FAILED
         assert "Could not list" in out.detail
 
-    def test_try_valkey_skipped_when_workflow_skipped_it(self) -> None:
+    def test_try_valkey_missing_sentinel_is_failed_for_the_latest_release(self) -> None:
+        # F22 (also the live July 21 pattern: green wrapper jobs, no
+        # upload): when this release IS the repository's latest, a missing
+        # sentinel means the public deployment was never updated.
+        jobs = _jobs([
+            ("update-try-valkey / build-try-valkey", "success"),
+        ])
+        run = _run_with_artifacts([])
+        out = verify._verify_try_valkey(
+            "ga", _BUILD_OK, run, jobs,
+            gh_source=_gh_latest("9.1.2"), repo_name="valkey-io/valkey", tag="9.1.2")
+        assert out.state is OutputState.FAILED
+        assert out.detail == "Try Valkey evidence is missing for the latest release"
+
+    def test_try_valkey_skipped_only_when_provably_not_latest(self) -> None:
         jobs = _jobs([
             ("update-try-valkey / build-try-valkey", "skipped"),
         ])
         run = _run_with_artifacts([])
-        out = verify._verify_try_valkey("ga", _BUILD_OK, run, jobs)
-        assert out.state is OutputState.SKIPPED  # not the latest release
+        out = verify._verify_try_valkey(
+            "ga", _BUILD_OK, run, jobs,
+            gh_source=_gh_latest("9.2.0"), repo_name="valkey-io/valkey", tag="9.1.2")
+        assert out.state is OutputState.SKIPPED
+        assert "provably not" in out.detail
+
+    def test_try_valkey_latest_comparison_failure_fails_closed(self) -> None:
+        # An unreadable or unparseable latest release is inconclusive; the
+        # missing sentinel must read FAILED, never settle as SKIPPED.
+        from github.GithubException import GithubException
+        jobs = _jobs([
+            ("update-try-valkey / build-try-valkey", "success"),
+        ])
+        run = _run_with_artifacts([])
+        gh = MagicMock()
+        gh.get_repo.return_value.get_latest_release.side_effect = (
+            GithubException(500, "boom", {}))
+        out = verify._verify_try_valkey(
+            "ga", _BUILD_OK, run, jobs,
+            gh_source=gh, repo_name="valkey-io/valkey", tag="9.1.2")
+        assert out.state is OutputState.FAILED
 
     def test_try_valkey_verified_only_with_the_upload_sentinel(self) -> None:
         jobs = _jobs([
             ("update-try-valkey / build-try-valkey", "success"),
         ])
         run = _run_with_artifacts(["try-valkey-uploaded-9.1.2"])
-        out = verify._verify_try_valkey("ga", _BUILD_OK, run, jobs)
+        out = verify._verify_try_valkey(
+            "ga", _BUILD_OK, run, jobs,
+            gh_source=MagicMock(), repo_name="valkey-io/valkey", tag="9.1.2")
         assert out.state is OutputState.VERIFIED
-
-    def test_green_wrapper_without_sentinel_is_skipped_not_verified(self) -> None:
-        # The live July 21 pattern: four releases, four green wrapper jobs,
-        # only one actual upload. Job success alone must never verify.
-        jobs = _jobs([
-            ("update-try-valkey / build-try-valkey", "success"),
-        ])
-        run = _run_with_artifacts([])
-        out = verify._verify_try_valkey("ga", _BUILD_OK, run, jobs)
-        assert out.state is OutputState.SKIPPED
 
     def test_stalled_pending_outputs_escalate_to_failed(self) -> None:
         from datetime import datetime, timedelta, timezone
         old = datetime.now(timezone.utc) - timedelta(minutes=999)
+        # The helm output carries attempt evidence (a PR url), so the
+        # normal deadline applies even though an action is set.
         outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
-                                    detail="waiting", action="open-helm-pr"),
+                                    detail="waiting", action="open-helm-pr",
+                                    url="https://x/pull/9"),
                    DownstreamOutput(name="bundle", state=OutputState.BLOCKED, detail="gated"))
         escalated = verify.escalate_stalled_outputs(outputs, old, 360)
         assert escalated[0].state is OutputState.FAILED
@@ -647,6 +830,32 @@ class TestPackagesAndTryValkey:
         # Escalation pages a human; the auto-action must not keep firing.
         assert escalated[0].action == ""
         assert escalated[1].state is OutputState.BLOCKED  # prerequisite carries it
+
+    def test_fresh_action_bearing_output_is_exempt_from_the_release_clock(self) -> None:
+        # F13: the clock starts at publication, but Bundle/Helm may spend
+        # that whole window BLOCKED and only just unblock. With no attempt
+        # evidence yet (empty run_id and url), the output keeps its action
+        # so the first dispatch can still happen.
+        from datetime import datetime, timedelta, timezone
+        old = datetime.now(timezone.utc) - timedelta(minutes=999)
+        outputs = (DownstreamOutput(name="bundle", state=OutputState.PENDING,
+                                    detail="the bundle update has not started yet",
+                                    action="dispatch-bundle"),)
+        escalated = verify.escalate_stalled_outputs(outputs, old, 360)
+        assert escalated[0].state is OutputState.PENDING
+        assert escalated[0].action == "dispatch-bundle"
+
+    def test_attempted_action_bearing_output_still_escalates(self) -> None:
+        # Once an attempt was observed (run_id evidence), the exemption
+        # ends and the deadline applies.
+        from datetime import datetime, timedelta, timezone
+        old = datetime.now(timezone.utc) - timedelta(minutes=999)
+        outputs = (DownstreamOutput(name="bundle", state=OutputState.PENDING,
+                                    detail="waiting", action="dispatch-bundle",
+                                    run_id=42),)
+        escalated = verify.escalate_stalled_outputs(outputs, old, 360)
+        assert escalated[0].state is OutputState.FAILED
+        assert escalated[0].action == ""
 
     def test_stall_detail_strips_the_trailing_period(self) -> None:
         from datetime import datetime, timedelta, timezone
@@ -689,38 +898,56 @@ class TestHostileJobPayloads:
     def test_ga_with_an_empty_jobs_list_fails_packages(self) -> None:
         # jobs [] is not None: the fetch worked and returned nothing, which
         # means the publish matrix never ran.
-        out = verify._verify_packages("ga", _BUILD_OK, [])
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, [])
         assert out.state is OutputState.FAILED
         assert "no package publish jobs" in out.detail
 
     def test_empty_string_conclusion_never_verifies_packages(self) -> None:
-        jobs = _jobs([("release-build-packages / Publish to S3", "")])
-        out = verify._verify_packages("ga", _BUILD_OK, jobs)
+        jobs = _jobs([("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "")])
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
         assert out.state is OutputState.FAILED
         assert "Publish to S3" in out.detail
 
     def test_unicode_job_names_are_matched_safely(self) -> None:
         jobs = _jobs([
-            ("release-build-packages / Publish to S3 · linux/amd64 🚀", "success"),
+            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3 🚀", "success"),
+            ("release-build-packages / RPM · el9 (aarch64) · Publish to S3 🚀", "success"),
+            ("release-build-packages / DEB · bookworm · Publish to S3 · résumé", "success"),
             ("release-build-packages / Deploy Pages · résumé", "success"),
         ])
-        out = verify._verify_packages("ga", _BUILD_OK, jobs)
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
         assert out.state is OutputState.VERIFIED
+
+    def test_duplicate_job_names_never_satisfy_the_inventory(self) -> None:
+        # The same RPM job served twice (rerun attempts listed together)
+        # is one platform, not two.
+        jobs = _jobs([
+            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
+            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
+            ("release-build-packages / DEB · bookworm (x86_64) · Publish to S3", "success"),
+        ])
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
+        assert out.state is OutputState.FAILED
+        assert "expected exactly 2" in out.detail
 
     def test_none_job_name_degrades_instead_of_crashing(self) -> None:
         nameless = MagicMock(conclusion="success")
         nameless.name = None
-        out = verify._verify_packages("ga", _BUILD_OK, [nameless])
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, [nameless])
         assert out.state is OutputState.FAILED
 
     def test_expired_upload_sentinel_is_not_evidence(self) -> None:
         # size-0-but-expired-False is fine for a sentinel; expired is not.
+        # For the latest release, an expired sentinel therefore reads
+        # FAILED, the same as no sentinel at all.
         jobs = _jobs([("update-try-valkey / build-try-valkey", "success")])
         run = _run_with_artifacts(["try-valkey-uploaded-9.1.2"])
         for artifact in run.get_artifacts.return_value:
             artifact.expired = True
-        out = verify._verify_try_valkey("ga", _BUILD_OK, run, jobs)
-        assert out.state is OutputState.SKIPPED
+        out = verify._verify_try_valkey(
+            "ga", _BUILD_OK, run, jobs,
+            gh_source=_gh_latest("9.1.2"), repo_name="valkey-io/valkey", tag="9.1.2")
+        assert out.state is OutputState.FAILED
 
 
 class TestStallEscalationBoundary:

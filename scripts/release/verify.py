@@ -76,8 +76,10 @@ def verify_core_outputs(
     outputs = [
         build,
         _guarded("tarballs", lambda: _verify_tarballs(down, tag)),
-        _guarded("packages", lambda: _verify_packages(stage, build, jobs)),
-        _guarded("try-valkey", lambda: _verify_try_valkey(stage, build, build_run, jobs)),
+        _guarded("packages", lambda: _verify_packages(down, stage, build, jobs)),
+        _guarded("try-valkey", lambda: _verify_try_valkey(
+            stage, build, build_run, jobs,
+            gh_source=gh_source, repo_name=policy.repo, tag=tag)),
         _guarded("hashes", lambda: _verify_hashes(gh, down, tag)),
     ]
     container = _guarded("container-pr", lambda: _verify_container(gh, down, tag))
@@ -89,16 +91,21 @@ def verify_core_outputs(
 
 def verify_ordered_outputs(
     gh: Any, policy: RepoReleasePolicy, *, version: str, tag: str, stage: str,
-    core: tuple[DownstreamOutput, ...],
+    core: tuple[DownstreamOutput, ...], published_at: Any = None,
 ) -> tuple[DownstreamOutput, ...]:
-    """Stage-6 outputs: Bundle and Helm, gated on public base images."""
+    """Stage-6 outputs: Bundle and Helm, gated on public base images.
+
+    ``published_at``, when known, lets the Bundle verifier ignore update
+    PRs that predate this release's publication.
+    """
     images_public = any(
         output.name == "container-images" and output.state is OutputState.VERIFIED
         for output in core
     )
     return (
         _guarded("bundle", lambda: _verify_bundle(
-            gh, policy.downstream, version, tag, images_public=images_public)),
+            gh, policy.downstream, version, tag, images_public=images_public,
+            published_at=published_at)),
         # container-images includes the bare tag (the chart's default image).
         _guarded("helm", lambda: _verify_helm(
             gh, policy.downstream, version, stage, image_public=images_public)),
@@ -130,6 +137,21 @@ def escalate_stalled_outputs(
     exempt: their prerequisite carries the escalation."""
     if published_at is None or not _past_deadline(published_at, timeout_minutes):
         return outputs
+
+    def _stalled(o: DownstreamOutput) -> bool:
+        if o.state is not OutputState.PENDING:
+            return False
+        # An action-bearing output with no attempt evidence (empty run_id
+        # AND empty url) has never been tried: the release-wide clock
+        # started at publication, but such an output may have spent that
+        # entire window BLOCKED behind a prerequisite (Bundle and Helm wait
+        # for the container images) and only just become eligible to start.
+        # Escalating it would clear the action and kill the very first
+        # attempt before one was ever observed, so it stays PENDING with
+        # its action intact. Once an attempt exists (run/PR evidence fills
+        # run_id or url), the normal deadline applies.
+        return not (o.action and not o.run_id and not o.url)
+
     return tuple(
         DownstreamOutput(
             name=o.name, state=OutputState.FAILED,
@@ -138,7 +160,7 @@ def escalate_stalled_outputs(
             # action cleared: an escalated stall pages a human; it must not
             # also keep auto-dispatching every pass.
             url=o.url, action="", run_id=o.run_id,
-        ) if o.state is OutputState.PENDING else o
+        ) if _stalled(o) else o
         for o in outputs
     )
 
@@ -159,6 +181,17 @@ def _guarded(name: str, verifier: Callable[[], Any]) -> Any:
             name=name, state=OutputState.FAILED,
             detail=f"GitHub returned HTTP {exc.status}: the target repository "
                    f"is missing or unreadable",
+        )
+    except (OSError, ValueError) as exc:
+        # OSError covers URLError and TimeoutError; ValueError covers
+        # json.JSONDecodeError. public_endpoints deliberately raises on
+        # 5xx/429 so registry outages surface loudly: they land here as a
+        # probe error for THIS output only, never a pass abort.
+        logger.warning("Verifier %s failed: %s", name, exc)
+        reason = str(exc).strip() or type(exc).__name__
+        return DownstreamOutput(
+            name=name, state=OutputState.FAILED,
+            detail=f"Probe error: {reason}",
         )
 
 
@@ -272,7 +305,7 @@ def _newest_marked_run(gh: Any, repo_name: str, workflow_file: str,
         workflow.get_runs,
         retries=2, description=f"list {workflow_file} runs",
     )
-    pattern = re.compile(rf"(?<![\w.]){re.escape(marker)}(?![\w.-])")
+    pattern = _exact_token_re(marker)
     for index, run in enumerate(runs):
         if index >= RUN_SCAN_LIMIT:
             break
@@ -311,13 +344,20 @@ def _build_run_jobs(build: DownstreamOutput, run: Any) -> Any:
         return None
 
 
-def _verify_packages(stage: str, build: DownstreamOutput, jobs: Any) -> DownstreamOutput:
+def _verify_packages(down: Any, stage: str, build: DownstreamOutput,
+                     jobs: Any) -> DownstreamOutput:
     """RPM/DEB publication (GA only), evidenced by the build run's publish
-    and pages jobs succeeding.
+    and pages jobs succeeding in exactly the reviewed inventory.
 
     Job-level evidence rather than a public endpoint: the package repos'
     public layout is not a stable URL contract, and the plan explicitly
     allows the authoritative publish workflow as the v1 canonical signal.
+
+    Counts are exact, not floors (the qualification verifier's stance): a
+    green-but-smaller publish matrix means a platform was silently dropped,
+    which must read FAILED, not VERIFIED. The expected counts are the
+    policy's qualification_rpm_jobs/deb_jobs inventory: the production
+    matrix publishes the same reviewed platform set qualification builds.
     """
     if stage != "ga":
         return DownstreamOutput(
@@ -353,19 +393,41 @@ def _verify_packages(stage: str, build: DownstreamOutput, jobs: Any) -> Downstre
             detail=f"Package publication jobs failed: {', '.join(failed)}",
             url=build.url,
         )
+    # Distinct names, not occurrences: the same job listed twice (rerun
+    # attempts served together) must not satisfy the inventory with a
+    # platform missing. The RPM/DEB markers follow the qualification
+    # verifier's job-name convention.
+    succeeded = {(j.name or "") for j in publish_jobs if j.conclusion == "success"}
+    for marker, expected, label in (
+        ("RPM", down.qualification_rpm_jobs, "RPM"),
+        ("DEB", down.qualification_deb_jobs, "DEB"),
+    ):
+        count = sum(marker in name for name in succeeded)
+        if count != expected:
+            return DownstreamOutput(
+                name="packages", state=OutputState.FAILED,
+                detail=f"(Evidence mismatch: {count} {label} publish jobs "
+                       f"succeeded, expected exactly {expected})",
+                url=build.url,
+            )
     return DownstreamOutput(
         name="packages", state=OutputState.VERIFIED,
-        detail="RPM/DEB publish and pages jobs succeeded", url=build.url,
+        detail=f"All {down.qualification_rpm_jobs} RPM and "
+               f"{down.qualification_deb_jobs} DEB publish jobs and the "
+               f"pages jobs succeeded", url=build.url,
     )
 
 
 def _verify_try_valkey(stage: str, build: DownstreamOutput, run: Any,
-                       jobs: Any) -> DownstreamOutput:
+                       jobs: Any, *, gh_source: Any, repo_name: str,
+                       tag: str) -> DownstreamOutput:
     """Try Valkey upload, evidenced by the build run's update-try-valkey job.
 
     The job itself skips for release candidates and for versions that are
-    not the latest release; a skipped job is therefore not-applicable, not
-    a failure.
+    not the latest release. A missing sentinel is only acceptable
+    (SKIPPED) when this release is provably not the repository's latest:
+    for the latest GA a missing or expired sentinel means the public Try
+    Valkey deployment was never updated, which is a failure.
     """
     if stage != "ga":
         return DownstreamOutput(
@@ -399,8 +461,7 @@ def _verify_try_valkey(stage: str, build: DownstreamOutput, run: Any,
     # The wrapper job succeeds whether or not it uploaded (it internally
     # skips non-latest releases), so job conclusion cannot support a
     # VERIFIED claim. The workflow uploads a native sentinel artifact when
-    # (and only when) the upload happened; its absence on a green job means
-    # the upload was intentionally skipped. Sentinel name set by
+    # (and only when) the upload happened. Sentinel name set by
     # valkey-release-automation/.github/workflows/build-release.yml.
     if _run_has_artifact(run, "try-valkey-uploaded"):
         return DownstreamOutput(
@@ -408,12 +469,47 @@ def _verify_try_valkey(stage: str, build: DownstreamOutput, run: Any,
             detail="Try Valkey upload confirmed by the run's upload sentinel",
             url=build.url,
         )
+    if _release_is_latest(gh_source, repo_name, tag):
+        return DownstreamOutput(
+            name="try-valkey", state=OutputState.FAILED,
+            detail="Try Valkey evidence is missing for the latest release",
+            url=build.url,
+        )
     return DownstreamOutput(
         name="try-valkey", state=OutputState.SKIPPED,
-        detail="No upload sentinel on the run: Try Valkey was intentionally "
-               "skipped (release candidate or not the latest release)",
+        detail="No upload sentinel on the run: Try Valkey tracks only the "
+               "latest release and this release is provably not it",
         url=build.url,
     )
+
+
+def _release_is_latest(gh_source: Any, repo_name: str, tag: str) -> bool:
+    """Whether *tag* is (or must be presumed) the repository's latest release.
+
+    The same comparison the publish path's latest-release decision uses,
+    reimplemented locally against gh_source (verify must not import
+    publish). Fails closed: when the latest release cannot be read or its
+    tag cannot be compared, the release is treated as the latest, so a
+    missing Try Valkey upload reads FAILED rather than silently settling
+    as SKIPPED.
+    """
+    try:
+        repo = retry_github_call(
+            lambda: gh_source.get_repo(repo_name),
+            retries=2, description=f"get repo {repo_name}",
+        )
+        latest = retry_github_call(
+            repo.get_latest_release,
+            retries=2, description="get latest release",
+        )
+    except GithubException:
+        # 404 means no latest release exists, so this one is it; any other
+        # API failure is an inconclusive comparison, which fails closed.
+        return True
+    try:
+        return parse_version(tag) >= parse_version(latest.tag_name or "")
+    except ValueError:
+        return True
 
 
 def _run_has_artifact(run: Any, prefix: str) -> bool:
@@ -531,15 +627,29 @@ def _verify_docs(gh: Any, down: Any, tag: str, stage: str) -> DownstreamOutput:
         retries=2, description=f"get repo {down.doc_repo}",
     )
     if patch > 0:
-        if _tag_exists(repo, tag):
+        tag_sha = resolve_tag_commit(repo, tag)
+        if not tag_sha:
             return DownstreamOutput(
-                name="docs", state=OutputState.VERIFIED,
-                detail=f"Docs tag {tag} exists",
+                name="docs", state=OutputState.PENDING,
+                detail=f"Docs tag {tag} has not been pushed yet",
+            )
+        # The tag alone is metadata anyone can push; the update-valkey-doc
+        # flow lands its commit on the default branch, so the tag's commit
+        # must be reachable there for the tag to be release evidence.
+        if not _commit_on_default_branch(repo, tag_sha):
+            return DownstreamOutput(
+                name="docs", state=OutputState.FAILED,
+                detail=f"Docs tag {tag} exists but its commit is not "
+                       f"reachable on the default branch, so it is not the "
+                       f"release flow's update",
                 url=f"https://github.com/{down.doc_repo}/releases/tag/{tag}",
             )
         return DownstreamOutput(
-            name="docs", state=OutputState.PENDING,
-            detail=f"Docs tag {tag} has not been pushed yet",
+            name="docs", state=OutputState.VERIFIED,
+            detail=f"Docs tag {tag} exists and its commit is on the default "
+                   f"branch. Repo evidence only; the public docs deployment "
+                   f"is not verified",
+            url=f"https://github.com/{down.doc_repo}/releases/tag/{tag}",
         )
     pr = _find_update_pr(gh, down.doc_repo, f"update-docs-{tag}")
     return _pr_progress_output("docs", pr, f"update-docs-{tag}", down.doc_repo)
@@ -561,6 +671,7 @@ def _verify_website(gh: Any, down: Any, tag: str, stage: str) -> DownstreamOutpu
 
 def _verify_bundle(
     gh: Any, down: Any, version: str, tag: str, *, images_public: bool,
+    published_at: Any = None,
 ) -> DownstreamOutput:
     """Bundle: applicable for lines >= 8.1; blocked until base images public;
     verified only when versions.json records the version AND the bundle
@@ -609,7 +720,14 @@ def _verify_bundle(
     if recorded is not None and not isinstance(recorded, str):
         return parse_failed
     if recorded != tag:  # versions.json records the tag form for rc releases
-        pr = _find_update_pr(gh, down.bundle_repo, _BUNDLE_UPDATE_BRANCH)
+        # The bundle flow reuses one fixed head branch across releases, so
+        # the branch alone cannot correlate a PR to THIS release: the PR
+        # must carry the exact tag (title or head ref) and postdate this
+        # release's publication. An older release's leftover PR (open or
+        # closed) is simply not this release's evidence: with no matching
+        # PR the not-started path holds and the dispatch can proceed.
+        pr = _find_update_pr(gh, down.bundle_repo, _BUNDLE_UPDATE_BRANCH,
+                             must_reference=tag, created_after=published_at)
         if pr is not None and pr.state == "open":
             if _pr_checks_failing(pr):
                 return DownstreamOutput(
@@ -822,8 +940,20 @@ def _chart_listed_in_index(index_text: str, chart_version: str) -> "bool | None"
 # Shared helpers
 
 
-def _find_update_pr(gh: Any, repo_name: str, head_branch: str) -> Any:
-    """Newest PR (any state) in *repo_name* whose head branch is *head_branch*."""
+def _find_update_pr(gh: Any, repo_name: str, head_branch: str, *,
+                    must_reference: str = "", created_after: Any = None) -> Any:
+    """Newest PR in *repo_name* whose head branch is *head_branch* and that
+    is actually bound to this release.
+
+    Two bindings always apply: the PR's base must be the target repo's
+    default branch (a PR retargeted at a side branch never lands the
+    update), and the PR must change at least one file (an empty PR is not
+    update evidence). ``must_reference``, when set, additionally requires
+    the PR title or head ref to carry that exact token (boundary-anchored):
+    needed for flows that reuse one fixed head branch across releases.
+    ``created_after``, when set, ignores PRs created before it, so an
+    earlier release's leftover PR can never be read as this release's.
+    """
     repo = retry_github_call(
         lambda: gh.get_repo(repo_name),
         retries=2, description=f"get repo {repo_name}",
@@ -834,7 +964,36 @@ def _find_update_pr(gh: Any, repo_name: str, head_branch: str) -> Any:
                                     sort="created", direction="desc")),
         retries=2, description=f"list {head_branch} PRs on {repo_name}",
     )
-    return pulls[0] if pulls else None
+    pattern = _exact_token_re(must_reference) if must_reference else None
+    for pr in pulls:
+        if pr.base.ref != repo.default_branch:
+            continue
+        if not pr.changed_files:
+            continue
+        if created_after is not None and pr.created_at < created_after:
+            continue
+        if pattern is not None and not (
+            pattern.search(pr.title or "") or pattern.search(pr.head.ref or "")
+        ):
+            continue
+        return pr
+    return None
+
+
+def _exact_token_re(token: str) -> "re.Pattern[str]":
+    """Boundary-anchored match for *token*: 9.1.2 never matches 9.1.20 or
+    9.1.2-rc1 (the same anchoring the run-marker scan uses)."""
+    return re.compile(rf"(?<![\w.]){re.escape(token)}(?![\w.-])")
+
+
+def _commit_on_default_branch(repo: Any, sha: str) -> bool:
+    """True when *sha* is the repo's default branch head or an ancestor of
+    it, i.e. the commit actually landed on the branch."""
+    comparison = retry_github_call(
+        lambda: repo.compare(sha, repo.default_branch),
+        retries=2, description=f"compare {str(sha)[:12]}...{repo.default_branch}",
+    )
+    return comparison.status in ("identical", "ahead")
 
 
 def _pr_progress_output(name: str, pr: Any, branch: str, repo_name: str) -> DownstreamOutput:
@@ -844,9 +1003,13 @@ def _pr_progress_output(name: str, pr: Any, branch: str, repo_name: str) -> Down
             detail=f"No {branch} PR on {repo_name} yet",
         )
     if pr.merged_at is not None:
+        # The policy carries no public URL for the docs/website content
+        # itself, so a merged PR is the strongest evidence available here;
+        # the detail says so rather than implying a deployment check.
         return DownstreamOutput(
             name=name, state=OutputState.VERIFIED,
-            detail=f"PR #{pr.number} merged", url=pr.html_url,
+            detail=f"PR #{pr.number} merged. Merged PR evidence only; the "
+                   f"public deployment is not verified", url=pr.html_url,
         )
     if pr.state == "closed":
         return DownstreamOutput(

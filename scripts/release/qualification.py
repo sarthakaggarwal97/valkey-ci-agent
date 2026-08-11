@@ -30,6 +30,20 @@ logger = logging.getLogger(__name__)
 # Shared with verify.py's build-run scan.
 RUN_SCAN_LIMIT = 50
 
+# The failed-jobs sentinel a startup_failure run reports. The dataclass
+# gains no flag (models.py is owned elsewhere and the shape must not
+# change): run_id set + pending False + passed False + this entry is the
+# whole encoding, and it routes through the same marker-gated one-retry
+# path as any other failed run, so reconciliation can never redispatch it
+# every pass.
+STARTUP_FAILURE_JOB = "(Workflow startup failed)"
+
+# The metadata-only manifest artifact the qualification workflow uploads
+# (schema 1: nonce/version/tag/source_sha/automation_sha/job counts).
+# Presence + unexpired is the whole check this round; content is never
+# fetched (follow-up: download and validate the JSON against the policy).
+MANIFEST_ARTIFACT = "qualification-manifest"
+
 
 def evaluate_qualification(
     gh: Any, policy: RepoReleasePolicy, *, tag: str, sha: str,
@@ -47,14 +61,20 @@ def evaluate_qualification(
 
     # A run that never planned jobs (startup_failure: invalid workflow file,
     # permission mismatch) is not evidence about the candidate; no build was
-    # attempted. Treat it as absent so reconciliation redispatches once the
-    # workflow is fixed; a real build failure still requires a human.
+    # attempted. It must still not read as "no run": that would redispatch
+    # every pass forever. It reports as a failed run (run id preserved, the
+    # sentinel as the failed job), so actions.advance routes it through the
+    # marker-gated one-retry path; after a second startup failure nothing
+    # dispatches and the failure notification stands for a human.
     if run.conclusion == "startup_failure":
         logger.warning(
-            "Qualification run %s failed at startup (never planned); ignoring it",
+            "Qualification run %s failed at startup (never planned any jobs)",
             run.id,
         )
-        return QualificationStatus()
+        return QualificationStatus(
+            run_id=run.id, url=run.html_url, passed=False,
+            failed_jobs=(STARTUP_FAILURE_JOB,),
+        )
 
     if run.status != "completed":
         return QualificationStatus(run_id=run.id, url=run.html_url, pending=True)
@@ -155,6 +175,13 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
                 f"(Evidence mismatch: usable DEB artifacts, {deb_artifacts} "
                 f"present, expected exactly {down.qualification_deb_jobs})"
             )
+    # The qualification manifest (uploaded by the qualification workflow)
+    # must be present and unexpired. Metadata-only this round: presence is
+    # the evidence, no download, and the job counts it would restate are
+    # already validated exactly by the expectations above. A run without it
+    # (any legacy run) fails closed going forward.
+    if MANIFEST_ARTIFACT not in usable:
+        gaps.append("(Evidence mismatch: no qualification manifest)")
     return tuple(gaps)
 
 

@@ -32,6 +32,7 @@ from scripts.release.models import (
     CheckState,
     DailyCiState,
     OutputState,
+    ReleaseBinding,
     ReleasePhase,
     ReleaseStatus,
     release_tag,
@@ -48,6 +49,14 @@ TRUSTED_MARKER_AUTHORS = frozenset({f"{APP_LOGIN}[bot]", f"{BOT_LOGIN}[bot]"})
 
 _ADOPT_MARKER_RE = re.compile(
     rf"<!-- {re.escape(MARKER_NAMESPACE)}:adopt:([0-9a-f]{{40}}) -->"
+)
+
+# The identity-binding receipt. Fields are encoded in the marker line itself
+# so the read-back is a pure parse of controller-authored text; merge_sha may
+# be empty while the notes PR is unmerged (or unknown).
+_BINDING_MARKER_RE = re.compile(
+    rf"<!-- {re.escape(MARKER_NAMESPACE)}:binding "
+    r"version=(\S+) stage=(\S+) notes_pr=(\d+) merge_sha=([0-9a-f]{0,40}) -->"
 )
 
 # Per-issue memo for comment fetches: one reconcile pass reads the same
@@ -118,6 +127,96 @@ def adopt_marker(sha: str) -> str:
     return f"<!-- {MARKER_NAMESPACE}:adopt:{sha} -->"
 
 
+def complete_marker() -> str:
+    """The comment marker the controller posts when closing a completed release."""
+    return f"<!-- {MARKER_NAMESPACE}:complete -->"
+
+
+def closed_warning_marker() -> str:
+    """The one-shot marker gating the abandoned-tracker warning.
+
+    Posted on a tracker that was closed while the release was still being
+    observed (no completion marker), so the warning fires exactly once.
+    """
+    return f"<!-- {MARKER_NAMESPACE}:closed-warning -->"
+
+
+def binding_marker(binding: ReleaseBinding) -> str:
+    """The marker line carrying the identity-binding receipt's fields."""
+    return (
+        f"<!-- {MARKER_NAMESPACE}:binding version={binding.version} "
+        f"stage={binding.stage} notes_pr={binding.notes_pr_number} "
+        f"merge_sha={binding.merge_sha} -->"
+    )
+
+
+def read_binding(issue: Any, gh: Any = None) -> "ReleaseBinding | None":
+    """The identity binding recorded on *issue*, or None.
+
+    Only trusted-author comments are consulted (same trust model as
+    adoptions), so nobody else can bind or rebind a release by commenting.
+    Updates are edit-in-place, so at most one binding comment exists; the
+    newest marker wins defensively should duplicates ever appear.
+    """
+    found = None
+    for comment in trusted_comments(issue, gh):
+        for match in _BINDING_MARKER_RE.finditer(comment.body or ""):
+            if marker_present(comment.body, match.group(0)):
+                found = ReleaseBinding(
+                    version=match.group(1),
+                    stage=match.group(2),
+                    notes_pr_number=int(match.group(3)),
+                    merge_sha=match.group(4),
+                )
+    return found
+
+
+def _binding_body(binding: ReleaseBinding) -> str:
+    line = (
+        f"Release identity binding: version `{binding.version}`, stage "
+        f"`{binding.stage.upper()}`"
+    )
+    if binding.notes_pr_number:
+        line += f", notes PR #{binding.notes_pr_number}"
+    if binding.merge_sha:
+        line += f", candidate merge `{binding.merge_sha[:12]}`"
+    return (
+        f"{binding_marker(binding)}\n{line}.\n"
+        f"Controller receipt; reconciliation reads this binding before any "
+        f"PR scan. Do not edit."
+    )
+
+
+def write_binding(issue: Any, binding: ReleaseBinding, gh: Any = None, *,
+                  assume_absent: bool = False) -> None:
+    """Record (or update in place) the identity binding on *issue*.
+
+    ``assume_absent`` skips the existing-comment lookup for a just-created
+    issue, which cannot carry any comment yet. A no-op when the recorded
+    binding already matches.
+    """
+    body = _binding_body(binding)
+    existing = None
+    if not assume_absent:
+        for comment in trusted_comments(issue, gh):
+            for match in _BINDING_MARKER_RE.finditer(comment.body or ""):
+                if marker_present(comment.body, match.group(0)):
+                    existing = comment
+    if existing is not None:
+        if (existing.body or "") == body:
+            return
+        retry_github_call(
+            lambda: existing.edit(body=body),
+            retries=2, description=f"update binding on issue #{issue.number}",
+        )
+    else:
+        retry_github_call(
+            lambda: issue.create_comment(body=body),
+            retries=2, description=f"record binding on issue #{issue.number}",
+        )
+    invalidate_comment_memo(issue)
+
+
 def marker_present(body: Any, marker: str) -> bool:
     """True when *marker* starts a line of *body* outside any code fence.
 
@@ -161,12 +260,14 @@ def render_live_title(status: ReleaseStatus) -> str:
 def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
     """Render the full issue body from recomputed state.
 
-    Deterministic for a given (status, reconciled_at), so reconciliation
-    can compare the rendered body against the current one and skip no-op
-    edits within the same minute. Layout is native left-aligned markdown:
-    a header naming the release line, an alert callout stating exactly
-    what happens next, the Pipeline checklist (the sole progress
-    rendering), and evidence tables.
+    Deterministic for a given (status, reconciled_at); *reconciled_at*
+    stamps the footer when an edit actually lands. Reconciliation compares
+    bodies with the footer timestamp normalized out
+    (:func:`normalize_body_timestamp`) and skips the edit entirely when
+    nothing else changed, so an unchanged release never churns the tracker.
+    Layout is native left-aligned markdown: a header naming the release
+    line, an alert callout stating exactly what happens next, the Pipeline
+    checklist (the sole progress rendering), and evidence tables.
     """
     done = _phases_done(status)
     lines: list[str] = [
@@ -243,10 +344,27 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
         "",
         "---",
         "",
-        f"<sub>Reconciled {reconciled_at.strftime('%Y-%m-%d %H:%M')} UTC · "
-        "auto-generated on every pass; manual edits are overwritten.</sub>",
+        f"<sub>Updated {reconciled_at.strftime('%Y-%m-%d %H:%M')} UTC · "
+        "auto-generated; manual edits are overwritten.</sub>",
     ]
     return "\n".join(lines) + "\n"
+
+
+# The footer timestamp, in both the current ("Updated") and the legacy
+# ("Reconciled") spellings so a pre-rename body does not force a wording-only
+# edit; it migrates on the next real state change.
+_FOOTER_TIMESTAMP_RE = re.compile(
+    r"<sub>(?:Updated|Reconciled) \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC"
+)
+
+
+def normalize_body_timestamp(body: str) -> str:
+    """*body* with the footer timestamp neutralized, for change comparison.
+
+    Reconciliation edits the tracker only when the body differs beyond the
+    footer timestamp; the freshness heartbeat lives in the workflow logs.
+    """
+    return _FOOTER_TIMESTAMP_RE.sub("<sub>Updated <timestamp> UTC", body or "")
 
 
 def _repo_url(status: ReleaseStatus) -> str:
@@ -497,8 +615,9 @@ def branch_label(branch: str) -> str:
     return f"release:{branch}"
 
 
-def find_release_issue(repo: Any, branch: str, *, label: str) -> Any:
-    """Return the open tracking issue for *branch*, or None.
+def find_release_issue(repo: Any, branch: str, *, label: str,
+                       state: str = "open") -> Any:
+    """Return the tracking issue for *branch* in *state*, or None.
 
     Identity is the label pair (tracker label + ``release:<branch>``), not
     the rendered body: a hand-edit that strips text from the body must not
@@ -506,10 +625,12 @@ def find_release_issue(repo: Any, branch: str, *, label: str) -> Any:
     a migration fallback for issues created before the branch label existed.
     The REST list endpoint returns PRs alongside issues; those are dropped
     the same way issue_dedup drops them (already-fetched payload, no GET).
+    ``state="closed"`` serves the abandonment check (the newest closed
+    tracker, GitHub's default newest-first ordering).
     """
     labelled = retry_github_call(
-        lambda: list(repo.get_issues(state="open", labels=[label, branch_label(branch)])),
-        retries=2, description=f"list open {label}+{branch_label(branch)} issues",
+        lambda: list(repo.get_issues(state=state, labels=[label, branch_label(branch)])),
+        retries=2, description=f"list {state} {label}+{branch_label(branch)} issues",
     )
     for issue in labelled:
         if "pull_request" not in issue._rawData:
@@ -517,8 +638,8 @@ def find_release_issue(repo: Any, branch: str, *, label: str) -> Any:
 
     marker = identity_marker(branch)
     issues = retry_github_call(
-        lambda: list(repo.get_issues(state="open", labels=[label])),
-        retries=2, description=f"list open {label} issues",
+        lambda: list(repo.get_issues(state=state, labels=[label])),
+        retries=2, description=f"list {state} {label} issues",
     )
     for issue in issues:
         if "pull_request" in issue._rawData:

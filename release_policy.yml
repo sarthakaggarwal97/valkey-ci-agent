@@ -18,6 +18,7 @@
 # NOTE for maintainers: upstream's active tag ruleset protects [89]*.*.* tags
 # but explicitly EXCLUDES 7.x, although 7.2 is a supported release line here;
 # extending the ruleset (and enabling immutable releases) is cutover hardening.
+schema_version: 1
 repos:
   - repo: valkey-io/valkey
     authorized_team: valkey-io/core-team
@@ -36,13 +37,11 @@ repos:
     # A required check still running after this long is reported STALLED
     # (blocks like a failure, with a rerun instruction) instead of pending.
     check_timeout_minutes: 360
-    # Branch-level daily-CI gate (observation-only complement to the
-    # per-commit required checks above): a candidate is not READY unless the
-    # newest completed daily.yml run on the release branch is green and no
-    # older than the bound. 30 hours = the 24-hour schedule cadence plus a
-    # margin for scheduler jitter and run duration.
-    daily_workflow: daily.yml
-    daily_max_age_hours: 30
+    # Branch-level daily-CI gate (daily_workflow / daily_max_age_hours):
+    # Deliberately unconfigured: upstream daily.yml only runs on the default
+    # branch, so there is no trustworthy per-release-branch producer yet.
+    # Configure only after the daily workflow emits per-branch runs with a
+    # verifiable checkout identity.
     # Where the release's public outputs live and how to verify them.
     downstream:
       automation_repo: valkey-io/valkey-release-automation

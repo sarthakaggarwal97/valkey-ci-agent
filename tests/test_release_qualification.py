@@ -6,7 +6,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from scripts.release.qualification import dispatch_qualification, evaluate_qualification
+from scripts.release.models import QualificationStatus
+from scripts.release.qualification import (
+    MANIFEST_ARTIFACT,
+    STARTUP_FAILURE_JOB,
+    dispatch_qualification,
+    evaluate_qualification,
+)
 from tests.release_fixtures import MERGE_SHA, MOVED_SHA, gh_mock, make_policy, qualification_run
 
 _POLICY = make_policy()
@@ -17,6 +23,23 @@ def _gh_with_runs(runs: "list[MagicMock]") -> MagicMock:
     repo.default_branch = "main"
     repo.get_workflow.return_value.get_runs.return_value = runs
     return gh_mock(repo)
+
+
+def _manifest_artifact(*, expired: bool = False,
+                       size_in_bytes: int = 512) -> MagicMock:
+    artifact = MagicMock(expired=expired, size_in_bytes=size_in_bytes)
+    artifact.name = MANIFEST_ARTIFACT
+    return artifact
+
+
+def _without_manifest(run: MagicMock) -> MagicMock:
+    """The shared fixture carries the manifest artifact; a run modeling a
+    legacy (pre-manifest) qualification needs it stripped."""
+    run.get_artifacts.return_value = [
+        artifact for artifact in run.get_artifacts.return_value
+        if artifact.name != MANIFEST_ARTIFACT
+    ]
+    return run
 
 
 def _archive_jobs() -> "list[MagicMock]":
@@ -40,7 +63,8 @@ class TestEvaluate:
 
     def test_run_matched_by_exact_sha_in_run_name(self) -> None:
         status = evaluate_qualification(
-            _gh_with_runs([qualification_run(sha=MOVED_SHA), qualification_run()]),
+            _gh_with_runs([qualification_run(sha=MOVED_SHA),
+                           qualification_run()]),
             _POLICY, tag="9.1.1", sha=MERGE_SHA,
         )
         assert status.run_id == 900 and status.passed
@@ -203,11 +227,78 @@ class TestDispatch:
                                    tag="9.1.1", sha=MERGE_SHA)
 
 
-def test_startup_failed_run_is_no_evidence_and_allows_redispatch() -> None:
-    # A startup_failure never planned jobs: nothing about the candidate was
-    # tested, so it must read as "no run" (reconcile then redispatches),
-    # unlike a real build failure which demands a human.
-    broken = qualification_run(conclusion="startup_failure")
-    status = evaluate_qualification(_gh_with_runs([broken]), _POLICY,
-                                    tag="9.1.1", sha=MERGE_SHA)
-    assert status == type(status)()  # pristine: run_id 0, not failed
+class TestStartupFailure:
+    """F14: a startup_failure run must not be erased into the no-run state
+    (that made reconciliation redispatch every pass, forever). Its identity
+    is preserved as a failed run, which actions.advance routes through the
+    marker-gated one-retry path."""
+
+    def test_startup_failure_reads_as_a_failed_run_not_no_run(self) -> None:
+        broken = qualification_run(conclusion="startup_failure")
+        status = evaluate_qualification(_gh_with_runs([broken]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert status != QualificationStatus()  # never mistaken for no-run
+        assert status.run_id == 900
+        assert status.url == "https://x/qruns/900"
+        assert not status.pending
+        assert not status.passed
+        assert status.failed_jobs == (STARTUP_FAILURE_JOB,)
+
+    def test_startup_failure_never_lists_jobs_or_artifacts(self) -> None:
+        # No job was ever planned; querying them would be wasted calls and
+        # could raise on a half-created run.
+        broken = qualification_run(conclusion="startup_failure")
+        evaluate_qualification(_gh_with_runs([broken]), _POLICY,
+                               tag="9.1.1", sha=MERGE_SHA)
+        broken.jobs.assert_not_called()
+        broken.get_artifacts.assert_not_called()
+
+
+class TestManifestEvidence:
+    """The qualification-manifest artifact is required evidence: presence
+    plus unexpired, metadata-only (content is never fetched this round)."""
+
+    def test_manifest_present_passes(self) -> None:
+        run = qualification_run()
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert status.passed
+        assert not status.failed_jobs
+
+    def test_manifest_absent_fails_with_the_gap_text(self) -> None:
+        # A legacy run (green, full matrix, no manifest) fails closed.
+        run = _without_manifest(qualification_run())
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert "(Evidence mismatch: no qualification manifest)" in status.failed_jobs
+
+    @pytest.mark.parametrize(("expired", "size"), [
+        pytest.param(True, 512, id="expired"),
+        pytest.param(False, 0, id="empty"),
+    ])
+    def test_expired_or_empty_manifest_is_a_name_not_evidence(
+        self, expired: bool, size: int,
+    ) -> None:
+        run = _without_manifest(qualification_run())
+        run.get_artifacts.return_value = (
+            list(run.get_artifacts.return_value)
+            + [_manifest_artifact(expired=expired, size_in_bytes=size)]
+        )
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert "(Evidence mismatch: no qualification manifest)" in status.failed_jobs
+
+    def test_manifest_alone_does_not_satisfy_the_other_evidence(self) -> None:
+        # The manifest is one more requirement, never a substitute for the
+        # job and artifact inventory.
+        only = MagicMock(conclusion="success")
+        only.name = "generate"
+        run = qualification_run(jobs=[only])
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("Evidence mismatch" in item for item in status.failed_jobs)
+        assert ("(Evidence mismatch: no qualification manifest)"
+                not in status.failed_jobs)

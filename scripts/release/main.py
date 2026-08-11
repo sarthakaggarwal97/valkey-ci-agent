@@ -36,6 +36,7 @@ from scripts.release.models import ReleaseIntent
 from scripts.release.policy import RepoReleasePolicy, load_policy
 from scripts.release.publish import (
     ensure_environment_protected,
+    plan_digest,
     plan_publication,
     post_approval_evidence,
     publish_release,
@@ -153,6 +154,11 @@ def main(argv: list[str] | None = None) -> int:
                            help="Tag the approver saw; revalidation must reproduce it")
     publish_p.add_argument("--expected-sha", default="",
                            help="Candidate SHA the approver saw; revalidation must reproduce it")
+    publish_p.add_argument("--expected-digest", default="",
+                           help="Plan digest from the approved validation; the "
+                                "recomputed plan must reproduce it (optional: "
+                                "absent means a legacy caller and only the "
+                                "tag/SHA bindings apply)")
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -313,13 +319,15 @@ def _run_publish(gh: Any, gh_downstream: Any, agent_repo: str,
     # The gate must be real before either path runs: plan-only fails
     # early so the problem surfaces before anyone approves anything.
     ensure_environment_protected(gh_downstream, policy, agent_repo)
+    # The commit this controller runs from: bound into the plan digest on
+    # both paths (and shown in the approval evidence); empty outside
+    # Actions and the evidence omits the line.
+    controller_sha = os.environ.get("GITHUB_SHA", "")
     if args.plan_only:
         plan = plan_publication(gh, policy, branch=args.branch,
                                 actor=args.actor, gh_downstream=gh_downstream,
-                                skip_authorization=args.unattended)
-        # The commit this controller runs from, for the approval evidence;
-        # empty outside Actions and the evidence omits the line.
-        controller_sha = os.environ.get("GITHUB_SHA", "")
+                                skip_authorization=args.unattended,
+                                controller_sha=controller_sha)
         summary = render_plan_summary(plan, controller_sha=controller_sha)
         emit_job_summary(summary)
         print(summary)
@@ -328,7 +336,8 @@ def _run_publish(gh: Any, gh_downstream: Any, agent_repo: str,
             post_approval_evidence(gh, policy, plan, run_url,
                                    controller_sha=controller_sha)
         _emit_outputs({"tag": plan.tag, "sha": plan.sha,
-                       "make_latest": plan.make_latest})
+                       "make_latest": plan.make_latest,
+                       "plan_digest": plan_digest(plan)})
         return 0
     # The execute path only runs behind an approval whose evidence is
     # a specific tag and SHA; an empty binding means that evidence
@@ -339,6 +348,7 @@ def _run_publish(gh: Any, gh_downstream: Any, agent_repo: str,
     url = publish_release(
         gh, policy, branch=args.branch, actor=args.actor,
         expected_tag=args.expected_tag, expected_sha=args.expected_sha,
+        expected_digest=args.expected_digest, controller_sha=controller_sha,
         gh_downstream=gh_downstream,
     )
     logger.info("Published: %s", url)

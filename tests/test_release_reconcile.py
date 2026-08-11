@@ -40,6 +40,7 @@ from tests.release_fixtures import (
     MOVED_SHA,
     TRACKER_CREATED,
     bot_adoption,
+    bot_binding,
     bot_comment,
     check_run,
     gh_mock,
@@ -116,11 +117,29 @@ class TestStartRelease:
         assert (result.version, result.stage) == ("9.1.1", "ga")
         repo.create_issue.assert_not_called()
 
-    def test_duplicate_start_after_release_shipped_demands_tracker_close(self) -> None:
-        repo = repo_mock(issues=[tracker()], tags=["9.1.0", "9.1.1"])
-        with pytest.raises(ReleaseControlError, match="close tracking issue #7"):
+    def test_duplicate_start_after_complete_release_demands_tracker_close(self) -> None:
+        # Tag exists AND the release is COMPLETE-shaped: closing the
+        # tracker is the right (and only recommended) next step.
+        repo = repo_mock(issues=[tracker()], tags=["9.1.0", "9.1.1"],
+                         released=True)
+        core = (_out("tarballs", OutputState.VERIFIED),)
+        ordered = (_out("bundle", OutputState.VERIFIED),)
+        p1, p2 = _patched_outputs(core, ordered)
+        with p1, p2, pytest.raises(ReleaseControlError,
+                                   match="close tracking issue #7"):
             start_release(gh_mock(repo), _POLICY, branch="9.1",
                           intent=ReleaseIntent.PATCH, actor="madolson")
+
+    def test_duplicate_start_with_release_in_flight_never_recommends_closing(self) -> None:
+        # Tag exists but the release is NOT complete (still verifying, or
+        # wedged): recommending closure would invite abandoning a live
+        # release; the refusal says it is still in flight instead.
+        repo = repo_mock(issues=[tracker()], tags=["9.1.0", "9.1.1"])
+        with pytest.raises(ReleaseControlError,
+                           match=r"still in flight \(tracker #7\)") as exc:
+            start_release(gh_mock(repo), _POLICY, branch="9.1",
+                          intent=ReleaseIntent.PATCH, actor="madolson")
+        assert "close tracking issue" not in str(exc.value)
 
     def test_dry_run_creates_nothing(self) -> None:
         repo = repo_mock(issues=[], tags=["9.1.0"])
@@ -225,6 +244,100 @@ class TestNotesPRBinding:
                          tracking_issue=tracker())
         assert status.notes_pr_number == 70
         assert (status.version, status.stage) == ("9.1.0", "rc2")
+
+
+class TestIdentityBinding:
+    """The durable binding receipt: read before any scan, never displaced,
+    never rebound."""
+
+    def test_newer_rc2_pr_cannot_displace_bound_rc1(self) -> None:
+        # RC1 is bound; a newer PR with a notes-style RC2 head must never
+        # take over the release identity. The bound PR is fetched by
+        # number, so the newer PR is invisible to the binding.
+        rc1 = notes_pr(head_ref="agent/release-cut/9.1.0-rc1", number=30)
+        rc2 = notes_pr(head_ref="agent/release-cut/9.1.0-rc2", number=70,
+                       created=AFTER_TRACKER + timedelta(days=1))
+        issue = tracker(comments=[bot_binding("9.1.0", "rc1",
+                                              notes_pr_number=30,
+                                              merge_sha=MERGE_SHA)])
+        status = _status(repo_mock(pulls=[rc2, rc1]), tracking_issue=issue)
+        assert status.notes_pr_number == 30
+        assert (status.version, status.stage) == ("9.1.0", "rc1")
+
+    def test_scan_eviction_cannot_unbind(self) -> None:
+        # The bound PR fell out of the scan window (200 newer PRs, or any
+        # listing hiccup): it is fetched by number, never by scan, so the
+        # release does not silently lose its notes PR.
+        bound = notes_pr(number=42)
+        repo = repo_mock(pulls=[bound])
+        repo.get_pulls.return_value = []  # evicted from the listing
+        issue = tracker(comments=[bot_binding("9.1.1", "ga",
+                                              notes_pr_number=42,
+                                              merge_sha=MERGE_SHA)])
+        status = _status(repo, tracking_issue=issue)
+        assert status.notes_pr_number == 42
+        assert status.ready
+
+    def test_scan_hit_binds_so_the_next_pass_skips_the_scan(self) -> None:
+        # An unbound tracker that finds its notes PR by scan records the
+        # binding receipt (PR number + merge SHA) on the tracker.
+        issue = tracker()
+        _status(repo_mock(), tracking_issue=issue)
+        body = issue.create_comment.call_args.kwargs["body"]
+        assert f"notes_pr=42 merge_sha={MERGE_SHA}" in body
+
+    def test_bound_pr_closed_unmerged_alerts_and_never_rebinds(self) -> None:
+        # The bound PR was closed without merging while another valid
+        # notes PR exists: reconciliation raises a standing alert instead
+        # of silently rebinding to the other PR.
+        lost = notes_pr(number=42, merged=False, state="closed")
+        lost.merged_at = None
+        other = notes_pr(number=90, created=AFTER_TRACKER + timedelta(days=1))
+        issue = tracker(comments=[bot_binding("9.1.1", "ga",
+                                              notes_pr_number=42,
+                                              merge_sha=MERGE_SHA)])
+        status = _status(repo_mock(pulls=[other, lost]), tracking_issue=issue)
+        assert status.alerts and "closed without merging" in status.alerts[0]
+        assert status.notes_pr_number == 0  # never the other PR
+        assert not status.ready
+
+    def test_bound_pr_missing_alerts_instead_of_rescanning(self) -> None:
+        issue = tracker(comments=[bot_binding("9.1.1", "ga",
+                                              notes_pr_number=404,
+                                              merge_sha=MERGE_SHA)])
+        status = _status(repo_mock(), tracking_issue=issue)
+        assert status.alerts and "cannot be fetched" in status.alerts[0]
+        assert not status.ready
+
+    def test_different_intent_resume_refuses(self) -> None:
+        # An rc1 release is bound; a duplicate start with a GA-producing
+        # intent must refuse instead of resuming (or re-deriving over) it.
+        issue = tracker(comments=[bot_binding("9.1.1", "rc1")])
+        repo = repo_mock(issues=[issue], tags=["9.1.0"])
+        with pytest.raises(ReleaseControlError, match="refusing to restart"):
+            start_release(gh_mock(repo), _POLICY, branch="9.1",
+                          intent=ReleaseIntent.PATCH, actor="madolson")
+
+    def test_same_intent_resume_reuses_the_bound_identity(self) -> None:
+        # A version-only binding (the cut never ran) resumes with the BOUND
+        # version, never a re-derivation that could disagree.
+        issue = tracker(comments=[bot_binding("9.1.1", "ga")])
+        repo = repo_mock(issues=[issue], pulls=[], tags=["9.1.0"])
+        result = start_release(gh_mock(repo), _POLICY, branch="9.1",
+                               intent=ReleaseIntent.PATCH, actor="madolson")
+        assert not result.created and result.cut_needed
+        assert (result.version, result.stage) == ("9.1.1", "ga")
+
+    def test_start_refusal_when_bound_pr_is_lost(self) -> None:
+        lost = notes_pr(number=42, merged=False, state="closed")
+        lost.merged_at = None
+        issue = tracker(comments=[bot_binding("9.1.1", "ga",
+                                              notes_pr_number=42,
+                                              merge_sha=MERGE_SHA)])
+        repo = repo_mock(issues=[issue], pulls=[lost], tags=["9.1.0"])
+        with pytest.raises(ReleaseControlError, match="closed without merging"):
+            start_release(gh_mock(repo), _POLICY, branch="9.1",
+                          intent=ReleaseIntent.PATCH, actor="madolson")
 
 
 class TestComputeStatus:
@@ -523,6 +636,15 @@ class TestPublishedPhases:
         assert status.release_url
         assert status.candidate.sha == MERGE_SHA  # pinned by the tag
 
+    def test_published_at_threads_into_ordered_verification(self) -> None:
+        # The Bundle verifier needs the publication instant to ignore
+        # update PRs predating this release; reconcile must pass it along.
+        core = (_out("tarballs", OutputState.VERIFIED),)
+        p1, p2 = _patched_outputs(core, ())
+        with p1, p2 as ordered:
+            _status(repo_mock(released=True))
+        assert ordered.call_args.kwargs["published_at"] == AFTER_TRACKER
+
     def test_core_settled_moves_to_bundle_helm(self) -> None:
         core = (_out("tarballs", OutputState.VERIFIED),)
         ordered = (_out("bundle", OutputState.PENDING),)
@@ -674,9 +796,10 @@ class TestReconcileBranch:
 
         issue.edit.assert_not_called()
 
-    def test_a_new_minute_edits_the_body_as_the_freshness_signal(self) -> None:
-        # Accepted churn: the footer timestamp IS the staleness signal, so
-        # a pass in a new minute edits the body even with no state change.
+    def test_unchanged_state_in_a_new_minute_performs_zero_edits(self) -> None:
+        # The footer timestamp is normalized out of the comparison: an idle
+        # release never churns the tracker just to refresh "Updated"; the
+        # freshness heartbeat lives in the workflow logs.
         repo = repo_mock(issues=[tracker()])
         now, clock = self._frozen_clock()
         with clock:
@@ -684,6 +807,23 @@ class TestReconcileBranch:
         assert first is not None
         issue = repo.get_issues.return_value[0]
         issue.body = issue_mod.render_body(first, now - timedelta(minutes=5))
+        issue.title = issue_mod.render_live_title(first)
+        issue.edit.reset_mock()
+        with clock:
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        issue.edit.assert_not_called()
+
+    def test_a_real_state_change_edits_exactly_once(self) -> None:
+        # The no-churn comparison must never swallow a real change: a body
+        # differing beyond the timestamp gets exactly one edit.
+        repo = repo_mock(issues=[tracker()])
+        now, clock = self._frozen_clock()
+        with clock:
+            first = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        assert first is not None
+        issue = repo.get_issues.return_value[0]
+        stale = issue_mod.render_body(first, now - timedelta(minutes=5))
+        issue.body = stale.replace("Passed", "Pending", 1)  # state drifted
         issue.title = issue_mod.render_live_title(first)
         issue.edit.reset_mock()
         with clock:
@@ -749,6 +889,48 @@ class TestReconcileBranch:
         assert status is not None
         assert status.approval_run_url == "https://x/actions/runs/500"
         assert "> **Approve here:** https://x/actions/runs/500" in issue.edit.call_args.kwargs["body"]
+
+    def test_approval_link_is_candidate_bound(self) -> None:
+        # A gate-parked run whose run-name binds a DIFFERENT candidate is
+        # never presented as the place to approve. Observation mode, so the
+        # stale run also is not cancelled (finder-only path).
+        issue = tracker()
+        repo = repo_mock(issues=[issue])
+        gh_agent = MagicMock()
+        agent_head = "d" * 40
+        gh_agent.get_repo.return_value.get_branch.return_value.commit.sha = agent_head
+        other = MagicMock(status="waiting", head_sha=agent_head,
+                          display_title=(f"Publish release on 9.1 · 9.1.1 @ "
+                                         f"{MOVED_SHA} (requested by x)"),
+                          html_url="https://x/actions/runs/501")
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.get_runs.return_value = [other]
+
+        status = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False,
+                                  gh_agent=gh_agent, agent_repo="o/agent")
+
+        assert status is not None and status.phase is ReleasePhase.READY
+        assert status.approval_run_url == ""
+        other.cancel.assert_not_called()
+
+    def test_approval_link_accepts_the_run_bound_to_this_candidate(self) -> None:
+        issue = tracker()
+        repo = repo_mock(issues=[issue])
+        gh_agent = MagicMock()
+        agent_head = "d" * 40
+        gh_agent.get_repo.return_value.get_branch.return_value.commit.sha = agent_head
+        bound = MagicMock(status="waiting", head_sha=agent_head,
+                          display_title=(f"Publish release on 9.1 · 9.1.1 @ "
+                                         f"{MERGE_SHA} (requested by x)"),
+                          html_url="https://x/actions/runs/502")
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.get_runs.return_value = [bound]
+
+        status = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False,
+                                  gh_agent=gh_agent, agent_repo="o/agent")
+
+        assert status is not None
+        assert status.approval_run_url == "https://x/actions/runs/502"
 
     def test_no_agent_client_renders_the_ready_callout_without_the_link(self) -> None:
         issue = tracker()
@@ -860,11 +1042,15 @@ class TestAdoptCandidate:
         repo = repo_mock(branch_head=MOVED_SHA, issues=[issue],
                          qual_runs=[qualification_run(sha=MOVED_SHA)])
 
-        def _record_adoption(body: str) -> MagicMock:
-            issue.get_comments.return_value = [bot_adoption(MOVED_SHA)]
+        def _record(body: str) -> MagicMock:
+            # Every controller post (binding receipt, adoption) lands as a
+            # trusted comment the next read sees, mirroring GitHub.
+            issue.get_comments.return_value = (
+                list(issue.get_comments.return_value) + [bot_comment(body)]
+            )
             return MagicMock()
 
-        issue.create_comment.side_effect = _record_adoption
+        issue.create_comment.side_effect = _record
 
         status = adopt_candidate(gh_mock(repo), _POLICY,
                                  branch="9.1", sha=MOVED_SHA, actor="madolson")
@@ -881,7 +1067,8 @@ class TestAdoptCandidate:
                          qual_runs=[qualification_run(sha=MOVED_SHA)])
         issue.create_comment.side_effect = lambda body: (
             issue.get_comments.configure_mock(
-                return_value=[bot_adoption(MOVED_SHA)]) or MagicMock()
+                return_value=list(issue.get_comments.return_value)
+                + [bot_comment(body)]) or MagicMock()
         )
 
         status = adopt_candidate(gh_mock(repo), _POLICY,
@@ -895,6 +1082,40 @@ class TestAdoptCandidate:
             adopt_candidate(gh_mock(repo), _POLICY,
                             branch="9.1", sha=MOVED_SHA, actor="madolson")
 
+    def test_pinned_candidate_readoption_reconfirms_shipping_it(self) -> None:
+        # The branch moved but the owner wants to ship the pinned candidate
+        # anyway: re-adopting the pinned SHA (the notes merge) is the
+        # explicit reconfirmation and re-establishes it as the candidate.
+        issue = tracker()
+        repo = repo_mock(branch_head=MOVED_SHA, issues=[issue])
+
+        def _record(body: str) -> MagicMock:
+            issue.get_comments.return_value = (
+                list(issue.get_comments.return_value) + [bot_comment(body)]
+            )
+            return MagicMock()
+
+        issue.create_comment.side_effect = _record
+
+        status = adopt_candidate(gh_mock(repo), _POLICY,
+                                 branch="9.1", sha=MERGE_SHA, actor="madolson")
+
+        assert status.candidate.state is CandidateState.ADOPTED
+        assert status.candidate.sha == MERGE_SHA
+        assert status.candidate.branch_head == MOVED_SHA
+        posted = "\n".join(
+            call.kwargs["body"] for call in issue.create_comment.call_args_list
+        )
+        assert issue_mod.adopt_marker(MERGE_SHA) in posted
+
+    def test_arbitrary_sha_still_refused_after_movement(self) -> None:
+        # Neither the new head nor the pinned candidate: adoption is never
+        # a way to pick an arbitrary commit.
+        repo = repo_mock(branch_head=MOVED_SHA, issues=[tracker()])
+        with pytest.raises(ReleaseControlError, match="exact current head"):
+            adopt_candidate(gh_mock(repo), _POLICY,
+                            branch="9.1", sha="e" * 40, actor="madolson")
+
     def test_adoption_refused_after_publication(self) -> None:
         repo = repo_mock(branch_head=MOVED_SHA, issues=[tracker()], released=True)
         core = (_out("tarballs", OutputState.PENDING),)
@@ -902,3 +1123,65 @@ class TestAdoptCandidate:
         with p1, p2, pytest.raises(ReleaseControlError, match="before publication"):
             adopt_candidate(gh_mock(repo), _POLICY,
                             branch="9.1", sha=MOVED_SHA, actor="madolson")
+
+
+class TestAbandonedTracker:
+    """A tracker closed while the release was still observed gets exactly
+    one warning; a controller-closed (complete) tracker stays silent."""
+
+    @staticmethod
+    def _repo_with_closed(closed) -> MagicMock:
+        repo = repo_mock()
+        repo.get_issues.side_effect = lambda state, labels: (
+            [closed] if state == "closed" else []
+        )
+        return repo
+
+    def test_abandoned_closed_tracker_warned_exactly_once(self) -> None:
+        closed = tracker()
+        closed.state = "closed"
+        repo = self._repo_with_closed(closed)
+
+        def _record(body: str) -> MagicMock:
+            closed.get_comments.return_value = (
+                list(closed.get_comments.return_value) + [bot_comment(body)]
+            )
+            return MagicMock()
+
+        closed.create_comment.side_effect = _record
+
+        assert reconcile_branch(gh_mock(repo), _POLICY, "9.1") is None
+        assert reconcile_branch(gh_mock(repo), _POLICY, "9.1") is None
+
+        closed.create_comment.assert_called_once()
+        body = closed.create_comment.call_args.kwargs["body"]
+        assert issue_mod.closed_warning_marker() in body
+        assert "> [!WARNING]" in body
+        assert ("This tracker was closed while the release was still being "
+                "observed. Reopen it or dispatch release-start to resume "
+                "observation.") in body
+
+    def test_controller_closed_tracker_stays_silent(self) -> None:
+        closed = tracker(comments=[bot_comment(
+            f"{issue_mod.complete_marker()}\nRelease complete. Closing."
+        )])
+        closed.state = "closed"
+        repo = self._repo_with_closed(closed)
+
+        assert reconcile_branch(gh_mock(repo), _POLICY, "9.1") is None
+
+        closed.create_comment.assert_not_called()
+
+    def test_observe_mode_never_posts_the_warning(self) -> None:
+        closed = tracker()
+        closed.state = "closed"
+        repo = self._repo_with_closed(closed)
+
+        assert reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False) is None
+
+        closed.create_comment.assert_not_called()
+
+    def test_no_closed_tracker_is_silence(self) -> None:
+        repo = repo_mock()
+        repo.get_issues.side_effect = lambda state, labels: []
+        assert reconcile_branch(gh_mock(repo), _POLICY, "9.1") is None

@@ -10,6 +10,7 @@ from github.GithubException import GithubException
 from scripts.release.models import ReleasePhase
 from scripts.release.publish import (
     PublishPlan,
+    plan_digest,
     plan_publication,
     publish_release,
     render_plan_summary,
@@ -40,9 +41,26 @@ _NOTES = (
 )
 
 
+def _with_manifest(run: MagicMock) -> MagicMock:
+    """Append the qualification-manifest artifact to a qual-run mock.
+
+    The shared fixture predates the manifest requirement in
+    qualification.py; idempotent so it stays harmless once the fixture
+    carries the manifest itself.
+    """
+    artifacts = list(run.get_artifacts.return_value)
+    if not any(a.name == "qualification-manifest" for a in artifacts):
+        manifest = MagicMock(expired=False, size_in_bytes=64)
+        manifest.name = "qualification-manifest"
+        run.get_artifacts.return_value = artifacts + [manifest]
+    return run
+
+
 def _ready_repo(**overrides: object) -> MagicMock:
     """A repo mock in the READY state whose contents serve the publish reads."""
     repo = repo_mock(tags=["9.1.0"], **overrides)  # type: ignore[arg-type]
+    for run in repo.get_workflow.return_value.get_runs.return_value:
+        _with_manifest(run)
 
     def _contents(path: str, **kw: object) -> MagicMock:
         f = MagicMock()
@@ -193,6 +211,135 @@ class TestPublishRelease:
             publish_release(gh_mock(repo), _POLICY, branch="9.1", actor="madolson")
 
 
+class TestPlanDigestBinding:
+    def test_matching_digest_publishes(self) -> None:
+        # The digest the approver saw, recomputed from an unchanged world,
+        # must match and publish.
+        repo = _publishable_repo()
+        plan = plan_publication(gh_mock(repo), _POLICY, branch="9.1",
+                                actor="madolson", controller_sha="f" * 40)
+        url = publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                              actor="madolson", expected_tag="9.1.1",
+                              expected_sha=MERGE_SHA,
+                              expected_digest=plan_digest(plan),
+                              controller_sha="f" * 40)
+        assert url == "https://x/releases/9.1.1"
+
+    def test_digest_mismatch_refuses_before_any_write(self) -> None:
+        repo = _publishable_repo()
+        with pytest.raises(ReleaseControlError,
+                           match="plan changed after approval"):
+            publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                            actor="madolson", expected_tag="9.1.1",
+                            expected_sha=MERGE_SHA,
+                            expected_digest="0" * 64)
+        repo.create_git_release.assert_not_called()
+
+    def test_controller_sha_drift_changes_the_digest_and_refuses(self) -> None:
+        # Approval bound one controller commit; execution from another
+        # commit (a force-push between validate and publish) must refuse.
+        repo = _publishable_repo()
+        plan = plan_publication(gh_mock(repo), _POLICY, branch="9.1",
+                                actor="madolson", controller_sha="f" * 40)
+        with pytest.raises(ReleaseControlError,
+                           match="plan changed after approval"):
+            publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                            actor="madolson", expected_tag="9.1.1",
+                            expected_sha=MERGE_SHA,
+                            expected_digest=plan_digest(plan),
+                            controller_sha="e" * 40)
+        repo.create_git_release.assert_not_called()
+
+    def test_absent_digest_is_legacy_and_the_tag_sha_binding_still_holds(self) -> None:
+        repo = _publishable_repo()
+        url = publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                              actor="madolson", expected_tag="9.1.1",
+                              expected_sha=MERGE_SHA)
+        assert url == "https://x/releases/9.1.1"
+
+    def test_digest_is_stable_and_covers_every_bound_dimension(self) -> None:
+        base = _plan()
+        assert plan_digest(base) == plan_digest(_plan())
+        import re as _re
+        assert _re.fullmatch(r"[0-9a-f]{64}", plan_digest(base))
+        variants = [
+            _plan(tag="9.1.2"),
+            _plan(sha="b" * 40),
+            _plan(prerelease=True),
+            _plan(make_latest="false"),
+            _plan(body="different notes"),
+            _plan(qualification_run_id=901),
+            _plan(tag_protected=True),
+            _plan(controller_sha="f" * 40),
+        ]
+        digests = {plan_digest(v) for v in variants}
+        assert plan_digest(base) not in digests
+        assert len(digests) == len(variants)  # every dimension binds
+
+    def test_summary_shows_the_short_digest(self) -> None:
+        plan = _plan()
+        summary = render_plan_summary(plan)
+        assert f"Plan digest: `{plan_digest(plan)[:12]}`" in summary
+
+
+class TestCreateReleaseRecovery:
+    """create_git_release is never blind-retried: one attempt, then
+    read-after-write recovery for the lost-response case only."""
+
+    def test_lost_response_with_the_release_at_the_approved_sha_recovers(self) -> None:
+        repo = _publishable_repo()
+
+        def _lost_response(*args: object, **kwargs: object) -> None:
+            # The create landed server-side; only the response was lost.
+            ref = MagicMock()
+            ref.object.type = "commit"
+            ref.object.sha = MERGE_SHA
+            repo.get_git_ref.side_effect = None
+            repo.get_git_ref.return_value = ref
+            repo.get_release.side_effect = None
+            repo.get_release.return_value = MagicMock(
+                html_url="https://x/releases/9.1.1")
+            raise GithubException(502, "bad gateway", {})
+
+        repo.create_git_release.side_effect = _lost_response
+        url = publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                              actor="madolson", expected_tag="9.1.1",
+                              expected_sha=MERGE_SHA)
+        assert url == "https://x/releases/9.1.1"
+        repo.create_git_release.assert_called_once()
+
+    def test_genuinely_failed_create_re_raises_without_a_retry(self) -> None:
+        repo = _publishable_repo()
+        repo.create_git_release.side_effect = GithubException(422, "boom", {})
+        with pytest.raises(GithubException, match="boom"):
+            publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                            actor="madolson", expected_tag="9.1.1",
+                            expected_sha=MERGE_SHA)
+        repo.create_git_release.assert_called_once()  # no blind retry
+
+    def test_release_existing_at_the_wrong_sha_re_raises(self) -> None:
+        # Someone else's release under the same tag is not our success.
+        repo = _publishable_repo()
+
+        def _foreign_release(*args: object, **kwargs: object) -> None:
+            ref = MagicMock()
+            ref.object.type = "commit"
+            ref.object.sha = "e" * 40
+            repo.get_git_ref.side_effect = None
+            repo.get_git_ref.return_value = ref
+            repo.get_release.side_effect = None
+            repo.get_release.return_value = MagicMock(
+                html_url="https://x/releases/9.1.1")
+            raise GithubException(502, "bad gateway", {})
+
+        repo.create_git_release.side_effect = _foreign_release
+        with pytest.raises(GithubException, match="bad gateway"):
+            publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                            actor="madolson", expected_tag="9.1.1",
+                            expected_sha=MERGE_SHA)
+        repo.create_git_release.assert_called_once()
+
+
 class TestRCPublication:
     def test_rc_plan_is_prerelease_and_never_latest(self) -> None:
         from tests.release_fixtures import notes_pr
@@ -208,10 +355,10 @@ class TestRCPublication:
             pulls=[notes_pr(head_ref="agent/release-cut/9.2.0-rc1")],
             issues=[tracker(branch="9.2")],
             tags=["9.1.0"],
-            qual_runs=[qualification_run(tag="9.2.0-rc1")],
+            qual_runs=[_with_manifest(qualification_run(tag="9.2.0-rc1"))],
         )
         repo.get_workflow.return_value.get_runs.return_value = [
-            qualification_run(tag="9.2.0-rc1")
+            _with_manifest(qualification_run(tag="9.2.0-rc1"))
         ]
 
         def _contents(path: str, **kw: object) -> MagicMock:
@@ -232,7 +379,8 @@ class TestRCPublication:
 
 
 def _env_repo(protection_rules: "list | None" = None, *,
-              can_admins_bypass: bool = False, exists: bool = True) -> MagicMock:
+              can_admins_bypass: bool = False, exists: bool = True,
+              deployment_branch_policy: "dict | None | str" = "default") -> MagicMock:
     repo = MagicMock()
     if not exists:
         repo.get_environment.side_effect = GithubException(404, "missing", {})
@@ -244,6 +392,10 @@ def _env_repo(protection_rules: "list | None" = None, *,
              "reviewers": [{"type": "Team"}]},
         ],
         "can_admins_bypass": can_admins_bypass,
+        "deployment_branch_policy": (
+            {"protected_branches": True, "custom_branch_policies": False}
+            if deployment_branch_policy == "default" else deployment_branch_policy
+        ),
     }
     repo.get_environment.return_value = env
     return repo
@@ -349,6 +501,43 @@ class TestEnvironmentProtection:
         with pytest.raises(ReleaseControlError, match="bypass"):
             ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
 
+    def test_null_deployment_branch_policy_is_refused(self) -> None:
+        # A null policy means ANY branch (including an attacker's topic
+        # branch) can deploy to the gated environment.
+        from scripts.release.publish import ensure_environment_protected
+        repo = _env_repo(deployment_branch_policy=None)
+        with pytest.raises(ReleaseControlError,
+                           match="not restricted to specific branches"):
+            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+
+    def test_absent_deployment_branch_policy_key_fails_closed(self) -> None:
+        from scripts.release.publish import ensure_environment_protected
+        repo = _env_repo()
+        del repo.get_environment.return_value.raw_data["deployment_branch_policy"]
+        with pytest.raises(ReleaseControlError,
+                           match="not restricted to specific branches"):
+            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+
+    def test_branch_policy_with_neither_restriction_is_refused(self) -> None:
+        from scripts.release.publish import ensure_environment_protected
+        repo = _env_repo(deployment_branch_policy={
+            "protected_branches": False, "custom_branch_policies": False})
+        with pytest.raises(ReleaseControlError,
+                           match="not restricted to specific branches"):
+            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+
+    def test_custom_branch_policies_satisfy_the_restriction(self) -> None:
+        from scripts.release.publish import ensure_environment_protected
+        repo = _env_repo(deployment_branch_policy={
+            "protected_branches": False, "custom_branch_policies": True})
+        ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+
+    def test_protected_branches_satisfy_the_restriction(self) -> None:
+        from scripts.release.publish import ensure_environment_protected
+        repo = _env_repo(deployment_branch_policy={
+            "protected_branches": True, "custom_branch_policies": False})
+        ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
+
     def test_fork_user_policy_skips_the_check_entirely(self) -> None:
         from scripts.release.publish import ensure_environment_protected
         gh = MagicMock()
@@ -445,15 +634,79 @@ def _ruleset_repo(rulesets: "list[dict]", details: "dict[int, dict]") -> MagicMo
     return repo
 
 
+_FULL_RULES = [{"type": "deletion"}, {"type": "update"}]
+
+
 class TestTagRulesetProbe:
-    def test_active_tag_ruleset_covering_the_tag_is_protected(self) -> None:
+    def test_active_tag_ruleset_with_full_rules_is_protected(self) -> None:
         from scripts.release.publish import tag_ruleset_protected
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
-                                             "exclude": []}}}},
+                                             "exclude": []}},
+                 "rules": _FULL_RULES, "bypass_actors": []}},
         )
         assert tag_ruleset_protected(repo, "9.1.1") is True
+
+    def test_non_fast_forward_counts_as_the_update_rule(self) -> None:
+        from scripts.release.publish import tag_ruleset_protected
+        repo = _ruleset_repo(
+            [{"id": 1, "target": "tag", "enforcement": "active"}],
+            {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
+                                             "exclude": []}},
+                 "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
+                 "bypass_actors": []}},
+        )
+        assert tag_ruleset_protected(repo, "9.1.1") is True
+
+    def test_matching_but_ruleless_ruleset_is_not_protected(self) -> None:
+        # The ruleset covers the ref but carries no deletion/update rules:
+        # it restricts nothing, so the tag must never claim immutability.
+        from scripts.release.publish import tag_ruleset_protected
+        repo = _ruleset_repo(
+            [{"id": 1, "target": "tag", "enforcement": "active"}],
+            {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
+                                             "exclude": []}},
+                 "rules": [], "bypass_actors": []}},
+        )
+        assert tag_ruleset_protected(repo, "9.1.1") is False
+
+    def test_deletion_rule_alone_is_not_protected(self) -> None:
+        # The tag could still be MOVED: immutability needs both halves.
+        from scripts.release.publish import tag_ruleset_protected
+        repo = _ruleset_repo(
+            [{"id": 1, "target": "tag", "enforcement": "active"}],
+            {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
+                                             "exclude": []}},
+                 "rules": [{"type": "deletion"}], "bypass_actors": []}},
+        )
+        assert tag_ruleset_protected(repo, "9.1.1") is False
+
+    def test_app_bypass_actor_is_unprotected_for_us(self) -> None:
+        # The publishing identity is a GitHub App; a ruleset any App can
+        # bypass constrains exactly nothing we rely on.
+        from scripts.release.publish import tag_ruleset_protected
+        repo = _ruleset_repo(
+            [{"id": 1, "target": "tag", "enforcement": "active"}],
+            {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
+                                             "exclude": []}},
+                 "rules": _FULL_RULES,
+                 "bypass_actors": [{"actor_id": 5, "actor_type": "Integration",
+                                    "bypass_mode": "always"}]}},
+        )
+        assert tag_ruleset_protected(repo, "9.1.1") is False
+
+    def test_invisible_bypass_data_degrades_to_unknown(self) -> None:
+        # No bypass_actors key in the payload: an App bypass cannot be
+        # ruled out, so the verdict is unknown, never protected.
+        from scripts.release.publish import tag_ruleset_protected
+        repo = _ruleset_repo(
+            [{"id": 1, "target": "tag", "enforcement": "active"}],
+            {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
+                                             "exclude": []}},
+                 "rules": _FULL_RULES}},
+        )
+        assert tag_ruleset_protected(repo, "9.1.1") is None
 
     def test_excluded_tag_is_not_protected(self) -> None:
         # Mirrors upstream: the ruleset excludes 1-7.* tags, so a 7.x
@@ -463,7 +716,8 @@ class TestTagRulesetProbe:
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {
                 "include": ["~ALL"],
-                "exclude": ["refs/tags/[1-7].*"]}}}},
+                "exclude": ["refs/tags/[1-7].*"]}},
+                "rules": _FULL_RULES, "bypass_actors": []}},
         )
         assert tag_ruleset_protected(repo, "7.2.11") is False
         assert tag_ruleset_protected(repo, "9.1.1") is True

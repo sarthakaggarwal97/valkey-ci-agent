@@ -115,11 +115,20 @@ def load_policy(path: str) -> dict[str, RepoReleasePolicy]:
 
     Raises :class:`ValueError` on structural problems so a bad policy fails
     the run instead of silently authorizing (or blocking) the wrong thing.
+    Unknown keys are rejected at every mapping level: a typo'd optional key
+    (``daly_workflow``) would otherwise silently disable the gate it meant
+    to configure.
     """
     with open(path, encoding="utf-8") as fh:
         raw = yaml.safe_load(fh)
     if not isinstance(raw, dict) or not isinstance(raw.get("repos"), list):
         raise ValueError(f"{path}: expected a top-level 'repos' list")
+    _reject_unknown_keys(path, "top level", raw, _TOP_LEVEL_KEYS)
+    schema_version = raw.get("schema_version", 1)
+    if schema_version != 1:
+        raise ValueError(
+            f"{path}: unsupported schema_version {schema_version!r} (expected 1)"
+        )
 
     policies: dict[str, RepoReleasePolicy] = {}
     for entry in raw["repos"]:
@@ -134,10 +143,29 @@ def load_policy(path: str) -> dict[str, RepoReleasePolicy]:
     return policies
 
 
+_TOP_LEVEL_KEYS = frozenset({"schema_version", "repos"})
+_REPO_ENTRY_KEYS = frozenset({
+    "repo", "authorized_team", "branches", "required_checks",
+    "checks_workflow", "check_timeout_minutes", "daily_workflow",
+    "daily_max_age_hours", "downstream",
+})
+
+
+def _reject_unknown_keys(path: str, where: str, mapping: "dict[str, object]",
+                         allowed: "frozenset[str]") -> None:
+    unknown = sorted(str(key) for key in mapping if key not in allowed)
+    if unknown:
+        raise ValueError(
+            f"{path}: unknown key(s) at {where}: {', '.join(unknown)}; "
+            f"a misspelled key would silently misconfigure the policy"
+        )
+
+
 def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
     repo = entry.get("repo")
     if not isinstance(repo, str) or repo.count("/") != 1:
         raise ValueError(f"{path}: 'repo' must be 'owner/name', got {repo!r}")
+    _reject_unknown_keys(path, f"repos entry {repo}", entry, _REPO_ENTRY_KEYS)
 
     team = entry.get("authorized_team")
     valid_team_form = isinstance(team, str) and (
@@ -246,11 +274,20 @@ _DOWNSTREAM_REPO_FIELDS = (
     "website_repo", "bundle_repo", "helm_repo",
 )
 _DOWNSTREAM_IMAGE_FIELDS = ("dockerhub_repo", "bundle_dockerhub_repo")
+_DOWNSTREAM_KEYS = frozenset({
+    *_DOWNSTREAM_REPO_FIELDS, *_DOWNSTREAM_IMAGE_FIELDS,
+    "build_workflow", "qualification_workflow",
+    "qualification_x86_archive_jobs", "qualification_arm_archive_jobs",
+    "qualification_rpm_jobs", "qualification_deb_jobs",
+    "downloads_base_url", "tarball_targets", "ghcr_image_repo",
+    "ecr_namespace", "helm_index_url",
+})
 
 
 def _parse_downstream(path: str, repo: str, raw: object) -> DownstreamPolicy:
     if not isinstance(raw, dict):
         raise ValueError(f"{path}: {repo}: 'downstream' must be a mapping")
+    _reject_unknown_keys(path, f"{repo} downstream", raw, _DOWNSTREAM_KEYS)
 
     values: dict[str, object] = {}
     for field in (*_DOWNSTREAM_REPO_FIELDS, *_DOWNSTREAM_IMAGE_FIELDS):

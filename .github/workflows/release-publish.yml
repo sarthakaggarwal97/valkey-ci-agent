@@ -22,7 +22,11 @@
 # reviewers, self-review prevented, and admin bypass disallowed.
 name: Release Publish
 
-run-name: "Publish release on ${{ inputs.branch }} (requested by ${{ github.triggering_actor }})"
+# The optional tag/candidate_sha bindings are stamped into the run-name so
+# the controller can correlate a run with the exact candidate it was
+# dispatched for (" · <tag> @ <sha>"); a manual dispatch without them keeps
+# the plain branch-only run-name.
+run-name: "Publish release on ${{ inputs.branch }}${{ inputs.tag != '' && format(' · {0}', inputs.tag) || '' }}${{ inputs.candidate_sha != '' && format(' @ {0}', inputs.candidate_sha) || '' }} (requested by ${{ github.triggering_actor }})"
 
 on:
   workflow_dispatch:
@@ -30,6 +34,16 @@ on:
       branch:
         description: "Release branch whose ready release to publish (e.g. 9.1)"
         required: true
+        type: string
+      tag:
+        description: "Tag this dispatch is bound to (optional; the controller sets it, manual dispatch may leave it empty)"
+        required: false
+        default: ""
+        type: string
+      candidate_sha:
+        description: "Candidate SHA this dispatch is bound to (optional; the controller sets it, manual dispatch may leave it empty)"
+        required: false
+        default: ""
         type: string
 
 permissions: {}
@@ -47,6 +61,7 @@ jobs:
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
       sha: ${{ steps.plan.outputs.sha }}
+      plan_digest: ${{ steps.plan.outputs.plan_digest }}
     steps:
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -126,6 +141,33 @@ jobs:
             args+=(--unattended)
           fi
           python -m scripts.release.main "${args[@]}"
+
+      - name: Enforce the dispatch-bound candidate
+        # The controller dispatches with the tag and candidate SHA it saw;
+        # validation still recomputes the plan from live state (the
+        # plan-recomputation contract is unchanged and the job outputs come
+        # from the plan), but when bindings were provided they are the
+        # expected values: a divergence means the release changed between
+        # dispatch and validation, and this run must not park an approval
+        # gate for a different candidate. Manual dispatch without bindings
+        # skips this entirely.
+        if: ${{ inputs.tag != '' || inputs.candidate_sha != '' }}
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_SHA: ${{ inputs.candidate_sha }}
+          PLAN_TAG: ${{ steps.plan.outputs.tag }}
+          PLAN_SHA: ${{ steps.plan.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${INPUT_TAG}" && "${INPUT_TAG}" != "${PLAN_TAG}" ]]; then
+            echo "Validation produced tag ${PLAN_TAG} but this run was dispatched for ${INPUT_TAG}; the release changed since dispatch. Refusing to hold the approval gate." >&2
+            exit 1
+          fi
+          if [[ -n "${INPUT_SHA}" && "${INPUT_SHA}" != "${PLAN_SHA}" ]]; then
+            echo "Validation produced candidate ${PLAN_SHA} but this run was dispatched for ${INPUT_SHA}; the candidate changed since dispatch. Refusing to hold the approval gate." >&2
+            exit 1
+          fi
 
   publish:
     name: "Publish (requires environment approval)"
@@ -245,10 +287,15 @@ jobs:
           # just the tag: a candidate adopted while approval was pending must
           # never publish under the reviewed tag.
           EXPECTED_SHA: ${{ needs.validate.outputs.sha }}
+          # The full plan the reviewer approved, as one digest: revalidation
+          # must reproduce it bit-for-bit, so ANY plan drift between approval
+          # and execution (not just tag or SHA) refuses to publish.
+          EXPECTED_DIGEST: ${{ needs.validate.outputs.plan_digest }}
           TARGET_REPO: ${{ github.repository_owner }}/valkey
           POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
         run: |
           set -euo pipefail
           python -m scripts.release.main --policy "${POLICY}" --repo "${TARGET_REPO}" \
             publish --branch "${BRANCH}" --actor "${ACTOR}" \
-            --expected-tag "${EXPECTED_TAG}" --expected-sha "${EXPECTED_SHA}"
+            --expected-tag "${EXPECTED_TAG}" --expected-sha "${EXPECTED_SHA}" \
+            --expected-digest "${EXPECTED_DIGEST}"

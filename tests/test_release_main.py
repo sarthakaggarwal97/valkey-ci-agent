@@ -12,6 +12,7 @@ import yaml
 from scripts.common.polling import run_poll_loop
 from scripts.release.authorize import NotAuthorizedError
 from scripts.release.main import main
+from scripts.release.publish import PublishPlan, plan_digest
 from scripts.release.reconcile import ReleaseControlError, StartResult
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -226,10 +227,12 @@ class TestReconcilePoll:
         loop.assert_not_called()
 
 
-def _publish_plan() -> MagicMock:
-    return MagicMock(tag="9.1.1", sha="a" * 40, make_latest="true",
-                     prerelease=False, body="notes body",
-                     tracker_url="", qualification_url="")
+def _publish_plan(**overrides: object) -> PublishPlan:
+    values: "dict[str, object]" = dict(
+        tag="9.1.1", sha="a" * 40, prerelease=False, make_latest="true",
+        body="notes body", issue_number=11)
+    values.update(overrides)
+    return PublishPlan(**values)  # type: ignore[arg-type]
 
 
 class TestPublishCLI:
@@ -284,7 +287,8 @@ class TestPublishCLI:
         outputs = dict(
             line.split("=", 1) for line in output_file.read_text().splitlines()
         )
-        assert outputs == {"tag": "9.1.1", "sha": "a" * 40, "make_latest": "true"}
+        assert outputs == {"tag": "9.1.1", "sha": "a" * 40, "make_latest": "true",
+                           "plan_digest": plan_digest(_publish_plan())}
         assert evidence.call_args.args[3] == \
             "https://github.com/o/agent/actions/runs/123"
 
@@ -297,12 +301,13 @@ class TestPublishCLI:
         with patch("scripts.release.main.Github"), \
              patch("scripts.release.main.ensure_environment_protected"), \
              patch("scripts.release.main.plan_publication",
-                   return_value=_publish_plan()), \
+                   return_value=_publish_plan()) as plan, \
              patch("scripts.release.main.post_approval_evidence") as evidence, \
              patch("scripts.release.main.render_plan_summary") as summary, \
              patch("scripts.release.main.emit_job_summary"):
             code = main(self._PLAN_ONLY)
         assert code == 0
+        assert plan.call_args.kwargs["controller_sha"] == "f" * 40
         assert summary.call_args.kwargs["controller_sha"] == "f" * 40
         assert evidence.call_args.kwargs["controller_sha"] == "f" * 40
 
@@ -351,6 +356,32 @@ class TestPublishCLI:
         output_file = tmp_path / "out"
         output_file.touch()
         monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+        monkeypatch.setenv("GITHUB_SHA", "f" * 40)
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.ensure_environment_protected"), \
+             patch("scripts.release.main.publish_release",
+                   return_value="https://x/releases/9.1.1") as publish:
+            code = main([*_POLICY_ARGS, "publish", "--branch", "9.1",
+                         "--actor", "madolson",
+                         "--expected-tag", "9.1.1", "--expected-sha", "a" * 40,
+                         "--expected-digest", "d" * 64])
+        assert code == 0
+        kwargs = publish.call_args.kwargs
+        assert kwargs["expected_tag"] == "9.1.1"
+        assert kwargs["expected_sha"] == "a" * 40
+        assert kwargs["expected_digest"] == "d" * 64
+        assert kwargs["controller_sha"] == "f" * 40
+        assert kwargs["branch"] == "9.1"
+        assert kwargs["actor"] == "madolson"
+        outputs = dict(
+            line.split("=", 1) for line in output_file.read_text().splitlines()
+        )
+        assert outputs == {"release_url": "https://x/releases/9.1.1"}
+
+    def test_execute_without_a_digest_is_legacy_and_still_publishes(
+            self) -> None:
+        # The digest binding is optional at the CLI: an approval produced
+        # before the digest existed still executes on the tag/SHA binding.
         with patch("scripts.release.main.Github"), \
              patch("scripts.release.main.ensure_environment_protected"), \
              patch("scripts.release.main.publish_release",
@@ -359,15 +390,7 @@ class TestPublishCLI:
                          "--actor", "madolson",
                          "--expected-tag", "9.1.1", "--expected-sha", "a" * 40])
         assert code == 0
-        kwargs = publish.call_args.kwargs
-        assert kwargs["expected_tag"] == "9.1.1"
-        assert kwargs["expected_sha"] == "a" * 40
-        assert kwargs["branch"] == "9.1"
-        assert kwargs["actor"] == "madolson"
-        outputs = dict(
-            line.split("=", 1) for line in output_file.read_text().splitlines()
-        )
-        assert outputs == {"release_url": "https://x/releases/9.1.1"}
+        assert publish.call_args.kwargs["expected_digest"] == ""
 
     def test_unprotected_gate_exits_1(self) -> None:
         with patch("scripts.release.main.Github"), \
@@ -444,6 +467,14 @@ class TestWorkflowContracts:
         assert env["RECONCILE_POLL_DURATION_SECONDS"] == \
             "${{ github.event_name == 'schedule' && '2400' || '0' }}"
         assert job["timeout-minutes"] == "58"
+        # The read-only downstream mint had no consumer; it was removed
+        # rather than shipped as an unused credential. The write-token
+        # scoping stays.
+        text = (_ROOT / ".github" / "workflows" /
+                "release-reconcile.yml").read_text(encoding="utf-8")
+        assert "RELEASE_DOWNSTREAM_READ_TOKEN" not in text
+        assert "generate-downstream-read-token" not in text
+        assert "RELEASE_DOWNSTREAM_TOKEN" in text
 
     def test_adopt_requires_branch_and_sha(self) -> None:
         inputs = _workflow("release-adopt.yml")["on"]["workflow_dispatch"]["inputs"]
