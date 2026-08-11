@@ -723,6 +723,17 @@ def reconcile_branch(
         ):
             logger.info("Action: %s", performed)
 
+    # Display-only: before the notes PR exists, link the in-flight (or
+    # failed) cut run so the tracker shows what an operator can watch
+    # instead of a bare "None found".
+    if (status.phase is ReleasePhase.NOTES and not status.notes_pr_number
+            and gh_agent is not None and agent_repo):
+        cut_url = actions_mod.notes_cut_run_url(
+            gh_agent, agent_repo, branch, status.version,
+        )
+        if cut_url:
+            status = replace(status, notes_cut_url=cut_url)
+
     # Display-only: link the waiting publish run so the READY callout can
     # say exactly where to approve. Fetched after advance() so a run the
     # dispatch just created has its best chance of being visible. Finder

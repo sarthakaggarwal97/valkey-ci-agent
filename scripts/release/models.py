@@ -267,6 +267,9 @@ class ReleaseStatus:
     stage: str = ""
     notes_pr_number: int = 0
     notes_pr_url: str = ""
+    # Display only: the in-flight or failed notes-cut workflow run, so the
+    # tracker links what an operator can watch before the PR exists.
+    notes_cut_url: str = ""
     notes_pr_merged: bool = False
     candidate: Candidate = Candidate(state=CandidateState.NONE)
     checks: tuple[RequiredCheck, ...] = ()

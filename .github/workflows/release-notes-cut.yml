@@ -11,6 +11,9 @@
 #   rcN (N>1)  -> M.m.p-rc(N-1) tag..M.m tip
 #   ga          -> last rc tag (or last patch tag)..M.m tip
 name: Cut Release Notes
+# The run-name embeds the version: it is the correlation marker the
+# controller matches to link an in-flight cut from the tracker.
+run-name: "Cut Release Notes ${{ inputs.version }}"
 
 on:
   workflow_dispatch:

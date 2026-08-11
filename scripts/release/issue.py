@@ -535,6 +535,8 @@ def _short(sha: str) -> str:
 
 def _notes_pr_cell(status: ReleaseStatus) -> str:
     if not status.notes_pr_number:
+        if status.notes_cut_url:
+            return f"_Being cut ([workflow run]({status.notes_cut_url}))_"
         return "_None found_"
     state = "Merged" if status.notes_pr_merged else "Open (not merged)"
     return f"[#{status.notes_pr_number}]({status.notes_pr_url}): {state}"

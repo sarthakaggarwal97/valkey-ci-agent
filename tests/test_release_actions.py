@@ -1580,3 +1580,50 @@ class TestRecoveryGenerations:
         actions.advance(gh, _POLICY, status=second, tracking_issue=harness.issue)
         # Same identity: only the ids changed, no re-ping.
         assert len(harness.bodies(":notify:")) == 1
+
+
+class TestNotesCutRunUrl:
+    @staticmethod
+    def _agent(runs_by_workflow):
+        def get_workflow(name):
+            workflow = MagicMock()
+            workflow.get_runs.return_value = runs_by_workflow.get(name, [])
+            return workflow
+        agent_repo = MagicMock()
+        agent_repo.get_workflow.side_effect = get_workflow
+        gh_agent = MagicMock()
+        gh_agent.get_repo.return_value = agent_repo
+        return gh_agent
+
+    @staticmethod
+    def _run(title, status="in_progress", conclusion=None):
+        return MagicMock(display_title=title, status=status,
+                         conclusion=conclusion, html_url=f"https://x/runs/{title}")
+
+    def test_active_chained_cut_is_linked(self) -> None:
+        gh = self._agent({"release-start.yml": [
+            self._run("Start Release on 8.0")]})
+        url = actions.notes_cut_run_url(gh, "o/agent", "8.0")
+        assert url == "https://x/runs/Start Release on 8.0"
+
+    def test_failed_cut_is_linked_when_nothing_is_active(self) -> None:
+        gh = self._agent({"release-start.yml": [
+            self._run("Start Release on 8.0", status="completed",
+                      conclusion="failure")]})
+        assert "Start Release on 8.0" in actions.notes_cut_run_url(gh, "o/agent", "8.0")
+
+    def test_other_branch_never_matches(self) -> None:
+        gh = self._agent({"release-start.yml": [
+            self._run("Start Release on 8.1")]})
+        assert actions.notes_cut_run_url(gh, "o/agent", "8.0") == ""
+
+    def test_standalone_cut_matches_only_with_a_bound_version(self) -> None:
+        gh = self._agent({"release-notes-cut.yml": [
+            self._run("Cut Release Notes 8.0.11")]})
+        assert actions.notes_cut_run_url(gh, "o/agent", "8.0") == ""
+        assert "8.0.11" in actions.notes_cut_run_url(gh, "o/agent", "8.0", "8.0.11")
+
+    def test_lookup_failure_returns_empty(self) -> None:
+        gh_agent = MagicMock()
+        gh_agent.get_repo.side_effect = GithubException(500, {}, {})
+        assert actions.notes_cut_run_url(gh_agent, "o/agent", "8.0") == ""

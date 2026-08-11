@@ -842,6 +842,48 @@ def _close_when_complete(gh: Any, status: ReleaseStatus, tracking_issue: Any) ->
 
 
 _PUBLISH_WORKFLOW = "release-publish.yml"
+_START_WORKFLOW = "release-start.yml"
+_CUT_WORKFLOW = "release-notes-cut.yml"
+_CUT_RUN_SCAN_LIMIT = 15
+
+
+def notes_cut_run_url(gh_agent: Any, agent_repo: str, branch: str,
+                      version: str = "") -> str:
+    """The in-flight (or newest failed) notes-cut run for *branch*, or "".
+
+    During the window between start and the PR appearing, the tracker
+    would otherwise show nothing an operator can watch. The chained cut
+    runs inside "Start Release on {branch}"; a standalone cut runs as
+    "Cut Release Notes {version}" (version known only once bound). An
+    active run of either is returned first; failing that, the newest
+    FAILED run (a failed cut leaves no PR, and the run link is the only
+    evidence of why). Display only: any lookup failure returns "".
+    """
+    markers = [(_START_WORKFLOW, f"Start Release on {branch} ")]
+    if version:
+        markers.append((_CUT_WORKFLOW, f"Cut Release Notes {version} "))
+    failed_url = ""
+    for workflow_file, marker in markers:
+        try:
+            workflow = workflow_handle(gh_agent, agent_repo, workflow_file)
+            if workflow is None:
+                continue
+            runs = retry_github_call(
+                workflow.get_runs,
+                retries=2, description=f"list {workflow_file} runs",
+            )
+            for index, run in enumerate(runs):
+                if index >= _CUT_RUN_SCAN_LIMIT:
+                    break
+                if marker not in f"{run.display_title or ''} ":
+                    continue
+                if run.status in ("queued", "in_progress", "waiting", "pending"):
+                    return run.html_url
+                if not failed_url and run.conclusion not in ("success", None):
+                    failed_url = run.html_url
+        except GithubException:
+            continue
+    return failed_url
 
 # Per-listing cap on each server-side filtered runs query. The status
 # filter (not this cap) is what keeps a long-waiting run visible: it can
