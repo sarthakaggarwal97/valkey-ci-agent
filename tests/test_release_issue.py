@@ -530,7 +530,7 @@ class TestTablesTriageAndCollapse:
             RequiredCheck(name="test-ubuntu-latest", state=CheckState.PASSED),
             RequiredCheck(name="build-macos-latest", state=CheckState.PASSED),
         )))
-        assert "<details><summary>All 2 required checks passed</summary>" in body
+        assert "<details><summary>All 2 policy-required checks passed</summary>" in body
         assert "</details>" in body
         assert "| `test-ubuntu-latest` | ✅ Passed |" in body
 

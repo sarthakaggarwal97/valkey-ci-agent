@@ -315,13 +315,22 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
         for check in status.checks:
             link = f" ([run]({check.url}))" if check.url else ""
             table.append(f"| `{check.name}` | {_CHECK_STATE_DISPLAY[check.state]}{link} |")
+        # The gate is the policy's release-blocking subset, not the full CI
+        # matrix; without saying so the table reads as "only N checks ran".
+        scope_note = (
+            f"<sub>The release policy gates on these {len(status.checks)} "
+            f"checks; every check that ran on the candidate is on "
+            f"[the commit]({_repo_url(status)}/commits/"
+            f"{status.candidate.sha}/checks). Deep platform coverage comes "
+            f"from the Qualification gate above.</sub>"
+        )
         if all(check.state is CheckState.PASSED for check in status.checks):
             lines += _collapsed(
-                f"All {len(status.checks)} required checks passed",
-                table,
+                f"All {len(status.checks)} policy-required checks passed",
+                [*table, "", scope_note],
             )
         else:
-            lines += table
+            lines += [*table, "", scope_note]
 
     if status.outputs:
         lines += ["", "### Public Outputs", ""]
