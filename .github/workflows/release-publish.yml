@@ -184,8 +184,8 @@ jobs:
         # The controller dispatches with the tag and candidate SHA it saw;
         # validation still recomputes the plan from live state (the
         # plan-recomputation contract is unchanged and the job outputs come
-        # from the plan), and the bindings — always populated because the
-        # "Check inputs" step above refuses empty values — are the expected
+        # from the plan), and the bindings (always populated because the
+        # "Check inputs" step above refuses empty values) are the expected
         # values. A divergence means the release changed between dispatch
         # and validation, and this run must not park an approval gate for
         # a different candidate.

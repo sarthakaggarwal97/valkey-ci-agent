@@ -454,20 +454,19 @@ def _post_publication_receipt(gh: Any, repo: Any, plan: "PublishPlan",
     forged copy from a random account is ignored) and skip if present.
     """
     tracking_issue = _get_issue(repo, plan.issue_number)
-    body = (
-        f"{_PUBLICATION_MARKER}\n"
-        f"Published **{plan.tag}** at `{plan.sha}` "
-        f"(publication approved by @{actor}): {release_url}\n"
-        f"Downstream outputs are now observed by reconciliation."
-    )
-    for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if issue_mod.marker_present(comment.body or "", _PUBLICATION_MARKER):
-            logger.info("Publication receipt for %s already posted; skipping",
-                        plan.tag)
-            return
-    retry_github_call(
-        lambda: tracking_issue.create_comment(body=body),
-        retries=2, description="record publication on tracker",
+    if issue_mod.has_marker(tracking_issue, _PUBLICATION_MARKER, gh):
+        logger.info("Publication receipt for %s already posted; skipping",
+                    plan.tag)
+        return
+    issue_mod.post_comment(
+        tracking_issue,
+        (
+            f"{_PUBLICATION_MARKER}\n"
+            f"Published **{plan.tag}** at `{plan.sha}` "
+            f"(publication approved by @{actor}): {release_url}\n"
+            f"Downstream outputs are now observed by reconciliation."
+        ),
+        "record publication on tracker",
     )
 
 
@@ -791,14 +790,12 @@ def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
         + f"\n\n**Approve here:** {run_url} (Review deployments -> `release` "
         f"-> Approve and deploy)"
     )
-    for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if issue_mod.marker_present(comment.body or "", _APPROVAL_MARKER):
-            retry_github_call(
-                partial(comment.edit, body=body),
-                retries=2, description="update approval evidence comment",
-            )
-            return
-    retry_github_call(
-        lambda: tracking_issue.create_comment(body=body),
-        retries=2, description="post approval evidence comment",
-    )
+    existing = issue_mod.find_marked_comment(tracking_issue, _APPROVAL_MARKER, gh)
+    if existing is not None:
+        retry_github_call(
+            partial(existing.edit, body=body),
+            retries=2, description="update approval evidence comment",
+        )
+        return
+    issue_mod.post_comment(tracking_issue, body,
+                           "post approval evidence comment")

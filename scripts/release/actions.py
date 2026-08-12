@@ -83,29 +83,6 @@ def _fp(source: str) -> str:
 _marker = issue_mod.marker
 
 
-def _marked_comment(gh: Any, tracking_issue: Any, marker: str) -> Any:
-    """The first trusted comment carrying *marker*, None when absent.
-
-    Only trusted comments count: a marker pasted by anyone else is
-    invisible, exactly like every other marker read-back.
-    """
-    for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if issue_mod.marker_present(comment.body, marker):
-            return comment
-    return None
-
-
-def _post_comment(tracking_issue: Any, body: str, description: str) -> Any:
-    """Post *body* on the tracker (retried) and invalidate the comment
-    memo so a same-pass re-read sees it. Returns the created comment."""
-    created = retry_github_call(
-        lambda: tracking_issue.create_comment(body=body),
-        retries=2, description=description,
-    )
-    issue_mod.invalidate_comment_memo(tracking_issue)
-    return created
-
-
 def _edit_comment(comment: Any, body: str, description: str,
                   tracking_issue: Any) -> None:
     """Edit *comment* to *body* (retried), keeping the in-process comment
@@ -126,9 +103,9 @@ def _post_marked_once(gh: Any, tracking_issue: Any, marker: str, body: str,
                       description: str) -> bool:
     """Post *body* under *marker* unless a trusted comment already carries
     the marker. True when this pass newly posted."""
-    if _marked_comment(gh, tracking_issue, marker) is not None:
+    if issue_mod.has_marker(tracking_issue, marker, gh):
         return False
-    _post_comment(tracking_issue, f"{marker}\n{body}", description)
+    issue_mod.post_comment(tracking_issue, f"{marker}\n{body}", description)
     return True
 
 
@@ -375,9 +352,10 @@ def _autofix_two_phase(
     intent_marker = _marker(f"autofix-intent:{key}:{fingerprint}")
     done_marker = _marker(f"autofix-done:{key}:{fingerprint}")
 
-    if _marked_comment(gh, tracking_issue, done_marker) is not None:
+    if issue_mod.has_marker(tracking_issue, done_marker, gh):
         return False  # completed on an earlier pass
-    intent_comment = _marked_comment(gh, tracking_issue, intent_marker)
+    intent_comment = issue_mod.find_marked_comment(tracking_issue,
+                                                   intent_marker, gh)
 
     if intent_comment is not None:
         # Intent without done: possible crash between intent-post and
@@ -410,9 +388,9 @@ def _autofix_two_phase(
     # Fresh: post intent, dispatch, stamp done. Losing the intent write
     # would silently disable the retry-once recovery path, so if that
     # write raises, the dispatch never runs (fail closed).
-    created = _post_comment(tracking_issue,
-                            f"{intent_marker}\n{intent_callout}",
-                            f"post {key} intent marker")
+    created = issue_mod.post_comment(tracking_issue,
+                                     f"{intent_marker}\n{intent_callout}",
+                                     f"post {key} intent marker")
     if created is None:
         # No comment handle returned: we cannot stamp done later.
         # Rather than dispatch and be unable to record it, refuse; the
@@ -457,7 +435,7 @@ def _run_dispatch_safely(dispatch_fn: "Any", *, tracking_issue: Any,
     except Exception:
         logger.exception("Auto-remediation dispatch (%s) failed", key)
         if instruction:
-            _post_comment(
+            issue_mod.post_comment(
                 tracking_issue,
                 f"> [!WARNING]\n"
                 f"> **Auto-remediation failed:** The dispatch itself failed. "
@@ -879,25 +857,6 @@ _NOTIFY_STATE_MARKER_RE = re.compile(
 )
 
 
-def _unfenced_lines(body: Any) -> "Iterator[str]":
-    """The lines of *body* outside any ``` code fence: the same fence
-    discipline as issue_mod.marker_present, for reads that need a marker
-    family or a marker's captured value rather than one exact marker."""
-    fenced = False
-    for line in (body or "").splitlines():
-        if line.lstrip().startswith("```"):
-            fenced = not fenced
-            continue
-        if not fenced:
-            yield line
-
-
-def _marker_prefix_present(body: Any, prefix: str) -> bool:
-    """True when a line of *body*, outside any code fence, starts with
-    *prefix*."""
-    return any(line.startswith(prefix) for line in _unfenced_lines(body))
-
-
 def _notify_generation(gh: Any, tracking_issue: Any) -> "tuple[int, Any, str]":
     """(current recovery generation, the trusted comment recording it,
     the current dirty/healthy state).
@@ -909,16 +868,18 @@ def _notify_generation(gh: Any, tracking_issue: Any) -> "tuple[int, Any, str]":
     when present, "" otherwise.
     """
     best_generation, best_comment, best_state = 0, None, ""
-    for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        gen_match = None
-        state_match = None
-        for line in _unfenced_lines(comment.body):
-            gen_match = gen_match or _NOTIFY_GEN_MARKER_RE.match(line)
-            state_match = state_match or _NOTIFY_STATE_MARKER_RE.match(line)
-        if gen_match and int(gen_match.group(1)) >= best_generation:
-            best_generation = int(gen_match.group(1))
-            best_comment = comment
-            best_state = state_match.group(1) if state_match else ""
+    for comment, match in issue_mod.marker_matches(
+            tracking_issue, _NOTIFY_GEN_MARKER_RE, gh):
+        if int(match.group(1)) < best_generation:
+            continue
+        best_generation, best_comment = int(match.group(1)), comment
+        state_match = _NOTIFY_STATE_MARKER_RE.search(comment.body or "")
+        best_state = (
+            state_match.group(1)
+            if state_match and issue_mod.marker_present(comment.body,
+                                                        state_match.group(0))
+            else ""
+        )
     return best_generation, best_comment, best_state
 
 
@@ -996,7 +957,8 @@ def _write_generation_state(tracking_issue: Any, *, generation: int,
         f"({state}, edited in place).</sub>"
     )
     if existing is None:
-        _post_comment(tracking_issue, body, "post recovery-generation comment")
+        issue_mod.post_comment(tracking_issue, body,
+                               "post recovery-generation comment")
     else:
         _edit_comment(existing, body, "advance recovery-generation comment",
                       tracking_issue)
@@ -1004,12 +966,10 @@ def _write_generation_state(tracking_issue: Any, *, generation: int,
 
 def _has_notification_history(gh: Any, tracking_issue: Any) -> bool:
     """True when any trusted comment carries a notify or wedge marker."""
-    prefixes = (f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:",
-                f"<!-- {issue_mod.MARKER_NAMESPACE}:wedge:")
     return any(
-        _marker_prefix_present(comment.body, prefix)
-        for comment in issue_mod.trusted_comments(tracking_issue, gh)
-        for prefix in prefixes
+        issue_mod.has_marker(tracking_issue, prefix, gh)
+        for prefix in (f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:",
+                       f"<!-- {issue_mod.MARKER_NAMESPACE}:wedge:")
     )
 
 
@@ -1203,16 +1163,14 @@ def _mark_complete_once(gh: Any, status: ReleaseStatus,
     """
     if tracking_issue.state == "closed":
         return False
-    body = (
-        f"> [!NOTE]\n"
-        f"> **Release `{status.version}` ({status.stage}) is complete.**\n"
-        f">\n"
-        f"> The release, tag, downloads, hashes, container images, "
-        f"docs, website, Bundle, and Helm outputs are all verified "
-        f"public. Closing."
+    if issue_mod.has_completion_marker(tracking_issue, gh):
+        return False
+    issue_mod.post_comment(
+        tracking_issue,
+        issue_mod.completion_comment(status.version, status.stage),
+        "post completion comment",
     )
-    return _post_marked_once(gh, tracking_issue, issue_mod.complete_marker(),
-                             body, "post completion comment")
+    return True
 
 
 _PUBLISH_WORKFLOW = "release-publish.yml"

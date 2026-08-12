@@ -137,7 +137,7 @@ jobs:
           RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
           BRANCH: ${{ inputs.branch || github.event.client_payload.branch }}
           INTENT: ${{ inputs.intent || github.event.client_payload.intent }}
-          # Direct dispatch: triggering_actor, not actor — on a workflow
+          # Direct dispatch: triggering_actor, not actor, because on a workflow
           # *re-run* github.actor remains the original dispatcher, so
           # authorizing it would let a repo-write user replay an authorized
           # user's dispatch. Trampoline dispatch: the forwarded human from

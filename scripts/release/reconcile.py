@@ -936,15 +936,6 @@ def reconcile_branch(
     return status
 
 
-def _post_comment(issue: Any, body: str, description: str) -> None:
-    """Post *body* on *issue* with retries and refresh the comment memo."""
-    retry_github_call(
-        lambda: issue.create_comment(body=body),
-        retries=2, description=description,
-    )
-    issue_mod.invalidate_comment_memo(issue)
-
-
 def _close_tracker_last_write(gh: Any, status: ReleaseStatus, tracking_issue: Any) -> None:
     """Post the completion comment if missing, then close as the last write.
 
@@ -956,17 +947,9 @@ def _close_tracker_last_write(gh: Any, status: ReleaseStatus, tracking_issue: An
     with a stale projection (F24).
     """
     if not issue_mod.has_completion_marker(tracking_issue, gh):
-        _post_comment(
+        issue_mod.post_comment(
             tracking_issue,
-            (
-                f"{issue_mod.complete_marker()}\n"
-                f"> [!NOTE]\n"
-                f"> **Release `{status.version}` ({status.stage}) is complete.**\n"
-                f">\n"
-                f"> The release, tag, downloads, hashes, container images, "
-                f"docs, website, Bundle, and Helm outputs are all verified "
-                f"public. Closing."
-            ),
+            issue_mod.completion_comment(status.version, status.stage),
             "post completion comment",
         )
     retry_github_call(
@@ -990,8 +973,7 @@ def _warn_abandoned_tracker(gh: Any, repo: Any, branch: str, *, act: bool) -> No
     if closed is None or issue_mod.has_completion_marker(closed, gh):
         return  # nothing closed, or controller-closed on completion
     marker = issue_mod.closed_warning_marker()
-    if any(issue_mod.marker_present(comment.body, marker)
-           for comment in issue_mod.trusted_comments(closed, gh)):
+    if issue_mod.has_marker(closed, marker, gh):
         return  # already warned once
     logger.warning(
         "Tracker #%s on %s was closed while the release was still being "
@@ -999,7 +981,7 @@ def _warn_abandoned_tracker(gh: Any, repo: Any, branch: str, *, act: bool) -> No
     )
     if not act:
         return
-    _post_comment(
+    issue_mod.post_comment(
         closed,
         (
             f"{marker}\n"
@@ -1101,8 +1083,8 @@ def adopt_candidate(
         f"adopted `{sha}` as the release candidate. Required checks will be "
         f"evaluated against this exact SHA on the next reconciliation."
     )
-    _post_comment(tracking_issue, comment,
-                  f"record adoption on issue #{tracking_issue.number}")
+    issue_mod.post_comment(tracking_issue, comment,
+                           f"record adoption on issue #{tracking_issue.number}")
     logger.info("Recorded adoption of %s on issue #%s", sha, tracking_issue.number)
 
     refreshed = compute_status(gh, policy, branch, tracking_issue=tracking_issue,

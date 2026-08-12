@@ -213,6 +213,11 @@ def _guarded(name: str, verifier: Callable[[], Any]) -> tuple[DownstreamOutput, 
     return (result,)
 
 
+def _skipped(name: str, detail: str) -> DownstreamOutput:
+    """A not-applicable output (rc-only scope, untracked line, newer chart)."""
+    return DownstreamOutput(name=name, state=OutputState.SKIPPED, detail=detail)
+
+
 # ---------------------------------------------------------------------------
 # Stage 5 verifiers
 
@@ -397,10 +402,8 @@ def _verify_packages(down: Any, stage: str, build: DownstreamOutput,
     matrix publishes the same reviewed platform set qualification builds.
     """
     if stage != "ga":
-        return DownstreamOutput(
-            name="packages", state=OutputState.SKIPPED,
-            detail="Distro packages are not built for release candidates",
-        )
+        return _skipped("packages",
+                        "Distro packages are not built for release candidates")
     gated = _build_gated("packages", build, jobs)
     if gated is not None:
         return gated
@@ -467,10 +470,8 @@ def _verify_try_valkey(stage: str, build: DownstreamOutput, run: Any,
     Valkey deployment was never updated, which is a failure.
     """
     if stage != "ga":
-        return DownstreamOutput(
-            name="try-valkey", state=OutputState.SKIPPED,
-            detail="Try Valkey is not updated for release candidates",
-        )
+        return _skipped("try-valkey",
+                        "Try Valkey is not updated for release candidates")
     gated = _build_gated("try-valkey", build, jobs)
     if gated is not None:
         return gated
@@ -642,10 +643,8 @@ def _verify_container(gh: Any, down: Any, tag: str) -> list[DownstreamOutput]:
 def _verify_docs(gh: Any, down: Any, tag: str, stage: str) -> DownstreamOutput:
     """Docs: rc skips; a patch pushes a tag; a minor opens a docs PR."""
     if stage != "ga":
-        return DownstreamOutput(
-            name="docs", state=OutputState.SKIPPED,
-            detail="Documentation is not updated for release candidates",
-        )
+        return _skipped("docs",
+                        "Documentation is not updated for release candidates")
     _major, _minor, patch = parse_version(tag)  # ga only: tag == version
     repo = get_repo(gh, down.doc_repo)
     if patch > 0:
@@ -679,10 +678,8 @@ def _verify_docs(gh: Any, down: Any, tag: str, stage: str) -> DownstreamOutput:
 
 def _verify_website(gh: Any, down: Any, tag: str, stage: str) -> DownstreamOutput:
     if stage != "ga":
-        return DownstreamOutput(
-            name="website", state=OutputState.SKIPPED,
-            detail="The website release page is not updated for release candidates",
-        )
+        return _skipped("website",
+                        "The website release page is not updated for release candidates")
     pr = _find_update_pr(gh, down.website_repo, f"update-website-{tag}")
     return _pr_progress_output("website", pr, f"update-website-{tag}", down.website_repo)
 
@@ -701,10 +698,8 @@ def _verify_bundle(
     major, minor, _patch = parse_version(version)
     line = f"{major}.{minor}"
     if (major, minor) < (8, 1):
-        return DownstreamOutput(
-            name="bundle", state=OutputState.SKIPPED,
-            detail=f"The `valkey-bundle` repo does not track the {line} line",
-        )
+        return _skipped("bundle",
+                        f"The `valkey-bundle` repo does not track the {line} line")
     if not images_public:
         return DownstreamOutput(
             name="bundle", state=OutputState.BLOCKED,
@@ -798,10 +793,7 @@ def _verify_helm(
     """Helm: GA only, and only when the version advances the chart's
     appVersion; blocked until the chart's default image tag is public."""
     if stage != "ga":
-        return DownstreamOutput(
-            name="helm", state=OutputState.SKIPPED,
-            detail="The chart does not track release candidates",
-        )
+        return _skipped("helm", "The chart does not track release candidates")
 
     repo = get_repo(gh, down.helm_repo)
     chart_yaml = read_text_file(repo, "valkey/Chart.yaml")
@@ -826,10 +818,8 @@ def _verify_helm(
                 detail=f"Could not parse `valkey/Chart.yaml` in {down.helm_repo}",
             )
         if chart_is_newer:
-            return DownstreamOutput(
-                name="helm", state=OutputState.SKIPPED,
-                detail=f"The chart already tracks the newer {app_version}",
-            )
+            return _skipped("helm",
+                            f"The chart already tracks the newer {app_version}")
         if not image_public:
             return DownstreamOutput(
                 name="helm", state=OutputState.BLOCKED,

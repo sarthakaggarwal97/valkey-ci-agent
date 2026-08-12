@@ -76,22 +76,21 @@ def evaluate_required_checks(
         run = latest_by_name.get(name)
         if run is None:
             results.append(RequiredCheck(name=name, state=CheckState.MISSING))
-        elif run.status != "completed":
+            continue
+        if run.status != "completed":
             # A run that never started has no started_at; fall back to its
             # creation time so it cannot dodge STALLED forever.
             started = getattr(run, "started_at", None) or getattr(run, "created_at", None)
-            state = (
-                CheckState.STALLED
-                if started is not None and started < stalled_before
-                else CheckState.PENDING
-            )
-            results.append(RequiredCheck(name=name, state=state, url=run.html_url or ""))
+            state = (CheckState.STALLED
+                     if started is not None and started < stalled_before
+                     else CheckState.PENDING)
         elif run.conclusion == "success":
-            results.append(RequiredCheck(name=name, state=CheckState.PASSED, url=run.html_url or ""))
+            state = CheckState.PASSED
         else:
             # failure, cancelled, timed_out, action_required, stale, neutral,
             # skipped: none of these is evidence the required check passed.
-            results.append(RequiredCheck(name=name, state=CheckState.FAILED, url=run.html_url or ""))
+            state = CheckState.FAILED
+        results.append(RequiredCheck(name=name, state=state, url=run.html_url or ""))
     return tuple(results)
 
 

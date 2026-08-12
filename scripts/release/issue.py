@@ -126,43 +126,41 @@ def marker(suffix: str) -> str:
     return f"<!-- {MARKER_NAMESPACE}:{suffix} -->"
 
 
-_marker = marker
-
-
 def identity_marker(branch: str) -> str:
     """The marker that identifies the active release issue for *branch*."""
-    return _marker(branch)
+    return marker(branch)
 
 
 def adopt_marker(sha: str) -> str:
     """The comment marker recording an owner's adoption of branch head *sha*."""
-    return _marker(f"adopt:{sha}")
+    return marker(f"adopt:{sha}")
 
 
 def complete_marker() -> str:
     """The comment marker the controller posts when closing a completed release."""
-    return _marker("complete")
+    return marker("complete")
 
 
 def closed_warning_marker() -> str:
     """The one-shot marker gating the abandoned-tracker warning (fires once)."""
-    return _marker("closed-warning")
+    return marker("closed-warning")
 
 
 def binding_marker(binding: ReleaseBinding) -> str:
     """The marker line carrying the identity-binding receipt's fields."""
-    return _marker(
+    return marker(
         f"binding version={binding.version} stage={binding.stage} "
         f"notes_pr={binding.notes_pr_number} merge_sha={binding.merge_sha}"
     )
 
 
-def _marker_matches(issue: Any, regex: "re.Pattern[str]",
-                    gh: Any) -> "Iterator[tuple[Any, re.Match[str]]]":
+def marker_matches(issue: Any, regex: "re.Pattern[str]",
+                   gh: Any = None) -> "Iterator[tuple[Any, re.Match[str]]]":
     """(comment, match) for every real *regex* marker in a trusted comment,
-    oldest first. The single scan path for adoption and binding read-back:
-    trusted authors only, and each hit re-checked through
-    :func:`marker_present` so a quoted marker never counts."""
+    oldest first. The single scan path for value-carrying markers
+    (adoption, binding, notification bookkeeping): trusted authors only,
+    and each hit re-checked through :func:`marker_present` so a quoted
+    marker never counts."""
     for comment in trusted_comments(issue, gh):
         for match in regex.finditer(comment.body or ""):
             if marker_present(comment.body, match.group(0)):
@@ -178,7 +176,7 @@ def read_binding(issue: Any, gh: Any = None) -> "ReleaseBinding | None":
     newest marker wins defensively should duplicates ever appear.
     """
     found = None
-    for _, match in _marker_matches(issue, _BINDING_MARKER_RE, gh):
+    for _, match in marker_matches(issue, _BINDING_MARKER_RE, gh):
         found = ReleaseBinding(
             version=match.group(1),
             stage=match.group(2),
@@ -215,7 +213,7 @@ def write_binding(issue: Any, binding: ReleaseBinding, gh: Any = None, *,
     body = _binding_body(binding)
     existing = None
     if not assume_absent:
-        for comment, _ in _marker_matches(issue, _BINDING_MARKER_RE, gh):
+        for comment, _ in marker_matches(issue, _BINDING_MARKER_RE, gh):
             existing = comment
     if existing is not None:
         if (existing.body or "") == body:
@@ -224,12 +222,9 @@ def write_binding(issue: Any, binding: ReleaseBinding, gh: Any = None, *,
             lambda: existing.edit(body=body),
             retries=2, description=f"update binding on issue #{issue.number}",
         )
+        invalidate_comment_memo(issue)
     else:
-        retry_github_call(
-            lambda: issue.create_comment(body=body),
-            retries=2, description=f"record binding on issue #{issue.number}",
-        )
-    invalidate_comment_memo(issue)
+        post_comment(issue, body, f"record binding on issue #{issue.number}")
 
 
 def marker_present(body: Any, marker: str) -> bool:
@@ -700,10 +695,21 @@ def has_completion_marker(issue: Any, gh: Any = None) -> bool:
     reconcile heal path (a controller-closed tracker with drifted
     projection is edited in place, never reopened).
     """
-    marker = complete_marker()
-    return any(
-        marker_present(comment.body, marker)
-        for comment in trusted_comments(issue, gh)
+    return has_marker(issue, complete_marker(), gh)
+
+
+def completion_comment(version: str, stage: str) -> str:
+    """The completion comment (marker plus callout) posted when a release
+    finishes. Shared by the advance() receipt and reconcile's close-path
+    safety net so the prose lives once."""
+    return (
+        f"{complete_marker()}\n"
+        f"> [!NOTE]\n"
+        f"> **Release `{version}` ({stage}) is complete.**\n"
+        f">\n"
+        f"> The release, tag, downloads, hashes, container images, "
+        f"docs, website, Bundle, and Helm outputs are all verified "
+        f"public. Closing."
     )
 
 
@@ -785,6 +791,38 @@ def trusted_comments(issue: Any, gh: Any = None) -> list[Any]:
     ]
 
 
+def find_marked_comment(issue: Any, marker: str, gh: Any = None) -> Any:
+    """The first trusted comment carrying *marker*, None when absent.
+
+    The single lookup path for exact-marker read-back: only trusted
+    comments count (a marker pasted by anyone else is invisible), and each
+    body is checked through :func:`marker_present` so a quoted marker never
+    counts. Because the match is a line-start test, a marker-family prefix
+    (``<!-- ns:notify:``) also works as *marker*.
+    """
+    for comment in trusted_comments(issue, gh):
+        if marker_present(comment.body, marker):
+            return comment
+    return None
+
+
+def has_marker(issue: Any, marker: str, gh: Any = None) -> bool:
+    """True when a trusted comment on *issue* carries *marker*."""
+    return find_marked_comment(issue, marker, gh) is not None
+
+
+def post_comment(issue: Any, body: str, description: str) -> Any:
+    """Post *body* on *issue* (retried) and invalidate the comment memo so
+    a same-pass re-read sees it. Returns the created comment. The single
+    create-comment path for every controller write to a tracker."""
+    created = retry_github_call(
+        lambda: issue.create_comment(body=body),
+        retries=2, description=description,
+    )
+    invalidate_comment_memo(issue)
+    return created
+
+
 def adopted_shas(issue: Any, gh: Any = None) -> tuple[str, ...]:
     """Adoption acknowledgements recorded on *issue*, oldest first.
 
@@ -795,7 +833,7 @@ def adopted_shas(issue: Any, gh: Any = None) -> tuple[str, ...]:
     """
     return tuple(
         match.group(1)
-        for _, match in _marker_matches(issue, _ADOPT_MARKER_RE, gh)
+        for _, match in marker_matches(issue, _ADOPT_MARKER_RE, gh)
     )
 
 
