@@ -2,26 +2,38 @@
 
 from __future__ import annotations
 
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
 from github.GithubException import GithubException
 
-from scripts.release.models import ReleasePhase
+from scripts.release import issue as issue_mod
+from scripts.release.authorize import NotAuthorizedError
 from scripts.release.publish import (
+    _APPROVAL_MARKER,
+    _PUBLICATION_MARKER,
     PublishPlan,
+    _ensure_tag_at_sha,
+    _make_latest_decision,
+    _previous_tag,
+    ensure_environment_protected,
     plan_digest,
     plan_publication,
+    post_approval_evidence,
     publish_release,
     render_plan_summary,
+    tag_ruleset_protected,
 )
 from scripts.release.reconcile import ReleaseControlError
 from tests.release_fixtures import (
     MERGE_SHA,
     gh_mock,
     make_policy,
+    notes_pr,
     qualification_run,
     repo_mock,
+    tag_ref,
     tracker,
 )
 
@@ -39,6 +51,15 @@ _NOTES = (
     "### Bug Fixes\n* Fix a thing by @someone (#1234)\n\n"
     "Valkey 9.1.0  -  Released earlier\n=====\nolder section\n"
 )
+
+
+def _contents_for(version_h: str = _VERSION_H, notes: str = _NOTES):
+    """A ``get_contents`` side effect serving *version_h* / *notes* by path."""
+    def _contents(path: str, **kw: object) -> MagicMock:
+        f = MagicMock()
+        f.decoded_content = (version_h if path.endswith("version.h") else notes).encode()
+        return f
+    return _contents
 
 
 def _with_manifest(run: MagicMock) -> MagicMock:
@@ -61,13 +82,7 @@ def _ready_repo(**overrides: object) -> MagicMock:
     repo = repo_mock(tags=["9.1.0"], **overrides)  # type: ignore[arg-type]
     for run in repo.get_workflow.return_value.get_runs.return_value:
         _with_manifest(run)
-
-    def _contents(path: str, **kw: object) -> MagicMock:
-        f = MagicMock()
-        f.decoded_content = (_VERSION_H if path.endswith("version.h") else _NOTES).encode()
-        return f
-
-    repo.get_contents.side_effect = _contents
+    repo.get_contents.side_effect = _contents_for()
     # F17 uses get_releases() enumeration; keep the legacy get_latest_release
     # in sync so both the pre-publication decision and the post-publish
     # pointer verify see the same maximum ("9.1.0" here: this GA advances).
@@ -90,11 +105,8 @@ def _publishable_repo() -> MagicMock:
     repo.get_issue.return_value = repo.get_issues.return_value[0]
 
     def _tag_after_create(*args: object, **kwargs: object) -> MagicMock:
-        ref = MagicMock()
-        ref.object.type = "commit"
-        ref.object.sha = MERGE_SHA
         repo.get_git_ref.side_effect = None
-        repo.get_git_ref.return_value = ref
+        repo.get_git_ref.return_value = tag_ref()
         # F17 defense-in-depth: publish_release re-reads the latest pointer
         # after create. When the plan asked for make_latest=true, the
         # pointer must now show this release; otherwise the verify step
@@ -136,37 +148,20 @@ class TestPlanPublication:
         # (publish.py's own tag check remains as defense-in-depth).
         repo = _with_tracker(_ready_repo())
         repo.get_git_ref.side_effect = None
-        ref = MagicMock()
-        ref.object.type = "commit"
-        ref.object.sha = "f" * 40
-        repo.get_git_ref.return_value = ref  # tag exists
+        repo.get_git_ref.return_value = tag_ref("f" * 40)  # tag exists
         with pytest.raises(ReleaseControlError, match="unshippable"):
             plan_publication(gh_mock(repo), _POLICY, branch="9.1", actor="madolson")
 
     def test_version_h_mismatch_is_refused(self) -> None:
         repo = _with_tracker(_ready_repo())
         wrong = _VERSION_H.replace("9.1.1", "9.1.0").replace("0x00090101", "0x00090100")
-
-        def _contents(path: str, **kw: object) -> MagicMock:
-            f = MagicMock()
-            f.decoded_content = (wrong if path.endswith("version.h") else _NOTES).encode()
-            return f
-
-        repo.get_contents.side_effect = _contents
+        repo.get_contents.side_effect = _contents_for(version_h=wrong)
         with pytest.raises(ReleaseControlError, match="version.h"):
             plan_publication(gh_mock(repo), _POLICY, branch="9.1", actor="madolson")
 
     def test_missing_notes_section_is_refused(self) -> None:
         repo = _with_tracker(_ready_repo())
-
-        def _contents(path: str, **kw: object) -> MagicMock:
-            f = MagicMock()
-            f.decoded_content = (
-                _VERSION_H if path.endswith("version.h") else "Valkey 9.1.0 only\n"
-            ).encode()
-            return f
-
-        repo.get_contents.side_effect = _contents
+        repo.get_contents.side_effect = _contents_for(notes="Valkey 9.1.0 only\n")
         with pytest.raises(ReleaseControlError, match="no dated section"):
             plan_publication(gh_mock(repo), _POLICY, branch="9.1", actor="madolson")
 
@@ -182,7 +177,6 @@ class TestPlanPublication:
         assert plan.make_latest == "false"
 
     def test_unauthorized_actor_cannot_plan(self) -> None:
-        from scripts.release.authorize import NotAuthorizedError
         repo = _with_tracker(_ready_repo())
         with pytest.raises(NotAuthorizedError):
             plan_publication(gh_mock(repo, member=False), _POLICY,
@@ -219,11 +213,8 @@ class TestPublishRelease:
         repo = _publishable_repo()
 
         def _wrong_tag(*args: object, **kwargs: object) -> MagicMock:
-            ref = MagicMock()
-            ref.object.type = "commit"
-            ref.object.sha = "e" * 40
             repo.get_git_ref.side_effect = None
-            repo.get_git_ref.return_value = ref
+            repo.get_git_ref.return_value = tag_ref("e" * 40)
             return MagicMock(html_url="https://x/releases/9.1.1")
 
         repo.create_git_release.side_effect = _wrong_tag
@@ -280,8 +271,7 @@ class TestPlanDigestBinding:
     def test_digest_is_stable_and_covers_every_bound_dimension(self) -> None:
         base = _plan()
         assert plan_digest(base) == plan_digest(_plan())
-        import re as _re
-        assert _re.fullmatch(r"[0-9a-f]{64}", plan_digest(base))
+        assert re.fullmatch(r"[0-9a-f]{64}", plan_digest(base))
         variants = [
             _plan(tag="9.1.2"),
             _plan(sha="b" * 40),
@@ -314,11 +304,8 @@ class TestCreateReleaseRecovery:
             # GitHub therefore ALSO moved the latest pointer (make_latest=true
             # took effect); the mocked read-after-write must reflect that or
             # the pointer verify would raise a false CRITICAL.
-            ref = MagicMock()
-            ref.object.type = "commit"
-            ref.object.sha = MERGE_SHA
             repo.get_git_ref.side_effect = None
-            repo.get_git_ref.return_value = ref
+            repo.get_git_ref.return_value = tag_ref()
             repo.get_release.side_effect = None
             repo.get_release.return_value = MagicMock(
                 html_url="https://x/releases/9.1.1")
@@ -348,11 +335,8 @@ class TestCreateReleaseRecovery:
         repo = _publishable_repo()
 
         def _foreign_release(*args: object, **kwargs: object) -> None:
-            ref = MagicMock()
-            ref.object.type = "commit"
-            ref.object.sha = "e" * 40
             repo.get_git_ref.side_effect = None
-            repo.get_git_ref.return_value = ref
+            repo.get_git_ref.return_value = tag_ref("e" * 40)
             repo.get_release.side_effect = None
             repo.get_release.return_value = MagicMock(
                 html_url="https://x/releases/9.1.1")
@@ -398,11 +382,8 @@ class TestTagCreationRace:
         # this; either refusal is acceptable: a wrong-SHA tag never lets
         # publication proceed.)
         repo = _publishable_repo()
-        stray_ref = MagicMock()
-        stray_ref.object.type = "commit"
-        stray_ref.object.sha = "e" * 40
         repo.get_git_ref.side_effect = None
-        repo.get_git_ref.return_value = stray_ref
+        repo.get_git_ref.return_value = tag_ref("e" * 40)
         with pytest.raises(ReleaseControlError,
                            match="another writer created this tag|"
                                  "unshippable|not ready to publish"):
@@ -416,15 +397,11 @@ class TestTagCreationRace:
         # a tag now resolving to someone else's commit == snipe. This is
         # the narrow window plan_publication cannot see (a snipe landing
         # AFTER revalidation, BEFORE ref creation).
-        from scripts.release.publish import PublishPlan, _ensure_tag_at_sha
         repo = MagicMock()
         repo.create_git_ref.side_effect = GithubException(
             422, "reference already exists", {},
         )
-        stray_ref = MagicMock()
-        stray_ref.object.type = "commit"
-        stray_ref.object.sha = "e" * 40
-        repo.get_git_ref.return_value = stray_ref
+        repo.get_git_ref.return_value = tag_ref("e" * 40)
         plan = _plan(tag="9.1.1", sha=MERGE_SHA)
         with pytest.raises(ReleaseControlError,
                            match="another writer created this tag"):
@@ -433,15 +410,11 @@ class TestTagCreationRace:
     def test_ensure_tag_helper_resumes_at_approved_sha(self) -> None:
         # Direct test: 422 with the tag pointing at the APPROVED SHA is a
         # partial-publish resume: proceed without raising.
-        from scripts.release.publish import _ensure_tag_at_sha
         repo = MagicMock()
         repo.create_git_ref.side_effect = GithubException(
             422, "reference already exists", {},
         )
-        approved_ref = MagicMock()
-        approved_ref.object.type = "commit"
-        approved_ref.object.sha = MERGE_SHA
-        repo.get_git_ref.return_value = approved_ref
+        repo.get_git_ref.return_value = tag_ref()
         plan = _plan(tag="9.1.1", sha=MERGE_SHA)
         _ensure_tag_at_sha(repo, plan)  # must not raise
 
@@ -449,7 +422,6 @@ class TestTagCreationRace:
         # A 403 (insufficient scope, ref-protection reject) is not a
         # conflict; it must propagate so the operator knows the write
         # itself was refused, not that a tag already existed somewhere.
-        from scripts.release.publish import _ensure_tag_at_sha
         repo = MagicMock()
         repo.create_git_ref.side_effect = GithubException(403, "denied", {})
         plan = _plan(tag="9.1.1", sha=MERGE_SHA)
@@ -463,11 +435,8 @@ class TestTagCreationRace:
         repo = _publishable_repo()
         # Tag exists at approved SHA from the outset (a crash after
         # STAGE 1 succeeded but before STAGE 2 ran).
-        approved_ref = MagicMock()
-        approved_ref.object.type = "commit"
-        approved_ref.object.sha = MERGE_SHA
         repo.get_git_ref.side_effect = None
-        repo.get_git_ref.return_value = approved_ref
+        repo.get_git_ref.return_value = tag_ref()
         # No release yet: that is the state we are resuming.
         repo.get_release.side_effect = GithubException(404, "no release", {})
         # STAGE 1 hits the 422 path; the helper sees the approved SHA and
@@ -489,15 +458,11 @@ class TestTagCreationRace:
         # for the identity binding (from plan_publication's revalidation)
         # and once for the publication receipt: so we filter for the
         # publication marker specifically.
-        from scripts.release.publish import _PUBLICATION_MARKER
         repo = _publishable_repo()
 
         def _release_already_exists(*args: object, **kwargs: object) -> None:
-            ref = MagicMock()
-            ref.object.type = "commit"
-            ref.object.sha = MERGE_SHA
             repo.get_git_ref.side_effect = None
-            repo.get_git_ref.return_value = ref
+            repo.get_git_ref.return_value = tag_ref()
             repo.get_release.side_effect = None
             repo.get_release.return_value = MagicMock(
                 html_url="https://x/releases/9.1.1")
@@ -523,9 +488,6 @@ class TestTagCreationRace:
         # trusted_comments returns the earlier receipt, so create_comment
         # is skipped for the publication marker (the binding receipt is a
         # separate concern from write_binding and may still fire).
-        from scripts.release import issue as issue_mod
-        from scripts.release.publish import _PUBLICATION_MARKER
-
         repo = _publishable_repo()
         existing = MagicMock(body=f"{_PUBLICATION_MARKER}\nearlier receipt")
         # trusted_comments is called in two places: once by write_binding
@@ -590,7 +552,6 @@ class TestLatestPointerRace:
         # An older-line 8.0.5 with make_latest=false: but GitHub's default
         # took effect anyway because a bug/race made the pointer move. The
         # verify catches it (defense in depth for the enumeration decision).
-        from tests.release_fixtures import notes_pr
         older_notes = (
             "Valkey 8.0.5  -  Released today\n=====\nUpgrade urgency LOW.\n"
         )
@@ -611,15 +572,7 @@ class TestLatestPointerRace:
         repo.get_workflow.return_value.get_runs.return_value = [
             qualification_run(tag="8.0.5"),
         ]
-
-        def _contents(path: str, **kw: object) -> MagicMock:
-            f = MagicMock()
-            f.decoded_content = (
-                older_version_h if path.endswith("version.h") else older_notes
-            ).encode()
-            return f
-
-        repo.get_contents.side_effect = _contents
+        repo.get_contents.side_effect = _contents_for(older_version_h, older_notes)
         repo.get_releases.return_value = [older_final, newer]
         repo.get_latest_release.return_value = newer
         release = MagicMock(html_url="https://x/releases/8.0.5")
@@ -627,11 +580,8 @@ class TestLatestPointerRace:
         repo.get_issue.return_value = repo.get_issues.return_value[0]
 
         def _tag_after_create(*args: object, **kwargs: object) -> MagicMock:
-            ref = MagicMock()
-            ref.object.type = "commit"
-            ref.object.sha = MERGE_SHA
             repo.get_git_ref.side_effect = None
-            repo.get_git_ref.return_value = ref
+            repo.get_git_ref.return_value = tag_ref()
             # A bug elsewhere lets the pointer drift to us despite the plan.
             stray = MagicMock(tag_name="8.0.5", draft=False, prerelease=False)
             repo.get_latest_release.return_value = stray
@@ -676,7 +626,6 @@ class TestUnconfiguredBranchRefusal:
 
 class TestRCPublication:
     def test_rc_plan_is_prerelease_and_never_latest(self) -> None:
-        from tests.release_fixtures import notes_pr
         rc_notes = (
             "Valkey 9.2.0-rc1  -  Released today\n=====\nUpgrade urgency LOW.\n"
         )
@@ -694,15 +643,7 @@ class TestRCPublication:
         repo.get_workflow.return_value.get_runs.return_value = [
             _with_manifest(qualification_run(tag="9.2.0-rc1"))
         ]
-
-        def _contents(path: str, **kw: object) -> MagicMock:
-            f = MagicMock()
-            f.decoded_content = (
-                rc_version_h if path.endswith("version.h") else rc_notes
-            ).encode()
-            return f
-
-        repo.get_contents.side_effect = _contents
+        repo.get_contents.side_effect = _contents_for(rc_version_h, rc_notes)
         repo.get_latest_release.return_value = MagicMock(tag_name="9.1.0")
         policy = make_policy(branches=("9.2",))
 
@@ -735,6 +676,9 @@ def _env_repo(protection_rules: "list | None" = None, *,
     return repo
 
 
+_ABSENT_KEY = object()  # parametrize sentinel: delete the key from raw_data
+
+
 class TestEnvironmentProtection:
     def _gh(self, repo: MagicMock) -> MagicMock:
         gh = MagicMock()
@@ -742,51 +686,50 @@ class TestEnvironmentProtection:
         return gh
 
     def test_fully_protected_environment_passes(self) -> None:
-        from scripts.release.publish import ensure_environment_protected
         ensure_environment_protected(self._gh(_env_repo()), _POLICY, "o/agent")
 
     def test_missing_environment_is_refused(self) -> None:
-        from scripts.release.publish import ensure_environment_protected
         with pytest.raises(ReleaseControlError, match="does not exist"):
             ensure_environment_protected(self._gh(_env_repo(exists=False)),
                                          _POLICY, "o/agent")
 
-    def test_no_reviewer_rules_is_refused(self) -> None:
-        # The exact live state GitHub auto-creates: no rules, bypass on.
-        from scripts.release.publish import ensure_environment_protected
-        repo = _env_repo([], can_admins_bypass=True)
+    # "No required reviewers" refusals: the exact live state GitHub
+    # auto-creates (no rules, bypass on), and a required_reviewers rule
+    # whose reviewers were all removed - a rule with nobody in it must
+    # count as "no required reviewers", not as protection.
+    @pytest.mark.parametrize(("rules", "bypass"), [
+        pytest.param([], True, id="no-rules-at-all"),
+        pytest.param([{"type": "required_reviewers",
+                       "prevent_self_review": True, "reviewers": []}],
+                     False, id="rule-with-empty-reviewers"),
+    ])
+    def test_missing_reviewer_protection_is_refused(
+            self, rules: list, bypass: bool) -> None:
+        repo = _env_repo(rules, can_admins_bypass=bypass)
         with pytest.raises(ReleaseControlError, match="no required reviewers"):
             ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
 
-    def test_reviewer_rule_with_empty_reviewers_list_is_refused(self) -> None:
-        # A required_reviewers rule whose reviewers were all removed still
-        # exists as a rule; it must count as "no required reviewers", not
-        # as protection.
-        from scripts.release.publish import ensure_environment_protected
-        repo = _env_repo([{"type": "required_reviewers",
-                           "prevent_self_review": True, "reviewers": []}])
-        with pytest.raises(ReleaseControlError, match="no required reviewers"):
-            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
-
-    def test_absent_prevent_self_review_key_fails_closed(self) -> None:
-        # Older API payloads may omit prevent_self_review entirely; absence
-        # must read as "not prevented", never as protected.
-        from scripts.release.publish import ensure_environment_protected
-        repo = _env_repo([{"type": "required_reviewers",
-                           "reviewers": [{"type": "User"}]}])
-        with pytest.raises(ReleaseControlError, match="self-review"):
-            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
-
-    def test_one_lax_rule_among_compliant_rules_is_refused(self) -> None:
-        # Every reviewer rule must prevent self-review: an approval can
-        # satisfy whichever rule is laxest.
-        from scripts.release.publish import ensure_environment_protected
-        repo = _env_repo([
+    # Self-review refusals: absence of prevent_self_review must read as
+    # "not prevented" (older API payloads omit the key), an explicit False
+    # is refused, and EVERY reviewer rule must prevent self-review - an
+    # approval can satisfy whichever rule is laxest.
+    @pytest.mark.parametrize("rules", [
+        pytest.param([{"type": "required_reviewers",
+                       "reviewers": [{"type": "User"}]}],
+                     id="absent-key-fails-closed"),
+        pytest.param([{"type": "required_reviewers",
+                       "prevent_self_review": False,
+                       "reviewers": [{"type": "User"}]}],
+                     id="explicit-false"),
+        pytest.param([
             {"type": "required_reviewers", "prevent_self_review": True,
              "reviewers": [{"type": "Team"}]},
             {"type": "required_reviewers",
              "reviewers": [{"type": "User"}]},  # key absent on this rule
-        ])
+        ], id="one-lax-rule-among-compliant"),
+    ])
+    def test_self_review_not_prevented_is_refused(self, rules: list) -> None:
+        repo = _env_repo(rules)
         with pytest.raises(ReleaseControlError, match="self-review"):
             ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
 
@@ -794,7 +737,6 @@ class TestEnvironmentProtection:
         # An environment endpoint answering 200 with {} (proxy stripping,
         # API drift) carries no evidence of protection; both the reviewer
         # requirement and the bypass default must fail closed.
-        from scripts.release.publish import ensure_environment_protected
         repo = MagicMock()
         env = MagicMock()
         env.raw_data = {}
@@ -805,7 +747,6 @@ class TestEnvironmentProtection:
         assert "bypass" in str(excinfo.value)
 
     def test_absent_can_admins_bypass_key_fails_closed(self) -> None:
-        from scripts.release.publish import ensure_environment_protected
         repo = _env_repo()
         del repo.get_environment.return_value.raw_data["can_admins_bypass"]
         with pytest.raises(ReleaseControlError, match="bypass"):
@@ -815,65 +756,51 @@ class TestEnvironmentProtection:
         # A Team reviewer is a real gate (any team member can approve, and
         # prevent_self_review still applies); it must be accepted, not
         # refused for lacking a User entry.
-        from scripts.release.publish import ensure_environment_protected
         repo = _env_repo([{"type": "required_reviewers",
                            "prevent_self_review": True,
                            "reviewers": [{"type": "Team", "reviewer": {"slug": "core-team"}}]}])
         ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
 
-    def test_self_review_not_prevented_is_refused(self) -> None:
-        from scripts.release.publish import ensure_environment_protected
-        repo = _env_repo([{"type": "required_reviewers",
-                           "prevent_self_review": False,
-                           "reviewers": [{"type": "User"}]}])
-        with pytest.raises(ReleaseControlError, match="self-review"):
-            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
-
     def test_admin_bypass_is_refused(self) -> None:
-        from scripts.release.publish import ensure_environment_protected
         repo = _env_repo(can_admins_bypass=True)
         with pytest.raises(ReleaseControlError, match="bypass"):
             ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
 
-    def test_null_deployment_branch_policy_is_refused(self) -> None:
-        # A null policy means ANY branch (including an attacker's topic
-        # branch) can deploy to the gated environment.
-        from scripts.release.publish import ensure_environment_protected
-        repo = _env_repo(deployment_branch_policy=None)
+    # Deployment-branch-policy refusals: a null policy means ANY branch
+    # (including an attacker's topic branch) can deploy to the gated
+    # environment; an absent key fails closed the same way, as does a
+    # policy carrying neither restriction.
+    @pytest.mark.parametrize("policy_value", [
+        pytest.param(None, id="null-policy"),
+        pytest.param(_ABSENT_KEY, id="absent-key-fails-closed"),
+        pytest.param({"protected_branches": False,
+                      "custom_branch_policies": False},
+                     id="neither-restriction"),
+    ])
+    def test_unrestricted_deployment_branch_policy_is_refused(
+            self, policy_value: object) -> None:
+        if policy_value is _ABSENT_KEY:
+            repo = _env_repo()
+            del repo.get_environment.return_value.raw_data["deployment_branch_policy"]
+        else:
+            repo = _env_repo(deployment_branch_policy=policy_value)  # type: ignore[arg-type]
         with pytest.raises(ReleaseControlError,
                            match="not restricted to specific branches"):
             ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
 
-    def test_absent_deployment_branch_policy_key_fails_closed(self) -> None:
-        from scripts.release.publish import ensure_environment_protected
-        repo = _env_repo()
-        del repo.get_environment.return_value.raw_data["deployment_branch_policy"]
-        with pytest.raises(ReleaseControlError,
-                           match="not restricted to specific branches"):
-            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
-
-    def test_branch_policy_with_neither_restriction_is_refused(self) -> None:
-        from scripts.release.publish import ensure_environment_protected
-        repo = _env_repo(deployment_branch_policy={
-            "protected_branches": False, "custom_branch_policies": False})
-        with pytest.raises(ReleaseControlError,
-                           match="not restricted to specific branches"):
-            ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
-
-    def test_custom_branch_policies_satisfy_the_restriction(self) -> None:
-        from scripts.release.publish import ensure_environment_protected
-        repo = _env_repo(deployment_branch_policy={
-            "protected_branches": False, "custom_branch_policies": True})
-        ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
-
-    def test_protected_branches_satisfy_the_restriction(self) -> None:
-        from scripts.release.publish import ensure_environment_protected
-        repo = _env_repo(deployment_branch_policy={
-            "protected_branches": True, "custom_branch_policies": False})
+    @pytest.mark.parametrize("policy_value", [
+        pytest.param({"protected_branches": False,
+                      "custom_branch_policies": True},
+                     id="custom-branch-policies"),
+        pytest.param({"protected_branches": True,
+                      "custom_branch_policies": False},
+                     id="protected-branches"),
+    ])
+    def test_either_branch_restriction_satisfies(self, policy_value: dict) -> None:
+        repo = _env_repo(deployment_branch_policy=policy_value)
         ensure_environment_protected(self._gh(repo), _POLICY, "o/agent")
 
     def test_fork_user_policy_skips_the_check_entirely(self) -> None:
-        from scripts.release.publish import ensure_environment_protected
         gh = MagicMock()
         policy = make_policy(repo="sarthakaggarwal97/valkey",
                              authorized_team="user:sarthakaggarwal97")
@@ -939,7 +866,6 @@ def test_unattended_planning_skips_the_actor_check_only() -> None:
     plan = plan_publication(gh, _POLICY, branch="9.1", actor="github-actions[bot]",
                             skip_authorization=True)
     assert plan.tag == "9.1.1"
-    from scripts.release.authorize import NotAuthorizedError
     with pytest.raises(NotAuthorizedError):
         plan_publication(gh, _POLICY, branch="9.1", actor="github-actions[bot]")
 
@@ -973,7 +899,6 @@ _FULL_RULES = [{"type": "deletion"}, {"type": "update"}]
 
 class TestTagRulesetProbe:
     def test_active_tag_ruleset_with_full_rules_is_protected(self) -> None:
-        from scripts.release.publish import tag_ruleset_protected
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
@@ -983,7 +908,6 @@ class TestTagRulesetProbe:
         assert tag_ruleset_protected(repo, "9.1.1") is True
 
     def test_non_fast_forward_counts_as_the_update_rule(self) -> None:
-        from scripts.release.publish import tag_ruleset_protected
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
@@ -993,33 +917,25 @@ class TestTagRulesetProbe:
         )
         assert tag_ruleset_protected(repo, "9.1.1") is True
 
-    def test_matching_but_ruleless_ruleset_is_not_protected(self) -> None:
-        # The ruleset covers the ref but carries no deletion/update rules:
-        # it restricts nothing, so the tag must never claim immutability.
-        from scripts.release.publish import tag_ruleset_protected
+    # A matching ruleset with no deletion/update rules restricts nothing,
+    # and a deletion rule alone still lets the tag be MOVED: immutability
+    # needs both halves, so neither may claim protection.
+    @pytest.mark.parametrize("rules", [
+        pytest.param([], id="ruleless"),
+        pytest.param([{"type": "deletion"}], id="deletion-alone"),
+    ])
+    def test_insufficient_rules_are_not_protected(self, rules: list) -> None:
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
                                              "exclude": []}},
-                 "rules": [], "bypass_actors": []}},
-        )
-        assert tag_ruleset_protected(repo, "9.1.1") is False
-
-    def test_deletion_rule_alone_is_not_protected(self) -> None:
-        # The tag could still be MOVED: immutability needs both halves.
-        from scripts.release.publish import tag_ruleset_protected
-        repo = _ruleset_repo(
-            [{"id": 1, "target": "tag", "enforcement": "active"}],
-            {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
-                                             "exclude": []}},
-                 "rules": [{"type": "deletion"}], "bypass_actors": []}},
+                 "rules": rules, "bypass_actors": []}},
         )
         assert tag_ruleset_protected(repo, "9.1.1") is False
 
     def test_app_bypass_actor_is_unprotected_for_us(self) -> None:
         # The publishing identity is a GitHub App; a ruleset any App can
         # bypass constrains exactly nothing we rely on.
-        from scripts.release.publish import tag_ruleset_protected
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
@@ -1033,7 +949,6 @@ class TestTagRulesetProbe:
     def test_invisible_bypass_data_degrades_to_unknown(self) -> None:
         # No bypass_actors key in the payload: an App bypass cannot be
         # ruled out, so the verdict is unknown, never protected.
-        from scripts.release.publish import tag_ruleset_protected
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
@@ -1045,7 +960,6 @@ class TestTagRulesetProbe:
     def test_excluded_tag_is_not_protected(self) -> None:
         # Mirrors upstream: the ruleset excludes 1-7.* tags, so a 7.x
         # release must never claim immutability.
-        from scripts.release.publish import tag_ruleset_protected
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {
@@ -1057,7 +971,6 @@ class TestTagRulesetProbe:
         assert tag_ruleset_protected(repo, "9.1.1") is True
 
     def test_no_tag_ruleset_is_not_protected(self) -> None:
-        from scripts.release.publish import tag_ruleset_protected
         repo = _ruleset_repo(
             [{"id": 2, "target": "branch", "enforcement": "active"},
              {"id": 3, "target": "tag", "enforcement": "disabled"}],
@@ -1066,7 +979,6 @@ class TestTagRulesetProbe:
         assert tag_ruleset_protected(repo, "9.1.1") is False
 
     def test_api_failure_is_unknown(self) -> None:
-        from scripts.release.publish import tag_ruleset_protected
         repo = MagicMock()
         repo.url = "https://api.github.com/repos/o/r"
         repo._requester.requestJsonAndCheck.side_effect = GithubException(
@@ -1113,7 +1025,6 @@ class TestApprovalEvidence:
     def test_first_post_mentions_the_approvers(self) -> None:
         # Creating the comment is what fires the notification; the plan
         # summary alone pings nobody.
-        from scripts.release.publish import _APPROVAL_MARKER, post_approval_evidence
         gh, issue = self._issue_repo()
         with patch("scripts.release.issue.trusted_comments", return_value=[]):
             post_approval_evidence(gh, _POLICY, _plan(), "https://x/runs/7")
@@ -1127,7 +1038,6 @@ class TestApprovalEvidence:
     def test_revalidation_edits_in_place_without_a_new_ping(self) -> None:
         # An edit does not re-notify: one ping per approval wait, not one
         # per cron re-validation.
-        from scripts.release.publish import _APPROVAL_MARKER, post_approval_evidence
         gh, issue = self._issue_repo()
         existing = MagicMock(body=f"{_APPROVAL_MARKER}\nstale evidence")
         with patch("scripts.release.issue.trusted_comments", return_value=[existing]):
@@ -1138,7 +1048,6 @@ class TestApprovalEvidence:
         assert "https://x/runs/8" in body
 
     def test_evidence_carries_the_controller_sha_when_provided(self) -> None:
-        from scripts.release.publish import post_approval_evidence
         gh, issue = self._issue_repo()
         with patch("scripts.release.issue.trusted_comments", return_value=[]):
             post_approval_evidence(gh, _POLICY, _plan(), "https://x/runs/9",
@@ -1147,7 +1056,6 @@ class TestApprovalEvidence:
         assert f"- [ ] Controller code: `{'f' * 12}`" in body
 
     def test_evidence_omits_the_controller_line_when_unknown(self) -> None:
-        from scripts.release.publish import post_approval_evidence
         gh, issue = self._issue_repo()
         with patch("scripts.release.issue.trusted_comments", return_value=[]):
             post_approval_evidence(gh, _POLICY, _plan(), "https://x/runs/9")
@@ -1177,21 +1085,18 @@ class TestMakeLatestDecision:
 
     def test_first_ever_release_becomes_latest(self) -> None:
         # An empty repo (no releases) yields no maximum; this GA takes over.
-        from scripts.release.publish import _make_latest_decision
         assert _make_latest_decision(self._repo(), "9.1.1", "ga") == "true"
 
     def test_ga_at_or_above_the_max_becomes_latest(self) -> None:
         # >=: a GA on the current top line is the latest even when equal
         # (the tag-exists gate makes a strict equal reach here only on a
         # partial-publish resume, where the pointer belongs to us).
-        from scripts.release.publish import _make_latest_decision
         repo = self._repo(("9.1.0", False, False), ("9.1.1", False, False))
         assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
 
     def test_older_line_patch_never_takes_latest(self) -> None:
         # F17: two-branch interleaving: 8.0.5 racing 9.1.0 out of the door
         # must NOT set latest, even if a mutable pointer earlier claimed it.
-        from scripts.release.publish import _make_latest_decision
         repo = self._repo(("9.1.0", False, False), ("8.0.4", False, False))
         assert _make_latest_decision(repo, "8.0.5", "ga") == "false"
 
@@ -1200,14 +1105,12 @@ class TestMakeLatestDecision:
         # can move it back manually to an older release). Enumeration
         # ignores the pointer entirely; the newer release, still present
         # in the release list, keeps the decision honest.
-        from scripts.release.publish import _make_latest_decision
         repo = self._repo(("9.1.0", False, False), ("9.2.0", False, False))
         # publishing 9.1.5 (still older than the max 9.2.0)
         assert _make_latest_decision(repo, "9.1.5", "ga") == "false"
 
     def test_non_version_tag_in_enumeration_is_ignored(self) -> None:
         # A rogue ``nightly-build`` release must not skew the maximum.
-        from scripts.release.publish import _make_latest_decision
         repo = self._repo(("nightly-build", False, False),
                           ("9.1.0", False, False))
         assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
@@ -1215,7 +1118,6 @@ class TestMakeLatestDecision:
     def test_prereleases_never_contribute_to_the_maximum(self) -> None:
         # A prerelease sitting at ``9.2.0-rc1`` must not block the 9.1.1
         # GA from becoming latest.
-        from scripts.release.publish import _make_latest_decision
         repo = self._repo(("9.1.0", False, False),
                           ("9.2.0-rc1", False, True))
         assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
@@ -1224,7 +1126,6 @@ class TestMakeLatestDecision:
         # A draft release (a maintainer preparing a future version) is not
         # published; treating it as part of the latest line would let an
         # unpublished tag block a real GA from taking over.
-        from scripts.release.publish import _make_latest_decision
         repo = self._repo(("9.1.0", False, False),
                           ("9.2.0", True, False))  # draft
         assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
@@ -1232,13 +1133,11 @@ class TestMakeLatestDecision:
     def test_two_digit_patch_compares_numerically_not_lexically(self) -> None:
         # A string sort would call '9.1.10' < '9.1.9' and strand the
         # latest pointer on the older release.
-        from scripts.release.publish import _make_latest_decision
         repo = self._repo(("9.1.9", False, False))
         assert _make_latest_decision(repo, "9.1.10", "ga") == "true"
 
     def test_rc_stage_never_asks_github_and_never_takes_latest(self) -> None:
         # rc: early return, no enumeration call, no side_effect trigger.
-        from scripts.release.publish import _make_latest_decision
         repo = MagicMock()
         assert _make_latest_decision(repo, "9.2.0", "rc1") == "false"
         repo.get_releases.assert_not_called()
@@ -1247,16 +1146,13 @@ class TestMakeLatestDecision:
 
 class TestPreviousTag:
     def test_rc_follows_the_previous_rc(self) -> None:
-        from scripts.release.publish import _previous_tag
         repo = repo_mock(tags=["9.2.0-rc1"])
         assert _previous_tag(repo, "9.2.0", "rc2") == "9.2.0-rc1"
 
     def test_rc_without_its_predecessor_tag_is_not_guessed(self) -> None:
-        from scripts.release.publish import _previous_tag
         repo = repo_mock(tags=["9.1.0"])
         assert _previous_tag(repo, "9.2.0", "rc2") is None
 
     def test_ga_follows_its_last_rc(self) -> None:
-        from scripts.release.publish import _previous_tag
         repo = repo_mock(tags=["9.2.0-rc1", "9.2.0-rc2"])
         assert _previous_tag(repo, "9.2.0", "ga") == "9.2.0-rc2"

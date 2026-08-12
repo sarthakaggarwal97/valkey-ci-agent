@@ -24,7 +24,14 @@ from scripts.release.models import (
     RequiredCheck,
 )
 from scripts.release.qualification import STARTUP_FAILURE_JOB
-from tests.release_fixtures import MERGE_SHA, MOVED_SHA, gh_mock, make_policy, tracker
+from tests.release_fixtures import (
+    MERGE_SHA,
+    MOVED_SHA,
+    gh_mock,
+    make_policy,
+    publish_run,
+    tracker,
+)
 
 _POLICY = make_policy()
 
@@ -1280,20 +1287,8 @@ _AGENT_HEAD = "d" * 40
 _STALE_HEAD = "e" * 40
 
 
-def _publish_run(*, head_sha: str, status: str = "waiting",
-                 branch: str = "9.1", run_id: int = 77,
-                 conclusion: "str | None" = None,
-                 tag: str = "", candidate_sha: str = "") -> MagicMock:
-    binding = ""
-    if tag and candidate_sha:
-        binding = f" · {tag} @ {candidate_sha}"
-    run = MagicMock(status=status, conclusion=conclusion, head_sha=head_sha,
-                    id=run_id,
-                    display_title=f"Publish release on {branch}{binding} "
-                                  f"(requested by x)",
-                    html_url=f"https://x/actions/runs/{run_id}")
-    run.cancel.return_value = True
-    return run
+# Promoted to release_fixtures.publish_run; alias keeps 25 call sites terse.
+_publish_run = publish_run
 
 
 def _runs_by_status(runs: "list[MagicMock]") -> "MagicMock":

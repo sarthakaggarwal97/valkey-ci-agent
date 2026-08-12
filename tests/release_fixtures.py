@@ -240,6 +240,33 @@ def qualification_run(sha: str = MERGE_SHA, *,
     return run
 
 
+def tag_ref(sha: str = MERGE_SHA) -> MagicMock:
+    """A git-ref mock resolving to a commit at *sha* (as get_git_ref serves)."""
+    ref = MagicMock()
+    ref.object.type = "commit"
+    ref.object.sha = sha
+    return ref
+
+
+def publish_run(*, head_sha: str, status: str = "waiting",
+                branch: str = "9.1", run_id: int = 77,
+                conclusion: "str | None" = None,
+                tag: str = "", candidate_sha: str = "") -> MagicMock:
+    """A publish-workflow run mock whose run-name carries the F16 binding.
+
+    ``tag`` + ``candidate_sha`` both set = a bound run; either empty = an
+    unbound (legacy / manual) run.
+    """
+    binding = f" · {tag} @ {candidate_sha}" if tag and candidate_sha else ""
+    run = MagicMock(status=status, conclusion=conclusion, head_sha=head_sha,
+                    id=run_id,
+                    display_title=f"Publish release on {branch}{binding} "
+                                  f"(requested by x)",
+                    html_url=f"https://x/actions/runs/{run_id}")
+    run.cancel.return_value = True
+    return run
+
+
 def notes_pr(*, merged: bool = True, state: "str | None" = None,
              head_ref: str = "agent/release-cut/9.1.1-ga",
              head_repo: "str | None" = "valkey-io/valkey",
@@ -330,10 +357,7 @@ def repo_mock(*, branch_head: str = MERGE_SHA,
                             published_at=AFTER_TRACKER,
                             html_url="https://x/releases/9.1.1")
         repo.get_release.return_value = release
-        ref = MagicMock()
-        ref.object.type = "commit"
-        ref.object.sha = MERGE_SHA
-        repo.get_git_ref.return_value = ref
+        repo.get_git_ref.return_value = tag_ref()
     else:
         repo.get_release.side_effect = GithubException(404, "no release", {})
         repo.get_git_ref.side_effect = GithubException(404, "no tag", {})
