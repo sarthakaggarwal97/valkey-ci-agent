@@ -44,9 +44,10 @@ from github.GithubException import GithubException
 from scripts.common.github_client import retry_github_call
 from scripts.release import issue as issue_mod
 from scripts.release.authorize import ensure_authorized
-from scripts.release.models import ReleasePhase
+from scripts.release.models import ReleasePhase, release_tag
 from scripts.release.policy import TRACKER_LABEL, RepoReleasePolicy, validate_release_branch
 from scripts.release.reconcile import ReleaseControlError, compute_status
+from scripts.release.release_refs import get_repo as _get_repo
 from scripts.release.release_refs import read_text_file, resolve_tag_commit
 from scripts.release_notes.release_format import parse_version
 from scripts.release_notes.version_bump import current_release_state
@@ -107,6 +108,24 @@ def plan_digest(plan: PublishPlan) -> str:
         f"controller_sha={plan.controller_sha}",
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _get_issue(repo: Any, number: int) -> Any:
+    return retry_github_call(
+        lambda: repo.get_issue(number),
+        retries=2, description=f"get issue #{number}",
+    )
+
+
+def _tag_snipe_error(tag: str, existing_sha: str,
+                     approved_sha: str) -> ReleaseControlError:
+    """The refusal for a tag another writer bound to a different SHA."""
+    return ReleaseControlError(
+        f"tag {tag} already exists at {existing_sha or '<unresolvable>'} "
+        f"but approval was for {approved_sha[:12]}; another writer created "
+        f"this tag under us. Quarantine the release; publication refuses "
+        f"until the conflict is resolved."
+    )
 
 
 def _ref_matches(ref: str, patterns: "list[str]") -> bool:
@@ -205,10 +224,7 @@ def plan_publication(
     if not skip_authorization:
         ensure_authorized(gh, policy, actor)
 
-    repo = retry_github_call(
-        lambda: gh.get_repo(policy.repo),
-        retries=2, description=f"get repo {policy.repo}",
-    )
+    repo = _get_repo(gh, policy.repo)
     tracking_issue = issue_mod.find_release_issue(repo, branch, label=TRACKER_LABEL)
     if tracking_issue is None:
         raise ReleaseControlError(f"no active release on {policy.repo} {branch}")
@@ -217,7 +233,7 @@ def plan_publication(
                             gh_downstream=gh_downstream)
 
     sha = status.candidate.sha
-    tag = status.version if status.stage == "ga" else f"{status.version}-{status.stage}"
+    tag = release_tag(status.version, status.stage)
 
     # F16 resumability: after a crashed publish, the world may already carry
     # the approved tag (or release) at the approved SHA. compute_status
@@ -235,12 +251,7 @@ def plan_publication(
         )
 
     if existing_tag_sha and existing_tag_sha != sha:
-        raise ReleaseControlError(
-            f"tag {tag} already exists on {policy.repo} at "
-            f"{existing_tag_sha[:12]}, not the approved candidate "
-            f"{sha[:12]}; another writer created this tag. Quarantine the "
-            f"release; publication refuses until the conflict is resolved."
-        )
+        raise _tag_snipe_error(tag, existing_tag_sha, sha)
 
     # The version files at the exact candidate SHA must record exactly what
     # is being published: a stale or wrong version.h means the notes PR and
@@ -331,10 +342,7 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
             f"after approval; re-run validation"
         )
 
-    repo = retry_github_call(
-        lambda: gh.get_repo(policy.repo),
-        retries=2, description=f"get repo {policy.repo}",
-    )
+    repo = _get_repo(gh, policy.repo)
 
     # STAGE 1: atomically create the tag at the approved SHA. If the tag
     # already exists (a partial resume, or a snipe), the ref lookup decides
@@ -396,7 +404,7 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
 def _ensure_tag_at_sha(repo: Any, plan: "PublishPlan") -> None:
     """Atomically create ``refs/tags/{plan.tag}`` at ``plan.sha``.
 
-    Three outcomes:
+    Four outcomes:
 
     - Ref created: proceed.
     - Ref already exists at the APPROVED SHA (422): partial resume, log
@@ -429,12 +437,7 @@ def _ensure_tag_at_sha(repo: Any, plan: "PublishPlan") -> None:
             "resume); continuing.", plan.tag, plan.sha[:12],
         )
         return
-    raise ReleaseControlError(
-        f"tag {plan.tag} already exists at {existing_sha or '<unresolvable>'} "
-        f"but approval was for {plan.sha[:12]}; another writer created this "
-        f"tag under us. Quarantine the release; publication refuses until "
-        f"the conflict is resolved."
-    )
+    raise _tag_snipe_error(plan.tag, existing_sha, plan.sha)
 
 
 _PUBLICATION_MARKER = f"<!-- {issue_mod.MARKER_NAMESPACE}:publication-receipt -->"
@@ -450,10 +453,7 @@ def _post_publication_receipt(gh: Any, repo: Any, plan: "PublishPlan",
     We look up an existing receipt marker (trusted-comments only, so a
     forged copy from a random account is ignored) and skip if present.
     """
-    tracking_issue = retry_github_call(
-        lambda: repo.get_issue(plan.issue_number),
-        retries=2, description=f"get issue #{plan.issue_number}",
-    )
+    tracking_issue = _get_issue(repo, plan.issue_number)
     body = (
         f"{_PUBLICATION_MARKER}\n"
         f"Published **{plan.tag}** at `{plan.sha}` "
@@ -507,10 +507,7 @@ def ensure_environment_protected(gh: Any, policy: RepoReleasePolicy,
     if policy.authorized_team.startswith("user:"):
         logger.info("Fork policy: skipping environment protection verification")
         return
-    repo = retry_github_call(
-        lambda: gh.get_repo(agent_repo),
-        retries=2, description=f"get repo {agent_repo}",
-    )
+    repo = _get_repo(gh, agent_repo)
     try:
         env = retry_github_call(
             lambda: repo.get_environment(environment),
@@ -780,14 +777,8 @@ def post_approval_evidence(gh: Any, policy: RepoReleasePolicy,
     ``controller_sha`` (the workflow's GITHUB_SHA) binds the evidence to
     the exact controller code that will execute; "" omits the line.
     """
-    repo = retry_github_call(
-        lambda: gh.get_repo(policy.repo),
-        retries=2, description=f"get repo {policy.repo}",
-    )
-    tracking_issue = retry_github_call(
-        lambda: repo.get_issue(plan.issue_number),
-        retries=2, description=f"get issue #{plan.issue_number}",
-    )
+    repo = _get_repo(gh, policy.repo)
+    tracking_issue = _get_issue(repo, plan.issue_number)
     # The mention notifies on first creation only: subsequent re-validations
     # edit the comment in place, which GitHub does not re-notify; one ping
     # per approval wait is the desired behavior.

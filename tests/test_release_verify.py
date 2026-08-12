@@ -7,9 +7,11 @@ ordering gates, applicability) against controlled registry/download answers.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+from github.GithubException import GithubException
 
 from scripts.release import verify
 from scripts.release.models import DownstreamOutput, OutputState
@@ -27,7 +29,6 @@ def _content_file(text: str) -> MagicMock:
 def _pr(number: int = 5, *, merged: bool = True, state: str = "closed",
         base_ref: str = "main", changed_files: int = 1, title: str = "",
         head_ref: str = "update-branch", created=None) -> MagicMock:
-    from datetime import datetime, timezone
     pr = MagicMock(number=number, merged_at="2026-08-07T00:00:00Z" if merged else None,
                    state="closed" if merged else state,
                    changed_files=changed_files, title=title,
@@ -48,7 +49,6 @@ def _repo_serving(contents: "dict[str, str]", *,
     repo.get_pulls.return_value = pulls or []
     repo.compare.return_value.status = compare_status
 
-    from github.GithubException import GithubException
 
     def _get_ref(ref: str) -> MagicMock:
         if ref.split("/", 1)[1] in (tags or set()):
@@ -250,7 +250,6 @@ class TestBundle:
         assert output.action == "dispatch-bundle"
 
     def test_pr_created_before_publication_is_ignored(self) -> None:
-        from datetime import datetime, timedelta, timezone
         published = datetime(2026, 8, 8, tzinfo=timezone.utc)
         versions = json.dumps({"9.1": {"version": "9.1.1", "valkey-server": {"version": "9.1.0"}}})
         repo = _repo_serving({"versions.json": versions},
@@ -505,7 +504,6 @@ class TestVerifierDegradation:
     def test_missing_downstream_repo_degrades_to_failed_output(self) -> None:
         # A 404 on one downstream repo (e.g. no valkey-hashes fork) must not
         # abort the pass; it reports as that output failing.
-        from github.GithubException import GithubException
         gh = MagicMock()
         gh.get_repo.side_effect = GithubException(404, "missing", {})
         outputs = verify.verify_core_outputs(gh, _POLICY, tag="9.1.2", stage="ga",
@@ -545,7 +543,6 @@ class TestVerifierDegradation:
 
 def _wf_run(title: str, *, run_id: int = 700, status: str = "completed",
             conclusion: str = "success", created=None) -> MagicMock:
-    from datetime import datetime, timezone
     run = MagicMock(id=run_id, status=status, conclusion=conclusion,
                     display_title=title,
                     html_url=f"https://x/runs/{run_id}",
@@ -636,7 +633,6 @@ class TestBuildRunObservation:
         assert out.state is OutputState.PENDING  # 9.1.2-rc1 is not 9.1.2
 
     def test_bounded_absence_becomes_failed(self) -> None:
-        from datetime import datetime, timedelta, timezone
         published = datetime.now(timezone.utc) - timedelta(
             minutes=_POLICY.check_timeout_minutes + 60)
         gh = _run_source({"build-release.yml": []})
@@ -662,7 +658,6 @@ class TestBuildRunObservation:
         # A perfectly-marked run created BEFORE the release was published
         # (e.g. a previous attempt of the same tag) must not satisfy this
         # publication's build.
-        from datetime import datetime, timedelta, timezone
         now = datetime.now(timezone.utc)
         stale = _wf_run("Build Release 9.1.2 (prod)",
                         created=now - timedelta(minutes=10))
@@ -729,7 +724,7 @@ class TestPackagesAndTryValkey:
     def test_pages_wording_admits_when_pages_was_not_checked(self) -> None:
         # F6-adjacent: the RPM/DEB matrix satisfied its inventory but no
         # Deploy Pages job ran, so the detail cannot claim "pages
-        # succeeded" — it says (pages not checked) instead. Full
+        # succeeded": it says (pages not checked) instead. Full
         # digest/provenance verification is a deferred redesign; not
         # lying about pages is the fix here.
         jobs = _jobs([
@@ -812,7 +807,6 @@ class TestPackagesAndTryValkey:
     def test_try_valkey_latest_comparison_failure_fails_closed(self) -> None:
         # An unreadable or unparseable latest release is inconclusive; the
         # missing sentinel must read FAILED, never settle as SKIPPED.
-        from github.GithubException import GithubException
         jobs = _jobs([
             ("update-try-valkey / build-try-valkey", "success"),
         ])
@@ -836,7 +830,6 @@ class TestPackagesAndTryValkey:
         assert out.state is OutputState.VERIFIED
 
     def test_stalled_pending_outputs_escalate_to_failed(self) -> None:
-        from datetime import datetime, timedelta, timezone
         old = datetime.now(timezone.utc) - timedelta(minutes=999)
         # The helm output carries attempt evidence (a PR url), so the
         # normal deadline applies even though an action is set.
@@ -856,7 +849,6 @@ class TestPackagesAndTryValkey:
         # that whole window BLOCKED and only just unblock. With no attempt
         # evidence yet (empty run_id and url), the output keeps its action
         # so the first dispatch can still happen.
-        from datetime import datetime, timedelta, timezone
         old = datetime.now(timezone.utc) - timedelta(minutes=999)
         outputs = (DownstreamOutput(name="bundle", state=OutputState.PENDING,
                                     detail="the bundle update has not started yet",
@@ -868,7 +860,6 @@ class TestPackagesAndTryValkey:
     def test_attempted_action_bearing_output_still_escalates(self) -> None:
         # Once an attempt was observed (run_id evidence), the exemption
         # ends and the deadline applies.
-        from datetime import datetime, timedelta, timezone
         old = datetime.now(timezone.utc) - timedelta(minutes=999)
         outputs = (DownstreamOutput(name="bundle", state=OutputState.PENDING,
                                     detail="waiting", action="dispatch-bundle",
@@ -878,7 +869,6 @@ class TestPackagesAndTryValkey:
         assert escalated[0].action == ""
 
     def test_stall_detail_strips_the_trailing_period(self) -> None:
-        from datetime import datetime, timedelta, timezone
         old = datetime.now(timezone.utc) - timedelta(minutes=999)
         outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
                                     detail="waiting for the chart PR."),)
@@ -895,7 +885,6 @@ class TestPackagesAndTryValkey:
         pytest.param(360, "6 hours", id="360-is-6-hours"),
     ])
     def test_humanized_duration_boundaries(self, minutes: int, rendered: str) -> None:
-        from datetime import datetime, timedelta, timezone
         old = datetime.now(timezone.utc) - timedelta(minutes=minutes + 1)
         outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
                                     detail="waiting"),)
@@ -976,7 +965,6 @@ class TestStallEscalationBoundary:
 
     @staticmethod
     def _at(seconds_past_deadline: int, timeout_minutes: int = 360):
-        from datetime import datetime, timedelta, timezone
         published = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
         now = published + timedelta(minutes=timeout_minutes,
                                     seconds=seconds_past_deadline)
@@ -1019,7 +1007,6 @@ class TestStallEscalationBoundary:
         # attempt clock must run from pr.created_at, not published_at,
         # otherwise the first-ever downstream attempt is killed on its
         # first pass.
-        from datetime import datetime, timedelta, timezone
         now = datetime.now(timezone.utc)
         published = now - timedelta(minutes=999)
         fresh = now - timedelta(minutes=5)
@@ -1034,7 +1021,6 @@ class TestStallEscalationBoundary:
     def test_old_attempt_still_escalates_even_on_a_fresh_release(self) -> None:
         # Symmetry check: a 6h-old attempt escalates on its own clock even
         # when the release itself was only just published.
-        from datetime import datetime, timedelta, timezone
         now = datetime.now(timezone.utc)
         published = now - timedelta(minutes=1)
         old_attempt = now - timedelta(minutes=999)
@@ -1051,7 +1037,6 @@ class TestStallEscalationBoundary:
         # When an output carries no attempt evidence (registry-probe
         # PENDING, hashes not yet recorded, ...), the release-wide clock
         # still governs so an eternal probe eventually escalates.
-        from datetime import datetime, timedelta, timezone
         now = datetime.now(timezone.utc)
         published = now - timedelta(minutes=999)
         outputs = (DownstreamOutput(
@@ -1066,12 +1051,11 @@ class TestDetailCellStyle:
         # Representative samples of the Detail-cell style rule: every cell
         # starts with a capital letter, reads as a statement, and never asks
         # a rhetorical question.
-        from github.GithubException import GithubException
 
         def _raise_404() -> None:
             raise GithubException(404, "missing", {})
 
-        guarded = verify._guarded("hashes", _raise_404)
+        (guarded,) = verify._guarded("hashes", _raise_404)
 
         gh = _run_source({
             "build-release.yml": [_wf_run("Build Release 9.1.2 (prod)",

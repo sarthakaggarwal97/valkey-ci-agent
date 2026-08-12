@@ -34,7 +34,13 @@ from scripts.release import public_endpoints as pub
 from scripts.release.models import DownstreamOutput, OutputState
 from scripts.release.policy import RepoReleasePolicy
 from scripts.release.qualification import RUN_SCAN_LIMIT
-from scripts.release.release_refs import read_text_file, resolve_tag_commit, workflow_handle
+from scripts.release.release_refs import (
+    get_repo,
+    humanize_minutes,
+    read_text_file,
+    resolve_tag_commit,
+    workflow_handle,
+)
 from scripts.release_notes.release_format import parse_version
 
 logger = logging.getLogger(__name__)
@@ -66,27 +72,29 @@ def verify_core_outputs(
     hashes lines, container branches, and image tags all carry it.
     """
     down = policy.downstream
-    build_result = _guarded("build-run", lambda: _verify_build_run(
-        gh, gh_source, policy, tag, published_at))
-    build, build_run = (build_result if isinstance(build_result, tuple)
-                        else (build_result, None))
+    resolved_run: list[Any] = [None]
+
+    def _build() -> DownstreamOutput:
+        output, resolved_run[0] = _verify_build_run(
+            gh, gh_source, policy, tag, published_at)
+        return output
+
+    (build,) = _guarded("build-run", _build)
     # The run object and its jobs are resolved once and shared by the
     # packages and Try Valkey verifiers (previously three fetches per pass).
-    jobs = _build_run_jobs(build, build_run)
-    outputs = [
+    jobs = _build_run_jobs(build, resolved_run[0])
+    return (
         build,
-        _guarded("tarballs", lambda: _verify_tarballs(down, tag)),
-        _guarded("packages", lambda: _verify_packages(down, stage, build, jobs)),
-        _guarded("try-valkey", lambda: _verify_try_valkey(
-            stage, build, build_run, jobs,
+        *_guarded("tarballs", lambda: _verify_tarballs(down, tag)),
+        *_guarded("packages", lambda: _verify_packages(down, stage, build, jobs)),
+        *_guarded("try-valkey", lambda: _verify_try_valkey(
+            stage, build, resolved_run[0], jobs,
             gh_source=gh_source, repo_name=policy.repo, tag=tag)),
-        _guarded("hashes", lambda: _verify_hashes(gh, down, tag)),
-    ]
-    container = _guarded("container-pr", lambda: _verify_container(gh, down, tag))
-    outputs.extend(container if isinstance(container, list) else [container])
-    outputs.append(_guarded("docs", lambda: _verify_docs(gh, down, tag, stage)))
-    outputs.append(_guarded("website", lambda: _verify_website(gh, down, tag, stage)))
-    return tuple(outputs)
+        *_guarded("hashes", lambda: _verify_hashes(gh, down, tag)),
+        *_guarded("container-pr", lambda: _verify_container(gh, down, tag)),
+        *_guarded("docs", lambda: _verify_docs(gh, down, tag, stage)),
+        *_guarded("website", lambda: _verify_website(gh, down, tag, stage)),
+    )
 
 
 def verify_ordered_outputs(
@@ -103,11 +111,11 @@ def verify_ordered_outputs(
         for output in core
     )
     return (
-        _guarded("bundle", lambda: _verify_bundle(
+        *_guarded("bundle", lambda: _verify_bundle(
             gh, policy.downstream, version, tag, images_public=images_public,
             published_at=published_at)),
         # container-images includes the bare tag (the chart's default image).
-        _guarded("helm", lambda: _verify_helm(
+        *_guarded("helm", lambda: _verify_helm(
             gh, policy.downstream, version, stage, image_public=images_public)),
     )
 
@@ -118,14 +126,6 @@ def outputs_all_settled(outputs: tuple[DownstreamOutput, ...]) -> bool:
         output.state in (OutputState.VERIFIED, OutputState.SKIPPED)
         for output in outputs
     )
-
-
-def _humanize_minutes(minutes: int) -> str:
-    """Operator-facing duration: minutes below two hours, whole hours from
-    there (floor, so 359 renders as 5 hours and 360 as 6 hours)."""
-    if minutes >= 120:
-        return f"{minutes // 60} hours"
-    return f"{minutes} minutes"
 
 
 def escalate_stalled_outputs(
@@ -165,7 +165,7 @@ def escalate_stalled_outputs(
     return tuple(
         DownstreamOutput(
             name=o.name, state=OutputState.FAILED,
-            detail=f"Stalled after {_humanize_minutes(timeout_minutes)}: "
+            detail=f"Stalled after {humanize_minutes(timeout_minutes)}: "
                    f"{o.detail.rstrip('.')}",
             # action cleared: an escalated stall pages a human; it must not
             # also keep auto-dispatching every pass.
@@ -176,8 +176,12 @@ def escalate_stalled_outputs(
     )
 
 
-def _guarded(name: str, verifier: Callable[[], Any]) -> Any:
-    """Degrade a verifier's API failure to a FAILED output.
+def _guarded(name: str, verifier: Callable[[], Any]) -> tuple[DownstreamOutput, ...]:
+    """Run a verifier, degrading its API failure to a FAILED output.
+
+    The one result shape every verifier flows through: a verifier may
+    return one output or a sequence of them, and callers always receive a
+    tuple, never dispatching on the return type.
 
     One missing or renamed downstream repository (a 404 on its first read)
     must report as that output failing, feeding the checklist and the
@@ -185,14 +189,14 @@ def _guarded(name: str, verifier: Callable[[], Any]) -> Any:
     and freezing the tracker at stale state.
     """
     try:
-        return verifier()
+        result = verifier()
     except GithubException as exc:
         logger.warning("Verifier %s failed: HTTP %s", name, exc.status)
-        return DownstreamOutput(
+        return (DownstreamOutput(
             name=name, state=OutputState.FAILED,
             detail=f"GitHub returned HTTP {exc.status}: the target repository "
                    f"is missing or unreadable",
-        )
+        ),)
     except (OSError, ValueError) as exc:
         # OSError covers URLError and TimeoutError; ValueError covers
         # json.JSONDecodeError. public_endpoints deliberately raises on
@@ -200,10 +204,13 @@ def _guarded(name: str, verifier: Callable[[], Any]) -> Any:
         # probe error for THIS output only, never a pass abort.
         logger.warning("Verifier %s failed: %s", name, exc)
         reason = str(exc).strip() or type(exc).__name__
-        return DownstreamOutput(
+        return (DownstreamOutput(
             name=name, state=OutputState.FAILED,
             detail=f"Probe error: {reason}",
-        )
+        ),)
+    if isinstance(result, (list, tuple)):
+        return tuple(result)
+    return (result,)
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +363,24 @@ def _build_run_jobs(build: DownstreamOutput, run: Any) -> Any:
         return None
 
 
+def _build_gated(name: str, build: DownstreamOutput,
+                 jobs: Any) -> "DownstreamOutput | None":
+    """The shared job-evidence preamble: BLOCKED until the build run is
+    verified, FAILED when its jobs could not be listed; None once job
+    evidence is available."""
+    if build.state is not OutputState.VERIFIED:
+        return DownstreamOutput(
+            name=name, state=OutputState.BLOCKED,
+            detail="Waiting for the build-release run to succeed",
+        )
+    if jobs is None:
+        return DownstreamOutput(
+            name=name, state=OutputState.FAILED,
+            detail="Could not list the build run's jobs", url=build.url,
+        )
+    return None
+
+
 def _verify_packages(down: Any, stage: str, build: DownstreamOutput,
                      jobs: Any) -> DownstreamOutput:
     """RPM/DEB publication (GA only), evidenced by the build run's publish
@@ -376,16 +401,9 @@ def _verify_packages(down: Any, stage: str, build: DownstreamOutput,
             name="packages", state=OutputState.SKIPPED,
             detail="Distro packages are not built for release candidates",
         )
-    if build.state is not OutputState.VERIFIED:
-        return DownstreamOutput(
-            name="packages", state=OutputState.BLOCKED,
-            detail="Waiting for the build-release run to succeed",
-        )
-    if jobs is None:
-        return DownstreamOutput(
-            name="packages", state=OutputState.FAILED,
-            detail="Could not list the build run's jobs", url=build.url,
-        )
+    gated = _build_gated("packages", build, jobs)
+    if gated is not None:
+        return gated
     # Job names set by
     # valkey-release-automation/.github/workflows/build-release.yml.
     # A hostile payload can serve a job with a null name; (j.name or "")
@@ -453,16 +471,9 @@ def _verify_try_valkey(stage: str, build: DownstreamOutput, run: Any,
             name="try-valkey", state=OutputState.SKIPPED,
             detail="Try Valkey is not updated for release candidates",
         )
-    if build.state is not OutputState.VERIFIED:
-        return DownstreamOutput(
-            name="try-valkey", state=OutputState.BLOCKED,
-            detail="Waiting for the build-release run to succeed",
-        )
-    if jobs is None:
-        return DownstreamOutput(
-            name="try-valkey", state=OutputState.FAILED,
-            detail="Could not list the build run's jobs", url=build.url,
-        )
+    gated = _build_gated("try-valkey", build, jobs)
+    if gated is not None:
+        return gated
     try_jobs = [j for j in jobs
                 if "try-valkey" in (j.name or "").lower()
                 or "try valkey" in (j.name or "").lower()]
@@ -513,10 +524,7 @@ def _release_is_latest(gh_source: Any, repo_name: str, tag: str) -> bool:
     as SKIPPED.
     """
     try:
-        repo = retry_github_call(
-            lambda: gh_source.get_repo(repo_name),
-            retries=2, description=f"get repo {repo_name}",
-        )
+        repo = get_repo(gh_source, repo_name)
         latest = retry_github_call(
             repo.get_latest_release,
             retries=2, description="get latest release",
@@ -565,10 +573,7 @@ def _verify_tarballs(down: Any, tag: str) -> DownstreamOutput:
 
 def _verify_hashes(gh: Any, down: Any, tag: str) -> DownstreamOutput:
     """The valkey-hashes README must record this version's tarball hash."""
-    repo = retry_github_call(
-        lambda: gh.get_repo(down.hashes_repo),
-        retries=2, description=f"get repo {down.hashes_repo}",
-    )
+    repo = get_repo(gh, down.hashes_repo)
     readme = read_text_file(repo, "README")
     if f"valkey-{tag}.tar.gz" in readme:
         return DownstreamOutput(
@@ -642,10 +647,7 @@ def _verify_docs(gh: Any, down: Any, tag: str, stage: str) -> DownstreamOutput:
             detail="Documentation is not updated for release candidates",
         )
     _major, _minor, patch = parse_version(tag)  # ga only: tag == version
-    repo = retry_github_call(
-        lambda: gh.get_repo(down.doc_repo),
-        retries=2, description=f"get repo {down.doc_repo}",
-    )
+    repo = get_repo(gh, down.doc_repo)
     if patch > 0:
         tag_sha = resolve_tag_commit(repo, tag)
         if not tag_sha:
@@ -710,10 +712,7 @@ def _verify_bundle(
                    "(the bundle builds FROM the -trixie/-alpine tags)",
         )
 
-    repo = retry_github_call(
-        lambda: gh.get_repo(down.bundle_repo),
-        retries=2, description=f"get repo {down.bundle_repo}",
-    )
+    repo = get_repo(gh, down.bundle_repo)
     versions_raw = read_text_file(repo, "versions.json")
     try:
         versions = json.loads(versions_raw)
@@ -748,32 +747,14 @@ def _verify_bundle(
         # PR the not-started path holds and the dispatch can proceed.
         pr = _find_update_pr(gh, down.bundle_repo, _BUNDLE_UPDATE_BRANCH,
                              must_reference=tag, created_after=published_at)
-        if pr is not None and pr.state == "open":
-            if _pr_checks_failing(pr):
-                return DownstreamOutput(
-                    name="bundle", state=OutputState.FAILED,
-                    detail=f"Bundle update PR #{pr.number} is open with failing "
-                           f"checks", url=pr.html_url,
-                )
-            return DownstreamOutput(
-                name="bundle", state=OutputState.PENDING,
-                detail=f"Bundle update PR #{pr.number} is open (`versions.json` "
-                       f"still records {recorded or 'nothing'} for {line})",
-                url=pr.html_url,
-                attempt_started_at=pr.created_at,
-            )
-        if pr is not None and pr.merged_at is None:
-            # A human closed the update PR: that is a decision, not a retry
-            # condition. Re-dispatching every reconcile pass would reopen
-            # the fight; a human re-dispatches manually if the closure was
-            # unrelated.
-            return DownstreamOutput(
-                name="bundle", state=OutputState.FAILED,
-                detail=f"Bundle update PR #{pr.number} was closed without "
-                       f"merging and needs a human decision. Re-dispatch the "
-                       f"bundle update manually if the closure was unrelated.",
-                url=pr.html_url,
-            )
+        in_flight = _pr_in_flight(
+            "bundle", pr, "Bundle update PR",
+            open_suffix=f" (`versions.json` still records "
+                        f"{recorded or 'nothing'} for {line})",
+            closed_recovery="Re-dispatch the bundle update manually if the "
+                            "closure was unrelated.")
+        if in_flight is not None:
+            return in_flight
         # Images are public, versions.json is stale, and no update PR is in
         # flight: the ordering gate is satisfied and the dispatch is safe.
         return DownstreamOutput(
@@ -822,10 +803,7 @@ def _verify_helm(
             detail="The chart does not track release candidates",
         )
 
-    repo = retry_github_call(
-        lambda: gh.get_repo(down.helm_repo),
-        retries=2, description=f"get repo {down.helm_repo}",
-    )
+    repo = get_repo(gh, down.helm_repo)
     chart_yaml = read_text_file(repo, "valkey/Chart.yaml")
     app_match = CHART_APP_VERSION_RE.search(chart_yaml)
     chart_match = CHART_VERSION_RE.search(chart_yaml)
@@ -859,30 +837,13 @@ def _verify_helm(
                        f"to be public (the chart's default image)",
             )
         pr = _find_update_pr(gh, down.helm_repo, helm_update_branch(version))
-        if pr is not None and pr.state == "open":
-            if _pr_checks_failing(pr):
-                return DownstreamOutput(
-                    name="helm", state=OutputState.FAILED,
-                    detail=f"Chart bump PR #{pr.number} is open with failing "
-                           f"checks", url=pr.html_url,
-                )
-            return DownstreamOutput(
-                name="helm", state=OutputState.PENDING,
-                detail=f"Chart bump PR #{pr.number} is open, awaiting merge",
-                url=pr.html_url,
-                attempt_started_at=pr.created_at,
-            )
-        if pr is not None and pr.merged_at is None:
-            # A closed bump PR is a human decision; never reopen it
-            # automatically (which would also force-reset the branch under
-            # their feet).
-            return DownstreamOutput(
-                name="helm", state=OutputState.FAILED,
-                detail=f"Chart bump PR #{pr.number} was closed without merging "
-                       f"and needs a human decision. Re-open it or bump the "
-                       f"chart manually if the closure was unrelated.",
-                url=pr.html_url,
-            )
+        in_flight = _pr_in_flight(
+            "helm", pr, "Chart bump PR",
+            open_suffix=", awaiting merge",
+            closed_recovery="Re-open it or bump the chart manually if the "
+                            "closure was unrelated.")
+        if in_flight is not None:
+            return in_flight
         # Image public, chart stale, no PR in flight: safe to open the bump PR.
         return DownstreamOutput(
             name="helm", state=OutputState.PENDING,
@@ -976,10 +937,7 @@ def _find_update_pr(gh: Any, repo_name: str, head_branch: str, *,
     ``created_after``, when set, ignores PRs created before it, so an
     earlier release's leftover PR can never be read as this release's.
     """
-    repo = retry_github_call(
-        lambda: gh.get_repo(repo_name),
-        retries=2, description=f"get repo {repo_name}",
-    )
+    repo = get_repo(gh, repo_name)
     owner = repo_name.split("/", maxsplit=1)[0]
     pulls = retry_github_call(
         lambda: list(repo.get_pulls(state="all", head=f"{owner}:{head_branch}",
@@ -1016,6 +974,42 @@ def _commit_on_default_branch(repo: Any, sha: str) -> bool:
         retries=2, description=f"compare {str(sha)[:12]}...{repo.default_branch}",
     )
     return comparison.status in ("identical", "ahead")
+
+
+def _pr_in_flight(name: str, pr: Any, label: str, *, open_suffix: str,
+                  closed_recovery: str) -> "DownstreamOutput | None":
+    """The Bundle/Helm in-flight PR states: open (PENDING, or FAILED when
+    its checks are red) and closed without merging.
+
+    A human closing the update PR is a decision, not a retry condition:
+    re-dispatching every reconcile pass (or force-resetting the branch
+    under their feet) would reopen the fight, so it reads FAILED with no
+    auto-action and *closed_recovery* names the manual path. None when
+    there is no in-flight decision to report (no PR, or a merged one).
+    """
+    if pr is None:
+        return None
+    if pr.state == "open":
+        if _pr_checks_failing(pr):
+            return DownstreamOutput(
+                name=name, state=OutputState.FAILED,
+                detail=f"{label} #{pr.number} is open with failing checks",
+                url=pr.html_url,
+            )
+        return DownstreamOutput(
+            name=name, state=OutputState.PENDING,
+            detail=f"{label} #{pr.number} is open{open_suffix}",
+            url=pr.html_url,
+            attempt_started_at=pr.created_at,
+        )
+    if pr.merged_at is None:
+        return DownstreamOutput(
+            name=name, state=OutputState.FAILED,
+            detail=f"{label} #{pr.number} was closed without merging and "
+                   f"needs a human decision. {closed_recovery}",
+            url=pr.html_url,
+        )
+    return None
 
 
 def _pr_progress_output(name: str, pr: Any, branch: str, repo_name: str) -> DownstreamOutput:

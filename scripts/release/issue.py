@@ -20,7 +20,7 @@ import os
 import re
 import weakref
 from datetime import datetime
-from typing import Any
+from typing import Any, Iterator
 
 from github.GithubException import GithubException
 
@@ -119,37 +119,54 @@ _PHASE_TITLES = {
     ReleasePhase.BUNDLE_HELM: "Bundle and Helm verified",
 }
 
+def marker(suffix: str) -> str:
+    """A namespaced marker comment: ``<!-- <namespace>:<suffix> -->``. The
+    single envelope builder; actions.py aliases it so every marker in the
+    system is assembled here."""
+    return f"<!-- {MARKER_NAMESPACE}:{suffix} -->"
+
+
+_marker = marker
+
+
 def identity_marker(branch: str) -> str:
     """The marker that identifies the active release issue for *branch*."""
-    return f"<!-- {MARKER_NAMESPACE}:{branch} -->"
+    return _marker(branch)
 
 
 def adopt_marker(sha: str) -> str:
     """The comment marker recording an owner's adoption of branch head *sha*."""
-    return f"<!-- {MARKER_NAMESPACE}:adopt:{sha} -->"
+    return _marker(f"adopt:{sha}")
 
 
 def complete_marker() -> str:
     """The comment marker the controller posts when closing a completed release."""
-    return f"<!-- {MARKER_NAMESPACE}:complete -->"
+    return _marker("complete")
 
 
 def closed_warning_marker() -> str:
-    """The one-shot marker gating the abandoned-tracker warning.
-
-    Posted on a tracker that was closed while the release was still being
-    observed (no completion marker), so the warning fires exactly once.
-    """
-    return f"<!-- {MARKER_NAMESPACE}:closed-warning -->"
+    """The one-shot marker gating the abandoned-tracker warning (fires once)."""
+    return _marker("closed-warning")
 
 
 def binding_marker(binding: ReleaseBinding) -> str:
     """The marker line carrying the identity-binding receipt's fields."""
-    return (
-        f"<!-- {MARKER_NAMESPACE}:binding version={binding.version} "
-        f"stage={binding.stage} notes_pr={binding.notes_pr_number} "
-        f"merge_sha={binding.merge_sha} -->"
+    return _marker(
+        f"binding version={binding.version} stage={binding.stage} "
+        f"notes_pr={binding.notes_pr_number} merge_sha={binding.merge_sha}"
     )
+
+
+def _marker_matches(issue: Any, regex: "re.Pattern[str]",
+                    gh: Any) -> "Iterator[tuple[Any, re.Match[str]]]":
+    """(comment, match) for every real *regex* marker in a trusted comment,
+    oldest first. The single scan path for adoption and binding read-back:
+    trusted authors only, and each hit re-checked through
+    :func:`marker_present` so a quoted marker never counts."""
+    for comment in trusted_comments(issue, gh):
+        for match in regex.finditer(comment.body or ""):
+            if marker_present(comment.body, match.group(0)):
+                yield comment, match
 
 
 def read_binding(issue: Any, gh: Any = None) -> "ReleaseBinding | None":
@@ -161,15 +178,13 @@ def read_binding(issue: Any, gh: Any = None) -> "ReleaseBinding | None":
     newest marker wins defensively should duplicates ever appear.
     """
     found = None
-    for comment in trusted_comments(issue, gh):
-        for match in _BINDING_MARKER_RE.finditer(comment.body or ""):
-            if marker_present(comment.body, match.group(0)):
-                found = ReleaseBinding(
-                    version=match.group(1),
-                    stage=match.group(2),
-                    notes_pr_number=int(match.group(3)),
-                    merge_sha=match.group(4),
-                )
+    for _, match in _marker_matches(issue, _BINDING_MARKER_RE, gh):
+        found = ReleaseBinding(
+            version=match.group(1),
+            stage=match.group(2),
+            notes_pr_number=int(match.group(3)),
+            merge_sha=match.group(4),
+        )
     return found
 
 
@@ -200,10 +215,8 @@ def write_binding(issue: Any, binding: ReleaseBinding, gh: Any = None, *,
     body = _binding_body(binding)
     existing = None
     if not assume_absent:
-        for comment in trusted_comments(issue, gh):
-            for match in _BINDING_MARKER_RE.finditer(comment.body or ""):
-                if marker_present(comment.body, match.group(0)):
-                    existing = comment
+        for comment, _ in _marker_matches(issue, _BINDING_MARKER_RE, gh):
+            existing = comment
     if existing is not None:
         if (existing.body or "") == body:
             return
@@ -242,8 +255,7 @@ def marker_present(body: Any, marker: str) -> bool:
 def render_title(branch: str, version: str, stage: str) -> str:
     """Issue title. Falls back to the branch while no notes PR pins a version."""
     if version:
-        suffix = version if stage == "ga" else f"{version}-{stage}"
-        return f"Release {suffix}"
+        return f"Release {release_tag(version, stage)}"
     return f"Next release on {branch}"
 
 
@@ -545,10 +557,6 @@ def _code(value: str) -> str:
     return f"`{value}`"
 
 
-def _short(sha: str) -> str:
-    return sha[:12] if sha else ""
-
-
 def _notes_pr_cell(status: ReleaseStatus) -> str:
     if not status.notes_pr_number:
         if status.notes_cut_url:
@@ -562,7 +570,7 @@ def _candidate_cell(status: ReleaseStatus) -> str:
     candidate = status.candidate
     if candidate.state is CandidateState.NONE:
         return "_None (recorded when the release-notes PR merges)_"
-    link = f"[`{_short(candidate.sha)}`]({_repo_url(status)}/commit/{candidate.sha})"
+    link = f"[`{candidate.sha[:12]}`]({_repo_url(status)}/commit/{candidate.sha})"
     if status.published:
         if not status.tag_trusted:
             return (
@@ -665,27 +673,18 @@ def find_release_issues(repo: Any, branch: str, *, label: str,
         lambda: list(repo.get_issues(state=state, labels=[label, branch_label(branch)])),
         retries=2, description=f"list {state} {label}+{branch_label(branch)} issues",
     )
-    seen: set[int] = set()
-    matches: list[Any] = []
-    for issue in labelled:
-        if "pull_request" in issue._rawData:
-            continue
-        if issue.number in seen:
-            continue
-        seen.add(issue.number)
-        matches.append(issue)
-
-    marker = identity_marker(branch)
-    issues = retry_github_call(
+    fallback = retry_github_call(
         lambda: list(repo.get_issues(state=state, labels=[label])),
         retries=2, description=f"list {state} {label} issues",
     )
-    for issue in issues:
-        if "pull_request" in issue._rawData:
-            continue
-        if issue.number in seen:
-            continue
-        if marker in (issue.body or ""):
+    marker = identity_marker(branch)
+    seen: set[int] = set()
+    matches: list[Any] = []
+    for issues, need_marker in ((labelled, False), (fallback, True)):
+        for issue in issues:
+            if ("pull_request" in issue._rawData or issue.number in seen
+                    or (need_marker and marker not in (issue.body or ""))):
+                continue
             seen.add(issue.number)
             matches.append(issue)
     return matches
@@ -708,15 +707,16 @@ def has_completion_marker(issue: Any, gh: Any = None) -> bool:
     )
 
 
-def trusted_bot_authors(gh: Any = None) -> "frozenset[str]":
-    """The set of login strings the controller treats as its own bot identities.
+def _trusted_logins(gh: Any = None) -> "set[str]":
+    """Login strings the controller treats as its own identities.
 
-    Same trust filter :func:`trusted_comments` applies to marker read-back,
-    but exposed as a set for authors of *other* GitHub resources -- notably
-    the release-notes PR itself, which reconciliation authenticates
-    before binding to avoid a lookalike preemption. Includes the static
-    bot identities, the RELEASE_BOT_LOGIN env override, and the
-    authenticated user identity (PAT runs) when *gh* is provided.
+    The static bot identities, plus the ``RELEASE_BOT_LOGIN`` env override
+    (a fork running its OWN GitHub App posts as "<forkslug>[bot]", which is
+    not in the static set, and App tokens have no user context, so the
+    release workflows pass the minted App's slug formatted "<slug>[bot]"),
+    plus the *currently authenticated* identity when it is a user (fork
+    runs authenticate as the fork owner's PAT, and markers the controller
+    wrote must remain readable to it).
     """
     trusted = set(TRUSTED_MARKER_AUTHORS)
     env_login = os.environ.get("RELEASE_BOT_LOGIN", "").strip()
@@ -726,7 +726,18 @@ def trusted_bot_authors(gh: Any = None) -> "frozenset[str]":
         login = controller_login(gh)
         if login:
             trusted.add(login)
-    return frozenset(trusted)
+    return trusted
+
+
+def trusted_bot_authors(gh: Any = None) -> "frozenset[str]":
+    """The set of login strings the controller treats as its own bot identities.
+
+    Same trust filter :func:`trusted_comments` applies to marker read-back,
+    but exposed as a set for authors of *other* GitHub resources -- notably
+    the release-notes PR itself, which reconciliation authenticates
+    before binding to avoid a lookalike preemption.
+    """
+    return frozenset(_trusted_logins(gh))
 
 
 def controller_login(gh: Any) -> str:
@@ -754,30 +765,13 @@ def trusted_comments(issue: Any, gh: Any = None) -> list[Any]:
 
     The trust filter for every marker the controller reads back (adoptions,
     notification fingerprints): a marker pasted by anyone else is invisible.
-    Trust covers the static bot identities, an env-provided App login
-    (``RELEASE_BOT_LOGIN``, set by the release workflows from the minted
-    App's slug so a fork's own App is trusted), plus the *currently
-    authenticated* identity when it is a user (fork runs authenticate as the
-    fork owner's PAT, and markers the controller wrote must remain readable
-    to it).
+    See :func:`_trusted_logins` for what counts as a controller identity.
 
     The fetch is memoized per issue object (a reconcile pass reads the same
     issue's comments up to three times); posting a comment must call
     :func:`invalidate_comment_memo` so the next read sees it.
     """
-    trusted = set(TRUSTED_MARKER_AUTHORS)
-    # A fork running its OWN GitHub App posts as "<forkslug>[bot]", which is
-    # not in the static set, and controller_login() is empty for App tokens,
-    # so without this the controller could not read back its own markers
-    # (the autofix would re-fire every pass). The release workflows pass the
-    # minted App's slug as RELEASE_BOT_LOGIN (formatted "<slug>[bot]").
-    env_login = os.environ.get("RELEASE_BOT_LOGIN", "").strip()
-    if env_login:
-        trusted.add(env_login)
-    if gh is not None:
-        login = controller_login(gh)
-        if login:
-            trusted.add(login)
+    trusted = _trusted_logins(gh)
     comments = _COMMENTS_MEMO.get(issue)
     if comments is None:
         comments = retry_github_call(
@@ -801,9 +795,7 @@ def adopted_shas(issue: Any, gh: Any = None) -> tuple[str, ...]:
     """
     return tuple(
         match.group(1)
-        for comment in trusted_comments(issue, gh)
-        for match in _ADOPT_MARKER_RE.finditer(comment.body or "")
-        if marker_present(comment.body, match.group(0))
+        for _, match in _marker_matches(issue, _ADOPT_MARKER_RE, gh)
     )
 
 

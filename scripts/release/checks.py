@@ -23,7 +23,7 @@ from scripts.common.github_client import retry_github_call
 from scripts.release.models import CheckState, DailyCiState, DailyCiStatus, RequiredCheck
 from scripts.release.policy import RepoReleasePolicy
 from scripts.release.qualification import RUN_SCAN_LIMIT
-from scripts.release.verify import _humanize_minutes
+from scripts.release.release_refs import humanize_minutes
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +182,7 @@ def evaluate_daily(
 
     in_progress_note = "; a newer daily run is in progress" if saw_in_progress else ""
     age = now - newest_completed.created_at
-    age_text = _humanize_minutes(max(0, int(age.total_seconds() // 60)))
+    age_text = humanize_minutes(max(0, int(age.total_seconds() // 60)))
     if age > timedelta(hours=policy.daily_max_age_hours or 0):
         return DailyCiStatus(
             state=DailyCiState.STALE,

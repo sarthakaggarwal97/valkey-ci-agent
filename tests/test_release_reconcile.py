@@ -111,7 +111,7 @@ class TestStartRelease:
         # ``unstable`` is not MAJOR.MINOR-shaped, so validate_release_branch
         # raises through parse_release_branch first ("not a release branch");
         # a right-shape-but-unconfigured branch would raise "not a configured
-        # release branch". Match either — both are the F10 gate firing.
+        # release branch". Match either - both are the F10 gate firing.
         with pytest.raises(ReleaseControlError, match="not a"):
             start_release(gh, _POLICY, branch="unstable",
                           intent=ReleaseIntent.PATCH, actor="madolson")
@@ -218,7 +218,7 @@ class TestNotesPRBinding:
     ])
     def test_non_matching_head_refs_never_bind(self, head_ref: str, branch: str) -> None:
         # Extended policy so branches like 9.10/9.11 pass F10's
-        # validate_release_branch gate — the property under test is the
+        # validate_release_branch gate - the property under test is the
         # trailing-dot prefix rule, not branch allowlisting.
         policy = make_policy(branches=("9.1", "8.0", "9.10", "9.11"))
         pr = notes_pr(head_ref=head_ref)
@@ -1372,7 +1372,7 @@ def _writes_of(issue: MagicMock) -> list[str]:
     """Names of writing methods called on *issue*, for zero-write assertions.
 
     Any of ``edit`` / ``add_to_labels`` / ``remove_from_labels`` /
-    ``create_comment`` firing means the pass wrote — this is the audit
+    ``create_comment`` firing means the pass wrote - this is the audit
     the F22 / F30 observation-mode tests apply.
     """
     calls: list[str] = []
@@ -1445,7 +1445,7 @@ class TestAdoptStaleAcknowledgement:
         # try to adopt B again: B is neither the current head (C) nor
         # the notes-merge pin (A), so it must be refused. Under the
         # pre-fix code ``status.candidate.sha`` would report B (the last
-        # recorded adoption) and quietly accept it — the exact wedge.
+        # recorded adoption) and quietly accept it - the exact wedge.
         head_c = "c" * 40
         repo = repo_mock(
             branch_head=head_c,
@@ -1543,7 +1543,7 @@ class TestBoundNotesPrRevalidation:
 
 
 class TestOneActiveReleaseInvariant:
-    """F19: ``one active release per branch`` — the create-issue path is
+    """F19: ``one active release per branch`` - the create-issue path is
     dedup-safe (readback-on-fail, refuse on ambiguity) and a closed
     tracker without the completion marker blocks the next start."""
 
@@ -1599,7 +1599,7 @@ class TestOneActiveReleaseInvariant:
         # Newest CLOSED tracker for this branch has no completion marker
         # (was closed manually mid-flight, not by the controller).
         # Starting a new release now would be a duplicate mid-flight
-        # release — refuse, naming the closed tracker.
+        # release - refuse, naming the closed tracker.
         closed = tracker()
         closed.state = "closed"
         closed.get_comments.return_value = []  # no completion marker
@@ -1615,7 +1615,7 @@ class TestOneActiveReleaseInvariant:
         repo.create_issue.assert_not_called()
 
     def test_closed_tracker_with_completion_marker_permits_start(self) -> None:
-        # The completed-then-closed tracker is fine — the previous
+        # The completed-then-closed tracker is fine - the previous
         # release shipped; a new one can start.
         closed = tracker(comments=[bot_comment(
             f"{issue_mod.complete_marker()}\nRelease complete. Closing."

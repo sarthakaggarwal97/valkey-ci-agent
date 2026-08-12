@@ -1,7 +1,7 @@
 """Tests for anonymous public-endpoint verification.
 
-Mocked at the HTTP boundary — ``urllib.request.urlopen``, the module's HTTP
-layer (it uses urllib, not requests) — so no real network is ever touched.
+Mocked at the HTTP boundary: ``urllib.request.urlopen``, the module's HTTP
+layer (it uses urllib, not requests): so no real network is ever touched.
 These pin the URL contracts against each registry and the
 absent/transient/present decision logic.
 """

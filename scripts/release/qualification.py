@@ -18,6 +18,7 @@ import io
 import json
 import logging
 import zipfile
+from functools import partial
 from typing import Any
 
 from github.GithubException import GithubException
@@ -25,7 +26,6 @@ from github.GithubException import GithubException
 from scripts.common.github_client import retry_github_call
 from scripts.release.models import QualificationStatus
 from scripts.release.policy import RepoReleasePolicy
-from scripts.release.release_refs import workflow_handle
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +81,7 @@ def evaluate_qualification(
     run = _find_run(gh, policy, tag, sha)
     if run is None:
         return QualificationStatus()
+    result = partial(QualificationStatus, run_id=run.id, url=run.html_url)
 
     # A run that never planned jobs (startup_failure: invalid workflow file,
     # permission mismatch) is not evidence about the candidate; no build was
@@ -94,13 +95,10 @@ def evaluate_qualification(
             "Qualification run %s failed at startup (never planned any jobs)",
             run.id,
         )
-        return QualificationStatus(
-            run_id=run.id, url=run.html_url, passed=False,
-            failed_jobs=(STARTUP_FAILURE_JOB,),
-        )
+        return result(passed=False, failed_jobs=(STARTUP_FAILURE_JOB,))
 
     if run.status != "completed":
-        return QualificationStatus(run_id=run.id, url=run.html_url, pending=True)
+        return result(pending=True)
 
     jobs = retry_github_call(
         lambda: list(run.jobs()),
@@ -112,22 +110,20 @@ def evaluate_qualification(
     # report pending, never failed, so nobody gets paged for a job that
     # is merely still running.
     if any((j.status or "") != "completed" for j in jobs):
-        return QualificationStatus(run_id=run.id, url=run.html_url, pending=True)
+        return result(pending=True)
     # (j.name or ""): a job served with a null name must read as unnamed,
     # not raise through the caller and abort the pass.
     failed = tuple((j.name or "") for j in jobs
                    if j.conclusion not in ("success", "skipped"))
     if run.conclusion != "success" or failed:
-        return QualificationStatus(
-            run_id=run.id, url=run.html_url, passed=False,
+        return result(
+            passed=False,
             failed_jobs=failed or (f"(Run concluded: {run.conclusion})",),
         )
     gaps = _evidence_gaps(policy, run, jobs, tag=tag, sha=sha)
     if gaps:
-        return QualificationStatus(
-            run_id=run.id, url=run.html_url, passed=False, failed_jobs=gaps,
-        )
-    return QualificationStatus(run_id=run.id, url=run.html_url, passed=True)
+        return result(passed=False, failed_jobs=gaps)
+    return result(passed=True)
 
 
 def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
@@ -185,26 +181,20 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
         if not a.expired and a.size_in_bytes > 0
     ]
     usable_names = [a.name for a in usable]
-    archive_artifacts = sum(name.startswith("qualify-") for name in usable_names)
     expected_archives = (down.qualification_x86_archive_jobs
                          + down.qualification_arm_archive_jobs)
-    if archive_artifacts != expected_archives:
-        gaps.append(
-            f"(Evidence mismatch: usable archive artifacts, "
-            f"{archive_artifacts} present, expected exactly {expected_archives})"
-        )
+    artifact_expectations = [("qualify-", expected_archives, "archive")]
     if is_ga:
-        rpm_artifacts = sum(name.startswith("valkey-rpms-") for name in usable_names)
-        deb_artifacts = sum(name.startswith("valkey-debs-") for name in usable_names)
-        if rpm_artifacts != down.qualification_rpm_jobs:
+        artifact_expectations += [
+            ("valkey-rpms-", down.qualification_rpm_jobs, "RPM"),
+            ("valkey-debs-", down.qualification_deb_jobs, "DEB"),
+        ]
+    for prefix, expected, label in artifact_expectations:
+        present = sum(name.startswith(prefix) for name in usable_names)
+        if present != expected:
             gaps.append(
-                f"(Evidence mismatch: usable RPM artifacts, {rpm_artifacts} "
-                f"present, expected exactly {down.qualification_rpm_jobs})"
-            )
-        if deb_artifacts != down.qualification_deb_jobs:
-            gaps.append(
-                f"(Evidence mismatch: usable DEB artifacts, {deb_artifacts} "
-                f"present, expected exactly {down.qualification_deb_jobs})"
+                f"(Evidence mismatch: usable {label} artifacts, {present} "
+                f"present, expected exactly {expected})"
             )
     # F5: the qualification manifest artifact is not just a name -- its
     # content must bind the run to the release identity that dispatched it.
@@ -258,38 +248,37 @@ def _validate_manifest_content(
     if gaps:  # a malformed manifest cannot be trusted for further comparisons
         return gaps
 
-    if payload["tag"] != tag:
-        gaps.append(
-            f"(Evidence mismatch: qualification manifest tag "
-            f"{payload['tag']!r}, expected {tag!r})"
-        )
-    if payload["source_sha"] != sha:
-        gaps.append(
-            f"(Evidence mismatch: qualification manifest source_sha "
-            f"{str(payload['source_sha'])[:12]!r}, expected {sha[:12]!r})"
-        )
     # The tag already carries the version+stage but the manifest emits
     # ``version`` separately (M.m.p, no stage suffix); binding it too
     # protects against a producer that renders the two independently.
-    expected_version = tag.split("-rc", 1)[0]
-    if payload["version"] != expected_version:
+    identity_bindings = (
+        ("tag", payload["tag"], tag),
+        ("source_sha", payload["source_sha"], sha),
+        ("version", payload["version"], tag.split("-rc", 1)[0]),
+    )
+    for key, actual, expected in identity_bindings:
+        if actual == expected:
+            continue
+        if key == "source_sha":
+            # Truncated hashes so the operator can diff them at a glance.
+            actual, expected = str(actual)[:12], expected[:12]
         gaps.append(
-            f"(Evidence mismatch: qualification manifest version "
-            f"{payload['version']!r}, expected {expected_version!r})"
+            f"(Evidence mismatch: qualification manifest {key} "
+            f"{actual!r}, expected {expected!r})"
         )
     expected_rpm = down.qualification_rpm_jobs if is_ga else 0
     expected_deb = down.qualification_deb_jobs if is_ga else 0
-    for key, expected in (("rpm_jobs", expected_rpm),
-                          ("deb_jobs", expected_deb),
-                          ("archive_jobs", expected_archive_jobs)):
-        actual = payload[key]
+    for key, expected_count in (("rpm_jobs", expected_rpm),
+                                ("deb_jobs", expected_deb),
+                                ("archive_jobs", expected_archive_jobs)):
+        count = payload[key]
         # An int that happens to string-format to the same digits is a
         # different type, and the exact-count discipline forbids either
         # coercing it or reading it as a match.
-        if not isinstance(actual, int) or isinstance(actual, bool) or actual != expected:
+        if not isinstance(count, int) or isinstance(count, bool) or count != expected_count:
             gaps.append(
                 f"(Evidence mismatch: qualification manifest {key} "
-                f"{actual!r}, expected {expected})"
+                f"{count!r}, expected {expected_count})"
             )
     if not gaps:
         # automation_sha is retained as evidence detail (dispatch-nonce
@@ -308,17 +297,38 @@ class _ManifestReadError(RuntimeError):
 
 
 def _load_manifest_payload(artifact: Any) -> dict:
-    """Return the JSON payload from the manifest artifact zip.
+    """Download and parse the JSON payload from the manifest artifact zip.
 
-    The producer uploads a single JSON file inside a zip; this helper hides
-    the download-decompress-parse chain so callers only see the dict or an
-    error message.
+    The producer uploads a single JSON file inside a zip. The download uses
+    the Artifact's own requester (``artifact.requester``) so the GitHub
+    token stays inside PyGithub's transport and does not leak to the signed
+    blob URL PyGithub redirects to; tests inject content through that
+    requester. The response body of a successful download is the zip bytes
+    as a str (PyGithub decodes the raw response); str encodes back
+    losslessly via latin-1 for zip parsing.
     """
-    raw = _download_manifest_bytes(artifact)
-    if not raw:
+    requester = getattr(artifact, "requester", None)
+    if requester is None:
+        raise _ManifestReadError(
+            "artifact has no ``requester`` attribute; cannot download manifest"
+        )
+    status, _headers, body = requester.requestBlob(
+        "GET", artifact.archive_download_url, None, None, None, None,
+    )
+    if not (200 <= int(status) < 300):
+        raise _ManifestReadError(
+            f"artifact download returned HTTP {status}"
+        )
+    if isinstance(body, str):
+        body = body.encode("latin-1")
+    elif not isinstance(body, bytes):
+        raise _ManifestReadError(
+            f"artifact download returned unexpected body type: {type(body).__name__}"
+        )
+    if not body:
         raise _ManifestReadError("artifact download returned no bytes")
     try:
-        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+        with zipfile.ZipFile(io.BytesIO(body)) as zf:
             members = [m for m in zf.infolist()
                        if not m.is_dir() and m.filename.lower().endswith(".json")]
             if not members:
@@ -350,41 +360,30 @@ def _load_manifest_payload(artifact: Any) -> dict:
     return parsed
 
 
-def _download_manifest_bytes(artifact: Any) -> bytes:
-    """Download the manifest artifact zip as bytes via PyGithub's authenticated
-    session.
+def _automation_workflow(gh: Any, policy: RepoReleasePolicy) -> "tuple[Any, Any]":
+    """The automation repo and its qualification workflow, one repo fetch.
 
-    Kept as a small, hook-friendly indirection so tests can inject content
-    (a valid manifest, a wrong-SHA manifest, malformed JSON, an empty
-    upload) by patching this one function. The real path uses the
-    Artifact's own requester (``artifact.requester``) so the GitHub token
-    stays inside PyGithub's transport and does not leak to the signed blob
-    URL PyGithub redirects to.
+    One fetch serves both the workflow lookup and the default-branch
+    check (``workflow_handle`` would hide the repo and force a second
+    fetch). The workflow slot is None when the qualification workflow does
+    not exist (404); callers decide whether that is a hard error (dispatch)
+    or no-evidence (evaluation).
     """
-    # PyGithub 2.x's Artifact exposes both ``archive_download_url`` (the
-    # API endpoint that redirects to signed storage) and ``requester`` (the
-    # session that talks to GitHub with credentials). The response body of
-    # a successful download is the zip bytes as a str (PyGithub decodes
-    # the raw response); str encodes back losslessly for zip parsing.
-    requester = getattr(artifact, "requester", None)
-    if requester is None:
-        raise _ManifestReadError(
-            "artifact has no ``requester`` attribute; cannot download manifest"
-        )
-    status, _headers, body = requester.requestBlob(
-        "GET", artifact.archive_download_url, None, None, None, None,
+    repo = retry_github_call(
+        lambda: gh.get_repo(policy.downstream.automation_repo),
+        retries=2, description=f"get repo {policy.downstream.automation_repo}",
     )
-    if not (200 <= int(status) < 300):
-        raise _ManifestReadError(
-            f"artifact download returned HTTP {status}"
+    try:
+        workflow = retry_github_call(
+            lambda: repo.get_workflow(policy.downstream.qualification_workflow),
+            retries=2,
+            description=f"get workflow {policy.downstream.qualification_workflow}",
         )
-    if isinstance(body, bytes):
-        return body
-    if isinstance(body, str):
-        return body.encode("latin-1")
-    raise _ManifestReadError(
-        f"artifact download returned unexpected body type: {type(body).__name__}"
-    )
+    except GithubException as exc:
+        if exc.status == 404:
+            return repo, None
+        raise
+    return repo, workflow
 
 
 def dispatch_qualification(
@@ -400,17 +399,12 @@ def dispatch_qualification(
     exists for this SHA); this function just fires the dispatch on the
     automation repo's default branch.
     """
-    workflow = workflow_handle(gh, policy.downstream.automation_repo,
-                               policy.downstream.qualification_workflow)
+    repo, workflow = _automation_workflow(gh, policy)
     if workflow is None:
         raise RuntimeError(
             f"{policy.downstream.qualification_workflow} does not exist on "
             f"{policy.downstream.automation_repo}"
         )
-    repo = retry_github_call(
-        lambda: gh.get_repo(policy.downstream.automation_repo),
-        retries=2, description=f"get repo {policy.downstream.automation_repo}",
-    )
     dispatched = retry_github_call(
         lambda: workflow.create_dispatch(
             repo.default_branch, inputs={"version": tag, "source_sha": sha},
@@ -437,22 +431,9 @@ def _find_run(gh: Any, policy: RepoReleasePolicy, tag: str, sha: str) -> Any:
       so a doctored qualify workflow on a side branch cannot manufacture
       evidence.
     """
-    # One repo fetch serves both the workflow lookup and the default-branch
-    # check (workflow_handle would hide the repo and force a second fetch).
-    repo = retry_github_call(
-        lambda: gh.get_repo(policy.downstream.automation_repo),
-        retries=2, description=f"get repo {policy.downstream.automation_repo}",
-    )
-    try:
-        workflow = retry_github_call(
-            lambda: repo.get_workflow(policy.downstream.qualification_workflow),
-            retries=2,
-            description=f"get workflow {policy.downstream.qualification_workflow}",
-        )
-    except GithubException as exc:
-        if exc.status == 404:
-            return None
-        raise
+    repo, workflow = _automation_workflow(gh, policy)
+    if workflow is None:
+        return None
     runs = retry_github_call(
         workflow.get_runs,
         retries=2, description="list qualification runs",

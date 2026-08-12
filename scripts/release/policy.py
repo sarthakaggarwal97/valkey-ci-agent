@@ -14,6 +14,7 @@ configuration bug, not something to work around at runtime.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import yaml
 
@@ -186,6 +187,29 @@ def _reject_unknown_keys(path: str, where: str, mapping: "dict[str, object]",
         )
 
 
+def _workflow_basename(ctx: str, field: str, value: object,
+                       example: str, why: str = "") -> str:
+    """Validate a workflow file basename field, returning it stripped.
+
+    A path (anything containing ``/``) is refused: runs are matched by the
+    workflow's file basename, and a path would silently never match.
+    """
+    if not isinstance(value, str) or not value.strip() or "/" in value:
+        raise ValueError(
+            f"{ctx}: {field} must be a workflow file basename "
+            f"(e.g. {example!r}), got {value!r}{why}"
+        )
+    return value.strip()
+
+
+def _https_url(ctx: str, field: str, value: object) -> str:
+    if not isinstance(value, str) or not value.startswith("https://"):
+        raise ValueError(
+            f"{ctx}: downstream.{field} must be an https URL, got {value!r}"
+        )
+    return value
+
+
 def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
     repo = entry.get("repo")
     if not isinstance(repo, str) or repo.count("/") != 1:
@@ -193,11 +217,10 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
     _reject_unknown_keys(path, f"repos entry {repo}", entry, _REPO_ENTRY_KEYS)
 
     team = entry.get("authorized_team")
-    valid_team_form = isinstance(team, str) and (
+    if not isinstance(team, str) or not (
         (team.count("/") == 1 and all(part.strip() for part in team.split("/")))
         or (team.startswith("user:") and team[len("user:"):].strip() != "" and "/" not in team)
-    )
-    if not isinstance(team, str) or not valid_team_form:
+    ):
         raise ValueError(
             f"{path}: {repo}: 'authorized_team' must be 'org/team-slug' or "
             f"'user:<login>' (fork policies only), got {team!r}"
@@ -239,13 +262,12 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
             f"{path}: {repo}: 'required_checks' contains duplicate entries"
         )
 
-    workflow = entry.get("checks_workflow")
-    if not isinstance(workflow, str) or not workflow.strip() or "/" in workflow:
-        raise ValueError(
-            f"{path}: {repo}: 'checks_workflow' must be a workflow file basename "
-            f"(e.g. 'ci.yml'), got {workflow!r}; without it, a same-named check "
-            f"run from another workflow could satisfy or clobber a requirement"
-        )
+    workflow = _workflow_basename(
+        f"{path}: {repo}", "'checks_workflow'", entry.get("checks_workflow"),
+        "ci.yml",
+        why="; without it, a same-named check "
+            "run from another workflow could satisfy or clobber a requirement",
+    )
 
     timeout = entry.get("check_timeout_minutes")
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
@@ -267,19 +289,16 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
     daily_workflow: "str | None" = None
     daily_max_age_hours: "int | None" = None
     if raw_daily_workflow is not None:
-        if (not isinstance(raw_daily_workflow, str) or not raw_daily_workflow.strip()
-                or "/" in raw_daily_workflow):
-            raise ValueError(
-                f"{path}: {repo}: 'daily_workflow' must be a workflow file "
-                f"basename (e.g. 'daily.yml'), got {raw_daily_workflow!r}"
-            )
+        daily_workflow = _workflow_basename(
+            f"{path}: {repo}", "'daily_workflow'", raw_daily_workflow,
+            "daily.yml",
+        )
         if (not isinstance(raw_daily_age, int) or isinstance(raw_daily_age, bool)
                 or raw_daily_age < 1):
             raise ValueError(
                 f"{path}: {repo}: 'daily_max_age_hours' must be an integer >= 1, "
                 f"got {raw_daily_age!r}"
             )
-        daily_workflow = raw_daily_workflow.strip()
         daily_max_age_hours = raw_daily_age
 
     return RepoReleasePolicy(
@@ -287,7 +306,7 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
         authorized_team=team,
         branches=tuple(normalized),
         required_checks=tuple(c.strip() for c in checks),
-        checks_workflow=workflow.strip(),
+        checks_workflow=workflow,
         check_timeout_minutes=timeout,
         downstream=_parse_downstream(path, repo, entry.get("downstream")),
         daily_workflow=daily_workflow,
@@ -297,114 +316,78 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
 
 _DOWNSTREAM_REPO_FIELDS = (
     "automation_repo", "hashes_repo", "container_repo", "doc_repo",
-    "website_repo", "bundle_repo", "helm_repo",
+    "website_repo", "bundle_repo", "helm_repo", "ghcr_image_repo",
 )
 _DOWNSTREAM_IMAGE_FIELDS = ("dockerhub_repo", "bundle_dockerhub_repo")
-_DOWNSTREAM_KEYS = frozenset({
-    *_DOWNSTREAM_REPO_FIELDS, *_DOWNSTREAM_IMAGE_FIELDS,
-    "build_workflow", "qualification_workflow",
+_DOWNSTREAM_COUNT_FIELDS = (
     "qualification_x86_archive_jobs", "qualification_arm_archive_jobs",
     "qualification_rpm_jobs", "qualification_deb_jobs",
-    "downloads_base_url", "tarball_targets", "ghcr_image_repo",
+)
+_DOWNSTREAM_KEYS = frozenset({
+    *_DOWNSTREAM_REPO_FIELDS, *_DOWNSTREAM_IMAGE_FIELDS,
+    *_DOWNSTREAM_COUNT_FIELDS,
+    "build_workflow", "qualification_workflow",
+    "downloads_base_url", "tarball_targets",
     "ecr_namespace", "helm_index_url",
 })
 
 
 def _parse_downstream(path: str, repo: str, raw: object) -> DownstreamPolicy:
+    ctx = f"{path}: {repo}"
     if not isinstance(raw, dict):
-        raise ValueError(f"{path}: {repo}: 'downstream' must be a mapping")
+        raise ValueError(f"{ctx}: 'downstream' must be a mapping")
     _reject_unknown_keys(path, f"{repo} downstream", raw, _DOWNSTREAM_KEYS)
 
-    values: dict[str, object] = {}
+    values: "dict[str, Any]" = {}
     for field in (*_DOWNSTREAM_REPO_FIELDS, *_DOWNSTREAM_IMAGE_FIELDS):
         value = raw.get(field)
         if not isinstance(value, str) or value.count("/") != 1:
             raise ValueError(
-                f"{path}: {repo}: downstream.{field} must be 'owner/name', got {value!r}"
+                f"{ctx}: downstream.{field} must be 'owner/name', got {value!r}"
             )
         values[field] = value
 
-    build_workflow = raw.get("build_workflow")
-    if not isinstance(build_workflow, str) or not build_workflow.strip() or "/" in build_workflow:
-        raise ValueError(
-            f"{path}: {repo}: downstream.build_workflow must be a workflow file "
-            f"basename (e.g. 'build-release.yml'), got {build_workflow!r}"
-        )
-
-    workflow = raw.get("qualification_workflow")
-    if not isinstance(workflow, str) or not workflow.strip() or "/" in workflow:
-        raise ValueError(
-            f"{path}: {repo}: downstream.qualification_workflow must be a workflow "
-            f"file basename, got {workflow!r}"
-        )
-
-    base_url = raw.get("downloads_base_url")
-    if not isinstance(base_url, str) or not base_url.startswith("https://"):
-        raise ValueError(
-            f"{path}: {repo}: downstream.downloads_base_url must be an https URL, "
-            f"got {base_url!r}"
-        )
+    values["build_workflow"] = _workflow_basename(
+        ctx, "downstream.build_workflow", raw.get("build_workflow"),
+        "build-release.yml",
+    )
+    values["qualification_workflow"] = _workflow_basename(
+        ctx, "downstream.qualification_workflow",
+        raw.get("qualification_workflow"), "qualify-release.yml",
+    )
+    values["downloads_base_url"] = _https_url(
+        ctx, "downloads_base_url", raw.get("downloads_base_url"),
+    ).rstrip("/")
+    values["helm_index_url"] = _https_url(
+        ctx, "helm_index_url", raw.get("helm_index_url"),
+    )
 
     targets = raw.get("tarball_targets")
     if not isinstance(targets, list) or not targets or not all(
         isinstance(t, str) and t.count("/") == 1 for t in targets
     ):
         raise ValueError(
-            f"{path}: {repo}: downstream.tarball_targets must be a non-empty list "
+            f"{ctx}: downstream.tarball_targets must be a non-empty list "
             f"of '<platform>/<arch>' entries"
         )
+    values["tarball_targets"] = tuple(targets)
 
-    matrix_counts = {}
-    for field in ("qualification_x86_archive_jobs", "qualification_arm_archive_jobs",
-                  "qualification_rpm_jobs", "qualification_deb_jobs"):
+    for field in _DOWNSTREAM_COUNT_FIELDS:
         value = raw.get(field)
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise ValueError(
-                f"{path}: {repo}: downstream.{field} must be the exact "
+                f"{ctx}: downstream.{field} must be the exact "
                 f"qualification matrix leg count (updated deliberately when "
                 f"platforms change), got {value!r}"
             )
-        matrix_counts[field] = value
+        values[field] = value
 
     ecr_namespace = raw.get("ecr_namespace")
     if not isinstance(ecr_namespace, str) or not ecr_namespace.strip() or "/" in ecr_namespace:
         raise ValueError(
-            f"{path}: {repo}: downstream.ecr_namespace must be the ECR Public "
+            f"{ctx}: downstream.ecr_namespace must be the ECR Public "
             f"registry alias (e.g. 'valkey'), got {ecr_namespace!r}"
         )
+    values["ecr_namespace"] = ecr_namespace.strip()
 
-    ghcr_image_repo = raw.get("ghcr_image_repo")
-    if not isinstance(ghcr_image_repo, str) or ghcr_image_repo.count("/") != 1:
-        raise ValueError(
-            f"{path}: {repo}: downstream.ghcr_image_repo must be 'owner/name', "
-            f"got {ghcr_image_repo!r}"
-        )
-    helm_index_url = raw.get("helm_index_url")
-    if not isinstance(helm_index_url, str) or not helm_index_url.startswith("https://"):
-        raise ValueError(
-            f"{path}: {repo}: downstream.helm_index_url must be an https URL, "
-            f"got {helm_index_url!r}"
-        )
-
-    return DownstreamPolicy(
-        automation_repo=str(values["automation_repo"]),
-        build_workflow=build_workflow.strip(),
-        qualification_workflow=workflow.strip(),
-        qualification_x86_archive_jobs=matrix_counts["qualification_x86_archive_jobs"],
-        qualification_arm_archive_jobs=matrix_counts["qualification_arm_archive_jobs"],
-        qualification_rpm_jobs=matrix_counts["qualification_rpm_jobs"],
-        qualification_deb_jobs=matrix_counts["qualification_deb_jobs"],
-        downloads_base_url=base_url.rstrip("/"),
-        tarball_targets=tuple(targets),
-        hashes_repo=str(values["hashes_repo"]),
-        container_repo=str(values["container_repo"]),
-        doc_repo=str(values["doc_repo"]),
-        website_repo=str(values["website_repo"]),
-        bundle_repo=str(values["bundle_repo"]),
-        helm_repo=str(values["helm_repo"]),
-        dockerhub_repo=str(values["dockerhub_repo"]),
-        bundle_dockerhub_repo=str(values["bundle_dockerhub_repo"]),
-        ghcr_image_repo=ghcr_image_repo,
-        ecr_namespace=ecr_namespace.strip(),
-        helm_index_url=helm_index_url,
-    )
+    return DownstreamPolicy(**values)

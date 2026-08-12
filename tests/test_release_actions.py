@@ -43,7 +43,7 @@ def _status(**overrides: object) -> ReleaseStatus:
         # TestStartupFailureRetry) override this explicitly. Every other
         # test focusing on notification / nudge / halt behaviour should
         # NOT trigger a side-dispatch just from picking the default
-        # status — that would flood every fixture with two-phase
+        # status - that would flood every fixture with two-phase
         # autofix-intent comments unrelated to what the test measures.
         "qualification": QualificationStatus(run_id=1, passed=True),
     }
@@ -416,7 +416,7 @@ class TestTwoPhaseAutofixRecovery:
 
         # Pass 2: dispatch succeeds. Correlation reports no matching run
         # (a fresh qualification.py._find_run miss), so the retry-once
-        # path runs — dispatch fires exactly one more time, then done
+        # path runs - dispatch fires exactly one more time, then done
         # stamps.
         with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch, \
              patch.object(actions.qual_mod, "_find_run", return_value=None):
@@ -1220,7 +1220,7 @@ class TestAutoDispatchPublish:
     def test_unbound_waiting_run_no_longer_holds_the_slot(self) -> None:
         # F12 hostile test: an unbound gate-parked run (legacy or a
         # workflow_dispatch that predates the required-input change)
-        # must NEVER block a fresh, bound dispatch — that was the DoS
+        # must NEVER block a fresh, bound dispatch - that was the DoS
         # vector where a stray unbound run failing the team check could
         # permanently suppress controller re-dispatch.
         stray = _publish_run(head_sha=_AGENT_HEAD)  # unbound
@@ -1233,7 +1233,7 @@ class TestAutoDispatchPublish:
             agent_head_sha=_AGENT_HEAD,
         )
         workflow = gh_agent.get_repo.return_value.get_workflow.return_value
-        # Unbound run is ignored entirely — dispatch proceeds and the
+        # Unbound run is ignored entirely - dispatch proceeds and the
         # unbound run is NOT cancelled either (it's not "stale for this
         # candidate", it's simply irrelevant).
         workflow.create_dispatch.assert_called_once()
@@ -1319,7 +1319,7 @@ class TestStalePublishRuns:
     stale: it is cancelled and replaced, never left to publish stale logic.
     F12: under the required-input workflow contract, every real dispatch
     is bound to a tag+candidate, so these tests exercise BOUND runs whose
-    head is stale — an unbound run is a separate case tested via
+    head is stale - an unbound run is a separate case tested via
     :class:`TestUnboundRunsIgnored`."""
 
     def _agent(self, runs: "list") -> MagicMock:
@@ -1699,7 +1699,7 @@ class TestCandidateBoundPublish:
 
     def test_unbound_manual_run_never_blocks_dispatch(self) -> None:
         # F12: unbound gate-parked runs (no tag/sha binding in the
-        # run-name — a legacy dispatch or a form-submit that predates the
+        # run-name - a legacy dispatch or a form-submit that predates the
         # required-input change) are IGNORED entirely. They may neither
         # hold nor halt the current candidate's slot; the DoS vector
         # where a stray unbound run failing the environment gate could
@@ -1790,7 +1790,7 @@ class TestServerSideRunFiltering:
 
 class TestNeverCancelInProgress:
     """F18: an in_progress run is past the approval gate; it must never be
-    cancelled — cancelling a publication in flight would leave a
+    cancelled - cancelling a publication in flight would leave a
     half-published release. F12 refines "hold the slot" semantics: only a
     run whose bindings match the current tag+candidate holds the slot for
     THIS candidate. An in_progress run with a mismatched or missing

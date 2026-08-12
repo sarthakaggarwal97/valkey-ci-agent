@@ -44,6 +44,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from collections.abc import Iterator
 from functools import partial
 from typing import Any
 
@@ -70,6 +71,75 @@ logger = logging.getLogger(__name__)
 
 _CHART_PATH = "valkey/Chart.yaml"
 _CHART_README_PATH = "valkey/README.md"
+
+
+def _fp(source: str) -> str:
+    """The 12-hex fingerprint of *source*, the width every marker uses."""
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()[:12]
+
+
+# The marker envelope is owned by issue.py; alias it so every marker in
+# the system is assembled in one place.
+_marker = issue_mod.marker
+
+
+def _marked_comment(gh: Any, tracking_issue: Any, marker: str) -> Any:
+    """The first trusted comment carrying *marker*, None when absent.
+
+    Only trusted comments count: a marker pasted by anyone else is
+    invisible, exactly like every other marker read-back.
+    """
+    for comment in issue_mod.trusted_comments(tracking_issue, gh):
+        if issue_mod.marker_present(comment.body, marker):
+            return comment
+    return None
+
+
+def _post_comment(tracking_issue: Any, body: str, description: str) -> Any:
+    """Post *body* on the tracker (retried) and invalidate the comment
+    memo so a same-pass re-read sees it. Returns the created comment."""
+    created = retry_github_call(
+        lambda: tracking_issue.create_comment(body=body),
+        retries=2, description=description,
+    )
+    issue_mod.invalidate_comment_memo(tracking_issue)
+    return created
+
+
+def _edit_comment(comment: Any, body: str, description: str,
+                  tracking_issue: Any) -> None:
+    """Edit *comment* to *body* (retried), keeping the in-process comment
+    view and the memo consistent so a same-pass re-read sees the change.
+    Real PyGithub Comment objects also update on edit."""
+    retry_github_call(
+        lambda: comment.edit(body=body),
+        retries=2, description=description,
+    )
+    try:
+        comment.body = body
+    except Exception:
+        pass
+    issue_mod.invalidate_comment_memo(tracking_issue)
+
+
+def _post_marked_once(gh: Any, tracking_issue: Any, marker: str, body: str,
+                      description: str) -> bool:
+    """Post *body* under *marker* unless a trusted comment already carries
+    the marker. True when this pass newly posted."""
+    if _marked_comment(gh, tracking_issue, marker) is not None:
+        return False
+    _post_comment(tracking_issue, f"{marker}\n{body}", description)
+    return True
+
+
+def _scan(listing: Any, limit: int) -> "Iterator[Any]":
+    """At most *limit* runs from *listing* (newest first). The shared
+    bound that keeps every run-correlation walk from paging a pathological
+    listing on an old repo with many same-workflow runs."""
+    for index, run in enumerate(listing):
+        if index >= limit:
+            return
+        yield run
 
 
 class AdvanceResult(list):
@@ -301,23 +371,13 @@ def _autofix_two_phase(
     marker: a raise during comment-post short-circuits the entire flow so
     the action cannot happen unrecorded.
     """
-    fingerprint = hashlib.sha256(
-        fingerprint_source.encode("utf-8")
-    ).hexdigest()[:12]
-    intent_marker = (
-        f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix-intent:{key}:{fingerprint} -->"
-    )
-    done_marker = (
-        f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix-done:{key}:{fingerprint} -->"
-    )
+    fingerprint = _fp(fingerprint_source)
+    intent_marker = _marker(f"autofix-intent:{key}:{fingerprint}")
+    done_marker = _marker(f"autofix-done:{key}:{fingerprint}")
 
-    intent_comment: Any = None
-    for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        body = comment.body or ""
-        if issue_mod.marker_present(body, done_marker):
-            return False  # completed on an earlier pass
-        if issue_mod.marker_present(body, intent_marker):
-            intent_comment = comment
+    if _marked_comment(gh, tracking_issue, done_marker) is not None:
+        return False  # completed on an earlier pass
+    intent_comment = _marked_comment(gh, tracking_issue, intent_marker)
 
     if intent_comment is not None:
         # Intent without done: possible crash between intent-post and
@@ -341,22 +401,18 @@ def _autofix_two_phase(
         # stamp done regardless of outcome so a chronic failure cannot
         # loop past two attempts total.
         dispatched = _run_dispatch_safely(
-            dispatch_fn, gh=gh, tracking_issue=tracking_issue,
+            dispatch_fn, tracking_issue=tracking_issue,
             key=key, instruction=on_dispatch_failure_instruction,
         )
         _stamp_done_marker(intent_comment, done_marker, tracking_issue)
         return dispatched
 
-    # Fresh: post intent, dispatch, stamp done. Post intent through the
-    # retry helper because losing the intent write would silently disable
-    # the retry-once recovery path; if that write raises, the dispatch
-    # never runs (fail closed).
-    intent_body = f"{intent_marker}\n{intent_callout}"
-    created = retry_github_call(
-        lambda: tracking_issue.create_comment(body=intent_body),
-        retries=2, description=f"post {key} intent marker",
-    )
-    issue_mod.invalidate_comment_memo(tracking_issue)
+    # Fresh: post intent, dispatch, stamp done. Losing the intent write
+    # would silently disable the retry-once recovery path, so if that
+    # write raises, the dispatch never runs (fail closed).
+    created = _post_comment(tracking_issue,
+                            f"{intent_marker}\n{intent_callout}",
+                            f"post {key} intent marker")
     if created is None:
         # No comment handle returned: we cannot stamp done later.
         # Rather than dispatch and be unable to record it, refuse; the
@@ -366,7 +422,7 @@ def _autofix_two_phase(
         return False
 
     dispatched = _run_dispatch_safely(
-        dispatch_fn, gh=gh, tracking_issue=tracking_issue,
+        dispatch_fn, tracking_issue=tracking_issue,
         key=key, instruction=on_dispatch_failure_instruction,
     )
     if dispatched:
@@ -376,68 +432,40 @@ def _autofix_two_phase(
 
 def _stamp_done_marker(comment: Any, done_marker: str,
                        tracking_issue: Any) -> None:
-    """Edit *comment* to include *done_marker* as its first line.
-
-    A no-op when the marker is already present so a re-observation is
-    idempotent, matching the marker-first read semantics elsewhere.
-    """
+    """Prepend *done_marker* to *comment*; a no-op when already present so
+    a re-observation is idempotent."""
     body = comment.body if isinstance(comment.body, str) else ""
     if issue_mod.marker_present(body, done_marker):
         return
-    new_body = f"{done_marker}\n{body}" if body else done_marker
-    retry_github_call(
-        lambda: comment.edit(body=new_body),
-        retries=2, description="stamp autofix-done marker",
-    )
-    # Keep the in-process comment view consistent so a same-pass re-read
-    # sees the marker. Real PyGithub Comment objects also update on edit.
-    try:
-        comment.body = new_body
-    except Exception:
-        pass
-    issue_mod.invalidate_comment_memo(tracking_issue)
+    _edit_comment(comment, f"{done_marker}\n{body}" if body else done_marker,
+                  "stamp autofix-done marker", tracking_issue)
 
 
-def _run_dispatch_safely(dispatch_fn: "Any", *, gh: Any, tracking_issue: Any,
+def _run_dispatch_safely(dispatch_fn: "Any", *, tracking_issue: Any,
                          key: str, instruction: str) -> bool:
     """Run *dispatch_fn* once; return True on success, False on Exception.
 
-    On failure, post the plain follow-up comment (when an instruction is
+    On failure, post a plain follow-up comment (when an instruction is
     provided) so the human sees the tracker's 'Dispatching' callout did
-    not land. The exception is swallowed: advance() must not skip its
-    remaining notify/nudge/render steps just because one dispatch raised.
+    not land. No autofix marker on it: the intent marker already posted
+    (fail closed), so the two-phase gate remains armed. The exception is
+    swallowed: advance() must not skip its remaining notify/nudge/render
+    steps just because one dispatch raised.
     """
     try:
         dispatch_fn()
     except Exception:
         logger.exception("Auto-remediation dispatch (%s) failed", key)
         if instruction:
-            _post_dispatch_failure(gh, tracking_issue, key=key,
-                                   instruction=instruction)
-        return False
-    return True
-
-
-def _post_dispatch_failure(gh: Any, tracking_issue: Any, *, key: str,
-                           instruction: str) -> None:
-    """Post the plain follow-up comment when an auto-remediation's dispatch
-    itself failed.
-
-    No autofix marker: the intent marker already posted (fail closed), so
-    the two-phase gate remains armed; this comment only tells the human
-    the tracker's 'Dispatching' callout did not land, so they can act.
-    """
-    retry_github_call(
-        lambda: tracking_issue.create_comment(
-            body=(
+            _post_comment(
+                tracking_issue,
                 f"> [!WARNING]\n"
                 f"> **Auto-remediation failed:** The dispatch itself failed. "
-                f"{instruction}"
+                f"{instruction}",
+                f"post {key} dispatch-failure comment",
             )
-        ),
-        retries=2, description=f"post {key} dispatch-failure comment",
-    )
-    issue_mod.invalidate_comment_memo(tracking_issue)
+        return False
+    return True
 
 
 def _autofix_marker_once(gh: Any, tracking_issue: Any, *, key: str,
@@ -449,17 +477,9 @@ def _autofix_marker_once(gh: Any, tracking_issue: Any, *, key: str,
     receipt is needed because there is no work to correlate -- the marker
     IS the work. Callers that dispatch must use :func:`_autofix_two_phase`.
     """
-    fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
-    marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:{key}:{fingerprint} -->"
-    for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if issue_mod.marker_present(comment.body, marker):
-            return False
-    retry_github_call(
-        lambda: tracking_issue.create_comment(body=f"{marker}\n{callout}"),
-        retries=2, description=f"post {key} auto-remediation comment",
-    )
-    issue_mod.invalidate_comment_memo(tracking_issue)
-    return True
+    marker = _marker(f"autofix:{key}:{_fp(fingerprint_source)}")
+    return _post_marked_once(gh, tracking_issue, marker, callout,
+                             f"post {key} auto-remediation comment")
 
 
 def _dispatch_build_once(
@@ -521,9 +541,7 @@ def _build_run_exists_for_tag(gh: Any, policy: RepoReleasePolicy,
                         f"for correlation",
         )
         marker = f"Build Release {tag} "
-        for index, run in enumerate(runs):
-            if index >= _AUTOFIX_CORRELATION_SCAN_LIMIT:
-                break
+        for run in _scan(runs, _AUTOFIX_CORRELATION_SCAN_LIMIT):
             if marker in f"{run.display_title or ''} ":
                 return True
     except Exception:
@@ -579,10 +597,14 @@ def _dispatch_qualification_once(
 
 
 def _qual_run_exists(gh: Any, policy: RepoReleasePolicy, *, tag: str,
-                     sha: str) -> bool:
+                     sha: str, exclude_run_id: int = 0) -> bool:
     """True when a qualification run for exactly (*tag*, *sha*) is visible
     on the automation repo. Correlation for the two-phase autofix; any
     lookup failure yields False (retry path preferred to permanent miss).
+
+    *exclude_run_id* names an already-known failed run to skip, so the
+    retry path only counts a NEW run as evidence the retry dispatch
+    landed on a prior pass with only the follow-up write lost.
     """
     try:
         found = qual_mod._find_run(gh, policy, tag, sha)
@@ -590,7 +612,9 @@ def _qual_run_exists(gh: Any, policy: RepoReleasePolicy, *, tag: str,
         logger.exception("Qualification-run correlation lookup for %s @ %s "
                          "raised; assuming no run", tag, sha[:12])
         return False
-    return found is not None
+    if found is None:
+        return False
+    return not exclude_run_id or getattr(found, "id", 0) != exclude_run_id
 
 
 def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str) -> None:
@@ -654,9 +678,9 @@ def _retry_qualification_once(
         dispatch_fn=lambda: qual_mod.dispatch_qualification(
             gh, policy, tag=tag, sha=status.candidate.sha,
         ),
-        run_exists_fn=lambda _c: _qual_retry_run_exists(
+        run_exists_fn=lambda _c: _qual_run_exists(
             gh, policy, tag=tag, sha=status.candidate.sha,
-            failed_run_id=failed_run_id,
+            exclude_run_id=failed_run_id,
         ),
         on_dispatch_failure_instruction=(
             f"Dispatch the qualification workflow for `{tag}` "
@@ -667,23 +691,6 @@ def _retry_qualification_once(
         return ""
     logger.info("Auto-retried qualification of %s @ %s", tag, status.candidate.sha[:12])
     return f"auto-retried qualification of {tag} @ {status.candidate.sha[:12]}"
-
-
-def _qual_retry_run_exists(gh: Any, policy: RepoReleasePolicy, *, tag: str,
-                           sha: str, failed_run_id: int) -> bool:
-    """True when a qualification run for (*tag*, *sha*) exists that is NOT
-    the already-known failed one -- evidence the retry dispatch already
-    landed on a prior pass and only the follow-up write was lost.
-    """
-    try:
-        found = qual_mod._find_run(gh, policy, tag, sha)
-    except Exception:
-        logger.exception("Qualification-retry correlation lookup for %s @ %s "
-                         "raised; assuming no run", tag, sha[:12])
-        return False
-    if found is None:
-        return False
-    return getattr(found, "id", 0) != failed_run_id
 
 
 def _open_helm_pr(gh: Any, policy: RepoReleasePolicy, version: str) -> str:
@@ -803,7 +810,7 @@ def _notify_once(
     The failure fingerprint is stamped into the notification comment; while
     the observed failure set is unchanged no further comment is posted, and
     a different failure set notifies again, exactly once. *generation* (the
-    recovery generation, see :func:`_record_recovery`) is hashed into the
+    recovery generation, see :func:`_sync_generation_state`) is hashed into the
     fingerprint so the SAME failure set recurring after a clean pass
     notifies again.
     """
@@ -811,35 +818,26 @@ def _notify_once(
     # wording tweak in a detail string must never re-ping the team, while a
     # NEW failure (a new failed run id, a new failing check) or a recurrence
     # after recovery must.
-    fingerprint = _notification_fingerprint(generation,
-                                            [key for key, _ in failures])
-    marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:{fingerprint} -->"
-    for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if issue_mod.marker_present(comment.body, marker):
-            return ""
+    marker = _marker(f"notify:{_notification_fingerprint(generation, [key for key, _ in failures])}")
     tag = release_tag(status.version, status.stage)
     rows = "\n".join(
         f"| {index} | {_problem_cell(text)} |"
         for index, (_, text) in enumerate(failures, start=1)
     )
-    retry_github_call(
-        lambda: tracking_issue.create_comment(
-            body=(
-                f"{marker}\n"
-                f"> [!WARNING]\n"
-                f"> **{policy.mention}: Release `{tag}` Needs Attention.**\n"
-                f"\n"
-                f"| # | Problem |\n"
-                f"|---|---|\n"
-                f"{rows}\n"
-                f"\n"
-                f"<sub>This notification repeats only if the failure state "
-                f"changes.</sub>"
-            )
-        ),
-        retries=2, description="post failure notification",
+    body = (
+        f"> [!WARNING]\n"
+        f"> **{policy.mention}: Release `{tag}` Needs Attention.**\n"
+        f"\n"
+        f"| # | Problem |\n"
+        f"|---|---|\n"
+        f"{rows}\n"
+        f"\n"
+        f"<sub>This notification repeats only if the failure state "
+        f"changes.</sub>"
     )
-    issue_mod.invalidate_comment_memo(tracking_issue)
+    if not _post_marked_once(gh, tracking_issue, marker, body,
+                             "post failure notification"):
+        return ""
     logger.info("Notified %s of %d failure(s)", policy.authorized_team, len(failures))
     return f"notified {policy.authorized_team} ({len(failures)} failure(s))"
 
@@ -857,13 +855,11 @@ def _notification_fingerprint(generation: int, keys: "list[str]") -> str:
     """The 12-hex fingerprint of (recovery generation, sorted stable keys).
 
     Hashing the generation in means an identical key set recurring AFTER a
-    recovery (see :func:`_record_recovery`) produces a new fingerprint and
-    so re-notifies exactly once, while an unchanged state within one
-    generation stays suppressed.
+    recovery (see :func:`_sync_generation_state`) produces a new
+    fingerprint and so re-notifies exactly once, while an unchanged state
+    within one generation stays suppressed.
     """
-    return hashlib.sha256(
-        "\n".join([str(generation), *sorted(keys)]).encode("utf-8")
-    ).hexdigest()[:12]
+    return _fp("\n".join([str(generation), *sorted(keys)]))
 
 
 _NOTIFY_GEN_MARKER_RE = re.compile(
@@ -883,18 +879,23 @@ _NOTIFY_STATE_MARKER_RE = re.compile(
 )
 
 
-def _marker_prefix_present(body: Any, prefix: str) -> bool:
-    """True when a line of *body*, outside any code fence, starts with
-    *prefix*. Same fence discipline as issue_mod.marker_present, for reads
-    that need a marker family rather than one exact marker."""
+def _unfenced_lines(body: Any) -> "Iterator[str]":
+    """The lines of *body* outside any ``` code fence: the same fence
+    discipline as issue_mod.marker_present, for reads that need a marker
+    family or a marker's captured value rather than one exact marker."""
     fenced = False
     for line in (body or "").splitlines():
         if line.lstrip().startswith("```"):
             fenced = not fenced
             continue
-        if not fenced and line.startswith(prefix):
-            return True
-    return False
+        if not fenced:
+            yield line
+
+
+def _marker_prefix_present(body: Any, prefix: str) -> bool:
+    """True when a line of *body*, outside any code fence, starts with
+    *prefix*."""
+    return any(line.startswith(prefix) for line in _unfenced_lines(body))
 
 
 def _notify_generation(gh: Any, tracking_issue: Any) -> "tuple[int, Any, str]":
@@ -909,19 +910,11 @@ def _notify_generation(gh: Any, tracking_issue: Any) -> "tuple[int, Any, str]":
     """
     best_generation, best_comment, best_state = 0, None, ""
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        fenced = False
         gen_match = None
         state_match = None
-        for line in (comment.body or "").splitlines():
-            if line.lstrip().startswith("```"):
-                fenced = not fenced
-                continue
-            if fenced:
-                continue
-            if gen_match is None:
-                gen_match = _NOTIFY_GEN_MARKER_RE.match(line)
-            if state_match is None:
-                state_match = _NOTIFY_STATE_MARKER_RE.match(line)
+        for line in _unfenced_lines(comment.body):
+            gen_match = gen_match or _NOTIFY_GEN_MARKER_RE.match(line)
+            state_match = state_match or _NOTIFY_STATE_MARKER_RE.match(line)
         if gen_match and int(gen_match.group(1)) >= best_generation:
             best_generation = int(gen_match.group(1))
             best_comment = comment
@@ -997,26 +990,16 @@ def _write_generation_state(tracking_issue: Any, *, generation: int,
                             state: str, existing: Any) -> None:
     """Create or edit-in-place the generation-state bookkeeping comment."""
     body = (
-        f"<!-- {issue_mod.MARKER_NAMESPACE}:notify-gen:{generation} -->\n"
-        f"<!-- {issue_mod.MARKER_NAMESPACE}:notify-state:{state} -->\n"
+        f"{_marker(f'notify-gen:{generation}')}\n"
+        f"{_marker(f'notify-state:{state}')}\n"
         f"<sub>Notification bookkeeping: generation {generation} "
         f"({state}, edited in place).</sub>"
     )
     if existing is None:
-        retry_github_call(
-            lambda: tracking_issue.create_comment(body=body),
-            retries=2, description="post recovery-generation comment",
-        )
+        _post_comment(tracking_issue, body, "post recovery-generation comment")
     else:
-        retry_github_call(
-            lambda: existing.edit(body=body),
-            retries=2, description="advance recovery-generation comment",
-        )
-        try:
-            existing.body = body
-        except Exception:
-            pass
-    issue_mod.invalidate_comment_memo(tracking_issue)
+        _edit_comment(existing, body, "advance recovery-generation comment",
+                      tracking_issue)
 
 
 def _has_notification_history(gh: Any, tracking_issue: Any) -> bool:
@@ -1070,31 +1053,22 @@ def _wedge_nudge_once(
     generation; a resolved-then-recurring one re-pings once through the
     generation bump.
     """
-    fingerprint = _notification_fingerprint(generation,
-                                            [key for key, _ in wedges])
-    marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:wedge:{fingerprint} -->"
-    for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if issue_mod.marker_present(comment.body, marker):
-            return ""
+    marker = _marker(f"wedge:{_notification_fingerprint(generation, [key for key, _ in wedges])}")
     tag = release_tag(status.version, status.stage)
     lines = "\n".join(f"> {text}" for _, text in wedges)
-    retry_github_call(
-        lambda: tracking_issue.create_comment(
-            body=(
-                f"{marker}\n"
-                f"> [!IMPORTANT]\n"
-                f"> **{policy.mention}: Release `{tag}` Is Blocked Without "
-                f"Progress.**\n"
-                f">\n"
-                f"{lines}\n"
-                f"\n"
-                f"<sub>One-time nudge: posts again only if the blocked state "
-                f"changes.</sub>"
-            )
-        ),
-        retries=2, description="post blocked-without-progress nudge",
+    body = (
+        f"> [!IMPORTANT]\n"
+        f"> **{policy.mention}: Release `{tag}` Is Blocked Without "
+        f"Progress.**\n"
+        f">\n"
+        f"{lines}\n"
+        f"\n"
+        f"<sub>One-time nudge: posts again only if the blocked state "
+        f"changes.</sub>"
     )
-    issue_mod.invalidate_comment_memo(tracking_issue)
+    if not _post_marked_once(gh, tracking_issue, marker, body,
+                             "post blocked-without-progress nudge"):
+        return ""
     logger.info("Nudged %s about %d wedged gate(s)", policy.authorized_team,
                 len(wedges))
     return f"nudged {policy.authorized_team} ({len(wedges)} wedged gate(s))"
@@ -1114,27 +1088,19 @@ def _nudge_once(
     if nudge is None:
         return ""
     key, message = nudge
-    fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
-    marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:nudge:{fingerprint} -->"
-    for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if issue_mod.marker_present(comment.body, marker):
-            return ""
+    marker = _marker(f"nudge:{_fp(key)}")
     tag = release_tag(status.version, status.stage)
-    retry_github_call(
-        lambda: tracking_issue.create_comment(
-            body=(
-                f"{marker}\n"
-                f"> [!IMPORTANT]\n"
-                f"> **{policy.mention}: Action Needed for `{tag}`.**\n"
-                f">\n"
-                f"> {message}\n"
-                f"\n"
-                f"<sub>One-time nudge: posts again only if the state changes.</sub>"
-            )
-        ),
-        retries=2, description="post action-needed nudge",
+    body = (
+        f"> [!IMPORTANT]\n"
+        f"> **{policy.mention}: Action Needed for `{tag}`.**\n"
+        f">\n"
+        f"> {message}\n"
+        f"\n"
+        f"<sub>One-time nudge: posts again only if the state changes.</sub>"
     )
-    issue_mod.invalidate_comment_memo(tracking_issue)
+    if not _post_marked_once(gh, tracking_issue, marker, body,
+                             "post action-needed nudge"):
+        return ""
     logger.info("Nudged %s (%s)", policy.authorized_team, key)
     return f"nudged {policy.authorized_team} ({key})"
 
@@ -1179,8 +1145,7 @@ def _alert_key(text: str) -> str:
     """
     normalized = re.sub(r"[0-9a-fA-F]{7,40}", "", text)
     normalized = re.sub(r"[0-9]+", "", normalized)
-    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12]
-    return f"alert:{digest}"
+    return f"alert:{_fp(normalized)}"
 
 
 def _failure_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
@@ -1229,8 +1194,8 @@ def _mark_complete_once(gh: Any, status: ReleaseStatus,
     F24: closing the tracker is the caller's job (reconcile), performed
     AFTER the final render/sync so a crash mid-close cannot leave a stale
     body on a closed tracker. advance() only stamps the completion marker
-    so :func:`_close_when_complete` (called by the caller) can see this
-    release was signed off, and so a rerun does not duplicate the comment.
+    so the caller can see this release was signed off, and so a rerun does
+    not duplicate the comment.
 
     Returns True when this pass newly posted the completion comment,
     False when the marker was already present (or the tracker is already
@@ -1238,29 +1203,16 @@ def _mark_complete_once(gh: Any, status: ReleaseStatus,
     """
     if tracking_issue.state == "closed":
         return False
-    marker = issue_mod.complete_marker()
-    already_commented = any(
-        issue_mod.marker_present(comment.body, marker)
-        for comment in issue_mod.trusted_comments(tracking_issue, gh)
+    body = (
+        f"> [!NOTE]\n"
+        f"> **Release `{status.version}` ({status.stage}) is complete.**\n"
+        f">\n"
+        f"> The release, tag, downloads, hashes, container images, "
+        f"docs, website, Bundle, and Helm outputs are all verified "
+        f"public. Closing."
     )
-    if already_commented:
-        return False
-    retry_github_call(
-        lambda: tracking_issue.create_comment(
-            body=(
-                f"{marker}\n"
-                f"> [!NOTE]\n"
-                f"> **Release `{status.version}` ({status.stage}) is complete.**\n"
-                f">\n"
-                f"> The release, tag, downloads, hashes, container images, "
-                f"docs, website, Bundle, and Helm outputs are all verified "
-                f"public. Closing."
-            )
-        ),
-        retries=2, description="post completion comment",
-    )
-    issue_mod.invalidate_comment_memo(tracking_issue)
-    return True
+    return _post_marked_once(gh, tracking_issue, issue_mod.complete_marker(),
+                             body, "post completion comment")
 
 
 _PUBLISH_WORKFLOW = "release-publish.yml"
@@ -1294,9 +1246,7 @@ def notes_cut_run_url(gh_agent: Any, agent_repo: str, branch: str,
                 workflow.get_runs,
                 retries=2, description=f"list {workflow_file} runs",
             )
-            for index, run in enumerate(runs):
-                if index >= _CUT_RUN_SCAN_LIMIT:
-                    break
+            for run in _scan(runs, _CUT_RUN_SCAN_LIMIT):
                 if marker not in f"{run.display_title or ''} ":
                     continue
                 if run.status in ("queued", "in_progress", "waiting", "pending"):
@@ -1423,9 +1373,7 @@ def _list_publish_runs(workflow: Any, statuses: "tuple[str, ...]") -> "list[Any]
             partial(workflow.get_runs, status=wanted),
             retries=2, description=f"list {wanted} publish runs",
         )
-        for index, run in enumerate(listing):
-            if index >= _PUBLISH_RUN_SCAN_LIMIT:
-                break
+        for run in _scan(listing, _PUBLISH_RUN_SCAN_LIMIT):
             if run.status != wanted:
                 continue
             runs.append(run)
@@ -1572,31 +1520,16 @@ def _active_publish_run(workflow: Any, branch: str, head_sha: str = "", *,
     return active
 
 
-def _publish_run_active(gh_agent: Any, agent_repo: str, branch: str,
-                        head_sha: str = "", *, tag: str = "",
-                        candidate_sha: str = "") -> bool:
-    """True when a publish run for *branch* is queued, running, or waiting
-    at the approval gate; reconcile must not stack duplicates. Stale
-    gate-parked runs are cancelled and do not count (see
-    :func:`find_publish_runs`)."""
-    workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
-    if workflow is None:
-        return True  # cannot see the workflow: do not dispatch blind
-    return _active_publish_run(workflow, branch, head_sha, tag=tag,
-                               candidate_sha=candidate_sha) is not None
-
-
 def waiting_publish_run_url(gh_agent: Any, agent_repo: str, branch: str,
                             head_sha: str = "", *, tag: str = "",
                             candidate_sha: str = "") -> str:
     """The html_url of the active publish run for *branch*, "" when none
     is visible (including when the workflow itself is unreadable).
 
-    Display-only companion to :func:`_publish_run_active`: reconciliation
-    threads it into the READY callout's approval link; nothing gates on it.
-    Observation only (finder, no cancel step): a stale run or a run bound
-    to a different tag/candidate is simply never presented as the place to
-    approve.
+    Display only: reconciliation threads it into the READY callout's
+    approval link; nothing gates on it. Observation only (finder, no
+    cancel step): a stale run or a run bound to a different tag/candidate
+    is simply never presented as the place to approve.
     """
     workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
     if workflow is None:
@@ -1633,9 +1566,7 @@ def _halted_publish_failure(workflow: Any, branch: str, head_sha: str, *,
         lambda: workflow.get_runs(status="completed"),
         retries=2, description="list completed publish runs",
     )
-    for index, run in enumerate(listing):
-        if index >= _PUBLISH_RUN_SCAN_LIMIT:
-            break
+    for run in _scan(listing, _PUBLISH_RUN_SCAN_LIMIT):
         if run.status != "completed":
             continue
         if not _matches_branch(run, branch):

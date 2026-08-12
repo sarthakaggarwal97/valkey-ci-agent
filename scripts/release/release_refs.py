@@ -6,7 +6,8 @@ identifies the notes PR (and reads the version and stage it pins) from that
 head branch. Building the regex from the cut's own constant keeps the two
 modules from drifting apart.
 
-Also home to the one tag-resolution helper every release module shares.
+Also home to the small helpers every release module shares (tag resolution,
+file reads, repo/workflow lookup, duration formatting).
 """
 
 from __future__ import annotations
@@ -66,16 +67,29 @@ def read_text_file(repo: Any, path: str, ref: Any = None) -> str:
     return contents.decoded_content.decode("utf-8")
 
 
+def get_repo(gh: Any, repo_name: str) -> Any:
+    """*repo_name*'s repository object, fetched with the standard retry."""
+    return retry_github_call(
+        lambda: gh.get_repo(repo_name),
+        retries=2, description=f"get repo {repo_name}",
+    )
+
+
+def humanize_minutes(minutes: int) -> str:
+    """Operator-facing duration: minutes below two hours, whole hours from
+    there (floor, so 359 renders as 5 hours and 360 as 6 hours)."""
+    if minutes >= 120:
+        return f"{minutes // 60} hours"
+    return f"{minutes} minutes"
+
+
 def workflow_handle(gh: Any, repo_name: str, workflow_file: str) -> Any:
     """The workflow object for *workflow_file* in *repo_name*, or None on 404.
 
     The one place the get_repo -> get_workflow chain lives; qualification,
     build observation, and the publish auto-dispatch all start here.
     """
-    repo = retry_github_call(
-        lambda: gh.get_repo(repo_name),
-        retries=2, description=f"get repo {repo_name}",
-    )
+    repo = get_repo(gh, repo_name)
     try:
         return retry_github_call(
             lambda: repo.get_workflow(workflow_file),

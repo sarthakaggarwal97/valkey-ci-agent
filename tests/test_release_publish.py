@@ -70,7 +70,7 @@ def _ready_repo(**overrides: object) -> MagicMock:
     repo.get_contents.side_effect = _contents
     # F17 uses get_releases() enumeration; keep the legacy get_latest_release
     # in sync so both the pre-publication decision and the post-publish
-    # pointer verify see the same maximum ("9.1.0" here — this GA advances).
+    # pointer verify see the same maximum ("9.1.0" here: this GA advances).
     _latest = MagicMock(tag_name="9.1.0", draft=False, prerelease=False)
     repo.get_latest_release.return_value = _latest
     repo.get_releases.return_value = [_latest]
@@ -395,7 +395,7 @@ class TestTagCreationRace:
         # A tag that appeared between approval and execution at a DIFFERENT
         # SHA is a snipe: plan_publication's tag check refuses before any
         # release is created. (The upstream readiness gate also catches
-        # this; either refusal is acceptable — a wrong-SHA tag never lets
+        # this; either refusal is acceptable: a wrong-SHA tag never lets
         # publication proceed.)
         repo = _publishable_repo()
         stray_ref = MagicMock()
@@ -432,7 +432,7 @@ class TestTagCreationRace:
 
     def test_ensure_tag_helper_resumes_at_approved_sha(self) -> None:
         # Direct test: 422 with the tag pointing at the APPROVED SHA is a
-        # partial-publish resume — proceed without raising.
+        # partial-publish resume: proceed without raising.
         from scripts.release.publish import _ensure_tag_at_sha
         repo = MagicMock()
         repo.create_git_ref.side_effect = GithubException(
@@ -468,7 +468,7 @@ class TestTagCreationRace:
         approved_ref.object.sha = MERGE_SHA
         repo.get_git_ref.side_effect = None
         repo.get_git_ref.return_value = approved_ref
-        # No release yet — that is the state we are resuming.
+        # No release yet: that is the state we are resuming.
         repo.get_release.side_effect = GithubException(404, "no release", {})
         # STAGE 1 hits the 422 path; the helper sees the approved SHA and
         # proceeds. STAGE 2 creates the release.
@@ -485,9 +485,9 @@ class TestTagCreationRace:
         # A crash after STAGE 2 but before the tracker comment: the
         # release already exists at the approved SHA. Recovery treats the
         # create failure as a lost response and STILL posts the receipt so
-        # the tracker trail is complete. create_comment fires TWICE — once
+        # the tracker trail is complete. create_comment fires TWICE: once
         # for the identity binding (from plan_publication's revalidation)
-        # and once for the publication receipt — so we filter for the
+        # and once for the publication receipt: so we filter for the
         # publication marker specifically.
         from scripts.release.publish import _PUBLICATION_MARKER
         repo = _publishable_repo()
@@ -555,7 +555,7 @@ class TestLatestPointerRace:
         newer = MagicMock(tag_name="9.2.0", draft=False, prerelease=False)
         older = MagicMock(tag_name="9.0.5", draft=False, prerelease=False)
         # The (mutable) latest pointer sits at the older release
-        # (unreliable evidence — a maintainer moved it back).
+        # (unreliable evidence: a maintainer moved it back).
         repo.get_latest_release.return_value = older
         repo.get_releases.return_value = [older, newer]
         plan = plan_publication(gh_mock(repo), _POLICY, branch="9.1",
@@ -587,7 +587,7 @@ class TestLatestPointerRace:
                             expected_sha=MERGE_SHA)
 
     def test_pointer_verify_flags_a_race_after_make_latest_false(self) -> None:
-        # An older-line 8.0.5 with make_latest=false — but GitHub's default
+        # An older-line 8.0.5 with make_latest=false: but GitHub's default
         # took effect anyway because a bug/race made the pointer move. The
         # verify catches it (defense in depth for the enumeration decision).
         from tests.release_fixtures import notes_pr
@@ -599,7 +599,7 @@ class TestLatestPointerRace:
             "#define VALKEY_VERSION_NUM 0x00080005\n"
             '#define VALKEY_RELEASE_STAGE "ga"\n'
         )
-        # The current top line is 9.1.0 — an 8.0.5 patch must NOT set latest.
+        # The current top line is 9.1.0: an 8.0.5 patch must NOT set latest.
         newer = MagicMock(tag_name="9.1.0", draft=False, prerelease=False)
         older_final = MagicMock(tag_name="8.0.4", draft=False, prerelease=False)
         repo = repo_mock(
@@ -667,7 +667,7 @@ class TestUnconfiguredBranchRefusal:
 
     def test_wrong_shape_branch_is_also_refused(self) -> None:
         # 'main' passes the "not in branches" check but fails the shape
-        # check upstream — validate_release_branch composes both.
+        # check upstream: validate_release_branch composes both.
         gh = MagicMock()
         with pytest.raises(ReleaseControlError, match="not a release branch"):
             plan_publication(gh, _POLICY, branch="main", actor="madolson")
@@ -1189,7 +1189,7 @@ class TestMakeLatestDecision:
         assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
 
     def test_older_line_patch_never_takes_latest(self) -> None:
-        # F17: two-branch interleaving — 8.0.5 racing 9.1.0 out of the door
+        # F17: two-branch interleaving: 8.0.5 racing 9.1.0 out of the door
         # must NOT set latest, even if a mutable pointer earlier claimed it.
         from scripts.release.publish import _make_latest_decision
         repo = self._repo(("9.1.0", False, False), ("8.0.4", False, False))
