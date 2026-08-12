@@ -68,13 +68,16 @@ class RepoReleasePolicy:
     """Release policy for one repository.
 
     ``authorized_team`` is ``org/team-slug``; membership is checked live at
-    every authorization point. ``required_checks`` are check-run names that
-    must pass on the exact candidate SHA; the loader rejects an empty list so
-    a repository can never be trivially "ready". ``checks_workflow`` is the
+    every authorization point. ``required_checks`` are check-run names
+    evaluated on the exact candidate SHA for tracker display (informational;
+    the release gates on qualification, never on these results); the loader
+    rejects an empty list so the tracker always shows the candidate's CI
+    state. ``checks_workflow`` is the
     workflow file (basename, e.g. ``ci.yml``) whose runs the required checks
     must come from: check-run names are not unique across workflows (valkey's
     ``ci.yml`` and ``daily.yml`` share job names), so a run from another
-    workflow on the same SHA must never satisfy (or clobber) a requirement.
+    workflow on the same SHA must never satisfy (or clobber) a displayed
+    result.
     ``check_timeout_minutes`` bounds how long a still-running required check
     may sit before it is reported STALLED instead of pending.
     ``daily_workflow`` / ``daily_max_age_hours`` configure the optional
@@ -226,7 +229,8 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
     ):
         raise ValueError(
             f"{path}: {repo}: 'required_checks' must be a non-empty list of check "
-            f"names; an empty list would make every candidate trivially ready"
+            f"names; an empty list would leave the tracker with no candidate "
+            f"CI display"
         )
     if len(set(checks)) != len(checks):
         # A duplicate usually means a copy-paste error hid the check that

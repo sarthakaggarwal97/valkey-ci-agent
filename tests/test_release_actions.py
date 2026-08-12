@@ -86,6 +86,23 @@ class TestQualificationDispatch:
                             status=status, tracking_issue=issue)
         dispatch.assert_not_called()
 
+    def test_dispatches_while_checks_are_still_pending(self) -> None:
+        # Pin (d): required-check results are informational, so the first
+        # qualification dispatch fires even while the candidate's checks
+        # are still pending (or missing entirely).
+        status = _status(
+            qualification=QualificationStatus(),
+            checks=(RequiredCheck(name="test-ubuntu-latest",
+                                  state=CheckState.PENDING),
+                    RequiredCheck(name="build-macos-latest",
+                                  state=CheckState.MISSING)),
+        )
+        with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
+            performed = actions.advance(gh_mock(MagicMock()), _POLICY,
+                                        status=status, tracking_issue=tracker())
+        dispatch.assert_called_once()
+        assert any("dispatched qualification" in p for p in performed)
+
     def test_does_not_redispatch_over_pending_run(self) -> None:
         status = _status(qualification=QualificationStatus(run_id=1, pending=True))
         with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
@@ -686,10 +703,14 @@ class TestOutputActions:
 
 
 class TestNotifyOnce:
+    @staticmethod
+    def _alert_status(detail: str = "Tag `9.1.1` exists but no release does; "
+                                    "the version is unshippable.") -> ReleaseStatus:
+        return _status(alerts=(detail,),
+                       qualification=QualificationStatus(run_id=1, passed=True))
+
     def test_failure_notifies_the_team_once(self) -> None:
-        status = _status(
-            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
-        )
+        status = self._alert_status()
         issue = tracker()
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=status, tracking_issue=issue)
@@ -697,15 +718,32 @@ class TestNotifyOnce:
         assert "> [!WARNING]" in body
         assert "**@valkey-io/core-team: Release `9.1.1` Needs Attention.**" in body
         assert "| # | Problem |" in body
-        assert "test-ubuntu-latest" in body
+        assert "unshippable" in body
         assert "<sub>This notification repeats only if the failure state changes.</sub>" in body
         assert f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:" in body
         assert "\u2014" not in body
 
+    def test_failed_required_check_never_notifies(self) -> None:
+        # Pin (b): a red (or stalled) check on the candidate is
+        # informational; it must not page the team and must not post any
+        # notification comment, on any candidate.
+        for sha in (MERGE_SHA, MOVED_SHA):
+            issue = tracker()
+            status = _status(
+                candidate=Candidate(state=CandidateState.CURRENT, sha=sha,
+                                    branch_head=sha),
+                checks=(RequiredCheck(name="test-ubuntu-latest",
+                                      state=CheckState.FAILED,
+                                      url="https://x/run/1"),
+                        RequiredCheck(name="build-macos-latest",
+                                      state=CheckState.STALLED)),
+            )
+            actions.advance(gh_mock(MagicMock()), _POLICY,
+                            status=status, tracking_issue=issue)
+            issue.create_comment.assert_not_called()
+
     def test_same_failure_state_never_notifies_twice(self) -> None:
-        status = _status(
-            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
-        )
+        status = self._alert_status()
         issue = tracker()
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=status, tracking_issue=issue)
@@ -732,9 +770,7 @@ class TestNotifyOnce:
     ) -> None:
         # A spoofer pasting the marker (under any lookalike of the trusted
         # login) must not silence real alerts.
-        status = _status(
-            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
-        )
+        status = self._alert_status()
         issue = tracker()
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=status, tracking_issue=issue)
@@ -752,7 +788,8 @@ class TestNotifyOnce:
 
     def test_new_failure_state_notifies_again(self) -> None:
         issue = tracker()
-        first = _status(checks=(RequiredCheck(name="a", state=CheckState.FAILED),))
+        first = _status(outputs=(DownstreamOutput(
+            name="pages", state=OutputState.FAILED, detail="first", run_id=7),))
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=first, tracking_issue=issue)
         posted = MagicMock()
@@ -761,7 +798,8 @@ class TestNotifyOnce:
         issue.get_comments.return_value = [posted]
         issue.create_comment.reset_mock()
 
-        second = _status(checks=(RequiredCheck(name="b", state=CheckState.FAILED),))
+        second = _status(outputs=(DownstreamOutput(
+            name="helm", state=OutputState.FAILED, detail="second", run_id=8),))
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=second, tracking_issue=issue)
 
@@ -893,32 +931,22 @@ class TestNotifyOnce:
         _advance(_failed(0, "run vanished"))
         assert len(replayed) == 2  # back to the old key: suppressed
 
-    def test_same_check_failing_on_a_new_candidate_notifies_again(self) -> None:
+    def test_check_failure_after_adoption_still_never_notifies(self) -> None:
+        # Retarget of the old cross-candidate re-ping pin: the branch moved,
+        # the new head was adopted, and the same required check failed again
+        # on the NEW candidate SHA. Under informational semantics there is
+        # nothing to re-ping: no candidate's check failure ever notifies.
         issue = tracker()
-        first = _status(
-            checks=(RequiredCheck(name="test-ubuntu-latest",
-                                  state=CheckState.FAILED, url="https://x/run/1"),),
-        )
-        actions.advance(gh_mock(MagicMock()), _POLICY,
-                        status=first, tracking_issue=issue)
-        posted = MagicMock()
-        posted.user.login = "valkeyrie-ops[bot]"
-        posted.body = issue.create_comment.call_args.kwargs["body"]
-        issue.get_comments.return_value = [posted]
-        issue.create_comment.reset_mock()
-
-        # The branch moved, the new head was adopted, and the same required
-        # check failed again in a NEW run on the NEW candidate SHA.
-        second = _status(
+        adopted = _status(
             candidate=Candidate(state=CandidateState.ADOPTED, sha=MOVED_SHA,
                                 branch_head=MOVED_SHA),
             checks=(RequiredCheck(name="test-ubuntu-latest",
                                   state=CheckState.FAILED, url="https://x/run/2"),),
         )
         actions.advance(gh_mock(MagicMock()), _POLICY,
-                        status=second, tracking_issue=issue)
+                        status=adopted, tracking_issue=issue)
 
-        issue.create_comment.assert_called_once()
+        issue.create_comment.assert_not_called()
 
 
 class TestNudgeOnce:
@@ -1851,9 +1879,10 @@ class TestFinderCancelSplit:
 
 
 class TestWedgeNudge:
-    """F24: a MISSING required check or a MISSING/STALE daily gate never
-    resolves on its own; a one-shot marker-gated nudge says so. No
-    time-based grace this round: the observed state is the trigger."""
+    """F24 retargeted: a MISSING/STALE daily gate never resolves on its own;
+    a one-shot marker-gated nudge says so. Required-check states never
+    wedge: nothing gates on them, so a MISSING check must not page anyone.
+    No time-based grace this round: the observed state is the trigger."""
 
     def _missing_check(self) -> ReleaseStatus:
         return _status(
@@ -1862,71 +1891,75 @@ class TestWedgeNudge:
                                   state=CheckState.MISSING),),
         )
 
-    def test_missing_check_nudges_once(self) -> None:
+    def _stale_daily(self) -> ReleaseStatus:
+        return _status(
+            phase=ReleasePhase.QUALIFICATION,
+            daily=DailyCiStatus(state=DailyCiState.STALE, run_id=77,
+                                url="https://x/druns/77",
+                                detail="The newest daily run is 30 hours old"),
+        )
+
+    def test_missing_check_never_nudges(self) -> None:
+        # Retarget of the old missing-check wedge pin: checks are
+        # informational, so a MISSING check is not blocked-without-progress
+        # and no nudge (or any comment) fires.
         harness = _IssueHarness()
         performed = actions.advance(gh_mock(MagicMock()), _POLICY,
                                     status=self._missing_check(),
+                                    tracking_issue=harness.issue)
+        assert harness.bodies(":wedge:") == []
+        assert not any("wedged gate" in p for p in performed)
+
+    def test_stale_daily_gate_nudges_once_with_its_detail(self) -> None:
+        harness = _IssueHarness()
+        performed = actions.advance(gh_mock(MagicMock()), _POLICY,
+                                    status=self._stale_daily(),
                                     tracking_issue=harness.issue)
         wedges = harness.bodies(":wedge:")
         assert len(wedges) == 1
         assert "> [!IMPORTANT]" in wedges[0]
         assert ("**@valkey-io/core-team: Release `9.1.1` Is Blocked Without "
                 "Progress.**") in wedges[0]
-        assert ("Blocked without progress: Required check "
-                "`test-ubuntu-latest` has no run on the candidate SHA. "
-                "This does not resolve on its own.") in wedges[0]
+        assert ("Blocked without progress: The newest daily run is 30 hours "
+                "old. This does not resolve on its own.") in wedges[0]
         assert "\u2014" not in wedges[0]
         assert any("wedged gate" in p for p in performed)
         # Same state again: suppressed.
         actions.advance(gh_mock(MagicMock()), _POLICY,
-                        status=self._missing_check(),
+                        status=self._stale_daily(),
                         tracking_issue=harness.issue)
         assert len(harness.bodies(":wedge:")) == 1
-
-    def test_stale_daily_gate_nudges_with_its_detail(self) -> None:
-        harness = _IssueHarness()
-        status = _status(
-            phase=ReleasePhase.QUALIFICATION,
-            daily=DailyCiStatus(state=DailyCiState.STALE, run_id=77,
-                                url="https://x/druns/77",
-                                detail="The newest daily run is 30 hours old"),
-        )
-        actions.advance(gh_mock(MagicMock()), _POLICY, status=status,
-                        tracking_issue=harness.issue)
-        wedges = harness.bodies(":wedge:")
-        assert len(wedges) == 1
-        assert ("Blocked without progress: The newest daily run is 30 hours "
-                "old. This does not resolve on its own.") in wedges[0]
 
     def test_resolution_then_recurrence_renudges_exactly_once(self) -> None:
         harness = _IssueHarness()
         gh = gh_mock(MagicMock())
-        actions.advance(gh, _POLICY, status=self._missing_check(),
+        actions.advance(gh, _POLICY, status=self._stale_daily(),
                         tracking_issue=harness.issue)
         assert len(harness.bodies(":wedge:")) == 1
-        # The check resolved: a clean pass bumps the recovery generation.
+        # The daily gate resolved: a clean pass bumps the recovery generation.
         actions.advance(gh, _POLICY,
                         status=_status(qualification=QualificationStatus(
                             run_id=1, passed=True)),
                         tracking_issue=harness.issue)
         assert harness.bodies(":notify-gen:1")
-        # The same check goes MISSING again: new fingerprint, one re-nudge.
-        actions.advance(gh, _POLICY, status=self._missing_check(),
+        # The same gate goes STALE again: new fingerprint, one re-nudge.
+        actions.advance(gh, _POLICY, status=self._stale_daily(),
                         tracking_issue=harness.issue)
         assert len(harness.bodies(":wedge:")) == 2
         # And a repeat of that state is suppressed again.
-        actions.advance(gh, _POLICY, status=self._missing_check(),
+        actions.advance(gh, _POLICY, status=self._stale_daily(),
                         tracking_issue=harness.issue)
         assert len(harness.bodies(":wedge:")) == 2
 
     def test_missing_check_is_not_a_failure_item(self) -> None:
-        # MISSING escalates through the wedge nudge, never the failure
-        # notifier (whose table is for FAILED/STALLED states).
+        # MISSING (like every other check state) escalates through neither
+        # the failure notifier nor the wedge nudge: checks are display only.
         harness = _IssueHarness()
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=self._missing_check(),
                         tracking_issue=harness.issue)
         assert not harness.bodies(":notify:")
+        assert not harness.bodies(":wedge:")
 
 
 class TestRecoveryGenerations:
@@ -1935,9 +1968,10 @@ class TestRecoveryGenerations:
     failure recurring after recovery re-pings exactly once."""
 
     def _failing(self) -> ReleaseStatus:
+        # A standing alert: checks no longer feed the failure machinery,
+        # so the generation bookkeeping is exercised through alerts.
         return _status(
-            checks=(RequiredCheck(name="test-ubuntu-latest",
-                                  state=CheckState.FAILED),),
+            alerts=("The release metadata is broken; fix it.",),
         )
 
     def _clean(self) -> ReleaseStatus:

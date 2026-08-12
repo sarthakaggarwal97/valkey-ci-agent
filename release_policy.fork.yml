@@ -23,7 +23,8 @@ repos:
       - "9.1"
     required_checks:
       # The full ci.yml job set present on every supported release branch
-      # (7.2 through 9.1): the release gate matches what CI itself demands.
+      # (7.2 through 9.1): displayed on the tracker for the candidate SHA.
+      # Informational only; the release gates on qualification.
       - test-ubuntu-latest
       - test-sanitizer-address
       - build-32bit

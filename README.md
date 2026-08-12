@@ -548,23 +548,28 @@ release-notes PR's merge commit becomes the candidate SHA, but only while it
 remains the branch head. The notes PR must live in the upstream repo and be
 newer than the tracker, so a fork PR with a look-alike head branch or a
 previous release's merged notes PR can never bind. Required checks (named in
-the policy) are evaluated against that exact SHA and only runs from the
-policy's `checks_workflow` count — check-run names are not unique across
-workflows, so a `daily.yml` dispatch on the candidate can neither satisfy nor
-clobber a `ci.yml` requirement. The latest run per check wins, so a
-maintainer rerun of a failed job on the same SHA is recognized. If the branch
-moves, the candidate is invalidated and qualification stops until an
-authorized owner dispatches `release-adopt.yml` with the exact new head SHA;
-the acknowledgement is recorded as a bot-authored comment, the only adoption
-record reconciliation trusts. The issue reports readiness only when a valid
-candidate passed every required check — and readiness is a display of
+the policy) are evaluated against that exact SHA for display only, and only
+runs from the policy's `checks_workflow` count — check-run names are not
+unique across workflows, so a `daily.yml` dispatch on the candidate can
+neither satisfy nor clobber a `ci.yml` result. The latest run per check
+wins, so a maintainer rerun of a failed job on the same SHA is recognized.
+The results are informational: they render on the tracker so the approver
+sees the candidate's CI state, but they never block qualification or
+readiness — qualification is the only pre-publication technical gate. If
+the branch moves, the candidate is invalidated and qualification stops
+until an authorized owner dispatches `release-adopt.yml` with the exact new
+head SHA; the acknowledgement is recorded as a bot-authored comment, the
+only adoption record reconciliation trusts. The issue reports readiness
+when a valid candidate passed qualification and the other non-check gates
+(tag absence, no alerts) hold — and readiness is a display of
 recomputed state, not an authorization to publish. A branch-level daily-CI
 gate complements these per-commit checks: when the policy configures
 `daily_workflow` and `daily_max_age_hours`, the release cannot reach READY
 unless the branch's newest completed daily run is green and no older than
 the freshness bound.
 
-**Qualification** (stage 3): once required CI is green on the candidate,
+**Qualification** (stage 3): once the candidate SHA is bound (notes PR
+merged, or the exact new head adopted after branch movement),
 reconciliation dispatches the automation repo's `qualify-release.yml` with
 the version *and the exact candidate SHA* — a no-publish build of the
 archive and package matrix. Evidence is GitHub-native and re-queried live:

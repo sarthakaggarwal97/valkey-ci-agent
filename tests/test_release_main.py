@@ -430,17 +430,56 @@ class TestWorkflowContracts:
         cut = _workflow("release-start.yml")["jobs"]["cut-notes"]
         assert cut["uses"] == "./.github/workflows/release-notes-cut.yml"
         assert "cut_needed == 'true'" in cut["if"]
-        assert "!inputs.dry_run" in cut["if"]
+        # The gate reads the start job's NORMALIZED dry_run output, not raw
+        # inputs: on the trampoline (repository_dispatch) path inputs.* is
+        # empty, so `!inputs.dry_run` would wrongly read as "not dry".
+        assert "needs.start.outputs.dry_run != 'true'" in cut["if"]
+        assert "!inputs.dry_run" not in cut["if"]
         assert cut["with"]["dry_run"] == "false"
+
+    def test_start_normalizes_dry_run_fail_closed_for_both_paths(self) -> None:
+        # The normalized expression must default to dry-run semantics only
+        # via explicit event checks: a payload without dry_run==true reads
+        # false, and the boolean input path is honored verbatim.
+        outputs = _workflow("release-start.yml")["jobs"]["start"]["outputs"]
+        expr = outputs["dry_run"]
+        assert "github.event_name == 'repository_dispatch'" in expr
+        assert "client_payload.dry_run == true" in expr
+        assert "github.event_name == 'workflow_dispatch'" in expr
 
     def test_authorization_uses_the_triggering_actor(self) -> None:
         # github.actor on a re-run is the ORIGINAL dispatcher; authorizing it
         # would let a repo-write user replay an authorized user's dispatch.
-        for name in ("release-start.yml", "release-adopt.yml"):
-            jobs = _workflow(name)["jobs"]
-            steps = next(iter(jobs.values()))["steps"]
-            run_step = steps[-1]
-            assert run_step["env"]["ACTOR"] == "${{ github.triggering_actor }}"
+        # Adopt is direct-dispatch only. Start also accepts the valkey-repo
+        # trampoline's forwarded actor, but ONLY on the repository_dispatch
+        # event (sending that requires contents:write on this repo, and the
+        # forwarded human is still team-checked live) - the direct path must
+        # still resolve to triggering_actor, never github.actor.
+        adopt_steps = next(iter(_workflow("release-adopt.yml")["jobs"].values()))["steps"]
+        assert adopt_steps[-1]["env"]["ACTOR"] == "${{ github.triggering_actor }}"
+        start_steps = next(iter(_workflow("release-start.yml")["jobs"].values()))["steps"]
+        actor = start_steps[-1]["env"]["ACTOR"]
+        assert "github.event_name == 'repository_dispatch'" in actor
+        assert "client_payload.actor" in actor
+        assert actor.rstrip("} ").endswith("github.triggering_actor")
+        assert "github.actor" not in actor.replace("github.triggering_actor", "")
+
+    def test_start_accepts_the_valkey_trampoline_dispatch(self) -> None:
+        # The valkey repository hosts a thin relay workflow (template kept
+        # at docs/valkey-repo/release-start.yml) so maintainers start
+        # releases from the repo where releases happen. It carries no
+        # authority: the controller re-verifies the forwarded actor.
+        workflow = _workflow("release-start.yml")
+        assert workflow["on"]["repository_dispatch"]["types"] == ["release-start"]
+        template = Path("docs/valkey-repo/release-start.yml")
+        assert template.exists()
+        relay = yaml.safe_load(template.read_text())
+        assert relay["permissions"] == {}
+        (job,) = relay["jobs"].values()
+        assert job["permissions"] == {}
+        relay_step = job["steps"][-1]
+        assert relay_step["env"]["ACTOR"] == "${{ github.triggering_actor }}"
+        assert "release-start" in relay_step["run"]
 
     def test_reconcile_is_scheduled_and_locked_down(self) -> None:
         workflow = _workflow("release-reconcile.yml")

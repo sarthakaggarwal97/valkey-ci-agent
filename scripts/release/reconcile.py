@@ -14,9 +14,11 @@ The controller's single source of truth is live GitHub state:
   authorized owner adopts the *exact* new head, or re-adopts the pinned
   candidate to confirm shipping it despite the movement, via the ``adopt``
   entry point.
-- **Required checks** are evaluated by exact candidate SHA. The latest check
-  run per name wins, so a maintainer rerun of a failed job on the same SHA is
-  recognized without special handling.
+- **Required checks** are evaluated by exact candidate SHA for display
+  only: they render on the tracker as information and never gate the
+  release (qualification is the only pre-publication technical gate). The
+  latest check run per name wins, so a maintainer rerun of a failed job on
+  the same SHA is recognized without special handling.
 
 Reconciliation is short and idempotent: recompute, re-render the issue, skip
 the edit when nothing changed. It never blocks waiting for CI or merges.
@@ -601,8 +603,11 @@ def compute_status(
                 f"continues."
             )
         else:
+            # Informational only: the results render on the tracker so a
+            # human sees the candidate's CI state, but they never block.
+            # Once the candidate SHA is bound, qualification proceeds
+            # immediately regardless of check status.
             checks = checks_mod.evaluate_required_checks(repo, policy, candidate.sha)
-            blockers.extend(checks_mod.check_blockers(checks))
             if not blockers and not alerts:
                 phase = ReleasePhase.QUALIFICATION
                 qualification = qual_mod.evaluate_qualification(

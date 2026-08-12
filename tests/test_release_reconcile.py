@@ -445,23 +445,37 @@ class TestComputeStatus:
         assert not status.qualification.passed
         assert any("Evidence mismatch" in job for job in status.qualification.failed_jobs)
 
-    def test_failed_required_check_blocks_before_qualification(self) -> None:
+    def test_failed_required_check_never_blocks_ready(self) -> None:
+        # Pin (a): required-check results are informational. A failed
+        # check still renders (the human sees red CI on the tracker) but
+        # produces no blocker, and READY is reached on qualification alone.
         runs = [check_run("test-ubuntu-latest", conclusion="failure"),
                 check_run("build-macos-latest", run_id=2)]
         status = _status(repo_mock(runs=runs))
-        assert status.phase is ReleasePhase.CANDIDATE
-        assert any("failed" in blocker and "test-ubuntu-latest" in blocker
-                   for blocker in status.blockers)
+        states = {check.name: check.state for check in status.checks}
+        assert states["test-ubuntu-latest"] is CheckState.FAILED
+        assert status.ready and not status.blockers
+        assert status.phase is ReleasePhase.READY
 
-    def test_pending_and_missing_required_checks_block(self) -> None:
+    def test_pending_and_missing_required_checks_never_block(self) -> None:
         runs = [check_run("test-ubuntu-latest", status="in_progress", conclusion=None)]
         status = _status(repo_mock(runs=runs))
         states = {check.name: check.state for check in status.checks}
         assert states["test-ubuntu-latest"] is CheckState.PENDING
         assert states["build-macos-latest"] is CheckState.MISSING
-        assert not status.ready
+        assert status.ready and not status.blockers
 
-    def test_check_running_past_timeout_is_stalled(self) -> None:
+    def test_qualification_proceeds_while_checks_are_still_pending(self) -> None:
+        # Pin (d): with the candidate bound and no qualification run yet,
+        # the phase is QUALIFICATION even though checks are still pending,
+        # so reconciliation dispatches the run without waiting for CI.
+        runs = [check_run("test-ubuntu-latest", status="in_progress", conclusion=None)]
+        status = _status(repo_mock(runs=runs, qual_runs=[]))
+        assert status.phase is ReleasePhase.QUALIFICATION
+        assert any("No qualification run" in blocker for blocker in status.blockers)
+        assert not any("check" in blocker.lower() for blocker in status.blockers)
+
+    def test_check_running_past_timeout_is_stalled_but_never_blocks(self) -> None:
         old = datetime.now(timezone.utc) - timedelta(minutes=_POLICY.check_timeout_minutes + 30)
         runs = [check_run("test-ubuntu-latest", status="in_progress",
                           conclusion=None, started=old),
@@ -469,7 +483,8 @@ class TestComputeStatus:
         status = _status(repo_mock(runs=runs))
         states = {check.name: check.state for check in status.checks}
         assert states["test-ubuntu-latest"] is CheckState.STALLED
-        assert any("timeout" in blocker for blocker in status.blockers)
+        assert not any("timeout" in blocker for blocker in status.blockers)
+        assert status.ready
 
     def test_never_started_check_stalls_from_its_creation_time(self) -> None:
         # A queued run with no started_at must not dodge STALLED forever;
@@ -482,30 +497,37 @@ class TestComputeStatus:
         states = {check.name: check.state for check in status.checks}
         assert states["test-ubuntu-latest"] is CheckState.STALLED
 
+    @staticmethod
+    def _displayed_state(status, name: str) -> CheckState:
+        return {check.name: check.state for check in status.checks}[name]
+
     def test_same_sha_rerun_supersedes_failed_attempt(self) -> None:
         early = datetime(2026, 8, 7, 10, 0, tzinfo=timezone.utc)
         late = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
         runs = [check_run("test-ubuntu-latest", conclusion="failure", run_id=1, started=early),
                 check_run("test-ubuntu-latest", conclusion="success", run_id=3, started=late),
                 check_run("build-macos-latest", run_id=2, started=early)]
-        assert _status(repo_mock(runs=runs)).ready
+        status = _status(repo_mock(runs=runs))
+        assert self._displayed_state(status, "test-ubuntu-latest") is CheckState.PASSED
 
     def test_run_id_breaks_ties_when_start_times_missing(self) -> None:
         runs = [check_run("test-ubuntu-latest", conclusion="failure", run_id=1),
                 check_run("test-ubuntu-latest", conclusion="success", run_id=3),
                 check_run("build-macos-latest", run_id=2)]
-        assert _status(repo_mock(runs=runs)).ready
+        status = _status(repo_mock(runs=runs))
+        assert self._displayed_state(status, "test-ubuntu-latest") is CheckState.PASSED
 
     # Newest-run-wins with EQUAL start timestamps: the ordering key falls
     # back to the run id (GitHub ids are creation-ordered), independent of
     # conclusion and of list position (the newer run is listed first here,
-    # so a naive last-listed-wins implementation fails too).
-    @pytest.mark.parametrize(("newest_conclusion", "expected_ready"), [
-        pytest.param("failure", False, id="newer-failure-beats-older-pass"),
-        pytest.param("success", True, id="newer-pass-beats-older-failure"),
+    # so a naive last-listed-wins implementation fails too). The states are
+    # display only, but the display must still report the NEWEST run.
+    @pytest.mark.parametrize(("newest_conclusion", "expected_state"), [
+        pytest.param("failure", CheckState.FAILED, id="newer-failure-beats-older-pass"),
+        pytest.param("success", CheckState.PASSED, id="newer-pass-beats-older-failure"),
     ])
     def test_equal_start_times_fall_back_to_run_id(
-        self, newest_conclusion: str, expected_ready: bool,
+        self, newest_conclusion: str, expected_state: CheckState,
     ) -> None:
         ts = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
         older_conclusion = "success" if newest_conclusion == "failure" else "failure"
@@ -514,34 +536,39 @@ class TestComputeStatus:
                 check_run("test-ubuntu-latest", conclusion=older_conclusion,
                           run_id=3, started=ts),
                 check_run("build-macos-latest", run_id=2, started=ts)]
-        assert _status(repo_mock(runs=runs)).ready is expected_ready
+        status = _status(repo_mock(runs=runs))
+        assert self._displayed_state(status, "test-ubuntu-latest") is expected_state
 
     @pytest.mark.parametrize(
-        ("required_conclusion", "daily_conclusion", "expected_ready"),
+        ("required_conclusion", "daily_conclusion", "expected_state"),
         [
-            pytest.param("success", "failure", True, id="daily-failure-invisible"),
-            pytest.param("failure", "success", False, id="daily-pass-cannot-satisfy"),
+            pytest.param("success", "failure", CheckState.PASSED,
+                         id="daily-failure-invisible"),
+            pytest.param("failure", "success", CheckState.FAILED,
+                         id="daily-pass-cannot-satisfy"),
         ],
     )
     def test_same_named_run_from_another_workflow_never_counts(
-        self, required_conclusion: str, daily_conclusion: str, expected_ready: bool,
+        self, required_conclusion: str, daily_conclusion: str,
+        expected_state: CheckState,
     ) -> None:
         # valkey's ci.yml and daily.yml share job names; a Daily dispatch on
-        # the candidate SHA must neither satisfy a requirement nor clobber a
-        # passed one.
+        # the candidate SHA must neither satisfy a displayed result nor
+        # clobber a passed one, or the tracker misreports the CI state.
         late = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
         runs = [check_run("test-ubuntu-latest", conclusion=required_conclusion, run_id=1),
                 check_run("test-ubuntu-latest", conclusion=daily_conclusion, run_id=9,
                           started=late, suite=DAILY_SUITE),
                 check_run("build-macos-latest", run_id=2)]
-        assert _status(repo_mock(runs=runs)).ready is expected_ready
+        status = _status(repo_mock(runs=runs))
+        assert self._displayed_state(status, "test-ubuntu-latest") is expected_state
 
     def test_no_qualification_workflow_run_means_missing(self) -> None:
         repo = repo_mock()
         repo.get_workflow_runs.return_value = []  # ci.yml never ran on this SHA
         status = _status(repo)
         assert {check.state for check in status.checks} == {CheckState.MISSING}
-        assert not status.ready
+        assert status.ready  # display only: MISSING never blocks
 
     def test_branch_movement_invalidates_candidate_and_skips_checks(self) -> None:
         repo = repo_mock(branch_head=MOVED_SHA)
@@ -1098,11 +1125,15 @@ class TestLabelSync:
         issue.add_to_labels.assert_not_called()
         issue.remove_from_labels.assert_called_once_with("phase:qualification")
 
+    @staticmethod
+    def _failed_qual_run() -> MagicMock:
+        bad_job = MagicMock(status="completed", conclusion="failure")
+        bad_job.name = "RPM · Rocky Linux 9 (x86_64)"
+        return qualification_run(conclusion="failure", jobs=[bad_job])
+
     def test_failures_add_needs_attention_and_recovery_removes_it(self) -> None:
-        failing_runs = [check_run("test-ubuntu-latest", conclusion="failure"),
-                        check_run("build-macos-latest", run_id=2)]
         issue = _issue_with_labels("release-tracker", "release:9.1")
-        repo = repo_mock(issues=[issue], runs=failing_runs)
+        repo = repo_mock(issues=[issue], qual_runs=[self._failed_qual_run()])
 
         with patch("scripts.release.actions.advance", return_value=[]):
             reconcile_branch(gh_mock(repo), _POLICY, "9.1")
@@ -1119,6 +1150,21 @@ class TestLabelSync:
         recovered.add_to_labels.assert_not_called()
         recovered.remove_from_labels.assert_called_once_with("needs-attention")
 
+    def test_failed_required_check_never_adds_needs_attention(self) -> None:
+        # Pin (b): a red check on the candidate is informational; it must
+        # not add the needs-attention label (and, per TestNotifyOnce, must
+        # not notify either).
+        failing_runs = [check_run("test-ubuntu-latest", conclusion="failure"),
+                        check_run("build-macos-latest", run_id=2)]
+        issue = _issue_with_labels("release-tracker", "release:9.1")
+        repo = repo_mock(issues=[issue], runs=failing_runs)
+
+        with patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
+
+        issue.add_to_labels.assert_not_called()
+        issue.remove_from_labels.assert_not_called()
+
     def test_labels_outside_the_owned_set_are_never_touched(self) -> None:
         issue = _issue_with_labels("release-tracker", "release:9.1",
                                    "bug", "help wanted")
@@ -1131,10 +1177,8 @@ class TestLabelSync:
         issue.remove_from_labels.assert_not_called()
 
     def test_needs_attention_is_created_through_the_shared_helper(self) -> None:
-        failing_runs = [check_run("test-ubuntu-latest", conclusion="failure"),
-                        check_run("build-macos-latest", run_id=2)]
         issue = _issue_with_labels("release-tracker", "release:9.1")
-        repo = repo_mock(issues=[issue], runs=failing_runs)
+        repo = repo_mock(issues=[issue], qual_runs=[self._failed_qual_run()])
         with patch("scripts.release.reconcile.ensure_label") as ensure, \
              patch("scripts.release.actions.advance", return_value=[]):
             reconcile_branch(gh_mock(repo), _POLICY, "9.1")

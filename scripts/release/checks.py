@@ -1,11 +1,14 @@
-"""Required-check evaluation on the exact candidate SHA.
+"""Required-check evaluation on the exact candidate SHA (informational).
 
-Split from reconcile so the one question it answers ("did the policy's
-required checks pass on this exact commit, from the right workflow?")
-lives behind a two-function interface (:func:`evaluate_required_checks`,
-:func:`check_blockers`). The branch-level daily-CI gate
-(:func:`evaluate_daily`, :func:`daily_blockers`) lives here as its sibling:
-same fail-closed posture, evaluated per branch instead of per commit.
+Split from reconcile so the one question it answers ("what did the policy's
+required checks report on this exact commit, from the right workflow?")
+lives behind :func:`evaluate_required_checks`. The results feed the
+tracker's Required Checks table for a human to read; they are NOT a gate:
+they never produce blockers, never hold a phase, and never affect
+readiness. Qualification (the exact-SHA no-publish build) is the only
+pre-publication technical gate. The branch-level daily-CI gate
+(:func:`evaluate_daily`, :func:`daily_blockers`) lives here as its sibling
+and, unlike the per-commit checks, does still gate READY when configured.
 """
 
 from __future__ import annotations
@@ -30,16 +33,23 @@ def evaluate_required_checks(
 ) -> tuple[RequiredCheck, ...]:
     """Evaluate every policy-required check against the exact *sha*.
 
+    The results are informational: they render on the tracker so a human
+    sees the candidate's CI state before approving, but they never gate
+    the release (qualification is the only pre-publication technical
+    gate).
+
     Only runs from the policy's ``checks_workflow`` count: check-run names
     are not unique across workflows (valkey's ci.yml and daily.yml share job
     names), so a same-named run from another workflow on the candidate SHA
-    must neither satisfy a requirement nor clobber a passed one. The mapping
-    is check run -> check suite -> workflow run, all from list payloads.
+    must neither satisfy a requirement nor clobber a passed one -- the
+    display would otherwise misreport which workflow's verdict it shows.
+    The mapping is check run -> check suite -> workflow run, all from list
+    payloads.
 
     Within the workflow, the *latest* run per name wins (by start time, then
     id), so a maintainer-triggered rerun of a failed job on the same SHA
     supersedes the failed attempt. A required check with no run at all is
-    MISSING, which blocks readiness: absence of evidence is not passing.
+    reported MISSING: absence of evidence is not displayed as passing.
     """
     suite_ids = _checks_workflow_suite_ids(repo, policy, sha)
     commit = retry_github_call(
@@ -89,7 +99,7 @@ def _checks_workflow_suite_ids(repo: Any, policy: RepoReleasePolicy, sha: str) -
     """Check-suite ids of *sha*'s runs of the policy's ``checks_workflow``.
 
     An empty set (workflow never ran on this SHA) makes every required check
-    MISSING, failing closed to mirror the no-run case.
+    display as MISSING, mirroring the no-run case.
     """
     workflow_runs = retry_github_call(
         lambda: list(repo.get_workflow_runs(head_sha=sha)),
@@ -116,23 +126,6 @@ def _suite_id(run: Any) -> int | None:
 def _run_order_key(run: Any) -> tuple[Any, int]:
     started = getattr(run, "started_at", None)
     return ((started is not None, started), run.id or 0)
-
-
-def check_blockers(checks: tuple[RequiredCheck, ...]) -> list[str]:
-    messages = {
-        CheckState.FAILED: "Required check failed on the candidate SHA: `{}` (rerun on the same SHA to retry).",
-        CheckState.PENDING: "Required check has not completed on the candidate SHA: `{}`.",
-        CheckState.MISSING: "Required check has no run on the candidate SHA: `{}`.",
-        CheckState.STALLED: (
-            "Required check has been running past the policy timeout on the "
-            "candidate SHA: `{}` (cancel and rerun it)."
-        ),
-    }
-    return [
-        messages[check.state].format(check.name)
-        for check in checks
-        if check.state is not CheckState.PASSED
-    ]
 
 
 def evaluate_daily(

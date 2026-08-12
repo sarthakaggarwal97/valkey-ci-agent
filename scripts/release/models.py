@@ -38,8 +38,11 @@ class ReleasePhase(str, Enum):
     phase's evidence is present in live GitHub/public state:
 
     ``NOTES``          no merged notes PR yet (cut pending or in review).
-    ``CANDIDATE``      candidate SHA recorded; required CI not yet green.
-    ``QUALIFICATION``  CI green; no-publish qualification not yet passed.
+    ``CANDIDATE``      candidate SHA not yet bound (or invalidated by branch
+                       movement). Required-check results are informational
+                       display and never hold this phase.
+    ``QUALIFICATION``  candidate bound; no-publish qualification not yet
+                       passed.
     ``READY``          all pre-publication evidence present; awaiting the
                        human-approved publish step.
     ``PUBLISHED``      the release/tag exists at the candidate SHA; core
@@ -60,9 +63,10 @@ class ReleasePhase(str, Enum):
 class CheckState(str, Enum):
     """Outcome of one required check on the exact candidate SHA.
 
-    ``STALLED`` marks a run still not completed after the policy's
-    ``check_timeout_minutes``; it blocks like FAILED but tells the operator
-    to rerun rather than wait.
+    Informational display only: no state here gates the release. ``STALLED``
+    marks a run still not completed after the policy's
+    ``check_timeout_minutes``; it renders with the failure icon so the
+    operator knows to rerun rather than wait.
     """
 
     PASSED = "passed"
@@ -264,8 +268,10 @@ class ReleaseStatus:
     (``agent/release-cut/<version>-<stage>``), the bot-created artifact that
     pins the release decision; both are "" until that PR exists.
     ``phase`` is the furthest phase whose entry evidence exists; ``ready``
-    remains the stage-2 pre-publication gate (candidate valid + required CI
-    green + qualification passed). ``blockers`` lists, in render order, what
+    remains the stage-2 pre-publication gate (candidate valid +
+    qualification passed + the non-check gates such as tag absence and no
+    alerts; required-check results are informational and never enter it).
+    ``blockers`` lists, in render order, what
     currently prevents the *next* phase transition. ``alerts`` are the
     subset needing human attention that the one-shot notifier escalates
     (they also render as blockers).

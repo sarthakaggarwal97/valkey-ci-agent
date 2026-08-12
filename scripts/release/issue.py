@@ -110,7 +110,9 @@ _PHASE_ORDER = (
 
 _PHASE_TITLES = {
     ReleasePhase.NOTES: "Release notes cut and merged",
-    ReleasePhase.CANDIDATE: "Required CI green on the candidate",
+    # Deliberately not "Required CI green": check results are informational
+    # and the phase advances on the candidate binding alone.
+    ReleasePhase.CANDIDATE: "Candidate SHA established",
     ReleasePhase.QUALIFICATION: "No-publish qualification passed",
     ReleasePhase.READY: "Published (human-approved)",
     ReleasePhase.PUBLISHED: "Core public outputs verified",
@@ -315,20 +317,22 @@ def render_body(status: ReleaseStatus, reconciled_at: datetime) -> str:
         for check in status.checks:
             link = f" ([run]({check.url}))" if check.url else ""
             table.append(f"| `{check.name}` | {_CHECK_STATE_DISPLAY[check.state]}{link} |")
-        # The gate is the policy's release-blocking subset, not the full CI
-        # matrix; without saying so the table reads as "only N checks ran".
-        scope_note = (
-            f"<sub>The release policy gates on these {len(status.checks)} "
-            f"checks; every check that ran on the candidate is on "
-            f"[the commit]({_repo_url(status)}/commits/"
-            f"{status.candidate.sha}/checks). Deep platform coverage comes "
-            f"from the Qualification gate above.</sub>"
+        # Honestly informational: the table shows the candidate's CI state
+        # for the human reviewing the tracker, but nothing gates on it; the
+        # release gates on the Qualification build above.
+        green = sum(1 for check in status.checks
+                    if check.state is CheckState.PASSED)
+        summary = (
+            f"Candidate CI: {green} of {len(status.checks)} checks green "
+            f"(informational; the release gates on Qualification)"
         )
-        if all(check.state is CheckState.PASSED for check in status.checks):
-            lines += _collapsed(
-                f"All {len(status.checks)} policy-required checks passed",
-                [*table, "", scope_note],
-            )
+        scope_note = (
+            f"<sub>{summary}. Every check that ran on the candidate is on "
+            f"[the commit]({_repo_url(status)}/commits/"
+            f"{status.candidate.sha}/checks).</sub>"
+        )
+        if green == len(status.checks):
+            lines += _collapsed(summary, [*table, "", scope_note])
         else:
             lines += [*table, "", scope_note]
 
@@ -383,7 +387,7 @@ def _repo_url(status: ReleaseStatus) -> str:
 # Short names for the phase badge in the header.
 _PHASE_SHORT = {
     ReleasePhase.NOTES: "1/6 Notes",
-    ReleasePhase.CANDIDATE: "2/6 Candidate CI",
+    ReleasePhase.CANDIDATE: "2/6 Candidate",
     ReleasePhase.QUALIFICATION: "3/6 Qualification",
     ReleasePhase.READY: "4/6 Ready to Publish",
     ReleasePhase.PUBLISHED: "5/6 Public Outputs",
@@ -396,7 +400,7 @@ _PHASE_SHORT = {
 # flight, so it must not assert the outcome ("Published" while unpublished).
 _PHASE_ACTIVE = {
     ReleasePhase.NOTES: "Cutting Release Notes",
-    ReleasePhase.CANDIDATE: "Waiting for Candidate CI",
+    ReleasePhase.CANDIDATE: "Establishing the Candidate",
     ReleasePhase.QUALIFICATION: "Qualifying the Candidate",
     ReleasePhase.READY: "Ready to Publish: Awaiting Approval",
     ReleasePhase.PUBLISHED: "Verifying Public Outputs",
@@ -470,10 +474,13 @@ def _collapsed(summary: str, table: list[str]) -> list[str]:
 
 
 def has_failures(status: ReleaseStatus) -> bool:
+    # Required-check states are deliberately absent: they are informational
+    # display only (the table still shows the failure icon), so a red check
+    # never turns the tracker red, never adds needs-attention, and never
+    # notifies.
     return bool(
         status.alerts
         or any(o.state is OutputState.FAILED for o in status.outputs)
-        or any(c.state in (CheckState.FAILED, CheckState.STALLED) for c in status.checks)
         or status.qualification.failed_jobs
         # A red daily run is a failure needing a human; STALE/MISSING are
         # blockers (waiting states), not failures.

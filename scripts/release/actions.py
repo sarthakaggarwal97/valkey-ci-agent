@@ -4,8 +4,9 @@ Reconciliation recomputes state, then performs at most the small set of
 side effects that state calls for, each guarded so a rerun never repeats
 completed work:
 
-- dispatch the qualification run (only when CI is green on the candidate
-  and no qualification run exists for that exact SHA);
+- dispatch the qualification run (once the candidate SHA is bound and no
+  qualification run exists for that exact SHA; required-check results are
+  informational and never hold the dispatch);
 - dispatch the Bundle update (only when the verifier says the ordering gate
   is satisfied and no update is in flight, signalled via ``action``);
 - open the Helm chart bump PR (same gating, controller-authored since
@@ -54,7 +55,6 @@ from scripts.release import qualification as qual_mod
 from scripts.release import verify as verify_mod
 from scripts.release.models import (
     CandidateState,
-    CheckState,
     DailyCiState,
     OutputState,
     QualificationStatus,
@@ -1033,20 +1033,17 @@ def _has_notification_history(gh: Any, tracking_issue: Any) -> bool:
 def _wedge_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
     """(stable key, rendered text) per silently wedged gate.
 
-    A MISSING required check or a MISSING/STALE daily gate is not a
-    failure, so :func:`_failure_items` never escalates it, yet nothing is
-    running that could change it: the release waits silently forever. No
-    time-based grace this round (status carries no tracker age): observing
-    the state at reconcile time is the whole trigger, keyed on the evidence
-    identity so an unchanged wedge nudges once per generation.
+    A MISSING/STALE daily gate is not a failure, so :func:`_failure_items`
+    never escalates it, yet nothing is running that could change it: the
+    release waits silently forever. No time-based grace this round (status
+    carries no tracker age): observing the state at reconcile time is the
+    whole trigger, keyed on the evidence identity so an unchanged wedge
+    nudges once per generation.
+
+    Required-check states never wedge: nothing gates on them, so a MISSING
+    check does not block progress and must not page anyone.
     """
-    items = [
-        (f"wedge:check:{status.candidate.sha}:{check.name}",
-         f"Blocked without progress: Required check `{check.name}` has no "
-         f"run on the candidate SHA. This does not resolve on its own.")
-        for check in status.checks
-        if check.state is CheckState.MISSING
-    ]
+    items: "list[tuple[str, str]]" = []
     if status.daily.state in (DailyCiState.MISSING, DailyCiState.STALE):
         detail = status.daily.detail or (
             f"Daily CI is {status.daily.state.value} on `{status.branch}`."
@@ -1190,27 +1187,15 @@ def _failure_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
     """(stable key, rendered text) per failure.
 
     Keys are identifiers, not prose: they feed the notification fingerprint,
-    so rewording a detail never re-pings, while a new failed run id or a
-    newly failing check does. Texts render into the comment body.
+    so rewording a detail never re-pings, while a new failed run id does.
+    Texts render into the comment body.
+
+    Required-check results are deliberately absent: they are informational
+    display, not a gate, so a red check on the candidate never pages anyone
+    and never contributes to needs-attention.
     """
-    # Failure states rendered as verb phrases, not raw enum values.
-    check_phrases = {
-        CheckState.FAILED: "failed",
-        CheckState.STALLED: "has stalled",
-    }
     items: "list[tuple[str, str]]" = [(_alert_key(alert), alert)
                                       for alert in status.alerts]
-    # Check keys carry the candidate SHA: unlike qualification and output
-    # failures, whose keys carry run ids and so re-ping on a new run, a
-    # check has no run id, and without the SHA the same check failing on a
-    # NEW candidate (after branch movement and adoption) would be
-    # suppressed forever by the old marker.
-    items += [
-        (f"check:{status.candidate.sha}:{check.name}:{check.state.value}",
-         f"Required check `{check.name}` {check_phrases[check.state]}")
-        for check in status.checks
-        if check.state in (CheckState.FAILED, CheckState.STALLED)
-    ]
     if status.qualification.failed_jobs:
         run_id = status.qualification.run_id
         items.append((

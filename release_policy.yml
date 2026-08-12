@@ -1,20 +1,23 @@
 # Release policy registry for the release controller.
 #
 # This file is the controller's authority for what is *allowed*: releasable
-# repositories, their release branches, the check runs that must pass on the
-# exact candidate SHA, and the GitHub team whose members may start a release
-# or adopt a moved branch head. Membership is verified live against GitHub at
-# every authorization point; editing an issue or this file's rendered output
-# never authorizes anything.
+# repositories, their release branches, the check runs displayed on the
+# tracker for the exact candidate SHA, and the GitHub team whose members may
+# start a release or adopt a moved branch head. Membership is verified live
+# against GitHub at every authorization point; editing an issue or this
+# file's rendered output never authorizes anything.
 #
 # required_checks are check-run names as they appear on commits of the release
-# branch. The list must be non-empty (an empty list would make every candidate
-# trivially ready) and should track the repository's required branch checks.
-# checks_workflow names the workflow file the required runs must come from:
+# branch. They define WHICH checks the tracker displays for the candidate SHA;
+# the results are informational and never gate the release (qualification is
+# the only pre-publication technical gate). The list must be non-empty so the
+# tracker always shows the candidate's CI state, and should track the
+# repository's required branch checks.
+# checks_workflow names the workflow file the displayed runs must come from:
 # check-run names are not unique across workflows (ci.yml and daily.yml share
 # job names such as test-sanitizer-address), so runs from other workflows on
 # the candidate SHA are ignored rather than allowed to satisfy or clobber a
-# requirement.
+# displayed result.
 # NOTE for maintainers: upstream's active tag ruleset protects [89]*.*.* tags
 # but explicitly EXCLUDES 7.x, although 7.2 is a supported release line here;
 # extending the ruleset (and enabling immutable releases) is cutover hardening.
@@ -31,7 +34,8 @@ repos:
       - "9.1"
     required_checks:
       # The full ci.yml job set present on every supported release branch
-      # (7.2 through 9.1): the release gate matches what CI itself demands.
+      # (7.2 through 9.1): displayed on the tracker for the candidate SHA.
+      # Informational only; the release gates on qualification.
       - test-ubuntu-latest
       - test-sanitizer-address
       - build-32bit

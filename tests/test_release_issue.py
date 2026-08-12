@@ -145,9 +145,9 @@ class TestLiveTitle:
 
     def test_failures_never_change_the_title(self) -> None:
         failing = _status(
-            ready=False, phase=ReleasePhase.CANDIDATE,
-            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
-            blockers=("Required check failed",),
+            ready=False, phase=ReleasePhase.QUALIFICATION,
+            alerts=("The release metadata is broken; fix it.",),
+            blockers=("The release metadata is broken; fix it.",),
         )
         assert issue_mod.render_live_title(failing) == "Release 9.1.1"
 
@@ -423,12 +423,28 @@ class TestAesthetics:
         assert "**Ready to Publish: Awaiting Approval**" in ready_body
         failing = _status(
             ready=False,
-            checks=(RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED),),
-            blockers=("Required check failed",),
+            alerts=("The release metadata is broken; fix it.",),
+            blockers=("The release metadata is broken; fix it.",),
         )
         failing_body = _render(failing)
         assert "🟥" in failing_body
         assert "(Failures Need Attention)**" in failing_body
+
+    def test_red_checks_alone_never_turn_the_bar_red(self) -> None:
+        # Checks are informational: a red check renders in the table (the
+        # human sees it) but is not a failure, so the bar stays blue/green
+        # and the tracker never claims the release needs attention for it.
+        red_checks = _status(
+            checks=(RequiredCheck(name="test-ubuntu-latest",
+                                  state=CheckState.FAILED),
+                    RequiredCheck(name="build-macos-latest",
+                                  state=CheckState.STALLED)),
+        )
+        assert not issue_mod.has_failures(red_checks)
+        body = _render(red_checks)
+        assert "🟥" not in body
+        assert "(Failures Need Attention)" not in body
+        assert "| `test-ubuntu-latest` | ❌ Failed |" in body
 
     def test_header_links_the_branch_and_the_tracker_search(self) -> None:
         body = _render(_status())
@@ -530,9 +546,25 @@ class TestTablesTriageAndCollapse:
             RequiredCheck(name="test-ubuntu-latest", state=CheckState.PASSED),
             RequiredCheck(name="build-macos-latest", state=CheckState.PASSED),
         )))
-        assert "<details><summary>All 2 policy-required checks passed</summary>" in body
+        assert ("<details><summary>Candidate CI: 2 of 2 checks green "
+                "(informational; the release gates on Qualification)"
+                "</summary>") in body
         assert "</details>" in body
         assert "| `test-ubuntu-latest` | ✅ Passed |" in body
+
+    def test_red_check_keeps_the_table_open_with_the_informational_line(self) -> None:
+        # Pin (c): a failed check still renders with the failure icon (a
+        # human SEES red CI before approving) and the summary line says the
+        # display is informational; the release itself can be READY.
+        body = _render(_status(checks=(
+            RequiredCheck(name="test-ubuntu-latest", state=CheckState.FAILED,
+                          url="https://x/run/1"),
+            RequiredCheck(name="build-macos-latest", state=CheckState.PASSED),
+        )))
+        assert "<details>" not in body
+        assert "| `test-ubuntu-latest` | ❌ Failed ([run](https://x/run/1)) |" in body
+        assert ("Candidate CI: 1 of 2 checks green (informational; the "
+                "release gates on Qualification)") in body
 
     def test_any_unfinished_check_keeps_the_table_open(self) -> None:
         body = _render(_status(

@@ -399,7 +399,8 @@ Future sibling modules and extensions:
 Makes a Valkey release one coordinated operation: `scripts/release/` plus the
 `release-start`, `release-reconcile`, `release-adopt`, and `release-publish`
 workflows, with `release_policy.yml` as the authority for what is allowed
-(release branches, required checks and their workflow, the exact package
+(release branches, the displayed candidate checks and their workflow, the
+exact package
 qualification inventory, downstream targets, the authorized team).
 
 Design rule: truth is recomputed from GitHub every pass. The reconcile
@@ -416,8 +417,9 @@ the upstream repo and postdate the tracker.
 
 Lifecycle (each transition gated on live evidence): notes PR merged → its
 merge commit is the candidate while it remains branch head (movement requires
-an authorized owner to adopt the exact new head) → required checks green on
-the exact SHA, scoped to the policy's CI workflow → no-publish qualification
+an authorized owner to adopt the exact new head) → required checks evaluated
+on the exact SHA, scoped to the policy's CI workflow, for tracker display
+only (informational, never a gate) → no-publish qualification
 in valkey-release-automation, dispatched automatically and evaluated against
 the exact reviewed matrix inventory (jobs and unexpired artifacts, not run
 conclusions) → protected publication (two jobs: validate renders the plan as
