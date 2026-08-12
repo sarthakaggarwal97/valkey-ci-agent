@@ -963,7 +963,7 @@ class TestReconcileBranch:
         # current tag+candidate in their run-name to hold the slot;
         # unbound runs are ignored. Match the shape the runner writes.
         waiting = MagicMock(status="waiting", head_sha=agent_head,
-                            display_title=(f"Publish release on 9.1 · 9.1.1 @ "
+                            display_title=(f"Publish Release on 9.1 · 9.1.1 @ "
                                            f"{MERGE_SHA} (requested by x)"),
                             html_url="https://x/actions/runs/500")
         workflow = gh_agent.get_repo.return_value.get_workflow.return_value
@@ -987,7 +987,7 @@ class TestReconcileBranch:
         agent_head = "d" * 40
         gh_agent.get_repo.return_value.get_branch.return_value.commit.sha = agent_head
         other = MagicMock(status="waiting", head_sha=agent_head,
-                          display_title=(f"Publish release on 9.1 · 9.1.1 @ "
+                          display_title=(f"Publish Release on 9.1 · 9.1.1 @ "
                                          f"{MOVED_SHA} (requested by x)"),
                           html_url="https://x/actions/runs/501")
         workflow = gh_agent.get_repo.return_value.get_workflow.return_value
@@ -1007,7 +1007,7 @@ class TestReconcileBranch:
         agent_head = "d" * 40
         gh_agent.get_repo.return_value.get_branch.return_value.commit.sha = agent_head
         bound = MagicMock(status="waiting", head_sha=agent_head,
-                          display_title=(f"Publish release on 9.1 · 9.1.1 @ "
+                          display_title=(f"Publish Release on 9.1 · 9.1.1 @ "
                                          f"{MERGE_SHA} (requested by x)"),
                           html_url="https://x/actions/runs/502")
         workflow = gh_agent.get_repo.return_value.get_workflow.return_value

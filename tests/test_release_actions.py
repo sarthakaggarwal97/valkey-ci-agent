@@ -1013,7 +1013,7 @@ class TestNudgeOnce:
         body = issue.create_comment.call_args.kwargs["body"]
         assert "**@valkey-io/core-team: Action Needed for `9.1.1`.**" in body
         assert f"Branch `9.1` moved to `{MOVED_SHA[:12]}`" in body
-        assert "Adopt the new head (Actions → release-adopt)" in body
+        assert "Adopt the new head (Actions → Adopt Release Candidate)" in body
         assert "or ship the pinned candidate." in body
         assert "\u2014" not in body
 
@@ -1249,7 +1249,7 @@ class TestAutoDispatchPublish:
 
     def test_other_branch_run_does_not_block(self) -> None:
         other = MagicMock(status="waiting",
-                          display_title="Publish release on 8.0 (requested by x)")
+                          display_title="Publish Release on 8.0 (requested by x)")
         gh_agent = self._agent([other])
         actions.advance(gh_mock(MagicMock()), _POLICY,
                         status=self._ready(), tracking_issue=tracker(),
@@ -1441,20 +1441,34 @@ class TestWaitingPublishRunUrl:
 
     def test_waiting_run_for_the_branch_yields_its_url(self) -> None:
         waiting = MagicMock(status="waiting",
-                            display_title="Publish release on 9.1 (requested by x)",
+                            display_title="Publish Release on 9.1 (requested by x)",
                             html_url="https://x/actions/runs/500")
         url = actions.waiting_publish_run_url(self._agent([waiting]), "o/agent", "9.1")
         assert url == "https://x/actions/runs/500"
 
+    def test_legacy_lowercase_titled_run_still_matches(self) -> None:
+        # Migration alias for the workflow rename ("Publish release on" ->
+        # "Publish Release on"): correlation is prefix-agnostic (workflow
+        # file + " on <branch> " + binding), so a gate-parked run dispatched
+        # under the OLD title is still recognized. Without this, the one
+        # pre-rename waiting run could neither hold nor halt the slot and
+        # would sit at the gate until manually cancelled. This test can be
+        # dropped after the next successful publish.
+        legacy = MagicMock(status="waiting",
+                           display_title="Publish release on 9.1 (requested by x)",
+                           html_url="https://x/actions/runs/499")
+        url = actions.waiting_publish_run_url(self._agent([legacy]), "o/agent", "9.1")
+        assert url == "https://x/actions/runs/499"
+
     def test_no_active_run_yields_empty(self) -> None:
         done = MagicMock(status="completed",
-                         display_title="Publish release on 9.1 (requested by x)",
+                         display_title="Publish Release on 9.1 (requested by x)",
                          html_url="https://x/actions/runs/400")
         assert actions.waiting_publish_run_url(self._agent([done]), "o/agent", "9.1") == ""
 
     def test_other_branch_run_yields_empty(self) -> None:
         other = MagicMock(status="waiting",
-                          display_title="Publish release on 8.0 (requested by x)",
+                          display_title="Publish Release on 8.0 (requested by x)",
                           html_url="https://x/actions/runs/300")
         assert actions.waiting_publish_run_url(self._agent([other]), "o/agent", "9.1") == ""
 
@@ -1684,6 +1698,25 @@ class TestCandidateBoundPublish:
     def test_current_candidates_waiting_run_blocks_and_is_kept(self) -> None:
         parked = _publish_run(head_sha=_AGENT_HEAD, tag="9.1.1",
                               candidate_sha=MERGE_SHA)
+        workflow = _runs_by_status([parked])
+        actions.advance(gh_mock(MagicMock()), _POLICY, status=self._ready(),
+                        tracking_issue=_IssueHarness().issue,
+                        gh_agent=_agent_with_workflow(workflow),
+                        agent_repo="o/agent", agent_head_sha=_AGENT_HEAD)
+        parked.cancel.assert_not_called()
+        workflow.create_dispatch.assert_not_called()
+
+    def test_legacy_lowercase_titled_bound_run_still_holds_the_slot(self) -> None:
+        # Migration alias for the workflow rename ("Publish release on" ->
+        # "Publish Release on"): one gate-parked run dispatched under the
+        # OLD title exists. Correlation never inspects the leading words,
+        # so its binding must keep holding the slot (no duplicate dispatch)
+        # exactly like a new-title run. Droppable after the next
+        # successful publish.
+        parked = MagicMock(status="waiting", head_sha=_AGENT_HEAD, id=76,
+                           display_title=(f"Publish release on 9.1 · 9.1.1 @ "
+                                          f"{MERGE_SHA} (requested by x)"),
+                           html_url="https://x/actions/runs/76")
         workflow = _runs_by_status([parked])
         actions.advance(gh_mock(MagicMock()), _POLICY, status=self._ready(),
                         tracking_issue=_IssueHarness().issue,

@@ -9,7 +9,10 @@
 # changes nothing and is overwritten here.
 #
 # Short and idempotent: a run that finds no change edits nothing.
-name: Release Reconcile
+name: Reconcile Releases
+# Scheduled runs carry no inputs, so inputs.branch is empty there and the
+# run titles as the all-branches pass.
+run-name: "${{ inputs.branch && format('Reconcile {0}', inputs.branch) || 'Reconcile All Branches' }}"
 
 on:
   schedule:
@@ -22,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Reconcile only this release branch (empty = all policy branches)"
+        description: "Release line to reconcile, e.g. 9.1. Leave empty to reconcile every policy-configured branch."
         required: false
         type: string
         default: ""

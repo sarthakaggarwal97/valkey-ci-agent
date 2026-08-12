@@ -8,17 +8,18 @@
 # records the adoption as a bot-authored comment on the tracking issue, the
 # only adoption record reconciliation trusts (a marker pasted by anyone else
 # is ignored).
-name: Release Adopt Candidate
+name: Adopt Release Candidate
+run-name: "Adopt Candidate on ${{ inputs.branch }}"
 
 on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Release branch with the invalidated candidate (e.g. 9.1)"
+        description: "Release line whose candidate was invalidated, e.g. 9.1"
         required: true
         type: string
       sha:
-        description: "Exact current head of the branch (full 40-character SHA)"
+        description: "Branch head to adopt: paste the exact current head as a full 40-character SHA"
         required: true
         type: string
 

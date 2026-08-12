@@ -1086,7 +1086,8 @@ def _nudge_item(status: ReleaseStatus) -> "tuple[str, str] | None":
             f"branch-moved:{head}",
             f"Branch `{status.branch}` moved to `{head[:12]}` after the "
             f"candidate was established. Adopt the new head "
-            f"(Actions → release-adopt) or ship the pinned candidate.",
+            f"(Actions → Adopt Release Candidate) or ship the pinned "
+            f"candidate.",
         )
     return None
 
@@ -1233,9 +1234,14 @@ _PUBLISH_RUN_GATED_STATUSES = ("queued", "waiting", "pending")
 # reported as active.
 _PUBLISH_RUN_ACTIVE_STATUSES = ("in_progress",) + _PUBLISH_RUN_GATED_STATUSES
 
-# The optional candidate binding release-publish.yml stamps into its
-# run-name when dispatched with tag/candidate_sha inputs:
-# "Publish release on <branch> · <tag> @ <sha> (requested by <actor>)".
+# The candidate binding release-publish.yml stamps into its run-name:
+# "Publish Release on <branch> · <tag> @ <sha> (requested by <actor>)".
+# Correlation is deliberately prefix-agnostic: runs are located by workflow
+# file, then matched on the " on <branch> " marker and this binding regex,
+# never on the leading words. Runs titled with the legacy lowercase prefix
+# ("Publish release on ...", dispatched before the workflow rename) are
+# therefore still recognized, held, and cancellable exactly like new runs;
+# this note can be dropped after the next successful publish.
 _PUBLISH_TITLE_BINDING_RE = re.compile(
     r" · (?P<tag>\S+) @ (?P<sha>[0-9a-fA-F]{7,40})(?![0-9a-zA-Z])"
 )

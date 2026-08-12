@@ -20,19 +20,21 @@
 #
 # The `release` environment must exist in this repository with required
 # reviewers, self-review prevented, and admin bypass disallowed.
-name: Release Publish
+name: Publish Release
 
 # tag and candidate_sha are always stamped into the run-name so the
 # controller can correlate a run with the exact candidate it was
-# dispatched for (" · <tag> @ <sha>"). Unbound runs cannot be dispatched
-# through this workflow any more (both inputs are required).
-run-name: "Publish release on ${{ inputs.branch }} · ${{ inputs.tag }} @ ${{ inputs.candidate_sha }} (requested by ${{ github.triggering_actor }})"
+# dispatched for (" · <tag> @ <sha>"). The SHA stays full-length: GitHub
+# expressions have no substring function, so it cannot be truncated here.
+# Unbound runs cannot be dispatched through this workflow any more (both
+# inputs are required).
+run-name: "Publish Release on ${{ inputs.branch }} · ${{ inputs.tag }} @ ${{ inputs.candidate_sha }} (requested by ${{ github.triggering_actor }})"
 
 on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Release branch whose ready release to publish (e.g. 9.1)"
+        description: "Release line whose ready release to publish, e.g. 9.1"
         required: true
         type: string
       # tag and candidate_sha are REQUIRED: an unbound run cannot be
@@ -44,11 +46,11 @@ on:
       # DoS vector at the workflow layer. The "Check inputs" step below
       # additionally fails the run when either value is whitespace.
       tag:
-        description: "Tag this dispatch is bound to (e.g. 9.1.1 or 9.2.0-rc1)"
+        description: "Release tag to publish, e.g. 9.1.1 or 9.2.0-rc1 (binds this dispatch to that tag)"
         required: true
         type: string
       candidate_sha:
-        description: "Candidate SHA this dispatch is bound to (40-char full SHA)"
+        description: "Candidate commit to publish: paste the full 40-character SHA (binds this dispatch to that candidate)"
         required: true
         type: string
 

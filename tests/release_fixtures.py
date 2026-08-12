@@ -260,7 +260,7 @@ def publish_run(*, head_sha: str, status: str = "waiting",
     binding = f" · {tag} @ {candidate_sha}" if tag and candidate_sha else ""
     run = MagicMock(status=status, conclusion=conclusion, head_sha=head_sha,
                     id=run_id,
-                    display_title=f"Publish release on {branch}{binding} "
+                    display_title=f"Publish Release on {branch}{binding} "
                                   f"(requested by x)",
                     html_url=f"https://x/actions/runs/{run_id}")
     run.cancel.return_value = True
