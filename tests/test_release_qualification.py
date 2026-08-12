@@ -269,8 +269,10 @@ class TestStartupFailure:
 
 
 class TestManifestEvidence:
-    """The qualification-manifest artifact is required evidence: presence
-    plus unexpired, metadata-only (content is never fetched this round)."""
+    """The qualification-manifest artifact is required evidence: content is
+    downloaded, parsed, and each field must match the release identity
+    being qualified (F5). Presence plus unexpired is necessary but not
+    sufficient."""
 
     def test_manifest_present_passes(self) -> None:
         run = qualification_run()
@@ -316,3 +318,234 @@ class TestManifestEvidence:
         assert any("Evidence mismatch" in item for item in status.failed_jobs)
         assert ("(Evidence mismatch: no qualification manifest)"
                 not in status.failed_jobs)
+
+
+class TestManifestContentValidation:
+    """F5: the manifest is downloaded, parsed, and every field bound to
+    the release identity being qualified. Any download failure, parse
+    failure, or field mismatch is an evidence mismatch that names what
+    differed. The producer schema is fixed at 1
+    (valkey-release-automation/qualify-release.yml)."""
+
+    def _run_with_manifest(self, **payload_overrides: object):
+        """A run whose manifest carries valid content minus the overrides."""
+        from tests.release_fixtures import build_manifest_payload
+        payload = build_manifest_payload()
+        payload.update(payload_overrides)
+        return qualification_run(manifest_payload=payload)
+
+    def test_valid_content_manifest_passes(self) -> None:
+        # Sanity: the fixture default satisfies every binding.
+        status = evaluate_qualification(
+            _gh_with_runs([qualification_run()]), _POLICY,
+            tag="9.1.1", sha=MERGE_SHA,
+        )
+        assert status.passed
+        assert not status.failed_jobs
+
+    def test_wrong_source_sha_names_the_field(self) -> None:
+        # An attacker-authored manifest for a different SHA must never
+        # count as evidence, even if the run and jobs look correct.
+        wrong_sha = "d" * 40
+        run = self._run_with_manifest(source_sha=wrong_sha)
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("source_sha" in item for item in status.failed_jobs)
+
+    def test_wrong_tag_names_the_field(self) -> None:
+        # A manifest for a different tag on the same SHA (an rc-suffixed
+        # dispatch that legitimately skipped packages) must not satisfy
+        # this release's qualification.
+        run = self._run_with_manifest(tag="9.1.2")
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("manifest tag" in item for item in status.failed_jobs)
+
+    def test_wrong_version_names_the_field(self) -> None:
+        # The manifest carries version separately from tag; both must bind.
+        run = self._run_with_manifest(version="9.1.0")
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("manifest version" in item for item in status.failed_jobs)
+
+    @pytest.mark.parametrize(("field", "wrong_value"), [
+        ("rpm_jobs", 1),           # policy expects 2
+        ("deb_jobs", 5),           # policy expects 1
+        ("archive_jobs", 3),       # policy expects 4 (2 x86 + 2 ARM)
+    ])
+    def test_wrong_job_counts_are_named_individually(
+        self, field: str, wrong_value: int,
+    ) -> None:
+        # Each miscount is a different failure and each one blocks the
+        # release; the reviewed inventory (policy file) is authoritative.
+        run = self._run_with_manifest(**{field: wrong_value})
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any(field in item for item in status.failed_jobs)
+
+    def test_stringified_count_is_still_wrong(self) -> None:
+        # A producer that emits "2" instead of 2 is a schema drift; the
+        # exact-int discipline refuses coercion.
+        run = self._run_with_manifest(rpm_jobs="2")
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("rpm_jobs" in item for item in status.failed_jobs)
+
+    def test_wrong_schema_version_refuses(self) -> None:
+        # Schema drift by a producer change: the controller cannot trust
+        # the shape and must not read fields blindly.
+        run = self._run_with_manifest(schema=2)
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("schema" in item for item in status.failed_jobs)
+
+    def test_missing_required_field_refuses(self) -> None:
+        from tests.release_fixtures import (
+            build_manifest_payload,
+            build_manifest_zip_bytes,
+        )
+        payload = build_manifest_payload()
+        del payload["automation_sha"]  # dispatch identity binding lost
+        run = qualification_run(
+            manifest_zip=build_manifest_zip_bytes(payload),
+        )
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("automation_sha" in item for item in status.failed_jobs)
+
+    def test_malformed_json_body_refuses(self) -> None:
+        from tests.release_fixtures import build_manifest_zip_bytes
+        run = qualification_run(
+            manifest_zip=build_manifest_zip_bytes(
+                json_body='{"schema": 1, "tag":'  # unterminated
+            ),
+        )
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("malformed JSON" in item for item in status.failed_jobs)
+
+    def test_top_level_json_list_refuses(self) -> None:
+        # A producer emitting a list at the top level cannot be indexed by
+        # field name; every field lookup would raise. Refuse cleanly.
+        from tests.release_fixtures import build_manifest_zip_bytes
+        run = qualification_run(
+            manifest_zip=build_manifest_zip_bytes(json_body='[1, 2, 3]'),
+        )
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("JSON" in item or "object" in item
+                   for item in status.failed_jobs)
+
+    def test_empty_artifact_body_refuses(self) -> None:
+        # An artifact with size_in_bytes > 0 but no bytes on the wire (a
+        # broken upload, a stubbed body) must not pass silently as "no
+        # gaps found".
+        from tests.release_fixtures import _manifest_artifact_mock
+        run = _without_manifest(qualification_run())
+        empty_requester = MagicMock()
+        empty_requester.requestBlob.return_value = (200, {}, b"")
+        run.get_artifacts.return_value = (
+            list(run.get_artifacts.return_value)
+            + [_manifest_artifact_mock(requester=empty_requester)]
+        )
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("unreadable" in item or "no bytes" in item
+                   for item in status.failed_jobs)
+
+    def test_corrupt_zip_body_refuses(self) -> None:
+        # Not a zip at all: an upstream mangle should never look like
+        # a passable manifest.
+        from tests.release_fixtures import _manifest_artifact_mock
+        run = _without_manifest(qualification_run())
+        bad_requester = MagicMock()
+        bad_requester.requestBlob.return_value = (200, {}, b"not a zip file")
+        run.get_artifacts.return_value = (
+            list(run.get_artifacts.return_value)
+            + [_manifest_artifact_mock(requester=bad_requester)]
+        )
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("corrupt" in item or "unreadable" in item
+                   for item in status.failed_jobs)
+
+    def test_download_http_error_refuses(self) -> None:
+        # A non-2xx from the artifact-download endpoint (blob-storage error,
+        # signed-URL expiry, rate limiting) is not evidence.
+        from tests.release_fixtures import _manifest_artifact_mock
+        run = _without_manifest(qualification_run())
+        error_requester = MagicMock()
+        error_requester.requestBlob.return_value = (503, {}, b"")
+        run.get_artifacts.return_value = (
+            list(run.get_artifacts.return_value)
+            + [_manifest_artifact_mock(requester=error_requester)]
+        )
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("HTTP 503" in item or "unreadable" in item
+                   for item in status.failed_jobs)
+
+    def test_wrong_source_sha_via_direct_helper_names_the_hash_diff(self) -> None:
+        # A more direct test of the helper's message shape: the SHA
+        # comparison prints truncated hashes so the operator can diff the
+        # values at a glance.
+        wrong = "e" * 40
+        run = self._run_with_manifest(source_sha=wrong)
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        # The message includes both the wrong prefix and the expected prefix
+        assert any(wrong[:12] in item for item in status.failed_jobs)
+        assert any(MERGE_SHA[:12] in item for item in status.failed_jobs)
+
+    def test_multiple_json_files_in_zip_refuses(self) -> None:
+        # A producer accidentally packing more than one JSON file: refuse
+        # rather than guess which one is authoritative.
+        import io
+        import json as _json
+        import zipfile as _zipfile
+
+        from tests.release_fixtures import (
+            _manifest_artifact_mock,
+            build_manifest_payload,
+        )
+        buf = io.BytesIO()
+        with _zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("manifest.json",
+                        _json.dumps(build_manifest_payload()))
+            zf.writestr("other.json", _json.dumps({"unrelated": True}))
+        run = _without_manifest(qualification_run())
+        multi_requester = MagicMock()
+        multi_requester.requestBlob.return_value = (200, {}, buf.getvalue())
+        run.get_artifacts.return_value = (
+            list(run.get_artifacts.return_value)
+            + [_manifest_artifact_mock(requester=multi_requester)]
+        )
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("JSON files" in item or "unreadable" in item
+                   for item in status.failed_jobs)
+
+    def test_rc_manifest_expects_zero_package_counts(self) -> None:
+        # RC dispatch skips packages; the manifest reflects that with
+        # rpm_jobs=0, deb_jobs=0. A leaked count of 1 must fail closed.
+        from tests.release_fixtures import build_manifest_payload
+        payload = build_manifest_payload(tag="9.2.0-rc1", rpm_jobs=1)
+        run = qualification_run(tag="9.2.0-rc1", manifest_payload=payload,
+                                jobs=_archive_jobs())
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.2.0-rc1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("rpm_jobs" in item for item in status.failed_jobs)

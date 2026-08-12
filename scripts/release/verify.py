@@ -134,10 +134,17 @@ def escalate_stalled_outputs(
     """PENDING past the deadline becomes FAILED, so stalls enter the
     notification path exactly once instead of staying invisible forever
     (the 'Helm discovered next day' failure mode). BLOCKED outputs are
-    exempt: their prerequisite carries the escalation."""
-    if published_at is None or not _past_deadline(published_at, timeout_minutes):
-        return outputs
+    exempt: their prerequisite carries the escalation.
 
+    The deadline is per-attempt: for an output that already matched a
+    workflow run or downstream PR the timeout runs from THAT object's
+    creation timestamp (``attempt_started_at``), not the release-wide
+    ``published_at``. This matters when the release spent hours BLOCKED
+    upstream before the downstream attempt could even start; charging
+    that upstream block against a freshly-opened Bundle or Helm PR would
+    kill the very first attempt on its first pass. When an output carries
+    no attempt evidence the release-wide clock still applies.
+    """
     def _stalled(o: DownstreamOutput) -> bool:
         if o.state is not OutputState.PENDING:
             return False
@@ -150,7 +157,10 @@ def escalate_stalled_outputs(
         # attempt before one was ever observed, so it stays PENDING with
         # its action intact. Once an attempt exists (run/PR evidence fills
         # run_id or url), the normal deadline applies.
-        return not (o.action and not o.run_id and not o.url)
+        if o.action and not o.run_id and not o.url:
+            return False
+        deadline_start = o.attempt_started_at or published_at
+        return _past_deadline(deadline_start, timeout_minutes)
 
     return tuple(
         DownstreamOutput(
@@ -160,6 +170,7 @@ def escalate_stalled_outputs(
             # action cleared: an escalated stall pages a human; it must not
             # also keep auto-dispatching every pass.
             url=o.url, action="", run_id=o.run_id,
+            attempt_started_at=o.attempt_started_at,
         ) if _stalled(o) else o
         for o in outputs
     )
@@ -267,6 +278,7 @@ def _verify_build_run(gh: Any, gh_source: Any, policy: RepoReleasePolicy,
         return DownstreamOutput(
             name="build-run", state=OutputState.PENDING,
             detail=f"Build-release run {run.id} is still executing", url=run.html_url,
+            attempt_started_at=run.created_at,
         ), run
     if run.conclusion == "success":
         return DownstreamOutput(
@@ -410,11 +422,18 @@ def _verify_packages(down: Any, stage: str, build: DownstreamOutput,
                        f"succeeded, expected exactly {expected})",
                 url=build.url,
             )
+    # Only claim Pages succeeded when a Deploy Pages job is actually
+    # present in the succeeded set. Otherwise keep the detail honest: the
+    # RPM/DEB matrix satisfied its inventory, but the site deployment was
+    # not observed by name and is unverified here. Full digest/provenance
+    # binding is a deferred redesign; not lying about pages is the fix.
+    pages_succeeded = any("Deploy Pages" in name for name in succeeded)
+    pages_detail = "and the pages jobs succeeded" if pages_succeeded else "(pages not checked)"
     return DownstreamOutput(
         name="packages", state=OutputState.VERIFIED,
         detail=f"All {down.qualification_rpm_jobs} RPM and "
-               f"{down.qualification_deb_jobs} DEB publish jobs and the "
-               f"pages jobs succeeded", url=build.url,
+               f"{down.qualification_deb_jobs} DEB publish jobs succeeded "
+               f"{pages_detail}", url=build.url,
     )
 
 
@@ -585,6 +604,7 @@ def _verify_container(gh: Any, down: Any, tag: str) -> list[DownstreamOutput]:
         pr_output = DownstreamOutput(
             name="container-pr", state=OutputState.PENDING,
             detail=f"PR #{pr.number} is open, awaiting merge", url=pr.html_url,
+            attempt_started_at=pr.created_at,
         )
 
     checks = {
@@ -740,6 +760,7 @@ def _verify_bundle(
                 detail=f"Bundle update PR #{pr.number} is open (`versions.json` "
                        f"still records {recorded or 'nothing'} for {line})",
                 url=pr.html_url,
+                attempt_started_at=pr.created_at,
             )
         if pr is not None and pr.merged_at is None:
             # A human closed the update PR: that is a decision, not a retry
@@ -849,6 +870,7 @@ def _verify_helm(
                 name="helm", state=OutputState.PENDING,
                 detail=f"Chart bump PR #{pr.number} is open, awaiting merge",
                 url=pr.html_url,
+                attempt_started_at=pr.created_at,
             )
         if pr is not None and pr.merged_at is None:
             # A closed bump PR is a human decision; never reopen it
@@ -1027,6 +1049,7 @@ def _pr_progress_output(name: str, pr: Any, branch: str, repo_name: str) -> Down
     return DownstreamOutput(
         name=name, state=OutputState.PENDING,
         detail=f"PR #{pr.number} is open, awaiting merge", url=pr.html_url,
+        attempt_started_at=pr.created_at,
     )
 
 

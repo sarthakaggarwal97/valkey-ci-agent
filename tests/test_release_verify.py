@@ -721,6 +721,26 @@ class TestPackagesAndTryValkey:
         ])
         out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
         assert out.state is OutputState.VERIFIED
+        # When a Deploy Pages job is present in the succeeded set the
+        # detail claims pages succeeded; otherwise the wording must stay
+        # honest (see test_pages_wording_admits_when_pages_was_not_checked).
+        assert "and the pages jobs succeeded" in out.detail
+
+    def test_pages_wording_admits_when_pages_was_not_checked(self) -> None:
+        # F6-adjacent: the RPM/DEB matrix satisfied its inventory but no
+        # Deploy Pages job ran, so the detail cannot claim "pages
+        # succeeded" — it says (pages not checked) instead. Full
+        # digest/provenance verification is a deferred redesign; not
+        # lying about pages is the fix here.
+        jobs = _jobs([
+            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
+            ("release-build-packages / RPM · el9 (aarch64) · Publish to S3", "success"),
+            ("release-build-packages / DEB · bookworm (x86_64) · Publish to S3", "success"),
+        ])
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
+        assert out.state is OutputState.VERIFIED
+        assert "(pages not checked)" in out.detail
+        assert "and the pages jobs succeeded" not in out.detail
 
     def test_dropped_platform_fails_packages_despite_green_jobs(self) -> None:
         # F21: a green-but-smaller matrix (one RPM platform silently
@@ -992,6 +1012,53 @@ class TestStallEscalationBoundary:
         outputs = (DownstreamOutput(name="helm", state=OutputState.PENDING,
                                     detail="waiting"),)
         assert verify.escalate_stalled_outputs(outputs, None, 360) == outputs
+
+    def test_fresh_attempt_after_long_upstream_block_is_not_escalated(self) -> None:
+        # F25: the release published hours ago (spent long in BLOCKED),
+        # but the downstream PR was JUST opened. The escalator's per-
+        # attempt clock must run from pr.created_at, not published_at,
+        # otherwise the first-ever downstream attempt is killed on its
+        # first pass.
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        published = now - timedelta(minutes=999)
+        fresh = now - timedelta(minutes=5)
+        outputs = (DownstreamOutput(
+            name="bundle", state=OutputState.PENDING,
+            detail="Bundle update PR #7 is open",
+            url="https://x/pull/7", attempt_started_at=fresh,
+        ),)
+        escalated = verify.escalate_stalled_outputs(outputs, published, 360)
+        assert escalated[0].state is OutputState.PENDING
+
+    def test_old_attempt_still_escalates_even_on_a_fresh_release(self) -> None:
+        # Symmetry check: a 6h-old attempt escalates on its own clock even
+        # when the release itself was only just published.
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        published = now - timedelta(minutes=1)
+        old_attempt = now - timedelta(minutes=999)
+        outputs = (DownstreamOutput(
+            name="bundle", state=OutputState.PENDING,
+            detail="Bundle update PR #7 is open",
+            url="https://x/pull/7", attempt_started_at=old_attempt,
+        ),)
+        escalated = verify.escalate_stalled_outputs(outputs, published, 360)
+        assert escalated[0].state is OutputState.FAILED
+        assert escalated[0].attempt_started_at == old_attempt
+
+    def test_attempt_timestamp_falls_back_to_release_wide_clock(self) -> None:
+        # When an output carries no attempt evidence (registry-probe
+        # PENDING, hashes not yet recorded, ...), the release-wide clock
+        # still governs so an eternal probe eventually escalates.
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        published = now - timedelta(minutes=999)
+        outputs = (DownstreamOutput(
+            name="hashes", state=OutputState.PENDING, detail="waiting",
+        ),)
+        escalated = verify.escalate_stalled_outputs(outputs, published, 360)
+        assert escalated[0].state is OutputState.FAILED
 
 
 class TestDetailCellStyle:

@@ -639,13 +639,34 @@ def find_release_issue(repo: Any, branch: str, *, label: str,
     ``state="closed"`` serves the abandonment check (the newest closed
     tracker, GitHub's default newest-first ordering).
     """
+    matches = find_release_issues(repo, branch, label=label, state=state)
+    return matches[0] if matches else None
+
+
+def find_release_issues(repo: Any, branch: str, *, label: str,
+                        state: str = "open") -> list[Any]:
+    """Every tracking issue for *branch* in *state*, newest first.
+
+    The plural form of :func:`find_release_issue` used where duplicates
+    matter (start-release ambiguous-create readback, "one active release
+    per branch" invariant check). Follows the same identity model: prefer
+    the label-pair query, fall back to the body-marker migration path.
+    The two candidate sets are unioned by issue number so a marker-only
+    tracker is not missed.
+    """
     labelled = retry_github_call(
         lambda: list(repo.get_issues(state=state, labels=[label, branch_label(branch)])),
         retries=2, description=f"list {state} {label}+{branch_label(branch)} issues",
     )
+    seen: set[int] = set()
+    matches: list[Any] = []
     for issue in labelled:
-        if "pull_request" not in issue._rawData:
-            return issue
+        if "pull_request" in issue._rawData:
+            continue
+        if issue.number in seen:
+            continue
+        seen.add(issue.number)
+        matches.append(issue)
 
     marker = identity_marker(branch)
     issues = retry_github_call(
@@ -655,9 +676,50 @@ def find_release_issue(repo: Any, branch: str, *, label: str,
     for issue in issues:
         if "pull_request" in issue._rawData:
             continue
+        if issue.number in seen:
+            continue
         if marker in (issue.body or ""):
-            return issue
-    return None
+            seen.add(issue.number)
+            matches.append(issue)
+    return matches
+
+
+def has_completion_marker(issue: Any, gh: Any = None) -> bool:
+    """True when *issue* carries the controller's completion marker.
+
+    Reads only from trusted-author comments, so a manual paste of the
+    marker string cannot forge completion. Used by the start-release
+    guard (a closed tracker without this marker was abandoned mid-flight,
+    starting a new release on top of it would be a duplicate) and by the
+    reconcile heal path (a controller-closed tracker with drifted
+    projection is edited in place, never reopened).
+    """
+    marker = complete_marker()
+    return any(
+        marker_present(comment.body, marker)
+        for comment in trusted_comments(issue, gh)
+    )
+
+
+def trusted_bot_authors(gh: Any = None) -> "frozenset[str]":
+    """The set of login strings the controller treats as its own bot identities.
+
+    Same trust filter :func:`trusted_comments` applies to marker read-back,
+    but exposed as a set for authors of *other* GitHub resources -- notably
+    the release-notes PR itself, which reconciliation authenticates
+    before binding to avoid a lookalike preemption. Includes the static
+    bot identities, the RELEASE_BOT_LOGIN env override, and the
+    authenticated user identity (PAT runs) when *gh* is provided.
+    """
+    trusted = set(TRUSTED_MARKER_AUTHORS)
+    env_login = os.environ.get("RELEASE_BOT_LOGIN", "").strip()
+    if env_login:
+        trusted.add(env_login)
+    if gh is not None:
+        login = controller_login(gh)
+        if login:
+            trusted.add(login)
+    return frozenset(trusted)
 
 
 def controller_login(gh: Any) -> str:

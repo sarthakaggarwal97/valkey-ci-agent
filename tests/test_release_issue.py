@@ -633,3 +633,139 @@ class TestCommentMemo:
         gh._release_controller_login = "sarthakaggarwal97"
         assert issue_mod.adopted_shas(tracker, gh) == (_SHA_A,)
         tracker.get_comments.assert_called_once()
+
+
+
+class TestFindReleaseIssues:
+    """The plural finder used by the F19 "one active release per branch"
+    invariant (multiple-open refusal, ambiguous-create readback). Follows
+    the same identity model as :func:`find_release_issue`: label-pair
+    query first, body-marker migration path as fallback, PRs dropped."""
+
+    def _issue(self, number: int, branch: str = "9.1") -> MagicMock:
+        issue = MagicMock(number=number)
+        issue.body = issue_mod.identity_marker(branch)
+        issue._rawData = {}
+        return issue
+
+    def test_returns_every_matching_open_tracker(self) -> None:
+        first = self._issue(7)
+        second = self._issue(8)
+        repo = MagicMock()
+        repo.get_issues.side_effect = lambda state, labels: (
+            [first, second] if "release:9.1" in labels else []
+        )
+
+        matches = issue_mod.find_release_issues(repo, "9.1", label="release-tracker")
+
+        assert [i.number for i in matches] == [7, 8]
+
+    def test_marker_fallback_covers_pre_label_trackers(self) -> None:
+        # A tracker created before the branch label existed still carries
+        # the body marker; the finder unions both candidate sets.
+        labelled = self._issue(9)
+        marker_only = self._issue(10)
+        repo = MagicMock()
+        # The label-pair query returns only the labelled tracker; the
+        # label-only fallback returns both (the pair-matched one is
+        # deduped by number).
+        repo.get_issues.side_effect = lambda state, labels: (
+            [labelled] if "release:9.1" in labels else [labelled, marker_only]
+        )
+
+        matches = issue_mod.find_release_issues(repo, "9.1", label="release-tracker")
+
+        assert sorted(i.number for i in matches) == [9, 10]
+
+    def test_pull_requests_are_dropped(self) -> None:
+        # The REST list endpoint returns PRs alongside issues; drop them.
+        real = self._issue(11)
+        pull = MagicMock(number=12)
+        pull.body = issue_mod.identity_marker("9.1")
+        pull._rawData = {"pull_request": {}}
+        repo = MagicMock()
+        repo.get_issues.return_value = [pull, real]
+
+        matches = issue_mod.find_release_issues(repo, "9.1", label="release-tracker")
+
+        assert [i.number for i in matches] == [11]
+
+    def test_empty_set_when_no_tracker(self) -> None:
+        repo = MagicMock()
+        repo.get_issues.return_value = []
+        assert issue_mod.find_release_issues(repo, "9.1", label="release-tracker") == []
+
+    def test_find_release_issue_returns_first_match(self) -> None:
+        # The singular finder is a thin wrapper: same identity model,
+        # returns the first hit (matching the pre-F19 behavior).
+        first = self._issue(13)
+        second = self._issue(14)
+        repo = MagicMock()
+        repo.get_issues.side_effect = lambda state, labels: (
+            [first, second] if "release:9.1" in labels else []
+        )
+
+        assert issue_mod.find_release_issue(repo, "9.1", label="release-tracker") is first
+
+
+class TestHasCompletionMarker:
+    """The F19 (refuse-start on abandoned closed tracker) and F24 (heal
+    controller-completed CLOSED tracker) guards depend on this: only a
+    trusted-author completion marker counts."""
+
+    def _tracker(self, comments: "list[MagicMock] | None" = None) -> MagicMock:
+        issue = MagicMock(number=7)
+        issue.get_comments.return_value = comments or []
+        return issue
+
+    def test_returns_true_when_trusted_marker_present(self) -> None:
+        comment = _comment("valkeyrie-ops[bot]",
+                           f"{issue_mod.complete_marker()}\nrelease complete")
+        assert issue_mod.has_completion_marker(self._tracker([comment])) is True
+
+    def test_returns_false_when_no_comments(self) -> None:
+        assert issue_mod.has_completion_marker(self._tracker([])) is False
+
+    def test_returns_false_for_untrusted_author(self) -> None:
+        # A hand-pasted completion marker by an outsider cannot forge
+        # controller-closed status; the same trust model as adoptions.
+        comment = _comment("drive-by",
+                           f"{issue_mod.complete_marker()}\nrelease complete")
+        assert issue_mod.has_completion_marker(self._tracker([comment])) is False
+
+    def test_returns_false_for_quoted_marker_inside_a_fence(self) -> None:
+        # A trusted comment quoting the marker (e.g., an operator help
+        # message) inside a code fence must not read as completion.
+        body = f"For reference:\n```\n{issue_mod.complete_marker()}\n```"
+        comment = _comment("valkeyrie-ops[bot]", body)
+        assert issue_mod.has_completion_marker(self._tracker([comment])) is False
+
+
+class TestTrustedBotAuthors:
+    """The trust set the F11 notes-PR author gate consults. Mirrors
+    :func:`trusted_comments`' trust model but exposed as a set for
+    caller-side authentication of *other* GitHub resources."""
+
+    def test_covers_the_static_bot_identities(self) -> None:
+        trusted = issue_mod.trusted_bot_authors()
+        assert issue_mod.TRUSTED_MARKER_AUTHORS.issubset(trusted)
+
+    def test_env_release_bot_login_joins_the_set(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("RELEASE_BOT_LOGIN", "myapp[bot]")
+        assert "myapp[bot]" in issue_mod.trusted_bot_authors()
+
+    def test_blank_env_release_bot_login_adds_nothing(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # An unset secret (empty string) must not silently trust the
+        # empty-login author.
+        monkeypatch.setenv("RELEASE_BOT_LOGIN", "")
+        assert "" not in issue_mod.trusted_bot_authors()
+        monkeypatch.setenv("RELEASE_BOT_LOGIN", "   ")
+        assert "   " not in issue_mod.trusted_bot_authors()
+
+    def test_authenticated_user_identity_joins_the_set(self) -> None:
+        gh = MagicMock()
+        gh._release_controller_login = None
+        gh.get_user.return_value.login = "sarthakaggarwal97"
+        assert "sarthakaggarwal97" in issue_mod.trusted_bot_authors(gh)

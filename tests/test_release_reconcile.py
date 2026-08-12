@@ -10,9 +10,11 @@ qualification, publication, and completion.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from github.GithubException import GithubException
 
 from scripts.release import issue as issue_mod
 from scripts.release.authorize import NotAuthorizedError
@@ -45,11 +47,48 @@ from tests.release_fixtures import (
     check_run,
     gh_mock,
     make_policy,
-    notes_pr,
     qualification_run,
     repo_mock,
     tracker,
 )
+from tests.release_fixtures import (
+    notes_pr as _notes_pr_raw,
+)
+
+
+def notes_pr(
+    *args: object,
+    user_login: str = "valkeyrie-ops[bot]",
+    base_ref: str = "9.1",
+    base_repo: str = "valkey-io/valkey",
+    **kwargs: object,
+) -> MagicMock:
+    """Wrap ``release_fixtures.notes_pr`` so the F11 lookalike-preemption
+    check and the F18 bound-PR revalidation see the fields they need.
+
+    ``release_fixtures.notes_pr`` predates both fixes: it leaves ``pr.user``
+    and ``pr.base`` as unconfigured MagicMocks (truthy but not strings). The
+    author check ``pr.user.login not in trusted_authors`` and the base-ref
+    check ``pr.base.ref != branch`` would then always trip on fixtures the
+    tests intend as "valid notes PR". Populate them with trusted defaults;
+    override to model drift.
+    """
+    pr = _notes_pr_raw(*args, **kwargs)  # type: ignore[arg-type]
+    pr.user.login = user_login
+    pr.base = SimpleNamespace(
+        ref=base_ref, repo=SimpleNamespace(full_name=base_repo),
+    )
+    return pr
+
+
+@pytest.fixture(autouse=True)
+def _patch_notes_pr_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Route ``release_fixtures.notes_pr`` (called internally by
+    ``release_fixtures.repo_mock``) through this module's wrapper so the
+    F11 author and F18 base-ref fields are populated on default fixtures
+    too. ``release_fixtures.py`` is off-limits under Agent B's file
+    ownership; monkey-patching keeps the change scoped to this module."""
+    monkeypatch.setattr("tests.release_fixtures.notes_pr", notes_pr)
 
 _POLICY = make_policy()
 
@@ -69,7 +108,11 @@ class TestStartRelease:
 
     def test_wrong_branch_refused(self) -> None:
         gh = MagicMock()
-        with pytest.raises(ReleaseControlError, match="not a configured release branch"):
+        # ``unstable`` is not MAJOR.MINOR-shaped, so validate_release_branch
+        # raises through parse_release_branch first ("not a release branch");
+        # a right-shape-but-unconfigured branch would raise "not a configured
+        # release branch". Match either — both are the F10 gate firing.
+        with pytest.raises(ReleaseControlError, match="not a"):
             start_release(gh, _POLICY, branch="unstable",
                           intent=ReleaseIntent.PATCH, actor="madolson")
         gh.get_repo.assert_not_called()
@@ -174,8 +217,13 @@ class TestNotesPRBinding:
         pytest.param("agent/release-cut/9.1.5-ga", "9.11", id="9.1-not-9.11"),
     ])
     def test_non_matching_head_refs_never_bind(self, head_ref: str, branch: str) -> None:
+        # Extended policy so branches like 9.10/9.11 pass F10's
+        # validate_release_branch gate — the property under test is the
+        # trailing-dot prefix rule, not branch allowlisting.
+        policy = make_policy(branches=("9.1", "8.0", "9.10", "9.11"))
         pr = notes_pr(head_ref=head_ref)
-        assert _status(repo_mock(pulls=[pr]), branch=branch).notes_pr_number == 0
+        assert _status(repo_mock(pulls=[pr]), branch=branch,
+                       policy=policy).notes_pr_number == 0
 
     def test_fork_pr_with_notes_style_head_cannot_bind(self) -> None:
         # head.ref of a fork PR is attacker-chosen; only upstream prep
@@ -765,7 +813,11 @@ class TestReconcileBranch:
         issue.body = issue_mod.identity_marker("9.1") + "\nstale hand-edited text"
         repo = repo_mock(issues=[issue])
 
-        status = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        # act=True writes: F30 makes act=False strict observation mode
+        # (no edits at all); use the default (act=True) for tests that
+        # want to assert on the rendered projection.
+        with patch("scripts.release.actions.advance", return_value=[]):
+            status = reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         assert status is not None and status.ready
         kwargs = issue.edit.call_args.kwargs
@@ -784,15 +836,15 @@ class TestReconcileBranch:
     def test_reconcile_skips_noop_edit_within_the_same_minute(self) -> None:
         repo = repo_mock(issues=[tracker()])
         now, clock = self._frozen_clock()
-        with clock:
-            first = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with clock, patch("scripts.release.actions.advance", return_value=[]):
+            first = reconcile_branch(gh_mock(repo), _POLICY, "9.1")
             assert first is not None
             issue = repo.get_issues.return_value[0]
             issue.body = issue_mod.render_body(first, now)
             issue.title = issue_mod.render_live_title(first)
             issue.edit.reset_mock()
 
-            reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         issue.edit.assert_not_called()
 
@@ -802,15 +854,15 @@ class TestReconcileBranch:
         # freshness heartbeat lives in the workflow logs.
         repo = repo_mock(issues=[tracker()])
         now, clock = self._frozen_clock()
-        with clock:
-            first = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with clock, patch("scripts.release.actions.advance", return_value=[]):
+            first = reconcile_branch(gh_mock(repo), _POLICY, "9.1")
         assert first is not None
         issue = repo.get_issues.return_value[0]
         issue.body = issue_mod.render_body(first, now - timedelta(minutes=5))
         issue.title = issue_mod.render_live_title(first)
         issue.edit.reset_mock()
-        with clock:
-            reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with clock, patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
         issue.edit.assert_not_called()
 
     def test_a_real_state_change_edits_exactly_once(self) -> None:
@@ -818,23 +870,24 @@ class TestReconcileBranch:
         # differing beyond the timestamp gets exactly one edit.
         repo = repo_mock(issues=[tracker()])
         now, clock = self._frozen_clock()
-        with clock:
-            first = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with clock, patch("scripts.release.actions.advance", return_value=[]):
+            first = reconcile_branch(gh_mock(repo), _POLICY, "9.1")
         assert first is not None
         issue = repo.get_issues.return_value[0]
         stale = issue_mod.render_body(first, now - timedelta(minutes=5))
         issue.body = stale.replace("Passed", "Pending", 1)  # state drifted
         issue.title = issue_mod.render_live_title(first)
         issue.edit.reset_mock()
-        with clock:
-            reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with clock, patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
         issue.edit.assert_called_once()
 
     def test_title_kept_while_no_notes_pr_pins_a_version(self) -> None:
         issue = tracker()
         repo = repo_mock(issues=[issue], pulls=[])
 
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         # The body still edits (freshness footer) but the start-time title
         # is never clobbered: the edit carries no title at all.
@@ -849,7 +902,8 @@ class TestReconcileBranch:
         issue.title = "Release 9.1.1 · Ready to Publish"
         repo = repo_mock(issues=[issue])
 
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         assert issue.edit.call_args.kwargs["title"] == "Release 9.1.1"
 
@@ -859,7 +913,8 @@ class TestReconcileBranch:
         issue.body = "stale"
         repo = repo_mock(issues=[issue])
 
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         kwargs = issue.edit.call_args.kwargs
         assert "title" not in kwargs
@@ -877,14 +932,19 @@ class TestReconcileBranch:
         gh_agent = MagicMock()
         agent_head = "d" * 40
         gh_agent.get_repo.return_value.get_branch.return_value.commit.sha = agent_head
+        # Under Agent A's F12, gate-parked publish runs must bind the
+        # current tag+candidate in their run-name to hold the slot;
+        # unbound runs are ignored. Match the shape the runner writes.
         waiting = MagicMock(status="waiting", head_sha=agent_head,
-                            display_title="Publish release on 9.1 (requested by x)",
+                            display_title=(f"Publish release on 9.1 · 9.1.1 @ "
+                                           f"{MERGE_SHA} (requested by x)"),
                             html_url="https://x/actions/runs/500")
         workflow = gh_agent.get_repo.return_value.get_workflow.return_value
         workflow.get_runs.return_value = [waiting]
 
-        status = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False,
-                                  gh_agent=gh_agent, agent_repo="o/agent")
+        with patch("scripts.release.actions.advance", return_value=[]):
+            status = reconcile_branch(gh_mock(repo), _POLICY, "9.1",
+                                      gh_agent=gh_agent, agent_repo="o/agent")
 
         assert status is not None
         assert status.approval_run_url == "https://x/actions/runs/500"
@@ -936,7 +996,8 @@ class TestReconcileBranch:
         issue = tracker()
         repo = repo_mock(issues=[issue])
 
-        status = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with patch("scripts.release.actions.advance", return_value=[]):
+            status = reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         assert status is not None and status.approval_run_url == ""
         assert "Approve here:" not in issue.edit.call_args.kwargs["body"]
@@ -953,6 +1014,64 @@ def _issue_with_labels(*names: str) -> MagicMock:
     return issue
 
 
+class TestCloseSeam:
+    """F24 integration: the AdvanceResult close signal drives the last-write
+    close in reconcile_branch. This seam broke silently once (a bool
+    isinstance check that an AdvanceResult never satisfies), so the
+    end-to-end path is pinned here rather than inferred from unit tests
+    on either side."""
+
+    def test_close_signal_closes_after_the_final_render(self) -> None:
+        from scripts.release.actions import AdvanceResult
+
+        issue = tracker()
+        repo = repo_mock(issues=[issue])
+        result = AdvanceResult([], close_when_complete=True)
+
+        with patch("scripts.release.actions.advance", return_value=result):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
+
+        close_calls = [
+            c for c in issue.edit.call_args_list
+            if c.kwargs.get("state") == "closed"
+        ]
+        assert len(close_calls) == 1, "close_when_complete=True must close"
+        # The close is the LAST write: the rendered-body edit precedes it.
+        assert issue.edit.call_args_list[-1].kwargs.get("state") == "closed"
+        body_edits = [
+            c for c in issue.edit.call_args_list if "body" in c.kwargs
+        ]
+        assert body_edits, "final projection must be rendered before close"
+
+    def test_no_close_signal_never_closes(self) -> None:
+        from scripts.release.actions import AdvanceResult
+
+        issue = tracker()
+        repo = repo_mock(issues=[issue])
+        result = AdvanceResult([], close_when_complete=False)
+
+        with patch("scripts.release.actions.advance", return_value=result):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
+
+        assert not any(
+            c.kwargs.get("state") == "closed"
+            for c in issue.edit.call_args_list
+        )
+
+    def test_act_false_never_closes_even_when_signalled(self) -> None:
+        issue = tracker()
+        repo = repo_mock(issues=[issue])
+
+        with patch("scripts.release.actions.advance") as advance:
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        advance.assert_not_called()
+        assert not any(
+            c.kwargs.get("state") == "closed"
+            for c in issue.edit.call_args_list
+        )
+
+
 class TestLabelSync:
     def test_healthy_tracker_gets_no_state_labels(self) -> None:
         # Titles are constant and the phase lives inside the tracker, so
@@ -960,7 +1079,8 @@ class TestLabelSync:
         issue = _issue_with_labels("release-tracker", "release:9.1")
         repo = repo_mock(issues=[issue])
 
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         issue.add_to_labels.assert_not_called()
         issue.remove_from_labels.assert_not_called()
@@ -972,7 +1092,8 @@ class TestLabelSync:
                                    "phase:qualification")
         repo = repo_mock(issues=[issue])
 
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         issue.add_to_labels.assert_not_called()
         issue.remove_from_labels.assert_called_once_with("phase:qualification")
@@ -983,7 +1104,8 @@ class TestLabelSync:
         issue = _issue_with_labels("release-tracker", "release:9.1")
         repo = repo_mock(issues=[issue], runs=failing_runs)
 
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         assert set(issue.add_to_labels.call_args.args) == {"needs-attention"}
 
@@ -991,7 +1113,8 @@ class TestLabelSync:
                                        "needs-attention")
         repo = repo_mock(issues=[recovered])
 
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         recovered.add_to_labels.assert_not_called()
         recovered.remove_from_labels.assert_called_once_with("needs-attention")
@@ -1001,7 +1124,8 @@ class TestLabelSync:
                                    "bug", "help wanted")
         repo = repo_mock(issues=[issue])
 
-        reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
         issue.add_to_labels.assert_not_called()
         issue.remove_from_labels.assert_not_called()
@@ -1011,8 +1135,9 @@ class TestLabelSync:
                         check_run("build-macos-latest", run_id=2)]
         issue = _issue_with_labels("release-tracker", "release:9.1")
         repo = repo_mock(issues=[issue], runs=failing_runs)
-        with patch("scripts.release.reconcile.ensure_label") as ensure:
-            reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+        with patch("scripts.release.reconcile.ensure_label") as ensure, \
+             patch("scripts.release.actions.advance", return_value=[]):
+            reconcile_branch(gh_mock(repo), _POLICY, "9.1")
         assert any(call.args[1] == "needs-attention"
                    for call in ensure.call_args_list)
 
@@ -1168,8 +1293,14 @@ class TestAbandonedTracker:
         closed.state = "closed"
         repo = self._repo_with_closed(closed)
 
-        assert reconcile_branch(gh_mock(repo), _POLICY, "9.1") is None
+        # F24 heal-path: a controller-completed CLOSED tracker with a
+        # drifted projection has its labels/body fixed in place, without
+        # a reopen and without an abandoned-warning comment. The return
+        # value is the healed status (not None).
+        with patch("scripts.release.actions.advance", return_value=[]):
+            status = reconcile_branch(gh_mock(repo), _POLICY, "9.1")
 
+        assert status is not None
         closed.create_comment.assert_not_called()
 
     def test_observe_mode_never_posts_the_warning(self) -> None:
@@ -1185,3 +1316,362 @@ class TestAbandonedTracker:
         repo = repo_mock()
         repo.get_issues.side_effect = lambda state, labels: []
         assert reconcile_branch(gh_mock(repo), _POLICY, "9.1") is None
+
+
+# ------------------------------------------------------------------
+# Regression coverage for the external review findings addressed in
+# this patch (F10, F11, F18, F19, F22, F27, F29, F30).
+# ------------------------------------------------------------------
+
+
+def _writes_of(issue: MagicMock) -> list[str]:
+    """Names of writing methods called on *issue*, for zero-write assertions.
+
+    Any of ``edit`` / ``add_to_labels`` / ``remove_from_labels`` /
+    ``create_comment`` firing means the pass wrote — this is the audit
+    the F22 / F30 observation-mode tests apply.
+    """
+    calls: list[str] = []
+    for method in ("edit", "add_to_labels", "remove_from_labels", "create_comment"):
+        mock = getattr(issue, method)
+        if mock.called:
+            calls.append(f"{method}({mock.call_count}x)")
+    return calls
+
+
+class TestObservationMode:
+    """F22 (start_release dry_run=True) and F30 (reconcile_branch act=False)
+    are strict observation modes: no comment, no label, no edit anywhere on
+    the tracker or on binding comments, regardless of what the state calls
+    for."""
+
+    def test_dry_run_start_on_existing_unbound_tracker_performs_no_writes(self) -> None:
+        # Existing tracker without a bound notes PR yet: a real start
+        # writes a version-only binding receipt. Dry-run must not.
+        issue = tracker()  # no comments = no binding
+        repo = repo_mock(issues=[issue], pulls=[], tags=["9.1.0"])
+
+        result = start_release(gh_mock(repo), _POLICY, branch="9.1",
+                               intent=ReleaseIntent.PATCH, actor="madolson",
+                               dry_run=True)
+
+        assert not result.created and result.cut_needed
+        assert (result.version, result.stage) == ("9.1.1", "ga")
+        assert _writes_of(issue) == []
+
+    def test_dry_run_start_with_discoverable_notes_pr_performs_no_writes(self) -> None:
+        # Existing tracker + a discoverable (scan-visible) notes PR: a real
+        # start writes the identity-binding receipt on the scan hit. Dry-run
+        # must not.
+        issue = tracker()
+        repo = repo_mock(issues=[issue])  # default pulls carries a valid notes PR
+
+        result = start_release(gh_mock(repo), _POLICY, branch="9.1",
+                               intent=ReleaseIntent.PATCH, actor="madolson",
+                               dry_run=True)
+
+        assert not result.created and not result.cut_needed
+        assert _writes_of(issue) == []
+
+    def test_reconcile_act_false_performs_no_writes_on_full_pass(self) -> None:
+        # A full reconcile pass in observation mode: no branch-label
+        # backfill, no advance actions, no phase-label sync, no tracker
+        # edit, no binding write, no comment. Every writing method on
+        # every relevant mock stays untouched.
+        issue = _issue_with_labels("release-tracker")  # missing branch label = backfill candidate
+        issue.body = "stale hand-edited text"  # would drive an edit under act=True
+        repo = repo_mock(issues=[issue])
+
+        with patch("scripts.release.actions.advance") as advance:
+            status = reconcile_branch(gh_mock(repo), _POLICY, "9.1", act=False)
+
+        assert status is not None
+        advance.assert_not_called()
+        assert _writes_of(issue) == []
+
+
+class TestAdoptStaleAcknowledgement:
+    """F29: an adoption of a former head that already lapsed is refused
+    (its stale acknowledgement was never in the allowed set), and a
+    post-adopt candidate that stays INVALIDATED raises loudly instead of
+    wedging the release on a recorded no-op."""
+
+    def test_stale_former_head_adoption_is_refused(self) -> None:
+        # Branch moved A → B → C. Owner previously adopted B. Now they
+        # try to adopt B again: B is neither the current head (C) nor
+        # the notes-merge pin (A), so it must be refused. Under the
+        # pre-fix code ``status.candidate.sha`` would report B (the last
+        # recorded adoption) and quietly accept it — the exact wedge.
+        head_c = "c" * 40
+        repo = repo_mock(
+            branch_head=head_c,
+            issues=[tracker(comments=[bot_adoption(MOVED_SHA)])],
+        )
+        with pytest.raises(ReleaseControlError, match="Genuinely adoptable SHAs"):
+            adopt_candidate(gh_mock(repo), _POLICY,
+                            branch="9.1", sha=MOVED_SHA, actor="madolson")
+        # No comment landed: the refusal fires before the record write.
+        repo.get_issues.return_value[0].create_comment.assert_not_called()
+
+    def test_post_adopt_still_invalidated_raises_loudly(self) -> None:
+        # A trusted acknowledgement matching the current head is
+        # recorded, but the immediate recompute still reports
+        # INVALIDATED (a second branch move raced with the write, or the
+        # comment writer's user was outside the trusted set). Refuse
+        # loudly rather than record a wedged no-op.
+        issue = tracker()
+        repo = repo_mock(branch_head=MOVED_SHA, issues=[issue])
+
+        # Simulate a non-trusted echo: create_comment lands but the
+        # comment reads back as an untrusted author, so ``adopted_shas``
+        # returns nothing and the candidate stays INVALIDATED.
+        def _echo_untrusted(body: str) -> MagicMock:
+            echo = MagicMock()
+            echo.user.login = "drive-by"
+            echo.body = body
+            issue.get_comments.return_value = (
+                list(issue.get_comments.return_value) + [echo]
+            )
+            return MagicMock()
+
+        issue.create_comment.side_effect = _echo_untrusted
+
+        with pytest.raises(ReleaseControlError,
+                           match="STILL invalidated on the immediate recomputation"):
+            adopt_candidate(gh_mock(repo), _POLICY,
+                            branch="9.1", sha=MOVED_SHA, actor="madolson")
+
+
+class TestBoundNotesPrRevalidation:
+    """F18: every reconcile pass revalidates the bound PR's identity
+    against the binding. A head rename, a base retarget, or a fork
+    shove-through surfaces a standing alert and freezes the binding
+    (never rebinds, never updates merge_sha)."""
+
+    def _bound_issue(self, **binding_overrides: object) -> MagicMock:
+        kwargs: dict[str, object] = {"notes_pr_number": 42, "merge_sha": MERGE_SHA}
+        kwargs.update(binding_overrides)
+        return tracker(comments=[bot_binding("9.1.1", "ga", **kwargs)])  # type: ignore[arg-type]
+
+    def test_head_rename_freezes_binding(self) -> None:
+        # PR is fetched by number, but head.ref now parses to a different
+        # release identity (or nothing at all): standing alert; the
+        # binding stays pinned to the same PR number.
+        drifted = notes_pr(number=42, head_ref="agent/release-cut/9.1.2-ga")
+        issue = self._bound_issue()
+        status = _status(repo_mock(pulls=[drifted]), tracking_issue=issue)
+        assert status.alerts and any("head" in a for a in status.alerts)
+        assert not status.ready
+        # Binding was NOT updated: no new comment posted.
+        issue.create_comment.assert_not_called()
+
+    def test_head_renamed_to_junk_freezes_binding(self) -> None:
+        # A head that no longer parses as a notes-cut prep branch at all
+        # was previously crashing an assertion; the F18 revalidation
+        # converts it into a standing alert.
+        drifted = notes_pr(number=42, head_ref="some/random/branch")
+        issue = self._bound_issue()
+        status = _status(repo_mock(pulls=[drifted]), tracking_issue=issue)
+        assert status.alerts and any("not a notes-cut prep branch" in a
+                                     for a in status.alerts)
+        assert not status.ready
+
+    def test_base_retarget_freezes_binding(self) -> None:
+        # The PR was retargeted onto a different base branch: merging it
+        # would land into the wrong branch. Standing alert; no merge SHA
+        # is trusted from a retargeted PR.
+        drifted = notes_pr(number=42, base_ref="main")  # not 9.1
+        issue = self._bound_issue()
+        status = _status(repo_mock(pulls=[drifted]), tracking_issue=issue)
+        assert status.alerts and any("targets base" in a for a in status.alerts)
+        assert not status.ready
+        issue.create_comment.assert_not_called()
+
+    def test_fork_head_shove_through_freezes_binding(self) -> None:
+        # A fork-headed PR at the same PR number is a shove-through
+        # attempt (post-rebind attacker-controlled head): freeze.
+        drifted = notes_pr(number=42, head_repo="attacker/valkey")
+        issue = self._bound_issue()
+        status = _status(repo_mock(pulls=[drifted]), tracking_issue=issue)
+        assert status.alerts and any("fork head" in a.lower() or "head in `" in a
+                                     for a in status.alerts)
+        assert not status.ready
+
+
+class TestOneActiveReleaseInvariant:
+    """F19: ``one active release per branch`` — the create-issue path is
+    dedup-safe (readback-on-fail, refuse on ambiguity) and a closed
+    tracker without the completion marker blocks the next start."""
+
+    def test_ambiguous_create_failure_readback_returns_existing(self) -> None:
+        # ``create_issue`` raised after landing server-side (a 5xx after
+        # an accepted POST). The readback finds one matching tracker;
+        # use it instead of retrying (which would create the duplicate).
+        pre_existing = tracker()
+        pre_existing.number = 42
+        pre_existing.html_url = "https://x/issues/42"
+        pre_existing.labels = [_Label("release-tracker"), _Label("release:9.1")]
+        pre_existing.get_comments.return_value = []
+
+        repo = repo_mock(issues=[], tags=["9.1.0"])
+
+        # Toggle flipped by ``create_issue``: readbacks *before* the
+        # create attempt see nothing (so start_release proceeds to
+        # create); readbacks *after* see the tracker that landed
+        # server-side (so the ambiguous-failure recovery uses it).
+        def _get_issues(state: str = "open", labels: "list[str] | None" = None) -> list[MagicMock]:
+            if state != "open":
+                return []
+            return [pre_existing] if state_flag["created"] else []
+
+        def _raise_after_landing(**_kwargs: object) -> MagicMock:
+            state_flag["created"] = True
+            raise GithubException(500, "flaky", {})
+
+        state_flag = {"created": False}
+
+        repo.get_issues.side_effect = _get_issues
+        repo.create_issue.side_effect = _raise_after_landing
+
+        result = start_release(gh_mock(repo), _POLICY, branch="9.1",
+                               intent=ReleaseIntent.PATCH, actor="madolson")
+
+        # No second create attempt: readback succeeded.
+        assert repo.create_issue.call_count == 1
+        assert result.issue_number == 42
+
+    def test_multiple_open_trackers_at_discovery_refuse(self) -> None:
+        first = tracker()
+        second = tracker()
+        second.number = 8
+        second.html_url = "https://x/issues/8"
+        repo = repo_mock(issues=[first, second])
+        with pytest.raises(ReleaseControlError,
+                           match="multiple open release trackers"):
+            start_release(gh_mock(repo), _POLICY, branch="9.1",
+                          intent=ReleaseIntent.PATCH, actor="madolson")
+
+    def test_closed_tracker_without_completion_marker_refuses_start(self) -> None:
+        # Newest CLOSED tracker for this branch has no completion marker
+        # (was closed manually mid-flight, not by the controller).
+        # Starting a new release now would be a duplicate mid-flight
+        # release — refuse, naming the closed tracker.
+        closed = tracker()
+        closed.state = "closed"
+        closed.get_comments.return_value = []  # no completion marker
+
+        repo = repo_mock(issues=[], tags=["9.1.0"])
+        repo.get_issues.side_effect = lambda state, labels: (
+            [closed] if state == "closed" else []
+        )
+
+        with pytest.raises(ReleaseControlError, match="#7 on 9.1 was closed"):
+            start_release(gh_mock(repo), _POLICY, branch="9.1",
+                          intent=ReleaseIntent.PATCH, actor="madolson")
+        repo.create_issue.assert_not_called()
+
+    def test_closed_tracker_with_completion_marker_permits_start(self) -> None:
+        # The completed-then-closed tracker is fine — the previous
+        # release shipped; a new one can start.
+        closed = tracker(comments=[bot_comment(
+            f"{issue_mod.complete_marker()}\nRelease complete. Closing."
+        )])
+        closed.state = "closed"
+
+        created = MagicMock(number=99, html_url="https://x/issues/99")
+        created.get_comments.return_value = []
+        repo = repo_mock(issues=[], tags=["9.1.0"])
+        repo.get_issues.side_effect = lambda state, labels: (
+            [closed] if state == "closed" else []
+        )
+        repo.create_issue.return_value = created
+
+        result = start_release(gh_mock(repo), _POLICY, branch="9.1",
+                               intent=ReleaseIntent.PATCH, actor="madolson")
+
+        assert result.issue_number == 99
+        repo.create_issue.assert_called_once()
+
+
+class TestBranchDeletedAfterPublication:
+    """F27: a published release survives its source branch being deleted
+    or renamed. ``compute_status`` tolerates the 404 and routes through
+    ``_published_status``; downstream verification runs unchanged."""
+
+    def test_branch_404_with_published_release_computes_through_published(self) -> None:
+        # Bind the notes PR before the branch disappears so
+        # ``_find_notes_pr`` resolves through the binding (no scan
+        # required against a deleted branch).
+        issue = tracker(comments=[bot_binding(
+            "9.1.1", "ga", notes_pr_number=42, merge_sha=MERGE_SHA,
+        )])
+        repo = repo_mock(released=True, issues=[issue])
+        repo.get_branch.side_effect = GithubException(404, "no such branch", {})
+
+        core = (DownstreamOutput(name="tarballs", state=OutputState.VERIFIED,
+                                 detail="ok"),)
+        with patch("scripts.release.reconcile.verify_mod.verify_core_outputs",
+                   return_value=core), \
+             patch("scripts.release.reconcile.verify_mod.verify_ordered_outputs",
+                   return_value=()):
+            status = _status(repo, tracking_issue=issue)
+
+        assert status.published
+        assert status.release_url
+        assert status.candidate.sha == MERGE_SHA  # pinned by the tag
+        assert status.candidate.branch_head == ""  # branch gone
+
+    def test_branch_404_without_release_is_a_hard_blocker(self) -> None:
+        issue = tracker(comments=[bot_binding(
+            "9.1.1", "ga", notes_pr_number=42, merge_sha=MERGE_SHA,
+        )])
+        repo = repo_mock(issues=[issue])
+        repo.get_branch.side_effect = GithubException(404, "no such branch", {})
+
+        status = _status(repo, tracking_issue=issue)
+        assert not status.ready
+        assert any("does not exist" in b for b in status.blockers)
+
+
+class TestBranchAllowlist:
+    """F10: adopt and compute_status enforce the same branch allowlist
+    as start_release (Agent C's ``validate_release_branch``)."""
+
+    def test_compute_status_refuses_unconfigured_numeric_branch(self) -> None:
+        # 6.9 is right-shape but not in the policy's configured set.
+        repo = repo_mock()
+        with pytest.raises(ReleaseControlError,
+                           match="not a configured release branch"):
+            compute_status(gh_mock(repo), _POLICY, "6.9")
+
+    def test_adopt_candidate_refuses_unconfigured_numeric_branch(self) -> None:
+        repo = repo_mock(branch_head=MOVED_SHA)
+        with pytest.raises(ReleaseControlError,
+                           match="not a configured release branch"):
+            adopt_candidate(gh_mock(repo), _POLICY,
+                            branch="6.9", sha=MOVED_SHA, actor="madolson")
+
+
+class TestLookalikeNotesPr:
+    """F11: a convention-matching PR authored by someone outside the
+    trusted bot set is a lookalike-preemption attempt: refuse to bind
+    it and surface a standing alert."""
+
+    def test_lookalike_pr_by_untrusted_author_is_not_bound(self) -> None:
+        lookalike = notes_pr(number=99, user_login="drive-by")
+        status = _status(repo_mock(pulls=[lookalike]), tracking_issue=tracker())
+        assert status.notes_pr_number == 0
+        assert status.alerts and any("not a trusted release-bot identity"
+                                     in a for a in status.alerts)
+        # The alert renders as a blocker so it shows in the callout.
+        assert any("not a trusted release-bot identity" in b
+                   for b in status.blockers)
+
+    def test_env_provided_release_bot_login_permits_binding(
+            self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A fork's own App slug (from RELEASE_BOT_LOGIN) is trusted.
+        monkeypatch.setenv("RELEASE_BOT_LOGIN", "myapp[bot]")
+        pr = notes_pr(user_login="myapp[bot]")
+        status = _status(repo_mock(pulls=[pr]), tracking_issue=tracker())
+        assert status.notes_pr_number == 42
+        assert status.alerts == ()

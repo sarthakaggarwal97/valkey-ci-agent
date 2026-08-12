@@ -20,7 +20,19 @@ completed work:
   loops; the failure notification still stands until the build verifies);
 - retry a failed qualification run exactly once per candidate (same
   marker gate; a second failure waits for a human);
-- close the tracking issue when every required public output is verified.
+- signal completion of a release (return ``close_when_complete=True`` so
+  the caller can render the final tracker body and then close the issue).
+
+Every dispatch here goes through the two-phase receipt helper
+:func:`_autofix_two_phase`: an ``autofix-intent:<key>:<fp>`` marker posts
+BEFORE the dispatch API call and an ``autofix-done:<key>:<fp>`` marker is
+stamped in place AFTER the dispatch succeeds. A pass that finds intent
+without done means the previous pass crashed between the two writes; the
+helper looks for a matching run and either backfills done (dispatch
+succeeded, the follow-up write failed) or retries the dispatch ONCE and
+stamps done regardless of the retry outcome (bounded so a chronic failure
+never loops). This closes the "marker was posted, action never happened"
+gap while keeping fail-closed dispatch semantics.
 
 Publication is deliberately absent: it only happens through the protected
 publish workflow.
@@ -60,14 +72,37 @@ _CHART_PATH = "valkey/Chart.yaml"
 _CHART_README_PATH = "valkey/README.md"
 
 
+class AdvanceResult(list):
+    """The list of actions performed, plus a ``close_when_complete`` flag.
+
+    Extends ``list`` so existing ``for performed in advance(...)`` iteration
+    stays valid. The flag tells the caller (reconcile) that the release
+    reached COMPLETE with no alerts on this pass; reconcile is expected to
+    render the final tracker body FIRST and then close the tracker as its
+    last write, so a crash mid-close never leaves a stale-body closed
+    tracker. advance() itself deliberately never closes.
+    """
+
+    __slots__ = ("close_when_complete",)
+
+    def __init__(self, performed: "list[str] | None" = None, *,
+                 close_when_complete: bool = False) -> None:
+        super().__init__(performed or [])
+        self.close_when_complete = close_when_complete
+
+
 def advance(
     gh: Any, policy: RepoReleasePolicy, *,
     status: ReleaseStatus, tracking_issue: Any,
     gh_agent: Any = None, agent_repo: str = "",
     agent_head_sha: str = "",
-) -> list[str]:
-    """Perform the actions the recomputed *status* calls for; returns a
-    log of what was done (empty when the state needs nothing).
+) -> AdvanceResult:
+    """Perform the actions the recomputed *status* calls for; returns an
+    :class:`AdvanceResult` carrying the log of what was done and a
+    ``close_when_complete`` flag telling the caller whether the tracker is
+    ready to be closed (advance() itself never closes: the render/sync must
+    land first so a crash mid-close cannot leave a permanently stale
+    closed tracker).
 
     ``agent_head_sha`` is the agent repo's default-branch head (resolved
     once per pass by the caller): a publish run parked at the approval
@@ -78,11 +113,10 @@ def advance(
 
     if status.phase is ReleasePhase.QUALIFICATION:
         if status.qualification == QualificationStatus():
-            tag = release_tag(status.version, status.stage)
-            qual_mod.dispatch_qualification(
-                gh, policy, tag=tag, sha=status.candidate.sha,
-            )
-            performed.append(f"dispatched qualification of {tag} @ {status.candidate.sha[:12]}")
+            dispatched = _dispatch_qualification_once(gh, policy, status,
+                                                     tracking_issue)
+            if dispatched:
+                performed.append(dispatched)
         elif (
             status.qualification.run_id
             and not status.qualification.pending
@@ -107,9 +141,9 @@ def advance(
 
     for output in status.outputs:
         if output.action == "dispatch-bundle":
-            tag = release_tag(status.version, status.stage)
-            _dispatch_bundle(gh, policy, tag)
-            performed.append(f"dispatched bundle update for {tag}")
+            dispatched = _dispatch_bundle_once(gh, policy, status, tracking_issue)
+            if dispatched:
+                performed.append(dispatched)
         elif output.action == "open-helm-pr":
             url = _open_helm_pr(gh, policy, status.version)
             performed.append(f"opened helm chart bump PR: {url}")
@@ -119,17 +153,15 @@ def advance(
                 performed.append(dispatched)
 
     # Recovery-aware notifications: the fingerprint of every notify and
-    # wedge comment hashes (generation, sorted keys), and a pass observing
-    # ZERO failure and ZERO wedge items advances the generation, so a
-    # failure that recurs after a clean pass re-notifies exactly once while
-    # a steady failure stays suppressed.
+    # wedge comment hashes (generation, sorted keys). A pass observing
+    # ZERO failure and ZERO wedge items records recovery ONLY on the
+    # transition from a dirty generation to a healthy one, so a steadily
+    # healthy release does not churn the bookkeeping comment on every
+    # reconcile pass.
     failures = _failure_items(status)
     wedges = _wedge_items(status)
-    if failures or wedges:
-        generation, _ = _notify_generation(gh, tracking_issue)
-    else:
-        generation = 0
-        _record_recovery(gh, tracking_issue)
+    generation = _sync_generation_state(gh, tracking_issue,
+                                        dirty=bool(failures or wedges))
 
     if failures:
         note = _notify_once(gh, policy, status, tracking_issue,
@@ -150,12 +182,22 @@ def advance(
     # Alerts block completion: a standing alert (an untrusted tag, broken
     # release metadata) must keep the tracker open for a human even if the
     # phase machine were ever to report COMPLETE alongside one.
+    close_when_complete = False
     if status.phase is ReleasePhase.COMPLETE and not status.alerts:
-        closed = _close_when_complete(gh, status, tracking_issue)
-        if closed:
-            performed.append(f"closed tracking issue #{tracking_issue.number}")
+        marked = _mark_complete_once(gh, status, tracking_issue)
+        if marked:
+            performed.append(f"marked release complete on tracker "
+                             f"#{tracking_issue.number}")
+        # Signal that reconcile should render one last time and close the
+        # tracker as its final write. The signal is always True on a
+        # COMPLETE+no-alerts pass, whether or not the completion comment
+        # was newly posted this pass -- an earlier crash between comment
+        # post and close leaves the tracker open, and the very next
+        # advance() must still request the close so the caller can finish
+        # the job.
+        close_when_complete = tracking_issue.state != "closed"
 
-    return performed
+    return AdvanceResult(performed, close_when_complete=close_when_complete)
 
 
 def _dispatch_bundle(gh: Any, policy: RepoReleasePolicy, tag: str) -> None:
@@ -163,6 +205,13 @@ def _dispatch_bundle(gh: Any, policy: RepoReleasePolicy, tag: str) -> None:
 
     The payload carries the tag, mirroring the upstream trigger (which
     sends the release's tag_name as its version).
+
+    ``retries=1``: repository_dispatch has no dispatch-echo id in its
+    response and its firing is not idempotent, so a transient 5xx after
+    the payload was accepted would fire the downstream twice. The
+    two-phase caller (:func:`_dispatch_bundle_once`) provides idempotency
+    at the outer layer instead -- an intent marker survives one crash and
+    the next pass either backfills done or retries once.
     """
     repo = retry_github_call(
         lambda: gh.get_repo(policy.downstream.bundle_repo),
@@ -173,35 +222,199 @@ def _dispatch_bundle(gh: Any, policy: RepoReleasePolicy, tag: str) -> None:
             event_type="valkey-release",
             client_payload={"version": tag, "component": "valkey"},
         ),
-        retries=2, description="dispatch bundle update",
+        retries=1, description="dispatch bundle update",
     )
     logger.info("Dispatched bundle update for valkey %s", tag)
 
 
-def _autofix_once(gh: Any, tracking_issue: Any, *, key: str,
-                  fingerprint_source: str, callout: str) -> bool:
-    """Post the auto-remediation marker comment once per (key, fingerprint).
+def _dispatch_bundle_once(gh: Any, policy: RepoReleasePolicy,
+                          status: ReleaseStatus, tracking_issue: Any) -> str:
+    """Bundle dispatch, marker-gated per (tag, candidate).
 
-    Same trusted-marker pattern as the nudges: the marker is stamped into a
-    bot comment, and while one exists for this fingerprint no further
-    remediation fires, so the autofix can never loop. Returns False when the
-    marker already exists (remediation was already attempted).
+    Bundle updates rebuild an image; firing twice for the same candidate
+    is a waste of the downstream's runners, and without a marker every
+    reconcile pass would re-fire while versions.json remained stale (no
+    Bundle-side PR yet visible to the verifier). Re-arm only when the
+    candidate changes (new fingerprint) or the verifier stops asking
+    (output action clears).
 
-    The marker posts *before* the remediation runs: a remediation that
-    dispatches but fails to record itself would retry forever, while a
-    marker without a dispatch just leaves the normal failure notification
-    standing. Fail closed.
+    Fires through the two-phase helper: intent marker before, done marker
+    after. A crash between them leaves the intent standing so the next
+    pass retries once. No live run-correlation lookup exists for
+    repository_dispatch (the target repo picks it up asynchronously and
+    no immediate handle is returned), so the retry always runs when
+    intent-only is observed -- bounded to one extra attempt.
     """
-    fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
-    marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:{key}:{fingerprint} -->"
+    tag = release_tag(status.version, status.stage)
+    performed = _autofix_two_phase(
+        gh, tracking_issue, key="bundle-dispatch",
+        fingerprint_source=f"{tag}:{status.candidate.sha}",
+        intent_callout=(
+            f"> [!NOTE]\n"
+            f"> **Auto-remediation:** Dispatching the bundle update for "
+            f"`{tag}` (versions.json is stale for this candidate)."
+        ),
+        dispatch_fn=lambda: _dispatch_bundle(gh, policy, tag),
+        run_exists_fn=None,
+        on_dispatch_failure_instruction=(
+            f"Dispatch the bundle update for `{tag}` manually."
+        ),
+    )
+    if performed:
+        return f"dispatched bundle update for {tag}"
+    return ""
+
+
+def _autofix_two_phase(
+    gh: Any, tracking_issue: Any, *, key: str,
+    fingerprint_source: str, intent_callout: str,
+    dispatch_fn: "Any",
+    run_exists_fn: "Any" = None,
+    on_dispatch_failure_instruction: str = "",
+) -> bool:
+    """Perform *dispatch_fn* at most once per (key, fingerprint) with a
+    two-phase intent/done receipt so a crash between the receipt and the
+    dispatch cannot permanently suppress the action.
+
+    Semantics:
+
+    - A ``autofix-done:<key>:<fp>`` marker on a trusted comment means the
+      action already completed successfully; return False (suppress).
+    - A ``autofix-intent:<key>:<fp>`` marker WITHOUT ``done`` means the
+      previous pass posted intent and then either crashed or its dispatch
+      failed. Check whether a matching run already exists (through
+      ``run_exists_fn`` when the caller can supply one); if it does,
+      stamp the done marker and return False (backfill: the dispatch
+      succeeded, only the follow-up write failed). Otherwise retry the
+      dispatch ONCE and stamp done regardless of retry outcome (bounded
+      so a chronic failure never loops).
+    - Neither marker: post an intent comment, run *dispatch_fn*, and on
+      success stamp the done marker into the intent comment. On failure
+      leave the intent standing so the next pass runs the retry-once path.
+
+    Returns True when the dispatch (fresh or retry) actually ran and
+    succeeded; False when suppressed, backfilled, or dispatch failed. The
+    return value is exclusively for the caller's log line: the marker
+    machinery is authoritative.
+
+    Never dispatches without first observing (or posting) an intent
+    marker: a raise during comment-post short-circuits the entire flow so
+    the action cannot happen unrecorded.
+    """
+    fingerprint = hashlib.sha256(
+        fingerprint_source.encode("utf-8")
+    ).hexdigest()[:12]
+    intent_marker = (
+        f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix-intent:{key}:{fingerprint} -->"
+    )
+    done_marker = (
+        f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix-done:{key}:{fingerprint} -->"
+    )
+
+    intent_comment: Any = None
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
-        if issue_mod.marker_present(comment.body, marker):
-            return False
-    retry_github_call(
-        lambda: tracking_issue.create_comment(body=f"{marker}\n{callout}"),
-        retries=2, description=f"post {key} auto-remediation comment",
+        body = comment.body or ""
+        if issue_mod.marker_present(body, done_marker):
+            return False  # completed on an earlier pass
+        if issue_mod.marker_present(body, intent_marker):
+            intent_comment = comment
+
+    if intent_comment is not None:
+        # Intent without done: possible crash between intent-post and
+        # dispatch, OR dispatch succeeded but the done-stamp write failed.
+        # A caller-supplied run-existence check distinguishes the two.
+        if run_exists_fn is not None:
+            try:
+                exists = bool(run_exists_fn(intent_comment))
+            except Exception:
+                logger.exception("run-exists check for %s failed; "
+                                 "assuming no run and retrying", key)
+                exists = False
+            if exists:
+                _stamp_done_marker(intent_comment, done_marker, tracking_issue)
+                logger.info("Backfilled autofix-done for %s (matching run "
+                            "found; earlier stamp write must have failed)",
+                            key)
+                return False
+
+        # No matching run (or no correlation available): retry once and
+        # stamp done regardless of outcome so a chronic failure cannot
+        # loop past two attempts total.
+        dispatched = _run_dispatch_safely(
+            dispatch_fn, gh=gh, tracking_issue=tracking_issue,
+            key=key, instruction=on_dispatch_failure_instruction,
+        )
+        _stamp_done_marker(intent_comment, done_marker, tracking_issue)
+        return dispatched
+
+    # Fresh: post intent, dispatch, stamp done. Post intent through the
+    # retry helper because losing the intent write would silently disable
+    # the retry-once recovery path; if that write raises, the dispatch
+    # never runs (fail closed).
+    intent_body = f"{intent_marker}\n{intent_callout}"
+    created = retry_github_call(
+        lambda: tracking_issue.create_comment(body=intent_body),
+        retries=2, description=f"post {key} intent marker",
     )
     issue_mod.invalidate_comment_memo(tracking_issue)
+    if created is None:
+        # No comment handle returned: we cannot stamp done later.
+        # Rather than dispatch and be unable to record it, refuse; the
+        # next pass will retry the intent-post.
+        logger.error("Intent comment for %s was not returned by GitHub; "
+                     "refusing to dispatch without a recording handle", key)
+        return False
+
+    dispatched = _run_dispatch_safely(
+        dispatch_fn, gh=gh, tracking_issue=tracking_issue,
+        key=key, instruction=on_dispatch_failure_instruction,
+    )
+    if dispatched:
+        _stamp_done_marker(created, done_marker, tracking_issue)
+    return dispatched
+
+
+def _stamp_done_marker(comment: Any, done_marker: str,
+                       tracking_issue: Any) -> None:
+    """Edit *comment* to include *done_marker* as its first line.
+
+    A no-op when the marker is already present so a re-observation is
+    idempotent, matching the marker-first read semantics elsewhere.
+    """
+    body = comment.body if isinstance(comment.body, str) else ""
+    if issue_mod.marker_present(body, done_marker):
+        return
+    new_body = f"{done_marker}\n{body}" if body else done_marker
+    retry_github_call(
+        lambda: comment.edit(body=new_body),
+        retries=2, description="stamp autofix-done marker",
+    )
+    # Keep the in-process comment view consistent so a same-pass re-read
+    # sees the marker. Real PyGithub Comment objects also update on edit.
+    try:
+        comment.body = new_body
+    except Exception:
+        pass
+    issue_mod.invalidate_comment_memo(tracking_issue)
+
+
+def _run_dispatch_safely(dispatch_fn: "Any", *, gh: Any, tracking_issue: Any,
+                         key: str, instruction: str) -> bool:
+    """Run *dispatch_fn* once; return True on success, False on Exception.
+
+    On failure, post the plain follow-up comment (when an instruction is
+    provided) so the human sees the tracker's 'Dispatching' callout did
+    not land. The exception is swallowed: advance() must not skip its
+    remaining notify/nudge/render steps just because one dispatch raised.
+    """
+    try:
+        dispatch_fn()
+    except Exception:
+        logger.exception("Auto-remediation dispatch (%s) failed", key)
+        if instruction:
+            _post_dispatch_failure(gh, tracking_issue, key=key,
+                                   instruction=instruction)
+        return False
     return True
 
 
@@ -210,9 +423,9 @@ def _post_dispatch_failure(gh: Any, tracking_issue: Any, *, key: str,
     """Post the plain follow-up comment when an auto-remediation's dispatch
     itself failed.
 
-    No autofix marker: the marker already posted (marker-first, fail
-    closed), so the autofix never re-fires for this candidate; this comment
-    only tells the human the tracker's 'Dispatching' callout did not land.
+    No autofix marker: the intent marker already posted (fail closed), so
+    the two-phase gate remains armed; this comment only tells the human
+    the tracker's 'Dispatching' callout did not land, so they can act.
     """
     retry_github_call(
         lambda: tracking_issue.create_comment(
@@ -227,6 +440,28 @@ def _post_dispatch_failure(gh: Any, tracking_issue: Any, *, key: str,
     issue_mod.invalidate_comment_memo(tracking_issue)
 
 
+def _autofix_marker_once(gh: Any, tracking_issue: Any, *, key: str,
+                         fingerprint_source: str, callout: str) -> bool:
+    """Post a marker-only autofix comment once per (key, fingerprint).
+
+    For callouts that do NOT dispatch any action of their own (the publish
+    halt warning, for example): a single marker gates repost. No two-phase
+    receipt is needed because there is no work to correlate -- the marker
+    IS the work. Callers that dispatch must use :func:`_autofix_two_phase`.
+    """
+    fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
+    marker = f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix:{key}:{fingerprint} -->"
+    for comment in issue_mod.trusted_comments(tracking_issue, gh):
+        if issue_mod.marker_present(comment.body, marker):
+            return False
+    retry_github_call(
+        lambda: tracking_issue.create_comment(body=f"{marker}\n{callout}"),
+        retries=2, description=f"post {key} auto-remediation comment",
+    )
+    issue_mod.invalidate_comment_memo(tracking_issue)
+    return True
+
+
 def _dispatch_build_once(
     gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus,
     tracking_issue: Any, output: Any,
@@ -235,38 +470,127 @@ def _dispatch_build_once(
     valkey-side release trigger failed before reaching the automation repo.
 
     The fingerprint is the candidate SHA: strictly one auto-dispatch per
-    candidate, even across distinct failed trigger runs. When the marker
-    already exists nothing happens (the normal failure notification covers
-    the state).
+    candidate (with the two-phase safety net letting a crashed dispatch
+    retry exactly once), even across distinct failed trigger runs. When
+    the done marker already exists nothing happens (the normal failure
+    notification covers the state).
     """
     tag = release_tag(status.version, status.stage)
-    posted = _autofix_once(
+    performed = _autofix_two_phase(
         gh, tracking_issue, key="build-dispatch",
         fingerprint_source=status.candidate.sha,
-        callout=(
+        intent_callout=(
             f"> [!NOTE]\n"
             f"> **Auto-remediation:** Dispatching the build pipeline for "
             f"`{tag}` directly (the [release trigger run]({output.url}) "
             f"did not succeed)."
         ),
+        dispatch_fn=lambda: _dispatch_build_release(gh, policy, tag),
+        run_exists_fn=lambda _c: _build_run_exists_for_tag(
+            gh, policy, tag,
+        ),
+        on_dispatch_failure_instruction=(
+            f"Dispatch build-release for `{tag}` manually."
+        ),
     )
-    if not posted:
-        return ""
-    # The dispatch must not escape advance(): an exception here would skip
-    # the notify/nudge/render steps and leave the tracker's 'Dispatching'
-    # callout as a false last word. The marker stays (once per candidate);
-    # the follow-up comment tells the human to dispatch manually.
-    try:
-        _dispatch_build_release(gh, policy, tag)
-    except Exception:
-        logger.exception("Auto-dispatch of build-release for %s failed", tag)
-        _post_dispatch_failure(
-            gh, tracking_issue, key="build-dispatch",
-            instruction=f"Dispatch build-release for `{tag}` manually.",
-        )
+    if not performed:
         return ""
     logger.info("Auto-dispatched build-release for %s", tag)
     return f"auto-dispatched build-release for {tag} (release trigger failed)"
+
+
+def _build_run_exists_for_tag(gh: Any, policy: RepoReleasePolicy,
+                              tag: str) -> bool:
+    """True when a build-release run for *tag* exists on the automation
+    repo. Used by the two-phase autofix to backfill the done marker when
+    the dispatch succeeded on a previous pass but its follow-up write did
+    not land. Any exception yields False so the retry path runs (the
+    correlation is best-effort, not authoritative -- a bounded double
+    dispatch is preferred to a permanent miss).
+    """
+    try:
+        workflow = workflow_handle(
+            gh, policy.downstream.automation_repo,
+            policy.downstream.build_workflow,
+        )
+        if workflow is None:
+            return False
+        runs = retry_github_call(
+            workflow.get_runs, retries=1,
+            description=f"list {policy.downstream.build_workflow} runs "
+                        f"for correlation",
+        )
+        marker = f"Build Release {tag} "
+        for index, run in enumerate(runs):
+            if index >= _AUTOFIX_CORRELATION_SCAN_LIMIT:
+                break
+            if marker in f"{run.display_title or ''} ":
+                return True
+    except Exception:
+        logger.exception("Build-run correlation lookup for %s raised; "
+                         "assuming no run", tag)
+    return False
+
+
+# Cap the correlation scan: a dispatched build-run is the newest of its
+# workflow's runs, so a few dozen entries are more than enough. The bound
+# only protects a pathological listing on an old repo with many
+# same-workflow runs.
+_AUTOFIX_CORRELATION_SCAN_LIMIT = 30
+
+
+def _dispatch_qualification_once(
+    gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus,
+    tracking_issue: Any,
+) -> str:
+    """First qualification dispatch for a candidate, marker-gated.
+
+    Historically the first dispatch was ungated: reconcile would fire
+    ``qual_mod.dispatch_qualification`` whenever ``status.qualification``
+    was empty. A restart or a second controller invocation between
+    dispatch and the run appearing in GitHub's UI would dispatch again,
+    duplicating work. The two-phase gate stops that: the intent marker
+    survives across passes even before the run is queryable, and the done
+    marker suppresses further dispatch once the API call succeeds.
+    """
+    tag = release_tag(status.version, status.stage)
+    performed = _autofix_two_phase(
+        gh, tracking_issue, key="qual-dispatch",
+        fingerprint_source=status.candidate.sha,
+        intent_callout=(
+            f"> [!NOTE]\n"
+            f"> **Dispatching qualification** for `{tag}` "
+            f"@ `{status.candidate.sha[:12]}`."
+        ),
+        dispatch_fn=lambda: qual_mod.dispatch_qualification(
+            gh, policy, tag=tag, sha=status.candidate.sha,
+        ),
+        run_exists_fn=lambda _c: _qual_run_exists(
+            gh, policy, tag=tag, sha=status.candidate.sha,
+        ),
+        on_dispatch_failure_instruction=(
+            f"Dispatch the qualification workflow for `{tag}` manually."
+        ),
+    )
+    if not performed:
+        return ""
+    return (f"dispatched qualification of {tag} @ "
+            f"{status.candidate.sha[:12]}")
+
+
+def _qual_run_exists(gh: Any, policy: RepoReleasePolicy, *, tag: str,
+                     sha: str) -> bool:
+    """True when a qualification run for exactly (*tag*, *sha*) is visible
+    on the automation repo. Correlation for the two-phase autofix; any
+    lookup failure yields False (retry path preferred to permanent miss).
+    """
+    try:
+        found = qual_mod._find_run(gh, policy, tag, sha)
+    except Exception:
+        logger.exception("Qualification-run correlation lookup for %s @ %s "
+                         "raised; assuming no run", tag, sha[:12])
+        return False
+    return found is not None
 
 
 def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str) -> None:
@@ -275,6 +599,13 @@ def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str) -> Non
     The inputs mirror the upstream release trigger exactly (it sends the
     release's tag_name as its version), so the resulting run carries the
     ``Build Release <tag> (prod)`` run-name the build-run verifier matches.
+
+    ``retries=1`` on the dispatch call: workflow_dispatch has no
+    dispatch-echo id in its response, so a transient 5xx after the run
+    was accepted would double-dispatch. The two-phase caller
+    (:func:`_dispatch_build_once`) provides idempotency at the outer
+    layer -- an intent marker survives one crash and the next pass either
+    backfills done via :func:`_build_run_exists_for_tag` or retries once.
     """
     down = policy.downstream
     workflow = workflow_handle(gh, down.automation_repo, down.build_workflow)
@@ -286,14 +617,11 @@ def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str) -> Non
         lambda: gh.get_repo(down.automation_repo),
         retries=2, description=f"get repo {down.automation_repo}",
     )
-    # Accepted non-idempotency window: retry_github_call around
-    # create_dispatch can rarely double-dispatch when a success response is
-    # lost; the verifier takes the newest run so verification stays correct.
     dispatched = retry_github_call(
         lambda: workflow.create_dispatch(
             repo.default_branch, inputs={"version": tag, "environment": "prod"},
         ),
-        retries=2, description="dispatch build-release run",
+        retries=1, description="dispatch build-release run",
     )
     if not dispatched:
         raise RuntimeError(
@@ -314,31 +642,48 @@ def _retry_qualification_once(
     """
     tag = release_tag(status.version, status.stage)
     run_link = f"[run {status.qualification.run_id}]({status.qualification.url})"
-    posted = _autofix_once(
+    failed_run_id = status.qualification.run_id
+    performed = _autofix_two_phase(
         gh, tracking_issue, key="qual-retry",
         fingerprint_source=status.candidate.sha,
-        callout=(
+        intent_callout=(
             f"> [!NOTE]\n"
             f"> **Auto-remediation:** Retrying qualification for `{tag}` "
             f"once (the previous run failed: {run_link})."
         ),
+        dispatch_fn=lambda: qual_mod.dispatch_qualification(
+            gh, policy, tag=tag, sha=status.candidate.sha,
+        ),
+        run_exists_fn=lambda _c: _qual_retry_run_exists(
+            gh, policy, tag=tag, sha=status.candidate.sha,
+            failed_run_id=failed_run_id,
+        ),
+        on_dispatch_failure_instruction=(
+            f"Dispatch the qualification workflow for `{tag}` "
+            f"manually."
+        ),
     )
-    if not posted:
-        return ""
-    # Same containment as the build auto-dispatch: a dispatch failure must
-    # not escape advance() and skip the notify/nudge/render steps.
-    try:
-        qual_mod.dispatch_qualification(gh, policy, tag=tag, sha=status.candidate.sha)
-    except Exception:
-        logger.exception("Auto-retry qualification dispatch for %s failed", tag)
-        _post_dispatch_failure(
-            gh, tracking_issue, key="qual-retry",
-            instruction=f"Dispatch the qualification workflow for `{tag}` "
-                        f"manually.",
-        )
+    if not performed:
         return ""
     logger.info("Auto-retried qualification of %s @ %s", tag, status.candidate.sha[:12])
     return f"auto-retried qualification of {tag} @ {status.candidate.sha[:12]}"
+
+
+def _qual_retry_run_exists(gh: Any, policy: RepoReleasePolicy, *, tag: str,
+                           sha: str, failed_run_id: int) -> bool:
+    """True when a qualification run for (*tag*, *sha*) exists that is NOT
+    the already-known failed one -- evidence the retry dispatch already
+    landed on a prior pass and only the follow-up write was lost.
+    """
+    try:
+        found = qual_mod._find_run(gh, policy, tag, sha)
+    except Exception:
+        logger.exception("Qualification-retry correlation lookup for %s @ %s "
+                         "raised; assuming no run", tag, sha[:12])
+        return False
+    if found is None:
+        return False
+    return getattr(found, "id", 0) != failed_run_id
 
 
 def _open_helm_pr(gh: Any, policy: RepoReleasePolicy, version: str) -> str:
@@ -526,6 +871,18 @@ _NOTIFY_GEN_MARKER_RE = re.compile(
 )
 
 
+# The dirty flag encoded alongside the generation marker: 'dirty' means
+# the current generation has observed failure or wedge items since it
+# started, 'healthy' means we have recovered to this generation. The
+# recovery bump only fires on the transition dirty -> healthy, so a
+# steadily healthy release never re-edits the bookkeeping comment.
+_NOTIFY_STATE_DIRTY = "dirty"
+_NOTIFY_STATE_HEALTHY = "healthy"
+_NOTIFY_STATE_MARKER_RE = re.compile(
+    rf"<!-- {re.escape(issue_mod.MARKER_NAMESPACE)}:notify-state:(\w+) -->"
+)
+
+
 def _marker_prefix_present(body: Any, prefix: str) -> bool:
     """True when a line of *body*, outside any code fence, starts with
     *prefix*. Same fence discipline as issue_mod.marker_present, for reads
@@ -540,55 +897,125 @@ def _marker_prefix_present(body: Any, prefix: str) -> bool:
     return False
 
 
-def _notify_generation(gh: Any, tracking_issue: Any) -> "tuple[int, Any]":
-    """(current recovery generation, the trusted comment recording it).
+def _notify_generation(gh: Any, tracking_issue: Any) -> "tuple[int, Any, str]":
+    """(current recovery generation, the trusted comment recording it,
+    the current dirty/healthy state).
 
-    (0, None) before any recovery was ever recorded. The newest (highest)
-    generation on a trusted comment wins; markers on untrusted comments are
-    ignored exactly like every other marker read-back.
+    (0, None, "") before any recovery was ever recorded. The newest
+    (highest) generation on a trusted comment wins; markers on untrusted
+    comments are ignored exactly like every other marker read-back. The
+    state is read from the notify-state sub-marker in the same comment
+    when present, "" otherwise.
     """
-    best_generation, best_comment = 0, None
+    best_generation, best_comment, best_state = 0, None, ""
     for comment in issue_mod.trusted_comments(tracking_issue, gh):
         fenced = False
+        gen_match = None
+        state_match = None
         for line in (comment.body or "").splitlines():
             if line.lstrip().startswith("```"):
                 fenced = not fenced
                 continue
             if fenced:
                 continue
-            match = _NOTIFY_GEN_MARKER_RE.match(line)
-            if match and int(match.group(1)) >= best_generation:
-                best_generation, best_comment = int(match.group(1)), comment
-    return best_generation, best_comment
+            if gen_match is None:
+                gen_match = _NOTIFY_GEN_MARKER_RE.match(line)
+            if state_match is None:
+                state_match = _NOTIFY_STATE_MARKER_RE.match(line)
+        if gen_match and int(gen_match.group(1)) >= best_generation:
+            best_generation = int(gen_match.group(1))
+            best_comment = comment
+            best_state = state_match.group(1) if state_match else ""
+    return best_generation, best_comment, best_state
 
 
-def _record_recovery(gh: Any, tracking_issue: Any) -> None:
-    """Advance the recovery generation after a clean pass (zero failure AND
-    zero wedge items), so a later recurrence hashes to a new fingerprint.
+def _sync_generation_state(gh: Any, tracking_issue: Any, *,
+                           dirty: bool) -> int:
+    """Return the current fingerprint generation, updating the marker
+    only on a state TRANSITION (F33-partial).
 
-    Skipped while the tracker has no notification history at all (no
-    notify, wedge, or generation marker): a healthy release gets no
-    bookkeeping comment. The generation lives in one tiny comment that is
-    edited in place, never duplicated.
+    Semantics:
+
+    - dirty=True observed while the recorded state is healthy: edit the
+      marker in place to state=dirty (fingerprints from now on include
+      failure/wedge items so they cannot re-ping across a
+      resolved-then-recurring cycle without a fresh transition).
+    - dirty=False observed while the recorded state is dirty (or unknown,
+      pre-schema comments): failure->healthy TRANSITION. Bump the
+      generation and record state=healthy. A later recurrence hashes to
+      the new generation and re-notifies exactly once.
+    - Any observation matching the recorded state is a no-op: a steadily
+      healthy release does not churn the bookkeeping comment on every
+      pass, and a steady failure state does not either.
+    - No prior generation marker AND dirty=True: no write. The
+      notify/wedge comments posted this pass ARE the "was dirty"
+      evidence a future healthy pass will read via
+      :func:`_has_notification_history`; there is nothing to record
+      until the transition happens.
+    - No prior generation marker AND dirty=False AND notification
+      history exists: this is the very first healthy pass after an
+      unrecorded failure run. Initialize the marker at generation 1,
+      state=healthy (skipping over the implicit generation 0 seed the
+      failure ran under). Without history the pass is a no-op: a happy
+      release gets no bookkeeping comment.
     """
-    generation, comment = _notify_generation(gh, tracking_issue)
-    if comment is None and not _has_notification_history(gh, tracking_issue):
-        return
-    body = (
-        f"<!-- {issue_mod.MARKER_NAMESPACE}:notify-gen:{generation + 1} -->\n"
-        f"<sub>Notification bookkeeping: generation "
-        f"{generation + 1} (edited in place).</sub>"
-    )
+    generation, comment, state = _notify_generation(gh, tracking_issue)
+
+    if dirty:
+        if comment is None or state == _NOTIFY_STATE_DIRTY:
+            return generation
+        # state is healthy: transition healthy -> dirty (edit in place).
+        _write_generation_state(tracking_issue,
+                                generation=generation,
+                                state=_NOTIFY_STATE_DIRTY,
+                                existing=comment)
+        return generation
+
+    # dirty=False (healthy pass)
     if comment is None:
+        if not _has_notification_history(gh, tracking_issue):
+            return 0  # happy path: no bookkeeping needed
+        # First healthy pass after an unrecorded dirty run.
+        _write_generation_state(tracking_issue,
+                                generation=1,
+                                state=_NOTIFY_STATE_HEALTHY,
+                                existing=None)
+        return 1
+    if state == _NOTIFY_STATE_HEALTHY:
+        return generation
+    # state is dirty (or unknown from a pre-state-schema marker):
+    # transition dirty -> healthy. Bump generation.
+    new_generation = generation + 1
+    _write_generation_state(tracking_issue,
+                            generation=new_generation,
+                            state=_NOTIFY_STATE_HEALTHY,
+                            existing=comment)
+    return new_generation
+
+
+def _write_generation_state(tracking_issue: Any, *, generation: int,
+                            state: str, existing: Any) -> None:
+    """Create or edit-in-place the generation-state bookkeeping comment."""
+    body = (
+        f"<!-- {issue_mod.MARKER_NAMESPACE}:notify-gen:{generation} -->\n"
+        f"<!-- {issue_mod.MARKER_NAMESPACE}:notify-state:{state} -->\n"
+        f"<sub>Notification bookkeeping: generation {generation} "
+        f"({state}, edited in place).</sub>"
+    )
+    if existing is None:
         retry_github_call(
             lambda: tracking_issue.create_comment(body=body),
             retries=2, description="post recovery-generation comment",
         )
     else:
         retry_github_call(
-            lambda: comment.edit(body=body),
+            lambda: existing.edit(body=body),
             retries=2, description="advance recovery-generation comment",
         )
+        try:
+            existing.body = body
+        except Exception:
+            pass
     issue_mod.invalidate_comment_memo(tracking_issue)
 
 
@@ -810,7 +1237,20 @@ def _failure_items(status: ReleaseStatus) -> "list[tuple[str, str]]":
     return items
 
 
-def _close_when_complete(gh: Any, status: ReleaseStatus, tracking_issue: Any) -> bool:
+def _mark_complete_once(gh: Any, status: ReleaseStatus,
+                        tracking_issue: Any) -> bool:
+    """Post the completion marker comment once; NEVER close the issue.
+
+    F24: closing the tracker is the caller's job (reconcile), performed
+    AFTER the final render/sync so a crash mid-close cannot leave a stale
+    body on a closed tracker. advance() only stamps the completion marker
+    so :func:`_close_when_complete` (called by the caller) can see this
+    release was signed off, and so a rerun does not duplicate the comment.
+
+    Returns True when this pass newly posted the completion comment,
+    False when the marker was already present (or the tracker is already
+    closed -- nothing more to stamp).
+    """
     if tracking_issue.state == "closed":
         return False
     marker = issue_mod.complete_marker()
@@ -818,26 +1258,23 @@ def _close_when_complete(gh: Any, status: ReleaseStatus, tracking_issue: Any) ->
         issue_mod.marker_present(comment.body, marker)
         for comment in issue_mod.trusted_comments(tracking_issue, gh)
     )
-    if not already_commented:
-        retry_github_call(
-            lambda: tracking_issue.create_comment(
-                body=(
-                    f"{marker}\n"
-                    f"> [!NOTE]\n"
-                    f"> **Release `{status.version}` ({status.stage}) is complete.**\n"
-                    f">\n"
-                    f"> The release, tag, downloads, hashes, container images, "
-                    f"docs, website, Bundle, and Helm outputs are all verified "
-                    f"public. Closing."
-                )
-            ),
-            retries=2, description="post completion comment",
-        )
-        issue_mod.invalidate_comment_memo(tracking_issue)
+    if already_commented:
+        return False
     retry_github_call(
-        lambda: tracking_issue.edit(state="closed"),
-        retries=2, description=f"close issue #{tracking_issue.number}",
+        lambda: tracking_issue.create_comment(
+            body=(
+                f"{marker}\n"
+                f"> [!NOTE]\n"
+                f"> **Release `{status.version}` ({status.stage}) is complete.**\n"
+                f">\n"
+                f"> The release, tag, downloads, hashes, container images, "
+                f"docs, website, Bundle, and Helm outputs are all verified "
+                f"public. Closing."
+            )
+        ),
+        retries=2, description="post completion comment",
     )
+    issue_mod.invalidate_comment_memo(tracking_issue)
     return True
 
 
@@ -936,7 +1373,10 @@ def agent_head_sha(gh_agent: Any, agent_repo: str) -> str:
 
 def _run_binding(run: Any) -> "tuple[str, str]":
     """(tag, candidate SHA) the run-name carries, ("", "") when the run was
-    dispatched without bindings (manual dispatch, pre-binding runs)."""
+    dispatched without bindings (legacy runs from before the workflow
+    required bindings). Only runs whose bindings can be extracted are
+    treated as relevant to the current slot; F12 closes the DoS window
+    where an unbound run could hold or halt the slot."""
     match = _PUBLISH_TITLE_BINDING_RE.search(run.display_title or "")
     if match is None:
         return "", ""
@@ -947,12 +1387,34 @@ def _matches_branch(run: Any, branch: str) -> bool:
     return f" on {branch} " in f"{run.display_title or ''} "
 
 
+def _binding_matches_current(run: Any, *, tag: str,
+                             candidate_sha: str) -> bool:
+    """True when the run carries bindings AND they exactly match the
+    current tag+candidate.
+
+    F12: an unbound run (no binding in the run name -- historical, or a
+    stray dispatch that predates the workflow's required-input change) is
+    treated as NOT MATCHING the current slot: it can neither hold nor halt
+    it. Only a run whose bindings exactly identify this candidate may
+    occupy the current slot. When *tag* or *candidate_sha* are empty the
+    controller has not resolved the current candidate yet, so no match is
+    ever claimed (fail closed).
+    """
+    if not tag or not candidate_sha:
+        return False
+    run_tag, run_sha = _run_binding(run)
+    if not run_tag or not run_sha:
+        return False  # unbound: cannot occupy this slot
+    return run_tag == tag and run_sha == candidate_sha.lower()
+
+
 def _is_stale_binding(run: Any, head_sha: str, tag: str,
                       candidate_sha: str) -> bool:
     """True when a gate-parked run is bound to a different controller head
     or (via its run-name) a different tag or candidate than the current
-    one. A run whose name carries no binding is never candidate-stale: its
-    target cannot be proven different."""
+    one. A run whose name carries no binding is treated as unrelated to
+    this slot and is neither active nor stale here -- the caller filters
+    unbound runs out separately via :func:`_binding_matches_current`."""
     if head_sha and (run.head_sha or "") != head_sha:
         return True
     run_tag, run_sha = _run_binding(run)
@@ -995,17 +1457,20 @@ def find_publish_runs(workflow: Any, branch: str, head_sha: str = "", *,
     caller):
 
     - *active* is a run genuinely in flight for the current controller
-      head and candidate: any in_progress run (past the approval gate,
-      always active regardless of bindings), or a gate-parked run whose
-      head and run-name bindings match. None when no such run exists.
+      head and candidate. An in_progress run whose bindings match the
+      current tag+candidate (or an in_progress run when no bindings are
+      set to check against) is always active -- it is past the approval
+      gate, publication is in flight, and never cancellable. A
+      gate-parked run whose head AND run-name bindings match this
+      candidate is also active. Unbound gate-parked runs (F12) are
+      IGNORED entirely: they can neither hold nor halt the slot.
     - *stale* lists gate-parked runs (queued, waiting, pending ONLY) bound
       to a different controller head, tag, or candidate.
 
     With *head_sha* "" head staleness cannot be judged and no run is
     head-stale (fail-safe); with *tag*/*candidate_sha* "" the run-name
-    binding is not checked. Both views (dispatch idempotency and the
-    approval URL) share this one matcher so a stale or mismatched run is
-    never presented as the place to approve.
+    binding is not checked and unbound in_progress runs remain active
+    (fail-safe: a running publication must not be presumed irrelevant).
     """
     active: Any = None
     stale: "list[Any]" = []
@@ -1013,13 +1478,42 @@ def find_publish_runs(workflow: Any, branch: str, head_sha: str = "", *,
         if not _matches_branch(run, branch):
             continue
         # An in_progress run is past the gate: it IS the publication in
-        # progress. Bindings do not matter; it is always active, never
-        # stale, and must never be cancelled.
-        if (run.status != "in_progress"
-                and _is_stale_binding(run, head_sha, tag, candidate_sha)):
+        # progress. When we have bindings to check against, only an
+        # in_progress run whose bindings match this candidate holds the
+        # active slot; another candidate's in-flight publish does not
+        # block a fresh dispatch for THIS candidate. When we have no
+        # bindings yet (empty tag/candidate_sha inputs), any in_progress
+        # run keeps the fail-safe today: it is never cancelled and it
+        # blocks dispatch.
+        if run.status == "in_progress":
+            if tag and candidate_sha:
+                if _binding_matches_current(run, tag=tag,
+                                            candidate_sha=candidate_sha):
+                    if active is None:
+                        active = run
+                continue
+            if active is None:
+                active = run
+            continue
+
+        # Gate-parked run: only runs whose bindings identify this
+        # candidate may hold the current slot. F12: unbound gate-parked
+        # runs are neither active nor stale here -- they are irrelevant.
+        if tag and candidate_sha and not _run_binding(run)[1]:
+            continue  # unbound: skip entirely
+        if _is_stale_binding(run, head_sha, tag, candidate_sha):
             stale.append(run)
-        elif active is None:
-            active = run
+        elif _binding_matches_current(run, tag=tag,
+                                      candidate_sha=candidate_sha):
+            if active is None:
+                active = run
+        elif not tag or not candidate_sha:
+            # No bindings to check against: keep pre-F12 behavior so a
+            # controller call missing tag/candidate context (out-of-flow
+            # display path) does not lose runs. Bound runs win over
+            # unbound in that case.
+            if active is None:
+                active = run
     return active, stale
 
 
@@ -1133,14 +1627,22 @@ def _halted_publish_failure(workflow: Any, branch: str, head_sha: str, *,
                             tag: str = "", candidate_sha: str = "") -> Any:
     """The completed publish run that halts re-dispatch, or None.
 
-    The newest COMPLETED publish run for *branch* at the current controller
-    head (and, when its run-name carries bindings, for the current
-    tag/candidate) is inspected: failure or cancelled halts, anything else
-    (or no such run) does not. A run on another controller head or another
-    candidate is skipped entirely, so a new controller head or a new
-    candidate re-arms dispatch by construction. With *head_sha* "" the head
-    filter is skipped: halting on the newest matching failure beats looping
-    when staleness cannot be judged.
+    The newest COMPLETED publish run for *branch* at the current
+    controller head, whose bindings EXACTLY identify the current tag and
+    candidate, is inspected: any non-success conclusion halts, success (or
+    no such run) does not. F21(1): the halt covers every non-success
+    conclusion GitHub Actions may report (``failure``, ``cancelled``,
+    ``timed_out``, ``action_required``, ``startup_failure``, ``skipped``,
+    ``neutral``, ``stale``), not just failure/cancelled -- a
+    ``timed_out``/``startup_failure`` publish would otherwise re-dispatch
+    every reconcile pass forever. A run on another controller head or
+    another candidate is skipped entirely, so a new controller head or a
+    new candidate re-arms dispatch by construction. F12: an unbound run
+    (no binding in its run-name) cannot be proven to belong to the
+    current candidate and is IGNORED here as well: it can neither hold
+    nor halt the slot. With *head_sha* "" the head filter is skipped:
+    halting on the newest matching failure beats looping when staleness
+    cannot be judged.
     """
     listing = retry_github_call(
         lambda: workflow.get_runs(status="completed"),
@@ -1155,12 +1657,16 @@ def _halted_publish_failure(workflow: Any, branch: str, head_sha: str, *,
             continue
         if head_sha and (run.head_sha or "") != head_sha:
             continue  # another controller version's run: a new head re-arms
-        run_tag, run_sha = _run_binding(run)
-        if candidate_sha and run_sha and run_sha != candidate_sha.lower():
-            continue  # another candidate's run: a new candidate re-arms
-        if tag and run_tag and run_tag != tag:
+        # F12: only bound runs that exactly match the current candidate
+        # may halt the slot. Unbound and cross-candidate runs are ignored.
+        if not _binding_matches_current(run, tag=tag,
+                                        candidate_sha=candidate_sha):
             continue
-        if run.conclusion in ("failure", "cancelled"):
+        # F21(1): any non-success conclusion halts. success passes
+        # through; a None conclusion cannot occur alongside
+        # status=="completed" but is treated as pass-through for safety.
+        conclusion = run.conclusion
+        if conclusion and conclusion != "success":
             return run
         return None  # the newest relevant completed run did not fail
     return None
@@ -1170,13 +1676,15 @@ def _advance_publish(gh: Any, gh_agent: Any, agent_repo: str,
                      status: ReleaseStatus, tracking_issue: Any,
                      head_sha: str) -> str:
     """Move the READY phase forward: dispatch the publish pipeline unless a
-    run already holds the slot or a failed run halts re-dispatch.
+    run already holds the slot or a completed non-success run halts
+    re-dispatch.
 
-    The halt is deliberate: a publish run that COMPLETED as failure or
-    cancelled at this controller head, for this candidate, would fail the
-    same way again; re-dispatching would loop. The one-shot marker-gated
-    warning tells the human, and a new controller head or a new candidate
-    re-arms dispatch (the failed run then no longer matches).
+    F21(1): the halt fires for EVERY non-success conclusion, not just
+    failure/cancelled -- a timed_out or startup_failure publish run would
+    otherwise loop forever. The one-shot marker-gated warning names the
+    concluding state so the human sees WHICH kind of failure blocks
+    re-dispatch, and a new controller head or a new candidate re-arms
+    dispatch (the failed run then no longer matches).
     """
     tag = release_tag(status.version, status.stage)
     candidate_sha = status.candidate.sha
@@ -1189,19 +1697,22 @@ def _advance_publish(gh: Any, gh_agent: Any, agent_repo: str,
     halted = _halted_publish_failure(workflow, status.branch, head_sha,
                                      tag=tag, candidate_sha=candidate_sha)
     if halted is not None:
-        posted = _autofix_once(
+        conclusion = halted.conclusion or "unknown"
+        posted = _autofix_marker_once(
             gh, tracking_issue, key="publish-halt",
             fingerprint_source=f"{candidate_sha}:{halted.id}",
             callout=(
                 f"> [!WARNING]\n"
-                f"> **The publish pipeline failed;** the controller will "
-                f"not re-dispatch until the controller code changes or a "
-                f"human re-runs it: [run {halted.id}]({halted.html_url})."
+                f"> **The publish pipeline concluded `{conclusion}`;** "
+                f"the controller will not re-dispatch until the controller "
+                f"code changes or a human re-runs it: "
+                f"[run {halted.id}]({halted.html_url})."
             ),
         )
         if posted:
             return (f"halted publish re-dispatch for {status.branch} "
-                    f"(publish run {halted.id} concluded {halted.conclusion})")
+                    f"(publish run {halted.id} concluded "
+                    f"{conclusion})")
         return ""
     _dispatch_publish(gh_agent, agent_repo, status.branch, tag=tag,
                       candidate_sha=candidate_sha)
@@ -1213,7 +1724,15 @@ def _dispatch_publish(gh_agent: Any, agent_repo: str, branch: str,
                       tag: str = "", candidate_sha: str = "") -> None:
     """Dispatch release-publish.yml for *branch*, binding the run to the
     exact *tag* and *candidate_sha* it was dispatched for (stamped into the
-    run-name so later passes can correlate by candidate, not just branch)."""
+    run-name so later passes can correlate by candidate, not just branch).
+
+    ``retries=1`` on ``create_dispatch``: workflow_dispatch has no
+    dispatch-echo id in its response, so retrying on a 5xx after the run
+    was accepted would leave two publish runs racing the approval gate.
+    On an ambiguous failure the next reconcile pass will find the
+    accepted run (or its absence) through :func:`find_publish_runs` and
+    act accordingly, so retrying here inside the call is redundant and
+    unsafe."""
     workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
     default_branch = retry_github_call(
         lambda: gh_agent.get_repo(agent_repo).default_branch,
@@ -1222,7 +1741,7 @@ def _dispatch_publish(gh_agent: Any, agent_repo: str, branch: str,
     inputs = {"branch": branch, "tag": tag, "candidate_sha": candidate_sha}
     retry_github_call(
         lambda: workflow.create_dispatch(default_branch, inputs=inputs),
-        retries=2, description="dispatch publish pipeline",
+        retries=1, description="dispatch publish pipeline",
     )
     logger.info("Dispatched the publish pipeline for %s (%s @ %s)",
                 branch, tag or "<no tag>", candidate_sha[:12] or "<no sha>")

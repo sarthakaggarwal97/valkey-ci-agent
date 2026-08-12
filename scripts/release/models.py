@@ -13,6 +13,7 @@ issue displays this state but is never parsed for decisions.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 
@@ -244,6 +245,15 @@ class DownstreamOutput:
     url: str = ""
     action: str = ""
     run_id: int = 0  # the workflow run backing this evidence, when one does
+    # When set, the timestamp of the specific attempt (workflow run / PR)
+    # this output's evidence points at. The stall escalator applies its
+    # timeout from THIS clock instead of the release-wide published_at, so
+    # a downstream PR opened long after the release (e.g. after a lengthy
+    # BLOCKED upstream wait) is not immediately charged for the release's
+    # entire window. Left None when the output carries no attempt evidence
+    # (a not-yet-started dispatch, a registry-probe PENDING); the escalator
+    # then falls back to the release-wide clock.
+    attempt_started_at: datetime | None = None
 
 
 @dataclass(frozen=True)

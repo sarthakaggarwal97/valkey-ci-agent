@@ -14,7 +14,10 @@ marker. A run whose name does not carry the exact SHA never counts.
 
 from __future__ import annotations
 
+import io
+import json
 import logging
+import zipfile
 from typing import Any
 
 from github.GithubException import GithubException
@@ -39,10 +42,30 @@ RUN_SCAN_LIMIT = 50
 STARTUP_FAILURE_JOB = "(Workflow startup failed)"
 
 # The metadata-only manifest artifact the qualification workflow uploads
-# (schema 1: nonce/version/tag/source_sha/automation_sha/job counts).
-# Presence + unexpired is the whole check this round; content is never
-# fetched (follow-up: download and validate the JSON against the policy).
+# (schema 1 JSON: nonce/version/tag/source_sha/automation_sha/job counts).
+# Presence plus content is the whole check: F5 removed the "presence is
+# evidence" shortcut, so a non-empty artifact whose bytes disagree with
+# what was dispatched must not pass.
 MANIFEST_ARTIFACT = "qualification-manifest"
+
+# The schema version emitted by valkey-release-automation's
+# .github/workflows/qualify-release.yml. A different value means the
+# producer changed shape underneath us and its evidence must not count.
+MANIFEST_SCHEMA_VERSION = 1
+
+# Cap the manifest read to a size that can only ever be a small JSON file
+# (the producer writes a handful of fields). A cap protects against a
+# hostile or damaged upload that would otherwise pin runner memory.
+_MAX_MANIFEST_BYTES = 32 * 1024
+
+# Required manifest fields (schema 1). automation_sha is recorded into the
+# evidence log rather than compared to a dispatch record: the controller
+# does not yet pass a per-dispatch nonce, so nonce binding is deferred
+# until the dispatch path can pin one and require it back in the manifest.
+_MANIFEST_REQUIRED_FIELDS = (
+    "schema", "nonce", "version", "tag", "source_sha", "automation_sha",
+    "rpm_jobs", "deb_jobs", "archive_jobs",
+)
 
 
 def evaluate_qualification(
@@ -99,7 +122,7 @@ def evaluate_qualification(
             run_id=run.id, url=run.html_url, passed=False,
             failed_jobs=failed or (f"(Run concluded: {run.conclusion})",),
         )
-    gaps = _evidence_gaps(policy, run, jobs, tag)
+    gaps = _evidence_gaps(policy, run, jobs, tag=tag, sha=sha)
     if gaps:
         return QualificationStatus(
             run_id=run.id, url=run.html_url, passed=False, failed_jobs=gaps,
@@ -108,7 +131,7 @@ def evaluate_qualification(
 
 
 def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
-                   tag: str) -> tuple[str, ...]:
+                   *, tag: str, sha: str) -> tuple[str, ...]:
     """Structural evidence a green run must still produce, by stage.
 
     A run conclusion alone is satisfiable by an empty or truncated matrix
@@ -158,10 +181,11 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
     )
     # An expired or empty artifact is a name, not evidence.
     usable = [
-        a.name for a in artifacts
+        a for a in artifacts
         if not a.expired and a.size_in_bytes > 0
     ]
-    archive_artifacts = sum(name.startswith("qualify-") for name in usable)
+    usable_names = [a.name for a in usable]
+    archive_artifacts = sum(name.startswith("qualify-") for name in usable_names)
     expected_archives = (down.qualification_x86_archive_jobs
                          + down.qualification_arm_archive_jobs)
     if archive_artifacts != expected_archives:
@@ -170,8 +194,8 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
             f"{archive_artifacts} present, expected exactly {expected_archives})"
         )
     if is_ga:
-        rpm_artifacts = sum(name.startswith("valkey-rpms-") for name in usable)
-        deb_artifacts = sum(name.startswith("valkey-debs-") for name in usable)
+        rpm_artifacts = sum(name.startswith("valkey-rpms-") for name in usable_names)
+        deb_artifacts = sum(name.startswith("valkey-debs-") for name in usable_names)
         if rpm_artifacts != down.qualification_rpm_jobs:
             gaps.append(
                 f"(Evidence mismatch: usable RPM artifacts, {rpm_artifacts} "
@@ -182,14 +206,185 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
                 f"(Evidence mismatch: usable DEB artifacts, {deb_artifacts} "
                 f"present, expected exactly {down.qualification_deb_jobs})"
             )
-    # The qualification manifest (uploaded by the qualification workflow)
-    # must be present and unexpired. Metadata-only this round: presence is
-    # the evidence, no download, and the job counts it would restate are
-    # already validated exactly by the expectations above. A run without it
-    # (any legacy run) fails closed going forward.
-    if MANIFEST_ARTIFACT not in usable:
+    # F5: the qualification manifest artifact is not just a name -- its
+    # content must bind the run to the release identity that dispatched it.
+    # A non-empty unexpired artifact whose bytes disagree with what was
+    # dispatched (tag, source_sha, version, job counts) never passes.
+    manifest_artifact = next(
+        (a for a in usable if a.name == MANIFEST_ARTIFACT), None,
+    )
+    if manifest_artifact is None:
         gaps.append("(Evidence mismatch: no qualification manifest)")
+    else:
+        gaps.extend(_validate_manifest_content(
+            manifest_artifact, policy=policy, tag=tag, sha=sha,
+            expected_archive_jobs=expected_archives, is_ga=is_ga,
+        ))
     return tuple(gaps)
+
+
+def _validate_manifest_content(
+    artifact: Any, *, policy: RepoReleasePolicy, tag: str, sha: str,
+    expected_archive_jobs: int, is_ga: bool,
+) -> list[str]:
+    """Load the manifest JSON and require every dispatched field to match.
+
+    Any download/parse/shape failure or field mismatch becomes an evidence
+    mismatch naming what differed, so nothing about a hostile manifest
+    (wrong SHA, wrong tag, wrong counts, malformed JSON, empty file) reads
+    as passable evidence. ``automation_sha`` is logged as evidence detail;
+    nonce binding to dispatch is deferred (the controller does not yet
+    pass a per-dispatch nonce, so requiring it back would refuse every
+    real run).
+    """
+    down = policy.downstream
+    try:
+        payload = _load_manifest_payload(artifact)
+    except _ManifestReadError as exc:
+        return [f"(Evidence mismatch: qualification manifest unreadable: {exc})"]
+
+    gaps: list[str] = []
+    if payload.get("schema") != MANIFEST_SCHEMA_VERSION:
+        gaps.append(
+            f"(Evidence mismatch: qualification manifest schema "
+            f"{payload.get('schema')!r}, expected {MANIFEST_SCHEMA_VERSION})"
+        )
+    for field in _MANIFEST_REQUIRED_FIELDS:
+        if field not in payload:
+            gaps.append(
+                f"(Evidence mismatch: qualification manifest missing "
+                f"required field {field!r})"
+            )
+    if gaps:  # a malformed manifest cannot be trusted for further comparisons
+        return gaps
+
+    if payload["tag"] != tag:
+        gaps.append(
+            f"(Evidence mismatch: qualification manifest tag "
+            f"{payload['tag']!r}, expected {tag!r})"
+        )
+    if payload["source_sha"] != sha:
+        gaps.append(
+            f"(Evidence mismatch: qualification manifest source_sha "
+            f"{str(payload['source_sha'])[:12]!r}, expected {sha[:12]!r})"
+        )
+    # The tag already carries the version+stage but the manifest emits
+    # ``version`` separately (M.m.p, no stage suffix); binding it too
+    # protects against a producer that renders the two independently.
+    expected_version = tag.split("-rc", 1)[0]
+    if payload["version"] != expected_version:
+        gaps.append(
+            f"(Evidence mismatch: qualification manifest version "
+            f"{payload['version']!r}, expected {expected_version!r})"
+        )
+    expected_rpm = down.qualification_rpm_jobs if is_ga else 0
+    expected_deb = down.qualification_deb_jobs if is_ga else 0
+    for key, expected in (("rpm_jobs", expected_rpm),
+                          ("deb_jobs", expected_deb),
+                          ("archive_jobs", expected_archive_jobs)):
+        actual = payload[key]
+        # An int that happens to string-format to the same digits is a
+        # different type, and the exact-count discipline forbids either
+        # coercing it or reading it as a match.
+        if not isinstance(actual, int) or isinstance(actual, bool) or actual != expected:
+            gaps.append(
+                f"(Evidence mismatch: qualification manifest {key} "
+                f"{actual!r}, expected {expected})"
+            )
+    if not gaps:
+        # automation_sha is retained as evidence detail (dispatch-nonce
+        # binding is deferred; see MANIFEST comment above).
+        logger.info(
+            "Qualification manifest for %s @ %s validated (automation_sha=%s, "
+            "nonce=%s)", tag, sha[:12],
+            str(payload.get("automation_sha"))[:12],
+            str(payload.get("nonce"))[:16],
+        )
+    return gaps
+
+
+class _ManifestReadError(RuntimeError):
+    """A qualification manifest artifact could not be downloaded or parsed."""
+
+
+def _load_manifest_payload(artifact: Any) -> dict:
+    """Return the JSON payload from the manifest artifact zip.
+
+    The producer uploads a single JSON file inside a zip; this helper hides
+    the download-decompress-parse chain so callers only see the dict or an
+    error message.
+    """
+    raw = _download_manifest_bytes(artifact)
+    if not raw:
+        raise _ManifestReadError("artifact download returned no bytes")
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            members = [m for m in zf.infolist()
+                       if not m.is_dir() and m.filename.lower().endswith(".json")]
+            if not members:
+                raise _ManifestReadError("zip contains no JSON file")
+            # The producer uploads exactly one JSON file; if there are more
+            # than one, refuse rather than guess which is authoritative.
+            if len(members) > 1:
+                raise _ManifestReadError(
+                    f"zip contains {len(members)} JSON files, expected exactly one"
+                )
+            member = members[0]
+            if member.file_size > _MAX_MANIFEST_BYTES:
+                raise _ManifestReadError(
+                    f"manifest declared size {member.file_size} exceeds "
+                    f"cap {_MAX_MANIFEST_BYTES}"
+                )
+            with zf.open(member) as fh:
+                data = fh.read()
+    except zipfile.BadZipFile as exc:
+        raise _ManifestReadError(f"corrupt zip: {exc}") from exc
+    try:
+        parsed = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise _ManifestReadError(f"malformed JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise _ManifestReadError(
+            f"top-level JSON must be an object, got {type(parsed).__name__}"
+        )
+    return parsed
+
+
+def _download_manifest_bytes(artifact: Any) -> bytes:
+    """Download the manifest artifact zip as bytes via PyGithub's authenticated
+    session.
+
+    Kept as a small, hook-friendly indirection so tests can inject content
+    (a valid manifest, a wrong-SHA manifest, malformed JSON, an empty
+    upload) by patching this one function. The real path uses the
+    Artifact's own requester (``artifact.requester``) so the GitHub token
+    stays inside PyGithub's transport and does not leak to the signed blob
+    URL PyGithub redirects to.
+    """
+    # PyGithub 2.x's Artifact exposes both ``archive_download_url`` (the
+    # API endpoint that redirects to signed storage) and ``requester`` (the
+    # session that talks to GitHub with credentials). The response body of
+    # a successful download is the zip bytes as a str (PyGithub decodes
+    # the raw response); str encodes back losslessly for zip parsing.
+    requester = getattr(artifact, "requester", None)
+    if requester is None:
+        raise _ManifestReadError(
+            "artifact has no ``requester`` attribute; cannot download manifest"
+        )
+    status, _headers, body = requester.requestBlob(
+        "GET", artifact.archive_download_url, None, None, None, None,
+    )
+    if not (200 <= int(status) < 300):
+        raise _ManifestReadError(
+            f"artifact download returned HTTP {status}"
+        )
+    if isinstance(body, bytes):
+        return body
+    if isinstance(body, str):
+        return body.encode("latin-1")
+    raise _ManifestReadError(
+        f"artifact download returned unexpected body type: {type(body).__name__}"
+    )
 
 
 def dispatch_qualification(

@@ -45,7 +45,7 @@ from scripts.common.github_client import retry_github_call
 from scripts.release import issue as issue_mod
 from scripts.release.authorize import ensure_authorized
 from scripts.release.models import ReleasePhase
-from scripts.release.policy import TRACKER_LABEL, RepoReleasePolicy
+from scripts.release.policy import TRACKER_LABEL, RepoReleasePolicy, validate_release_branch
 from scripts.release.reconcile import ReleaseControlError, compute_status
 from scripts.release.release_refs import read_text_file, resolve_tag_commit
 from scripts.release_notes.release_format import parse_version
@@ -191,6 +191,13 @@ def plan_publication(
     Raises :class:`ReleaseControlError` when any validation fails. Safe to
     call repeatedly; performs no writes.
     """
+    # F10: refuse a branch the policy never listed BEFORE any API access, so
+    # a wrong-branch dispatch never sees repo state it should not see.
+    try:
+        validate_release_branch(policy, branch)
+    except ValueError as exc:
+        raise ReleaseControlError(str(exc)) from exc
+
     # Unattended planning (the controller auto-dispatched this validate run
     # as the Actions bot) is read-only evidence generation: authorization is
     # enforced by the approval gate and re-checked with the approver's
@@ -208,19 +215,31 @@ def plan_publication(
 
     status = compute_status(gh, policy, branch, tracking_issue=tracking_issue,
                             gh_downstream=gh_downstream)
-    if status.phase is not ReleasePhase.READY:
+
+    sha = status.candidate.sha
+    tag = status.version if status.stage == "ga" else f"{status.version}-{status.stage}"
+
+    # F16 resumability: after a crashed publish, the world may already carry
+    # the approved tag (or release) at the approved SHA. compute_status
+    # treats that as non-READY (PUBLISHED or unshippable), which would
+    # quarantine an otherwise legitimate resume. Detect the two partial
+    # states and allow planning to proceed for them alone. A tag or release
+    # at a DIFFERENT commit is a genuine snipe and stays refused.
+    existing_tag_sha = resolve_tag_commit(repo, tag) if sha else ""
+    resumable_partial = bool(sha) and existing_tag_sha == sha
+
+    if status.phase is not ReleasePhase.READY and not resumable_partial:
         raise ReleaseControlError(
             f"release is not ready to publish (phase: {status.phase.value}); "
             f"blockers: {'; '.join(status.blockers) or 'none listed'}"
         )
 
-    sha = status.candidate.sha
-    tag = status.version if status.stage == "ga" else f"{status.version}-{status.stage}"
-
-    if resolve_tag_commit(repo, tag):
+    if existing_tag_sha and existing_tag_sha != sha:
         raise ReleaseControlError(
-            f"tag {tag} already exists on {policy.repo}; creating the release "
-            f"would silently attach to it regardless of the candidate SHA"
+            f"tag {tag} already exists on {policy.repo} at "
+            f"{existing_tag_sha[:12]}, not the approved candidate "
+            f"{sha[:12]}; another writer created this tag. Quarantine the "
+            f"release; publication refuses until the conflict is resolved."
         )
 
     # The version files at the exact candidate SHA must record exactly what
@@ -276,6 +295,19 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
     tag/SHA bindings apply. Returns the release URL. Publication fires the
     production build dispatch; there is deliberately no dry-run on this
     path (use :func:`plan_publication`).
+
+    Two writes are made in order: (1) ``refs/tags/{tag}`` is created at the
+    approved SHA -- the only atomic tag-creation primitive GitHub exposes;
+    (2) the release is created *against that tag*. F16 tightens this from
+    the earlier check-then-create pattern: a second writer racing us into
+    the create-release call could not steal the tag with a different SHA
+    because the tag now exists at the SHA we picked before the release
+    call is even attempted. Both steps recover the same way: an "exists at
+    the approved SHA" state is a partial-publish resume and continues; an
+    "exists at a different SHA" state is a snipe and refuses. Full
+    repo-wide serialization is deferred -- publish workflow's per-branch
+    concurrency has to stay because the waiting approval holds the slot
+    (repo-wide would deadlock two lines racing for approval).
     """
     plan = plan_publication(gh, policy, branch=branch, actor=actor,
                             gh_downstream=gh_downstream,
@@ -303,13 +335,21 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
         lambda: gh.get_repo(policy.repo),
         retries=2, description=f"get repo {policy.repo}",
     )
-    # Creating the release is NOT idempotent (it creates the tag and fires
-    # the production build dispatch), so it is attempted exactly once and
-    # never blind-retried: a retry after a lost response would race the
-    # release that the first attempt actually created. On failure, recover
-    # by reading back: if the release now exists and its tag resolves to
-    # exactly the approved SHA, the first attempt succeeded and the
-    # exception was only a lost response; anything else re-raises.
+
+    # STAGE 1: atomically create the tag at the approved SHA. If the tag
+    # already exists (a partial resume, or a snipe), the ref lookup decides
+    # which. Doing this BEFORE create_git_release closes the TOCTOU window:
+    # a second writer racing us into create_git_release can no longer bind
+    # the tag to a different SHA, because the ref now exists and GitHub's
+    # create_git_release will honor it as-is.
+    _ensure_tag_at_sha(repo, plan)
+
+    # STAGE 2: create or recover the release. Creating a release is NOT
+    # idempotent (it fires the production build dispatch), so it is
+    # attempted exactly once and never blind-retried. Recovery covers both
+    # the lost-response case (first attempt succeeded server-side, response
+    # never arrived) and the resume-after-crash case (release already
+    # exists at the approved SHA).
     try:
         release = repo.create_git_release(
             plan.tag,
@@ -331,7 +371,9 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
     logger.info("Published release %s: %s", plan.tag, release.html_url)
 
     # The create call silently reuses a pre-existing tag; re-resolve and
-    # assert the tag points at exactly the approved SHA.
+    # assert the tag points at exactly the approved SHA. STAGE 1 already
+    # bound this atomically, but a maintainer force-deleting-and-recreating
+    # the tag between our steps would still surface here.
     tag_sha = resolve_tag_commit(repo, plan.tag)
     if tag_sha != plan.sha:
         raise ReleaseControlError(
@@ -341,21 +383,92 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
             f"immediately before any downstream work proceeds."
         )
 
+    # F17 defense-in-depth: after create, the repo's latest pointer must
+    # match what plan.make_latest promised the approver. A race with a
+    # concurrent publish on another line -- where our enumeration decision
+    # differed from the wire outcome -- surfaces here as a CRITICAL error.
+    _verify_latest_pointer_matches_plan(repo, plan)
+
+    _post_publication_receipt(gh, repo, plan, actor, release.html_url)
+    return release.html_url
+
+
+def _ensure_tag_at_sha(repo: Any, plan: "PublishPlan") -> None:
+    """Atomically create ``refs/tags/{plan.tag}`` at ``plan.sha``.
+
+    Three outcomes:
+
+    - Ref created: proceed.
+    - Ref already exists at the APPROVED SHA (422): partial resume, log
+      and proceed.
+    - Ref already exists at a DIFFERENT SHA: refuse; another writer got
+      here first and the release is quarantined.
+    - Any other exception: re-raise.
+
+    Creating the ref before the release closes the tag TOCTOU: from this
+    point onward, ``create_git_release(target_commitish=plan.sha)`` sees
+    a tag that already points where we want it, and GitHub's silent
+    "existing tag wins" behavior is on our side rather than an attacker's.
+    """
+    try:
+        retry_github_call(
+            lambda: repo.create_git_ref(ref=f"refs/tags/{plan.tag}",
+                                        sha=plan.sha),
+            retries=2, description=f"create tag {plan.tag} at {plan.sha[:12]}",
+        )
+        return
+    except GithubException as exc:
+        if exc.status != 422:
+            raise
+    # 422: the tag exists. The only tolerable case is that it points at
+    # exactly the approved SHA (resume). Anything else is a snipe.
+    existing_sha = resolve_tag_commit(repo, plan.tag)
+    if existing_sha == plan.sha:
+        logger.warning(
+            "Tag %s already exists at approved SHA %s (partial publish "
+            "resume); continuing.", plan.tag, plan.sha[:12],
+        )
+        return
+    raise ReleaseControlError(
+        f"tag {plan.tag} already exists at {existing_sha or '<unresolvable>'} "
+        f"but approval was for {plan.sha[:12]}; another writer created this "
+        f"tag under us. Quarantine the release; publication refuses until "
+        f"the conflict is resolved."
+    )
+
+
+_PUBLICATION_MARKER = f"<!-- {issue_mod.MARKER_NAMESPACE}:publication-receipt -->"
+
+
+def _post_publication_receipt(gh: Any, repo: Any, plan: "PublishPlan",
+                              actor: str, release_url: str) -> None:
+    """Idempotently post the publication receipt on the tracker.
+
+    A partial publish that reached STAGE 2 (release created) but crashed
+    before the receipt was posted must be resumable; posting a second
+    receipt would double-notify the tracker and leave the trail confusing.
+    We look up an existing receipt marker (trusted-comments only, so a
+    forged copy from a random account is ignored) and skip if present.
+    """
     tracking_issue = retry_github_call(
         lambda: repo.get_issue(plan.issue_number),
         retries=2, description=f"get issue #{plan.issue_number}",
     )
+    body = (
+        f"{_PUBLICATION_MARKER}\n"
+        f"Published **{plan.tag}** at `{plan.sha}` "
+        f"(publication approved by @{actor}): {release_url}\n"
+        f"Downstream outputs are now observed by reconciliation."
+    )
+    for comment in issue_mod.trusted_comments(tracking_issue, gh):
+        if issue_mod.marker_present(comment.body or "", _PUBLICATION_MARKER):
+            logger.info("Publication receipt for %s already posted; skipping",
+                        plan.tag)
+            return
     retry_github_call(
-        lambda: tracking_issue.create_comment(
-            body=(
-                f"Published **{plan.tag}** at `{plan.sha}` "
-                f"(publication approved by @{actor}): {release.html_url}\n"
-                f"Downstream outputs are now observed by reconciliation."
-            )
-        ),
+        lambda: tracking_issue.create_comment(body=body),
         retries=2, description="record publication on tracker",
     )
-    return release.html_url
 
 
 def _recover_created_release(repo: Any, plan: PublishPlan) -> Any:
@@ -499,26 +612,104 @@ def render_plan_summary(plan: PublishPlan, *, controller_sha: str = "") -> str:
 def _make_latest_decision(repo: Any, version: str, stage: str) -> str:
     """Explicit ``make_latest``: never rely on GitHub's default (true).
 
-    ``true`` only for a GA that advances (or first establishes) the newest
-    release line; an older line's patch (e.g. 8.0.x while 9.1.x is current)
-    must never steal the latest pointer.
+    ``true`` only when this GA is at least the numerically maximum
+    canonical GA already published on the repo, computed by ENUMERATING
+    releases and parsing each tag. GitHub's ``get_latest_release`` returns
+    a MUTABLE pointer (a maintainer can move it back manually, and a
+    non-version tag currently reads as "no version, take over"), so
+    trusting it lets an old-line patch steal latest; enumerating avoids
+    that. Non-parseable tags, drafts, and prereleases are ignored -- they
+    are not part of the canonical GA line.
+
+    ``>=`` (not ``>``): equality means "this release is on the current
+    top line, at the tag it already occupies"; the tag-exists gate makes
+    that a re-attempt at the same identity, and the caller is publishing
+    it as latest. ``<`` means an older line's patch and never sets latest.
     """
     if stage != "ga":
         return "false"
+    max_version = _max_published_ga(repo)
+    if max_version is None:
+        return "true"  # first GA on the repo
+    try:
+        publishing_version = parse_version(version)
+    except ValueError:
+        # Should be unreachable: version already parsed upstream to derive
+        # the tag; if it somehow arrives malformed here, refuse to move
+        # the pointer rather than take over.
+        return "false"
+    return "true" if publishing_version >= max_version else "false"
+
+
+def _max_published_ga(repo: Any) -> "tuple[int, int, int] | None":
+    """Numerically maximum canonical GA version among published releases.
+
+    Drafts and prereleases are excluded (they are not part of the latest
+    line); non-canonical tag names (``nightly-build``, ``9.2.0-rc1`` that
+    slipped past the prerelease flag, ``v9.1.1`` with a leading v) are
+    ignored rather than guessed. ``None`` when the repo has no such
+    release yet.
+    """
+    releases = retry_github_call(
+        lambda: list(repo.get_releases()),
+        retries=2, description="list releases",
+    )
+    best: "tuple[int, int, int] | None" = None
+    for release in releases:
+        if getattr(release, "draft", False) or getattr(release, "prerelease", False):
+            continue
+        try:
+            version = parse_version(release.tag_name)
+        except ValueError:
+            continue  # non-canonical tag: never contributes to the latest line
+        if best is None or version > best:
+            best = version
+    return best
+
+
+def _verify_latest_pointer_matches_plan(repo: Any, plan: PublishPlan) -> None:
+    """Defense-in-depth: after create, the latest pointer must match the plan.
+
+    The enumeration decision is racy on the wire (a second release created
+    between our list and our create can move the pointer differently), so
+    we re-read once and refuse to declare success if the pointer disagrees
+    with what the approver saw. A "we did not become latest, but should
+    have" or "we became latest, but should not have" is a divergence
+    between the plan and the world; it goes to the CRITICAL path so the
+    operator can decide whether to reset the pointer.
+    """
     try:
         latest = retry_github_call(
             repo.get_latest_release,
-            retries=2, description="get latest release",
+            retries=2, description="verify latest pointer",
         )
     except GithubException as exc:
-        if exc.status == 404:  # no releases yet
-            return "true"
+        if exc.status == 404:
+            # No release visible yet: only tolerable when we deliberately
+            # did NOT set latest and the repo is otherwise empty.
+            if plan.make_latest == "false":
+                return
+            raise ReleaseControlError(
+                f"CRITICAL: release {plan.tag} was created with "
+                f"make_latest=true but the repo's latest pointer is empty; "
+                f"investigate before any downstream work proceeds."
+            ) from exc
         raise
-    try:
-        latest_version = parse_version(latest.tag_name)
-    except ValueError:
-        return "true"  # non-version latest tag: this GA takes over
-    return "true" if parse_version(version) > latest_version else "false"
+    pointer_at_us = getattr(latest, "tag_name", "") == plan.tag
+    if plan.make_latest == "true" and not pointer_at_us:
+        raise ReleaseControlError(
+            f"CRITICAL: release {plan.tag} was created with "
+            f"make_latest=true but the repo's latest pointer is at "
+            f"{getattr(latest, 'tag_name', '<unknown>')!r}; another line "
+            f"raced us into the pointer. Investigate before downstream work."
+        )
+    if plan.make_latest == "false" and pointer_at_us:
+        raise ReleaseControlError(
+            f"CRITICAL: release {plan.tag} was created with "
+            f"make_latest=false but the repo's latest pointer now points "
+            f"at it; the pointer moved to an older line. Investigate "
+            f"before downstream work."
+        )
 
 
 def _extract_release_section(notes: str, tag: str) -> str | None:

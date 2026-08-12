@@ -53,7 +53,11 @@ from scripts.release.models import (
     RequiredCheck,
     release_tag,
 )
-from scripts.release.policy import TRACKER_LABEL, RepoReleasePolicy
+from scripts.release.policy import (
+    TRACKER_LABEL,
+    RepoReleasePolicy,
+    validate_release_branch,
+)
 from scripts.release.release_refs import NOTES_PREP_BRANCH_RE, resolve_tag_commit
 from scripts.release.versioning import derive_version
 
@@ -128,11 +132,7 @@ def start_release(
             "process; the controller will not create a public tracking issue"
         )
 
-    if branch not in policy.branches:
-        raise ReleaseControlError(
-            f"branch {branch!r} is not a configured release branch of "
-            f"{policy.repo} (policy allows: {', '.join(policy.branches)})"
-        )
+    _refuse_unconfigured_branch(policy, branch)
 
     ensure_authorized(gh, policy, actor)
 
@@ -149,9 +149,43 @@ def start_release(
     #   - one whose tag already exists: the release shipped; refuse so the
     #     operator closes the tracker instead of silently no-opping forever;
     #   - one still in flight: report its pinned version, no cut needed.
-    existing = issue_mod.find_release_issue(repo, branch, label=TRACKER_LABEL)
-    if existing is not None:
-        return _reuse_active_release(gh, repo, policy, branch, intent, existing)
+    #
+    # More than one open tracker for the same branch is the "one active
+    # release per branch" invariant broken (typically an ambiguous
+    # create-issue retry that landed twice). Refuse with the numbers rather
+    # than silently pick one -- a duplicate mid-flight release is exactly
+    # the failure mode this guard exists to prevent.
+    open_trackers = issue_mod.find_release_issues(repo, branch, label=TRACKER_LABEL)
+    if len(open_trackers) > 1:
+        numbers = ", ".join(f"#{i.number}" for i in open_trackers)
+        raise ReleaseControlError(
+            f"multiple open release trackers exist for {branch}: {numbers}; "
+            f"resolve the duplicates (close all but one) before starting a "
+            f"release on this branch"
+        )
+    if open_trackers:
+        return _reuse_active_release(gh, repo, policy, branch, intent,
+                                     open_trackers[0], dry_run=dry_run)
+
+    # No open tracker. Before creating a new one, refuse when the newest
+    # CLOSED tracker for this branch was abandoned (no controller
+    # completion marker): starting a new release on top of it would be a
+    # duplicate mid-flight release. The operator must reopen or explicitly
+    # confirm the earlier release was aborted before starting the next.
+    closed_tracker = issue_mod.find_release_issue(
+        repo, branch, label=TRACKER_LABEL, state="closed",
+    )
+    if closed_tracker is not None and not issue_mod.has_completion_marker(
+        closed_tracker, gh,
+    ):
+        raise ReleaseControlError(
+            f"tracker #{closed_tracker.number} on {branch} was closed "
+            f"without the controller's completion marker; the previous "
+            f"release was abandoned mid-flight. Reopen tracker "
+            f"#{closed_tracker.number} to resume it, or post an explicit "
+            f"abort comment there, before starting a new release on "
+            f"{branch}"
+        )
 
     tags = _tag_names(repo, policy)
     derived = derive_version(branch, intent, tags)
@@ -177,13 +211,7 @@ def start_release(
             version=derived.version, stage=derived.stage, tag=derived.tag,
         )
     issue_mod.ensure_tracker_labels(repo, branch, TRACKER_LABEL)
-    created = retry_github_call(
-        lambda: repo.create_issue(
-            title=title, body=body,
-            labels=[TRACKER_LABEL, issue_mod.branch_label(branch)],
-        ),
-        retries=2, description="create release tracking issue",
-    )
+    created = _create_tracker_or_readback(repo, branch, title, body)
     logger.info("Created release tracking issue #%s: %s", created.number, created.html_url)
     # The durable identity binding: the receipt travels with the tracker so
     # a duplicate start resumes THIS release instead of re-deriving one.
@@ -202,6 +230,61 @@ def start_release(
     )
 
 
+def _refuse_unconfigured_branch(policy: RepoReleasePolicy, branch: str) -> None:
+    """Wrap :func:`validate_release_branch` so callers raise
+    :class:`ReleaseControlError` (the CLI's uniform refusal shape) rather
+    than the raw ``ValueError``. Applied at every public entry point that
+    accepts a branch: ``start_release``, ``compute_status``, and
+    ``adopt_candidate``."""
+    try:
+        validate_release_branch(policy, branch)
+    except ValueError as exc:
+        raise ReleaseControlError(str(exc)) from exc
+
+
+def _create_tracker_or_readback(repo: Any, branch: str, title: str, body: str) -> Any:
+    """Create the tracking issue with a readback fallback on ambiguous failure.
+
+    ``retry_github_call`` around ``repo.create_issue`` is unsafe: a 5xx
+    reply after the POST was accepted server-side would blindly retry and
+    land a second identical tracker (the "one active release per branch"
+    invariant broken). Instead, attempt the create ONCE; if it raises,
+    read back by the label pair before assuming failure.
+
+    Ties resolved:
+      - readback returns exactly one → use it (the create landed);
+      - readback returns MORE than one → refuse (duplicates already exist
+        after our POST; retry would only worsen the mess);
+      - readback returns none → the create truly failed; re-raise so the
+        caller sees the underlying error.
+    """
+    try:
+        return retry_github_call(
+            lambda: repo.create_issue(
+                title=title, body=body,
+                labels=[TRACKER_LABEL, issue_mod.branch_label(branch)],
+            ),
+            retries=1, description="create release tracking issue",
+        )
+    except Exception as exc:
+        matches = issue_mod.find_release_issues(repo, branch, label=TRACKER_LABEL)
+        if len(matches) == 1:
+            logger.warning(
+                "create_issue raised %s but a matching tracker exists "
+                "(#%s); the create landed server-side, using it",
+                exc, matches[0].number,
+            )
+            return matches[0]
+        if len(matches) > 1:
+            numbers = ", ".join(f"#{i.number}" for i in matches)
+            raise ReleaseControlError(
+                f"create_issue raised {exc!r} and multiple matching "
+                f"trackers now exist ({numbers}); resolve the duplicates "
+                f"manually before retrying"
+            ) from exc
+        raise
+
+
 def _intent_matches_stage(intent: ReleaseIntent, stage: str) -> bool:
     """True when *intent* would produce a release of the bound *stage*'s kind.
 
@@ -216,9 +299,16 @@ def _intent_matches_stage(intent: ReleaseIntent, stage: str) -> bool:
 
 def _reuse_active_release(
     gh: Any, repo: Any, policy: RepoReleasePolicy, branch: str,
-    intent: ReleaseIntent, existing: Any,
+    intent: ReleaseIntent, existing: Any, *, dry_run: bool = False,
 ) -> StartResult:
-    """Resolve a duplicate start against the release already active on *branch*."""
+    """Resolve a duplicate start against the release already active on *branch*.
+
+    ``dry_run`` True forbids every side effect on the tracker: the binding
+    write when the cut never ran, and the binding writes _find_notes_pr
+    performs on discovering or refreshing the notes PR. Observation-mode
+    duplicate starts must produce zero writes even when they resume a
+    real release.
+    """
     logger.info(
         "Active release already tracked in issue #%s; reusing it "
         "(one active release per branch)", existing.number,
@@ -232,9 +322,10 @@ def _reuse_active_release(
             f"tracker, before starting a different kind of release on {branch}"
         )
     try:
-        notes_pr = _find_notes_pr(repo, policy, branch,
-                                  created_after=existing.created_at,
-                                  tracking_issue=existing, gh=gh)
+        notes_pr, _lookalike_alerts = _find_notes_pr(
+            repo, policy, branch, created_after=existing.created_at,
+            tracking_issue=existing, gh=gh, act=not dry_run,
+        )
     except _BoundNotesPrLost as exc:
         raise ReleaseControlError(str(exc)) from exc
     if notes_pr is None:
@@ -249,12 +340,17 @@ def _reuse_active_release(
             # nothing to disagree with); the result is bound so the next
             # resume no longer re-derives.
             pinned = derive_version(branch, intent, _tag_names(repo, policy))
-            issue_mod.write_binding(
-                existing,
-                ReleaseBinding(version=pinned.version, stage=pinned.stage), gh,
-            )
-            logger.info("No notes PR bound to issue #%s; requesting a (re)cut "
-                        "of %s", existing.number, pinned.tag)
+            if not dry_run:
+                issue_mod.write_binding(
+                    existing,
+                    ReleaseBinding(version=pinned.version, stage=pinned.stage),
+                    gh,
+                )
+                logger.info("No notes PR bound to issue #%s; requesting a "
+                            "(re)cut of %s", existing.number, pinned.tag)
+            else:
+                logger.info("[dry-run] would bind %s to issue #%s",
+                            pinned.tag, existing.number)
         return StartResult(
             created=False, cut_needed=True,
             issue_number=existing.number, issue_url=existing.html_url,
@@ -311,6 +407,7 @@ def compute_status(
     *,
     tracking_issue: Any = None,
     gh_downstream: Any = None,
+    act: bool = True,
 ) -> ReleaseStatus:
     """Recompute the full release status for *branch* from live GitHub and
     public state.
@@ -320,25 +417,49 @@ def compute_status(
     after the tracker count, so a previous release's merged notes PR can
     never be mistaken for this one). Everything else comes from PRs, refs,
     check runs, workflow runs, and public endpoints.
+
+    ``act`` False forbids every binding write (:func:`_find_notes_pr` skips
+    the receipt updates on scan-hit and merge-SHA drift), so an
+    observation-mode reconcile pass performs zero writes even when a real
+    binding decision is available.
     """
+    _refuse_unconfigured_branch(policy, branch)
+
     gh_downstream = gh_downstream or gh
     repo = retry_github_call(
         lambda: gh.get_repo(policy.repo),
         retries=2, description=f"get repo {policy.repo}",
     )
-    branch_head = retry_github_call(
-        lambda: repo.get_branch(branch).commit.sha,
-        retries=2, description=f"resolve head of {branch}",
-    )
+
+    # A published release survives its source branch being deleted or
+    # renamed: the immutable tag pins the candidate, and downstream
+    # verification runs against public URLs, not the branch. So catch
+    # branch 404 and continue with an empty head. Every other error
+    # (500s, auth) still bubbles up as before.
+    branch_missing = False
+    branch_head = ""
+    try:
+        branch_head = retry_github_call(
+            lambda: repo.get_branch(branch).commit.sha,
+            retries=2, description=f"resolve head of {branch}",
+        )
+    except GithubException as exc:
+        if exc.status != 404:
+            raise
+        branch_missing = True
 
     created_after = tracking_issue.created_at if tracking_issue is not None else None
     try:
-        notes_pr = _find_notes_pr(repo, policy, branch, created_after=created_after,
-                                  tracking_issue=tracking_issue, gh=gh)
+        notes_pr, lookalike_alerts = _find_notes_pr(
+            repo, policy, branch, created_after=created_after,
+            tracking_issue=tracking_issue, gh=gh,
+            branch_available=not branch_missing, act=act,
+        )
     except _BoundNotesPrLost as exc:
-        # The bound PR is gone or closed unmerged. Never rebind: surface a
-        # standing alert so a human decides; every pass re-raises it until
-        # the PR is restored or the tracker is closed.
+        # The bound PR is gone, closed unmerged, or drifted (renamed or
+        # retargeted). Never rebind: surface a standing alert so a human
+        # decides; every pass re-raises it until the PR is restored or
+        # the tracker is closed.
         alert = str(exc)
         return ReleaseStatus(
             repo=policy.repo,
@@ -351,15 +472,23 @@ def compute_status(
             alerts=(alert,),
         )
     if notes_pr is None:
+        blockers: list[str] = list(lookalike_alerts)
+        blockers.append(
+            "No release-notes PR is bound to this release yet; rerun "
+            "Start Release to (re)cut one."
+        )
+        if branch_missing:
+            blockers.append(
+                f"Source branch `{branch}` does not exist on {policy.repo}; "
+                f"restore it or close this tracker."
+            )
         return ReleaseStatus(
             repo=policy.repo,
             branch=branch,
             candidate=Candidate(state=CandidateState.NONE, branch_head=branch_head),
             phase=ReleasePhase.NOTES,
-            blockers=(
-                "No release-notes PR is bound to this release yet; rerun "
-                "Start Release to (re)cut one.",
-            ),
+            blockers=tuple(blockers),
+            alerts=tuple(lookalike_alerts),
         )
 
     match = NOTES_PREP_BRANCH_RE.match(notes_pr.head.ref)
@@ -370,6 +499,11 @@ def compute_status(
     # lazy per-PR GET). _find_notes_pr drops closed-unmerged PRs, so an
     # unmerged PR here is open and awaiting merge.
     if notes_pr.merged_at is None:
+        blockers = list(lookalike_alerts)
+        blockers.append(
+            f"Release-notes PR #{notes_pr.number} is not merged; its merge "
+            f"commit becomes the candidate SHA."
+        )
         return ReleaseStatus(
             repo=policy.repo,
             branch=branch,
@@ -380,24 +514,52 @@ def compute_status(
             notes_pr_merged=False,
             candidate=Candidate(state=CandidateState.NONE, branch_head=branch_head),
             phase=ReleasePhase.NOTES,
-            blockers=(
-                f"Release-notes PR #{notes_pr.number} is not merged; its merge "
-                f"commit becomes the candidate SHA.",
-            ),
+            blockers=tuple(blockers),
+            alerts=tuple(lookalike_alerts),
         )
 
     tag = release_tag(version, stage)
     release = _find_release(repo, tag)
     if release is not None:
-        return _published_status(
+        published = _published_status(
             gh, gh_downstream, repo, policy, branch=branch, version=version,
             stage=stage, tag=tag, release=release, branch_head=branch_head,
             notes_pr=notes_pr, tracking_issue=tracking_issue,
         )
+        if lookalike_alerts:
+            # Keep the alert visible even after publication; ordering is
+            # (published alerts first, then lookalike alerts) so triage
+            # order matches severity.
+            merged_alerts = tuple(published.alerts) + tuple(lookalike_alerts)
+            merged_blockers = tuple(published.blockers) + tuple(lookalike_alerts)
+            return replace(published, alerts=merged_alerts,
+                           blockers=merged_blockers)
+        return published
+
+    # From here down the release is not yet published; a missing source
+    # branch is a hard blocker (there is no live head to qualify against).
+    if branch_missing:
+        return ReleaseStatus(
+            repo=policy.repo,
+            branch=branch,
+            version=version,
+            stage=stage,
+            notes_pr_number=notes_pr.number,
+            notes_pr_url=notes_pr.html_url,
+            notes_pr_merged=True,
+            candidate=Candidate(state=CandidateState.NONE, branch_head=""),
+            phase=ReleasePhase.CANDIDATE,
+            blockers=tuple(lookalike_alerts) + (
+                f"Source branch `{branch}` does not exist on {policy.repo}; "
+                f"restore it or close this tracker before qualification "
+                f"can continue.",
+            ),
+            alerts=tuple(lookalike_alerts),
+        )
 
     notes_merge_sha = notes_pr.merge_commit_sha or ""
-    blockers: list[str] = []
-    alerts: list[str] = []
+    blockers = list(lookalike_alerts)
+    alerts: list[str] = list(lookalike_alerts)
     checks: tuple[RequiredCheck, ...] = ()
     qualification = QualificationStatus()
     phase = ReleasePhase.CANDIDATE
@@ -473,7 +635,7 @@ def compute_status(
                     )
 
     blockers.extend(daily_blockers)
-    blockers.extend(alerts)
+    blockers.extend(a for a in alerts if a not in blockers)
     return ReleaseStatus(
         repo=policy.repo,
         branch=branch,
@@ -682,22 +844,57 @@ def reconcile_branch(
     when title and body already match, so repeated runs cause no churn. With
     ``act`` (the default) it also performs the guarded progress actions the
     state calls for (dispatch qualification/bundle, open the helm PR, notify
-    once, close on completion); ``act=False`` observes only.
+    once, close on completion). ``act=False`` is strict **observation
+    mode**: no branch-label backfill, no advance actions, no phase-label
+    sync, no tracker edit, no binding write, no comment. A read-only pass.
+
+    Ordering (post-Agent-A F24 contract): render/labels first, close last.
+    ``actions.advance`` returns a ``close_when_complete`` bool describing
+    the intent; reconcile lays the final projection into the tracker
+    (labels + body) FIRST so the closed tracker never carries a stale
+    projection, and only then closes as the very last write. The legacy
+    list-returning ``advance`` (which closes internally) is still tolerated
+    via ``isinstance`` fallback so this side ships before Agent A's flip.
     """
+    _refuse_unconfigured_branch(policy, branch)
+
     repo = retry_github_call(
         lambda: gh.get_repo(policy.repo),
         retries=2, description=f"get repo {policy.repo}",
     )
     tracking_issue = issue_mod.find_release_issue(repo, branch, label=TRACKER_LABEL)
     if tracking_issue is None:
+        # No open tracker. Try to heal a controller-completed CLOSED
+        # tracker whose projection has drifted (a downstream URL check
+        # flipping to failed after the close, an alert appearing on a
+        # re-verified public output). We fix labels/body in place but
+        # NEVER reopen -- closure is authoritative once the completion
+        # marker is present. Compute_status runs in strict observation
+        # mode here (act=False) so no binding write or comment lands on
+        # a closed tracker; only the projection edits (labels/body) fire
+        # when act=True.
+        closed = issue_mod.find_release_issue(repo, branch, label=TRACKER_LABEL,
+                                              state="closed")
+        if closed is not None and issue_mod.has_completion_marker(closed, gh):
+            status = compute_status(gh, policy, branch, tracking_issue=closed,
+                                    gh_downstream=gh_downstream, act=False)
+            if act:
+                _sync_phase_labels(repo, closed, status)
+                _render_tracker(closed, status)
+                logger.info(
+                    "Healed projection on closed tracker #%s (phase=%s); "
+                    "not reopening", closed.number, status.phase.value,
+                )
+            return status
         _warn_abandoned_tracker(gh, repo, branch, act=act)
         logger.info("No active release on %s %s; nothing to reconcile", policy.repo, branch)
         return None
 
     gh_downstream = gh_downstream or gh
     # Backfill the branch identity label on pre-label trackers so their
-    # discovery stops depending on the editable body marker.
-    if issue_mod.branch_label(branch) not in {
+    # discovery stops depending on the editable body marker. Observation
+    # mode never writes: the backfill is a fix, not a read.
+    if act and issue_mod.branch_label(branch) not in {
         getattr(label, "name", "") for label in tracking_issue.labels
     }:
         issue_mod.ensure_tracker_labels(repo, branch, TRACKER_LABEL)
@@ -707,7 +904,7 @@ def reconcile_branch(
         )
 
     status = compute_status(gh, policy, branch, tracking_issue=tracking_issue,
-                            gh_downstream=gh_downstream)
+                            gh_downstream=gh_downstream, act=act)
 
     # The trusted controller version, resolved once per pass: publish runs
     # parked at the approval gate on any other commit are stale and get
@@ -716,12 +913,20 @@ def reconcile_branch(
     if status.phase is ReleasePhase.READY and gh_agent is not None and agent_repo:
         agent_head = actions_mod.agent_head_sha(gh_agent, agent_repo)
 
+    close_when_complete = False
     if act:
-        for performed in actions_mod.advance(
+        performed = actions_mod.advance(
             gh_downstream, policy, status=status, tracking_issue=tracking_issue,
             gh_agent=gh_agent, agent_repo=agent_repo, agent_head_sha=agent_head,
-        ):
-            logger.info("Action: %s", performed)
+        )
+        # F24 contract: advance() returns AdvanceResult (a list of action
+        # log strings carrying ``close_when_complete``) and never closes
+        # the tracker itself; the close happens below, after the final
+        # projection is rendered, as the last write. Plain lists (tests
+        # patching advance) simply read as close_when_complete=False.
+        close_when_complete = getattr(performed, "close_when_complete", False)
+        for entry in performed:
+            logger.info("Action: %s", entry)
 
     # Display-only: before the notes PR exists, link the in-flight (or
     # failed) cut run so the tracker shows what an operator can watch
@@ -749,10 +954,57 @@ def reconcile_branch(
         if approval_url:
             status = replace(status, approval_run_url=approval_url)
 
-    _sync_phase_labels(repo, tracking_issue, status)
-    _render_tracker(tracking_issue, status)
+    if act:
+        _sync_phase_labels(repo, tracking_issue, status)
+        _render_tracker(tracking_issue, status)
+
+    # The very last write of the pass: close the tracker on completion.
+    # Under the new F24 contract this is where the close happens; under
+    # the legacy contract advance() has already closed the tracker itself,
+    # so ``close_when_complete`` stays False and this is a no-op. Skipped
+    # if a healing pass encountered a tracker already closed.
+    if act and close_when_complete and tracking_issue.state != "closed":
+        _close_tracker_last_write(gh, status, tracking_issue)
+
     logger.info("Reconciled issue #%s (phase=%s)", tracking_issue.number, status.phase.value)
     return status
+
+
+def _close_tracker_last_write(gh: Any, status: ReleaseStatus, tracking_issue: Any) -> None:
+    """Post the completion comment if missing, then close as the last write.
+
+    ``actions.advance()`` posts the completion comment via its
+    ``_mark_complete_once`` receipt before signalling
+    ``close_when_complete``; the marker check here is a safety net for a
+    pass that crashed between that comment and this close. Closing is
+    deliberately the final write so a crash never leaves a closed tracker
+    with a stale projection (F24).
+    """
+    marker = issue_mod.complete_marker()
+    already_commented = any(
+        issue_mod.marker_present(comment.body, marker)
+        for comment in issue_mod.trusted_comments(tracking_issue, gh)
+    )
+    if not already_commented:
+        retry_github_call(
+            lambda: tracking_issue.create_comment(
+                body=(
+                    f"{marker}\n"
+                    f"> [!NOTE]\n"
+                    f"> **Release `{status.version}` ({status.stage}) is complete.**\n"
+                    f">\n"
+                    f"> The release, tag, downloads, hashes, container images, "
+                    f"docs, website, Bundle, and Helm outputs are all verified "
+                    f"public. Closing."
+                )
+            ),
+            retries=2, description="post completion comment",
+        )
+        issue_mod.invalidate_comment_memo(tracking_issue)
+    retry_github_call(
+        lambda: tracking_issue.edit(state="closed"),
+        retries=2, description=f"close issue #{tracking_issue.number}",
+    )
 
 
 def _warn_abandoned_tracker(gh: Any, repo: Any, branch: str, *, act: bool) -> None:
@@ -806,12 +1058,18 @@ def adopt_candidate(
 ) -> ReleaseStatus:
     """Record an authorized owner's adoption of the branch's exact new head.
 
-    Refuses unless: the actor is authorized (live team check), an active
-    release with an invalidated candidate exists, and *sha* equals the
-    current branch head exactly. On success posts a bot-authored
-    acknowledgement comment (the only adoption record reconciliation trusts)
-    and returns the freshly reconciled status.
+    Refuses unless: the branch is a configured release branch, the actor
+    is authorized (live team check), an active release with an invalidated
+    candidate exists, and *sha* equals one of the *genuinely adoptable*
+    SHAs -- the current branch head, the notes-PR merge SHA carried by the
+    binding, or the notes-PR merge SHA carried by the resolved status.
+    On success posts a bot-authored acknowledgement comment (the only
+    adoption record reconciliation trusts), recomputes, and -- if the
+    candidate is still ``INVALIDATED`` after the acknowledgement was
+    trusted -- refuses loudly so the release does not silently wedge on
+    a stale adoption.
     """
+    _refuse_unconfigured_branch(policy, branch)
     ensure_authorized(gh, policy, actor)
 
     sha = sha.strip().lower()
@@ -823,7 +1081,8 @@ def adopt_candidate(
     if tracking_issue is None:
         raise ReleaseControlError(f"no active release on {policy.repo} {branch}")
 
-    status = compute_status(gh, policy, branch, tracking_issue=tracking_issue)
+    status = compute_status(gh, policy, branch, tracking_issue=tracking_issue,
+                            act=False)
     if status.candidate.state is not CandidateState.INVALIDATED or status.published:
         raise ReleaseControlError(
             f"candidate is {status.candidate.state.value}"
@@ -832,22 +1091,47 @@ def adopt_candidate(
             f"movement, before publication"
         )
     # Two acceptable adoptions after branch movement: the exact new head
-    # (ship what the branch became), or the pinned candidate itself (or the
-    # bound notes merge SHA) as explicit reconfirmation to ship the pinned
-    # candidate despite the movement. Anything else is refused: adoption is
-    # never a way to pick an arbitrary commit.
-    allowed = {status.candidate.branch_head, status.candidate.sha}
+    # (ship what the branch became), or the pinned notes-merge SHA
+    # (explicit reconfirmation to ship the pinned candidate despite the
+    # movement). ``status.candidate.sha`` is NOT allowed here -- for an
+    # INVALIDATED candidate, ``_resolve_candidate`` sets it to the last
+    # recorded adoption (a former, already-lapsed head), and adopting a
+    # stale adoption would record a no-op that wedges the release.
     binding = issue_mod.read_binding(tracking_issue, gh)
+    allowed: set[str] = set()
+    if status.candidate.branch_head:
+        allowed.add(status.candidate.branch_head)
+    notes_merge_sha = ""
     if binding is not None and binding.merge_sha:
+        notes_merge_sha = binding.merge_sha
         allowed.add(binding.merge_sha)
-    allowed.discard("")
+    else:
+        # No binding merge SHA yet: fetch the notes PR to derive it.
+        # Never trust status.candidate.sha for this -- for INVALIDATED
+        # candidates it stores the last recorded adoption, not the
+        # notes merge.
+        try:
+            notes_pr, _ = _find_notes_pr(
+                repo, policy, branch,
+                tracking_issue=tracking_issue, gh=gh, act=False,
+            )
+        except _BoundNotesPrLost:
+            notes_pr = None
+        if notes_pr is not None:
+            candidate_sha = (notes_pr.merge_commit_sha or "").lower()
+            if candidate_sha:
+                notes_merge_sha = candidate_sha
+                allowed.add(candidate_sha)
     if sha not in allowed:
+        listed = ", ".join(sorted(allowed)) or "<none available>"
         raise ReleaseControlError(
             f"adoption requires the exact current head of {branch} "
-            f"({status.candidate.branch_head}), or the pinned candidate "
-            f"({status.candidate.sha}) to reconfirm shipping it despite the "
-            f"branch movement; got {sha or '<empty>'!r}. "
-            f"Re-check the branch and pass the full 40-character SHA."
+            f"({status.candidate.branch_head or '<unknown>'}), or the "
+            f"pinned notes-merge SHA "
+            f"({notes_merge_sha or '<unknown>'}) to reconfirm shipping "
+            f"it despite the branch movement; got {sha or '<empty>'!r}. "
+            f"Genuinely adoptable SHAs: {listed}. Re-check the branch "
+            f"and pass the full 40-character SHA."
         )
 
     comment = (
@@ -863,7 +1147,23 @@ def adopt_candidate(
     issue_mod.invalidate_comment_memo(tracking_issue)
     logger.info("Recorded adoption of %s on issue #%s", sha, tracking_issue.number)
 
-    refreshed = compute_status(gh, policy, branch, tracking_issue=tracking_issue)
+    refreshed = compute_status(gh, policy, branch, tracking_issue=tracking_issue,
+                               act=False)
+    # Guardrail: the adoption we just recorded must be recognized by the
+    # very next recomputation. If the candidate is still INVALIDATED here
+    # then something else drifted between the check above and the write
+    # (a second branch movement, an untrusted comment author, an internal
+    # mis-classification). Refuse loudly so the release does not wedge on
+    # a recorded no-op.
+    if refreshed.candidate.state is CandidateState.INVALIDATED:
+        raise ReleaseControlError(
+            f"adoption of `{sha}` on tracker #{tracking_issue.number} was "
+            f"recorded but the candidate is STILL invalidated on the "
+            f"immediate recomputation (branch moved again to "
+            f"`{refreshed.candidate.branch_head or '<unknown>'}`, or the "
+            f"acknowledgement was not trusted). Re-check the branch and "
+            f"adopt the exact new head; do NOT retry the same SHA blindly"
+        )
     _render_tracker(tracking_issue, refreshed)
     return refreshed
 
@@ -871,13 +1171,27 @@ def adopt_candidate(
 def _find_notes_pr(
     repo: Any, policy: RepoReleasePolicy, branch: str, *, created_after: Any = None,
     tracking_issue: Any = None, gh: Any = None,
-) -> Any:
-    """The release-notes PR bound to the active release on *branch*, or None.
+    branch_available: bool = True, act: bool = True,
+) -> "tuple[Any, tuple[str, ...]]":
+    """The release-notes PR bound to the active release on *branch*, and a
+    tuple of standing alerts.
+
+    Returns ``(pull_or_none, alerts)``:
+
+    - ``pull`` is the bound PyGithub PR when a binding resolves, or the
+      scan-hit PR when no binding exists yet (and the caller trusts the
+      author). ``None`` means no PR was identified.
+    - ``alerts`` carries **standing** warnings that must render on the
+      tracker but do not stop the release from progressing when possible
+      -- currently the lookalike-notes-PR preemption alert (a
+      convention-matching PR authored by someone outside the trusted bot
+      set).
 
     With *tracking_issue* the durable identity binding is consulted first:
     a bound PR is fetched by number (no scan), so a newer PR with a
     notes-style head can never displace it and eviction from the scan
-    window cannot unbind it. A bound PR that is missing or closed unmerged
+    window cannot unbind it. A bound PR that is missing, closed unmerged,
+    or **drifted** (head renamed, base retargeted, cross-repo shift)
     raises :class:`_BoundNotesPrLost` (never a rebind). The scan runs only
     while no PR is bound; a hit is then bound so the next pass skips the
     scan. A version-only binding constrains the scan: a PR pinning a
@@ -885,30 +1199,46 @@ def _find_notes_pr(
 
     PRs into a release branch are mostly backports; the notes PR is
     identified by its namespaced head branch and its version matching the
-    release line. Three guards keep the binding sound:
+    release line. The scan enforces:
 
     - the head must live in the upstream repo itself (the cut pushes prep
       branches upstream): ``head.ref`` of a fork PR is an attacker-chosen
       string, so without this anyone could displace the real notes PR;
-    - PRs closed without merging are abandoned cuts, skipped so they neither
-      wedge the release nor shadow an older valid PR;
-    - with ``created_after`` (the tracker's server-set creation time), only
-      PRs newer than the tracker count, so a previous release's merged notes
-      PR is never mistaken for this release's.
+    - the author must be a trusted controller bot identity: a
+      convention-matching PR from any other author is a lookalike
+      preemption attempt; skip it and surface an alert;
+    - PRs closed without merging are abandoned cuts, skipped so they
+      neither wedge the release nor shadow an older valid PR;
+    - with ``created_after`` (the tracker's server-set creation time),
+      only PRs newer than the tracker count, so a previous release's
+      merged notes PR is never mistaken for this release's.
 
-    Newest-first listing plus a scan cap bounds the work; hitting the cap is
-    logged loudly since it would misreport the notes PR as missing.
+    ``branch_available`` False (source branch deleted) skips the scan
+    entirely: ``get_pulls`` filters server-side by ``base`` and a
+    missing base yields nothing informative. Only the binding path can
+    still resolve a PR in that state.
+
+    ``act`` False forbids every binding write on discovery (scan-hit
+    binding, merge-SHA drift refresh); observation-mode callers see the
+    resolved PR without side effects. Newest-first listing plus a scan
+    cap bounds the work; hitting the cap is logged loudly since it would
+    misreport the notes PR as missing.
     """
     binding = (issue_mod.read_binding(tracking_issue, gh)
                if tracking_issue is not None else None)
     if binding is not None and binding.notes_pr_number:
-        pull = _fetch_bound_notes_pr(repo, binding)
+        pull = _fetch_bound_notes_pr(repo, policy, branch, binding)
         merge_sha = (pull.merge_commit_sha or "").lower()
-        if merge_sha and merge_sha != binding.merge_sha:
+        if merge_sha and merge_sha != binding.merge_sha and act:
             issue_mod.write_binding(
                 tracking_issue, replace(binding, merge_sha=merge_sha), gh,
             )
-        return pull
+        return pull, ()
+
+    if not branch_available:
+        # Cannot scan for candidates when the base branch is gone; only a
+        # pre-existing binding can rescue us, and that path returned above.
+        return None, ()
 
     pulls = retry_github_call(
         lambda: list(itertools.islice(
@@ -924,6 +1254,8 @@ def _find_notes_pr(
             _NOTES_PR_SCAN_LIMIT, branch,
         )
         pulls = pulls[:_NOTES_PR_SCAN_LIMIT]
+    trusted_authors = issue_mod.trusted_bot_authors(gh)
+    lookalike_alerts: list[str] = []
     for pull in pulls:
         match = NOTES_PREP_BRANCH_RE.match(pull.head.ref)
         if not match or not match.group(1).startswith(f"{branch}."):
@@ -939,12 +1271,29 @@ def _find_notes_pr(
                 pull.number, pull.head.ref, policy.repo,
             )
             continue
+        author_login = (getattr(pull.user, "login", "") or "") if pull.user else ""
+        if author_login not in trusted_authors:
+            # Convention-matching PR by someone the controller does not
+            # trust as a bot identity: refuse to bind, surface a standing
+            # alert so a human decides. Full mitigation (an authorized-
+            # opener list beyond bot identities) is a design change out
+            # of scope for this patch.
+            alert = (
+                f"PR #{pull.number} matches the notes-cut naming "
+                f"convention on `{branch}` but was opened by "
+                f"`{author_login or '<unknown>'}`, who is not a trusted "
+                f"release-bot identity; refusing to bind it. Investigate "
+                f"before adopting the release."
+            )
+            if alert not in lookalike_alerts:
+                lookalike_alerts.append(alert)
+            continue
         if pull.state == "closed" and pull.merged_at is None:
             logger.info("Ignoring PR #%s: notes cut closed without merging", pull.number)
             continue
         if created_after is not None and pull.created_at <= created_after:
             continue
-        if tracking_issue is not None:
+        if tracking_issue is not None and act:
             issue_mod.write_binding(
                 tracking_issue,
                 ReleaseBinding(
@@ -954,17 +1303,33 @@ def _find_notes_pr(
                 ),
                 gh,
             )
-        return pull
-    return None
+        return pull, tuple(lookalike_alerts)
+    return None, tuple(lookalike_alerts)
 
 
-def _fetch_bound_notes_pr(repo: Any, binding: ReleaseBinding) -> Any:
-    """The notes PR the binding pins, fetched by number (never a scan).
+def _fetch_bound_notes_pr(
+    repo: Any, policy: RepoReleasePolicy, branch: str,
+    binding: ReleaseBinding,
+) -> Any:
+    """The notes PR the binding pins, fetched by number (never a scan),
+    revalidated against the binding's exact identity on every pass.
 
-    Raises :class:`_BoundNotesPrLost` when the PR cannot be fetched or was
-    closed without merging: the binding is never rewritten to another PR,
-    so the failure surfaces as an alert (reconcile) or refusal (start)
-    instead of a silent rebind.
+    Raises :class:`_BoundNotesPrLost` when the PR cannot be fetched, was
+    closed without merging, or its identity **drifted** from the binding:
+
+    - ``base.ref`` no longer equals the release branch (the PR was
+      retargeted to another base -- merging it would land into the wrong
+      branch);
+    - the base or head repo is no longer the upstream repo (a fork
+      shove-through, or a cross-repo migration);
+    - ``head.ref`` no longer parses to the bound version/stage (the head
+      branch was renamed -- either to a different release identity, or to
+      something not notes-shaped at all).
+
+    Drift never triggers a rebind: the failure surfaces as an alert
+    (reconcile) or refusal (start) instead of silently switching the
+    release to a different PR. The binding's ``merge_sha`` is never
+    updated from a drifted PR either.
     """
     tag = release_tag(binding.version, binding.stage)
     try:
@@ -986,6 +1351,63 @@ def _fetch_bound_notes_pr(repo: Any, binding: ReleaseBinding) -> Any:
             f"rebinds to another PR. Reopen and merge PR "
             f"#{binding.notes_pr_number}, or close the tracker and start "
             f"over", binding,
+        )
+
+    # Every pass revalidates the bound PR's identity against the binding.
+    # A head rename to a nonmatching name previously crashed on the
+    # ``assert match is not None`` above; a rename to another release's
+    # name silently switched the release's version/stage; a base retarget
+    # silently changed which branch the merge would land into; a fork
+    # shove-through accepted a non-upstream head. All four now produce a
+    # standing alert instead.
+    pull_base = getattr(pull, "base", None)
+    pull_head = getattr(pull, "head", None)
+    base_ref = getattr(pull_base, "ref", "") or "" if pull_base is not None else ""
+    base_repo_obj = getattr(pull_base, "repo", None) if pull_base is not None else None
+    base_repo = getattr(base_repo_obj, "full_name", "") if base_repo_obj is not None else ""
+    head_repo_obj = getattr(pull_head, "repo", None) if pull_head is not None else None
+    head_repo = getattr(head_repo_obj, "full_name", "") if head_repo_obj is not None else ""
+    head_ref = getattr(pull_head, "ref", "") or "" if pull_head is not None else ""
+
+    if base_ref != branch:
+        raise _BoundNotesPrLost(
+            f"the release-notes PR #{binding.notes_pr_number} bound to this "
+            f"{tag} release now targets base `{base_ref or '<unknown>'}` "
+            f"instead of `{branch}`; the binding is frozen and no merge "
+            f"SHA is trusted from a retargeted PR. Restore the PR's base "
+            f"or close the tracker", binding,
+        )
+    if base_repo and base_repo != policy.repo:
+        raise _BoundNotesPrLost(
+            f"the release-notes PR #{binding.notes_pr_number} bound to this "
+            f"{tag} release now targets base repo `{base_repo}` instead of "
+            f"`{policy.repo}`; the binding is frozen and no merge SHA is "
+            f"trusted from a cross-repo PR. Investigate before proceeding",
+            binding,
+        )
+    if head_repo and head_repo != policy.repo:
+        raise _BoundNotesPrLost(
+            f"the release-notes PR #{binding.notes_pr_number} bound to this "
+            f"{tag} release now has its head in `{head_repo}` instead of "
+            f"`{policy.repo}`; a fork head is attacker-controllable, so the "
+            f"binding is frozen. Investigate before proceeding", binding,
+        )
+    match = NOTES_PREP_BRANCH_RE.match(head_ref)
+    if match is None:
+        raise _BoundNotesPrLost(
+            f"the release-notes PR #{binding.notes_pr_number} bound to this "
+            f"{tag} release now has head `{head_ref or '<empty>'}`, which "
+            f"is not a notes-cut prep branch; the binding is frozen and "
+            f"no merge SHA is trusted from a renamed head. Restore the "
+            f"prep branch name or close the tracker", binding,
+        )
+    if match.group(1) != binding.version or match.group(2) != binding.stage:
+        raise _BoundNotesPrLost(
+            f"the release-notes PR #{binding.notes_pr_number} bound to this "
+            f"{tag} release now has head `{head_ref}`, which parses as "
+            f"{match.group(1)}-{match.group(2)}; the release identity is "
+            f"pinned by the binding and cannot silently shift. Investigate "
+            f"the rename before proceeding", binding,
         )
     return pull
 

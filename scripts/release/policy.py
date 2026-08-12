@@ -110,6 +110,28 @@ class RepoReleasePolicy:
         return f"@{self.authorized_team}"
 
 
+def validate_release_branch(policy: RepoReleasePolicy, branch: str) -> None:
+    """Refuse a branch that is not one of *policy*'s configured release lines.
+
+    The one choke point every entry point that acts against a caller-supplied
+    branch is expected to funnel through, so a policy load that never listed
+    the branch (a typo, a mothballed line, an attempt to run the controller
+    against a numeric non-release ref) is refused *before* any GitHub read
+    or write is issued. Raises :class:`ValueError` with a message that names
+    the offending branch and the allowed set so the operator can see what
+    the policy actually configures. Numeric-looking branch strings still
+    have to pass the same shape check that :func:`parse_release_branch`
+    already enforces at policy load time (reused here so both a wrong-form
+    branch and a right-form-but-unconfigured branch fail at the same place).
+    """
+    parse_release_branch(branch)  # right-shape check; raises on '6.9-nope', 'main', ...
+    if branch not in policy.branches:
+        raise ValueError(
+            f"branch {branch!r} is not a configured release branch of "
+            f"{policy.repo} (policy allows: {', '.join(policy.branches)})"
+        )
+
+
 def load_policy(path: str) -> dict[str, RepoReleasePolicy]:
     """Parse *path* into a mapping of ``repo full name -> policy``.
 

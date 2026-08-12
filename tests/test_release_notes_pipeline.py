@@ -30,12 +30,13 @@ def clone(tmp_path):
 
 def _patch(
     monkeypatch, *, prs, bullets=(), skipped=(), triage_result=None,
-    unresolved_backports=(),
+    unresolved_backports=(), unresolved_cherry_picks=(),
 ):
     monkeypatch.setattr(pipeline_mod.discover_mod, "discover",
                         lambda *a, **k: DiscoveryResult(
                             base_tag="9.1.0-rc1", head_ref="9.1", prs=prs,
                             unresolved_backports=unresolved_backports,
+                            unresolved_cherry_picks=unresolved_cherry_picks,
                         ))
     monkeypatch.setattr(pipeline_mod.generate_mod, "generate",
                         lambda *a, **k: GenerationResult(bullets=bullets, skipped=skipped))
@@ -266,15 +267,10 @@ def test_unresolved_backports_passthrough(monkeypatch, clone):
     prs = (MergedPR(number=500, title="[Backport 9.1] Fix", author="bot", url="u",
                     labels=("backport",)),)
     unresolved_backports = (UnresolvedBackport(number=500, title="[Backport 9.1] Fix"),)
-    monkeypatch.setattr(
-        pipeline_mod.discover_mod, "discover",
-        lambda *a, **k: DiscoveryResult(
-            base_tag="9.1.0-rc1", head_ref="9.1", prs=prs,
-            unresolved_backports=unresolved_backports,
-        ),
-    )
-    monkeypatch.setattr(pipeline_mod.generate_mod, "generate",
-                        lambda *a, **k: GenerationResult(bullets=(), skipped=()))
+    # _patch stubs triage so the "backport"-labelled PR (which is not
+    # release-notes/no-release-notes) does not fall through to the real
+    # Claude CLI.
+    _patch(monkeypatch, prs=prs, unresolved_backports=unresolved_backports)
     r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
     assert [b.number for b in r.unresolved_backports] == [500]
 
@@ -286,15 +282,8 @@ def test_unresolved_cherry_picks_passthrough(monkeypatch, clone):
     prs = (MergedPR(number=80, title="port fix", author="dev", url="u", labels=()),)
     unresolved_cherry_picks = (UnresolvedCherryPick(
         number=80, sha="rangesha", source_shas=("deadbeefdeadbeef",), subject="port fix (#80)"),)
-    monkeypatch.setattr(
-        pipeline_mod.discover_mod, "discover",
-        lambda *a, **k: DiscoveryResult(
-            base_tag="9.1.0-rc1", head_ref="9.1", prs=prs,
-            unresolved_cherry_picks=unresolved_cherry_picks,
-        ),
-    )
-    monkeypatch.setattr(pipeline_mod.generate_mod, "generate",
-                        lambda *a, **k: GenerationResult(bullets=(), skipped=()))
+    # _patch stubs triage so the label-less PR does not reach the real Claude CLI.
+    _patch(monkeypatch, prs=prs, unresolved_cherry_picks=unresolved_cherry_picks)
     r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None)
     assert [c.number for c in r.unresolved_cherry_picks] == [80]
 

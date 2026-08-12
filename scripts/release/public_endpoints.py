@@ -59,6 +59,38 @@ def _fetch_json(url: str) -> dict[str, object]:
         return json.load(response)
 
 
+def _registry_token(url: str) -> str:
+    """Anonymous ``token`` grant from a registry, shape-validated.
+
+    A registry that answers 200 with a payload that is not a JSON object,
+    is missing ``token``, or carries a non-string ``token`` (an error-shaped
+    body, a null, a numeric type from a broken proxy) is not a usable grant
+    and must never fall through as an empty ``Authorization: Bearer`` header
+    that some registries would then coincidentally accept. Every deviation
+    surfaces as :class:`ValueError` so the caller's ``_guarded`` degradation
+    catches it, while a genuine 4xx on the grant itself keeps its
+    :class:`urllib.error.HTTPError` shape and answers not-public.
+    """
+    payload = _fetch_json(url)
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"registry token response at {url} is not a JSON object "
+            f"(got {type(payload).__name__})"
+        )
+    if "token" not in payload:
+        raise ValueError(
+            f"registry token response at {url} is missing the 'token' field "
+            f"(keys: {sorted(str(k) for k in payload)})"
+        )
+    token = payload["token"]
+    if not isinstance(token, str) or not token:
+        raise ValueError(
+            f"registry token at {url} is not a non-empty string "
+            f"(got {type(token).__name__})"
+        )
+    return token
+
+
 def dockerhub_tag_exists(repo: str, tag: str) -> bool:
     """True when Docker Hub serves *repo*:*tag* publicly (no auth needed)."""
     return url_exists(
@@ -73,7 +105,9 @@ def ghcr_tag_exists(repo: str, tag: str) -> bool:
     reads as not-public, which is exactly the answer we need.
     """
     try:
-        token = _fetch_json(f"https://ghcr.io/token?scope=repository:{repo}:pull")["token"]
+        token = _registry_token(
+            f"https://ghcr.io/token?scope=repository:{repo}:pull",
+        )
     except urllib.error.HTTPError as exc:
         if 400 <= exc.code < 500 and exc.code != 429:
             return False
@@ -86,7 +120,7 @@ def ghcr_tag_exists(repo: str, tag: str) -> bool:
 
 def ecr_public_tag_exists(repo: str, tag: str) -> bool:
     """True when ECR Public serves *repo*:*tag* anonymously."""
-    token = _fetch_json("https://public.ecr.aws/token/")["token"]
+    token = _registry_token("https://public.ecr.aws/token/")
     return url_exists(
         f"https://public.ecr.aws/v2/{repo}/manifests/{tag}",
         headers={"Authorization": f"Bearer {token}", "Accept": _MANIFEST_ACCEPT},

@@ -96,14 +96,37 @@ class TestGhcr:
     @pytest.mark.parametrize("body", [
         b"{}",                                 # 200 with no token key
         b'{"errors": [{"code": "DENIED"}]}',   # 200 with an error-shaped body
+        b'{"token": null}',                    # 200 with a null token
+        b'{"token": ""}',                      # 200 with an empty token
+        b'{"token": 12345}',                   # 200 with a numeric token
     ])
     def test_hostile_token_body_never_reads_as_public(self, body: bytes) -> None:
         # A 200 token response without a usable token must never turn into
-        # "tag exists". Raising (KeyError today) is acceptable; True is not.
+        # "tag exists". F26: every deviation surfaces as ValueError so the
+        # caller's _guarded degradation catches it, instead of a raw
+        # KeyError (missing 'token') or TypeError (non-string coerced into
+        # a header) or a silently-empty Authorization header.
         with patch("urllib.request.urlopen",
                    return_value=_response(200, body)), \
-             pytest.raises(KeyError):
+             pytest.raises(ValueError):
             pub.ghcr_tag_exists("valkey-io/valkey", "9.1.1")
+
+    def test_non_object_json_body_is_refused_by_shape_check(self) -> None:
+        # A registry answering 200 with a JSON list or string (broken proxy
+        # rewriting, API drift) would raise TypeError on subscript access
+        # before F26; must now surface as a clear ValueError.
+        with patch("urllib.request.urlopen",
+                   return_value=_response(200, b'["not", "an", "object"]')), \
+             pytest.raises(ValueError, match="not a JSON object"):
+            pub.ghcr_tag_exists("valkey-io/valkey", "9.1.1")
+
+    def test_ecr_shape_check_applies_uniformly(self) -> None:
+        # Same shape-check discipline as ghcr; F26 factored both through
+        # _registry_token so a hostile ECR grant fails just as loudly.
+        with patch("urllib.request.urlopen",
+                   return_value=_response(200, b'{"unrelated": true}')), \
+             pytest.raises(ValueError, match="missing the 'token' field"):
+            pub.ecr_public_tag_exists("valkey/valkey", "9.1.1")
 
 
 class TestEcrPublic:

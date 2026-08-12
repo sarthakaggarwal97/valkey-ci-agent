@@ -104,12 +104,22 @@ jobs:
           # on valkey-helm. valkey itself is excluded from this token's
           # scope. The read-only verification targets get their own
           # read-scoped mint below instead of riding along here.
+          #
+          # Permission-set caveat: this is a UNION token. The consumers on
+          # each repo actually need less than the union: valkey-release-
+          # automation only uses actions:write (dispatches), valkey-bundle
+          # only contents:write (repository_dispatch), and valkey-helm
+          # contents:write + pull-requests:write (branch + files + PR).
+          # Splitting into three per-repo tokens needs main.py plumbing to
+          # accept multiple downstream clients, which is deferred; the
+          # minimum here drops issues:read (nothing on these repos reads
+          # issues via this token; the tracking issue is on valkey and uses
+          # the primary token above).
           repositories: |
             valkey-release-automation
             valkey-bundle
             valkey-helm
           permission-contents: write
-          permission-issues: read
           permission-pull-requests: write
           permission-checks: read
           permission-actions: write

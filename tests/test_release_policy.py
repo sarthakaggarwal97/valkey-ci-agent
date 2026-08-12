@@ -228,3 +228,67 @@ def test_duplicate_repo_rejected(tmp_path: Path) -> None:
 def test_missing_repos_key_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="repos"):
         load_policy(_write(tmp_path, "other: 1\n"))
+
+
+class TestValidateReleaseBranch:
+    """F10: :func:`validate_release_branch` is the single choke point every
+    branch-scoped entry point (plan_publication, publish_release, reconcile
+    entry points on the other agents' side) funnels through. A branch not
+    listed in the policy is refused BEFORE any API access; the shape check
+    inherited from :func:`parse_release_branch` runs on the same call site
+    so both wrong-shape and unconfigured-but-well-shaped inputs fail here.
+    """
+
+    def _policy(self, tmp_path: Path) -> object:
+        from scripts.release.policy import load_policy
+        return load_policy(_write(tmp_path, _VALID))["valkey-io/valkey"]
+
+    def test_configured_branch_is_accepted(self, tmp_path: Path) -> None:
+        from scripts.release.policy import validate_release_branch
+        # Returns None (nothing to inspect); no exception is success.
+        validate_release_branch(self._policy(tmp_path), "9.1")
+        validate_release_branch(self._policy(tmp_path), "8.0")
+
+    def test_unconfigured_numeric_branch_is_refused(self, tmp_path: Path) -> None:
+        from scripts.release.policy import validate_release_branch
+        with pytest.raises(ValueError,
+                           match="not a configured release branch"):
+            validate_release_branch(self._policy(tmp_path), "6.9")
+
+    def test_error_message_lists_allowed_branches(self, tmp_path: Path) -> None:
+        # The operator sees exactly which branches ARE configured so they
+        # can correct the dispatch without inspecting the policy file.
+        from scripts.release.policy import validate_release_branch
+        with pytest.raises(ValueError,
+                           match=r"policy allows: 9\.1, 8\.0"):
+            validate_release_branch(self._policy(tmp_path), "10.5")
+
+    @pytest.mark.parametrize("bad_shape", [
+        "main", "unstable", "9", "9.1.0", "9.01", "release/9.1", "",
+    ])
+    def test_wrong_shape_branch_is_refused_by_the_shape_check(
+        self, tmp_path: Path, bad_shape: str,
+    ) -> None:
+        # An operator-supplied branch that does not even match M.m is
+        # refused with the parse error (same message as at policy load
+        # time); nothing gets past this to touch GitHub.
+        from scripts.release.policy import validate_release_branch
+        with pytest.raises(ValueError):
+            validate_release_branch(self._policy(tmp_path), bad_shape)
+
+    def test_signature_matches_the_agreed_contract(self) -> None:
+        # Agent B imports validate_release_branch from scripts.release.policy
+        # and calls it as validate_release_branch(policy, branch) -> None.
+        # A rename or extra required arg here breaks reconcile.py.
+        import inspect
+
+        from scripts.release.policy import validate_release_branch
+        sig = inspect.signature(validate_release_branch)
+        params = list(sig.parameters.values())
+        assert len(params) == 2
+        assert [p.name for p in params] == ["policy", "branch"]
+        assert all(p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+                   for p in params)
+        # Under `from __future__ import annotations` the return annotation
+        # is stringified; match either the string 'None' or the type.
+        assert sig.return_annotation in (None, "None")

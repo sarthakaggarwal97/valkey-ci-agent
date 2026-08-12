@@ -9,6 +9,9 @@ under test.
 
 from __future__ import annotations
 
+import io
+import json
+import zipfile
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -101,10 +104,101 @@ def daily_run(*, run_id: int = 77, status: str = "completed",
     )
 
 
+def build_manifest_payload(
+    *, tag: str = "9.1.1", sha: str = MERGE_SHA,
+    version: "str | None" = None,
+    rpm_jobs: "int | None" = None, deb_jobs: "int | None" = None,
+    archive_jobs: int = 4,
+    schema: int = 1, nonce: str = "n" * 32,
+    automation_sha: str = "c" * 40,
+    created_at: str = "2026-08-01T00:00:00Z",
+    extra: "dict | None" = None,
+) -> "dict[str, object]":
+    """A valid schema-1 qualification manifest, ready for tests to mutate.
+
+    The default matches the ``qualification_run`` job/artifact inventory
+    for GA (four archive legs, two RPM, one DEB); an RC tag zeroes the
+    package counts to match the workflow's RC-skip behavior. Individual
+    fields are overridden by attack tests (wrong tag, wrong SHA, wrong
+    counts).
+    """
+    is_rc = "-rc" in tag
+    if rpm_jobs is None:
+        rpm_jobs = 0 if is_rc else 2
+    if deb_jobs is None:
+        deb_jobs = 0 if is_rc else 1
+    payload: "dict[str, object]" = {
+        "schema": schema,
+        "nonce": nonce,
+        "version": version if version is not None else tag.split("-rc", 1)[0],
+        "tag": tag,
+        "source_sha": sha,
+        "automation_sha": automation_sha,
+        "rpm_jobs": rpm_jobs,
+        "deb_jobs": deb_jobs,
+        "archive_jobs": archive_jobs,
+        "created_at": created_at,
+    }
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def build_manifest_zip_bytes(payload: "dict[str, object] | None" = None,
+                             *, filename: str = "manifest.json",
+                             json_body: "str | None" = None) -> bytes:
+    """A zip whose only file is the given JSON payload (or raw ``json_body``).
+
+    Attack tests use ``json_body`` to inject exact malformed content (an
+    unterminated brace, a top-level list, a plain string) without going
+    through the well-formed builder.
+    """
+    if json_body is None:
+        payload = payload if payload is not None else build_manifest_payload()
+        json_body = json.dumps(payload)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(filename, json_body)
+    return buf.getvalue()
+
+
+def _manifest_artifact_mock(*, expired: bool = False,
+                            size_in_bytes: int = 1024,
+                            zip_bytes: "bytes | None" = None,
+                            requester: "MagicMock | None" = None) -> MagicMock:
+    """A qualification-manifest artifact mock whose requester serves a zip.
+
+    The default zip is a valid schema-1 manifest bound to ``(9.1.1,
+    MERGE_SHA)``, matching the fixture's happy path. Tests wanting a
+    mismatch pass a different ``zip_bytes`` value (built via
+    :func:`build_manifest_zip_bytes` with overridden fields).
+    """
+    artifact = MagicMock(expired=expired, size_in_bytes=size_in_bytes)
+    artifact.name = "qualification-manifest"
+    artifact.archive_download_url = (
+        "https://api.github.com/repos/o/r/actions/artifacts/1/zip"
+    )
+    if requester is None:
+        blob = zip_bytes if zip_bytes is not None else build_manifest_zip_bytes()
+        requester = MagicMock()
+        requester.requestBlob.return_value = (200, {}, blob)
+    artifact.requester = requester
+    return artifact
+
+
 def qualification_run(sha: str = MERGE_SHA, *,
                       status: str = "completed", conclusion: str = "success",
                       tag: str = "9.1.1", head_branch: str = "main",
-                      jobs: "list[MagicMock] | None" = None) -> MagicMock:
+                      jobs: "list[MagicMock] | None" = None,
+                      manifest_payload: "dict[str, object] | None" = None,
+                      manifest_zip: "bytes | None" = None) -> MagicMock:
+    """A qualification run mock whose manifest artifact serves valid content.
+
+    ``manifest_payload`` overrides the manifest JSON payload while keeping
+    the zip envelope intact (default: a schema-1 payload matching this
+    run's ``tag`` and ``sha``). ``manifest_zip`` overrides the entire
+    envelope (for empty-upload / corrupt-zip attack tests).
+    """
     run = MagicMock(id=900, status=status, conclusion=conclusion,
                     html_url="https://x/qruns/900",
                     head_branch=head_branch,
@@ -128,12 +222,20 @@ def qualification_run(sha: str = MERGE_SHA, *,
     run.jobs.return_value = jobs
     artifact_names = ["qualify-a", "qualify-b", "qualify-c", "qualify-d",
                       "valkey-rpms-el9-x86_64", "valkey-rpms-alma9-aarch64",
-                      "valkey-debs-debian12-arm64", "qualification-manifest"]
+                      "valkey-debs-debian12-arm64"]
     artifacts = []
     for name in artifact_names:
         artifact = MagicMock(expired=False, size_in_bytes=1024)
         artifact.name = name
         artifacts.append(artifact)
+    # Manifest artifact carrying valid content by default. Attack tests
+    # opt into malformed content by passing manifest_payload / manifest_zip.
+    if manifest_zip is None:
+        payload = manifest_payload if manifest_payload is not None else (
+            build_manifest_payload(tag=tag, sha=sha)
+        )
+        manifest_zip = build_manifest_zip_bytes(payload)
+    artifacts.append(_manifest_artifact_mock(zip_bytes=manifest_zip))
     run.get_artifacts.return_value = artifacts
     return run
 
@@ -142,7 +244,8 @@ def notes_pr(*, merged: bool = True, state: "str | None" = None,
              head_ref: str = "agent/release-cut/9.1.1-ga",
              head_repo: "str | None" = "valkey-io/valkey",
              number: int = 42, merge_sha: "str | None" = MERGE_SHA,
-             created: datetime = AFTER_TRACKER) -> MagicMock:
+             created: datetime = AFTER_TRACKER,
+             author_login: str = "valkeyrie-ops[bot]") -> MagicMock:
     pr = MagicMock(number=number,
                    merged_at=AFTER_TRACKER if merged else None,
                    merge_commit_sha=merge_sha if merged else None,
@@ -151,6 +254,9 @@ def notes_pr(*, merged: bool = True, state: "str | None" = None,
                    html_url=f"https://x/pull/{number}")
     pr.head.ref = head_ref
     pr.head.repo = None if head_repo is None else SimpleNamespace(full_name=head_repo)
+    # Trust the notes-PR author by default (Agent B's trust rule): tests
+    # that model a lookalike PR override author_login to a non-bot value.
+    pr.user.login = author_login
     return pr
 
 

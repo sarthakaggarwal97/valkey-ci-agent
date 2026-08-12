@@ -92,6 +92,11 @@ jobs:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          # Scope to exactly the repo this workflow touches: start reads
+          # valkey tags/branches and opens the release tracking issue there.
+          # Without repositories:, an installation token would cover every
+          # repo the App is installed on for the owner.
+          repositories: valkey
           # issues:write to create the tracking issue; contents:read for tags
           # and branch heads; members:read for the live team-membership check.
           permission-contents: read

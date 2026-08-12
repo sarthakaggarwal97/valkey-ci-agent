@@ -56,6 +56,12 @@ jobs:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          # Scope to exactly the repo this workflow touches: adopt reads the
+          # valkey branch head, checks team membership, and records the
+          # adoption on the valkey tracking issue. Without repositories:,
+          # an installation token would cover every repo the App is
+          # installed on for the owner.
+          repositories: valkey
           # issues:write to record the adoption comment and refresh the tracker;
           # members:read for the live team check; the rest mirror reconcile.
           permission-contents: read
