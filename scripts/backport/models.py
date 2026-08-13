@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from scripts.backport.utils import DEFAULT_BACKPORT_LABEL, DEFAULT_LLM_CONFLICT_LABEL
+
 ResolutionSource = Literal["llm", "automatic"]
 BackportOutcome = Literal[
     "success",
@@ -78,6 +80,6 @@ class BackportResult:
 class BackportConfig:
     """Configuration for the backport agent, derived from the registry."""
 
-    backport_label: str = "backport"
-    llm_conflict_label: str = "ai-resolved-conflicts"
+    backport_label: str = DEFAULT_BACKPORT_LABEL
+    llm_conflict_label: str = DEFAULT_LLM_CONFLICT_LABEL
     max_conflicting_files: int = 100

@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import hashlib
 import html
+import os
 import re
 from dataclasses import dataclass
 from typing import Any
 
 from scripts.backport.models import ResolutionResult
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import BOT_NAME
 
 _MARKER_PREFIX = "valkey-ci-agent:ai-diff"
 
@@ -37,6 +39,11 @@ _MARKER_RE = re.compile(
 # Claude's rationale is the only free-form text in the comment; cap it so a
 # runaway summary cannot bloat the body. Diffs are not inlined.
 _MAX_SUMMARY_CHARS = 2000
+
+
+def get_diff_comment_login() -> str:
+    """Resolve the login used by the AI-diff comment ownership gate."""
+    return os.environ.get("CI_AGENT_DIFF_COMMENT_LOGIN") or BOT_NAME
 
 
 @dataclass(frozen=True)

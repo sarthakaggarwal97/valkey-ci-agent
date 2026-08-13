@@ -19,7 +19,7 @@ from github.GithubException import GithubException
 
 from scripts.backport.cherry_pick import cherry_pick
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
-from scripts.backport.diff_comments import reconcile_diff_comments
+from scripts.backport.diff_comments import get_diff_comment_login, reconcile_diff_comments
 from scripts.backport.models import (
     BackportConfig,
     BackportOutcome,
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # Login that authors the AI-diff comments. Defaults to the bot, but the comment
 # author follows the token identity, so a fork run using a personal PAT sets
 # CI_AGENT_DIFF_COMMENT_LOGIN to that user so the ownership gate still matches.
-DIFF_COMMENT_LOGIN = os.environ.get("CI_AGENT_DIFF_COMMENT_LOGIN") or BOT_NAME
+DIFF_COMMENT_LOGIN = get_diff_comment_login()
 
 
 def build_summary(result: BackportResult) -> str:

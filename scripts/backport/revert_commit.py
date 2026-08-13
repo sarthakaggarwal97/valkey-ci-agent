@@ -13,6 +13,7 @@ from github import Auth, Github
 from scripts.backport.main import _run_git as run_git_default
 from scripts.backport.sweep_git import BRANCH_PREFIX, clone_target_branch
 from scripts.backport.sweep_prs import find_existing_pr
+from scripts.backport.utils import configure_cli_logging
 from scripts.common.git_auth import GitAuth
 
 logger = logging.getLogger(__name__)
@@ -116,10 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_cli_logging(args.verbose)
 
     try:
         revert_commit(

@@ -31,8 +31,10 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.backport.registry import load_registry
-from scripts.backport.sweep import _BRANCH_PREFIX, run_backport_sweep
+from scripts.backport.sweep import run_backport_sweep
+from scripts.backport.sweep_git import BRANCH_PREFIX
 from scripts.backport.sweep_prs import find_existing_pr
+from scripts.backport.utils import configure_cli_logging
 from scripts.common.polling import (
     add_poll_loop_args,
     format_poll_results,
@@ -73,7 +75,7 @@ def poll_branch(
     repo_full_name = repo_entry.repo
     push_repo = repo_entry.effective_push_repo
     target_branch = branch_entry.branch
-    backport_branch = f"{_BRANCH_PREFIX}/{target_branch}"
+    backport_branch = f"{BRANCH_PREFIX}/{target_branch}"
 
     gh = Github(auth=Auth.Token(github_token))
     try:
@@ -159,10 +161,7 @@ def main() -> None:
     add_poll_loop_args(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_cli_logging(args.verbose)
 
     registry = load_registry(args.registry)
     repo_entry, branch_entry = registry.get_branch(args.repo, args.branch)

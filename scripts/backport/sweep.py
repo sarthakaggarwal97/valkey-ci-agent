@@ -23,6 +23,7 @@ from scripts.backport.sweep_apply import (
     apply_candidate,
 )
 from scripts.backport.sweep_git import (
+    BRANCH_PREFIX,
     branch_has_changes,
     clone_target_branch,
     list_already_applied,
@@ -52,6 +53,14 @@ from scripts.backport.sweep_validation import (
     run_test_commands,
     validate_branch_with_optional_repair,
 )
+from scripts.backport.utils import (
+    DEFAULT_BACKPORT_LABEL,
+    DEFAULT_BACKPORT_STATUS,
+    DEFAULT_LLM_CONFLICT_LABEL,
+    DEFAULT_PROJECT_STATUS_FIELD,
+    configure_cli_logging,
+    normalize_project_value,
+)
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.job_summary import emit_job_summary
 
@@ -64,9 +73,9 @@ _DEFAULT_BRANCH_FIELDS = (
     "Backport Branch", "Target Branch", "Release Branch",
     "Branch", "Version", "Release", "Folder",
 )
-_DEFAULT_STATUS_FIELD = "Status"
-_DEFAULT_STATUS_VALUE = "To be backported"
-_BRANCH_PREFIX = "agent/backport/sweep"
+_DEFAULT_STATUS_FIELD = DEFAULT_PROJECT_STATUS_FIELD
+_DEFAULT_STATUS_VALUE = DEFAULT_BACKPORT_STATUS
+_normalize = normalize_project_value
 
 
 class ProjectBackportDiscovery:
@@ -288,8 +297,8 @@ def _process_branch(
     build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
     repair_validation_failures: bool = False,
-    backport_label: str = "backport",
-    llm_conflict_label: str = "ai-resolved-conflicts",
+    backport_label: str = DEFAULT_BACKPORT_LABEL,
+    llm_conflict_label: str = DEFAULT_LLM_CONFLICT_LABEL,
 ) -> BranchSweepResult:
     result = BranchSweepResult(
         target_branch=target_branch,
@@ -325,7 +334,7 @@ def _process_branch(
                     target_branch,
                 )
 
-            backport_branch = f"{_BRANCH_PREFIX}/{target_branch}"
+            backport_branch = f"{BRANCH_PREFIX}/{target_branch}"
             existing_pr = find_existing_pr(
                 gh,
                 repo_full_name,
@@ -496,10 +505,6 @@ def _process_branch(
     return result
 
 
-def _normalize(value: object) -> str:
-    return str(value or "").strip().lower()
-
-
 def _project_items_query(owner_field: str) -> str:
     return f"""
 query($owner: String!, $number: Int!, $cursor: String) {{
@@ -624,10 +629,7 @@ def main() -> None:
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_cli_logging(args.verbose)
 
     from scripts.backport.registry import load_registry
 

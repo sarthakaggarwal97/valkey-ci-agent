@@ -9,6 +9,8 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from scripts.backport.utils import DEFAULT_BACKPORT_LABEL, DEFAULT_LLM_CONFLICT_LABEL
+
 _REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _VALID_OWNER_TYPES = {"organization", "user"}
 
@@ -37,8 +39,8 @@ class RepoEntry:
     validation_setup_commands: tuple[str, ...] = ()
     validation_rules: tuple[ValidationRule, ...] = ()
     repair_validation_failures: bool = False
-    backport_label: str = "backport"
-    llm_conflict_label: str = "ai-resolved-conflicts"
+    backport_label: str = DEFAULT_BACKPORT_LABEL
+    llm_conflict_label: str = DEFAULT_LLM_CONFLICT_LABEL
     max_conflicting_files: int = 100
 
     @property
@@ -155,10 +157,10 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
             f"repos[{index}].repair_validation_failures must be a boolean"
         )
 
-    backport_label = raw.get("backport_label", "backport")
+    backport_label = raw.get("backport_label", DEFAULT_BACKPORT_LABEL)
     if not isinstance(backport_label, str) or not backport_label.strip():
         raise ValueError(f"repos[{index}].backport_label must be a non-empty string")
-    llm_conflict_label = raw.get("llm_conflict_label", "ai-resolved-conflicts")
+    llm_conflict_label = raw.get("llm_conflict_label", DEFAULT_LLM_CONFLICT_LABEL)
     if not isinstance(llm_conflict_label, str) or not llm_conflict_label.strip():
         raise ValueError(f"repos[{index}].llm_conflict_label must be a non-empty string")
     max_conflicting_files = raw.get("max_conflicting_files", 100)

@@ -25,7 +25,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
-from scripts.backport.utils import pr_numbers_from_commit_subjects
+from scripts.backport.utils import (
+    DEFAULT_BACKPORT_STATUS,
+    DEFAULT_PROJECT_STATUS_FIELD,
+    configure_cli_logging,
+    normalize_project_value,
+    pr_numbers_from_commit_subjects,
+)
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.polling import (
     PollLoopError,
@@ -36,9 +42,10 @@ from scripts.common.polling import (
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_STATUS_FIELD = "Status"
-_DEFAULT_FROM_STATUS = "To be backported"
+_DEFAULT_STATUS_FIELD = DEFAULT_PROJECT_STATUS_FIELD
+_DEFAULT_FROM_STATUS = DEFAULT_BACKPORT_STATUS
 _DEFAULT_DONE_STATUS = "Done"
+_normalize = normalize_project_value
 
 # Depth of the shallow verification clone. A release branch accumulates backports
 # steadily, so a few thousand commits comfortably covers any PR still sitting in
@@ -370,10 +377,6 @@ def _pr_numbers_from_table_cells(markdown: str) -> set[int]:
     return numbers
 
 
-def _normalize(value: object) -> str:
-    return str(value or "").strip().lower()
-
-
 def _load_project(
     gql: GitHubGraphQLClient,
     *,
@@ -543,10 +546,7 @@ def main() -> None:
     add_poll_loop_args(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_cli_logging(args.verbose)
 
     from scripts.backport.registry import load_registry
 

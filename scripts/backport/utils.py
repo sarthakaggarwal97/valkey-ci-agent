@@ -1,13 +1,30 @@
-"""Naming conventions and conflict detection helpers."""
+"""Shared backport helpers."""
 
 from __future__ import annotations
 
+import logging
 import re
+
+DEFAULT_BACKPORT_LABEL = "backport"
+DEFAULT_LLM_CONFLICT_LABEL = "ai-resolved-conflicts"
+DEFAULT_PROJECT_STATUS_FIELD = "Status"
+DEFAULT_BACKPORT_STATUS = "To be backported"
 
 _CONFLICT_MARKERS = re.compile(
     r"^(<{7} \S|={7}$|>{7} \S|<{7}$|>{7}$)",
     re.MULTILINE,
 )
+
+
+def configure_cli_logging(verbose: bool) -> None:
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+
+
+def normalize_project_value(value: object) -> str:
+    return str(value or "").strip().lower()
 
 
 def build_branch_name(source_pr_number: int, target_branch: str) -> str:
