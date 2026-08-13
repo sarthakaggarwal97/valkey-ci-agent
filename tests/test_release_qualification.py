@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -13,7 +13,15 @@ from scripts.release.qualification import (
     dispatch_qualification,
     evaluate_qualification,
 )
-from tests.release_fixtures import MERGE_SHA, MOVED_SHA, gh_mock, make_policy, qualification_run
+from tests.release_fixtures import (
+    MERGE_SHA,
+    MOVED_SHA,
+    build_manifest_payload,
+    build_manifest_zip_bytes,
+    gh_mock,
+    make_policy,
+    qualification_run,
+)
 
 _POLICY = make_policy()
 
@@ -318,6 +326,38 @@ class TestManifestEvidence:
         assert any("Evidence mismatch" in item for item in status.failed_jobs)
         assert ("(Evidence mismatch: no qualification manifest)"
                 not in status.failed_jobs)
+
+
+class TestManifestRedirectFollowing:
+    """GitHub answers artifact downloads with a 302 to signed blob storage.
+    The live E2E caught the reader treating that redirect as an error and
+    wedging every release at qualification (fail-closed, but wrongly)."""
+
+    def test_302_redirect_is_followed_to_the_blob(self) -> None:
+        from scripts.release import qualification as qual_mod
+        blob = build_manifest_zip_bytes(build_manifest_payload())
+        run = qualification_run()
+        artifact = run.get_artifacts.return_value[0]
+        artifact.requester.requestBlob.return_value = (
+            302, {"Location": "https://blobs.example/signed"}, "")
+        with patch.object(qual_mod, "_fetch_signed_url",
+                          return_value=blob) as fetch:
+            payload = qual_mod._load_manifest_payload(artifact)
+        fetch.assert_called_once_with("https://blobs.example/signed")
+        assert payload["schema"] == 1
+
+    def test_redirect_without_location_refuses(self) -> None:
+        from scripts.release import qualification as qual_mod
+        run = qualification_run()
+        artifact = run.get_artifacts.return_value[0]
+        artifact.requester.requestBlob.return_value = (302, {}, "")
+        with pytest.raises(qual_mod._ManifestReadError, match="no Location"):
+            qual_mod._load_manifest_payload(artifact)
+
+    def test_non_https_redirect_refuses(self) -> None:
+        from scripts.release import qualification as qual_mod
+        with pytest.raises(qual_mod._ManifestReadError, match="non-https"):
+            qual_mod._fetch_signed_url("http://blobs.example/signed")
 
 
 class TestManifestContentValidation:

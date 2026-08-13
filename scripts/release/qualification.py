@@ -296,6 +296,24 @@ class _ManifestReadError(RuntimeError):
     """A qualification manifest artifact could not be downloaded or parsed."""
 
 
+def _fetch_signed_url(url: str) -> bytes:
+    """The bytes behind a signed blob-storage URL, size-capped.
+
+    Deliberately sends NO Authorization header: the URL is self-
+    authenticating and the API token must never reach the blob host.
+    """
+    from urllib.request import Request, urlopen
+
+    if not url.startswith("https://"):
+        raise _ManifestReadError("artifact redirect points at a non-https URL")
+    req = Request(url, headers={"User-Agent": "valkey-ci-agent"})
+    try:
+        with urlopen(req, timeout=30) as resp:  # noqa: S310 (https enforced)
+            return resp.read(_MAX_MANIFEST_BYTES * 4 + 1)
+    except OSError as exc:
+        raise _ManifestReadError(f"artifact blob download failed: {exc}") from exc
+
+
 def _load_manifest_payload(artifact: Any) -> dict:
     """Download and parse the JSON payload from the manifest artifact zip.
 
@@ -312,10 +330,26 @@ def _load_manifest_payload(artifact: Any) -> dict:
         raise _ManifestReadError(
             "artifact has no ``requester`` attribute; cannot download manifest"
         )
-    status, _headers, body = requester.requestBlob(
+    status, headers, body = requester.requestBlob(
         "GET", artifact.archive_download_url, None, None, None, None,
     )
-    if not (200 <= int(status) < 300):
+    if 300 <= int(status) < 400:
+        # GitHub answers artifact downloads with a redirect to short-lived
+        # signed blob storage. Follow it WITHOUT the API token: the signed
+        # URL authenticates itself, and forwarding our token to another
+        # host would leak it (the same discipline as
+        # scripts/common/workflow_artifacts.ArtifactClient).
+        location = ""
+        for key, value in (headers or {}).items():
+            if str(key).lower() == "location":
+                location = str(value)
+                break
+        if not location:
+            raise _ManifestReadError(
+                f"artifact download returned HTTP {status} with no Location"
+            )
+        body = _fetch_signed_url(location)
+    elif not (200 <= int(status) < 300):
         raise _ManifestReadError(
             f"artifact download returned HTTP {status}"
         )
