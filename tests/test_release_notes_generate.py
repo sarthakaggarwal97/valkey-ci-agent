@@ -38,6 +38,13 @@ def _fake_run(obj, *, exit_code: int = 0):
 
 
 class TestBuildPrompt:
+    def test_default_core_project_wording_is_preserved(self) -> None:
+        prompt = build_prompt([], categories=_CATEGORIES)
+        assert prompt.startswith(
+            "You are writing release notes for the open-source project Valkey. "
+            "You are given\n"
+        )
+
     def test_includes_categories_and_pr_numbers(self) -> None:
         prompt = build_prompt([_pr(40), _pr(41)], categories=_CATEGORIES)
         for name in _CATEGORIES:

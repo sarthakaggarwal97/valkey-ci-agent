@@ -11,13 +11,14 @@ Version layouts by repository:
   valkey        src/version.h  VALKEY_VERSION, VALKEY_VERSION_NUM, VALKEY_RELEASE_STAGE
   valkey-search src/version.h  kModuleVersion constexpr + MODULE_RELEASE_STAGE
   valkey-json   CMakeLists.txt project(<Name> VERSION M.m.p ...)
-  valkey-bloom  Cargo.toml     [package] version = "M.m.p"
+  valkey-bloom  Cargo.toml     [package] version = "M.m.p[-dev]"
 
-valkey-json and valkey-bloom record no release stage in their version file, so
+valkey-json and valkey-bloom record no RC/GA stage in their version file, so
 their bumpers set ``records_stage = False``: the version-file progression gate
 compares M.m.p only (allowing rc2 after rc1 of the same version through), and
 the tag-based gate in discover.validate_target_release_tag remains the
-authoritative check against re-cutting an already-tagged stage.
+authoritative check against re-cutting an already-tagged stage. Bloom's
+``-dev`` suffix is used only for its unstable sentinel.
 """
 
 from __future__ import annotations
@@ -38,6 +39,8 @@ class VersionBumper(Protocol):
     #: Whether the version file records the release stage (ga/rcN/dev).
     #: When False, the progression gate compares M.m.p only.
     records_stage: bool
+    #: Repository-specific development sentinels that may begin any release line.
+    unstable_release_states: frozenset[tuple[str, str]]
 
     def current_release_state(self, text: str) -> tuple[str, str]:
         """Return the canonical ``(version, stage)`` recorded in *text*."""
@@ -53,6 +56,7 @@ class ValkeyVersionH:
 
     version_file = "src/version.h"
     records_stage = True
+    unstable_release_states = frozenset({("255.255.255", "dev")})
 
     def current_release_state(self, text: str) -> tuple[str, str]:
         return bv.current_release_state(text)
@@ -86,6 +90,7 @@ class SearchVersionH:
 
     version_file = "src/version.h"
     records_stage = True
+    unstable_release_states: frozenset[tuple[str, str]] = frozenset()
 
     def current_release_state(self, text: str) -> tuple[str, str]:
         versions = _SEARCH_VERSION_RE.findall(text)
@@ -132,13 +137,18 @@ _CMAKE_PROJECT_VERSION_RE = re.compile(
 class CMakeProjectVersion:
     """valkey-json: the ``project(<Name> VERSION M.m.p ...)`` declaration.
 
-    CMake's VERSION accepts only numeric components, so no release stage is
-    recorded; ``current_release_state`` reports ``ga`` and the progression gate
-    compares M.m.p only (records_stage is False).
+    CMake's VERSION accepts only numeric components, so no RC/GA stage is
+    recorded. ``current_release_state`` recognizes the repository's numeric
+    unstable sentinel as ``dev`` and otherwise reports ``ga``; the progression
+    gate compares M.m.p only (records_stage is False).
     """
 
     version_file = "CMakeLists.txt"
     records_stage = False
+    # valkey-json uses a numeric sentinel because CMake's VERSION field cannot
+    # encode a prerelease suffix. Treat it as development state only here; a
+    # real repository version of 99.99.99 must not become a global convention.
+    unstable_release_states = frozenset({("99.99.99", "dev")})
 
     def current_release_state(self, text: str) -> tuple[str, str]:
         versions = _CMAKE_PROJECT_VERSION_RE.findall(text)
@@ -148,7 +158,9 @@ class CMakeProjectVersion:
                 f"in CMakeLists.txt, found {len(versions)}"
             )
         major, minor, patch = rn.parse_version(versions[0][1])
-        return f"{major}.{minor}.{patch}", "ga"
+        version = f"{major}.{minor}.{patch}"
+        stage = "dev" if version == "99.99.99" else "ga"
+        return version, stage
 
     def set_version(self, text: str, version: str, stage: str) -> str:
         self.current_release_state(text)  # validates exactly one declaration
@@ -163,21 +175,24 @@ _CARGO_PACKAGE_SECTION_RE = re.compile(
     r"^\[package\]\s*$(?P<body>.*?)(?=^\[|\Z)", re.MULTILINE | re.DOTALL
 )
 _CARGO_VERSION_RE = re.compile(
-    r'^(?P<prefix>version\s*=\s*")(?P<version>\d+\.\d+\.\d+)"',
+    r'^(?P<prefix>version\s*=\s*")'
+    r'(?P<value>(?P<version>\d+\.\d+\.\d+)(?P<suffix>-dev)?)"',
     re.MULTILINE,
 )
 
 
 class CargoTomlVersion:
-    """valkey-bloom: ``version = "M.m.p"`` in Cargo.toml's [package] section.
+    """valkey-bloom: ``version = "M.m.p[-dev]"`` in Cargo.toml's package.
 
     Only the [package] section is rewritten, so dependency ``version = "..."``
-    entries elsewhere in the file are never touched. No release stage is
-    recorded (records_stage is False).
+    entries elsewhere in the file are never touched. The ``-dev`` suffix marks
+    only the unstable sentinel; no RC/GA stage is recorded
+    (records_stage is False).
     """
 
     version_file = "Cargo.toml"
     records_stage = False
+    unstable_release_states = frozenset({("99.99.99", "dev")})
 
     def _package_version_match(self, text: str) -> tuple[re.Match[str], re.Match[str]]:
         section = _CARGO_PACKAGE_SECTION_RE.search(text)
@@ -187,7 +202,7 @@ class CargoTomlVersion:
         versions = list(_CARGO_VERSION_RE.finditer(body))
         if len(versions) != 1:
             raise ValueError(
-                "expected exactly one version = \"M.m.p\" entry in Cargo.toml's "
+                "expected exactly one version = \"M.m.p[-dev]\" entry in Cargo.toml's "
                 f"[package] section, found {len(versions)}"
             )
         return section, versions[0]
@@ -195,13 +210,15 @@ class CargoTomlVersion:
     def current_release_state(self, text: str) -> tuple[str, str]:
         _section, version = self._package_version_match(text)
         major, minor, patch = rn.parse_version(version.group("version"))
-        return f"{major}.{minor}.{patch}", "ga"
+        stage = "dev" if version.group("suffix") else "ga"
+        return f"{major}.{minor}.{patch}", stage
 
     def set_version(self, text: str, version: str, stage: str) -> str:
         section, match = self._package_version_match(text)
         major, minor, patch = rn.parse_version(version)
-        start = section.start("body") + match.start("version")
-        end = section.start("body") + match.end("version")
+        # Replace the whole value so cutting from 99.99.99-dev removes -dev.
+        start = section.start("body") + match.start("value")
+        end = section.start("body") + match.end("value")
         return f"{text[:start]}{major}.{minor}.{patch}{text[end:]}"
 
 
@@ -280,7 +297,8 @@ class ProjectProfile:
     name: str                # repository name, e.g. "valkey-search"
     display_name: str        # changelog heading name, e.g. "Valkey Search"
     bumper: VersionBumper
-    prompt_description: str  # names the project in the AI prompts ("<Name>, a ...")
+    generation_prompt_project: str  # project wording in the note-writing prompt
+    triage_prompt_project: str      # project wording in the inclusion prompt
     category_guidance: str   # category-boundary guidance for the generation prompt
     notes_file: str = "00-RELEASENOTES"
     categories: tuple[str, ...] = tuple(rn.CATEGORIES)
@@ -290,7 +308,11 @@ VALKEY_PROFILE = ProjectProfile(
     name="valkey",
     display_name="Valkey",
     bumper=ValkeyVersionH(),
-    prompt_description="Valkey, a production key-value datastore",
+    # Preserve the two pre-profile prompt introductions exactly for core. The
+    # generation prompt historically used only "Valkey", while triage carried
+    # the longer datastore description.
+    generation_prompt_project="Valkey",
+    triage_prompt_project="Valkey, a production key-value datastore",
     category_guidance=_CORE_CATEGORY_GUIDANCE,
 )
 
@@ -302,7 +324,12 @@ _PROFILES: dict[str, ProjectProfile] = {
             name="valkey-search",
             display_name="Valkey Search",
             bumper=SearchVersionH(),
-            prompt_description=(
+            generation_prompt_project=(
+                "Valkey Search, a Valkey module that provides vector similarity "
+                "search, full-text search, and secondary indexing (the FT.* "
+                "commands) for the Valkey key-value datastore"
+            ),
+            triage_prompt_project=(
                 "Valkey Search, a Valkey module that provides vector similarity "
                 "search, full-text search, and secondary indexing (the FT.* "
                 "commands) for the Valkey key-value datastore"
@@ -314,7 +341,12 @@ _PROFILES: dict[str, ProjectProfile] = {
             name="valkey-json",
             display_name="Valkey JSON",
             bumper=CMakeProjectVersion(),
-            prompt_description=(
+            generation_prompt_project=(
+                "Valkey JSON, a Valkey module that provides a native JSON data "
+                "type with JSONPath queries (the JSON.* commands) for the Valkey "
+                "key-value datastore"
+            ),
+            triage_prompt_project=(
                 "Valkey JSON, a Valkey module that provides a native JSON data "
                 "type with JSONPath queries (the JSON.* commands) for the Valkey "
                 "key-value datastore"
@@ -326,7 +358,11 @@ _PROFILES: dict[str, ProjectProfile] = {
             name="valkey-bloom",
             display_name="Valkey Bloom",
             bumper=CargoTomlVersion(),
-            prompt_description=(
+            generation_prompt_project=(
+                "Valkey Bloom, a Valkey module that provides bloom filter data "
+                "types (the BF.* commands) for the Valkey key-value datastore"
+            ),
+            triage_prompt_project=(
                 "Valkey Bloom, a Valkey module that provides bloom filter data "
                 "types (the BF.* commands) for the Valkey key-value datastore"
             ),

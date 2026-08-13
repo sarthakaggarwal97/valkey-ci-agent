@@ -262,7 +262,7 @@ def build_prompt(
     diffs: dict[int, str] | None = None,
     base_ref: str = "",
     already_noted: Sequence[int] = (),
-    project_description: str = VALKEY_PROFILE.prompt_description,
+    project_description: str = VALKEY_PROFILE.triage_prompt_project,
 ) -> str:
     """Render the triage prompt for a batch of candidate PRs.
 
@@ -355,7 +355,7 @@ def triage(
     timeout: int = 1800,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
-    project_description: str = VALKEY_PROFILE.prompt_description,
+    project_description: str = VALKEY_PROFILE.triage_prompt_project,
 ) -> TriageResult:
     """Decide include/exclude for each non-release-notes candidate, batching inputs.
 

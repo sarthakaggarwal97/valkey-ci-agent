@@ -218,7 +218,7 @@ Every "pr" must be one of the input PR numbers. Emit at most one bullet per PR.
 def build_prompt(
     prs: Sequence[MergedPR], *, categories: Sequence[str], diffs: dict[int, str] | None = None,
     patch_release: bool = False,
-    project_description: str = VALKEY_PROFILE.prompt_description,
+    project_description: str = VALKEY_PROFILE.generation_prompt_project,
     category_guidance: str = VALKEY_PROFILE.category_guidance,
 ) -> str:
     """Render the generation prompt for a batch of PRs.
@@ -446,7 +446,7 @@ def generate(
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
     patch_release: bool = False,
-    project_description: str = VALKEY_PROFILE.prompt_description,
+    project_description: str = VALKEY_PROFILE.generation_prompt_project,
     category_guidance: str = VALKEY_PROFILE.category_guidance,
 ) -> GenerationResult:
     """Generate categorized bullets for *prs*, batching large inputs.

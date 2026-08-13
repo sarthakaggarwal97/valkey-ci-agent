@@ -360,11 +360,19 @@ def _validate_release_target(
     stage: str,
     profile: projects_mod.ProjectProfile,
 ) -> None:
-    """Fail before AI work if the requested release does not advance the line."""
+    """Fail before AI work if the requested release is invalid or duplicated."""
     version_text = cut_mod._read_version_file(clone_dir, profile)
     cut_mod.validate_release_progression(
         version_text, version, stage, bumper=profile.bumper
     )
+    notes_text = cut_mod._read_required(
+        clone_dir,
+        profile.notes_file,
+        "seed the changelog file on the release line before cutting",
+    )
+    cut_mod._validate_changelog_history(notes_text, profile)
+    if not profile.bumper.records_stage:
+        cut_mod._refuse_already_cut_stage(notes_text, version, stage, profile)
     discover_mod.validate_target_release_tag(
         clone_dir, source_ref, version, stage
     )

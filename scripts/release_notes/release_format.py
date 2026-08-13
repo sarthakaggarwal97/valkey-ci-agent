@@ -238,12 +238,6 @@ def render_version_section(
 
 
 _CONTRIBUTORS_HEADER_RE = re.compile(r"^###\s+Contributors\s*$", re.MULTILINE)
-# Legacy hand-written contributor blocks (module changelogs predating this
-# tool): a standalone "Contributors" line boxed by ===== ruler lines, with
-# names as comma-separated @handles (valkey-search) or bullet lines.
-_LEGACY_CONTRIBUTORS_HEADER_RE = re.compile(r"^Contributors\s*$", re.MULTILINE)
-_RULER_RE = re.compile(r"^[=-]+$")
-_BARE_HANDLE_RE = re.compile(r"^@[A-Za-z0-9-]+$")
 
 
 def _strip_bullet(line: str) -> str:
@@ -254,60 +248,17 @@ def _strip_bullet(line: str) -> str:
     return s
 
 
-def _split_legacy_contributors_block(text: str) -> "tuple[str, List[str]]":
-    """Split a trailing hand-written Contributors block (pre-tool changelogs).
-
-    The module repos' existing files (valkey-search 1.0/1.1/1.2) end in a
-    standalone ``Contributors`` line boxed by ``====`` ruler lines, with names
-    as one comma-separated run of ``@handles``; an underlined header or bullet
-    names are accepted too. Returns ``(body, names)`` with the block removed so
-    those credits merge into the cumulative ``### Contributors`` footer instead
-    of being stranded inside the history next to a second, incomplete footer.
-    Any unrecognized shape returns the text unchanged with no names (fail
-    closed: better to leave a legacy block in place than to mangle it).
-    """
-    lines = text.splitlines()
-    headers = [i for i, line in enumerate(lines) if line.strip() == "Contributors"]
-    if not headers:
-        return text, []
-    header = headers[-1]
-    body_end = header
-    if header > 0 and _RULER_RE.match(lines[header - 1].strip()):
-        body_end = header - 1  # boxed: the opening ruler leaves with the block
-    names_start = header + 1
-    if names_start < len(lines) and _RULER_RE.match(lines[names_start].strip()):
-        names_start += 1  # closing ruler (boxed) or underline
-    elif body_end == header:
-        return text, []  # a bare "Contributors" prose line, not a ruled header
-    names: List[str] = []
-    for line in lines[names_start:]:
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if _BULLET_RE.match(line):
-            names.append(_strip_bullet(line))
-            continue
-        handles = [token for token in (t.strip() for t in stripped.split(",")) if token]
-        if not handles or not all(_BARE_HANDLE_RE.match(token) for token in handles):
-            return text, []  # unrecognized content: keep the block untouched
-        names.extend(handles)
-    if not names:
-        return text, []
-    return "\n".join(lines[:body_end]).rstrip(), names
-
-
 def _split_contributors_footer(text: str) -> "tuple[str, List[str]]":
     """Split *text* at its trailing ``### Contributors`` section.
 
     Returns ``(body, contributors)`` where *body* is everything before the last
     such header and *contributors* is the list of display names from that
-    section. A file that predates this tool (no ``### Contributors``) falls
-    back to the legacy hand-written block, so the first automated cut absorbs
-    those credits into the cumulative footer.
+    section. Repositories are expected to normalize historical contributor
+    blocks to this canonical format before enabling automated cuts.
     """
     matches = list(_CONTRIBUTORS_HEADER_RE.finditer(text))
     if not matches:
-        return _split_legacy_contributors_block(text)
+        return text, []
     last = matches[-1]
     body = text[: last.start()].rstrip()
     names: List[str] = []
@@ -330,9 +281,8 @@ def render_contributors_footer(contributors: Sequence[str]) -> str:
         rendered = _strip_bullet(entry)
         if not rendered:
             continue
-        # (?:^|\s) also accepts a bare "@handle" (legacy comma-separated blocks),
-        # keying it by handle with an empty display so a later "Full Name @handle"
-        # entry replaces it instead of duplicating.
+        # (?:^|\s) accepts a canonical footer entry with either a display name
+        # and handle or just a bare handle, keying both forms by login.
         handle_match = re.search(r"(?:^|\s)@([A-Za-z0-9-]+)$", rendered)
         handle = handle_match.group(1).casefold() if handle_match else ""
         display = (

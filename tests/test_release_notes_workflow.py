@@ -88,6 +88,15 @@ def test_release_concurrency_serializes_inferred_and_explicit_ga() -> None:
     assert concurrency["cancel-in-progress"] == "false"
 
 
+def test_app_credentials_require_both_secrets() -> None:
+    job_env = _workflow(_SIMPLE)["jobs"]["cut"]["env"]
+
+    assert job_env["HAS_APP_CREDS"] == (
+        "${{ secrets.VALKEYRIE_BOT_APP_ID != '' && "
+        "secrets.VALKEYRIE_BOT_PRIVATE_KEY != '' }}"
+    )
+
+
 def test_repo_gate_runs_before_any_token_is_minted() -> None:
     # The allowlist must reject a bad repo name before an App token could be
     # minted for it (defense-in-depth on top of the dispatch choice list).

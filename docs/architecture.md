@@ -336,7 +336,7 @@ main.py (manual dispatch: repo, version, optional stage, urgency, dry_run)
             -> dedup bullets by PR number (surfaces duplicate_prs)
             -> group_bullets()  {category: [canonical bullet line, ...]}
        -> _drop_already_credited()   dedup against PRs the line already ships
-       -> promote_and_bump()         dated section + version.h bump + contributors
+       -> promote_and_bump()         dated section + profile version bump + contributors
        -> _commit_push_release_pr()  prep branch (force-with-lease) + PR into the line
 ```
 
@@ -345,7 +345,7 @@ M.m branch (e.g. `9.1`). Maintainers create the branch and push tags before
 dispatching. Tags determine the discovery range (rc1 uses the previous release tag,
 rc2+ finds the prior rc tag, ga finds the last rc/patch tag). The cut lands on an
 `agent/release-cut/...` prep branch and opens a PR into M.m, so the line only
-advances when a human merges. The normal dispatch has four inputs and defaults to
+advances when a human merges. The normal dispatch has five inputs and defaults to
 a dry run; patch versions may omit stage and infer `ga`, while `M.m.0` always
 requires an explicit stage. The advanced dispatch is a thin wrapper around the
 same reusable workflow.

@@ -301,6 +301,18 @@ authoritative check against re-cutting an already-tagged stage. The
 valkey-search 1.0 line (version inline in `src/module_loader.cc`) is not
 supported and fails with a clear error.
 
+Before automated cuts are enabled for a repository, its historical contributor
+block must be normalized to the canonical cumulative footer used by this
+workflow: a `### Contributors` heading followed by one `* Display Name @handle`
+entry per line. Legacy repository-specific footer formats are migrated once in
+the source repository rather than carried as permanent parsing rules here.
+
+Unstable sentinels are repository-specific: valkey core uses
+`255.255.255-dev`, valkey-json uses numeric `99.99.99`, and valkey-bloom uses
+`99.99.99-dev`. The selected version bumper recognizes only its repository's
+sentinel and replaces it with the requested version when a new release line is
+cut.
+
 The normal dispatch defaults to a read-only preview. For rc1 of a new minor line:
 
 ```bash
@@ -407,10 +419,11 @@ human merges.
 1. **Resolve the plan** (code) - normalize an explicit stage, or infer `ga` when
    `PATCH > 0`; an omitted stage for `M.m.0` is rejected. Map that
    `(version, stage)` onto the branch model above. The version is canonicalized
-   once (`M.m.p`, no leading zeros / stray whitespace) so `version.h`, the dated
-   heading, the commit title, and the branch names all agree. The requested state
-   must be newer than both `src/version.h` and every existing tag on that release
-   line; an already-released stage or downgrade is rejected before the AI runs.
+   once (`M.m.p`, no leading zeros / stray whitespace) so the repository's
+   version file, dated heading, commit title, and branch names all agree. The
+   requested state must be newer than both the version file and every existing
+   tag on that release line; an already-released stage or downgrade is rejected
+   before the AI runs.
 2. **Discover the range** (code) - resolve `base..head` and walk it by graph
    reachability, deduplicating to one entry per originating PR number. The M.m
    branch tip is fetched once and pinned to an immutable SHA used by discovery,
@@ -450,7 +463,8 @@ human merges.
    (`version_bump.py`), append the cumulative contributor list
    (`contributors.py`) deduplicated by case-insensitive display-name/login
    identity (PR-resolved logins give squash-merged authors proper @handles),
-   and bump `src/version.h`. These format primitives live
+   and bump the version file selected by the repository profile. These format
+   primitives live
    in-repo rather than being imported from valkey, because upstream
    `valkey-io/valkey` ships no such tooling, so a cut runs against unmodified
    upstream (a plaintext `00-RELEASENOTES` placeholder and a `src/version.h`
@@ -473,7 +487,7 @@ explicit stage, an urgency outside `LOW/MODERATE/HIGH/CRITICAL/SECURITY`, or a
 non-ISO date. Repository-state validation runs after the clone: an explicit
 `--base-ref` that resolves to nothing aborts with a clear error, and a cut
 against a non-existent M.m branch is refused immediately. A target that is equal
-to or older than `src/version.h`, or at or behind an existing tag on that M.m
+to or older than the repository's version file, or at or behind an existing tag on that M.m
 line, is also refused before note generation.
 
 When the cut raises anything a maintainer should address before merging, the

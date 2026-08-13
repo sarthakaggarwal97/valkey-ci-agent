@@ -139,7 +139,7 @@ jobs:
       CLAUDE_CODE_USE_BEDROCK: "1"
       # secrets.* is not readable in step `if:` expressions; surface presence
       # here so the token steps can be skipped on a fork without App creds.
-      HAS_APP_CREDS: ${{ secrets.VALKEYRIE_BOT_APP_ID != '' }}
+      HAS_APP_CREDS: ${{ secrets.VALKEYRIE_BOT_APP_ID != '' && secrets.VALKEYRIE_BOT_PRIVATE_KEY != '' }}
     steps:
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

@@ -278,8 +278,8 @@ class TestTrailingPrRegex:
         ("* x by @a (#44).", {44}),
         ("* x by @a (#44):", {44}),
         ("* x by @a (#44) ", {44}),
-        # A trailing run of refs credits only the last (the merge PR); render never
-        # emits this, but a hand-edited line might.
+        ("* x by @a (#44, #45)", {44, 45}),
+        # Separate trailing groups preserve the historic last-group behavior.
         ("* x by @a (#44)(#45)", {45}),
     ])
     def test_credited_tolerates_trailing_punctuation(self, line, expected) -> None:
@@ -375,8 +375,7 @@ class TestPromoteAndBump:
             dest_notes_text="",          # first cut: no prior changelog
             dest_version_text=version_text,
             version="9.1.0", stage_lc="rc1", urgency="LOW", date="2026-06-25",
-            repo_full_name="valkey-io/valkey", contrib_base=None,
-            contrib_head="unstable", token=None,
+            contrib_base=None, token=None,
             security_fixes=None, profile=projects.VALKEY_PROFILE,
         )
         # Dated section rendered, bullet included, never an unreleased block.
@@ -400,8 +399,7 @@ class TestPromoteAndBump:
         version_text = open(os.path.join(clone, "src", "version.h"), encoding="utf-8").read()
         new_notes, _ = promote_and_bump( grouped=grouped, dest_notes_text=prior,
             dest_version_text=version_text, version="9.1.0", stage_lc="rc2",
-            urgency="LOW", date="2026-06-25", repo_full_name="valkey-io/valkey",
-            contrib_base=None, contrib_head="9.1",
+            urgency="LOW", date="2026-06-25", contrib_base=None,
             token=None, security_fixes=None, profile=projects.VALKEY_PROFILE,
         )
         assert "Valkey 9.1.0-rc2" in new_notes
@@ -418,8 +416,7 @@ class TestPromoteAndBump:
         )
         new_notes, _ = promote_and_bump( grouped=grouped, dest_notes_text="",
             dest_version_text=version_text, version="9.1.0", stage_lc="rc1",
-            urgency="LOW", date="2026-06-25", repo_full_name="valkey-io/valkey",
-            contrib_base="9.0.0", contrib_head="unstable", token=None,
+            urgency="LOW", date="2026-06-25", contrib_base="9.0.0", token=None,
             security_fixes=None, profile=projects.VALKEY_PROFILE,
         )
         assert "### Contributors" in new_notes
@@ -439,9 +436,8 @@ class TestPromoteAndBump:
         monkeypatch.setattr(rc.gc, "list_contributors", _list)
         promote_and_bump( grouped=grouped, dest_notes_text="",
             dest_version_text=version_text, version="9.1.0", stage_lc="rc2",
-            urgency="LOW", date="2026-06-25", repo_full_name="valkey-io/valkey",
-            contrib_base="origin/unstable",
-            contrib_head="origin/9.1", token="t", security_fixes=None,
+            urgency="LOW", date="2026-06-25",
+            contrib_base="origin/unstable", token="t", security_fixes=None,
             pr_authors=("jane", "bob"), profile=projects.VALKEY_PROFILE,
         )
         assert captured["logins"] == ["jane", "bob"]
@@ -483,8 +479,7 @@ class TestPromoteAndBump:
             grouped=grouped, dest_notes_text=prior,
             dest_version_text=version_text, version="1.2.2", stage_lc="ga",
             urgency="LOW", date="2026-08-06",
-            repo_full_name="valkey-io/valkey-search",
-            contrib_base=None, contrib_head="1.2",
+            contrib_base=None,
             token=None, security_fixes=None,
             profile=profile,
         )
@@ -2120,6 +2115,16 @@ class TestRefuseAlreadyCutStage:
         with pytest.raises(ValueError, match="1.0.3-rc1"):
             rc._refuse_already_cut_stage(notes, "1.0.3", "rc1", self._JSON)
 
+    def test_handwritten_space_and_uppercase_rc_refused(self) -> None:
+        notes = "Valkey JSON 1.0.3 RC1 - Released Tue 04 August 2026\n"
+        with pytest.raises(ValueError, match="1.0.3-rc1"):
+            rc._refuse_already_cut_stage(notes, "1.0.3", "rc1", self._JSON)
+
+    def test_handwritten_patch_ga_token_refused(self) -> None:
+        notes = "Valkey JSON 1.0.3 GA - Released Tue 04 August 2026\n"
+        with pytest.raises(ValueError, match="already records"):
+            rc._refuse_already_cut_stage(notes, "1.0.3", "ga", self._JSON)
+
     def test_next_rc_allowed(self) -> None:
         notes = "Valkey JSON 1.0.3-rc1  -  Released Tue 04 August 2026\n"
         rc._refuse_already_cut_stage(notes, "1.0.3", "rc2", self._JSON)
@@ -2136,37 +2141,32 @@ class TestRefuseAlreadyCutStage:
         rc._refuse_already_cut_stage(notes, "9.1.1", "ga", projects.VALKEY_PROFILE)
 
 
-class TestHistoryAtRiskSignal:
-    """A prior changelog that credits PRs but matches no display-name heading
-    must hold the PR (its history would silently vanish from the render)."""
+class TestValidateChangelogHistory:
+    """A render that cannot preserve credited history must fail outright."""
 
-    @staticmethod
-    def _meta(history_at_risk):
-        regen = pipeline_mod.RegenResult(
-            base_tag="1.2.1", grouped={"Bug Fixes": ["* fix (#1)"]},
-            included=1, bullet_count=1, skipped=(), triage=(), had_prs=True,
+    _SEARCH = projects.profile_for("valkey-search")
+
+    def test_credited_history_without_matching_heading_is_refused(self) -> None:
+        notes = (
+            "Search module release notes\n"
+            "===========================\n\n"
+            "Search 1.2.1 - Released Tue 07 July 2026\n"
+            "* Fixed a race condition (#1079)\n"
         )
-        return rc._NotesMeta(
-            regen=regen,
-            already_credited=(), noted_bullet_count=1, urgency="LOW",
-            security_fixes=None, security_noted_prs=(), baseline_unanchored=False,
-            history_at_risk=history_at_risk,
+        with pytest.raises(ValueError, match="would drop prior changelog history"):
+            rc._validate_changelog_history(notes, self._SEARCH)
+
+    def test_matching_module_heading_preserves_credited_history(self) -> None:
+        notes = (
+            "Valkey Search 1.2.1 GA - Released Tue 07 July 2026\n"
+            "* Fixed a race condition (#1079)\n"
         )
+        rc._validate_changelog_history(notes, self._SEARCH)
 
-    def test_hold_reason_and_section_fire_together(self) -> None:
-        plan = BranchPlan("ga", "1.2", "1.2")
-        meta = self._meta(True)
-        profile = projects.profile_for("valkey-search")
-        assert "prior changelog content would be dropped" in rc._hold_reasons(plan, meta)
-        section = rc._history_warning_section(meta, profile)
-        assert "Valkey Search M.m.p" in section
-        assert "00-RELEASENOTES" in section
-
-    def test_silent_when_history_is_safe(self) -> None:
-        meta = self._meta(False)
-        assert rc._history_warning_section(
-            meta, projects.profile_for("valkey-search")
-        ) == ""
+    def test_fresh_placeholder_without_credits_is_allowed(self) -> None:
+        rc._validate_changelog_history(
+            "Release notes will be generated here.\n", self._SEARCH
+        )
 
 
 class TestBodyNamesProfileVersionFile:

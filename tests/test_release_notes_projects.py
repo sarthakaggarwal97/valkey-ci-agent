@@ -143,6 +143,13 @@ def test_cmake_bumper_reads_current_state() -> None:
     assert bumper.current_release_state(_JSON_CMAKELISTS) == ("1.0.2", "ga")
 
 
+def test_cmake_bumper_recognizes_json_unstable_sentinel() -> None:
+    bumper = projects.CMakeProjectVersion()
+    unstable = _JSON_CMAKELISTS.replace("VERSION 1.0.2", "VERSION 99.99.99")
+    assert bumper.current_release_state(unstable) == ("99.99.99", "dev")
+    cut_mod.validate_release_progression(unstable, "2.0.0", "rc1", bumper=bumper)
+
+
 def test_cmake_bumper_sets_version_only() -> None:
     bumper = projects.CMakeProjectVersion()
     updated = bumper.set_version(_JSON_CMAKELISTS, "1.0.3", "rc1")
@@ -164,6 +171,16 @@ def test_cmake_bumper_rejects_missing_project_version() -> None:
 def test_cargo_bumper_reads_current_state() -> None:
     bumper = projects.CargoTomlVersion()
     assert bumper.current_release_state(_BLOOM_CARGO_TOML) == ("1.0.1", "ga")
+
+
+def test_cargo_bumper_reads_and_replaces_bloom_unstable_version() -> None:
+    bumper = projects.CargoTomlVersion()
+    unstable = _BLOOM_CARGO_TOML.replace('version = "1.0.1"', 'version = "99.99.99-dev"')
+    assert bumper.current_release_state(unstable) == ("99.99.99", "dev")
+    cut_mod.validate_release_progression(unstable, "2.0.0", "rc1", bumper=bumper)
+    updated = bumper.set_version(unstable, "2.0.0", "rc1")
+    assert 'version = "2.0.0"' in updated
+    assert "99.99.99-dev" not in updated
 
 
 def test_cargo_bumper_rewrites_only_the_package_version() -> None:

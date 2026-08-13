@@ -124,7 +124,7 @@ def regenerate_unreleased(
         repo_dir=clone_dir,
         base_ref=discovery.base_tag,
         diff_collector=diff_collector,
-        project_description=profile.prompt_description,
+        project_description=profile.triage_prompt_project,
     )
 
     # Join each verdict back to its PR facts for the body, and collect the PRs the
@@ -165,7 +165,7 @@ def regenerate_unreleased(
         categories=profile.categories,
         diff_collector=diff_collector,
         patch_release=patch_release,
-        project_description=profile.prompt_description,
+        project_description=profile.generation_prompt_project,
         category_guidance=profile.category_guidance,
     )
     # Keep one bullet per PR; prefer a renderable bullet over a reserved-category one.

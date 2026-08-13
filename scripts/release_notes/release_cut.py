@@ -45,13 +45,14 @@ _DATED_RC_RE_TMPL = r"^{display} {major}\.{minor}\.{patch}[- ][rR][cC]([1-9]\d*)
 # credit. Used to dedup a cut's notes against the PRs the destination release
 # line already lists (see _drop_already_credited).
 _BULLET_LINE_RE = re.compile(r"^\s*[*-]\s+\S")
-# Trailing PR ref: "(#N)" at end of line, tolerating trailing punctuation/closing
-# parens a hand-edit may add (". ", ": ", ")", "(#44)(#45)"). The agent's own
-# render always emits a single canonical "(#N)"; the punctuation tolerance only
-# matters for destination-side hand-edits / pre-existing valkey files, where a
-# missed ref would let a credited PR be promoted a second time. A trailing run
-# like "(#44)(#45)" still captures only the last ref (45), rare enough to leave.
-_TRAILING_PR_RE = re.compile(r"\(#(\d+)\)[\s.,:;)]*$")
+# Trailing PR group: "(#N)" or a hand-written "(#N, #M)" at end of line,
+# tolerating trailing punctuation/closing parens. Generated notes always emit a
+# single canonical ref, while existing module changelogs sometimes credit
+# several PRs in one trailing group.
+_TRAILING_PR_GROUP_RE = re.compile(
+    r"\((?P<refs>#\d+(?:\s*,\s*#\d+)*)\)[\s.,:;)]*$"
+)
+_PR_NUMBER_RE = re.compile(r"#(\d+)")
 
 # Urgency values render_release_notes() accepts; a SECURITY cut with no fixes is
 # flagged in the PR body. Mirrors VALID_URGENCIES in the release-format module
@@ -97,7 +98,6 @@ class _NotesMeta:
     security_fixes: Optional[Sequence[str]]  # sanitized security bullets: manual + advisory-derived (None when empty)
     security_noted_prs: Sequence[int]   # PRs dropped from generated bullets because supplied as a --security-fix (kept only under Security Fixes)
     baseline_unanchored: bool           # rc1 of M.0.0 with no --base-ref (over-broad range risk)
-    history_at_risk: bool = False       # prior changelog credits PRs but no heading matched the display name (render drops it)
     advisories: Optional[Any] = None    # security.AdvisorySelection when --security-from-advisories ran, else None
     notes_range: Optional["_NotesRange"] = None  # resolved base/head refs + SHAs for the range display
 
@@ -271,8 +271,8 @@ def validate_release_progression(
 ) -> None:
     """Reject an already-released or backward target for the current branch.
 
-    ``255.255.255-dev`` is Valkey's unstable sentinel and is allowed to begin any
-    release line. Every other branch state must advance monotonically.
+    Repository-specific unstable sentinels are allowed to begin any release
+    line. Every other branch state must advance monotonically.
 
     *bumper* parses the version file (defaulting to valkey core's version.h
     layout). A bumper whose file records no release stage (``records_stage`` is
@@ -282,7 +282,7 @@ def validate_release_progression(
     against re-cutting an already-tagged stage.
     """
     current_version, current_stage = bumper.current_release_state(version_h_text)
-    if current_version == "255.255.255" and current_stage == "dev":
+    if (current_version, current_stage) in bumper.unstable_release_states:
         return
 
     target_canonical = canonical_version(target_version)
@@ -352,9 +352,7 @@ def promote_and_bump(
     stage_lc: str,
     urgency: str,
     date: str,
-    repo_full_name: str,
     contrib_base: Optional[str],
-    contrib_head: str,
     token: Optional[str],
     security_fixes: Optional[Sequence[str]],
     profile: projects_mod.ProjectProfile,
@@ -486,6 +484,14 @@ def _resolve_notes_range(
     )
 
 
+def _trailing_pr_numbers(line: str) -> set[int]:
+    """Return every PR number in a line's final ``(#N[, #M...])`` group."""
+    match = _TRAILING_PR_GROUP_RE.search(line)
+    if match is None:
+        return set()
+    return {int(number) for number in _PR_NUMBER_RE.findall(match.group("refs"))}
+
+
 def _credited_pr_numbers(notes_text: str) -> set[int]:
     """Return the PR numbers a release-line changelog already credits.
 
@@ -521,9 +527,7 @@ def _credited_pr_numbers(notes_text: str) -> set[int]:
             continue
         if in_security or not _BULLET_LINE_RE.match(line):
             continue
-        m = _TRAILING_PR_RE.search(line)
-        if m:
-            credited.add(int(m.group(1)))
+        credited.update(_trailing_pr_numbers(line))
     return credited
 
 
@@ -538,9 +542,7 @@ def _grouped_pr_numbers(grouped: dict[str, list[str]]) -> set[int]:
     numbers: set[int] = set()
     for lines in grouped.values():
         for line in lines:
-            m = _TRAILING_PR_RE.search(line)
-            if m:
-                numbers.add(int(m.group(1)))
+            numbers.update(_trailing_pr_numbers(line))
     return numbers
 
 
@@ -560,9 +562,9 @@ def _drop_already_credited(
     for category, lines in grouped.items():
         kept_lines: list[str] = []
         for line in lines:
-            m = _TRAILING_PR_RE.search(line)
-            if m and int(m.group(1)) in credited:
-                dropped.append(int(m.group(1)))
+            overlaps = _trailing_pr_numbers(line) & credited
+            if overlaps:
+                dropped.extend(sorted(overlaps))
                 continue
             kept_lines.append(line)
         if kept_lines:
@@ -606,9 +608,7 @@ def _security_fix_prs_in_notes(
         return []
     found: set[int] = set()
     for entry in security_fixes:
-        m = _TRAILING_PR_RE.search(entry)
-        if m and int(m.group(1)) in noted:
-            found.add(int(m.group(1)))
+        found.update(_trailing_pr_numbers(entry) & noted)
     return sorted(found)
 
 
@@ -639,9 +639,24 @@ def _read_version_file(repo_dir: str, profile: projects_mod.ProjectProfile) -> s
     )
 
 
-def _heading_present(notes_text: str, heading: str) -> bool:
-    """Whether *heading* starts a line in *notes_text* (not a longer version's prefix)."""
-    return bool(re.search(rf"^{re.escape(heading)}(?=\s|$)", notes_text, re.MULTILINE))
+def _release_heading_present(
+    notes_text: str, version: str, stage_lc: str, display_name: str
+) -> bool:
+    """Match canonical and known hand-written headings for one release stage."""
+    display = r"[ \t]+".join(re.escape(part) for part in display_name.split())
+    prefix = rf"^{display}[ \t]+{re.escape(version)}"
+    if stage_lc == "ga":
+        # Patch headings may omit GA; hand-written module headings often keep it.
+        # The date separator is preceded by whitespace, unlike the hyphen in
+        # ``-rcN``; keeping that boundary prevents an RC from looking like GA.
+        suffix = r"(?:[ \t]+GA)?(?=[ \t]+-|[ \t]*$)"
+    else:
+        rc_number = _RC_STAGE_RE.fullmatch(stage_lc)
+        if rc_number is None:
+            raise ValueError(f"invalid release stage: {stage_lc!r}")
+        # Accept generated "-rcN" and existing module " RCN" spellings.
+        suffix = rf"(?:-|[ \t]+)RC{rc_number.group(1)}\b"
+    return bool(re.search(prefix + suffix, notes_text, re.MULTILINE | re.IGNORECASE))
 
 
 def _refuse_already_cut_stage(
@@ -661,16 +676,45 @@ def _refuse_already_cut_stage(
     if profile.bumper.records_stage:
         return
     exact = rn.stage_heading(version, stage_lc, profile.display_name)
-    if _heading_present(dest_notes_text, exact):
+    if _release_heading_present(
+        dest_notes_text, version, stage_lc, profile.display_name
+    ):
         raise ValueError(
             f"the release line's changelog already records {exact!r}; "
             "refusing to cut it again"
         )
     ga = rn.stage_heading(version, "ga", profile.display_name)
-    if stage_lc != "ga" and _heading_present(dest_notes_text, ga):
+    if stage_lc != "ga" and _release_heading_present(
+        dest_notes_text, version, "ga", profile.display_name
+    ):
         raise ValueError(
             f"the release line's changelog already records {ga!r}; "
             f"an rc cannot follow the shipped {version} GA"
+        )
+
+
+def _validate_changelog_history(
+    notes_text: str, profile: projects_mod.ProjectProfile
+) -> None:
+    """Refuse a render that cannot carry credited changelog history forward.
+
+    ``render_release_notes`` retains prior sections starting at the first dated
+    heading matching the profile's display name. If a changelog credits PRs but
+    has no matching heading, rendering would deterministically delete that
+    history. This is an input-format error, not a reviewer judgment: abort rather
+    than producing a destructive draft that ``force_ready`` could override.
+
+    A fresh-line placeholder credits no PRs and remains valid; it is intentionally
+    replaced by the first generated release section.
+    """
+    if _credited_pr_numbers(notes_text) and not rn.has_dated_section(
+        notes_text, profile.display_name
+    ):
+        raise ValueError(
+            f"{profile.notes_file} credits existing PRs but has no dated heading "
+            f"matching '{profile.display_name} M.m.p'; refusing because rendering "
+            "would drop prior changelog history. Normalize the historical headings "
+            "or correct the project profile before cutting the release."
         )
 
 
@@ -805,16 +849,9 @@ def cut(
             dest_version_text, version, plan.stage, bumper=profile.bumper
         )
         _refuse_already_cut_stage(dest_notes_text, version, plan.stage, profile)
-
-        # The destination changelog credits PRs, but none of its headings match
-        # this profile's display name: rendering would silently drop that whole
-        # history (only a mass deletion in the PR diff would show it). Real
-        # changelog content must never vanish without a maintainer's eyes on it,
-        # so this holds the PR as a draft. A placeholder file (core's fresh-line
-        # seed) credits no PRs and is intentionally replaced without a hold.
-        history_at_risk = bool(_credited_pr_numbers(dest_notes_text)) and not (
-            rn.has_dated_section(dest_notes_text, profile.display_name)
-        )
+        # Re-check the pinned release-line snapshot immediately before rendering;
+        # main's preflight ran before this exact branch tip was fetched.
+        _validate_changelog_history(dest_notes_text, profile)
 
         # Drop bullets the destination changelog already credits. The tag-based
         # dedup in discovery cannot engage without RC tags (the agent never
@@ -861,14 +898,13 @@ def cut(
                 len(security_noted_prs), security_noted_prs,
             )
 
-        # 3. Render bullets -> dated section on dest; bump version.h.
+        # 3. Render bullets -> dated section on dest; bump the profile's version file.
         new_dest_notes, new_version = promote_and_bump(
             grouped=grouped,
             dest_notes_text=dest_notes_text,
             dest_version_text=dest_version_text,
             version=version, stage_lc=plan.stage, urgency=urgency, date=date,
-            repo_full_name=repo_full_name, contrib_base=contrib_base,
-            contrib_head=notes_head_ref, token=token,
+            contrib_base=contrib_base, token=token,
             security_fixes=security_fixes,
             profile=profile,
             pr_authors=regen.pr_authors,
@@ -892,8 +928,7 @@ def cut(
             noted_bullet_count=noted_bullet_count, urgency=urgency,
             security_fixes=security_fixes, security_noted_prs=security_noted_prs,
             baseline_unanchored=baseline_unanchored,
-            history_at_risk=history_at_risk, advisories=advisories,
-            notes_range=notes_range,
+            advisories=advisories, notes_range=notes_range,
         )
 
         if dry_run:
@@ -956,9 +991,6 @@ def _print_dry_run(
         print(f"notes range: {regen.base_tag}..HEAD")
     if notes_meta.baseline_unanchored:
         print(f"⚠️  baseline unanchored: rc1 of {version} fell back to nearest tag {regen.base_tag!r}")
-    if notes_meta.history_at_risk:
-        print(f"⚠️  prior {profile.notes_file} content credits PRs but matches no "
-              f"'{profile.display_name} M.m.p' heading; the render drops it")
     if plan.rc_warning:
         print(f"⚠️  rc out of sequence: {plan.rc_warning}")
     if notes_meta.already_credited:
@@ -1140,8 +1172,6 @@ def _hold_reasons(plan: BranchPlan, notes_meta: "_NotesMeta") -> list[str]:
         reasons.append("release candidate out of sequence")
     if notes_meta.baseline_unanchored:
         reasons.append("release-notes baseline is unanchored")
-    if notes_meta.history_at_risk:
-        reasons.append("prior changelog content would be dropped")
     # Empty dated section, and not the dedup cause (which has its own reason next).
     # Mirrors _empty_notes_section's two sub-causes: no PRs, or PRs existed but none
     # were included (every candidate AI-excluded or left undecided). A non-empty
@@ -1304,7 +1334,6 @@ def _build_pr_body(
         + _notes_range_body_section(notes_meta.notes_range, regen)
         + _rc_warning_section(plan)
         + _baseline_warning_section(notes_meta, version)
-        + _history_warning_section(notes_meta, profile)
         + _empty_notes_section(notes_meta, plan, profile)
         + _no_new_prs_section(notes_meta, plan, profile)
         + _duplicate_pr_section(regen.duplicate_prs)
@@ -1410,22 +1439,6 @@ def _baseline_warning_section(notes_meta: "_NotesMeta", version: str) -> str:
         "Cutting anyway as requested. Confirm the range above is correct before "
         "merging; if not, close this PR and re-dispatch with an explicit "
         "`--base-ref`.\n"
-    )
-
-
-def _history_warning_section(
-    notes_meta: "_NotesMeta", profile: projects_mod.ProjectProfile
-) -> str:
-    """Warn when rendering would drop the destination's prior changelog content."""
-    if not notes_meta.history_at_risk:
-        return ""
-    return (
-        "\n### ⚠️ Prior changelog content would be dropped\n\n"
-        f"`{profile.notes_file}` on the release line credits PRs, but none of its "
-        f"headings match the `{profile.display_name} M.m.p` form this cut renders, "
-        "so the rendered file carries none of that history forward. Review the "
-        "deletion in this PR's diff; if the prior content should be kept, "
-        "restore it under a matching dated heading before merging.\n"
     )
 
 
