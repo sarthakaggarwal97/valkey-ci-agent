@@ -702,71 +702,121 @@ def _gh_latest(tag_name: str) -> MagicMock:
 
 
 class TestPackagesAndTryValkey:
+    # Real job-name shapes, taken from the production workflow files
+    # (valkey-release-automation): build-release.yml calls packages.yml
+    # from its `release-build-packages` job, so child jobs render under
+    # that prefix. packages.yml names its jobs
+    # "RPM · <platform.name> (<arch>) · v<version>" (build-rpm),
+    # "DEB · ..." (build-deb), "Test RPM · ..." / "Test DEB · ..."
+    # (test-rpm/test-deb), plus ONE aggregate "Publish to S3" job and ONE
+    # "Deploy Pages" job. F12 shipped because earlier fixtures invented
+    # per-platform "RPM ... Publish to S3" names that production never
+    # creates. The fixture policy expects exactly 2 RPM and 1 DEB builds.
+    _REAL_PACKAGE_JOBS: "list[tuple[str, str]]" = [
+        ("release-build-packages / RPM · Rocky Linux 9 (x86_64) · v9.1.2", "success"),
+        ("release-build-packages / RPM · AlmaLinux 9 (aarch64) · v9.1.2", "success"),
+        ("release-build-packages / DEB · Debian 12 (arm64) · v9.1.2", "success"),
+        ("release-build-packages / Test RPM · Rocky Linux 9 (x86_64) · v9.1.2", "success"),
+        ("release-build-packages / Test RPM · AlmaLinux 9 (aarch64) · v9.1.2", "success"),
+        ("release-build-packages / Test DEB · Debian 12 (arm64) · v9.1.2", "success"),
+        ("release-build-packages / Publish to S3", "success"),
+        ("release-build-packages / Deploy Pages", "success"),
+    ]
+
+    def _real_jobs(self, *, drop: "tuple[str, ...]" = (),
+                   fail: "tuple[str, ...]" = ()) -> "list[MagicMock]":
+        """The production run's job list, minus *drop* substrings, with
+        *fail* substrings concluding failure."""
+        shaped = []
+        for name, conclusion in self._REAL_PACKAGE_JOBS:
+            if any(fragment in name for fragment in drop):
+                continue
+            if any(fragment in name for fragment in fail):
+                conclusion = "failure"
+            shaped.append((name, conclusion))
+        return _jobs(shaped)
+
     def test_rc_skips_packages(self) -> None:
         out = verify._verify_packages(_POLICY.downstream, "rc1", _BUILD_OK, None)
         assert out.state is OutputState.SKIPPED
 
-    def test_packages_verified_by_the_exact_publish_inventory(self) -> None:
-        # The fixture policy expects exactly 2 RPM and 1 DEB publish jobs.
-        jobs = _jobs([
-            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
-            ("release-build-packages / RPM · el9 (aarch64) · Publish to S3", "success"),
-            ("release-build-packages / DEB · bookworm (x86_64) · Publish to S3", "success"),
-            ("release-build-packages / Deploy Pages", "success"),
-        ])
-        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
+    def test_packages_verified_by_the_real_production_job_shapes(self) -> None:
+        # F12 regression pin: the production run has matrix BUILD jobs
+        # plus singular aggregate publish jobs. This exact set (the live
+        # 8.0.11 shape, scaled to the fixture policy) must verify.
+        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK,
+                                      self._real_jobs())
         assert out.state is OutputState.VERIFIED
-        # When a Deploy Pages job is present in the succeeded set the
-        # detail claims pages succeeded; otherwise the wording must stay
-        # honest (see test_pages_wording_admits_when_pages_was_not_checked).
-        assert "and the pages jobs succeeded" in out.detail
+        assert "Publish to S3 and Deploy Pages jobs succeeded" in out.detail
 
-    def test_pages_wording_admits_when_pages_was_not_checked(self) -> None:
-        # F6-adjacent: the RPM/DEB matrix satisfied its inventory but no
-        # Deploy Pages job ran, so the detail cannot claim "pages
-        # succeeded": it says (pages not checked) instead. Full
-        # digest/provenance verification is a deferred redesign; not
-        # lying about pages is the fix here.
-        jobs = _jobs([
-            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
-            ("release-build-packages / RPM · el9 (aarch64) · Publish to S3", "success"),
-            ("release-build-packages / DEB · bookworm (x86_64) · Publish to S3", "success"),
-        ])
-        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
-        assert out.state is OutputState.VERIFIED
-        assert "(pages not checked)" in out.detail
-        assert "and the pages jobs succeeded" not in out.detail
+    def test_aggregate_only_publish_set_never_verifies(self) -> None:
+        # F18 negative pin: green aggregate publish jobs with ZERO matrix
+        # build jobs must not verify. The publish job succeeding proves a
+        # write happened, not that the reviewed platform inventory was
+        # built; an empty matrix (broken generate step) must read FAILED.
+        out = verify._verify_packages(
+            _POLICY.downstream, "ga", _BUILD_OK,
+            self._real_jobs(drop=("RPM ·", "DEB ·")))
+        assert out.state is OutputState.FAILED
+        assert ("(Evidence mismatch: RPM package builds, 0 succeeded, "
+                "expected exactly 2)") in out.detail
+
+    def test_test_legs_never_backfill_the_build_inventory(self) -> None:
+        # The " / RPM · " anchor counts BUILD jobs only: with one RPM
+        # build missing, the still-green "Test RPM · " legs must not make
+        # up the count (mirroring qualification._evidence_gaps).
+        out = verify._verify_packages(
+            _POLICY.downstream, "ga", _BUILD_OK,
+            self._real_jobs(drop=("/ RPM · AlmaLinux",)))
+        assert out.state is OutputState.FAILED
+        assert ("(Evidence mismatch: RPM package builds, 1 succeeded, "
+                "expected exactly 2)") in out.detail
+
+    def test_missing_publish_to_s3_job_fails_packages(self) -> None:
+        # The aggregate publish job is required by name: a run whose
+        # matrix is green but never reached publish-to-s3 published
+        # nothing.
+        out = verify._verify_packages(
+            _POLICY.downstream, "ga", _BUILD_OK,
+            self._real_jobs(drop=("Publish to S3",)))
+        assert out.state is OutputState.FAILED
+        assert "no 'Publish to S3' job" in out.detail
+
+    def test_missing_deploy_pages_job_fails_packages(self) -> None:
+        # Deploy Pages is equally required: the install-instructions site
+        # is part of the published surface, not an optional extra.
+        out = verify._verify_packages(
+            _POLICY.downstream, "ga", _BUILD_OK,
+            self._real_jobs(drop=("Deploy Pages",)))
+        assert out.state is OutputState.FAILED
+        assert "no 'Deploy Pages' job" in out.detail
 
     def test_dropped_platform_fails_packages_despite_green_jobs(self) -> None:
         # F21: a green-but-smaller matrix (one RPM platform silently
-        # dropped) must read FAILED, not VERIFIED.
-        jobs = _jobs([
-            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
-            ("release-build-packages / DEB · bookworm (x86_64) · Publish to S3", "success"),
-            ("release-build-packages / Deploy Pages", "success"),
-        ])
-        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
+        # dropped, build and test legs both gone) must read FAILED, not
+        # VERIFIED.
+        out = verify._verify_packages(
+            _POLICY.downstream, "ga", _BUILD_OK,
+            self._real_jobs(drop=("AlmaLinux",)))
         assert out.state is OutputState.FAILED
-        assert ("(Evidence mismatch: 1 RPM publish jobs succeeded, "
+        assert ("(Evidence mismatch: RPM package builds, 1 succeeded, "
                 "expected exactly 2)") in out.detail
 
     def test_dropped_deb_platform_fails_packages(self) -> None:
-        jobs = _jobs([
-            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
-            ("release-build-packages / RPM · el9 (aarch64) · Publish to S3", "success"),
-            ("release-build-packages / Deploy Pages", "success"),
-        ])
-        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
+        out = verify._verify_packages(
+            _POLICY.downstream, "ga", _BUILD_OK,
+            self._real_jobs(drop=("Debian",)))
         assert out.state is OutputState.FAILED
-        assert ("(Evidence mismatch: 0 DEB publish jobs succeeded, "
+        assert ("(Evidence mismatch: DEB package builds, 0 succeeded, "
                 "expected exactly 1)") in out.detail
 
     def test_failed_publish_job_fails_packages(self) -> None:
-        jobs = _jobs([
-            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "failure"),
-        ])
-        out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
+        out = verify._verify_packages(
+            _POLICY.downstream, "ga", _BUILD_OK,
+            self._real_jobs(fail=("Publish to S3",)))
         assert out.state is OutputState.FAILED
+        assert ("Package publication jobs failed: "
+                "release-build-packages / Publish to S3") in out.detail
 
     def test_packages_blocked_until_build_verified(self) -> None:
         pending = DownstreamOutput(name="build-run", state=OutputState.PENDING)
@@ -902,38 +952,52 @@ class TestPackagesAndTryValkey:
 
 class TestHostileJobPayloads:
     """Job lists shaped like what a chaotic API (or a broken matrix) can
-    actually serve: empty, oddly concluded, unicode, or null-named."""
+    actually serve: empty, oddly concluded, unicode, or null-named. Job
+    names follow the real production shapes (packages.yml build jobs under
+    the build-release.yml `release-build-packages` caller prefix)."""
 
     def test_ga_with_an_empty_jobs_list_fails_packages(self) -> None:
         # jobs [] is not None: the fetch worked and returned nothing, which
-        # means the publish matrix never ran.
+        # means the build matrix never ran; the RPM inventory check is the
+        # first to notice.
         out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, [])
         assert out.state is OutputState.FAILED
-        assert "no package publish jobs" in out.detail
+        assert ("(Evidence mismatch: RPM package builds, 0 succeeded, "
+                "expected exactly 2)") in out.detail
 
     def test_empty_string_conclusion_never_verifies_packages(self) -> None:
-        jobs = _jobs([("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "")])
+        # A full green build matrix with the aggregate publish job served
+        # with an empty-string conclusion: not success, so publication is
+        # unproven and must fail naming the job.
+        jobs = _jobs([
+            ("release-build-packages / RPM · Rocky Linux 9 (x86_64) · v9.1.2", "success"),
+            ("release-build-packages / RPM · AlmaLinux 9 (aarch64) · v9.1.2", "success"),
+            ("release-build-packages / DEB · Debian 12 (arm64) · v9.1.2", "success"),
+            ("release-build-packages / Deploy Pages", "success"),
+            ("release-build-packages / Publish to S3", ""),
+        ])
         out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
         assert out.state is OutputState.FAILED
         assert "Publish to S3" in out.detail
 
     def test_unicode_job_names_are_matched_safely(self) -> None:
         jobs = _jobs([
-            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3 🚀", "success"),
-            ("release-build-packages / RPM · el9 (aarch64) · Publish to S3 🚀", "success"),
-            ("release-build-packages / DEB · bookworm · Publish to S3 · résumé", "success"),
+            ("release-build-packages / RPM · Rocky Linux 9 🚀 (x86_64) · v9.1.2", "success"),
+            ("release-build-packages / RPM · AlmaLinux 9 🚀 (aarch64) · v9.1.2", "success"),
+            ("release-build-packages / DEB · Débian 12 (arm64) · v9.1.2", "success"),
+            ("release-build-packages / Publish to S3 · résumé", "success"),
             ("release-build-packages / Deploy Pages · résumé", "success"),
         ])
         out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
         assert out.state is OutputState.VERIFIED
 
     def test_duplicate_job_names_never_satisfy_the_inventory(self) -> None:
-        # The same RPM job served twice (rerun attempts listed together)
-        # is one platform, not two.
+        # The same RPM build job served twice (rerun attempts listed
+        # together) is one platform, not two.
         jobs = _jobs([
-            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
-            ("release-build-packages / RPM · el9 (x86_64) · Publish to S3", "success"),
-            ("release-build-packages / DEB · bookworm (x86_64) · Publish to S3", "success"),
+            ("release-build-packages / RPM · Rocky Linux 9 (x86_64) · v9.1.2", "success"),
+            ("release-build-packages / RPM · Rocky Linux 9 (x86_64) · v9.1.2", "success"),
+            ("release-build-packages / DEB · Debian 12 (arm64) · v9.1.2", "success"),
         ])
         out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK, jobs)
         assert out.state is OutputState.FAILED

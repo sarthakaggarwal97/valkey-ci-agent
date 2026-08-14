@@ -130,6 +130,12 @@ def build_manifest_payload(
     payload: "dict[str, object]" = {
         "schema": schema,
         "nonce": nonce,
+        # The -rcN strip mirrors the producer contract exactly: the fixed
+        # qualify-release.yml (valkey-release-automation) emits the BASE
+        # version (no -rcN suffix) in the manifest 'version' field and the
+        # full dispatched tag in 'tag'. The consumer (qualification.py)
+        # binds 'version' against tag.split("-rc", 1)[0], so this default
+        # is the shape a real producer manifest carries.
         "version": version if version is not None else tag.split("-rc", 1)[0],
         "tag": tag,
         "source_sha": sha,

@@ -388,18 +388,18 @@ def _build_gated(name: str, build: DownstreamOutput,
 
 def _verify_packages(down: Any, stage: str, build: DownstreamOutput,
                      jobs: Any) -> DownstreamOutput:
-    """RPM/DEB publication (GA only), evidenced by the build run's publish
-    and pages jobs succeeding in exactly the reviewed inventory.
+    """RPM/DEB publication (GA only), evidenced by the build run's package
+    BUILD matrix plus its two singular aggregate publish jobs.
 
     Job-level evidence rather than a public endpoint: the package repos'
     public layout is not a stable URL contract, and the plan explicitly
     allows the authoritative publish workflow as the v1 canonical signal.
 
     Counts are exact, not floors (the qualification verifier's stance): a
-    green-but-smaller publish matrix means a platform was silently dropped,
+    green-but-smaller build matrix means a platform was silently dropped,
     which must read FAILED, not VERIFIED. The expected counts are the
     policy's qualification_rpm_jobs/deb_jobs inventory: the production
-    matrix publishes the same reviewed platform set qualification builds.
+    matrix builds the same reviewed platform set qualification builds.
     """
     if stage != "ga":
         return _skipped("packages",
@@ -407,54 +407,68 @@ def _verify_packages(down: Any, stage: str, build: DownstreamOutput,
     gated = _build_gated("packages", build, jobs)
     if gated is not None:
         return gated
-    # Job names set by
-    # valkey-release-automation/.github/workflows/build-release.yml.
-    # A hostile payload can serve a job with a null name; (j.name or "")
-    # keeps the match a str test instead of a TypeError through _guarded.
-    publish_jobs = [j for j in jobs
-                    if "Publish to S3" in (j.name or "") or "Deploy Pages" in (j.name or "")]
-    if not publish_jobs:
-        return DownstreamOutput(
-            name="packages", state=OutputState.FAILED,
-            detail="The build run has no package publish jobs; the matrix "
-                   "may not have run", url=build.url,
-        )
-    failed = [j.name for j in publish_jobs if j.conclusion != "success"]
-    if failed:
-        return DownstreamOutput(
-            name="packages", state=OutputState.FAILED,
-            detail=f"Package publication jobs failed: {', '.join(failed)}",
-            url=build.url,
-        )
+    # Job-name shapes derived from the production workflow files
+    # (valkey-release-automation): build-release.yml calls packages.yml
+    # from its `release-build-packages` job, so every child job renders
+    # under that prefix in the run's job list. packages.yml names them:
+    #   build-rpm:      "RPM · <platform.name> (<arch>) · v<version>"
+    #   build-deb:      "DEB · <platform.name> (<arch>) · v<version>"
+    #   test-rpm/-deb:  "Test RPM · ..." / "Test DEB · ..."
+    #   publish-to-s3:  "Publish to S3"    (ONE aggregate job)
+    #   deploy-pages:   "Deploy Pages"     (ONE aggregate job)
+    # The policy's qualification_rpm_jobs/deb_jobs inventory describes the
+    # BUILD matrix, the same set qualification._evidence_gaps counts; the
+    # " / RPM · " child-prefix anchor keeps the "Test RPM · " legs out of
+    # the count exactly as it does there. Test-leg failures need no
+    # separate check: the build run must have concluded success to reach
+    # this verifier, and the publish jobs `need` the test jobs.
+    #
     # Distinct names, not occurrences: the same job listed twice (rerun
     # attempts served together) must not satisfy the inventory with a
-    # platform missing. The RPM/DEB markers follow the qualification
-    # verifier's job-name convention.
-    succeeded = {(j.name or "") for j in publish_jobs if j.conclusion == "success"}
+    # platform missing. A hostile payload can serve a job with a null
+    # name; (j.name or "") keeps the match a str test instead of a
+    # TypeError through _guarded.
+    all_names = {(j.name or "") for j in jobs}
+    succeeded = {(j.name or "") for j in jobs if j.conclusion == "success"}
     for marker, expected, label in (
-        ("RPM", down.qualification_rpm_jobs, "RPM"),
-        ("DEB", down.qualification_deb_jobs, "DEB"),
+        (" / RPM · ", down.qualification_rpm_jobs, "RPM package builds"),
+        (" / DEB · ", down.qualification_deb_jobs, "DEB package builds"),
     ):
         count = sum(marker in name for name in succeeded)
         if count != expected:
             return DownstreamOutput(
                 name="packages", state=OutputState.FAILED,
-                detail=f"(Evidence mismatch: {count} {label} publish jobs "
-                       f"succeeded, expected exactly {expected})",
+                detail=f"(Evidence mismatch: {label}, {count} succeeded, "
+                       f"expected exactly {expected})",
                 url=build.url,
             )
-    # Only claim Pages succeeded when a Deploy Pages job is actually
-    # present in the succeeded set. Otherwise keep the detail honest: the
-    # RPM/DEB matrix satisfied its inventory, but the site deployment was
-    # not observed by name and is unverified here. Full digest/provenance
-    # binding is a deferred redesign; not lying about pages is the fix.
-    pages_succeeded = any("Deploy Pages" in name for name in succeeded)
-    pages_detail = "and the pages jobs succeeded" if pages_succeeded else "(pages not checked)"
+    # Publication is two SINGULAR aggregate jobs, never per-platform legs:
+    # each must be present and have a succeeded attempt. Absence means the
+    # packages were never published (the matrix alone writes nothing
+    # public); the name-set difference tolerates a rerun that serves both
+    # a failed and a succeeded attempt under one name.
+    for marker in ("Publish to S3", "Deploy Pages"):
+        matching = {name for name in all_names if marker in name}
+        if not matching:
+            return DownstreamOutput(
+                name="packages", state=OutputState.FAILED,
+                detail=f"The build run has no '{marker}' job; the packages "
+                       f"were never published", url=build.url,
+            )
+        never_succeeded = sorted(matching - succeeded)
+        if never_succeeded:
+            return DownstreamOutput(
+                name="packages", state=OutputState.FAILED,
+                detail=f"Package publication jobs failed: "
+                       f"{', '.join(never_succeeded)}",
+                url=build.url,
+            )
     return DownstreamOutput(
         name="packages", state=OutputState.VERIFIED,
         detail=f"All {down.qualification_rpm_jobs} RPM and "
-               f"{down.qualification_deb_jobs} DEB publish jobs succeeded "
-               f"{pages_detail}", url=build.url,
+               f"{down.qualification_deb_jobs} DEB package builds succeeded, "
+               f"and the Publish to S3 and Deploy Pages jobs succeeded",
+        url=build.url,
     )
 
 

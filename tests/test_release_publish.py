@@ -431,7 +431,10 @@ class TestTagCreationRace:
     def test_tag_at_approved_sha_resumes_the_release(self) -> None:
         # End-to-end resume: plan_publication sees the tag at the approved
         # SHA (partial-publish resume state) and does not refuse; publish
-        # proceeds and completes.
+        # proceeds and completes. F5: the resume is only allowed because
+        # this repo's qualification evidence exists and passed; readiness
+        # is re-proven live, never inferred from the tag's existence (see
+        # TestResumeRequiresReadiness for the refusal side).
         repo = _publishable_repo()
         # Tag exists at approved SHA from the outset (a crash after
         # STAGE 1 succeeded but before STAGE 2 ran).
@@ -502,6 +505,68 @@ class TestTagCreationRace:
         # No comment body carrying the publication marker was posted.
         for call in repo.get_issue.return_value.create_comment.call_args_list:
             assert _PUBLICATION_MARKER not in call.kwargs.get("body", "")
+
+
+class TestResumeRequiresReadiness:
+    """F5: a same-SHA tag excuses exactly one refusal, the TAG-EXISTS
+    check (STAGE 1 of a crashed publish already claimed the tag). It must
+    never stand in for readiness itself: an out-of-band writer
+    pre-creating the tag at the public candidate SHA must not obtain an
+    approvable plan carrying zero qualification evidence."""
+
+    def _repo_with_tag_at_candidate(self, qual_runs: list) -> MagicMock:
+        """A READY-shaped repo except the tag already exists at the
+        candidate SHA and the qualification evidence is caller-chosen."""
+        repo = _with_tracker(_ready_repo(qual_runs=qual_runs))
+        repo.get_git_ref.side_effect = None
+        repo.get_git_ref.return_value = tag_ref()
+        return repo
+
+    def test_missing_qualification_refuses_the_resume(self) -> None:
+        # The exact F5 attack: pre-create the tag at the candidate SHA
+        # with NO qualification run anywhere. The old behavior planned
+        # anyway with qualification_run_id=0 bound into the digest.
+        repo = self._repo_with_tag_at_candidate(qual_runs=[])
+        with pytest.raises(ReleaseControlError) as excinfo:
+            plan_publication(gh_mock(repo), _POLICY, branch="9.1",
+                             actor="madolson")
+        assert ("tag 9.1.1 exists at the candidate but the release is "
+                "not READY") in str(excinfo.value)
+        assert "no qualification evidence" in str(excinfo.value)
+
+    def test_failed_qualification_refuses_the_resume(self) -> None:
+        repo = self._repo_with_tag_at_candidate(
+            qual_runs=[qualification_run(conclusion="failure")])
+        with pytest.raises(ReleaseControlError) as excinfo:
+            plan_publication(gh_mock(repo), _POLICY, branch="9.1",
+                             actor="madolson")
+        assert ("tag 9.1.1 exists at the candidate but the release is "
+                "not READY") in str(excinfo.value)
+        assert "did not pass" in str(excinfo.value)
+
+    def test_pending_qualification_refuses_the_resume(self) -> None:
+        # Still-running evidence is not evidence yet; the resume waits.
+        repo = self._repo_with_tag_at_candidate(
+            qual_runs=[qualification_run(status="in_progress")])
+        with pytest.raises(ReleaseControlError) as excinfo:
+            plan_publication(gh_mock(repo), _POLICY, branch="9.1",
+                             actor="madolson")
+        assert "not READY" in str(excinfo.value)
+        assert "still executing" in str(excinfo.value)
+
+    def test_ready_resume_plans_and_binds_the_real_qualification_run(self) -> None:
+        # The legitimate resume still plans, and the plan (hence the
+        # digest the approver signs off on) binds the real qualification
+        # run instead of run_id 0: the F5 hole was precisely an approvable
+        # digest over qualification_run_id=0.
+        repo = self._repo_with_tag_at_candidate(
+            qual_runs=[qualification_run()])
+        plan = plan_publication(gh_mock(repo), _POLICY, branch="9.1",
+                                actor="madolson")
+        assert plan.tag == "9.1.1"
+        assert plan.sha == MERGE_SHA
+        assert plan.qualification_run_id == 900
+        assert plan.qualification_url == "https://x/qruns/900"
 
 
 class TestLatestPointerRace:

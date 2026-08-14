@@ -13,8 +13,10 @@ reviewers.
 Everything is revalidated *after* approval, immediately before the write:
 
 - the actor's team membership (live);
-- the full release status (candidate valid, required CI green on the exact
-  SHA, qualification passed on the exact SHA);
+- the full release status (candidate valid, qualification passed on the
+  exact SHA, which is the one pre-publication technical gate; the
+  candidate's required-CI results are informational display and never gate
+  publication);
 - the version files at the candidate SHA (``src/version.h`` must record
   exactly the version and stage being published);
 - the release notes at the candidate SHA (the dated section must exist,
@@ -35,7 +37,7 @@ import fnmatch
 import hashlib
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any
 
@@ -43,8 +45,9 @@ from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
 from scripts.release import issue as issue_mod
+from scripts.release import qualification as qual_mod
 from scripts.release.authorize import ensure_authorized
-from scripts.release.models import ReleasePhase, release_tag
+from scripts.release.models import ReleasePhase, ReleaseStatus, release_tag
 from scripts.release.policy import TRACKER_LABEL, RepoReleasePolicy, validate_release_branch
 from scripts.release.reconcile import ReleaseControlError, compute_status
 from scripts.release.release_refs import get_repo as _get_repo
@@ -235,19 +238,28 @@ def plan_publication(
     sha = status.candidate.sha
     tag = release_tag(status.version, status.stage)
 
-    # F16 resumability: after a crashed publish, the world may already carry
-    # the approved tag (or release) at the approved SHA. compute_status
-    # treats that as non-READY (PUBLISHED or unshippable), which would
-    # quarantine an otherwise legitimate resume. Detect the two partial
-    # states and allow planning to proceed for them alone. A tag or release
-    # at a DIFFERENT commit is a genuine snipe and stays refused.
+    # F16 resumability, F5-hardened: after a crashed publish, the world may
+    # already carry the approved tag at the approved SHA. compute_status
+    # treats that as non-READY (an unshippable stray-tag alert), which
+    # would quarantine an otherwise legitimate resume. A same-SHA tag
+    # therefore keeps ONLY the tag-exists check from refusing (STAGE 1 of
+    # the crashed publish already claimed the tag); it must never stand in
+    # for readiness itself, or an out-of-band writer pre-creating the tag
+    # at the public candidate SHA would obtain an approvable plan with
+    # zero qualification evidence (a digest binding qualification_run_id
+    # 0). The resume re-proves readiness in _require_resumed_readiness. A
+    # tag or release at a DIFFERENT commit is a genuine snipe and refuses.
     existing_tag_sha = resolve_tag_commit(repo, tag) if sha else ""
     resumable_partial = bool(sha) and existing_tag_sha == sha
 
-    if status.phase is not ReleasePhase.READY and not resumable_partial:
-        raise ReleaseControlError(
-            f"release is not ready to publish (phase: {status.phase.value}); "
-            f"blockers: {'; '.join(status.blockers) or 'none listed'}"
+    if status.phase is not ReleasePhase.READY:
+        if not resumable_partial:
+            raise ReleaseControlError(
+                f"release is not ready to publish (phase: {status.phase.value}); "
+                f"blockers: {'; '.join(status.blockers) or 'none listed'}"
+            )
+        status = _require_resumed_readiness(
+            gh_downstream or gh, policy, status, tag=tag, sha=sha,
         )
 
     if existing_tag_sha and existing_tag_sha != sha:
@@ -286,6 +298,51 @@ def plan_publication(
         qualification_run_id=status.qualification.run_id,
         controller_sha=controller_sha,
     )
+
+
+def _require_resumed_readiness(
+    gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus, *,
+    tag: str, sha: str,
+) -> ReleaseStatus:
+    """F5: a resume of the tag-claim stage must still prove readiness.
+
+    compute_status reports the tag-without-release state as an unshippable
+    stray-tag alert and stops before evaluating qualification, so a
+    legitimate resume can never present phase READY. Readiness is
+    re-established here instead: nothing beyond that one expected alert
+    may block, and the qualification evidence for exactly this tag+SHA is
+    re-evaluated live and must have passed. Anything less refuses, so a
+    pre-created tag with no (or failed, or still-running) qualification
+    evidence never yields an approvable plan. Returns the status with the
+    live qualification substituted, so the plan (and its digest) binds the
+    real run id rather than 0.
+    """
+    # The one blocker a legitimate resume always carries is reconcile.py's
+    # stray-tag alert for this tag; the prefix omits the SHA because the
+    # caller already proved the tag sits at the candidate. Any other
+    # blocker (invalidated candidate, stale daily gate, lookalike alert)
+    # is a real readiness gap and refuses.
+    stray_tag_prefix = f"Tag `{tag}` exists"
+    problems = [b for b in status.blockers if not b.startswith(stray_tag_prefix)]
+    qualification = qual_mod.evaluate_qualification(gh, policy, tag=tag, sha=sha)
+    if not qualification.passed:
+        if qualification.pending:
+            problems.append(f"qualification run {qualification.run_id} is "
+                            f"still executing on the candidate SHA")
+        elif qualification.run_id:
+            failed = ", ".join(qualification.failed_jobs[:5])
+            problems.append(f"qualification run {qualification.run_id} did "
+                            f"not pass ({failed})")
+        else:
+            problems.append("no qualification evidence exists for the "
+                            "candidate SHA")
+    if problems:
+        raise ReleaseControlError(
+            f"tag {tag} exists at the candidate but the release is not "
+            f"READY: {'; '.join(problems)}. Publication refuses until "
+            f"readiness is restored."
+        )
+    return replace(status, qualification=qualification)
 
 
 def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: str,

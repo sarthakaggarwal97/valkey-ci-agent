@@ -359,6 +359,39 @@ class TestManifestRedirectFollowing:
         with pytest.raises(qual_mod._ManifestReadError, match="non-https"):
             qual_mod._fetch_signed_url("http://blobs.example/signed")
 
+    def test_blob_fetch_sends_no_authorization_and_caps_the_read(self) -> None:
+        # F19: the signed URL is self-authenticating, so the GitHub token
+        # must never ride the request to the blob host, and the read must
+        # be size-capped so a hostile or damaged upload cannot pin runner
+        # memory.
+        from scripts.release import qualification as qual_mod
+        resp = MagicMock()
+        resp.__enter__.return_value = resp
+        resp.geturl.return_value = "https://blobs.example/signed"
+        resp.read.return_value = b"zipbytes"
+        with patch.object(qual_mod, "urlopen", return_value=resp) as opened:
+            body = qual_mod._fetch_signed_url("https://blobs.example/signed")
+        assert body == b"zipbytes"
+        (request,), _kwargs = opened.call_args
+        assert request.get_full_url() == "https://blobs.example/signed"
+        assert not request.has_header("Authorization")
+        resp.read.assert_called_once_with(qual_mod._MAX_MANIFEST_BYTES * 4 + 1)
+
+    def test_https_to_http_downgrade_by_the_redirect_chain_refuses(self) -> None:
+        # F19: the stdlib default redirect handler follows an https URL to
+        # an http target without complaint; evidence bytes that traveled a
+        # cleartext hop must never be trusted, and nothing is read off the
+        # downgraded response.
+        from scripts.release import qualification as qual_mod
+        resp = MagicMock()
+        resp.__enter__.return_value = resp
+        resp.geturl.return_value = "http://blobs.example/downgraded"
+        with patch.object(qual_mod, "urlopen", return_value=resp):
+            with pytest.raises(qual_mod._ManifestReadError,
+                               match="left https"):
+                qual_mod._fetch_signed_url("https://blobs.example/signed")
+        resp.read.assert_not_called()
+
 
 class TestManifestContentValidation:
     """F5: the manifest is downloaded, parsed, and every field bound to
@@ -589,3 +622,28 @@ class TestManifestContentValidation:
                                         tag="9.2.0-rc1", sha=MERGE_SHA)
         assert not status.passed
         assert any("rpm_jobs" in item for item in status.failed_jobs)
+
+    def test_rc_contract_version_is_base_and_tag_is_full(self) -> None:
+        # F11 consumer contract pin: the controller dispatches the full
+        # tag as the workflow's 'version' input, and the fixed producer
+        # (qualify-release.yml) emits the BASE version (no -rcN) in the
+        # manifest 'version' field with the full tag in 'tag'. That shape
+        # passes; a manifest carrying the full tag in 'version' is the
+        # pre-fix producer bug and must fail with the version-mismatch gap.
+        passing = build_manifest_payload(tag="9.2.0-rc1", version="9.2.0")
+        run = qualification_run(tag="9.2.0-rc1", manifest_payload=passing,
+                                jobs=_archive_jobs())
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.2.0-rc1", sha=MERGE_SHA)
+        assert status.passed
+        assert not status.failed_jobs
+
+        rejected = build_manifest_payload(tag="9.2.0-rc1",
+                                          version="9.2.0-rc1")
+        run = qualification_run(tag="9.2.0-rc1", manifest_payload=rejected,
+                                jobs=_archive_jobs())
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.2.0-rc1", sha=MERGE_SHA)
+        assert not status.passed
+        assert any("manifest version '9.2.0-rc1', expected '9.2.0'" in item
+                   for item in status.failed_jobs)

@@ -21,6 +21,11 @@ import zipfile
 from functools import partial
 from typing import Any
 
+# Module-level import (not function-local) so tests can patch
+# scripts.release.qualification.urlopen and pin the no-token, size-capped
+# fetch behavior without reaching into urllib globally.
+from urllib.request import Request, urlopen
+
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
@@ -301,14 +306,24 @@ def _fetch_signed_url(url: str) -> bytes:
 
     Deliberately sends NO Authorization header: the URL is self-
     authenticating and the API token must never reach the blob host.
-    """
-    from urllib.request import Request, urlopen
 
+    The stdlib's default redirect handler happily follows an https URL to
+    an http target, so the final URL's scheme is re-checked after the
+    open and a downgrade refuses. Checking after the fact is the smallest
+    sound guard here: no credential ever rides the request, so refusing
+    to trust bytes that traveled a cleartext hop is all that is needed.
+    """
     if not url.startswith("https://"):
         raise _ManifestReadError("artifact redirect points at a non-https URL")
     req = Request(url, headers={"User-Agent": "valkey-ci-agent"})
     try:
         with urlopen(req, timeout=30) as resp:  # noqa: S310 (https enforced)
+            final_url = str(resp.geturl() or "")
+            if not final_url.startswith("https://"):
+                raise _ManifestReadError(
+                    "artifact blob redirect chain left https "
+                    f"(final URL: {final_url or '<unknown>'})"
+                )
             return resp.read(_MAX_MANIFEST_BYTES * 4 + 1)
     except OSError as exc:
         raise _ManifestReadError(f"artifact blob download failed: {exc}") from exc
