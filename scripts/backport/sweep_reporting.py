@@ -14,6 +14,7 @@ from scripts.backport.sweep_models import (
     BranchSweepResult,
     CandidateResult,
 )
+from scripts.backport.utils import escape_markdown_table_cell
 
 AI_DETAIL_MARKERS = (
     DETAIL_RESOLVED_BY_AI,
@@ -356,4 +357,9 @@ def _unesc(value: str) -> str:
 
 
 def _esc(value: object) -> str:
-    return str(value).replace("|", "\\|").replace("\n", " ")
+    return escape_markdown_table_cell(
+        value,
+        newline_replacement=" ",
+        normalize_newlines=False,
+        strip=False,
+    )

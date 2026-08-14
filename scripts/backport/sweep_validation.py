@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import tempfile
@@ -10,12 +9,13 @@ from pathlib import Path
 from typing import Any, Callable, Union
 
 from scripts.ai.runtime import run_agent
-from scripts.backport.main import _run_git as run_git_default
+from scripts.backport.git import run_pipeline_git as run_git_default
 from scripts.backport.sweep_apply import has_staged_changes
 from scripts.backport.sweep_git import worktree_changed_paths
+from scripts.backport.utils import extract_jsonl_result_text
 from scripts.backport.validation import (
     changed_paths_since_base,
-    select_validation_commands,
+    validate_branch,
 )
 from scripts.common.build_validator import run_build_commands
 
@@ -44,12 +44,17 @@ def validate_backport_branch(
     validation_rules: list[Any],
     log_path: str | None = None,
 ) -> tuple[bool, str]:
-    commands = select_validation_commands(
+    return validate_branch(
+        repo_dir,
+        f"origin/{target_branch}",
         test_commands,
         validation_rules,
-        changed_paths_since_base(repo_dir, f"origin/{target_branch}"),
+        log_path=log_path,
+        run_empty=True,
+        pass_log_path=True,
+        run_commands=run_test_commands,
+        changed_paths_func=changed_paths_since_base,
     )
-    return run_test_commands(repo_dir, commands, log_path=log_path)
 
 
 def validate_branch_with_optional_repair(
@@ -189,22 +194,11 @@ def repair_validation_failure_with_claude(
 
 
 def extract_agent_result_text(stdout: str) -> str:
-    result_text = ""
-    for line in stdout.strip().splitlines():
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if not isinstance(event, dict):
-            continue
-        if event.get("type") != "result" or "result" not in event:
-            continue
-        raw_result = event.get("result")
-        if isinstance(raw_result, str):
-            result_text = raw_result.strip()
-        elif raw_result is not None:
-            result_text = json.dumps(raw_result, sort_keys=True, default=str)
-    return result_text
+    return extract_jsonl_result_text(
+        stdout,
+        strip_result=True,
+        ignore_non_dict_events=True,
+    )
 
 
 def validation_output_with_diagnosis(

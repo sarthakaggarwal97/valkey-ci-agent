@@ -3,19 +3,27 @@
 from __future__ import annotations
 
 import difflib
-import json
 import logging
 import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable
 
 from scripts.ai.runtime import AgentRunResult, run_agent
-from scripts.backport.cherry_pick import is_non_merge_mainline_error
+from scripts.backport.cherry_pick import (
+    build_conflicted_file,
+    cherry_pick_commit,
+    stage_resolutions,
+)
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
-from scripts.backport.main import _run_git as run_git_default
+from scripts.backport.git import (
+    SWEEP_APPLY_GIT_MODE,
+    run_git_command,
+)
+from scripts.backport.git import run_pipeline_git as run_git_default
 from scripts.backport.models import BackportPRContext, ConflictedFile, ResolutionResult
 from scripts.backport.sweep_git import changed_paths_in_index_or_worktree
 from scripts.backport.sweep_models import (
@@ -26,7 +34,7 @@ from scripts.backport.sweep_models import (
     CandidateResult,
     ProjectBackportCandidate,
 )
-from scripts.backport.utils import has_conflict_markers
+from scripts.backport.utils import extract_jsonl_result_text, has_conflict_markers
 from scripts.backport.validation import select_validation_commands
 
 logger = logging.getLogger(__name__)
@@ -54,6 +62,21 @@ class FileSnapshot:
 
 
 AdaptMissingTests = Callable[..., MissingTestAdaptationResult]
+
+
+def _run_captured_git(
+    repo_dir: str,
+    *args: str,
+    check: bool = True,
+    run_process: RunProcess = subprocess.run,
+) -> subprocess.CompletedProcess[str]:
+    return run_git_command(
+        repo_dir,
+        *args,
+        mode=SWEEP_APPLY_GIT_MODE,
+        check=check,
+        run_process=run_process,
+    )
 
 
 def _abort_cherry_pick(repo_dir: str, run_git: RunGit) -> None:
@@ -108,23 +131,13 @@ def apply_candidate(
 
     try:
         run_git(repo_dir, "fetch", "origin", sha, env=git_env)
-        result = run_process(
-            ["git", "cherry-pick", "-m", "1", sha],
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
+        result = cherry_pick_commit(
+            repo_dir,
+            sha,
+            mainline=True,
+            run_git=partial(_run_captured_git, run_process=run_process),
+            log=logger,
         )
-        if result.returncode != 0 and is_non_merge_mainline_error(f"{result.stdout}\n{result.stderr}"):
-            logger.info(
-                "%s is not a merge commit; retrying cherry-pick without -m",
-                sha,
-            )
-            result = run_process(
-                ["git", "cherry-pick", sha],
-                cwd=repo_dir,
-                capture_output=True,
-                text=True,
-            )
     except subprocess.CalledProcessError as exc:
         return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "error", str(exc))
 
@@ -162,12 +175,13 @@ def apply_candidate(
     for path in conflicting_paths:
         target_content = read_index_stage(repo_dir, path, 2, run_process=run_process)
         source_content = read_index_stage(repo_dir, path, 3, run_process=run_process)
-        # Binary files have no line-level merge, so the resolver can't act on
-        # them (git marks binary content with a NUL byte). Skip them rather
-        # than feeding them to the resolver. A candidate left with only binary
-        # conflicts has no resolvable files and is skipped below.
-        if "\x00" in target_content or "\x00" in source_content:
-            logger.warning("Skipping binary conflict: %s", path)
+        conflicted_file = build_conflicted_file(
+            path,
+            target_content,
+            source_content,
+            log=logger,
+        )
+        if conflicted_file is None:
             continue
         if not index_stage_exists(repo_dir, path, 2, run_process=run_process):
             target_missing_paths.add(path)
@@ -178,13 +192,7 @@ def apply_candidate(
                     source_content,
                     run_process=run_process,
                 )
-        conflicting_files.append(
-            ConflictedFile(
-                path=path,
-                target_branch_content=target_content,
-                source_branch_content=source_content,
-            )
-        )
+        conflicting_files.append(conflicted_file)
     if not conflicting_files:
         _abort_cherry_pick(repo_dir, run_git)
         return CandidateResult(
@@ -248,12 +256,7 @@ def apply_candidate(
             f"unresolved - {details}",
         )
 
-    for r in resolutions:
-        if r.resolved_content is not None:
-            resolved_path = Path(repo_dir, r.path)
-            resolved_path.parent.mkdir(parents=True, exist_ok=True)
-            resolved_path.write_text(r.resolved_content, encoding="utf-8")
-            run_git(repo_dir, "add", r.path)
+    stage_resolutions(repo_dir, resolutions, run_git=run_git)
 
     test_adaptation = MissingTestAdaptationResult()
     if target_missing_test_contexts:
@@ -589,19 +592,11 @@ def list_existing_test_paths(
 
 
 def extract_agent_result_text(agent_result: AgentRunResult) -> str:
-    result_text = ""
-    for line in agent_result.stdout.strip().splitlines():
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if event.get("type") == "result" and "result" in event:
-            raw_result = event.get("result")
-            if isinstance(raw_result, str):
-                result_text = raw_result
-            elif raw_result is not None:
-                result_text = json.dumps(raw_result, sort_keys=True, default=str)
-    return result_text
+    return extract_jsonl_result_text(
+        agent_result.stdout,
+        strip_result=False,
+        ignore_non_dict_events=False,
+    )
 
 
 def copy_worktree_for_adaptation(repo_dir: str, sandbox_dir: Path) -> None:

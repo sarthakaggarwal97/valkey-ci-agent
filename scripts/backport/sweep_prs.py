@@ -10,9 +10,8 @@ from github.GithubException import GithubException
 from scripts.backport.diff_comments import get_diff_comment_login, marked_source_pr_urls, reconcile_diff_comments
 from scripts.backport.pr_creator import (
     apply_pr_labels,
-    build_pull_search_head_ref,
     create_pull_from_push_repo,
-    pull_matches_push_repo,
+    find_pull_by_head,
 )
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import BranchSweepResult, CandidateResult
@@ -27,15 +26,17 @@ DIFF_COMMENT_LOGIN = get_diff_comment_login()
 
 def find_existing_pr(gh: Any, base_repo: str, push_repo: str, branch: str) -> Any | None:
     repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
-    head_ref = build_pull_search_head_ref(base_repo, push_repo, branch)
-    pulls = retry_github_call(
-        lambda: list(repo.get_pulls(state="open", head=head_ref)),
-        retries=2, description="list PRs",
+    return find_pull_by_head(
+        repo,
+        base_repo=base_repo,
+        push_repo=push_repo,
+        branch_name=branch,
+        state="open",
+        retries=2,
+        retry_description="list PRs",
+        materialize_in_retry=True,
+        retry_call=retry_github_call,
     )
-    for pull in pulls:
-        if pull_matches_push_repo(pull, push_repo):
-            return pull
-    return None
 
 
 def delete_stale_backport_branch(gh: Any, push_repo: str, branch: str) -> None:

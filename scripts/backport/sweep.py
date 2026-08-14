@@ -9,7 +9,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,7 +17,13 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
-from scripts.backport.main import _run_git
+from scripts.backport.git import run_pipeline_git as _run_git
+from scripts.backport.project_graphql import (
+    build_project_query,
+    extract_field_values,
+    load_project_v2,
+    project_owner_field,
+)
 from scripts.backport.sweep_apply import (
     apply_candidate,
 )
@@ -116,24 +121,16 @@ class ProjectBackportDiscovery:
         return by_branch
 
     def _iter_items(self) -> list[dict[str, Any]]:
-        owner_field = "user" if self._owner_type == "user" else "organization"
+        owner_field = project_owner_field(self._owner_type)
         query = _project_items_query(owner_field)
-        cursor = None
-        items: list[dict[str, Any]] = []
-        while True:
-            data = self._gql.execute(
-                query,
-                {"owner": self._owner, "number": self._number, "cursor": cursor},
-            )
-            project = (data.get(owner_field) or {}).get("projectV2")
-            if not project:
-                raise RuntimeError(f"Project {self._owner}/{self._number} not found")
-            page = project.get("items") or {}
-            items.extend(page.get("nodes") or [])
-            page_info = page.get("pageInfo") or {}
-            if not page_info.get("hasNextPage"):
-                return items
-            cursor = page_info.get("endCursor")
+        return load_project_v2(
+            self._gql,
+            project_owner=self._owner,
+            project_number=self._number,
+            project_owner_type=self._owner_type,
+            query=query,
+            require_id=False,
+        ).items
 
     def _candidate_from_item(
         self,
@@ -154,7 +151,7 @@ class ProjectBackportDiscovery:
             )
             return None
 
-        fields = _extract_field_values(item)
+        fields = extract_field_values(item)
         if not _field_has_value(fields, self._status_field, self._status_value):
             return None
 
@@ -506,61 +503,7 @@ def _process_branch(
 
 
 def _project_items_query(owner_field: str) -> str:
-    return f"""
-query($owner: String!, $number: Int!, $cursor: String) {{
-  {owner_field}(login: $owner) {{
-    projectV2(number: $number) {{
-      items(first: 100, after: $cursor) {{
-        pageInfo {{ hasNextPage endCursor }}
-        nodes {{
-          content {{
-            __typename
-            ... on PullRequest {{
-              number title url merged mergedAt
-              repository {{ nameWithOwner }}
-              mergeCommit {{ oid }}
-              commits(first: 100) {{ nodes {{ commit {{ oid }} }} }}
-            }}
-          }}
-          fieldValues(first: 50) {{
-            nodes {{
-              __typename
-              ... on ProjectV2ItemFieldTextValue {{ text field {{ ... on ProjectV2FieldCommon {{ name }} }} }}
-              ... on ProjectV2ItemFieldSingleSelectValue {{ name field {{ ... on ProjectV2FieldCommon {{ name }} }} }}
-              ... on ProjectV2ItemFieldNumberValue {{ number field {{ ... on ProjectV2FieldCommon {{ name }} }} }}
-              ... on ProjectV2ItemFieldIterationValue {{ title field {{ ... on ProjectV2FieldCommon {{ name }} }} }}
-            }}
-          }}
-        }}
-      }}
-    }}
-  }}
-}}
-"""
-
-
-def _extract_field_values(item: dict[str, Any]) -> dict[str, list[str]]:
-    values: dict[str, list[str]] = defaultdict(list)
-    for field_value in (item.get("fieldValues") or {}).get("nodes") or []:
-        name = (field_value.get("field") or {}).get("name")
-        if not name:
-            continue
-        values[_normalize(name)].extend(_field_value_strings(field_value))
-    return dict(values)
-
-
-def _field_value_strings(field_value: dict[str, Any]) -> list[str]:
-    type_name = field_value.get("__typename")
-    if type_name == "ProjectV2ItemFieldTextValue":
-        return [str(field_value.get("text") or "")]
-    if type_name == "ProjectV2ItemFieldSingleSelectValue":
-        return [str(field_value.get("name") or "")]
-    if type_name == "ProjectV2ItemFieldNumberValue":
-        number = field_value.get("number")
-        return [] if number is None else [str(number)]
-    if type_name == "ProjectV2ItemFieldIterationValue":
-        return [str(field_value.get("title") or "")]
-    return []
+    return build_project_query(owner_field, "discovery")
 
 
 def _field_has_value(
@@ -691,4 +634,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

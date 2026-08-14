@@ -17,9 +17,16 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 from github.GithubException import GithubException
 
-from scripts.backport.cherry_pick import cherry_pick
+from scripts.backport.cherry_pick import (
+    cherry_pick,
+    stage_resolutions,
+)
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.diff_comments import get_diff_comment_login, reconcile_diff_comments
+from scripts.backport.git import (
+    clone_repository,
+    run_pipeline_git,
+)
 from scripts.backport.models import (
     BackportConfig,
     BackportOutcome,
@@ -34,6 +41,7 @@ from scripts.backport.utils import build_branch_name
 from scripts.backport.validation import (
     changed_paths_since_base,
     select_validation_commands,
+    validate_branch,
 )
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
@@ -322,16 +330,16 @@ def run_backport(
                     if head.returncode == 0:
                         resolved_commit_sha = head.stdout.strip()
 
-                commands: list[str] = []
                 if build_commands or validation_rules:
-                    commands = select_validation_commands(
+                    ok, output = validate_branch(
+                        tmp_dir,
+                        f"origin/{target_branch}",
                         build_commands or [],
                         validation_rules or [],
-                        changed_paths_since_base(tmp_dir, f"origin/{target_branch}"),
+                        run_empty=False,
+                        pass_log_path=False,
+                        changed_paths_func=changed_paths_since_base,
                     )
-                if commands:
-                    from scripts.common.build_validator import run_build_commands
-                    ok, output = run_build_commands(tmp_dir, commands)
                     if not ok:
                         msg = f"Build validation failed: {output[:500]}"
                         logger.error(msg)
@@ -535,47 +543,24 @@ def _clone_repo(
     """
     logger.info("Cloning %s into %s.", repo_full_name, dest_dir)
 
-    clone_url = github_https_url(repo_full_name)
-    subprocess.run(
-        ["git", "clone", "--no-single-branch", "--branch", target_branch, clone_url, "."],
-        cwd=dest_dir,
-        check=True,
-        capture_output=True,
-        text=True,
-        env=git_env,
-    )
-    # Configure git identity for cherry-pick commits
-    subprocess.run(
-        ["git", "config", "user.name", BOT_NAME],
-        cwd=dest_dir, check=True, capture_output=True, text=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.email", BOT_EMAIL],
-        cwd=dest_dir, check=True, capture_output=True, text=True,
-    )
-    # Fetch all branches so cherry-pick can reference any commit
-    subprocess.run(
-        ["git", "fetch", "--all"],
-        cwd=dest_dir,
-        check=True,
-        capture_output=True,
-        text=True,
-        env=git_env,
+    clone_repository(
+        repo_full_name,
+        dest_dir,
+        git_env,
+        clone_args=("--no-single-branch", "--branch", target_branch),
+        clone_into_existing_directory=True,
+        configure_identity=True,
+        identity=(BOT_NAME, BOT_EMAIL),
+        fetch_all=True,
+        run_process=subprocess.run,
+        url_builder=github_https_url,
     )
     return git_env
 
 
 def _run_git(repo_dir: str, *args: str, env: dict[str, str] | None = None) -> None:
     """Run a git command in *repo_dir*, raising on failure."""
-    cmd = ["git", *args]
-    logger.debug("Running: %s (cwd=%s)", " ".join(cmd), repo_dir)
-    result = subprocess.run(cmd, cwd=repo_dir, capture_output=True, text=True, env=env)
-    if result.returncode != 0:
-        logger.error("git %s failed (rc=%d)\nstdout: %s\nstderr: %s",
-                     args[0], result.returncode,
-                     result.stdout.strip()[-500:] if result.stdout else "",
-                     result.stderr.strip()[-500:] if result.stderr else "")
-        result.check_returncode()
+    run_pipeline_git(repo_dir, *args, env=env, log=logger, run_process=subprocess.run)
 
 
 def _apply_resolutions(
@@ -588,17 +573,7 @@ def _apply_resolutions(
     with ``git add``, then aborts the failed cherry-pick and commits
     the resolved state.
     """
-    for result in resolution_results:
-        if result.resolved_content is not None:
-            file_path = os.path.join(repo_dir, result.path)
-            parent = os.path.dirname(file_path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            with open(file_path, "w", encoding="utf-8") as fh:
-                fh.write(result.resolved_content)
-            _run_git(repo_dir, "add", result.path)
-        else:
-            raise ValueError(f"Cannot apply unresolved conflict for {result.path}")
+    stage_resolutions(repo_dir, resolution_results, run_git=_run_git)
 
     # Complete the cherry-pick with resolved content.
     # Set core.editor=true to prevent git from opening an editor

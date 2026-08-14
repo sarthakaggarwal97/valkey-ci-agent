@@ -4,10 +4,23 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from pathlib import Path
+from typing import Callable
 
-from scripts.backport.models import CherryPickResult, ConflictedFile
+from scripts.backport.git import (
+    CHERRY_PICK_GIT_MODE,
+    run_git_command,
+)
+from scripts.backport.models import (
+    CherryPickResult,
+    ConflictedFile,
+    ResolutionResult,
+)
 
 logger = logging.getLogger(__name__)
+
+RunGit = Callable[..., subprocess.CompletedProcess[str]]
+StageGit = Callable[..., object]
 
 
 def cherry_pick(
@@ -34,17 +47,13 @@ def _cherry_pick_merge(
         merge_commit_sha,
         target_branch,
     )
-    result = _run_git(
-        repo_dir, "cherry-pick", "-m", "1", merge_commit_sha, check=False,
+    result = cherry_pick_commit(
+        repo_dir,
+        merge_commit_sha,
+        mainline=True,
+        run_git=_run_git,
+        log=logger,
     )
-    if result.returncode != 0 and is_non_merge_mainline_error(
-        f"{result.stdout}\n{result.stderr}"
-    ):
-        logger.info(
-            "%s is not a merge commit; retrying cherry-pick without -m",
-            merge_commit_sha,
-        )
-        result = _run_git(repo_dir, "cherry-pick", merge_commit_sha, check=False)
     if result.returncode != 0:
         logger.warning(
             "Cherry-pick of merge commit %s produced conflicts",
@@ -86,7 +95,13 @@ def _cherry_pick_sequential(
     applied: list[str] = []
     for sha in commit_shas:
         logger.info("Cherry-picking commit %s onto %s", sha, target_branch)
-        result = _run_git(repo_dir, "cherry-pick", sha, check=False)
+        result = cherry_pick_commit(
+            repo_dir,
+            sha,
+            mainline=False,
+            run_git=_run_git,
+            log=logger,
+        )
         if result.returncode != 0:
             logger.warning(
                 "Cherry-pick of commit %s produced conflicts", sha,
@@ -120,15 +135,12 @@ def _collect_conflicts(repo_dir: str, target_branch: str) -> list[ConflictedFile
 
     conflicts: list[ConflictedFile] = []
     for path in paths:
-        cf = _build_conflicted_file(repo_dir, target_branch, path)
-        # Binary files have no line-level merge, so the resolver can't act on
-        # them. Skip them (git marks binary content with a NUL byte). A
-        # cherry-pick left with only binary conflicts becomes an empty set and
-        # is skipped by the caller.
-        if "\x00" in cf.target_branch_content or "\x00" in cf.source_branch_content:
-            logger.warning("Skipping binary conflict: %s", path)
-            continue
-        conflicts.append(cf)
+        # build_conflicted_file returns None for binary conflicts. A
+        # cherry-pick left with only binary conflicts becomes an empty set
+        # and is skipped by the caller.
+        conflicted_file = _build_conflicted_file(repo_dir, target_branch, path)
+        if conflicted_file is not None:
+            conflicts.append(conflicted_file)
     return conflicts
 
 
@@ -136,19 +148,19 @@ def _build_conflicted_file(
     repo_dir: str,
     target_branch: str,
     file_path: str,
-) -> ConflictedFile:
+) -> ConflictedFile | None:
     # Target branch version (before cherry-pick)
     target_branch_content = _show_file(repo_dir, target_branch, file_path)
 
     # Source branch version (the commit being cherry-picked)
     source_branch_content = _show_file(repo_dir, "CHERRY_PICK_HEAD", file_path)
 
-    return ConflictedFile(
-        path=file_path,
-        target_branch_content=target_branch_content,
-        source_branch_content=source_branch_content,
+    return build_conflicted_file(
+        file_path,
+        target_branch_content,
+        source_branch_content,
+        log=logger,
     )
-
 
 
 def _show_file(repo_dir: str, ref: str, file_path: str) -> str:
@@ -182,26 +194,72 @@ def is_non_merge_mainline_error(output: str) -> bool:
     )
 
 
+def cherry_pick_commit(
+    repo_dir: str,
+    commit_sha: str,
+    *,
+    mainline: bool,
+    run_git: RunGit,
+    log: logging.Logger,
+) -> subprocess.CompletedProcess[str]:
+    """Attempt one commit, retrying a non-merge SHA without ``-m``."""
+    args = ("cherry-pick", "-m", "1", commit_sha) if mainline else ("cherry-pick", commit_sha)
+    result = run_git(repo_dir, *args, check=False)
+    if mainline and result.returncode != 0 and is_non_merge_mainline_error(
+        f"{result.stdout}\n{result.stderr}"
+    ):
+        log.info(
+            "%s is not a merge commit; retrying cherry-pick without -m",
+            commit_sha,
+        )
+        result = run_git(repo_dir, "cherry-pick", commit_sha, check=False)
+    return result
+
+
+def build_conflicted_file(
+    path: str,
+    target_content: str,
+    source_content: str,
+    *,
+    log: logging.Logger,
+) -> ConflictedFile | None:
+    """Build a text conflict model, excluding binary conflicts."""
+    if "\x00" in target_content or "\x00" in source_content:
+        log.warning("Skipping binary conflict: %s", path)
+        return None
+    return ConflictedFile(
+        path=path,
+        target_branch_content=target_content,
+        source_branch_content=source_content,
+    )
+
+
+def stage_resolutions(
+    repo_dir: str,
+    resolution_results: list[ResolutionResult],
+    *,
+    run_git: StageGit,
+) -> None:
+    """Write and stage resolved files, rejecting unresolved entries."""
+    for result in resolution_results:
+        if result.resolved_content is None:
+            raise ValueError(f"Cannot apply unresolved conflict for {result.path}")
+        file_path = Path(repo_dir, result.path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(result.resolved_content, encoding="utf-8")
+        run_git(repo_dir, "add", result.path)
+
+
 def _run_git(
     repo_dir: str,
     *args: str,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    cmd = ["git", *args]
-    logger.debug("Running: %s", " ".join(cmd))
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        errors="replace",
-        cwd=repo_dir,
-        check=False,
+    return run_git_command(
+        repo_dir,
+        *args,
+        mode=CHERRY_PICK_GIT_MODE,
+        check=check,
+        run_process=subprocess.run,
+        log=logger,
     )
-    if check and result.returncode != 0:
-        raise subprocess.CalledProcessError(
-            result.returncode,
-            cmd,
-            output=result.stdout,
-            stderr=result.stderr,
-        )
-    return result

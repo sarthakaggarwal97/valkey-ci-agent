@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from github import Github
 from github.GithubException import GithubException
@@ -13,7 +13,13 @@ from scripts.backport.models import (
     CherryPickResult,
     ResolutionResult,
 )
-from scripts.backport.utils import DEFAULT_BACKPORT_LABEL, DEFAULT_LLM_CONFLICT_LABEL, build_branch_name, build_pr_title
+from scripts.backport.utils import (
+    DEFAULT_BACKPORT_LABEL,
+    DEFAULT_LLM_CONFLICT_LABEL,
+    build_branch_name,
+    build_pr_title,
+    escape_markdown_table_cell,
+)
 from scripts.common.github_client import retry_github_call
 
 logger = logging.getLogger(__name__)
@@ -154,12 +160,49 @@ def pull_matches_push_repo(pr: Any, push_repo: str) -> bool:
     return isinstance(full_name, str) and full_name == push_repo
 
 
+def find_pull_by_head(
+    repo: Any,
+    *,
+    base_repo: str,
+    push_repo: str,
+    branch_name: str,
+    state: str,
+    retries: int,
+    retry_description: str,
+    materialize_in_retry: bool,
+    require_merged: bool = False,
+    retry_call: Callable[..., Any] | None = None,
+) -> Any | None:
+    """Find a PR while preserving each path's pagination/retry semantics."""
+    head_ref = build_pull_search_head_ref(base_repo, push_repo, branch_name)
+
+    def get_pulls() -> Any:
+        pulls = repo.get_pulls(state=state, head=head_ref)
+        return list(pulls) if materialize_in_retry else pulls
+
+    retry = retry_github_call if retry_call is None else retry_call
+    pulls = retry(
+        get_pulls,
+        retries=retries,
+        description=retry_description,
+    )
+    for pr in pulls:
+        if not pull_matches_push_repo(pr, push_repo):
+            continue
+        if require_merged and pr.merged_at is None:
+            continue
+        return pr
+    return None
+
+
 def _escape_table_cell(value: object) -> str:
     """Return markdown-table-safe text."""
-    text = str(value).replace("\r\n", "\n").replace("\r", "\n").strip()
-    if not text:
-        return ""
-    return text.replace("|", "\\|").replace("\n", "<br>")
+    return escape_markdown_table_cell(
+        value,
+        newline_replacement="<br>",
+        normalize_newlines=True,
+        strip=True,
+    )
 
 
 def _was_llm_resolved(result: ResolutionResult) -> bool:
@@ -391,36 +434,42 @@ class BackportPRCreator:
             "Checking for duplicate backport PR with head ref %s",
             head_ref,
         )
-        open_pulls = retry_github_call(
-            lambda: repo.get_pulls(state="open", head=head_ref),
-            retries=3,
-            description="search open PRs for duplicate",
-        )
         expected_push_repo = self._push_repo or self._base_repo
-        for pr in open_pulls:
-            if not pull_matches_push_repo(pr, expected_push_repo):
-                continue
-            logger.info("Found existing open backport PR: %s", pr.html_url)
-            return pr.html_url
+        open_pr = find_pull_by_head(
+            repo,
+            base_repo=self._base_repo,
+            push_repo=expected_push_repo,
+            branch_name=branch_name,
+            state="open",
+            retries=3,
+            retry_description="search open PRs for duplicate",
+            materialize_in_retry=False,
+        )
+        if open_pr is not None:
+            logger.info("Found existing open backport PR: %s", open_pr.html_url)
+            return open_pr.html_url
 
         # Check closed PRs with matching head branch. Only treat a closed
         # PR as a duplicate if it was merged — a closed-but-not-merged PR
         # means the work was abandoned, and we should be free to reopen a
         # fresh backport. GitHub returns merged PRs as state=closed with
         # merged_at set.
-        closed_pulls = retry_github_call(
-            lambda: repo.get_pulls(state="closed", head=head_ref),
+        merged_pr = find_pull_by_head(
+            repo,
+            base_repo=self._base_repo,
+            push_repo=expected_push_repo,
+            branch_name=branch_name,
+            state="closed",
             retries=3,
-            description="search closed PRs for duplicate",
+            retry_description="search closed PRs for duplicate",
+            materialize_in_retry=False,
+            require_merged=True,
         )
-        for pr in closed_pulls:
-            if not pull_matches_push_repo(pr, expected_push_repo):
-                continue
-            if pr.merged_at is not None:
-                logger.info(
-                    "Found existing merged backport PR: %s", pr.html_url,
-                )
-                return pr.html_url
+        if merged_pr is not None:
+            logger.info(
+                "Found existing merged backport PR: %s", merged_pr.html_url,
+            )
+            return merged_pr.html_url
 
         logger.info("No duplicate backport PR found for %s", branch_name)
         return None

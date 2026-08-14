@@ -10,7 +10,8 @@ from typing import Any, Callable
 
 from github.GithubException import GithubException
 
-from scripts.backport.main import _run_git as run_git_default
+from scripts.backport.git import clone_repository
+from scripts.backport.git import run_pipeline_git as run_git_default
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
     CandidateResult,
@@ -38,16 +39,18 @@ def clone_target_branch(
     dest_dir: str,
     git_env: dict[str, str],
 ) -> None:
-    clone_url = github_https_url(repo_full_name)
-    subprocess.run(
-        ["git", "clone", "--branch", target_branch, clone_url, dest_dir],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=git_env,
+    clone_repository(
+        repo_full_name,
+        dest_dir,
+        git_env,
+        clone_args=("--branch", target_branch),
+        clone_into_existing_directory=False,
+        configure_identity=True,
+        identity=(BOT_NAME, BOT_EMAIL),
+        identity_runner=run_git_default,
+        run_process=subprocess.run,
+        url_builder=github_https_url,
     )
-    run_git_default(dest_dir, "config", "user.name", BOT_NAME)
-    run_git_default(dest_dir, "config", "user.email", BOT_EMAIL)
 
 
 def push_backport_branch(

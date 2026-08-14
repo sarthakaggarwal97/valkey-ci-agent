@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import difflib
 import hashlib
-import json
 import logging
 import os
 import subprocess
@@ -14,6 +13,7 @@ from typing import TYPE_CHECKING
 from scripts.ai.runtime import run_agent
 from scripts.backport.models import ConflictedFile, ResolutionResult
 from scripts.backport.utils import (
+    extract_jsonl_result_text,
     has_conflict_markers,
     is_whitespace_only_conflict,
 )
@@ -129,20 +129,11 @@ def _reviewer_diff(path: str, before: str, after: str) -> str | None:
 
 def _agent_result_text(stdout: str) -> str:
     """Extract Claude Code's final result text from its JSONL stream."""
-    result_text = ""
-    for line in stdout.strip().splitlines():
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if event.get("type") != "result" or "result" not in event:
-            continue
-        raw_result = event.get("result")
-        if isinstance(raw_result, str):
-            result_text = raw_result
-        elif raw_result is not None:
-            result_text = json.dumps(raw_result, sort_keys=True, default=str)
-    return result_text.strip()
+    return extract_jsonl_result_text(
+        stdout,
+        strip_result=True,
+        ignore_non_dict_events=False,
+    )
 
 
 def _build_prompt(

@@ -24,6 +24,13 @@ import tempfile
 from dataclasses import dataclass, field
 from typing import Any
 
+from scripts.backport.git import clone_repository
+from scripts.backport.project_graphql import (
+    build_project_query,
+    item_single_select_value,
+    load_project_v2,
+    project_owner_field,
+)
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.utils import (
     DEFAULT_BACKPORT_STATUS,
@@ -155,19 +162,19 @@ def _applied_prs_from_commit_bodies(repo_dir: str) -> set[int]:
 def _shallow_clone(
     repo_full_name: str, target_branch: str, dest_dir: str, git_env: dict[str, str]
 ) -> None:
-    subprocess.run(
-        [
-            "git", "clone",
+    clone_repository(
+        repo_full_name,
+        dest_dir,
+        git_env,
+        clone_args=(
             "--branch", target_branch,
             "--single-branch",
             f"--depth={_VERIFY_CLONE_DEPTH}",
-            github_https_url(repo_full_name),
-            dest_dir,
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=git_env,
+        ),
+        clone_into_existing_directory=False,
+        configure_identity=False,
+        run_process=subprocess.run,
+        url_builder=github_https_url,
     )
 
 
@@ -227,7 +234,7 @@ def mark_backport_items_done(
             continue
 
         found.add(number)
-        current_status = _item_single_select_value(item, status_field)
+        current_status = item_single_select_value(item, status_field)
         if _normalize(current_status) == _normalize(done_status):
             result.already_done.append(number)
             continue
@@ -295,7 +302,7 @@ def reconcile_project_board(
             continue
         if (content.get("repository") or {}).get("nameWithOwner") != source_repo:
             continue
-        if _normalize(_item_single_select_value(item, status_field)) != _normalize(from_status):
+        if _normalize(item_single_select_value(item, status_field)) != _normalize(from_status):
             continue
         number = content.get("number")
         if not isinstance(number, int):
@@ -384,36 +391,16 @@ def _load_project(
     project_number: int,
     project_owner_type: str,
 ) -> dict[str, Any]:
-    owner_field = "user" if project_owner_type == "user" else "organization"
-    query = _project_query(owner_field)
-    cursor = None
-    project_id = ""
-    fields: list[dict[str, Any]] = []
-    items: list[dict[str, Any]] = []
-
-    while True:
-        data = gql.execute(
-            query,
-            {"owner": project_owner, "number": project_number, "cursor": cursor},
-        )
-        project = (data.get(owner_field) or {}).get("projectV2")
-        if not project:
-            raise RuntimeError(f"Project {project_owner}/{project_number} not found")
-
-        project_id = project_id or str(project.get("id") or "")
-        if not fields:
-            fields = (project.get("fields") or {}).get("nodes") or []
-
-        page = project.get("items") or {}
-        items.extend(page.get("nodes") or [])
-        page_info = page.get("pageInfo") or {}
-        if not page_info.get("hasNextPage"):
-            break
-        cursor = page_info.get("endCursor")
-
-    if not project_id:
-        raise RuntimeError(f"Project {project_owner}/{project_number} has no id")
-    return {"id": project_id, "fields": fields, "items": items}
+    owner_field = project_owner_field(project_owner_type)
+    project = load_project_v2(
+        gql,
+        project_owner=project_owner,
+        project_number=project_number,
+        project_owner_type=project_owner_type,
+        query=_project_query(owner_field),
+        require_id=True,
+    )
+    return {"id": project.id, "fields": project.fields, "items": project.items}
 
 
 def _find_status_field_and_option(
@@ -438,15 +425,6 @@ def _find_status_field_and_option(
             f"Project status field {status_field!r} has no {done_status!r} option"
         )
     raise RuntimeError(f"Project has no single-select status field {status_field!r}")
-
-
-def _item_single_select_value(item: dict[str, Any], field_name: str) -> str:
-    for field_value in (item.get("fieldValues") or {}).get("nodes") or []:
-        if field_value.get("__typename") != "ProjectV2ItemFieldSingleSelectValue":
-            continue
-        if _normalize((field_value.get("field") or {}).get("name")) == _normalize(field_name):
-            return str(field_value.get("name") or "")
-    return ""
 
 
 def _set_project_item_status(
@@ -481,47 +459,7 @@ mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
 
 
 def _project_query(owner_field: str) -> str:
-    return f"""
-query($owner: String!, $number: Int!, $cursor: String) {{
-  {owner_field}(login: $owner) {{
-    projectV2(number: $number) {{
-      id
-      fields(first: 100) {{
-        nodes {{
-          __typename
-          ... on ProjectV2SingleSelectField {{
-            id
-            name
-            options {{ id name }}
-          }}
-        }}
-      }}
-      items(first: 100, after: $cursor) {{
-        pageInfo {{ hasNextPage endCursor }}
-        nodes {{
-          id
-          content {{
-            __typename
-            ... on PullRequest {{
-              number
-              repository {{ nameWithOwner }}
-            }}
-          }}
-          fieldValues(first: 50) {{
-            nodes {{
-              __typename
-              ... on ProjectV2ItemFieldSingleSelectValue {{
-                name
-                field {{ ... on ProjectV2FieldCommon {{ name }} }}
-              }}
-            }}
-          }}
-        }}
-      }}
-    }}
-  }}
-}}
-"""
+    return build_project_query(owner_field, "status")
 
 
 def main() -> None:

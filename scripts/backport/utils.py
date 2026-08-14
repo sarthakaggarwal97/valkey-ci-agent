@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 
@@ -25,6 +26,47 @@ def configure_cli_logging(verbose: bool) -> None:
 
 def normalize_project_value(value: object) -> str:
     return str(value or "").strip().lower()
+
+
+def escape_markdown_table_cell(
+    value: object,
+    *,
+    newline_replacement: str,
+    normalize_newlines: bool,
+    strip: bool,
+) -> str:
+    """Escape a table cell using the caller's existing whitespace policy."""
+    text = str(value)
+    if normalize_newlines:
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+    if strip:
+        text = text.strip()
+    return text.replace("|", "\\|").replace("\n", newline_replacement)
+
+
+def extract_jsonl_result_text(
+    stdout: str,
+    *,
+    strip_result: bool,
+    ignore_non_dict_events: bool,
+) -> str:
+    """Extract the last result event using a caller's legacy strictness."""
+    result_text = ""
+    for line in stdout.strip().splitlines():
+        try:
+            event = json.loads(line)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if ignore_non_dict_events and not isinstance(event, dict):
+            continue
+        if event.get("type") != "result" or "result" not in event:
+            continue
+        raw_result = event.get("result")
+        if isinstance(raw_result, str):
+            result_text = raw_result
+        elif raw_result is not None:
+            result_text = json.dumps(raw_result, sort_keys=True, default=str)
+    return result_text.strip() if strip_result else result_text
 
 
 def build_branch_name(source_pr_number: int, target_branch: str) -> str:

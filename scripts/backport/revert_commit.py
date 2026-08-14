@@ -10,7 +10,7 @@ import tempfile
 
 from github import Auth, Github
 
-from scripts.backport.main import _run_git as run_git_default
+from scripts.backport.git import run_pipeline_git as run_git_default
 from scripts.backport.sweep_git import BRANCH_PREFIX, clone_target_branch
 from scripts.backport.sweep_prs import find_existing_pr
 from scripts.backport.utils import configure_cli_logging
