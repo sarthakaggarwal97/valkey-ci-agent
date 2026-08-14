@@ -483,7 +483,9 @@ def _dispatch_build_once(
             f"`{tag}` directly (the [release trigger run]({output.url}) "
             f"did not succeed)."
         ),
-        dispatch_fn=lambda: _dispatch_build_release(gh, policy, tag),
+        dispatch_fn=lambda: _dispatch_build_release(
+            gh, policy, tag, status.candidate.sha,
+        ),
         run_exists_fn=lambda _c: _build_run_exists_for_tag(
             gh, policy, tag,
         ),
@@ -595,12 +597,19 @@ def _qual_run_exists(gh: Any, policy: RepoReleasePolicy, *, tag: str,
     return not exclude_run_id or getattr(found, "id", 0) != exclude_run_id
 
 
-def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str) -> None:
+def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str,
+                            source_sha: str) -> None:
     """Fire the automation repo's build workflow for *tag* in prod.
 
-    The inputs mirror the upstream release trigger exactly (it sends the
-    release's tag_name as its version), so the resulting run carries the
-    ``Build Release <tag> (prod)`` run-name the build-run verifier matches.
+    The version/environment inputs mirror the upstream release trigger
+    (it sends the release's tag_name as its version), so the resulting run
+    carries the ``Build Release <tag> (prod)`` run-name the build-run
+    verifier matches. ``source_sha`` (F6) additionally names the exact
+    candidate commit this build must represent, so the automation repo can
+    verify its checkout against the commit the controller vetted instead
+    of trusting the tag ref alone; the automation side treats the field as
+    optional for backward compatibility, so payloads without it (the
+    upstream trigger's) keep working.
 
     ``retries=1`` on the dispatch call: workflow_dispatch has no
     dispatch-echo id in its response, so a transient 5xx after the run
@@ -621,7 +630,9 @@ def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str) -> Non
     )
     dispatched = retry_github_call(
         lambda: workflow.create_dispatch(
-            repo.default_branch, inputs={"version": tag, "environment": "prod"},
+            repo.default_branch,
+            inputs={"version": tag, "environment": "prod",
+                    "source_sha": source_sha},
         ),
         retries=1, description="dispatch build-release run",
     )

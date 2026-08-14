@@ -324,6 +324,23 @@ def bot_binding(version: str = "9.1.1", stage: str = "ga", *,
     return bot_comment(f"{issue_mod.binding_marker(binding)}\nreceipt")
 
 
+def bot_receipt(tag: str = "9.1.1", sha: str = MERGE_SHA, *,
+                author: str = "valkeyrie-ops[bot]") -> MagicMock:
+    """A trusted publication receipt in the LEGACY field set (no plan
+    digest, no controller lines): exactly what the pre-F3 publish path
+    posted, and what prior releases' trackers (8.0.10, 9.0.6, the live
+    8.0.11) carry. Defaulting to this shape means every test using it also
+    proves the migration acceptance: marker presence plus tag/SHA match is
+    the whole requirement."""
+    return bot_comment(
+        f"{issue_mod.publication_receipt_marker()}\n"
+        f"Published **{tag}** at `{sha}` (publication approved by "
+        f"@madolson): https://x/releases/{tag}\n"
+        f"Downstream outputs are now observed by reconciliation.",
+        author=author,
+    )
+
+
 def repo_mock(*, branch_head: str = MERGE_SHA,
               pulls: "list[MagicMock] | None" = None,
               issues: "list[MagicMock] | None" = None,

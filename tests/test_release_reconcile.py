@@ -44,6 +44,7 @@ from tests.release_fixtures import (
     bot_adoption,
     bot_binding,
     bot_comment,
+    bot_receipt,
     check_run,
     gh_mock,
     make_policy,
@@ -162,9 +163,11 @@ class TestStartRelease:
 
     def test_duplicate_start_after_complete_release_demands_tracker_close(self) -> None:
         # Tag exists AND the release is COMPLETE-shaped: closing the
-        # tracker is the right (and only recommended) next step.
-        repo = repo_mock(issues=[tracker()], tags=["9.1.0", "9.1.1"],
-                         released=True)
+        # tracker is the right (and only recommended) next step. The
+        # tracker carries the publication receipt (F3): without it the
+        # release would read as unverified, not complete.
+        repo = repo_mock(issues=[tracker(comments=[bot_receipt()])],
+                         tags=["9.1.0", "9.1.1"], released=True)
         core = (_out("tarballs", OutputState.VERIFIED),)
         ordered = (_out("bundle", OutputState.VERIFIED),)
         p1, p2 = _patched_outputs(core, ordered)
@@ -699,13 +702,22 @@ def _out(name: str, state: OutputState) -> DownstreamOutput:
     return DownstreamOutput(name=name, state=state, detail=name)
 
 
+def _receipted_tracker(sha: str = MERGE_SHA) -> MagicMock:
+    """A tracker carrying the publication receipt for the observed release
+    (F3): published-state tests need one or the release quarantines as
+    unverified. The fixture receipt is legacy-shaped, so these tests also
+    pin the migration acceptance."""
+    return tracker(comments=[bot_receipt(sha=sha)])
+
+
 class TestPublishedPhases:
     def test_release_existing_enters_published_phase(self) -> None:
         core = (_out("tarballs", OutputState.PENDING),)
         ordered = (_out("bundle", OutputState.BLOCKED),)
         p1, p2 = _patched_outputs(core, ordered)
         with p1, p2:
-            status = _status(repo_mock(released=True))
+            status = _status(repo_mock(released=True),
+                             tracking_issue=_receipted_tracker())
         assert status.published
         assert status.phase is ReleasePhase.PUBLISHED
         assert status.release_url
@@ -717,7 +729,8 @@ class TestPublishedPhases:
         core = (_out("tarballs", OutputState.VERIFIED),)
         p1, p2 = _patched_outputs(core, ())
         with p1, p2 as ordered:
-            _status(repo_mock(released=True))
+            _status(repo_mock(released=True),
+                    tracking_issue=_receipted_tracker())
         assert ordered.call_args.kwargs["published_at"] == AFTER_TRACKER
 
     def test_core_settled_moves_to_bundle_helm(self) -> None:
@@ -725,7 +738,8 @@ class TestPublishedPhases:
         ordered = (_out("bundle", OutputState.PENDING),)
         p1, p2 = _patched_outputs(core, ordered)
         with p1, p2:
-            status = _status(repo_mock(released=True))
+            status = _status(repo_mock(released=True),
+                             tracking_issue=_receipted_tracker())
         assert status.phase is ReleasePhase.BUNDLE_HELM
 
     def test_everything_settled_is_complete(self) -> None:
@@ -734,13 +748,14 @@ class TestPublishedPhases:
                    _out("helm", OutputState.SKIPPED))
         p1, p2 = _patched_outputs(core, ordered)
         with p1, p2:
-            status = _status(repo_mock(released=True))
+            status = _status(repo_mock(released=True),
+                             tracking_issue=_receipted_tracker())
         assert status.phase is ReleasePhase.COMPLETE
 
     def test_wrong_prerelease_flag_blocks(self) -> None:
         repo = repo_mock(released=True)
         repo.get_release.return_value.prerelease = True  # but stage is ga
-        status = _status(repo)
+        status = _status(repo, tracking_issue=_receipted_tracker())
         assert status.published
         assert any("prerelease flag" in blocker for blocker in status.blockers)
 
@@ -754,7 +769,8 @@ class TestPublishedPhases:
         core = (_out("tarballs", OutputState.PENDING),)
         p1, p2 = _patched_outputs(core, ())
         with p1, p2:
-            status = _status(repo_mock(released=True, branch_head=MOVED_SHA))
+            status = _status(repo_mock(released=True, branch_head=MOVED_SHA),
+                             tracking_issue=_receipted_tracker())
         assert status.published
         assert status.candidate.state is CandidateState.CURRENT
         assert status.candidate.sha == MERGE_SHA  # the tag's commit
@@ -806,13 +822,14 @@ class TestPublishedTagTrust:
         p1, p2 = _patched_outputs(core, ())
         with p1, p2:
             status = _status(self._released_repo(MERGE_SHA),
-                             tracking_issue=tracker())
+                             tracking_issue=_receipted_tracker())
         assert status.tag_trusted
         assert status.alerts == ()
         assert status.phase is ReleasePhase.COMPLETE
 
     def test_tag_at_an_owner_adopted_sha_stays_clean(self) -> None:
-        issue = tracker(comments=[bot_adoption(MOVED_SHA)])
+        issue = tracker(comments=[bot_adoption(MOVED_SHA),
+                                  bot_receipt(sha=MOVED_SHA)])
         core = (DownstreamOutput(name="tarballs", state=OutputState.PENDING),)
         p1, p2 = _patched_outputs(core, ())
         with p1, p2:
@@ -828,6 +845,138 @@ class TestPublishedTagTrust:
         status = _status(self._released_repo(self._HOSTILE_SHA))
         assert not status.tag_trusted
         assert issue_mod.has_failures(status)
+
+
+class TestPublicationReceipt:
+    """F3: an observed release must match the publish path's publication
+    receipt (a trusted-author marker comment recording the exact tag+SHA)
+    before published verification starts. No receipt, or a receipt naming
+    a different tag or SHA, quarantines the release pre-published: a
+    standing alert, no downstream verification, and a phase on which
+    advance() dispatches nothing."""
+
+    _UNRECEIPTED_ALERT = (
+        "Release `9.1.1` exists without a controller publication receipt; "
+        "treating as unverified. If this was a legitimate publish whose "
+        "receipt write crashed, re-run the publish workflow to resume; an "
+        "out-of-band release should be investigated."
+    )
+
+    def test_unreceipted_release_quarantines_with_the_alert(self) -> None:
+        # The core attack: a release appears with no receipt on the
+        # tracker. Published verification must never start and the phase
+        # must stay pre-published so downstream dispatch never fires.
+        core_verifier = MagicMock()
+        with patch("scripts.release.reconcile.verify_mod.verify_core_outputs",
+                   core_verifier):
+            status = _status(repo_mock(released=True),
+                             tracking_issue=tracker())
+        assert status.published  # the release exists...
+        assert status.phase is ReleasePhase.CANDIDATE  # ...but pre-published
+        assert status.alerts == (self._UNRECEIPTED_ALERT,)
+        assert status.blockers == (self._UNRECEIPTED_ALERT,)
+        core_verifier.assert_not_called()
+        assert status.outputs == ()
+        # The alert routes through needs-attention and the one-shot
+        # notification like every other standing alert.
+        assert issue_mod.has_failures(status)
+
+    def test_no_tracker_reads_as_unreceipted(self) -> None:
+        # Without a tracker there is nowhere a receipt could live, so the
+        # release fails closed exactly like the unreceipted case.
+        core_verifier = MagicMock()
+        with patch("scripts.release.reconcile.verify_mod.verify_core_outputs",
+                   core_verifier):
+            status = _status(repo_mock(released=True))
+        assert status.phase is ReleasePhase.CANDIDATE
+        assert status.alerts == (self._UNRECEIPTED_ALERT,)
+        core_verifier.assert_not_called()
+
+    def test_receipted_release_proceeds_to_verification(self) -> None:
+        core = (_out("tarballs", OutputState.VERIFIED),)
+        ordered = (_out("bundle", OutputState.VERIFIED),)
+        p1, p2 = _patched_outputs(core, ordered)
+        with p1, p2:
+            status = _status(repo_mock(released=True),
+                             tracking_issue=_receipted_tracker())
+        assert status.alerts == ()
+        assert status.phase is ReleasePhase.COMPLETE
+
+    def test_sha_mismatched_receipt_alerts_naming_the_mismatch(self) -> None:
+        # A receipt exists but records a different SHA than the tag points
+        # at: the same quarantine, with the alert naming both sides.
+        core_verifier = MagicMock()
+        issue = tracker(comments=[bot_receipt(sha=MOVED_SHA)])
+        with patch("scripts.release.reconcile.verify_mod.verify_core_outputs",
+                   core_verifier):
+            status = _status(repo_mock(released=True), tracking_issue=issue)
+        assert status.phase is ReleasePhase.CANDIDATE
+        assert len(status.alerts) == 1
+        alert = status.alerts[0]
+        assert "controller publication receipt" in alert
+        assert f"`{MOVED_SHA[:12]}`" in alert  # what the receipt records
+        assert f"`{MERGE_SHA[:12]}`" in alert  # what the release tag pins
+        core_verifier.assert_not_called()
+        assert status.outputs == ()
+
+    def test_tag_mismatched_receipt_alerts(self) -> None:
+        issue = tracker(comments=[bot_receipt(tag="9.1.0")])
+        status = _status(repo_mock(released=True), tracking_issue=issue)
+        assert status.phase is ReleasePhase.CANDIDATE
+        assert any("records `9.1.0`" in a for a in status.alerts)
+
+    def test_receipt_from_untrusted_author_does_not_count(self) -> None:
+        # A forged receipt pasted by anyone outside the trusted bot set is
+        # invisible, exactly like every other marker read-back.
+        issue = tracker(comments=[bot_receipt(author="drive-by")])
+        status = _status(repo_mock(released=True), tracking_issue=issue)
+        assert status.phase is ReleasePhase.CANDIDATE
+        assert status.alerts == (self._UNRECEIPTED_ALERT,)
+
+    def test_legacy_field_receipt_is_accepted(self) -> None:
+        # MIGRATION: receipts posted by the pre-F3 code (8.0.10, 9.0.6,
+        # the live 8.0.11 tracker) carry only the marker and the carrier
+        # line: no plan digest, no controller lines. They must keep
+        # verifying so live trackers do not regress. bot_receipt IS that
+        # legacy shape; this test pins the guarantee explicitly.
+        core = (_out("tarballs", OutputState.PENDING),)
+        p1, p2 = _patched_outputs(core, ())
+        with p1, p2:
+            status = _status(repo_mock(released=True),
+                             tracking_issue=_receipted_tracker())
+        assert status.alerts == ()
+        assert status.phase is ReleasePhase.PUBLISHED
+
+    def test_new_field_receipt_is_accepted(self) -> None:
+        # The current publish path appends digest and controller lines
+        # after the carrier line; the verifier reads only the carrier.
+        body = (
+            f"{issue_mod.publication_receipt_marker()}\n"
+            f"Published **9.1.1** at `{MERGE_SHA}` (publication approved "
+            f"by @madolson): https://x/releases/9.1.1\n"
+            f"Plan digest: `{'0' * 64}`\n"
+            f"Controller commit: `{'f' * 40}`\n"
+            f"Controller run: https://x/actions/runs/9\n"
+            f"Downstream outputs are now observed by reconciliation."
+        )
+        issue = tracker(comments=[bot_comment(body)])
+        core = (_out("tarballs", OutputState.PENDING),)
+        p1, p2 = _patched_outputs(core, ())
+        with p1, p2:
+            status = _status(repo_mock(released=True), tracking_issue=issue)
+        assert status.alerts == ()
+        assert status.phase is ReleasePhase.PUBLISHED
+
+    def test_untrusted_tag_alert_takes_precedence_over_the_receipt_check(self) -> None:
+        # A tag at a never-vetted SHA is the more fundamental failure and
+        # keeps its existing alert; the receipt check only runs for a
+        # trusted tag.
+        repo = repo_mock(released=True)
+        repo.get_git_ref.return_value.object.sha = "c" * 40
+        status = _status(repo, tracking_issue=tracker())
+        assert not status.tag_trusted
+        assert len(status.alerts) == 1
+        assert "never a trusted candidate" in status.alerts[0]
 
 
 class TestReconcileBranch:
@@ -1648,7 +1797,7 @@ class TestBranchDeletedAfterPublication:
         # required against a deleted branch).
         issue = tracker(comments=[bot_binding(
             "9.1.1", "ga", notes_pr_number=42, merge_sha=MERGE_SHA,
-        )])
+        ), bot_receipt()])
         repo = repo_mock(released=True, issues=[issue])
         repo.get_branch.side_effect = GithubException(404, "no such branch", {})
 

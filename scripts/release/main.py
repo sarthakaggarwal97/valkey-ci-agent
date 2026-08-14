@@ -349,6 +349,9 @@ def _run_publish(gh: Any, gh_downstream: Any, agent_repo: str,
         gh, policy, branch=args.branch, actor=args.actor,
         expected_tag=args.expected_tag, expected_sha=args.expected_sha,
         expected_digest=args.expected_digest, controller_sha=controller_sha,
+        # Recorded on the publication receipt so the write can be traced
+        # to the exact controller run; "" outside Actions omits the line.
+        run_url=_actions_run_url(),
         gh_downstream=gh_downstream,
     )
     logger.info("Published: %s", url)

@@ -650,7 +650,10 @@ def _published_status(
     recorded on the tracker. Any other commit means the tag was created (or
     moved) outside the controller; that alerts loudly, blocks completion,
     and skips downstream verification so no untrusted artifact is pushed
-    further downstream.
+    further downstream. Beyond the tag, the release itself must carry the
+    publish path's publication receipt (F3): a release with no matching
+    trusted receipt is quarantined pre-published, again with no downstream
+    verification.
     """
     tag_sha = resolve_tag_commit(repo, tag)
     trusted_shas = {sha for sha in (notes_pr.merge_commit_sha,) if sha}
@@ -690,6 +693,54 @@ def _published_status(
         )
         return ReleaseStatus(
             phase=ReleasePhase.PUBLISHED,
+            blockers=(alert,),
+            alerts=(alert,),
+            **base,
+        )
+
+    # F3: a trusted tag is necessary but not sufficient. The protected
+    # publish path posts a publication receipt on the tracker as its
+    # write-side record; a release with no trusted receipt matching the
+    # observed tag+SHA was created out of band (or the publish crashed
+    # before the receipt write, which a publish-workflow re-run repairs by
+    # resuming and posting the receipt). Either way, published
+    # verification never starts and the phase stays pre-published
+    # (CANDIDATE: the one pre-published phase advance() dispatches nothing
+    # on), so no downstream dispatch or verification touches an unverified
+    # release. Receipts lacking the newer digest/controller fields (posted
+    # before those fields existed: 8.0.10, 9.0.6, the live 8.0.11 tracker)
+    # verify identically: marker presence plus tag/SHA match is the whole
+    # requirement. KNOWN LIMIT: comments are editable by repo writers, so
+    # the receipt raises the bar against out-of-band releases rather than
+    # being a capability boundary; the ledger redesign is the real fix.
+    receipt = (issue_mod.read_publication_receipt(tracking_issue, gh)
+               if tracking_issue is not None else None)
+    if receipt is None:
+        alert = (
+            f"Release `{tag}` exists without a controller publication "
+            f"receipt; treating as unverified. If this was a legitimate "
+            f"publish whose receipt write crashed, re-run the publish "
+            f"workflow to resume; an out-of-band release should be "
+            f"investigated."
+        )
+        return ReleaseStatus(
+            phase=ReleasePhase.CANDIDATE,
+            blockers=(alert,),
+            alerts=(alert,),
+            **base,
+        )
+    receipt_tag, receipt_sha = receipt
+    if receipt_tag != tag or receipt_sha != tag_sha.lower():
+        alert = (
+            f"Release `{tag}` exists but the controller publication receipt "
+            f"records `{receipt_tag or '<unparseable>'}` at "
+            f"`{receipt_sha[:12] or '<unparseable>'}` while the release tag "
+            f"points at `{tag_sha[:12]}`; treating as unverified. An "
+            f"out-of-band release, or a receipt from a different publish, "
+            f"should be investigated."
+        )
+        return ReleaseStatus(
+            phase=ReleasePhase.CANDIDATE,
             blockers=(alert,),
             alerts=(alert,),
             **base,

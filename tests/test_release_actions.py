@@ -224,8 +224,12 @@ class TestAutoDispatchBuildRelease:
                                     status=self._failed_trigger_status(),
                                     tracking_issue=issue)
         repo.get_workflow.assert_any_call("build-release.yml")
+        # F6: the payload carries source_sha (the exact candidate commit)
+        # so the automation repo can verify its checkout against the
+        # commit the controller vetted, not just the tag ref.
         repo.get_workflow.return_value.create_dispatch.assert_called_once_with(
-            "main", inputs={"version": "9.1.1", "environment": "prod"},
+            "main", inputs={"version": "9.1.1", "environment": "prod",
+                            "source_sha": MERGE_SHA},
         )
         fingerprint = hashlib.sha256(MERGE_SHA.encode("utf-8")).hexdigest()[:12]
         bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
@@ -248,7 +252,8 @@ class TestAutoDispatchBuildRelease:
                         status=self._failed_trigger_status(version="9.2.0", stage="rc1"),
                         tracking_issue=tracker())
         repo.get_workflow.return_value.create_dispatch.assert_called_once_with(
-            "main", inputs={"version": "9.2.0-rc1", "environment": "prod"},
+            "main", inputs={"version": "9.2.0-rc1", "environment": "prod",
+                            "source_sha": MERGE_SHA},
         )
 
     def test_marked_candidate_never_dispatches_again(self) -> None:

@@ -140,36 +140,42 @@ def _ref_matches(ref: str, patterns: "list[str]") -> bool:
 
 
 def _ruleset_rules_cover_immutability(ruleset: "dict[str, Any]") -> bool:
-    """Whether the ruleset's rules actually forbid moving and deleting the tag.
+    """Whether the rules forbid creating, moving, AND deleting the tag.
 
     A ruleset that matches the ref but carries no ``deletion`` rule and no
     ``update``/``non_fast_forward`` rule restricts nothing we rely on: the
     tag could still be moved or deleted despite the ruleset "covering" it.
+    A ``creation`` rule is required as well (F4): without it any writer
+    can still pre-create the release tag at an arbitrary commit, which is
+    exactly the tag-snipe the publish path defends against, so claiming
+    the tag namespace is protected would overstate what was verified.
     """
     rule_types = {
         rule.get("type") for rule in (ruleset.get("rules") or [])
         if isinstance(rule, dict)
     }
-    return "deletion" in rule_types and (
-        "update" in rule_types or "non_fast_forward" in rule_types
-    )
+    return ("deletion" in rule_types and "creation" in rule_types and
+            ("update" in rule_types or "non_fast_forward" in rule_types))
 
 
 def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
     """Whether an active tag ruleset protects ``refs/tags/{tag}``.
 
     True when an active ruleset targeting tags includes the ref, does not
-    exclude it, actually carries deletion plus update (or non_fast_forward)
-    rules, and grants no bypass to a GitHub App. A matching ruleset without
-    those rules restricts nothing and counts as unprotected. A bypass actor
-    of type Integration is treated as unprotected-for-us: the publishing
-    identity is itself a GitHub App, so an App bypass may be exactly the
-    actor whose writes the ruleset is supposed to constrain. When a
-    matching ruleset's bypass data is not visible the verdict degrades to
-    None (unknown) instead of claiming protection. False when no ruleset
-    qualifies; None when the API could not answer (rulesets endpoint
-    unavailable, insufficient scope). The approval evidence treats None
-    like False: never claim immutability that was not verified.
+    exclude it, actually carries creation plus deletion plus update (or
+    non_fast_forward) rules, and grants no bypass to ANY actor. A matching
+    ruleset without those rules restricts nothing and counts as
+    unprotected. Any bypass actor defeats the claim regardless of
+    actor_type or bypass_mode (F4): an Integration bypass may be exactly
+    the publishing App whose writes the ruleset is supposed to constrain,
+    and a human bypass (Team, RepositoryRole, OrganizationAdmin, User)
+    means people can still move or delete the tag, so "immutable" would
+    overstate what was verified. When a matching ruleset's bypass data is
+    not visible the verdict degrades to None (unknown) instead of
+    claiming protection. False when no ruleset qualifies; None when the
+    API could not answer (rulesets endpoint unavailable, insufficient
+    scope). The approval evidence treats None like False: never claim
+    immutability that was not verified.
     """
     ref = f"refs/tags/{tag}"
     bypass_unknown = False
@@ -190,11 +196,10 @@ def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
             if not _ruleset_rules_cover_immutability(ruleset):
                 continue  # matches the ref but restricts nothing we rely on
             if "bypass_actors" not in ruleset:
-                bypass_unknown = True  # cannot rule out an App bypass
+                bypass_unknown = True  # cannot rule out a bypass
                 continue
-            if any(isinstance(actor, dict) and actor.get("actor_type") == "Integration"
-                   for actor in ruleset.get("bypass_actors") or []):
-                continue  # an App can bypass: unprotected-for-us
+            if ruleset.get("bypass_actors"):
+                continue  # ANY bypass actor: unprotected-for-us (F4)
             return True
         return None if bypass_unknown else False
     except Exception:
@@ -304,26 +309,38 @@ def _require_resumed_readiness(
     gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus, *,
     tag: str, sha: str,
 ) -> ReleaseStatus:
-    """F5: a resume of the tag-claim stage must still prove readiness.
+    """F5: a resume of a crashed publish must still prove readiness.
 
     compute_status reports the tag-without-release state as an unshippable
-    stray-tag alert and stops before evaluating qualification, so a
-    legitimate resume can never present phase READY. Readiness is
-    re-established here instead: nothing beyond that one expected alert
-    may block, and the qualification evidence for exactly this tag+SHA is
-    re-evaluated live and must have passed. Anything less refuses, so a
-    pre-created tag with no (or failed, or still-running) qualification
-    evidence never yields an approvable plan. Returns the status with the
-    live qualification substituted, so the plan (and its digest) binds the
-    real run id rather than 0.
+    stray-tag alert (and the release-without-receipt state as an
+    unreceipted quarantine) and stops before evaluating qualification, so
+    a legitimate resume can never present phase READY. Readiness is
+    re-established here instead: nothing beyond those expected
+    crash-artifact alerts may block, and the qualification evidence for
+    exactly this tag+SHA is re-evaluated live and must have passed.
+    Anything less refuses, so a pre-created tag with no (or failed, or
+    still-running) qualification evidence never yields an approvable
+    plan. Returns the status with the live qualification substituted, so
+    the plan (and its digest) binds the real run id rather than 0.
     """
-    # The one blocker a legitimate resume always carries is reconcile.py's
-    # stray-tag alert for this tag; the prefix omits the SHA because the
-    # caller already proved the tag sits at the candidate. Any other
-    # blocker (invalidated candidate, stale daily gate, lookalike alert)
-    # is a real readiness gap and refuses.
+    # The blockers a legitimate resume can carry are reconcile.py's
+    # stray-tag alert for this tag (crash between STAGE 1 and STAGE 2:
+    # tag exists, no release; the prefix omits the SHA because the caller
+    # already proved the tag sits at the candidate) and the
+    # unreceipted-release alert (crash between STAGE 2 and the receipt
+    # write: release exists, receipt missing; re-running publish IS the
+    # documented recovery, and the resume posts the receipt). The
+    # receipt-MISMATCH alert ("...exists but the controller publication
+    # receipt records...") deliberately does not match either prefix: a
+    # receipt naming a different tag or SHA is not our crash to resume.
+    # Any other blocker (invalidated candidate, stale daily gate,
+    # lookalike alert) is a real readiness gap and refuses.
     stray_tag_prefix = f"Tag `{tag}` exists"
-    problems = [b for b in status.blockers if not b.startswith(stray_tag_prefix)]
+    unreceipted_prefix = (
+        f"Release `{tag}` exists without a controller publication receipt"
+    )
+    problems = [b for b in status.blockers
+                if not b.startswith((stray_tag_prefix, unreceipted_prefix))]
     qualification = qual_mod.evaluate_qualification(gh, policy, tag=tag, sha=sha)
     if not qualification.passed:
         if qualification.pending:
@@ -348,6 +365,7 @@ def _require_resumed_readiness(
 def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: str,
                     expected_tag: str = "", expected_sha: str = "",
                     expected_digest: str = "", controller_sha: str = "",
+                    run_url: str = "",
                     gh_downstream: Any = None) -> str:
     """Revalidate everything and publish the release at the candidate SHA.
 
@@ -360,7 +378,10 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
     recomputed plan's canonical digest, binding every remaining plan
     dimension (release flags, body, qualification run, tag-protection
     verdict, controller code); absent means a legacy caller and only the
-    tag/SHA bindings apply. Returns the release URL. Publication fires the
+    tag/SHA bindings apply. ``run_url`` (the executing workflow run, ""
+    outside Actions) is recorded on the publication receipt so the
+    publication can be traced to the exact controller run. Returns the
+    release URL. Publication fires the
     production build dispatch; there is deliberately no dry-run on this
     path (use :func:`plan_publication`).
 
@@ -454,7 +475,8 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
     # differed from the wire outcome -- surfaces here as a CRITICAL error.
     _verify_latest_pointer_matches_plan(repo, plan)
 
-    _post_publication_receipt(gh, repo, plan, actor, release.html_url)
+    _post_publication_receipt(gh, repo, plan, actor, release.html_url,
+                              run_url=run_url)
     return release.html_url
 
 
@@ -497,11 +519,12 @@ def _ensure_tag_at_sha(repo: Any, plan: "PublishPlan") -> None:
     raise _tag_snipe_error(plan.tag, existing_sha, plan.sha)
 
 
-_PUBLICATION_MARKER = f"<!-- {issue_mod.MARKER_NAMESPACE}:publication-receipt -->"
+_PUBLICATION_MARKER = issue_mod.publication_receipt_marker()
 
 
 def _post_publication_receipt(gh: Any, repo: Any, plan: "PublishPlan",
-                              actor: str, release_url: str) -> None:
+                              actor: str, release_url: str,
+                              run_url: str = "") -> None:
     """Idempotently post the publication receipt on the tracker.
 
     A partial publish that reached STAGE 2 (release created) but crashed
@@ -509,20 +532,40 @@ def _post_publication_receipt(gh: Any, repo: Any, plan: "PublishPlan",
     receipt would double-notify the tracker and leave the trail confusing.
     We look up an existing receipt marker (trusted-comments only, so a
     forged copy from a random account is ignored) and skip if present.
+
+    The receipt is also reconciliation's read-side proof that this release
+    was controller-published (F3): _published_status refuses to enter
+    published verification for a release whose tracker carries no trusted
+    receipt matching the observed tag+SHA. The carrier line records that
+    tag+SHA; the digest and controller lines bind the approved plan and
+    the exact controller commit/run that executed the write, as evidence
+    for a human tracing the publication. Those extra fields are optional
+    on read-back (receipts from before they existed must keep verifying),
+    so the carrier line's shape is deliberately unchanged. KNOWN LIMIT:
+    comments are editable by repo writers, so the receipt raises the bar
+    against out-of-band releases rather than being a capability boundary;
+    the ledger redesign is the real fix.
     """
     tracking_issue = _get_issue(repo, plan.issue_number)
     if issue_mod.has_marker(tracking_issue, _PUBLICATION_MARKER, gh):
         logger.info("Publication receipt for %s already posted; skipping",
                     plan.tag)
         return
+    lines = [
+        _PUBLICATION_MARKER,
+        f"Published **{plan.tag}** at `{plan.sha}` "
+        f"(publication approved by @{actor}): {release_url}",
+        f"Plan digest: `{plan_digest(plan)}`",
+    ]
+    # "" outside Actions: omit the lines rather than record empty values.
+    if plan.controller_sha:
+        lines.append(f"Controller commit: `{plan.controller_sha}`")
+    if run_url:
+        lines.append(f"Controller run: {run_url}")
+    lines.append("Downstream outputs are now observed by reconciliation.")
     issue_mod.post_comment(
         tracking_issue,
-        (
-            f"{_PUBLICATION_MARKER}\n"
-            f"Published **{plan.tag}** at `{plan.sha}` "
-            f"(publication approved by @{actor}): {release_url}\n"
-            f"Downstream outputs are now observed by reconciliation."
-        ),
+        "\n".join(lines),
         "record publication on tracker",
     )
 
@@ -616,8 +659,9 @@ def render_plan_summary(plan: PublishPlan, *, controller_sha: str = "") -> str:
     """
     if plan.tag_protected:
         protection_line = (
-            "> The created tag is ruleset-protected and cannot be moved or "
-            "deleted."
+            "> The created tag is ruleset-protected: tag creation, update, "
+            "and deletion are restricted and no bypass actors are "
+            "configured, so it cannot be moved or deleted."
         )
     else:
         protection_line = (

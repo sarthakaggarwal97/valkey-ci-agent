@@ -28,6 +28,7 @@ from scripts.release.publish import (
 from scripts.release.reconcile import ReleaseControlError
 from tests.release_fixtures import (
     MERGE_SHA,
+    bot_receipt,
     gh_mock,
     make_policy,
     notes_pr,
@@ -507,6 +508,87 @@ class TestTagCreationRace:
             assert _PUBLICATION_MARKER not in call.kwargs.get("body", "")
 
 
+class TestPublicationReceiptContent:
+    """F3 write side: the receipt records the tag/SHA carrier line (the
+    field the verifier requires) plus the plan digest and the controller
+    commit/run that executed the write (evidence for a human; optional on
+    read-back so legacy receipts keep verifying)."""
+
+    def _receipt_body(self, repo: MagicMock) -> str:
+        bodies = [
+            call.kwargs.get("body", "")
+            for call in repo.get_issue.return_value.create_comment.call_args_list
+            if _PUBLICATION_MARKER in call.kwargs.get("body", "")
+        ]
+        assert len(bodies) == 1
+        return bodies[0]
+
+    def test_receipt_records_digest_controller_and_run(self) -> None:
+        repo = _publishable_repo()
+        publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                        actor="madolson", expected_tag="9.1.1",
+                        expected_sha=MERGE_SHA, controller_sha="f" * 40,
+                        run_url="https://x/actions/runs/9")
+        receipt = self._receipt_body(repo)
+        assert f"Published **9.1.1** at `{MERGE_SHA}`" in receipt
+        assert re.search(r"Plan digest: `[0-9a-f]{64}`", receipt)
+        assert f"Controller commit: `{'f' * 40}`" in receipt
+        assert "Controller run: https://x/actions/runs/9" in receipt
+
+    def test_receipt_omits_controller_lines_outside_actions(self) -> None:
+        # controller_sha and run_url are "" outside Actions: the lines are
+        # omitted rather than recording empty values; the digest is always
+        # computable and always recorded.
+        repo = _publishable_repo()
+        publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                        actor="madolson", expected_tag="9.1.1",
+                        expected_sha=MERGE_SHA)
+        receipt = self._receipt_body(repo)
+        assert "Plan digest: `" in receipt
+        assert "Controller commit:" not in receipt
+        assert "Controller run:" not in receipt
+
+
+class TestUnreceiptedReleaseResume:
+    """F3 resume seam: a publish that crashed after creating the release
+    but before the receipt write leaves reconcile reporting the
+    unreceipted-release alert. Re-running the publish workflow is the
+    documented recovery, so that ONE alert must not refuse the resume;
+    a receipt naming a different SHA is not our crash and still refuses."""
+
+    def _crashed_after_release_repo(self, tracking: MagicMock) -> MagicMock:
+        repo = _ready_repo()
+        repo.get_issues.return_value = [tracking]
+        # The crash left the world with the tag at the approved SHA AND
+        # the release created, but no receipt on the tracker.
+        repo.get_git_ref.side_effect = None
+        repo.get_git_ref.return_value = tag_ref()
+        repo.get_release.side_effect = None
+        repo.get_release.return_value = MagicMock(
+            prerelease=False, draft=False,
+            html_url="https://x/releases/9.1.1", published_at=None)
+        return repo
+
+    def test_unreceipted_release_at_the_candidate_resumes_planning(self) -> None:
+        repo = self._crashed_after_release_repo(tracker())
+        plan = plan_publication(gh_mock(repo), _POLICY, branch="9.1",
+                                actor="madolson")
+        assert plan.tag == "9.1.1"
+        assert plan.sha == MERGE_SHA
+        # F5 still holds on this resume: the plan binds the re-proven
+        # qualification run, never run_id 0.
+        assert plan.qualification_run_id == 900
+
+    def test_sha_mismatched_receipt_refuses_the_resume(self) -> None:
+        # A receipt recording a DIFFERENT SHA is evidence of another
+        # publish (or tampering), not of our crash: never resumable.
+        repo = self._crashed_after_release_repo(
+            tracker(comments=[bot_receipt(sha="d" * 40)]))
+        with pytest.raises(ReleaseControlError, match="not READY"):
+            plan_publication(gh_mock(repo), _POLICY, branch="9.1",
+                             actor="madolson")
+
+
 class TestResumeRequiresReadiness:
     """F5: a same-SHA tag excuses exactly one refusal, the TAG-EXISTS
     check (STAGE 1 of a crashed publish already claimed the tag). It must
@@ -959,11 +1041,11 @@ def _ruleset_repo(rulesets: "list[dict]", details: "dict[int, dict]") -> MagicMo
     return repo
 
 
-_FULL_RULES = [{"type": "deletion"}, {"type": "update"}]
+_FULL_RULES = [{"type": "deletion"}, {"type": "update"}, {"type": "creation"}]
 
 
 class TestTagRulesetProbe:
-    def test_active_tag_ruleset_with_full_rules_is_protected(self) -> None:
+    def test_full_rules_with_zero_bypasses_is_protected(self) -> None:
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
@@ -977,17 +1059,22 @@ class TestTagRulesetProbe:
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
                                              "exclude": []}},
-                 "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
+                 "rules": [{"type": "deletion"}, {"type": "non_fast_forward"},
+                           {"type": "creation"}],
                  "bypass_actors": []}},
         )
         assert tag_ruleset_protected(repo, "9.1.1") is True
 
     # A matching ruleset with no deletion/update rules restricts nothing,
-    # and a deletion rule alone still lets the tag be MOVED: immutability
-    # needs both halves, so neither may claim protection.
+    # a deletion rule alone still lets the tag be MOVED, and deletion plus
+    # update without a creation rule still lets any writer PRE-CREATE the
+    # release tag (the snipe): protection needs all three halves.
     @pytest.mark.parametrize("rules", [
         pytest.param([], id="ruleless"),
         pytest.param([{"type": "deletion"}], id="deletion-alone"),
+        pytest.param([{"type": "deletion"}, {"type": "update"}],
+                     id="missing-creation-rule"),
+        pytest.param([{"type": "creation"}], id="creation-alone"),
     ])
     def test_insufficient_rules_are_not_protected(self, rules: list) -> None:
         repo = _ruleset_repo(
@@ -1008,6 +1095,26 @@ class TestTagRulesetProbe:
                  "rules": _FULL_RULES,
                  "bypass_actors": [{"actor_id": 5, "actor_type": "Integration",
                                     "bypass_mode": "always"}]}},
+        )
+        assert tag_ruleset_protected(repo, "9.1.1") is False
+
+    # F4: HUMAN bypasses defeat the claim too. A Team, role, org-admin, or
+    # user bypass means people can still create, move, or delete the tag,
+    # so "immutable" would overstate what was verified: any bypass actor
+    # fails closed, regardless of actor_type or bypass_mode.
+    @pytest.mark.parametrize("actor_type", [
+        "Team", "RepositoryRole", "OrganizationAdmin", "User",
+    ])
+    @pytest.mark.parametrize("bypass_mode", ["always", "pull_request"])
+    def test_any_bypass_actor_defeats_the_claim(self, actor_type: str,
+                                                bypass_mode: str) -> None:
+        repo = _ruleset_repo(
+            [{"id": 1, "target": "tag", "enforcement": "active"}],
+            {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
+                                             "exclude": []}},
+                 "rules": _FULL_RULES,
+                 "bypass_actors": [{"actor_id": 9, "actor_type": actor_type,
+                                    "bypass_mode": bypass_mode}]}},
         )
         assert tag_ruleset_protected(repo, "9.1.1") is False
 
@@ -1053,10 +1160,14 @@ class TestTagRulesetProbe:
 
 
 class TestPlanSummaryHonesty:
-    def test_protected_tag_states_verified_immutability(self) -> None:
+    def test_protected_tag_states_only_the_strengthened_claim(self) -> None:
+        # F4: the protected claim now names exactly what the probe
+        # verified: creation, update, and deletion restrictions with zero
+        # bypass actors.
         summary = render_plan_summary(_plan(tag_protected=True))
-        assert ("The created tag is ruleset-protected and cannot be moved "
-                "or deleted.") in summary
+        assert ("The created tag is ruleset-protected: tag creation, update, "
+                "and deletion are restricted and no bypass actors are "
+                "configured, so it cannot be moved or deleted.") in summary
         assert "NOT ruleset-protected" not in summary
         assert "creates the release tag" in summary
         assert "cannot be moved or deleted. Verify" not in summary
@@ -1068,7 +1179,7 @@ class TestPlanSummaryHonesty:
         assert ("**WARNING:** The created tag is NOT ruleset-protected in "
                 "this repository; extend tag protection before relying on "
                 "immutability.") in summary
-        assert "ruleset-protected and cannot be moved" not in summary
+        assert "ruleset-protected: tag creation" not in summary
 
     def test_controller_sha_is_in_the_checklist_when_provided(self) -> None:
         summary = render_plan_summary(_plan(), controller_sha="f" * 40)

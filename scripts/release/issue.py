@@ -146,6 +146,47 @@ def closed_warning_marker() -> str:
     return marker("closed-warning")
 
 
+def publication_receipt_marker() -> str:
+    """The marker on the protected publish path's publication receipt."""
+    return marker("publication-receipt")
+
+
+# The receipt's carrier line, exactly as _post_publication_receipt writes it
+# (and as every receipt already on a live tracker carries it): the tag and
+# the full 40-char SHA the protected publish actually wrote. The newer
+# digest/controller lines are human evidence and deliberately NOT required
+# here, so receipts posted before those fields existed (8.0.10, 9.0.6, the
+# live 8.0.11 tracker) verify identically and live trackers do not regress.
+_PUBLICATION_RECEIPT_RE = re.compile(
+    r"Published \*\*(?P<tag>\S+)\*\* at `(?P<sha>[0-9a-fA-F]{40})`"
+)
+
+
+def read_publication_receipt(issue: Any, gh: Any = None) -> "tuple[str, str] | None":
+    """The (tag, sha) recorded by the publication receipt, or None.
+
+    Reconciliation requires this receipt before treating an observed
+    release as controller-published: the publish path posts it as its
+    write-side record, so a release with no trusted receipt was created
+    out of band (or the publish crashed before the receipt write, which
+    a publish-workflow re-run repairs). Only trusted-author comments are
+    consulted, like every other marker read-back. A receipt whose carrier
+    line is missing or mangled reads as ("", ""), which can never match a
+    real tag+SHA, so the caller's mismatch handling fires.
+
+    KNOWN LIMIT: issue comments are editable by repo writers, so the
+    receipt raises the bar against out-of-band releases rather than being
+    a capability boundary; the ledger redesign is the real fix.
+    """
+    comment = find_marked_comment(issue, publication_receipt_marker(), gh)
+    if comment is None:
+        return None
+    match = _PUBLICATION_RECEIPT_RE.search(comment.body or "")
+    if match is None:
+        return "", ""
+    return match.group("tag"), match.group("sha").lower()
+
+
 def binding_marker(binding: ReleaseBinding) -> str:
     """The marker line carrying the identity-binding receipt's fields."""
     return marker(
