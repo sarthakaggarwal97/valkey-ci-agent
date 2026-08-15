@@ -1,193 +1,56 @@
-# Start a release: one coordinated entry point for the release flow.
-#
-# The start job authorizes the dispatching actor against the release policy's
-# team (checked live against GitHub), derives the version and stage
-# deterministically from the branch and existing tags, and creates (or, on a
-# duplicate start, reuses) the release tracking issue. A security/embargoed
-# intent is refused before any public artifact is created.
-#
-# When a new release was started (not a duplicate, not a dry run), the cut job
-# chains into the existing release-notes workflow with the derived version and
-# stage; that PR's merge commit becomes the release candidate SHA, tracked by
-# release-reconcile.yml.
 name: Start Release
-# The run-name embeds the branch: it is the correlation marker the
-# controller matches to link an in-flight cut from the tracker. The
-# client_payload fallback covers the trampoline path below.
-run-name: "Start Release on ${{ inputs.branch || github.event.client_payload.branch }}"
+run-name: "Start Release on ${{ github.event.client_payload.branch }}"
 
 on:
-  workflow_dispatch:
-    inputs:
-      branch:
-        description: "Release line to start, e.g. 9.1 (must be a policy-configured line)"
-        required: true
-        type: string
-      intent:
-        description: >-
-          What to release: rc/ga only before the line's initial release;
-          patch after. 'security' is the embargoed path: the controller
-          refuses it BEFORE any public artifact exists; run the manual
-          break-glass process instead.
-        required: true
-        type: choice
-        options:
-          - rc
-          - ga
-          - patch
-          - security
-      urgency:
-        description: >-
-          How urgently users should upgrade (passed to the release-notes
-          cut). SECURITY is for already-disclosed fixes only; an embargoed
-          fix must use intent 'security', which refuses before creating
-          anything public.
-        required: true
-        type: choice
-        options:
-          - LOW
-          - MODERATE
-          - HIGH
-          - CRITICAL
-          - SECURITY
-      dry_run:
-        description: "Preview only: authorize and show the derived version without creating anything. Uncheck to actually start the release."
-        required: false
-        type: boolean
-        default: true
-  # Trampoline path: maintainers start a release from the valkey repository
-  # itself (its thin release-start workflow relays here) so the entry point
-  # lives where releases happen, without moving controller code or secrets.
-  #
-  # Trust anchor for the forwarded actor: sending this event requires a
-  # token with contents:write on THIS repository, and the trampoline runs
-  # from valkey's default branch, populating client_payload.actor from
-  # github.triggering_actor, which a dispatcher cannot forge. A forged
-  # payload would therefore need both a privileged token for this repo AND
-  # the name of an authorized team member, because the actor named here is
-  # still verified live against the policy's team before anything happens.
   repository_dispatch:
-    types:
-      - release-start
+    types: [release-start]
 
 permissions: {}
 
 jobs:
   start:
-    name: "Authorize, derive version, open tracker"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: release-control
     concurrency:
-      group: release-start-${{ inputs.branch || github.event.client_payload.branch }}
+      group: release-start-${{ github.event.client_payload.branch }}
       cancel-in-progress: false
     permissions:
+      actions: write
       contents: read
-    outputs:
-      version: ${{ steps.start.outputs.version }}
-      stage: ${{ steps.start.outputs.stage }}
-      cut_needed: ${{ steps.start.outputs.cut_needed }}
-      # Normalized across both dispatch shapes (boolean input vs JSON
-      # payload); the cut job gates on this instead of raw inputs, which
-      # are empty on the trampoline path.
-      dry_run: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.dry_run == true) && 'true' || (github.event_name == 'workflow_dispatch' && inputs.dry_run) && 'true' || 'false' }}
     steps:
-      - name: Check out agent repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-          fetch-depth: 1
-
-      - name: Set up agent dependencies
-        uses: ./.github/actions/setup-agent
-
-      - name: Generate GitHub App token
-        id: generate-token
-        # A fork configured with the App secrets uses them; one without
-        # falls through to the AUTOMATION_PAT fallback below.
-        # continue-on-error is fork-only: upstream, a missing or rotated
-        # App secret fails fast here instead of deep in the run.
-        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
+      - uses: ./.github/actions/setup-agent
+      - name: Mint non-publishing controller token
+        id: source-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # Scope to exactly the repo this workflow touches: start reads
-          # valkey tags/branches and opens the release tracking issue there.
-          # Without repositories:, an installation token would cover every
-          # repo the App is installed on for the owner.
           repositories: valkey
-          # issues:write to create the tracking issue; contents:read for tags
-          # and branch heads; members:read for the live team-membership check.
+          permission-actions: read
           permission-contents: read
           permission-issues: write
           permission-members: read
           permission-metadata: read
-
-      - name: Start release
-        id: start
-        shell: bash
+      - name: Authenticate source run and start
         env:
-          # Fork operation (owner != valkey-io) falls back to AUTOMATION_PAT,
-          # mirroring the convention in valkey's own trigger workflow.
-          RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
-          # The controller's own comment identity: markers it posts must be
-          # readable back through the trusted-author filter even when a fork
-          # runs its own App (whose "<slug>[bot]" login is not in the static
-          # trusted set). Empty when the token step was skipped.
-          RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
-          BRANCH: ${{ inputs.branch || github.event.client_payload.branch }}
-          INTENT: ${{ inputs.intent || github.event.client_payload.intent }}
-          # Direct dispatch: triggering_actor, not actor, because on a workflow
-          # *re-run* github.actor remains the original dispatcher, so
-          # authorizing it would let a repo-write user replay an authorized
-          # user's dispatch. Trampoline dispatch: the forwarded human from
-          # valkey's own release-start workflow (see the trust-anchor note
-          # on the repository_dispatch trigger above); the team membership
-          # check below applies to that human either way.
-          ACTOR: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.actor || github.triggering_actor }}
-          TARGET_REPO: ${{ github.repository_owner }}/valkey
-          # Fork runs use the fork policy registry (fork repos, PAT-readable
-          # team) so live testing never targets valkey-io repositories.
-          POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
-          DRY_RUN: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.dry_run == true) && 'true' || (github.event_name == 'workflow_dispatch' && inputs.dry_run) && 'true' || 'false' }}
+          AGENT_TOKEN: ${{ github.token }}
+          SOURCE_TOKEN: ${{ steps.source-token.outputs.token }}
+          CONTROLLER_APP_ID: ${{ vars.APP_ID }}
+          NOTES_APP_ID: ${{ vars.RELEASE_NOTES_APP_ID }}
+          RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
+          START_RELAY_BOT_ID: ${{ vars.START_RELAY_BOT_ID }}
+          SOURCE_RUN: ${{ github.event.client_payload.source_run }}
+          EVENT_SENDER: ${{ github.event.sender.id }}
+          BRANCH: ${{ github.event.client_payload.branch }}
+          INTENT: ${{ github.event.client_payload.intent }}
+          URGENCY: ${{ github.event.client_payload.urgency }}
         run: |
           set -euo pipefail
-          args=(--policy "${POLICY}" --repo "${TARGET_REPO}" start --branch "${BRANCH}" --intent "${INTENT}" --actor "${ACTOR}")
-          if [[ "${DRY_RUN}" == "true" ]]; then
-            args+=(--dry-run)
-          fi
-          python -m scripts.release.main "${args[@]}"
-
-  cut-notes:
-    name: "Cut release notes"
-    needs: start
-    # cut_needed covers both a fresh start and a resume after a failed cut;
-    # a duplicate start whose notes PR already exists cuts nothing.
-    # dry_run: on the trampoline path inputs.* is empty, so gate on the
-    # start job's normalized DRY_RUN decision instead of raw inputs.
-    if: ${{ needs.start.outputs.cut_needed == 'true' && needs.start.outputs.dry_run != 'true' }}
-    # A called workflow cannot exceed the caller's grant: the cut's jobs
-    # request contents:read + id-token:write (OIDC for Bedrock), so this
-    # caller job must grant exactly that.
-    permissions:
-      contents: read
-      id-token: write
-    # REBASE NOTE (PR #80): the module-repos branch adds a `repo` input and a
-    # VALKEY_GITHUB_TOKEN workflow_call secret to the cut. Whichever lands
-    # second adds `repo: valkey` here and keeps the secrets list in sync.
-    uses: ./.github/workflows/release-notes-cut.yml
-    with:
-      version: ${{ needs.start.outputs.version }}
-      stage: ${{ needs.start.outputs.stage }}
-      urgency: ${{ inputs.urgency || github.event.client_payload.urgency }}
-      dry_run: false
-    # Explicit mapping, not `inherit`: the exact secrets this cut consumes
-    # stay visible and reviewable here. None is marked required in the
-    # called workflow (a possibly-empty pass is fine); a genuinely missing
-    # AWS role then fails cleanly at the AWS credentials step.
-    secrets:
-      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-      VALKEY_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          python -m scripts.release.main --repo "${{ github.repository_owner }}/valkey" start \
+            --branch "$BRANCH" --intent "$INTENT" --urgency "$URGENCY" \
+            --source-run "$SOURCE_RUN" --event-sender "$EVENT_SENDER"

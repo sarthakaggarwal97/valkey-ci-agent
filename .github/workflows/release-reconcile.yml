@@ -1,31 +1,13 @@
-# Reconcile active releases: recompute truth from GitHub and update trackers.
-#
-# For every policy-configured release branch with an open tracking issue, the
-# controller recomputes the release state from live GitHub data: the
-# release-notes PR (whose merge commit is the candidate SHA), the branch head
-# (movement invalidates the candidate until an owner adopts the exact new
-# head), and the required check runs on the exact candidate SHA. It then
-# re-renders the issue. Nothing is parsed out of issue text; editing the issue
-# changes nothing and is overwritten here.
-#
-# Short and idempotent: a run that finds no change edits nothing.
 name: Reconcile Releases
-# Scheduled runs carry no inputs, so inputs.branch is empty there and the
-# run titles as the all-branches pass.
-run-name: "${{ inputs.branch && format('Reconcile {0}', inputs.branch) || 'Reconcile All Branches' }}"
+run-name: "${{ inputs.branch && format('Reconcile {0}', inputs.branch) || 'Reconcile all releases' }}"
 
 on:
   schedule:
-    # Hourly scheduled run that reconciles every 10 minutes INTERNALLY: a
-    # single run long-polls via RECONCILE_POLL_* below instead of trusting a
-    # `*/10` cron, which GitHub fires unreliably at high frequency.
-    # workflow_dispatch runs one immediate pass. Offset from :00 to dodge
-    # GitHub's top-of-hour cron congestion.
-    - cron: "7 * * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       branch:
-        description: "Release line to reconcile, e.g. 9.1. Leave empty to reconcile every policy-configured branch."
+        description: "Optional release branch"
         required: false
         type: string
         default: ""
@@ -34,133 +16,59 @@ permissions: {}
 
 jobs:
   reconcile:
-    name: "Reconcile release trackers"
-    # Scheduled runs happen in the canonical repo, or in a fork that has
-    # opted in by setting the repository variable RELEASE_POLL_ENABLED to
-    # 'true' (unattended end-to-end testing). The variable must be exactly
-    # 'true', and an opted-in fork needs the App secrets or a PAT fallback
-    # configured, otherwise the hourly run fails at startup. Manual dispatch
-    # works everywhere (against the fork policy registry).
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'valkey-io/valkey-ci-agent' || vars.RELEASE_POLL_ENABLED == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 58
+    timeout-minutes: 15
+    environment: release-control
     concurrency:
-      # cancel-in-progress false: a queued manual dispatch waits for the
-      # current (up to ~45 minute) scheduled pass cycle to finish rather
-      # than killing it mid-pass; immediate need can cancel the scheduled
-      # run from the UI first.
       group: release-reconcile
       cancel-in-progress: false
     permissions:
-      contents: read
-      # actions:write lets reconcile dispatch the publish pipeline in this
-      # repo when a release turns READY (it holds at the approval gate).
       actions: write
+      contents: read
     steps:
-      - name: Check out agent repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-          fetch-depth: 1
-
-      - name: Set up agent dependencies
-        uses: ./.github/actions/setup-agent
-
-      - name: Generate GitHub App token (valkey, read + tracker)
-        id: generate-token
-        # A fork configured with the App secrets uses them; one without
-        # falls through to the AUTOMATION_PAT fallback below.
-        # continue-on-error is fork-only: upstream, a missing or rotated
-        # App secret fails fast here instead of deep in the run.
-        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
+      - uses: ./.github/actions/setup-agent
+      - name: Mint source observer token
+        id: source-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # Deliberately NOT contents:write: reconciliation runs unattended
-          # on a schedule outside the protected environment, so the token
-          # that touches valkey must be incapable of creating the release or
-          # its tag; publication-only-via-approval is capability-enforced.
           repositories: valkey
+          permission-administration: read
+          permission-actions: read
+          permission-checks: read
           permission-contents: read
           permission-issues: write
-          permission-pull-requests: read
-          permission-checks: read
-          permission-actions: read
           permission-metadata: read
-
-      - name: Generate GitHub App token (downstream, write)
-        id: generate-downstream-token
-        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
+          permission-pull-requests: read
+      - name: Mint qualification token
+        id: automation-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # Scoped to exactly the repos reconciliation writes to (the write
-          # set in scripts/release/actions.py): the qualification and
-          # build-release dispatches (actions:write) on
-          # valkey-release-automation, the bundle update hook
-          # (repository_dispatch needs contents:write) on valkey-bundle, and
-          # the helm bump branch + PR (contents:write, pull-requests:write)
-          # on valkey-helm. valkey itself is excluded from this token's
-          # scope. The read-only verification targets get their own
-          # read-scoped mint below instead of riding along here.
-          #
-          # Permission-set caveat: this is a UNION token. The consumers on
-          # each repo actually need less than the union: valkey-release-
-          # automation only uses actions:write (dispatches), valkey-bundle
-          # only contents:write (repository_dispatch), and valkey-helm
-          # contents:write + pull-requests:write (branch + files + PR).
-          # Splitting into three per-repo tokens needs main.py plumbing to
-          # accept multiple downstream clients, which is deferred; the
-          # minimum here drops issues:read (nothing on these repos reads
-          # issues via this token; the tracking issue is on valkey and uses
-          # the primary token above).
-          repositories: |
-            valkey-release-automation
-            valkey-bundle
-            valkey-helm
-          permission-contents: write
-          permission-pull-requests: write
-          permission-checks: read
+          repositories: valkey-release-automation
           permission-actions: write
+          permission-contents: read
           permission-metadata: read
-
-      - name: Reconcile
-        shell: bash
+      - name: Recompute live state
         env:
-          RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
-          # main.py consumes RELEASE_DOWNSTREAM_TOKEN as its single
-          # downstream client today, so the write-scoped token goes there;
-          # write calls on repos outside its scope now fail at the token
-          # level, and reads on the four verification repos still work
-          # while they are public (an App installation token can read any
-          # public repo regardless of its repository scoping).
-          RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
-          AGENT_GITHUB_TOKEN: ${{ github.token }}
-          # The controller's own comment identity: markers it posts must be
-          # readable back through the trusted-author filter even when a fork
-          # runs its own App (whose "<slug>[bot]" login is not in the static
-          # trusted set). Empty when the token step was skipped.
-          RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
-          BRANCH: ${{ inputs.branch || '' }}
-          TARGET_REPO: ${{ github.repository_owner }}/valkey
-          POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
-          # Scheduled runs long-poll (a pass every 10 minutes); manual
-          # dispatch is one immediate pass, matching backport-poll. The
-          # duration cap bounds when the last pass STARTS (run_poll_loop
-          # stops only when the next start would exceed the deadline):
-          # 2400 allows passes at t=0,10,20,30,40 minutes, leaving the
-          # final pass roughly 19 minutes of App-token validity before the
-          # 60-minute token expiry and the 58-minute job timeout.
-          RECONCILE_POLL_INTERVAL_SECONDS: ${{ github.event_name == 'schedule' && '600' || '0' }}
-          RECONCILE_POLL_DURATION_SECONDS: ${{ github.event_name == 'schedule' && '2400' || '0' }}
+          SOURCE_TOKEN: ${{ steps.source-token.outputs.token }}
+          AUTOMATION_TOKEN: ${{ steps.automation-token.outputs.token }}
+          AGENT_TOKEN: ${{ github.token }}
+          CONTROLLER_APP_ID: ${{ vars.APP_ID }}
+          NOTES_APP_ID: ${{ vars.RELEASE_NOTES_APP_ID }}
+          RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
+          BRANCH: ${{ inputs.branch }}
         run: |
           set -euo pipefail
-          args=(--policy "${POLICY}" --repo "${TARGET_REPO}" reconcile)
-          if [[ -n "${BRANCH}" ]]; then
-            args+=(--branch "${BRANCH}")
+          args=(--repo "${{ github.repository_owner }}/valkey" reconcile)
+          if [[ -n "$BRANCH" ]]; then
+            args+=(--branch "$BRANCH")
           fi
           python -m scripts.release.main "${args[@]}"

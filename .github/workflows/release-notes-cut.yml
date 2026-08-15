@@ -98,9 +98,9 @@ on:
       # the point of use instead: a fork without the App secrets falls back
       # to VALKEY_GITHUB_TOKEN, and a genuinely missing AWS role fails
       # cleanly at the AWS credentials step.
-      VALKEYRIE_BOT_APP_ID:
+      RELEASE_NOTES_APP_ID:
         required: false
-      VALKEYRIE_BOT_PRIVATE_KEY:
+      RELEASE_NOTES_APP_PRIVATE_KEY:
         required: false
       VALKEY_GITHUB_TOKEN:
         description: Fork-testing token fallback when the App secrets are absent
@@ -117,6 +117,10 @@ jobs:
   cut:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # This environment has no human gate, but its deployment policy admits
+    # only the default branch. The notes-only App key therefore cannot be
+    # exposed by dispatching a modified copy of this workflow on a side ref.
+    environment: release-notes
     permissions:
       contents: read
       id-token: write
@@ -153,9 +157,9 @@ jobs:
         continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
+          app-id: ${{ secrets.RELEASE_NOTES_APP_ID }}
+          private-key: ${{ secrets.RELEASE_NOTES_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
           repositories: valkey
           # contents:write to push the agent-namespaced prep branch;
           # pull-requests:write to open the release PR; metadata:read is always required.
@@ -169,9 +173,9 @@ jobs:
         continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
+          app-id: ${{ secrets.RELEASE_NOTES_APP_ID }}
+          private-key: ${{ secrets.RELEASE_NOTES_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
           repositories: valkey
           # Same as above plus repository-advisories:read, which --security-from-advisories
           # needs to list published advisories. This step only runs for an advisory

@@ -1,340 +1,143 @@
-# Publish a ready release: the release flow's only production write path.
-#
-# Two jobs, split so approval evidence exists before the gate:
-#
-#   validate  runs every pre-publication check (candidate SHA, required CI,
-#             qualification, version.h, release notes, tag availability,
-#             latest-release decision) and prints the exact publication plan
-#             (tag, SHA, flags, release body) to the job summary. No secrets
-#             beyond read access; no environment.
-#
-#   publish   gated by the protected `release` environment (required
-#             reviewers approve on the run page after reading the validate
-#             summary). Every step here, including token minting, runs
-#             only after approval. It re-runs the FULL validation and
-#             requires it to reproduce the exact tag the approver saw, then
-#             creates the release at the candidate SHA and verifies the tag.
-#
-# Publishing fires valkey's trigger-build-release dispatch (prod builds) and
-# creates a tag that can never be moved or deleted.
-#
-# The `release` environment must exist in this repository with required
-# reviewers, self-review prevented, and admin bypass disallowed.
 name: Publish Release
-
-# tag and candidate_sha are always stamped into the run-name so the
-# controller can correlate a run with the exact candidate it was
-# dispatched for (" · <tag> @ <sha>"). The SHA stays full-length: GitHub
-# expressions have no substring function, so it cannot be truncated here.
-# Unbound runs cannot be dispatched through this workflow any more (both
-# inputs are required).
-run-name: "Publish Release on ${{ inputs.branch }} · ${{ inputs.tag }} @ ${{ inputs.candidate_sha }} (requested by ${{ github.triggering_actor }})"
+run-name: "Publish ${{ inputs.identity }}"
 
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: "Release line whose ready release to publish, e.g. 9.1"
+      issue:
+        description: "Durable release issue number"
         required: true
         type: string
-      # tag and candidate_sha are REQUIRED: an unbound run cannot be
-      # correlated with the current candidate, and the controller treats
-      # runs without a binding as irrelevant to the current slot (they
-      # cannot hold or halt it). Leaving these empty would let any repo
-      # writer stage a run that fails the environment gate and then have
-      # the controller ignore it anyway; making them required blocks that
-      # DoS vector at the workflow layer. The "Check inputs" step below
-      # additionally fails the run when either value is whitespace.
-      tag:
-        description: "Release tag to publish, e.g. 9.1.1 or 9.2.0-rc1 (binds this dispatch to that tag)"
-        required: true
-        type: string
-      candidate_sha:
-        description: "Candidate commit to publish: paste the full 40-character SHA (binds this dispatch to that candidate)"
+      identity:
+        description: "Immutable v1 release identity"
         required: true
         type: string
 
 permissions: {}
+concurrency:
+  group: release-publication
+  cancel-in-progress: false
 
 jobs:
   validate:
-    name: "Validate and produce approval evidence"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    concurrency:
-      group: release-validate-${{ inputs.branch }}
-      cancel-in-progress: false
+    environment: release-control
     permissions:
+      actions: read
       contents: read
-    outputs:
-      tag: ${{ steps.plan.outputs.tag }}
-      sha: ${{ steps.plan.outputs.sha }}
-      plan_digest: ${{ steps.plan.outputs.plan_digest }}
     steps:
-      - name: Check inputs
-        # workflow_dispatch marks inputs required, but the required flag
-        # still accepts an empty string (a user clearing the field on the
-        # Actions "Run workflow" form). An empty binding would let the run
-        # slip past the controller's slot occupancy check (the finder
-        # ignores unbound runs), so refuse it here before any secret is
-        # even minted.
-        shell: bash
-        env:
-          TAG: ${{ inputs.tag }}
-          SHA: ${{ inputs.candidate_sha }}
-        run: |
-          set -euo pipefail
-          fail=0
-          if [[ -z "${TAG// /}" ]]; then
-            echo "::error::inputs.tag is required and must not be empty or whitespace." >&2
-            fail=1
-          fi
-          if [[ -z "${SHA// /}" ]]; then
-            echo "::error::inputs.candidate_sha is required and must not be empty or whitespace." >&2
-            fail=1
-          fi
-          # A 40-character hex SHA is what the controller stamps into the
-          # run-name binding regex; enforcing the shape here means a
-          # mis-typed manual dispatch (short SHA, branch name) fails fast
-          # instead of holding the approval gate for an unmatchable run.
-          if [[ -n "${SHA// /}" && ! "$SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "::error::inputs.candidate_sha must be a 40-character hex SHA (got '${SHA}')." >&2
-            fail=1
-          fi
-          exit "$fail"
-
-      - name: Check out agent repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-          fetch-depth: 1
-
-      - name: Set up agent dependencies
-        uses: ./.github/actions/setup-agent
-
-      - name: Generate GitHub App token (read-only validation scope)
-        id: generate-token
-        # A fork configured with the App secrets uses them; one without
-        # falls through to the AUTOMATION_PAT fallback below.
-        # continue-on-error is fork-only: upstream, a missing or rotated
-        # App secret fails fast here instead of deep in the run.
-        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
+      - uses: ./.github/actions/setup-agent
+      - name: Mint read-only source token
+        id: source-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: valkey
-          permission-contents: read
-          # issues:write posts the approver's checklist onto the tracker.
-          permission-issues: write
-          permission-pull-requests: read
-          permission-checks: read
+          permission-administration: read
           permission-actions: read
-          permission-members: read
+          permission-checks: read
+          permission-contents: read
+          permission-issues: read
           permission-metadata: read
-
-      - name: Generate GitHub App token (downstream reads for revalidation)
-        id: generate-downstream-token
-        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
+          permission-pull-requests: read
+      - name: Mint read-only qualification token
+        id: automation-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # Revalidation reads the qualification runs; without this scope the
-          # valkey-scoped token only works while those repos are public.
-          repositories: |
-            valkey-release-automation
-            valkey-ci-agent
+          repositories: valkey-release-automation
+          permission-administration: read
           permission-actions: read
           permission-contents: read
           permission-metadata: read
-
-      - name: Validate and render the publication plan
-        id: plan
-        shell: bash
+      - name: Revalidate and show approval plan
         env:
-          RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
-          RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
-          # The controller's own comment identity: markers it posts must be
-          # readable back through the trusted-author filter even when a fork
-          # runs its own App (whose "<slug>[bot]" login is not in the static
-          # trusted set). Empty when the token step was skipped.
-          RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
-          BRANCH: ${{ inputs.branch }}
-          ACTOR: ${{ github.triggering_actor }}
-          # The controller commit this run executes; the Python side stamps
-          # it into the approval evidence so approver and executor can be
-          # shown to have run the same controller code.
-          CONTROLLER_SHA: ${{ github.sha }}
-          TARGET_REPO: ${{ github.repository_owner }}/valkey
-          POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
+          SOURCE_TOKEN: ${{ steps.source-token.outputs.token }}
+          AUTOMATION_TOKEN: ${{ steps.automation-token.outputs.token }}
+          AGENT_TOKEN: ${{ github.token }}
+          CONTROLLER_APP_ID: ${{ vars.APP_ID }}
+          NOTES_APP_ID: ${{ vars.RELEASE_NOTES_APP_ID }}
+          RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
+          ISSUE: ${{ inputs.issue }}
+          IDENTITY: ${{ inputs.identity }}
         run: |
           set -euo pipefail
-          args=(--policy "${POLICY}" --repo "${TARGET_REPO}"
-                publish --branch "${BRANCH}" --actor "${ACTOR}" --plan-only)
-          # A run the controller dispatched itself has the Actions bot as its
-          # actor; planning is read-only, and authorization is enforced at
-          # the approval gate and re-checked on execute with the approver.
-          if [[ "${ACTOR}" == "github-actions[bot]" ]]; then
-            args+=(--unattended)
-          fi
-          python -m scripts.release.main "${args[@]}"
-
-      - name: Enforce the dispatch-bound candidate
-        # The controller dispatches with the tag and candidate SHA it saw;
-        # validation still recomputes the plan from live state (the
-        # plan-recomputation contract is unchanged and the job outputs come
-        # from the plan), and the bindings (always populated because the
-        # "Check inputs" step above refuses empty values) are the expected
-        # values. A divergence means the release changed between dispatch
-        # and validation, and this run must not park an approval gate for
-        # a different candidate.
-        shell: bash
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-          INPUT_SHA: ${{ inputs.candidate_sha }}
-          PLAN_TAG: ${{ steps.plan.outputs.tag }}
-          PLAN_SHA: ${{ steps.plan.outputs.sha }}
-        run: |
-          set -euo pipefail
-          if [[ "${INPUT_TAG}" != "${PLAN_TAG}" ]]; then
-            echo "Validation produced tag ${PLAN_TAG} but this run was dispatched for ${INPUT_TAG}; the release changed since dispatch. Refusing to hold the approval gate." >&2
-            exit 1
-          fi
-          if [[ "${INPUT_SHA}" != "${PLAN_SHA}" ]]; then
-            echo "Validation produced candidate ${PLAN_SHA} but this run was dispatched for ${INPUT_SHA}; the candidate changed since dispatch. Refusing to hold the approval gate." >&2
-            exit 1
-          fi
+          python -m scripts.release.main --repo "${{ github.repository_owner }}/valkey" \
+            publish --issue "$ISSUE" --identity "$IDENTITY"
 
   publish:
-    name: "Publish (requires environment approval)"
     needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     environment: release
-    concurrency:
-      group: release-publish-${{ inputs.branch }}
-      cancel-in-progress: false
     permissions:
-      contents: read
-      # actions:read lets the approver step read the deployment approval record.
       actions: read
+      contents: read
     steps:
-      - name: Check out agent repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-          fetch-depth: 1
-
-      - name: Set up agent dependencies
-        uses: ./.github/actions/setup-agent
-
-      - name: Generate GitHub App token (publication scope)
-        id: generate-token
-        # A fork configured with the App secrets uses them; one without
-        # falls through to the AUTOMATION_PAT fallback below.
-        # continue-on-error is fork-only: upstream, a missing or rotated
-        # App secret fails fast here instead of deep in the run.
-        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
+      - uses: ./.github/actions/setup-agent
+      - name: Mint sole source publication token
+        id: source-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # Scoped to the one repository publication writes to; an
-          # owner-wide token here would put every installed repo in blast
-          # radius of the flow's most privileged step.
           repositories: valkey
-          # contents:write creates the release and its tag.
+          permission-administration: read
+          permission-actions: read
+          permission-checks: read
           permission-contents: write
           permission-issues: write
-          permission-pull-requests: read
-          permission-checks: read
-          permission-actions: read
           permission-members: read
           permission-metadata: read
-
-      - name: Generate GitHub App token (downstream reads for revalidation)
-        id: generate-downstream-token
-        continue-on-error: ${{ github.repository_owner != 'valkey-io' }}
+          permission-pull-requests: read
+      - name: Mint sole production-dispatch token
+        id: automation-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          # Revalidation reads the qualification runs; without this scope the
-          # valkey-scoped token only works while those repos are public.
-          repositories: |
-            valkey-release-automation
-            valkey-ci-agent
-          permission-actions: read
-          permission-contents: read
+          repositories: valkey-release-automation
+          permission-administration: read
+          permission-actions: write
+          permission-contents: write
           permission-metadata: read
-
-      - name: Resolve the approving human
+      - name: Verify current controller and resolve approver
         id: approver
-        # The execute path's actor must be the human who approved, not the
-        # dispatcher (which may be the controller itself). The deployment
-        # approval record is the authoritative source.
         env:
           GH_TOKEN: ${{ github.token }}
-          FALLBACK_ACTOR: ${{ github.triggering_actor }}
-          GATE_OWNER: ${{ github.repository_owner }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          # The endpoint returns the run's approval records; the last
-          # state=approved entry is the human who clicked Approve.
-          APPROVER=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/approvals" \
-            --jq '[.[] | select(.state == "approved")] | last.user.login // empty' 2>/dev/null || echo "")
-          if [[ -z "$APPROVER" ]]; then
-            # Upstream the protected `release` environment always exists, so
-            # a missing approval record means either the gate was bypassed or
-            # the record could not be read; treating the dispatcher as the
-            # approver would misattribute the approval. Fail closed.
-            if [[ "$GATE_OWNER" == "valkey-io" ]]; then
-              echo "The deployment approval record did not identify a human approver; refusing to publish." >&2
-              exit 1
-            fi
-            # Fork carve-out: fork policies authorize via explicit user:
-            # entries and may run without a protected release environment,
-            # so no approval record exists; there the dispatcher is the
-            # accountable human.
-            APPROVER="${FALLBACK_ACTOR}"
-          fi
-          echo "login=$APPROVER" >> "$GITHUB_OUTPUT"
-
-      - name: Revalidate and publish
-        shell: bash
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$DEFAULT_BRANCH" --jq .sha)" == "$GITHUB_SHA" ]] || { echo "Controller changed after dispatch" >&2; exit 1; }
+          login=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/approvals" \
+            --jq '[.[] | select(.state == "approved")] | last.user.login // empty')
+          [[ -n "$login" ]] || { echo "No human approval record found" >&2; exit 1; }
+          echo "login=$login" >> "$GITHUB_OUTPUT"
+      - name: Revalidate, publish, receipt, and dispatch
         env:
-          RELEASE_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
-          RELEASE_DOWNSTREAM_TOKEN: ${{ steps.generate-downstream-token.outputs.token || (github.repository_owner != 'valkey-io' && (secrets.AUTOMATION_PAT || secrets.VALKEY_GITHUB_TOKEN)) || '' }}
-          # The controller's own comment identity: markers it posts must be
-          # readable back through the trusted-author filter even when a fork
-          # runs its own App (whose "<slug>[bot]" login is not in the static
-          # trusted set). Empty when the token step was skipped.
-          RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
-          BRANCH: ${{ inputs.branch }}
-          ACTOR: ${{ steps.approver.outputs.login }}
-          # The controller commit this run executes; the Python side stamps
-          # it into the approval evidence so approver and executor can be
-          # shown to have run the same controller code.
-          CONTROLLER_SHA: ${{ github.sha }}
-          EXPECTED_TAG: ${{ needs.validate.outputs.tag }}
-          # The approval is bound to the exact commit the reviewer saw, not
-          # just the tag: a candidate adopted while approval was pending must
-          # never publish under the reviewed tag.
-          EXPECTED_SHA: ${{ needs.validate.outputs.sha }}
-          # The full plan the reviewer approved, as one digest: revalidation
-          # must reproduce it bit-for-bit, so ANY plan drift between approval
-          # and execution (not just tag or SHA) refuses to publish.
-          EXPECTED_DIGEST: ${{ needs.validate.outputs.plan_digest }}
-          TARGET_REPO: ${{ github.repository_owner }}/valkey
-          POLICY: ${{ github.repository_owner == 'valkey-io' && 'release_policy.yml' || 'release_policy.fork.yml' }}
+          SOURCE_TOKEN: ${{ steps.source-token.outputs.token }}
+          AUTOMATION_TOKEN: ${{ steps.automation-token.outputs.token }}
+          AGENT_TOKEN: ${{ github.token }}
+          CONTROLLER_APP_ID: ${{ vars.APP_ID }}
+          NOTES_APP_ID: ${{ vars.RELEASE_NOTES_APP_ID }}
+          RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
+          ISSUE: ${{ inputs.issue }}
+          IDENTITY: ${{ inputs.identity }}
+          APPROVER: ${{ steps.approver.outputs.login }}
         run: |
           set -euo pipefail
-          python -m scripts.release.main --policy "${POLICY}" --repo "${TARGET_REPO}" \
-            publish --branch "${BRANCH}" --actor "${ACTOR}" \
-            --expected-tag "${EXPECTED_TAG}" --expected-sha "${EXPECTED_SHA}" \
-            --expected-digest "${EXPECTED_DIGEST}"
+          python -m scripts.release.main --repo "${{ github.repository_owner }}/valkey" \
+            publish --issue "$ISSUE" --identity "$IDENTITY" --execute --approver "$APPROVER"
