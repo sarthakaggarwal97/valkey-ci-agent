@@ -21,6 +21,15 @@
 # NOTE for maintainers: upstream's active tag ruleset protects [89]*.*.* tags
 # but explicitly EXCLUDES 7.x, although 7.2 is a supported release line here;
 # extending the ruleset (and enabling immutable releases) is cutover hardening.
+#
+# Adding a release line (checklist):
+#   1. Add the branch under `branches`.
+#   2. Confirm every `required_checks` name exists in that branch's ci.yml
+#      (job names drift across branches; a missing name displays as MISSING).
+#   3. Confirm upstream's tag ruleset covers the new line's tags (today it
+#      protects [89]*.*.* and EXCLUDES 7.x; see the NOTE above).
+#   4. Confirm `tarball_targets` and the qualification_*_jobs counts still
+#      mirror the automation repo's build/qualify matrices (LOCKSTEP below).
 schema_version: 1
 repos:
   - repo: valkey-io/valkey

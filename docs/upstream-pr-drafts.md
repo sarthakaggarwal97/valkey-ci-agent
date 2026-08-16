@@ -15,8 +15,9 @@ A stateless controller that runs Valkey releases end to end from a GitHub
 tracking issue, with exactly three human touches per release: start it,
 merge the release-notes PR, and click one environment approval.
 
-Every 10 minutes it recomputes release state from live GitHub evidence
-(no database, no memory between runs) and takes the next step: cut notes,
+On an hourly schedule with an internal poll loop (five passes per
+hour), it recomputes release state from live GitHub evidence (no
+database, no memory between runs) and takes the next step: cut notes,
 bind the candidate to the exact merge SHA, dispatch a no-publish
 qualification build, park publication behind a protected-environment
 approval bound to a plan digest, publish with an atomic tag claim, then
@@ -44,14 +45,19 @@ website, Bundle, Helm) fail-closed before closing the tracker.
 
 <details><summary>Validation</summary>
 
-- 2,152 unit tests (attack-test style: forged receipts, lookalike PRs,
-  quoted markers, hostile payloads, bypass actors), ruff and mypy clean.
-- Four independent adversarial review rounds; every patchable finding is
-  closed and the remainder is scoped below.
 - Live end-to-end cycles on a fork: 8.0.10, 9.0.6, and 8.0.11 published
   through the full chain, including branch-movement adoption, stale-gate
   replacement, bounded auto-remediation, and a real macOS build break
-  caught by the candidate gate.
+  caught by the candidate gate. This is the primary evidence.
+- 2,177 unit tests (attack-test style: forged receipts, lookalike PRs,
+  quoted markers, hostile payloads, bypass actors), ruff and mypy clean.
+- Four AI-adversarial review rounds plus three maintainer-persona
+  cold reads; every patchable finding is closed and the remainder is
+  scoped below. The controller itself is deterministic and never
+  invokes AI; the AI-assisted step is release-notes drafting, whose
+  output lands behind a human-merged PR.
+- The trust model (every token, every marker, blast radius) is
+  docs/trust-model.md; the on-call runbook is docs/operations.md.
 
 </details>
 
@@ -63,7 +69,8 @@ raise the bar without being a capability boundary; a dedicated publisher
 App whose key lives only in the protected environment, one immutable
 release identity carried through every dispatch, and build-once/promote
 artifact provenance are the follow-up design, kept out of this PR to
-stay reviewable.
+stay reviewable. Hash-pinned Python dependencies for the privileged
+workflows are a declared follow-up as well.
 
 </details>
 
@@ -132,8 +139,11 @@ carries no authority of its own.
 
 Also hardens the existing build trigger: untrusted values (release tag
 names, manual inputs) enter through env with validation before the
-job's token is minted, and the yamlfmt failure step now shows its own
-diff instead of clang-format's.
+job's token is minted, the release commit is resolved and forwarded so
+production builds from the exact SHA, and the relay verifies the
+controller heard it (a dispatch that lands nowhere warns instead of
+ending green). The yamlfmt diagnostic fix rides separately, not in
+this PR.
 
 ---
 

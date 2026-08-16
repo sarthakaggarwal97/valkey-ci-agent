@@ -265,6 +265,7 @@ class TestPlanDigestBinding:
             _plan(body="different notes"),
             _plan(qualification_run_id=901),
             _plan(tag_protected=True),
+            _plan(tag_protected=True, tag_bypass_integration_ids=(5,)),
             _plan(controller_sha="f" * 40),
         ]
         digests = {plan_digest(v) for v in variants}
@@ -1036,7 +1037,9 @@ class TestTagRulesetProbe:
                                              "exclude": []}},
                  "rules": _FULL_RULES, "bypass_actors": []}},
         )
-        assert tag_ruleset_protected(repo, "9.1.1") is True
+        verdict = tag_ruleset_protected(repo, "9.1.1")
+        assert verdict.protected is True
+        assert verdict.bypass_integration_ids == ()
 
     def test_non_fast_forward_counts_as_the_update_rule(self) -> None:
         repo = _ruleset_repo(
@@ -1047,12 +1050,15 @@ class TestTagRulesetProbe:
                            {"type": "creation"}],
                  "bypass_actors": []}},
         )
-        assert tag_ruleset_protected(repo, "9.1.1") is True
+        assert tag_ruleset_protected(repo, "9.1.1").protected is True
 
     # A matching ruleset with no deletion/update rules restricts nothing,
     # a deletion rule alone still lets the tag be MOVED, and deletion plus
     # update without a creation rule still lets any writer PRE-CREATE the
-    # release tag (the snipe): protection needs all three halves.
+    # release tag (the snipe): protection needs all three halves. The
+    # creation rule stays required even now that an Integration bypass is
+    # tolerated: the bypass narrows WHO can create, the rule is what
+    # restricts creation at all.
     @pytest.mark.parametrize("rules", [
         pytest.param([], id="ruleless"),
         pytest.param([{"type": "deletion"}], id="deletion-alone"),
@@ -1061,17 +1067,27 @@ class TestTagRulesetProbe:
         pytest.param([{"type": "creation"}], id="creation-alone"),
     ])
     def test_insufficient_rules_are_not_protected(self, rules: list) -> None:
+        # Even with the workable App-only bypass configured, missing rules
+        # restrict nothing: the bypass never substitutes for the rules.
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
                                              "exclude": []}},
-                 "rules": rules, "bypass_actors": []}},
+                 "rules": rules,
+                 "bypass_actors": [{"actor_id": 5,
+                                    "actor_type": "Integration",
+                                    "bypass_mode": "always"}]}},
         )
-        assert tag_ruleset_protected(repo, "9.1.1") is False
+        verdict = tag_ruleset_protected(repo, "9.1.1")
+        assert verdict.protected is False
+        assert verdict.bypass_integration_ids == ()
 
-    def test_app_bypass_actor_is_unprotected_for_us(self) -> None:
-        # The publishing identity is a GitHub App; a ruleset any App can
-        # bypass constrains exactly nothing we rely on.
+    def test_single_integration_bypass_passes_with_its_id_surfaced(self) -> None:
+        # REACHABILITY: a creation rule with zero bypasses also blocks the
+        # publishing App, so the workable protected config is full rules
+        # plus the publishing App as the sole Integration bypass. The
+        # verdict surfaces the App id so the approval evidence names
+        # exactly which App can bypass.
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
@@ -1080,30 +1096,51 @@ class TestTagRulesetProbe:
                  "bypass_actors": [{"actor_id": 5, "actor_type": "Integration",
                                     "bypass_mode": "always"}]}},
         )
-        assert tag_ruleset_protected(repo, "9.1.1") is False
+        verdict = tag_ruleset_protected(repo, "9.1.1")
+        assert verdict.protected is True
+        assert verdict.bypass_integration_ids == (5,)
 
-    # HUMAN bypasses defeat the claim too. A Team, role, org-admin, or
-    # user bypass means people can still create, move, or delete the tag,
-    # so "immutable" would overstate what was verified: any bypass actor
-    # fails closed, regardless of actor_type or bypass_mode.
+    # HUMAN (and key) bypasses still defeat the claim. A Team, role,
+    # org-admin, user, or deploy-key bypass means people can still create,
+    # move, or delete the tag, so "immutable" would overstate what was
+    # verified: any non-Integration bypass fails closed, regardless of
+    # bypass_mode, even when an Integration bypass rides alongside it.
     @pytest.mark.parametrize("actor_type", [
-        "Team", "RepositoryRole", "OrganizationAdmin", "User",
+        "Team", "RepositoryRole", "OrganizationAdmin", "User", "DeployKey",
     ])
     @pytest.mark.parametrize("bypass_mode", ["always", "pull_request"])
-    def test_any_bypass_actor_defeats_the_claim(self, actor_type: str,
-                                                bypass_mode: str) -> None:
+    def test_any_human_bypass_actor_defeats_the_claim(self, actor_type: str,
+                                                      bypass_mode: str) -> None:
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
             {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
                                              "exclude": []}},
                  "rules": _FULL_RULES,
-                 "bypass_actors": [{"actor_id": 9, "actor_type": actor_type,
+                 "bypass_actors": [{"actor_id": 5, "actor_type": "Integration",
+                                    "bypass_mode": "always"},
+                                   {"actor_id": 9, "actor_type": actor_type,
                                     "bypass_mode": bypass_mode}]}},
         )
-        assert tag_ruleset_protected(repo, "9.1.1") is False
+        verdict = tag_ruleset_protected(repo, "9.1.1")
+        assert verdict.protected is False
+        # The App id is NOT surfaced from a ruleset that did not qualify.
+        assert verdict.bypass_integration_ids == ()
+
+    def test_integration_bypass_without_a_nameable_id_defeats_the_claim(self) -> None:
+        # An App the evidence cannot NAME is an App the approver cannot
+        # check: fail closed rather than claim protection anonymously.
+        repo = _ruleset_repo(
+            [{"id": 1, "target": "tag", "enforcement": "active"}],
+            {1: {"conditions": {"ref_name": {"include": ["refs/tags/*"],
+                                             "exclude": []}},
+                 "rules": _FULL_RULES,
+                 "bypass_actors": [{"actor_type": "Integration",
+                                    "bypass_mode": "always"}]}},
+        )
+        assert tag_ruleset_protected(repo, "9.1.1").protected is False
 
     def test_invisible_bypass_data_degrades_to_unknown(self) -> None:
-        # No bypass_actors key in the payload: an App bypass cannot be
+        # No bypass_actors key in the payload: a human bypass cannot be
         # ruled out, so the verdict is unknown, never protected.
         repo = _ruleset_repo(
             [{"id": 1, "target": "tag", "enforcement": "active"}],
@@ -1111,7 +1148,7 @@ class TestTagRulesetProbe:
                                              "exclude": []}},
                  "rules": _FULL_RULES}},
         )
-        assert tag_ruleset_protected(repo, "9.1.1") is None
+        assert tag_ruleset_protected(repo, "9.1.1").protected is None
 
     def test_excluded_tag_is_not_protected(self) -> None:
         # Mirrors upstream: the ruleset excludes 1-7.* tags, so a 7.x
@@ -1123,8 +1160,8 @@ class TestTagRulesetProbe:
                 "exclude": ["refs/tags/[1-7].*"]}},
                 "rules": _FULL_RULES, "bypass_actors": []}},
         )
-        assert tag_ruleset_protected(repo, "7.2.11") is False
-        assert tag_ruleset_protected(repo, "9.1.1") is True
+        assert tag_ruleset_protected(repo, "7.2.11").protected is False
+        assert tag_ruleset_protected(repo, "9.1.1").protected is True
 
     def test_no_tag_ruleset_is_not_protected(self) -> None:
         repo = _ruleset_repo(
@@ -1132,7 +1169,7 @@ class TestTagRulesetProbe:
              {"id": 3, "target": "tag", "enforcement": "disabled"}],
             {},
         )
-        assert tag_ruleset_protected(repo, "9.1.1") is False
+        assert tag_ruleset_protected(repo, "9.1.1").protected is False
 
     def test_api_failure_is_unknown(self) -> None:
         repo = MagicMock()
@@ -1140,7 +1177,7 @@ class TestTagRulesetProbe:
         repo._requester.requestJsonAndCheck.side_effect = GithubException(
             403, "forbidden", {},
         )
-        assert tag_ruleset_protected(repo, "9.1.1") is None
+        assert tag_ruleset_protected(repo, "9.1.1").protected is None
 
 
 class TestTagRulesetProbePinsPyGithubSurface:
@@ -1187,10 +1224,15 @@ class TestTagRulesetProbePinsPyGithubSurface:
         # supported rulesets accessor; this pins that claim so a version
         # bump that ADDS one prompts migrating off the private requester.
         from github.Repository import Repository
+        from github.Requester import Requester
         assert not [attr for attr in dir(Repository) if "ruleset" in attr.lower()], (
             "PyGithub now ships a rulesets accessor on Repository: migrate "
             "tag_ruleset_protected off the private _requester probe"
         )
+        # And the raw method the probe rides still exists by that name, so
+        # a PyGithub rename fails HERE instead of silently degrading the
+        # probe to None on every call.
+        assert hasattr(Requester, "requestJsonAndCheck")
 
     def test_probe_through_a_real_repository_answers_protected(self) -> None:
         requester = self._RawRequester(
@@ -1207,13 +1249,15 @@ class TestTagRulesetProbePinsPyGithubSurface:
         # A degradation to None here (private-attribute rename, call-shape
         # change) is exactly the silent "unprotected" downgrade this test
         # exists to catch: assert the True verdict, not just non-error.
-        assert tag_ruleset_protected(repo, "9.1.1") is True
+        assert tag_ruleset_protected(repo, "9.1.1").protected is True
         assert requester.calls == [
             ("GET", "https://api.github.com/repos/o/valkey/rulesets"),
             ("GET", "https://api.github.com/repos/o/valkey/rulesets/42"),
         ]
 
-    def test_probe_through_a_real_repository_answers_unprotected(self) -> None:
+    def test_probe_through_a_real_repository_surfaces_the_app_bypass(self) -> None:
+        # The workable production shape: full rules, the publishing App as
+        # the sole Integration bypass. Protected, with the App id named.
         requester = self._RawRequester(
             [{"id": 7, "target": "tag", "enforcement": "active"}],
             {7: {
@@ -1224,7 +1268,23 @@ class TestTagRulesetProbePinsPyGithubSurface:
                 "bypass_actors": [{"actor_type": "Integration", "actor_id": 1}],
             }},
         )
-        assert tag_ruleset_protected(self._real_repo(requester), "9.1.1") is False
+        verdict = tag_ruleset_protected(self._real_repo(requester), "9.1.1")
+        assert verdict.protected is True
+        assert verdict.bypass_integration_ids == (1,)
+
+    def test_probe_through_a_real_repository_answers_unprotected(self) -> None:
+        requester = self._RawRequester(
+            [{"id": 7, "target": "tag", "enforcement": "active"}],
+            {7: {
+                "id": 7, "target": "tag", "enforcement": "active",
+                "conditions": {"ref_name": {"include": ["~ALL"], "exclude": []}},
+                "rules": [{"type": "creation"}, {"type": "update"},
+                          {"type": "deletion"}],
+                "bypass_actors": [{"actor_type": "Team", "actor_id": 9}],
+            }},
+        )
+        verdict = tag_ruleset_protected(self._real_repo(requester), "9.1.1")
+        assert verdict.protected is False
 
 
 class TestPlanSummaryHonesty:
@@ -1239,6 +1299,16 @@ class TestPlanSummaryHonesty:
         assert "NOT ruleset-protected" not in summary
         assert "creates the release tag" in summary
         assert "cannot be moved or deleted. Verify" not in summary
+
+    def test_protected_tag_with_app_bypass_names_the_integration_ids(self) -> None:
+        # The approver must see exactly which App can bypass, so they can
+        # confirm it is the publishing App and nothing else.
+        summary = render_plan_summary(_plan(
+            tag_protected=True, tag_bypass_integration_ids=(5,)))
+        assert ("the only bypass is GitHub App (Integration) id(s) 5. "
+                "Confirm that is the publishing App and nothing else") in summary
+        assert "no bypass actors are configured" not in summary
+        assert "NOT ruleset-protected" not in summary
 
     @pytest.mark.parametrize("protection", [False, None],
                              ids=["unprotected", "unknown"])

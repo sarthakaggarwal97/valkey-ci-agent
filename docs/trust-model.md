@@ -35,9 +35,12 @@ App is not configured.
 
 Two structural properties fall out of the table:
 
-- The one `contents:write`-on-valkey token in the whole flow is minted
-  inside the environment-gated publish job, after a human approves, and
-  scoped to the single repository publication writes to.
+- The only `contents:write`-on-valkey token on an unattended or
+  publication path lives inside the environment-gated publish job, after
+  a human approves, and is scoped to the single repository publication
+  writes to. The notes-cut job also holds `contents:write` on valkey (to
+  push the prep branch and open the notes PR), but it runs only from a
+  human-initiated start and its PR still requires a human merge.
 - The scheduled path (reconcile) deliberately holds no `contents:write` on
   valkey at all, so unattended code cannot create the release or its tag
   through its own credentials; its write scope is confined to the three
@@ -68,7 +71,7 @@ that would upgrade them.
 | `binding version/stage/notes_pr/merge_sha` | controller (`write_binding`) | reconciliation, before any PR scan | rebinding the release to a different notes PR or identity; the bound PR is still revalidated every pass (repo, base, head shape, author trust) and drift freezes with an alert | reconciliation rescans; the scan enforces upstream-head + trusted-author rules, so eviction cannot swap in a fork PR |
 | `adopt:<sha>` | `adopt` entry point, after a live team-membership check | candidate resolution | adopting an arbitrary SHA as candidate; it must still be the exact branch head or the pinned notes merge, must pass qualification on that exact SHA, and publication still requires human approval | the candidate reverts to INVALIDATED and the release blocks until a real adoption |
 | `publication-receipt` + `Published **tag** at \`sha\`` carrier line | protected publish path, post-write | `_published_status`: a release with no matching trusted receipt is quarantined as unverified | an out-of-band release reads as controller-published and downstream verification proceeds on it; this is exactly the editable-comment limit above, and why the receipt is detection, not a boundary | a legitimate release quarantines as unverified (alert noise, downstream verification withheld) until the publish workflow is re-run to restore it |
-| `qual-nonce:<sha>:<nonce>` | qualification dispatch receipt (intent comment) | `evaluate_qualification` via `recorded_qualification_nonce` | a wrong nonce refuses legitimate evidence (denial of progress); accepting a hostile run additionally requires a manifest passing every identity and count binding from a default-branch run of the automation repo | evaluation falls back to legacy behavior (nonce is evidence detail only) |
+| `qual-nonce:<sha>:<nonce>` | qualification dispatch receipt (intent comment) | `evaluate_qualification` via `recorded_qualification_nonce` | a wrong nonce hides legitimate evidence (runs that do not echo it are skipped, never failed, and the tracker blocker renders the recorded nonce with the re-dispatch instruction: denial of progress, loudly); accepting a hostile run additionally requires a manifest passing every identity and count binding from a default-branch run of the automation repo | evaluation falls back to legacy behavior (nonce is evidence detail only) |
 | `autofix-intent:<key>:<fp>` / `autofix-done:<key>:<fp>` | two-phase dispatch receipts (`_autofix_two_phase`) | the same helper on later passes | forging `done` suppresses a needed dispatch (quiet denial of progress; the standing failure notification still fires); forging `intent` triggers at most one bounded extra dispatch | deleting `done` risks one bounded duplicate dispatch; deleting `intent` the same |
 | `notify:<fp>`, `wedge:<fp>`, `nudge:<fp>` | one-shot notification gates | the same posting paths | forging suppresses a team ping for that exact state (silence attack); any state change re-pings | the next pass re-posts the notification |
 | `notify-gen:<n>` / `notify-state:<s>` | recovery-generation bookkeeping | notification fingerprinting | suppressing or duplicating re-pings after recovery | bookkeeping reinitializes from notification history |
@@ -107,7 +110,9 @@ key. Stated plainly:
   what the approver saw, and execution refuses on any drift.
 - Move or delete valkey's protected release tags: upstream's active tag
   ruleset (probed by `tag_ruleset_protected`, and only claimed when it
-  carries creation, update, and deletion rules with zero bypass actors)
+  carries creation, update, and deletion rules with no bypass actors
+  beyond GitHub App Integrations, whose ids the approval evidence names
+  so the approver can confirm the sole bypass is the publishing App)
   is enforced by GitHub, outside this repo's reach.
 - Escape detection cheaply. An out-of-band release or tag surfaces on the
   next honest reconcile pass as an untrusted-tag alert or an unreceipted

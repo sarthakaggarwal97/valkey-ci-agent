@@ -458,16 +458,25 @@ class TestComputeStatus:
         assert status.qualification.passed
         assert status.phase is ReleasePhase.READY
 
-    def test_recorded_dispatch_nonce_mismatch_refuses_the_evidence(self) -> None:
-        # The receipt recorded a different nonce than the manifest echoes:
-        # this run is not the controller's dispatch and must not qualify.
+    def test_recorded_dispatch_nonce_mismatch_skips_the_run_and_blocks_visibly(self) -> None:
+        # SKIP semantics: the receipt recorded a different nonce than the
+        # manifest echoes, so the run is not the controller's dispatch.
+        # It is invisible (not evidence, NOT a failure), and the blocker
+        # renders the recorded nonce with the exact manual action.
         issue = tracker(comments=[bot_comment(
             f"{issue_mod.qual_nonce_marker(MERGE_SHA, 'f' * 32)}\ndispatched")])
         status = _status(repo_mock(issues=[issue]), tracking_issue=issue)
         assert not status.qualification.passed
-        mismatch = next(item for item in status.qualification.failed_jobs
-                        if "nonce" in item)
-        assert "f" * 32 in mismatch and "n" * 32 in mismatch
+        assert status.qualification.run_id == 0  # skipped, never failed
+        assert not status.qualification.failed_jobs
+        blocker = next(b for b in status.blockers
+                       if "dispatch nonce" in b)
+        assert "f" * 32 in blocker  # the recorded nonce, rendered visibly
+        assert "ignored, not failed" in blocker
+        # The action, not just values: what to dispatch, where, with what.
+        assert ("Dispatch the qualification workflow for `9.1.1` at "
+                f"`{MERGE_SHA[:12]}` with `{'f' * 32}` as its `nonce` "
+                f"input.") in blocker
 
     def test_untrusted_nonce_receipt_is_ignored_like_every_marker(self) -> None:
         # A nonce marker pasted by a random account must not become the

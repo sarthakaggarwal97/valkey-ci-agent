@@ -503,18 +503,72 @@ class TestManifestContentValidation:
         assert status.passed
         assert not status.failed_jobs
 
-    def test_mismatched_dispatch_nonce_refuses_naming_both_values(self) -> None:
-        # A manifest whose nonce differs from the receipt's recorded one
-        # is not the run this controller dispatched; the refusal names
-        # both values so the operator can diff them.
+    def test_non_echoing_run_is_invisible_not_a_failure(self) -> None:
+        # SKIP semantics: a run whose manifest does not echo the recorded
+        # dispatch nonce is some other dispatch (typically a nonce-less
+        # manual re-dispatch, whose producer falls back to a run-derived
+        # nonce). It is ignored during run selection -- not evidence, not
+        # a failure -- so it can never poison the slot for the
+        # controller's own run.
         run = self._run_with_manifest(nonce="e" * 32)
         status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
                                         tag="9.1.1", sha=MERGE_SHA,
                                         expected_nonce="c" * 32)
-        assert not status.passed
-        mismatch = next(item for item in status.failed_jobs if "nonce" in item)
-        assert "e" * 32 in mismatch
-        assert "c" * 32 in mismatch
+        assert status == QualificationStatus()  # missing, never failed
+
+    def test_older_echoing_run_still_wins_over_a_newer_non_echoing_one(self) -> None:
+        # The newest ECHOING run is the evidence: a manual re-dispatch
+        # landing after the controller's own passed run must not
+        # supersede it.
+        from tests.release_fixtures import build_manifest_payload
+        newer = qualification_run(
+            manifest_payload=build_manifest_payload(nonce="e" * 32))
+        newer.id = 901
+        newer.html_url = "https://x/qruns/901"
+        older = qualification_run(
+            manifest_payload=build_manifest_payload(nonce="c" * 32))
+        status = evaluate_qualification(_gh_with_runs([newer, older]),
+                                        _POLICY, tag="9.1.1", sha=MERGE_SHA,
+                                        expected_nonce="c" * 32)
+        assert status.run_id == 900
+        assert status.passed
+
+    def test_manifestless_run_is_invisible_under_a_recorded_nonce(self) -> None:
+        # A completed run with no readable manifest cannot prove it is the
+        # controller's dispatch; under a recorded nonce it reads as
+        # non-echoing and is skipped, never failed.
+        run = _without_manifest(qualification_run())
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA,
+                                        expected_nonce="c" * 32)
+        assert status == QualificationStatus()
+
+    def test_in_progress_run_is_held_pending_not_skipped(self) -> None:
+        # A run still executing cannot have uploaded its manifest, so its
+        # nonce is undecidable: hold it as pending rather than skip it, or
+        # the missing-evidence blocker would tell the operator to dispatch
+        # a duplicate while the controller's own run is the one in flight.
+        run = qualification_run(status="in_progress", conclusion=None)
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA,
+                                        expected_nonce="c" * 32)
+        assert status.pending
+        run.get_artifacts.assert_not_called()
+
+    def test_startup_failure_run_stays_visible_under_a_recorded_nonce(self) -> None:
+        # A startup_failure run never planned jobs or artifacts, so its
+        # identity is undecidable by manifest -- but the broken
+        # default-branch workflow definition affects the controller's own
+        # dispatch identically, so it stays a visible failure (routing
+        # through the marker-gated one-retry path) instead of reading as
+        # "no run".
+        broken = qualification_run(conclusion="startup_failure")
+        status = evaluate_qualification(_gh_with_runs([broken]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA,
+                                        expected_nonce="c" * 32)
+        assert status.run_id == 900
+        assert status.failed_jobs == (STARTUP_FAILURE_JOB,)
+        broken.get_artifacts.assert_not_called()
 
     def test_legacy_receipt_without_nonce_tolerates_any_manifest_nonce(self) -> None:
         # Receipts from before nonce wiring recorded nothing: the empty

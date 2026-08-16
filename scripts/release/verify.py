@@ -524,8 +524,9 @@ def _verify_try_valkey(stage: str, build: DownstreamOutput, run: Any,
     # The wrapper job succeeds whether or not it uploaded (it internally
     # skips non-latest releases), so job conclusion cannot support a
     # VERIFIED claim. The workflow uploads a native sentinel artifact when
-    # (and only when) the upload happened. Sentinel name set by
-    # valkey-release-automation/.github/workflows/build-release.yml.
+    # (and only when) the upload happened. Sentinel uploaded by
+    # valkey-release-automation/.github/workflows/update-try-valkey.yml
+    # (the reusable workflow the build run calls for this job).
     if _run_has_artifact(run, "try-valkey-uploaded"):
         return DownstreamOutput(
             name="try-valkey", state=OutputState.VERIFIED,

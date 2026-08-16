@@ -16,7 +16,8 @@ run-name: "${{ inputs.branch && format('Reconcile {0}', inputs.branch) || 'Recon
 
 on:
   schedule:
-    # Hourly scheduled run that reconciles every 10 minutes INTERNALLY: a
+    # Hourly scheduled run that reconciles INTERNALLY, five passes per hour
+    # (at :07, :17, :27, :37, :47): a
     # single run long-polls via RECONCILE_POLL_* below instead of trusting a
     # `*/10` cron, which GitHub fires unreliably at high frequency.
     # workflow_dispatch runs one immediate pass. Offset from :00 to dodge

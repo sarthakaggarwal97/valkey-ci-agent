@@ -82,6 +82,17 @@ def test_shipped_registry_is_valid() -> None:
     # The gate code stays and is covered by fixture-based tests.
     assert policies["valkey-io/valkey"].daily_workflow is None
     assert policies["valkey-io/valkey"].daily_max_age_hours is None
+    # Empty public-endpoint fields are LEGAL (a fork's opt-out) but on the
+    # shipped UPSTREAM policy every one must be configured: blanking one
+    # here would silently convert that output's verification into an
+    # informational skip.
+    down = policies["valkey-io/valkey"].downstream
+    assert down.dockerhub_repo
+    assert down.bundle_dockerhub_repo
+    assert down.ecr_namespace
+    assert down.helm_index_url
+    assert down.downloads_base_url
+    assert down.ghcr_image_repo
 
 
 def test_shipped_fork_registry_is_valid() -> None:

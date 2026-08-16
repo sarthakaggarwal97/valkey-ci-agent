@@ -39,7 +39,7 @@ import logging
 import re
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Any
+from typing import Any, NamedTuple
 
 from github.GithubException import GithubException
 
@@ -83,6 +83,11 @@ class PublishPlan:
     # when the probe answered, None when it could not (treated as
     # unprotected in the evidence, never claimed protected).
     tag_protected: "bool | None" = None
+    # The GitHub App (Integration) ids the qualifying ruleset allows to
+    # bypass, surfaced so the approval evidence names exactly which App(s)
+    # can bypass; () for every non-True verdict and for a True verdict
+    # with zero bypasses.
+    tag_bypass_integration_ids: "tuple[int, ...]" = ()
     # The qualification run the readiness evidence is based on (0 when the
     # status carried none) and the controller commit that computed the
     # plan ("" outside Actions); both are bound into the plan digest.
@@ -108,6 +113,8 @@ def plan_digest(plan: PublishPlan) -> str:
         f"body_sha256={hashlib.sha256(plan.body.encode('utf-8')).hexdigest()}",
         f"qualification_run_id={plan.qualification_run_id}",
         f"tag_protected={plan.tag_protected}",
+        f"tag_bypass_integrations="
+        f"{','.join(str(i) for i in plan.tag_bypass_integration_ids)}",
         f"controller_sha={plan.controller_sha}",
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -158,24 +165,57 @@ def _ruleset_rules_cover_immutability(ruleset: "dict[str, Any]") -> bool:
             ("update" in rule_types or "non_fast_forward" in rule_types))
 
 
-def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
+class TagRulesetVerdict(NamedTuple):
+    """The tag-immutability probe's answer plus its evidence detail.
+
+    ``protected`` is True/False when the probe answered, None when it
+    could not (rulesets endpoint unavailable, insufficient scope, bypass
+    data invisible). ``bypass_integration_ids`` names the GitHub App
+    (Integration) ids the qualifying ruleset allows to bypass, so the
+    approval evidence can show the approver exactly which App(s) can
+    bypass; empty for every non-True verdict and for a True verdict with
+    zero bypasses.
+    """
+
+    protected: "bool | None"
+    bypass_integration_ids: "tuple[int, ...]" = ()
+
+
+def tag_ruleset_protected(repo: Any, tag: str) -> TagRulesetVerdict:
     """Whether an active tag ruleset protects ``refs/tags/{tag}``.
 
     True when an active ruleset targeting tags includes the ref, does not
     exclude it, actually carries creation plus deletion plus update (or
-    non_fast_forward) rules, and grants no bypass to ANY actor. A matching
-    ruleset without those rules restricts nothing and counts as
-    unprotected. Any bypass actor defeats the claim regardless of
-    actor_type or bypass_mode: an Integration bypass may be exactly
-    the publishing App whose writes the ruleset is supposed to constrain,
-    and a human bypass (Team, RepositoryRole, OrganizationAdmin, User)
-    means people can still move or delete the tag, so "immutable" would
-    overstate what was verified. When a matching ruleset's bypass data is
-    not visible the verdict degrades to None (unknown) instead of
-    claiming protection. False when no ruleset qualifies; None when the
-    API could not answer (rulesets endpoint unavailable, insufficient
-    scope). The approval evidence treats None like False: never claim
-    immutability that was not verified.
+    non_fast_forward) rules, and grants bypass ONLY to actors of type
+    ``Integration`` (a GitHub App), whose ids are surfaced in the verdict
+    so the approval evidence names exactly which App(s) can bypass.
+
+    REACHABILITY (why Integration bypasses are tolerated): the creation
+    rule is required (without it any writer can pre-create the release
+    tag: the snipe), but a creation rule with ZERO bypass actors blocks
+    tag creation for EVERY actor -- including the publishing App this
+    controller publishes through -- so the previous zero-bypass
+    requirement made a True verdict unreachable in any deployment that
+    can actually publish. The workable protected configuration is:
+    creation + update (or non_fast_forward) + deletion restricted, with
+    the publishing App as the sole Integration bypass. The approver, who
+    sees the surfaced integration id(s), verifies the list is the
+    publishing App and nothing else.
+
+    Any other bypass actor type (User, Team, RepositoryRole,
+    OrganizationAdmin, DeployKey, or anything unrecognized -- the
+    allowlist fails closed) still defeats the claim regardless of
+    bypass_mode: it means humans or keys can create, move, or delete the
+    tag, and "immutable" would overstate what was verified. An
+    Integration bypass entry without a usable integer ``actor_id``
+    defeats the claim too: an App the evidence cannot NAME is an App the
+    approver cannot check. A matching ruleset without the required rules
+    restricts nothing and counts as unprotected. When a matching
+    ruleset's bypass data is not visible the verdict degrades to None
+    (unknown) instead of claiming protection. False when no ruleset
+    qualifies; None when the API could not answer. The approval evidence
+    treats None like False: never claim immutability that was not
+    verified.
     """
     ref = f"refs/tags/{tag}"
     bypass_unknown = False
@@ -208,16 +248,27 @@ def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
             if not _ruleset_rules_cover_immutability(ruleset):
                 continue  # matches the ref but restricts nothing we rely on
             if "bypass_actors" not in ruleset:
-                bypass_unknown = True  # cannot rule out a bypass
+                bypass_unknown = True  # cannot rule out a human bypass
                 continue
-            if ruleset.get("bypass_actors"):
-                continue  # ANY bypass actor: unprotected-for-us
-            return True
-        return None if bypass_unknown else False
+            integration_ids: "list[int]" = []
+            defeated = False
+            for actor in ruleset.get("bypass_actors") or []:
+                actor_id = actor.get("actor_id") if isinstance(actor, dict) else None
+                if (not isinstance(actor, dict)
+                        or actor.get("actor_type") != "Integration"
+                        or not isinstance(actor_id, int)
+                        or isinstance(actor_id, bool)):
+                    defeated = True  # non-App bypass, or an App we cannot name
+                    break
+                integration_ids.append(actor_id)
+            if defeated:
+                continue
+            return TagRulesetVerdict(True, tuple(integration_ids))
+        return TagRulesetVerdict(None if bypass_unknown else False)
     except Exception:
         logger.warning("Cannot determine tag ruleset protection for %s; "
                        "treating it as unknown", tag, exc_info=True)
-        return None
+        return TagRulesetVerdict(None)
 
 
 def plan_publication(
@@ -304,6 +355,7 @@ def plan_publication(
         )
     body += _changelog_footer(repo, policy, tag, status.version, status.stage)
 
+    tag_verdict = tag_ruleset_protected(repo, tag)
     return PublishPlan(
         tag=tag,
         sha=sha,
@@ -313,7 +365,8 @@ def plan_publication(
         issue_number=tracking_issue.number,
         tracker_url=tracking_issue.html_url,
         qualification_url=status.qualification.url,
-        tag_protected=tag_ruleset_protected(repo, tag),
+        tag_protected=tag_verdict.protected,
+        tag_bypass_integration_ids=tag_verdict.bypass_integration_ids,
         qualification_run_id=status.qualification.run_id,
         controller_sha=controller_sha,
     )
@@ -368,6 +421,16 @@ def _require_resumed_readiness(
             failed = ", ".join(qualification.failed_jobs[:5])
             problems.append(f"qualification run {qualification.run_id} did "
                             f"not pass ({failed})")
+        elif expected_nonce:
+            # Skip semantics: non-echoing runs are invisible, so "no run"
+            # means "no ECHOING run". Render the recorded nonce and name
+            # the exact action, like reconcile's blocker.
+            problems.append(
+                f"no qualification run echoes the recorded dispatch nonce "
+                f"`{expected_nonce}` for the candidate SHA; dispatch the "
+                f"qualification workflow for {tag} with `{expected_nonce}` "
+                f"as its `nonce` input"
+            )
         else:
             problems.append("no qualification evidence exists for the "
                             "candidate SHA")
@@ -675,7 +738,16 @@ def render_plan_summary(plan: PublishPlan, *, controller_sha: str = "") -> str:
     ``controller_sha`` (the commit the controller runs from) is included
     when known so the approver can see exactly which code executes.
     """
-    if plan.tag_protected:
+    if plan.tag_protected and plan.tag_bypass_integration_ids:
+        ids = ", ".join(str(i) for i in plan.tag_bypass_integration_ids)
+        protection_line = (
+            f"> The created tag is ruleset-protected: tag creation, update, "
+            f"and deletion are restricted, and the only bypass is GitHub "
+            f"App (Integration) id(s) {ids}. Confirm that is the publishing "
+            f"App and nothing else; no human, team, role, or deploy key can "
+            f"move or delete the tag."
+        )
+    elif plan.tag_protected:
         protection_line = (
             "> The created tag is ruleset-protected: tag creation, update, "
             "and deletion are restricted and no bypass actors are "

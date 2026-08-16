@@ -546,8 +546,8 @@ def _qual_dispatch_nonce(gh: Any, tracking_issue: Any, *, key: str,
     previous pass posted intent and crashed before (or during) dispatch;
     the retry must dispatch the SAME nonce that receipt already recorded,
     or the recorded nonce and the dispatched one would diverge and the
-    evaluator would refuse the run's manifest forever. With no standing
-    intent, a fresh uuid4 hex is minted.
+    evaluator would skip the run's manifest forever (a non-echoing run is
+    invisible). With no standing intent, a fresh uuid4 hex is minted.
     """
     intent_marker = _marker(f"autofix-intent:{key}:{_fp(sha)}")
     comment = issue_mod.find_marked_comment(tracking_issue, intent_marker, gh)
@@ -587,7 +587,11 @@ def _dispatch_qualification_once(
             f"{issue_mod.qual_nonce_marker(sha, nonce)}\n"
             f"> [!NOTE]\n"
             f"> **Dispatching qualification** for `{tag}` "
-            f"@ `{sha[:12]}`."
+            f"@ `{sha[:12]}`.\n"
+            f"> Dispatch nonce: `{nonce}` (an integrity binding, not a "
+            f"secret: the run's manifest must echo it, and a manual "
+            f"re-dispatch must pass it as the `nonce` input or its run "
+            f"is ignored)."
         ),
         dispatch_fn=lambda: qual_mod.dispatch_qualification(
             gh, policy, tag=tag, sha=sha, nonce=nonce,
@@ -596,7 +600,10 @@ def _dispatch_qualification_once(
             gh, policy, tag=tag, sha=sha,
         ),
         on_dispatch_failure_instruction=(
-            f"Dispatch the qualification workflow for `{tag}` manually."
+            f"Dispatch the qualification workflow for `{tag}` manually "
+            f"with `{nonce}` as its `nonce` input (the recorded dispatch "
+            f"nonce; a run that does not echo it is ignored, never "
+            f"counted as evidence)."
         ),
     )
     if not performed:
@@ -697,7 +704,11 @@ def _retry_qualification_once(
             f"{issue_mod.qual_nonce_marker(sha, nonce)}\n"
             f"> [!NOTE]\n"
             f"> **Auto-remediation:** Retrying qualification for `{tag}` "
-            f"once (the previous run failed: {run_link})."
+            f"once (the previous run failed: {run_link}).\n"
+            f"> Dispatch nonce: `{nonce}` (an integrity binding, not a "
+            f"secret: the run's manifest must echo it, and a manual "
+            f"re-dispatch must pass it as the `nonce` input or its run "
+            f"is ignored)."
         ),
         dispatch_fn=lambda: qual_mod.dispatch_qualification(
             gh, policy, tag=tag, sha=sha, nonce=nonce,
@@ -707,8 +718,10 @@ def _retry_qualification_once(
             exclude_run_id=failed_run_id,
         ),
         on_dispatch_failure_instruction=(
-            f"Dispatch the qualification workflow for `{tag}` "
-            f"manually."
+            f"Dispatch the qualification workflow for `{tag}` manually "
+            f"with `{nonce}` as its `nonce` input (the recorded dispatch "
+            f"nonce; a run that does not echo it is ignored, never "
+            f"counted as evidence)."
         ),
     )
     if not performed:

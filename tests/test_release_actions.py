@@ -162,8 +162,11 @@ class TestQualificationDispatch:
             assert (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix-intent:qual-retry:"
                     f"{fingerprint} -->") in intent
             # The receipt records the dispatched nonce so the evaluator
-            # can require the manifest to echo it.
+            # can require the manifest to echo it, and the VISIBLE part of
+            # the callout renders it too (an integrity binding, not a
+            # secret) so a manual re-dispatcher can copy it.
             assert issue_mod.qual_nonce_marker(MERGE_SHA, nonce) in intent
+            assert f"Dispatch nonce: `{nonce}`" in intent
             assert "[run 901](https://x/qruns/901)" in intent
             # Done stamp lands via edit on the intent comment.
             created = issue.create_comment.return_value
@@ -386,11 +389,12 @@ class TestAutofixDispatchFailure:
     def test_raising_qualification_dispatch_posts_followup_and_still_notifies(self) -> None:
         issue = tracker()
         with patch.object(actions.qual_mod, "dispatch_qualification",
-                          side_effect=RuntimeError("boom")):
+                          side_effect=RuntimeError("boom")) as dispatch:
             performed = actions.advance(gh_mock(MagicMock()), _POLICY,
                                         status=self._failed_qualification_status(),
                                         tracking_issue=issue)
         assert not any("auto-retried" in p for p in performed)
+        nonce = dispatch.call_args.kwargs["nonce"]
         bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
         assert any(":autofix-intent:qual-retry:" in b for b in bodies)
         # No done marker on the intent when dispatch raised (the gate
@@ -401,7 +405,11 @@ class TestAutofixDispatchFailure:
         followup = next(b for b in bodies if "Auto-remediation failed:" in b)
         assert "> [!WARNING]" in followup
         assert "The dispatch itself failed." in followup
-        assert "Dispatch the qualification workflow for `9.1.1` manually." in followup
+        # The manual instruction is self-contained: it carries the exact
+        # recorded nonce to pass as the `nonce` input, because a manual
+        # dispatch without it produces a run the evaluator ignores.
+        assert (f"Dispatch the qualification workflow for `9.1.1` manually "
+                f"with `{nonce}` as its `nonce` input") in followup
         assert ":autofix" not in followup
         assert "\u2014" not in followup
         assert any(f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:" in b for b in bodies)
@@ -548,11 +556,18 @@ class TestTwoPhaseAutofixRecovery:
         # The wedge state exists: done stamped, no run anywhere.
         assert harness.bodies(":autofix-done:qual-retry:")
         # Escalation 1: every failed dispatch posted the loud follow-up
-        # naming the exact manual action (once per failed attempt).
+        # naming the exact manual action (once per failed attempt),
+        # including the recorded nonce a manual dispatch must echo. Both
+        # attempts reuse the ONE recorded nonce (the standing intent's),
+        # so both instructions carry the same value.
         followups = harness.bodies("Auto-remediation failed:")
         assert len(followups) == 2
-        assert all("Dispatch the qualification workflow for `9.1.1` "
-                   "manually." in body for body in followups)
+        recorded = issue_mod.recorded_qualification_nonce(
+            harness.issue, MERGE_SHA)
+        assert recorded
+        assert all(f"Dispatch the qualification workflow for `9.1.1` "
+                   f"manually with `{recorded}` as its `nonce` input"
+                   in body for body in followups)
         # Escalation 2: the standing failure notification mentioned the
         # team, naming the failed qualification run.
         notifications = harness.bodies(
@@ -576,8 +591,8 @@ class TestQualificationDispatchNonce:
     """The per-dispatch nonce contract: the intent receipt records the
     nonce, the dispatch sends exactly that nonce, and a crashed dispatch's
     retry reuses the RECORDED nonce (a fresh one would diverge from the
-    receipt and the evaluator would refuse the resulting manifest
-    forever)."""
+    receipt and the evaluator would skip the resulting run's manifest
+    forever: a non-echoing run is invisible)."""
 
     def _fresh_status(self) -> ReleaseStatus:
         return _status(qualification=QualificationStatus())
@@ -594,6 +609,10 @@ class TestQualificationDispatchNonce:
         intents = harness.bodies(":autofix-intent:qual-dispatch:")
         assert len(intents) == 1
         assert issue_mod.qual_nonce_marker(MERGE_SHA, nonce) in intents[0]
+        # The VISIBLE part of the NOTE callout renders the nonce too (an
+        # integrity binding, not a secret): a manual re-dispatcher must be
+        # able to copy it as the `nonce` input.
+        assert f"Dispatch nonce: `{nonce}`" in intents[0]
         # The read-back the evaluator threading uses resolves to it.
         assert issue_mod.recorded_qualification_nonce(
             harness.issue, MERGE_SHA) == nonce

@@ -607,10 +607,12 @@ def compute_status(
             checks = checks_mod.evaluate_required_checks(repo, policy, candidate.sha)
             if not blockers and not alerts:
                 phase = ReleasePhase.QUALIFICATION
-                # The evaluator requires the manifest to echo the nonce the
-                # dispatch receipt recorded, when one exists; "" (legacy
-                # receipts, pre-nonce trackers) leaves the nonce as
-                # evidence detail only.
+                # Skip semantics: when the dispatch receipt recorded a
+                # nonce, the evaluator ignores runs whose manifest does
+                # not echo it (they are not evidence, not failures) and
+                # the newest echoing run wins; "" (legacy receipts,
+                # pre-nonce trackers) leaves the nonce as evidence detail
+                # only.
                 expected_nonce = (
                     issue_mod.recorded_qualification_nonce(
                         tracking_issue, candidate.sha, gh)
@@ -633,14 +635,36 @@ def compute_status(
                     )
                 elif qualification.run_id:
                     failed = ", ".join(qualification.failed_jobs[:5])
+                    redispatch = (
+                        f"re-dispatch the qualification workflow with "
+                        f"`{expected_nonce}` as its `nonce` input (the "
+                        f"recorded dispatch nonce; a run that does not "
+                        f"echo it is ignored, and a new echoing run for "
+                        f"the same SHA supersedes this one)"
+                        if expected_nonce else
+                        "re-dispatch the qualification workflow (a new run "
+                        "for the same SHA supersedes this one)"
+                    )
                     blockers.append(
                         f"Qualification run {qualification.run_id} failed "
                         f"({failed}); the first failure is retried once "
                         f"automatically. After a failed retry, fix the cause "
                         f"and dispatch the Reconcile Releases workflow, or "
-                        f"re-dispatch the qualification workflow echoing the "
-                        f"recorded dispatch nonce (a new run for the same SHA "
-                        f"supersedes this one)."
+                        f"{redispatch}."
+                    )
+                elif expected_nonce:
+                    # Skip semantics: runs whose manifest does not echo the
+                    # recorded dispatch nonce are invisible (not evidence,
+                    # not failures), so "no run" here means "no ECHOING
+                    # run". The blocker renders the nonce (an integrity
+                    # binding, not a secret) and names the exact action.
+                    blockers.append(
+                        f"No qualification run echoes the recorded dispatch "
+                        f"nonce `{expected_nonce}` for the candidate SHA "
+                        f"(runs that do not echo it are ignored, not "
+                        f"failed). Dispatch the qualification workflow for "
+                        f"`{tag}` at `{candidate.sha[:12]}` with "
+                        f"`{expected_nonce}` as its `nonce` input."
                     )
                 else:
                     blockers.append(

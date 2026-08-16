@@ -65,12 +65,13 @@ MANIFEST_SCHEMA_VERSION = 1
 _MAX_MANIFEST_BYTES = 32 * 1024
 
 # Required manifest fields (schema 1). automation_sha is recorded into the
-# evidence log rather than compared to a dispatch record. The nonce IS
-# compared when the caller supplies the dispatch-recorded value
+# evidence log rather than compared to a dispatch record. The nonce binds
+# during RUN SELECTION when the caller supplies the dispatch-recorded value
 # (``expected_nonce``): the controller passes a per-dispatch nonce and
-# records it on the tracker receipt, and the producer echoes it back in
-# the manifest; a receipt from before nonce wiring carries none, in which
-# case the nonce stays evidence detail only.
+# records it on the tracker receipt, the producer echoes it back in the
+# manifest, and a completed run whose manifest does not echo it is skipped
+# (invisible, never a failure). A receipt from before nonce wiring carries
+# none, in which case the nonce stays evidence detail only.
 _MANIFEST_REQUIRED_FIELDS = (
     "schema", "nonce", "version", "tag", "source_sha", "automation_sha",
     "rpm_jobs", "deb_jobs", "archive_jobs",
@@ -89,13 +90,20 @@ def evaluate_qualification(
     generate step) must not pass vacuously.
 
     ``expected_nonce``, when set, is the nonce the controller's dispatch
-    receipt recorded for this candidate: the run's manifest must echo it
-    exactly, binding the evidence to the controller's own dispatch. ""
+    receipt recorded for this candidate. SKIP semantics, not fail: a
+    completed run whose manifest does not echo the recorded nonce is not
+    the controller's dispatch, so it is invisible during run selection --
+    not evidence, not a failure -- and the newest ECHOING run is the
+    evidence. A nonce-less manual re-dispatch (whose producer falls back
+    to a run-derived nonce) therefore never poisons the slot by
+    superseding the controller's own run. When no echoing run exists at
+    all, this returns the empty status and the caller's blocker renders
+    the recorded nonce with the exact manual-dispatch instruction. ""
     (legacy receipts from before nonce wiring, or callers with no tracker
     access) keeps the prior behavior: the manifest nonce is recorded as
     evidence detail only.
     """
-    run = _find_run(gh, policy, tag, sha)
+    run = _find_run(gh, policy, tag, sha, expected_nonce=expected_nonce)
     if run is None:
         return QualificationStatus()
     result = partial(QualificationStatus, run_id=run.id, url=run.html_url)
@@ -303,12 +311,16 @@ def _validate_manifest_content(
                 f"{count!r}, expected {expected_count})"
             )
     if expected_nonce and payload["nonce"] != expected_nonce:
-        # The dispatch receipt recorded a nonce: the manifest must echo it
-        # exactly, or the run is not the one this controller dispatched.
+        # Defense in depth: run selection already skips completed runs
+        # whose manifest does not echo the recorded nonce, so this gap is
+        # normally unreachable; it stands against artifact content
+        # changing between the selection read and this validation read.
+        # The message names the remedial ACTION, not just the values.
         gaps.append(
             f"(Evidence mismatch: qualification manifest nonce "
             f"{payload['nonce']!r}, expected {expected_nonce!r} from the "
-            f"dispatch receipt)"
+            f"dispatch receipt; dispatch the qualification workflow with "
+            f"the recorded nonce as its `nonce` input)"
         )
     if not gaps:
         # automation_sha is retained as evidence detail; the nonce is
@@ -506,17 +518,72 @@ def dispatch_qualification(
     return nonce
 
 
-def _find_run(gh: Any, policy: RepoReleasePolicy, tag: str, sha: str) -> Any:
+def _run_echoes_nonce(run: Any, expected_nonce: str) -> bool:
+    """Whether a completed run's manifest echoes the recorded dispatch nonce.
+
+    The run-selection filter behind skip semantics. False never fails
+    anything: a non-echoing run is simply invisible (the caller keeps
+    scanning for an echoing one), so failing closed here can only delay
+    evidence, never fabricate or destroy it. A run with no readable
+    manifest (never uploaded, expired, corrupt, or a transient download
+    error) cannot prove it is the controller's dispatch and reads as
+    non-echoing.
+    """
+    try:
+        artifacts = retry_github_call(
+            lambda: list(run.get_artifacts()),
+            retries=2,
+            description=f"list artifacts of qualification run {run.id}",
+        )
+        manifest = next(
+            (a for a in artifacts
+             if a.name == MANIFEST_ARTIFACT and not a.expired
+             and a.size_in_bytes > 0),
+            None,
+        )
+        if manifest is None:
+            return False
+        payload = _load_manifest_payload(manifest)
+    except Exception:
+        logger.warning(
+            "Could not read the manifest of qualification run %s while "
+            "matching the recorded dispatch nonce; treating the run as "
+            "non-echoing (skipped, not failed)", run.id, exc_info=True,
+        )
+        return False
+    return payload.get("nonce") == expected_nonce
+
+
+def _find_run(gh: Any, policy: RepoReleasePolicy, tag: str, sha: str,
+              expected_nonce: str = "") -> Any:
     """The newest qualification run for exactly this release and commit.
 
-    Two binding rules keep the evidence honest:
+    Three binding rules keep the evidence honest:
     - the run-name must carry the full ``Qualify <tag> @ <sha>`` marker, so
       a run dispatched with a different version for the same SHA (e.g. an
       rc-suffixed dispatch that legitimately skips the package matrix) can
       never satisfy this release's qualification;
     - the run must have executed the default branch's workflow definition,
       so a doctored qualify workflow on a side branch cannot manufacture
-      evidence.
+      evidence;
+    - when ``expected_nonce`` is set (the dispatch receipt recorded one),
+      a completed run whose manifest does not echo it is SKIPPED, not
+      failed: it is some other dispatch (typically a nonce-less manual
+      re-dispatch, whose producer falls back to a run-derived nonce) and
+      must be neither evidence nor a failure, so the newest ECHOING run
+      still wins even when a non-echoing run is newer.
+
+    Two deliberate carve-outs from the nonce filter:
+    - a run still executing cannot have uploaded its manifest yet, so it
+      is returned (and reads as pending) rather than skipped; skipping it
+      would instruct the operator to dispatch a duplicate while the
+      controller's own run may be the one in flight;
+    - a ``startup_failure`` run never planned jobs or artifacts, so its
+      identity is undecidable by manifest -- but its failure is real for
+      EVERY dispatch of this workflow (the same default-branch workflow
+      definition the controller dispatches), so it stays visible and
+      keeps routing through the marker-gated one-retry path instead of
+      reading as "no run".
     """
     repo, workflow = _automation_workflow(gh, policy)
     if workflow is None:
@@ -538,6 +605,15 @@ def _find_run(gh: Any, policy: RepoReleasePolicy, tag: str, sha: str) -> Any:
             logger.warning(
                 "Ignoring qualification run %s: executed from ref %r, not the "
                 "default branch", run.id, run.head_branch,
+            )
+            continue
+        if (expected_nonce and run.status == "completed"
+                and run.conclusion != "startup_failure"
+                and not _run_echoes_nonce(run, expected_nonce)):
+            logger.info(
+                "Skipping qualification run %s: its manifest does not echo "
+                "the recorded dispatch nonce (not evidence, not a failure)",
+                run.id,
             )
             continue
         return run
