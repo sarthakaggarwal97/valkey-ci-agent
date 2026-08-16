@@ -1645,7 +1645,7 @@ class TestAdoptStaleAcknowledgement:
     wedging the release on a recorded no-op."""
 
     def test_stale_former_head_adoption_is_refused(self) -> None:
-        # Branch moved A → B → C. Owner previously adopted B. Now they
+        # Branch moved A -> B -> C. Owner previously adopted B. Now they
         # try to adopt B again: B is neither the current head (C) nor
         # the notes-merge pin (A), so it must be refused. Under the
         # pre-fix code ``status.candidate.sha`` would report B (the last

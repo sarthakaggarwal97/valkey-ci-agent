@@ -1148,7 +1148,7 @@ def _nudge_item(status: ReleaseStatus) -> "tuple[str, str] | None":
             f"branch-moved:{head}",
             f"Branch `{status.branch}` moved to `{head[:12]}` after the "
             f"candidate was established. Adopt the new head "
-            f"(Actions → Adopt Release Candidate) or ship the pinned "
+            f"(Actions -> Adopt Release Candidate) or ship the pinned "
             f"candidate.",
         )
     return None

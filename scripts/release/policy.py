@@ -80,7 +80,9 @@ class RepoReleasePolicy:
     workflow on the same SHA must never satisfy (or clobber) a displayed
     result.
     ``check_timeout_minutes`` bounds how long a still-running required check
-    may sit before it is reported STALLED instead of pending.
+    may sit before it is reported STALLED instead of pending; the same bound
+    also serves post-publication as the deadline for the build run to appear
+    and for a PENDING downstream output before it escalates to FAILED.
     ``daily_workflow`` / ``daily_max_age_hours`` configure the optional
     branch-level daily-CI gate: the newest completed run of that workflow on
     the release branch must be green and no older than the bound for the

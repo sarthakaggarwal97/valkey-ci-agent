@@ -36,7 +36,7 @@ from scripts.release.policy import RepoReleasePolicy
 logger = logging.getLogger(__name__)
 
 # Bound the run scan; qualification runs for an active release are recent.
-# Shared with verify.py's build-run scan.
+# Shared with verify.py's build-run scan and checks.py's daily-run scan.
 RUN_SCAN_LIMIT = 50
 
 # The failed-jobs sentinel a startup_failure run reports. The dataclass

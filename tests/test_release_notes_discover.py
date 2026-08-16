@@ -437,7 +437,7 @@ class TestListRangeCommits:
     def test_sweep_merge_splices_second_parent_sources(self, tmp_path) -> None:
         # A merge-merged backport sweep carries each source PR's (#N) only on its
         # branch (second-parent) side. Those cherry-picks must survive the
-        # first-parent walk, spliced in in place of the sweep merge, or the whole
+        # first-parent walk, spliced in, in place of the sweep merge, or the whole
         # sweep would collapse to its un-attributable merge commit. The merge commit
         # itself is dropped: its sources are now enumerated and the backport-labeled
         # container PR is never a note, so keeping it would mint a phantom note plus

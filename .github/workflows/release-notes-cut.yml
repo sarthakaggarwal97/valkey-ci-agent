@@ -8,7 +8,7 @@
 # Branch model: all stages target the existing M.m branch (created by maintainers).
 # Tags determine the discovery range:
 #   rc1         -> previous release tag..M.m tip
-#   rcN (N>1)  -> M.m.p-rc(N-1) tag..M.m tip
+#   rcN (N>1)   -> M.m.p-rc(N-1) tag..M.m tip
 #   ga          -> last rc tag (or last patch tag)..M.m tip
 name: Cut Release Notes
 # The run-name embeds the version: it is the correlation marker the

@@ -263,10 +263,10 @@ def _create_tracker_or_readback(repo: Any, branch: str, title: str, body: str) -
     read back by the label pair before assuming failure.
 
     Ties resolved:
-      - readback returns exactly one → use it (the create landed);
-      - readback returns MORE than one → refuse (duplicates already exist
+      - readback returns exactly one -> use it (the create landed);
+      - readback returns MORE than one -> refuse (duplicates already exist
         after our POST; retry would only worsen the mess);
-      - readback returns none → the create truly failed; re-raise so the
+      - readback returns none -> the create truly failed; re-raise so the
         caller sees the underlying error.
     """
     try:

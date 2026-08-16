@@ -11,6 +11,9 @@ Subcommands:
                and idempotent; safe to run on a schedule.
     adopt      Record an authorized owner's acknowledgement of branch
                movement by adopting the exact current head as the candidate.
+    publish    Revalidate everything and publish the ready release at its
+               candidate SHA (protected path): plan-only emits the approval
+               evidence; execute requires the approved tag/SHA bindings.
 
 Returns 0 on success, 1 on refusal/failure, 2 on usage error.
 """

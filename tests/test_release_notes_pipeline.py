@@ -422,7 +422,7 @@ def test_uncertain_dropped_bullet_not_surfaced(monkeypatch, clone):
     assert r.uncertain == ()
 
 
-def test_dedup_bullets_by_pr_keeps_first_preserves_order(monkeypatch):
+def test_dedup_bullets_by_pr_keeps_first_preserves_order():
     bl = [
         CategorizedBullet(pr_number=1, author="a", category="Bug Fixes", text="one"),
         CategorizedBullet(pr_number=2, author="b", category="Bug Fixes", text="two"),
@@ -434,7 +434,7 @@ def test_dedup_bullets_by_pr_keeps_first_preserves_order(monkeypatch):
     assert dups == (1,)
 
 
-def test_dedup_prefers_renderable_over_reserved_bullet(monkeypatch):
+def test_dedup_prefers_renderable_over_reserved_bullet():
     # The model emits a reserved-section bullet FIRST for a PR, then its real note.
     # First-seen dedup would keep the reserved one (dropped by group_bullets) and
     # discard the real note, so the PR renders nowhere and is misreported as
@@ -448,7 +448,7 @@ def test_dedup_prefers_renderable_over_reserved_bullet(monkeypatch):
     assert dups == (1,)
 
 
-def test_dedup_all_reserved_keeps_first(monkeypatch):
+def test_dedup_all_reserved_keeps_first():
     # When every bullet for a PR is reserved there is nothing renderable to prefer;
     # keep the first so the pipeline still folds the PR into skipped (not credited).
     bl = [

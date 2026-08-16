@@ -415,20 +415,20 @@ identities. The release decision (version + stage) is pinned by the notes
 PR's head branch (`agent/release-cut/<version>-<stage>`), which must live in
 the upstream repo and postdate the tracker.
 
-Lifecycle (each transition gated on live evidence): notes PR merged → its
+Lifecycle (each transition gated on live evidence): notes PR merged -> its
 merge commit is the candidate while it remains branch head (movement requires
-an authorized owner to adopt the exact new head) → required checks evaluated
+an authorized owner to adopt the exact new head) -> required checks evaluated
 on the exact SHA, scoped to the policy's CI workflow, for tracker display
-only (informational, never a gate) → no-publish qualification
+only (informational, never a gate) -> no-publish qualification
 in valkey-release-automation, dispatched automatically and evaluated against
 the exact reviewed matrix inventory (jobs and unexpired artifacts, not run
-conclusions) → protected publication (two jobs: validate renders the plan as
+conclusions) -> protected publication (two jobs: validate renders the plan as
 approver evidence; the environment-gated publish revalidates everything,
 requires the approver-seen tag and SHA, creates the release at the candidate
-SHA, and verifies the tag) → downstream outputs verified against canonical
+SHA, and verifies the tag) -> downstream outputs verified against canonical
 public locations (downloads, three registries, merged PRs, the Helm index),
 with Bundle and Helm gated on the base images being public and stalls or
-failures escalated into a once-per-state team notification → the issue
+failures escalated into a once-per-state team notification -> the issue
 closes itself when everything is verified. Alongside the per-commit gates,
 an optional branch-level daily-CI gate (policy `daily_workflow` +
 `daily_max_age_hours`) holds READY unless the release branch's newest

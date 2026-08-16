@@ -5,8 +5,8 @@ is opened until you say so; branches are on the fork, review-ready.
 
 ---
 
-## PR 1 — valkey-io/valkey-ci-agent
-**Branch**: `sarthakaggarwal97:upstream-release-controller` → `valkey-io:main` (2 commits)
+## PR 1 - valkey-io/valkey-ci-agent
+**Branch**: `sarthakaggarwal97:upstream-release-controller` -> `valkey-io:main` (2 commits)
 **Title**: Add a release controller driven by tracking issues
 
 ### Body
@@ -49,7 +49,7 @@ website, Bundle, Helm) fail-closed before closing the tracker.
   through the full chain, including branch-movement adoption, stale-gate
   replacement, bounded auto-remediation, and a real macOS build break
   caught by the candidate gate. This is the primary evidence.
-- 2,177 unit tests (attack-test style: forged receipts, lookalike PRs,
+- 2,186 unit tests (attack-test style: forged receipts, lookalike PRs,
   quoted markers, hostile payloads, bypass actors), ruff and mypy clean.
 - Four AI-adversarial review rounds plus three maintainer-persona
   cold reads; every patchable finding is closed and the remainder is
@@ -80,8 +80,8 @@ without the relay; qualification requires the automation PR.
 
 ---
 
-## PR 2 — valkey-io/valkey-release-automation
-**Branch**: `sarthakaggarwal97:upstream-release-automation` → `valkey-io:main` (2 commits)
+## PR 2 - valkey-io/valkey-release-automation
+**Branch**: `sarthakaggarwal97:upstream-release-automation` -> `valkey-io:main` (2 commits)
 **Title**: Add release qualification and harden the release workflows
 
 ### Body
@@ -123,9 +123,9 @@ issues.
 
 ---
 
-## PR 3 — valkey-io/valkey
+## PR 3 - valkey-io/valkey
 **Branch**: (cherry-pick `.github/workflows/release-start.yml` + the
-trigger-build-release hardening from fork `unstable`) → `valkey-io:unstable`
+trigger-build-release hardening from fork `unstable`) -> `valkey-io:unstable`
 **Title**: Add a Start Release relay to the release controller
 
 ### Body
@@ -149,7 +149,7 @@ this PR.
 
 ## Open questions for you before opening
 1. PR 3 branch: I'll cut a clean `upstream-start-relay` branch from
-   valkey-io/valkey unstable with just those commits — confirm.
+   valkey-io/valkey unstable with just those commits - confirm.
 2. The fork policy file (`release_policy.fork.yml`) ships in PR 1;
    reviews suggested removing it from the production branch. Keep (it
    documents the test harness) or strip?

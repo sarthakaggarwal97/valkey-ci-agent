@@ -512,10 +512,11 @@ to read the advisories.
 
 ## Release Controller
 
-`release-start.yml`, `release-reconcile.yml`, and `release-adopt.yml` drive a
+`release-start.yml`, `release-reconcile.yml`, `release-adopt.yml`, and
+`release-publish.yml` drive a
 deterministic release controller (`scripts/release/`) that makes a Valkey
 release one coordinated operation. A release tracking issue shows the live
-state, but the controller recomputes truth from GitHub on every pass — it
+state, but the controller recomputes truth from GitHub on every pass: it
 never trusts issue text, so editing the issue changes nothing and authorizes
 nothing.
 
@@ -536,9 +537,9 @@ release decision: branch, intent (`rc`/`ga`/`patch`), and urgency. It:
 3. Verifies the dispatching actor's membership in the policy's authorized
    team, live against GitHub.
 4. Derives the version deterministically from the branch and existing tags
-   (`rc` → next `M.m.0-rcN`, `ga` → `M.m.0`, `patch` → next `M.m.p`); the
+   (`rc` -> next `M.m.0-rcN`, `ga` -> `M.m.0`, `patch` -> next `M.m.p`); the
    operator never types a version.
-5. Creates the tracking issue — or, when a release is already active on the
+5. Creates the tracking issue, or, when a release is already active on the
    branch, reuses its issue without any writes (one active release per
    branch; concurrent releases on different branches are fine). A duplicate
    start whose cut never produced a notes PR *resumes*: the version is
@@ -556,19 +557,19 @@ remains the branch head. The notes PR must live in the upstream repo and be
 newer than the tracker, so a fork PR with a look-alike head branch or a
 previous release's merged notes PR can never bind. Required checks (named in
 the policy) are evaluated against that exact SHA for display only, and only
-runs from the policy's `checks_workflow` count — check-run names are not
+runs from the policy's `checks_workflow` count: check-run names are not
 unique across workflows, so a `daily.yml` dispatch on the candidate can
 neither satisfy nor clobber a `ci.yml` result. The latest run per check
 wins, so a maintainer rerun of a failed job on the same SHA is recognized.
 The results are informational: they render on the tracker so the approver
 sees the candidate's CI state, but they never block qualification or
-readiness — qualification is the only pre-publication technical gate. If
+readiness; qualification is the only pre-publication technical gate. If
 the branch moves, the candidate is invalidated and qualification stops
 until an authorized owner dispatches `release-adopt.yml` with the exact new
 head SHA; the acknowledgement is recorded as a bot-authored comment, the
 only adoption record reconciliation trusts. The issue reports readiness
 when a valid candidate passed qualification and the other non-check gates
-(tag absence, no alerts) hold — and readiness is a display of
+(tag absence, no alerts) hold, and readiness is a display of
 recomputed state, not an authorization to publish. A branch-level daily-CI
 gate complements these per-commit checks: when the policy configures
 `daily_workflow` and `daily_max_age_hours`, the release cannot reach READY
@@ -578,20 +579,20 @@ the freshness bound.
 **Qualification** (stage 3): once the candidate SHA is bound (notes PR
 merged, or the exact new head adopted after branch movement),
 reconciliation dispatches the automation repo's `qualify-release.yml` with
-the version *and the exact candidate SHA* — a no-publish build of the
+the version *and the exact candidate SHA*: a no-publish build of the
 archive and package matrix. Evidence is GitHub-native and re-queried live:
 the run (matched by the SHA embedded in its run-name), its conclusion, its
 job results, and a minimum job count so a truncated matrix can never pass
-vacuously. This is the stage that catches the 7.2.14 pattern — a package
-matrix that cannot build — before any release, tag, or upload exists.
+vacuously. This is the stage that catches the 7.2.14 pattern (a package
+matrix that cannot build) before any release, tag, or upload exists.
 
 **Protected publication** (stage 4, `release-publish.yml`): publication is
 the flow's only production write and fires valkey's build dispatch, so it
 runs as two jobs. `validate` re-runs every check (candidate, CI,
 qualification, `version.h` at the SHA, release-notes section, tag
 availability, explicit latest-release decision) and renders the exact plan
-into the job summary; `publish` — gated by the protected `release`
-environment with required reviewers — revalidates everything again, requires
+into the job summary; `publish`, gated by the protected `release`
+environment with required reviewers, revalidates everything again, requires
 the same tag the approver saw, creates the release at the full candidate
 SHA, and verifies the created tag points at exactly that SHA. `make_latest`
 is always explicit: an old line's patch never steals the latest pointer.
@@ -608,8 +609,8 @@ an unchanged failure never re-notifies).
 Valkey `-trixie`/`-alpine` base images are public, then dispatched through
 valkey-bundle's own update hook and verified through merge and public
 availability in Docker Hub, GHCR, and ECR. The Helm chart bump (which has no
-upstream automation) is opened by the controller itself — `appVersion`,
-chart patch bump, README badges — only after the chart's default image tag
+upstream automation) is opened by the controller itself (`appVersion`,
+chart patch bump, README badges) only after the chart's default image tag
 is public, and verified through the chart release, and the GHCR OCI chart.
 When every output is verified or not-applicable, the tracking issue closes
 itself.
@@ -626,18 +627,18 @@ personal fork has no teams).
 |---|---|---|
 | `VALKEYRIE_BOT_APP_ID` / `VALKEYRIE_BOT_PRIVATE_KEY` (secrets) | all release workflows | GitHub App that mints every short-lived token (upstream) |
 | `AWS_ROLE_ARN` (secret) + `AWS_REGION` (variable) | release-notes cut | OIDC role for Bedrock; region defaults to `us-east-1` |
-| `AUTOMATION_PAT` / `VALKEY_GITHUB_TOKEN` (secrets) | all / notes cut | Fork-only fallbacks — structurally unused when the owner is `valkey-io` |
+| `AUTOMATION_PAT` / `VALKEY_GITHUB_TOKEN` (secrets) | all / notes cut | Fork-only fallbacks, structurally unused when the owner is `valkey-io` |
 
 The App installation must cover the org and every repo the flow touches,
 with the union of what the workflows mint: `members:read` on the org;
 `contents:write`, `issues:write`, `pull-requests:write`, `checks:read`, and
 `actions:read` on valkey; `contents:write`, `pull-requests:write`,
-`actions:write`, `issues:read`, and `checks:read` on the downstream repos
+`actions:write`, and `checks:read` on the downstream repos
 (valkey-release-automation, valkey-hashes, valkey-container, valkey-doc,
 valkey-io.github.io, valkey-bundle, valkey-helm); plus
 `repository-advisories:read` on valkey only if advisory-sourced cuts are
 used. This repository also needs a `release` environment configured with
-required reviewers, self-review prevented, and admin bypass disallowed —
+required reviewers, self-review prevented, and admin bypass disallowed;
 the controller fail-closes publication when the environment is missing or
 any of those protections is absent.
 

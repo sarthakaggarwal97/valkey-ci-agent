@@ -18,11 +18,8 @@ Registry flows (verified live against the valkey repos):
 from __future__ import annotations
 
 import json
-import logging
 import urllib.error
 import urllib.request
-
-logger = logging.getLogger(__name__)
 
 _TIMEOUT_S = 30
 _MANIFEST_ACCEPT = ", ".join([

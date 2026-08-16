@@ -951,8 +951,6 @@ def _previous_tag(repo: Any, version: str, stage: str) -> str | None:
     return None
 
 
-
-
 _APPROVAL_MARKER = f"<!-- {issue_mod.MARKER_NAMESPACE}:approval-evidence -->"
 
 

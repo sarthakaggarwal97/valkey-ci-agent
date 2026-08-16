@@ -5,8 +5,9 @@
 #   validate  runs every pre-publication check (candidate SHA, required CI,
 #             qualification, version.h, release notes, tag availability,
 #             latest-release decision) and prints the exact publication plan
-#             (tag, SHA, flags, release body) to the job summary. No secrets
-#             beyond read access; no environment.
+#             (tag, SHA, flags, release body) to the job summary. Its App
+#             token is read-scoped except issues:write, which posts the
+#             approval evidence onto the tracker; no environment.
 #
 #   publish   gated by the protected `release` environment (required
 #             reviewers approve on the run page after reading the validate

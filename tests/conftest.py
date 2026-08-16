@@ -27,7 +27,7 @@ def block_real_ai_entry_point(monkeypatch: pytest.MonkeyPatch) -> None:
     :func:`scripts.ai.claude_code.run_claude_code`. Python resolves that
     default at import time and stores it on the function object's
     ``__kwdefaults__``, so patching the module-level ``run_claude_code``
-    attribute is not enough — the function still holds a reference to the
+    attribute is not enough: the function still holds a reference to the
     real function. When a test's PRs are label-less (or carry a non-
     ``release-notes`` label) they enter the triage stage, and if the test
     forgets to stub ``triage_mod.triage`` and does not pass ``run_fn=``

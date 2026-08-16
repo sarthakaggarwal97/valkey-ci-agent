@@ -1162,7 +1162,7 @@ class TestNudgeOnce:
         body = issue.create_comment.call_args.kwargs["body"]
         assert "**@valkey-io/core-team: Action Needed for `9.1.1`.**" in body
         assert f"Branch `9.1` moved to `{MOVED_SHA[:12]}`" in body
-        assert "Adopt the new head (Actions → Adopt Release Candidate)" in body
+        assert "Adopt the new head (Actions -> Adopt Release Candidate)" in body
         assert "or ship the pinned candidate." in body
         assert "\u2014" not in body
 

@@ -268,7 +268,7 @@ class ReleaseStatus:
     (``agent/release-cut/<version>-<stage>``), the bot-created artifact that
     pins the release decision; both are "" until that PR exists.
     ``phase`` is the furthest phase whose entry evidence exists; ``ready``
-    remains the stage-2 pre-publication gate (candidate valid +
+    remains the pre-publication gate (candidate valid +
     qualification passed + the non-check gates such as tag absence and no
     alerts; required-check results are informational and never enter it).
     ``blockers`` lists, in render order, what
