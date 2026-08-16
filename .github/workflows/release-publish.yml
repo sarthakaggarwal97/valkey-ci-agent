@@ -53,6 +53,20 @@ on:
         description: "Candidate commit to publish: paste the full 40-character SHA (binds this dispatch to that candidate)"
         required: true
         type: string
+      # The explicit, typed signal that the CONTROLLER (not a human)
+      # dispatched this run. Only the controller's auto-dispatch
+      # (scripts/release/actions.py _dispatch_publish) ever sends true;
+      # the Actions "Run workflow" form defaults to false. The plan-only
+      # step keys its --unattended flag off this input, never off an
+      # actor-name literal. --unattended only skips the actor team check
+      # on the READ-ONLY planning path: authorization is enforced at the
+      # approval gate and re-checked on execute with the approver's
+      # identity, so a stray true here grants nothing.
+      unattended:
+        description: "Set by the controller's auto-dispatch only: plan without checking the dispatcher's team membership (approval still gates publication)"
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -164,6 +178,9 @@ jobs:
           RELEASE_BOT_LOGIN: ${{ steps.generate-token.outputs.app-slug && format('{0}[bot]', steps.generate-token.outputs.app-slug) || '' }}
           BRANCH: ${{ inputs.branch }}
           ACTOR: ${{ github.triggering_actor }}
+          # "true"/"false" from the typed boolean input; only the
+          # controller's auto-dispatch ever sends true.
+          UNATTENDED: ${{ inputs.unattended }}
           # The controller commit this run executes; the Python side stamps
           # it into the approval evidence so approver and executor can be
           # shown to have run the same controller code.
@@ -174,10 +191,11 @@ jobs:
           set -euo pipefail
           args=(--policy "${POLICY}" --repo "${TARGET_REPO}"
                 publish --branch "${BRANCH}" --actor "${ACTOR}" --plan-only)
-          # A run the controller dispatched itself has the Actions bot as its
-          # actor; planning is read-only, and authorization is enforced at
-          # the approval gate and re-checked on execute with the approver.
-          if [[ "${ACTOR}" == "github-actions[bot]" ]]; then
+          # The explicit unattended input (never an actor-name literal)
+          # declares a controller-dispatched run; planning is read-only,
+          # and authorization is enforced at the approval gate and
+          # re-checked on execute with the approver.
+          if [[ "${UNATTENDED}" == "true" ]]; then
             args+=(--unattended)
           fi
           python -m scripts.release.main "${args[@]}"
@@ -284,23 +302,29 @@ jobs:
           GATE_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          # The endpoint returns the run's approval records; the last
-          # state=approved entry is the human who clicked Approve.
+          # The endpoint returns the run's approval records, each naming
+          # the environment(s) it approved. Select by ENVIRONMENT NAME
+          # ("release" must match this job's `environment:` line), never
+          # positionally: a run whose approval history also carries
+          # records for other environments (or rejected states) must
+          # resolve to the human who approved THIS gate. The newest
+          # matching approval wins.
           APPROVER=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/approvals" \
-            --jq '[.[] | select(.state == "approved")] | last.user.login // empty' 2>/dev/null || echo "")
+            --jq '[.[] | select(.state == "approved") | select([.environments[]?.name] | index("release"))] | last.user.login // empty' 2>/dev/null || echo "")
           if [[ -z "$APPROVER" ]]; then
             # Upstream the protected `release` environment always exists, so
             # a missing approval record means either the gate was bypassed or
             # the record could not be read; treating the dispatcher as the
             # approver would misattribute the approval. Fail closed.
             if [[ "$GATE_OWNER" == "valkey-io" ]]; then
-              echo "The deployment approval record did not identify a human approver; refusing to publish." >&2
+              echo "The deployment approval record did not identify a human approver for the release environment; refusing to publish." >&2
               exit 1
             fi
             # Fork carve-out: fork policies authorize via explicit user:
             # entries and may run without a protected release environment,
             # so no approval record exists; there the dispatcher is the
-            # accountable human.
+            # accountable human. Say so loudly on the run.
+            echo "::warning::No deployment approval record backed this publish; the dispatching actor '${FALLBACK_ACTOR}' is being promoted to approver (fork carve-out). This publication was NOT gated by a recorded environment approval."
             APPROVER="${FALLBACK_ACTOR}"
           fi
           echo "login=$APPROVER" >> "$GITHUB_OUTPUT"

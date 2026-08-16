@@ -15,7 +15,7 @@ from github.GithubException import GithubException
 
 from scripts.release import verify
 from scripts.release.models import DownstreamOutput, OutputState
-from tests.release_fixtures import MERGE_SHA, gh_mock, make_policy
+from tests.release_fixtures import MERGE_SHA, gh_mock, make_downstream, make_policy
 
 _POLICY = make_policy()
 
@@ -217,7 +217,7 @@ class TestBundle:
         assert output.action == ""
 
     def test_old_closed_pr_no_longer_wedges_the_release(self) -> None:
-        # F28: a closed-unmerged PR carrying an OLDER tag is a previous
+        # A closed-unmerged PR carrying an OLDER tag is a previous
         # release's history, not this release's rejection; the not-started
         # path holds and the dispatch can proceed.
         versions = json.dumps({"9.1": {"version": "9.1.1", "valkey-server": {"version": "9.1.0"}}})
@@ -452,6 +452,120 @@ class TestOrderingGate:
         assert bundle.call_args.kwargs["images_public"] is False
         assert helm.call_args.kwargs["image_public"] is False
 
+    def test_unconfigured_container_images_satisfy_the_gate_vacuously(self) -> None:
+        # SKIPPED happens exactly when no image registry endpoint is
+        # configured (fork policies): there is no public-image evidence to
+        # wait for, and holding Bundle/Helm BLOCKED forever would wedge
+        # the release.
+        core_skipped = (DownstreamOutput(name="container-images",
+                                         state=OutputState.SKIPPED),)
+        with patch.object(verify, "_verify_bundle") as bundle, \
+             patch.object(verify, "_verify_helm") as helm:
+            verify.verify_ordered_outputs(MagicMock(), _POLICY, version="9.1.1",
+                                          tag="9.1.1", stage="ga", core=core_skipped)
+        assert bundle.call_args.kwargs["images_public"] is True
+        assert helm.call_args.kwargs["image_public"] is True
+
+
+class TestUnconfiguredPublicEndpoints:
+    """Empty public-endpoint policy fields mean "not configured for this
+    repository": the output is informational (SKIPPED, never VERIFIED) and
+    never fails or blocks the release. Mirrors the daily gate's handling
+    of absence; exists so a fork E2E cannot false-VERIFY against
+    upstream's real registries and downloads."""
+
+    _NOT_CONFIGURED_DOWN = make_policy(downstream=make_downstream(
+        dockerhub_repo="", bundle_dockerhub_repo="", ghcr_image_repo="",
+        ecr_namespace="", helm_index_url="", downloads_base_url="",
+    )).downstream
+
+    def test_empty_downloads_url_never_probes_and_never_verifies(self) -> None:
+        with patch.object(verify.pub, "url_exists") as probe:
+            output = verify._verify_tarballs(self._NOT_CONFIGURED_DOWN, "9.1.1")
+        probe.assert_not_called()
+        assert output.state is OutputState.SKIPPED
+        assert output.detail == "Not configured for this repository"
+
+    def test_all_image_endpoints_empty_renders_not_configured(self) -> None:
+        repo = _repo_serving({}, pulls=[_pr()])
+        with patch.object(verify.pub, "dockerhub_tag_exists") as hub, \
+             patch.object(verify.pub, "ghcr_tag_exists") as ghcr, \
+             patch.object(verify.pub, "ecr_public_tag_exists") as ecr:
+            _pr_out, images = verify._verify_container(
+                gh_mock(repo), self._NOT_CONFIGURED_DOWN, "9.1.1")
+        # No probe fired: nothing upstream-owned was consulted.
+        hub.assert_not_called()
+        ghcr.assert_not_called()
+        ecr.assert_not_called()
+        assert images.state is OutputState.SKIPPED
+        assert images.detail == "Not configured for this repository"
+
+    def test_skipped_endpoints_never_fail_and_settle_the_release(self) -> None:
+        # The whole point: an unconfigured endpoint neither verifies nor
+        # fails; the release can still complete (SKIPPED settles).
+        with patch.object(verify.pub, "url_exists") as probe:
+            tarballs = verify._verify_tarballs(self._NOT_CONFIGURED_DOWN, "9.1.1")
+        probe.assert_not_called()
+        assert tarballs.state not in (OutputState.VERIFIED, OutputState.FAILED)
+        assert verify.outputs_all_settled((tarballs,))
+
+    def test_partial_configuration_probes_only_configured_registries(self) -> None:
+        # Only GHCR is configured (a fork-owned namespace): Docker Hub and
+        # ECR are never probed, and the VERIFIED claim names only what was
+        # actually checked.
+        down = make_policy(downstream=make_downstream(
+            dockerhub_repo="", ecr_namespace="",
+            ghcr_image_repo="forkowner/valkey",
+        )).downstream
+        repo = _repo_serving({}, pulls=[_pr()])
+        with patch.object(verify.pub, "dockerhub_tag_exists") as hub, \
+             patch.object(verify.pub, "ghcr_tag_exists",
+                          return_value=True) as ghcr, \
+             patch.object(verify.pub, "ecr_public_tag_exists") as ecr:
+            _pr_out, images = verify._verify_container(gh_mock(repo), down, "9.1.1")
+        hub.assert_not_called()
+        ecr.assert_not_called()
+        ghcr.assert_called_once_with("forkowner/valkey", "9.1.1")
+        assert images.state is OutputState.VERIFIED
+        assert "GHCR" in images.detail
+        assert "Docker Hub" not in images.detail
+        assert "ECR" not in images.detail
+
+    def test_bundle_probes_only_configured_registries(self) -> None:
+        down = make_policy(downstream=make_downstream(
+            bundle_dockerhub_repo="", ecr_namespace="",
+        )).downstream
+        versions = json.dumps(
+            {"9.1": {"valkey-server": {"version": "9.1.1"}, "version": "2.0.1"}}
+        )
+        repo = _repo_serving({"versions.json": versions})
+        with patch.object(verify.pub, "dockerhub_tag_exists") as hub, \
+             patch.object(verify.pub, "ghcr_tag_exists",
+                          return_value=True) as ghcr, \
+             patch.object(verify.pub, "ecr_public_tag_exists") as ecr:
+            output = verify._verify_bundle(gh_mock(repo), down, "9.1.1", "9.1.1",
+                                           images_public=True)
+        hub.assert_not_called()
+        ecr.assert_not_called()
+        ghcr.assert_called_once()
+        assert output.state is OutputState.VERIFIED
+        assert "GHCR" in output.detail
+
+    def test_helm_with_no_index_url_verifies_on_fork_owned_evidence(self) -> None:
+        down = make_policy(downstream=make_downstream(
+            helm_index_url="",
+        )).downstream
+        chart = 'apiVersion: v2\nname: valkey\nversion: 0.11.0\nappVersion: "9.1.1"\n'
+        repo = _repo_serving({"valkey/Chart.yaml": chart},
+                             tags={"valkey-0.11.0"})
+        with patch.object(verify.pub, "ghcr_tag_exists", return_value=True), \
+             patch.object(verify.pub, "fetch_text") as fetch:
+            output = verify._verify_helm(gh_mock(repo), down, "9.1.1", "ga",
+                                         image_public=True)
+        fetch.assert_not_called()  # the upstream index is never consulted
+        assert output.state is OutputState.VERIFIED
+        assert "not configured for this repository" in output.detail
+
     def test_all_settled_requires_every_output_verified_or_skipped(self) -> None:
         settled = (DownstreamOutput(name="a", state=OutputState.VERIFIED),
                    DownstreamOutput(name="b", state=OutputState.SKIPPED))
@@ -513,7 +627,7 @@ class TestVerifierDegradation:
         assert "404" in hashes.detail
 
     def test_urlerror_degrades_one_output_and_siblings_still_verify(self) -> None:
-        # F29: public_endpoints deliberately raises on 5xx/429 and network
+        # public_endpoints deliberately raises on 5xx/429 and network
         # failures; those must land as a probe error on THAT output only,
         # never abort the pass.
         import urllib.error
@@ -709,7 +823,7 @@ class TestPackagesAndTryValkey:
     # "RPM · <platform.name> (<arch>) · v<version>" (build-rpm),
     # "DEB · ..." (build-deb), "Test RPM · ..." / "Test DEB · ..."
     # (test-rpm/test-deb), plus ONE aggregate "Publish to S3" job and ONE
-    # "Deploy Pages" job. F12 shipped because earlier fixtures invented
+    # "Deploy Pages" job. This check shipped because earlier fixtures invented
     # per-platform "RPM ... Publish to S3" names that production never
     # creates. The fixture policy expects exactly 2 RPM and 1 DEB builds.
     _REAL_PACKAGE_JOBS: "list[tuple[str, str]]" = [
@@ -741,7 +855,7 @@ class TestPackagesAndTryValkey:
         assert out.state is OutputState.SKIPPED
 
     def test_packages_verified_by_the_real_production_job_shapes(self) -> None:
-        # F12 regression pin: the production run has matrix BUILD jobs
+        # Regression pin: the production run has matrix BUILD jobs
         # plus singular aggregate publish jobs. This exact set (the live
         # 8.0.11 shape, scaled to the fixture policy) must verify.
         out = verify._verify_packages(_POLICY.downstream, "ga", _BUILD_OK,
@@ -750,7 +864,7 @@ class TestPackagesAndTryValkey:
         assert "Publish to S3 and Deploy Pages jobs succeeded" in out.detail
 
     def test_aggregate_only_publish_set_never_verifies(self) -> None:
-        # F18 negative pin: green aggregate publish jobs with ZERO matrix
+        # Negative pin: green aggregate publish jobs with ZERO matrix
         # build jobs must not verify. The publish job succeeding proves a
         # write happened, not that the reviewed platform inventory was
         # built; an empty matrix (broken generate step) must read FAILED.
@@ -792,7 +906,7 @@ class TestPackagesAndTryValkey:
         assert "no 'Deploy Pages' job" in out.detail
 
     def test_dropped_platform_fails_packages_despite_green_jobs(self) -> None:
-        # F21: a green-but-smaller matrix (one RPM platform silently
+        # A green-but-smaller matrix (one RPM platform silently
         # dropped, build and test legs both gone) must read FAILED, not
         # VERIFIED.
         out = verify._verify_packages(
@@ -830,7 +944,7 @@ class TestPackagesAndTryValkey:
         assert "Could not list" in out.detail
 
     def test_try_valkey_missing_sentinel_is_failed_for_the_latest_release(self) -> None:
-        # F22 (also the live July 21 pattern: green wrapper jobs, no
+        # The wrapper-job trap (also the live July 21 pattern: green wrapper jobs, no
         # upload): when this release IS the repository's latest, a missing
         # sentinel means the public deployment was never updated.
         jobs = _jobs([
@@ -895,7 +1009,7 @@ class TestPackagesAndTryValkey:
         assert escalated[1].state is OutputState.BLOCKED  # prerequisite carries it
 
     def test_fresh_action_bearing_output_is_exempt_from_the_release_clock(self) -> None:
-        # F13: the clock starts at publication, but Bundle/Helm may spend
+        # The clock starts at publication, but Bundle/Helm may spend
         # that whole window BLOCKED and only just unblock. With no attempt
         # evidence yet (empty run_id and url), the output keeps its action
         # so the first dispatch can still happen.
@@ -1066,7 +1180,7 @@ class TestStallEscalationBoundary:
         assert verify.escalate_stalled_outputs(outputs, None, 360) == outputs
 
     def test_fresh_attempt_after_long_upstream_block_is_not_escalated(self) -> None:
-        # F25: the release published hours ago (spent long in BLOCKED),
+        # The release published hours ago (spent long in BLOCKED),
         # but the downstream PR was JUST opened. The escalator's per-
         # attempt clock must run from pr.created_at, not published_at,
         # otherwise the first-ever downstream attempt is killed on its

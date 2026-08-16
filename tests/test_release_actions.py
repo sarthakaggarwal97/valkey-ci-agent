@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -60,7 +61,7 @@ def _status(**overrides: object) -> ReleaseStatus:
 
 class TestQualificationDispatch:
     def test_dispatches_when_no_run_exists(self) -> None:
-        # F21(2): first qualification dispatch now goes through the two-
+        # The first qualification dispatch goes through the two-
         # phase autofix receipt, so a restart between dispatch and the
         # run appearing in the UI cannot dispatch twice. The intent
         # marker fingerprints the candidate SHA.
@@ -72,7 +73,7 @@ class TestQualificationDispatch:
         assert any("dispatched qualification" in p for p in performed)
 
     def test_first_dispatch_is_marker_gated(self) -> None:
-        # F21(2): with an autofix-done marker in place for this candidate,
+        # With an autofix-done marker in place for this candidate,
         # a fresh advance() (still seeing an empty QualificationStatus)
         # must not re-dispatch. The intent+done pair on a single trusted
         # comment is what a real successful dispatch leaves behind.
@@ -144,16 +145,25 @@ class TestQualificationDispatch:
             assert not any("auto-retried" in p for p in performed)
         else:
             dispatch.assert_called_once()
-            assert dispatch.call_args.kwargs == {"tag": "9.1.1", "sha": MERGE_SHA}
+            kwargs = dict(dispatch.call_args.kwargs)
+            # The retry is a new dispatch, so it carries its own nonce
+            # (recorded on the intent receipt below).
+            nonce = kwargs.pop("nonce")
+            assert re.fullmatch(r"[0-9a-f]{32}", nonce)
+            assert kwargs == {"tag": "9.1.1", "sha": MERGE_SHA}
             assert any("auto-retried qualification" in p for p in performed)
             # The intent marker carries the candidate fingerprint and
             # names the failed run so the human sees which one was
             # retried. The done marker is stamped in place on the intent
-            # comment after dispatch success (F20 two-phase receipt).
+            # comment after dispatch success (the two-phase intent/done
+            # receipt).
             bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
             intent = next(b for b in bodies if ":autofix-intent:qual-retry:" in b)
             assert (f"<!-- {issue_mod.MARKER_NAMESPACE}:autofix-intent:qual-retry:"
                     f"{fingerprint} -->") in intent
+            # The receipt records the dispatched nonce so the evaluator
+            # can require the manifest to echo it.
+            assert issue_mod.qual_nonce_marker(MERGE_SHA, nonce) in intent
             assert "[run 901](https://x/qruns/901)" in intent
             # Done stamp lands via edit on the intent comment.
             created = issue.create_comment.return_value
@@ -224,7 +234,7 @@ class TestAutoDispatchBuildRelease:
                                     status=self._failed_trigger_status(),
                                     tracking_issue=issue)
         repo.get_workflow.assert_any_call("build-release.yml")
-        # F6: the payload carries source_sha (the exact candidate commit)
+        # The payload carries source_sha (the exact candidate commit)
         # so the automation repo can verify its checkout against the
         # commit the controller vetted, not just the tag ref.
         repo.get_workflow.return_value.create_dispatch.assert_called_once_with(
@@ -240,7 +250,7 @@ class TestAutoDispatchBuildRelease:
         assert "**Auto-remediation:** Dispatching the build pipeline for `9.1.1`" in intent
         assert "[release trigger run](https://x/runs/55)" in intent
         assert "\u2014" not in intent
-        # Done stamp lands via edit on the intent comment (F20 two-phase).
+        # Done stamp lands via edit on the intent comment (two-phase receipt).
         created = issue.create_comment.return_value
         edit_bodies = [c.kwargs["body"] for c in created.edit.call_args_list]
         assert any(":autofix-done:build-dispatch:" in b for b in edit_bodies)
@@ -258,7 +268,7 @@ class TestAutoDispatchBuildRelease:
 
     def test_marked_candidate_never_dispatches_again(self) -> None:
         # Once per candidate SHA, even across distinct failed trigger runs.
-        # F20: the done marker (not the old single-shot marker) is what
+        # The done marker (not the old single-shot marker) is what
         # signals "completed successfully" and suppresses re-dispatch.
         repo = self._dispatchable_repo()
         issue = tracker()
@@ -356,7 +366,7 @@ class TestAutofixDispatchFailure:
         bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
         # Intent-first ordering preserved: the intent marker posted even
         # though the follow-up dispatch was rejected. The next pass will
-        # observe intent-without-done and retry once (F20 two-phase).
+        # observe intent-without-done and retry once (two-phase receipt).
         assert any(":autofix-intent:build-dispatch:" in b for b in bodies)
         # The done marker is NOT stamped on the intent when dispatch
         # failed, so re-scanning the intent comment on a next pass
@@ -383,7 +393,8 @@ class TestAutofixDispatchFailure:
         assert not any("auto-retried" in p for p in performed)
         bodies = [c.kwargs["body"] for c in issue.create_comment.call_args_list]
         assert any(":autofix-intent:qual-retry:" in b for b in bodies)
-        # No done marker on the intent when dispatch raised (F20).
+        # No done marker on the intent when dispatch raised (the gate
+        # stays armed for the bounded retry).
         created = issue.create_comment.return_value
         edit_bodies = [c.kwargs["body"] for c in created.edit.call_args_list]
         assert not any(":autofix-done:qual-retry:" in b for b in edit_bodies)
@@ -397,7 +408,7 @@ class TestAutofixDispatchFailure:
 
 
 class TestTwoPhaseAutofixRecovery:
-    """F20: the two-phase receipt (intent marker before dispatch, done
+    """The two-phase receipt (intent marker before dispatch, done
     marker after success) recovers from a crash between the two writes.
 
     - Dispatch raises after intent posted -> next pass retries once and
@@ -469,7 +480,7 @@ class TestTwoPhaseAutofixRecovery:
         assert harness.bodies(":autofix-done:qual-retry:")
 
     def test_dispatch_never_runs_without_the_intent_marker_first(self) -> None:
-        # F20 fail-closed: if the intent-post itself raises, the dispatch
+        # Fail closed: if the intent-post itself raises, the dispatch
         # must not run. Otherwise a crash after dispatch could leave the
         # action unrecorded forever.
         issue = tracker()
@@ -517,9 +528,123 @@ class TestTwoPhaseAutofixRecovery:
         # whether the retry itself succeeded), so pass 3 never dispatches.
         assert harness.bodies(":autofix-done:qual-retry:")
 
+    def test_done_stamped_receipt_with_no_run_escalates_through_failure_notification(self) -> None:
+        # THE WEDGE SCENARIO: intent posted, the retry dispatch also
+        # failed, done stamped (suppressing further attempts), and NO
+        # qualification run resulted. The done stamp must not be a silent
+        # dead end: the human-facing escalation must already be on the
+        # tracker, naming what to do, and later passes must stay quiet
+        # without erasing it.
+        harness = _IssueHarness()
+        status = self._failed_qualification_status()
+        with patch.object(actions.qual_mod, "dispatch_qualification",
+                          side_effect=RuntimeError("boom")), \
+             patch.object(actions.qual_mod, "_find_run", return_value=None):
+            actions.advance(gh_mock(MagicMock()), _POLICY, status=status,
+                            tracking_issue=harness.issue)  # intent + failed dispatch
+            actions.advance(gh_mock(MagicMock()), _POLICY, status=status,
+                            tracking_issue=harness.issue)  # failed retry + done stamp
+
+        # The wedge state exists: done stamped, no run anywhere.
+        assert harness.bodies(":autofix-done:qual-retry:")
+        # Escalation 1: every failed dispatch posted the loud follow-up
+        # naming the exact manual action (once per failed attempt).
+        followups = harness.bodies("Auto-remediation failed:")
+        assert len(followups) == 2
+        assert all("Dispatch the qualification workflow for `9.1.1` "
+                   "manually." in body for body in followups)
+        # Escalation 2: the standing failure notification mentioned the
+        # team, naming the failed qualification run.
+        notifications = harness.bodies(
+            f"<!-- {issue_mod.MARKER_NAMESPACE}:notify:")
+        assert notifications
+        assert any("Qualification run 901 failed" in body
+                   for body in notifications)
+
+        # Later passes: suppressed (no new dispatch), and QUIET, but the
+        # escalation comments stand; the state is escalated-and-waiting,
+        # never silently wedged.
+        before = len(harness.comments)
+        with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
+            actions.advance(gh_mock(MagicMock()), _POLICY, status=status,
+                            tracking_issue=harness.issue)
+        dispatch.assert_not_called()
+        assert len(harness.comments) == before
+
+
+class TestQualificationDispatchNonce:
+    """The per-dispatch nonce contract: the intent receipt records the
+    nonce, the dispatch sends exactly that nonce, and a crashed dispatch's
+    retry reuses the RECORDED nonce (a fresh one would diverge from the
+    receipt and the evaluator would refuse the resulting manifest
+    forever)."""
+
+    def _fresh_status(self) -> ReleaseStatus:
+        return _status(qualification=QualificationStatus())
+
+    def test_first_dispatch_records_the_dispatched_nonce_on_the_receipt(self) -> None:
+        harness = _IssueHarness()
+        with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
+            actions.advance(gh_mock(MagicMock()), _POLICY,
+                            status=self._fresh_status(),
+                            tracking_issue=harness.issue)
+        dispatch.assert_called_once()
+        nonce = dispatch.call_args.kwargs["nonce"]
+        assert re.fullmatch(r"[0-9a-f]{32}", nonce)
+        intents = harness.bodies(":autofix-intent:qual-dispatch:")
+        assert len(intents) == 1
+        assert issue_mod.qual_nonce_marker(MERGE_SHA, nonce) in intents[0]
+        # The read-back the evaluator threading uses resolves to it.
+        assert issue_mod.recorded_qualification_nonce(
+            harness.issue, MERGE_SHA) == nonce
+
+    def test_crashed_dispatch_retry_reuses_the_recorded_nonce(self) -> None:
+        # Pass 1: intent (recording nonce N) posts, dispatch raises.
+        # Pass 2: the retry must dispatch N again, not a fresh nonce.
+        harness = _IssueHarness()
+        status = self._fresh_status()
+        with patch.object(actions.qual_mod, "dispatch_qualification",
+                          side_effect=RuntimeError("boom")) as first:
+            actions.advance(gh_mock(MagicMock()), _POLICY, status=status,
+                            tracking_issue=harness.issue)
+        recorded = issue_mod.recorded_qualification_nonce(
+            harness.issue, MERGE_SHA)
+        assert recorded
+        assert first.call_args.kwargs["nonce"] == recorded
+
+        with patch.object(actions.qual_mod, "dispatch_qualification") as retry, \
+             patch.object(actions.qual_mod, "_find_run", return_value=None):
+            actions.advance(gh_mock(MagicMock()), _POLICY, status=status,
+                            tracking_issue=harness.issue)
+        retry.assert_called_once()
+        assert retry.call_args.kwargs["nonce"] == recorded
+        # No second nonce receipt was minted: one intent, one nonce.
+        assert len(harness.bodies(":autofix-intent:qual-dispatch:")) == 1
+
+    def test_retry_after_failed_run_records_a_fresh_nonce(self) -> None:
+        # The one-shot retry after a FAILED run is a NEW dispatch: its
+        # receipt records a fresh nonce that supersedes the original for
+        # evaluation (newest wins).
+        harness = _IssueHarness()
+        # Seed the tracker with the original dispatch's nonce receipt.
+        harness.issue.create_comment(
+            body=f"{issue_mod.qual_nonce_marker(MERGE_SHA, 'a' * 32)}\nseed")
+        failed = _status(qualification=QualificationStatus(
+            run_id=901, url="https://x/qruns/901", failed_jobs=("job",)))
+        with patch.object(actions.qual_mod, "dispatch_qualification") as dispatch:
+            actions.advance(gh_mock(MagicMock()), _POLICY, status=failed,
+                            tracking_issue=harness.issue)
+        dispatch.assert_called_once()
+        retry_nonce = dispatch.call_args.kwargs["nonce"]
+        assert retry_nonce != "a" * 32
+        # Newest wins on read-back: the retry's nonce is now the one the
+        # evaluator will require.
+        assert issue_mod.recorded_qualification_nonce(
+            harness.issue, MERGE_SHA) == retry_nonce
+
 
 class TestBundleDispatchIdempotency:
-    """F21(3): bundle dispatch marker-gated per (tag, candidate) with the
+    """Bundle dispatch is marker-gated per (tag, candidate) with the
     two-phase receipt. Without this the dispatch re-fires every pass
     while versions.json remains stale."""
 
@@ -572,7 +697,7 @@ class TestBundleDispatchIdempotency:
         repo.create_repository_dispatch.assert_called_once()
 
     def test_raising_dispatch_leaves_intent_for_retry_once(self) -> None:
-        # F21(3): the two-phase receipt handles crashes/5xx in the
+        # The two-phase receipt handles crashes/5xx in the
         # dispatch call too. Pass 1 raises -> intent stays, no done.
         # Pass 2 retries once and stamps done (bounded).
         repo = MagicMock()
@@ -1087,9 +1212,9 @@ class TestNudgeOnce:
 
 
 class TestAutoClose:
-    """F24: advance() marks the release complete (posts the completion
+    """advance() marks the release complete (posts the completion
     comment) and signals close_when_complete=True; it NEVER closes the
-    tracker itself. Reconcile (Agent B's territory) closes as its final
+    tracker itself. Reconcile closes as its final
     write after rendering the final tracker body."""
 
     def test_complete_release_marks_and_signals_close(self) -> None:
@@ -1121,7 +1246,7 @@ class TestAutoClose:
         assert result.close_when_complete is False
 
     def test_close_signal_repeats_across_passes_while_open(self) -> None:
-        # F24: the completion marker is only posted once, but the close
+        # The completion marker is only posted once, but the close
         # signal keeps firing on every subsequent COMPLETE pass while the
         # tracker remains open. Reconcile's earlier close-write may have
         # failed and the next pass must still request the close.
@@ -1156,7 +1281,7 @@ class TestReviewRegressions:
         assert "unshippable" in body
 
     def test_completion_comment_is_not_duplicated_on_rerun(self) -> None:
-        # F24: advance() never closes, so this test now verifies exactly
+        # advance() never closes, so this test now verifies exactly
         # the completion-comment-not-duplicated property. The close is
         # reconcile's job and is asserted separately over there.
         status = _status(phase=ReleasePhase.COMPLETE,
@@ -1205,16 +1330,19 @@ class TestAutoDispatchPublish:
                                     status=self._ready(), tracking_issue=tracker(),
                                     gh_agent=gh_agent, agent_repo="o/agent")
         workflow = gh_agent.get_repo.return_value.get_workflow.return_value
-        # The dispatch binds the run to the exact tag and candidate (F16);
-        # the workflow stamps them into its run-name for correlation.
+        # The dispatch binds the run to the exact tag and candidate (the
+        # workflow stamps them into its run-name for correlation), and
+        # declares itself controller-dispatched through the explicit
+        # unattended input, never an actor-name literal.
         workflow.create_dispatch.assert_called_once_with(
             gh_agent.get_repo.return_value.default_branch,
-            inputs={"branch": "9.1", "tag": "9.1.1", "candidate_sha": MERGE_SHA},
+            inputs={"branch": "9.1", "tag": "9.1.1", "candidate_sha": MERGE_SHA,
+                    "unattended": "true"},
         )
         assert any("publish pipeline" in p for p in performed)
 
     def test_waiting_publish_run_blocks_a_duplicate_dispatch(self) -> None:
-        # F12: only a run whose binding matches the current tag+candidate
+        # Only a run whose binding matches the current tag+candidate
         # may hold the slot. An unbound run cannot; a bound one does.
         # This test uses a matching-bound run so it still measures the
         # anti-duplicate-dispatch behavior it was written for.
@@ -1230,7 +1358,7 @@ class TestAutoDispatchPublish:
         workflow.create_dispatch.assert_not_called()
 
     def test_unbound_waiting_run_no_longer_holds_the_slot(self) -> None:
-        # F12 hostile test: an unbound gate-parked run (legacy or a
+        # Hostile test: an unbound gate-parked run (legacy or a
         # workflow_dispatch that predates the required-input change)
         # must NEVER block a fresh, bound dispatch - that was the DoS
         # vector where a stray unbound run failing the team check could
@@ -1297,8 +1425,8 @@ _publish_run = publish_run
 
 
 def _runs_by_status(runs: "list[MagicMock]") -> "MagicMock":
-    """A workflow mock whose get_runs honors the server-side status filter
-    (F17): get_runs(status=X) serves only the runs whose status is X."""
+    """A workflow mock whose get_runs honors the server-side status filter:
+    get_runs(status=X) serves only the runs whose status is X."""
     workflow = MagicMock()
     workflow.get_runs.side_effect = lambda status="": [
         r for r in runs if r.status == status
@@ -1317,7 +1445,7 @@ def _agent_with_workflow(workflow: MagicMock,
 class TestStalePublishRuns:
     """A publish run parked at the approval gate on old controller code is
     stale: it is cancelled and replaced, never left to publish stale logic.
-    F12: under the required-input workflow contract, every real dispatch
+    Under the required-input workflow contract, every real dispatch
     is bound to a tag+candidate, so these tests exercise BOUND runs whose
     head is stale - an unbound run is a separate case tested via
     :class:`TestUnboundRunsIgnored`."""
@@ -1514,7 +1642,7 @@ class _IssueHarness:
 
 
 class TestStartupFailureRetry:
-    """F14: a startup-failed qualification run carries its run id (it is a
+    """A startup-failed qualification run carries its run id (it is a
     failed run, not no-evidence), so it goes through the marker-gated
     one-retry path: exactly one more dispatch, never a loop, and the
     failure notification stands."""
@@ -1531,9 +1659,11 @@ class TestStartupFailureRetry:
                             status=self._startup_failed(),
                             tracking_issue=harness.issue)
         dispatch.assert_called_once()
-        assert dispatch.call_args.kwargs == {"tag": "9.1.1", "sha": MERGE_SHA}
-        # F20 two-phase: intent marker posts before dispatch, done stamps
-        # after success on the same comment.
+        kwargs = dict(dispatch.call_args.kwargs)
+        assert re.fullmatch(r"[0-9a-f]{32}", kwargs.pop("nonce"))
+        assert kwargs == {"tag": "9.1.1", "sha": MERGE_SHA}
+        # Two-phase receipt: intent marker posts before dispatch, done
+        # stamps after success on the same comment.
         assert harness.bodies(":autofix-intent:qual-retry:")
         assert harness.bodies(":autofix-done:qual-retry:")
 
@@ -1568,7 +1698,7 @@ class TestStartupFailureRetry:
 
 
 class TestPublishHalt:
-    """F15: with no active publish run, a newest COMPLETED run for this
+    """With no active publish run, a newest COMPLETED run for this
     branch at the current controller head that concluded failure/cancelled
     halts re-dispatch (one-shot warning); a new controller head or a new
     candidate re-arms."""
@@ -1613,7 +1743,7 @@ class TestPublishHalt:
     @pytest.mark.parametrize("conclusion", [
         "failure",
         "cancelled",
-        # F21(1): halt on EVERY completed non-success conclusion, not
+        # Halt on EVERY completed non-success conclusion, not
         # just failure/cancelled. Without these, a timed_out or
         # startup_failure publish run would re-dispatch every reconcile
         # pass forever until the controller code changed.
@@ -1679,7 +1809,7 @@ class TestPublishHalt:
 
 
 class TestCandidateBoundPublish:
-    """F16: publish runs correlate by branch AND, when the run-name carries
+    """Publish runs correlate by branch AND, when the run-name carries
     them, tag + candidate. A gate-parked run for a different candidate is
     stale (cancelled, not active); its URL is never the approval link."""
 
@@ -1731,7 +1861,7 @@ class TestCandidateBoundPublish:
         workflow.create_dispatch.assert_not_called()
 
     def test_unbound_manual_run_never_blocks_dispatch(self) -> None:
-        # F12: unbound gate-parked runs (no tag/sha binding in the
+        # Unbound gate-parked runs (no tag/sha binding in the
         # run-name - a legacy dispatch or a form-submit that predates the
         # required-input change) are IGNORED entirely. They may neither
         # hold nor halt the current candidate's slot; the DoS vector
@@ -1748,11 +1878,11 @@ class TestCandidateBoundPublish:
         workflow.create_dispatch.assert_called_once()
 
     def test_unbound_failed_run_at_current_head_does_not_suppress_dispatch(self) -> None:
-        # F12 hostile test: even a COMPLETED unbound run at the current
+        # Hostile test: even a COMPLETED unbound run at the current
         # controller head, whose conclusion is failure, must not halt
         # re-dispatch. Without this, any repo writer could stage an
         # unbound workflow_dispatch, watch it fail the environment gate,
-        # and permanently DoS the controller. Under F12, unbound halted
+        # and permanently DoS the controller. Unbound halted
         # runs are ignored just like unbound gate-parked ones.
         failed_unbound = _publish_run(
             status="completed", conclusion="failure",
@@ -1792,7 +1922,7 @@ class TestCandidateBoundPublish:
 
 
 class TestServerSideRunFiltering:
-    """F17: active runs are found via server-side status filters, so a
+    """Active runs are found via server-side status filters, so a
     long-waiting run can never fall out of a newest-N window no matter how
     many completed runs pile up above it."""
 
@@ -1822,12 +1952,12 @@ class TestServerSideRunFiltering:
 
 
 class TestNeverCancelInProgress:
-    """F18: an in_progress run is past the approval gate; it must never be
+    """An in_progress run is past the approval gate; it must never be
     cancelled - cancelling a publication in flight would leave a
-    half-published release. F12 refines "hold the slot" semantics: only a
+    half-published release. "Hold the slot" is binding-scoped: only a
     run whose bindings match the current tag+candidate holds the slot for
     THIS candidate. An in_progress run with a mismatched or missing
-    binding is neither cancelled (F18) nor blocking (F12), so a fresh
+    binding is neither cancelled nor blocking, so a fresh
     dispatch for the current candidate can proceed alongside an
     in-flight publish for something else (per-branch GitHub concurrency
     still serializes real work)."""
@@ -1851,8 +1981,8 @@ class TestNeverCancelInProgress:
         workflow.create_dispatch.assert_not_called()
 
     def test_in_progress_other_candidate_is_never_cancelled_never_blocks(self) -> None:
-        # F12: in_progress bound to a DIFFERENT candidate does NOT hold
-        # this candidate's slot. F18: still never cancelled. Both apply.
+        # in_progress bound to a DIFFERENT candidate does NOT hold
+        # this candidate's slot, and is still never cancelled. Both apply.
         running = _publish_run(status="in_progress", head_sha=_AGENT_HEAD,
                                tag="9.1.1", candidate_sha=MOVED_SHA)
         workflow = _runs_by_status([running])
@@ -1861,12 +1991,12 @@ class TestNeverCancelInProgress:
                         gh_agent=_agent_with_workflow(workflow),
                         agent_repo="o/agent", agent_head_sha=_AGENT_HEAD)
         running.cancel.assert_not_called()
-        # F12: dispatch for THIS candidate proceeds (the other candidate's
+        # Dispatch for THIS candidate proceeds (the other candidate's
         # in-flight publish does not block this one).
         workflow.create_dispatch.assert_called_once()
 
     def test_in_progress_unbound_is_never_cancelled_never_blocks(self) -> None:
-        # F12 + F18: an unbound in_progress (legacy, or a manual dispatch
+        # An unbound in_progress (legacy, or a manual dispatch
         # that predates required inputs) is neither cancelled nor blocking.
         running = _publish_run(status="in_progress", head_sha=_STALE_HEAD)
         workflow = _runs_by_status([running])
@@ -1912,7 +2042,7 @@ class TestFinderCancelSplit:
 
 
 class TestWedgeNudge:
-    """F24 retargeted: a MISSING/STALE daily gate never resolves on its own;
+    """A MISSING/STALE daily gate never resolves on its own;
     a one-shot marker-gated nudge says so. Required-check states never
     wedge: nothing gates on them, so a MISSING check must not page anyone.
     No time-based grace this round: the observed state is the trigger."""
@@ -1996,7 +2126,7 @@ class TestWedgeNudge:
 
 
 class TestRecoveryGenerations:
-    """F25: fingerprints hash (recovery generation, sorted keys); a clean
+    """Fingerprints hash (recovery generation, sorted keys); a clean
     pass advances the generation in one edit-in-place marker comment, so a
     failure recurring after recovery re-pings exactly once."""
 
@@ -2034,7 +2164,7 @@ class TestRecoveryGenerations:
         assert len(harness.bodies(":notify:")) == 1
 
     def test_generation_marker_edits_in_place(self) -> None:
-        # F33-partial: the marker is written only on TRANSITION.
+        # The marker is written only on TRANSITION.
         # Failing pass -> notify posted, no marker yet.
         # First healthy pass with notify history -> transition, write
         # generation=1 healthy.
@@ -2061,7 +2191,7 @@ class TestRecoveryGenerations:
         gen_comments[0].edit.assert_not_called()
 
     def test_two_consecutive_healthy_passes_produce_exactly_one_edit_total(self) -> None:
-        # F33-partial pin: after the initial failing pass, two clean
+        # Transition-only pin: after the initial failing pass, two clean
         # passes in a row must produce EXACTLY ONE bookkeeping edit
         # (the first transition), never two.
         harness = _IssueHarness()

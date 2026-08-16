@@ -109,15 +109,18 @@ jobs:
           # read-scoped mint below instead of riding along here.
           #
           # Permission-set caveat: this is a UNION token. The consumers on
-          # each repo actually need less than the union: valkey-release-
-          # automation only uses actions:write (dispatches), valkey-bundle
-          # only contents:write (repository_dispatch), and valkey-helm
-          # contents:write + pull-requests:write (branch + files + PR).
+          # each repo actually need less than the union, exactly:
+          #   valkey-release-automation: actions:write only (the
+          #     qualification and build-release workflow dispatches);
+          #   valkey-bundle: contents:write only (repository_dispatch);
+          #   valkey-helm: contents:write + pull-requests:write (bump
+          #     branch + file updates + PR).
           # Splitting into three per-repo tokens needs main.py plumbing to
-          # accept multiple downstream clients, which is deferred; the
-          # minimum here drops issues:read (nothing on these repos reads
-          # issues via this token; the tracking issue is on valkey and uses
-          # the primary token above).
+          # accept multiple downstream clients; that split is a TRACKED
+          # FOLLOW-UP, deliberately not in this round. The minimum here
+          # drops issues:read (nothing on these repos reads issues via
+          # this token; the tracking issue is on valkey and uses the
+          # primary token above).
           repositories: |
             valkey-release-automation
             valkey-bundle

@@ -519,6 +519,13 @@ state, but the controller recomputes truth from GitHub on every pass — it
 never trusts issue text, so editing the issue changes nothing and authorizes
 nothing.
 
+Two companion documents: [docs/trust-model.md](docs/trust-model.md) is the
+security reference (every token the flow mints, the marker/receipt
+inventory and what each actually guarantees, and the blast radius of a
+compromise of this repository), and [docs/operations.md](docs/operations.md)
+is the on-call runbook (symptom to safe action; re-running reconcile and
+publish is always safe).
+
 **Start Release** (`release-start.yml`, manual dispatch) takes only the
 release decision: branch, intent (`rc`/`ga`/`patch`), and urgency. It:
 

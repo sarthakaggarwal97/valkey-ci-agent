@@ -316,8 +316,14 @@ def _parse_entry(path: str, entry: dict[str, object]) -> RepoReleasePolicy:
 
 _DOWNSTREAM_REPO_FIELDS = (
     "automation_repo", "hashes_repo", "container_repo", "doc_repo",
-    "website_repo", "bundle_repo", "helm_repo", "ghcr_image_repo",
+    "website_repo", "bundle_repo", "helm_repo",
 )
+# Public-endpoint fields may be EMPTY, meaning "not configured for this
+# repository": the verifier then reports the corresponding output as
+# informational (never VERIFIED, never failing the release). This exists
+# for fork policies, where pointing these at the real upstream registries
+# and downloads would let a fork E2E false-VERIFY artifacts it never
+# produced. Non-empty values must still satisfy the full shape check.
 _DOWNSTREAM_IMAGE_FIELDS = ("dockerhub_repo", "bundle_dockerhub_repo")
 _DOWNSTREAM_COUNT_FIELDS = (
     "qualification_x86_archive_jobs", "qualification_arm_archive_jobs",
@@ -328,7 +334,7 @@ _DOWNSTREAM_KEYS = frozenset({
     *_DOWNSTREAM_COUNT_FIELDS,
     "build_workflow", "qualification_workflow",
     "downloads_base_url", "tarball_targets",
-    "ecr_namespace", "helm_index_url",
+    "ghcr_image_repo", "ecr_namespace", "helm_index_url",
 })
 
 
@@ -339,11 +345,23 @@ def _parse_downstream(path: str, repo: str, raw: object) -> DownstreamPolicy:
     _reject_unknown_keys(path, f"{repo} downstream", raw, _DOWNSTREAM_KEYS)
 
     values: "dict[str, Any]" = {}
-    for field in (*_DOWNSTREAM_REPO_FIELDS, *_DOWNSTREAM_IMAGE_FIELDS):
+    for field in _DOWNSTREAM_REPO_FIELDS:
         value = raw.get(field)
         if not isinstance(value, str) or value.count("/") != 1:
             raise ValueError(
                 f"{ctx}: downstream.{field} must be 'owner/name', got {value!r}"
+            )
+        values[field] = value
+
+    # Public-endpoint fields: an empty string means "not configured for
+    # this repository" (the verifier reports the output as informational);
+    # a non-empty value must be 'owner/name'.
+    for field in (*_DOWNSTREAM_IMAGE_FIELDS, "ghcr_image_repo"):
+        value = raw.get(field)
+        if not isinstance(value, str) or (value != "" and value.count("/") != 1):
+            raise ValueError(
+                f"{ctx}: downstream.{field} must be 'owner/name', or empty "
+                f"for a repository without that public endpoint, got {value!r}"
             )
         values[field] = value
 
@@ -355,12 +373,15 @@ def _parse_downstream(path: str, repo: str, raw: object) -> DownstreamPolicy:
         ctx, "downstream.qualification_workflow",
         raw.get("qualification_workflow"), "qualify-release.yml",
     )
-    values["downloads_base_url"] = _https_url(
-        ctx, "downloads_base_url", raw.get("downloads_base_url"),
-    ).rstrip("/")
-    values["helm_index_url"] = _https_url(
-        ctx, "helm_index_url", raw.get("helm_index_url"),
-    )
+    # The two URL endpoints follow the same empty-means-unconfigured rule.
+    raw_downloads = raw.get("downloads_base_url")
+    values["downloads_base_url"] = ("" if raw_downloads == "" else _https_url(
+        ctx, "downloads_base_url", raw_downloads,
+    ).rstrip("/"))
+    raw_helm_index = raw.get("helm_index_url")
+    values["helm_index_url"] = ("" if raw_helm_index == "" else _https_url(
+        ctx, "helm_index_url", raw_helm_index,
+    ))
 
     targets = raw.get("tarball_targets")
     if not isinstance(targets, list) or not targets or not all(
@@ -383,10 +404,12 @@ def _parse_downstream(path: str, repo: str, raw: object) -> DownstreamPolicy:
         values[field] = value
 
     ecr_namespace = raw.get("ecr_namespace")
-    if not isinstance(ecr_namespace, str) or not ecr_namespace.strip() or "/" in ecr_namespace:
+    if not isinstance(ecr_namespace, str) or "/" in ecr_namespace or (
+            ecr_namespace != "" and not ecr_namespace.strip()):
         raise ValueError(
             f"{ctx}: downstream.ecr_namespace must be the ECR Public "
-            f"registry alias (e.g. 'valkey'), got {ecr_namespace!r}"
+            f"registry alias (e.g. 'valkey'), or empty for a repository "
+            f"without that public endpoint, got {ecr_namespace!r}"
         )
     values["ecr_namespace"] = ecr_namespace.strip()
 

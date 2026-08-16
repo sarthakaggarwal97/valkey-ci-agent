@@ -106,8 +106,14 @@ def verify_ordered_outputs(
     ``published_at``, when known, lets the Bundle verifier ignore update
     PRs that predate this release's publication.
     """
+    # VERIFIED satisfies the ordering gate; SKIPPED does too, but only
+    # because container-images is SKIPPED exactly when the policy
+    # configures no image registry endpoint at all (fork policies), in
+    # which case there is no public-image evidence to wait for and holding
+    # Bundle/Helm BLOCKED forever would wedge the release.
     images_public = any(
-        output.name == "container-images" and output.state is OutputState.VERIFIED
+        output.name == "container-images"
+        and output.state in (OutputState.VERIFIED, OutputState.SKIPPED)
         for output in core
     )
     return (
@@ -216,6 +222,18 @@ def _guarded(name: str, verifier: Callable[[], Any]) -> tuple[DownstreamOutput, 
 def _skipped(name: str, detail: str) -> DownstreamOutput:
     """A not-applicable output (rc-only scope, untracked line, newer chart)."""
     return DownstreamOutput(name=name, state=OutputState.SKIPPED, detail=detail)
+
+
+# The detail for a public endpoint the policy leaves empty. Mirrors the
+# daily gate's handling of absence: the output renders as informational
+# (SKIPPED, never VERIFIED) and never fails or blocks the release. Fork
+# policies use this so a fork E2E cannot false-VERIFY against upstream's
+# real registries and downloads.
+_NOT_CONFIGURED = "Not configured for this repository"
+
+
+def _not_configured(name: str) -> DownstreamOutput:
+    return _skipped(name, _NOT_CONFIGURED)
 
 
 # ---------------------------------------------------------------------------
@@ -564,6 +582,8 @@ def _run_has_artifact(run: Any, prefix: str) -> bool:
 
 def _verify_tarballs(down: Any, tag: str) -> DownstreamOutput:
     """Every tarball and its .sha256 must answer publicly on downloads."""
+    if not down.downloads_base_url:
+        return _not_configured("tarballs")
     bases = [
         f"{down.downloads_base_url}/valkey-{tag}-{target.replace('/', '-')}.tar.gz"
         for target in down.tarball_targets
@@ -627,17 +647,32 @@ def _verify_container(gh: Any, down: Any, tag: str) -> list[DownstreamOutput]:
             attempt_started_at=pr.created_at,
         )
 
-    checks = {
-        f"docker.io/{down.dockerhub_repo}:{tag}{suffix}":
-            pub.dockerhub_tag_exists(down.dockerhub_repo, f"{tag}{suffix}")
-        for suffix in CONTAINER_TAG_SUFFIXES
-    }
+    # Only configured registries are probed: an empty endpoint field means
+    # the repository has no such public endpoint, so probing (upstream's
+    # real registry) would false-VERIFY artifacts this repo never
+    # produced. No configured registry at all renders the whole output
+    # informational, never VERIFIED and never failed.
+    checks: "dict[str, bool]" = {}
+    verified_registries: list[str] = []
+    if down.dockerhub_repo:
+        verified_registries.append("Docker Hub (including -trixie/-alpine)")
+        checks.update({
+            f"docker.io/{down.dockerhub_repo}:{tag}{suffix}":
+                pub.dockerhub_tag_exists(down.dockerhub_repo, f"{tag}{suffix}")
+            for suffix in CONTAINER_TAG_SUFFIXES
+        })
     # The variant tags feed the Bundle build and live on Docker Hub; the
     # cross-registry requirement (GHCR, ECR) applies to the bare tag.
-    checks[f"ghcr.io/{down.ghcr_image_repo}:{tag}"] = pub.ghcr_tag_exists(
-        down.ghcr_image_repo, tag)
-    checks[f"public.ecr.aws/{down.ecr_namespace}/valkey:{tag}"] = (
-        pub.ecr_public_tag_exists(f"{down.ecr_namespace}/valkey", tag))
+    if down.ghcr_image_repo:
+        verified_registries.append("GHCR")
+        checks[f"ghcr.io/{down.ghcr_image_repo}:{tag}"] = pub.ghcr_tag_exists(
+            down.ghcr_image_repo, tag)
+    if down.ecr_namespace:
+        verified_registries.append("ECR")
+        checks[f"public.ecr.aws/{down.ecr_namespace}/valkey:{tag}"] = (
+            pub.ecr_public_tag_exists(f"{down.ecr_namespace}/valkey", tag))
+    if not checks:
+        return [pr_output, _not_configured("container-images")]
     missing = [ref for ref, exists in checks.items() if not exists]
     if missing:
         images = DownstreamOutput(
@@ -647,9 +682,9 @@ def _verify_container(gh: Any, down: Any, tag: str) -> list[DownstreamOutput]:
     else:
         images = DownstreamOutput(
             name="container-images", state=OutputState.VERIFIED,
-            detail=f"Tag {tag} is public in Docker Hub (including "
-                   f"-trixie/-alpine), GHCR, and ECR",
-            url=f"https://hub.docker.com/r/{down.dockerhub_repo}/tags?name={tag}",
+            detail=f"Tag {tag} is public in {', '.join(verified_registries)}",
+            url=(f"https://hub.docker.com/r/{down.dockerhub_repo}/tags?name={tag}"
+                 if down.dockerhub_repo else ""),
         )
     return [pr_output, images]
 
@@ -779,15 +814,19 @@ def _verify_bundle(
         # probes: Docker Hub answers 200 on the bare tags/ list URL, so an
         # empty tag would verify vacuously.
         return parse_failed
-    missing = [
-        registry for registry, exists in (
-            ("Docker Hub", pub.dockerhub_tag_exists(down.bundle_dockerhub_repo, bundle_version)),
-            ("GHCR", pub.ghcr_tag_exists(down.bundle_repo, bundle_version)),
-            # ECR repo mirrors the GitHub repo name.
-            ("ECR", pub.ecr_public_tag_exists(
-                f"{down.ecr_namespace}/{down.bundle_repo.split('/')[1]}", bundle_version)),
-        ) if not exists
-    ]
+    # Only configured registries are probed (empty endpoint fields mean the
+    # repo has no such public endpoint); the GHCR probe keys off the
+    # GitHub bundle repo itself, which is always configured.
+    probes = [("GHCR", pub.ghcr_tag_exists(down.bundle_repo, bundle_version))]
+    if down.bundle_dockerhub_repo:
+        probes.insert(0, ("Docker Hub", pub.dockerhub_tag_exists(
+            down.bundle_dockerhub_repo, bundle_version)))
+    if down.ecr_namespace:
+        # ECR repo mirrors the GitHub repo name.
+        probes.append(("ECR", pub.ecr_public_tag_exists(
+            f"{down.ecr_namespace}/{down.bundle_repo.split('/')[1]}",
+            bundle_version)))
+    missing = [registry for registry, exists in probes if not exists]
     if missing:
         return DownstreamOutput(
             name="bundle", state=OutputState.PENDING,
@@ -796,8 +835,10 @@ def _verify_bundle(
         )
     return DownstreamOutput(
         name="bundle", state=OutputState.VERIFIED,
-        detail=f"Bundle {bundle_version} is public in Docker Hub, GHCR, and ECR",
-        url=f"https://hub.docker.com/r/{down.bundle_dockerhub_repo}/tags?name={bundle_version}",
+        detail=f"Bundle {bundle_version} is public in "
+               f"{', '.join(registry for registry, _ in probes)}",
+        url=(f"https://hub.docker.com/r/{down.bundle_dockerhub_repo}/tags"
+             f"?name={bundle_version}" if down.bundle_dockerhub_repo else ""),
     )
 
 
@@ -869,6 +910,19 @@ def _verify_helm(
             name="helm", state=OutputState.PENDING,
             detail=f"Chart release {chart_tag} exists but the GHCR OCI chart "
                    f"{chart_version} is not public yet",
+            url=f"https://github.com/{down.helm_repo}/releases/tag/{chart_tag}",
+        )
+    if not down.helm_index_url:
+        # No public chart index is configured for this repository: the
+        # remaining evidence (chart release + GHCR OCI chart, both under
+        # the configured helm repo) is the strongest claim available. The
+        # detail says the index leg was not checked rather than implying
+        # it was.
+        return DownstreamOutput(
+            name="helm", state=OutputState.VERIFIED,
+            detail=f"Chart {chart_version} (appVersion {version}) is released "
+                   f"and on GHCR; the public chart index is not configured "
+                   f"for this repository and was not checked",
             url=f"https://github.com/{down.helm_repo}/releases/tag/{chart_tag}",
         )
     listed = _chart_listed_in_index(pub.fetch_text(down.helm_index_url), chart_version)

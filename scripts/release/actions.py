@@ -44,6 +44,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import uuid
 from collections.abc import Iterator
 from functools import partial
 from typing import Any
@@ -537,6 +538,26 @@ def _build_run_exists_for_tag(gh: Any, policy: RepoReleasePolicy,
 _AUTOFIX_CORRELATION_SCAN_LIMIT = 30
 
 
+def _qual_dispatch_nonce(gh: Any, tracking_issue: Any, *, key: str,
+                         sha: str) -> str:
+    """The per-dispatch qualification nonce for (*key*, *sha*).
+
+    A standing intent receipt for this exact (key, candidate) means a
+    previous pass posted intent and crashed before (or during) dispatch;
+    the retry must dispatch the SAME nonce that receipt already recorded,
+    or the recorded nonce and the dispatched one would diverge and the
+    evaluator would refuse the run's manifest forever. With no standing
+    intent, a fresh uuid4 hex is minted.
+    """
+    intent_marker = _marker(f"autofix-intent:{key}:{_fp(sha)}")
+    comment = issue_mod.find_marked_comment(tracking_issue, intent_marker, gh)
+    if comment is not None:
+        recorded = issue_mod.qual_nonce_in_body(comment.body, sha)
+        if recorded:
+            return recorded
+    return uuid.uuid4().hex
+
+
 def _dispatch_qualification_once(
     gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus,
     tracking_issue: Any,
@@ -550,21 +571,29 @@ def _dispatch_qualification_once(
     duplicating work. The two-phase gate stops that: the intent marker
     survives across passes even before the run is queryable, and the done
     marker suppresses further dispatch once the API call succeeds.
+
+    The intent receipt also records the per-dispatch nonce the producer
+    must echo into its manifest, so the evaluator can bind the run's
+    evidence to this exact dispatch.
     """
     tag = release_tag(status.version, status.stage)
+    sha = status.candidate.sha
+    nonce = _qual_dispatch_nonce(gh, tracking_issue, key="qual-dispatch",
+                                 sha=sha)
     performed = _autofix_two_phase(
         gh, tracking_issue, key="qual-dispatch",
-        fingerprint_source=status.candidate.sha,
+        fingerprint_source=sha,
         intent_callout=(
+            f"{issue_mod.qual_nonce_marker(sha, nonce)}\n"
             f"> [!NOTE]\n"
             f"> **Dispatching qualification** for `{tag}` "
-            f"@ `{status.candidate.sha[:12]}`."
+            f"@ `{sha[:12]}`."
         ),
         dispatch_fn=lambda: qual_mod.dispatch_qualification(
-            gh, policy, tag=tag, sha=status.candidate.sha,
+            gh, policy, tag=tag, sha=sha, nonce=nonce,
         ),
         run_exists_fn=lambda _c: _qual_run_exists(
-            gh, policy, tag=tag, sha=status.candidate.sha,
+            gh, policy, tag=tag, sha=sha,
         ),
         on_dispatch_failure_instruction=(
             f"Dispatch the qualification workflow for `{tag}` manually."
@@ -573,7 +602,7 @@ def _dispatch_qualification_once(
     if not performed:
         return ""
     return (f"dispatched qualification of {tag} @ "
-            f"{status.candidate.sha[:12]}")
+            f"{sha[:12]}")
 
 
 def _qual_run_exists(gh: Any, policy: RepoReleasePolicy, *, tag: str,
@@ -604,7 +633,7 @@ def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str,
     The version/environment inputs mirror the upstream release trigger
     (it sends the release's tag_name as its version), so the resulting run
     carries the ``Build Release <tag> (prod)`` run-name the build-run
-    verifier matches. ``source_sha`` (F6) additionally names the exact
+    verifier matches. ``source_sha`` additionally names the exact
     candidate commit this build must represent, so the automation repo can
     verify its checkout against the commit the controller vetted instead
     of trusting the tag ref alone; the automation side treats the field as
@@ -651,24 +680,30 @@ def _retry_qualification_once(
     The deliberate never-redispatch-over-a-failed-run stance is softened by
     exactly one step: one automatic retry per candidate SHA. A second
     failure changes nothing further; the normal failure notification
-    stands and a human decides.
+    stands and a human decides. The retry's intent receipt records a fresh
+    nonce (the retry is a new dispatch), superseding the initial
+    dispatch's recorded nonce for evaluation.
     """
     tag = release_tag(status.version, status.stage)
+    sha = status.candidate.sha
     run_link = f"[run {status.qualification.run_id}]({status.qualification.url})"
     failed_run_id = status.qualification.run_id
+    nonce = _qual_dispatch_nonce(gh, tracking_issue, key="qual-retry",
+                                 sha=sha)
     performed = _autofix_two_phase(
         gh, tracking_issue, key="qual-retry",
-        fingerprint_source=status.candidate.sha,
+        fingerprint_source=sha,
         intent_callout=(
+            f"{issue_mod.qual_nonce_marker(sha, nonce)}\n"
             f"> [!NOTE]\n"
             f"> **Auto-remediation:** Retrying qualification for `{tag}` "
             f"once (the previous run failed: {run_link})."
         ),
         dispatch_fn=lambda: qual_mod.dispatch_qualification(
-            gh, policy, tag=tag, sha=status.candidate.sha,
+            gh, policy, tag=tag, sha=sha, nonce=nonce,
         ),
         run_exists_fn=lambda _c: _qual_run_exists(
-            gh, policy, tag=tag, sha=status.candidate.sha,
+            gh, policy, tag=tag, sha=sha,
             exclude_run_id=failed_run_id,
         ),
         on_dispatch_failure_instruction=(
@@ -678,8 +713,8 @@ def _retry_qualification_once(
     )
     if not performed:
         return ""
-    logger.info("Auto-retried qualification of %s @ %s", tag, status.candidate.sha[:12])
-    return f"auto-retried qualification of {tag} @ {status.candidate.sha[:12]}"
+    logger.info("Auto-retried qualification of %s @ %s", tag, sha[:12])
+    return f"auto-retried qualification of {tag} @ {sha[:12]}"
 
 
 def _open_helm_pr(gh: Any, policy: RepoReleasePolicy, version: str) -> str:
@@ -897,7 +932,8 @@ def _notify_generation(gh: Any, tracking_issue: Any) -> "tuple[int, Any, str]":
 def _sync_generation_state(gh: Any, tracking_issue: Any, *,
                            dirty: bool) -> int:
     """Return the current fingerprint generation, updating the marker
-    only on a state TRANSITION (F33-partial).
+    only on a state TRANSITION, so steady states never churn the
+    bookkeeping comment.
 
     Semantics:
 
@@ -1017,7 +1053,9 @@ def _wedge_nudge_once(
     gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus, tracking_issue: Any,
     wedges: "list[tuple[str, str]]", generation: int,
 ) -> str:
-    """Mention the authorized team once per distinct wedged state (F24).
+    """Mention the authorized team once per distinct wedged state: a
+    silently blocked gate must page a human exactly once, since nothing
+    running will ever change it.
 
     Same fingerprint-marker pattern as :func:`_notify_once`, in its own
     ``wedge:`` marker family: an unchanged wedge never re-pings within a
@@ -1163,7 +1201,7 @@ def _mark_complete_once(gh: Any, status: ReleaseStatus,
                         tracking_issue: Any) -> bool:
     """Post the completion marker comment once; NEVER close the issue.
 
-    F24: closing the tracker is the caller's job (reconcile), performed
+    Closing the tracker is the caller's job (reconcile), performed
     AFTER the final render/sync so a crash mid-close cannot leave a stale
     body on a closed tracker. advance() only stamps the completion marker
     so the caller can see this release was signed off, and so a rerun does
@@ -1285,8 +1323,9 @@ def _run_binding(run: Any) -> "tuple[str, str]":
     """(tag, candidate SHA) the run-name carries, ("", "") when the run was
     dispatched without bindings (legacy runs from before the workflow
     required bindings). Only runs whose bindings can be extracted are
-    treated as relevant to the current slot; F12 closes the DoS window
-    where an unbound run could hold or halt the slot."""
+    treated as relevant to the current slot; an unbound run must never
+    hold or halt the slot, or any repo writer could stage a run that
+    permanently denies dispatch."""
     match = _PUBLISH_TITLE_BINDING_RE.search(run.display_title or "")
     if match is None:
         return "", ""
@@ -1302,7 +1341,7 @@ def _binding_matches_current(run: Any, *, tag: str,
     """True when the run carries bindings AND they exactly match the
     current tag+candidate.
 
-    F12: an unbound run (no binding in the run name -- historical, or a
+    An unbound run (no binding in the run name -- historical, or a
     stray dispatch that predates the workflow's required-input change) is
     treated as NOT MATCHING the current slot: it can neither hold nor halt
     it. Only a run whose bindings exactly identify this candidate may
@@ -1370,8 +1409,8 @@ def find_publish_runs(workflow: Any, branch: str, head_sha: str = "", *,
       set to check against) is always active -- it is past the approval
       gate, publication is in flight, and never cancellable. A
       gate-parked run whose head AND run-name bindings match this
-      candidate is also active. Unbound gate-parked runs (F12) are
-      IGNORED entirely: they can neither hold nor halt the slot.
+      candidate is also active. Unbound gate-parked runs are IGNORED
+      entirely: an unbound run must never hold or halt the slot.
     - *stale* lists gate-parked runs (queued, waiting, pending ONLY) bound
       to a different controller head, tag, or candidate.
 
@@ -1405,8 +1444,9 @@ def find_publish_runs(workflow: Any, branch: str, head_sha: str = "", *,
             continue
 
         # Gate-parked run: only runs whose bindings identify this
-        # candidate may hold the current slot. F12: unbound gate-parked
-        # runs are neither active nor stale here -- they are irrelevant.
+        # candidate may hold the current slot. Unbound gate-parked runs
+        # are neither active nor stale here -- they are irrelevant, so
+        # they can neither hold nor halt the slot.
         if tag and candidate_sha and not _run_binding(run)[1]:
             continue  # unbound: skip entirely
         if _is_stale_binding(run, head_sha, tag, candidate_sha):
@@ -1416,10 +1456,11 @@ def find_publish_runs(workflow: Any, branch: str, head_sha: str = "", *,
             if active is None:
                 active = run
         elif not tag or not candidate_sha:
-            # No bindings to check against: keep pre-F12 behavior so a
-            # controller call missing tag/candidate context (out-of-flow
-            # display path) does not lose runs. Bound runs win over
-            # unbound in that case.
+            # No bindings to check against: keep the legacy behavior
+            # (any branch-matching run counts) so a controller call
+            # missing tag/candidate context (out-of-flow display path)
+            # does not lose runs. Bound runs win over unbound in that
+            # case.
             if active is None:
                 active = run
     return active, stale
@@ -1523,14 +1564,14 @@ def _halted_publish_failure(workflow: Any, branch: str, head_sha: str, *,
     The newest COMPLETED publish run for *branch* at the current
     controller head, whose bindings EXACTLY identify the current tag and
     candidate, is inspected: any non-success conclusion halts, success (or
-    no such run) does not. F21(1): the halt covers every non-success
+    no such run) does not. The halt covers every non-success
     conclusion GitHub Actions may report (``failure``, ``cancelled``,
     ``timed_out``, ``action_required``, ``startup_failure``, ``skipped``,
     ``neutral``, ``stale``), not just failure/cancelled -- a
     ``timed_out``/``startup_failure`` publish would otherwise re-dispatch
     every reconcile pass forever. A run on another controller head or
     another candidate is skipped entirely, so a new controller head or a
-    new candidate re-arms dispatch by construction. F12: an unbound run
+    new candidate re-arms dispatch by construction. An unbound run
     (no binding in its run-name) cannot be proven to belong to the
     current candidate and is IGNORED here as well: it can neither hold
     nor halt the slot. With *head_sha* "" the head filter is skipped:
@@ -1548,12 +1589,12 @@ def _halted_publish_failure(workflow: Any, branch: str, head_sha: str, *,
             continue
         if head_sha and (run.head_sha or "") != head_sha:
             continue  # another controller version's run: a new head re-arms
-        # F12: only bound runs that exactly match the current candidate
+        # Only bound runs that exactly match the current candidate
         # may halt the slot. Unbound and cross-candidate runs are ignored.
         if not _binding_matches_current(run, tag=tag,
                                         candidate_sha=candidate_sha):
             continue
-        # F21(1): any non-success conclusion halts. success passes
+        # Any non-success conclusion halts. success passes
         # through; a None conclusion cannot occur alongside
         # status=="completed" but is treated as pass-through for safety.
         conclusion = run.conclusion
@@ -1570,7 +1611,7 @@ def _advance_publish(gh: Any, gh_agent: Any, agent_repo: str,
     run already holds the slot or a completed non-success run halts
     re-dispatch.
 
-    F21(1): the halt fires for EVERY non-success conclusion, not just
+    The halt fires for EVERY non-success conclusion, not just
     failure/cancelled -- a timed_out or startup_failure publish run would
     otherwise loop forever. The one-shot marker-gated warning names the
     concluding state so the human sees WHICH kind of failure blocks
@@ -1629,7 +1670,13 @@ def _dispatch_publish(gh_agent: Any, agent_repo: str, branch: str,
         lambda: gh_agent.get_repo(agent_repo).default_branch,
         retries=2, description=f"resolve {agent_repo} default branch",
     )
-    inputs = {"branch": branch, "tag": tag, "candidate_sha": candidate_sha}
+    # "unattended" is the explicit, typed signal that the controller (not
+    # a human) dispatched this run: the workflow's plan-only step keys its
+    # --unattended flag off this input, never off an actor-name literal.
+    # Only this auto-dispatch ever sends true; a human dispatching from
+    # the Actions form gets the input's false default.
+    inputs = {"branch": branch, "tag": tag, "candidate_sha": candidate_sha,
+              "unattended": "true"}
     retry_github_call(
         lambda: workflow.create_dispatch(default_branch, inputs=inputs),
         retries=1, description="dispatch publish pipeline",

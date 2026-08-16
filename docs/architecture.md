@@ -438,6 +438,9 @@ Credential model: the scheduled reconcile holds a valkey token without
 `contents:write` (publication is capability-blocked outside the protected
 environment) and a separate downstream write token that excludes valkey;
 PAT fallbacks are structurally impossible when the owner is `valkey-io`.
+The full token inventory, the marker/receipt trust analysis, and the
+blast-radius statement live in [trust-model.md](trust-model.md); the
+on-call symptom-to-action table lives in [operations.md](operations.md).
 
 Deliberate scope notes: production builds still check out by tag (publication
 creates the tag, so they cannot diverge; `source_sha` exists for the

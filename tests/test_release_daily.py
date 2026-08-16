@@ -41,27 +41,12 @@ _NOW = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
 _DAILY_POLICY = make_policy(daily_workflow="daily.yml", daily_max_age_hours=30)
 
 
-def _with_manifest(run: MagicMock) -> MagicMock:
-    """Append the qualification-manifest artifact to a qual-run mock.
-
-    The shared fixture predates the manifest requirement in
-    qualification.py; idempotent so it stays harmless once the fixture
-    carries the manifest itself.
-    """
-    artifacts = list(run.get_artifacts.return_value)
-    if not any(a.name == "qualification-manifest" for a in artifacts):
-        manifest = MagicMock(expired=False, size_in_bytes=64)
-        manifest.name = "qualification-manifest"
-        run.get_artifacts.return_value = artifacts + [manifest]
-    return run
-
-
 def _daily_repo(daily_runs: "list[MagicMock]", **repo_kwargs: object) -> MagicMock:
     """A repo mock whose get_workflow distinguishes the daily workflow from
     the qualification workflow (the plain repo_mock serves one workflow)."""
     repo = repo_mock(**repo_kwargs)  # type: ignore[arg-type]
     qual_workflow = MagicMock()
-    qual_workflow.get_runs.return_value = [_with_manifest(qualification_run())]
+    qual_workflow.get_runs.return_value = [qualification_run()]
     daily_workflow = MagicMock()
     daily_workflow.get_runs.return_value = daily_runs
     repo.get_workflow.side_effect = lambda name: (
@@ -236,7 +221,6 @@ class TestReadinessGate:
 
     def test_unconfigured_gate_skips_and_ready_is_reachable(self) -> None:
         repo = repo_mock()
-        _with_manifest(repo.get_workflow.return_value.get_runs.return_value[0])
         status = compute_status(gh_mock(repo), make_policy(), "9.1")
         assert status.daily.state is DailyCiState.SKIPPED
         assert status.ready
@@ -302,7 +286,7 @@ class TestDailyFailureNotification:
 
     def test_stale_and_missing_daily_nudge_as_wedged_not_as_failures(self) -> None:
         # STALE/MISSING daily is not a failure (no daily-CI failure ping),
-        # but it is a silently wedged gate: the F24 wedge nudge mentions
+        # but it is a silently wedged gate: the wedge nudge mentions
         # the team once instead.
         for state, detail in ((DailyCiState.STALE, "too old"),
                               (DailyCiState.MISSING, "no run")):

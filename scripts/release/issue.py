@@ -151,6 +151,50 @@ def publication_receipt_marker() -> str:
     return marker("publication-receipt")
 
 
+# The per-dispatch qualification nonce, recorded on the two-phase dispatch
+# receipt (the autofix-intent comment for qual-dispatch / qual-retry). The
+# nonce group is deliberately permissive within hex (uuid4().hex is 32
+# chars, but the exact width is not a contract worth breaking reads over).
+_QUAL_NONCE_MARKER_RE = re.compile(
+    rf"<!-- {re.escape(MARKER_NAMESPACE)}:qual-nonce:"
+    r"([0-9a-f]{40}):([0-9a-fA-F]{8,64}) -->"
+)
+
+
+def qual_nonce_marker(sha: str, nonce: str) -> str:
+    """The marker recording the qualification dispatch *nonce* for candidate
+    *sha*. Carried by the dispatch's intent receipt so the evaluator can
+    require the manifest to echo the exact nonce this controller sent."""
+    return marker(f"qual-nonce:{sha}:{nonce}")
+
+
+def qual_nonce_in_body(body: Any, sha: str) -> str:
+    """The qualification nonce recorded in one comment *body* for candidate
+    *sha*, "" when none. Used to REUSE the recorded nonce when a crashed
+    dispatch is retried against a standing intent receipt (the retry must
+    dispatch the nonce the receipt already names, not a fresh one)."""
+    for match in _QUAL_NONCE_MARKER_RE.finditer(body or ""):
+        if match.group(1) == sha and marker_present(body, match.group(0)):
+            return match.group(2)
+    return ""
+
+
+def recorded_qualification_nonce(issue: Any, sha: str, gh: Any = None) -> str:
+    """The newest qualification-dispatch nonce recorded on *issue* for
+    candidate *sha*, "" when none was ever recorded (legacy receipts from
+    before nonce wiring, or a candidate the controller never dispatched).
+
+    Trusted-author comments only, like every other marker read-back. The
+    newest wins: a retry dispatch records a fresh nonce, and the newest
+    matching run the evaluator selects is the retry's run.
+    """
+    found = ""
+    for _, match in marker_matches(issue, _QUAL_NONCE_MARKER_RE, gh):
+        if match.group(1) == sha:
+            found = match.group(2)
+    return found
+
+
 # The receipt's carrier line, exactly as _post_publication_receipt writes it
 # (and as every receipt already on a live tracker carries it): the tag and
 # the full 40-char SHA the protected publish actually wrote. The newer

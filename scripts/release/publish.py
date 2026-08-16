@@ -145,7 +145,7 @@ def _ruleset_rules_cover_immutability(ruleset: "dict[str, Any]") -> bool:
     A ruleset that matches the ref but carries no ``deletion`` rule and no
     ``update``/``non_fast_forward`` rule restricts nothing we rely on: the
     tag could still be moved or deleted despite the ruleset "covering" it.
-    A ``creation`` rule is required as well (F4): without it any writer
+    A ``creation`` rule is required as well: without it any writer
     can still pre-create the release tag at an arbitrary commit, which is
     exactly the tag-snipe the publish path defends against, so claiming
     the tag namespace is protected would overstate what was verified.
@@ -166,7 +166,7 @@ def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
     non_fast_forward) rules, and grants no bypass to ANY actor. A matching
     ruleset without those rules restricts nothing and counts as
     unprotected. Any bypass actor defeats the claim regardless of
-    actor_type or bypass_mode (F4): an Integration bypass may be exactly
+    actor_type or bypass_mode: an Integration bypass may be exactly
     the publishing App whose writes the ruleset is supposed to constrain,
     and a human bypass (Team, RepositoryRole, OrganizationAdmin, User)
     means people can still move or delete the tag, so "immutable" would
@@ -180,6 +180,18 @@ def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
     ref = f"refs/tags/{tag}"
     bypass_unknown = False
     try:
+        # WHY the private ``repo._requester``: PyGithub (pinned
+        # ``>=2.6.0``; claim verified against the installed 2.9.1)
+        # exposes NO supported wrapper for the repository-rulesets
+        # endpoints (GET /repos/{owner}/{repo}/rulesets and
+        # /rulesets/{id}) -- Repository has no ruleset accessor -- so the
+        # raw requester is the only path to this data.
+        # test_release_publish.py's TestTagRulesetProbe pins this probe
+        # against a REAL Repository object and the raw API response
+        # shape, so a PyGithub upgrade that renames ``_requester`` or
+        # changes ``requestJsonAndCheck`` surfaces as a test failure
+        # instead of this probe silently degrading every verdict to None
+        # (rendered as "not protected").
         _, listing = repo._requester.requestJsonAndCheck(
             "GET", f"{repo.url}/rulesets",
         )
@@ -199,7 +211,7 @@ def tag_ruleset_protected(repo: Any, tag: str) -> "bool | None":
                 bypass_unknown = True  # cannot rule out a bypass
                 continue
             if ruleset.get("bypass_actors"):
-                continue  # ANY bypass actor: unprotected-for-us (F4)
+                continue  # ANY bypass actor: unprotected-for-us
             return True
         return None if bypass_unknown else False
     except Exception:
@@ -218,7 +230,7 @@ def plan_publication(
     Raises :class:`ReleaseControlError` when any validation fails. Safe to
     call repeatedly; performs no writes.
     """
-    # F10: refuse a branch the policy never listed BEFORE any API access, so
+    # Refuse a branch the policy never listed BEFORE any API access, so
     # a wrong-branch dispatch never sees repo state it should not see.
     try:
         validate_release_branch(policy, branch)
@@ -243,7 +255,7 @@ def plan_publication(
     sha = status.candidate.sha
     tag = release_tag(status.version, status.stage)
 
-    # F16 resumability, F5-hardened: after a crashed publish, the world may
+    # Resumability, hardened: after a crashed publish, the world may
     # already carry the approved tag at the approved SHA. compute_status
     # treats that as non-READY (an unshippable stray-tag alert), which
     # would quarantine an otherwise legitimate resume. A same-SHA tag
@@ -265,6 +277,8 @@ def plan_publication(
             )
         status = _require_resumed_readiness(
             gh_downstream or gh, policy, status, tag=tag, sha=sha,
+            expected_nonce=issue_mod.recorded_qualification_nonce(
+                tracking_issue, sha, gh),
         )
 
     if existing_tag_sha and existing_tag_sha != sha:
@@ -307,9 +321,9 @@ def plan_publication(
 
 def _require_resumed_readiness(
     gh: Any, policy: RepoReleasePolicy, status: ReleaseStatus, *,
-    tag: str, sha: str,
+    tag: str, sha: str, expected_nonce: str = "",
 ) -> ReleaseStatus:
-    """F5: a resume of a crashed publish must still prove readiness.
+    """A resume of a crashed publish must still prove readiness.
 
     compute_status reports the tag-without-release state as an unshippable
     stray-tag alert (and the release-without-receipt state as an
@@ -320,7 +334,9 @@ def _require_resumed_readiness(
     exactly this tag+SHA is re-evaluated live and must have passed.
     Anything less refuses, so a pre-created tag with no (or failed, or
     still-running) qualification evidence never yields an approvable
-    plan. Returns the status with the live qualification substituted, so
+    plan. ``expected_nonce`` is the dispatch receipt's recorded nonce
+    (same binding compute_status applies; "" for pre-nonce trackers).
+    Returns the status with the live qualification substituted, so
     the plan (and its digest) binds the real run id rather than 0.
     """
     # The blockers a legitimate resume can carry are reconcile.py's
@@ -341,7 +357,9 @@ def _require_resumed_readiness(
     )
     problems = [b for b in status.blockers
                 if not b.startswith((stray_tag_prefix, unreceipted_prefix))]
-    qualification = qual_mod.evaluate_qualification(gh, policy, tag=tag, sha=sha)
+    qualification = qual_mod.evaluate_qualification(
+        gh, policy, tag=tag, sha=sha, expected_nonce=expected_nonce,
+    )
     if not qualification.passed:
         if qualification.pending:
             problems.append(f"qualification run {qualification.run_id} is "
@@ -387,8 +405,8 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
 
     Two writes are made in order: (1) ``refs/tags/{tag}`` is created at the
     approved SHA -- the only atomic tag-creation primitive GitHub exposes;
-    (2) the release is created *against that tag*. F16 tightens this from
-    the earlier check-then-create pattern: a second writer racing us into
+    (2) the release is created *against that tag*. This tightens the
+    earlier check-then-create pattern: a second writer racing us into
     the create-release call could not steal the tag with a different SHA
     because the tag now exists at the SHA we picked before the release
     call is even attempted. Both steps recover the same way: an "exists at
@@ -469,7 +487,7 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
             f"immediately before any downstream work proceeds."
         )
 
-    # F17 defense-in-depth: after create, the repo's latest pointer must
+    # Defense-in-depth: after create, the repo's latest pointer must
     # match what plan.make_latest promised the approver. A race with a
     # concurrent publish on another line -- where our enumeration decision
     # differed from the wire outcome -- surfaces here as a CRITICAL error.
@@ -534,7 +552,7 @@ def _post_publication_receipt(gh: Any, repo: Any, plan: "PublishPlan",
     forged copy from a random account is ignored) and skip if present.
 
     The receipt is also reconciliation's read-side proof that this release
-    was controller-published (F3): _published_status refuses to enter
+    was controller-published: _published_status refuses to enter
     published verification for a release whose tracker carries no trusted
     receipt matching the observed tag+SHA. The carrier line records that
     tag+SHA; the digest and controller lines bind the approved plan and

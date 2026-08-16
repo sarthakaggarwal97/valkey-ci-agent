@@ -60,6 +60,10 @@ repos:
       # artifacts: a platform addition or removal is a deliberate edit
       # here, reviewed alongside the matrix change; a floor would silently
       # tolerate losing coverage.
+      # LOCKSTEP: a matrix change in valkey-release-automation must land
+      # together with the matching count update here, automation first,
+      # because the failure mode between the two merges is a refused
+      # qualification mid-release (exact-count evidence mismatch).
       qualification_x86_archive_jobs: 2
       qualification_arm_archive_jobs: 2
       qualification_rpm_jobs: 30

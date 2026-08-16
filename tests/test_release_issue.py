@@ -669,7 +669,7 @@ class TestCommentMemo:
 
 
 class TestFindReleaseIssues:
-    """The plural finder used by the F19 "one active release per branch"
+    """The plural finder used by the "one active release per branch"
     invariant (multiple-open refusal, ambiguous-create readback). Follows
     the same identity model as :func:`find_release_issue`: label-pair
     query first, body-marker migration path as fallback, PRs dropped."""
@@ -729,7 +729,7 @@ class TestFindReleaseIssues:
 
     def test_find_release_issue_returns_first_match(self) -> None:
         # The singular finder is a thin wrapper: same identity model,
-        # returns the first hit (matching the pre-F19 behavior).
+        # returns the first hit (matching the single-finder behavior).
         first = self._issue(13)
         second = self._issue(14)
         repo = MagicMock()
@@ -741,7 +741,7 @@ class TestFindReleaseIssues:
 
 
 class TestHasCompletionMarker:
-    """The F19 (refuse-start on abandoned closed tracker) and F24 (heal
+    """The refuse-start-on-abandoned-closed-tracker and heal-closed-tracker (heal
     controller-completed CLOSED tracker) guards depend on this: only a
     trusted-author completion marker counts."""
 
@@ -774,7 +774,7 @@ class TestHasCompletionMarker:
 
 
 class TestTrustedBotAuthors:
-    """The trust set the F11 notes-PR author gate consults. Mirrors
+    """The trust set the notes-PR author gate consults. Mirrors
     :func:`trusted_comments`' trust model but exposed as a set for
     caller-side authentication of *other* GitHub resources."""
 

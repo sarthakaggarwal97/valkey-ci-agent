@@ -17,6 +17,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import uuid
 import zipfile
 from functools import partial
 from typing import Any
@@ -48,9 +49,9 @@ STARTUP_FAILURE_JOB = "(Workflow startup failed)"
 
 # The metadata-only manifest artifact the qualification workflow uploads
 # (schema 1 JSON: nonce/version/tag/source_sha/automation_sha/job counts).
-# Presence plus content is the whole check: F5 removed the "presence is
-# evidence" shortcut, so a non-empty artifact whose bytes disagree with
-# what was dispatched must not pass.
+# Presence plus content is the whole check: a non-empty artifact whose
+# bytes disagree with what was dispatched must not pass; artifact presence
+# alone was never evidence.
 MANIFEST_ARTIFACT = "qualification-manifest"
 
 # The schema version emitted by valkey-release-automation's
@@ -64,9 +65,12 @@ MANIFEST_SCHEMA_VERSION = 1
 _MAX_MANIFEST_BYTES = 32 * 1024
 
 # Required manifest fields (schema 1). automation_sha is recorded into the
-# evidence log rather than compared to a dispatch record: the controller
-# does not yet pass a per-dispatch nonce, so nonce binding is deferred
-# until the dispatch path can pin one and require it back in the manifest.
+# evidence log rather than compared to a dispatch record. The nonce IS
+# compared when the caller supplies the dispatch-recorded value
+# (``expected_nonce``): the controller passes a per-dispatch nonce and
+# records it on the tracker receipt, and the producer echoes it back in
+# the manifest; a receipt from before nonce wiring carries none, in which
+# case the nonce stays evidence detail only.
 _MANIFEST_REQUIRED_FIELDS = (
     "schema", "nonce", "version", "tag", "source_sha", "automation_sha",
     "rpm_jobs", "deb_jobs", "archive_jobs",
@@ -75,6 +79,7 @@ _MANIFEST_REQUIRED_FIELDS = (
 
 def evaluate_qualification(
     gh: Any, policy: RepoReleasePolicy, *, tag: str, sha: str,
+    expected_nonce: str = "",
 ) -> QualificationStatus:
     """Live qualification evidence for release *tag* at exactly *sha*.
 
@@ -82,6 +87,13 @@ def evaluate_qualification(
     supersedes it. A successful run must also show zero failed jobs and at
     least ``qualification_min_jobs`` jobs: a truncated matrix (an empty
     generate step) must not pass vacuously.
+
+    ``expected_nonce``, when set, is the nonce the controller's dispatch
+    receipt recorded for this candidate: the run's manifest must echo it
+    exactly, binding the evidence to the controller's own dispatch. ""
+    (legacy receipts from before nonce wiring, or callers with no tracker
+    access) keeps the prior behavior: the manifest nonce is recorded as
+    evidence detail only.
     """
     run = _find_run(gh, policy, tag, sha)
     if run is None:
@@ -125,14 +137,16 @@ def evaluate_qualification(
             passed=False,
             failed_jobs=failed or (f"(Run concluded: {run.conclusion})",),
         )
-    gaps = _evidence_gaps(policy, run, jobs, tag=tag, sha=sha)
+    gaps = _evidence_gaps(policy, run, jobs, tag=tag, sha=sha,
+                          expected_nonce=expected_nonce)
     if gaps:
         return result(passed=False, failed_jobs=gaps)
     return result(passed=True)
 
 
 def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
-                   *, tag: str, sha: str) -> tuple[str, ...]:
+                   *, tag: str, sha: str,
+                   expected_nonce: str = "") -> tuple[str, ...]:
     """Structural evidence a green run must still produce, by stage.
 
     A run conclusion alone is satisfiable by an empty or truncated matrix
@@ -201,10 +215,11 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
                 f"(Evidence mismatch: usable {label} artifacts, {present} "
                 f"present, expected exactly {expected})"
             )
-    # F5: the qualification manifest artifact is not just a name -- its
+    # The qualification manifest artifact is not just a name -- its
     # content must bind the run to the release identity that dispatched it.
     # A non-empty unexpired artifact whose bytes disagree with what was
-    # dispatched (tag, source_sha, version, job counts) never passes.
+    # dispatched (tag, source_sha, version, job counts, and the dispatch
+    # nonce when the receipt recorded one) never passes.
     manifest_artifact = next(
         (a for a in usable if a.name == MANIFEST_ARTIFACT), None,
     )
@@ -214,23 +229,25 @@ def _evidence_gaps(policy: RepoReleasePolicy, run: Any, jobs: list,
         gaps.extend(_validate_manifest_content(
             manifest_artifact, policy=policy, tag=tag, sha=sha,
             expected_archive_jobs=expected_archives, is_ga=is_ga,
+            expected_nonce=expected_nonce,
         ))
     return tuple(gaps)
 
 
 def _validate_manifest_content(
     artifact: Any, *, policy: RepoReleasePolicy, tag: str, sha: str,
-    expected_archive_jobs: int, is_ga: bool,
+    expected_archive_jobs: int, is_ga: bool, expected_nonce: str = "",
 ) -> list[str]:
     """Load the manifest JSON and require every dispatched field to match.
 
     Any download/parse/shape failure or field mismatch becomes an evidence
     mismatch naming what differed, so nothing about a hostile manifest
     (wrong SHA, wrong tag, wrong counts, malformed JSON, empty file) reads
-    as passable evidence. ``automation_sha`` is logged as evidence detail;
-    nonce binding to dispatch is deferred (the controller does not yet
-    pass a per-dispatch nonce, so requiring it back would refuse every
-    real run).
+    as passable evidence. ``automation_sha`` is logged as evidence detail.
+    ``expected_nonce``, when set, must be echoed exactly by the manifest's
+    ``nonce`` field (the controller recorded it on the dispatch receipt);
+    "" keeps the nonce as logged detail only, so receipts from before
+    nonce wiring keep verifying.
     """
     down = policy.downstream
     try:
@@ -285,9 +302,17 @@ def _validate_manifest_content(
                 f"(Evidence mismatch: qualification manifest {key} "
                 f"{count!r}, expected {expected_count})"
             )
+    if expected_nonce and payload["nonce"] != expected_nonce:
+        # The dispatch receipt recorded a nonce: the manifest must echo it
+        # exactly, or the run is not the one this controller dispatched.
+        gaps.append(
+            f"(Evidence mismatch: qualification manifest nonce "
+            f"{payload['nonce']!r}, expected {expected_nonce!r} from the "
+            f"dispatch receipt)"
+        )
     if not gaps:
-        # automation_sha is retained as evidence detail (dispatch-nonce
-        # binding is deferred; see MANIFEST comment above).
+        # automation_sha is retained as evidence detail; the nonce is
+        # logged here too so a receipt-less evaluation still records it.
         logger.info(
             "Qualification manifest for %s @ %s validated (automation_sha=%s, "
             "nonce=%s)", tag, sha[:12],
@@ -437,17 +462,27 @@ def _automation_workflow(gh: Any, policy: RepoReleasePolicy) -> "tuple[Any, Any]
 
 def dispatch_qualification(
     gh: Any, policy: RepoReleasePolicy, *, tag: str, sha: str,
-) -> None:
+    nonce: str = "",
+) -> str:
     """Start a qualification run for release *tag* at exactly *sha*.
 
     The tag (not the bare version) is the dispatched identity: the
     qualification workflow mirrors production applicability from it (an rc
     skips the distro package matrix exactly as the production build does).
 
+    A per-dispatch ``nonce`` (uuid4 hex, generated here when the caller
+    does not supply one) rides along as a workflow input; the producer
+    echoes it into the qualification manifest, and the evaluator requires
+    it back when the dispatch receipt recorded one. The nonce actually
+    dispatched is returned so the caller can record it. The producer falls
+    back to a run-derived nonce when the input is absent, so deploy order
+    between the two repos is safe either way.
+
     Callers guard idempotency (dispatch only when no pending or passed run
     exists for this SHA); this function just fires the dispatch on the
     automation repo's default branch.
     """
+    nonce = nonce or uuid.uuid4().hex
     repo, workflow = _automation_workflow(gh, policy)
     if workflow is None:
         raise RuntimeError(
@@ -456,7 +491,8 @@ def dispatch_qualification(
         )
     dispatched = retry_github_call(
         lambda: workflow.create_dispatch(
-            repo.default_branch, inputs={"version": tag, "source_sha": sha},
+            repo.default_branch,
+            inputs={"version": tag, "source_sha": sha, "nonce": nonce},
         ),
         retries=2, description="dispatch qualification run",
     )
@@ -465,7 +501,9 @@ def dispatch_qualification(
             f"qualification dispatch was rejected by "
             f"{policy.downstream.automation_repo}/{policy.downstream.qualification_workflow}"
         )
-    logger.info("Dispatched qualification of %s @ %s", tag, sha[:12])
+    logger.info("Dispatched qualification of %s @ %s (nonce %s)",
+                tag, sha[:12], nonce[:16])
+    return nonce
 
 
 def _find_run(gh: Any, policy: RepoReleasePolicy, tag: str, sha: str) -> Any:

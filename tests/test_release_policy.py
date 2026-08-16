@@ -93,6 +93,53 @@ def test_shipped_fork_registry_is_valid() -> None:
     # Forks have no scheduled daily runs; the gate stays unconfigured.
     assert policy.daily_workflow is None
     assert policy.daily_max_age_hours is None
+    # Public endpoints are either fork-owned or empty (not configured):
+    # a fork E2E must never be able to false-VERIFY against upstream's
+    # real registries, downloads, or chart index.
+    down = policy.downstream
+    fork_owner = policy.repo.split("/", 1)[0]
+    assert down.dockerhub_repo == ""
+    assert down.bundle_dockerhub_repo == ""
+    assert down.ecr_namespace == ""
+    assert down.helm_index_url == ""
+    assert down.downloads_base_url == ""
+    assert down.ghcr_image_repo.startswith(f"{fork_owner}/")
+
+
+def test_empty_public_endpoint_fields_are_accepted(tmp_path: Path) -> None:
+    # Empty means "not configured for this repository": the verifier
+    # reports the output as informational instead of probing anything.
+    text = _VALID
+    for old, new in (
+        # bundle_dockerhub_repo first: its line contains "dockerhub_repo:
+        # valkey/valkey" as a substring.
+        ("bundle_dockerhub_repo: valkey/valkey-bundle", "bundle_dockerhub_repo: ''"),
+        ("dockerhub_repo: valkey/valkey", "dockerhub_repo: ''"),
+        ("ghcr_image_repo: valkey-io/valkey", "ghcr_image_repo: ''"),
+        ("ecr_namespace: valkey", "ecr_namespace: ''"),
+        ("helm_index_url: https://valkey.io/valkey-helm/index.yaml",
+         "helm_index_url: ''"),
+        ("downloads_base_url: https://download.valkey.io/releases",
+         "downloads_base_url: ''"),
+    ):
+        assert old in text
+        text = text.replace(old, new)
+    down = load_policy(_write(tmp_path, text))["valkey-io/valkey"].downstream
+    assert down.dockerhub_repo == ""
+    assert down.bundle_dockerhub_repo == ""
+    assert down.ghcr_image_repo == ""
+    assert down.ecr_namespace == ""
+    assert down.helm_index_url == ""
+    assert down.downloads_base_url == ""
+
+
+def test_non_endpoint_repo_fields_still_reject_empty(tmp_path: Path) -> None:
+    # Only the public-endpoint fields may be empty; the GitHub repos the
+    # controller reads and writes are always required.
+    text = _VALID.replace("bundle_repo: valkey-io/valkey-bundle",
+                          "bundle_repo: ''")
+    with pytest.raises(ValueError, match="bundle_repo"):
+        load_policy(_write(tmp_path, text))
 
 
 @pytest.mark.parametrize(
@@ -126,7 +173,9 @@ def test_shipped_fork_registry_is_valid() -> None:
         ("downloads_base_url: http://insecure.example", "downloads_base_url"),
         ("tarball_targets: []", "tarball_targets"),
         ("automation_repo: not-a-repo", "automation_repo"),
-        ("ecr_namespace: ''", "ecr_namespace"),
+        ("ecr_namespace: '   '", "ecr_namespace"),
+        ("dockerhub_repo: not-a-repo", "dockerhub_repo"),
+        ("ghcr_image_repo: not-a-repo", "ghcr_image_repo"),
     ],
 )
 def test_invalid_entries_are_rejected(tmp_path: Path, mutation: str, message: str) -> None:
@@ -231,9 +280,9 @@ def test_missing_repos_key_rejected(tmp_path: Path) -> None:
 
 
 class TestValidateReleaseBranch:
-    """F10: :func:`validate_release_branch` is the single choke point every
-    branch-scoped entry point (plan_publication, publish_release, reconcile
-    entry points on the other agents' side) funnels through. A branch not
+    """:func:`validate_release_branch` is the single choke point every
+    branch-scoped entry point (plan_publication, publish_release, the
+    reconcile entry points) funnels through. A branch not
     listed in the policy is refused BEFORE any API access; the shape check
     inherited from :func:`parse_release_branch` runs on the same call site
     so both wrong-shape and unconfigured-but-well-shaped inputs fail here.
@@ -275,20 +324,3 @@ class TestValidateReleaseBranch:
         from scripts.release.policy import validate_release_branch
         with pytest.raises(ValueError):
             validate_release_branch(self._policy(tmp_path), bad_shape)
-
-    def test_signature_matches_the_agreed_contract(self) -> None:
-        # Agent B imports validate_release_branch from scripts.release.policy
-        # and calls it as validate_release_branch(policy, branch) -> None.
-        # A rename or extra required arg here breaks reconcile.py.
-        import inspect
-
-        from scripts.release.policy import validate_release_branch
-        sig = inspect.signature(validate_release_branch)
-        params = list(sig.parameters.values())
-        assert len(params) == 2
-        assert [p.name for p in params] == ["policy", "branch"]
-        assert all(p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
-                   for p in params)
-        # Under `from __future__ import annotations` the return annotation
-        # is stringified; match either the string 'None' or the type.
-        assert sig.return_annotation in (None, "None")

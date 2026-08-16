@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -232,12 +233,35 @@ class TestDispatch:
         repo.get_workflow.return_value.create_dispatch.return_value = True
         gh = gh_mock(repo)
 
-        dispatch_qualification(gh, _POLICY, tag="9.1.1", sha=MERGE_SHA)
+        nonce = dispatch_qualification(gh, _POLICY, tag="9.1.1", sha=MERGE_SHA)
 
         gh.get_repo.assert_called_with("valkey-io/valkey-release-automation")
         repo.get_workflow.assert_called_with("qualify-release.yml")
+        # A per-dispatch nonce always rides along (generated when the
+        # caller supplies none) and the dispatched value is returned so
+        # the caller can record it on the receipt.
         repo.get_workflow.return_value.create_dispatch.assert_called_once_with(
-            "main", inputs={"version": "9.1.1", "source_sha": MERGE_SHA},
+            "main", inputs={"version": "9.1.1", "source_sha": MERGE_SHA,
+                            "nonce": nonce},
+        )
+        assert re.fullmatch(r"[0-9a-f]{32}", nonce)
+
+    def test_dispatch_echoes_a_caller_supplied_nonce(self) -> None:
+        # The controller records the nonce on the intent receipt BEFORE
+        # dispatching, so the dispatched nonce must be exactly the one it
+        # passes in, never a fresh generation.
+        repo = MagicMock()
+        repo.default_branch = "main"
+        repo.get_workflow.return_value.create_dispatch.return_value = True
+
+        returned = dispatch_qualification(gh_mock(repo), _POLICY,
+                                          tag="9.1.1", sha=MERGE_SHA,
+                                          nonce="d" * 32)
+
+        assert returned == "d" * 32
+        repo.get_workflow.return_value.create_dispatch.assert_called_once_with(
+            "main", inputs={"version": "9.1.1", "source_sha": MERGE_SHA,
+                            "nonce": "d" * 32},
         )
 
     def test_rejected_dispatch_raises(self) -> None:
@@ -250,7 +274,7 @@ class TestDispatch:
 
 
 class TestStartupFailure:
-    """F14: a startup_failure run must not be erased into the no-run state
+    """A startup_failure run must not be erased into the no-run state
     (that made reconciliation redispatch every pass, forever). Its identity
     is preserved as a failed run, which actions.advance routes through the
     marker-gated one-retry path."""
@@ -279,7 +303,7 @@ class TestStartupFailure:
 class TestManifestEvidence:
     """The qualification-manifest artifact is required evidence: content is
     downloaded, parsed, and each field must match the release identity
-    being qualified (F5). Presence plus unexpired is necessary but not
+    being qualified. Presence plus unexpired is necessary but not
     sufficient."""
 
     def test_manifest_present_passes(self) -> None:
@@ -360,7 +384,7 @@ class TestManifestRedirectFollowing:
             qual_mod._fetch_signed_url("http://blobs.example/signed")
 
     def test_blob_fetch_sends_no_authorization_and_caps_the_read(self) -> None:
-        # F19: the signed URL is self-authenticating, so the GitHub token
+        # The signed URL is self-authenticating, so the GitHub token
         # must never ride the request to the blob host, and the read must
         # be size-capped so a hostile or damaged upload cannot pin runner
         # memory.
@@ -378,7 +402,7 @@ class TestManifestRedirectFollowing:
         resp.read.assert_called_once_with(qual_mod._MAX_MANIFEST_BYTES * 4 + 1)
 
     def test_https_to_http_downgrade_by_the_redirect_chain_refuses(self) -> None:
-        # F19: the stdlib default redirect handler follows an https URL to
+        # The stdlib default redirect handler follows an https URL to
         # an http target without complaint; evidence bytes that traveled a
         # cleartext hop must never be trusted, and nothing is read off the
         # downgraded response.
@@ -394,7 +418,7 @@ class TestManifestRedirectFollowing:
 
 
 class TestManifestContentValidation:
-    """F5: the manifest is downloaded, parsed, and every field bound to
+    """The manifest is downloaded, parsed, and every field bound to
     the release identity being qualified. Any download failure, parse
     failure, or field mismatch is an evidence mismatch that names what
     differed. The producer schema is fixed at 1
@@ -468,6 +492,39 @@ class TestManifestContentValidation:
                                         tag="9.1.1", sha=MERGE_SHA)
         assert not status.passed
         assert any("rpm_jobs" in item for item in status.failed_jobs)
+
+    def test_matching_dispatch_nonce_passes(self) -> None:
+        # The dispatch receipt recorded a nonce and the producer echoed
+        # it: the run is the controller's own dispatch.
+        run = self._run_with_manifest(nonce="c" * 32)
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA,
+                                        expected_nonce="c" * 32)
+        assert status.passed
+        assert not status.failed_jobs
+
+    def test_mismatched_dispatch_nonce_refuses_naming_both_values(self) -> None:
+        # A manifest whose nonce differs from the receipt's recorded one
+        # is not the run this controller dispatched; the refusal names
+        # both values so the operator can diff them.
+        run = self._run_with_manifest(nonce="e" * 32)
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA,
+                                        expected_nonce="c" * 32)
+        assert not status.passed
+        mismatch = next(item for item in status.failed_jobs if "nonce" in item)
+        assert "e" * 32 in mismatch
+        assert "c" * 32 in mismatch
+
+    def test_legacy_receipt_without_nonce_tolerates_any_manifest_nonce(self) -> None:
+        # Receipts from before nonce wiring recorded nothing: the empty
+        # expected_nonce keeps today's behavior (nonce is evidence detail
+        # only), so already-in-flight releases keep verifying.
+        run = self._run_with_manifest(nonce="e" * 32)
+        status = evaluate_qualification(_gh_with_runs([run]), _POLICY,
+                                        tag="9.1.1", sha=MERGE_SHA)
+        assert status.passed
+        assert not status.failed_jobs
 
     def test_wrong_schema_version_refuses(self) -> None:
         # Schema drift by a producer change: the controller cannot trust
@@ -624,7 +681,7 @@ class TestManifestContentValidation:
         assert any("rpm_jobs" in item for item in status.failed_jobs)
 
     def test_rc_contract_version_is_base_and_tag_is_full(self) -> None:
-        # F11 consumer contract pin: the controller dispatches the full
+        # Consumer contract pin: the controller dispatches the full
         # tag as the workflow's 'version' input, and the fixed producer
         # (qualify-release.yml) emits the BASE version (no -rcN) in the
         # manifest 'version' field with the full tag in 'tag'. That shape

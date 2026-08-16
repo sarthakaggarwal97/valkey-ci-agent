@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import itertools
 import logging
+import os
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
@@ -80,6 +81,19 @@ _NOTES_PR_SCAN_LIMIT = 200
 
 class ReleaseControlError(Exception):
     """A release action is impossible or refused; the message says why."""
+
+
+def _adopt_workflow_url() -> str:
+    """The dispatch page of the Adopt Release Candidate workflow.
+
+    The workflow lives in the controller's own repo: GITHUB_REPOSITORY in
+    Actions (which also makes fork runs link the fork's copy), the
+    canonical repo outside Actions. Used by operator-facing blocker text
+    so "adopt the new head" names the exact button, the way the READY
+    callout links "Approve here".
+    """
+    agent_repo = os.environ.get("GITHUB_REPOSITORY", "valkey-io/valkey-ci-agent")
+    return f"https://github.com/{agent_repo}/actions/workflows/release-adopt.yml"
 
 
 class _BoundNotesPrLost(Exception):
@@ -581,8 +595,9 @@ def compute_status(
             blockers.append(
                 f"Branch `{branch}` moved past the candidate (`{candidate.sha[:12]}`); "
                 f"an authorized owner must adopt the exact new head "
-                f"(`{branch_head[:12]}`) via the adopt command before qualification "
-                f"continues."
+                f"(`{branch_head[:12]}`) before qualification continues: "
+                f"dispatch the [Adopt Release Candidate workflow]"
+                f"({_adopt_workflow_url()}) with the full head SHA."
             )
         else:
             # Informational only: the results render on the tracker so a
@@ -592,8 +607,18 @@ def compute_status(
             checks = checks_mod.evaluate_required_checks(repo, policy, candidate.sha)
             if not blockers and not alerts:
                 phase = ReleasePhase.QUALIFICATION
+                # The evaluator requires the manifest to echo the nonce the
+                # dispatch receipt recorded, when one exists; "" (legacy
+                # receipts, pre-nonce trackers) leaves the nonce as
+                # evidence detail only.
+                expected_nonce = (
+                    issue_mod.recorded_qualification_nonce(
+                        tracking_issue, candidate.sha, gh)
+                    if tracking_issue is not None else ""
+                )
                 qualification = qual_mod.evaluate_qualification(
                     gh_downstream, policy, tag=tag, sha=candidate.sha,
+                    expected_nonce=expected_nonce,
                 )
                 if qualification.passed:
                     # The daily gate holds READY (and with it the publish
@@ -612,8 +637,10 @@ def compute_status(
                         f"Qualification run {qualification.run_id} failed "
                         f"({failed}); the first failure is retried once "
                         f"automatically. After a failed retry, fix the cause "
-                        f"and re-dispatch the qualification workflow (a new "
-                        f"run for the same SHA supersedes this one)."
+                        f"and dispatch the Reconcile Releases workflow, or "
+                        f"re-dispatch the qualification workflow echoing the "
+                        f"recorded dispatch nonce (a new run for the same SHA "
+                        f"supersedes this one)."
                     )
                 else:
                     blockers.append(
@@ -651,7 +678,7 @@ def _published_status(
     moved) outside the controller; that alerts loudly, blocks completion,
     and skips downstream verification so no untrusted artifact is pushed
     further downstream. Beyond the tag, the release itself must carry the
-    publish path's publication receipt (F3): a release with no matching
+    publish path's publication receipt: a release with no matching
     trusted receipt is quarantined pre-published, again with no downstream
     verification.
     """
@@ -698,7 +725,7 @@ def _published_status(
             **base,
         )
 
-    # F3: a trusted tag is necessary but not sufficient. The protected
+    # A trusted tag is necessary but not sufficient. The protected
     # publish path posts a publication receipt on the tracker as its
     # write-side record; a release with no trusted receipt matching the
     # observed tag+SHA was created out of band (or the publish crashed
@@ -867,14 +894,13 @@ def reconcile_branch(
     mode**: no branch-label backfill, no advance actions, no phase-label
     sync, no tracker edit, no binding write, no comment. A read-only pass.
 
-    Ordering (post-Agent-A F24 contract): render/labels first, close last.
+    Ordering: render/labels first, close last.
     ``actions.advance`` returns a ``close_when_complete`` bool describing
     the intent; reconcile lays the final projection into the tracker
     (labels + body) FIRST so the closed tracker never carries a stale
-    projection, and only then closes as the very last write. The legacy
-    list-returning ``advance`` (which closes internally) is still tolerated
-    via the ``getattr`` fallback below so this side ships before Agent A's
-    flip.
+    projection, and only then closes as the very last write. The
+    ``getattr`` fallback below exists because tests patch ``advance``
+    with plain lists, which simply read as ``close_when_complete=False``.
     """
     _refuse_unconfigured_branch(policy, branch)
 
@@ -936,7 +962,7 @@ def reconcile_branch(
             gh_downstream, policy, status=status, tracking_issue=tracking_issue,
             gh_agent=gh_agent, agent_repo=agent_repo, agent_head_sha=agent_head,
         )
-        # F24 contract: advance() returns AdvanceResult (a list of action
+        # advance() returns AdvanceResult (a list of action
         # log strings carrying ``close_when_complete``) and never closes
         # the tracker itself; the close happens below, after the final
         # projection is rendered, as the last write. Plain lists (tests
@@ -976,10 +1002,9 @@ def reconcile_branch(
         _render_tracker(tracking_issue, status)
 
     # The very last write of the pass: close the tracker on completion.
-    # Under the new F24 contract this is where the close happens; under
-    # the legacy contract advance() has already closed the tracker itself,
-    # so ``close_when_complete`` stays False and this is a no-op. Skipped
-    # if a healing pass encountered a tracker already closed.
+    # advance() never closes the tracker itself, so the close lands here,
+    # after the final projection is rendered. Skipped if a healing pass
+    # encountered a tracker already closed.
     if act and close_when_complete and tracking_issue.state != "closed":
         _close_tracker_last_write(gh, status, tracking_issue)
 
@@ -995,7 +1020,7 @@ def _close_tracker_last_write(gh: Any, status: ReleaseStatus, tracking_issue: An
     ``close_when_complete``; the marker check here is a safety net for a
     pass that crashed between that comment and this close. Closing is
     deliberately the final write so a crash never leaves a closed tracker
-    with a stale projection (F24).
+    with a stale projection.
     """
     if not issue_mod.has_completion_marker(tracking_issue, gh):
         issue_mod.post_comment(

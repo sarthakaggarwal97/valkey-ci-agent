@@ -63,30 +63,14 @@ def _contents_for(version_h: str = _VERSION_H, notes: str = _NOTES):
     return _contents
 
 
-def _with_manifest(run: MagicMock) -> MagicMock:
-    """Append the qualification-manifest artifact to a qual-run mock.
-
-    The shared fixture predates the manifest requirement in
-    qualification.py; idempotent so it stays harmless once the fixture
-    carries the manifest itself.
-    """
-    artifacts = list(run.get_artifacts.return_value)
-    if not any(a.name == "qualification-manifest" for a in artifacts):
-        manifest = MagicMock(expired=False, size_in_bytes=64)
-        manifest.name = "qualification-manifest"
-        run.get_artifacts.return_value = artifacts + [manifest]
-    return run
-
-
 def _ready_repo(**overrides: object) -> MagicMock:
     """A repo mock in the READY state whose contents serve the publish reads."""
     repo = repo_mock(tags=["9.1.0"], **overrides)  # type: ignore[arg-type]
-    for run in repo.get_workflow.return_value.get_runs.return_value:
-        _with_manifest(run)
     repo.get_contents.side_effect = _contents_for()
-    # F17 uses get_releases() enumeration; keep the legacy get_latest_release
-    # in sync so both the pre-publication decision and the post-publish
-    # pointer verify see the same maximum ("9.1.0" here: this GA advances).
+    # The latest decision uses get_releases() enumeration; keep the legacy
+    # get_latest_release in sync so both the pre-publication decision and
+    # the post-publish pointer verify see the same maximum ("9.1.0" here:
+    # this GA advances).
     _latest = MagicMock(tag_name="9.1.0", draft=False, prerelease=False)
     repo.get_latest_release.return_value = _latest
     repo.get_releases.return_value = [_latest]
@@ -108,7 +92,7 @@ def _publishable_repo() -> MagicMock:
     def _tag_after_create(*args: object, **kwargs: object) -> MagicMock:
         repo.get_git_ref.side_effect = None
         repo.get_git_ref.return_value = tag_ref()
-        # F17 defense-in-depth: publish_release re-reads the latest pointer
+        # Defense-in-depth: publish_release re-reads the latest pointer
         # after create. When the plan asked for make_latest=true, the
         # pointer must now show this release; otherwise the verify step
         # would flag a race.
@@ -352,7 +336,7 @@ class TestCreateReleaseRecovery:
 
 
 class TestTagCreationRace:
-    """F16: create refs/tags/{tag} atomically BEFORE the release, so a
+    """Create refs/tags/{tag} atomically BEFORE the release, so a
     second writer racing us into create_git_release cannot bind the tag
     to a different SHA. A conflict at a different SHA quarantines; a
     conflict at the approved SHA is a resume and continues.
@@ -432,7 +416,7 @@ class TestTagCreationRace:
     def test_tag_at_approved_sha_resumes_the_release(self) -> None:
         # End-to-end resume: plan_publication sees the tag at the approved
         # SHA (partial-publish resume state) and does not refuse; publish
-        # proceeds and completes. F5: the resume is only allowed because
+        # proceeds and completes. The resume is only allowed because
         # this repo's qualification evidence exists and passed; readiness
         # is re-proven live, never inferred from the tag's existence (see
         # TestResumeRequiresReadiness for the refusal side).
@@ -509,7 +493,7 @@ class TestTagCreationRace:
 
 
 class TestPublicationReceiptContent:
-    """F3 write side: the receipt records the tag/SHA carrier line (the
+    """Receipt write side: the receipt records the tag/SHA carrier line (the
     field the verifier requires) plus the plan digest and the controller
     commit/run that executed the write (evidence for a human; optional on
     read-back so legacy receipts keep verifying)."""
@@ -550,7 +534,7 @@ class TestPublicationReceiptContent:
 
 
 class TestUnreceiptedReleaseResume:
-    """F3 resume seam: a publish that crashed after creating the release
+    """Receipt resume seam: a publish that crashed after creating the release
     but before the receipt write leaves reconcile reporting the
     unreceipted-release alert. Re-running the publish workflow is the
     documented recovery, so that ONE alert must not refuse the resume;
@@ -575,7 +559,7 @@ class TestUnreceiptedReleaseResume:
                                 actor="madolson")
         assert plan.tag == "9.1.1"
         assert plan.sha == MERGE_SHA
-        # F5 still holds on this resume: the plan binds the re-proven
+        # Readiness re-proof still holds on this resume: the plan binds the re-proven
         # qualification run, never run_id 0.
         assert plan.qualification_run_id == 900
 
@@ -590,7 +574,7 @@ class TestUnreceiptedReleaseResume:
 
 
 class TestResumeRequiresReadiness:
-    """F5: a same-SHA tag excuses exactly one refusal, the TAG-EXISTS
+    """A same-SHA tag excuses exactly one refusal, the TAG-EXISTS
     check (STAGE 1 of a crashed publish already claimed the tag). It must
     never stand in for readiness itself: an out-of-band writer
     pre-creating the tag at the public candidate SHA must not obtain an
@@ -605,7 +589,7 @@ class TestResumeRequiresReadiness:
         return repo
 
     def test_missing_qualification_refuses_the_resume(self) -> None:
-        # The exact F5 attack: pre-create the tag at the candidate SHA
+        # The exact attack this closes: pre-create the tag at the candidate SHA
         # with NO qualification run anywhere. The old behavior planned
         # anyway with qualification_run_id=0 bound into the digest.
         repo = self._repo_with_tag_at_candidate(qual_runs=[])
@@ -639,7 +623,7 @@ class TestResumeRequiresReadiness:
     def test_ready_resume_plans_and_binds_the_real_qualification_run(self) -> None:
         # The legitimate resume still plans, and the plan (hence the
         # digest the approver signs off on) binds the real qualification
-        # run instead of run_id 0: the F5 hole was precisely an approvable
+        # run instead of run_id 0: the closed hole was precisely an approvable
         # digest over qualification_run_id=0.
         repo = self._repo_with_tag_at_candidate(
             qual_runs=[qualification_run()])
@@ -652,7 +636,7 @@ class TestResumeRequiresReadiness:
 
 
 class TestLatestPointerRace:
-    """F17: publications on two branches interleaving must not both take
+    """Publications on two branches interleaving must not both take
     the latest pointer. The enumeration-based decision is racy on the
     wire; post-create pointer verify catches divergence."""
 
@@ -743,7 +727,7 @@ class TestLatestPointerRace:
 
 
 class TestUnconfiguredBranchRefusal:
-    """F10: plan and publish refuse an unconfigured branch BEFORE any API
+    """Plan and publish refuse an unconfigured branch BEFORE any API
     call the branch would otherwise reach (repo lookup, status compute)."""
 
     def test_plan_refuses_before_repo_access(self) -> None:
@@ -785,10 +769,10 @@ class TestRCPublication:
             pulls=[notes_pr(head_ref="agent/release-cut/9.2.0-rc1")],
             issues=[tracker(branch="9.2")],
             tags=["9.1.0"],
-            qual_runs=[_with_manifest(qualification_run(tag="9.2.0-rc1"))],
+            qual_runs=[qualification_run(tag="9.2.0-rc1")],
         )
         repo.get_workflow.return_value.get_runs.return_value = [
-            _with_manifest(qualification_run(tag="9.2.0-rc1"))
+            qualification_run(tag="9.2.0-rc1")
         ]
         repo.get_contents.side_effect = _contents_for(rc_version_h, rc_notes)
         repo.get_latest_release.return_value = MagicMock(tag_name="9.1.0")
@@ -1098,7 +1082,7 @@ class TestTagRulesetProbe:
         )
         assert tag_ruleset_protected(repo, "9.1.1") is False
 
-    # F4: HUMAN bypasses defeat the claim too. A Team, role, org-admin, or
+    # HUMAN bypasses defeat the claim too. A Team, role, org-admin, or
     # user bypass means people can still create, move, or delete the tag,
     # so "immutable" would overstate what was verified: any bypass actor
     # fails closed, regardless of actor_type or bypass_mode.
@@ -1159,9 +1143,93 @@ class TestTagRulesetProbe:
         assert tag_ruleset_protected(repo, "9.1.1") is None
 
 
+class TestTagRulesetProbePinsPyGithubSurface:
+    """The probe rides PyGithub's PRIVATE ``repo._requester`` because the
+    pinned PyGithub exposes no supported wrapper for the rulesets
+    endpoints. These tests run the probe through a REAL
+    ``github.Repository.Repository`` (never a MagicMock, which would
+    tolerate any attribute name) fed raw API response shapes, so a
+    PyGithub upgrade that renames ``_requester``, changes
+    ``requestJsonAndCheck``'s call shape, or alters Repository
+    construction surfaces HERE as a test failure instead of the probe
+    silently degrading every verdict to None ("not protected")."""
+
+    class _RawRequester:
+        """Duck-typed requester serving the documented raw JSON shapes of
+        GET /repos/{o}/{r}/rulesets and /rulesets/{id}."""
+
+        # Attributes Repository construction reads off the requester.
+        base_url = "https://api.github.com"
+        is_not_lazy = False
+
+        def __init__(self, listing: list, details: "dict[int, dict]") -> None:
+            self.listing = listing
+            self.details = details
+            self.calls: "list[tuple[str, str]]" = []
+
+        def requestJsonAndCheck(self, verb: str, url: str) -> "tuple[dict, object]":
+            self.calls.append((verb, url))
+            if url.endswith("/rulesets"):
+                return {}, self.listing
+            return {}, self.details[int(url.rsplit("/", 1)[1])]
+
+    def _real_repo(self, requester: "_RawRequester") -> "object":
+        from github.Repository import Repository
+        return Repository(
+            requester=requester,  # type: ignore[arg-type]
+            headers={},
+            attributes={"url": "https://api.github.com/repos/o/valkey"},
+            completed=True,
+        )
+
+    def test_still_exposes_no_supported_ruleset_wrapper(self) -> None:
+        # The WHY comment in publish.py claims the pinned PyGithub has no
+        # supported rulesets accessor; this pins that claim so a version
+        # bump that ADDS one prompts migrating off the private requester.
+        from github.Repository import Repository
+        assert not [attr for attr in dir(Repository) if "ruleset" in attr.lower()], (
+            "PyGithub now ships a rulesets accessor on Repository: migrate "
+            "tag_ruleset_protected off the private _requester probe"
+        )
+
+    def test_probe_through_a_real_repository_answers_protected(self) -> None:
+        requester = self._RawRequester(
+            [{"id": 42, "target": "tag", "enforcement": "active"}],
+            {42: {
+                "id": 42, "target": "tag", "enforcement": "active",
+                "conditions": {"ref_name": {"include": ["~ALL"], "exclude": []}},
+                "rules": [{"type": "creation"}, {"type": "update"},
+                          {"type": "deletion"}],
+                "bypass_actors": [],
+            }},
+        )
+        repo = self._real_repo(requester)
+        # A degradation to None here (private-attribute rename, call-shape
+        # change) is exactly the silent "unprotected" downgrade this test
+        # exists to catch: assert the True verdict, not just non-error.
+        assert tag_ruleset_protected(repo, "9.1.1") is True
+        assert requester.calls == [
+            ("GET", "https://api.github.com/repos/o/valkey/rulesets"),
+            ("GET", "https://api.github.com/repos/o/valkey/rulesets/42"),
+        ]
+
+    def test_probe_through_a_real_repository_answers_unprotected(self) -> None:
+        requester = self._RawRequester(
+            [{"id": 7, "target": "tag", "enforcement": "active"}],
+            {7: {
+                "id": 7, "target": "tag", "enforcement": "active",
+                "conditions": {"ref_name": {"include": ["~ALL"], "exclude": []}},
+                "rules": [{"type": "creation"}, {"type": "update"},
+                          {"type": "deletion"}],
+                "bypass_actors": [{"actor_type": "Integration", "actor_id": 1}],
+            }},
+        )
+        assert tag_ruleset_protected(self._real_repo(requester), "9.1.1") is False
+
+
 class TestPlanSummaryHonesty:
     def test_protected_tag_states_only_the_strengthened_claim(self) -> None:
-        # F4: the protected claim now names exactly what the probe
+        # The protected claim names exactly what the probe
         # verified: creation, update, and deletion restrictions with zero
         # bypass actors.
         summary = render_plan_summary(_plan(tag_protected=True))
@@ -1254,7 +1322,7 @@ class TestMakeLatestDecision:
         ]
         repo.get_releases.return_value = releases_mocks
         repo.get_latest_release.side_effect = AssertionError(
-            "F17: _make_latest_decision must enumerate releases, not use "
+            "_make_latest_decision must enumerate releases, not use "
             "the mutable get_latest_release pointer"
         )
         return repo
@@ -1271,13 +1339,13 @@ class TestMakeLatestDecision:
         assert _make_latest_decision(repo, "9.1.1", "ga") == "true"
 
     def test_older_line_patch_never_takes_latest(self) -> None:
-        # F17: two-branch interleaving: 8.0.5 racing 9.1.0 out of the door
+        # Two-branch interleaving: 8.0.5 racing 9.1.0 out of the door
         # must NOT set latest, even if a mutable pointer earlier claimed it.
         repo = self._repo(("9.1.0", False, False), ("8.0.4", False, False))
         assert _make_latest_decision(repo, "8.0.5", "ga") == "false"
 
     def test_stale_manual_pointer_does_not_deceive_enumeration(self) -> None:
-        # F17: get_latest_release returns a MUTABLE pointer (a maintainer
+        # get_latest_release returns a MUTABLE pointer (a maintainer
         # can move it back manually to an older release). Enumeration
         # ignores the pointer entirely; the newer release, still present
         # in the release list, keeps the decision honest.

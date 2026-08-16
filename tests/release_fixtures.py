@@ -258,7 +258,7 @@ def publish_run(*, head_sha: str, status: str = "waiting",
                 branch: str = "9.1", run_id: int = 77,
                 conclusion: "str | None" = None,
                 tag: str = "", candidate_sha: str = "") -> MagicMock:
-    """A publish-workflow run mock whose run-name carries the F16 binding.
+    """A publish-workflow run mock whose run-name carries the tag@sha binding.
 
     ``tag`` + ``candidate_sha`` both set = a bound run; either empty = an
     unbound (legacy / manual) run.
@@ -287,7 +287,7 @@ def notes_pr(*, merged: bool = True, state: "str | None" = None,
                    html_url=f"https://x/pull/{number}")
     pr.head.ref = head_ref
     pr.head.repo = None if head_repo is None else SimpleNamespace(full_name=head_repo)
-    # Trust the notes-PR author by default (Agent B's trust rule): tests
+    # Trust the notes-PR author by default (the trusted-bot-author gate): tests
     # that model a lookalike PR override author_login to a non-bot value.
     pr.user.login = author_login
     return pr
@@ -327,7 +327,7 @@ def bot_binding(version: str = "9.1.1", stage: str = "ga", *,
 def bot_receipt(tag: str = "9.1.1", sha: str = MERGE_SHA, *,
                 author: str = "valkeyrie-ops[bot]") -> MagicMock:
     """A trusted publication receipt in the LEGACY field set (no plan
-    digest, no controller lines): exactly what the pre-F3 publish path
+    digest, no controller lines): exactly what the pre-receipt-fields publish path
     posted, and what prior releases' trackers (8.0.10, 9.0.6, the live
     8.0.11) carry. Defaulting to this shape means every test using it also
     proves the migration acceptance: marker presence plus tag/SHA match is

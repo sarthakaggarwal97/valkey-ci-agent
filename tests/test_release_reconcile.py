@@ -64,8 +64,8 @@ def notes_pr(
     base_repo: str = "valkey-io/valkey",
     **kwargs: object,
 ) -> MagicMock:
-    """Wrap ``release_fixtures.notes_pr`` so the F11 lookalike-preemption
-    check and the F18 bound-PR revalidation see the fields they need.
+    """Wrap ``release_fixtures.notes_pr`` so the lookalike-preemption
+    check and the bound-PR revalidation see the fields they need.
 
     ``release_fixtures.notes_pr`` predates both fixes: it leaves ``pr.user``
     and ``pr.base`` as unconfigured MagicMocks (truthy but not strings). The
@@ -86,9 +86,9 @@ def notes_pr(
 def _patch_notes_pr_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Route ``release_fixtures.notes_pr`` (called internally by
     ``release_fixtures.repo_mock``) through this module's wrapper so the
-    F11 author and F18 base-ref fields are populated on default fixtures
-    too. ``release_fixtures.py`` is off-limits under Agent B's file
-    ownership; monkey-patching keeps the change scoped to this module."""
+    author and base-ref fields are populated on default fixtures
+    too; monkey-patching keeps the change scoped to this module (the
+    shared fixture file serves other test modules unchanged)."""
     monkeypatch.setattr("tests.release_fixtures.notes_pr", notes_pr)
 
 _POLICY = make_policy()
@@ -112,7 +112,8 @@ class TestStartRelease:
         # ``unstable`` is not MAJOR.MINOR-shaped, so validate_release_branch
         # raises through parse_release_branch first ("not a release branch");
         # a right-shape-but-unconfigured branch would raise "not a configured
-        # release branch". Match either - both are the F10 gate firing.
+        # release branch". Match either - both are the branch-allowlist
+        # gate firing before any API access.
         with pytest.raises(ReleaseControlError, match="not a"):
             start_release(gh, _POLICY, branch="unstable",
                           intent=ReleaseIntent.PATCH, actor="madolson")
@@ -164,7 +165,7 @@ class TestStartRelease:
     def test_duplicate_start_after_complete_release_demands_tracker_close(self) -> None:
         # Tag exists AND the release is COMPLETE-shaped: closing the
         # tracker is the right (and only recommended) next step. The
-        # tracker carries the publication receipt (F3): without it the
+        # tracker carries the publication receipt: without it the
         # release would read as unverified, not complete.
         repo = repo_mock(issues=[tracker(comments=[bot_receipt()])],
                          tags=["9.1.0", "9.1.1"], released=True)
@@ -220,7 +221,7 @@ class TestNotesPRBinding:
         pytest.param("agent/release-cut/9.1.5-ga", "9.11", id="9.1-not-9.11"),
     ])
     def test_non_matching_head_refs_never_bind(self, head_ref: str, branch: str) -> None:
-        # Extended policy so branches like 9.10/9.11 pass F10's
+        # Extended policy so branches like 9.10/9.11 pass the
         # validate_release_branch gate - the property under test is the
         # trailing-dot prefix rule, not branch allowlisting.
         policy = make_policy(branches=("9.1", "8.0", "9.10", "9.11"))
@@ -447,6 +448,48 @@ class TestComputeStatus:
         status = _status(repo_mock(qual_runs=[truncated]))
         assert not status.qualification.passed
         assert any("Evidence mismatch" in job for job in status.qualification.failed_jobs)
+
+    def test_recorded_dispatch_nonce_matching_the_manifest_stays_ready(self) -> None:
+        # The tracker's dispatch receipt recorded the nonce the fixture
+        # manifest carries ("n" * 32): the evidence binds and READY holds.
+        issue = tracker(comments=[bot_comment(
+            f"{issue_mod.qual_nonce_marker(MERGE_SHA, 'n' * 32)}\ndispatched")])
+        status = _status(repo_mock(issues=[issue]), tracking_issue=issue)
+        assert status.qualification.passed
+        assert status.phase is ReleasePhase.READY
+
+    def test_recorded_dispatch_nonce_mismatch_refuses_the_evidence(self) -> None:
+        # The receipt recorded a different nonce than the manifest echoes:
+        # this run is not the controller's dispatch and must not qualify.
+        issue = tracker(comments=[bot_comment(
+            f"{issue_mod.qual_nonce_marker(MERGE_SHA, 'f' * 32)}\ndispatched")])
+        status = _status(repo_mock(issues=[issue]), tracking_issue=issue)
+        assert not status.qualification.passed
+        mismatch = next(item for item in status.qualification.failed_jobs
+                        if "nonce" in item)
+        assert "f" * 32 in mismatch and "n" * 32 in mismatch
+
+    def test_untrusted_nonce_receipt_is_ignored_like_every_marker(self) -> None:
+        # A nonce marker pasted by a random account must not become the
+        # binding: without a trusted receipt the legacy behavior holds
+        # (nonce is evidence detail only) and the release stays READY.
+        issue = tracker(comments=[bot_comment(
+            f"{issue_mod.qual_nonce_marker(MERGE_SHA, 'f' * 32)}\nforged",
+            author="drive-by-user")])
+        status = _status(repo_mock(issues=[issue]), tracking_issue=issue)
+        assert status.qualification.passed
+        assert status.phase is ReleasePhase.READY
+
+    def test_invalidated_candidate_blocker_links_the_adopt_workflow(self) -> None:
+        # The operator-facing blocker names the exact button, the way the
+        # READY callout links "Approve here": the Adopt Release Candidate
+        # workflow's dispatch page, plus what to paste (the full head SHA).
+        status = _status(repo_mock(branch_head=MOVED_SHA))
+        assert status.candidate.state is CandidateState.INVALIDATED
+        blocker = next(b for b in status.blockers if "moved past" in b)
+        assert "Adopt Release Candidate workflow" in blocker
+        assert "/actions/workflows/release-adopt.yml" in blocker
+        assert "full head SHA" in blocker
 
     def test_failed_required_check_never_blocks_ready(self) -> None:
         # Pin (a): required-check results are informational. A failed
@@ -703,8 +746,8 @@ def _out(name: str, state: OutputState) -> DownstreamOutput:
 
 
 def _receipted_tracker(sha: str = MERGE_SHA) -> MagicMock:
-    """A tracker carrying the publication receipt for the observed release
-    (F3): published-state tests need one or the release quarantines as
+    """A tracker carrying the publication receipt for the observed release:
+    published-state tests need one or the release quarantines as
     unverified. The fixture receipt is legacy-shaped, so these tests also
     pin the migration acceptance."""
     return tracker(comments=[bot_receipt(sha=sha)])
@@ -848,7 +891,7 @@ class TestPublishedTagTrust:
 
 
 class TestPublicationReceipt:
-    """F3: an observed release must match the publish path's publication
+    """An observed release must match the publish path's publication
     receipt (a trusted-author marker comment recording the exact tag+SHA)
     before published verification starts. No receipt, or a receipt naming
     a different tag or SHA, quarantines the release pre-published: a
@@ -934,7 +977,8 @@ class TestPublicationReceipt:
         assert status.alerts == (self._UNRECEIPTED_ALERT,)
 
     def test_legacy_field_receipt_is_accepted(self) -> None:
-        # MIGRATION: receipts posted by the pre-F3 code (8.0.10, 9.0.6,
+        # MIGRATION: receipts posted before the digest/controller
+        # fields existed (8.0.10, 9.0.6,
         # the live 8.0.11 tracker) carry only the marker and the carrier
         # line: no plan digest, no controller lines. They must keep
         # verifying so live trackers do not regress. bot_receipt IS that
@@ -989,7 +1033,7 @@ class TestReconcileBranch:
         issue.body = issue_mod.identity_marker("9.1") + "\nstale hand-edited text"
         repo = repo_mock(issues=[issue])
 
-        # act=True writes: F30 makes act=False strict observation mode
+        # act=True writes: act=False is strict observation mode
         # (no edits at all); use the default (act=True) for tests that
         # want to assert on the rendered projection.
         with patch("scripts.release.actions.advance", return_value=[]):
@@ -1108,7 +1152,7 @@ class TestReconcileBranch:
         gh_agent = MagicMock()
         agent_head = "d" * 40
         gh_agent.get_repo.return_value.get_branch.return_value.commit.sha = agent_head
-        # Under Agent A's F12, gate-parked publish runs must bind the
+        # Gate-parked publish runs must bind the
         # current tag+candidate in their run-name to hold the slot;
         # unbound runs are ignored. Match the shape the runner writes.
         waiting = MagicMock(status="waiting", head_sha=agent_head,
@@ -1191,7 +1235,7 @@ def _issue_with_labels(*names: str) -> MagicMock:
 
 
 class TestCloseSeam:
-    """F24 integration: the AdvanceResult close signal drives the last-write
+    """Close-seam integration: the AdvanceResult close signal drives the last-write
     close in reconcile_branch. This seam broke silently once (a bool
     isinstance check that an AdvanceResult never satisfies), so the
     end-to-end path is pinned here rather than inferred from unit tests
@@ -1486,7 +1530,7 @@ class TestAbandonedTracker:
         closed.state = "closed"
         repo = self._repo_with_closed(closed)
 
-        # F24 heal-path: a controller-completed CLOSED tracker with a
+        # Heal-path: a controller-completed CLOSED tracker with a
         # drifted projection has its labels/body fixed in place, without
         # a reopen and without an abandoned-warning comment. The return
         # value is the healed status (not None).
@@ -1512,8 +1556,10 @@ class TestAbandonedTracker:
 
 
 # ------------------------------------------------------------------
-# Regression coverage for the external review findings addressed in
-# this patch (F10, F11, F18, F19, F22, F27, F29, F30).
+# Regression coverage for review-hardening properties: the branch
+# allowlist, the lookalike notes PR, bound-PR revalidation, the
+# one-active-release invariant, observation modes, stale adoption,
+# and branch-deleted-after-publication.
 # ------------------------------------------------------------------
 
 
@@ -1522,7 +1568,7 @@ def _writes_of(issue: MagicMock) -> list[str]:
 
     Any of ``edit`` / ``add_to_labels`` / ``remove_from_labels`` /
     ``create_comment`` firing means the pass wrote - this is the audit
-    the F22 / F30 observation-mode tests apply.
+    the observation-mode tests apply.
     """
     calls: list[str] = []
     for method in ("edit", "add_to_labels", "remove_from_labels", "create_comment"):
@@ -1533,7 +1579,7 @@ def _writes_of(issue: MagicMock) -> list[str]:
 
 
 class TestObservationMode:
-    """F22 (start_release dry_run=True) and F30 (reconcile_branch act=False)
+    """start_release dry_run=True and reconcile_branch act=False
     are strict observation modes: no comment, no label, no edit anywhere on
     the tracker or on binding comments, regardless of what the state calls
     for."""
@@ -1584,7 +1630,7 @@ class TestObservationMode:
 
 
 class TestAdoptStaleAcknowledgement:
-    """F29: an adoption of a former head that already lapsed is refused
+    """An adoption of a former head that already lapsed is refused
     (its stale acknowledgement was never in the allowed set), and a
     post-adopt candidate that stays INVALIDATED raises loudly instead of
     wedging the release on a recorded no-op."""
@@ -1636,7 +1682,7 @@ class TestAdoptStaleAcknowledgement:
 
 
 class TestBoundNotesPrRevalidation:
-    """F18: every reconcile pass revalidates the bound PR's identity
+    """Every reconcile pass revalidates the bound PR's identity
     against the binding. A head rename, a base retarget, or a fork
     shove-through surfaces a standing alert and freezes the binding
     (never rebinds, never updates merge_sha)."""
@@ -1660,7 +1706,7 @@ class TestBoundNotesPrRevalidation:
 
     def test_head_renamed_to_junk_freezes_binding(self) -> None:
         # A head that no longer parses as a notes-cut prep branch at all
-        # was previously crashing an assertion; the F18 revalidation
+        # was previously crashing an assertion; the bound-PR revalidation
         # converts it into a standing alert.
         drifted = notes_pr(number=42, head_ref="some/random/branch")
         issue = self._bound_issue()
@@ -1692,7 +1738,7 @@ class TestBoundNotesPrRevalidation:
 
 
 class TestOneActiveReleaseInvariant:
-    """F19: ``one active release per branch`` - the create-issue path is
+    """``one active release per branch`` - the create-issue path is
     dedup-safe (readback-on-fail, refuse on ambiguity) and a closed
     tracker without the completion marker blocks the next start."""
 
@@ -1787,7 +1833,7 @@ class TestOneActiveReleaseInvariant:
 
 
 class TestBranchDeletedAfterPublication:
-    """F27: a published release survives its source branch being deleted
+    """A published release survives its source branch being deleted
     or renamed. ``compute_status`` tolerates the 404 and routes through
     ``_published_status``; downstream verification runs unchanged."""
 
@@ -1827,8 +1873,8 @@ class TestBranchDeletedAfterPublication:
 
 
 class TestBranchAllowlist:
-    """F10: adopt and compute_status enforce the same branch allowlist
-    as start_release (Agent C's ``validate_release_branch``)."""
+    """adopt and compute_status enforce the same branch allowlist
+    as start_release (``validate_release_branch``)."""
 
     def test_compute_status_refuses_unconfigured_numeric_branch(self) -> None:
         # 6.9 is right-shape but not in the policy's configured set.
@@ -1846,7 +1892,7 @@ class TestBranchAllowlist:
 
 
 class TestLookalikeNotesPr:
-    """F11: a convention-matching PR authored by someone outside the
+    """A convention-matching PR authored by someone outside the
     trusted bot set is a lookalike-preemption attempt: refuse to bind
     it and surface a standing alert."""
 
