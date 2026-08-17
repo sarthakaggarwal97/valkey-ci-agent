@@ -40,6 +40,8 @@ def build_matrix(
                 continue
             entries.append({
                 "repo": repo_entry.repo,
+                "repo_owner": repo_entry.repo.split("/", 1)[0],
+                "repo_name": repo_entry.repo.split("/", 1)[1],
                 "repo_slug": repo_entry.repo.replace("/", "-"),
                 "project_owner": repo_entry.project_owner,
                 "project_owner_type": repo_entry.project_owner_type,

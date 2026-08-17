@@ -47,6 +47,10 @@ repos:
       - "docker build -t valkey-search-backport -f .devcontainer/Dockerfile ."
     build_commands:
       - "docker run --privileged --rm -v \"$(pwd):/workspace\" --user \"ubuntu:ubuntu\" valkey-search-backport sudo ci/build_ubuntu.sh"
+    test_path_patterns:
+      - "testing/*.cc"
+      - "vmsdk/testing/*.cc"
+      - "integration/test_*.py"
     repair_validation_failures: true
     branches:
       - branch: "1.0"

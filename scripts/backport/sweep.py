@@ -18,10 +18,9 @@ if __package__ in {None, ""}:
 
 from github import Auth, Github
 
-from scripts.backport.main import _run_git
-from scripts.backport.sweep_apply import (
-    apply_candidate,
-)
+from scripts.backport.candidate_apply import apply_candidate
+from scripts.backport.git_commands import head_sha
+from scripts.backport.git_commands import run_git as _run_git
 from scripts.backport.sweep_git import (
     branch_has_changes,
     clone_target_branch,
@@ -34,6 +33,7 @@ from scripts.backport.sweep_git import (
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
+    DETAIL_RESOLVED_BY_AI,
     BranchSweepResult,
     CandidateResult,
     ProjectBackportCandidate,
@@ -165,6 +165,7 @@ class ProjectBackportDiscovery:
             node.get("commit", {}).get("oid", "")
             for node in (content.get("commits", {}).get("nodes") or [])
         ]
+        commits_page = content.get("commits") or {}
         merge_sha = (content.get("mergeCommit") or {}).get("oid")
         return ProjectBackportCandidate(
             source_pr_number=int(content["number"]),
@@ -174,6 +175,9 @@ class ProjectBackportDiscovery:
             merge_commit_sha=merge_sha,
             commit_shas=[sha for sha in commits if sha],
             merged_at=str(content.get("mergedAt") or ""),
+            source_commits_complete=not bool(
+                (commits_page.get("pageInfo") or {}).get("hasNextPage")
+            ),
         )
 
 
@@ -265,7 +269,9 @@ def run_backport_sweep(
         language=repo_entry.language,
         build_commands=list(repo_entry.build_commands) or None,
         validation_rules=validation_rules,
+        test_path_patterns=repo_entry.test_path_patterns,
         repair_validation_failures=repo_entry.repair_validation_failures,
+        max_conflicting_files=repo_entry.max_conflicting_files,
         backport_label=repo_entry.backport_label,
         llm_conflict_label=repo_entry.llm_conflict_label,
     )
@@ -287,7 +293,9 @@ def _process_branch(
     language: str = "c",
     build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
     repair_validation_failures: bool = False,
+    max_conflicting_files: int = 100,
     backport_label: str = "backport",
     llm_conflict_label: str = "ai-resolved-conflicts",
 ) -> BranchSweepResult:
@@ -397,6 +405,7 @@ def _process_branch(
                     )
                     continue
 
+                pre_candidate_head = head_sha(tmpdir)
                 candidate_result = apply_candidate(
                     tmpdir,
                     candidate,
@@ -405,8 +414,16 @@ def _process_branch(
                     language=language,
                     build_commands=build_commands,
                     validation_rules=validation_rules,
+                    test_path_patterns=test_path_patterns,
+                    max_conflicting_files=max_conflicting_files,
                 )
                 result.results.append(candidate_result)
+
+                if not candidate_result.worktree_restored:
+                    raise RuntimeError(
+                        f"candidate #{candidate.source_pr_number} could not "
+                        "restore the worktree; aborting this branch"
+                    )
 
                 if candidate_result.outcome != "applied":
                     continue
@@ -415,7 +432,7 @@ def _process_branch(
                 # the whole branch still validates. A red commit left on the
                 # branch would block every later candidate, so we always reset
                 # a failure off the branch and move on to the next candidate.
-                ok, output = validate_branch_with_optional_repair(
+                validation_outcome = validate_branch_with_optional_repair(
                     tmpdir,
                     target_branch,
                     test_commands,
@@ -423,16 +440,35 @@ def _process_branch(
                     repair=repair_validation_failures,
                     run_git=_run_git,
                 )
+                ok, output = validation_outcome
                 if not ok:
                     candidate_result.outcome = "skipped-validation-failed"
                     candidate_result.detail = validation_failure_detail(output)
-                    _run_git(tmpdir, "reset", "--hard", "HEAD^")
+                    _run_git(tmpdir, "reset", "--hard", pre_candidate_head)
                     logger.warning(
                         "Validation failed for candidate #%d on %s; removed candidate and continuing.",
                         candidate.source_pr_number,
                         target_branch,
                     )
                     continue
+
+                repair_resolutions = list(validation_outcome.resolutions)
+                if repair_resolutions:
+                    candidate_result.resolutions.extend(repair_resolutions)
+                    candidate_result.resolved_by_ai = True
+                    candidate_result.resolved_commit_sha = head_sha(tmpdir)
+                    repair_summary = validation_outcome.ai_summary
+                    if repair_summary:
+                        candidate_result.ai_summary = repair_summary
+                    if DETAIL_RESOLVED_BY_AI not in candidate_result.detail:
+                        candidate_result.detail = "; ".join(
+                            part
+                            for part in (
+                                candidate_result.detail,
+                                DETAIL_RESOLVED_BY_AI,
+                            )
+                            if part
+                        )
 
                 applied_count += 1
 
@@ -514,7 +550,10 @@ query($owner: String!, $number: Int!, $cursor: String) {{
               number title url merged mergedAt
               repository {{ nameWithOwner }}
               mergeCommit {{ oid }}
-              commits(first: 100) {{ nodes {{ commit {{ oid }} }} }}
+              commits(first: 100) {{
+                pageInfo {{ hasNextPage endCursor }}
+                nodes {{ commit {{ oid }} }}
+              }}
             }}
           }}
           fieldValues(first: 50) {{
@@ -689,4 +728,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

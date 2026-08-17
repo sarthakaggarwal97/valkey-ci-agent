@@ -149,6 +149,38 @@ def test_pr_numbers_from_subjects_uses_trailing_pr_only() -> None:
     assert pr_numbers_from_commit_subjects(subjects) == {3756}
 
 
+def test_pr_numbers_from_commit_messages_supports_merges_and_trailers() -> None:
+    from scripts.backport.utils import pr_numbers_from_commit_messages
+
+    messages = [
+        "Merge pull request #42 from owner/feature\n\nMerge feature",
+        "Backport adjustment\n\nBackport-Source-PR: 77\n",
+    ]
+
+    assert pr_numbers_from_commit_messages(messages) == {42, 77}
+
+
+def test_pr_numbers_from_commit_messages_ignores_body_prose() -> None:
+    from scripts.backport.utils import pr_numbers_from_commit_messages
+
+    messages = [
+        (
+            "Backport summary\n\n"
+            "Backport-Source-PR: 88\n"
+            "This line is explanatory prose, not a trailer block.\n"
+        ),
+        (
+            "Sweep result\n\n"
+            "## Needs attention\n\n"
+            "Backport-Source-PR: 99\n"
+            "| PR | Result |\n"
+        ),
+        "No separator\nBackport-Source-PR: 111\n",
+    ]
+
+    assert pr_numbers_from_commit_messages(messages) == set()
+
+
 def test_verify_counts_subject_but_not_body_mention(tmp_path, monkeypatch) -> None:
     import subprocess
 

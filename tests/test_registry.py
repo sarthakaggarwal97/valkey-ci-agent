@@ -56,6 +56,7 @@ class TestLoadRegistry:
         assert entry.build_commands == ()
         assert entry.validation_setup_commands == ()
         assert entry.validation_rules == ()
+        assert entry.test_path_patterns == ()
         assert entry.repair_validation_failures is False
         assert entry.backport_label == "backport"
         assert entry.llm_conflict_label == "ai-resolved-conflicts"
@@ -73,6 +74,7 @@ class TestLoadRegistry:
                 }
             ],
             repair_validation_failures=True,
+            test_path_patterns=["testing/*.cc", "integration/test_*.py"],
             backport_label="bp",
             llm_conflict_label="ai",
             max_conflicting_files=50,
@@ -95,6 +97,10 @@ class TestLoadRegistry:
             ),
         )
         assert entry.repair_validation_failures is True
+        assert entry.test_path_patterns == (
+            "testing/*.cc",
+            "integration/test_*.py",
+        )
         assert entry.backport_label == "bp"
         assert entry.llm_conflict_label == "ai"
         assert entry.max_conflicting_files == 50
@@ -248,6 +254,25 @@ class TestValidation:
         with pytest.raises(
             ValueError,
             match="repair_validation_failures must be a boolean",
+        ):
+            load_registry(path)
+
+    def test_test_path_patterns_must_be_a_list(self, tmp_path):
+        data = _minimal_registry(
+            repos=[_minimal_repo(test_path_patterns="testing/*.cc")]
+        )
+        path = _write_registry(tmp_path, data)
+        with pytest.raises(ValueError, match="test_path_patterns must be a list"):
+            load_registry(path)
+
+    def test_test_path_patterns_reject_empty_pattern(self, tmp_path):
+        data = _minimal_registry(
+            repos=[_minimal_repo(test_path_patterns=["testing/*.cc", "  "])]
+        )
+        path = _write_registry(tmp_path, data)
+        with pytest.raises(
+            ValueError,
+            match=r"test_path_patterns\[1\] must be a non-empty string",
         ):
             load_registry(path)
 

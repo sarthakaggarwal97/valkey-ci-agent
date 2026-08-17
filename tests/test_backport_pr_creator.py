@@ -836,3 +836,84 @@ def test_backport_summary_roundtrips_with_pipe_in_source_title() -> None:
         context, had_conflicts=False, resolution_results=None,
     )
     assert summary_source_pr_from_body(body) == 77
+
+
+def test_ai_adaptation_without_resolutions_gets_summary_and_disclaimer() -> None:
+    """AI involvement is broader than conflict resolutions: test adaptation
+    writes AI-generated content with no resolution rows. The disclaimer and
+    label decision must honor the flag, not just the resolution list."""
+    context = BackportPRContext(
+        source_pr_number=42,
+        source_pr_title="Fix flaky ordering",
+        source_pr_url="https://github.com/example/repo/pull/42",
+        source_pr_diff="",
+        target_branch="8.1",
+        commits=["a" * 40],
+    )
+    body = BackportPRCreator.build_pr_body(
+        context,
+        had_conflicts=True,
+        resolution_results=None,
+        ai_involved=True,
+        ai_summary=(
+            "ported target-missing test coverage to: "
+            "tests/unit/networking.tcl"
+        ),
+    )
+    assert "### AI Adaptation" in body
+    assert "tests/unit/networking.tcl" in body
+    assert "Human Review Required" in body
+    assert "### Conflict Details" not in body
+
+    body_without = BackportPRCreator.build_pr_body(
+        context,
+        had_conflicts=True,
+        resolution_results=None,
+        ai_involved=False,
+    )
+    assert "Human Review Required" not in body_without
+
+
+def test_automatic_resolution_does_not_get_ai_disclosure() -> None:
+    context = BackportPRContext(
+        source_pr_number=42,
+        source_pr_title="Normalize formatting",
+        source_pr_url="https://github.com/example/repo/pull/42",
+        source_pr_diff="",
+        target_branch="8.1",
+        commits=["a" * 40],
+    )
+
+    body = BackportPRCreator.build_pr_body(
+        context,
+        had_conflicts=True,
+        resolution_results=[
+            ResolutionResult(
+                path="src/server.c",
+                resolved_content="resolved\n",
+                resolution_summary="whitespace-only (no LLM needed)",
+                source="automatic",
+            )
+        ],
+    )
+
+    assert "Human Review Required" not in body
+    assert "AI-authored" not in body
+
+    llm_body = BackportPRCreator.build_pr_body(
+        context,
+        had_conflicts=True,
+        resolution_results=[
+            ResolutionResult(
+                path="src/server.c",
+                resolved_content="resolved\n",
+                resolution_summary="resolved with target-branch API",
+                source="llm",
+            )
+        ],
+        ai_involved=False,
+        ai_summary="Adjusted the resolution for the target branch API.",
+    )
+
+    assert "### AI Adaptation" in llm_body
+    assert "Human Review Required" in llm_body
