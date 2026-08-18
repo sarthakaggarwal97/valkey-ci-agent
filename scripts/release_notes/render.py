@@ -68,18 +68,16 @@ def is_reserved_category(category: str) -> bool:
 
 def group_bullets(
     bullets: Sequence[CategorizedBullet],
-    categories: Sequence[str] | None = None,
+    categories: Sequence[str],
 ) -> dict[str, list[str]]:
     """Group bullets into ``{category: [rendered line, ...]}``.
 
-    *categories* is the profile's canonical list (defaulting to the core
-    CATEGORIES). Non-canonical categories are coerced into the catch-all.
-    Bullets under reserved sections (Security Fixes, Contributors) are refused
-    and logged. Output keys are in *categories* order.
+    *categories* is the profile's canonical list. Non-canonical categories are
+    coerced into the catch-all. Bullets under reserved sections (Security
+    Fixes, Contributors) are refused and logged. Output keys are in
+    *categories* order.
     """
-    ordered_categories: Sequence[str] = (
-        _release_format.CATEGORIES if categories is None else categories
-    )
+    ordered_categories = categories
     reserved = _reserved_sections()
     canonical = set(ordered_categories)
     # Fallback if CATCH_ALL_CATEGORY were edited off-list.

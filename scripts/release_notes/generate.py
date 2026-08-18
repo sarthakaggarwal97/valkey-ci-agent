@@ -21,7 +21,6 @@ from scripts.release_notes.ai_inputs import (
     exact_pr_number,
 )
 from scripts.release_notes.models import CategorizedBullet, GenerationResult, MergedPR
-from scripts.release_notes.projects import VALKEY_PROFILE
 
 logger = logging.getLogger(__name__)
 
@@ -218,17 +217,17 @@ Every "pr" must be one of the input PR numbers. Emit at most one bullet per PR.
 def build_prompt(
     prs: Sequence[MergedPR], *, categories: Sequence[str], diffs: dict[int, str] | None = None,
     patch_release: bool = False,
-    project_description: str = VALKEY_PROFILE.generation_prompt_project,
-    category_guidance: str = VALKEY_PROFILE.category_guidance,
+    project_description: str,
+    category_guidance: str,
 ) -> str:
     """Render the generation prompt for a batch of PRs.
 
     ``diffs`` maps PR number to inlined diff text; absent or empty entries omit
     the diff field. Defaults to no diffs so the prompt works without a clone.
     ``project_description`` names the project for the model and
-    ``category_guidance`` explains the category boundaries; both default to
-    valkey core's wording (module repos pass their profile's values). The
-    patch-release policy is release-type wording, appended for any profile.
+    ``category_guidance`` explains the category boundaries; the selected
+    profile supplies both explicitly. The patch-release policy is release-type
+    wording, appended for any profile.
     """
     return _PROMPT_TEMPLATE.format(
         project=project_description,
@@ -446,8 +445,8 @@ def generate(
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
     patch_release: bool = False,
-    project_description: str = VALKEY_PROFILE.generation_prompt_project,
-    category_guidance: str = VALKEY_PROFILE.category_guidance,
+    project_description: str,
+    category_guidance: str,
 ) -> GenerationResult:
     """Generate categorized bullets for *prs*, batching large inputs.
 

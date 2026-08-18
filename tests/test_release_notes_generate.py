@@ -3,14 +3,26 @@
 from __future__ import annotations
 
 import json
+from functools import partial
 
-from scripts.release_notes import release_format as _release_format
-from scripts.release_notes.generate import build_prompt, generate
+from scripts.release_notes.generate import build_prompt as _build_prompt
+from scripts.release_notes.generate import generate as _generate
 from scripts.release_notes.models import MergedPR
+from scripts.release_notes.projects import VALKEY_PROFILE
 
-# Use the real canonical list so these tests track the taxonomy rather than a
-# drifting local copy.
-_CATEGORIES = list(_release_format.CATEGORIES)
+# Use the real core profile so direct helper tests exercise the same explicit
+# values as the production pipeline.
+_CATEGORIES = list(VALKEY_PROFILE.categories)
+build_prompt = partial(
+    _build_prompt,
+    project_description=VALKEY_PROFILE.generation_prompt_project,
+    category_guidance=VALKEY_PROFILE.category_guidance,
+)
+generate = partial(
+    _generate,
+    project_description=VALKEY_PROFILE.generation_prompt_project,
+    category_guidance=VALKEY_PROFILE.category_guidance,
+)
 
 
 def _pr(

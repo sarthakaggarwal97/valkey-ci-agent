@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from functools import partial
 
 import pytest
 
@@ -18,10 +19,18 @@ from scripts.release_notes import projects
 from scripts.release_notes import release_cut as rc
 from scripts.release_notes.release_cut import (
     BranchPlan,
-    commit_title,
     promote_and_bump,
     resolve_branch_plan,
     stage_release_name,
+)
+from scripts.release_notes.release_cut import (
+    commit_title as _commit_title,
+)
+
+commit_title = partial(_commit_title, display_name=projects.VALKEY_PROFILE.display_name)
+validate_release_progression = partial(
+    rc.validate_release_progression,
+    bumper=projects.VALKEY_PROFILE.bumper,
 )
 
 _FIXTURE_CLONE = os.path.join(os.path.dirname(__file__), "fixtures", "valkey_clone")
@@ -229,21 +238,21 @@ class TestValidateReleaseProgression:
         ],
     )
     def test_live_patch_lines_advance(self, current, stage, target) -> None:
-        rc.validate_release_progression(self._version_h(current, stage), target, "ga")
+        validate_release_progression(self._version_h(current, stage), target, "ga")
 
     def test_rc_and_ga_advance_same_version(self) -> None:
-        rc.validate_release_progression(self._version_h("9.2.0", "rc1"), "9.2.0", "rc2")
-        rc.validate_release_progression(self._version_h("9.2.0", "rc2"), "9.2.0", "ga")
+        validate_release_progression(self._version_h("9.2.0", "rc1"), "9.2.0", "rc2")
+        validate_release_progression(self._version_h("9.2.0", "rc2"), "9.2.0", "ga")
 
     def test_unstable_sentinel_can_start_release(self) -> None:
-        rc.validate_release_progression(
+        validate_release_progression(
             self._version_h("255.255.255", "dev"), "9.2.0", "rc1"
         )
 
     @pytest.mark.parametrize(("target", "stage"), [("8.1.8", "ga"), ("8.1.7", "ga")])
     def test_same_or_older_release_rejected(self, target, stage) -> None:
         with pytest.raises(ValueError, match="already-released or backward"):
-            rc.validate_release_progression(
+            validate_release_progression(
                 self._version_h("8.1.8", "ga"), target, stage
             )
 
@@ -364,7 +373,9 @@ class TestPromoteAndBump:
         from scripts.release_notes import render as render_mod
         from scripts.release_notes.models import CategorizedBullet
         return render_mod.group_bullets(
-            [CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix a crash")])
+            [CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix a crash")],
+            categories=projects.VALKEY_PROFILE.categories,
+        )
 
     def test_promotes_dated_section_and_bumps_version(self, clone, monkeypatch) -> None:
         # No contributor base -> skip the network lookup entirely.
@@ -553,7 +564,9 @@ class TestCutOrchestration:
 
         bl = ([CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix")]
               if bullets else [])
-        grouped = render_mod.group_bullets(bl)
+        grouped = render_mod.group_bullets(
+            bl, categories=projects.VALKEY_PROFILE.categories
+        )
         # Included counts every PR sent to generation, including ones for which
         # generation returned no bullet.
         included = (
@@ -693,7 +706,8 @@ class TestCutOrchestration:
 
         self._setup(monkeypatch, clone, line_exists=line_exists)
         grouped = render_mod.group_bullets(
-            [CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix")]
+            [CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix")],
+            categories=projects.VALKEY_PROFILE.categories,
         )
         captured = {}
 
@@ -1832,7 +1846,9 @@ class TestDedupAgainstDestination:
         from scripts.release_notes.pipeline import RegenResult
 
         bl = [CategorizedBullet(pr_number=44, author="a", category="Bug Fixes", text="fix")]
-        grouped = render_mod.group_bullets(bl)
+        grouped = render_mod.group_bullets(
+            bl, categories=projects.VALKEY_PROFILE.categories
+        )
         monkeypatch.setattr(
             pipeline_mod, "regenerate_unreleased",
             lambda *a, **k: RegenResult(
@@ -2077,12 +2093,12 @@ class TestRcSequenceWarningModuleRepos:
 
 class TestModuleCommitTitle:
     def test_ga_commit_title_uses_display_name(self) -> None:
-        assert commit_title("1.2.0", "ga", "Valkey Search") == (
+        assert _commit_title("1.2.0", "ga", "Valkey Search") == (
             "Add release notes entry for Valkey Search 1.2.0 GA"
         )
 
     def test_rc_commit_title_is_display_neutral(self) -> None:
-        assert commit_title("1.2.0", "rc1", "Valkey Search") == (
+        assert _commit_title("1.2.0", "rc1", "Valkey Search") == (
             "Update version to 1.2.0-rc1 and add release notes"
         )
 

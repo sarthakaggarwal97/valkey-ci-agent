@@ -26,7 +26,6 @@ from scripts.release_notes.ai_inputs import (
     exact_pr_number,
 )
 from scripts.release_notes.models import MergedPR, TriageDecision, TriageResult
-from scripts.release_notes.projects import VALKEY_PROFILE
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +261,7 @@ def build_prompt(
     diffs: dict[int, str] | None = None,
     base_ref: str = "",
     already_noted: Sequence[int] = (),
-    project_description: str = VALKEY_PROFILE.triage_prompt_project,
+    project_description: str,
 ) -> str:
     """Render the triage prompt for a batch of candidate PRs.
 
@@ -275,8 +274,8 @@ def build_prompt(
     prior patch release. When non-empty, a section is injected telling the model to
     exclude them mechanically.
 
-    ``project_description`` names the target repository for the model, defaulting
-    to valkey core's wording (module repos pass their profile's value).
+    ``project_description`` names the target repository for the model and is
+    supplied explicitly by the selected profile.
 
     Reuses generate.py's payload builder so the PR JSON (number/title/author/url/
     body + optional diff) is shaped identically to the generation prompt.
@@ -355,7 +354,7 @@ def triage(
     timeout: int = 1800,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
-    project_description: str = VALKEY_PROFILE.triage_prompt_project,
+    project_description: str,
 ) -> TriageResult:
     """Decide include/exclude for each non-release-notes candidate, batching inputs.
 

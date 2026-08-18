@@ -236,9 +236,7 @@ def stage_release_name(version: str, stage_lc: str) -> str:
     return version if stage_lc == "ga" else f"{version}-{stage_lc}"
 
 
-def commit_title(
-    version: str, stage_lc: str, display_name: str = rn.DEFAULT_DISPLAY_NAME
-) -> str:
+def commit_title(version: str, stage_lc: str, display_name: str) -> str:
     """Match valkey's release commit titles."""
     if stage_lc == "ga":
         _major, _minor, patch = _split_version(version)
@@ -267,17 +265,17 @@ def validate_release_progression(
     target_version: str,
     target_stage: str,
     *,
-    bumper: projects_mod.VersionBumper = projects_mod.VALKEY_PROFILE.bumper,
+    bumper: projects_mod.VersionBumper,
 ) -> None:
     """Reject an already-released or backward target for the current branch.
 
     Repository-specific unstable sentinels are allowed to begin any release
     line. Every other branch state must advance monotonically.
 
-    *bumper* parses the version file (defaulting to valkey core's version.h
-    layout). A bumper whose file records no release stage (``records_stage`` is
-    False) compares M.m.p only and allows an equal version through: rc2 after
-    rc1 of the same version leaves such a file unchanged, and the tag gate in
+    *bumper* parses the selected profile's version file. A bumper whose file
+    records no release stage (``records_stage`` is False) compares M.m.p only
+    and allows an equal version through: rc2 after rc1 of the same version
+    leaves such a file unchanged, and the tag gate in
     ``discover.validate_target_release_tag`` remains the authoritative check
     against re-cutting an already-tagged stage.
     """

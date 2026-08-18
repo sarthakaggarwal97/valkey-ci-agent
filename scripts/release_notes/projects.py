@@ -300,8 +300,8 @@ class ProjectProfile:
     generation_prompt_project: str  # project wording in the note-writing prompt
     triage_prompt_project: str      # project wording in the inclusion prompt
     category_guidance: str   # category-boundary guidance for the generation prompt
-    notes_file: str = "00-RELEASENOTES"
-    categories: tuple[str, ...] = tuple(rn.CATEGORIES)
+    categories: tuple[str, ...]
+    notes_file: str
 
 
 VALKEY_PROFILE = ProjectProfile(
@@ -314,6 +314,8 @@ VALKEY_PROFILE = ProjectProfile(
     generation_prompt_project="Valkey",
     triage_prompt_project="Valkey, a production key-value datastore",
     category_guidance=_CORE_CATEGORY_GUIDANCE,
+    categories=tuple(rn.CATEGORIES),
+    notes_file="00-RELEASENOTES",
 )
 
 _PROFILES: dict[str, ProjectProfile] = {
@@ -336,6 +338,7 @@ _PROFILES: dict[str, ProjectProfile] = {
             ),
             categories=_SEARCH_CATEGORIES,
             category_guidance=_SEARCH_CATEGORY_GUIDANCE,
+            notes_file="00-RELEASENOTES",
         ),
         ProjectProfile(
             name="valkey-json",
@@ -353,6 +356,7 @@ _PROFILES: dict[str, ProjectProfile] = {
             ),
             categories=_MODULE_CATEGORIES,
             category_guidance=_MODULE_CATEGORY_GUIDANCE,
+            notes_file="00-RELEASENOTES",
         ),
         ProjectProfile(
             name="valkey-bloom",
@@ -368,6 +372,7 @@ _PROFILES: dict[str, ProjectProfile] = {
             ),
             categories=_MODULE_CATEGORIES,
             category_guidance=_MODULE_CATEGORY_GUIDANCE,
+            notes_file="00-RELEASENOTES",
         ),
     )
 }

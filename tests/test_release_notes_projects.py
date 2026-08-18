@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import inspect
 import re
 
 import pytest
 
-from scripts.release_notes import projects
+from scripts.release_notes import generate, projects, render, triage
 from scripts.release_notes import release_cut as cut_mod
 from scripts.release_notes import release_format as rn
 
@@ -92,6 +93,32 @@ def test_profile_guidance_names_only_profile_categories() -> None:
                 assert category in profile.categories, (
                     f"{name} guidance names {category!r}, absent from its categories"
                 )
+
+
+@pytest.mark.parametrize(
+    ("function", "parameter"),
+    [
+        (generate.build_prompt, "project_description"),
+        (generate.build_prompt, "category_guidance"),
+        (generate.generate, "project_description"),
+        (generate.generate, "category_guidance"),
+        (triage.build_prompt, "project_description"),
+        (triage.triage, "project_description"),
+        (cut_mod.commit_title, "display_name"),
+        (cut_mod.validate_release_progression, "bumper"),
+        (rn.unrecognized_categories, "categories"),
+        (rn.render_header, "display_name"),
+        (rn.render_version_section, "display_name"),
+        (rn.render_version_section, "categories"),
+        (rn.render_release_notes, "display_name"),
+        (rn.render_release_notes, "categories"),
+        (render.group_bullets, "categories"),
+        (projects.ProjectProfile, "categories"),
+        (projects.ProjectProfile, "notes_file"),
+    ],
+)
+def test_profile_sensitive_parameters_are_required(function, parameter) -> None:
+    assert inspect.signature(function).parameters[parameter].default is inspect.Parameter.empty
 
 
 def test_module_categories_are_subsets_of_core() -> None:

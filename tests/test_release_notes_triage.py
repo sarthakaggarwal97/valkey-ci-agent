@@ -3,9 +3,21 @@
 from __future__ import annotations
 
 import json
+from functools import partial
 
 from scripts.release_notes.models import MergedPR
-from scripts.release_notes.triage import build_prompt, triage
+from scripts.release_notes.projects import VALKEY_PROFILE
+from scripts.release_notes.triage import build_prompt as _build_prompt
+from scripts.release_notes.triage import triage as _triage
+
+build_prompt = partial(
+    _build_prompt,
+    project_description=VALKEY_PROFILE.triage_prompt_project,
+)
+triage = partial(
+    _triage,
+    project_description=VALKEY_PROFILE.triage_prompt_project,
+)
 
 
 def _pr(

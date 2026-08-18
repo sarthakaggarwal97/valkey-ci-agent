@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from dataclasses import replace
 
 import pytest
 
@@ -70,6 +71,68 @@ def test_generates_and_renders(monkeypatch, clone):
     r = pipeline_mod.regenerate_unreleased(object(), clone, head_ref="9.1", tag_glob=None, profile=projects.VALKEY_PROFILE)
     assert r.had_prs and r.included == 1 and r.bullet_count == 1
     assert r.grouped["Bug Fixes"] == ["* fix by @a (#40)"]
+
+
+def test_profile_values_are_forwarded_explicitly(monkeypatch, clone):
+    profile = replace(
+        projects.VALKEY_PROFILE,
+        generation_prompt_project="sentinel generation project",
+        triage_prompt_project="sentinel triage project",
+        category_guidance="sentinel category guidance",
+        categories=("Configuration", "Other Changes"),
+    )
+    prs = (
+        MergedPR(number=40, title="change a", author="a", url="u", labels=()),
+        MergedPR(number=41, title="change b", author="b", url="u", labels=()),
+    )
+    monkeypatch.setattr(
+        pipeline_mod.discover_mod,
+        "discover",
+        lambda *a, **k: DiscoveryResult(
+            base_tag="9.1.0-rc1", head_ref="9.1", prs=prs
+        ),
+    )
+    captured = {}
+
+    def fake_triage(candidates, **kwargs):
+        captured["triage_project"] = kwargs["project_description"]
+        return TriageResult(
+            included=tuple(
+                TriageDecision(pr_number=pr.number, included=True, reason="user-facing")
+                for pr in candidates
+            )
+        )
+
+    def fake_generate(include, **kwargs):
+        captured["generation_project"] = kwargs["project_description"]
+        captured["category_guidance"] = kwargs["category_guidance"]
+        captured["categories"] = kwargs["categories"]
+        return GenerationResult(
+            bullets=(
+                CategorizedBullet(
+                    pr_number=40, author="a", category="Other Changes", text="change a"
+                ),
+                CategorizedBullet(
+                    pr_number=41, author="b", category="Configuration", text="change b"
+                ),
+            ),
+            skipped=(),
+        )
+
+    monkeypatch.setattr(pipeline_mod.triage_mod, "triage", fake_triage)
+    monkeypatch.setattr(pipeline_mod.generate_mod, "generate", fake_generate)
+
+    result = pipeline_mod.regenerate_unreleased(
+        object(), clone, head_ref="9.1", tag_glob=None, profile=profile
+    )
+
+    assert captured == {
+        "triage_project": profile.triage_prompt_project,
+        "generation_project": profile.generation_prompt_project,
+        "category_guidance": profile.category_guidance,
+        "categories": profile.categories,
+    }
+    assert list(result.grouped) == ["Configuration", "Other Changes"]
 
 
 def test_contributor_authors_exclude_bots_and_unresolved_backports(

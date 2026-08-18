@@ -67,10 +67,6 @@ _PATCH_URGENCY_SENTENCES = {
 }
 
 _BULLET_RE = re.compile(r"^\s*[*-]\s+\S")
-# Default heading name for dated sections; module repos pass their own
-# display_name ("Valkey Search", "Valkey JSON", ...) so their headings and the
-# prior-section splitter agree with their changelog history.
-DEFAULT_DISPLAY_NAME = "Valkey"
 _VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 # rcN, N starting at 1 with no leading zeros: "rc1", "rc12" but not "rc0"/"rc01".
 _RC_STAGE_RE = re.compile(r"^rc([1-9]\d*)$")
@@ -109,14 +105,13 @@ def ordinal(n: int) -> str:
 
 def unrecognized_categories(
     notes: "Dict[str, List[str]]",
-    categories: Optional[Sequence[str]] = None,
+    categories: Sequence[str],
 ) -> List[str]:
     """Return category names in *notes* that are not in *categories*.
 
-    *categories* defaults to the core CATEGORIES list. Reserved sections are
-    excluded. Empty categories are ignored.
+    Reserved sections are excluded. Empty categories are ignored.
     """
-    known = set(CATEGORIES if categories is None else categories) | set(RESERVED_SECTIONS)
+    known = set(categories) | set(RESERVED_SECTIONS)
     return [
         category
         for category, bullets in notes.items()
@@ -142,9 +137,7 @@ def _normalize_stage(stage: str) -> str:
     raise ValueError("release stage must be 'ga' or 'rcN' (e.g. rc1), got {!r}".format(stage))
 
 
-def render_header(
-    major: int, minor: int, display_name: str = DEFAULT_DISPLAY_NAME
-) -> str:
+def render_header(major: int, minor: int, display_name: str) -> str:
     """Render the file title and urgency legend for a ``M.m`` release line."""
     title = "{} {}.{} release notes".format(display_name, major, minor)
     underline = "=" * len(title)
@@ -191,17 +184,17 @@ def render_version_section(
     notes: "Dict[str, List[str]]",
     security_fixes: Optional[Sequence[str]] = None,
     *,
-    display_name: str = DEFAULT_DISPLAY_NAME,
-    categories: Optional[Sequence[str]] = None,
+    display_name: str,
+    categories: Sequence[str],
 ) -> str:
     """Render one dated release section in release-branch markdown form.
 
     Emits Security Fixes (from *security_fixes*) first, then canonical
     categories in order, then any non-canonical categories last. Contributors
-    are rendered separately as a cumulative file footer. *categories* defaults
-    to the core CATEGORIES list; profiles pass their own ordering.
+    are rendered separately as a cumulative file footer. *categories* is the
+    profile's canonical ordering.
     """
-    ordered_categories: Sequence[str] = CATEGORIES if categories is None else categories
+    ordered_categories = categories
     stage = _normalize_stage(stage)
     urgency = urgency.strip().upper()
     if urgency not in VALID_URGENCIES:
@@ -346,9 +339,8 @@ def has_dated_section(text: str, display_name: str) -> bool:
 def _existing_dated_sections(text: str, display_name: str) -> str:
     """Return text from the first ``<display_name> M.m.p`` heading onward.
 
-    The heading name must match the profile's display_name: with the default
-    "Valkey", a module changelog heading like "Valkey Search 1.2.1" would not
-    match and the prior history would be silently dropped from the render.
+    The heading name must match the selected profile's ``display_name``. A
+    mismatched value would fail to recognize the profile's prior history.
     """
     match = _dated_section_re(display_name).search(text)
     if not match:
@@ -366,8 +358,8 @@ def render_release_notes(
     prior_text: str,
     contributors: Optional[Sequence[str]] = None,
     security_fixes: Optional[Sequence[str]] = None,
-    display_name: str = DEFAULT_DISPLAY_NAME,
-    categories: Optional[Sequence[str]] = None,
+    display_name: str,
+    categories: Sequence[str],
 ) -> str:
     """Render the full changelog with a new dated section prepended.
 

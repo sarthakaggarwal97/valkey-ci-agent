@@ -7,6 +7,7 @@ import json
 from scripts.release_notes import ai_inputs
 from scripts.release_notes.generate import generate
 from scripts.release_notes.models import MergedPR
+from scripts.release_notes.projects import VALKEY_PROFILE
 from scripts.release_notes.triage import triage
 
 
@@ -104,6 +105,7 @@ def test_triage_and_generation_share_diff_cache(monkeypatch) -> None:
         repo_dir="/repo",
         run_fn=triage_run,
         diff_collector=collector,
+        project_description=VALKEY_PROFILE.triage_prompt_project,
     )
     generate(
         [prs[0]],
@@ -111,6 +113,8 @@ def test_triage_and_generation_share_diff_cache(monkeypatch) -> None:
         categories=["Bug Fixes", "Other Changes"],
         run_fn=generate_run,
         diff_collector=collector,
+        project_description=VALKEY_PROFILE.generation_prompt_project,
+        category_guidance=VALKEY_PROFILE.category_guidance,
     )
 
     assert [decision.pr_number for decision in result.included] == [1]
