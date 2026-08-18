@@ -107,13 +107,13 @@ class SearchVersionH:
                 f"src/version.h, found {len(stages)}"
             )
         _prefix, major, minor, patch, _suffix = versions[0]
-        stage = bv._validate_stage(stages[0][1])
+        stage = bv.validate_stage(stages[0][1])
         return f"{int(major)}.{int(minor)}.{int(patch)}", stage
 
     def set_version(self, text: str, version: str, stage: str) -> str:
         self.current_release_state(text)  # validates both macros exist exactly once
         major, minor, patch = rn.parse_version(version)
-        stage = bv._validate_stage(stage)
+        stage = bv.validate_stage(stage)
         text = _SEARCH_VERSION_RE.sub(
             lambda m: f"{m.group('prefix')}{major}, {minor}, {patch}{m.group('suffix')}",
             text,
@@ -164,6 +164,7 @@ class CMakeProjectVersion:
 
     def set_version(self, text: str, version: str, stage: str) -> str:
         self.current_release_state(text)  # validates exactly one declaration
+        bv.validate_stage(stage)
         major, minor, patch = rn.parse_version(version)
         return _CMAKE_PROJECT_VERSION_RE.sub(
             lambda m: f"{m.group('prefix')}{major}.{minor}.{patch}", text
@@ -215,6 +216,7 @@ class CargoTomlVersion:
 
     def set_version(self, text: str, version: str, stage: str) -> str:
         section, match = self._package_version_match(text)
+        bv.validate_stage(stage)
         major, minor, patch = rn.parse_version(version)
         # Replace the whole value so cutting from 99.99.99-dev removes -dev.
         start = section.start("body") + match.start("value")
@@ -222,25 +224,11 @@ class CargoTomlVersion:
         return f"{text[:start]}{major}.{minor}.{patch}{text[end:]}"
 
 
-# Category lists shared by the module repos: valkey core's canonical names,
+# Category list shared by the module repos: valkey core's canonical names,
 # minus the core-only surfaces (Sentinel/CLI programs/module-API hosting). All
 # names stay subsets of core's CATEGORIES so render's catch-all coercion and
 # generate's observability guardrail behave identically across profiles.
 _MODULE_CATEGORIES: tuple[str, ...] = (
-    "Behavior Changes",
-    "New Features and Enhanced Behavior",
-    "Performance and Efficiency Improvements",
-    "Bug Fixes",
-    "Command and API Updates",
-    "Configuration",
-    "Observability and Logging",
-    "Build and Tooling",
-    "Other Changes",
-)
-
-# valkey-search coordinates queries across cluster nodes, so it keeps the
-# cluster category.
-_SEARCH_CATEGORIES: tuple[str, ...] = (
     "Behavior Changes",
     "New Features and Enhanced Behavior",
     "Performance and Efficiency Improvements",
@@ -277,18 +265,13 @@ _MODULE_CATEGORY_GUIDANCE = """\
   title beginning with "Fix".
 - `Command and API Updates` owns the module's command arguments/results, reply
   schemas, and ACL categories.
+- `Cluster and Replication` owns cluster behavior and replication of module state.
 - `Configuration` owns module config parsing, validation, and defaults.
 - `Observability and Logging` owns INFO fields, metrics, logs, and corrections
   to those outputs.
 - `Build and Tooling` is for shipped build/packaging changes; test-only and
   CI-only PRs should be skipped.
 """
-
-_SEARCH_CATEGORY_GUIDANCE = _MODULE_CATEGORY_GUIDANCE + """\
-- `Cluster and Replication` owns cluster-mode query fanout, coordinator
-  behavior, and replication of index state.
-"""
-
 
 @dataclass(frozen=True)
 class ProjectProfile:
@@ -336,8 +319,8 @@ _PROFILES: dict[str, ProjectProfile] = {
                 "search, full-text search, and secondary indexing (the FT.* "
                 "commands) for the Valkey key-value datastore"
             ),
-            categories=_SEARCH_CATEGORIES,
-            category_guidance=_SEARCH_CATEGORY_GUIDANCE,
+            categories=_MODULE_CATEGORIES,
+            category_guidance=_MODULE_CATEGORY_GUIDANCE,
             notes_file="00-RELEASENOTES",
         ),
         ProjectProfile(

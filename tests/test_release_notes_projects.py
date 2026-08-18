@@ -126,6 +126,7 @@ def test_module_categories_are_subsets_of_core() -> None:
     for name in ("valkey-search", "valkey-json", "valkey-bloom"):
         profile = projects.profile_for(name)
         assert set(profile.categories) <= core
+        assert "Cluster and Replication" in profile.categories
         assert rn.CATCH_ALL_CATEGORY in profile.categories
 
 
@@ -224,6 +225,18 @@ def test_cargo_bumper_rejects_missing_package_section() -> None:
     bumper = projects.CargoTomlVersion()
     with pytest.raises(ValueError, match=r"\[package\]"):
         bumper.current_release_state('[dependencies]\nversion = "1.0.0"\n')
+
+
+@pytest.mark.parametrize(
+    ("bumper", "text"),
+    [
+        (projects.CMakeProjectVersion(), _JSON_CMAKELISTS),
+        (projects.CargoTomlVersion(), _BLOOM_CARGO_TOML),
+    ],
+)
+def test_stage_less_bumpers_reject_invalid_stage(bumper, text: str) -> None:
+    with pytest.raises(ValueError, match="release stage"):
+        bumper.set_version(text, "1.0.3", "beta")
 
 
 # ---------------------------------------------------------------------------

@@ -53,6 +53,11 @@ _TRAILING_PR_GROUP_RE = re.compile(
     r"\((?P<refs>#\d+(?:\s*,\s*#\d+)*)\)[\s.,:;)]*$"
 )
 _PR_NUMBER_RE = re.compile(r"#(\d+)")
+_LEGACY_CONTRIBUTOR_RE = re.compile(
+    r"^(?:Contributors|We appreciate the efforts of all who contributed code "
+    r"to this release!)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 # Urgency values render_release_notes() accepts; a SECURITY cut with no fixes is
 # flagged in the PR body. Mirrors VALID_URGENCIES in the release-format module
@@ -493,39 +498,14 @@ def _trailing_pr_numbers(line: str) -> set[int]:
 def _credited_pr_numbers(notes_text: str) -> set[int]:
     """Return the PR numbers a release-line changelog already credits.
 
-    Reads every bullet line's trailing ``(#N)`` from *notes_text* (a destination
-    changelog: the dated sections on the M.m release line). This is the dedup
-    key for promotion. Upstream, discovery excludes prior-RC PRs via the RC tag
-    it walks back to, but the agent never pushes those tags and a fork carries
-    none, so on GA (or any continued cut) discovery re-walks the whole source
-    branch and re-finds PRs the line already shipped. Deduping the cut's bullets
-    against this set makes promotion idempotent regardless of tags: a PR the line
-    already lists is dropped instead of double-noted.
-
-    Bullets inside the ``### Security Fixes`` section are skipped: that section is
-    sourced only from ``security_fixes`` (never from PR bullets), so its bullets
-    carry no legitimate PR credit. Their trailing ``(#N)``, if a CVE summary
-    happens to end in one, is prose, not a credit, and must not seed the dedup
-    set, or a later cut would drop an unrelated real PR that reused that number.
+    Reads every bullet line's trailing local ``(#N[, #M...])`` reference from
+    *notes_text*. GitHub issue and PR numbers are unique within a repository, so
+    a trailing local reference is a valid credit regardless of section heading.
     """
-    security_header = getattr(rn, "SECURITY_CATEGORY", "Security Fixes")
     credited: set[int] = set()
-    in_security = False
     for line in notes_text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("### "):
-            in_security = stripped[len("### "):].strip() == security_header
-            continue
-        # Defensive: a "## " ATX header would leave whatever ### category we were
-        # in. render_release_notes emits dated sections setext-style (heading +
-        # "-" underline), not as "## " headers, so this does not fire on our own
-        # output; it guards a hand-edited or differently-formatted changelog.
-        if stripped.startswith("## "):
-            in_security = False
-            continue
-        if in_security or not _BULLET_LINE_RE.match(line):
-            continue
-        credited.update(_trailing_pr_numbers(line))
+        if _BULLET_LINE_RE.match(line):
+            credited.update(_trailing_pr_numbers(line))
     return credited
 
 
@@ -705,6 +685,13 @@ def _validate_changelog_history(
     A fresh-line placeholder credits no PRs and remains valid; it is intentionally
     replaced by the first generated release section.
     """
+    if _LEGACY_CONTRIBUTOR_RE.search(notes_text):
+        raise ValueError(
+            f"{profile.notes_file} uses a legacy contributor format for "
+            f"{profile.display_name}; normalize it to a trailing "
+            "`### Contributors` footer with one `* Display Name @handle` entry "
+            "per line before cutting a release."
+        )
     if _credited_pr_numbers(notes_text) and not rn.has_dated_section(
         notes_text, profile.display_name
     ):

@@ -96,6 +96,10 @@ class TestRenderContributorsFooter:
         out = rf.render_contributors_footer(["zoe Q @zoe", "Amy P @amy", "bob @bob"])
         assert out == "### Contributors\n* Amy P @amy\n* bob @bob\n* zoe Q @zoe"
 
+    def test_bare_handles_sort_by_login(self) -> None:
+        out = rf.render_contributors_footer(["@zoe", "Amy @amy", "@bob"])
+        assert out == "### Contributors\n* Amy @amy\n* @bob\n* @zoe"
+
     def test_dedup_latest_handled_identity_wins(self) -> None:
         # Later entries come from the current compare API after the prior footer,
         # so their profile spelling replaces stale carried-forward text.

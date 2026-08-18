@@ -80,7 +80,10 @@ _ORDINALS = [
 def parse_version(version: str) -> "tuple[int, int, int]":
     """Split ``"M.m.p"`` into integer ``(major, minor, patch)``.
 
-    Each component must be 0-255 (one byte of VALKEY_VERSION_NUM).
+    All profiles intentionally limit each component to 0-255. Core requires
+    one-byte components for ``VALKEY_VERSION_NUM``; module profiles share this
+    controller-wide contract so branch, tag, changelog, and version-file
+    validation cannot diverge by repository.
     """
     match = _VERSION_RE.match(version.strip())
     if not match:
@@ -317,7 +320,7 @@ def render_contributors_footer(contributors: Sequence[str]) -> str:
         return ""
     unique = sorted(
         (rendered for _name, _handle, rendered in records),
-        key=lambda entry: entry.rsplit(" @", 1)[0].casefold(),
+        key=lambda entry: entry.rsplit(" @", 1)[0].lstrip("@").casefold(),
     )
     out = ["### Contributors"]
     out.extend("* {}".format(name) for name in unique)

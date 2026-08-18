@@ -296,6 +296,15 @@ categories, prompt wording) live in `scripts/release_notes/projects.py`:
 | valkey-json | `CMakeLists.txt` (`project(... VERSION M.m.p)`) | no |
 | valkey-bloom | `Cargo.toml` (`[package] version`) | no |
 
+The Valkeyrie GitHub App installation must include every repository that can be
+selected: `valkey`, `valkey-search`, `valkey-json`, and `valkey-bloom` (or choose
+**All repositories**). Each workflow token is scoped to only the selected
+`${{ inputs.repo }}` and requests `contents:write`, `pull-requests:write`, and
+`metadata:read`. Advisory-backed cuts additionally require
+`repository-advisories:read`; normal cuts do not. Token creation fails when the
+installation does not include the selected repository or lacks a requested
+permission.
+
 For repos whose version file records no stage, tag-based validation remains the
 authoritative check against re-cutting an already-tagged stage. The
 valkey-search 1.0 line (version inline in `src/module_loader.cc`) is not

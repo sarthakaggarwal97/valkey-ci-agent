@@ -294,31 +294,18 @@ class TestTrailingPrRegex:
     def test_credited_tolerates_trailing_punctuation(self, line, expected) -> None:
         assert rc._credited_pr_numbers(line) == expected
 
-    def test_security_section_pr_refs_not_credited(self) -> None:
-        # A CVE summary ending in "(#500)" is prose, not a PR credit. It must not
-        # seed the dedup set, or a later cut would drop an unrelated real PR #500.
-        # A normal bullet's (#44) in the same file is still credited.
+    def test_lowercase_security_section_local_pr_ref_is_credited(self) -> None:
+        # Bloom 1.0 contains this real shape: GitHub PR numbers are unique in a
+        # repository, so a local trailing reference remains a credit here.
         notes = (
-            "Valkey 9.1.0-rc1  -  Released Tue 24 June 2026\n"
+            "Valkey Bloom 1.0.0 GA - Released Tue 24 June 2026\n"
             "-----\n\n"
-            "### Security Fixes\n"
-            "* (CVE-2026-23479) Use-after-free in unblock client flow (#500)\n\n"
+            "### Security fixes\n"
+            "* Fix potential integer overflow (#82)\n\n"
             "### Bug Fixes\n"
             "* Fix a thing by @a (#44)\n"
         )
-        assert rc._credited_pr_numbers(notes) == {44}
-
-    def test_new_dated_section_ends_security_scope(self) -> None:
-        # After the Security Fixes section, a later dated section's normal bullets
-        # are credited again (the section flag resets on the next "## "/"### ").
-        notes = (
-            "### Security Fixes\n"
-            "* (CVE-2026-1) something (#500)\n\n"
-            "## Valkey 9.1 release notes\n"
-            "### Bug Fixes\n"
-            "* real note (#77)\n"
-        )
-        assert rc._credited_pr_numbers(notes) == {77}
+        assert rc._credited_pr_numbers(notes) == {44, 82}
 
 
 class TestUnresolvedBackportsSection:
@@ -2176,6 +2163,52 @@ class TestValidateChangelogHistory:
         notes = (
             "Valkey Search 1.2.1 GA - Released Tue 07 July 2026\n"
             "* Fixed a race condition (#1079)\n"
+        )
+        rc._validate_changelog_history(notes, self._SEARCH)
+
+    @pytest.mark.parametrize(
+        ("repo", "legacy_footer"),
+        [
+            (
+                "valkey-search",
+                "Contributors\n============\n\n@Aksha1812, @alice\n",
+            ),
+            (
+                "valkey-json",
+                "We appreciate the efforts of all who contributed code to this "
+                "release!\n\nRoshan Khatri (roshkhatri), Joe Hu (joehu21)\n",
+            ),
+            (
+                "valkey-bloom",
+                "We appreciate the efforts of all who contributed code to this "
+                "release!\n\nAlice Example (alice), Bob Example (bob)\n",
+            ),
+        ],
+    )
+    def test_known_module_legacy_contributor_formats_are_refused(
+        self, repo: str, legacy_footer: str
+    ) -> None:
+        profile = projects.profile_for(repo)
+        notes = (
+            f"{profile.display_name} 1.0.0 GA - Released Tue 07 July 2026\n"
+            "* Fixed a race condition (#82)\n\n"
+            f"{legacy_footer}"
+        )
+        with pytest.raises(
+            ValueError,
+            match=(
+                rf"{profile.notes_file} uses a legacy contributor format for "
+                rf"{profile.display_name}"
+            ),
+        ):
+            rc._validate_changelog_history(notes, profile)
+
+    def test_canonical_contributor_footer_is_allowed(self) -> None:
+        notes = (
+            "Valkey Search 1.2.1 GA - Released Tue 07 July 2026\n"
+            "* Fixed a race condition (#1079)\n\n"
+            "### Contributors\n"
+            "* Aksha Sharma @Aksha1812\n"
         )
         rc._validate_changelog_history(notes, self._SEARCH)
 

@@ -97,6 +97,18 @@ def test_app_credentials_require_both_secrets() -> None:
     )
 
 
+def test_app_tokens_are_scoped_to_the_selected_repo() -> None:
+    steps = _workflow(_SIMPLE)["jobs"]["cut"]["steps"]
+    tokens = [
+        step for step in steps if "create-github-app-token" in step.get("uses", "")
+    ]
+
+    assert len(tokens) == 2
+    for step in tokens:
+        assert step["with"]["owner"] == "valkey-io"
+        assert step["with"]["repositories"] == "${{ inputs.repo }}"
+
+
 def test_repo_gate_runs_before_any_token_is_minted() -> None:
     # The allowlist must reject a bad repo name before an App token could be
     # minted for it (defense-in-depth on top of the dispatch choice list).
