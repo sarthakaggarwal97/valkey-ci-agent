@@ -137,7 +137,7 @@ async function load() {
   const meta = graph.meta;
   el('brand-stats').textContent =
     `${meta.moduleCount} modules · ${meta.nodeCount} symbols · ` +
-    `${meta.edgeCount} calls · ${meta.commit}`;
+    `${meta.edgeCount} calls`;
 
   buildLegend();
   buildEntrypoints();

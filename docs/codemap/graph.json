@@ -1,11 +1,10 @@
 {
  "meta": {
-  "commit": "1b1c33e4",
   "moduleCount": 80,
-  "nodeCount": 750,
-  "edgeCount": 1149,
+  "nodeCount": 749,
+  "edgeCount": 1148,
   "edgeConfidence": {
-   "exact": 1086,
+   "exact": 1085,
    "inferred": 61,
    "ambiguous": 2
   },
@@ -949,7 +948,7 @@
    "package": "codemap",
    "file": "scripts/codemap/build.py",
    "doc": "Build a static call graph of ``scripts/`` for the interactive code map.",
-   "loc": 698,
+   "loc": 687,
    "symbols": [
     "scripts.codemap.build:CallResolver",
     "scripts.codemap.build:Definition",
@@ -961,7 +960,6 @@
     "scripts.codemap.build:_first_paragraph",
     "scripts.codemap.build:_format_argument",
     "scripts.codemap.build:_format_signature",
-    "scripts.codemap.build:_git_commit",
     "scripts.codemap.build:_is_excluded",
     "scripts.codemap.build:_is_main_guard",
     "scripts.codemap.build:_module_name",
@@ -977,7 +975,7 @@
     "scripts.codemap.build:find_entrypoints",
     "scripts.codemap.build:write_graph"
    ],
-   "symbolCount": 31,
+   "symbolCount": 30,
    "entryWorkflows": [],
    "hasMainGuard": false
   },
@@ -11652,8 +11650,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 358,
-   "endLine": 448,
+   "line": 362,
+   "endLine": 452,
    "loc": 91,
    "signature": "class CallResolver",
    "doc": "Resolves call sites to internal definitions, with a confidence label.",
@@ -11670,8 +11668,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 361,
-   "endLine": 366,
+   "line": 365,
+   "endLine": 370,
    "loc": 6,
    "signature": "__init__(self, modules: dict[str, ModuleInfo]) -> None",
    "doc": "",
@@ -11694,8 +11692,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 441,
-   "endLine": 448,
+   "line": 445,
+   "endLine": 452,
    "loc": 8,
    "signature": "_infer_by_name(self, attr: str) -> tuple[list[str], str]",
    "doc": "Last resort: match the attribute against known method names.",
@@ -11713,8 +11711,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 429,
-   "endLine": 439,
+   "line": 433,
+   "endLine": 443,
    "loc": 11,
    "signature": "_resolve_inherited(self, module: ModuleInfo, class_name: str, attr: str) -> str | None",
    "doc": "",
@@ -11735,8 +11733,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 386,
-   "endLine": 427,
+   "line": 390,
+   "endLine": 431,
    "loc": 42,
    "signature": "resolve_attribute(self, module: ModuleInfo, node: ast.Attribute, class_name: str | None) -> tuple[list[str], str]",
    "doc": "Resolve ``something.attr(...)``.",
@@ -11759,8 +11757,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 368,
-   "endLine": 384,
+   "line": 372,
+   "endLine": 388,
    "loc": 17,
    "signature": "resolve_name(self, module: ModuleInfo, name: str) -> tuple[list[str], str]",
    "doc": "Resolve a bare ``name(...)`` call.",
@@ -11782,8 +11780,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 92,
-   "endLine": 139,
+   "line": 96,
+   "endLine": 143,
    "loc": 48,
    "signature": "class Definition",
    "doc": "A function, method, or class defined somewhere in ``scripts/``.",
@@ -11803,8 +11801,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 114,
-   "endLine": 139,
+   "line": 118,
+   "endLine": 143,
    "loc": 26,
    "signature": "to_json(self) -> dict[str, Any]",
    "doc": "",
@@ -11822,8 +11820,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 142,
-   "endLine": 156,
+   "line": 146,
+   "endLine": 160,
    "loc": 15,
    "signature": "class ModuleInfo",
    "doc": "One parsed source file plus the tables needed to resolve its calls.",
@@ -11843,8 +11841,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 535,
-   "endLine": 536,
+   "line": 539,
+   "endLine": 540,
    "loc": 2,
    "signature": "_confidence_rank(confidence: str) -> int",
    "doc": "",
@@ -11864,8 +11862,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 539,
-   "endLine": 550,
+   "line": 543,
+   "endLine": 554,
    "loc": 12,
    "signature": "_definition_ast(module: ModuleInfo, definition: Definition) -> ast.FunctionDef | ast.AsyncFunctionDef | None",
    "doc": "Find the AST node for an already-indexed definition.",
@@ -11885,8 +11883,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 238,
-   "endLine": 243,
+   "line": 242,
+   "endLine": 247,
    "loc": 6,
    "signature": "_definition_start(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) -> int",
    "doc": "First line of a definition, counting any decorators above it.",
@@ -11903,8 +11901,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 451,
-   "endLine": 470,
+   "line": 455,
+   "endLine": 474,
    "loc": 20,
    "signature": "_external_label(node: ast.Call) -> str | None",
    "doc": "Human-readable label for a call that leaves the agent's own code.",
@@ -11921,8 +11919,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 176,
-   "endLine": 185,
+   "line": 180,
+   "endLine": 189,
    "loc": 10,
    "signature": "_first_paragraph(docstring: str | None) -> str",
    "doc": "",
@@ -11946,8 +11944,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 197,
-   "endLine": 205,
+   "line": 201,
+   "endLine": 209,
    "loc": 9,
    "signature": "_format_argument(arg: ast.arg, default: ast.expr | None) -> str",
    "doc": "",
@@ -11964,8 +11962,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 208,
-   "endLine": 235,
+   "line": 212,
+   "endLine": 239,
    "loc": 28,
    "signature": "_format_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str",
    "doc": "",
@@ -11979,28 +11977,6 @@
    ]
   },
   {
-   "id": "scripts.codemap.build:_git_commit",
-   "kind": "function",
-   "name": "_git_commit",
-   "qualname": "_git_commit",
-   "module": "scripts.codemap.build",
-   "package": "codemap",
-   "file": "scripts/codemap/build.py",
-   "line": 595,
-   "endLine": 606,
-   "loc": 12,
-   "signature": "_git_commit(repo_root: Path) -> str",
-   "doc": "",
-   "source": "def _git_commit(repo_root: Path) -> str:\n    try:\n        result = subprocess.run(\n            [\"git\", \"rev-parse\", \"--short\", \"HEAD\"],\n            cwd=repo_root,\n            capture_output=True,\n            text=True,\n            check=True,\n        )\n    except (OSError, subprocess.CalledProcessError):\n        return \"unknown\"\n    return result.stdout.strip()",
-   "private": true,
-   "callers": 1,
-   "callees": 0,
-   "externals": [
-    "result.strip",
-    "subprocess.run"
-   ]
-  },
-  {
    "id": "scripts.codemap.build:_is_excluded",
    "kind": "function",
    "name": "_is_excluded",
@@ -12008,8 +11984,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 159,
-   "endLine": 160,
+   "line": 163,
+   "endLine": 164,
    "loc": 2,
    "signature": "_is_excluded(path: Path) -> bool",
    "doc": "",
@@ -12026,8 +12002,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 346,
-   "endLine": 355,
+   "line": 350,
+   "endLine": 359,
    "loc": 10,
    "signature": "_is_main_guard(node: ast.If) -> bool",
    "doc": "",
@@ -12044,8 +12020,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 163,
-   "endLine": 168,
+   "line": 167,
+   "endLine": 172,
    "loc": 6,
    "signature": "_module_name(path: Path, root: Path) -> str",
    "doc": "",
@@ -12068,8 +12044,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 171,
-   "endLine": 173,
+   "line": 175,
+   "endLine": 177,
    "loc": 3,
    "signature": "_package_of(module: str) -> str",
    "doc": "",
@@ -12089,8 +12065,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 246,
-   "endLine": 247,
+   "line": 250,
+   "endLine": 251,
    "loc": 2,
    "signature": "_source_slice(lines: list[str], start: int, end: int) -> str",
    "doc": "",
@@ -12110,8 +12086,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 188,
-   "endLine": 194,
+   "line": 192,
+   "endLine": 198,
    "loc": 7,
    "signature": "_unparse(node: ast.AST | None) -> str",
    "doc": "",
@@ -12131,8 +12107,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 473,
-   "endLine": 532,
+   "line": 477,
+   "endLine": 536,
    "loc": 60,
    "signature": "build_edges(modules: dict[str, ModuleInfo], resolver: CallResolver) -> tuple[list[dict[str, Any]], dict[str, list[str]]]",
    "doc": "Walk every definition body and record its outgoing calls.",
@@ -12159,15 +12135,15 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 609,
-   "endLine": 690,
-   "loc": 82,
+   "line": 599,
+   "endLine": 679,
+   "loc": 81,
    "signature": "build_graph(repo_root: Path) -> dict[str, Any]",
    "doc": "Produce the full graph payload consumed by the code-map page.",
-   "source": "def build_graph(repo_root: Path) -> dict[str, Any]:\n    \"\"\"Produce the full graph payload consumed by the code-map page.\"\"\"\n    source_root = repo_root / \"scripts\"\n    modules = discover_modules(source_root, repo_root)\n    for module in modules.values():\n        collect_imports(module)\n        collect_definitions(module)\n\n    entries = find_entrypoints(repo_root / \".github\" / \"workflows\")\n    for module_name, workflows in entries.items():\n        entry_module = modules.get(module_name)\n        if entry_module is not None:\n            entry_module.entry_workflows = workflows\n\n    resolver = CallResolver(modules)\n    edges, externals = build_edges(modules, resolver)\n\n    definitions: dict[str, Definition] = {}\n    for module in modules.values():\n        for definition in module.definitions.values():\n            definitions[definition.node_id] = definition\n\n    incoming: dict[str, int] = {}\n    outgoing: dict[str, int] = {}\n    for edge in edges:\n        outgoing[edge[\"source\"]] = outgoing.get(edge[\"source\"], 0) + 1\n        incoming[edge[\"target\"]] = incoming.get(edge[\"target\"], 0) + 1\n\n    node_payload: list[dict[str, Any]] = []\n    for node_id, definition in sorted(definitions.items()):\n        payload = definition.to_json()\n        payload[\"callers\"] = incoming.get(node_id, 0)\n        payload[\"callees\"] = outgoing.get(node_id, 0)\n        if node_id in externals:\n            payload[\"externals\"] = externals[node_id]\n        module = modules[definition.module]\n        if module.entry_workflows and definition.name == \"main\":\n            payload[\"entryWorkflows\"] = module.entry_workflows\n        node_payload.append(payload)\n\n    module_payload = [\n        {\n            \"id\": module.name,\n            \"package\": module.package,\n            \"file\": module.file,\n            \"doc\": module.doc,\n            \"loc\": module.loc,\n            \"symbols\": sorted(\n                d.node_id for d in module.definitions.values() if d.kind != \"method\"\n            ),\n            \"symbolCount\": len(module.definitions),\n            \"entryWorkflows\": module.entry_workflows,\n            \"hasMainGuard\": module.has_main_guard,\n        }\n        for module in sorted(modules.values(), key=lambda m: m.name)\n        if module.definitions or module.entry_workflows\n    ]\n\n    packages = sorted({module.package for module in modules.values()})\n    confidence_counts: dict[str, int] = {}\n    for edge in edges:\n        confidence_counts[edge[\"confidence\"]] = (\n            confidence_counts.get(edge[\"confidence\"], 0) + 1\n        )\n\n    return {\n        \"meta\": {\n            \"commit\": _git_commit(repo_root),\n            \"moduleCount\": len(module_payload),\n            \"nodeCount\": len(node_payload),\n            \"edgeCount\": len(edges),\n            \"edgeConfidence\": confidence_counts,\n            \"packages\": [\n                {\"name\": name, \"color\": PACKAGE_COLORS.get(name, \"#8b95a5\")}\n                for name in packages\n            ],\n        },\n        \"modules\": module_payload,\n        \"moduleEdges\": build_module_edges(edges, definitions),\n        \"nodes\": node_payload,\n        \"edges\": edges,\n    }",
+   "source": "def build_graph(repo_root: Path) -> dict[str, Any]:\n    \"\"\"Produce the full graph payload consumed by the code-map page.\"\"\"\n    source_root = repo_root / \"scripts\"\n    modules = discover_modules(source_root, repo_root)\n    for module in modules.values():\n        collect_imports(module)\n        collect_definitions(module)\n\n    entries = find_entrypoints(repo_root / \".github\" / \"workflows\")\n    for module_name, workflows in entries.items():\n        entry_module = modules.get(module_name)\n        if entry_module is not None:\n            entry_module.entry_workflows = workflows\n\n    resolver = CallResolver(modules)\n    edges, externals = build_edges(modules, resolver)\n\n    definitions: dict[str, Definition] = {}\n    for module in modules.values():\n        for definition in module.definitions.values():\n            definitions[definition.node_id] = definition\n\n    incoming: dict[str, int] = {}\n    outgoing: dict[str, int] = {}\n    for edge in edges:\n        outgoing[edge[\"source\"]] = outgoing.get(edge[\"source\"], 0) + 1\n        incoming[edge[\"target\"]] = incoming.get(edge[\"target\"], 0) + 1\n\n    node_payload: list[dict[str, Any]] = []\n    for node_id, definition in sorted(definitions.items()):\n        payload = definition.to_json()\n        payload[\"callers\"] = incoming.get(node_id, 0)\n        payload[\"callees\"] = outgoing.get(node_id, 0)\n        if node_id in externals:\n            payload[\"externals\"] = externals[node_id]\n        module = modules[definition.module]\n        if module.entry_workflows and definition.name == \"main\":\n            payload[\"entryWorkflows\"] = module.entry_workflows\n        node_payload.append(payload)\n\n    module_payload = [\n        {\n            \"id\": module.name,\n            \"package\": module.package,\n            \"file\": module.file,\n            \"doc\": module.doc,\n            \"loc\": module.loc,\n            \"symbols\": sorted(\n                d.node_id for d in module.definitions.values() if d.kind != \"method\"\n            ),\n            \"symbolCount\": len(module.definitions),\n            \"entryWorkflows\": module.entry_workflows,\n            \"hasMainGuard\": module.has_main_guard,\n        }\n        for module in sorted(modules.values(), key=lambda m: m.name)\n        if module.definitions or module.entry_workflows\n    ]\n\n    packages = sorted({module.package for module in modules.values()})\n    confidence_counts: dict[str, int] = {}\n    for edge in edges:\n        confidence_counts[edge[\"confidence\"]] = (\n            confidence_counts.get(edge[\"confidence\"], 0) + 1\n        )\n\n    return {\n        \"meta\": {\n            \"moduleCount\": len(module_payload),\n            \"nodeCount\": len(node_payload),\n            \"edgeCount\": len(edges),\n            \"edgeConfidence\": confidence_counts,\n            \"packages\": [\n                {\"name\": name, \"color\": PACKAGE_COLORS.get(name, \"#8b95a5\")}\n                for name in packages\n            ],\n        },\n        \"modules\": module_payload,\n        \"moduleEdges\": build_module_edges(edges, definitions),\n        \"nodes\": node_payload,\n        \"edges\": edges,\n    }",
    "private": false,
    "callers": 1,
-   "callees": 9,
+   "callees": 8,
    "externals": [
     "PACKAGE_COLORS.get",
     "confidence_counts.get",
@@ -12189,8 +12165,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 575,
-   "endLine": 592,
+   "line": 579,
+   "endLine": 596,
    "loc": 18,
    "signature": "build_module_edges(edges: list[dict[str, Any]], nodes: dict[str, Definition]) -> list[dict[str, Any]]",
    "doc": "Aggregate function-level edges into module-level ones.",
@@ -12212,8 +12188,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 296,
-   "endLine": 343,
+   "line": 300,
+   "endLine": 347,
    "loc": 48,
    "signature": "collect_definitions(module: ModuleInfo) -> None",
    "doc": "Index every function, method, and class defined in a module.",
@@ -12235,8 +12211,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 275,
-   "endLine": 293,
+   "line": 279,
+   "endLine": 297,
    "loc": 19,
    "signature": "collect_imports(module: ModuleInfo) -> None",
    "doc": "Map every local alias in a module to the dotted target it refers to.",
@@ -12259,8 +12235,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 250,
-   "endLine": 272,
+   "line": 254,
+   "endLine": 276,
    "loc": 23,
    "signature": "discover_modules(root: Path, repo_root: Path) -> dict[str, ModuleInfo]",
    "doc": "Parse every source file under ``root`` into a :class:`ModuleInfo`.",
@@ -12285,8 +12261,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 553,
-   "endLine": 572,
+   "line": 557,
+   "endLine": 576,
    "loc": 20,
    "signature": "find_entrypoints(workflow_dir: Path) -> dict[str, list[str]]",
    "doc": "Map module name -> workflow files that execute it.",
@@ -12315,8 +12291,8 @@
    "module": "scripts.codemap.build",
    "package": "codemap",
    "file": "scripts/codemap/build.py",
-   "line": 693,
-   "endLine": 698,
+   "line": 682,
+   "endLine": 687,
    "loc": 6,
    "signature": "write_graph(repo_root: Path, output: Path) -> dict[str, Any]",
    "doc": "Build the graph and write it to ``output`` as JSON.",
@@ -24939,7 +24915,7 @@
    "target": "scripts.codemap.build:CallResolver._infer_by_name",
    "confidence": "exact",
    "lines": [
-    427
+    431
    ]
   },
   {
@@ -24947,7 +24923,7 @@
    "target": "scripts.codemap.build:CallResolver._resolve_inherited",
    "confidence": "exact",
    "lines": [
-    403
+    407
    ]
   },
   {
@@ -24955,7 +24931,7 @@
    "target": "scripts.codemap.build:_unparse",
    "confidence": "exact",
    "lines": [
-    423
+    427
    ]
   },
   {
@@ -24963,7 +24939,7 @@
    "target": "scripts.codemap.build:_definition_start",
    "confidence": "exact",
    "lines": [
-    548
+    552
    ]
   },
   {
@@ -24971,8 +24947,8 @@
    "target": "scripts.codemap.build:_unparse",
    "confidence": "exact",
    "lines": [
-    199,
-    204
+    203,
+    208
    ]
   },
   {
@@ -24980,10 +24956,10 @@
    "target": "scripts.codemap.build:_format_argument",
    "confidence": "exact",
    "lines": [
-    218,
-    223,
-    228,
-    231
+    222,
+    227,
+    232,
+    235
    ]
   },
   {
@@ -24991,7 +24967,7 @@
    "target": "scripts.codemap.build:_unparse",
    "confidence": "exact",
    "lines": [
-    233
+    237
    ]
   },
   {
@@ -24999,7 +24975,7 @@
    "target": "scripts.codemap.build:CallResolver.resolve_attribute",
    "confidence": "inferred",
    "lines": [
-    494
+    498
    ]
   },
   {
@@ -25007,7 +24983,7 @@
    "target": "scripts.codemap.build:CallResolver.resolve_name",
    "confidence": "inferred",
    "lines": [
-    492
+    496
    ]
   },
   {
@@ -25015,7 +24991,7 @@
    "target": "scripts.codemap.build:_confidence_rank",
    "confidence": "exact",
    "lines": [
-    521
+    525
    ]
   },
   {
@@ -25023,7 +24999,7 @@
    "target": "scripts.codemap.build:_definition_ast",
    "confidence": "exact",
    "lines": [
-    484
+    488
    ]
   },
   {
@@ -25031,7 +25007,7 @@
    "target": "scripts.codemap.build:_external_label",
    "confidence": "exact",
    "lines": [
-    501
+    505
    ]
   },
   {
@@ -25039,7 +25015,7 @@
    "target": "scripts.codemap.build:CallResolver",
    "confidence": "exact",
    "lines": [
-    623
+    613
    ]
   },
   {
@@ -25047,15 +25023,7 @@
    "target": "scripts.codemap.build:Definition.to_json",
    "confidence": "inferred",
    "lines": [
-    639
-   ]
-  },
-  {
-   "source": "scripts.codemap.build:build_graph",
-   "target": "scripts.codemap.build:_git_commit",
-   "confidence": "exact",
-   "lines": [
-    676
+    629
    ]
   },
   {
@@ -25063,7 +25031,7 @@
    "target": "scripts.codemap.build:build_edges",
    "confidence": "exact",
    "lines": [
-    624
+    614
    ]
   },
   {
@@ -25071,7 +25039,7 @@
    "target": "scripts.codemap.build:build_module_edges",
    "confidence": "exact",
    "lines": [
-    687
+    676
    ]
   },
   {
@@ -25079,7 +25047,7 @@
    "target": "scripts.codemap.build:collect_definitions",
    "confidence": "exact",
    "lines": [
-    615
+    605
    ]
   },
   {
@@ -25087,7 +25055,7 @@
    "target": "scripts.codemap.build:collect_imports",
    "confidence": "exact",
    "lines": [
-    614
+    604
    ]
   },
   {
@@ -25095,7 +25063,7 @@
    "target": "scripts.codemap.build:discover_modules",
    "confidence": "exact",
    "lines": [
-    612
+    602
    ]
   },
   {
@@ -25103,7 +25071,7 @@
    "target": "scripts.codemap.build:find_entrypoints",
    "confidence": "exact",
    "lines": [
-    617
+    607
    ]
   },
   {
@@ -25111,7 +25079,7 @@
    "target": "scripts.codemap.build:Definition",
    "confidence": "exact",
    "lines": [
-    314
+    318
    ]
   },
   {
@@ -25119,7 +25087,7 @@
    "target": "scripts.codemap.build:_definition_start",
    "confidence": "exact",
    "lines": [
-    304
+    308
    ]
   },
   {
@@ -25127,7 +25095,7 @@
    "target": "scripts.codemap.build:_first_paragraph",
    "confidence": "exact",
    "lines": [
-    325
+    329
    ]
   },
   {
@@ -25135,7 +25103,7 @@
    "target": "scripts.codemap.build:_format_signature",
    "confidence": "exact",
    "lines": [
-    312
+    316
    ]
   },
   {
@@ -25143,7 +25111,7 @@
    "target": "scripts.codemap.build:_is_main_guard",
    "confidence": "exact",
    "lines": [
-    342
+    346
    ]
   },
   {
@@ -25151,7 +25119,7 @@
    "target": "scripts.codemap.build:_source_slice",
    "confidence": "exact",
    "lines": [
-    326
+    330
    ]
   },
   {
@@ -25159,8 +25127,8 @@
    "target": "scripts.codemap.build:_unparse",
    "confidence": "exact",
    "lines": [
-    309,
-    329
+    313,
+    333
    ]
   },
   {
@@ -25168,7 +25136,7 @@
    "target": "scripts.codemap.build:ModuleInfo",
    "confidence": "exact",
    "lines": [
-    263
+    267
    ]
   },
   {
@@ -25176,7 +25144,7 @@
    "target": "scripts.codemap.build:_first_paragraph",
    "confidence": "exact",
    "lines": [
-    267
+    271
    ]
   },
   {
@@ -25184,7 +25152,7 @@
    "target": "scripts.codemap.build:_is_excluded",
    "confidence": "exact",
    "lines": [
-    254
+    258
    ]
   },
   {
@@ -25192,7 +25160,7 @@
    "target": "scripts.codemap.build:_module_name",
    "confidence": "exact",
    "lines": [
-    261
+    265
    ]
   },
   {
@@ -25200,7 +25168,7 @@
    "target": "scripts.codemap.build:_package_of",
    "confidence": "exact",
    "lines": [
-    265
+    269
    ]
   },
   {
@@ -25208,7 +25176,7 @@
    "target": "scripts.codemap.build:build_graph",
    "confidence": "exact",
    "lines": [
-    695
+    684
    ]
   },
   {

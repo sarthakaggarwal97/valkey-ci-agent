@@ -4,6 +4,11 @@ The graph is derived purely from the AST, so it describes what *can* call what
 rather than what ran in any particular workflow. Every edge carries a
 confidence level so the UI can distinguish a call resolved through an explicit
 import from one guessed by matching a method name.
+
+The output is a pure function of the source tree: identical sources produce a
+byte-identical graph. ``graph.json`` is committed so GitHub Pages needs no build
+step, and determinism is what keeps that 1.6 MB artifact from churning on every
+unrelated commit.
 """
 
 from __future__ import annotations
@@ -11,7 +16,6 @@ from __future__ import annotations
 import ast
 import json
 import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -592,20 +596,6 @@ def build_module_edges(
     ]
 
 
-def _git_commit(repo_root: Path) -> str:
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
-    return result.stdout.strip()
-
-
 def build_graph(repo_root: Path) -> dict[str, Any]:
     """Produce the full graph payload consumed by the code-map page."""
     source_root = repo_root / "scripts"
@@ -673,7 +663,6 @@ def build_graph(repo_root: Path) -> dict[str, Any]:
 
     return {
         "meta": {
-            "commit": _git_commit(repo_root),
             "moduleCount": len(module_payload),
             "nodeCount": len(node_payload),
             "edgeCount": len(edges),

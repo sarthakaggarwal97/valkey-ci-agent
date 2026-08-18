@@ -524,6 +524,53 @@ def test_write_graph_emits_loadable_json(tmp_path: Path):
     assert {"meta", "modules", "moduleEdges", "nodes", "edges"} <= set(reloaded)
 
 
+def test_graph_is_byte_identical_for_identical_sources(tmp_path: Path):
+    """The committed graph must not churn on unrelated commits.
+
+    It is a 1.6 MB tracked artifact, so anything that varies per build -- a git
+    SHA, a timestamp, set iteration order -- shows up as a diff on every commit
+    and on every ``serve``. Identical sources must produce identical bytes.
+    """
+    _repo(
+        tmp_path,
+        {
+            "scripts/__init__.py": "",
+            "scripts/pkg/__init__.py": "",
+            "scripts/pkg/helpers.py": "def one():\n    pass\n\n\ndef two():\n    pass\n",
+            "scripts/pkg/entry.py": (
+                "from scripts.pkg.helpers import one, two\n\n\n"
+                "def run():\n    one()\n    two()\n"
+            ),
+        },
+        workflows={"run.yml": "- run: python -m scripts.pkg.entry\n"},
+    )
+    first = write_graph(tmp_path, tmp_path / "a.json")
+    second = write_graph(tmp_path, tmp_path / "b.json")
+
+    assert (tmp_path / "a.json").read_bytes() == (tmp_path / "b.json").read_bytes()
+    assert first == second
+
+
+def test_graph_metadata_carries_no_git_state(tmp_path: Path):
+    _repo(
+        tmp_path,
+        {
+            "scripts/__init__.py": "",
+            "scripts/pkg/__init__.py": "",
+            "scripts/pkg/entry.py": "def run():\n    pass\n",
+        },
+    )
+    meta = build_graph(tmp_path)["meta"]
+
+    assert set(meta) == {
+        "moduleCount",
+        "nodeCount",
+        "edgeCount",
+        "edgeConfidence",
+        "packages",
+    }
+
+
 def test_real_repo_graph_is_well_formed():
     """The generator must stay consistent against this repository's own source."""
     graph = build_graph(Path("."))
