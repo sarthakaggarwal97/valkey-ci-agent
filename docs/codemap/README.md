@@ -35,9 +35,28 @@ fails because the browser blocks the `fetch` of `graph.json`.
 
 - Dashed edges are **bridged**: they appear when a filter hides an intermediate
   node, so the chain stays connected instead of silently truncating.
+- **⚙ n** on a node counts shared leaf utilities it calls that were folded into
+  the node instead of drawn. `retry_github_call` has 50 callers and calls almost
+  nothing; drawn as a node it drags 50 edges across the layout for no insight.
+  The calls are still listed in the detail panel, marked with ⚙, and clicking
+  one navigates to it. The rule is 8+ callers and at most 2 callees, which
+  currently selects 8 symbols.
+- **+N more** caps a rank at 12 nodes. Click it to expand that rank. Without
+  the cap, `release_notes.main` at depth 4 produces a 36-node rank, which is
+  unreadable at any zoom.
 - **External effects** in the detail panel lists calls that leave our code
   (`subprocess.run`, `requests.get`, …). That is usually the fastest way to see
   what a function actually *does* to the outside world.
+
+## Why it stays readable
+
+The call graph is a DAG — zero cycles across all 1149 edges — so ranks are
+meaningful and no edge has to be reversed to draw it. Density is 1.53
+edges/node, well under the point where a graph becomes a hairball. What is
+lopsided is in-degree: 625 of 750 symbols have at most 2 callers, while 8 leaf
+utilities absorb 15% of all edges. Those two facts are what the ⚙ badge and the
+rank cap exist to exploit. At the default depth of 2, every entry point renders
+in 3-22 nodes; at depth 4 the worst case is 46 nodes with a widest rank of 17.
 
 ## What it cannot tell you
 

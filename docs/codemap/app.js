@@ -15,15 +15,29 @@ const CONFIDENCE_COLOR = {
   ambiguous: '#f2775e',
 };
 
+// A leaf utility called from everywhere (retry_github_call has 50 callers) acts
+// as a gravity well: every caller drags an edge across the whole layout to the
+// same box. Collapsing those into a badge on the caller halves edge crossings
+// without hiding the fact that the call happens.
+const HUB_MIN_CALLERS = 8;
+const HUB_MAX_CALLEES = 2;
+
+// Layering release_notes.main at depth 4 produced ranks of 1,6,7,22,36,11,6,3.
+// A 36-node rank is unreadable at any zoom, and capping each parent's fan-out
+// does not help because several wide parents stack into the same rank -- so the
+// cap has to apply to the rank itself.
+const MAX_RANK_WIDTH = 12;
+
 const state = {
   view: 'functions',
   root: null,
-  depth: 3,
+  depth: 2,
   direction: 'callees',
   hidePrivate: false,
   hideClasses: false,
   confidences: new Set(['exact', 'inferred', 'ambiguous']),
   disabledPackages: new Set(),
+  expanded: new Set(),
   trail: [],
   selected: null,
 };
@@ -39,11 +53,13 @@ const index = {
   in: new Map(),
   moduleOut: new Map(),
   moduleIn: new Map(),
+  collapsible: new Set(),
   meta: null,
   packageColor: new Map(),
 };
 
 let cy = null;
+let currentOverflow = new Map();
 
 /* ------------------------------------------------------------------ utils */
 
@@ -108,6 +124,14 @@ async function load() {
   graph.moduleEdges.forEach((edge) => {
     push(index.moduleOut, edge.source, edge);
     push(index.moduleIn, edge.target, edge);
+  });
+
+  index.nodes.forEach((node, id) => {
+    const callers = (index.in.get(id) || []).length;
+    const callees = (index.out.get(id) || []).length;
+    if (callers >= HUB_MIN_CALLERS && callees <= HUB_MAX_CALLEES) {
+      index.collapsible.add(id);
+    }
   });
 
   const meta = graph.meta;
@@ -356,6 +380,18 @@ function wireSearch() {
 
 /* ------------------------------------------------------- graph traversal */
 
+/** A hub is collapsed everywhere except when you navigate directly to it. */
+function isCollapsed(id) {
+  return index.collapsible.has(id) && id !== state.root;
+}
+
+/** The collapsed utilities a node calls, shown as a badge instead of nodes. */
+function badgesFor(id) {
+  return (index.out.get(id) || [])
+    .filter((edge) => edgeAllowed(edge) && isCollapsed(edge.target))
+    .map((edge) => edge.target);
+}
+
 function nodeVisible(id) {
   const node = index.nodes.get(id);
   if (!node) return false;
@@ -369,7 +405,12 @@ function edgeAllowed(edge) {
   return state.confidences.has(edge.confidence);
 }
 
-/** Neighbours of `id`, bridging transitively through filtered-out nodes. */
+/** Neighbours of `id`, bridging transitively through filtered-out nodes.
+ *
+ * Filtered-out nodes are bridged so a chain never silently truncates, but
+ * collapsed hubs terminate instead: they are leaf utilities, and walking into
+ * them re-creates exactly the long edges collapsing them removed.
+ */
 function visibleNeighbors(id, direction) {
   const map = direction === 'callees' ? index.out : index.in;
   const found = new Map();
@@ -380,6 +421,7 @@ function visibleNeighbors(id, direction) {
       if (!edgeAllowed(edge)) return;
       const next = direction === 'callees' ? edge.target : edge.source;
       if (seen.has(next)) return;
+      if (isCollapsed(next)) return;
       if (nodeVisible(next)) {
         const existing = found.get(next);
         if (!existing || (existing.bridged && !bridged)) {
@@ -396,51 +438,112 @@ function visibleNeighbors(id, direction) {
   return found;
 }
 
+/** Keep the structurally interesting nodes when a rank is capped. */
+function byInterest(left, right) {
+  const weight = (id) => (index.out.get(id) || []).length;
+  return weight(right[0]) - weight(left[0]) || left[0].localeCompare(right[0]);
+}
+
 /** Breadth-first subgraph around the current root. */
 function subgraph() {
   const nodes = new Set();
   const edges = [];
   const edgeKeys = new Set();
+  const overflow = new Map();
   const root = state.root;
-  if (!root || !index.nodes.has(root)) return { nodes, edges };
+  if (!root || !index.nodes.has(root)) return { nodes, edges, overflow };
 
   nodes.add(root);
   const directions = state.direction === 'both'
     ? ['callees', 'callers']
     : [state.direction];
 
+  const addEdge = (current, neighbor, direction, meta) => {
+    const source = direction === 'callees' ? current : neighbor;
+    const target = direction === 'callees' ? neighbor : current;
+    const key = `${source}->${target}`;
+    if (edgeKeys.has(key)) return;
+    edgeKeys.add(key);
+    edges.push({
+      key,
+      source,
+      target,
+      confidence: meta.edge.confidence,
+      lines: meta.edge.lines,
+      bridged: meta.bridged,
+    });
+  };
+
   directions.forEach((direction) => {
     let frontier = [root];
     for (let level = 0; level < state.depth; level += 1) {
-      const nextFrontier = [];
+      // Collect the whole rank before deciding what fits. Capping per parent
+      // would let several wide parents still stack into one unreadable rank.
+      const candidates = [];
       frontier.forEach((current) => {
         visibleNeighbors(current, direction).forEach((meta, neighbor) => {
-          const source = direction === 'callees' ? current : neighbor;
-          const target = direction === 'callees' ? neighbor : current;
-          const key = `${source}->${target}`;
-          if (!edgeKeys.has(key)) {
-            edgeKeys.add(key);
-            edges.push({
-              key,
-              source,
-              target,
-              confidence: meta.edge.confidence,
-              lines: meta.edge.lines,
-              bridged: meta.bridged,
-            });
-          }
-          if (!nodes.has(neighbor)) {
-            nodes.add(neighbor);
-            nextFrontier.push(neighbor);
-          }
+          candidates.push({ current, neighbor, meta });
         });
       });
+
+      // Nodes already on screen cost no width, so their edges always land.
+      const fresh = new Map();
+      candidates.forEach((candidate) => {
+        if (nodes.has(candidate.neighbor)) {
+          addEdge(candidate.current, candidate.neighbor, direction, candidate.meta);
+          return;
+        }
+        const entry = fresh.get(candidate.neighbor);
+        if (entry) entry.parents.push(candidate);
+        else fresh.set(candidate.neighbor, { parents: [candidate] });
+      });
+
+      const rankKey = `rank:${direction}:${level}`;
+      let shown = [...fresh.entries()];
+      let hidden = [];
+      if (shown.length > MAX_RANK_WIDTH && !state.expanded.has(rankKey)) {
+        const ranked = shown.slice().sort(byInterest);
+        shown = ranked.slice(0, MAX_RANK_WIDTH);
+        hidden = ranked.slice(MAX_RANK_WIDTH);
+      }
+
+      const nextFrontier = [];
+      shown.forEach(([neighbor, entry]) => {
+        nodes.add(neighbor);
+        nextFrontier.push(neighbor);
+        entry.parents.forEach((candidate) => {
+          addEdge(candidate.current, neighbor, direction, candidate.meta);
+        });
+      });
+
+      if (hidden.length) {
+        const overflowId = `::more::${direction}::${level}`;
+        overflow.set(overflowId, {
+          key: rankKey,
+          direction,
+          hidden: hidden.map(([id]) => id),
+        });
+        nodes.add(overflowId);
+        const parents = new Set();
+        hidden.forEach(([, entry]) => {
+          entry.parents.forEach((candidate) => parents.add(candidate.current));
+        });
+        parents.forEach((parent) => {
+          const source = direction === 'callees' ? parent : overflowId;
+          const target = direction === 'callees' ? overflowId : parent;
+          const key = `${source}->${target}`;
+          if (edgeKeys.has(key)) return;
+          edgeKeys.add(key);
+          edges.push({ key, source, target, overflow: true });
+        });
+      }
+
       frontier = nextFrontier;
       if (!frontier.length) break;
     }
   });
 
-  return { nodes, edges };
+  return { nodes, edges, overflow };
 }
 
 function moduleSubgraph() {
@@ -529,6 +632,17 @@ function initCytoscape() {
         style: { shape: 'round-rectangle', 'background-opacity': 0.22 },
       },
       {
+        selector: 'node[?isOverflow]',
+        style: {
+          shape: 'round-rectangle',
+          'background-opacity': 0.06,
+          'border-style': 'dotted',
+          'border-width': 1,
+          color: '#9aa4b2',
+          'font-size': 10,
+        },
+      },
+      {
         selector: 'node[?isRoot]',
         style: {
           'border-width': 3,
@@ -561,6 +675,10 @@ function initCytoscape() {
         style: { 'line-style': 'dashed', opacity: 0.35 },
       },
       {
+        selector: 'edge[?overflow]',
+        style: { 'line-style': 'dotted', opacity: 0.3, 'target-arrow-shape': 'none' },
+      },
+      {
         selector: '.faded',
         style: { opacity: 0.12, 'text-opacity': 0.25 },
       },
@@ -573,6 +691,12 @@ function initCytoscape() {
 
   cy.on('tap', 'node', (event) => {
     const id = event.target.id();
+    const spill = currentOverflow.get(id);
+    if (spill) {
+      state.expanded.add(spill.key);
+      render();
+      return;
+    }
     state.selected = id;
     highlightNeighborhood(id);
     if (state.view === 'modules') showModuleDetail(id);
@@ -581,6 +705,7 @@ function initCytoscape() {
 
   cy.on('dbltap', 'node', (event) => {
     const id = event.target.id();
+    if (currentOverflow.has(id)) return;
     if (state.view === 'modules') {
       const module = index.modules.get(id);
       const target = (module && module.symbols && module.symbols[0]) || null;
@@ -610,10 +735,11 @@ function highlightNeighborhood(id) {
 }
 
 function measure(label) {
-  const longest = label.split('\n').reduce((max, line) => Math.max(max, line.length), 0);
+  const lines = label.split('\n');
+  const longest = lines.reduce((max, line) => Math.max(max, line.length), 0);
   return {
     w: Math.min(210, Math.max(72, longest * 6.6 + 22)),
-    h: label.includes('\n') ? 42 : 28,
+    h: 16 + lines.length * 13,
   };
 }
 
@@ -624,6 +750,7 @@ function render() {
 
   if (state.view === 'modules') {
     const { nodes, edges } = moduleSubgraph();
+    currentOverflow = new Map();
     nodes.forEach((id) => {
       const module = index.modules.get(id);
       const label = shortModule(id);
@@ -653,11 +780,33 @@ function render() {
       });
     });
   } else {
-    const { nodes, edges } = subgraph();
+    const { nodes, edges, overflow } = subgraph();
+    currentOverflow = overflow;
     nodes.forEach((id) => {
+      const spill = overflow.get(id);
+      if (spill) {
+        const label = `+${spill.hidden.length} more`;
+        const { w, h } = measure(label);
+        elements.push({
+          data: {
+            id,
+            label,
+            kind: 'overflow',
+            color: '#6b7684',
+            w,
+            h,
+            isOverflow: true,
+          },
+        });
+        return;
+      }
+
       const node = index.nodes.get(id);
       if (!node) return;
-      const label = `${shortName(id)}\n${shortModule(node.module)}`;
+      const badges = badgesFor(id);
+      const label = badges.length
+        ? `${shortName(id)}\n${shortModule(node.module)}\n⚙ ${badges.length}`
+        : `${shortName(id)}\n${shortModule(node.module)}`;
       const { w, h } = measure(label);
       elements.push({
         data: {
@@ -678,9 +827,10 @@ function render() {
           id: edge.key,
           source: edge.source,
           target: edge.target,
-          color: CONFIDENCE_COLOR[edge.confidence] || '#4d5866',
+          color: edge.overflow ? '#4d5866' : (CONFIDENCE_COLOR[edge.confidence] || '#4d5866'),
           w: 1.4,
           bridged: edge.bridged || undefined,
+          overflow: edge.overflow || undefined,
         },
       });
     });
@@ -750,8 +900,12 @@ function renderTrail() {
 
 function setRoot(id, options = {}) {
   state.root = id;
-  if (options.reset) state.trail = id ? [id] : [];
-  else if (id && state.trail[state.trail.length - 1] !== id) state.trail.push(id);
+  if (options.reset) {
+    state.trail = id ? [id] : [];
+    state.expanded.clear();
+  } else if (id && state.trail[state.trail.length - 1] !== id) {
+    state.trail.push(id);
+  }
 
   state.selected = id;
   el('entrypoints').querySelectorAll('li').forEach((item) => {
@@ -795,9 +949,12 @@ function callList(edges, direction) {
     const lines = edge.lines && edge.lines.length
       ? `L${edge.lines[0]}${edge.lines.length > 1 ? `+${edge.lines.length - 1}` : ''}`
       : '';
+    const collapsed = direction === 'out' && index.collapsible.has(other)
+      ? '<span class="gear" title="shown as a badge, not a node">⚙</span> '
+      : '';
     return `<li data-goto="${escapeHtml(other)}" title="${escapeHtml(other)} (${edge.confidence})">
       <span class="cbar" style="background:${color}"></span>
-      <span class="tgt">${escapeHtml(shortName(other))}
+      <span class="tgt">${collapsed}${escapeHtml(shortName(other))}
         <span class="mod">· ${escapeHtml(where)}</span></span>
       <span class="ln">${lines}</span>
     </li>`;
