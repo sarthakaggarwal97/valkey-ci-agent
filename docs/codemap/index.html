@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>valkey-ci-agent · code map</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-name">code map</span>
+    <span class="brand-sub" id="brand-stats">loading…</span>
+  </div>
+
+  <div class="viewtoggle" role="tablist" aria-label="Graph granularity">
+    <button id="view-modules" role="tab" aria-selected="false">Modules</button>
+    <button id="view-functions" role="tab" aria-selected="true">Functions</button>
+  </div>
+
+  <div class="searchwrap">
+    <input id="search" type="search" autocomplete="off" spellcheck="false"
+           placeholder="Search functions, classes, modules…"
+           aria-label="Search symbols">
+    <ul id="search-results" class="search-results" hidden></ul>
+  </div>
+</header>
+
+<main class="layout">
+
+  <aside class="sidebar" aria-label="Navigation and filters">
+    <section class="panel">
+      <h2>Entry points</h2>
+      <p class="hint">Where a GitHub Actions workflow starts executing code.</p>
+      <ul id="entrypoints" class="entrylist"></ul>
+    </section>
+
+    <section class="panel">
+      <h2>Walk</h2>
+      <label class="control">
+        <span>Direction</span>
+        <select id="direction">
+          <option value="callees">calls &rarr; (what it runs)</option>
+          <option value="callers">&larr; called by (who runs it)</option>
+          <option value="both">both</option>
+        </select>
+      </label>
+      <label class="control">
+        <span>Depth <output id="depth-out">3</output></span>
+        <input id="depth" type="range" min="1" max="6" value="3">
+      </label>
+    </section>
+
+    <section class="panel">
+      <h2>Filters</h2>
+      <label class="check">
+        <input type="checkbox" id="hide-private"> Hide private helpers (<code>_name</code>)
+      </label>
+      <label class="check">
+        <input type="checkbox" id="hide-classes"> Hide dataclasses / models
+      </label>
+      <fieldset class="confidence">
+        <legend>Edge confidence</legend>
+        <label class="check"><input type="checkbox" data-conf="exact" checked>
+          <span class="dot exact"></span> exact</label>
+        <label class="check"><input type="checkbox" data-conf="inferred" checked>
+          <span class="dot inferred"></span> inferred</label>
+        <label class="check"><input type="checkbox" data-conf="ambiguous" checked>
+          <span class="dot ambiguous"></span> ambiguous</label>
+      </fieldset>
+    </section>
+
+    <section class="panel">
+      <h2>Packages</h2>
+      <ul id="legend" class="legend"></ul>
+    </section>
+  </aside>
+
+  <section class="stage">
+    <div class="trail" id="trail" aria-label="Navigation history"></div>
+    <div id="cy" role="application" aria-label="Call graph"></div>
+    <div class="stagehint" id="stagehint">
+      click a node to inspect &middot; double-click to walk into it
+    </div>
+  </section>
+
+  <aside class="detail" id="detail" aria-live="polite">
+    <div class="detail-empty" id="detail-empty">
+      <h2>Nothing selected</h2>
+      <p>Pick an entry point on the left, or click any node in the graph to see
+         what it does, what it calls, and its source.</p>
+    </div>
+    <div class="detail-body" id="detail-body" hidden></div>
+  </aside>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
