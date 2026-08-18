@@ -381,6 +381,29 @@ html, body {
 
 .d-section { margin-top: 18px; }
 
+.d-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.d-actions button {
+  appearance: none;
+  flex: 1 1 auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 6px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.d-actions button:hover { border-color: var(--accent); color: var(--text); }
+
 .d-section h3 {
   margin: 0 0 7px;
   font-size: 10.5px;

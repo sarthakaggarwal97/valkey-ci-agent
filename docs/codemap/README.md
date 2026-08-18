@@ -17,11 +17,13 @@ fails because the browser blocks the `fetch` of `graph.json`.
 
 ## Reading the graph
 
-- **Modules / Functions** toggle switches granularity. Modules is the 30,000-ft
-  view, in two levels: packages first (8 nodes, labelled with cross-package call
-  counts), then double-click one to see the modules inside it. Functions is the
-  actual call flow. Depth and direction apply only to the function walk, so they
-  are disabled in the module view.
+- **Modules / Functions** toggle switches granularity. The module view has three
+  levels: packages (8 nodes, edges labelled with cross-package call counts),
+  then the modules inside one package, then one module's dependencies followed
+  across package boundaries. The third level is reached from the detail panel —
+  "Walk what it uses" or "What breaks if it changes" — and is the only module
+  level where depth and direction apply, so they are disabled on the other two.
+  Dashed edges there cross a package boundary.
 - **Entry points** lists every `python -m scripts.*` invocation found in
   `.github/workflows/`, so each root is the real start of a CI run.
 - **Direction** flips between "what this calls" and "who calls this" — the
@@ -69,12 +71,17 @@ is 46 nodes with a widest rank of 17.
 The module view was the other hairball: all 80 modules at once is 190 edges,
 6 ranks, a 22-wide rank, and half the edges skipping ranks. Splitting it into
 packages-then-modules gives an 8-node overview and package views of 2-23 nodes
-with a widest rank of 10. Worth recording what did *not* work, so it is not
-retried: hiding low-weight edges cut the edge count by 46% but widened the worst
-rank from 22 to 38, because removing edges removes the constraints holding nodes
-apart. And routing out-of-package dependencies to a shared group node per
-package was worse than either — 30 nodes and 65% skipping for `backport` — since
-the group node becomes a hub itself. Badges avoid both.
+with a widest rank of 10. The third level — one module's dependencies across
+packages — stays bounded on its own: 12-31 nodes spanning 2-6 packages. It was
+only the *unrooted* all-80 variant that was unreadable, so rooting is what makes
+the difference, not scope.
+
+Worth recording what did *not* work, so it is not retried: hiding low-weight
+edges cut the edge count by 46% but widened the worst rank from 22 to 38,
+because removing edges removes the constraints holding nodes apart. And routing
+out-of-package dependencies to a shared group node per package was worse than
+either — 30 nodes and 65% skipping for `backport` — since the group node becomes
+a hub itself. Badges avoid both.
 
 ## What it cannot tell you
 

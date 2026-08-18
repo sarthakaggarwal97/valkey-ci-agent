@@ -32,6 +32,7 @@ const state = {
   view: 'functions',
   root: null,
   modulePackage: null,
+  moduleWalk: null,
   depth: 2,
   direction: 'callees',
   hidePrivate: false,
@@ -257,22 +258,27 @@ function syncViewButtons() {
   el('view-modules').setAttribute('aria-selected', String(isModules));
   el('view-functions').setAttribute('aria-selected', String(!isModules));
 
-  // Depth and direction describe a walk out from one function; the module view
-  // shows a whole level at once, so leaving them live would be a lie.
-  el('depth').disabled = isModules;
-  el('direction').disabled = isModules;
+  // Depth and direction drive a rooted walk. That applies to the function view
+  // and to a module dependency walk, but not to the package levels, which show
+  // a whole level at once.
+  const walking = !isModules || Boolean(state.moduleWalk);
+  el('depth').disabled = !walking;
+  el('direction').disabled = !walking;
 
-  el('stagehint').textContent = isModules
-    ? (state.modulePackage === null
-      ? 'click a package to inspect · double-click to open its modules'
-      : 'click a module to inspect · double-click to open its functions')
-    : 'click a node to inspect · double-click to walk into it';
+  let hint;
+  if (!isModules) hint = 'click a node to inspect · double-click to walk into it';
+  else if (state.moduleWalk) hint = 'depth and direction apply · double-click to open functions';
+  else if (state.modulePackage === null) {
+    hint = 'click a package to inspect · double-click to open its modules';
+  } else hint = 'click a module to inspect · double-click to open its functions';
+  el('stagehint').textContent = hint;
 }
 
 function wireControls() {
   el('view-modules').addEventListener('click', () => {
     state.view = 'modules';
     state.modulePackage = null;
+    state.moduleWalk = null;
     state.root = null;
     state.trail = [];
     syncViewButtons();
@@ -282,7 +288,9 @@ function wireControls() {
   el('view-functions').addEventListener('click', () => {
     state.view = 'functions';
     syncViewButtons();
-    if (!state.root) {
+    // The module view leaves a module id in state.root, which is not a symbol,
+    // so the function graph would come up empty. Fall back to an entry point.
+    if (!state.root || !index.nodes.has(state.root)) {
       const first = entrypointNodes()[0];
       setRoot(first ? first.id : null, { reset: true });
     } else {
@@ -644,6 +652,56 @@ function packageModuleGraph(name) {
   return { nodes, edges };
 }
 
+/** Third level: one module's dependencies, following them across packages.
+ *
+ * This is the mode that answers "what does this module pull in" and, in the
+ * callers direction, "what breaks if I change it" -- questions the package
+ * views cannot answer because they stop at the package boundary. Rooted, it
+ * stays at 12-31 nodes; it was only the unrooted all-80 variant that was
+ * unreadable.
+ */
+function moduleWalkGraph(root) {
+  const nodes = new Set([root]);
+  const directions = state.direction === 'both'
+    ? ['moduleOut', 'moduleIn']
+    : [state.direction === 'callees' ? 'moduleOut' : 'moduleIn'];
+
+  directions.forEach((mapName) => {
+    let frontier = [root];
+    for (let level = 0; level < state.depth; level += 1) {
+      const next = [];
+      frontier.forEach((current) => {
+        (index[mapName].get(current) || []).forEach((edge) => {
+          const other = mapName === 'moduleOut' ? edge.target : edge.source;
+          const owner = index.modules.get(other);
+          if (!owner || state.disabledPackages.has(owner.package)) return;
+          if (nodes.has(other)) return;
+          nodes.add(other);
+          next.push(other);
+        });
+      });
+      frontier = next;
+      if (!frontier.length) break;
+    }
+  });
+
+  const edges = [];
+  index.moduleOut.forEach((bucket) => {
+    bucket.forEach((edge) => {
+      if (nodes.has(edge.source) && nodes.has(edge.target)) {
+        edges.push({
+          key: `${edge.source}->${edge.target}`,
+          source: edge.source,
+          target: edge.target,
+          weight: edge.weight,
+        });
+      }
+    });
+  });
+
+  return { nodes, edges };
+}
+
 /** Out-of-package dependencies of a module, rendered as a badge. */
 function externalPackages(moduleId) {
   const externals = index.moduleExternal.get(moduleId);
@@ -698,6 +756,10 @@ function initCytoscape() {
           'font-size': 13,
           'font-weight': 'bold',
         },
+      },
+      {
+        selector: 'edge[?crosses]',
+        style: { 'line-style': 'dashed', opacity: 0.7 },
       },
       {
         selector: 'edge[?weighted]',
@@ -842,7 +904,42 @@ function render() {
 
   if (state.view === 'modules') {
     currentOverflow = new Map();
-    if (state.modulePackage === null) {
+    if (state.moduleWalk) {
+      const { nodes, edges } = moduleWalkGraph(state.moduleWalk);
+      nodes.forEach((id) => {
+        const module = index.modules.get(id);
+        // Several packages are on screen at once here, so keep the package
+        // prefix in the label rather than stripping it.
+        const label = shortModule(id);
+        const { w, h } = measure(label);
+        elements.push({
+          data: {
+            id,
+            label,
+            kind: 'module',
+            color: packageColor(module.package),
+            w: Math.max(w, 90),
+            h,
+            isRoot: id === state.moduleWalk || undefined,
+            isEntry: module.entryWorkflows.length ? true : undefined,
+          },
+        });
+      });
+      edges.forEach((edge) => {
+        const from = index.modules.get(edge.source);
+        const to = index.modules.get(edge.target);
+        elements.push({
+          data: {
+            id: edge.key,
+            source: edge.source,
+            target: edge.target,
+            color: from.package === to.package ? '#4d5866' : '#6f7d90',
+            w: Math.min(6, 1 + Math.log2(edge.weight + 1)),
+            crosses: from.package !== to.package ? true : undefined,
+          },
+        });
+      });
+    } else if (state.modulePackage === null) {
       const { nodes, edges } = packageOverview();
       nodes.forEach((name) => {
         const members = index.packageModules.get(name) || [];
@@ -1004,6 +1101,7 @@ function runLayout() {
 
 function enterPackage(name) {
   state.modulePackage = name;
+  state.moduleWalk = null;
   state.root = null;
   state.selected = null;
   render();
@@ -1013,11 +1111,25 @@ function enterPackage(name) {
 
 function leavePackage() {
   state.modulePackage = null;
+  state.moduleWalk = null;
   state.root = null;
   state.selected = null;
   render();
   el('detail-body').hidden = true;
   el('detail-empty').hidden = false;
+}
+
+/** Show one module's dependencies across package boundaries. */
+function walkModule(id) {
+  const module = index.modules.get(id);
+  if (!module) return;
+  state.view = 'modules';
+  state.modulePackage = module.package;
+  state.moduleWalk = id;
+  state.root = id;
+  state.selected = id;
+  render();
+  showModuleDetail(id);
 }
 
 function renderTrail() {
@@ -1028,11 +1140,28 @@ function renderTrail() {
       trail.innerHTML = '<button disabled>all packages</button>';
       return;
     }
-    trail.innerHTML =
-      '<button data-up="1">all packages</button><span class="sep">›</span>' +
-      `<button disabled>${escapeHtml(state.modulePackage)}</button>`;
-    const up = trail.querySelector('button[data-up]');
-    if (up) up.addEventListener('click', leavePackage);
+
+    const crumbs = [
+      '<button data-up="root">all packages</button>',
+      '<span class="sep">›</span>',
+    ];
+    if (state.moduleWalk) {
+      crumbs.push(`<button data-up="package">${escapeHtml(state.modulePackage)}</button>`);
+      crumbs.push('<span class="sep">›</span>');
+      crumbs.push(
+        `<button disabled>${escapeHtml(shortModule(state.moduleWalk))} · dependencies</button>`,
+      );
+    } else {
+      crumbs.push(`<button disabled>${escapeHtml(state.modulePackage)}</button>`);
+    }
+    trail.innerHTML = crumbs.join('');
+
+    trail.querySelectorAll('button[data-up]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (button.dataset.up === 'root') leavePackage();
+        else enterPackage(state.modulePackage);
+      });
+    });
     return;
   }
 
@@ -1338,6 +1467,11 @@ function showModuleDetail(id) {
     ${workflows ? `<div class="d-section"><h3>Entry point for</h3>${workflows}</div>` : ''}
     <p class="d-doc${module.doc ? '' : ' none'}">${escapeHtml(module.doc || 'No module docstring.')}</p>
 
+    <div class="d-actions">
+      <button data-walk="callees">Walk what it uses &rarr;</button>
+      <button data-walk="callers">&larr; What breaks if it changes</button>
+    </div>
+
     ${external ? `<div class="d-section">
       <h3>Outside this package <span class="gear">⚙</span></h3>
       <div class="chips">${external}</div>
@@ -1358,6 +1492,13 @@ function showModuleDetail(id) {
       <ul class="d-list">${symbols}</ul>
     </div>`;
 
+  body.querySelectorAll('[data-walk]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.direction = button.dataset.walk;
+      el('direction').value = state.direction;
+      walkModule(id);
+    });
+  });
   body.querySelectorAll('[data-module]').forEach((item) => {
     item.addEventListener('click', () => {
       const target = item.dataset.module;
@@ -1388,6 +1529,7 @@ function updateHash() {
   const params = new URLSearchParams();
   params.set('view', state.view);
   if (state.modulePackage) params.set('pkg', state.modulePackage);
+  if (state.moduleWalk) params.set('walk', state.moduleWalk);
   if (state.root) params.set('root', state.root);
   params.set('depth', String(state.depth));
   params.set('dir', state.direction);
@@ -1420,6 +1562,11 @@ function restoreFromHash() {
   syncViewButtons();
 
   if (state.view === 'modules') {
+    const walk = params.get('walk');
+    if (walk && index.modules.has(walk)) {
+      walkModule(walk);
+      return true;
+    }
     state.modulePackage = index.packageModules.has(pkg) ? pkg : null;
     if (root && index.modules.has(root)) {
       const owner = index.modules.get(root);
