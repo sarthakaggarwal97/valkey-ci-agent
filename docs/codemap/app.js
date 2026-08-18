@@ -15,31 +15,15 @@ const CONFIDENCE_COLOR = {
   ambiguous: '#f2775e',
 };
 
-// A leaf utility called from everywhere (retry_github_call has 50 callers) acts
-// as a gravity well: every caller drags an edge across the whole layout to the
-// same box. Collapsing those into a badge on the caller halves edge crossings
-// without hiding the fact that the call happens.
-const HUB_MIN_CALLERS = 8;
-const HUB_MAX_CALLEES = 2;
-
-// Layering release_notes.main at depth 4 produced ranks of 1,6,7,22,36,11,6,3.
-// A 36-node rank is unreadable at any zoom, and capping each parent's fan-out
-// does not help because several wide parents stack into the same rank -- so the
-// cap has to apply to the rank itself.
-const MAX_RANK_WIDTH = 12;
-
 const state = {
   view: 'functions',
   root: null,
-  modulePackage: null,
-  moduleWalk: null,
-  depth: 2,
+  depth: 3,
   direction: 'callees',
   hidePrivate: false,
   hideClasses: false,
   confidences: new Set(['exact', 'inferred', 'ambiguous']),
   disabledPackages: new Set(),
-  expanded: new Set(),
   trail: [],
   selected: null,
 };
@@ -55,16 +39,11 @@ const index = {
   in: new Map(),
   moduleOut: new Map(),
   moduleIn: new Map(),
-  collapsible: new Set(),
-  packageModules: new Map(),
-  packageEdges: new Map(),
-  moduleExternal: new Map(),
   meta: null,
   packageColor: new Map(),
 };
 
 let cy = null;
-let currentOverflow = new Map();
 
 /* ------------------------------------------------------------------ utils */
 
@@ -129,52 +108,6 @@ async function load() {
   graph.moduleEdges.forEach((edge) => {
     push(index.moduleOut, edge.source, edge);
     push(index.moduleIn, edge.target, edge);
-  });
-
-  index.nodes.forEach((node, id) => {
-    const callers = (index.in.get(id) || []).length;
-    const callees = (index.out.get(id) || []).length;
-    if (callers >= HUB_MIN_CALLERS && callees <= HUB_MAX_CALLEES) {
-      index.collapsible.add(id);
-    }
-  });
-
-  // Drawing all 80 modules at once is what makes the module view a hairball:
-  // 190 edges, 6 ranks, a 22-wide rank, and half the edges skipping ranks. So
-  // the view is two levels -- packages, then the modules inside one package --
-  // and a module's out-of-package dependencies become a badge rather than an
-  // edge to a shared node. A shared "common" node would just be the same hub
-  // problem one level up.
-  index.modules.forEach((module) => {
-    const bucket = index.packageModules.get(module.package);
-    if (bucket) bucket.push(module.id);
-    else index.packageModules.set(module.package, [module.id]);
-  });
-
-  index.moduleOut.forEach((bucket) => {
-    bucket.forEach((edge) => {
-      const from = index.modules.get(edge.source);
-      const to = index.modules.get(edge.target);
-      if (!from || !to || from.package === to.package) return;
-
-      const key = `${from.package}->${to.package}`;
-      const existing = index.packageEdges.get(key);
-      if (existing) existing.weight += edge.weight;
-      else {
-        index.packageEdges.set(key, {
-          source: from.package,
-          target: to.package,
-          weight: edge.weight,
-        });
-      }
-
-      let externals = index.moduleExternal.get(edge.source);
-      if (!externals) {
-        externals = new Map();
-        index.moduleExternal.set(edge.source, externals);
-      }
-      externals.set(to.package, (externals.get(to.package) || 0) + edge.weight);
-    });
   });
 
   const meta = graph.meta;
@@ -254,31 +187,16 @@ function buildLegend() {
 }
 
 function syncViewButtons() {
-  const isModules = state.view === 'modules';
-  el('view-modules').setAttribute('aria-selected', String(isModules));
-  el('view-functions').setAttribute('aria-selected', String(!isModules));
-
-  // Depth and direction drive a rooted walk. That applies to the function view
-  // and to a module dependency walk, but not to the package levels, which show
-  // a whole level at once.
-  const walking = !isModules || Boolean(state.moduleWalk);
-  el('depth').disabled = !walking;
-  el('direction').disabled = !walking;
-
-  let hint;
-  if (!isModules) hint = 'click a node to inspect · double-click to walk into it';
-  else if (state.moduleWalk) hint = 'depth and direction apply · double-click to open functions';
-  else if (state.modulePackage === null) {
-    hint = 'click a package to inspect · double-click to open its modules';
-  } else hint = 'click a module to inspect · double-click to open its functions';
-  el('stagehint').textContent = hint;
+  el('view-modules').setAttribute('aria-selected', String(state.view === 'modules'));
+  el('view-functions').setAttribute('aria-selected', String(state.view === 'functions'));
+  el('stagehint').textContent = state.view === 'modules'
+    ? 'click a module to inspect · double-click to open its functions'
+    : 'click a node to inspect · double-click to walk into it';
 }
 
 function wireControls() {
   el('view-modules').addEventListener('click', () => {
     state.view = 'modules';
-    state.modulePackage = null;
-    state.moduleWalk = null;
     state.root = null;
     state.trail = [];
     syncViewButtons();
@@ -351,11 +269,8 @@ function wireSearch() {
     close();
     if (match.type === 'module') {
       state.view = 'modules';
-      enterPackage(index.modules.get(match.id).package);
-      state.root = match.id;
-      state.selected = match.id;
-      render();
-      showModuleDetail(match.id);
+      syncViewButtons();
+      setRoot(match.id, { reset: true });
     } else {
       state.view = 'functions';
       syncViewButtons();
@@ -443,18 +358,6 @@ function wireSearch() {
 
 /* ------------------------------------------------------- graph traversal */
 
-/** A hub is collapsed everywhere except when you navigate directly to it. */
-function isCollapsed(id) {
-  return index.collapsible.has(id) && id !== state.root;
-}
-
-/** The collapsed utilities a node calls, shown as a badge instead of nodes. */
-function badgesFor(id) {
-  return (index.out.get(id) || [])
-    .filter((edge) => edgeAllowed(edge) && isCollapsed(edge.target))
-    .map((edge) => edge.target);
-}
-
 function nodeVisible(id) {
   const node = index.nodes.get(id);
   if (!node) return false;
@@ -468,12 +371,7 @@ function edgeAllowed(edge) {
   return state.confidences.has(edge.confidence);
 }
 
-/** Neighbours of `id`, bridging transitively through filtered-out nodes.
- *
- * Filtered-out nodes are bridged so a chain never silently truncates, but
- * collapsed hubs terminate instead: they are leaf utilities, and walking into
- * them re-creates exactly the long edges collapsing them removed.
- */
+/** Neighbours of `id`, bridging transitively through filtered-out nodes. */
 function visibleNeighbors(id, direction) {
   const map = direction === 'callees' ? index.out : index.in;
   const found = new Map();
@@ -484,7 +382,6 @@ function visibleNeighbors(id, direction) {
       if (!edgeAllowed(edge)) return;
       const next = direction === 'callees' ? edge.target : edge.source;
       if (seen.has(next)) return;
-      if (isCollapsed(next)) return;
       if (nodeVisible(next)) {
         const existing = found.get(next);
         if (!existing || (existing.bridged && !bridged)) {
@@ -501,144 +398,87 @@ function visibleNeighbors(id, direction) {
   return found;
 }
 
-/** Keep the structurally interesting nodes when a rank is capped. */
-function byInterest(left, right) {
-  const weight = (id) => (index.out.get(id) || []).length;
-  return weight(right[0]) - weight(left[0]) || left[0].localeCompare(right[0]);
-}
-
 /** Breadth-first subgraph around the current root. */
 function subgraph() {
   const nodes = new Set();
   const edges = [];
   const edgeKeys = new Set();
-  const overflow = new Map();
   const root = state.root;
-  if (!root || !index.nodes.has(root)) return { nodes, edges, overflow };
+  if (!root || !index.nodes.has(root)) return { nodes, edges };
 
   nodes.add(root);
   const directions = state.direction === 'both'
     ? ['callees', 'callers']
     : [state.direction];
 
-  const addEdge = (current, neighbor, direction, meta) => {
-    const source = direction === 'callees' ? current : neighbor;
-    const target = direction === 'callees' ? neighbor : current;
-    const key = `${source}->${target}`;
-    if (edgeKeys.has(key)) return;
-    edgeKeys.add(key);
-    edges.push({
-      key,
-      source,
-      target,
-      confidence: meta.edge.confidence,
-      lines: meta.edge.lines,
-      bridged: meta.bridged,
-    });
-  };
-
   directions.forEach((direction) => {
     let frontier = [root];
     for (let level = 0; level < state.depth; level += 1) {
-      // Collect the whole rank before deciding what fits. Capping per parent
-      // would let several wide parents still stack into one unreadable rank.
-      const candidates = [];
+      const nextFrontier = [];
       frontier.forEach((current) => {
         visibleNeighbors(current, direction).forEach((meta, neighbor) => {
-          candidates.push({ current, neighbor, meta });
-        });
-      });
-
-      // Nodes already on screen cost no width, so their edges always land.
-      const fresh = new Map();
-      candidates.forEach((candidate) => {
-        if (nodes.has(candidate.neighbor)) {
-          addEdge(candidate.current, candidate.neighbor, direction, candidate.meta);
-          return;
-        }
-        const entry = fresh.get(candidate.neighbor);
-        if (entry) entry.parents.push(candidate);
-        else fresh.set(candidate.neighbor, { parents: [candidate] });
-      });
-
-      const rankKey = `rank:${direction}:${level}`;
-      let shown = [...fresh.entries()];
-      let hidden = [];
-      if (shown.length > MAX_RANK_WIDTH && !state.expanded.has(rankKey)) {
-        const ranked = shown.slice().sort(byInterest);
-        shown = ranked.slice(0, MAX_RANK_WIDTH);
-        hidden = ranked.slice(MAX_RANK_WIDTH);
-      }
-
-      const nextFrontier = [];
-      shown.forEach(([neighbor, entry]) => {
-        nodes.add(neighbor);
-        nextFrontier.push(neighbor);
-        entry.parents.forEach((candidate) => {
-          addEdge(candidate.current, neighbor, direction, candidate.meta);
-        });
-      });
-
-      if (hidden.length) {
-        const overflowId = `::more::${direction}::${level}`;
-        overflow.set(overflowId, {
-          key: rankKey,
-          direction,
-          hidden: hidden.map(([id]) => id),
-        });
-        nodes.add(overflowId);
-        const parents = new Set();
-        hidden.forEach(([, entry]) => {
-          entry.parents.forEach((candidate) => parents.add(candidate.current));
-        });
-        parents.forEach((parent) => {
-          const source = direction === 'callees' ? parent : overflowId;
-          const target = direction === 'callees' ? overflowId : parent;
+          const source = direction === 'callees' ? current : neighbor;
+          const target = direction === 'callees' ? neighbor : current;
           const key = `${source}->${target}`;
-          if (edgeKeys.has(key)) return;
-          edgeKeys.add(key);
-          edges.push({ key, source, target, overflow: true });
+          if (!edgeKeys.has(key)) {
+            edgeKeys.add(key);
+            edges.push({
+              key,
+              source,
+              target,
+              confidence: meta.edge.confidence,
+              lines: meta.edge.lines,
+              bridged: meta.bridged,
+            });
+          }
+          if (!nodes.has(neighbor)) {
+            nodes.add(neighbor);
+            nextFrontier.push(neighbor);
+          }
         });
-      }
-
+      });
       frontier = nextFrontier;
       if (!frontier.length) break;
     }
   });
 
-  return { nodes, edges, overflow };
-}
-
-/** Top level of the module view: one node per package. */
-function packageOverview() {
-  const nodes = new Set();
-  index.packageModules.forEach((_modules, name) => {
-    if (!state.disabledPackages.has(name)) nodes.add(name);
-  });
-
-  const edges = [];
-  index.packageEdges.forEach((edge) => {
-    if (nodes.has(edge.source) && nodes.has(edge.target)) {
-      edges.push({
-        key: `${edge.source}->${edge.target}`,
-        source: edge.source,
-        target: edge.target,
-        weight: edge.weight,
-      });
-    }
-  });
-
   return { nodes, edges };
 }
 
-/** Second level: the modules inside one package, and only their own edges. */
-function packageModuleGraph(name) {
-  const nodes = new Set(index.packageModules.get(name) || []);
+function moduleSubgraph() {
+  let visible = new Set();
+  index.modules.forEach((module) => {
+    if (!state.disabledPackages.has(module.package)) visible.add(module.id);
+  });
+
+  if (state.root && index.modules.has(state.root)) {
+    const keep = new Set([state.root]);
+    const directions = state.direction === 'both'
+      ? ['moduleOut', 'moduleIn']
+      : [state.direction === 'callees' ? 'moduleOut' : 'moduleIn'];
+    directions.forEach((mapName) => {
+      let frontier = [state.root];
+      for (let level = 0; level < state.depth; level += 1) {
+        const next = [];
+        frontier.forEach((current) => {
+          (index[mapName].get(current) || []).forEach((edge) => {
+            const other = mapName === 'moduleOut' ? edge.target : edge.source;
+            if (!visible.has(other) || keep.has(other)) return;
+            keep.add(other);
+            next.push(other);
+          });
+        });
+        frontier = next;
+        if (!frontier.length) break;
+      }
+    });
+    visible = keep;
+  }
 
   const edges = [];
   index.moduleOut.forEach((bucket) => {
     bucket.forEach((edge) => {
-      if (nodes.has(edge.source) && nodes.has(edge.target)) {
+      if (visible.has(edge.source) && visible.has(edge.target)) {
         edges.push({
           key: `${edge.source}->${edge.target}`,
           source: edge.source,
@@ -649,64 +489,7 @@ function packageModuleGraph(name) {
     });
   });
 
-  return { nodes, edges };
-}
-
-/** Third level: one module's dependencies, following them across packages.
- *
- * This is the mode that answers "what does this module pull in" and, in the
- * callers direction, "what breaks if I change it" -- questions the package
- * views cannot answer because they stop at the package boundary. Rooted, it
- * stays at 12-31 nodes; it was only the unrooted all-80 variant that was
- * unreadable.
- */
-function moduleWalkGraph(root) {
-  const nodes = new Set([root]);
-  const directions = state.direction === 'both'
-    ? ['moduleOut', 'moduleIn']
-    : [state.direction === 'callees' ? 'moduleOut' : 'moduleIn'];
-
-  directions.forEach((mapName) => {
-    let frontier = [root];
-    for (let level = 0; level < state.depth; level += 1) {
-      const next = [];
-      frontier.forEach((current) => {
-        (index[mapName].get(current) || []).forEach((edge) => {
-          const other = mapName === 'moduleOut' ? edge.target : edge.source;
-          const owner = index.modules.get(other);
-          if (!owner || state.disabledPackages.has(owner.package)) return;
-          if (nodes.has(other)) return;
-          nodes.add(other);
-          next.push(other);
-        });
-      });
-      frontier = next;
-      if (!frontier.length) break;
-    }
-  });
-
-  const edges = [];
-  index.moduleOut.forEach((bucket) => {
-    bucket.forEach((edge) => {
-      if (nodes.has(edge.source) && nodes.has(edge.target)) {
-        edges.push({
-          key: `${edge.source}->${edge.target}`,
-          source: edge.source,
-          target: edge.target,
-          weight: edge.weight,
-        });
-      }
-    });
-  });
-
-  return { nodes, edges };
-}
-
-/** Out-of-package dependencies of a module, rendered as a badge. */
-function externalPackages(moduleId) {
-  const externals = index.moduleExternal.get(moduleId);
-  if (!externals) return [];
-  return [...externals.entries()].sort((left, right) => right[1] - left[1]);
+  return { nodes: visible, edges };
 }
 
 /* -------------------------------------------------------------- rendering */
@@ -748,43 +531,6 @@ function initCytoscape() {
         style: { shape: 'round-rectangle', 'background-opacity': 0.22 },
       },
       {
-        selector: 'node[kind = "package"]',
-        style: {
-          shape: 'round-rectangle',
-          'background-opacity': 0.28,
-          'border-width': 2,
-          'font-size': 13,
-          'font-weight': 'bold',
-        },
-      },
-      {
-        selector: 'edge[?crosses]',
-        style: { 'line-style': 'dashed', opacity: 0.7 },
-      },
-      {
-        selector: 'edge[?weighted]',
-        style: {
-          label: 'data(label)',
-          'font-size': 9,
-          color: '#9aa4b2',
-          'text-background-color': '#0f1216',
-          'text-background-opacity': 0.85,
-          'text-background-padding': 2,
-          'text-rotation': 'autorotate',
-        },
-      },
-      {
-        selector: 'node[?isOverflow]',
-        style: {
-          shape: 'round-rectangle',
-          'background-opacity': 0.06,
-          'border-style': 'dotted',
-          'border-width': 1,
-          color: '#9aa4b2',
-          'font-size': 10,
-        },
-      },
-      {
         selector: 'node[?isRoot]',
         style: {
           'border-width': 3,
@@ -817,10 +563,6 @@ function initCytoscape() {
         style: { 'line-style': 'dashed', opacity: 0.35 },
       },
       {
-        selector: 'edge[?overflow]',
-        style: { 'line-style': 'dotted', opacity: 0.3, 'target-arrow-shape': 'none' },
-      },
-      {
         selector: '.faded',
         style: { opacity: 0.12, 'text-opacity': 0.25 },
       },
@@ -833,33 +575,15 @@ function initCytoscape() {
 
   cy.on('tap', 'node', (event) => {
     const id = event.target.id();
-    const spill = currentOverflow.get(id);
-    if (spill) {
-      state.expanded.add(spill.key);
-      render();
-      return;
-    }
     state.selected = id;
     highlightNeighborhood(id);
-    if (state.view === 'modules') {
-      if (index.packageModules.has(id) && state.modulePackage === null) {
-        showPackageDetail(id);
-      } else {
-        showModuleDetail(id);
-      }
-    } else {
-      showNodeDetail(id);
-    }
+    if (state.view === 'modules') showModuleDetail(id);
+    else showNodeDetail(id);
   });
 
   cy.on('dbltap', 'node', (event) => {
     const id = event.target.id();
-    if (currentOverflow.has(id)) return;
     if (state.view === 'modules') {
-      if (state.modulePackage === null && index.packageModules.has(id)) {
-        enterPackage(id);
-        return;
-      }
       const module = index.modules.get(id);
       const target = (module && module.symbols && module.symbols[0]) || null;
       if (target) {
@@ -888,151 +612,54 @@ function highlightNeighborhood(id) {
 }
 
 function measure(label) {
-  const lines = label.split('\n');
-  const longest = lines.reduce((max, line) => Math.max(max, line.length), 0);
+  const longest = label.split('\n').reduce((max, line) => Math.max(max, line.length), 0);
   return {
     w: Math.min(210, Math.max(72, longest * 6.6 + 22)),
-    h: 16 + lines.length * 13,
+    h: label.includes('\n') ? 42 : 28,
   };
 }
 
 function render() {
   if (!cy) return;
-  syncViewButtons();
 
   const elements = [];
 
   if (state.view === 'modules') {
-    currentOverflow = new Map();
-    if (state.moduleWalk) {
-      const { nodes, edges } = moduleWalkGraph(state.moduleWalk);
-      nodes.forEach((id) => {
-        const module = index.modules.get(id);
-        // Several packages are on screen at once here, so keep the package
-        // prefix in the label rather than stripping it.
-        const label = shortModule(id);
-        const { w, h } = measure(label);
-        elements.push({
-          data: {
-            id,
-            label,
-            kind: 'module',
-            color: packageColor(module.package),
-            w: Math.max(w, 90),
-            h,
-            isRoot: id === state.moduleWalk || undefined,
-            isEntry: module.entryWorkflows.length ? true : undefined,
-          },
-        });
-      });
-      edges.forEach((edge) => {
-        const from = index.modules.get(edge.source);
-        const to = index.modules.get(edge.target);
-        elements.push({
-          data: {
-            id: edge.key,
-            source: edge.source,
-            target: edge.target,
-            color: from.package === to.package ? '#4d5866' : '#6f7d90',
-            w: Math.min(6, 1 + Math.log2(edge.weight + 1)),
-            crosses: from.package !== to.package ? true : undefined,
-          },
-        });
-      });
-    } else if (state.modulePackage === null) {
-      const { nodes, edges } = packageOverview();
-      nodes.forEach((name) => {
-        const members = index.packageModules.get(name) || [];
-        const label = `${name}\n${members.length} modules`;
-        const { w, h } = measure(label);
-        elements.push({
-          data: {
-            id: name,
-            label,
-            kind: 'package',
-            color: packageColor(name),
-            w: Math.max(w, 110),
-            h,
-            isRoot: name === state.root || undefined,
-          },
-        });
-      });
-      edges.forEach((edge) => {
-        elements.push({
-          data: {
-            id: edge.key,
-            source: edge.source,
-            target: edge.target,
-            label: String(edge.weight),
-            color: '#4d5866',
-            w: Math.min(7, 1 + Math.log2(edge.weight + 1)),
-            weighted: true,
-          },
-        });
-      });
-    } else {
-      const { nodes, edges } = packageModuleGraph(state.modulePackage);
-      nodes.forEach((id) => {
-        const module = index.modules.get(id);
-        const externals = externalPackages(id);
-        const name = shortModule(id).replace(`${module.package}.`, '');
-        const label = externals.length
-          ? `${name}\n⚙ ${externals.map(([pkg]) => pkg).join(', ')}`
-          : name;
-        const { w, h } = measure(label);
-        elements.push({
-          data: {
-            id,
-            label,
-            kind: 'module',
-            color: packageColor(module.package),
-            w: Math.max(w, 90),
-            h,
-            isRoot: id === state.root || undefined,
-            isEntry: module.entryWorkflows.length ? true : undefined,
-          },
-        });
-      });
-      edges.forEach((edge) => {
-        elements.push({
-          data: {
-            id: edge.key,
-            source: edge.source,
-            target: edge.target,
-            color: '#4d5866',
-            w: Math.min(6, 1 + Math.log2(edge.weight + 1)),
-          },
-        });
-      });
-    }
-  } else {
-    const { nodes, edges, overflow } = subgraph();
-    currentOverflow = overflow;
+    const { nodes, edges } = moduleSubgraph();
     nodes.forEach((id) => {
-      const spill = overflow.get(id);
-      if (spill) {
-        const label = `+${spill.hidden.length} more`;
-        const { w, h } = measure(label);
-        elements.push({
-          data: {
-            id,
-            label,
-            kind: 'overflow',
-            color: '#6b7684',
-            w,
-            h,
-            isOverflow: true,
-          },
-        });
-        return;
-      }
-
+      const module = index.modules.get(id);
+      const label = shortModule(id);
+      const { w, h } = measure(label);
+      elements.push({
+        data: {
+          id,
+          label,
+          kind: 'module',
+          color: packageColor(module.package),
+          w: Math.max(w, 90),
+          h,
+          isRoot: id === state.root || undefined,
+          isEntry: module.entryWorkflows.length ? true : undefined,
+        },
+      });
+    });
+    edges.forEach((edge) => {
+      elements.push({
+        data: {
+          id: edge.key,
+          source: edge.source,
+          target: edge.target,
+          color: '#4d5866',
+          w: Math.min(6, 1 + Math.log2(edge.weight + 1)),
+        },
+      });
+    });
+  } else {
+    const { nodes, edges } = subgraph();
+    nodes.forEach((id) => {
       const node = index.nodes.get(id);
       if (!node) return;
-      const badges = badgesFor(id);
-      const label = badges.length
-        ? `${shortName(id)}\n${shortModule(node.module)}\n⚙ ${badges.length}`
-        : `${shortName(id)}\n${shortModule(node.module)}`;
+      const label = `${shortName(id)}\n${shortModule(node.module)}`;
       const { w, h } = measure(label);
       elements.push({
         data: {
@@ -1053,10 +680,9 @@ function render() {
           id: edge.key,
           source: edge.source,
           target: edge.target,
-          color: edge.overflow ? '#4d5866' : (CONFIDENCE_COLOR[edge.confidence] || '#4d5866'),
+          color: CONFIDENCE_COLOR[edge.confidence] || '#4d5866',
           w: 1.4,
           bridged: edge.bridged || undefined,
-          overflow: edge.overflow || undefined,
         },
       });
     });
@@ -1099,75 +725,15 @@ function runLayout() {
   }
 }
 
-function enterPackage(name) {
-  state.modulePackage = name;
-  state.moduleWalk = null;
-  state.root = null;
-  state.selected = null;
-  render();
-  el('detail-body').hidden = true;
-  el('detail-empty').hidden = false;
-}
-
-function leavePackage() {
-  state.modulePackage = null;
-  state.moduleWalk = null;
-  state.root = null;
-  state.selected = null;
-  render();
-  el('detail-body').hidden = true;
-  el('detail-empty').hidden = false;
-}
-
-/** Show one module's dependencies across package boundaries. */
-function walkModule(id) {
-  const module = index.modules.get(id);
-  if (!module) return;
-  state.view = 'modules';
-  state.modulePackage = module.package;
-  state.moduleWalk = id;
-  state.root = id;
-  state.selected = id;
-  render();
-  showModuleDetail(id);
-}
-
 function renderTrail() {
   const trail = el('trail');
-
-  if (state.view === 'modules') {
-    if (state.modulePackage === null) {
-      trail.innerHTML = '<button disabled>all packages</button>';
-      return;
-    }
-
-    const crumbs = [
-      '<button data-up="root">all packages</button>',
-      '<span class="sep">›</span>',
-    ];
-    if (state.moduleWalk) {
-      crumbs.push(`<button data-up="package">${escapeHtml(state.modulePackage)}</button>`);
-      crumbs.push('<span class="sep">›</span>');
-      crumbs.push(
-        `<button disabled>${escapeHtml(shortModule(state.moduleWalk))} · dependencies</button>`,
-      );
-    } else {
-      crumbs.push(`<button disabled>${escapeHtml(state.modulePackage)}</button>`);
-    }
-    trail.innerHTML = crumbs.join('');
-
-    trail.querySelectorAll('button[data-up]').forEach((button) => {
-      button.addEventListener('click', () => {
-        if (button.dataset.up === 'root') leavePackage();
-        else enterPackage(state.modulePackage);
-      });
-    });
+  if (state.view === 'modules' && !state.root) {
+    trail.innerHTML = '<button disabled>all modules</button>';
     return;
   }
-
   const crumbs = state.trail.length ? state.trail : (state.root ? [state.root] : []);
   trail.innerHTML = crumbs.map((id, i) => {
-    const label = shortName(id);
+    const label = state.view === 'modules' ? shortModule(id) : shortName(id);
     const sep = i < crumbs.length - 1 ? '<span class="sep">›</span>' : '';
     return `<button data-i="${i}" title="${escapeHtml(id)}">${escapeHtml(label)}</button>${sep}`;
   }).join('');
@@ -1178,19 +744,16 @@ function renderTrail() {
       state.trail = state.trail.slice(0, i + 1);
       state.root = state.trail[i];
       render();
-      showNodeDetail(state.root);
+      if (state.view === 'modules') showModuleDetail(state.root);
+      else showNodeDetail(state.root);
     });
   });
 }
 
 function setRoot(id, options = {}) {
   state.root = id;
-  if (options.reset) {
-    state.trail = id ? [id] : [];
-    state.expanded.clear();
-  } else if (id && state.trail[state.trail.length - 1] !== id) {
-    state.trail.push(id);
-  }
+  if (options.reset) state.trail = id ? [id] : [];
+  else if (id && state.trail[state.trail.length - 1] !== id) state.trail.push(id);
 
   state.selected = id;
   el('entrypoints').querySelectorAll('li').forEach((item) => {
@@ -1234,12 +797,9 @@ function callList(edges, direction) {
     const lines = edge.lines && edge.lines.length
       ? `L${edge.lines[0]}${edge.lines.length > 1 ? `+${edge.lines.length - 1}` : ''}`
       : '';
-    const collapsed = direction === 'out' && index.collapsible.has(other)
-      ? '<span class="gear" title="shown as a badge, not a node">⚙</span> '
-      : '';
     return `<li data-goto="${escapeHtml(other)}" title="${escapeHtml(other)} (${edge.confidence})">
       <span class="cbar" style="background:${color}"></span>
-      <span class="tgt">${collapsed}${escapeHtml(shortName(other))}
+      <span class="tgt">${escapeHtml(shortName(other))}
         <span class="mod">· ${escapeHtml(where)}</span></span>
       <span class="ln">${lines}</span>
     </li>`;
@@ -1312,105 +872,6 @@ function showNodeDetail(id) {
   wireDetailLinks();
 }
 
-function showPackageDetail(name) {
-  const body = el('detail-body');
-  const empty = el('detail-empty');
-  const members = index.packageModules.get(name);
-  if (!members) {
-    body.hidden = true;
-    empty.hidden = false;
-    return;
-  }
-  empty.hidden = true;
-  body.hidden = false;
-
-  const dependsOn = [];
-  const usedBy = [];
-  index.packageEdges.forEach((edge) => {
-    if (edge.source === name) dependsOn.push(edge);
-    if (edge.target === name) usedBy.push(edge);
-  });
-
-  const loc = members.reduce((sum, id) => sum + index.modules.get(id).loc, 0);
-  const symbols = members.reduce(
-    (sum, id) => sum + index.modules.get(id).symbolCount, 0,
-  );
-  const workflows = new Set();
-  members.forEach((id) => {
-    index.modules.get(id).entryWorkflows.forEach((wf) => workflows.add(wf));
-  });
-
-  const pkgList = (edges, direction) => {
-    if (!edges.length) return '<p class="d-empty">none</p>';
-    return `<ul class="d-list">${edges
-      .slice()
-      .sort((left, right) => right.weight - left.weight)
-      .map((edge) => {
-        const other = direction === 'out' ? edge.target : edge.source;
-        return `<li data-package="${escapeHtml(other)}">
-          <span class="swatch" style="background:${packageColor(other)}"></span>
-          <span class="tgt">${escapeHtml(other)}</span>
-          <span class="ln">${edge.weight} call${edge.weight === 1 ? '' : 's'}</span>
-        </li>`;
-      }).join('')}</ul>`;
-  };
-
-  const moduleList = members
-    .slice()
-    .sort((left, right) => index.modules.get(right).loc - index.modules.get(left).loc)
-    .map((id) => {
-      const module = index.modules.get(id);
-      const short = shortModule(id).replace(`${name}.`, '');
-      return `<li data-module="${escapeHtml(id)}" title="${escapeHtml(module.doc)}">
-        <span class="tgt">${escapeHtml(short)}</span>
-        <span class="ln">${module.loc} lines</span>
-      </li>`;
-    }).join('');
-
-  body.innerHTML = `
-    <span class="d-kind">package</span>
-    <h2 class="d-name">${escapeHtml(name)}</h2>
-    <div class="d-loc">
-      ${members.length} modules · ${symbols} symbols · ${loc} lines
-    </div>
-    ${workflows.size ? `<div class="d-section"><h3>Entry point for</h3>${
-      [...workflows].sort().map((wf) => `<span class="wf-chip">${escapeHtml(wf)}</span>`).join('')
-    }</div>` : ''}
-
-    <div class="d-section">
-      <h3>Depends on (${dependsOn.length})</h3>
-      ${pkgList(dependsOn, 'out')}
-    </div>
-
-    <div class="d-section">
-      <h3>Used by (${usedBy.length})</h3>
-      ${pkgList(usedBy, 'in')}
-    </div>
-
-    <div class="d-section">
-      <h3>Modules (${members.length})</h3>
-      <ul class="d-list">${moduleList}</ul>
-    </div>`;
-
-  body.querySelectorAll('[data-package]').forEach((item) => {
-    item.addEventListener('click', () => {
-      state.selected = item.dataset.package;
-      render();
-      showPackageDetail(item.dataset.package);
-    });
-  });
-  body.querySelectorAll('[data-module]').forEach((item) => {
-    item.addEventListener('click', () => {
-      const id = item.dataset.module;
-      enterPackage(index.modules.get(id).package);
-      state.root = id;
-      state.selected = id;
-      render();
-      showModuleDetail(id);
-    });
-  });
-}
-
 function showModuleDetail(id) {
   const module = index.modules.get(id);
   const body = el('detail-body');
@@ -1451,11 +912,6 @@ function showModuleDetail(id) {
       </li>`;
     }).join('');
 
-  const external = externalPackages(id)
-    .map(([pkg, count]) => `<span class="chip" data-package="${escapeHtml(pkg)}">
-      <span class="swatch" style="background:${packageColor(pkg)}"></span>
-      ${escapeHtml(pkg)} · ${count}</span>`).join('');
-
   body.innerHTML = `
     <span class="d-kind">module · ${escapeHtml(module.package)}</span>
     <h2 class="d-name">${escapeHtml(shortModule(id))}</h2>
@@ -1466,16 +922,6 @@ function showModuleDetail(id) {
     </div>
     ${workflows ? `<div class="d-section"><h3>Entry point for</h3>${workflows}</div>` : ''}
     <p class="d-doc${module.doc ? '' : ' none'}">${escapeHtml(module.doc || 'No module docstring.')}</p>
-
-    <div class="d-actions">
-      <button data-walk="callees">Walk what it uses &rarr;</button>
-      <button data-walk="callers">&larr; What breaks if it changes</button>
-    </div>
-
-    ${external ? `<div class="d-section">
-      <h3>Outside this package <span class="gear">⚙</span></h3>
-      <div class="chips">${external}</div>
-    </div>` : ''}
 
     <div class="d-section">
       <h3>Depends on (${outgoing.length})</h3>
@@ -1492,33 +938,8 @@ function showModuleDetail(id) {
       <ul class="d-list">${symbols}</ul>
     </div>`;
 
-  body.querySelectorAll('[data-walk]').forEach((button) => {
-    button.addEventListener('click', () => {
-      state.direction = button.dataset.walk;
-      el('direction').value = state.direction;
-      walkModule(id);
-    });
-  });
   body.querySelectorAll('[data-module]').forEach((item) => {
-    item.addEventListener('click', () => {
-      const target = item.dataset.module;
-      const owner = index.modules.get(target);
-      if (!owner) return;
-      // A dependency may live in another package, so follow it there.
-      if (owner.package !== state.modulePackage) enterPackage(owner.package);
-      state.root = target;
-      state.selected = target;
-      render();
-      showModuleDetail(target);
-    });
-  });
-  body.querySelectorAll('.chip[data-package]').forEach((item) => {
-    item.addEventListener('click', () => {
-      leavePackage();
-      state.selected = item.dataset.package;
-      render();
-      showPackageDetail(item.dataset.package);
-    });
+    item.addEventListener('click', () => setRoot(item.dataset.module));
   });
   wireDetailLinks();
 }
@@ -1528,8 +949,6 @@ function showModuleDetail(id) {
 function updateHash() {
   const params = new URLSearchParams();
   params.set('view', state.view);
-  if (state.modulePackage) params.set('pkg', state.modulePackage);
-  if (state.moduleWalk) params.set('walk', state.moduleWalk);
   if (state.root) params.set('root', state.root);
   params.set('depth', String(state.depth));
   params.set('dir', state.direction);
@@ -1545,7 +964,6 @@ function restoreFromHash() {
   const params = new URLSearchParams(raw);
   const view = params.get('view');
   const root = params.get('root');
-  const pkg = params.get('pkg');
   const depth = Number(params.get('depth'));
   const direction = params.get('dir');
 
@@ -1561,32 +979,15 @@ function restoreFromHash() {
   }
   syncViewButtons();
 
-  if (state.view === 'modules') {
-    const walk = params.get('walk');
-    if (walk && index.modules.has(walk)) {
-      walkModule(walk);
-      return true;
-    }
-    state.modulePackage = index.packageModules.has(pkg) ? pkg : null;
-    if (root && index.modules.has(root)) {
-      const owner = index.modules.get(root);
-      state.modulePackage = owner.package;
-      state.root = root;
-      state.selected = root;
-      render();
-      showModuleDetail(root);
-    } else {
-      render();
-      if (state.modulePackage === null) {
-        el('detail-body').hidden = true;
-        el('detail-empty').hidden = false;
-      }
-    }
+  const known = state.view === 'modules'
+    ? index.modules.has(root)
+    : index.nodes.has(root);
+  if (root && known) {
+    setRoot(root, { reset: true });
     return true;
   }
-
-  if (root && index.nodes.has(root)) {
-    setRoot(root, { reset: true });
+  if (state.view === 'modules') {
+    setRoot(null, { reset: true });
     return true;
   }
   return false;
