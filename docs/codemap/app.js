@@ -31,6 +31,7 @@ const MAX_RANK_WIDTH = 12;
 const state = {
   view: 'functions',
   root: null,
+  modulePackage: null,
   depth: 2,
   direction: 'callees',
   hidePrivate: false,
@@ -54,6 +55,9 @@ const index = {
   moduleOut: new Map(),
   moduleIn: new Map(),
   collapsible: new Set(),
+  packageModules: new Map(),
+  packageEdges: new Map(),
+  moduleExternal: new Map(),
   meta: null,
   packageColor: new Map(),
 };
@@ -134,6 +138,44 @@ async function load() {
     }
   });
 
+  // Drawing all 80 modules at once is what makes the module view a hairball:
+  // 190 edges, 6 ranks, a 22-wide rank, and half the edges skipping ranks. So
+  // the view is two levels -- packages, then the modules inside one package --
+  // and a module's out-of-package dependencies become a badge rather than an
+  // edge to a shared node. A shared "common" node would just be the same hub
+  // problem one level up.
+  index.modules.forEach((module) => {
+    const bucket = index.packageModules.get(module.package);
+    if (bucket) bucket.push(module.id);
+    else index.packageModules.set(module.package, [module.id]);
+  });
+
+  index.moduleOut.forEach((bucket) => {
+    bucket.forEach((edge) => {
+      const from = index.modules.get(edge.source);
+      const to = index.modules.get(edge.target);
+      if (!from || !to || from.package === to.package) return;
+
+      const key = `${from.package}->${to.package}`;
+      const existing = index.packageEdges.get(key);
+      if (existing) existing.weight += edge.weight;
+      else {
+        index.packageEdges.set(key, {
+          source: from.package,
+          target: to.package,
+          weight: edge.weight,
+        });
+      }
+
+      let externals = index.moduleExternal.get(edge.source);
+      if (!externals) {
+        externals = new Map();
+        index.moduleExternal.set(edge.source, externals);
+      }
+      externals.set(to.package, (externals.get(to.package) || 0) + edge.weight);
+    });
+  });
+
   const meta = graph.meta;
   el('brand-stats').textContent =
     `${meta.moduleCount} modules · ${meta.nodeCount} symbols · ` +
@@ -211,16 +253,26 @@ function buildLegend() {
 }
 
 function syncViewButtons() {
-  el('view-modules').setAttribute('aria-selected', String(state.view === 'modules'));
-  el('view-functions').setAttribute('aria-selected', String(state.view === 'functions'));
-  el('stagehint').textContent = state.view === 'modules'
-    ? 'click a module to inspect · double-click to open its functions'
+  const isModules = state.view === 'modules';
+  el('view-modules').setAttribute('aria-selected', String(isModules));
+  el('view-functions').setAttribute('aria-selected', String(!isModules));
+
+  // Depth and direction describe a walk out from one function; the module view
+  // shows a whole level at once, so leaving them live would be a lie.
+  el('depth').disabled = isModules;
+  el('direction').disabled = isModules;
+
+  el('stagehint').textContent = isModules
+    ? (state.modulePackage === null
+      ? 'click a package to inspect · double-click to open its modules'
+      : 'click a module to inspect · double-click to open its functions')
     : 'click a node to inspect · double-click to walk into it';
 }
 
 function wireControls() {
   el('view-modules').addEventListener('click', () => {
     state.view = 'modules';
+    state.modulePackage = null;
     state.root = null;
     state.trail = [];
     syncViewButtons();
@@ -291,8 +343,11 @@ function wireSearch() {
     close();
     if (match.type === 'module') {
       state.view = 'modules';
-      syncViewButtons();
-      setRoot(match.id, { reset: true });
+      enterPackage(index.modules.get(match.id).package);
+      state.root = match.id;
+      state.selected = match.id;
+      render();
+      showModuleDetail(match.id);
     } else {
       state.view = 'functions';
       syncViewButtons();
@@ -546,40 +601,36 @@ function subgraph() {
   return { nodes, edges, overflow };
 }
 
-function moduleSubgraph() {
-  let visible = new Set();
-  index.modules.forEach((module) => {
-    if (!state.disabledPackages.has(module.package)) visible.add(module.id);
+/** Top level of the module view: one node per package. */
+function packageOverview() {
+  const nodes = new Set();
+  index.packageModules.forEach((_modules, name) => {
+    if (!state.disabledPackages.has(name)) nodes.add(name);
   });
 
-  if (state.root && index.modules.has(state.root)) {
-    const keep = new Set([state.root]);
-    const directions = state.direction === 'both'
-      ? ['moduleOut', 'moduleIn']
-      : [state.direction === 'callees' ? 'moduleOut' : 'moduleIn'];
-    directions.forEach((mapName) => {
-      let frontier = [state.root];
-      for (let level = 0; level < state.depth; level += 1) {
-        const next = [];
-        frontier.forEach((current) => {
-          (index[mapName].get(current) || []).forEach((edge) => {
-            const other = mapName === 'moduleOut' ? edge.target : edge.source;
-            if (!visible.has(other) || keep.has(other)) return;
-            keep.add(other);
-            next.push(other);
-          });
-        });
-        frontier = next;
-        if (!frontier.length) break;
-      }
-    });
-    visible = keep;
-  }
+  const edges = [];
+  index.packageEdges.forEach((edge) => {
+    if (nodes.has(edge.source) && nodes.has(edge.target)) {
+      edges.push({
+        key: `${edge.source}->${edge.target}`,
+        source: edge.source,
+        target: edge.target,
+        weight: edge.weight,
+      });
+    }
+  });
+
+  return { nodes, edges };
+}
+
+/** Second level: the modules inside one package, and only their own edges. */
+function packageModuleGraph(name) {
+  const nodes = new Set(index.packageModules.get(name) || []);
 
   const edges = [];
   index.moduleOut.forEach((bucket) => {
     bucket.forEach((edge) => {
-      if (visible.has(edge.source) && visible.has(edge.target)) {
+      if (nodes.has(edge.source) && nodes.has(edge.target)) {
         edges.push({
           key: `${edge.source}->${edge.target}`,
           source: edge.source,
@@ -590,7 +641,14 @@ function moduleSubgraph() {
     });
   });
 
-  return { nodes: visible, edges };
+  return { nodes, edges };
+}
+
+/** Out-of-package dependencies of a module, rendered as a badge. */
+function externalPackages(moduleId) {
+  const externals = index.moduleExternal.get(moduleId);
+  if (!externals) return [];
+  return [...externals.entries()].sort((left, right) => right[1] - left[1]);
 }
 
 /* -------------------------------------------------------------- rendering */
@@ -630,6 +688,28 @@ function initCytoscape() {
       {
         selector: 'node[kind = "module"]',
         style: { shape: 'round-rectangle', 'background-opacity': 0.22 },
+      },
+      {
+        selector: 'node[kind = "package"]',
+        style: {
+          shape: 'round-rectangle',
+          'background-opacity': 0.28,
+          'border-width': 2,
+          'font-size': 13,
+          'font-weight': 'bold',
+        },
+      },
+      {
+        selector: 'edge[?weighted]',
+        style: {
+          label: 'data(label)',
+          'font-size': 9,
+          color: '#9aa4b2',
+          'text-background-color': '#0f1216',
+          'text-background-opacity': 0.85,
+          'text-background-padding': 2,
+          'text-rotation': 'autorotate',
+        },
       },
       {
         selector: 'node[?isOverflow]',
@@ -699,14 +779,25 @@ function initCytoscape() {
     }
     state.selected = id;
     highlightNeighborhood(id);
-    if (state.view === 'modules') showModuleDetail(id);
-    else showNodeDetail(id);
+    if (state.view === 'modules') {
+      if (index.packageModules.has(id) && state.modulePackage === null) {
+        showPackageDetail(id);
+      } else {
+        showModuleDetail(id);
+      }
+    } else {
+      showNodeDetail(id);
+    }
   });
 
   cy.on('dbltap', 'node', (event) => {
     const id = event.target.id();
     if (currentOverflow.has(id)) return;
     if (state.view === 'modules') {
+      if (state.modulePackage === null && index.packageModules.has(id)) {
+        enterPackage(id);
+        return;
+      }
       const module = index.modules.get(id);
       const target = (module && module.symbols && module.symbols[0]) || null;
       if (target) {
@@ -745,40 +836,78 @@ function measure(label) {
 
 function render() {
   if (!cy) return;
+  syncViewButtons();
 
   const elements = [];
 
   if (state.view === 'modules') {
-    const { nodes, edges } = moduleSubgraph();
     currentOverflow = new Map();
-    nodes.forEach((id) => {
-      const module = index.modules.get(id);
-      const label = shortModule(id);
-      const { w, h } = measure(label);
-      elements.push({
-        data: {
-          id,
-          label,
-          kind: 'module',
-          color: packageColor(module.package),
-          w: Math.max(w, 90),
-          h,
-          isRoot: id === state.root || undefined,
-          isEntry: module.entryWorkflows.length ? true : undefined,
-        },
+    if (state.modulePackage === null) {
+      const { nodes, edges } = packageOverview();
+      nodes.forEach((name) => {
+        const members = index.packageModules.get(name) || [];
+        const label = `${name}\n${members.length} modules`;
+        const { w, h } = measure(label);
+        elements.push({
+          data: {
+            id: name,
+            label,
+            kind: 'package',
+            color: packageColor(name),
+            w: Math.max(w, 110),
+            h,
+            isRoot: name === state.root || undefined,
+          },
+        });
       });
-    });
-    edges.forEach((edge) => {
-      elements.push({
-        data: {
-          id: edge.key,
-          source: edge.source,
-          target: edge.target,
-          color: '#4d5866',
-          w: Math.min(6, 1 + Math.log2(edge.weight + 1)),
-        },
+      edges.forEach((edge) => {
+        elements.push({
+          data: {
+            id: edge.key,
+            source: edge.source,
+            target: edge.target,
+            label: String(edge.weight),
+            color: '#4d5866',
+            w: Math.min(7, 1 + Math.log2(edge.weight + 1)),
+            weighted: true,
+          },
+        });
       });
-    });
+    } else {
+      const { nodes, edges } = packageModuleGraph(state.modulePackage);
+      nodes.forEach((id) => {
+        const module = index.modules.get(id);
+        const externals = externalPackages(id);
+        const name = shortModule(id).replace(`${module.package}.`, '');
+        const label = externals.length
+          ? `${name}\n⚙ ${externals.map(([pkg]) => pkg).join(', ')}`
+          : name;
+        const { w, h } = measure(label);
+        elements.push({
+          data: {
+            id,
+            label,
+            kind: 'module',
+            color: packageColor(module.package),
+            w: Math.max(w, 90),
+            h,
+            isRoot: id === state.root || undefined,
+            isEntry: module.entryWorkflows.length ? true : undefined,
+          },
+        });
+      });
+      edges.forEach((edge) => {
+        elements.push({
+          data: {
+            id: edge.key,
+            source: edge.source,
+            target: edge.target,
+            color: '#4d5866',
+            w: Math.min(6, 1 + Math.log2(edge.weight + 1)),
+          },
+        });
+      });
+    }
   } else {
     const { nodes, edges, overflow } = subgraph();
     currentOverflow = overflow;
@@ -873,15 +1002,43 @@ function runLayout() {
   }
 }
 
+function enterPackage(name) {
+  state.modulePackage = name;
+  state.root = null;
+  state.selected = null;
+  render();
+  el('detail-body').hidden = true;
+  el('detail-empty').hidden = false;
+}
+
+function leavePackage() {
+  state.modulePackage = null;
+  state.root = null;
+  state.selected = null;
+  render();
+  el('detail-body').hidden = true;
+  el('detail-empty').hidden = false;
+}
+
 function renderTrail() {
   const trail = el('trail');
-  if (state.view === 'modules' && !state.root) {
-    trail.innerHTML = '<button disabled>all modules</button>';
+
+  if (state.view === 'modules') {
+    if (state.modulePackage === null) {
+      trail.innerHTML = '<button disabled>all packages</button>';
+      return;
+    }
+    trail.innerHTML =
+      '<button data-up="1">all packages</button><span class="sep">›</span>' +
+      `<button disabled>${escapeHtml(state.modulePackage)}</button>`;
+    const up = trail.querySelector('button[data-up]');
+    if (up) up.addEventListener('click', leavePackage);
     return;
   }
+
   const crumbs = state.trail.length ? state.trail : (state.root ? [state.root] : []);
   trail.innerHTML = crumbs.map((id, i) => {
-    const label = state.view === 'modules' ? shortModule(id) : shortName(id);
+    const label = shortName(id);
     const sep = i < crumbs.length - 1 ? '<span class="sep">›</span>' : '';
     return `<button data-i="${i}" title="${escapeHtml(id)}">${escapeHtml(label)}</button>${sep}`;
   }).join('');
@@ -892,8 +1049,7 @@ function renderTrail() {
       state.trail = state.trail.slice(0, i + 1);
       state.root = state.trail[i];
       render();
-      if (state.view === 'modules') showModuleDetail(state.root);
-      else showNodeDetail(state.root);
+      showNodeDetail(state.root);
     });
   });
 }
@@ -1027,6 +1183,105 @@ function showNodeDetail(id) {
   wireDetailLinks();
 }
 
+function showPackageDetail(name) {
+  const body = el('detail-body');
+  const empty = el('detail-empty');
+  const members = index.packageModules.get(name);
+  if (!members) {
+    body.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  body.hidden = false;
+
+  const dependsOn = [];
+  const usedBy = [];
+  index.packageEdges.forEach((edge) => {
+    if (edge.source === name) dependsOn.push(edge);
+    if (edge.target === name) usedBy.push(edge);
+  });
+
+  const loc = members.reduce((sum, id) => sum + index.modules.get(id).loc, 0);
+  const symbols = members.reduce(
+    (sum, id) => sum + index.modules.get(id).symbolCount, 0,
+  );
+  const workflows = new Set();
+  members.forEach((id) => {
+    index.modules.get(id).entryWorkflows.forEach((wf) => workflows.add(wf));
+  });
+
+  const pkgList = (edges, direction) => {
+    if (!edges.length) return '<p class="d-empty">none</p>';
+    return `<ul class="d-list">${edges
+      .slice()
+      .sort((left, right) => right.weight - left.weight)
+      .map((edge) => {
+        const other = direction === 'out' ? edge.target : edge.source;
+        return `<li data-package="${escapeHtml(other)}">
+          <span class="swatch" style="background:${packageColor(other)}"></span>
+          <span class="tgt">${escapeHtml(other)}</span>
+          <span class="ln">${edge.weight} call${edge.weight === 1 ? '' : 's'}</span>
+        </li>`;
+      }).join('')}</ul>`;
+  };
+
+  const moduleList = members
+    .slice()
+    .sort((left, right) => index.modules.get(right).loc - index.modules.get(left).loc)
+    .map((id) => {
+      const module = index.modules.get(id);
+      const short = shortModule(id).replace(`${name}.`, '');
+      return `<li data-module="${escapeHtml(id)}" title="${escapeHtml(module.doc)}">
+        <span class="tgt">${escapeHtml(short)}</span>
+        <span class="ln">${module.loc} lines</span>
+      </li>`;
+    }).join('');
+
+  body.innerHTML = `
+    <span class="d-kind">package</span>
+    <h2 class="d-name">${escapeHtml(name)}</h2>
+    <div class="d-loc">
+      ${members.length} modules · ${symbols} symbols · ${loc} lines
+    </div>
+    ${workflows.size ? `<div class="d-section"><h3>Entry point for</h3>${
+      [...workflows].sort().map((wf) => `<span class="wf-chip">${escapeHtml(wf)}</span>`).join('')
+    }</div>` : ''}
+
+    <div class="d-section">
+      <h3>Depends on (${dependsOn.length})</h3>
+      ${pkgList(dependsOn, 'out')}
+    </div>
+
+    <div class="d-section">
+      <h3>Used by (${usedBy.length})</h3>
+      ${pkgList(usedBy, 'in')}
+    </div>
+
+    <div class="d-section">
+      <h3>Modules (${members.length})</h3>
+      <ul class="d-list">${moduleList}</ul>
+    </div>`;
+
+  body.querySelectorAll('[data-package]').forEach((item) => {
+    item.addEventListener('click', () => {
+      state.selected = item.dataset.package;
+      render();
+      showPackageDetail(item.dataset.package);
+    });
+  });
+  body.querySelectorAll('[data-module]').forEach((item) => {
+    item.addEventListener('click', () => {
+      const id = item.dataset.module;
+      enterPackage(index.modules.get(id).package);
+      state.root = id;
+      state.selected = id;
+      render();
+      showModuleDetail(id);
+    });
+  });
+}
+
 function showModuleDetail(id) {
   const module = index.modules.get(id);
   const body = el('detail-body');
@@ -1067,6 +1322,11 @@ function showModuleDetail(id) {
       </li>`;
     }).join('');
 
+  const external = externalPackages(id)
+    .map(([pkg, count]) => `<span class="chip" data-package="${escapeHtml(pkg)}">
+      <span class="swatch" style="background:${packageColor(pkg)}"></span>
+      ${escapeHtml(pkg)} · ${count}</span>`).join('');
+
   body.innerHTML = `
     <span class="d-kind">module · ${escapeHtml(module.package)}</span>
     <h2 class="d-name">${escapeHtml(shortModule(id))}</h2>
@@ -1077,6 +1337,11 @@ function showModuleDetail(id) {
     </div>
     ${workflows ? `<div class="d-section"><h3>Entry point for</h3>${workflows}</div>` : ''}
     <p class="d-doc${module.doc ? '' : ' none'}">${escapeHtml(module.doc || 'No module docstring.')}</p>
+
+    ${external ? `<div class="d-section">
+      <h3>Outside this package <span class="gear">⚙</span></h3>
+      <div class="chips">${external}</div>
+    </div>` : ''}
 
     <div class="d-section">
       <h3>Depends on (${outgoing.length})</h3>
@@ -1094,7 +1359,25 @@ function showModuleDetail(id) {
     </div>`;
 
   body.querySelectorAll('[data-module]').forEach((item) => {
-    item.addEventListener('click', () => setRoot(item.dataset.module));
+    item.addEventListener('click', () => {
+      const target = item.dataset.module;
+      const owner = index.modules.get(target);
+      if (!owner) return;
+      // A dependency may live in another package, so follow it there.
+      if (owner.package !== state.modulePackage) enterPackage(owner.package);
+      state.root = target;
+      state.selected = target;
+      render();
+      showModuleDetail(target);
+    });
+  });
+  body.querySelectorAll('.chip[data-package]').forEach((item) => {
+    item.addEventListener('click', () => {
+      leavePackage();
+      state.selected = item.dataset.package;
+      render();
+      showPackageDetail(item.dataset.package);
+    });
   });
   wireDetailLinks();
 }
@@ -1104,6 +1387,7 @@ function showModuleDetail(id) {
 function updateHash() {
   const params = new URLSearchParams();
   params.set('view', state.view);
+  if (state.modulePackage) params.set('pkg', state.modulePackage);
   if (state.root) params.set('root', state.root);
   params.set('depth', String(state.depth));
   params.set('dir', state.direction);
@@ -1119,6 +1403,7 @@ function restoreFromHash() {
   const params = new URLSearchParams(raw);
   const view = params.get('view');
   const root = params.get('root');
+  const pkg = params.get('pkg');
   const depth = Number(params.get('depth'));
   const direction = params.get('dir');
 
@@ -1134,15 +1419,27 @@ function restoreFromHash() {
   }
   syncViewButtons();
 
-  const known = state.view === 'modules'
-    ? index.modules.has(root)
-    : index.nodes.has(root);
-  if (root && known) {
-    setRoot(root, { reset: true });
+  if (state.view === 'modules') {
+    state.modulePackage = index.packageModules.has(pkg) ? pkg : null;
+    if (root && index.modules.has(root)) {
+      const owner = index.modules.get(root);
+      state.modulePackage = owner.package;
+      state.root = root;
+      state.selected = root;
+      render();
+      showModuleDetail(root);
+    } else {
+      render();
+      if (state.modulePackage === null) {
+        el('detail-body').hidden = true;
+        el('detail-empty').hidden = false;
+      }
+    }
     return true;
   }
-  if (state.view === 'modules') {
-    setRoot(null, { reset: true });
+
+  if (root && index.nodes.has(root)) {
+    setRoot(root, { reset: true });
     return true;
   }
   return false;

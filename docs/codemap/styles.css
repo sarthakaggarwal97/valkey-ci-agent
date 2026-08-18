@@ -421,6 +421,19 @@ html, body {
   color: var(--text-dim);
 }
 
+.chip[data-package] {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chip[data-package]:hover { border-color: var(--accent); color: var(--text); }
+.chip .swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.d-list .swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+
+.control select:disabled, .control input:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .d-source {
   margin: 8px 0 0;
   max-height: 420px;
