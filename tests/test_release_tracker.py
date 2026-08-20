@@ -184,8 +184,14 @@ def test_moved_branch_blocks_automatic_publication(monkeypatch: pytest.MonkeyPat
     assert "Rerun **Prepare Release**" in issue.create_comment.call_args.args[0]
 
 
+@pytest.mark.parametrize(
+    ("trusted_owner", "expected_head_sha"),
+    (("", SHA), ("sarthakaggarwal97", "")),
+)
 def test_existing_exact_publication_run_prevents_duplicate_dispatch(
     monkeypatch: pytest.MonkeyPatch,
+    trusted_owner: str,
+    expected_head_sha: str,
 ) -> None:
     issue = _issue()
     agent = MagicMock()
@@ -203,7 +209,8 @@ def test_existing_exact_publication_run_prevents_duplicate_dispatch(
     monkeypatch.setattr(tracker_mod, "_find_prep_pr", lambda *a: pr)
     monkeypatch.setattr(tracker_mod, "_find_release", lambda *a: None)
     monkeypatch.setattr(tracker_mod, "_branch_head", lambda *a: SHA)
-    monkeypatch.setattr(tracker_mod, "_find_run", lambda *a: publication)
+    find_run = MagicMock(return_value=publication)
+    monkeypatch.setattr(tracker_mod, "_find_run", find_run)
 
     result = tracker_mod._sync_one(
         issue,
@@ -213,9 +220,15 @@ def test_existing_exact_publication_run_prevents_duplicate_dispatch(
         MagicMock(),
         workflow,
         agent_repo="valkey-io/valkey-ci-agent",
+        trusted_owner=trusted_owner,
         dispatch=True,
     )
 
+    find_run.assert_called_once_with(
+        workflow,
+        f"Publish release on {TRACKER.branch} @ {SHA}",
+        expected_head_sha,
+    )
     workflow.create_dispatch.assert_not_called()
     assert result == "#42: validating and qualifying"
 

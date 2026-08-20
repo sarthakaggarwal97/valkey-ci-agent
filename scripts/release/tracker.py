@@ -191,6 +191,7 @@ def sync_trackers(
                 automation,
                 publish_workflow,
                 agent_repo=agent_repo,
+                trusted_owner=trusted_owner,
                 dispatch=dispatch,
             )
         except Exception as exc:
@@ -219,6 +220,7 @@ def _sync_one(
     publish_workflow: Any,
     *,
     agent_repo: str,
+    trusted_owner: str = "",
     dispatch: bool,
 ) -> str:
     pr = _find_prep_pr(repo, tracker)
@@ -234,7 +236,9 @@ def _sync_one(
     release = _find_release(repo, tracker.tag, candidate_sha, tracker.stage != "ga")
 
     publish_title = f"Publish release on {tracker.branch} @ {candidate_sha}" if candidate_sha else ""
-    controller_sha = _branch_head(agent, getattr(agent, "default_branch", "main"))
+    # A fork-only tracker fix can advance the controller branch while an exact-candidate
+    # Publish run is active. Production remains bound to the current controller SHA.
+    controller_sha = "" if trusted_owner else _branch_head(agent, getattr(agent, "default_branch", "main"))
     publish_run = _find_run(publish_workflow, publish_title, controller_sha) if publish_title else None
 
     dispatched = False
