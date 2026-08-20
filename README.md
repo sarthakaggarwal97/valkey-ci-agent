@@ -13,6 +13,7 @@ scripts/
   fuzzer/      Fuzzer run monitoring (active)
   ci_fix/      On-demand CI test-fix bot (active)
   release_notes/  Release cutter: AI notes + version bump (active)
+  cve_scan/    CVE scanning + verified rebuild dispatch (build-and-prove, active)
   common/      Shared infrastructure (git auth, GitHub client, safety guards)
 .github/actions/setup-agent
               Shared workflow setup for Python deps and optional Claude Code
@@ -30,6 +31,7 @@ New workflows are added as sibling directories to `backport/`. Each workflow pic
 | CI Fix | Active | On-demand `@valkeyrie-bot fix <ci-link>` - diagnoses and fixes a failing test on a backport PR |
 | Test Failure Detector | Active | Detects test failures from Daily CI, files/updates GitHub issues |
 | Release Notes | Active | Cuts a release for valkey core or a module repo (search/json/bloom): AI-generates notes from `release-notes` PRs plus AI-triaged candidates without that label, promotes them onto a release line branch, bumps the repo's version file, opens a PR (held as a draft when the cut flags issues) |
+| CVE Scan | Active | Scans container images for vulnerabilities, builds and scans the candidate image itself to prove the fix, then dispatches a targeted rebuild |
 | PR Reviewer | Planned | Two-stage code review with skeptic pass |
 | Additional Daily CI Analysis | Planned | Detects flaky tests, generates fix PRs |
 
@@ -558,12 +560,98 @@ cut, so an ordinary cut is never blocked when the App installation lacks it.
 The App installation must hold `repository-advisories:read` for an advisory cut
 to read the advisories.
 
+## CVE Scan Workflow
+
+Verification instead of prediction. The scan finds candidate CVEs in the published container images; we then build the candidate image ourselves, scan the real artifact to prove the targeted CVEs are gone, and only then dispatch valkey-container's plain build-and-publish workflow. We never predict whether a rebuild would help by inspecting base package databases or simulating installs; we build and check. All findings are reported in the GitHub Actions job summary. No GitHub issues are created.
+
+This is Phase 1: a concrete implementation targeting `valkey-io/valkey-container`. Phase 2 (reusable `workflow_call` extraction for other repos) is planned.
+
+### How it works
+
+The workflow has four jobs:
+
+1. `scan` scans every published architecture, reports findings, and emits one JSON `plan`. Each plan leg contains `{line, variant, platform, cves}` and is used directly as the verification matrix.
+2. `verify` calls valkey-container's shared build action with `push: false` and `load: true`, then checks the rebuilt artifact for that leg's CVE IDs. It writes a uniquely named `verified`, `survivors`, or `error` marker.
+3. `collect` reconciles those markers against the same plan. Missing and unexpected legs stay visible; a line qualifies when any affected architecture is verified.
+4. `rebuild` dispatches valkey-container's normal `ci.yml`, locates the correlated run, waits for its real result, and reports the per-architecture status.
+
+The verify job has no credentials and cannot publish. Only the rebuild dispatch step receives the scoped GitHub App token. See [CVE Scan Flow](docs/architecture.md#cve-scan-flow) for the complete contract, failure behavior, and security boundaries.
+
+### Tradeoffs
+
+The image is built once for verification and again for publication. This keeps publication decisions out of valkey-container, at the cost of extra builds. Verification covers every affected architecture, while dispatch remains any-architecture because `ci.yml` rebuilds all platforms together. The report therefore never treats a partially verified line as fully fixed.
+
+### Installation
+
+#### Prerequisites
+
+- The **Valkeyrie Bot GitHub App** installed on the target repository with:
+  - `actions: write` (dispatch the rebuild workflow)
+  - `contents: read`, `metadata: read`
+- Org-level secrets: `VALKEYRIE_BOT_APP_ID` and `VALKEYRIE_BOT_PRIVATE_KEY`
+
+#### Step 1: Configure secrets
+
+On the repo hosting the agent workflows:
+
+| Type | Name | Value |
+|------|------|-------|
+| Secret | `VALKEYRIE_BOT_APP_ID` | Valkeyrie Bot GitHub App ID |
+| Secret | `VALKEYRIE_BOT_PRIVATE_KEY` | App private key |
+
+Forks are scan/dry-run only: there is no PAT fallback, so without the org App secrets the rebuild job's guards keep it from running and no token is minted.
+
+#### Step 2: Create the protected Environment
+
+Create a `cve-rebuild-dispatch` Environment in repo Settings with a deployment-branch rule limited to `main`. It is a credential boundary (not an approval gate): it scopes the App credentials and dispatch permission so no other ref can access them.
+
+### Configuration
+
+Settings are loaded from `CVE_SCAN_*` environment variables with sensible defaults
+targeting `valkey-io/valkey-container`. The workflow pins all values explicitly in
+its `env:` block (house style: visible-in-workflow configuration). Override any
+variable to change behavior for forks or testing.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CVE_SCAN_VERSIONS_URL` | `https://raw.githubusercontent.com/valkey-io/valkey-container/mainline/versions.json` | URL to the versions.json manifest for dynamic image resolution |
+| `CVE_SCAN_REPOSITORY` | `valkey/valkey` | Docker Hub repository prefix for derived image tags |
+| `CVE_SCAN_INCLUDE_UNSTABLE` | `false` | Include the `unstable` version line (truthy: `1`, `true`, `yes`, `on`; falsy: `0`, `false`, `no`, `off`, empty) |
+| `CVE_SCAN_SEVERITY_THRESHOLD` | `HIGH` | Ignore findings below this severity (`UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`). |
+| `CVE_SCAN_IMAGES` | *(empty)* | Optional static image list (comma-separated). When set, overrides dynamic resolution from versions.json. Testing/escape hatch. |
+| `CVE_SCAN_PLATFORMS` | `linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le` | Comma-separated platforms to scan per image. Defaults to the verified published set for valkey images. |
+
+Invalid values (bad severity, malformed booleans, or empty platform lists) raise immediately:
+a typo must not silently scan nothing.
+
+### Usage
+
+#### Weekly scan (automatic)
+
+Runs weekly on the configured schedule (default: Monday 06:00 UTC). Scans all images in the matrix on all configured platforms, reports findings in the job summary, builds and scans each candidate to prove the fix, and dispatches a targeted rebuild automatically for the candidates that pass verification.
+
+#### Manual scan
+
+```bash
+gh workflow run cve-scan.yml --repo <agent-repo>
+```
+
+Supports a `dry_run` input that prints findings without dispatching a rebuild. It defaults to `true`: a manual run never triggers a real rebuild unless you explicitly set `dry_run=false`. Supports a `severity_threshold` input for ad-hoc investigation; it affects classification and therefore rebuild dispatch, not just reporting.
+
+#### Reviewing results
+
+After each scan, check the workflow run's job summary in GitHub Actions. The summary lists all findings (candidates and not-fixable) as grouped markdown tables. Candidates flow into the `verify` job, which builds and scans the real artifact to prove the fix; only proven candidates reach the `rebuild` job, which then waits for the downstream valkey-container build and reports its actual conclusion and run URL in the job summary and Slack, so any non-success outcome (failed, cancelled, or timed-out) always notifies and is visible rather than masked by a successful dispatch.
+
 ## Safety
 
 - **Branch namespace** - the agent writes only `agent/backport/...` (backports) and `agent/release-cut/...` (release cuts) branches and opens PRs for maintainer review. It never force-pushes a release line directly.
 - **Credential isolation** - all GitHub auth uses `GIT_ASKPASS`; tokens never appear in `.git/config` or URLs
 - **Claude Code env isolation** - `GITHUB_TOKEN`, `GH_TOKEN`, and `*_SECRET` are stripped from the subprocess environment. Claude cannot see credentials.
 - **Deterministic validation** - registry-configured build commands run before push. A validation failure blocks the push.
+- **CVE scan: proof, not prediction** - a rebuild is dispatched only after the `verify` job builds the candidate image itself and scans the real artifact, and only for the version lines `collect` finds proven fixed on at least one affected architecture. A run that proves nothing at all (no architecture verified anywhere, with an errored or missing leg) fails closed and dispatches nothing. The workflow run log is the audit record for every automatic dispatch.
+- **CVE scan: targeted dispatch** - rebuilds are dispatched with `--field version="<versions>"` for only the affected version lines (e.g. `8.0 9.1`), not a rebuild-all. This minimizes the blast radius of automatic rebuilds.
+- **CVE scan: no registry credentials in verify** - the `verify` job builds with `push: false` / `load: true` and holds no registry credentials, so the candidate image never leaves the runner.
+- **CVE scan: no AI in the pipeline** - the entire scan-verify-dispatch path is deterministic code (scanner, shared candidate build action, `verify_candidate`, `gh workflow run`). No AI layer participates in any decision or dispatch step.
 - **Fork sync** - when a different-owner `push_repo` is configured, the agent fast-forwards that fork's release branch to match upstream before cherry-picking
 - **Stale branch pruning** - if a previous backport PR was closed without merging, the agent deletes the orphaned branch before starting fresh
 - **DCO** - backport commits are signed off. ci_fix commits are authored by the bot without a sign-off, so a human certifies the change before merge.

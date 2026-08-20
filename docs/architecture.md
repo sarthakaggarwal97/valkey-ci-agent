@@ -14,6 +14,7 @@ scripts/
   test_failure_detector/ Test Failure Detector workflow
   ci_fix/      CI test-fix bot
   release_notes/ Release-notes cutter: AI notes + version bump
+  cve_scan/    CVE scan + verified rebuild workflow (build-and-prove)
   ai/          Claude Code subprocess orchestration
   common/      Shared infrastructure
 repos.yml      Registry of repos, release branches, and project boards
@@ -390,6 +391,141 @@ calendar date.
 - `scripts/release_notes/release_format.py` - `00-RELEASENOTES` dated-section rendering
 - `scripts/release_notes/version_bump.py` - `src/version.h` macro rewriting
 - `scripts/release_notes/contributors.py` - contributor discovery; reconciles display-name, login, co-author trailers, and PR-resolved logins
+
+## CVE Scan Flow
+
+Verification instead of prediction. Four jobs: a deterministic `scan` that finds
+candidate CVEs and reports all findings, a `verify` job that builds each candidate
+image itself and scans the real artifact to prove the targeted CVEs are gone, a
+`collect` job that reconciles the per-leg results and decides which version lines to
+dispatch, and a `rebuild` job that dispatches valkey-container's plain build-and-publish
+only on that proof. The image is built twice by design: once here to verify, once by
+valkey-container to publish. That is the deliberate price of keeping their `ci.yml` a
+plain build with no CVE logic.
+
+```text
+Job 1 - scan (scheduled / workflow_dispatch; needs: none, timeout 30)
+sweep.py
+  → image_matrix.py
+      resolve_matrix() fetches versions.json once, derives image tags
+  → scanner.py (Trivy subprocess per image per platform)
+      scans each image on each published platform (amd64, arm64, arm/v7, ppc64le)
+      deduplicates findings by (image, package, cve_id, installed_version, platform)
+        (exact duplicates within a platform collapse; the same CVE on different
+         platforms stays distinct)
+  → classify (rebuild_decider.py): fixed_version present → candidate;
+      no fixed_version → not fixable
+      (a candidacy signal, NOT a prediction a rebuild will resolve it; proof is verify)
+  → summary.py (render grouped findings tables for job summary)
+  → emit GITHUB_OUTPUT: plan=<JSON legs {line,variant,platform,cves[]}>
+
+Job 2 - verify (needs: scan; matrix = fromJSON(needs.scan.outputs.plan),
+         max-parallel 8, fail-fast false, timeout 180; one leg per affected
+         (line, variant, platform); runs only on valkey-io/valkey-ci-agent main,
+         if plan is non-empty AND not dry_run; no creds)
+  → checkout valkey-io/valkey-container @ mainline into ./container
+  → call ./container/.github/actions/build-image, the same action ci.yml publishes with:
+       explicit context ./container, dockerfile <line>/<variant>/Dockerfile,
+       platforms <one>, push false, load true,
+       tag cve-candidate:<line>-<variant>-<platform-slug>
+  → verify_candidate.py --image-ref ... --cves-json ... --line/--variant/--platform
+       records a marker with the leg outcome (verified / survivors / error);
+       exit 2 (error) fails the leg loud, exit 1 (survivors) does not
+
+Job 3 - collect (needs: [scan, verify], timeout 10)
+  → collect_verification.py
+      downloads uniquely named leg markers and reconciles them against the plan from scan
+        (a leg with no marker = missing; an unexpected leg is rejected)
+      decides dispatchable version lines (any-architecture: qualify when at least one
+        affected arch is proven fixed)
+  → emit GITHUB_OUTPUT: verified_versions, arch_report (per-arch proof status)
+
+Job 4 - rebuild (needs: [scan, collect]; dispatches collect.verified_versions on
+         valkey-io/valkey-ci-agent main, inside the cve-rebuild-dispatch Environment,
+         when there is a dispatchable line and not dry_run; timeout 240)
+  → mint Valkeyrie Bot App token (actions:write, scoped to valkey-container) - dispatch only
+  → correlation_id = <github.run_id>-<github.run_attempt>
+    gh workflow run ci.yml --repo valkey-io/valkey-container
+         --field "version=<versions>" --field "correlation_id=<id>"
+  (locate/watch/conclusion use the built-in GITHUB_TOKEN, valid for the whole job)
+  → locate the triggered run by its EXACT name "CVE rebuild <id>"
+       (gh run list --workflow ci.yml --branch mainline; retry; fail loud if none)
+  → gh run watch <run-id> --exit-status  (wait; a failed build fails the job)
+  → capture conclusion; report build result + correlation id + run URL in summary and Slack
+```
+
+The rebuild is dispatched on proof, not prediction: the `verify` job built the
+candidate from the same `mainline` Dockerfiles and scanned the artifact to confirm the
+targeted CVEs are gone. The dispatch gate is any-architecture: a version line is
+dispatched when AT LEAST ONE affected architecture was proven fixed, not when all of
+them were. valkey-container's `ci.yml` takes a single `version` input and rebuilds every
+platform in one multi-platform push; it cannot target one architecture, so withholding a
+dispatch because one architecture lagged would be strictly harmful (the architectures
+whose fix is live stay unfixed for another week, while the lagging one is no better off).
+A dispatched line may therefore still be vulnerable on an architecture whose fix has not
+landed, which is why the reporting is per architecture (see below). A surviving CVE on
+one architecture, or an errored or missing leg, is surfaced but does not block a line
+proven fixed on another architecture; the only fail-closed no-dispatch is a run that
+proved nothing at all (no architecture verified anywhere and at least one leg errored or
+went missing).
+
+The rebuild job does not stop at the dispatch: it locates the run it triggered by an
+exact correlation name (`CVE rebuild <run_id>-<run_attempt>`, echoed into the run name
+by valkey-container's ci.yml via the companion change's `correlation_id` input),
+restricted to ci.yml on mainline, retrying for the run to appear. Exact-name
+correlation replaces the old timestamp-window and actor-filter heuristics entirely. It
+then waits with `gh run watch --exit-status` and reports the actual build conclusion and
+run URL in the job summary and Slack. A failed downstream build therefore fails this
+job, and a run that cannot be located fails loud rather than reporting an unverified
+success. The Slack status is success only when the dispatch, run location, and build all
+succeed; every other case (including cancelled or timed-out) normalizes to failure, so a
+non-success rebuild always notifies instead of going silent. The job's `timeout-minutes`
+is 240 to outlast observed full-matrix `ci.yml` builds of about 130 to 150 minutes (the
+runner is billed while watching, the deliberate cost of verification).
+
+### Entry Points
+
+- `scripts/cve_scan/sweep.py`: orchestrates scanning, classification, summaries, and the grouped verification plan
+- `scripts/cve_scan/rebuild_decider.py`: two-rule fixability classification (fixed_version present means candidate; absent means not fixable)
+- `scripts/cve_scan/summary.py`: renders grouped findings tables for the job summary
+- `scripts/cve_scan/verify_candidate.py`: scans a candidate for the leg's CVE IDs, independent of package names
+- `scripts/cve_scan/collect_verification.py`: reconciles per-leg markers against the plan and emits verified_versions/arch_report
+- `scripts/cve_scan/image_matrix.py`: resolves image tags from versions.json
+- `scripts/cve_scan/scanner.py`: per-image per-platform Trivy invocation with finding deduplication
+
+### Security Model
+
+The design relies on proof and deterministic code:
+
+- **Proof, not prediction (fail-closed)**: a rebuild is dispatched only after the verify job builds the candidate image itself and scans the real artifact to confirm the targeted CVEs are absent. There is no base package-database inspection, native version comparison, or install simulation; a run that verifies no architecture anywhere, with an errored or missing leg, dispatches nothing.
+- **Verify our build, not the exact digest**: the verify build and valkey-container's publish build run minutes apart from the same `mainline` Dockerfiles, and OS package repositories only move forward, so a fix present in our build is present in theirs. This is strong evidence, though not digest-identical: we prove the fix on an artifact we built, not on the exact bytes valkey-container ships.
+- **Targeted version dispatch**: the rebuild job passes `--field version="<versions>"` with only the affected version lines (e.g. `8.0 9.1`) rather than rebuilding all images, minimizing blast radius.
+- **Every affected architecture is verified, dispatch is any-architecture**: the verify matrix emits one build per distinct `(line, variant, platform)` in the findings, so a CVE flagged on multiple architectures is proven on each. A distro can publish a package fix for one architecture before another, so per-architecture verification is what lets the report be honest. A line is dispatched when AT LEAST ONE affected architecture is proven fixed, because `ci.yml` rebuilds all platforms from a single `version` input and cannot target one architecture: a partial fix is a strict improvement (the fixed architectures ship, the lagging one is rebuilt no worse off). A dispatched line may still be vulnerable on an architecture whose fix has not landed, so the `collect` job emits a per-architecture `arch_report` and the summary and Slack state which architectures were proven fixed and which remain vulnerable, never implying a blanket fix. The cost: up to fourfold more verification builds per line and variant (four published platforms), two of them (`linux/arm/v7`, `linux/ppc64le`) QEMU-emulated source compiles.
+- **One canonical build definition**: valkey-container owns `.github/actions/build-image`, and both its publishing workflow and the agent verification job call it. The agent supplies an explicit path context and local-only push/load settings, while the action owns QEMU, Buildx, Dockerfile handling, and provenance.
+- **No credentials in verify**: the verify job builds with `push: false` / `load: true` and holds no registry credentials, so the candidate never leaves the runner.
+- **Deterministic code path**: scanning, classification, candidate build, verification, and dispatch are all deterministic code with no AI in the loop.
+- **Least-privilege tokens**: the scan, verify, and collect jobs need only `contents:read`. The rebuild job mints a separate App token scoped to `actions:write` + `metadata:read` for the dispatch step only; the run-tracking steps use the built-in `GITHUB_TOKEN`.
+- **Audit trail**: every automatic dispatch is recorded in the workflow run log and the job summary, including the correlation id and the downstream run URL.
+
+This matches valkey-container's existing posture: the same `ci.yml` workflow already runs automatically on cron and on push. The CVE scanner dispatches it through the same path with the same effect, triggered by verified vulnerability evidence rather than a timer.
+
+### Authentication
+
+The rebuild job authenticates as the **Valkeyrie Bot GitHub App** by minting a short-lived, repo-scoped installation token (via `actions/create-github-app-token`) with `actions:write` scope, used only by the dispatch step. The locate, watch, and conclusion steps instead use the built-in `GITHUB_TOKEN`, because App installation tokens expire after one hour while the watched build runs 130 to 150 minutes; valkey-container is public, so `GITHUB_TOKEN` can read its Actions runs and no privileged App credential is held for the full wait. The scan, verify, and collect jobs require only `contents:read` (the verify job holds no credentials at all). The rebuild job is restricted to `valkey-io/valkey-ci-agent` on `refs/heads/main` and runs inside the `cve-rebuild-dispatch` protected Environment, a credential boundary (not an approval gate) that scopes the App credentials and dispatch permission to `main`. There is no PAT fallback: forks are scan/dry-run only and cannot dispatch.
+
+### Idempotency
+
+Concurrency is declared per job. The scan and verify jobs cancel/redo cheaply when
+superseded; the rebuild job uses a separate group with `cancel-in-progress: false` so an
+in-flight rebuild watcher is never cancelled while the container build continues.
+
+### Configuration
+
+Settings are loaded from `CVE_SCAN_*` environment variables with sensible defaults
+targeting `valkey-io/valkey-container`. The workflow pins all values explicitly in
+its `env:` block (house style: visible-in-workflow configuration, matching the
+`CI_FIX_*` and `RELEASE_NOTES_*` patterns used by other workflows). Invalid values
+raise immediately rather than acting on defaults.
 
 ## Planned Workflows
 
