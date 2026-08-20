@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from scripts.cve_scan.config import DEFAULT_PLATFORMS
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 #: Per-scan subprocess timeout in seconds (cached-DB scans take tens of seconds).
 _SCAN_TIMEOUT_SECONDS = 180
+_MAX_SCAN_WORKERS = 4
 
 
 class ScanError(Exception):
@@ -153,28 +155,38 @@ def scan_images(
     if platforms is None:
         platforms = DEFAULT_PLATFORMS
 
-    all_findings: list[Finding] = []
-    total = len(images)
-    for idx, image in enumerate(images, start=1):
-        image_findings: list[Finding] = []
-        for platform in platforms:
-            logger.info(
-                "Scanning image %d/%d: %s (platform=%s)",
-                idx, total, image, platform,
-            )
-            platform_findings = scan_image(image, scanner, platform=platform)
-            logger.info(
-                "  %s [%s]: %d finding(s) total",
-                image, platform, len(platform_findings),
-            )
-            image_findings.extend(platform_findings)
+    jobs = [
+        (image_index, image, platform)
+        for image_index, image in enumerate(images)
+        for platform in platforms
+    ]
+    results: list[list[Finding] | None] = [None] * len(jobs)
+    workers = min(_MAX_SCAN_WORKERS, len(jobs))
+    logger.info("Scanning %d image/platform pair(s) with %d worker(s)", len(jobs), workers)
 
-        deduped = _dedup_findings(image_findings)
-        above = [f for f in deduped if f.severity >= threshold]
-        logger.info(
-            "  %s: %d unique finding(s) across %d platform(s), %d at or above %s",
-            image, len(deduped), len(platforms), len(above), threshold.name,
-        )
-        all_findings.extend(deduped)
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="cve-scan") as executor:
+        futures = {
+            executor.submit(scan_image, image, scanner, platform): result_index
+            for result_index, (_image_index, image, platform) in enumerate(jobs)
+        }
+        try:
+            for future in as_completed(futures):
+                result_index = futures[future]
+                _image_index, image, platform = jobs[result_index]
+                findings = future.result()
+                results[result_index] = findings
+                logger.info("%s [%s]: %d finding(s)", image, platform, len(findings))
+        except Exception:
+            for future in futures:
+                future.cancel()
+            raise
 
-    return filter_by_threshold(all_findings, threshold)
+    # Flatten in input order so summaries and tests stay deterministic despite
+    # concurrent subprocess completion.
+    all_findings = [
+        finding
+        for result in results
+        if result is not None
+        for finding in result
+    ]
+    return filter_by_threshold(_dedup_findings(all_findings), threshold)

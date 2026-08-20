@@ -1,9 +1,7 @@
 """Tests for scripts/cve_scan/rebuild_decider.py.
 
-Two-rule contract: no fixed_version -> not fixable; fixed_version present ->
-candidate fixable, pending base pre-check verification. Version ordering
-semantics live only in version_compare.py (native dpkg/apk), which has its
-own tests.
+Two-rule contract: no fixed_version -> unresolved; fixed_version present ->
+candidate build target. Only the exact downstream artifact can verify removal.
 """
 
 from __future__ import annotations
@@ -38,9 +36,9 @@ class TestNoFixAvailable:
         result = classify(_make_finding(fixed=""))
         assert result.fixable is False
 
-    def test_rationale_mentions_no_upstream_fix(self) -> None:
+    def test_rationale_mentions_no_published_fix(self) -> None:
         result = classify(_make_finding(fixed=None))
-        assert "no upstream fix" in result.rationale.lower()
+        assert "no published package fix" in result.rationale.lower()
 
     def test_result_preserves_finding(self) -> None:
         finding = _make_finding(fixed=None)
@@ -53,14 +51,13 @@ class TestCandidateFixable:
         result = classify(_make_finding(installed="1.0.0", fixed="1.0.1"))
         assert result.fixable is True
 
-    def test_rationale_mentions_pending_base_verification(self) -> None:
+    def test_rationale_requires_exact_digest_verification(self) -> None:
         result = classify(_make_finding())
-        assert "pending base verification" in result.rationale
+        assert "exact rebuilt digest" in result.rationale
 
     def test_rationale_mentions_versions(self) -> None:
         result = classify(_make_finding(installed="3.0.12-r0", fixed="3.0.13-r0"))
         assert "3.0.13-r0" in result.rationale
-        assert "3.0.12-r0" in result.rationale
 
     def test_candidacy_does_not_compare_versions(self) -> None:
         """Trivy's matching is trusted: even installed >= fixed is a candidate here."""

@@ -1,837 +1,142 @@
-"""Integration tests for the CVE scan sweep: real settings loading + real output emission.
-
-load_settings and _emit_outputs are NOT mocked; only scan_images, the HTTP
-fetch, and base package reads are patched. Covers fixable/not-fixable output
-emission, config-error regression, dynamic resolution, base pre-check
-downgrades, static-mode dispatch disable, and job summary content.
-"""
-
 from __future__ import annotations
 
+import base64
 import json
-import os
-from io import BytesIO
-from pathlib import Path
 
 import pytest
 
-from scripts.cve_scan.base_precheck import BasePrecheckError
-from scripts.cve_scan.config import CveScanConfigError, load_settings
+from scripts.cve_scan.config import CveScanSettings
 from scripts.cve_scan.models import Finding, Severity
 from scripts.cve_scan.scanner import ScanError
 from scripts.cve_scan.sweep import run_sweep
 
 
-@pytest.fixture(autouse=True)
-def _clean_cve_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remove all CVE_SCAN_* env vars for a clean slate."""
-    for key in list(os.environ):
-        if key.startswith("CVE_SCAN_"):
-            monkeypatch.delenv(key, raising=False)
-
-
-@pytest.fixture(autouse=True)
-def _mock_native_compare(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Patch _native_compare with a deterministic stub (no real Docker).
-
-    Parses the 'X.Y.Z[-rN]' shapes used in these tests as tuples of ints;
-    anything else returns None (fail-closed, like the native comparator).
-    """
-    def parse(version: str) -> "tuple[int, ...] | None":
-        nums, _, rev = version.partition("-r")
-        try:
-            return tuple(int(p) for p in nums.split(".")) + (int(rev) if rev else 0,)
-        except ValueError:
-            return None
-
-    def stub_compare(a: str, b: str, flavor: str, base_image: str | None = None) -> int | None:
-        pa, pb = parse(a), parse(b)
-        if pa is None or pb is None:
-            return None
-        return (pa > pb) - (pa < pb)
-
-    monkeypatch.setattr(
-        "scripts.cve_scan.base_precheck._native_compare",
-        stub_compare,
+def _settings() -> CveScanSettings:
+    return CveScanSettings(
+        versions_url="https://example.test/versions.json",
+        repository="valkey/valkey",
+        include_unstable=False,
+        scanner="trivy",
+        severity_threshold=Severity.HIGH,
+        platforms=["linux/amd64", "linux/arm64"],
     )
 
 
-@pytest.fixture()
-def github_output_file(tmp_path: Path) -> Path:
-    """Create a temp file to act as GITHUB_OUTPUT."""
-    output_file = tmp_path / "github_output"
-    output_file.write_text("")
-    return output_file
+def _finding(*, fixed: str | None, platform: str = "linux/amd64") -> Finding:
+    return Finding(
+        image="valkey/valkey:9.0",
+        package="libssl3t64",
+        installed_version="3.0.17-1",
+        cve_id="CVE-2026-0001",
+        severity=Severity.HIGH,
+        fixed_version=fixed,
+        platform=platform,
+    )
 
 
-def _mock_urlopen_response(data: dict) -> BytesIO:
-    """Create a mock response object for urllib.request.urlopen."""
-    body = json.dumps(data).encode("utf-8")
-    resp = BytesIO(body)
-    resp.status = 200  # type: ignore[attr-defined]
-    return resp
+def _outputs(path) -> dict[str, str]:
+    return dict(line.split("=", 1) for line in path.read_text().splitlines())
 
 
-SAMPLE_VERSIONS = {
-    "7.2": {"version": "7.2.13", "debian": {"version": "trixie"}, "alpine": {"version": "3.23"}},
-    "8.0": {"version": "8.0.9", "debian": {"version": "trixie"}, "alpine": {"version": "3.23"}},
-    "8.1": {"version": "8.1.8", "debian": {"version": "trixie"}, "alpine": {"version": "3.23"}},
-    "9.0": {"version": "9.0.4", "debian": {"version": "trixie"}, "alpine": {"version": "3.23"}},
-    "9.1": {"version": "9.1.0", "debian": {"version": "trixie"}, "alpine": {"version": "3.23"}},
-    "unstable": {"version": "unstable", "debian": {"version": "trixie"}, "alpine": {"version": "3.23"}},
-}
+def test_published_fix_emits_exact_downstream_contract(monkeypatch, tmp_path) -> None:
+    output = tmp_path / "output"
+    summary = tmp_path / "summary"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    monkeypatch.setattr("scripts.cve_scan.sweep.resolve_matrix", lambda _settings: ["valkey/valkey:9.0"])
+    monkeypatch.setattr(
+        "scripts.cve_scan.sweep.scan_images",
+        lambda *_args, **_kwargs: [_finding(fixed="3.0.18-1")],
+    )
+
+    run_sweep(settings=_settings())
+
+    values = _outputs(output)
+    assert values["rebuild_required"] == "true"
+    assert values["versions"] == "9.0"
+    targets = json.loads(base64.b64decode(values["targets"]))
+    assert targets == [{
+        "cve_id": "CVE-2026-0001",
+        "image": "valkey/valkey:9.0",
+        "package": "libssl3t64",
+        "platform": "linux/amd64",
+    }]
+    assert "does not predict rebuild behavior" in summary.read_text()
 
 
-class TestIntegrationFixable:
-    """Real load_settings + real _emit_outputs with a fixable finding."""
+def test_no_published_fix_reports_without_dispatch(monkeypatch, tmp_path) -> None:
+    output = tmp_path / "output"
+    summary = tmp_path / "summary"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    monkeypatch.setattr("scripts.cve_scan.sweep.resolve_matrix", lambda _settings: ["valkey/valkey:9.0"])
+    monkeypatch.setattr(
+        "scripts.cve_scan.sweep.scan_images",
+        lambda *_args, **_kwargs: [_finding(fixed=None)],
+    )
 
-    def test_fixable_finding_emits_true(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        github_output_file: Path,
-    ) -> None:
-        """A finding with installed < fixed_version produces fixable=true."""
-        fixable_findings = [
-            Finding(
-                image="valkey/valkey:8.0-alpine",
-                package="openssl",
-                installed_version="3.0.12-r0",
-                cve_id="CVE-2024-1234",
-                severity=Severity.HIGH,
-                fixed_version="3.0.13-r0",
-            ),
-        ]
+    run_sweep(settings=_settings())
 
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output_file))
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: fixable_findings,
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-        # Base pre-check: base has the fix (package at fixed version)
-        monkeypatch.setattr(
-            "scripts.cve_scan.base_precheck.get_base_packages",
-            lambda base_ref, platform="": {"openssl": "3.0.13-r0"},
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        output = github_output_file.read_text()
-        lines = output.strip().splitlines()
-        assert "fixable=true" in lines
-
-    def test_multiple_fixable_images_emits_true(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        github_output_file: Path,
-    ) -> None:
-        """Multiple fixable images still just emit fixable=true."""
-        findings = [
-            Finding(
-                image="valkey/valkey:9.0-alpine",
-                package="zlib",
-                installed_version="1.2.13-r0",
-                cve_id="CVE-2024-5678",
-                severity=Severity.CRITICAL,
-                fixed_version="1.2.14-r0",
-            ),
-            Finding(
-                image="valkey/valkey:7.2-alpine",
-                package="openssl",
-                installed_version="3.0.10-r0",
-                cve_id="CVE-2024-1111",
-                severity=Severity.HIGH,
-                fixed_version="3.0.11-r0",
-            ),
-        ]
-
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output_file))
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: findings,
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.base_precheck.get_base_packages",
-            lambda base_ref, platform="": {"openssl": "3.0.11-r0", "zlib": "1.2.14-r0"},
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        output = github_output_file.read_text()
-        assert "fixable=true" in output.strip().splitlines()
+    values = _outputs(output)
+    assert values == {"rebuild_required": "false", "versions": "", "targets": ""}
+    assert "without a published fix" in summary.read_text()
 
 
-class TestIntegrationNotFixable:
-    """Real load_settings + real _emit_outputs with only non-fixable findings."""
+def test_dry_run_preserves_targets_but_suppresses_dispatch(monkeypatch, tmp_path) -> None:
+    output = tmp_path / "output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setattr("scripts.cve_scan.sweep.resolve_matrix", lambda _settings: ["valkey/valkey:9.0"])
+    monkeypatch.setattr(
+        "scripts.cve_scan.sweep.scan_images",
+        lambda *_args, **_kwargs: [_finding(fixed="3.0.18-1")],
+    )
 
-    def test_no_fix_available_emits_false(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        github_output_file: Path,
-    ) -> None:
-        """Findings with fixed_version=None produce fixable=false."""
-        not_fixable_findings = [
-            Finding(
-                image="valkey/valkey:8.0-alpine",
-                package="busybox",
-                installed_version="1.36.1-r0",
-                cve_id="CVE-2024-9999",
-                severity=Severity.HIGH,
-                fixed_version=None,
-            ),
-        ]
+    run_sweep(settings=_settings(), dry_run=True)
 
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output_file))
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: not_fixable_findings,
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        output = github_output_file.read_text()
-        lines = output.strip().splitlines()
-        assert "fixable=false" in lines
-
-    def test_zero_findings_emits_false(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        github_output_file: Path,
-    ) -> None:
-        """Zero findings from scanner produces fixable=false."""
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output_file))
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: [],
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        output = github_output_file.read_text()
-        lines = output.strip().splitlines()
-        assert "fixable=false" in lines
+    values = _outputs(output)
+    assert values["rebuild_required"] == "false"
+    assert values["versions"] == "9.0"
+    assert values["targets"]
 
 
-class TestIntegrationConfigError:
-    """Proves the REAL load path is exercised (not mocked away)."""
+def test_scan_failure_emits_false_and_failure_summary(monkeypatch, tmp_path) -> None:
+    output = tmp_path / "output"
+    summary = tmp_path / "summary"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    monkeypatch.setattr("scripts.cve_scan.sweep.resolve_matrix", lambda _settings: ["valkey/valkey:9.0"])
 
-    def test_invalid_scanner_raises_cve_scan_config_error(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setenv("CVE_SCAN_SCANNER", "unknown-scanner")
-        with pytest.raises(CveScanConfigError, match="Invalid CVE_SCAN_SCANNER"):
-            load_settings()
+    def fail(*_args, **_kwargs):
+        raise ScanError("linux/arm64 failed")
 
-    def test_invalid_severity_raises_cve_scan_config_error(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setenv("CVE_SCAN_SEVERITY_THRESHOLD", "INVALID")
-        with pytest.raises(CveScanConfigError, match="Invalid CVE_SCAN_SEVERITY_THRESHOLD"):
-            load_settings()
+    monkeypatch.setattr("scripts.cve_scan.sweep.scan_images", fail)
+    with pytest.raises(ScanError):
+        run_sweep(settings=_settings())
+
+    assert _outputs(output)["rebuild_required"] == "false"
+    assert "complete scan coverage could not be proven" in summary.read_text()
 
 
-class TestIntegrationDynamic:
-    """Dynamic settings with mocked HTTP fetch. Only scan_images and urlopen mocked."""
-
-    def test_dynamic_settings_resolves_and_scans(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """Dynamic settings fetches versions.json, resolves images, passes to scanner."""
-        github_output = tmp_path / "github_output"
-        github_output.write_text("")
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-
-        # Track what images were passed to scan_images
-        scanned_images: list[str] = []
-
-        def mock_scan(images, scanner, threshold, **_kw):
-            scanned_images.extend(images)
-            return [
-                Finding(
-                    image="valkey/valkey:8.0-alpine",
-                    package="openssl",
-                    installed_version="3.0.12-r0",
-                    cve_id="CVE-2024-1234",
-                    severity=Severity.HIGH,
-                    fixed_version="3.0.13-r0",
-                ),
-            ]
-
-        monkeypatch.setattr("scripts.cve_scan.sweep.scan_images", mock_scan)
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.base_precheck.get_base_packages",
-            lambda base_ref, platform="": {"openssl": "3.0.13-r0"},
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        # Verify images were resolved (10 stable: 5 alpine + 5 bare)
-        assert len(scanned_images) == 10
-        assert "valkey/valkey:7.2-alpine" in scanned_images
-        assert "valkey/valkey:9.1" in scanned_images
-        # Unstable excluded
-        assert "valkey/valkey:unstable-alpine" not in scanned_images
-        assert "valkey/valkey:unstable" not in scanned_images
-
-        # Verify outputs emitted
-        output = github_output.read_text()
-        assert "fixable=true" in output
-
-
-class TestIntegrationBasePrecheck:
-    """Integration: dynamic settings with base pre-check wired into sweep."""
-
-    def test_stale_base_downgrades_fixable_to_not_fixable(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """Fixable finding whose base is stale -> fixable=false."""
-        github_output = tmp_path / "github_output"
-        github_output.write_text("")
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-
-        fixable_finding = Finding(
-            image="valkey/valkey:9.1-alpine",
-            package="openssl",
-            installed_version="3.0.12-r0",
-            cve_id="CVE-2024-5555",
+def test_version_lines_strip_only_alpine_suffix(monkeypatch, tmp_path) -> None:
+    output = tmp_path / "output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setattr(
+        "scripts.cve_scan.sweep.resolve_matrix",
+        lambda _settings: ["valkey/valkey:8.1-alpine", "valkey/valkey:9.0"],
+    )
+    findings = [
+        Finding(
+            image=image,
+            package="pkg",
+            installed_version="1",
+            cve_id=f"CVE-2026-{index}",
             severity=Severity.HIGH,
-            fixed_version="3.0.13-r0",
+            fixed_version="2",
+            platform="linux/amd64",
         )
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: [fixable_finding],
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.base_precheck.get_base_packages",
-            lambda base_ref, platform="": {"openssl": "3.0.12-r0"},
-        )
-        # Stale base: the rebuild plan does not install openssl, so the
-        # finding stays downgraded (needs a base image update).
-        monkeypatch.setattr(
-            "scripts.cve_scan.base_precheck._rebuild_plan",
-            lambda finding, base_ref, install_list_cache, plan_cache: {},
-        )
+        for index, image in enumerate(("valkey/valkey:8.1-alpine", "valkey/valkey:9.0"), 1)
+    ]
+    monkeypatch.setattr("scripts.cve_scan.sweep.scan_images", lambda *_args, **_kwargs: findings)
 
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        output = github_output.read_text()
-        assert "fixable=false" in output
-
-    def test_stale_base_finding_appears_in_dry_run(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        """Downgraded finding appears in dry-run not-fixable output."""
-        github_output = tmp_path / "github_output"
-        github_output.write_text("")
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-
-        fixable_finding = Finding(
-            image="valkey/valkey:9.1-alpine",
-            package="openssl",
-            installed_version="3.0.12-r0",
-            cve_id="CVE-2024-5555",
-            severity=Severity.HIGH,
-            fixed_version="3.0.13-r0",
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: [fixable_finding],
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.base_precheck.get_base_packages",
-            lambda base_ref, platform="": {"openssl": "3.0.11-r0"},
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.base_precheck._rebuild_plan",
-            lambda finding, base_ref, install_list_cache, plan_cache: {},
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        captured = capsys.readouterr()
-        assert "NOT-FIXABLE" in captured.out
-        assert "CVE-2024-5555" in captured.out
-        # Rationale must explain why a rebuild will not help: the plan does
-        # not install it, so it stays at the stale base version.
-        assert "base version 3.0.11-r0" in captured.out
-        assert "needs a base image update" in captured.out
-
-    def test_confirmed_base_keeps_fixable_true(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """Fixable finding confirmed by base pre-check -> fixable=true."""
-        github_output = tmp_path / "github_output"
-        github_output.write_text("")
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-
-        fixable_finding = Finding(
-            image="valkey/valkey:9.1-alpine",
-            package="openssl",
-            installed_version="3.0.12-r0",
-            cve_id="CVE-2024-5555",
-            severity=Severity.HIGH,
-            fixed_version="3.0.13-r0",
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: [fixable_finding],
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.base_precheck.get_base_packages",
-            lambda base_ref, platform="": {"openssl": "3.0.13-r0"},
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        output = github_output.read_text()
-        assert "fixable=true" in output
-
-
-class TestStaticModeDispatchDisabled:
-    """Static mode reclassifies candidates as not-fixable and never dispatches."""
-
-    STATIC_RATIONALE = "static image override: base verification unavailable, not auto-fixable"
-
-    def test_static_mode_fixable_finding_emits_false(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        github_output_file: Path,
-    ) -> None:
-        """Static mode: fixable finding still produces fixable=false."""
-        fixable_findings = [
-            Finding(
-                image="valkey/valkey:8.0-alpine",
-                package="openssl",
-                installed_version="3.0.12-r0",
-                cve_id="CVE-2024-1234",
-                severity=Severity.HIGH,
-                fixed_version="3.0.13-r0",
-            ),
-        ]
-
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output_file))
-        monkeypatch.setenv("CVE_SCAN_IMAGES", "valkey/valkey:8.0-alpine,valkey/valkey:7.2-alpine")
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: fixable_findings,
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        output = github_output_file.read_text()
-        lines = output.strip().splitlines()
-        assert "fixable=false" in lines
-
-    def test_static_mode_candidates_reported_as_unresolved(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """Static mode: candidates land under unresolved findings with the override rationale; no dispatch section."""
-        github_output = tmp_path / "github_output"
-        github_output.write_text("")
-        summary_file = tmp_path / "step_summary"
-        summary_file.write_text("")
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
-        monkeypatch.setenv("CVE_SCAN_IMAGES", "valkey/valkey:8.0-alpine")
-
-        fixable_findings = [
-            Finding(
-                image="valkey/valkey:8.0-alpine",
-                package="openssl",
-                installed_version="3.0.12-r0",
-                cve_id="CVE-2024-1234",
-                severity=Severity.HIGH,
-                fixed_version="3.0.13-r0",
-            ),
-        ]
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: fixable_findings,
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=False,
-        )
-
-        summary = summary_file.read_text()
-        assert "Unresolved findings" in summary
-        assert "CVE-2024-1234" in summary
-        assert self.STATIC_RATIONALE in summary
-        # No dispatch section of any kind in static mode
-        assert "dispatched" not in summary
-        assert "### Confirmed fixable" not in summary
-        assert github_output.read_text().strip().splitlines().count("fixable=false") == 1
-
-    def test_static_mode_dry_run_has_no_dispatch_output(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        github_output_file: Path,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        """Static mode dry-run: candidates print as NOT-FIXABLE, never as would-dispatch."""
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output_file))
-        monkeypatch.setenv("CVE_SCAN_IMAGES", "valkey/valkey:8.0-alpine")
-
-        fixable_findings = [
-            Finding(
-                image="valkey/valkey:8.0-alpine",
-                package="openssl",
-                installed_version="3.0.12-r0",
-                cve_id="CVE-2024-1234",
-                severity=Severity.HIGH,
-                fixed_version="3.0.13-r0",
-            ),
-        ]
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: fixable_findings,
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        captured = capsys.readouterr()
-        assert "NOT-FIXABLE" in captured.out
-        assert self.STATIC_RATIONALE in captured.out
-        assert "DISPATCH BEHAVIOR" not in captured.out
-        assert "Would dispatch" not in captured.out
-
-
-class TestSweepOutputNoEnvVar:
-    """When GITHUB_OUTPUT is unset, run_sweep prints and does not raise."""
-
-    def test_no_github_output_env_prints_fixable(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
-
-        fixable_findings = [
-            Finding(
-                image="valkey/valkey:8.0-alpine",
-                package="openssl",
-                installed_version="3.0.12-r0",
-                cve_id="CVE-2024-1234",
-                severity=Severity.HIGH,
-                fixed_version="3.0.13-r0",
-            ),
-        ]
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: fixable_findings,
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.base_precheck.get_base_packages",
-            lambda base_ref, platform="": {"openssl": "3.0.13-r0"},
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        captured = capsys.readouterr()
-        assert "fixable=true" in captured.out
-
-    def test_no_github_output_env_no_findings(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        """Zero findings + no GITHUB_OUTPUT: prints fixable=false, no exception."""
-        monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: [],
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=True,
-        )
-
-        captured = capsys.readouterr()
-        assert "fixable=false" in captured.out
-
-
-class TestJobSummaryContent:
-    """Verify job summary includes findings tables."""
-
-    def test_fixable_findings_appear_in_job_summary(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """Fixable findings render in the job summary."""
-        github_output = tmp_path / "github_output"
-        github_output.write_text("")
-        summary_file = tmp_path / "step_summary"
-        summary_file.write_text("")
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
-
-        findings = [
-            Finding(
-                image="valkey/valkey:8.0-alpine",
-                package="openssl",
-                installed_version="3.0.12-r0",
-                cve_id="CVE-2024-1234",
-                severity=Severity.HIGH,
-                fixed_version="3.0.13-r0",
-            ),
-        ]
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: findings,
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.base_precheck.get_base_packages",
-            lambda base_ref, platform="": {"openssl": "3.0.13-r0"},
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=False,
-        )
-
-        summary = summary_file.read_text()
-        assert "CVE Scan Summary" in summary
-        assert "CVE-2024-1234" in summary
-        assert "Confirmed fixable (eligible for rebuild:" in summary
-
-    def test_not_fixable_findings_appear_in_job_summary(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """Not-fixable findings render in the job summary."""
-        github_output = tmp_path / "github_output"
-        github_output.write_text("")
-        summary_file = tmp_path / "step_summary"
-        summary_file.write_text("")
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
-
-        findings = [
-            Finding(
-                image="valkey/valkey:8.0-alpine",
-                package="busybox",
-                installed_version="1.36.1-r0",
-                cve_id="CVE-2024-9999",
-                severity=Severity.HIGH,
-                fixed_version=None,
-            ),
-        ]
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: findings,
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-
-        settings = load_settings()
-        run_sweep(
-            settings=settings,
-            dry_run=False,
-        )
-
-        summary = summary_file.read_text()
-        assert "CVE Scan Summary" in summary
-        assert "CVE-2024-9999" in summary
-        assert "Unresolved findings" in summary
-
-
-class TestScanFailureSummary:
-    """A ScanError re-raises but first records a failure section in the summary."""
-
-    def test_scan_error_emits_summary_and_reraises(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """scan_images raising ScanError -> failure summary written, then re-raised."""
-        github_output = tmp_path / "github_output"
-        github_output.write_text("")
-        summary_file = tmp_path / "step_summary"
-        summary_file.write_text("")
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
-
-        def _raise(images, scanner, threshold, **_kw):
-            raise ScanError("Scanner exited with code 1: trivy image valkey/valkey:8.0-alpine")
-
-        monkeypatch.setattr("scripts.cve_scan.sweep.scan_images", _raise)
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-
-        settings = load_settings()
-        with pytest.raises(ScanError, match="valkey/valkey:8.0-alpine"):
-            run_sweep(settings=settings, dry_run=False)
-
-        summary = summary_file.read_text()
-        assert "Scan failed" in summary
-        assert "no rebuild will be dispatched" in summary
-        assert "valkey/valkey:8.0-alpine" in summary
-
-
-class TestBasePrecheckFailureSummary:
-    """A BasePrecheckError re-raises but first records a failure section naming
-    the base-verification stage.
-
-    The base pre-check runs after the scan and shells out to docker across many
-    image/platform combinations, so its failure must not escape without a job
-    summary the way it did before (only ScanError was handled).
-    """
-
-    def test_base_precheck_error_emits_summary_and_reraises(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """verify_fixable_in_base raising BasePrecheckError -> base-verification
-        failure summary written, then re-raised."""
-        github_output = tmp_path / "github_output"
-        github_output.write_text("")
-        summary_file = tmp_path / "step_summary"
-        summary_file.write_text("")
-        monkeypatch.setenv("GITHUB_OUTPUT", str(github_output))
-        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
-
-        fixable_finding = Finding(
-            image="valkey/valkey:9.1-alpine",
-            package="openssl",
-            installed_version="3.0.12-r0",
-            cve_id="CVE-2024-5555",
-            severity=Severity.HIGH,
-            fixed_version="3.0.13-r0",
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.sweep.scan_images",
-            lambda images, scanner, threshold, **_kw: [fixable_finding],
-        )
-        monkeypatch.setattr(
-            "scripts.cve_scan.image_matrix.urllib.request.urlopen",
-            lambda *a, **kw: _mock_urlopen_response(SAMPLE_VERSIONS),
-        )
-
-        def _raise(*_a, **_kw):
-            raise BasePrecheckError(
-                "docker run failed for alpine:3.23 (exit 1): could not pull image"
-            )
-
-        monkeypatch.setattr("scripts.cve_scan.sweep.verify_fixable_in_base", _raise)
-
-        settings = load_settings()
-        with pytest.raises(BasePrecheckError, match="alpine:3.23"):
-            run_sweep(settings=settings, dry_run=False)
-
-        summary = summary_file.read_text()
-        # Failure section names the base-verification stage (not the scan).
-        assert "Base verification failed" in summary
-        assert "no rebuild will be dispatched" in summary
-        assert "alpine:3.23" in summary
+    run_sweep(settings=_settings())
+    assert _outputs(output)["versions"] == "8.1 9.0"

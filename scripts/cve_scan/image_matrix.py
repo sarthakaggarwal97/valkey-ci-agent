@@ -1,14 +1,10 @@
-"""Dynamic image matrix resolver for the CVE scan workflow.
-
-Static override (settings.images) or dynamic derivation from versions.json.
-Fail-closed: any fetch, parse, or derivation failure raises rather than
-silently falling back to a stale or incomplete list.
-"""
+"""Resolve the complete published image matrix from versions.json."""
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 import urllib.request
 from typing import TYPE_CHECKING
 from urllib.error import URLError
@@ -18,144 +14,99 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Default HTTP timeout for fetching the versions manifest (seconds).
 _FETCH_TIMEOUT_SECONDS = 15
+_VERSION_KEY_RE = re.compile(r"^\d+\.\d+$")
+_REQUIRED_VARIANTS = ("debian", "alpine")
 
 
 class MatrixResolutionError(Exception):
-    """Raised when dynamic image matrix resolution fails."""
+    """Raised when the manifest cannot prove complete scan coverage."""
 
 
-def _fetch_versions_json(url: str) -> dict:
-    """Fetch and parse versions.json from the given URL.
-
-    Raises MatrixResolutionError on network failure, non-200 status, or invalid JSON.
-    """
+def _fetch_versions_json(url: str) -> dict[str, object]:
+    """Fetch a non-empty JSON object or fail closed."""
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "valkey-ci-agent/cve-scan"})
-        with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_SECONDS) as resp:
-            if resp.status != 200:
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "valkey-ci-agent/cve-scan"},
+        )
+        with urllib.request.urlopen(request, timeout=_FETCH_TIMEOUT_SECONDS) as response:
+            if response.status != 200:
                 raise MatrixResolutionError(
-                    f"Failed to fetch versions manifest: HTTP {resp.status} from {url}"
+                    f"Failed to fetch versions manifest: HTTP {response.status} from {url}"
                 )
-            body = resp.read().decode("utf-8")
+            body = response.read().decode("utf-8")
     except (URLError, OSError, TimeoutError) as exc:
         raise MatrixResolutionError(
             f"Failed to fetch versions manifest from {url}: {exc}"
         ) from exc
 
     try:
-        data = json.loads(body)
+        payload = json.loads(body)
     except json.JSONDecodeError as exc:
         raise MatrixResolutionError(
             f"Invalid JSON in versions manifest from {url}: {exc}"
         ) from exc
-
-    if not isinstance(data, dict):
-        raise MatrixResolutionError(
-            f"Versions manifest must be a JSON object, got {type(data).__name__}"
-        )
-    if not data:
-        raise MatrixResolutionError(
-            f"Versions manifest from {url} is an empty JSON object"
-        )
-    return data
+    if not isinstance(payload, dict) or not payload:
+        raise MatrixResolutionError("Versions manifest must be a non-empty JSON object")
+    return payload
 
 
-def _variant_version(version_key: str, variant: str, value: object) -> str:
-    """Validate a variant object and return its version string.
-
-    The variant value must be a dict whose "version" is a non-empty,
-    non-whitespace string. Anything else (wrong type, missing, empty)
-    raises MatrixResolutionError naming the offending version key and
-    variant, so a malformed manifest can never produce an invalid or
-    empty base image reference.
-    """
+def _validate_variant(version_key: str, variant: str, value: object) -> None:
+    """Validate the variant shape used by valkey-container."""
     if not isinstance(value, dict):
         raise MatrixResolutionError(
-            f"Malformed versions manifest: entry {version_key!r} variant {variant!r} "
-            f"must be an object, got {type(value).__name__}"
+            f"Manifest entry {version_key!r}.{variant} must be an object"
         )
     version = value.get("version")
     if not isinstance(version, str) or not version.strip():
         raise MatrixResolutionError(
-            f"Malformed versions manifest: entry {version_key!r} variant {variant!r} "
-            f"'version' must be a non-empty string, got {version!r}"
+            f"Manifest entry {version_key!r}.{variant}.version must be a non-empty string"
         )
-    return version
 
 
-def _derive_base_map(
-    versions: dict,
+def _derive_images(
+    versions: dict[str, object],
     repository: str,
     include_unstable: bool,
-) -> dict[str, str]:
-    """Map each derived image tag to its base image reference.
-
-    Base conventions (valkey-container Dockerfiles): alpine:<version> for
-    -alpine tags, debian:<version>-slim otherwise.
-
-    Non-dict version entries are skipped with a log (tolerated metadata
-    keys). Malformed variant objects raise MatrixResolutionError via
-    _variant_version (fail-closed).
-    """
-    base_map: dict[str, str] = {}
+) -> list[str]:
+    """Derive both required image variants for every release entry."""
+    images: list[str] = []
     for version_key, value in versions.items():
         if version_key == "unstable" and not include_unstable:
             continue
+        if version_key != "unstable" and not _VERSION_KEY_RE.fullmatch(version_key):
+            raise MatrixResolutionError(f"Unexpected versions manifest key {version_key!r}")
         if not isinstance(value, dict):
-            logger.warning(
-                "Skipping non-object versions manifest entry %r (%s)",
-                version_key,
-                type(value).__name__,
+            raise MatrixResolutionError(
+                f"Manifest release entry {version_key!r} must be an object"
             )
-            continue
-        if "alpine" in value:
-            alpine_ver = _variant_version(version_key, "alpine", value["alpine"])
-            image_ref = f"{repository}:{version_key}-alpine"
-            base_map[image_ref] = f"alpine:{alpine_ver}"
-        if "debian" in value:
-            debian_ver = _variant_version(version_key, "debian", value["debian"])
-            image_ref = f"{repository}:{version_key}"
-            base_map[image_ref] = f"debian:{debian_ver}-slim"
-    return base_map
+        for variant in _REQUIRED_VARIANTS:
+            if variant not in value:
+                raise MatrixResolutionError(
+                    f"Manifest release entry {version_key!r} is missing required variant {variant!r}"
+                )
+            _validate_variant(version_key, variant, value[variant])
+        images.extend([
+            f"{repository}:{version_key}",
+            f"{repository}:{version_key}-alpine",
+        ])
+    if not images:
+        raise MatrixResolutionError("Dynamic resolution produced zero images")
+    return sorted(images)
 
 
-def resolve_matrix(settings: CveScanSettings) -> tuple[list[str], dict[str, str]]:
-    """Resolve the image list and base-image mapping from a single fetch.
-
-    Args:
-        settings: Loaded CveScanSettings instance.
-
-    Returns:
-        (images, base_map): sorted image refs and image_ref -> base_ref
-        mapping (base_map is empty in static override mode).
-
-    Raises:
-        MatrixResolutionError: On any dynamic resolution failure.
-    """
+def resolve_matrix(settings: CveScanSettings) -> list[str]:
+    """Return static overrides or the complete validated dynamic image list."""
     if settings.images:
-        logger.info(
-            "Using static image override (%d image(s)): %s",
-            len(settings.images),
-            ", ".join(settings.images),
-        )
-        return settings.images, {}
+        logger.info("Using static image override: %s", ", ".join(settings.images))
+        return settings.images
 
-    logger.info(
-        "Resolving dynamic image matrix from %s (repository=%s, include_unstable=%s)",
-        settings.versions_url,
+    versions = _fetch_versions_json(settings.versions_url)
+    images = _derive_images(
+        versions,
         settings.repository,
         settings.include_unstable,
     )
-    versions = _fetch_versions_json(settings.versions_url)
-    base_map = _derive_base_map(versions, settings.repository, settings.include_unstable)
-    images = sorted(base_map.keys())
-
-    if not images:
-        raise MatrixResolutionError(
-            "Dynamic resolution produced zero images from versions manifest"
-        )
-
     logger.info("Resolved %d image(s): %s", len(images), ", ".join(images))
-    return images, base_map
+    return images
