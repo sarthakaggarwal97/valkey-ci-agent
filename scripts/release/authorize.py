@@ -1,8 +1,10 @@
-"""Live authorization against the release policy's GitHub team.
+"""Live authorization against the release policy's configured principal.
 
-Preparation and the final approved publication verify the acting user's
-membership at execution time. Failures fail closed. Publication planning is
-non-writing and may be started automatically after the canonical PR merge.
+Production policies use GitHub team membership. A fork-only E2E policy may
+instead name one explicit user. Preparation and final approved publication
+verify the acting user at execution time, and all failures fail closed.
+Publication planning is non-writing and may be started automatically after the
+canonical PR merge.
 """
 
 from __future__ import annotations
@@ -16,21 +18,32 @@ from scripts.release.models import ReleasePolicy
 
 
 class NotAuthorizedError(Exception):
-    """The actor is not a member of the policy's authorized team."""
+    """The actor is not authorized by the configured release principal."""
 
 
 def ensure_authorized(gh: Any, policy: ReleasePolicy, actor: str) -> None:
     """Raise :class:`NotAuthorizedError` unless *actor* is authorized.
 
-    ``authorized_team`` is ``org/team-slug`` and membership is queried live.
+    ``authorized_team`` is normally ``org/team-slug`` and membership is
+    queried live. The fork-only ``user:LOGIN`` form performs an exact,
+    case-insensitive login comparison without an organization lookup.
 
-    Lookup failures also refuse (fail closed), with a message naming the
+    Team lookup failures also refuse (fail closed), with a message naming the
     failed lookup, since "the token cannot read the org's teams" needs a
     different operator response than "not a member".
     """
     actor = actor.strip()
     if not actor:
         raise NotAuthorizedError("no acting user supplied")
+
+    authorized_user = policy.authorized_user
+    if authorized_user is not None:
+        if actor.casefold() != authorized_user.casefold():
+            raise NotAuthorizedError(
+                f"@{actor} is not the authorized user @{authorized_user}; "
+                f"only that user may perform release actions on {policy.repo}"
+            )
+        return
 
     try:
         team = retry_github_call(

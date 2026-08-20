@@ -241,7 +241,7 @@ def _sync_one(
     ):
         accepted = retry_github_call(
             lambda: publish_workflow.create_dispatch(
-                "main",
+                agent.default_branch,
                 inputs={"branch": tracker.branch, "candidate_sha": candidate_sha},
             ),
             retries=1,

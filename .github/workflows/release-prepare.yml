@@ -37,20 +37,19 @@ concurrency:
 jobs:
   authorize-start:
     name: Verify Valkey handoff
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
     steps:
-      - name: Require the release-control App actor
+      - name: Require the fork relay actor
         env:
           ACTOR: ${{ github.triggering_actor }}
-          EXPECTED_ACTOR: ${{ vars.VALKEY_RELEASE_START_ACTOR }}
+          INITIATOR: ${{ inputs.initiator }}
         run: |
           set -euo pipefail
-          [[ -n "$EXPECTED_ACTOR" ]] || { echo "VALKEY_RELEASE_START_ACTOR is not configured" >&2; exit 1; }
-          [[ "$ACTOR" == "$EXPECTED_ACTOR" ]] || {
-            echo "Prepare Release can be started only through valkey-io/valkey Start Release" >&2
+          [[ "$ACTOR" == "sarthakaggarwal97" && "$INITIATOR" == "$ACTOR" ]] || {
+            echo "Fork Prepare Release must be relayed by sarthakaggarwal97 for the same initiator" >&2
             exit 1
           }
 
@@ -59,7 +58,6 @@ jobs:
     needs: authorize-start
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: release-control
     permissions:
       contents: read
     outputs:
@@ -74,27 +72,18 @@ jobs:
 
       - uses: ./.github/actions/setup-agent
 
-      - name: Create read-only control token
-        id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-contents: read
-          permission-members: read
-          permission-metadata: read
-
       - name: Derive release identity
         id: release
         env:
-          RELEASE_GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
           BRANCH: ${{ inputs.branch }}
           INTENT: ${{ inputs.intent }}
           ACTOR: ${{ inputs.initiator }}
+          POLICY: release_policy.e2e.yml
         run: |
-          python -m scripts.release.main prepare \
+          set -euo pipefail
+          [[ -n "$RELEASE_GITHUB_TOKEN" ]] || { echo "VALKEY_GITHUB_TOKEN is required for fork E2E" >&2; exit 1; }
+          python -m scripts.release.main --policy "$POLICY" prepare \
             --branch "$BRANCH" --intent "$INTENT" --actor "$ACTOR"
 
       - name: Summary
@@ -124,6 +113,7 @@ jobs:
       stage: ${{ needs.derive.outputs.stage }}
       urgency: ${{ inputs.urgency }}
       dry_run: false
+    secrets: inherit
 
   tracker:
     name: Open release dashboard
@@ -131,7 +121,6 @@ jobs:
     if: ${{ inputs.dry_run != true }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: release-control
     permissions:
       contents: read
     outputs:
@@ -144,28 +133,18 @@ jobs:
 
       - uses: ./.github/actions/setup-agent
 
-      - name: Create dashboard token
-        id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-issues: write
-          permission-metadata: read
-
       - name: Create or refresh release dashboard
         id: tracker
         env:
-          TARGET_GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          TARGET_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
           BRANCH: ${{ inputs.branch }}
           VERSION: ${{ needs.derive.outputs.version }}
           STAGE: ${{ needs.derive.outputs.stage }}
           TAG: ${{ needs.derive.outputs.tag }}
         run: |
+          [[ -n "$TARGET_GITHUB_TOKEN" ]] || { echo "VALKEY_GITHUB_TOKEN is required for fork E2E" >&2; exit 1; }
           python -m scripts.release.tracker ensure \
-            --repo valkey-io/valkey --branch "$BRANCH" \
+            --repo sarthakaggarwal97/valkey --branch "$BRANCH" \
             --version "$VERSION" --stage "$STAGE" --tag "$TAG" \
             --prep-branch "agent/release-cut/${VERSION}-${STAGE}" \
             --prepare-run-id "$GITHUB_RUN_ID" --agent-repo "$GITHUB_REPOSITORY"

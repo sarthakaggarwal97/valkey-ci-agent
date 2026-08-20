@@ -1,0 +1,16 @@
+# Fork-only policy for the copied streamlined-architecture E2E.
+schema_version: 1
+repo: sarthakaggarwal97/valkey
+authorized_team: user:sarthakaggarwal97
+checks_workflow: ci.yml
+branches:
+  - "9.1"
+required_checks:
+  - test-ubuntu-latest
+  - test-sanitizer-address
+  - build-32bit
+  - build-macos-latest
+  - build-debian-old
+  - build-libc-malloc
+  - build-almalinux8-jemalloc
+require_tag_ruleset: false

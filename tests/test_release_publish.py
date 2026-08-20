@@ -113,6 +113,28 @@ def test_moved_branch_refuses_before_publication(monkeypatch: pytest.MonkeyPatch
         publish_mod.plan_publication(_gh(_repo(head="b" * 40)), POLICY, branch="9.1", candidate_sha=SHA)
 
 
+def test_explicit_fork_policy_records_unprotected_tag(monkeypatch: pytest.MonkeyPatch) -> None:
+    policy = ReleasePolicy(
+        repo="sarthakaggarwal97/valkey",
+        authorized_team="user:sarthakaggarwal97",
+        branches=("9.1",),
+        checks_workflow="ci.yml",
+        required_checks=("test",),
+        require_tag_ruleset=False,
+    )
+    monkeypatch.setattr(publish_mod, "require_green_checks", lambda *a, **k: None)
+    monkeypatch.setattr(
+        publish_mod,
+        "tag_ruleset_protected",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("ruleset API must not be called")),
+    )
+    repo = _repo()
+    repo.get_commit.return_value.get_pulls.return_value[0].head.repo.full_name = policy.repo
+    plan = publish_mod.plan_publication(_gh(repo), policy, branch="9.1", candidate_sha=SHA)
+    assert plan.tag_protected is False
+    assert plan.tag_bypass_integration_ids is None
+
+
 def test_missing_release_notes_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(publish_mod, "require_green_checks", lambda *a, **k: None)
     with pytest.raises(publish_mod.ReleaseError, match="no section"):

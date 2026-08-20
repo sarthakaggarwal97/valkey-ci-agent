@@ -109,14 +109,17 @@ def plan_publication(
         raise ReleaseError(f"00-RELEASENOTES at {candidate_sha[:12]} has no section for Valkey {tag}")
     body += _changelog_footer(repo, policy.repo, tag, version, stage)
 
-    verdict = tag_ruleset_protected(repo, tag)
-    if verdict.protected is not True:
-        raise ReleaseError(f"cannot verify an active immutable-tag ruleset for {tag}; refusing publication")
-    if verdict.bypass_integration_ids is not None and len(verdict.bypass_integration_ids) != 1:
-        raise ReleaseError(
-            f"the immutable-tag ruleset for {tag} must name exactly one Integration bypass "
-            f"(found {len(verdict.bypass_integration_ids)})"
-        )
+    if policy.require_tag_ruleset:
+        verdict = tag_ruleset_protected(repo, tag)
+        if verdict.protected is not True:
+            raise ReleaseError(f"cannot verify an active immutable-tag ruleset for {tag}; refusing publication")
+        if verdict.bypass_integration_ids is not None and len(verdict.bypass_integration_ids) != 1:
+            raise ReleaseError(
+                f"the immutable-tag ruleset for {tag} must name exactly one Integration bypass "
+                f"(found {len(verdict.bypass_integration_ids)})"
+            )
+    else:
+        verdict = TagRulesetVerdict(False, None)
     return PublishPlan(
         branch=branch,
         tag=tag,
@@ -195,12 +198,12 @@ def publish_release(
     candidate_sha: str,
     actor: str,
     expected_digest: str,
-    expected_bypass_integration_id: int,
+    expected_bypass_integration_id: int | None,
 ) -> str:
     """Revalidate an approved plan, atomically bind its tag, and publish."""
     ensure_authorized(gh, policy, actor)
     plan = plan_publication(gh, policy, branch=branch, candidate_sha=candidate_sha)
-    if plan.tag_bypass_integration_ids != (expected_bypass_integration_id,):
+    if policy.require_tag_ruleset and plan.tag_bypass_integration_ids != (expected_bypass_integration_id,):
         raise ReleaseError(
             "the immutable-tag ruleset bypass is not the configured publication App "
             f"(expected {expected_bypass_integration_id}, found {plan.tag_bypass_integration_ids})"
