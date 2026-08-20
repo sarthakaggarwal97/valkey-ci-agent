@@ -131,16 +131,23 @@ def ensure_tracker(
     )
     _upsert_status(issue, status, tracker=tracker)
     # The marker is needed in the create body only to recover an ambiguous
-    # issue-creation response. Once the bot-owned status comment exists, make
-    # the human-editable body purely presentational.
-    clean_body = _issue_body(tracker, agent_repo, include_marker=False)
-    if (issue.body or "") != clean_body:
-        retry_github_call(
-            lambda: issue.edit(title=f"Release {tracker.tag}", body=clean_body),
-            retries=2,
-            description=f"finalize release tracker #{issue.number}",
-        )
+    # issue-creation response. Once the controller-owned status comment exists,
+    # make the human-editable body purely presentational.
+    _refresh_issue_body(issue, tracker, agent_repo)
     return issue
+
+
+def _refresh_issue_body(issue: Any, tracker: Tracker, agent_repo: str) -> None:
+    """Idempotently apply the current presentational UI to an existing tracker."""
+    title = f"Release {tracker.tag}"
+    body = _issue_body(tracker, agent_repo, include_marker=False)
+    if getattr(issue, "title", "") == title and (issue.body or "") == body:
+        return
+    retry_github_call(
+        lambda: issue.edit(title=title, body=body),
+        retries=2,
+        description=f"refresh release tracker #{issue.number} presentation",
+    )
 
 
 def parse_tracker(body: str) -> Tracker | None:
@@ -234,6 +241,7 @@ def _sync_one(
     trusted_owner: str = "",
     dispatch: bool,
 ) -> str:
+    _refresh_issue_body(issue, tracker, agent_repo)
     pr = _find_prep_pr(repo, tracker)
     branch_head = _branch_head(repo, tracker.branch)
     prepare_run = retry_github_call(

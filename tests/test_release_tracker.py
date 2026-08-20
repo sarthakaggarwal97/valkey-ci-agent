@@ -453,3 +453,24 @@ def test_pending_candidate_ci_is_linked_without_premature_publication(
     assert "| Candidate CI |" in body
     assert "—" not in body
     assert not any(symbol in body for symbol in "✅❌⏳⛔🛑⚠️🟦🟥🟩⬜")
+
+
+def test_refresh_issue_body_migrates_legacy_dashboard_idempotently() -> None:
+    issue = _issue()
+    issue.title = f"Release {TRACKER.tag}"
+    issue.body = "## Maintainer checklist\n\n- [ ] Legacy action"
+
+    tracker_mod._refresh_issue_body(issue, TRACKER, "valkey-io/valkey-ci-agent")
+
+    rendered = issue.edit.call_args.kwargs["body"]
+    assert issue.edit.call_args.kwargs["title"] == f"Release {TRACKER.tag}"
+    assert "## Maintainer checklist" not in rendered
+    assert "## Human checkpoints" in rendered
+    assert TRACKER.marker() not in rendered
+    assert f"[{TRACKER.prep_branch!r}]" not in rendered
+    assert f"https://github.com/{TRACKER.repo}/tree/{TRACKER.prep_branch}" in rendered
+
+    issue.body = rendered
+    issue.edit.reset_mock()
+    tracker_mod._refresh_issue_body(issue, TRACKER, "valkey-io/valkey-ci-agent")
+    issue.edit.assert_not_called()
