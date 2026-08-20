@@ -137,21 +137,36 @@ jobs:
               --verbose
           }
 
+          poll_once() {
+            poll > backport-poll-result.json &&
+              python -c 'import json; print(json.load(open("backport-poll-result.json"))["action"])'
+          }
+
           poll_started=${SECONDS}
-          poll > backport-poll-result.json
-          action=$(python -c 'import json; print(json.load(open("backport-poll-result.json"))["action"])')
+          poll_had_error=false
+          if action=$(poll_once); then
+            :
+          else
+            poll_had_error=true
+            action=error
+          fi
           if [[ "${action}" != "would-sweep" \
                 && "${POLL_INTERVAL_SECONDS}" -gt 0 \
                 && "${POLL_DURATION_SECONDS}" -ge "${POLL_INTERVAL_SECONDS}" ]]; then
             wait=$((POLL_INTERVAL_SECONDS - (SECONDS - poll_started)))
             (( wait <= 0 )) || sleep "${wait}"
-            poll > backport-poll-result.json
-            action=$(python -c 'import json; print(json.load(open("backport-poll-result.json"))["action"])')
+            if action=$(poll_once); then
+              :
+            else
+              poll_had_error=true
+              action=error
+            fi
           fi
 
           cat backport-poll-result.json
           [[ "${action}" == "would-sweep" ]] && sweep=true || sweep=false
           echo "needs_sweep=${sweep}" >> "${GITHUB_OUTPUT}"
+          echo "had_error=${poll_had_error}" >> "${GITHUB_OUTPUT}"
 
       - name: Generate preparation token
         if: steps.poll.outputs.needs_sweep == 'true'
@@ -249,3 +264,10 @@ jobs:
           path: agent-evidence
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Report polling failure
+        if: always() && steps.poll.outputs.had_error == 'true'
+        shell: bash
+        run: |
+          echo "One or more backport poll attempts failed; see the uploaded poll result." >&2
+          exit 1

@@ -2,10 +2,43 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from unittest.mock import patch
 
 from scripts.common.build_validator import run_build_commands
+
+
+def test_run_build_commands_scrubs_credentials_and_actions_control_files(
+    tmp_path, monkeypatch,
+) -> None:
+    secrets = {
+        "AWS_ACCESS_KEY_ID": "AKIA-secret",
+        "AWS_SECRET_ACCESS_KEY": "secret",
+        "AWS_SESSION_TOKEN": "session",
+        "TARGET_TOKEN": "github-token",
+        "GITHUB_ENV": "/tmp/github-env",
+        "GITHUB_PATH": "/tmp/github-path",
+        "GITHUB_OUTPUT": "/tmp/github-output",
+        "ACTIONS_RUNTIME_TOKEN": "runtime-token",
+    }
+    for name, value in secrets.items():
+        monkeypatch.setenv(name, value)
+
+    completed = subprocess.CompletedProcess(
+        args="make", returncode=0, stdout="ok", stderr="",
+    )
+    with patch(
+        "scripts.common.build_validator.subprocess.run",
+        return_value=completed,
+    ) as run:
+        ok, _ = run_build_commands(str(tmp_path), ["make"])
+
+    assert ok is True
+    child_env = run.call_args.kwargs["env"]
+    assert all(name not in child_env for name in secrets)
+    if os.environ.get("PATH"):
+        assert child_env["PATH"] == os.environ["PATH"]
 
 
 def test_run_build_commands_returns_failure_on_timeout(tmp_path) -> None:

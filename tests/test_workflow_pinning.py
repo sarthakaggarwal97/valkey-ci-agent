@@ -155,3 +155,6 @@ def test_backport_workflows_refresh_credentials_after_validation():
     assert "'1800'" in poll and "'3300'" in poll
     assert "poll_started=${SECONDS}" in poll
     assert 'sleep "${wait}"' in poll
+    assert "if action=$(poll_once); then" in poll
+    assert 'echo "had_error=${poll_had_error}"' in poll
+    assert "steps.poll.outputs.had_error == 'true'" in poll

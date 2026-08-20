@@ -6,7 +6,18 @@ import logging
 import subprocess
 from pathlib import Path
 
+from scripts.common.proc import NETWORK_ENV, PROCESS_BASICS, filter_env
+
 logger = logging.getLogger(__name__)
+
+
+# Validation executes code from the target branch and freshly applied
+# backports. Give it only the process basics needed to run local tools plus CA
+# bundle locations for repositories whose build setup downloads dependencies.
+# In particular, never pass AWS credentials or GitHub Actions control-file
+# paths: a validation command that can write GITHUB_ENV or GITHUB_PATH could
+# otherwise compromise the later publication step and its fresh GitHub token.
+_BUILD_ENV_ALLOWLIST = PROCESS_BASICS + NETWORK_ENV
 
 
 def run_build_commands(
@@ -26,6 +37,10 @@ def run_build_commands(
     call. This lets agent-driven consumers (e.g. validation repair) read
     the complete log via tools like ``Read`` and ``Grep`` instead of being
     starved by a small embedded tail.
+
+    Commands receive a scrubbed environment containing only process basics
+    and CA-bundle locations. Credentials and GitHub Actions control-file paths
+    are intentionally excluded because the checked-out code is untrusted.
     """
     if not commands:
         if log_path:
@@ -45,6 +60,7 @@ def run_build_commands(
                 capture_output=True,
                 text=True,
                 timeout=1800,
+                env=filter_env(_BUILD_ENV_ALLOWLIST),
             )
         except subprocess.TimeoutExpired as exc:
             full_stdout = _decode(exc.stdout)
