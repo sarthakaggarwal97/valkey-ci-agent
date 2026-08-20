@@ -97,23 +97,6 @@ _MATERIAL_SCOPE_RULES: tuple[
         re.compile(r"\bLinux\b", re.IGNORECASE),
     ),
 )
-_CATEGORY_GUIDANCE = """\
-- Prefer the category for the user-visible surface over the fact that the PR is
-  a bug fix. `Bug Fixes` is the fallback, not the automatic category for every
-  title beginning with "Fix".
-- EXCEPTION: a crash, assertion, or memory-safety fix belongs in `Bug Fixes`
-  even when the crash happens in an operator-output path (INFO, logging,
-  metrics). The severity is the story, not the surface.
-- `Observability and Logging` owns INFO fields, metrics, ACL LOG, server logs,
-  diagnostics, process titles, and corrections to those outputs.
-- `Command and API Updates` owns command arguments/results, wire reply schemas,
-  and public APIs. `Module API Changes` owns third-party module APIs.
-- `Cluster and Replication` owns cluster, Sentinel, failover, migration, and
-  replication behavior unless Configuration or Observability is more specific.
-- `Configuration` owns config parsing, validation, persistence, and defaults.
-- `Build and Tooling` is for shipped build/packaging/tool changes; test-only and
-  CI-only PRs should be skipped.
-"""
 
 _PATCH_RELEASE_GUIDANCE = """\
 
@@ -159,7 +142,7 @@ _PATCH_INTENTIONAL_CHANGE_RE = re.compile(
 )
 
 _PROMPT_TEMPLATE = """\
-You are writing release notes for the open-source project Valkey. You are given
+You are writing release notes for the open-source project {project}. You are given
 a list of pull requests that merged into a release line since the last release.
 For each one, write a single concise, user-facing release-note line and assign
 it to exactly one category.
@@ -234,16 +217,23 @@ Every "pr" must be one of the input PR numbers. Emit at most one bullet per PR.
 def build_prompt(
     prs: Sequence[MergedPR], *, categories: Sequence[str], diffs: dict[int, str] | None = None,
     patch_release: bool = False,
+    project_description: str,
+    category_guidance: str,
 ) -> str:
     """Render the generation prompt for a batch of PRs.
 
     ``diffs`` maps PR number to inlined diff text; absent or empty entries omit
     the diff field. Defaults to no diffs so the prompt works without a clone.
+    ``project_description`` names the project for the model and
+    ``category_guidance`` explains the category boundaries; the selected
+    profile supplies both explicitly. The patch-release policy is release-type
+    wording, appended for any profile.
     """
     return _PROMPT_TEMPLATE.format(
+        project=project_description,
         categories="\n".join(f"- {name}" for name in categories),
         category_guidance=(
-            _CATEGORY_GUIDANCE + (_PATCH_RELEASE_GUIDANCE if patch_release else "")
+            category_guidance + (_PATCH_RELEASE_GUIDANCE if patch_release else "")
         ),
         prs_json=build_prompt_payload(prs, diffs=diffs),
     )
@@ -455,6 +445,8 @@ def generate(
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
     patch_release: bool = False,
+    project_description: str,
+    category_guidance: str,
 ) -> GenerationResult:
     """Generate categorized bullets for *prs*, batching large inputs.
 
@@ -478,6 +470,8 @@ def generate(
         prompt = build_prompt(
             batch, categories=categories, diffs=diffs,
             patch_release=patch_release,
+            project_description=project_description,
+            category_guidance=category_guidance,
         )
         stdout, stderr, code = run_fn(
             prompt,
@@ -524,6 +518,8 @@ def generate(
             retry_prompt = build_prompt(
                 retry_batch, categories=categories, diffs=collector.collect(retry_batch),
                 patch_release=patch_release,
+                project_description=project_description,
+                category_guidance=category_guidance,
             )
             retry_stdout, _retry_stderr, _retry_code = run_fn(
                 retry_prompt,

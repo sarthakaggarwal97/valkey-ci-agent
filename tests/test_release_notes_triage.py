@@ -3,9 +3,21 @@
 from __future__ import annotations
 
 import json
+from functools import partial
 
 from scripts.release_notes.models import MergedPR
-from scripts.release_notes.triage import build_prompt, triage
+from scripts.release_notes.projects import VALKEY_PROFILE
+from scripts.release_notes.triage import build_prompt as _build_prompt
+from scripts.release_notes.triage import triage as _triage
+
+build_prompt = partial(
+    _build_prompt,
+    project_description=VALKEY_PROFILE.triage_prompt_project,
+)
+triage = partial(
+    _triage,
+    project_description=VALKEY_PROFILE.triage_prompt_project,
+)
 
 
 def _pr(
@@ -39,6 +51,13 @@ def _fake_run_raw(text: str, *, exit_code: int = 0):
 
 
 class TestBuildPrompt:
+    def test_default_core_project_wording_is_preserved(self) -> None:
+        prompt = build_prompt([], base_ref="9.0.0")
+        assert prompt.startswith(
+            "You are triaging pull requests for the release notes of Valkey, a "
+            "production key-value datastore. These PRs\nmerged after 9.0.0"
+        )
+
     def test_lists_pr_numbers_and_asks_for_verdicts(self) -> None:
         prompt = build_prompt([_pr(40), _pr(41)])
         assert "40" in prompt and "41" in prompt

@@ -3,14 +3,26 @@
 from __future__ import annotations
 
 import json
+from functools import partial
 
-from scripts.release_notes import release_format as _release_format
-from scripts.release_notes.generate import build_prompt, generate
+from scripts.release_notes.generate import build_prompt as _build_prompt
+from scripts.release_notes.generate import generate as _generate
 from scripts.release_notes.models import MergedPR
+from scripts.release_notes.projects import VALKEY_PROFILE
 
-# Use the real canonical list so these tests track the taxonomy rather than a
-# drifting local copy.
-_CATEGORIES = list(_release_format.CATEGORIES)
+# Use the real core profile so direct helper tests exercise the same explicit
+# values as the production pipeline.
+_CATEGORIES = list(VALKEY_PROFILE.categories)
+build_prompt = partial(
+    _build_prompt,
+    project_description=VALKEY_PROFILE.generation_prompt_project,
+    category_guidance=VALKEY_PROFILE.category_guidance,
+)
+generate = partial(
+    _generate,
+    project_description=VALKEY_PROFILE.generation_prompt_project,
+    category_guidance=VALKEY_PROFILE.category_guidance,
+)
 
 
 def _pr(
@@ -38,6 +50,13 @@ def _fake_run(obj, *, exit_code: int = 0):
 
 
 class TestBuildPrompt:
+    def test_default_core_project_wording_is_preserved(self) -> None:
+        prompt = build_prompt([], categories=_CATEGORIES)
+        assert prompt.startswith(
+            "You are writing release notes for the open-source project Valkey. "
+            "You are given\n"
+        )
+
     def test_includes_categories_and_pr_numbers(self) -> None:
         prompt = build_prompt([_pr(40), _pr(41)], categories=_CATEGORIES)
         for name in _CATEGORIES:

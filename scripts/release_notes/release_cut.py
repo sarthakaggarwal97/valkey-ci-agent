@@ -22,37 +22,45 @@ from scripts.common.git_auth import github_https_url
 from scripts.common.proc import BOT_EMAIL, BOT_NAME, git_output, run_git
 from scripts.release_notes import contributors as gc
 from scripts.release_notes import pipeline as pipeline_mod
+from scripts.release_notes import projects as projects_mod
 from scripts.release_notes import publish as publish_mod
 from scripts.release_notes import release_format as rn
 from scripts.release_notes import security as security_mod
-from scripts.release_notes import version_bump as bv
 
 logger = logging.getLogger(__name__)
-
-NOTES_FILE = "00-RELEASENOTES"
-VERSION_FILE = os.path.join("src", "version.h")
 
 # The agent creates only throwaway prep branches in this namespace, which PR
 # into the M.m release line. The line is only advanced by merging a PR.
 PREP_BRANCH_PREFIX = "agent/release-cut"
 
 _RC_STAGE_RE = re.compile(r"^rc([1-9]\d*)$")
-# Matches "Valkey M.m.p-rcN" headings in the release line changelog, to tell
-# which rc numbers already shipped.
-_DATED_RC_RE_TMPL = r"^Valkey {major}\.{minor}\.{patch}-rc(\d+)"
+# Matches "<Display Name> M.m.p-rcN" headings in the release line changelog, to
+# tell which rc numbers already shipped. The separator and rc-token case
+# tolerate hand-written module history such as "Valkey Search 1.2.0 RC3"
+# alongside the canonical "-rc3" this tool renders.
+_DATED_RC_RE_TMPL = r"^{display} {major}\.{minor}\.{patch}[- ][rR][cC]([1-9]\d*)\b"
 
 # A rendered note bullet ends with "(#N)" naming the PR it credits. The
 # bullet-line guard keeps a "(#N)" in prose or a heading from being read as a
 # credit. Used to dedup a cut's notes against the PRs the destination release
 # line already lists (see _drop_already_credited).
 _BULLET_LINE_RE = re.compile(r"^\s*[*-]\s+\S")
-# Trailing PR ref: "(#N)" at end of line, tolerating trailing punctuation/closing
-# parens a hand-edit may add (". ", ": ", ")", "(#44)(#45)"). The agent's own
-# render always emits a single canonical "(#N)"; the punctuation tolerance only
-# matters for destination-side hand-edits / pre-existing valkey files, where a
-# missed ref would let a credited PR be promoted a second time. A trailing run
-# like "(#44)(#45)" still captures only the last ref (45), rare enough to leave.
-_TRAILING_PR_RE = re.compile(r"\(#(\d+)\)[\s.,:;)]*$")
+# Trailing PR group: "(#N)" or a hand-written "(#N, #M)" at end of line,
+# tolerating trailing punctuation/closing parens. Generated notes always emit a
+# single canonical ref, while existing module changelogs sometimes credit
+# several PRs in one trailing group.
+_TRAILING_PR_GROUP_RE = re.compile(
+    r"\((?P<refs>#\d+(?:\s*,\s*#\d+)*)\)[\s.,:;)]*$"
+)
+_PR_NUMBER_RE = re.compile(r"#(\d+)")
+_LEGACY_CONTRIBUTOR_RE = re.compile(
+    r"^(?:Contributors|We appreciate the efforts of all who contributed code "
+    r"to this release!)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_CANONICAL_CONTRIBUTOR_HEADER_RE = re.compile(
+    r"^###\s+Contributors\s*$", re.MULTILINE
+)
 
 # Urgency values render_release_notes() accepts; a SECURITY cut with no fixes is
 # flagged in the PR body. Mirrors VALID_URGENCIES in the release-format module
@@ -161,7 +169,13 @@ def _assert_origin_url(repo_dir: str, repo_full_name: str) -> None:
         )
 
 
-def resolve_branch_plan(repo_dir: str, *, version: str, stage: str) -> BranchPlan:
+def resolve_branch_plan(
+    repo_dir: str,
+    *,
+    version: str,
+    stage: str,
+    profile: projects_mod.ProjectProfile,
+) -> BranchPlan:
     """Resolve the destination branch for this cut.
 
     The target is always M.m (derived from version). The branch must already
@@ -179,13 +193,17 @@ def resolve_branch_plan(repo_dir: str, *, version: str, stage: str) -> BranchPla
 
     rc_warning = None
     if stage_lc != "ga":
-        rc_warning = _warn_rc_sequence(repo_dir, target, stage_lc, major, minor, _patch)
+        rc_warning = _warn_rc_sequence(
+            repo_dir, target, stage_lc, major, minor, _patch, profile=profile
+        )
 
     return BranchPlan(stage_lc, target, target, rc_warning=rc_warning)
 
 
 def _warn_rc_sequence(
-    repo_dir: str, target_branch: str, stage_lc: str, major: int, minor: int, patch: int
+    repo_dir: str, target_branch: str, stage_lc: str, major: int, minor: int, patch: int,
+    *,
+    profile: projects_mod.ProjectProfile,
 ) -> Optional[str]:
     """Return a warning if a continued rc number is out of sequence; None if OK."""
     m = _RC_STAGE_RE.match(stage_lc)
@@ -194,11 +212,17 @@ def _warn_rc_sequence(
     requested = int(m.group(1))
     try:
         run_git(repo_dir, "fetch", "--quiet", "origin", target_branch)
-        notes = git_output(repo_dir, "show", f"FETCH_HEAD:{NOTES_FILE}")
+        notes = git_output(repo_dir, "show", f"FETCH_HEAD:{profile.notes_file}")
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not read %s to check rc sequence (%s); skipping.", target_branch, exc)
         return None
-    pattern = re.compile(_DATED_RC_RE_TMPL.format(major=major, minor=minor, patch=patch), re.MULTILINE)
+    pattern = re.compile(
+        _DATED_RC_RE_TMPL.format(
+            display=re.escape(profile.display_name),
+            major=major, minor=minor, patch=patch,
+        ),
+        re.MULTILINE,
+    )
     seen = sorted({int(x) for x in pattern.findall(notes)})
     highest = max(seen) if seen else 0
     expected = highest + 1
@@ -220,12 +244,12 @@ def stage_release_name(version: str, stage_lc: str) -> str:
     return version if stage_lc == "ga" else f"{version}-{stage_lc}"
 
 
-def commit_title(version: str, stage_lc: str) -> str:
+def commit_title(version: str, stage_lc: str, display_name: str) -> str:
     """Match valkey's release commit titles."""
     if stage_lc == "ga":
         _major, _minor, patch = _split_version(version)
         suffix = " GA" if patch == 0 else ""
-        return f"Add release notes entry for Valkey {version}{suffix}"
+        return f"Add release notes entry for {display_name} {version}{suffix}"
     return f"Update version to {version}-{stage_lc} and add release notes"
 
 
@@ -245,23 +269,45 @@ def _release_order(version: str, stage: str) -> tuple[int, int, int, int, int]:
 
 
 def validate_release_progression(
-    version_h_text: str, target_version: str, target_stage: str
+    version_h_text: str,
+    target_version: str,
+    target_stage: str,
+    *,
+    bumper: projects_mod.VersionBumper,
 ) -> None:
     """Reject an already-released or backward target for the current branch.
 
-    ``255.255.255-dev`` is Valkey's unstable sentinel and is allowed to begin any
-    release line. Every other branch state must advance monotonically.
+    Repository-specific unstable sentinels are allowed to begin any release
+    line. Every other branch state must advance monotonically.
+
+    *bumper* parses the selected profile's version file. A bumper whose file
+    records no release stage (``records_stage`` is False) compares M.m.p only
+    and allows an equal version through: rc2 after rc1 of the same version
+    leaves such a file unchanged, and the tag gate in
+    ``discover.validate_target_release_tag`` remains the authoritative check
+    against re-cutting an already-tagged stage.
     """
-    current_version, current_stage = bv.current_release_state(version_h_text)
-    if current_version == "255.255.255" and current_stage == "dev":
+    current_version, current_stage = bumper.current_release_state(version_h_text)
+    if (current_version, current_stage) in bumper.unstable_release_states:
         return
 
+    target_canonical = canonical_version(target_version)
+    target_stage_lc = _normalize_stage(target_stage)
+    if not bumper.records_stage:
+        if _split_version(target_canonical) >= _split_version(current_version):
+            return
+        raise ValueError(
+            f"target release {target_canonical}-{target_stage_lc} is older than the "
+            f"branch's current version {current_version} in "
+            f"{bumper.version_file}; refusing a backward cut"
+        )
+
     current = _release_order(current_version, current_stage)
-    target = _release_order(canonical_version(target_version), _normalize_stage(target_stage))
+    target = _release_order(target_canonical, target_stage_lc)
     if target > current:
         return
     raise ValueError(
-        f"target release {canonical_version(target_version)}-{_normalize_stage(target_stage)} "
+        f"target release {target_canonical}-{target_stage_lc} "
         f"must be newer than the branch's current state "
         f"{current_version}-{current_stage}; refusing an already-released or backward cut"
     )
@@ -304,7 +350,6 @@ def _assert_remote_branch_unchanged(
 
 
 def promote_and_bump(
-    valkey_clone_dir: str,
     *,
     grouped: dict[str, list[str]],
     dest_notes_text: str,
@@ -313,22 +358,21 @@ def promote_and_bump(
     stage_lc: str,
     urgency: str,
     date: str,
-    repo_full_name: str,
     contrib_base: Optional[str],
-    contrib_head: str,
     token: Optional[str],
     security_fixes: Optional[Sequence[str]],
+    profile: projects_mod.ProjectProfile,
     pr_authors: Optional[Sequence[str]] = None,
 ) -> tuple[str, str]:
     """Render *grouped* onto the destination changelog and bump the version.
 
-    Returns ``(new_dest_notes, new_version_h)``. ``render_release_notes`` renders
-    the categorized bullets into a new dated section atop the destination's running
-    changelog, and ``set_version`` rewrites the three version macros. The contributor
-    list comes only from authors of source PRs resolved for this release range and
-    is merged into the cumulative footer. Commit authors and co-author trailers
-    are deliberately excluded because merges and backports can add incidental
-    identities.
+    Returns ``(new_dest_notes, new_version_text)``. ``render_release_notes``
+    renders the categorized bullets into a new dated section atop the
+    destination's running changelog, and the profile's bumper rewrites the
+    recorded version. The contributor list comes only from authors of source PRs
+    resolved for this release range and is merged into the cumulative footer.
+    Commit authors and co-author trailers are deliberately excluded because
+    merges and backports can add incidental identities.
     """
     contributors: list[str] = []
     if contrib_base:
@@ -350,11 +394,13 @@ def promote_and_bump(
         prior_text=dest_notes_text,
         contributors=contributors,
         security_fixes=list(security_fixes) if security_fixes else None,
+        display_name=profile.display_name,
+        categories=profile.categories,
     )
-    new_version = bv.set_version(dest_version_text, version, stage_lc)
+    new_version = profile.bumper.set_version(dest_version_text, version, stage_lc)
     logger.info(
-        "version.h -> VALKEY_VERSION=%s VALKEY_VERSION_NUM=%s VALKEY_RELEASE_STAGE=%s",
-        version, bv.version_num(version), stage_lc,
+        "%s -> version=%s stage=%s",
+        profile.bumper.version_file, version, stage_lc,
     )
     return new_notes, new_version
 
@@ -444,44 +490,25 @@ def _resolve_notes_range(
     )
 
 
+def _trailing_pr_numbers(line: str) -> set[int]:
+    """Return every PR number in a line's final ``(#N[, #M...])`` group."""
+    match = _TRAILING_PR_GROUP_RE.search(line)
+    if match is None:
+        return set()
+    return {int(number) for number in _PR_NUMBER_RE.findall(match.group("refs"))}
+
+
 def _credited_pr_numbers(notes_text: str) -> set[int]:
     """Return the PR numbers a release-line changelog already credits.
 
-    Reads every bullet line's trailing ``(#N)`` from *notes_text* (a destination
-    changelog: the dated sections on the M.m release line). This is the dedup
-    key for promotion. Upstream, discovery excludes prior-RC PRs via the RC tag
-    it walks back to, but the agent never pushes those tags and a fork carries
-    none, so on GA (or any continued cut) discovery re-walks the whole source
-    branch and re-finds PRs the line already shipped. Deduping the cut's bullets
-    against this set makes promotion idempotent regardless of tags: a PR the line
-    already lists is dropped instead of double-noted.
-
-    Bullets inside the ``### Security Fixes`` section are skipped: that section is
-    sourced only from ``security_fixes`` (never from PR bullets), so its bullets
-    carry no legitimate PR credit. Their trailing ``(#N)``, if a CVE summary
-    happens to end in one, is prose, not a credit, and must not seed the dedup
-    set, or a later cut would drop an unrelated real PR that reused that number.
+    Reads every bullet line's trailing local ``(#N[, #M...])`` reference from
+    *notes_text*. GitHub issue and PR numbers are unique within a repository, so
+    a trailing local reference is a valid credit regardless of section heading.
     """
-    security_header = getattr(rn, "SECURITY_CATEGORY", "Security Fixes")
     credited: set[int] = set()
-    in_security = False
     for line in notes_text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("### "):
-            in_security = stripped[len("### "):].strip() == security_header
-            continue
-        # Defensive: a "## " ATX header would leave whatever ### category we were
-        # in. render_release_notes emits dated sections setext-style (heading +
-        # "-" underline), not as "## " headers, so this does not fire on our own
-        # output; it guards a hand-edited or differently-formatted changelog.
-        if stripped.startswith("## "):
-            in_security = False
-            continue
-        if in_security or not _BULLET_LINE_RE.match(line):
-            continue
-        m = _TRAILING_PR_RE.search(line)
-        if m:
-            credited.add(int(m.group(1)))
+        if _BULLET_LINE_RE.match(line):
+            credited.update(_trailing_pr_numbers(line))
     return credited
 
 
@@ -496,9 +523,7 @@ def _grouped_pr_numbers(grouped: dict[str, list[str]]) -> set[int]:
     numbers: set[int] = set()
     for lines in grouped.values():
         for line in lines:
-            m = _TRAILING_PR_RE.search(line)
-            if m:
-                numbers.add(int(m.group(1)))
+            numbers.update(_trailing_pr_numbers(line))
     return numbers
 
 
@@ -518,9 +543,9 @@ def _drop_already_credited(
     for category, lines in grouped.items():
         kept_lines: list[str] = []
         for line in lines:
-            m = _TRAILING_PR_RE.search(line)
-            if m and int(m.group(1)) in credited:
-                dropped.append(int(m.group(1)))
+            overlaps = _trailing_pr_numbers(line) & credited
+            if overlaps:
+                dropped.extend(sorted(overlaps))
                 continue
             kept_lines.append(line)
         if kept_lines:
@@ -564,15 +589,138 @@ def _security_fix_prs_in_notes(
         return []
     found: set[int] = set()
     for entry in security_fixes:
-        m = _TRAILING_PR_RE.search(entry)
-        if m and int(m.group(1)) in noted:
-            found.add(int(m.group(1)))
+        found.update(_trailing_pr_numbers(entry) & noted)
     return sorted(found)
 
 
 def _read(path: str) -> str:
     with open(path, "r", encoding="utf-8") as fh:
         return fh.read()
+
+
+def _read_required(repo_dir: str, rel_path: str, hint: str) -> str:
+    """Read a repo file the cut cannot proceed without, failing with *hint*."""
+    try:
+        return _read(os.path.join(repo_dir, rel_path))
+    except FileNotFoundError:
+        raise ValueError(f"{rel_path} not found on the release line; {hint}") from None
+
+
+def _read_version_file(repo_dir: str, profile: projects_mod.ProjectProfile) -> str:
+    """Read the profile's version file, failing with a release-facing error.
+
+    A missing file means the checked-out release line predates the layout the
+    profile supports (e.g. the valkey-search 1.0 line keeps its version in
+    src/module_loader.cc); surface that instead of a bare FileNotFoundError.
+    """
+    return _read_required(
+        repo_dir, profile.bumper.version_file,
+        f"this {profile.display_name} line predates the version layout the "
+        "release cut supports",
+    )
+
+
+def _release_heading_present(
+    notes_text: str, version: str, stage_lc: str, display_name: str
+) -> bool:
+    """Match canonical and known hand-written headings for one release stage."""
+    display = r"[ \t]+".join(re.escape(part) for part in display_name.split())
+    prefix = rf"^{display}[ \t]+{re.escape(version)}"
+    if stage_lc == "ga":
+        # Patch headings may omit GA; hand-written module headings often keep it.
+        # The date separator is preceded by whitespace, unlike the hyphen in
+        # ``-rcN``; keeping that boundary prevents an RC from looking like GA.
+        suffix = r"(?:[ \t]+GA)?(?=[ \t]+-|[ \t]*$)"
+    else:
+        rc_number = _RC_STAGE_RE.fullmatch(stage_lc)
+        if rc_number is None:
+            raise ValueError(f"invalid release stage: {stage_lc!r}")
+        # Accept generated "-rcN" and existing module " RCN" spellings.
+        suffix = rf"(?:-|[ \t]+)RC{rc_number.group(1)}\b"
+    return bool(re.search(prefix + suffix, notes_text, re.MULTILINE | re.IGNORECASE))
+
+
+def _refuse_already_cut_stage(
+    dest_notes_text: str, version: str, stage_lc: str,
+    profile: projects_mod.ProjectProfile,
+) -> None:
+    """For a stage-less version file, reject a release the changelog already shipped.
+
+    Core's version.h records the stage, so :func:`validate_release_progression`
+    rejects a duplicate or backward cut from the file alone. A CMake/Cargo file
+    holds only M.m.p, leaving a window between the release PR merging and the
+    maintainer pushing the tag in which a duplicate GA — or an rc dispatched
+    after the GA merged — passes both the version and tag gates. The dated
+    heading the merged cut wrote to the changelog is the durable record; refuse
+    when it (or this version's GA heading) is already there.
+    """
+    if profile.bumper.records_stage:
+        return
+    exact = rn.stage_heading(version, stage_lc, profile.display_name)
+    if _release_heading_present(
+        dest_notes_text, version, stage_lc, profile.display_name
+    ):
+        raise ValueError(
+            f"the release line's changelog already records {exact!r}; "
+            "refusing to cut it again"
+        )
+    ga = rn.stage_heading(version, "ga", profile.display_name)
+    if stage_lc != "ga" and _release_heading_present(
+        dest_notes_text, version, "ga", profile.display_name
+    ):
+        raise ValueError(
+            f"the release line's changelog already records {ga!r}; "
+            f"an rc cannot follow the shipped {version} GA"
+        )
+
+
+def _validate_changelog_history(
+    notes_text: str, profile: projects_mod.ProjectProfile
+) -> None:
+    """Refuse a render that cannot carry credited changelog history forward.
+
+    ``render_release_notes`` retains prior sections starting at the first dated
+    heading matching the profile's display name. If a changelog credits PRs but
+    has no matching heading, rendering would deterministically delete that
+    history. This is an input-format error, not a reviewer judgment: abort rather
+    than producing a destructive draft that ``force_ready`` could override.
+
+    A fresh-line placeholder credits no PRs and remains valid; it is intentionally
+    replaced by the first generated release section.
+    """
+    legacy_matches = list(_LEGACY_CONTRIBUTOR_RE.finditer(notes_text))
+    dated_start = rn.dated_section_start(notes_text, profile.display_name)
+    canonical_footers = list(_CANONICAL_CONTRIBUTOR_HEADER_RE.finditer(notes_text))
+    # Once a canonical trailing footer exists, legacy phrases inside the dated
+    # history are harmless: render_release_notes copies that region verbatim.
+    # Continue to reject them in the preamble and canonical footer, the two
+    # regions the render replaces or parses. Without a canonical footer there
+    # is no reliable boundary for a legacy trailing block, so fail closed.
+    legacy_in_rewritten_region = bool(legacy_matches) and (
+        dated_start is None
+        or not canonical_footers
+        or any(
+            match.start() < dated_start
+            or match.start() >= canonical_footers[-1].start()
+            for match in legacy_matches
+        )
+    )
+    if legacy_in_rewritten_region:
+        raise ValueError(
+            f"{profile.notes_file} uses a legacy contributor format for "
+            f"{profile.display_name}; normalize it to a trailing "
+            "`### Contributors` footer with one `* Display Name @handle` entry "
+            "per line before cutting a release."
+        )
+    if _credited_pr_numbers(notes_text) and not rn.has_dated_section(
+        notes_text, profile.display_name
+    ):
+        raise ValueError(
+            f"{profile.notes_file} credits existing PRs but has no dated heading "
+            f"matching '{profile.display_name} M.m.p'; refusing because rendering "
+            "would drop prior changelog history. Normalize the historical headings "
+            "or correct the project profile before cutting the release."
+        )
 
 
 def _write(path: str, text: str) -> None:
@@ -585,7 +733,6 @@ def cut(
     *,
     repo_full_name: str,
     source_clone_dir: str,
-    valkey_clone_dir: str,
     version: str,
     stage: str,
     urgency: str,
@@ -600,13 +747,14 @@ def cut(
     baseline_unanchored: bool = False,
     security_from_advisories: bool = False,
     force_ready: bool = False,
+    profile: projects_mod.ProjectProfile,
 ) -> int:
     """Cut a release: generate notes with AI, render onto the release line, open PRs.
 
-    ``source_clone_dir`` is a clone of the M.m branch; it doubles as
-    ``valkey_clone_dir`` for the contributor range lookup. The destination
-    release branch is materialized in a worktree under it. Returns 0 on success,
-    1 on failure.
+    ``source_clone_dir`` is a clone of the M.m branch. The destination release
+    branch is materialized in a worktree under it. ``profile`` carries the
+    target repository's conventions (notes file, version layout, heading name,
+    categories, prompt wording). Returns 0 on success, 1 on failure.
 
     When *security_from_advisories* is set, published GitHub repository advisories
     fixed by *version* are rendered into the Security Fixes section (merged with
@@ -640,7 +788,7 @@ def cut(
     # and an embedded newline would inject a raw non-bullet line into the changelog.
     security_fixes = _sanitize_security_fixes(security_fixes)
     plan = resolve_branch_plan(
-        source_clone_dir, version=version, stage=stage
+        source_clone_dir, version=version, stage=stage, profile=profile
     )
     source_ref = plan.target
     logger.info(
@@ -670,6 +818,7 @@ def cut(
         tag_glob=notes_tag_glob, base_ref=notes_base_ref,
         release_branch=source_ref,
         patch_release=rn.parse_version(version)[2] > 0,
+        profile=profile,
     )
     if regen.included and not regen.bullet_count:
         logger.error(
@@ -693,12 +842,21 @@ def cut(
     run_git(source_clone_dir, "worktree", "add", "--force", "-B", prep_branch, dest_dir,
             pinned_head_sha)
     try:
-        dest_notes_path = os.path.join(dest_dir, NOTES_FILE)
-        dest_notes_text = _read(dest_notes_path)
-        dest_version_text = _read(os.path.join(dest_dir, VERSION_FILE))
+        dest_notes_path = os.path.join(dest_dir, profile.notes_file)
+        dest_notes_text = _read_required(
+            dest_dir, profile.notes_file,
+            "seed the changelog file on the release line before cutting",
+        )
+        dest_version_text = _read_version_file(dest_dir, profile)
         # Main validates this before the AI run. Re-check the pinned worktree so a
         # branch advance between clone and pin cannot bypass the monotonicity gate.
-        validate_release_progression(dest_version_text, version, plan.stage)
+        validate_release_progression(
+            dest_version_text, version, plan.stage, bumper=profile.bumper
+        )
+        _refuse_already_cut_stage(dest_notes_text, version, plan.stage, profile)
+        # Re-check the pinned release-line snapshot immediately before rendering;
+        # main's preflight ran before this exact branch tip was fetched.
+        _validate_changelog_history(dest_notes_text, profile)
 
         # Drop bullets the destination changelog already credits. The tag-based
         # dedup in discovery cannot engage without RC tags (the agent never
@@ -745,16 +903,15 @@ def cut(
                 len(security_noted_prs), security_noted_prs,
             )
 
-        # 3. Render bullets -> dated section on dest; bump version.h.
+        # 3. Render bullets -> dated section on dest; bump the profile's version file.
         new_dest_notes, new_version = promote_and_bump(
-            valkey_clone_dir,
             grouped=grouped,
             dest_notes_text=dest_notes_text,
             dest_version_text=dest_version_text,
             version=version, stage_lc=plan.stage, urgency=urgency, date=date,
-            repo_full_name=repo_full_name, contrib_base=contrib_base,
-            contrib_head=notes_head_ref, token=token,
+            contrib_base=contrib_base, token=token,
             security_fixes=security_fixes,
+            profile=profile,
             pr_authors=regen.pr_authors,
         )
 
@@ -775,8 +932,8 @@ def cut(
             regen=regen, already_credited=already_credited,
             noted_bullet_count=noted_bullet_count, urgency=urgency,
             security_fixes=security_fixes, security_noted_prs=security_noted_prs,
-            baseline_unanchored=baseline_unanchored, advisories=advisories,
-            notes_range=notes_range,
+            baseline_unanchored=baseline_unanchored,
+            advisories=advisories, notes_range=notes_range,
         )
 
         if dry_run:
@@ -785,17 +942,18 @@ def cut(
                 repo_full_name,
             )
             _print_dry_run(plan, version, new_dest_notes, new_version, notes_meta,
-                           force_ready=force_ready)
+                           force_ready=force_ready, profile=profile)
             return 0
 
         _write(dest_notes_path, new_dest_notes)
-        _write(os.path.join(dest_dir, VERSION_FILE), new_version)
+        _write(os.path.join(dest_dir, profile.bumper.version_file), new_version)
 
         release_url = _commit_push_release_pr(
             repo, dest_dir, repo_full_name=repo_full_name, plan=plan,
             version=version, prep_branch=prep_branch, notes_meta=notes_meta,
             git_env=git_env, force_ready=force_ready,
             expected_base_sha=pinned_head_sha,
+            profile=profile,
         )
         logger.info("Release PR: %s", release_url)
 
@@ -805,7 +963,9 @@ def cut(
 
 
 def _print_dry_run(
-    plan, version, dest_notes, version_h, notes_meta: "_NotesMeta", *, force_ready: bool = False
+    plan, version, dest_notes, version_h, notes_meta: "_NotesMeta", *,
+    force_ready: bool = False,
+    profile: projects_mod.ProjectProfile,
 ) -> None:
     regen = notes_meta.regen
     print(f"\n===== release plan ({version} {plan.stage}) =====")
@@ -905,14 +1065,15 @@ def _print_dry_run(
     if regen.reverted:
         print("⚠️  reverted sweep manifest rows (no bullet generated): "
               f"{[r.number for r in regen.reverted]}")
-    print(f"\n===== {NOTES_FILE} (release branch, dry run) =====\n{dest_notes}")
-    print(f"\n===== {VERSION_FILE} (dry run) =====\n{version_h}")
+    print(f"\n===== {profile.notes_file} (release branch, dry run) =====\n{dest_notes}")
+    print(f"\n===== {profile.bumper.version_file} (dry run) =====\n{version_h}")
 
 
 def _commit_push_release_pr(
     repo: Any, dest_dir: str, *, repo_full_name: str, plan: BranchPlan, version: str,
     prep_branch: str, notes_meta: "_NotesMeta", git_env: dict[str, str],
     force_ready: bool = False, expected_base_sha: str = "",
+    profile: projects_mod.ProjectProfile,
 ) -> str:
     """Commit the cut on the prep branch, push it, and open/update a PR into the line.
 
@@ -932,8 +1093,9 @@ def _commit_push_release_pr(
     """
     run_git(dest_dir, "config", "user.name", BOT_NAME)
     run_git(dest_dir, "config", "user.email", BOT_EMAIL)
-    run_git(dest_dir, "add", NOTES_FILE, VERSION_FILE)
-    run_git(dest_dir, "commit", "-s", "-m", commit_title(version, plan.stage))
+    run_git(dest_dir, "add", profile.notes_file, profile.bumper.version_file)
+    run_git(dest_dir, "commit", "-s", "-m",
+            commit_title(version, plan.stage, profile.display_name))
     if not prep_branch.startswith(f"{PREP_BRANCH_PREFIX}/"):
         raise RuntimeError(f"Refusing to push to non-namespaced prep branch: {prep_branch!r}")
 
@@ -944,8 +1106,9 @@ def _commit_push_release_pr(
     # branch push and the body update succeed. force_ready cannot override a
     # security-signal hold (see _should_hold).
     hold = _should_hold(_hold_reasons(plan, notes_meta), force_ready)
-    title = commit_title(version, plan.stage)
-    body = _build_pr_body(plan, version, notes_meta, force_ready=force_ready)
+    title = commit_title(version, plan.stage, profile.display_name)
+    body = _build_pr_body(plan, version, notes_meta, force_ready=force_ready,
+                          profile=profile)
     if expected_base_sha:
         # Check at the last practical point before remote mutation. The local
         # commit is harmless if this fails; no prep branch or PR was changed.
@@ -1150,7 +1313,9 @@ def _hold_banner(reasons: Sequence[str], force_ready: bool) -> str:
 
 
 def _build_pr_body(
-    plan: BranchPlan, version: str, notes_meta: "_NotesMeta", *, force_ready: bool = False
+    plan: BranchPlan, version: str, notes_meta: "_NotesMeta", *,
+    force_ready: bool = False,
+    profile: projects_mod.ProjectProfile,
 ) -> str:
     """Assemble the release PR body: hold banner, summary line, then each section.
 
@@ -1170,12 +1335,12 @@ def _build_pr_body(
         + f"Cuts **{stage_release_name(version, plan.stage)}** onto release line "
         f"`{plan.target}`.\n\n"
         f"- Promotes the release notes into a dated section, bumps "
-        f"`src/version.h`, and refreshes the running contributor list.\n"
+        f"`{profile.bumper.version_file}`, and refreshes the running contributor list.\n"
         + _notes_range_body_section(notes_meta.notes_range, regen)
         + _rc_warning_section(plan)
         + _baseline_warning_section(notes_meta, version)
-        + _empty_notes_section(notes_meta, plan)
-        + _no_new_prs_section(notes_meta, plan)
+        + _empty_notes_section(notes_meta, plan, profile)
+        + _no_new_prs_section(notes_meta, plan, profile)
         + _duplicate_pr_section(regen.duplicate_prs)
         + _skipped_section(regen.skipped)
         + _uncertain_section(regen.uncertain)
@@ -1282,7 +1447,9 @@ def _baseline_warning_section(notes_meta: "_NotesMeta", version: str) -> str:
     )
 
 
-def _empty_notes_section(notes_meta: "_NotesMeta", plan: BranchPlan) -> str:
+def _empty_notes_section(
+    notes_meta: "_NotesMeta", plan: BranchPlan, profile: projects_mod.ProjectProfile
+) -> str:
     """Explain an empty dated section, keyed on the cause.
 
     The cut renders only the dated heading + version bump when no bullet survives.
@@ -1300,7 +1467,7 @@ def _empty_notes_section(notes_meta: "_NotesMeta", plan: BranchPlan) -> str:
         return (
             "\n### Empty release notes\n\n"
             "No merged PRs were found in range, so this cut only adds the dated "
-            "heading and the `src/version.h` bump. If you expected notes here, "
+            f"heading and the `{profile.bumper.version_file}` bump. If you expected notes here, "
             "confirm the range above and that the target branch has the intended "
             "commits.\n"
         )
@@ -1533,7 +1700,9 @@ def _security_warning_section(notes_meta: "_NotesMeta") -> str:
     )
 
 
-def _no_new_prs_section(notes_meta: "_NotesMeta", plan: BranchPlan) -> str:
+def _no_new_prs_section(
+    notes_meta: "_NotesMeta", plan: BranchPlan, profile: projects_mod.ProjectProfile
+) -> str:
     """Warn in the PR body when every PR in range was already credited on the line.
 
     Returns an empty string unless some PR was dropped as a duplicate AND the drop
@@ -1552,7 +1721,7 @@ def _no_new_prs_section(notes_meta: "_NotesMeta", plan: BranchPlan) -> str:
         f"Every release-noted PR in range is already credited on `{plan.target}` "
         f"(carried from an earlier cut): {refs}. They were dropped to avoid "
         "duplicate entries, so this cut only adds the dated heading and the "
-        "`src/version.h` bump. If you expected new notes here, confirm the new "
+        f"`{profile.bumper.version_file}` bump. If you expected new notes here, confirm the new "
         "PRs merged into the target branch and carry the `release-notes` label.\n"
     )
 

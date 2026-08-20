@@ -1,7 +1,11 @@
-# Cut a Valkey release: generate notes all at once + bump version + carry prior RCs.
+# Cut a release: generate notes all at once + bump version + carry prior RCs.
 #
-# The normal dispatch asks only for the release decision: version, stage, urgency,
-# and whether to preview. Patch versions infer stage=ga when stage is left empty.
+# Supports valkey core and the module repos (valkey-search, valkey-json,
+# valkey-bloom); per-repo conventions live in scripts/release_notes/projects.py.
+#
+# The normal dispatch asks only for the release decision: repo, version, stage,
+# urgency, and whether to preview. Patch versions infer stage=ga when stage is
+# left empty.
 # Advanced overrides live in release-notes-cut-advanced.yml, which calls this same
 # workflow through workflow_call so both paths execute identical release code.
 #
@@ -15,6 +19,16 @@ name: Cut Release Notes
 on:
   workflow_dispatch:
     inputs:
+      repo:
+        description: "Target repository (valkey-io org)"
+        required: true
+        type: choice
+        default: valkey
+        options:
+          - valkey
+          - valkey-search
+          - valkey-json
+          - valkey-bloom
       version:
         description: "Target MAJOR.MINOR.PATCH, which must advance the current release line (e.g. 9.1.1 after 9.1.0)"
         required: true
@@ -40,6 +54,11 @@ on:
         default: true
   workflow_call:
     inputs:
+      repo:
+        description: "Target repository name in the valkey-io org (valkey, valkey-search, valkey-json, valkey-bloom)"
+        required: false
+        type: string
+        default: valkey
       version:
         description: "Target MAJOR.MINOR.PATCH"
         required: true
@@ -90,9 +109,11 @@ on:
         default: true
     secrets:
       VALKEYRIE_BOT_APP_ID:
-        required: true
+        required: false
       VALKEYRIE_BOT_PRIVATE_KEY:
-        required: true
+        required: false
+      VALKEY_GITHUB_TOKEN:
+        required: false
       AWS_ROLE_ARN:
         required: true
 
@@ -109,13 +130,16 @@ jobs:
       contents: read
       id-token: write
     concurrency:
-      # Serialize every stage of a target version. This also makes an inferred patch
-      # GA, an explicit ga, and case variants share one lock.
-      group: release-cut-${{ inputs.version }}
+      # Serialize every stage of a target version per repository. This also makes
+      # an inferred patch GA, an explicit ga, and case variants share one lock.
+      group: release-cut-${{ inputs.repo }}-${{ inputs.version }}
       cancel-in-progress: false
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       CLAUDE_CODE_USE_BEDROCK: "1"
+      # secrets.* is not readable in step `if:` expressions; surface presence
+      # here so the token steps can be skipped on a fork without App creds.
+      HAS_APP_CREDS: ${{ secrets.VALKEYRIE_BOT_APP_ID != '' && secrets.VALKEYRIE_BOT_PRIVATE_KEY != '' }}
     steps:
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -123,13 +147,34 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
+      # Gate the target repo to the exact supported set BEFORE any App token is
+      # minted for it and before it flows into RELEASE_NOTES_REPO (and from
+      # there into git clone/push targets). The dispatch UI is a choice list,
+      # but workflow_call passes any string.
+      - name: Validate target repository
+        shell: bash
+        env:
+          RELEASE_NOTES_TARGET_REPO_NAME: ${{ inputs.repo }}
+        run: |
+          set -euo pipefail
+          case "${RELEASE_NOTES_TARGET_REPO_NAME}" in
+            valkey|valkey-search|valkey-json|valkey-bloom) ;;
+            *)
+              echo "Invalid repo (want valkey, valkey-search, valkey-json, or valkey-bloom): ${RELEASE_NOTES_TARGET_REPO_NAME}" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Set up agent (Python deps + Claude Code)
         uses: ./.github/actions/setup-agent
         with:
           install-claude: "true"
 
       # Two token steps, selected by whether this cut reads advisories, so a
-      # normal cut never depends on the advisory grant. repository-advisories:read
+      # normal cut never depends on the advisory grant. Both steps are skipped
+      # when the App credentials are absent (a fork without VALKEYRIE_BOT_*):
+      # the cut step then falls back to VALKEY_GITHUB_TOKEN for READ-ONLY dry
+      # runs and refuses to publish. repository-advisories:read
       # is only requested when --security-from-advisories is on; create-github-app-token
       # fails if the App installation lacks a requested permission, so requesting it
       # unconditionally would break EVERY cut (including ones that never touch
@@ -137,13 +182,13 @@ jobs:
       # is read as (default || advisory) below, and a skipped step yields "".
       - name: Generate GitHub App token
         id: generate-token
-        if: ${{ !inputs.security_from_advisories }}
+        if: ${{ !inputs.security_from_advisories && env.HAS_APP_CREDS == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
-          repositories: valkey
+          repositories: ${{ inputs.repo }}
           # contents:write to push the agent-namespaced prep branch;
           # pull-requests:write to open the release PR; metadata:read is always required.
           permission-contents: write
@@ -152,13 +197,13 @@ jobs:
 
       - name: Generate GitHub App token (with advisories)
         id: generate-token-advisories
-        if: ${{ inputs.security_from_advisories }}
+        if: ${{ inputs.security_from_advisories && env.HAS_APP_CREDS == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
-          repositories: valkey
+          repositories: ${{ inputs.repo }}
           # Same as above plus repository-advisories:read, which --security-from-advisories
           # needs to list published advisories. This step only runs for an advisory
           # cut, so a plain cut is never blocked when the App lacks this grant. The
@@ -182,8 +227,9 @@ jobs:
         env:
           # Exactly one token step ran (gated by security_from_advisories); the
           # skipped one yields "", so this resolves to whichever produced a token.
-          RELEASE_NOTES_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || steps.generate-token-advisories.outputs.token }}
-          RELEASE_NOTES_REPO: valkey-io/valkey
+          RELEASE_NOTES_GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || steps.generate-token-advisories.outputs.token || secrets.VALKEY_GITHUB_TOKEN }}
+          RELEASE_NOTES_DRY_RUN_FALLBACK_TOKEN: ${{ (steps.generate-token.outputs.token || steps.generate-token-advisories.outputs.token) == '' && secrets.VALKEY_GITHUB_TOKEN != '' && 'true' || 'false' }}
+          RELEASE_NOTES_TARGET_REPO_NAME: ${{ inputs.repo }}
           RELEASE_NOTES_VERSION: ${{ inputs.version }}
           RELEASE_NOTES_STAGE: ${{ inputs.stage }}
           RELEASE_NOTES_URGENCY: ${{ inputs.urgency }}
@@ -196,6 +242,27 @@ jobs:
           RELEASE_NOTES_DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
         run: |
           set -euo pipefail
+          # The "Validate target repository" step already enforced the allowlist
+          # (before token minting). Re-check only the shape here so this step
+          # never composes RELEASE_NOTES_REPO from an empty or path-like value.
+          if [[ ! "${RELEASE_NOTES_TARGET_REPO_NAME}" =~ ^[a-z][a-z-]*$ ]]; then
+            echo "Invalid repo name shape: ${RELEASE_NOTES_TARGET_REPO_NAME}" >&2
+            exit 1
+          fi
+          export RELEASE_NOTES_REPO="valkey-io/${RELEASE_NOTES_TARGET_REPO_NAME}"
+          # Fork testing: with no App credentials, a personal-token fallback
+          # (VALKEY_GITHUB_TOKEN) may run READ-ONLY dry runs. It must never
+          # publish: a PAT push would bypass the App's audited identity.
+          if [[ "${RELEASE_NOTES_DRY_RUN_FALLBACK_TOKEN}" == "true" && "${RELEASE_NOTES_DRY_RUN}" != "true" ]]; then
+            echo "Refusing a non-dry-run cut with the personal-token fallback;" \
+                 "publishing requires the App credentials (VALKEYRIE_BOT_*)." >&2
+            exit 1
+          fi
+          if [[ -z "${RELEASE_NOTES_GITHUB_TOKEN}" ]]; then
+            echo "No token available: set VALKEYRIE_BOT_APP_ID/PRIVATE_KEY, or" \
+                 "VALKEY_GITHUB_TOKEN for a dry run on a fork." >&2
+            exit 1
+          fi
           # Validate a value used in a git ref position. These inputs flow into git
           # commands as bare arguments (`git clone --branch <ref>`, `<ref>^{commit}`,
           # push refspecs, `git compare` ends), so the gate must reject shapes that

@@ -14,6 +14,7 @@ import pytest
 
 from scripts.common.proc import git_output, run_git
 from scripts.release_notes import main as main_mod
+from scripts.release_notes import projects as projects_mod
 from scripts.release_notes.main import main
 
 # Every RELEASE_NOTES_* env var main() reads as an argparse default. The
@@ -49,7 +50,7 @@ def patched(monkeypatch, tmp_path):
     monkeypatch.setattr(main_mod, "run_git", lambda *a, **k: MagicMock())
     monkeypatch.setattr(main_mod.tempfile, "mkdtemp", lambda *a, **k: str(tmp_path / "clone"))
     monkeypatch.setattr(main_mod.shutil, "rmtree", lambda *a, **k: None)
-    # The orchestration tests mock clone and never materialize version.h or tags.
+    # The orchestration tests mock clone and never materialize release files or tags.
     # Target progression has focused real-repository tests below.
     monkeypatch.setattr(main_mod, "_validate_release_target", lambda *a, **k: None)
     # Default the rc1 previous-release resolver to a no-op (no earlier release), so
@@ -462,29 +463,73 @@ class TestValidateReleaseTarget:
         if stage is not None:
             lines.append(f'#define VALKEY_RELEASE_STAGE "{stage}"')
         (repo / "src" / "version.h").write_text("\n".join(lines) + "\n")
+        (repo / "00-RELEASENOTES").write_text(
+            "Release notes will be generated here.\n"
+        )
         run_git(str(repo), "init", "-q", "-b", "main")
         run_git(str(repo), "config", "user.email", "t@t")
         run_git(str(repo), "config", "user.name", "t")
-        run_git(str(repo), "add", "src/version.h")
+        run_git(str(repo), "add", "src/version.h", "00-RELEASENOTES")
         run_git(str(repo), "commit", "-q", "-m", "base")
         return repo
 
     def test_patch_target_advances_current_release(self, tmp_path):
         repo = self._repo(tmp_path, "8.1.8")
         run_git(str(repo), "tag", "8.1.8")
-        main_mod._validate_release_target(str(repo), "main", "8.1.9", "ga")
+        main_mod._validate_release_target(str(repo), "main", "8.1.9", "ga", projects_mod.VALKEY_PROFILE)
 
     def test_rejects_downgrade_before_cut(self, tmp_path):
         repo = self._repo(tmp_path, "8.1.8")
         run_git(str(repo), "tag", "8.1.8")
         with pytest.raises(ValueError, match="newer than the branch's current state"):
-            main_mod._validate_release_target(str(repo), "main", "8.1.7", "ga")
+            main_mod._validate_release_target(str(repo), "main", "8.1.7", "ga", projects_mod.VALKEY_PROFILE)
 
     def test_rejects_already_tagged_target(self, tmp_path):
         repo = self._repo(tmp_path, "9.1.0", "rc1")
         run_git(str(repo), "tag", "9.1.0-rc2")
         with pytest.raises(ValueError, match="existing tag '9.1.0-rc2'"):
-            main_mod._validate_release_target(str(repo), "main", "9.1.0", "rc2")
+            main_mod._validate_release_target(str(repo), "main", "9.1.0", "rc2", projects_mod.VALKEY_PROFILE)
+
+    def test_rejects_unrecognized_credited_history_before_tag_validation(
+        self, tmp_path, monkeypatch
+    ):
+        repo = self._repo(tmp_path, "8.1.8")
+        (repo / "00-RELEASENOTES").write_text(
+            "Server release history\n* Fixed a race condition (#1079)\n"
+        )
+        monkeypatch.setattr(
+            main_mod.discover_mod,
+            "validate_target_release_tag",
+            lambda *args, **kwargs: pytest.fail("tag validation should not run"),
+        )
+        with pytest.raises(ValueError, match="would drop prior changelog history"):
+            main_mod._validate_release_target(
+                str(repo), "main", "8.1.9", "ga", projects_mod.VALKEY_PROFILE
+            )
+
+    def test_rejects_stageless_duplicate_before_tag_validation(
+        self, tmp_path, monkeypatch
+    ):
+        repo = tmp_path / "json-repo"
+        repo.mkdir()
+        (repo / "CMakeLists.txt").write_text(
+            "project(ValkeyJSONModule VERSION 1.0.3 LANGUAGES C CXX)\n"
+        )
+        (repo / "00-RELEASENOTES").write_text(
+            "Valkey JSON 1.0.3 GA - Released Tue 04 August 2026\n"
+        )
+        # Prove the changelog gate runs before the tag gate (and therefore before
+        # the later AI regeneration reached by main()).
+        monkeypatch.setattr(
+            main_mod.discover_mod,
+            "validate_target_release_tag",
+            lambda *args, **kwargs: pytest.fail("tag validation should not run"),
+        )
+        with pytest.raises(ValueError, match="already records"):
+            main_mod._validate_release_target(
+                str(repo), "1.0", "1.0.3", "ga",
+                projects_mod.profile_for("valkey-json"),
+            )
 
 
 # --- baseline glob / base-ref resolution ---

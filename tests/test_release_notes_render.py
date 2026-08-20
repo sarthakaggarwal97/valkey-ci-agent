@@ -10,13 +10,19 @@ from __future__ import annotations
 
 import os
 import re
+from functools import partial
 
-from scripts.release_notes import release_format
+from scripts.release_notes import projects, release_format
 from scripts.release_notes.models import CategorizedBullet
 from scripts.release_notes.render import (
     format_bullet,
-    group_bullets,
 )
+from scripts.release_notes.render import (
+    group_bullets as _group_bullets,
+)
+
+_CORE = projects.VALKEY_PROFILE
+group_bullets = partial(_group_bullets, categories=_CORE.categories)
 
 _FIXTURE_CLONE = os.path.join(os.path.dirname(__file__), "fixtures", "valkey_clone")
 
@@ -171,7 +177,11 @@ class TestMaliciousBulletCannotBreakSection:
         grouped = group_bullets(bullets)
         assert len(grouped["Bug Fixes"]) == 1
         assert "\n" not in grouped["Bug Fixes"][0]
-        section = fmt.render_version_section("9.1.0", "rc1", "LOW", "2026-06-25", grouped)
+        section = fmt.render_version_section(
+            "9.1.0", "rc1", "LOW", "2026-06-25", grouped,
+            display_name=_CORE.display_name,
+            categories=_CORE.categories,
+        )
         # Both categories render; the injected heading (now inside a bullet line)
         # did not create an extra category HEADER. Count header lines, not the
         # substring; the sanitized bullet text legitimately contains "### Bug Fixes".
@@ -188,7 +198,9 @@ class TestRenderVersionSection:
             _bullet(41, "jdoe", "New Features and Enhanced Behavior", "new opt"),
         ]
         section = fmt.render_version_section(
-            "9.1.0", "rc1", "LOW", "2026-06-25", group_bullets(bullets)
+            "9.1.0", "rc1", "LOW", "2026-06-25", group_bullets(bullets),
+            display_name=_CORE.display_name,
+            categories=_CORE.categories,
         )
         assert "* fix crash by @BChan-0 (#40)" in section
         assert "* new opt by @jdoe (#41)" in section
@@ -201,7 +213,11 @@ class TestRenderVersionSection:
         grouped = group_bullets(
             [_bullet(40, "BChan-0", "Bug Fixes", "a"), _bullet(41, "", "Bug Fixes", "b")]
         )
-        section = fmt.render_version_section("9.1.0", "rc1", "LOW", "2026-06-25", grouped)
+        section = fmt.render_version_section(
+            "9.1.0", "rc1", "LOW", "2026-06-25", grouped,
+            display_name=_CORE.display_name,
+            categories=_CORE.categories,
+        )
         for line in section.splitlines():
             if line.startswith("* "):
                 assert _TRAILING_PR_RE.search(line), line

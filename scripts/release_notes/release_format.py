@@ -67,7 +67,6 @@ _PATCH_URGENCY_SENTENCES = {
 }
 
 _BULLET_RE = re.compile(r"^\s*[*-]\s+\S")
-_DATED_SECTION_RE = re.compile(r"^Valkey\s+\d+\.\d+\.\d+", re.MULTILINE)
 _VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 # rcN, N starting at 1 with no leading zeros: "rc1", "rc12" but not "rc0"/"rc01".
 _RC_STAGE_RE = re.compile(r"^rc([1-9]\d*)$")
@@ -81,7 +80,10 @@ _ORDINALS = [
 def parse_version(version: str) -> "tuple[int, int, int]":
     """Split ``"M.m.p"`` into integer ``(major, minor, patch)``.
 
-    Each component must be 0-255 (one byte of VALKEY_VERSION_NUM).
+    All profiles intentionally limit each component to 0-255. Core requires
+    one-byte components for ``VALKEY_VERSION_NUM``; module profiles share this
+    controller-wide contract so branch, tag, changelog, and version-file
+    validation cannot diverge by repository.
     """
     match = _VERSION_RE.match(version.strip())
     if not match:
@@ -104,12 +106,15 @@ def ordinal(n: int) -> str:
     return "{}th".format(n)
 
 
-def unrecognized_categories(notes: "Dict[str, List[str]]") -> List[str]:
-    """Return category names in *notes* that are not in CATEGORIES.
+def unrecognized_categories(
+    notes: "Dict[str, List[str]]",
+    categories: Sequence[str],
+) -> List[str]:
+    """Return category names in *notes* that are not in *categories*.
 
     Reserved sections are excluded. Empty categories are ignored.
     """
-    known = set(CATEGORIES) | set(RESERVED_SECTIONS)
+    known = set(categories) | set(RESERVED_SECTIONS)
     return [
         category
         for category, bullets in notes.items()
@@ -135,23 +140,24 @@ def _normalize_stage(stage: str) -> str:
     raise ValueError("release stage must be 'ga' or 'rcN' (e.g. rc1), got {!r}".format(stage))
 
 
-def render_header(major: int, minor: int) -> str:
+def render_header(major: int, minor: int, display_name: str) -> str:
     """Render the file title and urgency legend for a ``M.m`` release line."""
-    title = "Valkey {}.{} release notes".format(major, minor)
+    title = "{} {}.{} release notes".format(display_name, major, minor)
     underline = "=" * len(title)
     return "{}\n{}\n\n{}".format(title, underline, URGENCY_LEGEND)
 
 
-def _stage_heading(version: str, stage: str) -> str:
+def stage_heading(version: str, stage: str, display_name: str) -> str:
+    """The version part of a dated heading: ``<Name> M.m.p[-rcN| GA]``."""
     if stage == "ga":
         # Valkey uses "GA" for the initial M.m.0 release, while patch release
-        # headings are simply "Valkey M.m.p".
+        # headings are simply "<Name> M.m.p".
         _major, _minor, patch = parse_version(version)
-        return "Valkey {}{}".format(version, " GA" if patch == 0 else "")
-    return "Valkey {}-{}".format(version, stage)
+        return "{} {}{}".format(display_name, version, " GA" if patch == 0 else "")
+    return "{} {}-{}".format(display_name, version, stage)
 
 
-def _urgency_sentence(version: str, stage: str, urgency: str) -> str:
+def _urgency_sentence(version: str, stage: str, urgency: str, display_name: str) -> str:
     major, minor, patch = parse_version(version)
     if urgency == "SECURITY" or (stage == "ga" and patch > 0):
         return "Upgrade urgency {}: {}".format(
@@ -160,15 +166,15 @@ def _urgency_sentence(version: str, stage: str, urgency: str) -> str:
     if stage == "ga":
         which = ordinal(patch + 1)  # M.m.0 is the first stable release of M.m
         return (
-            "Upgrade urgency {}: This is the {} stable release of Valkey {}.{}.".format(
-                urgency, which, major, minor
+            "Upgrade urgency {}: This is the {} stable release of {} {}.{}.".format(
+                urgency, which, display_name, major, minor
             )
         )
     rc_num = int(_RC_STAGE_RE.match(stage).group(1))  # type: ignore[union-attr]
     which = ordinal(rc_num)
     return (
-        "Upgrade urgency {}: This is the {} release candidate of Valkey {}.".format(
-            urgency, which, version
+        "Upgrade urgency {}: This is the {} release candidate of {} {}.".format(
+            urgency, which, display_name, version
         )
     )
 
@@ -180,13 +186,18 @@ def render_version_section(
     date: str,
     notes: "Dict[str, List[str]]",
     security_fixes: Optional[Sequence[str]] = None,
+    *,
+    display_name: str,
+    categories: Sequence[str],
 ) -> str:
     """Render one dated release section in release-branch markdown form.
 
     Emits Security Fixes (from *security_fixes*) first, then canonical
     categories in order, then any non-canonical categories last. Contributors
-    are rendered separately as a cumulative file footer.
+    are rendered separately as a cumulative file footer. *categories* is the
+    profile's canonical ordering.
     """
+    ordered_categories = categories
     stage = _normalize_stage(stage)
     urgency = urgency.strip().upper()
     if urgency not in VALID_URGENCIES:
@@ -194,9 +205,14 @@ def render_version_section(
             "urgency must be one of {}, got {!r}".format(", ".join(VALID_URGENCIES), urgency)
         )
 
-    heading = "{}  -  Released {}".format(_stage_heading(version, stage), _format_date(date))
+    heading = "{}  -  Released {}".format(
+        stage_heading(version, stage, display_name), _format_date(date)
+    )
     underline = "-" * len(heading)
-    out: List[str] = [heading, underline, "", _urgency_sentence(version, stage, urgency), ""]
+    out: List[str] = [
+        heading, underline, "",
+        _urgency_sentence(version, stage, urgency, display_name), "",
+    ]
 
     def emit_category(name: str, bullets: Sequence[str]) -> None:
         out.append("### {}".format(name))
@@ -206,12 +222,12 @@ def render_version_section(
 
     if security_fixes:
         emit_category(SECURITY_CATEGORY, list(security_fixes))
-    for category in CATEGORIES:
+    for category in ordered_categories:
         bullets = notes.get(category)
         if bullets:
             emit_category(category, bullets)
     # Non-canonical categories rendered last so nothing is silently dropped.
-    for category in unrecognized_categories(notes):
+    for category in unrecognized_categories(notes, ordered_categories):
         emit_category(category, notes[category])
 
     return "\n".join(out).rstrip() + "\n"
@@ -232,7 +248,9 @@ def _split_contributors_footer(text: str) -> "tuple[str, List[str]]":
     """Split *text* at its trailing ``### Contributors`` section.
 
     Returns ``(body, contributors)`` where *body* is everything before the last
-    such header and *contributors* is the list of display names from that section.
+    such header and *contributors* is the list of display names from that
+    section. Repositories are expected to normalize historical contributor
+    blocks to this canonical format before enabling automated cuts.
     """
     matches = list(_CONTRIBUTORS_HEADER_RE.finditer(text))
     if not matches:
@@ -259,7 +277,9 @@ def render_contributors_footer(contributors: Sequence[str]) -> str:
         rendered = _strip_bullet(entry)
         if not rendered:
             continue
-        handle_match = re.search(r"\s+@([A-Za-z0-9-]+)$", rendered)
+        # (?:^|\s) accepts a canonical footer entry with either a display name
+        # and handle or just a bare handle, keying both forms by login.
+        handle_match = re.search(r"(?:^|\s)@([A-Za-z0-9-]+)$", rendered)
         handle = handle_match.group(1).casefold() if handle_match else ""
         display = (
             rendered[:handle_match.start()].strip()
@@ -267,11 +287,18 @@ def render_contributors_footer(contributors: Sequence[str]) -> str:
             else rendered
         )
         display_key = display.casefold()
+        # A name-only identity (e.g. a co-author trailer with no resolvable
+        # login) merges with a handle it spells: "KarthikSubbarao" is
+        # "@KarthikSubbarao". Spaces are dropped so "Karthik Subbarao" also
+        # merges with that handle.
+        squashed = display_key.replace(" ", "")
         matches = [
             index
             for index, (known_name, known_handle, _known_rendered) in enumerate(records)
             if (handle and known_handle == handle)
             or (display_key and known_name == display_key)
+            or (handle and known_name.replace(" ", "") == handle)
+            or (squashed and known_handle == squashed)
         ]
         if not matches:
             records.append((display_key, handle, rendered))
@@ -293,19 +320,41 @@ def render_contributors_footer(contributors: Sequence[str]) -> str:
         return ""
     unique = sorted(
         (rendered for _name, _handle, rendered in records),
-        key=lambda entry: entry.rsplit(" @", 1)[0].casefold(),
+        key=lambda entry: entry.rsplit(" @", 1)[0].lstrip("@").casefold(),
     )
     out = ["### Contributors"]
     out.extend("* {}".format(name) for name in unique)
     return "\n".join(out)
 
 
-def _existing_dated_sections(text: str) -> str:
-    """Return text from the first ``Valkey M.m.p`` heading onward."""
-    match = _DATED_SECTION_RE.search(text)
-    if not match:
+def _dated_section_re(display_name: str) -> "re.Pattern[str]":
+    """Line-anchored ``<display_name> M.m.p`` heading matcher."""
+    return re.compile(
+        r"^{}\s+\d+\.\d+\.\d+".format(re.escape(display_name)), re.MULTILINE
+    )
+
+
+def has_dated_section(text: str, display_name: str) -> bool:
+    """Whether *text* contains any ``<display_name> M.m.p`` dated heading."""
+    return dated_section_start(text, display_name) is not None
+
+
+def dated_section_start(text: str, display_name: str) -> "Optional[int]":
+    """Return the offset of the first dated section, or ``None`` when absent."""
+    match = _dated_section_re(display_name).search(text)
+    return match.start() if match else None
+
+
+def _existing_dated_sections(text: str, display_name: str) -> str:
+    """Return text from the first ``<display_name> M.m.p`` heading onward.
+
+    The heading name must match the selected profile's ``display_name``. A
+    mismatched value would fail to recognize the profile's prior history.
+    """
+    start = dated_section_start(text, display_name)
+    if start is None:
         return ""
-    return text[match.start():].strip()
+    return text[start:].strip()
 
 
 def render_release_notes(
@@ -318,6 +367,8 @@ def render_release_notes(
     prior_text: str,
     contributors: Optional[Sequence[str]] = None,
     security_fixes: Optional[Sequence[str]] = None,
+    display_name: str,
+    categories: Sequence[str],
 ) -> str:
     """Render the full changelog with a new dated section prepended.
 
@@ -325,12 +376,15 @@ def render_release_notes(
     and a cumulative Contributors footer.
     """
     major, minor, _ = parse_version(version)
-    dated = render_version_section(version, stage, urgency, date, notes, security_fixes)
+    dated = render_version_section(
+        version, stage, urgency, date, notes, security_fixes,
+        display_name=display_name, categories=categories,
+    )
 
     before_contrib, prior_contributors = _split_contributors_footer(prior_text)
-    existing = _existing_dated_sections(before_contrib)
+    existing = _existing_dated_sections(before_contrib, display_name)
 
-    parts: List[str] = [render_header(major, minor), "", dated.rstrip()]
+    parts: List[str] = [render_header(major, minor, display_name), "", dated.rstrip()]
     if existing:
         parts += ["", existing]
 

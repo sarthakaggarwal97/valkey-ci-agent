@@ -310,11 +310,18 @@ main.py (daily cron or manual dispatch)
 
 ## Release Notes Flow
 
+Supports valkey core and the module repos (valkey-search, valkey-json,
+valkey-bloom). Per-repo conventions (changelog display name, version file
+layout and bumper, note categories, prompt wording) are declared as
+`ProjectProfile`s in `scripts/release_notes/projects.py` and resolved from the
+target repo name (fork owners resolve the upstream profile).
+
 ```text
-main.py (manual dispatch: version, optional stage, urgency, dry_run)
+main.py (manual dispatch: repo, version, optional stage, urgency, dry_run)
+  -> resolve the repo's ProjectProfile (unsupported repos fail fast)
   -> validate + canonicalize inputs; infer patch GA only when PATCH > 0
   -> dry_run selects preview (true) or PR-opening execution (false)
-  -> clone valkey (full depth + tags), validate --base-ref
+  -> clone the target repo (full depth + tags), validate --base-ref
   -> release_cut.cut()
        -> collect_advisory_fixes()   (if --security-from-advisories)
        -> resolve_branch_plan()      verify M.m branch exists, derive target
@@ -329,7 +336,7 @@ main.py (manual dispatch: version, optional stage, urgency, dry_run)
             -> dedup bullets by PR number (surfaces duplicate_prs)
             -> group_bullets()  {category: [canonical bullet line, ...]}
        -> _drop_already_credited()   dedup against PRs the line already ships
-       -> promote_and_bump()         dated section + version.h bump + contributors
+       -> promote_and_bump()         dated section + profile version bump + contributors
        -> _commit_push_release_pr()  prep branch (force-with-lease) + PR into the line
 ```
 
@@ -338,7 +345,7 @@ M.m branch (e.g. `9.1`). Maintainers create the branch and push tags before
 dispatching. Tags determine the discovery range (rc1 uses the previous release tag,
 rc2+ finds the prior rc tag, ga finds the last rc/patch tag). The cut lands on an
 `agent/release-cut/...` prep branch and opens a PR into M.m, so the line only
-advances when a human merges. The normal dispatch has four inputs and defaults to
+advances when a human merges. The normal dispatch has five inputs and defaults to
 a dry run; patch versions may omit stage and infer `ga`, while `M.m.0` always
 requires an explicit stage. The advanced dispatch is a thin wrapper around the
 same reusable workflow.
@@ -376,6 +383,7 @@ calendar date.
 - `scripts/release_notes/triage.py` - completeness-first Claude include/exclude plus deterministic release-impact guardrail for PRs without `release-notes` (no tools; PR data inlined in prompt)
 - `scripts/release_notes/generate.py` - Claude bullet generation (no tools; PR data inlined in prompt)
 - `scripts/release_notes/models.py` - typed dataclasses for the pipeline
+- `scripts/release_notes/projects.py` - per-repo release conventions (ProjectProfile) and version bumpers (valkey version.h macros, valkey-search kModuleVersion, valkey-json CMake project VERSION, valkey-bloom Cargo.toml)
 - `scripts/release_notes/security.py` - Security Fixes from published GitHub advisories (never AI-authored)
 - `scripts/release_notes/render.py` - canonical `00-RELEASENOTES` rendering
 - `scripts/release_notes/publish.py` - find/open/update the release PR; `_reconcile_draft` flips draft state on re-dispatch

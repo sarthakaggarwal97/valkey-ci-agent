@@ -10,16 +10,27 @@ from __future__ import annotations
 
 import os
 import shutil
+from functools import partial
 
 import pytest
 
+from scripts.release_notes import pipeline as pipeline_mod
+from scripts.release_notes import projects
 from scripts.release_notes import release_cut as rc
 from scripts.release_notes.release_cut import (
     BranchPlan,
-    commit_title,
     promote_and_bump,
     resolve_branch_plan,
     stage_release_name,
+)
+from scripts.release_notes.release_cut import (
+    commit_title as _commit_title,
+)
+
+commit_title = partial(_commit_title, display_name=projects.VALKEY_PROFILE.display_name)
+validate_release_progression = partial(
+    rc.validate_release_progression,
+    bumper=projects.VALKEY_PROFILE.bumper,
 )
 
 _FIXTURE_CLONE = os.path.join(os.path.dirname(__file__), "fixtures", "valkey_clone")
@@ -82,51 +93,51 @@ class TestResolveBranchPlan:
 
     def test_rc1_targets_minor_branch(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
-        plan = resolve_branch_plan("/d", version="9.1.0", stage="rc1")
+        plan = resolve_branch_plan("/d", version="9.1.0", stage="rc1", profile=projects.VALKEY_PROFILE)
         assert plan == BranchPlan("rc1", "9.1", "9.1")
 
     def test_rcN_targets_minor_branch(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
         monkeypatch.setattr(rc, "_warn_rc_sequence", lambda *a, **k: None)
-        plan = resolve_branch_plan("/d", version="9.1.0", stage="rc2")
+        plan = resolve_branch_plan("/d", version="9.1.0", stage="rc2", profile=projects.VALKEY_PROFILE)
         assert plan == BranchPlan("rc2", "9.1", "9.1")
 
     def test_ga_targets_minor_branch(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
-        plan = resolve_branch_plan("/d", version="9.1.0", stage="ga")
+        plan = resolve_branch_plan("/d", version="9.1.0", stage="ga", profile=projects.VALKEY_PROFILE)
         assert plan == BranchPlan("ga", "9.1", "9.1")
 
     def test_uppercase_rc1_normalizes(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
-        plan = resolve_branch_plan("/d", version="9.1.0", stage="RC1")
+        plan = resolve_branch_plan("/d", version="9.1.0", stage="RC1", profile=projects.VALKEY_PROFILE)
         assert plan.stage == "rc1"
         assert plan.target == "9.1"
 
     def test_uppercase_ga_normalizes(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
-        plan = resolve_branch_plan("/d", version="9.1.0", stage="GA")
+        plan = resolve_branch_plan("/d", version="9.1.0", stage="GA", profile=projects.VALKEY_PROFILE)
         assert plan.stage == "ga"
         assert plan.target == "9.1"
 
     def test_missing_branch_raises(self, monkeypatch) -> None:
         self._exists(monkeypatch, set())
         with pytest.raises(ValueError, match="does not exist"):
-            resolve_branch_plan("/d", version="9.1.0", stage="rc1")
+            resolve_branch_plan("/d", version="9.1.0", stage="rc1", profile=projects.VALKEY_PROFILE)
 
     def test_bad_stage_raises(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
         with pytest.raises(ValueError):
-            resolve_branch_plan("/d", version="9.1.0", stage="beta")
+            resolve_branch_plan("/d", version="9.1.0", stage="beta", profile=projects.VALKEY_PROFILE)
 
     def test_bad_version_raises(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
         with pytest.raises(ValueError):
-            resolve_branch_plan("/d", version="9.1", stage="rc1")
+            resolve_branch_plan("/d", version="9.1", stage="rc1", profile=projects.VALKEY_PROFILE)
 
     def test_rc_sequence_warning_plumbed(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
         monkeypatch.setattr(rc, "_warn_rc_sequence", lambda *a, **k: "out-of-seq detail")
-        plan = resolve_branch_plan("/d", version="9.1.0", stage="rc3")
+        plan = resolve_branch_plan("/d", version="9.1.0", stage="rc3", profile=projects.VALKEY_PROFILE)
         assert plan.rc_warning == "out-of-seq detail"
 
 
@@ -140,7 +151,7 @@ class TestRcSequenceWarning:
 
     def _warn(self, monkeypatch, stage_lc, notes):
         self._stub_notes(monkeypatch, notes)
-        return rc._warn_rc_sequence("/d", "9.1", stage_lc, 9, 1, 0)
+        return rc._warn_rc_sequence("/d", "9.1", stage_lc, 9, 1, 0, profile=projects.VALKEY_PROFILE)
 
     def test_in_sequence_returns_none(self, monkeypatch) -> None:
         # Line records up to rc1; rc2 is exactly next.
@@ -174,7 +185,7 @@ class TestRcSequenceWarning:
         def _boom(*a, **k):
             raise RuntimeError("no such branch")
         monkeypatch.setattr(rc, "run_git", _boom)
-        assert rc._warn_rc_sequence("/d", "9.1", "rc2", 9, 1, 0) is None
+        assert rc._warn_rc_sequence("/d", "9.1", "rc2", 9, 1, 0, profile=projects.VALKEY_PROFILE) is None
 
 
 
@@ -227,21 +238,21 @@ class TestValidateReleaseProgression:
         ],
     )
     def test_live_patch_lines_advance(self, current, stage, target) -> None:
-        rc.validate_release_progression(self._version_h(current, stage), target, "ga")
+        validate_release_progression(self._version_h(current, stage), target, "ga")
 
     def test_rc_and_ga_advance_same_version(self) -> None:
-        rc.validate_release_progression(self._version_h("9.2.0", "rc1"), "9.2.0", "rc2")
-        rc.validate_release_progression(self._version_h("9.2.0", "rc2"), "9.2.0", "ga")
+        validate_release_progression(self._version_h("9.2.0", "rc1"), "9.2.0", "rc2")
+        validate_release_progression(self._version_h("9.2.0", "rc2"), "9.2.0", "ga")
 
     def test_unstable_sentinel_can_start_release(self) -> None:
-        rc.validate_release_progression(
+        validate_release_progression(
             self._version_h("255.255.255", "dev"), "9.2.0", "rc1"
         )
 
     @pytest.mark.parametrize(("target", "stage"), [("8.1.8", "ga"), ("8.1.7", "ga")])
     def test_same_or_older_release_rejected(self, target, stage) -> None:
         with pytest.raises(ValueError, match="already-released or backward"):
-            rc.validate_release_progression(
+            validate_release_progression(
                 self._version_h("8.1.8", "ga"), target, stage
             )
 
@@ -276,38 +287,25 @@ class TestTrailingPrRegex:
         ("* x by @a (#44).", {44}),
         ("* x by @a (#44):", {44}),
         ("* x by @a (#44) ", {44}),
-        # A trailing run of refs credits only the last (the merge PR); render never
-        # emits this, but a hand-edited line might.
+        ("* x by @a (#44, #45)", {44, 45}),
+        # Separate trailing groups preserve the historic last-group behavior.
         ("* x by @a (#44)(#45)", {45}),
     ])
     def test_credited_tolerates_trailing_punctuation(self, line, expected) -> None:
         assert rc._credited_pr_numbers(line) == expected
 
-    def test_security_section_pr_refs_not_credited(self) -> None:
-        # A CVE summary ending in "(#500)" is prose, not a PR credit. It must not
-        # seed the dedup set, or a later cut would drop an unrelated real PR #500.
-        # A normal bullet's (#44) in the same file is still credited.
+    def test_lowercase_security_section_local_pr_ref_is_credited(self) -> None:
+        # Bloom 1.0 contains this real shape: GitHub PR numbers are unique in a
+        # repository, so a local trailing reference remains a credit here.
         notes = (
-            "Valkey 9.1.0-rc1  -  Released Tue 24 June 2026\n"
+            "Valkey Bloom 1.0.0 GA - Released Tue 24 June 2026\n"
             "-----\n\n"
-            "### Security Fixes\n"
-            "* (CVE-2026-23479) Use-after-free in unblock client flow (#500)\n\n"
+            "### Security fixes\n"
+            "* Fix potential integer overflow (#82)\n\n"
             "### Bug Fixes\n"
             "* Fix a thing by @a (#44)\n"
         )
-        assert rc._credited_pr_numbers(notes) == {44}
-
-    def test_new_dated_section_ends_security_scope(self) -> None:
-        # After the Security Fixes section, a later dated section's normal bullets
-        # are credited again (the section flag resets on the next "## "/"### ").
-        notes = (
-            "### Security Fixes\n"
-            "* (CVE-2026-1) something (#500)\n\n"
-            "## Valkey 9.1 release notes\n"
-            "### Bug Fixes\n"
-            "* real note (#77)\n"
-        )
-        assert rc._credited_pr_numbers(notes) == {77}
+        assert rc._credited_pr_numbers(notes) == {44, 82}
 
 
 class TestUnresolvedBackportsSection:
@@ -362,21 +360,21 @@ class TestPromoteAndBump:
         from scripts.release_notes import render as render_mod
         from scripts.release_notes.models import CategorizedBullet
         return render_mod.group_bullets(
-            [CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix a crash")])
+            [CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix a crash")],
+            categories=projects.VALKEY_PROFILE.categories,
+        )
 
     def test_promotes_dated_section_and_bumps_version(self, clone, monkeypatch) -> None:
         # No contributor base -> skip the network lookup entirely.
         grouped = self._grouped_with_bullet(clone)
         version_text = open(os.path.join(clone, "src", "version.h"), encoding="utf-8").read()
         new_notes, new_version = promote_and_bump(
-            clone,
             grouped=grouped,
             dest_notes_text="",          # first cut: no prior changelog
             dest_version_text=version_text,
             version="9.1.0", stage_lc="rc1", urgency="LOW", date="2026-06-25",
-            repo_full_name="valkey-io/valkey", contrib_base=None,
-            contrib_head="unstable", token=None,
-            security_fixes=None,
+            contrib_base=None, token=None,
+            security_fixes=None, profile=projects.VALKEY_PROFILE,
         )
         # Dated section rendered, bullet included, never an unreleased block.
         assert "Valkey 9.1.0-rc1" in new_notes
@@ -397,12 +395,10 @@ class TestPromoteAndBump:
             "Upgrade urgency LOW: ...\n\n### Bug Fixes\n* earlier fix by @x (#1)\n"
         )
         version_text = open(os.path.join(clone, "src", "version.h"), encoding="utf-8").read()
-        new_notes, _ = promote_and_bump(
-            clone, grouped=grouped, dest_notes_text=prior,
+        new_notes, _ = promote_and_bump( grouped=grouped, dest_notes_text=prior,
             dest_version_text=version_text, version="9.1.0", stage_lc="rc2",
-            urgency="LOW", date="2026-06-25", repo_full_name="valkey-io/valkey",
-            contrib_base=None, contrib_head="9.1",
-            token=None, security_fixes=None,
+            urgency="LOW", date="2026-06-25", contrib_base=None,
+            token=None, security_fixes=None, profile=projects.VALKEY_PROFILE,
         )
         assert "Valkey 9.1.0-rc2" in new_notes
         assert "Valkey 9.1.0-rc1" in new_notes      # prior rc retained
@@ -416,12 +412,10 @@ class TestPromoteAndBump:
         monkeypatch.setattr(
             rc.gc, "list_contributors", lambda *a, **k: ["Jane Doe @jane", "Bob @bob"]
         )
-        new_notes, _ = promote_and_bump(
-            clone, grouped=grouped, dest_notes_text="",
+        new_notes, _ = promote_and_bump( grouped=grouped, dest_notes_text="",
             dest_version_text=version_text, version="9.1.0", stage_lc="rc1",
-            urgency="LOW", date="2026-06-25", repo_full_name="valkey-io/valkey",
-            contrib_base="9.0.0", contrib_head="unstable", token=None,
-            security_fixes=None,
+            urgency="LOW", date="2026-06-25", contrib_base="9.0.0", token=None,
+            security_fixes=None, profile=projects.VALKEY_PROFILE,
         )
         assert "### Contributors" in new_notes
         assert "Jane Doe @jane" in new_notes
@@ -438,13 +432,11 @@ class TestPromoteAndBump:
             return ["Jane Doe @jane"]
 
         monkeypatch.setattr(rc.gc, "list_contributors", _list)
-        promote_and_bump(
-            clone, grouped=grouped, dest_notes_text="",
+        promote_and_bump( grouped=grouped, dest_notes_text="",
             dest_version_text=version_text, version="9.1.0", stage_lc="rc2",
-            urgency="LOW", date="2026-06-25", repo_full_name="valkey-io/valkey",
-            contrib_base="origin/unstable",
-            contrib_head="origin/9.1", token="t", security_fixes=None,
-            pr_authors=("jane", "bob"),
+            urgency="LOW", date="2026-06-25",
+            contrib_base="origin/unstable", token="t", security_fixes=None,
+            pr_authors=("jane", "bob"), profile=projects.VALKEY_PROFILE,
         )
         assert captured["logins"] == ["jane", "bob"]
 
@@ -464,6 +456,40 @@ class TestPromoteAndBump:
         assert rc._compare_ref(repo, "HEAD") == sha
         assert rc._compare_ref(repo, "no-such-ref") == "no-such-ref"  # graceful fallback
 
+    def test_module_profile_renders_and_bumps_its_own_layout(self, clone) -> None:
+        # End-to-end through the profile plumbing: valkey-search headings on the
+        # notes, kModuleVersion + MODULE_RELEASE_STAGE on the version file, and
+        # the hand-written prior history preserved.
+        profile = projects.profile_for("valkey-io/valkey-search")
+        grouped = self._grouped_with_bullet(clone)
+        prior = (
+            "Valkey Search 1.2 release notes\n"
+            "===============================\n\n"
+            "Valkey Search 1.2.1 GA - Released Tue 07 July 2026\n"
+            "--------------------------------------------------\n\n"
+            "* Fixed a race condition (#1079)\n"
+        )
+        version_text = (
+            "constexpr auto kModuleVersion = vmsdk::ValkeyVersion(1, 2, 1);\n"
+            '#define MODULE_RELEASE_STAGE "ga"\n'
+        )
+        new_notes, new_version = promote_and_bump(
+            grouped=grouped, dest_notes_text=prior,
+            dest_version_text=version_text, version="1.2.2", stage_lc="ga",
+            urgency="LOW", date="2026-08-06",
+            contrib_base=None,
+            token=None, security_fixes=None,
+            profile=profile,
+        )
+        assert new_notes.startswith("Valkey Search 1.2 release notes")
+        assert "Valkey Search 1.2.2  -  Released Thu 06 August 2026" in new_notes
+        assert "* fix a crash by @a (#40)" in new_notes
+        # Prior hand-written history preserved (the fixed splitter regression).
+        assert "Valkey Search 1.2.1 GA - Released Tue 07 July 2026" in new_notes
+        assert "* Fixed a race condition (#1079)" in new_notes
+        # Version file rewritten in the search layout.
+        assert "kModuleVersion = vmsdk::ValkeyVersion(1, 2, 2);" in new_version
+        assert '#define MODULE_RELEASE_STAGE "ga"' in new_version
 
 class TestOriginGuard:
     def test_rejects_non_github_origin(self, monkeypatch) -> None:
@@ -525,7 +551,9 @@ class TestCutOrchestration:
 
         bl = ([CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix")]
               if bullets else [])
-        grouped = render_mod.group_bullets(bl)
+        grouped = render_mod.group_bullets(
+            bl, categories=projects.VALKEY_PROFILE.categories
+        )
         # Included counts every PR sent to generation, including ones for which
         # generation returned no bullet.
         included = (
@@ -609,7 +637,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -644,7 +672,7 @@ class TestCutOrchestration:
 
         rc_code = rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -665,7 +693,8 @@ class TestCutOrchestration:
 
         self._setup(monkeypatch, clone, line_exists=line_exists)
         grouped = render_mod.group_bullets(
-            [CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix")]
+            [CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix")],
+            categories=projects.VALKEY_PROFILE.categories,
         )
         captured = {}
 
@@ -685,7 +714,7 @@ class TestCutOrchestration:
 
         base = dict(
             repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, urgency="LOW", date="2026-06-25", tag_glob=None,
+            profile=projects.VALKEY_PROFILE, urgency="LOW", date="2026-06-25", tag_glob=None,
             base_ref=None, contrib_base_ref=None, security_fixes=None, token="t",
             git_env={}, dry_run=False,
         )
@@ -715,7 +744,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="GA",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="GA",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -747,7 +776,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc2",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc2",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -780,7 +809,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc2",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc2",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -815,7 +844,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc2",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc2",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -847,7 +876,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc2",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc2",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -874,7 +903,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc2",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc2",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -899,7 +928,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -940,7 +969,7 @@ class TestCutOrchestration:
         monkeypatch.setattr(rc.publish_mod, "retry_github_call", lambda op, **k: op())
         base = dict(
             repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None,
             contrib_base_ref=None, security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -1095,7 +1124,7 @@ class TestCutOrchestration:
         monkeypatch.setattr(rc.publish_mod, "retry_github_call", lambda op, **k: op())
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="SECURITY", date="2026-06-25", tag_glob=None, base_ref=None,
             contrib_base_ref=None, security_fixes=["(CVE-2026-1) UAF in unblock (#40)"],
             token="t", git_env={}, dry_run=False,
@@ -1147,9 +1176,10 @@ class TestCutOrchestration:
         to ``clone/00-RELEASENOTES`` would leave the dest path unwritten and fail
         here rather than silently pass.
         """
-        dest_notes = os.path.join(clone, ".release-dest", rc.NOTES_FILE)
+        dest_notes = os.path.join(clone, ".release-dest", projects.VALKEY_PROFILE.notes_file)
         assert dest_notes in writes, (
-            f"cut() wrote no {rc.NOTES_FILE} to the dest worktree; wrote to {list(writes)}"
+            f"cut() wrote no {projects.VALKEY_PROFILE.notes_file} to the dest "
+            f"worktree; wrote to {list(writes)}"
         )
         return writes[dest_notes]
 
@@ -1171,7 +1201,7 @@ class TestCutOrchestration:
         repo, created, writes, calls = self._advisory_repo(monkeypatch, clone, advisories=[adv])
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="SECURITY", date="2026-06-25", tag_glob=None, base_ref=None,
             contrib_base_ref=None, security_fixes=None, token="t", git_env={},
             dry_run=False, security_from_advisories=True,
@@ -1197,7 +1227,7 @@ class TestCutOrchestration:
         repo.get_repository_advisories.side_effect = RuntimeError("no advisory permission")
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None,
             contrib_base_ref=None, security_fixes=None, token="t", git_env={},
             dry_run=False, security_from_advisories=True,
@@ -1215,7 +1245,7 @@ class TestCutOrchestration:
         repo, created, _writes, _calls = self._advisory_repo(monkeypatch, clone, advisories=[adv])
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None,
             contrib_base_ref=None, security_fixes=None, token="t", git_env={},
             dry_run=False, security_from_advisories=True,
@@ -1235,7 +1265,7 @@ class TestCutOrchestration:
         repo, created, writes, calls = self._advisory_repo(monkeypatch, clone, advisories=[adv])
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="SECURITY", date="2026-06-25", tag_glob=None, base_ref=None,
             contrib_base_ref=None,
             security_fixes=["CVE-2026-23479: hand-written wording"],
@@ -1284,7 +1314,7 @@ class TestCutOrchestration:
         monkeypatch.setattr(rc.publish_mod, "retry_github_call", lambda op, **k: op())
         base = dict(
             repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None,
             contrib_base_ref=None, security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -1418,7 +1448,7 @@ class TestCutOrchestration:
         repo = MagicMock()
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.0.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.0.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=True, baseline_unanchored=True,
         )
@@ -1445,7 +1475,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -1475,7 +1505,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -1489,7 +1519,7 @@ class TestCutOrchestration:
         repo = MagicMock()
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc1",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=True,
         )
@@ -1502,7 +1532,7 @@ class TestCutOrchestration:
         calls = self._setup(monkeypatch, clone, line_exists={"9.1": True})
         rc.cut(
             MagicMock(), repo_full_name="valkey-io/valkey",
-            source_clone_dir=clone, valkey_clone_dir=clone,
+            source_clone_dir=clone, profile=projects.VALKEY_PROFILE,
             version="9.1.0", stage="rc1", urgency="LOW",
             date="2026-06-25", tag_glob=None, base_ref=None,
             contrib_base_ref=None, security_fixes=None, token="t",
@@ -1521,7 +1551,7 @@ class TestCutOrchestration:
         with pytest.raises(RuntimeError, match="advanced during generation"):
             rc.cut(
                 MagicMock(), repo_full_name="valkey-io/valkey",
-                source_clone_dir=clone, valkey_clone_dir=clone,
+                source_clone_dir=clone, profile=projects.VALKEY_PROFILE,
                 version="9.1.0", stage="rc1", urgency="LOW",
                 date="2026-06-25", tag_glob=None, base_ref=None,
                 contrib_base_ref=None, security_fixes=None, token="t",
@@ -1541,7 +1571,7 @@ class TestCutOrchestration:
         with pytest.raises(RuntimeError, match="advanced during generation"):
             rc.cut(
                 repo, repo_full_name="valkey-io/valkey",
-                source_clone_dir=clone, valkey_clone_dir=clone,
+                source_clone_dir=clone, profile=projects.VALKEY_PROFILE,
                 version="9.1.0", stage="rc1", urgency="LOW",
                 date="2026-06-25", tag_glob=None, base_ref=None,
                 contrib_base_ref=None, security_fixes=None, token="t",
@@ -1564,7 +1594,7 @@ class TestCutOrchestration:
 
         captured = {}
 
-        def _promote(valkey_clone_dir, **kw):
+        def _promote(**kw):
             captured["contrib_base"] = kw["contrib_base"]
             return "NOTES", "VERSION"
 
@@ -1576,7 +1606,7 @@ class TestCutOrchestration:
 
         rc.cut(
             repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0", stage="rc2",
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc2",
             urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None, contrib_base_ref=None,
             security_fixes=None, token="t", git_env={}, dry_run=False,
         )
@@ -1738,19 +1768,19 @@ class TestDedupAgainstDestination:
     def test_no_new_prs_section_renders_when_all_credited(self) -> None:
         # Every PR in range was already credited on the line, so the dated section
         # is version-bump-only; the body must say so (not read as a generation miss).
-        section = rc._no_new_prs_section(self._meta([44, 45], 0), self._GA_PLAN)
+        section = rc._no_new_prs_section(self._meta([44, 45], 0), self._GA_PLAN, projects.VALKEY_PROFILE)
         assert "No new release notes" in section
         assert "#44" in section and "#45" in section
         assert "9.1" in section  # names the target line
 
     def test_no_new_prs_section_empty_when_nothing_dropped(self) -> None:
-        assert rc._no_new_prs_section(self._meta([], 0), self._GA_PLAN) == ""
+        assert rc._no_new_prs_section(self._meta([], 0), self._GA_PLAN, projects.VALKEY_PROFILE) == ""
 
     def test_no_new_prs_section_silent_when_a_new_note_survives(self) -> None:
         # Regression (PR #58): a duplicate PR was dropped (#44) but another PR still
         # produced a bullet, so the dated section carries real content. The section
         # must stay silent rather than falsely claim "No new release notes".
-        assert rc._no_new_prs_section(self._meta([44], 1), self._GA_PLAN) == ""
+        assert rc._no_new_prs_section(self._meta([44], 1), self._GA_PLAN, projects.VALKEY_PROFILE) == ""
 
     def test_credited_reads_trailing_pr_refs(self) -> None:
         text = (
@@ -1803,7 +1833,9 @@ class TestDedupAgainstDestination:
         from scripts.release_notes.pipeline import RegenResult
 
         bl = [CategorizedBullet(pr_number=44, author="a", category="Bug Fixes", text="fix")]
-        grouped = render_mod.group_bullets(bl)
+        grouped = render_mod.group_bullets(
+            bl, categories=projects.VALKEY_PROFILE.categories
+        )
         monkeypatch.setattr(
             pipeline_mod, "regenerate_unreleased",
             lambda *a, **k: RegenResult(
@@ -1847,7 +1879,7 @@ class TestDedupAgainstDestination:
 
         rcmod.cut(
             object(), repo_full_name="valkey-io/valkey", source_clone_dir=clone,
-            valkey_clone_dir=clone, version="9.1.0",
+            profile=projects.VALKEY_PROFILE, version="9.1.0",
             stage="ga", urgency="LOW", date="2026-06-29", tag_glob=None,
             base_ref=None, contrib_base_ref=None, security_fixes=None,
             token="t", git_env={}, dry_run=True,
@@ -1907,12 +1939,12 @@ class TestSecurityOnlyCutNotEmpty:
 
     def test_empty_notes_section_suppressed_with_security_fixes(self):
         meta = self._meta(security_fixes=["Fix CVE-2025-1234 (CVSS 9.8)"])
-        section = rc._empty_notes_section(meta, self._RC_PLAN)
+        section = rc._empty_notes_section(meta, self._RC_PLAN, projects.VALKEY_PROFILE)
         assert section == ""
 
     def test_empty_notes_section_renders_without_security_fixes(self):
         meta = self._meta(security_fixes=None)
-        section = rc._empty_notes_section(meta, self._RC_PLAN)
+        section = rc._empty_notes_section(meta, self._RC_PLAN, projects.VALKEY_PROFILE)
         assert "Empty release notes" in section
 
     def test_no_new_prs_section_suppressed_with_security_fixes(self):
@@ -1921,7 +1953,7 @@ class TestSecurityOnlyCutNotEmpty:
             already_credited=[44, 45],
             noted_bullet_count=0,
         )
-        section = rc._no_new_prs_section(meta, self._GA_PLAN)
+        section = rc._no_new_prs_section(meta, self._GA_PLAN, projects.VALKEY_PROFILE)
         assert section == ""
 
     def test_no_new_prs_hold_reason_suppressed_with_security_fixes(self):
@@ -1996,3 +2028,256 @@ class TestNamedCveHold:
         body = rc._impact_review_section(self._cve_impact(), "HIGH")
         assert "CVE-2026-25243" in body
         assert "holds the cut" in body
+
+
+class TestRcSequenceWarningModuleRepos:
+    """The rc-heading reader must key on the profile's display name and accept
+    both the canonical '-rcN' form and hand-written module history (' RC3')."""
+
+    def _warn(self, monkeypatch, stage_lc, notes, profile):
+        monkeypatch.setattr(rc, "run_git", lambda *a, **k: None)
+        monkeypatch.setattr(rc, "git_output", lambda *a, **k: notes)
+        return rc._warn_rc_sequence("/d", "1.2", stage_lc, 1, 2, 0, profile=profile)
+
+    def test_canonical_module_rc_heading_counted(self, monkeypatch) -> None:
+        profile = projects.profile_for("valkey-search")
+        msg = self._warn(
+            monkeypatch, "rc2",
+            "Valkey Search 1.2.0-rc1  -  Released Thu 19 February 2026\n",
+            profile,
+        )
+        assert msg is None  # rc1 recorded, rc2 in sequence
+
+    def test_historical_uppercase_rc_heading_counted(self, monkeypatch) -> None:
+        # valkey-search's hand-written history spells "Valkey Search 1.2.0 RC3".
+        profile = projects.profile_for("valkey-search")
+        msg = self._warn(
+            monkeypatch, "rc2",
+            "Valkey Search 1.2.0 RC3 - Released Wed 11 March 2026\n"
+            "Valkey Search 1.2.0 RC1 - Released Thu 19 February 2026\n",
+            profile,
+        )
+        assert msg is not None
+        assert "rc4" in msg  # next expected after the recorded rc3
+
+    def test_core_headings_not_counted_for_module_profile(self, monkeypatch) -> None:
+        # A "Valkey 1.2.0-rc1" line (wrong display name) must not count.
+        profile = projects.profile_for("valkey-search")
+        msg = self._warn(
+            monkeypatch, "rc1", "Valkey 1.2.0-rc1  -  Released X\n", profile
+        )
+        assert msg is None  # nothing recorded for Valkey Search, rc1 in sequence
+
+    def test_version_at_line_end_does_not_match_rc_on_next_line(self, monkeypatch) -> None:
+        # The separator is "-" or a space, never a newline: a heading ending in
+        # the bare version must not absorb an "rc3..." start of the next line.
+        profile = projects.profile_for("valkey-search")
+        msg = self._warn(
+            monkeypatch, "rc1", "Valkey Search 1.2.0\nrc3 planning notes\n", profile
+        )
+        assert msg is None  # no rc recorded, rc1 in sequence
+
+
+class TestModuleCommitTitle:
+    def test_ga_commit_title_uses_display_name(self) -> None:
+        assert _commit_title("1.2.0", "ga", "Valkey Search") == (
+            "Add release notes entry for Valkey Search 1.2.0 GA"
+        )
+
+    def test_rc_commit_title_is_display_neutral(self) -> None:
+        assert _commit_title("1.2.0", "rc1", "Valkey Search") == (
+            "Update version to 1.2.0-rc1 and add release notes"
+        )
+
+
+class TestRefuseAlreadyCutStage:
+    """The changelog-heading gate for repos whose version file records no stage.
+
+    Covers the merge-to-tag window where a duplicate or backward cut passes both
+    the M.m.p version gate and the (not-yet-pushed) tag gate.
+    """
+
+    _JSON = projects.profile_for("valkey-json")
+    _GA_NOTES = (
+        "Valkey JSON 1.0 release notes\n=============================\n\n"
+        "Valkey JSON 1.0.3  -  Released Tue 04 August 2026\n"
+        "-------------------------------------------------\n\n"
+        "* a fix by @x (#9)\n"
+    )
+
+    def test_duplicate_ga_refused(self) -> None:
+        with pytest.raises(ValueError, match="already records"):
+            rc._refuse_already_cut_stage(self._GA_NOTES, "1.0.3", "ga", self._JSON)
+
+    def test_rc_after_shipped_ga_refused(self) -> None:
+        with pytest.raises(ValueError, match="an rc cannot follow the shipped 1.0.3 GA"):
+            rc._refuse_already_cut_stage(self._GA_NOTES, "1.0.3", "rc1", self._JSON)
+
+    def test_duplicate_rc_refused(self) -> None:
+        notes = "Valkey JSON 1.0.3-rc1  -  Released Tue 04 August 2026\n"
+        with pytest.raises(ValueError, match="1.0.3-rc1"):
+            rc._refuse_already_cut_stage(notes, "1.0.3", "rc1", self._JSON)
+
+    def test_handwritten_space_and_uppercase_rc_refused(self) -> None:
+        notes = "Valkey JSON 1.0.3 RC1 - Released Tue 04 August 2026\n"
+        with pytest.raises(ValueError, match="1.0.3-rc1"):
+            rc._refuse_already_cut_stage(notes, "1.0.3", "rc1", self._JSON)
+
+    def test_handwritten_patch_ga_token_refused(self) -> None:
+        notes = "Valkey JSON 1.0.3 GA - Released Tue 04 August 2026\n"
+        with pytest.raises(ValueError, match="already records"):
+            rc._refuse_already_cut_stage(notes, "1.0.3", "ga", self._JSON)
+
+    def test_next_rc_allowed(self) -> None:
+        notes = "Valkey JSON 1.0.3-rc1  -  Released Tue 04 August 2026\n"
+        rc._refuse_already_cut_stage(notes, "1.0.3", "rc2", self._JSON)
+
+    def test_longer_version_is_not_a_prefix_match(self) -> None:
+        # "Valkey JSON 1.0.3" must not match a recorded "Valkey JSON 1.0.30".
+        notes = "Valkey JSON 1.0.30  -  Released Tue 04 August 2026\n"
+        rc._refuse_already_cut_stage(notes, "1.0.3", "ga", self._JSON)
+
+    def test_stage_recording_repos_skip_this_gate(self) -> None:
+        # Core's version.h records the stage; validate_release_progression owns
+        # the duplicate check there, so a heading match must not double-gate.
+        notes = "Valkey 9.1.1  -  Released Tue 04 August 2026\n"
+        rc._refuse_already_cut_stage(notes, "9.1.1", "ga", projects.VALKEY_PROFILE)
+
+
+class TestValidateChangelogHistory:
+    """A render that cannot preserve credited history must fail outright."""
+
+    _SEARCH = projects.profile_for("valkey-search")
+
+    def test_credited_history_without_matching_heading_is_refused(self) -> None:
+        notes = (
+            "Search module release notes\n"
+            "===========================\n\n"
+            "Search 1.2.1 - Released Tue 07 July 2026\n"
+            "* Fixed a race condition (#1079)\n"
+        )
+        with pytest.raises(ValueError, match="would drop prior changelog history"):
+            rc._validate_changelog_history(notes, self._SEARCH)
+
+    def test_matching_module_heading_preserves_credited_history(self) -> None:
+        notes = (
+            "Valkey Search 1.2.1 GA - Released Tue 07 July 2026\n"
+            "* Fixed a race condition (#1079)\n"
+        )
+        rc._validate_changelog_history(notes, self._SEARCH)
+
+    @pytest.mark.parametrize(
+        ("repo", "legacy_footer"),
+        [
+            (
+                "valkey-search",
+                "Contributors\n============\n\n@Aksha1812, @alice\n",
+            ),
+            (
+                "valkey-json",
+                "We appreciate the efforts of all who contributed code to this "
+                "release!\n\nRoshan Khatri (roshkhatri), Joe Hu (joehu21)\n",
+            ),
+            (
+                "valkey-bloom",
+                "We appreciate the efforts of all who contributed code to this "
+                "release!\n\nAlice Example (alice), Bob Example (bob)\n",
+            ),
+        ],
+    )
+    def test_known_module_legacy_contributor_formats_are_refused(
+        self, repo: str, legacy_footer: str
+    ) -> None:
+        profile = projects.profile_for(repo)
+        notes = (
+            f"{profile.display_name} 1.0.0 GA - Released Tue 07 July 2026\n"
+            "* Fixed a race condition (#82)\n\n"
+            f"{legacy_footer}"
+        )
+        with pytest.raises(
+            ValueError,
+            match=(
+                rf"{profile.notes_file} uses a legacy contributor format for "
+                rf"{profile.display_name}"
+            ),
+        ):
+            rc._validate_changelog_history(notes, profile)
+
+    def test_canonical_contributor_footer_is_allowed(self) -> None:
+        notes = (
+            "Valkey Search 1.2.1 GA - Released Tue 07 July 2026\n"
+            "* Fixed a race condition (#1079)\n\n"
+            "### Contributors\n"
+            "* Aksha Sharma @Aksha1812\n"
+        )
+        rc._validate_changelog_history(notes, self._SEARCH)
+
+    def test_legacy_phrase_inside_dated_history_is_allowed_after_normalization(
+        self,
+    ) -> None:
+        profile = projects.profile_for("valkey-json")
+        notes = (
+            "Valkey JSON 1.0.0 GA - Released Tue 07 July 2026\n"
+            "* Added JSON support (#82)\n\n"
+            "We appreciate the efforts of all who contributed code to this "
+            "release!\n\n"
+            "Roshan Khatri (roshkhatri), Joe Hu (joehu21)\n\n"
+            "### Contributors\n"
+            "* Roshan Khatri @roshkhatri\n"
+            "* Joe Hu @joehu21\n"
+        )
+
+        rc._validate_changelog_history(notes, profile)
+
+    def test_fresh_placeholder_without_credits_is_allowed(self) -> None:
+        rc._validate_changelog_history(
+            "Release notes will be generated here.\n", self._SEARCH
+        )
+
+
+class TestBodyNamesProfileVersionFile:
+    """The PR body must name the file the cut actually bumps (not src/version.h)."""
+
+    _PLAN = BranchPlan("ga", "1.0", "1.0")
+    _JSON = projects.profile_for("valkey-json")
+
+    def _meta(self, **overrides):
+        base = dict(
+            regen=pipeline_mod.RegenResult(
+                base_tag="1.0.2", grouped={}, included=0, bullet_count=0,
+                skipped=(), triage=(), had_prs=False,
+            ),
+            already_credited=(), noted_bullet_count=0, urgency="LOW",
+            security_fixes=None, security_noted_prs=(), baseline_unanchored=False,
+        )
+        base.update(overrides)
+        return rc._NotesMeta(**base)
+
+    def test_pr_body_summary_line(self) -> None:
+        body = rc._build_pr_body(
+            self._PLAN, "1.0.3", self._meta(), profile=self._JSON
+        )
+        assert "`CMakeLists.txt`" in body
+        assert "src/version.h" not in body
+
+    def test_empty_notes_section(self) -> None:
+        section = rc._empty_notes_section(self._meta(), self._PLAN, self._JSON)
+        assert "`CMakeLists.txt`" in section
+
+    def test_no_new_prs_section(self) -> None:
+        meta = self._meta(already_credited=(44,))
+        section = rc._no_new_prs_section(meta, self._PLAN, self._JSON)
+        assert "`CMakeLists.txt`" in section
+
+
+class TestReadRequired:
+    def test_missing_notes_file_is_a_release_facing_error(self, tmp_path) -> None:
+        with pytest.raises(ValueError, match="00-RELEASENOTES not found.*seed the changelog"):
+            rc._read_required(
+                str(tmp_path), "00-RELEASENOTES",
+                "seed the changelog file on the release line before cutting",
+            )
+
+    def test_existing_file_read_verbatim(self, tmp_path) -> None:
+        (tmp_path / "00-RELEASENOTES").write_text("content\n", encoding="utf-8")
+        assert rc._read_required(str(tmp_path), "00-RELEASENOTES", "x") == "content\n"

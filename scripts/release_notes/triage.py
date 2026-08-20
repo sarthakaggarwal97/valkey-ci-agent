@@ -171,8 +171,8 @@ def release_impact_reason(pr: MergedPR) -> str | None:
 
 
 _PROMPT_TEMPLATE = """\
-You are triaging pull requests for the release notes of Valkey, a production
-key-value datastore. These PRs merged after {base_ref} without a `release-notes`
+You are triaging pull requests for the release notes of {project}. These PRs
+merged after {base_ref} without a `release-notes`
 label. Decide whether each change needs a patch-release changelog line.
 
 ## Release-safety principle
@@ -261,6 +261,7 @@ def build_prompt(
     diffs: dict[int, str] | None = None,
     base_ref: str = "",
     already_noted: Sequence[int] = (),
+    project_description: str,
 ) -> str:
     """Render the triage prompt for a batch of candidate PRs.
 
@@ -272,6 +273,9 @@ def build_prompt(
     ``already_noted`` is a list of PR numbers whose fixes were already released in a
     prior patch release. When non-empty, a section is injected telling the model to
     exclude them mechanically.
+
+    ``project_description`` names the target repository for the model and is
+    supplied explicitly by the selected profile.
 
     Reuses generate.py's payload builder so the PR JSON (number/title/author/url/
     body + optional diff) is shaped identically to the generation prompt.
@@ -287,6 +291,7 @@ def build_prompt(
     else:
         section = ""
     return _PROMPT_TEMPLATE.format(
+        project=project_description,
         base_ref=ref, prs_json=build_prompt_payload(prs, diffs=diffs),
         already_noted_section=section,
     )
@@ -349,6 +354,7 @@ def triage(
     timeout: int = 1800,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
+    project_description: str,
 ) -> TriageResult:
     """Decide include/exclude for each non-release-notes candidate, batching inputs.
 
@@ -378,7 +384,10 @@ def triage(
         batch = prs[start:start + _BATCH_SIZE]
         batch_numbers = {pr.number for pr in batch}
         diffs = collector.collect(batch)
-        prompt = build_prompt(batch, diffs=diffs, base_ref=base_ref, already_noted=already_noted)
+        prompt = build_prompt(
+            batch, diffs=diffs, base_ref=base_ref, already_noted=already_noted,
+            project_description=project_description,
+        )
         stdout, stderr, code = run_fn(
             prompt,
             cwd=repo_dir,

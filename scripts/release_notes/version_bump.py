@@ -26,7 +26,7 @@ def version_num(version: str) -> str:
     return "0x00{:02x}{:02x}{:02x}".format(major, minor, patch)
 
 
-def _validate_stage(stage: str) -> str:
+def validate_stage(stage: str) -> str:
     stage = stage.strip().lower()
     if not _STAGE_RE.match(stage):
         raise ValueError(
@@ -56,7 +56,7 @@ def current_release_state(version_h_text: str) -> tuple[str, str]:
             "expected at most one VALKEY_RELEASE_STAGE definition in version.h, "
             f"found {len(stages)}"
         )
-    stage = _validate_stage(stages[0]) if stages else "ga"
+    stage = validate_stage(stages[0]) if stages else "ga"
     return canonical, stage
 
 
@@ -65,7 +65,7 @@ def set_version(version_h_text: str, version: str, stage: str) -> str:
     # Derive canonical string from parsed tuple so VERSION and VERSION_NUM agree.
     major, minor, patch = parse_version(version)
     canonical = "{}.{}.{}".format(major, minor, patch)
-    stage = _validate_stage(stage)
+    stage = validate_stage(stage)
 
     text, n1 = _VERSION_DEFINE_RE.subn(
         lambda m: '{}"{}"'.format(m.group(1), canonical), version_h_text

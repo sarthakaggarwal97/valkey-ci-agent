@@ -7,6 +7,16 @@ name: Cut Release Notes (Advanced)
 on:
   workflow_dispatch:
     inputs:
+      repo:
+        description: "Target repository (valkey-io org)"
+        required: true
+        type: choice
+        default: valkey
+        options:
+          - valkey
+          - valkey-search
+          - valkey-json
+          - valkey-bloom
       version:
         description: "Target MAJOR.MINOR.PATCH"
         required: true
@@ -66,6 +76,7 @@ jobs:
       id-token: write
     uses: ./.github/workflows/release-notes-cut.yml
     with:
+      repo: ${{ inputs.repo }}
       version: ${{ inputs.version }}
       stage: ${{ inputs.stage }}
       urgency: ${{ inputs.urgency }}
