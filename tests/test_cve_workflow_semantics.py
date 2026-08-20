@@ -58,6 +58,7 @@ def test_dispatch_sends_correlation_and_exact_target_contract() -> None:
     rebuild = _workflow()["jobs"]["rebuild"]
     dispatch = _step(rebuild, "Dispatch candidate workflow")
     run = dispatch["run"]
+    assert "gh workflow run cve-rebuild.yml" in run
     assert "--ref mainline" in run
     assert '--field "correlation_id=${CORRELATION_ID}"' in run
     assert '--field "targeted_findings=${TARGETS}"' in run
@@ -69,6 +70,7 @@ def test_locate_uses_exact_run_name_and_mainline_not_timestamp() -> None:
     run = locate["run"]
     assert 'expected_title="CVE rebuild ${CORRELATION_ID}"' in run
     assert ".displayTitle == $title" in run
+    assert "--workflow cve-rebuild.yml" in run
     assert "--branch mainline" in run
     assert "dispatch_ts" not in run.lower()
     assert "--created" not in run

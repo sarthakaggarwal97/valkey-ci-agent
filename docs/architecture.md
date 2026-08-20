@@ -407,13 +407,13 @@ sweep.py
 Job 2 - rebuild (runs only on valkey-io/valkey-ci-agent main, inside the
          cve-rebuild-dispatch Environment, with non-empty live targets)
   → mint Valkeyrie Bot App token (actions:write, scoped to valkey-container) - dispatch step only
-  → dispatch ci.yml with versions, targets, and correlation ID <run-id>-<attempt>
+  → dispatch cve-rebuild.yml with versions, targets, and correlation ID <run-id>-<attempt>
   (locate/watch/conclusion use the built-in GITHUB_TOKEN, valid for the whole job)
   → locate exact run-name "CVE rebuild <correlation ID>" on mainline
   → gh run watch <run-id> --exit-status  (wait; a failed build fails the job)
   → report downstream verification/promotion conclusion + run URL
 
-valkey-container ci.yml - CVE mode
+valkey-container cve-rebuild.yml
   → map every targeted version-line/variant to exactly one concrete matrix entry
   → build all four platforms to a unique non-production GHCR candidate tag
   → record the immutable multi-platform and platform digests; assert completeness

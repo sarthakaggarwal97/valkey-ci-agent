@@ -533,7 +533,7 @@ A single workflow (`.github/workflows/cve-scan.yml`) with two jobs:
 
 1. **Condition**: runs only on the canonical `main` branch when the scan emits a non-empty target contract and the run is not a dry run. The protected `cve-rebuild-dispatch` Environment scopes the App credentials to this path.
 2. **Dispatch**: sends affected version lines, the target contract, and correlation ID `<agent-run-id>-<attempt>` to `valkey-container`.
-3. **Locate and wait**: finds the exact downstream run by its correlation ID in `run-name`, restricted to `ci.yml` on `mainline`, then waits with `gh run watch --exit-status`. Timestamp and actor heuristics are not used.
+3. **Locate and wait**: finds the exact downstream run by its correlation ID in `run-name`, restricted to the dedicated `cve-rebuild.yml` workflow on `mainline`, then waits with `gh run watch --exit-status`. Timestamp and actor heuristics are not used.
 4. **Verify and promote downstream**: `valkey-container` builds multi-platform candidates under unique non-production tags, records immutable digests, scans the targeted platforms, and promotes those same digests only after every candidate passes. Registry promotion stages every digest and records previous production digests for rollback.
 5. **Report the result**: the summary and Slack report success only when the downstream verification and promotion workflow concludes successfully.
 
