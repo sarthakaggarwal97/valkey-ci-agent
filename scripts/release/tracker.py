@@ -640,10 +640,15 @@ def _find_run(workflow: Any, title: str, head_sha: str = "") -> Any | None:
         retries=2,
         description=f"list {workflow.name} runs",
     )
+    fallback = None
     for run in itertools.islice(runs, 500):
-        if (getattr(run, "display_title", "") or "") == title:
+        if (getattr(run, "display_title", "") or "") != title:
+            continue
+        if getattr(run, "status", "") != "completed":
             return run
-    return None
+        if fallback is None:
+            fallback = run
+    return fallback
 
 
 def _resolve_tag_commit(repo: Any, tag: str) -> str:

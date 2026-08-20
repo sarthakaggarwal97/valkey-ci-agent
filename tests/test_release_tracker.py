@@ -233,6 +233,17 @@ def test_existing_exact_publication_run_prevents_duplicate_dispatch(
     assert result == "#42: validating and qualifying"
 
 
+def test_find_run_prefers_active_match_over_newer_completed_duplicate() -> None:
+    title = f"Publish release on {TRACKER.branch} @ {SHA}"
+    workflow = MagicMock()
+    workflow.name = "Publish Release"
+    cancelled = SimpleNamespace(display_title=title, status="completed", conclusion="cancelled")
+    active = SimpleNamespace(display_title=title, status="in_progress", conclusion=None)
+    workflow.get_runs.return_value = [cancelled, active]
+
+    assert tracker_mod._find_run(workflow, title) is active
+
+
 def test_release_must_be_published_at_the_exact_candidate() -> None:
     repo = MagicMock()
     repo.get_releases.return_value = [SimpleNamespace(tag_name=TRACKER.tag, draft=False, prerelease=False)]
