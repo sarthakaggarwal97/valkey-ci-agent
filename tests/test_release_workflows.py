@@ -83,3 +83,5 @@ def test_progress_watcher_is_fork_scoped_and_serialized() -> None:
     assert "--trusted-owner sarthakaggarwal97" in rendered
     assert "secrets.VALKEY_GITHUB_TOKEN" in rendered
     assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in rendered
+    assert "--policy" in rendered
+    assert "release_policy.e2e.yml" in rendered

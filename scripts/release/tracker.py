@@ -20,6 +20,9 @@ from github import Auth, Github
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
+from scripts.release.checks import CandidateCI, evaluate_candidate_ci
+from scripts.release.models import ReleasePolicy
+from scripts.release.policy import load_policy
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +30,14 @@ TRACKING_LABEL = "release-tracking"
 _TRACKER_PREFIX = "<!-- valkey-release-tracker:v1 "
 _STATUS_MARKER = "<!-- valkey-release-tracker:status -->"
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-_REFRESHED_RE = re.compile(r"Last refreshed \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC")
+_REFRESHED_RE = re.compile(r"Status last changed \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC")
 _PHASES = (
     "Prepare",
     "Review notes",
-    "Validate & qualify",
-    "Publish",
+    "Candidate CI",
+    "Qualification",
+    "Release approval",
+    "Publication",
     "Production",
     "Follow-up",
 )
@@ -117,6 +122,7 @@ def ensure_tracker(
         pr=None,
         branch_head="",
         candidate_sha="",
+        candidate_ci=None,
         publish_run=None,
         release=None,
         production_run=None,
@@ -161,10 +167,13 @@ def sync_trackers(
     target_repo: str,
     agent_repo: str,
     automation_repo: str,
+    policy: ReleasePolicy,
     trusted_owner: str = "",
     dispatch: bool = True,
 ) -> list[str]:
     """Refresh every open tracker and advance a merged notes PR once."""
+    if policy.repo != target_repo:
+        raise ValueError(f"policy repository {policy.repo} does not match tracker target {target_repo}")
     repo = _repo(target_gh, target_repo)
     agent = _repo(agent_gh, agent_repo)
     automation = _repo(automation_gh, automation_repo)
@@ -191,6 +200,7 @@ def sync_trackers(
                 automation,
                 publish_workflow,
                 agent_repo=agent_repo,
+                policy=policy,
                 trusted_owner=trusted_owner,
                 dispatch=dispatch,
             )
@@ -220,6 +230,7 @@ def _sync_one(
     publish_workflow: Any,
     *,
     agent_repo: str,
+    policy: ReleasePolicy,
     trusted_owner: str = "",
     dispatch: bool,
 ) -> str:
@@ -233,6 +244,11 @@ def _sync_one(
     candidate_sha = ""
     if pr is not None and getattr(pr, "merged", False):
         candidate_sha = (getattr(pr, "merge_commit_sha", "") or "").lower()
+    candidate_ci = (
+        evaluate_candidate_ci(repo, policy, candidate_sha)
+        if _SHA_RE.fullmatch(candidate_sha)
+        else None
+    )
     release = _find_release(repo, tracker.tag, candidate_sha, tracker.stage != "ga")
 
     publish_title = f"Publish release on {tracker.branch} @ {candidate_sha}" if candidate_sha else ""
@@ -248,6 +264,8 @@ def _sync_one(
         and candidate_sha
         and _SHA_RE.fullmatch(candidate_sha)
         and branch_head == candidate_sha
+        and candidate_ci is not None
+        and candidate_ci.ready
         and publish_run is None
     ):
         accepted = retry_github_call(
@@ -269,6 +287,7 @@ def _sync_one(
         pr=pr,
         branch_head=branch_head,
         candidate_sha=candidate_sha,
+        candidate_ci=candidate_ci,
         publish_run=publish_run,
         release=release,
         production_run=production_run,
@@ -286,237 +305,366 @@ def _render_status(
     pr: Any | None,
     branch_head: str,
     candidate_sha: str,
+    candidate_ci: CandidateCI | None,
     publish_run: Any | None,
     release: Any | None,
     production_run: Any | None,
     agent_repo: str,
     dispatched: bool,
 ) -> tuple[str, str]:
+    repo_url = f"https://github.com/{tracker.repo}"
     prep_url = f"https://github.com/{agent_repo}/actions/runs/{tracker.prepare_run_id}"
-    prep_cell = _run_cell(prepare_run) if prepare_run is not None else f"[run]({prep_url})"
-    candidate_cell = "⏳ Waiting for preparation PR"
-    current = "Generating the release-notes PR."
-    next_action = "Wait for preparation to finish; rerun **Prepare Release** if it fails."
-    summary = "preparing notes"
+    prep_branch_url = f"{repo_url}/tree/{tracker.prep_branch}"
+    prepare_status, prepare_evidence = _run_status(
+        prepare_run,
+        label=f"Prepare run {tracker.prepare_run_id}",
+        fallback_url=prep_url,
+    )
 
+    notes_status = _status_badge("Waiting", "9a6700")
+    notes_evidence = f"[Preparation branch `{tracker.prep_branch}`]({prep_branch_url})"
+    notes_action = "Wait for the preparation PR."
+    current = "Preparing the release notes."
+    next_action = "Wait for preparation to finish."
+    summary = "preparing notes"
+    pr_link = ""
     if prepare_run is not None and prepare_run.status == "completed":
         if prepare_run.conclusion == "success":
-            current = "Release preparation completed; waiting for the release-notes PR."
-            next_action = "Open the preparation run if the PR does not appear shortly."
+            current = "Release preparation completed and the release-notes PR is pending."
+            next_action = "Wait for the release-notes PR to appear."
             summary = "preparation completed"
         else:
             current = "Release preparation failed."
-            next_action = "Open the failed preparation run, fix the failure, and rerun **Prepare Release**."
+            next_action = "Open the Prepare run, fix the failure, and rerun Prepare Release."
             summary = "preparation failed"
 
     if pr is not None:
-        pr_link = f"[#{pr.number}]({pr.html_url})"
+        pr_link = f"[PR #{pr.number}]({pr.html_url})"
+        notes_evidence = f"{pr_link} · [Preparation branch `{tracker.prep_branch}`]({prep_branch_url})"
         if getattr(pr, "merged", False):
-            candidate_cell = f"✅ {pr_link} merged at `{candidate_sha[:12] or 'unknown'}`"
-            current = "The release candidate is bound to the merged preparation PR."
-            next_action = "Publication will start automatically."
+            notes_status = _status_badge("Merged", "1a7f37")
+            notes_action = "Complete"
+            current = "The release-notes PR is merged and the candidate is fixed."
+            next_action = "Wait for candidate CI and qualification."
             summary = "notes PR merged"
         elif pr.state == "closed":
-            candidate_cell = f"❌ {pr_link} closed without merge"
-            current = "Preparation stopped because the release PR was closed."
-            next_action = "Rerun **Prepare Release** to recreate or refresh the PR."
+            notes_status = _status_badge("Closed", "cf222e")
+            notes_action = "Rerun Prepare Release."
+            current = "The release-notes PR closed without merging."
+            next_action = notes_action
             summary = "notes PR closed"
         elif getattr(pr, "draft", False):
-            candidate_cell = f"⚠️ {pr_link} is draft"
-            current = "The release PR is held for maintainer review."
-            next_action = "Resolve the warnings in the PR, rerun Prepare if needed, then mark it ready and merge."
+            notes_status = _status_badge("Review needed", "9a6700")
+            notes_action = "Review, mark ready, and merge the PR."
+            current = "The release-notes PR is waiting for maintainer review."
+            next_action = notes_action
             summary = "notes PR held"
         else:
-            candidate_cell = f"⏳ {pr_link} awaiting review and merge"
-            current = "The release-notes PR is ready for maintainer review."
-            next_action = "Review and merge the release-notes PR."
+            notes_status = _status_badge("Ready for review", "0969da")
+            notes_action = "Review and merge the PR."
+            current = "The release-notes PR is ready for review."
+            next_action = notes_action
             summary = "waiting for notes PR merge"
 
-    publish_cell = "— Not started"
-    if candidate_sha and branch_head != candidate_sha:
-        publish_cell = f"🛑 Branch moved to `{branch_head[:12] or 'unknown'}` after candidate `{candidate_sha[:12]}`"
-        current = "Automatic publication is blocked because the reviewed candidate is no longer branch HEAD."
-        next_action = "Rerun **Prepare Release** so the new branch state is reviewed in a fresh PR."
-        summary = "candidate invalidated by branch movement"
-    elif dispatched:
-        publish_cell = "⏳ Publication workflow dispatched"
-        current = "Exact-SHA validation and qualification are starting."
-        next_action = "Open the publication run when it appears; approve the `release` gate after reviewing its plan."
+    candidate_status = _status_badge("Not started", "57606a")
+    candidate_evidence = "Candidate not established"
+    candidate_action = "Merge the canonical release-notes PR."
+    if candidate_sha:
+        candidate_url = f"{repo_url}/commit/{candidate_sha}"
+        candidate_evidence = f"[Candidate `{candidate_sha[:12]}`]({candidate_url})"
+        if branch_head != candidate_sha:
+            candidate_status = _status_badge("Blocked", "cf222e")
+            candidate_action = "Rerun Prepare Release for the new branch head."
+            current = "The release branch moved after the candidate was reviewed."
+            next_action = candidate_action
+            summary = "candidate invalidated by branch movement"
+        elif candidate_ci is None or candidate_ci.state == "missing":
+            candidate_status = _status_badge("Waiting for CI", "9a6700")
+            candidate_action = "Wait for the candidate CI run to appear."
+            current = "The exact candidate is waiting for CI."
+            next_action = candidate_action
+            summary = "waiting for candidate CI"
+        else:
+            ci_run_id = candidate_ci.workflow_url.rstrip("/").rsplit("/", 1)[-1]
+            ci_link = (
+                f"[Candidate CI run {ci_run_id}]({candidate_ci.workflow_url})"
+                if candidate_ci.workflow_url
+                else "Candidate CI run not found"
+            )
+            candidate_evidence += (
+                f" · {ci_link} · {candidate_ci.passed_count} of {len(candidate_ci.checks)} required checks passed"
+            )
+            if candidate_ci.state == "passed":
+                candidate_status = _status_badge("Passed", "1a7f37")
+                candidate_action = "Complete"
+                current = "Candidate CI passed. Qualification can start."
+                next_action = "Wait for qualification to finish."
+                summary = "candidate CI passed"
+            elif candidate_ci.state == "running":
+                candidate_status = _status_badge("Running", "0969da")
+                pending = ", ".join(check.name for check in candidate_ci.checks if not check.passed)
+                candidate_action = f"Wait for: {pending}." if pending else "Wait for CI to finish."
+                current = "Candidate CI is running."
+                next_action = candidate_action
+                summary = "candidate CI running"
+            else:
+                candidate_status = _status_badge("Failed", "cf222e")
+                failed_checks = ", ".join(check.name for check in candidate_ci.checks if not check.passed)
+                candidate_action = f"Inspect and rerun: {failed_checks}."
+                current = "Candidate CI needs attention."
+                next_action = candidate_action
+                summary = "candidate CI failed"
+
+    qualification_status = _status_badge("Not started", "57606a")
+    qualification_evidence = "No Publish run"
+    qualification_action = "Wait for candidate CI to pass."
+    approval_status = _status_badge("Not ready", "57606a")
+    approval_evidence = "Qualification has not passed"
+    approval_action = "No action yet."
+    if dispatched:
+        qualification_status = _status_badge("Starting", "0969da")
+        qualification_evidence = "Publish workflow dispatched"
+        qualification_action = "Wait for the run to appear."
+        current = "Qualification is starting."
+        next_action = qualification_action
         summary = "publication dispatched"
     elif publish_run is not None:
-        publish_cell = _run_cell(publish_run)
-        if publish_run.status == "completed" and publish_run.conclusion != "success":
-            current = "The publication workflow failed."
-            next_action = "Open the failed run, fix or rerun it, and keep the candidate SHA unchanged."
-            summary = "publication failed"
-        elif publish_run.status == "completed":
-            current = "The publication workflow completed."
-            next_action = "Wait for the GitHub release event to start production automation."
+        publish_link = f"[Publish run {publish_run.id}]({publish_run.html_url})"
+        qualification_evidence = publish_link
+        if publish_run.status == "completed" and publish_run.conclusion == "success":
+            qualification_status = _status_badge("Passed", "1a7f37")
+            qualification_action = "Complete"
+            approval_status = _status_badge("Approved", "1a7f37")
+            approval_evidence = publish_link
+            approval_action = "Complete"
+            current = "Qualification and protected publication completed."
+            next_action = "Wait for production automation."
             summary = "publication completed"
+        elif publish_run.status == "completed":
+            qualification_status = _status_badge("Failed", "cf222e")
+            qualification_action = "Inspect and rerun the Publish workflow."
+            approval_status = _status_badge("Not reached", "57606a")
+            approval_evidence = publish_link
+            approval_action = "Fix the failed Publish run first."
+            current = "The Publish workflow failed."
+            next_action = qualification_action
+            summary = "publication failed"
         elif publish_run.status in {"waiting", "pending"}:
-            current = "Qualification passed or is finishing; publication is waiting at the protected release gate."
-            next_action = "Review the rendered plan and approve the `release` environment."
+            qualification_status = _status_badge("Passed", "1a7f37")
+            qualification_action = "Complete"
+            approval_status = _status_badge("Waiting for approval", "8250df")
+            approval_evidence = publish_link
+            approval_action = "Review the plan, then approve the `release` environment."
+            current = "Qualification passed and release approval is required."
+            next_action = approval_action
             summary = "waiting for release approval"
         else:
-            current = "Candidate validation and no-publish qualification are running."
-            next_action = "Open the publication run for the exact failing or running job."
+            qualification_status = _status_badge("Running", "0969da")
+            qualification_action = "Wait for exact-candidate qualification."
+            approval_status = _status_badge("Not ready", "57606a")
+            approval_evidence = publish_link
+            approval_action = "No action until qualification passes."
+            current = "Exact-candidate qualification is running."
+            next_action = qualification_action
             summary = "validating and qualifying"
 
-    release_cell = "— Not published"
+    release_status = _status_badge("Not published", "57606a")
+    release_evidence = "No GitHub release"
+    release_action = "Complete qualification and release approval."
     if release is not None:
-        release_cell = f"✅ [GitHub release]({release.html_url})"
-        current = "The GitHub release is published; production automation is next."
-        next_action = "Wait for the production run, then approve `release-publish`."
+        release_status = _status_badge("Published", "1a7f37")
+        release_evidence = f"[GitHub release {tracker.tag}]({release.html_url})"
+        release_action = "Complete"
+        current = "The GitHub release is published."
+        next_action = "Wait for production automation and its protected approval."
         summary = "release published"
 
-    production_cell = "— Not started"
+    production_status = _status_badge("Not started", "57606a")
+    production_evidence = "No production run"
+    production_action = "Wait for the GitHub release event."
+    follow_up_status = _status_badge("Not started", "57606a")
+    follow_up_evidence = "Downstream work has not completed"
+    follow_up_action = "No action yet."
     if production_run is not None:
-        production_cell = _run_cell(production_run)
+        production_link = f"[Production run {production_run.id}]({production_run.html_url})"
+        production_evidence = production_link
         if production_run.status == "completed" and production_run.conclusion == "success":
-            current = "Production automation completed successfully."
-            next_action = (
-                "Review and merge the downstream container/Helm/docs/website PRs, confirm Bundle, "
-                "then close this tracker."
-            )
+            production_status = _status_badge("Passed", "1a7f37")
+            production_action = "Complete"
+            follow_up_status = _status_badge("Action needed", "8250df")
+            follow_up_evidence = production_link
+            follow_up_action = "Review downstream PRs, confirm Bundle, then close this tracker."
+            current = "Production automation completed."
+            next_action = follow_up_action
             summary = "production automation completed"
         elif production_run.status == "completed":
+            production_status = _status_badge("Failed", "cf222e")
+            production_action = "Inspect and rerun the failed production workflow."
             current = "Production automation failed."
-            next_action = "Open the production run, fix or rerun the failed job, and leave this tracker open."
+            next_action = production_action
             summary = "production automation failed"
         elif production_run.status in {"waiting", "pending"}:
-            current = "Production automation is waiting at its protected environment."
-            next_action = "Review and approve the `release-publish` environment."
+            production_status = _status_badge("Waiting for approval", "8250df")
+            production_action = "Approve the `release-publish` environment."
+            current = "Production approval is required."
+            next_action = production_action
             summary = "waiting for production approval"
         else:
-            current = "Production packaging and downstream updates are running."
-            next_action = "Open the production run for live job-level status."
+            production_status = _status_badge("Running", "0969da")
+            production_action = "Wait for production automation."
+            current = "Production automation is running."
+            next_action = production_action
             summary = "production automation running"
 
     refreshed = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     phase, failed = _presentation_state(summary)
     callout = "CAUTION" if failed else ("IMPORTANT" if "approval" in summary else "NOTE")
     phase_color = "cf222e" if failed else ("1a7f37" if phase == len(_PHASES) else "0969da")
-    candidate_badge = candidate_sha[:12] if candidate_sha else "pending"
-    return (
-        "\n".join(
-            (
-                '<div align="center">',
-                "",
-                f"## Valkey {tracker.tag} release status",
-                "",
-                " ".join(
-                    (
-                        _badge("phase", f"{phase}/{len(_PHASES)} {_PHASES[phase - 1]}", phase_color),
-                        _badge("candidate", candidate_badge, "57606a"),
-                        _badge("stage", tracker.stage.upper(), "8250df"),
-                    )
-                ),
-                "",
-                _progress_bar(phase, failed),
-                "",
-                "</div>",
-                "",
-                f"> [!{callout}]",
-                f"> **{current}**",
-                ">",
-                f"> **Next maintainer action:** {next_action}",
-                "",
-                "## Pipeline",
-                "",
-                *_phase_checklist(phase),
-                "",
-                "## Current release status",
-                "",
-                "| Phase | Status |",
-                "|---|---|",
-                f"| Prepare workflow | {prep_cell} |",
-                f"| Release-notes PR | {candidate_cell} |",
-                f"| Validate, qualify, approve, publish | {publish_cell} |",
-                f"| GitHub release | {release_cell} |",
-                f"| Production automation | {production_cell} |",
-                "",
-                "<details><summary>Security and recovery model</summary>",
-                "",
-                "This dashboard is a projection of live GitHub state. It cannot choose a candidate, authorize publication, or skip either protected approval. The canonical merged preparation PR, exact branch SHA, no-publish qualification run, live approver membership, and environment gates remain authoritative; ordinary candidate CI is advisory context.",
-                "",
-                "</details>",
-                "",
-                f"<sub>Last refreshed {refreshed} · [Preparation run]({prep_url}) · Dashboard only; not release authority.</sub>",
-            )
-        ),
-        summary,
+    rows = (
+        ("Prepare", prepare_status, prepare_evidence, "Complete" if prepare_run and prepare_run.conclusion == "success" else "Wait for or rerun Prepare Release."),
+        ("Release notes", notes_status, notes_evidence, notes_action),
+        ("Candidate CI", candidate_status, candidate_evidence, candidate_action),
+        ("Qualification", qualification_status, qualification_evidence, qualification_action),
+        ("Release approval", approval_status, approval_evidence, approval_action),
+        ("Publication", release_status, release_evidence, release_action),
+        ("Production", production_status, production_evidence, production_action),
+        ("Follow-up", follow_up_status, follow_up_evidence, follow_up_action),
     )
+    lines = [
+        '<div align="center">',
+        "",
+        "## Current release status",
+        "",
+        _status_badge(_PHASES[phase - 1], phase_color),
+        "",
+        "</div>",
+        "",
+        f"> [!{callout}]",
+        f"> **{current}**",
+        ">",
+        f"> **Next step:** {next_action}",
+        "",
+        "## Live release status",
+        "",
+        "| Stage | Status | Evidence | Next action |",
+        "|---|---|---|---|",
+        *(f"| {stage} | {status} | {evidence} | {action} |" for stage, status, evidence, action in rows),
+    ]
+    if candidate_ci is not None and candidate_ci.workflow_status != "missing":
+        lines.extend((
+            "",
+            f"<details><summary>Candidate CI: {candidate_ci.passed_count} of {len(candidate_ci.checks)} required checks passed</summary>",
+            "",
+            "| Required check | Status | Evidence |",
+            "|---|---|---|",
+            *(
+                f"| `{check.name}` | {_check_status_badge(check)} | "
+                f"{f'[`{check.name}` check]({check.url})' if check.url else 'No check run'} |"
+                for check in candidate_ci.checks
+            ),
+            "",
+            "</details>",
+        ))
+    lines.extend((
+        "",
+        "<details><summary>Security and recovery model</summary>",
+        "",
+        "This dashboard is a projection of live GitHub state. It cannot choose a candidate, authorize publication, or skip either protected approval. The canonical merged preparation PR, exact branch SHA, required candidate CI, no-publish qualification run, live approver membership, and environment gates remain authoritative.",
+        "",
+        "</details>",
+        "",
+        f"<sub>Status last changed {refreshed} · Dashboard only; not release authority.</sub>",
+    ))
+    return "\n".join(lines), summary
 
 
-def _run_cell(run: Any) -> str:
-    link = f"[run]({run.html_url})"
+def _run_status(run: Any | None, *, label: str, fallback_url: str = "") -> tuple[str, str]:
+    if run is None:
+        evidence = f"[{label}]({fallback_url})" if fallback_url else "Run not found"
+        return _status_badge("Waiting", "9a6700"), evidence
+    evidence = f"[{label}]({run.html_url})"
     if run.status != "completed":
-        return f"⏳ {link} `{run.status}`"
+        return _status_badge("Running", "0969da"), evidence
     if run.conclusion == "success":
-        return f"✅ {link} succeeded"
-    return f"❌ {link} `{run.conclusion or 'failed'}`"
+        return _status_badge("Passed", "1a7f37"), evidence
+    return _status_badge("Failed", "cf222e"), evidence
 
+
+def _check_status_badge(check: Any) -> str:
+    if check.passed:
+        return _status_badge("Passed", "1a7f37")
+    if check.status in {"queued", "in_progress", "pending", "waiting"}:
+        return _status_badge("Running", "0969da")
+    if check.status == "missing":
+        return _status_badge("Missing", "cf222e")
+    return _status_badge("Failed", "cf222e")
 
 def _issue_body(tracker: Tracker, agent_repo: str, *, include_marker: bool = True) -> str:
     repo_url = f"https://github.com/{tracker.repo}"
     trackers_url = f"{repo_url}/issues?q=is%3Aissue+is%3Aopen+label%3A{TRACKING_LABEL}"
+    prep_branch_url = f"{repo_url}/tree/{tracker.prep_branch}"
+    prepare_run_url = f"https://github.com/{agent_repo}/actions/runs/{tracker.prepare_run_id}"
     lines: tuple[str, ...] = (
-            '<div align="center">',
-            "",
-            f"# Valkey {tracker.tag}",
-            "",
-            " ".join(
-                (
-                    _badge("release", tracker.tag, "0969da"),
-                    _badge("stage", tracker.stage.upper(), "8250df"),
-                    _badge("line", tracker.branch, "57606a"),
-                )
-            ),
-            "",
-            f"[`{tracker.repo}`]({repo_url}) · [`{tracker.branch}`]({repo_url}/tree/{tracker.branch}) · [All active releases]({trackers_url})",
-            "",
-            "</div>",
-            "",
-            "> [!NOTE]",
-            "> **This is the maintainer control center for the release.** The bot-owned status comment below shows the live phase, failure evidence, and exact next action.",
-            ">",
-            "> Editing this issue never authorizes or advances the release.",
-            "",
-            "## Release path",
-            "",
-            "`Prepare` → `Review notes` → `Validate & qualify` → `Approve release` → `Approve production` → `Follow-up`",
-            "",
-            "After the canonical release-notes PR merges, qualification starts automatically. The two approval gates remain deliberate human decisions.",
-            "",
-            "## Release identity",
-            "",
-            "| Field | Value |",
-            "|---|---|",
-            f"| Release line | [`{tracker.branch}`]({repo_url}/tree/{tracker.branch}) |",
-            f"| Preparation branch | `{tracker.prep_branch}` |",
-            f"| Preparation run | [Open run](https://github.com/{agent_repo}/actions/runs/{tracker.prepare_run_id}) |",
-            "",
-            "## Maintainer checklist",
-            "",
-            "- [ ] Review and merge the release-notes PR",
-            "- [ ] Approve the protected `release` publication gate",
-            "- [ ] Approve the protected `release-publish` production gate",
-            "- [ ] Review and merge generated downstream PRs (container, docs/website when applicable, Helm for GA)",
-            "- [ ] Confirm the Bundle update for supported release lines",
-            "- [ ] Close this issue after downstream publication is complete",
-        )
+        '<div align="center">',
+        "",
+        f"# Valkey {tracker.tag}",
+        "",
+        " ".join(
+            (
+                _badge("release", tracker.tag, "0969da"),
+                _badge("stage", tracker.stage.upper(), "8250df"),
+                _badge("line", tracker.branch, "57606a"),
+            )
+        ),
+        "",
+        f"[`{tracker.repo}`]({repo_url}) · [`{tracker.branch}`]({repo_url}/tree/{tracker.branch}) · "
+        f"[All active releases]({trackers_url})",
+        "",
+        "</div>",
+        "",
+        "> [!NOTE]",
+        "> This issue contains stable release identity and operator guidance. The controller-owned status comment shows live state, exact evidence, and the next action.",
+        ">",
+        "> Editing this issue never authorizes or advances the release.",
+        "",
+        "## Release identity",
+        "",
+        "| Field | Value |",
+        "|---|---|",
+        f"| Release line | [`{tracker.branch}`]({repo_url}/tree/{tracker.branch}) |",
+        f"| Preparation branch | [`{tracker.prep_branch}`]({prep_branch_url}) |",
+        f"| Preparation run | [Prepare run {tracker.prepare_run_id}]({prepare_run_url}) |",
+        "",
+        "## Release path",
+        "",
+        "`Prepare` → `Review notes` → `Candidate CI` → `Qualification` → `Release approval` → "
+        "`Publication` → `Production` → `Follow-up`",
+        "",
+        "Qualification starts only after the canonical release-notes PR merges and the latest exact-candidate CI passes. Publication and production each retain a protected human approval.",
+        "",
+        "## Human checkpoints",
+        "",
+        "- Review and merge the canonical release-notes PR when the live status links it.",
+        "- Review the rendered release plan before approving the `release` environment.",
+        "- Review production evidence before approving the `release-publish` environment.",
+        "- Review downstream PRs, confirm Bundle, and close this tracker after follow-up completes.",
+    )
     if include_marker:
         lines = (tracker.marker(), *lines)
     return "\n".join(lines)
 
 
+def _escape_badge(value: str) -> str:
+    return value.replace("-", "--").replace("_", "__").replace(" ", "%20").replace("/", "%2F").replace("&", "%26")
+
+
 def _badge(label: str, message: str, color: str) -> str:
-    def escape(value: str) -> str:
-        return value.replace("-", "--").replace("_", "__").replace(" ", "%20").replace("/", "%2F").replace("&", "%26")
-
     alt = f"{label}: {message}"
-    return f"![{alt}](https://img.shields.io/badge/{escape(label)}-{escape(message)}-{color}?style=flat-square)"
+    return f"![{alt}](https://img.shields.io/badge/{_escape_badge(label)}-{_escape_badge(message)}-{color}?style=flat-square)"
 
+
+def _status_badge(message: str, color: str) -> str:
+    return f"![{message}](https://img.shields.io/badge/-{_escape_badge(message)}-{color}?style=flat-square)"
 
 def _presentation_state(summary: str) -> tuple[int, bool]:
     failed = any(word in summary for word in ("failed", "invalidated", "closed"))
@@ -527,43 +675,27 @@ def _presentation_state(summary: str) -> tuple[int, bool]:
     if summary in {
         "notes PR merged",
         "candidate invalidated by branch movement",
-        "publication dispatched",
-        "publication failed",
-        "validating and qualifying",
+        "waiting for candidate CI",
+        "candidate CI running",
+        "candidate CI failed",
+        "candidate CI passed",
     }:
         return 3, failed
-    if summary in {"waiting for release approval", "publication completed"}:
+    if summary in {"publication dispatched", "publication failed", "validating and qualifying"}:
         return 4, failed
+    if summary == "waiting for release approval":
+        return 5, failed
+    if summary in {"publication completed", "release published"}:
+        return 6, failed
     if summary in {
-        "release published",
         "waiting for production approval",
         "production automation running",
         "production automation failed",
     }:
-        return 5, failed
+        return 7, failed
     if summary == "production automation completed":
-        return 6, failed
+        return 8, failed
     return 1, True
-
-
-def _progress_bar(phase: int, failed: bool) -> str:
-    current = "🟥" if failed else "🟦"
-    blocks = "".join(
-        "🟩" if index < phase else current if index == phase else "⬜" for index in range(1, len(_PHASES) + 1)
-    )
-    label = _PHASES[phase - 1]
-    suffix = " · needs attention" if failed else ""
-    return f"{blocks} **{label}{suffix}**"
-
-
-def _phase_checklist(phase: int) -> tuple[str, ...]:
-    lines = []
-    for index, label in enumerate(_PHASES, start=1):
-        checked = "x" if index < phase else " "
-        rendered = f"**{label}**" if index == phase else label
-        lines.append(f"- [{checked}] {rendered}")
-    return tuple(lines)
-
 
 def _find_prep_pr(repo: Any, tracker: Tracker) -> Any | None:
     pulls = retry_github_call(
@@ -730,8 +862,8 @@ def _upsert_status(issue: Any, body: str, *, tracker: Tracker | None = None) -> 
             description=f"create tracker #{issue.number} status",
         )
     else:
-        if _REFRESHED_RE.sub("Last refreshed <timestamp> UTC", existing.body or "") == _REFRESHED_RE.sub(
-            "Last refreshed <timestamp> UTC", rendered
+        if _REFRESHED_RE.sub("Status last changed <timestamp> UTC", existing.body or "") == _REFRESHED_RE.sub(
+            "Status last changed <timestamp> UTC", rendered
         ):
             return
         retry_github_call(
@@ -814,6 +946,7 @@ def main(argv: list[str] | None = None) -> int:
     sync.add_argument("--agent-repo", default="valkey-io/valkey-ci-agent")
     sync.add_argument("--automation-repo", default="valkey-io/valkey-release-automation")
     sync.add_argument("--trusted-owner", default="")
+    sync.add_argument("--policy", default="release_policy.yml")
     sync.add_argument("--no-dispatch", action="store_true")
     args = parser.parse_args(argv)
 
@@ -851,6 +984,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("AUTOMATION_GITHUB_TOKEN is required for sync")
     agent_gh = Github(auth=Auth.Token(agent_token))
     automation_gh = Github(auth=Auth.Token(automation_token))
+    policy = load_policy(args.policy)
     for result in sync_trackers(
         target_gh,
         agent_gh,
@@ -858,6 +992,7 @@ def main(argv: list[str] | None = None) -> int:
         target_repo=args.target_repo,
         agent_repo=args.agent_repo,
         automation_repo=args.automation_repo,
+        policy=policy,
         trusted_owner=args.trusted_owner,
         dispatch=not args.no_dispatch,
     ):

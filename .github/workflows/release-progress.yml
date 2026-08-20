@@ -36,6 +36,7 @@ jobs:
           TARGET_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
           AGENT_GITHUB_TOKEN: ${{ github.token }}
           AUTOMATION_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          POLICY: release_policy.e2e.yml
         run: |
           set -euo pipefail
           [[ -n "$TARGET_GITHUB_TOKEN" && -n "$AUTOMATION_GITHUB_TOKEN" ]] || {
@@ -46,4 +47,5 @@ jobs:
             --target-repo sarthakaggarwal97/valkey \
             --agent-repo sarthakaggarwal97/valkey-ci-agent \
             --automation-repo sarthakaggarwal97/valkey-release-automation \
-            --trusted-owner sarthakaggarwal97
+            --trusted-owner sarthakaggarwal97 \
+            --policy "$POLICY"

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from scripts.release.checks import require_green_checks
+from scripts.release.checks import evaluate_candidate_ci, require_green_checks
 from scripts.release.models import ReleasePolicy
 
 POLICY = ReleasePolicy(
@@ -24,6 +24,7 @@ def _run(name: str, conclusion: str, suite: int = 7, run_id: int = 1):
         conclusion=conclusion,
         started_at=None,
         id=run_id,
+        html_url=f"https://example/checks/{run_id}",
         _rawData={"check_suite": {"id": suite}},
     )
 
@@ -33,8 +34,10 @@ def _workflow(path: str, suite: int, *, run_id: int = 1, status: str = "complete
         path=f".github/workflows/{path}",
         check_suite_id=suite,
         status=status,
+        conclusion="success" if status == "completed" else None,
         created_at=None,
         id=run_id,
+        html_url=f"https://example/actions/runs/{run_id}",
     )
 
 
@@ -81,3 +84,19 @@ def test_latest_ci_workflow_must_finish_before_checks_are_accepted() -> None:
     workflows = [_workflow("ci.yml", 9, run_id=2, status="in_progress")]
     with pytest.raises(ValueError, match="wait for it to complete"):
         require_green_checks(_repo([], workflows), POLICY, "a" * 40)
+
+
+def test_candidate_ci_snapshot_exposes_exact_run_and_required_check_evidence() -> None:
+    snapshot = evaluate_candidate_ci(
+        _repo([_run("linux", "success", run_id=11), _run("macos", "failure", run_id=12)]),
+        POLICY,
+        "a" * 40,
+    )
+
+    assert snapshot.workflow_url == "https://example/actions/runs/1"
+    assert snapshot.state == "failed"
+    assert snapshot.passed_count == 1
+    assert [(check.name, check.conclusion, check.url) for check in snapshot.checks] == [
+        ("linux", "success", "https://example/checks/11"),
+        ("macos", "failure", "https://example/checks/12"),
+    ]
