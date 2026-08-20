@@ -7,7 +7,7 @@ import pytest
 from github.GithubException import GithubException
 
 from scripts.release import publish as publish_mod
-from scripts.release.models import PublishPlan, ReleasePolicy
+from scripts.release.models import PublishPlan, ReleaseIntent, ReleasePolicy
 
 SHA = "a" * 40
 POLICY = ReleasePolicy(
@@ -263,3 +263,43 @@ def test_non_fast_forward_rule_does_not_prove_tag_immutability() -> None:
         }),
     ]
     assert publish_mod.tag_ruleset_protected(repo, "9.1.2").protected is False
+
+
+def test_prepare_without_target_remains_tag_derived(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo()
+    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *a, **k: None)
+    release = publish_mod.prepare_release(
+        _gh(repo), POLICY, branch="9.1", intent=ReleaseIntent.PATCH, actor="maintainer"
+    )
+    assert (release.version, release.stage) == ("9.1.2", "ga")
+    repo.get_contents.assert_not_called()
+
+
+def test_prepare_allows_policy_gated_single_patch_skip(monkeypatch: pytest.MonkeyPatch) -> None:
+    policy = ReleasePolicy(
+        repo="sarthakaggarwal97/valkey",
+        authorized_team="user:sarthakaggarwal97",
+        branches=("9.1",),
+        checks_workflow="ci.yml",
+        required_checks=("test",),
+        require_tag_ruleset=False,
+        allow_version_override=True,
+    )
+    repo = _repo()
+    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *a, **k: None)
+    release = publish_mod.prepare_release(
+        _gh(repo), policy, branch="9.1", intent=ReleaseIntent.PATCH,
+        actor="sarthakaggarwal97", target_version="9.1.3",
+    )
+    assert (release.version, release.stage) == ("9.1.3", "ga")
+    repo.get_contents.assert_called_once_with("src/version.h", ref="9.1")
+
+
+def test_prepare_refuses_target_when_policy_capability_is_off() -> None:
+    gh = MagicMock()
+    with pytest.raises(publish_mod.ReleaseError, match="does not allow"):
+        publish_mod.prepare_release(
+            gh, POLICY, branch="9.1", intent=ReleaseIntent.PATCH,
+            actor="maintainer", target_version="9.1.3",
+        )
+    gh.get_repo.assert_not_called()

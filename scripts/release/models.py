@@ -30,6 +30,7 @@ class ReleasePolicy:
     checks_workflow: str
     required_checks: tuple[str, ...]
     require_tag_ruleset: bool = True
+    allow_version_override: bool = False
 
     @property
     def authorized_user(self) -> str | None:

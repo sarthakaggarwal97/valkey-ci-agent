@@ -1,9 +1,9 @@
 """Deterministic version derivation from a release branch and existing tags.
 
 Given a release branch (``M.m``), the operator's intent (rc/ga/patch), and the
-repository's existing tags, exactly one next version and stage follow. The
-operator never types a version, so a Start Release dispatch cannot introduce a
-version that disagrees with the branch or repeats an existing tag.
+repository's existing tags, exactly one next version and stage follow. An
+optional policy-gated target may skip exactly one unpublished patch only when
+the release branch source already records that skipped version.
 
 Valkey's tag model (mirrored from the release-notes cut):
 
@@ -95,3 +95,49 @@ def derive_version(branch: str, intent: ReleaseIntent, tags: Iterable[str]) -> D
         return DerivedRelease(version=f"{major}.{minor}.{max(finals) + 1}", stage="ga")
 
     raise ValueError(f"cannot derive a version for intent {intent.value!r}")
+
+
+def resolve_target_version(
+    branch: str,
+    intent: ReleaseIntent,
+    tags: Iterable[str],
+    *,
+    source_version: str,
+    source_stage: str,
+    target_version: str,
+) -> DerivedRelease:
+    """Validate an explicit target that skips one unpublished patch.
+
+    Normal releases remain tag-derived. The escape hatch is deliberately
+    narrow: patch intent only, exact unpadded version syntax, the same release
+    line, source at the automatically derived unpublished patch, and a target
+    exactly one patch later.
+    """
+    if target_version and intent is not ReleaseIntent.PATCH:
+        raise ValueError("an explicit target version is allowed only for patch releases")
+    derived = derive_version(branch, intent, tags)
+    if not target_version:
+        return derived
+
+    target = _FINAL_TAG_RE.fullmatch(target_version)
+    if not target:
+        raise ValueError("target version must be exact unpadded MAJOR.MINOR.PATCH")
+    target_parts = tuple(int(target.group(index)) for index in range(1, 4))
+    if target_parts[:2] != parse_release_branch(branch):
+        raise ValueError(f"target version {target_version} does not belong to branch {branch}")
+
+    expected = _FINAL_TAG_RE.fullmatch(derived.version)
+    source = _FINAL_TAG_RE.fullmatch(source_version)
+    if expected is None or source is None:
+        raise ValueError("derived and source versions must use exact unpadded MAJOR.MINOR.PATCH syntax")
+    expected_parts = tuple(int(expected.group(index)) for index in range(1, 4))
+    source_parts = tuple(int(source.group(index)) for index in range(1, 4))
+    if source_stage != "ga" or source_parts != expected_parts:
+        raise ValueError(
+            f"branch source must record unpublished {derived.version} at stage ga before it can be skipped"
+        )
+    if target_parts != (*expected_parts[:2], expected_parts[2] + 1):
+        raise ValueError(
+            f"target version must be exactly one patch after unpublished {derived.version}"
+        )
+    return DerivedRelease(version=target_version, stage="ga")

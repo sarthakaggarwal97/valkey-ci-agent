@@ -28,6 +28,7 @@ def test_loads_small_policy(tmp_path: Path) -> None:
     assert policy.repo == "valkey-io/valkey"
     assert policy.team_slug == "core-team"
     assert policy.require_tag_ruleset is True
+    assert policy.allow_version_override is False
     assert validate_branch(policy, " 9.1 ") == "9.1"
 
 
@@ -84,3 +85,13 @@ def test_invalid_explicit_user_policy_is_refused(tmp_path: Path, value: str) -> 
     )
     with pytest.raises(ValueError, match="user:LOGIN"):
         load_policy(_write(tmp_path, body))
+
+
+def test_explicit_fork_policy_can_enable_version_override(tmp_path: Path) -> None:
+    policy = load_policy(_write(tmp_path, VALID + "allow_version_override: true\n"))
+    assert policy.allow_version_override is True
+
+
+def test_non_boolean_version_override_policy_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="allow_version_override must be a boolean"):
+        load_policy(_write(tmp_path, VALID + "allow_version_override: 'true'\n"))

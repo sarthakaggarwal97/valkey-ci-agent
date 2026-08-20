@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     prepare.add_argument("--branch", required=True)
     prepare.add_argument("--intent", required=True, choices=[item.value for item in ReleaseIntent])
     prepare.add_argument("--actor", required=True)
+    prepare.add_argument("--target-version", default="")
 
     plan = sub.add_parser("plan", help="validate and render a publication plan")
     plan.add_argument("--branch", required=True)
@@ -81,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
                 branch=args.branch,
                 intent=ReleaseIntent(args.intent),
                 actor=args.actor,
+                target_version=args.target_version,
             )
             _write_outputs({"version": release.version, "stage": release.stage, "tag": release.tag})
             print(f"Prepared {release.tag} on {args.branch}")

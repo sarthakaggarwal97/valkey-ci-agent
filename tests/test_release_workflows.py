@@ -15,14 +15,19 @@ def _load(name: str) -> dict:
 
 def test_prepare_accepts_fork_relay_and_opens_dashboard_and_notes_pr() -> None:
     workflow = _load("release-prepare.yml")
+    policy = yaml.load(Path("release_policy.e2e.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    assert policy["allow_version_override"] == "true"
     inputs = workflow["on"]["workflow_dispatch"]["inputs"]
     assert inputs["dry_run"]["default"] == "false"
     assert inputs["initiator"]["required"] == "true"
+    assert inputs["target_version"]["required"] == "false"
+    assert inputs["target_version"]["default"] == ""
     assert list(workflow["jobs"]) == ["authorize-start", "derive", "cut-notes", "tracker"]
     assert workflow["jobs"]["derive"]["needs"] == "authorize-start"
     assert "sarthakaggarwal97" in str(workflow["jobs"]["authorize-start"])
     assert "release_policy.e2e.yml" in str(workflow["jobs"]["derive"])
     assert "secrets.VALKEY_GITHUB_TOKEN" in str(workflow["jobs"]["derive"])
+    assert "--target-version" in str(workflow["jobs"]["derive"])
     assert workflow["jobs"]["cut-notes"]["uses"] == "./.github/workflows/release-notes-cut.yml"
     assert workflow["jobs"]["cut-notes"]["secrets"] == "inherit"
     assert workflow["jobs"]["tracker"]["needs"] == "derive"

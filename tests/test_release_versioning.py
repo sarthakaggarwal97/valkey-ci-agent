@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from scripts.release.models import ReleaseIntent
-from scripts.release.versioning import derive_version, parse_release_branch
+from scripts.release.versioning import derive_version, parse_release_branch, resolve_target_version
 
 
 class TestParseReleaseBranch:
@@ -136,3 +136,47 @@ class TestDerivePatch:
         # matched into a final release (which would skip or repeat a patch).
         derived = derive_version("9.1", ReleaseIntent.PATCH, ["9.1.0", stray])
         assert derived.version == "9.1.1"
+
+
+class TestResolveTargetVersion:
+    def test_omitted_target_preserves_normal_derivation(self) -> None:
+        release = resolve_target_version(
+            "9.1", ReleaseIntent.PATCH, ["9.1.3"],
+            source_version="9.1.4", source_stage="ga", target_version="",
+        )
+        assert (release.version, release.stage) == ("9.1.4", "ga")
+
+    def test_allows_exactly_one_unpublished_patch_to_be_skipped(self) -> None:
+        release = resolve_target_version(
+            "9.1", ReleaseIntent.PATCH, ["9.1.3"],
+            source_version="9.1.4", source_stage="ga", target_version="9.1.5",
+        )
+        assert (release.version, release.stage, release.tag) == ("9.1.5", "ga", "9.1.5")
+
+    @pytest.mark.parametrize(
+        ("intent", "source_version", "source_stage", "target_version", "message"),
+        [
+            (ReleaseIntent.GA, "9.1.4", "ga", "9.1.5", "only for patch"),
+            (ReleaseIntent.PATCH, "9.1.4", "ga", "9.01.5", "exact unpadded"),
+            (ReleaseIntent.PATCH, "9.1.4", "ga", "9.2.5", "does not belong"),
+            (ReleaseIntent.PATCH, "9.1.3", "ga", "9.1.5", "source must record"),
+            (ReleaseIntent.PATCH, "9.1.4", "dev", "9.1.5", "source must record"),
+            (ReleaseIntent.PATCH, "9.1.4", "ga", "9.1.4", "exactly one patch"),
+            (ReleaseIntent.PATCH, "9.1.4", "ga", "9.1.6", "exactly one patch"),
+        ],
+    )
+    def test_refuses_unsafe_target_overrides(
+        self,
+        intent: ReleaseIntent,
+        source_version: str,
+        source_stage: str,
+        target_version: str,
+        message: str,
+    ) -> None:
+        with pytest.raises(ValueError, match=message):
+            resolve_target_version(
+                "9.1", intent, ["9.1.3"],
+                source_version=source_version,
+                source_stage=source_stage,
+                target_version=target_version,
+            )

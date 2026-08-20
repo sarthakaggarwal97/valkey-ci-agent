@@ -23,6 +23,7 @@ def load_policy(path: str | Path) -> ReleasePolicy:
         "checks_workflow",
         "required_checks",
         "require_tag_ruleset",
+        "allow_version_override",
     }
     unknown = set(raw) - allowed
     if unknown:
@@ -45,6 +46,9 @@ def load_policy(path: str | Path) -> ReleasePolicy:
     require_tag_ruleset = raw.get("require_tag_ruleset", True)
     if not isinstance(require_tag_ruleset, bool):
         raise ValueError("require_tag_ruleset must be a boolean")
+    allow_version_override = raw.get("allow_version_override", False)
+    if not isinstance(allow_version_override, bool):
+        raise ValueError("allow_version_override must be a boolean")
     if len(set(branches)) != len(branches):
         raise ValueError("branches contains duplicates")
     if len(set(checks)) != len(checks):
@@ -57,6 +61,7 @@ def load_policy(path: str | Path) -> ReleasePolicy:
         checks_workflow=workflow,
         required_checks=checks,
         require_tag_ruleset=require_tag_ruleset,
+        allow_version_override=allow_version_override,
     )
 
 

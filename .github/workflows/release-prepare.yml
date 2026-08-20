@@ -27,6 +27,11 @@ on:
         description: "Maintainer login forwarded by the Valkey Start Release workflow"
         required: true
         type: string
+      target_version:
+        description: "Fork-only exact patch target for one intentionally skipped unpublished version"
+        required: false
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -79,12 +84,16 @@ jobs:
           BRANCH: ${{ inputs.branch }}
           INTENT: ${{ inputs.intent }}
           ACTOR: ${{ inputs.initiator }}
+          TARGET_VERSION: ${{ inputs.target_version }}
           POLICY: release_policy.e2e.yml
         run: |
           set -euo pipefail
           [[ -n "$RELEASE_GITHUB_TOKEN" ]] || { echo "VALKEY_GITHUB_TOKEN is required for fork E2E" >&2; exit 1; }
-          python -m scripts.release.main --policy "$POLICY" prepare \
-            --branch "$BRANCH" --intent "$INTENT" --actor "$ACTOR"
+          args=(--branch "$BRANCH" --intent "$INTENT" --actor "$ACTOR")
+          if [[ -n "$TARGET_VERSION" ]]; then
+            args+=(--target-version "$TARGET_VERSION")
+          fi
+          python -m scripts.release.main --policy "$POLICY" prepare "${args[@]}"
 
       - name: Summary
         env:

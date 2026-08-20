@@ -15,7 +15,7 @@ from scripts.release.authorize import ensure_authorized
 from scripts.release.checks import require_green_checks
 from scripts.release.models import DerivedRelease, PublishPlan, ReleaseIntent, ReleasePolicy
 from scripts.release.policy import validate_branch
-from scripts.release.versioning import derive_version
+from scripts.release.versioning import derive_version, resolve_target_version
 from scripts.release_notes.release_format import parse_version
 from scripts.release_notes.version_bump import current_release_state
 
@@ -41,9 +41,12 @@ def prepare_release(
     branch: str,
     intent: ReleaseIntent,
     actor: str,
+    target_version: str = "",
 ) -> DerivedRelease:
     """Authorize and derive the release identity; perform no writes."""
     branch = validate_branch(policy, branch)
+    if target_version and not policy.allow_version_override:
+        raise ReleaseError("the release policy does not allow an explicit target version")
     ensure_authorized(gh, policy, actor)
     repo = _repo(gh, policy.repo)
     tags = retry_github_call(
@@ -51,7 +54,19 @@ def prepare_release(
         retries=2,
         description="list release tags",
     )
-    return derive_version(branch, intent, tags)
+    derived = derive_version(branch, intent, tags)
+    if not target_version:
+        return derived
+    version_h = _read_text(repo, "src/version.h", branch)
+    source_version, source_stage = current_release_state(version_h)
+    return resolve_target_version(
+        branch,
+        intent,
+        tags,
+        source_version=source_version,
+        source_stage=source_stage,
+        target_version=target_version,
+    )
 
 
 def plan_publication(

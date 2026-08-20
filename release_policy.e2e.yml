@@ -14,3 +14,4 @@ required_checks:
   - build-libc-malloc
   - build-almalinux8-jemalloc
 require_tag_ruleset: false
+allow_version_override: true
