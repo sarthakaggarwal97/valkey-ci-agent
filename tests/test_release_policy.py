@@ -58,3 +58,18 @@ def test_unknown_key_refused(tmp_path: Path) -> None:
 def test_unlisted_branch_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="not releasable"):
         validate_branch(load_policy(_write(tmp_path, VALID)), "unstable")
+
+
+def test_loads_explicit_user_policy(tmp_path: Path) -> None:
+    body = VALID.replace("valkey-io/core-team", "user:sarthakaggarwal97")
+    policy = load_policy(_write(tmp_path, body))
+    assert policy.authorized_user == "sarthakaggarwal97"
+
+
+@pytest.mark.parametrize("value", ["user:", "user:two/logins", "user:has space"])
+def test_invalid_explicit_user_policy_is_refused(tmp_path: Path, value: str) -> None:
+    body = VALID.replace(
+        "authorized_team: valkey-io/core-team", f"authorized_team: '{value}'"
+    )
+    with pytest.raises(ValueError, match="user:LOGIN"):
+        load_policy(_write(tmp_path, body))

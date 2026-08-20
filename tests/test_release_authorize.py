@@ -81,3 +81,19 @@ def test_actor_whitespace_is_stripped_before_the_lookup() -> None:
     gh = _gh(member=True)
     ensure_authorized(gh, _POLICY, "  madolson  ")
     gh.get_user.assert_called_once_with("madolson")
+
+
+def test_explicit_user_policy_authorizes_only_that_user() -> None:
+    policy = ReleasePolicy(
+        repo="sarthakaggarwal97/valkey",
+        authorized_team="user:sarthakaggarwal97",
+        branches=("9.1",),
+        checks_workflow="ci.yml",
+        required_checks=("test",),
+    )
+    gh = MagicMock()
+    ensure_authorized(gh, policy, "SarthakAggarwal97")
+    gh.get_organization.assert_not_called()
+
+    with pytest.raises(NotAuthorizedError, match="not the authorized user"):
+        ensure_authorized(gh, policy, "drive-by")

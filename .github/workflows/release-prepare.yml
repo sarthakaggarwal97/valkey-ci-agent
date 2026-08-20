@@ -1,5 +1,5 @@
 name: Prepare Release
-run-name: "Prepare ${{ inputs.intent }} release on ${{ inputs.branch }}"
+run-name: "Prepare ${{ github.event.client_payload.intent || inputs.intent }} release on ${{ github.event.client_payload.branch || inputs.branch }}"
 
 on:
   workflow_dispatch:
@@ -23,13 +23,15 @@ on:
         required: false
         type: boolean
         default: false
+  repository_dispatch:
+    types: [release-prepare]
 
 permissions: {}
 
 jobs:
   derive:
     name: Authorize and derive release
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release-control
@@ -39,6 +41,9 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       stage: ${{ steps.release.outputs.stage }}
       tag: ${{ steps.release.outputs.tag }}
+      branch: ${{ steps.release.outputs.branch }}
+      urgency: ${{ steps.release.outputs.urgency }}
+      dry_run: ${{ steps.release.outputs.dry_run }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -47,34 +52,35 @@ jobs:
 
       - uses: ./.github/actions/setup-agent
 
-      - name: Create read-only control token
-        id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-contents: read
-          permission-members: read
-          permission-metadata: read
-
       - name: Derive release identity
         id: release
         env:
-          RELEASE_GITHUB_TOKEN: ${{ steps.token.outputs.token }}
-          BRANCH: ${{ inputs.branch }}
-          INTENT: ${{ inputs.intent }}
-          ACTOR: ${{ github.triggering_actor }}
+          RELEASE_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          BRANCH: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.branch || inputs.branch }}
+          INTENT: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.intent || inputs.intent }}
+          URGENCY: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.urgency || inputs.urgency }}
+          DRY_RUN: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.dry_run == true && 'true' || github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+          ACTOR: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.actor || github.triggering_actor }}
+          POLICY: release_policy.e2e.yml
         run: |
-          python -m scripts.release.main prepare \
+          set -euo pipefail
+          [[ -n "$RELEASE_GITHUB_TOKEN" ]] || {
+            echo "VALKEY_GITHUB_TOKEN is required for fork E2E" >&2
+            exit 1
+          }
+          python -m scripts.release.main --policy "$POLICY" prepare \
             --branch "$BRANCH" --intent "$INTENT" --actor "$ACTOR"
+          {
+            echo "branch=$BRANCH"
+            echo "urgency=$URGENCY"
+            echo "dry_run=$DRY_RUN"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Summary
         env:
           TAG: ${{ steps.release.outputs.tag }}
-          BRANCH: ${{ inputs.branch }}
-          DRY_RUN: ${{ inputs.dry_run }}
+          BRANCH: ${{ steps.release.outputs.branch }}
+          DRY_RUN: ${{ steps.release.outputs.dry_run }}
         run: |
           {
             echo "## Release preparation"
@@ -87,7 +93,7 @@ jobs:
   cut-notes:
     name: Open release preparation PR
     needs: derive
-    if: ${{ inputs.dry_run != true }}
+    if: needs.derive.outputs.dry_run != 'true'
     permissions:
       contents: read
       id-token: write
@@ -95,13 +101,14 @@ jobs:
     with:
       version: ${{ needs.derive.outputs.version }}
       stage: ${{ needs.derive.outputs.stage }}
-      urgency: ${{ inputs.urgency }}
+      urgency: ${{ needs.derive.outputs.urgency }}
       dry_run: false
+    secrets: inherit
 
   tracker:
     name: Open release dashboard
     needs: derive
-    if: ${{ inputs.dry_run != true }}
+    if: needs.derive.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release-control
@@ -117,28 +124,22 @@ jobs:
 
       - uses: ./.github/actions/setup-agent
 
-      - name: Create dashboard token
-        id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-issues: write
-          permission-metadata: read
-
       - name: Create or refresh release dashboard
         id: tracker
         env:
-          TARGET_GITHUB_TOKEN: ${{ steps.token.outputs.token }}
-          BRANCH: ${{ inputs.branch }}
+          TARGET_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          BRANCH: ${{ needs.derive.outputs.branch }}
           VERSION: ${{ needs.derive.outputs.version }}
           STAGE: ${{ needs.derive.outputs.stage }}
           TAG: ${{ needs.derive.outputs.tag }}
         run: |
+          set -euo pipefail
+          [[ -n "$TARGET_GITHUB_TOKEN" ]] || {
+            echo "VALKEY_GITHUB_TOKEN is required for fork E2E" >&2
+            exit 1
+          }
           python -m scripts.release.tracker ensure \
-            --repo valkey-io/valkey --branch "$BRANCH" \
+            --repo sarthakaggarwal97/valkey --branch "$BRANCH" \
             --version "$VERSION" --stage "$STAGE" --tag "$TAG" \
             --prep-branch "agent/release-cut/${VERSION}-${STAGE}" \
             --prepare-run-id "$GITHUB_RUN_ID" --agent-repo "$GITHUB_REPOSITORY"

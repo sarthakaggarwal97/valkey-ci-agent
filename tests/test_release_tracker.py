@@ -94,6 +94,7 @@ def test_merged_pr_at_branch_head_dispatches_publication_once(
     issue = _issue()
     repo = MagicMock()
     agent = MagicMock()
+    agent.default_branch = "e2e/streamlined-release-controller"
     agent.get_workflow_run.return_value = _run()
     workflow = MagicMock()
     workflow.create_dispatch.return_value = None  # PyGithub may return no body on HTTP 204.
@@ -122,7 +123,10 @@ def test_merged_pr_at_branch_head_dispatches_publication_once(
         dispatch=True,
     )
 
-    workflow.create_dispatch.assert_called_once_with("main", inputs={"branch": "9.1", "candidate_sha": SHA})
+    workflow.create_dispatch.assert_called_once_with(
+        "e2e/streamlined-release-controller",
+        inputs={"branch": "9.1", "candidate_sha": SHA},
+    )
     assert result == "#42: publication dispatched"
     assert "Publication workflow dispatched" in issue.create_comment.call_args.args[0]
 

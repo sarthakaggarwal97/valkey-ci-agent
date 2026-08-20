@@ -2,22 +2,31 @@ from pathlib import Path
 
 import yaml
 
+E2E_AUTOMATION_WORKFLOW = (
+    "sarthakaggarwal97/valkey-release-automation/"
+    ".github/workflows/qualify-release.yml@e2e/streamlined-release-automation"
+)
+
 
 def _load(name: str) -> dict:
     path = Path(".github/workflows") / name
     return yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
 
-def test_prepare_opens_dashboard_and_notes_pr_in_parallel() -> None:
+def test_prepare_accepts_valkey_relay_and_opens_dashboard_and_notes_pr() -> None:
     workflow = _load("release-prepare.yml")
     inputs = workflow["on"]["workflow_dispatch"]["inputs"]
     assert inputs["dry_run"]["default"] == "false"
+    assert workflow["on"]["repository_dispatch"]["types"] == ["release-prepare"]
     assert list(workflow["jobs"]) == ["derive", "cut-notes", "tracker"]
     assert workflow["jobs"]["derive"]["environment"] == "release-control"
+    assert "release_policy.e2e.yml" in str(workflow["jobs"]["derive"])
+    assert "secrets.VALKEY_GITHUB_TOKEN" in str(workflow["jobs"]["derive"])
     assert workflow["jobs"]["cut-notes"]["uses"] == "./.github/workflows/release-notes-cut.yml"
+    assert workflow["jobs"]["cut-notes"]["secrets"] == "inherit"
     assert workflow["jobs"]["tracker"]["needs"] == "derive"
     assert workflow["jobs"]["tracker"]["environment"] == "release-control"
-    assert "permission-issues" in str(workflow["jobs"]["tracker"])
+    assert "sarthakaggarwal97/valkey" in str(workflow["jobs"]["tracker"])
 
 
 def test_publish_waits_for_qualification_before_protected_write() -> None:
@@ -27,23 +36,23 @@ def test_publish_waits_for_qualification_before_protected_write() -> None:
     assert jobs["qualify"]["needs"] == "validate"
     assert jobs["publish"]["needs"] == ["validate", "qualify"]
     assert jobs["publish"]["environment"] == "release"
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" in str(jobs["publish"])
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in str(jobs["validate"])
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in str(jobs["qualify"])
+    assert "VALKEY_GITHUB_TOKEN" in str(jobs["publish"])
+    assert "VALKEY_GITHUB_TOKEN" in str(jobs["validate"])
     assert "TRIGGERING_ACTOR" in str(jobs["publish"])
     assert '"$APPROVER" != "$TRIGGERING_ACTOR"' in str(jobs["publish"])
+    assert "release_policy.e2e.yml" in str(jobs["publish"])
 
 
 def test_publish_qualification_is_exact_and_synchronous() -> None:
     job = _load("release-publish.yml")["jobs"]["qualify"]
-    assert job["uses"] == "valkey-io/valkey-release-automation/.github/workflows/qualify-release.yml@main"
+    assert job["uses"] == E2E_AUTOMATION_WORKFLOW
     assert job["with"]["version"] == "${{ needs.validate.outputs.version }}"
     assert job["with"]["source_sha"] == "${{ needs.validate.outputs.sha }}"
-    assert job["with"]["automation_repo"] == "valkey-io/valkey-release-automation"
-    assert job["with"]["automation_ref"] == "main"
+    assert job["with"]["automation_repo"] == "sarthakaggarwal97/valkey-release-automation"
+    assert job["with"]["automation_ref"] == "e2e/streamlined-release-automation"
     assert "github.run_id" in job["with"]["request_id"]
     assert "steps" not in job
-    assert "VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY" not in str(job)
+    assert "VALKEY_GITHUB_TOKEN" not in str(job)
 
 
 def test_no_controller_loop_workflows_remain() -> None:
@@ -54,18 +63,15 @@ def test_no_controller_loop_workflows_remain() -> None:
     assert {"release-prepare.yml", "release-progress.yml", "release-publish.yml"} <= names
 
 
-def test_progress_watcher_is_narrow_and_serialized() -> None:
+def test_progress_watcher_is_fork_scoped_and_serialized() -> None:
     workflow = _load("release-progress.yml")
     assert workflow["on"]["schedule"][0]["cron"] == "*/5 * * * *"
     assert workflow["permissions"] == {"actions": "write", "contents": "read"}
     assert workflow["concurrency"]["group"] == "release-progress"
     job = workflow["jobs"]["sync"]
     assert job["environment"] == "release-control"
-    assert "scripts.release.tracker sync" in str(job)
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in str(job)
-    steps = {step.get("id"): step for step in job["steps"] if step.get("id")}
-    assert steps["target-token"]["with"]["repositories"] == "valkey"
-    assert steps["target-token"]["with"]["permission-issues"] == "write"
-    assert steps["automation-token"]["with"]["repositories"] == "valkey-release-automation"
-    assert "permission-issues" not in steps["automation-token"]["with"]
-    assert "AUTOMATION_GITHUB_TOKEN" in str(job)
+    rendered = str(job)
+    assert "scripts.release.tracker sync" in rendered
+    assert "sarthakaggarwal97/valkey-release-automation" in rendered
+    assert "secrets.VALKEY_GITHUB_TOKEN" in rendered
+    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in rendered

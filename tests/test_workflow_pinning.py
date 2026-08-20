@@ -15,12 +15,9 @@ _DIRECT_AGENT_SETUP_RE = re.compile(
 )
 _EXPECTED_CLAUDE_CODE_VERSION = "2.1.175"
 _TRUSTED_REUSABLE_WORKFLOW_REFS = {
-    # Qualification is an organization-owned workflow, not a third-party
-    # action. It intentionally follows the automation repository's protected
-    # main branch so the two release components can evolve together without a
-    # tag-management bootstrap cycle. It receives no secrets, and the jobs
-    # that execute candidate code are constrained to contents:read.
-    "valkey-io/valkey-release-automation/.github/workflows/qualify-release.yml@main",
+    # Fork-only E2E copy. The referenced branch is created from the reviewed
+    # release-automation head and is frozen for the duration of the run.
+    "sarthakaggarwal97/valkey-release-automation/.github/workflows/qualify-release.yml@e2e/streamlined-release-automation",
 }
 
 

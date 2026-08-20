@@ -22,7 +22,7 @@ concurrency:
 jobs:
   validate:
     name: Validate candidate and render plan
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release-control
@@ -50,51 +50,35 @@ jobs:
 
       - uses: ./.github/actions/setup-agent
 
-      - name: Create validation token
-        id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-actions: read
-          permission-checks: read
-          permission-contents: read
-          permission-metadata: read
-          permission-pull-requests: read
-
       - name: Validate and plan
         id: plan
         env:
-          RELEASE_GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
           BRANCH: ${{ inputs.branch }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          POLICY: release_policy.e2e.yml
         run: |
-          python -m scripts.release.main plan \
+          set -euo pipefail
+          [[ -n "$RELEASE_GITHUB_TOKEN" ]] || {
+            echo "VALKEY_GITHUB_TOKEN is required for fork E2E" >&2
+            exit 1
+          }
+          python -m scripts.release.main --policy "$POLICY" plan \
             --branch "$BRANCH" --candidate-sha "$CANDIDATE_SHA"
 
   qualify:
     name: Qualify exact candidate
     needs: validate
-    # A native reusable-workflow call is synchronous and does not depend on a
-    # one-hour App token surviving a multi-hour package matrix. No secrets are
-    # passed; candidate-code jobs in the called workflow downgrade themselves
-    # to contents:read and never receive OIDC.
     permissions:
       contents: write
       id-token: write
-    # Deliberately follows the separately reviewed, branch-protected workflow
-    # in the Valkey organization. Unlike third-party actions, this is a
-    # first-party release component that must evolve with production; it is
-    # secretless and candidate-code jobs receive contents:read only.
-    uses: valkey-io/valkey-release-automation/.github/workflows/qualify-release.yml@main
+    uses: sarthakaggarwal97/valkey-release-automation/.github/workflows/qualify-release.yml@e2e/streamlined-release-automation
     with:
       version: ${{ needs.validate.outputs.version }}
       source_sha: ${{ needs.validate.outputs.sha }}
       request_id: ${{ format('{0}-{1}', github.run_id, github.run_attempt) }}
-      automation_repo: valkey-io/valkey-release-automation
-      automation_ref: main
+      automation_repo: sarthakaggarwal97/valkey-release-automation
+      automation_ref: e2e/streamlined-release-automation
 
   publish:
     name: Publish approved release
@@ -133,29 +117,20 @@ jobs:
           }
           echo "login=$APPROVER" >> "$GITHUB_OUTPUT"
 
-      - name: Create publication token
-        id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEY_RELEASE_PUBLISH_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-actions: read
-          permission-checks: read
-          permission-contents: write
-          permission-members: read
-          permission-metadata: read
-          permission-pull-requests: read
-
       - name: Revalidate and publish
         env:
-          RELEASE_GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
           BRANCH: ${{ inputs.branch }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           APPROVER: ${{ steps.approver.outputs.login }}
           EXPECTED_DIGEST: ${{ needs.validate.outputs.plan_digest }}
+          POLICY: release_policy.e2e.yml
         run: |
-          python -m scripts.release.main publish \
+          set -euo pipefail
+          [[ -n "$RELEASE_GITHUB_TOKEN" ]] || {
+            echo "VALKEY_GITHUB_TOKEN is required for fork E2E" >&2
+            exit 1
+          }
+          python -m scripts.release.main --policy "$POLICY" publish \
             --branch "$BRANCH" --candidate-sha "$CANDIDATE_SHA" \
             --actor "$APPROVER" --expected-digest "$EXPECTED_DIGEST"

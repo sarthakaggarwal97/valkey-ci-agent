@@ -31,11 +31,20 @@ class ReleasePolicy:
     required_checks: tuple[str, ...]
 
     @property
+    def authorized_user(self) -> str | None:
+        prefix = "user:"
+        return self.authorized_team[len(prefix) :] if self.authorized_team.startswith(prefix) else None
+
+    @property
     def team_org(self) -> str:
+        if self.authorized_user is not None:
+            raise ValueError("a user authorization has no team organization")
         return self.authorized_team.split("/", 1)[0]
 
     @property
     def team_slug(self) -> str:
+        if self.authorized_user is not None:
+            raise ValueError("a user authorization has no team slug")
         return self.authorized_team.split("/", 1)[1]
 
 
