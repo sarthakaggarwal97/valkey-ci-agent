@@ -2212,6 +2212,23 @@ class TestValidateChangelogHistory:
         )
         rc._validate_changelog_history(notes, self._SEARCH)
 
+    def test_legacy_phrase_inside_dated_history_is_allowed_after_normalization(
+        self,
+    ) -> None:
+        profile = projects.profile_for("valkey-json")
+        notes = (
+            "Valkey JSON 1.0.0 GA - Released Tue 07 July 2026\n"
+            "* Added JSON support (#82)\n\n"
+            "We appreciate the efforts of all who contributed code to this "
+            "release!\n\n"
+            "Roshan Khatri (roshkhatri), Joe Hu (joehu21)\n\n"
+            "### Contributors\n"
+            "* Roshan Khatri @roshkhatri\n"
+            "* Joe Hu @joehu21\n"
+        )
+
+        rc._validate_changelog_history(notes, profile)
+
     def test_fresh_placeholder_without_credits_is_allowed(self) -> None:
         rc._validate_changelog_history(
             "Release notes will be generated here.\n", self._SEARCH

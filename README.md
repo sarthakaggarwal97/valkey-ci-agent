@@ -310,11 +310,15 @@ authoritative check against re-cutting an already-tagged stage. The
 valkey-search 1.0 line (version inline in `src/module_loader.cc`) is not
 supported and fails with a clear error.
 
-Before automated cuts are enabled for a repository, its historical contributor
-block must be normalized to the canonical cumulative footer used by this
-workflow: a `### Contributors` heading followed by one `* Display Name @handle`
-entry per line. Legacy repository-specific footer formats are migrated once in
-the source repository rather than carried as permanent parsing rules here.
+Before their first automated cut, all three module repositories (`valkey-search`,
+`valkey-json`, and `valkey-bloom`) need a one-time `00-RELEASENOTES`
+normalization. The trailing historical contributor block must become the
+canonical cumulative footer used by this workflow: a `### Contributors` heading
+followed by one `* Display Name @handle` entry per line. Matching legacy text
+inside a dated release section may remain because the renderer carries dated
+history forward verbatim; only the trailing footer needs normalization. Legacy
+repository-specific footer formats are not carried as permanent parsing rules
+here.
 
 Unstable sentinels are repository-specific: valkey core uses
 `255.255.255-dev`, valkey-json uses numeric `99.99.99`, and valkey-bloom uses

@@ -58,6 +58,9 @@ _LEGACY_CONTRIBUTOR_RE = re.compile(
     r"to this release!)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
+_CANONICAL_CONTRIBUTOR_HEADER_RE = re.compile(
+    r"^###\s+Contributors\s*$", re.MULTILINE
+)
 
 # Urgency values render_release_notes() accepts; a SECURITY cut with no fixes is
 # flagged in the PR body. Mirrors VALID_URGENCIES in the release-format module
@@ -685,7 +688,24 @@ def _validate_changelog_history(
     A fresh-line placeholder credits no PRs and remains valid; it is intentionally
     replaced by the first generated release section.
     """
-    if _LEGACY_CONTRIBUTOR_RE.search(notes_text):
+    legacy_matches = list(_LEGACY_CONTRIBUTOR_RE.finditer(notes_text))
+    dated_start = rn.dated_section_start(notes_text, profile.display_name)
+    canonical_footers = list(_CANONICAL_CONTRIBUTOR_HEADER_RE.finditer(notes_text))
+    # Once a canonical trailing footer exists, legacy phrases inside the dated
+    # history are harmless: render_release_notes copies that region verbatim.
+    # Continue to reject them in the preamble and canonical footer, the two
+    # regions the render replaces or parses. Without a canonical footer there
+    # is no reliable boundary for a legacy trailing block, so fail closed.
+    legacy_in_rewritten_region = bool(legacy_matches) and (
+        dated_start is None
+        or not canonical_footers
+        or any(
+            match.start() < dated_start
+            or match.start() >= canonical_footers[-1].start()
+            for match in legacy_matches
+        )
+    )
+    if legacy_in_rewritten_region:
         raise ValueError(
             f"{profile.notes_file} uses a legacy contributor format for "
             f"{profile.display_name}; normalize it to a trailing "

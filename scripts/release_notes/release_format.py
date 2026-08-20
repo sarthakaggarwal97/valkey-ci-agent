@@ -336,7 +336,13 @@ def _dated_section_re(display_name: str) -> "re.Pattern[str]":
 
 def has_dated_section(text: str, display_name: str) -> bool:
     """Whether *text* contains any ``<display_name> M.m.p`` dated heading."""
-    return bool(_dated_section_re(display_name).search(text))
+    return dated_section_start(text, display_name) is not None
+
+
+def dated_section_start(text: str, display_name: str) -> "Optional[int]":
+    """Return the offset of the first dated section, or ``None`` when absent."""
+    match = _dated_section_re(display_name).search(text)
+    return match.start() if match else None
 
 
 def _existing_dated_sections(text: str, display_name: str) -> str:
@@ -345,10 +351,10 @@ def _existing_dated_sections(text: str, display_name: str) -> str:
     The heading name must match the selected profile's ``display_name``. A
     mismatched value would fail to recognize the profile's prior history.
     """
-    match = _dated_section_re(display_name).search(text)
-    if not match:
+    start = dated_section_start(text, display_name)
+    if start is None:
         return ""
-    return text[match.start():].strip()
+    return text[start:].strip()
 
 
 def render_release_notes(
