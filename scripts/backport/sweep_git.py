@@ -55,7 +55,9 @@ def push_backport_branch(
     branch: str,
     git_env: dict[str, str],
     *,
-    force_with_lease: bool,
+    push_repo: str,
+    prepared_head: str,
+    expected_remote_head: str | None,
     branch_prefix: str = BRANCH_PREFIX,
     run_git: RunGit = run_git_default,
 ) -> None:
@@ -64,9 +66,17 @@ def push_backport_branch(
             f"Refusing to push to non-namespaced branch: {branch!r}. "
             f"Agent push targets must start with {branch_prefix}/."
         )
-    args = ["push", "push_target", branch]
-    if force_with_lease:
-        args.insert(1, "--force-with-lease")
+    destination = f"refs/heads/{branch}"
+    args = [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "credential.helper=",
+        "push",
+        f"--force-with-lease={destination}:{expected_remote_head or ''}",
+        github_https_url(push_repo),
+        f"{prepared_head}:{destination}",
+    ]
     run_git(repo_dir, *args, env=git_env)
 
 

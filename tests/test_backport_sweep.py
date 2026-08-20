@@ -1679,51 +1679,185 @@ def test_clone_target_branch_invokes_git_clone_without_destination_cwd(
     ]
 
 
-def test_push_backport_branch_uses_plain_push_for_new_branch(monkeypatch):
+@pytest.mark.parametrize(
+    ("expected_remote", "lease_suffix"),
+    [("oldsha", "oldsha"), (None, "")],
+)
+def test_push_prepared_branch_uses_exact_lease(expected_remote, lease_suffix):
     calls: list[tuple[str, ...]] = []
-
-    def fake_run_git(_repo_dir, *args, **_kwargs):
-        calls.append(args)
-
-    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
-
     push_backport_branch(
         "/repo",
         "agent/backport/sweep/8.1",
         {},
-        force_with_lease=False,
-        run_git=fake_run_git,
+        push_repo="valkey-io/valkey",
+        prepared_head="newsha",
+        expected_remote_head=expected_remote,
+        run_git=lambda _repo, *args, **_kwargs: calls.append(args),
     )
 
-    assert calls == [("push", "push_target", "agent/backport/sweep/8.1")]
-
-
-def test_push_backport_branch_uses_force_with_lease_after_rebase(monkeypatch):
-    calls: list[tuple[str, ...]] = []
-
-    def fake_run_git(_repo_dir, *args, **_kwargs):
-        calls.append(args)
-
-    monkeypatch.setattr(backport_sweep, "_run_git", fake_run_git)
-
-    push_backport_branch(
-        "/repo",
-        "agent/backport/sweep/8.1",
-        {},
-        force_with_lease=True,
-        run_git=fake_run_git,
-    )
-
+    destination = "refs/heads/agent/backport/sweep/8.1"
     assert calls == [
         (
+            "-c", "core.hooksPath=/dev/null",
+            "-c", "credential.helper=",
             "push",
-            "--force-with-lease",
-            "push_target",
-            "agent/backport/sweep/8.1",
+            f"--force-with-lease={destination}:{lease_suffix}",
+            "https://github.com/valkey-io/valkey.git",
+            f"newsha:{destination}",
         )
     ]
 
+def _mock_phase_boundary(monkeypatch, target_branch="8.1"):
+    monkeypatch.setattr(
+        backport_sweep,
+        "prepare_source_change",
+        lambda _repo, _number, merge_sha, commits, **_kwargs: SourceChangePlan(
+            strategy="merge",
+            commits=(merge_sha,),
+            merge_commit_sha=merge_sha,
+            source_commits=tuple(commits),
+            aggregate_patch_id="test-patch",
+        ),
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "_remote_branch_sha",
+        lambda _gh, _repo, branch: (
+            "pre-candidate-head" if branch == target_branch else None
+        ),
+    )
 
+
+
+def test_prepare_prefetches_before_token_free_validation(monkeypatch, tmp_path):
+    candidate = _candidate(10)
+    plan = _source_plan(candidate)
+    events: list[str] = []
+
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(backport_sweep, "_run_git", lambda *_a, **_k: None)
+    monkeypatch.setattr(backport_sweep, "head_sha", lambda _repo: "preparedsha")
+    monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_a, **_k: None)
+    monkeypatch.setattr(backport_sweep, "_remote_branch_sha", lambda *_a, **_k: None)
+    monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_a, **_k: set())
+    monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
+
+    monkeypatch.setattr(
+        backport_sweep,
+        "prepare_source_change",
+        lambda *_a, **_k: events.append("fetch") or plan,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "run_test_commands",
+        lambda *_a, **_k: (events.append("setup") or True, ""),
+    )
+
+    def apply(_repo, _candidate, _repo_name, git_env, **kwargs):
+        events.append("apply")
+        assert git_env == {}
+        assert kwargs["source_plan"] is plan
+        return CandidateResult(10, "PR 10", "applied")
+
+    monkeypatch.setattr(backport_sweep, "apply_candidate", apply)
+    monkeypatch.setattr(
+        backport_sweep,
+        "validate_branch_with_optional_repair",
+        lambda *_a, **_k: events.append("validate") or ValidationOutcome(True, ""),
+    )
+
+    result, prepared = backport_sweep._prepare_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="preparation-token",
+        target_branch="8.1",
+        candidates=[candidate],
+        push_repo="valkey-io/valkey",
+        test_commands=["make test"],
+        work_root=str(tmp_path),
+    )
+
+    assert result.error == ""
+    assert events == ["fetch", "setup", "apply", "validate"]
+    assert prepared is not None and prepared.prepared_head == "preparedsha"
+    backport_sweep.shutil.rmtree(prepared.repo_dir)
+
+
+def test_prepared_state_binds_identity_and_uses_fresh_token(monkeypatch, tmp_path):
+    repo_dir = tmp_path / "worktree"
+    repo_dir.mkdir()
+    prepared = backport_sweep.PreparedBranchSweep(
+        repo_full_name="valkey-io/valkey",
+        push_repo="valkey-io/valkey",
+        target_branch="8.1",
+        backport_branch="agent/backport/sweep/8.1",
+        repo_dir=str(repo_dir),
+        target_head="targetsha",
+        prepared_head="preparedsha",
+        expected_remote_head=None,
+        expected_pr_number=None,
+        result=BranchSweepResult(
+            target_branch="8.1",
+            candidates_found=1,
+            results=[CandidateResult(10, "PR 10", "applied")],
+        ),
+    )
+    state = tmp_path / "state.json"
+    backport_sweep.write_prepared_sweep(str(state), prepared)
+    assert "token" not in state.read_text(encoding="utf-8").lower()
+
+    identity = {
+        "repo_full_name": "valkey-io/valkey",
+        "push_repo": "valkey-io/valkey",
+        "target_branch": "8.1",
+        "backport_branch": "agent/backport/sweep/8.1",
+        "backport_label": "backport",
+        "llm_conflict_label": "ai-resolved-conflicts",
+    }
+    with pytest.raises(ValueError, match="identity"):
+        backport_sweep.load_prepared_sweep(
+            str(state), **(identity | {"target_branch": "7.2"})
+        )
+
+    loaded = backport_sweep.load_prepared_sweep(str(state), **identity)
+    monkeypatch.setattr(backport_sweep, "head_sha", lambda _repo: "preparedsha")
+    monkeypatch.setattr(
+        backport_sweep,
+        "_remote_branch_sha",
+        lambda _gh, _repo, branch: "targetsha" if branch == "8.1" else None,
+    )
+    monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_a, **_k: None)
+    monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_a: [])
+    published: list[tuple[dict[str, str], dict[str, object]]] = []
+    monkeypatch.setattr(
+        backport_sweep,
+        "push_backport_branch",
+        lambda _repo, _branch, env, **kwargs: published.append((env, kwargs)),
+    )
+    monkeypatch.setattr(backport_sweep, "upsert_pr", lambda *_a, **_k: "pr-url")
+
+    result = backport_sweep.publish_prepared_sweep(
+        loaded, "fresh-publication-token", gh=MagicMock()
+    )
+
+    assert result.pr_url == "pr-url"
+    env, kwargs = published[0]
+    assert env["GIT_PASSWORD"] == "fresh-publication-token"
+    assert kwargs["prepared_head"] == "preparedsha"
+    assert kwargs["expected_remote_head"] is None
+
+    repo_dir.mkdir()
+    published.clear()
+    monkeypatch.setattr(
+        backport_sweep,
+        "_remote_branch_sha",
+        lambda _gh, _repo, branch: "changed" if branch == "8.1" else None,
+    )
+    failed = backport_sweep.publish_prepared_sweep(
+        loaded, "another-token", gh=MagicMock()
+    )
+    assert failed.error == "Target branch 8.1 changed during preparation"
+    assert published == []
 def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     candidates = [
         ProjectBackportCandidate(
@@ -1737,11 +1871,11 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     ]
     applied_by_pr = {3, 4, 6, 7, 8, 9}
     attempted: list[int] = []
+    _mock_phase_boundary(monkeypatch)
 
     monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "_run_git", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: {"2"})
     monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(sweep_validation, "changed_paths_since_base", lambda *_args, **_kwargs: [], raising=False)
@@ -1811,11 +1945,11 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
         target_branch="8.1",
         merge_commit_sha="sha1",
     )
+    _mock_phase_boundary(monkeypatch)
 
     monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "_run_git", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: set())
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
     monkeypatch.setattr(backport_sweep, "head_sha", lambda _repo: "pre-candidate-head")
@@ -1848,7 +1982,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
 
     assert result.error
     assert result.results[0].outcome == "error"
-    assert "push failed" in result.results[0].detail
+    assert "publication failed" in result.results[0].detail
     assert sum(1 for r in result.results if r.outcome == "applied") == 0
 
 
@@ -1869,9 +2003,9 @@ def _green_only_process_branch(
     validates after each kept cherry-pick (validate_fn). Returns
     (result, pushed, upserts, reset_count, reset_refs).
     """
+    _mock_phase_boundary(monkeypatch)
     monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_a, **_k: None)
-    monkeypatch.setattr(backport_sweep, "delete_stale_backport_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(
         backport_sweep,
         "list_already_applied",
@@ -1910,7 +2044,9 @@ def _green_only_process_branch(
     monkeypatch.setattr(
         backport_sweep,
         "push_backport_branch",
-        lambda _repo_dir, branch, _env, *, force_with_lease: pushed.append((branch, force_with_lease)),
+        lambda _repo_dir, branch, _env, **kwargs: pushed.append(
+            (branch, "expected_remote_head" in kwargs)
+        ),
     )
     upserts: list[dict] = []
 
@@ -1985,7 +2121,13 @@ def test_process_branch_reports_successful_ai_validation_repair(monkeypatch):
             resolutions=(resolution,),
             ai_summary="Adjusted the backport for the target branch API.",
         ),
-        head_shas=("pre-candidate-head", "repairsha"),
+        head_shas=(
+            "pre-candidate-head",
+            "repairsha",
+            "repairsha",
+            "repairsha",
+            "repairsha",
+        ),
     )
 
     candidate = result.results[0]
@@ -2113,7 +2255,7 @@ def test_process_branch_keeps_trying_until_green(monkeypatch):
     ]
     assert resets == 2  # two red cherry-picks reset off the branch
     assert reset_refs == ["pre-candidate-head", "pre-candidate-head"]
-    assert pushed == [("agent/backport/sweep/8.1", False)]
+    assert pushed == [("agent/backport/sweep/8.1", True)]
     assert len(upserts) == 1
     # The pushed PR is never a draft - the branch is green.
     assert upserts[0].get("draft", False) is False
@@ -2131,7 +2273,7 @@ def test_process_branch_pushes_green_branch_as_ready(monkeypatch):
     assert result.results[0].outcome == "applied"
     assert resets == 0
     assert reset_refs == []
-    assert pushed == [("agent/backport/sweep/8.1", False)]
+    assert pushed == [("agent/backport/sweep/8.1", True)]
     assert upserts[0].get("draft", False) is False
 
 
@@ -2155,7 +2297,7 @@ def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
     assert attempted == [41]  # 40 skipped as already-applied, not re-applied
     assert result.results[0].outcome == "skipped-existing"
     assert result.results[1].outcome == "applied"
-    assert pushed == [("agent/backport/sweep/8.1", False)]
+    assert pushed == [("agent/backport/sweep/8.1", True)]
 
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
