@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -143,7 +144,11 @@ def main() -> None:
         required=True,
         help="Target branch (must exist in registry for this repo)",
     )
-    parser.add_argument("--target-token", required=True)
+    parser.add_argument(
+        "--target-token",
+        default="",
+        help="GitHub token (defaults to TARGET_TOKEN)",
+    )
     parser.add_argument(
         "--max-candidates",
         type=nonnegative_int,
@@ -158,6 +163,10 @@ def main() -> None:
     parser.add_argument("--verbose", action="store_true")
     add_poll_loop_args(parser)
     args = parser.parse_args()
+    env_token = os.environ.pop("TARGET_TOKEN", "")
+    github_token = args.target_token or env_token
+    if not github_token:
+        parser.error("--target-token or TARGET_TOKEN is required")
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
@@ -171,7 +180,7 @@ def main() -> None:
         return poll_branch(
             repo_entry=repo_entry,
             branch_entry=branch_entry,
-            github_token=args.target_token,
+            github_token=github_token,
             max_candidates=args.max_candidates,
             dry_run=args.dry_run,
         )

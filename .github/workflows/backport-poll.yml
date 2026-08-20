@@ -105,8 +105,98 @@ jobs:
         with:
           install-claude: "true"
 
-      - name: Generate GitHub App token
-        id: generate-token
+      - name: Configure runtime paths
+        shell: bash
+        run: echo "SWEEP_STATE_FILE=${RUNNER_TEMP}/backport-sweep/state.json" >> "${GITHUB_ENV}"
+
+      - name: Generate polling token
+        id: poll-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ matrix.repo_owner }}
+          repositories: ${{ matrix.repo_name }}
+          permission-pull-requests: read
+          permission-metadata: read
+
+      - name: Check for sweep work
+        id: poll
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.poll-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          poll() {
+            python -m scripts.backport.poller \
+              --registry repos.yml \
+              --repo "${{ matrix.repo }}" \
+              --branch "${{ matrix.branch }}" \
+              --max-candidates "${MAX_CANDIDATES}" \
+              --dry-run \
+              --verbose
+          }
+
+          poll_started=${SECONDS}
+          poll > backport-poll-result.json
+          action=$(python -c 'import json; print(json.load(open("backport-poll-result.json"))["action"])')
+          if [[ "${action}" != "would-sweep" \
+                && "${POLL_INTERVAL_SECONDS}" -gt 0 \
+                && "${POLL_DURATION_SECONDS}" -ge "${POLL_INTERVAL_SECONDS}" ]]; then
+            wait=$((POLL_INTERVAL_SECONDS - (SECONDS - poll_started)))
+            (( wait <= 0 )) || sleep "${wait}"
+            poll > backport-poll-result.json
+            action=$(python -c 'import json; print(json.load(open("backport-poll-result.json"))["action"])')
+          fi
+
+          cat backport-poll-result.json
+          [[ "${action}" == "would-sweep" ]] && sweep=true || sweep=false
+          echo "needs_sweep=${sweep}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate preparation token
+        if: steps.poll.outputs.needs_sweep == 'true'
+        id: prepare-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ matrix.repo_owner }}
+          repositories: ${{ matrix.repo_name }}
+          permission-contents: read
+          permission-pull-requests: read
+          permission-organization-projects: read
+          permission-metadata: read
+
+      - name: Configure AWS credentials
+        if: steps.poll.outputs.needs_sweep == 'true'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: backport-poll-${{ github.run_id }}-${{ matrix.branch }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-duration-seconds: 10800
+
+      - name: Prepare backport sweep
+        if: steps.poll.outputs.needs_sweep == 'true'
+        id: prepare
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.prepare-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.sweep \
+            --registry repos.yml \
+            --repo "${{ matrix.repo }}" \
+            --branch "${{ matrix.branch }}" \
+            --max-candidates "${MAX_CANDIDATES}" \
+            --prepare-state "${SWEEP_STATE_FILE}" \
+            --verbose | tee backport-sweep-result.json
+          [[ -f "${SWEEP_STATE_FILE}" ]] && publish=true || publish=false
+          echo "needs_publish=${publish}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate publication token
+        if: steps.prepare.outputs.needs_publish == 'true'
+        id: publish-token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -117,41 +207,38 @@ jobs:
           permission-workflows: write
           permission-pull-requests: write
           permission-issues: write
-          permission-organization-projects: read
           permission-metadata: read
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: backport-poll-${{ github.run_id }}-${{ matrix.branch }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Run backport poll
+      - name: Publish backport sweep
+        if: steps.prepare.outputs.needs_publish == 'true'
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
+          TARGET_TOKEN: ${{ steps.publish-token.outputs.token }}
         run: |
           set -euo pipefail
-          # Pass --max-candidates unconditionally, including 0, which the
-          # poller treats as unlimited. Dropping it at 0 would fall back to the
-          # Python default instead of unlimited.
-          python -m scripts.backport.poller \
+          python -m scripts.backport.sweep \
             --registry repos.yml \
             --repo "${{ matrix.repo }}" \
             --branch "${{ matrix.branch }}" \
-            --target-token "${TARGET_TOKEN}" \
-            --max-candidates "${MAX_CANDIDATES}" \
-            --poll-interval-seconds "${POLL_INTERVAL_SECONDS}" \
-            --poll-duration-seconds "${POLL_DURATION_SECONDS}" \
-            --verbose | tee backport-poll-result.json
+            --publish-state "${SWEEP_STATE_FILE}" \
+            --verbose | tee backport-sweep-result.json
+
+      - name: Clean up prepared sweep
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${SWEEP_STATE_FILE:-}" == "${RUNNER_TEMP}/backport-sweep/state.json" ]]; then
+            rm -rf -- "${RUNNER_TEMP}/backport-sweep"
+          fi
 
       - name: Upload result
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: backport-poll-result-${{ github.run_id }}-${{ matrix.repo_slug }}-${{ matrix.branch }}
-          path: backport-poll-result.json
+          path: |
+            backport-poll-result.json
+            backport-sweep-result.json
           retention-days: 30
 
       - name: Upload agent evidence

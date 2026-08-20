@@ -35,3 +35,21 @@ class BranchSweepResult:
     def applied_count(self) -> int:
         """Number of candidates that were cherry-picked onto the branch."""
         return sum(1 for item in self.results if item.outcome == "applied")
+
+
+@dataclass
+class PreparedBranchSweep:
+    """Validated local branch awaiting publication with a fresh token."""
+
+    repo_full_name: str
+    push_repo: str
+    target_branch: str
+    backport_branch: str
+    repo_dir: str
+    target_head: str
+    prepared_head: str
+    expected_remote_head: str | None
+    expected_pr_number: int | None
+    result: BranchSweepResult
+    backport_label: str = "backport"
+    llm_conflict_label: str = "ai-resolved-conflicts"

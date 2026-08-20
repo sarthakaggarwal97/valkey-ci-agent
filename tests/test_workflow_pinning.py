@@ -111,8 +111,8 @@ def test_push_capable_app_tokens_can_update_workflows():
     """Push tokens need workflows:write for commits touching .github/workflows."""
     required_steps = {
         ".github/workflows/backport.yml": "Generate GitHub App token",
-        ".github/workflows/backport-poll.yml": "Generate GitHub App token",
-        ".github/workflows/backport-sweep.yml": "Generate GitHub App token",
+        ".github/workflows/backport-poll.yml": "Generate publication token",
+        ".github/workflows/backport-sweep.yml": "Generate publication token",
         ".github/workflows/ci-fix.yml": "Generate GitHub App token",
         ".github/workflows/manual-revert-commit.yml": "Generate GitHub App token",
     }
@@ -135,3 +135,23 @@ def test_push_capable_app_tokens_can_update_workflows():
             offenders.append(f"{path}: missing token step {step_name!r}")
 
     assert offenders == []
+
+
+def test_backport_workflows_refresh_credentials_after_validation():
+    for filename in ("backport-sweep.yml", "backport-poll.yml"):
+        text = (Path(".github/workflows") / filename).read_text(encoding="utf-8")
+        assert text.index("- name: Generate preparation token") < text.index(
+            "- name: Prepare backport sweep"
+        ) < text.index("- name: Generate publication token") < text.index(
+            "- name: Publish backport sweep"
+        ) < text.index("- name: Clean up prepared sweep")
+        assert "role-duration-seconds: 10800" in text
+        assert "TARGET_TOKEN: ${{ steps.prepare-token.outputs.token }}" in text
+        assert "TARGET_TOKEN: ${{ steps.publish-token.outputs.token }}" in text
+        assert "--target-token" not in text
+
+    poll = (Path(".github/workflows") / "backport-poll.yml").read_text()
+    assert 'cron: "0 * * * *"' in poll
+    assert "'1800'" in poll and "'3300'" in poll
+    assert "poll_started=${SECONDS}" in poll
+    assert 'sleep "${wait}"' in poll
