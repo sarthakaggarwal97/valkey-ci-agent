@@ -88,14 +88,6 @@ on:
         required: false
         type: boolean
         default: true
-    secrets:
-      VALKEYRIE_BOT_APP_ID:
-        required: true
-      VALKEYRIE_BOT_PRIVATE_KEY:
-        required: true
-      AWS_ROLE_ARN:
-        required: true
-
 permissions: {}
 
 env:
@@ -103,8 +95,10 @@ env:
 
 jobs:
   cut:
+    if: github.repository == 'valkey-io/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    environment: release-control
     permissions:
       contents: read
       id-token: write
@@ -140,8 +134,8 @@ jobs:
         if: ${{ !inputs.security_from_advisories }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
+          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey
           # contents:write to push the agent-namespaced prep branch;
@@ -155,8 +149,8 @@ jobs:
         if: ${{ inputs.security_from_advisories }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
+          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey
           # Same as above plus repository-advisories:read, which --security-from-advisories
