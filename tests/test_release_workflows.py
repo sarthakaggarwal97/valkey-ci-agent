@@ -27,6 +27,7 @@ def test_prepare_accepts_fork_relay_and_opens_dashboard_and_notes_pr() -> None:
     assert workflow["jobs"]["cut-notes"]["secrets"] == "inherit"
     assert workflow["jobs"]["tracker"]["needs"] == "derive"
     assert "sarthakaggarwal97/valkey" in str(workflow["jobs"]["tracker"])
+    assert "--trusted-owner sarthakaggarwal97" in str(workflow["jobs"]["tracker"])
 
 
 def test_publish_waits_for_qualification_before_protected_write() -> None:
@@ -74,5 +75,6 @@ def test_progress_watcher_is_fork_scoped_and_serialized() -> None:
     rendered = str(job)
     assert "scripts.release.tracker sync" in rendered
     assert "sarthakaggarwal97/valkey-release-automation" in rendered
+    assert "--trusted-owner sarthakaggarwal97" in rendered
     assert "secrets.VALKEY_GITHUB_TOKEN" in rendered
     assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in rendered

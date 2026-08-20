@@ -53,9 +53,15 @@ def test_bot_status_comment_is_authoritative_over_edited_issue_body() -> None:
     assert tracker_mod._tracker_from_issue(issue) == TRACKER
 
 
-def test_only_bot_owned_issues_are_accepted_as_dashboards() -> None:
-    assert tracker_mod._is_bot_owned(SimpleNamespace(user=SimpleNamespace(login="release-app[bot]")))
-    assert not tracker_mod._is_bot_owned(SimpleNamespace(user=SimpleNamespace(login="maintainer")))
+def test_only_bot_or_explicitly_trusted_owner_issues_are_accepted_as_dashboards() -> None:
+    bot_issue = SimpleNamespace(user=SimpleNamespace(login="release-app[bot]"))
+    owner_issue = SimpleNamespace(user=SimpleNamespace(login="SarthakAggarwal97"))
+    other_issue = SimpleNamespace(user=SimpleNamespace(login="maintainer"))
+
+    assert tracker_mod._is_trusted_owner(bot_issue)
+    assert not tracker_mod._is_trusted_owner(owner_issue)
+    assert tracker_mod._is_trusted_owner(owner_issue, "sarthakaggarwal97")
+    assert not tracker_mod._is_trusted_owner(other_issue, "sarthakaggarwal97")
 
 
 def test_prep_pr_fallback_survives_deleted_head_branch() -> None:

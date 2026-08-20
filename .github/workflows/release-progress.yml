@@ -45,4 +45,5 @@ jobs:
           python -m scripts.release.tracker sync \
             --target-repo sarthakaggarwal97/valkey \
             --agent-repo sarthakaggarwal97/valkey-ci-agent \
-            --automation-repo sarthakaggarwal97/valkey-release-automation
+            --automation-repo sarthakaggarwal97/valkey-release-automation \
+            --trusted-owner sarthakaggarwal97

@@ -53,7 +53,13 @@ class Tracker:
         return f"{_TRACKER_PREFIX}{payload} -->"
 
 
-def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
+def ensure_tracker(
+    gh: Any,
+    tracker: Tracker,
+    *,
+    agent_repo: str,
+    trusted_owner: str = "",
+) -> Any:
     """Create or reuse the one open dashboard for *tracker.tag*."""
     _validate_tracker(tracker)
     repo = _repo(gh, tracker.repo)
@@ -61,7 +67,7 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
     issue = None
     for candidate in itertools.islice(repo.get_issues(state="all", labels=[label]), 200):
         existing = _tracker_from_issue(candidate)
-        if _is_bot_owned(candidate) and existing is not None and existing.tag == tracker.tag:
+        if _is_trusted_owner(candidate, trusted_owner) and existing is not None and existing.tag == tracker.tag:
             issue = candidate
             break
 
@@ -79,7 +85,7 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
                 (
                     candidate
                     for candidate in itertools.islice(repo.get_issues(state="all", labels=[label]), 200)
-                    if _is_bot_owned(candidate)
+                    if _is_trusted_owner(candidate, trusted_owner)
                     and (parsed := _tracker_from_issue(candidate)) is not None
                     and parsed.tag == tracker.tag
                 ),
@@ -155,6 +161,7 @@ def sync_trackers(
     target_repo: str,
     agent_repo: str,
     automation_repo: str,
+    trusted_owner: str = "",
     dispatch: bool = True,
 ) -> list[str]:
     """Refresh every open tracker and advance a merged notes PR once."""
@@ -169,8 +176,8 @@ def sync_trackers(
     label = _ensure_label(repo)
     results: list[str] = []
     for issue in itertools.islice(repo.get_issues(state="open", labels=[label]), 100):
-        if not _is_bot_owned(issue):
-            logger.warning("Ignoring non-bot release tracker lookalike #%s", issue.number)
+        if not _is_trusted_owner(issue, trusted_owner):
+            logger.warning("Ignoring untrusted release tracker lookalike #%s", issue.number)
             continue
         tracker = _tracker_from_issue(issue)
         if tracker is None or tracker.repo != target_repo:
@@ -751,9 +758,10 @@ def _repo(gh: Any, name: str) -> Any:
     return retry_github_call(lambda: gh.get_repo(name), retries=2, description=f"get {name}")
 
 
-def _is_bot_owned(issue: Any) -> bool:
+def _is_trusted_owner(issue: Any, trusted_owner: str = "") -> bool:
     login = (getattr(getattr(issue, "user", None), "login", "") or "").casefold()
-    return login.endswith("[bot]")
+    trusted = trusted_owner.casefold()
+    return login.endswith("[bot]") or bool(trusted and login == trusted)
 
 
 def _validate_tracker(tracker: Tracker) -> None:
@@ -790,11 +798,13 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("repo", "branch", "version", "stage", "tag", "prep-branch", "agent-repo"):
         ensure.add_argument(f"--{name}", required=True)
     ensure.add_argument("--prepare-run-id", required=True, type=int)
+    ensure.add_argument("--trusted-owner", default="")
 
     sync = sub.add_parser("sync")
     sync.add_argument("--target-repo", default="valkey-io/valkey")
     sync.add_argument("--agent-repo", default="valkey-io/valkey-ci-agent")
     sync.add_argument("--automation-repo", default="valkey-io/valkey-release-automation")
+    sync.add_argument("--trusted-owner", default="")
     sync.add_argument("--no-dispatch", action="store_true")
     args = parser.parse_args(argv)
 
@@ -816,7 +826,12 @@ def main(argv: list[str] | None = None) -> int:
             prep_branch=args.prep_branch,
             prepare_run_id=args.prepare_run_id,
         )
-        issue = ensure_tracker(target_gh, tracker, agent_repo=args.agent_repo)
+        issue = ensure_tracker(
+            target_gh,
+            tracker,
+            agent_repo=args.agent_repo,
+            trusted_owner=args.trusted_owner,
+        )
         _write_outputs({"issue_number": str(issue.number), "issue_url": issue.html_url})
         print(issue.html_url)
         return 0
@@ -834,6 +849,7 @@ def main(argv: list[str] | None = None) -> int:
         target_repo=args.target_repo,
         agent_repo=args.agent_repo,
         automation_repo=args.automation_repo,
+        trusted_owner=args.trusted_owner,
         dispatch=not args.no_dispatch,
     ):
         print(result)

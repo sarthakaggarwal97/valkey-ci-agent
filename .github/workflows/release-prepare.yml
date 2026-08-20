@@ -147,7 +147,8 @@ jobs:
             --repo sarthakaggarwal97/valkey --branch "$BRANCH" \
             --version "$VERSION" --stage "$STAGE" --tag "$TAG" \
             --prep-branch "agent/release-cut/${VERSION}-${STAGE}" \
-            --prepare-run-id "$GITHUB_RUN_ID" --agent-repo "$GITHUB_REPOSITORY"
+            --prepare-run-id "$GITHUB_RUN_ID" --agent-repo "$GITHUB_REPOSITORY" \
+            --trusted-owner sarthakaggarwal97
 
       - name: Link release dashboard
         env:
