@@ -18,6 +18,7 @@ def test_prepare_opens_dashboard_and_notes_pr_in_parallel() -> None:
     assert "VALKEY_RELEASE_START_ACTOR" in str(workflow["jobs"]["authorize-start"])
     assert workflow["jobs"]["derive"]["environment"] == "release-control"
     assert workflow["jobs"]["cut-notes"]["uses"] == "./.github/workflows/release-notes-cut.yml"
+    assert workflow["jobs"]["cut-notes"]["secrets"] == "inherit"
     assert workflow["jobs"]["tracker"]["needs"] == "derive"
     assert workflow["jobs"]["tracker"]["environment"] == "release-control"
     assert "VALKEY_GITHUB_TOKEN" in str(workflow["jobs"]["derive"])
