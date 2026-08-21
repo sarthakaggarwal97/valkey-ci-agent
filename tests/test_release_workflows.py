@@ -40,6 +40,8 @@ def test_publish_waits_for_qualification_before_protected_write() -> None:
     assert "No human approval record exists" in str(jobs["publish"])
     assert '"$APPROVER" != "$TRIGGERING_ACTOR"' not in str(jobs["publish"])
     assert "release must disable admin bypass" in str(jobs["publish"])
+    assert 'if has("can_admins_bypass") then .can_admins_bypass else true end' in str(jobs["publish"])
+    assert ".can_admins_bypass // true" not in str(jobs["publish"])
     assert jobs["onboard-backports"]["continue-on-error"] == "true"
 
 
