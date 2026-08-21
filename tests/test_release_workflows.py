@@ -14,6 +14,7 @@ def test_prepare_opens_dashboard_and_notes_pr_in_parallel() -> None:
     assert inputs["dry_run"]["default"] == "false"
     assert list(workflow["jobs"]) == ["authorize-start", "derive", "cut-notes", "tracker"]
     assert inputs["initiator"]["required"] == "true"
+    assert workflow["jobs"]["cut-notes"]["with"]["release_owner"] == "${{ inputs.initiator }}"
     assert workflow["jobs"]["derive"]["needs"] == "authorize-start"
     assert "VALKEY_RELEASE_START_ACTOR" in str(workflow["jobs"]["authorize-start"])
     assert workflow["jobs"]["derive"]["environment"] == "release-control"

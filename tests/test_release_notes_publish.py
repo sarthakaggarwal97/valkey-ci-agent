@@ -69,6 +69,33 @@ class TestOpenOrUpdatePr:
         assert url == "https://x/9"
         repo.create_pull.assert_called_once()
 
+    def test_notifies_release_owner_once(self) -> None:
+        repo = MagicMock()
+        pr = MagicMock(number=9, html_url="https://x/9")
+        pr.get_issue_comments.return_value = []
+        repo.create_pull.return_value = pr
+        open_or_update_pr(
+            repo, base_repo="o/r", push_repo=None,
+            branch="agent/release-cut/9.1.0-rc1", base_branch="9.1",
+            title="t", body="b", existing=None, release_owner="alice",
+        )
+        comment = pr.create_issue_comment.call_args.args[0]
+        assert comment.startswith("@alice, please review this automated release PR.")
+        assert "<!-- valkey-release-owner-review -->" in comment
+
+    def test_does_not_duplicate_release_owner_comment(self) -> None:
+        repo = MagicMock()
+        existing = MagicMock(number=5, html_url="https://x/5", draft=False)
+        existing.get_issue_comments.return_value = [
+            MagicMock(body="already sent\n\n<!-- valkey-release-owner-review -->")
+        ]
+        open_or_update_pr(
+            repo, base_repo="o/r", push_repo=None,
+            branch="agent/release-cut/9.1.0-rc1", base_branch="9.1",
+            title="t", body="b", existing=existing, release_owner="alice",
+        )
+        existing.create_issue_comment.assert_not_called()
+
     def test_create_passes_draft_true_to_hold(self) -> None:
         # A held cut opens the PR as a draft so GitHub refuses to merge it.
         repo = MagicMock()

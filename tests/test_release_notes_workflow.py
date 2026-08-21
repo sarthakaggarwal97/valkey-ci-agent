@@ -42,6 +42,7 @@ def test_shared_workflow_keeps_advanced_inputs_available() -> None:
         "security_fixes",
         "security_from_advisories",
         "force_ready",
+        "release_owner",
         "dry_run",
     }
     assert inputs["stage"]["default"] == ""

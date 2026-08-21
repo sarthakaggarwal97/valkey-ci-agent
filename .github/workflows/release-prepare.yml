@@ -112,6 +112,7 @@ jobs:
       version: ${{ needs.derive.outputs.version }}
       stage: ${{ needs.derive.outputs.stage }}
       urgency: ${{ inputs.urgency }}
+      release_owner: ${{ inputs.initiator }}
       dry_run: false
 
   tracker:
