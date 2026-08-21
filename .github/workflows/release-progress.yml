@@ -40,7 +40,7 @@ jobs:
       - name: Refresh progress
         env:
           TARGET_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
-          AGENT_GITHUB_TOKEN: ${{ github.token }}
+          AGENT_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
           AUTOMATION_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
           POLL_INTERVAL_SECONDS: 300
           POLL_DURATION_SECONDS: 3300
