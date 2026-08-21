@@ -22,7 +22,7 @@ _TRUSTED_REUSABLE_WORKFLOW_REFS = {
     # implementation checkouts to github.workflow_sha, the exact commit this
     # reference resolved to. It receives no secrets, and candidate-code jobs
     # are constrained to contents:read.
-    "valkey-io/valkey-release-automation/.github/workflows/qualify-release.yml@main",
+    "sarthakaggarwal97/valkey-release-automation/.github/workflows/qualify-release.yml@e2e/final-release-automation",
 }
 
 

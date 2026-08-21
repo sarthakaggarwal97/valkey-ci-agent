@@ -241,3 +241,40 @@ def test_non_fast_forward_rule_does_not_prove_tag_immutability() -> None:
         }),
     ]
     assert publish_mod.tag_ruleset_protected(repo, "9.1.2").protected is False
+
+
+def test_personal_fork_can_plan_and_publish_without_tag_ruleset_bypass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = ReleasePolicy(
+        repo="sarthakaggarwal97/valkey",
+        authorized_team="user/sarthakaggarwal97",
+        branches=("9.1",),
+        checks_workflow="ci.yml",
+        required_checks=("test",),
+    )
+    repo = _repo()
+    repo.get_commit.return_value.get_pulls.return_value[0].head.repo.full_name = policy.repo
+    monkeypatch.setattr(publish_mod, "require_green_checks", lambda *a, **k: None)
+    ruleset = MagicMock(side_effect=AssertionError("fork must not inspect unavailable rulesets"))
+    monkeypatch.setattr(publish_mod, "tag_ruleset_protected", ruleset)
+    plan = publish_mod.plan_publication(_gh(repo), policy, branch="9.1", candidate_sha=SHA)
+    assert plan.tag_protected is False
+    assert plan.tag_bypass_integration_ids == ()
+    ruleset.assert_not_called()
+
+    repo.create_git_ref.side_effect = None
+    repo.get_git_ref.side_effect = None
+    repo.get_git_ref.return_value.object = SimpleNamespace(type="commit", sha=SHA)
+    repo.create_git_release.return_value.html_url = "https://example/release"
+    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *a, **k: None)
+    monkeypatch.setattr(publish_mod, "plan_publication", lambda *a, **k: plan)
+    assert publish_mod.publish_release(
+        _gh(repo),
+        policy,
+        branch="9.1",
+        candidate_sha=SHA,
+        actor="sarthakaggarwal97",
+        expected_digest=publish_mod.plan_digest(plan),
+        expected_bypass_integration_id=0,
+    ) == "https://example/release"

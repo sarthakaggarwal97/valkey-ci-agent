@@ -1,8 +1,8 @@
 # Small allow-list used by both release workflows. Operational state lives in
 # the release preparation PR and exact candidate SHA, not in this file.
 schema_version: 1
-repo: valkey-io/valkey
-authorized_team: valkey-io/core-team
+repo: sarthakaggarwal97/valkey
+authorized_team: user/sarthakaggarwal97
 checks_workflow: ci.yml
 branches:
   - "7.2"

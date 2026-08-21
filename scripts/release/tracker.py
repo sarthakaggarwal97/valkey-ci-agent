@@ -59,7 +59,7 @@ class Tracker:
         return f"{_TRACKER_PREFIX}{payload} -->"
 
 
-def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
+def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str, trusted_owner: str = "") -> Any:
     """Create or reuse the one open dashboard for *tracker.tag*."""
     _validate_tracker(tracker)
     repo = _repo(gh, tracker.repo)
@@ -67,7 +67,7 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
     issue = None
     for candidate in itertools.islice(repo.get_issues(state="all", labels=[label]), 200):
         existing = _tracker_from_issue(candidate)
-        if _is_bot_owned(candidate) and existing is not None and existing.tag == tracker.tag:
+        if _is_bot_owned(candidate, trusted_owner) and existing is not None and existing.tag == tracker.tag:
             issue = candidate
             break
 
@@ -85,7 +85,7 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
                 (
                     candidate
                     for candidate in itertools.islice(repo.get_issues(state="all", labels=[label]), 200)
-                    if _is_bot_owned(candidate)
+                    if _is_bot_owned(candidate, trusted_owner)
                     and (parsed := _tracker_from_issue(candidate)) is not None
                     and parsed.tag == tracker.tag
                 ),
@@ -171,6 +171,7 @@ def sync_trackers(
     automation_repo: str,
     policy: ReleasePolicy,
     dispatch: bool = True,
+    trusted_owner: str = "",
 ) -> list[str]:
     """Refresh every open tracker and advance a merged notes PR once."""
     if policy.repo != target_repo:
@@ -186,7 +187,7 @@ def sync_trackers(
     label = _ensure_label(repo)
     results: list[str] = []
     for issue in itertools.islice(repo.get_issues(state="open", labels=[label]), 100):
-        if not _is_bot_owned(issue):
+        if not _is_bot_owned(issue, trusted_owner):
             logger.warning("Ignoring non-bot release tracker lookalike #%s", issue.number)
             continue
         tracker = _tracker_from_issue(issue)
@@ -940,9 +941,9 @@ def _repo(gh: Any, name: str) -> Any:
     return retry_github_call(lambda: gh.get_repo(name), retries=2, description=f"get {name}")
 
 
-def _is_bot_owned(issue: Any) -> bool:
+def _is_bot_owned(issue: Any, trusted_owner: str = "") -> bool:
     login = (getattr(getattr(issue, "user", None), "login", "") or "").casefold()
-    return login.endswith("[bot]")
+    return login.endswith("[bot]") or (bool(trusted_owner) and login == trusted_owner.casefold())
 
 
 def _validate_tracker(tracker: Tracker) -> None:
@@ -979,6 +980,7 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("repo", "branch", "version", "stage", "tag", "prep-branch", "agent-repo"):
         ensure.add_argument(f"--{name}", required=True)
     ensure.add_argument("--prepare-run-id", required=True, type=int)
+    ensure.add_argument("--trusted-owner", default="")
 
     sync = sub.add_parser("sync")
     sync.add_argument("--target-repo", default="valkey-io/valkey")
@@ -986,6 +988,7 @@ def main(argv: list[str] | None = None) -> int:
     sync.add_argument("--automation-repo", default="valkey-io/valkey-release-automation")
     sync.add_argument("--policy", default="release_policy.yml")
     sync.add_argument("--no-dispatch", action="store_true")
+    sync.add_argument("--trusted-owner", default="")
     add_poll_loop_args(sync)
     args = parser.parse_args(argv)
 
@@ -1007,7 +1010,9 @@ def main(argv: list[str] | None = None) -> int:
             prep_branch=args.prep_branch,
             prepare_run_id=args.prepare_run_id,
         )
-        issue = ensure_tracker(target_gh, tracker, agent_repo=args.agent_repo)
+        issue = ensure_tracker(
+            target_gh, tracker, agent_repo=args.agent_repo, trusted_owner=args.trusted_owner
+        )
         _write_outputs({"issue_number": str(issue.number), "issue_url": issue.html_url})
         print(issue.html_url)
         return 0
@@ -1029,6 +1034,7 @@ def main(argv: list[str] | None = None) -> int:
             automation_repo=args.automation_repo,
             policy=policy,
             dispatch=not args.no_dispatch,
+            trusted_owner=args.trusted_owner,
         )
 
     for iteration in run_poll_loop_from_args(_poll, args, logger=logger):

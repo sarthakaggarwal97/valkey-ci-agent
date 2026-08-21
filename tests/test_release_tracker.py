@@ -91,7 +91,8 @@ def test_only_bot_owned_issues_are_accepted_as_dashboards() -> None:
 
     assert tracker_mod._is_bot_owned(bot_issue)
     assert not tracker_mod._is_bot_owned(owner_issue)
-    assert not tracker_mod._is_bot_owned(other_issue)
+    assert tracker_mod._is_bot_owned(owner_issue, "sarthakaggarwal97")
+    assert not tracker_mod._is_bot_owned(other_issue, "sarthakaggarwal97")
 
 
 def test_prep_pr_fallback_survives_deleted_head_branch() -> None:

@@ -22,7 +22,7 @@ concurrency:
 jobs:
   validate:
     name: Validate candidate and render plan
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release-control
@@ -50,25 +50,10 @@ jobs:
 
       - uses: ./.github/actions/setup-agent
 
-      - name: Create validation token
-        id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-administration: read
-          permission-actions: read
-          permission-checks: read
-          permission-contents: read
-          permission-metadata: read
-          permission-pull-requests: read
-
       - name: Validate and plan
         id: plan
         env:
-          RELEASE_GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
           BRANCH: ${{ inputs.branch }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
         run: |
@@ -85,11 +70,10 @@ jobs:
     permissions:
       contents: write
       id-token: write
-    # Deliberately follows the separately reviewed, branch-protected workflow
-    # in the Valkey organization. Unlike third-party actions, this is a
-    # first-party release component that must evolve with production; it is
-    # secretless and candidate-code jobs receive contents:read only.
-    uses: valkey-io/valkey-release-automation/.github/workflows/qualify-release.yml@main
+    # Deliberately follows the separately reviewed temporary branch in the
+    # personal automation fork. It is secretless and candidate-code jobs
+    # receive contents:read only.
+    uses: sarthakaggarwal97/valkey-release-automation/.github/workflows/qualify-release.yml@e2e/final-release-automation
     with:
       version: ${{ needs.validate.outputs.version }}
       source_sha: ${{ needs.validate.outputs.sha }}
@@ -146,12 +130,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
-          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
         run: |
           set -euo pipefail
-          CURRENT_SHA=$(gh api "repos/${REPO}/commits/main" --jq '.sha')
+          DEFAULT_BRANCH=$(gh api "repos/${REPO}" --jq '.default_branch')
+          CURRENT_SHA=$(gh api "repos/${REPO}/commits/${DEFAULT_BRANCH}" --jq '.sha')
           [[ "$CURRENT_SHA" == "$GITHUB_SHA" ]] || {
-            echo "Controller main moved from $GITHUB_SHA to $CURRENT_SHA; rerun publication" >&2
+            echo "Controller default branch moved from $GITHUB_SHA to $CURRENT_SHA; rerun publication" >&2
             exit 1
           }
           ENVIRONMENT=$(gh api "repos/${REPO}/environments/release")
@@ -161,10 +145,10 @@ jobs:
           CUSTOM_POLICY=$(jq -r '.deployment_branch_policy.custom_branch_policies // false' <<< "$ENVIRONMENT")
           POLICY_NAMES=$(gh api --paginate "repos/${REPO}/environments/release/deployment-branch-policies" --jq '.branch_policies[].name' | sort -u)
           [[ "$REVIEWERS" -ge 1 ]] || { echo "release must require a reviewer" >&2; exit 1; }
-          [[ "$PREVENT_SELF" == "true" ]] || { echo "release must prevent self-review" >&2; exit 1; }
+          [[ "$PREVENT_SELF" == "false" ]] || { echo "release must allow the sole fork owner to approve" >&2; exit 1; }
           [[ "$ADMIN_BYPASS" == "false" ]] || { echo "release must disable admin bypass" >&2; exit 1; }
-          [[ "$CUSTOM_POLICY" == "true" && "$POLICY_NAMES" == "main" ]] || {
-            echo "release must allow exactly the main branch; found: ${POLICY_NAMES:-<none>}" >&2
+          [[ "$CUSTOM_POLICY" == "true" && "$POLICY_NAMES" == "$DEFAULT_BRANCH" ]] || {
+            echo "release must allow exactly the default branch; found: ${POLICY_NAMES:-<none>}" >&2
             exit 1
           }
           APPROVER=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/approvals" \
@@ -173,44 +157,22 @@ jobs:
             echo "No human approval record exists for the release environment" >&2
             exit 1
           }
-          [[ "$APPROVER" != "$TRIGGERING_ACTOR" ]] || {
-            echo "The workflow dispatcher cannot approve their own release" >&2
-            exit 1
-          }
           echo "login=$APPROVER" >> "$GITHUB_OUTPUT"
-
-      - name: Create publication token
-        id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEY_RELEASE_PUBLISH_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-administration: read
-          permission-actions: read
-          permission-checks: read
-          permission-contents: write
-          permission-members: read
-          permission-metadata: read
-          permission-pull-requests: read
 
       - name: Revalidate and publish
         env:
-          RELEASE_GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_GITHUB_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
           BRANCH: ${{ inputs.branch }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           APPROVER: ${{ steps.approver.outputs.login }}
           EXPECTED_DIGEST: ${{ needs.validate.outputs.plan_digest }}
           APPROVAL_DIGEST: ${{ needs.approval-plan.outputs.approval_digest }}
-          PUBLISH_APP_ID: ${{ secrets.VALKEY_RELEASE_PUBLISH_APP_ID }}
         run: |
           [[ "$APPROVAL_DIGEST" =~ ^[0-9a-f]{64}$ ]] || { echo "missing qualification approval receipt" >&2; exit 1; }
-          [[ "$PUBLISH_APP_ID" =~ ^[1-9][0-9]*$ ]] || { echo "invalid publication App id" >&2; exit 1; }
           python -m scripts.release.main publish \
             --branch "$BRANCH" --candidate-sha "$CANDIDATE_SHA" \
             --actor "$APPROVER" --expected-digest "$EXPECTED_DIGEST" \
-            --expected-bypass-integration-id "$PUBLISH_APP_ID"
+            --expected-bypass-integration-id 0
 
   onboard-backports:
     name: Onboard first-GA backport automation

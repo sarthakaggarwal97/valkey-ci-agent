@@ -20,7 +20,9 @@ def test_prepare_opens_dashboard_and_notes_pr_in_parallel() -> None:
     assert workflow["jobs"]["cut-notes"]["uses"] == "./.github/workflows/release-notes-cut.yml"
     assert workflow["jobs"]["tracker"]["needs"] == "derive"
     assert workflow["jobs"]["tracker"]["environment"] == "release-control"
-    assert "permission-issues" in str(workflow["jobs"]["tracker"])
+    assert "VALKEY_GITHUB_TOKEN" in str(workflow["jobs"]["derive"])
+    assert "VALKEY_GITHUB_TOKEN" in str(workflow["jobs"]["tracker"])
+    assert "--trusted-owner sarthakaggarwal97" in str(workflow["jobs"]["tracker"])
 
 
 def test_publish_waits_for_qualification_before_protected_write() -> None:
@@ -31,17 +33,18 @@ def test_publish_waits_for_qualification_before_protected_write() -> None:
     assert jobs["publish"]["needs"] == ["validate", "qualify", "approval-plan"]
     assert "automation_sha" in str(jobs["approval-plan"])
     assert jobs["publish"]["environment"] == "release"
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" in str(jobs["publish"])
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in str(jobs["validate"])
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in str(jobs["qualify"])
-    assert "TRIGGERING_ACTOR" in str(jobs["publish"])
-    assert '"$APPROVER" != "$TRIGGERING_ACTOR"' in str(jobs["publish"])
+    assert "VALKEY_GITHUB_TOKEN" in str(jobs["validate"])
+    assert "VALKEY_GITHUB_TOKEN" in str(jobs["publish"])
+    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in str(jobs["publish"])
+    assert "No human approval record exists" in str(jobs["publish"])
+    assert '"$APPROVER" != "$TRIGGERING_ACTOR"' not in str(jobs["publish"])
+    assert "release must disable admin bypass" in str(jobs["publish"])
     assert jobs["onboard-backports"]["continue-on-error"] == "true"
 
 
 def test_publish_qualification_is_exact_and_synchronous() -> None:
     job = _load("release-publish.yml")["jobs"]["qualify"]
-    assert job["uses"] == "valkey-io/valkey-release-automation/.github/workflows/qualify-release.yml@main"
+    assert job["uses"] == "sarthakaggarwal97/valkey-release-automation/.github/workflows/qualify-release.yml@e2e/final-release-automation"
     assert job["with"]["version"] == "${{ needs.validate.outputs.version }}"
     assert job["with"]["source_sha"] == "${{ needs.validate.outputs.sha }}"
     assert "automation_repo" not in job["with"]
@@ -72,9 +75,7 @@ def test_progress_watcher_is_narrow_and_serialized() -> None:
     assert "--poll-interval-seconds" in str(job)
     assert "'300'" in str(job) and "'3300'" in str(job)
     assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in str(job)
-    steps = {step.get("id"): step for step in job["steps"] if step.get("id")}
-    assert steps["target-token"]["with"]["repositories"] == "valkey"
-    assert steps["target-token"]["with"]["permission-issues"] == "write"
-    assert steps["automation-token"]["with"]["repositories"] == "valkey-release-automation"
-    assert "permission-issues" not in steps["automation-token"]["with"]
+    assert "VALKEY_GITHUB_TOKEN" in str(job)
+    assert "--target-repo sarthakaggarwal97/valkey" in str(job)
+    assert "--trusted-owner sarthakaggarwal97" in str(job)
     assert "AUTOMATION_GITHUB_TOKEN" in str(job)

@@ -81,3 +81,18 @@ def test_actor_whitespace_is_stripped_before_the_lookup() -> None:
     gh = _gh(member=True)
     ensure_authorized(gh, _POLICY, "  madolson  ")
     gh.get_user.assert_called_once_with("madolson")
+
+
+def test_exact_personal_fork_owner_is_authorized_without_team_lookup() -> None:
+    policy = ReleasePolicy(
+        repo="sarthakaggarwal97/valkey",
+        authorized_team="user/sarthakaggarwal97",
+        branches=("8.0",),
+        checks_workflow="ci.yml",
+        required_checks=("test",),
+    )
+    gh = MagicMock()
+    ensure_authorized(gh, policy, "SarthakAggarwal97")
+    gh.get_organization.assert_not_called()
+    with pytest.raises(NotAuthorizedError, match="authorized personal-fork owner"):
+        ensure_authorized(gh, policy, "other-user")

@@ -32,6 +32,11 @@ def ensure_authorized(gh: Any, policy: ReleasePolicy, actor: str) -> None:
     if not actor:
         raise NotAuthorizedError("no acting user supplied")
 
+    if policy.repo == "sarthakaggarwal97/valkey" and policy.authorized_team == "user/sarthakaggarwal97":
+        if actor.casefold() != "sarthakaggarwal97":
+            raise NotAuthorizedError(f"@{actor} is not the authorized personal-fork owner")
+        return
+
     try:
         team = retry_github_call(
             lambda: gh.get_organization(policy.team_org).get_team_by_slug(policy.team_slug),
