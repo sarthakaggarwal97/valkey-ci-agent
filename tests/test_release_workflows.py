@@ -65,7 +65,9 @@ def test_no_controller_loop_workflows_remain() -> None:
 def test_progress_watcher_is_narrow_and_serialized() -> None:
     workflow = _load("release-progress.yml")
     assert workflow["on"]["schedule"][0]["cron"] == "0 * * * *"
-    assert "workflow_run" not in workflow["on"]
+    assert workflow["on"]["workflow_run"]["workflows"] == ["Prepare Release"]
+    assert workflow["on"]["workflow_run"]["types"] == ["completed"]
+    assert workflow["on"]["workflow_run"]["branches"] == ["e2e/final-release-controller"]
     assert workflow["permissions"] == {"actions": "write", "contents": "read"}
     assert workflow["concurrency"]["group"] == "release-progress"
     job = workflow["jobs"]["sync"]

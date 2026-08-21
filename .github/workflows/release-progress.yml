@@ -2,11 +2,16 @@ name: Refresh Release Progress
 run-name: Refresh active release dashboards
 
 on:
+  # Start immediately after preparation, then retain the hourly fallback.
+  # Each runner stays alive for 55 minutes and polls every five minutes,
+  # bridging GitHub's often-delayed scheduled-workflow starts while remaining
+  # below the token lifetime.
   schedule:
-    # Start one runner per hour. It stays alive for 55 minutes and polls every
-    # five minutes, bridging GitHub's often-delayed scheduled-workflow starts
-    # while remaining below the App token's one-hour lifetime.
     - cron: "0 * * * *"
+  workflow_run:
+    workflows: ["Prepare Release"]
+    types: [completed]
+    branches: [e2e/final-release-controller]
   workflow_dispatch:
 
 permissions:
