@@ -15,8 +15,6 @@ from scripts.common.github_client import retry_github_call
 
 logger = logging.getLogger(__name__)
 
-_RELEASE_OWNER_COMMENT_MARKER = "<!-- valkey-release-owner-review -->"
-
 
 def find_existing_pr(
     repo: Any, *, base_repo: str, push_repo: str | None, branch: str, base_branch: str
@@ -54,7 +52,6 @@ def open_or_update_pr(
             retries=3, description=f"update PR #{existing.number}",
         )
         reconcile_draft(existing, draft)
-        ensure_release_owner_comment(existing, release_owner)
         logger.info("Updated release PR #%s (draft=%s)", existing.number, draft)
         return existing.html_url
     head_ref = build_pull_create_head_ref(base_repo, push_repo, branch)
@@ -62,30 +59,15 @@ def open_or_update_pr(
         lambda: repo.create_pull(title=title, body=body, head=head_ref, base=base_branch, draft=draft),
         retries=3, description="create release PR",
     )
-    ensure_release_owner_comment(pr, release_owner)
+    if release_owner:
+        retry_github_call(
+            lambda: pr.create_issue_comment(
+                f"@{release_owner}, please review this automated release PR."
+            ),
+            retries=3, description=f"notify release owner on PR #{pr.number}",
+        )
     logger.info("Opened release PR #%s (draft=%s)", pr.number, draft)
     return pr.html_url
-
-
-def ensure_release_owner_comment(pr: Any, release_owner: str) -> None:
-    """Idempotently ask *release_owner* to review the automated release PR."""
-    if not release_owner:
-        return
-    comments = retry_github_call(
-        lambda: list(pr.get_issue_comments()),
-        retries=3, description=f"read release-owner comment on PR #{pr.number}",
-    )
-    if any(_RELEASE_OWNER_COMMENT_MARKER in (getattr(comment, "body", "") or "")
-           for comment in comments):
-        return
-    body = (
-        f"@{release_owner}, please review this automated release PR.\n\n"
-        f"{_RELEASE_OWNER_COMMENT_MARKER}"
-    )
-    retry_github_call(
-        lambda: pr.create_issue_comment(body),
-        retries=3, description=f"notify release owner on PR #{pr.number}",
-    )
 
 
 def reconcile_draft(existing: Any, draft: bool) -> None:
