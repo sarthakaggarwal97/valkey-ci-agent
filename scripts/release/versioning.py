@@ -24,9 +24,12 @@ from scripts.release.models import DerivedRelease, ReleaseIntent
 # No leading zeros: git treats 9.01 and 9.1 as distinct refs, so accepting
 # a zero-padded component would derive versions for the wrong branch, and a
 # zero-padded tag (9.01.0) would be counted onto the wrong release line.
-_BRANCH_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)$")
-_FINAL_TAG_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
-_RC_TAG_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-rc([1-9]\d*)$")
+_BRANCH_RE = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", re.ASCII)
+_FINAL_TAG_RE = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", re.ASCII)
+_RC_TAG_RE = re.compile(
+    r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc([1-9][0-9]*)",
+    re.ASCII,
+)
 
 
 def parse_release_branch(branch: str) -> tuple[int, int]:
@@ -36,7 +39,7 @@ def parse_release_branch(branch: str) -> tuple[int, int]:
     full ``M.m.p`` version, ...), so a wrong-branch dispatch fails before any
     GitHub state is touched.
     """
-    m = _BRANCH_RE.match(branch.strip())
+    m = _BRANCH_RE.fullmatch(branch.strip())
     if not m:
         raise ValueError(f"not a release branch: {branch!r} (expected MAJOR.MINOR, e.g. '9.1')")
     return int(m.group(1)), int(m.group(2))
@@ -55,11 +58,11 @@ def derive_version(branch: str, intent: ReleaseIntent, tags: Iterable[str]) -> D
     finals: list[int] = []  # patch numbers of final releases on this line
     initial_rcs: list[int] = []  # rc numbers of M.m.0 release candidates
     for tag in tags:
-        f = _FINAL_TAG_RE.match(tag)
+        f = _FINAL_TAG_RE.fullmatch(tag)
         if f and (int(f.group(1)), int(f.group(2))) == (major, minor):
             finals.append(int(f.group(3)))
             continue
-        r = _RC_TAG_RE.match(tag)
+        r = _RC_TAG_RE.fullmatch(tag)
         if r and (int(r.group(1)), int(r.group(2)), int(r.group(3))) == (major, minor, 0):
             initial_rcs.append(int(r.group(4)))
 
@@ -85,6 +88,8 @@ def derive_version(branch: str, intent: ReleaseIntent, tags: Iterable[str]) -> D
                 f"{branch} already has a final release ({branch}.{max(finals)}); "
                 f"use intent 'patch' for the next release on this line"
             )
+        if not initial_rcs:
+            raise ValueError(f"no release candidate exists on {branch}; cut an rc before the initial ga")
         return DerivedRelease(version=f"{major}.{minor}.0", stage="ga")
 
     if intent is ReleaseIntent.PATCH:

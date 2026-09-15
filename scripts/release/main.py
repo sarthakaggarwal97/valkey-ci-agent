@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from github import Auth, Github
+from github.GithubException import GithubException
 
 from scripts.common.job_summary import emit_job_summary
 from scripts.release.authorize import NotAuthorizedError
@@ -118,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Published {url}")
             return 0
         raise AssertionError(args.command)
-    except (ReleaseError, NotAuthorizedError, ValueError) as exc:
+    except (ReleaseError, NotAuthorizedError, ValueError, GithubException, ConnectionError) as exc:
         logging.error("%s", exc)
         return 1
 

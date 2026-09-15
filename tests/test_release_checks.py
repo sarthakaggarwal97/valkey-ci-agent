@@ -25,7 +25,7 @@ def _run(name: str, conclusion: str, suite: int = 7, run_id: int = 1):
         started_at=None,
         id=run_id,
         html_url=f"https://example/checks/{run_id}",
-        _rawData={"check_suite": {"id": suite}},
+        check_suite_id=suite,
     )
 
 

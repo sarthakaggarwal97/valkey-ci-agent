@@ -1,15 +1,17 @@
 """Shared test fixtures."""
 
+import socket
+
 import pytest
+import urllib3.util.connection
 
 
 @pytest.fixture(autouse=True)
-def allow_upstream_publish_in_tests(request: pytest.FixtureRequest) -> None:
-    """No-op fixture kept for the ``disable_publish_autouse`` marker.
+def block_unstubbed_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make accidental live API calls fail instead of being hidden by fail-soft CLIs."""
 
-    The legacy publish guard has been removed; this fixture is retained so
-    tests that explicitly opt out via the marker continue to work without
-    requiring per-test changes.
-    """
-    if "disable_publish_autouse" in request.keywords:
-        return
+    def denied(*args: object, **kwargs: object) -> None:
+        raise AssertionError("tests must stub external network access")
+
+    monkeypatch.setattr(socket, "create_connection", denied)
+    monkeypatch.setattr(urllib3.util.connection, "create_connection", denied)

@@ -71,6 +71,61 @@ def test_tracker_marker_round_trips_and_rejects_invalid_metadata() -> None:
     assert tracker_mod.parse_tracker("<!-- valkey-release-tracker:v1 {} -->") is None
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        '{"repo":null}',
+        '{"repo":7}',
+        '{"repo":"valkey-io/valkey --> forged"}',
+        '{"repo":"valkey-io/valkey","branch":"9.1","version":"9.1.2","stage":"ga",'
+        '"tag":"9.1.2","prep_branch":"agent/release-cut/9.1.2-ga","prepare_run_id":true}',
+        "[" * 5000,
+    ],
+)
+def test_poisoned_tracker_markers_are_contained(payload: str) -> None:
+    assert tracker_mod.parse_tracker(f"{tracker_mod._TRACKER_PREFIX}{payload} -->") is None
+
+
+def test_ensure_checks_issue_ownership_before_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
+    human = _issue()
+    human.user.login = "maintainer"
+    bot = _issue()
+    bot.state = "open"
+    bot.title = f"Release {TRACKER.tag}"
+    bot.body = tracker_mod._issue_body(TRACKER, "valkey-io/valkey-ci-agent", include_marker=False)
+    repo = MagicMock()
+    repo.get_issues.return_value = [human, bot]
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    parsed = MagicMock(return_value=TRACKER)
+    monkeypatch.setattr(tracker_mod, "_tracker_from_issue", parsed)
+
+    assert tracker_mod.ensure_tracker(gh, TRACKER, agent_repo="valkey-io/valkey-ci-agent") is bot
+    parsed.assert_called_once_with(bot)
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"repo": "valkey"}, "owner/name"),
+        ({"branch": "unstable"}, "MAJOR.MINOR"),
+        ({"version": "9.1"}, "MAJOR.MINOR.PATCH"),
+        ({"stage": "rc0"}, "ga or rcN"),
+        ({"tag": "9.1.3"}, "does not match"),
+        ({"prep_branch": "agent/release-cut/other"}, "not canonical"),
+        ({"prepare_run_id": True}, "must be positive"),
+        ({"prepare_run_id": 0}, "must be positive"),
+    ],
+)
+def test_tracker_validation_refuses_each_invalid_identity(
+    changes: dict[str, object],
+    message: str,
+) -> None:
+    candidate = tracker_mod.Tracker(**{**TRACKER.__dict__, **changes})
+    with pytest.raises(ValueError, match=message):
+        tracker_mod._validate_tracker(candidate)
+
+
 def test_bot_status_comment_is_authoritative_over_edited_issue_body() -> None:
     issue = _issue()
     issue.body = tracker_mod.Tracker(
@@ -338,13 +393,58 @@ def test_existing_exact_publication_run_prevents_duplicate_dispatch(
         dispatch=True,
     )
 
-    find_run.assert_called_once_with(
-        workflow,
-        f"Publish release on {TRACKER.branch} @ {SHA}",
-        SHA,
-    )
+    title = f"Publish release on {TRACKER.branch} @ {SHA}"
+    find_run.assert_called_once_with(workflow, title, SHA)
     workflow.create_dispatch.assert_not_called()
     assert result == "#42: validating and qualifying"
+
+
+def test_stale_waiting_publication_is_cancelled_before_redispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    issue = _issue()
+    repo = MagicMock()
+    agent = MagicMock()
+    agent.default_branch = "main"
+    agent.get_workflow_run.return_value = _run()
+    workflow = MagicMock()
+    workflow.create_dispatch.return_value = True
+    stale = _run(status="waiting", conclusion=None)
+    stale.head_sha = "b" * 40
+    stale.cancel = MagicMock(return_value=True)
+    pr = SimpleNamespace(
+        merged=True,
+        merge_commit_sha=SHA,
+        number=7,
+        html_url="https://example/pull/7",
+        state="closed",
+        draft=False,
+    )
+    monkeypatch.setattr(tracker_mod, "_find_prep_pr", lambda *a: pr)
+    monkeypatch.setattr(tracker_mod, "_find_release", lambda *a: None)
+    monkeypatch.setattr(tracker_mod, "_branch_head", MagicMock(side_effect=[SHA, "c" * 40]))
+    monkeypatch.setattr(tracker_mod, "_find_run", MagicMock(side_effect=[None, stale]))
+    monkeypatch.setattr(tracker_mod, "evaluate_candidate_ci", lambda *a: _candidate_ci())
+    monkeypatch.setattr(tracker_mod, "_find_production_run", lambda *a: None)
+
+    result = tracker_mod._sync_one(
+        issue,
+        TRACKER,
+        repo,
+        agent,
+        MagicMock(),
+        workflow,
+        agent_repo="valkey-io/valkey-ci-agent",
+        policy=POLICY,
+        dispatch=True,
+    )
+
+    stale.cancel.assert_called_once_with()
+    workflow.create_dispatch.assert_called_once_with(
+        "main",
+        inputs={"branch": "9.1", "candidate_sha": SHA},
+    )
+    assert result == "#42: publication dispatched"
 
 
 def test_find_run_prefers_active_match_over_newer_completed_duplicate() -> None:
@@ -509,6 +609,69 @@ def test_sync_rejects_policy_for_a_different_repository() -> None:
         )
 
 
+def test_sync_logs_invalid_marker_and_continues_to_healthy_tracker(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    poisoned = _issue()
+    poisoned.number = 40
+    healthy = _issue()
+    healthy.number = 42
+    repo = MagicMock()
+    repo.get_issues.return_value = [poisoned, healthy]
+    agent = MagicMock()
+    automation = MagicMock()
+    monkeypatch.setattr(tracker_mod, "_repo", MagicMock(side_effect=[repo, agent, automation]))
+    monkeypatch.setattr(tracker_mod, "_ensure_label", lambda *a: object())
+    monkeypatch.setattr(tracker_mod, "_tracker_from_issue", MagicMock(side_effect=[None, TRACKER]))
+    sync_one = MagicMock(return_value="#42: refreshed")
+    monkeypatch.setattr(tracker_mod, "_sync_one", sync_one)
+
+    results = tracker_mod.sync_trackers(
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        target_repo=TRACKER.repo,
+        agent_repo="valkey-io/valkey-ci-agent",
+        automation_repo="valkey-io/valkey-release-automation",
+        policy=POLICY,
+    )
+
+    assert results == ["#40: invalid tracker metadata", "#42: refreshed"]
+    assert "invalid metadata" in caplog.text
+    sync_one.assert_called_once()
+
+
+def test_off_policy_tracker_is_rejected_before_issue_or_dispatch_mutation() -> None:
+    off_policy = tracker_mod.Tracker(
+        **{
+            **TRACKER.__dict__,
+            "branch": "8.0",
+            "version": "8.0.12",
+            "tag": "8.0.12",
+            "prep_branch": "agent/release-cut/8.0.12-ga",
+        }
+    )
+    issue = _issue()
+    workflow = MagicMock()
+
+    with pytest.raises(ValueError, match="not allowed by release policy"):
+        tracker_mod._sync_one(
+            issue,
+            off_policy,
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            workflow,
+            agent_repo="valkey-io/valkey-ci-agent",
+            policy=POLICY,
+            dispatch=True,
+        )
+
+    issue.edit.assert_not_called()
+    workflow.create_dispatch.assert_not_called()
+
+
 def test_sync_cli_uses_the_shared_bounded_poll_loop(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -538,6 +701,17 @@ def test_sync_cli_uses_the_shared_bounded_poll_loop(
 
     assert sync.call_count == 2
     assert capsys.readouterr().out.splitlines() == ["#42: refreshed", "#42: refreshed"]
+
+
+def test_tracker_outputs_refuse_multiline_values(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    output = tmp_path / "outputs"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+
+    with pytest.raises(ValueError, match="multiline workflow output refused"):
+        tracker_mod._write_outputs({"issue_url": "safe\nforged=true"})
 
 
 def test_unchanged_status_does_not_churn_comment_for_timestamp_only() -> None:

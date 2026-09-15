@@ -299,7 +299,7 @@ categories, prompt wording) live in `scripts/release_notes/projects.py`:
 | valkey-json | `CMakeLists.txt` (`project(... VERSION M.m.p)`) | no |
 | valkey-bloom | `Cargo.toml` (`[package] version`) | no |
 
-The Valkeyrie GitHub App installation must include every repository that can be
+The release-control GitHub App installation must include every repository that can be
 selected: `valkey`, `valkey-search`, `valkey-json`, and `valkey-bloom` (or choose
 **All repositories**). Each workflow token is scoped to only the selected
 `${{ inputs.repo }}` and requests `contents:write`, `pull-requests:write`, and
@@ -646,23 +646,38 @@ controller's long-lived post-release polling loop.
 - `release-control` must allow only the exact default branch. It stores
   `VALKEY_RELEASE_CONTROL_APP_ID`,
   `VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY`, and the release-notes Bedrock
-credentials. Set `VALKEY_RELEASE_START_ACTOR` to the release-control App's bot
-login. In `valkey`, create a no-reviewer `release-control` environment restricted
-to the exact `unstable` branch and store the same App id/key there; its
-installation on `valkey-ci-agent` needs only `actions:write` and `metadata:read`
-for the thin Start Release handoff. The control App reads Valkey and production workflow status,
-  writes only the preparation PR and release tracking issue; it must not bypass
-  release-tag protection. Qualification is a secretless synchronous reusable
-  workflow call, so it needs no cross-repository Actions-write token. The
-  control App installation
-  needs Valkey `issues:write` and `pull-requests:read`, plus `actions:read` on
-  `valkey-release-automation` for the dashboard.
+  credentials. Set `VALKEY_RELEASE_START_ACTOR` to the release-control App's bot
+  login. In `valkey`, create a no-reviewer `release-control` environment restricted
+  to the exact `unstable` branch and store the same App id/key there. Qualification
+  is a secretless synchronous reusable workflow call, so it needs no
+  cross-repository Actions-write token. The control App must not bypass
+  release-tag protection.
+- Grant the control App only the permissions requested by the workflows:
+  - on `valkey`: `administration:read`, `actions:read`, `checks:read`,
+    `contents:write`, `issues:write`, `metadata:read`, and
+    `pull-requests:write`;
+  - on each module repository (`valkey-search`, `valkey-json`, and
+    `valkey-bloom`): `contents:write`, `metadata:read`, and
+    `pull-requests:write`;
+  - on any repository using advisory-backed cuts:
+    `repository-advisories:read`;
+  - on `valkey-ci-agent`: `contents:write`, `issues:write`, `metadata:read`,
+    and `pull-requests:write`;
+  - on `valkey-release-automation`: `actions:read`, `contents:read`, and
+    `metadata:read`;
+  - at organization scope: `members:read` for release authorization and
+    `organization-projects:read` for first-GA backport onboarding.
+  The thin Start Release handoff's installation token on `valkey-ci-agent`
+  additionally requests `actions:write` and `metadata:read`.
 - `release` must allow only the exact default branch, require a reviewer,
   prevent self-review, and disallow admin bypass. It alone stores
   `VALKEY_RELEASE_PUBLISH_APP_ID` and
-  `VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY`. Both Apps need
-  `administration:read` to inspect tag-rule bypass actors. The publication App is the sole
-  Integration allowed to create protected release tags.
+  `VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY`. On `valkey`, the publication App
+  needs `administration:read`, `actions:read`, `checks:read`, `contents:write`,
+  `metadata:read`, and `pull-requests:read`, plus organization
+  `members:read`. Both Apps use `administration:read` to inspect tag-rule
+  bypass actors. The publication App is the sole Integration allowed to create
+  protected release tags.
 - `valkey-release-automation` keeps its existing `release-publish`
   production approval. It is the second deployment approval before public
   packages and downstream updates are written.
@@ -674,6 +689,15 @@ For a maintainer, the normal path is: start **Start Release** in Valkey,
 merge the notes PR, approve `release`, and approve `release-publish`. Everything
 between those decisions advances automatically, and the tracking issue remains
 the single place to find the current run, failure, and next action.
+
+### Aborting a release
+
+Close the release-tracking issue to abandon that release. The hourly progress
+workflow scans only open trackers, so closing the issue stops reconciliation and
+prevents any new publication dispatch. If an operator needs to stop all release
+reconciliation while investigating an incident, disable **Refresh Release
+Progress** in `valkey-ci-agent`; re-enable it after every abandoned tracker has
+been closed. There is no `/release abort` command.
 
 Deploy `valkey-release-automation` before this CI-agent change: its public
 `qualify-release.yml` must expose `workflow_call` when **Publish Release** invokes

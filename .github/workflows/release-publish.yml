@@ -83,7 +83,7 @@ jobs:
     # passed; candidate-code jobs in the called workflow downgrade themselves
     # to contents:read and never receive OIDC.
     permissions:
-      contents: write
+      contents: read
       id-token: write
     # Deliberately follows the separately reviewed, branch-protected workflow
     # in the Valkey organization. Unlike third-party actions, this is a
@@ -203,9 +203,14 @@ jobs:
           APPROVER: ${{ steps.approver.outputs.login }}
           EXPECTED_DIGEST: ${{ needs.validate.outputs.plan_digest }}
           APPROVAL_DIGEST: ${{ needs.approval-plan.outputs.approval_digest }}
+          AUTOMATION_SHA: ${{ needs.qualify.outputs.automation_sha }}
           PUBLISH_APP_ID: ${{ secrets.VALKEY_RELEASE_PUBLISH_APP_ID }}
         run: |
-          [[ "$APPROVAL_DIGEST" =~ ^[0-9a-f]{64}$ ]] || { echo "missing qualification approval receipt" >&2; exit 1; }
+          EXPECTED_APPROVAL_DIGEST=$(printf '%s\n%s\n' "$EXPECTED_DIGEST" "$AUTOMATION_SHA" | sha256sum | cut -d' ' -f1)
+          [[ "$APPROVAL_DIGEST" == "$EXPECTED_APPROVAL_DIGEST" ]] || {
+            echo "qualification approval receipt changed after approval" >&2
+            exit 1
+          }
           [[ "$PUBLISH_APP_ID" =~ ^[1-9][0-9]*$ ]] || { echo "invalid publication App id" >&2; exit 1; }
           python -m scripts.release.main publish \
             --branch "$BRANCH" --candidate-sha "$CANDIDATE_SHA" \

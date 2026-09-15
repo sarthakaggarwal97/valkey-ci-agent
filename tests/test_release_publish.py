@@ -207,6 +207,64 @@ def test_publish_refuses_a_different_ruleset_bypass_app(monkeypatch: pytest.Monk
         )
 
 
+def test_publish_recovers_a_lost_release_creation_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    plan = _plan()
+    repo = _repo()
+    repo.create_git_release.side_effect = ConnectionError("response lost")
+    release = SimpleNamespace(html_url="https://example/release")
+    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *a, **k: None)
+    monkeypatch.setattr(publish_mod, "plan_publication", lambda *a, **k: plan)
+    monkeypatch.setattr(publish_mod, "_ensure_tag", lambda *a, **k: None)
+    monkeypatch.setattr(publish_mod, "_find_release", lambda *a, **k: release)
+    monkeypatch.setattr(publish_mod, "resolve_tag_commit", lambda *a, **k: SHA)
+
+    url = publish_mod.publish_release(
+        _gh(repo),
+        POLICY,
+        branch="9.1",
+        candidate_sha=SHA,
+        actor="approver",
+        expected_digest=publish_mod.plan_digest(plan),
+        expected_bypass_integration_id=123,
+    )
+
+    assert url == release.html_url
+
+
+def test_publish_verifies_tag_sha_after_release_creation(monkeypatch: pytest.MonkeyPatch) -> None:
+    plan = _plan()
+    repo = _repo()
+    repo.create_git_release.return_value = SimpleNamespace(html_url="https://example/release")
+    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *a, **k: None)
+    monkeypatch.setattr(publish_mod, "plan_publication", lambda *a, **k: plan)
+    monkeypatch.setattr(publish_mod, "_ensure_tag", lambda *a, **k: None)
+    monkeypatch.setattr(publish_mod, "resolve_tag_commit", lambda *a, **k: "b" * 40)
+
+    with pytest.raises(publish_mod.ReleaseError, match="not created at approved SHA"):
+        publish_mod.publish_release(
+            _gh(repo),
+            POLICY,
+            branch="9.1",
+            candidate_sha=SHA,
+            actor="approver",
+            expected_digest=publish_mod.plan_digest(plan),
+            expected_bypass_integration_id=123,
+        )
+
+
+def test_make_latest_uses_numeric_ga_release_order() -> None:
+    repo = MagicMock()
+    repo.get_releases.return_value = [
+        SimpleNamespace(tag_name="9.1.10", draft=False, prerelease=False),
+        SimpleNamespace(tag_name="10.0.0-rc1", draft=False, prerelease=True),
+        SimpleNamespace(tag_name="not-a-version", draft=False, prerelease=False),
+    ]
+
+    assert publish_mod._make_latest(repo, "9.1.11", "ga") == "true"
+    assert publish_mod._make_latest(repo, "9.1.9", "ga") == "false"
+    assert publish_mod._make_latest(repo, "10.0.0", "rc1") == "false"
+
+
 def test_ruleset_fails_closed_when_github_hides_bypass_actors() -> None:
     repo = MagicMock()
     repo.url = "https://api.github.com/repos/valkey-io/valkey"

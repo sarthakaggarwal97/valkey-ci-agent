@@ -47,6 +47,17 @@ def transient_backoff_delay(attempt: int) -> float:
     return random.uniform(0, min(_MAX_DELAY_SECONDS, _BASE_DELAY_SECONDS * (2 ** attempt)))
 
 
+def _retry_delay(exc: Exception, attempt: int) -> float:
+    headers = getattr(exc, "headers", None) or {}
+    retry_after = headers.get("Retry-After") or headers.get("retry-after")
+    if retry_after is not None:
+        try:
+            return max(0.0, float(retry_after))
+        except (TypeError, ValueError):
+            pass
+    return transient_backoff_delay(attempt)
+
+
 def retry_github_call(
     operation: Callable[[], _T],
     *,
@@ -60,7 +71,7 @@ def retry_github_call(
         except Exception as exc:
             if not _is_retryable_error(exc) or attempt == retries - 1:
                 raise
-            wait_seconds = transient_backoff_delay(attempt)
+            wait_seconds = _retry_delay(exc, attempt)
             logger.warning(
                 "Retrying GitHub API call for %s after %.2fs: %s",
                 description,

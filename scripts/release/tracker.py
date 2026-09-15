@@ -14,6 +14,7 @@ import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from github import Auth, Github
@@ -24,6 +25,8 @@ from scripts.common.polling import add_poll_loop_args, run_poll_loop_from_args
 from scripts.release.checks import CandidateCI, evaluate_candidate_ci
 from scripts.release.models import ReleasePolicy
 from scripts.release.policy import load_policy
+from scripts.release.publish import resolve_tag_commit
+from scripts.release_notes.release_cut import PREP_BRANCH_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +34,9 @@ TRACKING_LABEL = "release-tracking"
 _TRACKER_PREFIX = "<!-- valkey-release-tracker:v1 "
 _STATUS_MARKER = "<!-- valkey-release-tracker:status -->"
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_REPO_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*", re.ASCII)
 _REFRESHED_RE = re.compile(r"Status last changed \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC")
+_ROOT = Path(__file__).resolve().parents[2]
 _PHASES = (
     "Prepare",
     "Review notes",
@@ -59,6 +64,7 @@ class Tracker:
     prepare_run_id: int
 
     def marker(self) -> str:
+        _validate_tracker(self)
         payload = json.dumps(self.__dict__, sort_keys=True, separators=(",", ":"))
         return f"{_TRACKER_PREFIX}{payload} -->"
 
@@ -70,8 +76,10 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
     label = _ensure_label(repo)
     issue = None
     for candidate in itertools.islice(repo.get_issues(state="all", labels=[label]), 200):
+        if not _is_bot_owned(candidate):
+            continue
         existing = _tracker_from_issue(candidate)
-        if _is_bot_owned(candidate) and existing is not None and existing.tag == tracker.tag:
+        if existing is not None and existing.tag == tracker.tag:
             issue = candidate
             break
 
@@ -150,18 +158,28 @@ def _refresh_issue_body(issue: Any, tracker: Tracker, agent_repo: str) -> None:
 
 
 def parse_tracker(body: str) -> Tracker | None:
+    if not isinstance(body, str):
+        return None
     start = body.find(_TRACKER_PREFIX)
     if start < 0:
         return None
     end = body.find(" -->", start)
     if end < 0:
         return None
+    payload = body[start + len(_TRACKER_PREFIX) : end]
+    if len(payload) > 4096:
+        return None
     try:
-        raw = json.loads(body[start + len(_TRACKER_PREFIX) : end])
+        raw = json.loads(payload)
+        if not isinstance(raw, dict):
+            return None
         tracker = Tracker(**raw)
         _validate_tracker(tracker)
         return tracker
-    except (TypeError, ValueError):
+    except Exception:
+        # Issue bodies and comments are untrusted input. Malformed JSON,
+        # unexpected field types, and parser recursion must stay contained to
+        # the one issue carrying the invalid marker.
         return None
 
 
@@ -193,10 +211,21 @@ def sync_trackers(
         if not _is_bot_owned(issue):
             logger.warning("Ignoring non-bot release tracker lookalike #%s", issue.number)
             continue
-        tracker = _tracker_from_issue(issue)
-        if tracker is None or tracker.repo != target_repo:
-            continue
+        tracker = None
         try:
+            tracker = _tracker_from_issue(issue)
+            if tracker is None:
+                logger.warning("Ignoring release tracker #%s with invalid metadata", issue.number)
+                results.append(f"#{issue.number}: invalid tracker metadata")
+                continue
+            if tracker.repo != target_repo:
+                logger.warning(
+                    "Ignoring release tracker #%s for unexpected repository %s",
+                    issue.number,
+                    tracker.repo,
+                )
+                results.append(f"#{issue.number}: unexpected tracker repository")
+                continue
             result = _sync_one(
                 issue,
                 tracker,
@@ -211,15 +240,19 @@ def sync_trackers(
         except Exception as exc:
             logger.exception("Could not refresh release tracker #%s", issue.number)
             detail = re.sub(r"\s+", " ", str(exc)).replace("`", "'")[:500]
-            _upsert_status(
-                issue,
-                '<div align="center">\n\n## Release dashboard needs attention\n\n'
-                f"{_badge('tracker', 'refresh failed', 'cf222e')}\n\n</div>\n\n"
-                "> [!CAUTION]\n"
-                f"> **Tracker refresh failed:** `{type(exc).__name__}: {detail}`\n>\n"
-                "> No release action was authorized by this failure. Open the progress workflow logs and rerun it.",
-                tracker=tracker,
-            )
+            if tracker is not None:
+                try:
+                    _upsert_status(
+                        issue,
+                        '<div align="center">\n\n## Release dashboard needs attention\n\n'
+                        f"{_badge('tracker', 'refresh failed', 'cf222e')}\n\n</div>\n\n"
+                        "> [!CAUTION]\n"
+                        f"> **Tracker refresh failed:** `{type(exc).__name__}: {detail}`\n>\n"
+                        "> No release action was authorized by this failure. Open the progress workflow logs and rerun it.",
+                        tracker=tracker,
+                    )
+                except Exception:
+                    logger.exception("Could not report release tracker #%s refresh failure", issue.number)
             result = f"#{issue.number}: refresh failed"
         results.append(result)
     return results
@@ -237,6 +270,8 @@ def _sync_one(
     policy: ReleasePolicy,
     dispatch: bool,
 ) -> str:
+    if tracker.branch not in policy.branches:
+        raise ValueError(f"tracker branch {tracker.branch} is not allowed by release policy")
     _refresh_issue_body(issue, tracker, agent_repo)
     pr = _find_prep_pr(repo, tracker)
     branch_head = _branch_head(repo, tracker.branch)
@@ -269,6 +304,34 @@ def _sync_one(
     publish_title = f"Publish release on {tracker.branch} @ {candidate_sha}" if candidate_sha else ""
     controller_sha = _branch_head(agent, getattr(agent, "default_branch", "main"))
     publish_run = _find_run(publish_workflow, publish_title, controller_sha) if publish_title else None
+    any_publish_run = publish_run or (_find_run(publish_workflow, publish_title) if publish_title else None)
+    if (
+        publish_run is None
+        and any_publish_run is not None
+        and getattr(any_publish_run, "status", "") != "completed"
+        and getattr(any_publish_run, "head_sha", "") == controller_sha
+    ):
+        publish_run = any_publish_run
+    if (
+        publish_run is None
+        and any_publish_run is not None
+        and getattr(any_publish_run, "status", "") != "completed"
+        and getattr(any_publish_run, "head_sha", "") != controller_sha
+    ):
+        if dispatch:
+            cancelled = retry_github_call(
+                lambda: any_publish_run.cancel(),
+                retries=2,
+                description=f"cancel stale publication run {any_publish_run.id}",
+            )
+            if cancelled is False:
+                raise RuntimeError(f"GitHub refused cancellation of stale publication run {any_publish_run.id}")
+            logger.warning(
+                "Cancelled stale publication run %s after controller main moved",
+                any_publish_run.id,
+            )
+        else:
+            publish_run = any_publish_run
 
     dispatched = False
     if (
@@ -527,7 +590,16 @@ def _render_status(
             summary = "production automation running"
 
     refreshed = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    phase, failed = _presentation_state(summary)
+    phase, failed = _presentation_state(
+        prepare_run=prepare_run,
+        pr=pr,
+        branch_head=branch_head,
+        candidate_sha=candidate_sha,
+        publish_run=publish_run,
+        release=release,
+        production_run=production_run,
+        dispatched=dispatched,
+    )
     callout = "CAUTION" if failed else ("IMPORTANT" if "approval" in summary else "NOTE")
     phase_color = "cf222e" if failed else ("1a7f37" if phase == len(_PHASES) else "0969da")
     rows = (
@@ -711,36 +783,46 @@ def _badge(label: str, message: str, color: str) -> str:
 def _status_badge(message: str, color: str) -> str:
     return f"![{message}](https://img.shields.io/badge/-{_escape_badge(message)}-{color}?style=flat-square)"
 
-def _presentation_state(summary: str) -> tuple[int, bool]:
-    failed = any(word in summary for word in ("failed", "invalidated", "closed"))
-    if summary in {"preparing notes", "preparation completed", "preparation failed"}:
-        return 1, failed
-    if summary in {"notes PR held", "waiting for notes PR merge", "notes PR closed"}:
-        return 2, failed
-    if summary in {
-        "notes PR merged",
-        "candidate invalidated by branch movement",
-        "waiting for candidate CI",
-        "candidate CI running",
-        "candidate CI failed",
-        "candidate CI passed",
-    }:
-        return 3, failed
-    if summary in {"publication dispatched", "publication failed", "validating and qualifying"}:
-        return 4, failed
-    if summary == "waiting for release approval":
-        return 5, failed
-    if summary in {"publication completed", "release published"}:
-        return 6, failed
-    if summary in {
-        "waiting for production approval",
-        "production automation running",
-        "production automation failed",
-    }:
-        return 7, failed
-    if summary == "production automation completed":
-        return 8, failed
-    return 1, True
+def _presentation_state(
+    *,
+    prepare_run: Any | None,
+    pr: Any | None,
+    branch_head: str,
+    candidate_sha: str,
+    publish_run: Any | None,
+    release: Any | None,
+    production_run: Any | None,
+    dispatched: bool,
+) -> tuple[int, bool]:
+    """Derive the dashboard phase from live objects, never rendered prose."""
+    if production_run is not None:
+        completed = getattr(production_run, "status", "") == "completed"
+        succeeded = completed and getattr(production_run, "conclusion", None) == "success"
+        return (8 if succeeded else 7), completed and not succeeded
+    if release is not None:
+        return 6, False
+    if publish_run is not None:
+        status = getattr(publish_run, "status", "")
+        if status == "completed":
+            succeeded = getattr(publish_run, "conclusion", None) == "success"
+            return (6 if succeeded else 4), not succeeded
+        if status in {"waiting", "pending"}:
+            return 5, False
+        return 4, False
+    if dispatched:
+        return 4, False
+    if candidate_sha:
+        return 3, branch_head != candidate_sha
+    if pr is not None:
+        if getattr(pr, "merged", False):
+            return 3, False
+        return 2, getattr(pr, "state", "") == "closed"
+    prepare_failed = (
+        prepare_run is not None
+        and getattr(prepare_run, "status", "") == "completed"
+        and getattr(prepare_run, "conclusion", None) != "success"
+    )
+    return 1, prepare_failed
 
 def _find_prep_pr(repo: Any, tracker: Tracker) -> Any | None:
     pulls = retry_github_call(
@@ -801,7 +883,7 @@ def _find_release(
     ):
         raise RuntimeError(f"release {tag} has the wrong prerelease classification")
     if release is not None and expected_sha:
-        actual = _resolve_tag_commit(repo, tag)
+        actual = resolve_tag_commit(repo, tag)
         if actual != expected_sha:
             raise RuntimeError(
                 f"release {tag} resolves to {actual or '<unknown>'}, expected candidate {expected_sha}"
@@ -826,22 +908,6 @@ def _find_run(workflow: Any, title: str, head_sha: str = "") -> Any | None:
         if fallback is None:
             fallback = run
     return fallback
-
-
-def _resolve_tag_commit(repo: Any, tag: str) -> str:
-    try:
-        ref = retry_github_call(lambda: repo.get_git_ref(f"tags/{tag}"), retries=2, description=f"resolve {tag}")
-    except GithubException as exc:
-        if exc.status == 404:
-            return ""
-        raise
-    obj = ref.object
-    if obj.type == "commit":
-        return obj.sha
-    if obj.type != "tag":
-        return ""
-    annotated = retry_github_call(lambda: repo.get_git_tag(obj.sha), retries=2, description=f"peel {tag}")
-    return annotated.object.sha if annotated.object.type == "commit" else ""
 
 
 def _find_production_run(repo: Any, tag: str) -> Any | None:
@@ -950,20 +1016,30 @@ def _is_bot_owned(issue: Any) -> bool:
 
 
 def _validate_tracker(tracker: Tracker) -> None:
-    if tracker.repo.count("/") != 1:
+    string_fields = (
+        tracker.repo,
+        tracker.branch,
+        tracker.version,
+        tracker.stage,
+        tracker.tag,
+        tracker.prep_branch,
+    )
+    if not all(isinstance(value, str) for value in string_fields):
+        raise ValueError("tracker text fields must be strings")
+    if not _REPO_RE.fullmatch(tracker.repo):
         raise ValueError("tracker repo must be owner/name")
-    if not re.fullmatch(r"[0-9]+\.[0-9]+", tracker.branch):
+    if not re.fullmatch(r"[0-9]+\.[0-9]+", tracker.branch, re.ASCII):
         raise ValueError("tracker branch must be MAJOR.MINOR")
-    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", tracker.version):
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", tracker.version, re.ASCII):
         raise ValueError("tracker version must be MAJOR.MINOR.PATCH")
-    if not re.fullmatch(r"ga|rc[1-9][0-9]*", tracker.stage):
+    if not re.fullmatch(r"ga|rc[1-9][0-9]*", tracker.stage, re.ASCII):
         raise ValueError("tracker stage must be ga or rcN")
     expected_tag = tracker.version if tracker.stage == "ga" else f"{tracker.version}-{tracker.stage}"
     if tracker.tag != expected_tag:
         raise ValueError("tracker tag does not match version and stage")
-    if tracker.prep_branch != f"agent/release-cut/{tracker.version}-{tracker.stage}":
+    if tracker.prep_branch != f"{PREP_BRANCH_PREFIX}/{tracker.version}-{tracker.stage}":
         raise ValueError("tracker preparation branch is not canonical")
-    if not isinstance(tracker.prepare_run_id, int) or tracker.prepare_run_id <= 0:
+    if type(tracker.prepare_run_id) is not int or tracker.prepare_run_id <= 0:
         raise ValueError("tracker prepare run id must be positive")
 
 
@@ -973,6 +1049,8 @@ def _write_outputs(values: dict[str, str]) -> None:
         return
     with open(path, "a", encoding="utf-8") as output:
         for key, value in values.items():
+            if "\n" in value or "\r" in value:
+                raise ValueError(f"multiline workflow output refused for {key}")
             output.write(f"{key}={value}\n")
 
 
@@ -988,7 +1066,7 @@ def main(argv: list[str] | None = None) -> int:
     sync.add_argument("--target-repo", default="valkey-io/valkey")
     sync.add_argument("--agent-repo", default="valkey-io/valkey-ci-agent")
     sync.add_argument("--automation-repo", default="valkey-io/valkey-release-automation")
-    sync.add_argument("--policy", default="release_policy.yml")
+    sync.add_argument("--policy", default=str(_ROOT / "release_policy.yml"))
     sync.add_argument("--no-dispatch", action="store_true")
     add_poll_loop_args(sync)
     args = parser.parse_args(argv)

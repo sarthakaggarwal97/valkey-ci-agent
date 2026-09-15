@@ -67,12 +67,19 @@ class TestDeriveRC:
 
 
 class TestDeriveGA:
-    @pytest.mark.parametrize("tags", [["9.1.0-rc1", "9.1.0-rc2"], []],
-                             ids=["after-rcs", "empty-tag-set"])
-    def test_initial_ga(self, tags: "list[str]") -> None:
-        derived = derive_version("9.1", ReleaseIntent.GA, tags)
+    def test_initial_ga_follows_release_candidates(self) -> None:
+        derived = derive_version("9.1", ReleaseIntent.GA, ["9.1.0-rc1", "9.1.0-rc2"])
         assert (derived.version, derived.stage) == ("9.1.0", "ga")
         assert derived.tag == "9.1.0"
+
+    def test_initial_ga_requires_a_release_candidate(self) -> None:
+        with pytest.raises(ValueError, match="cut an rc"):
+            derive_version("9.1", ReleaseIntent.GA, [])
+
+
+def test_unicode_digits_and_trailing_newlines_are_not_release_tags() -> None:
+    derived = derive_version("9.1", ReleaseIntent.PATCH, ["9.1.1", "9.1.1٠", "9.1.10\n"])
+    assert derived.version == "9.1.2"
 
 
 @pytest.mark.parametrize("intent", [ReleaseIntent.RC, ReleaseIntent.GA])

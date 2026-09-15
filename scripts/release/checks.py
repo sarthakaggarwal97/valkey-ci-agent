@@ -94,8 +94,7 @@ def evaluate_candidate_ci(repo: Any, policy: ReleasePolicy, sha: str) -> Candida
             description=f"list checks on {sha[:12]}",
         )
         for run in check_runs:
-            suite = (getattr(run, "_rawData", {}) or {}).get("check_suite") or {}
-            if suite.get("id") != suite_id:
+            if getattr(run, "check_suite_id", None) != suite_id:
                 continue
             current = latest.get(run.name)
             if current is None or _order(run) > _order(current):
