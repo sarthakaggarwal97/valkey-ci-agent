@@ -58,7 +58,11 @@ jobs:
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey
-          permission-administration: read
+          # write, not read: GitHub returns a ruleset's bypass_actors only to
+          # tokens that could edit the ruleset. With read the response simply
+          # omits the field, and validation fails closed on the invisible
+          # bypass list (as designed - an unseen actor could move the tag).
+          permission-administration: write
           permission-actions: read
           permission-checks: read
           permission-contents: read
@@ -197,7 +201,11 @@ jobs:
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey
-          permission-administration: read
+          # write, not read: GitHub returns a ruleset's bypass_actors only to
+          # tokens that could edit the ruleset. With read the response simply
+          # omits the field, and validation fails closed on the invisible
+          # bypass list (as designed - an unseen actor could move the tag).
+          permission-administration: write
           permission-actions: read
           permission-checks: read
           permission-contents: write
