@@ -113,7 +113,9 @@ class ReleasedCodeOracle:
                 logger.debug("Could not blame %s:%s-%s at %s^", path, start, end, sha[:12])
                 return None
             introducing = {
-                m.group(1) for m in (_BLAME_SHA_RE.match(l) for l in blame.splitlines()) if m
+                m.group(1)
+                for m in (_BLAME_SHA_RE.match(line) for line in blame.splitlines())
+                if m
             }
             if not introducing:
                 return None

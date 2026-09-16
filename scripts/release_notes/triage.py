@@ -19,13 +19,13 @@ import re
 from typing import Callable, Sequence
 
 from scripts.ai.claude_code import run_claude_code
-from scripts.release_notes.code_age import ReleasedCodeOracle
 from scripts.common.ai_output import extract_json_object
 from scripts.release_notes.ai_inputs import (
     PRDiffCollector,
     build_prompt_payload,
     exact_pr_number,
 )
+from scripts.release_notes.code_age import ReleasedCodeOracle
 from scripts.release_notes.models import MergedPR, TriageDecision, TriageResult
 
 logger = logging.getLogger(__name__)
