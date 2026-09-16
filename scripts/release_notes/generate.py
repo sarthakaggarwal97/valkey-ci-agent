@@ -25,7 +25,7 @@ from scripts.release_notes.models import CategorizedBullet, GenerationResult, Me
 logger = logging.getLogger(__name__)
 
 # Max PRs per Claude call; results from each batch are merged.
-_BATCH_SIZE = 80
+_BATCH_SIZE = 20
 
 # No-tools runs: deny everything. "MultiEdit" no longer exists as a tool name
 # (Claude Code warns "matches no known tool"), so it is not listed.
@@ -441,7 +441,7 @@ def generate(
     *,
     repo_dir: str,
     categories: Sequence[str],
-    timeout: int = 1800,
+    timeout: int = 3600,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
     patch_release: bool = False,
@@ -478,6 +478,10 @@ def generate(
             cwd=repo_dir,
             timeout=timeout,
             model=None,  # let CI_AGENT_CLAUDE_MODEL env override win
+            # One categorized bullet per PR against a fixed category list and
+            # canonical format. High is ample for the prose; maximum
+            # deliberation on a large batch risks the request not finishing.
+            effort="high",
             allowed_tools="",
             disallowed_tools=_DISALLOWED_TOOLS,
         )
@@ -526,6 +530,7 @@ def generate(
                 cwd=repo_dir,
                 timeout=timeout,
                 model=None,
+                effort="high",
                 allowed_tools="",
                 disallowed_tools=_DISALLOWED_TOOLS,
             )

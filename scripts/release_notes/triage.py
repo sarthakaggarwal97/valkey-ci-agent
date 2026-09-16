@@ -30,7 +30,7 @@ from scripts.release_notes.models import MergedPR, TriageDecision, TriageResult
 logger = logging.getLogger(__name__)
 
 # Max PRs per Claude call; verdicts from each batch are merged.
-_BATCH_SIZE = 80
+_BATCH_SIZE = 20
 
 # A deterministic backstop for effects that must not disappear because of an AI
 # exclusion or malformed response. This is deliberately based on PR-authored
@@ -351,7 +351,7 @@ def triage(
     repo_dir: str,
     base_ref: str = "",
     already_noted: Sequence[int] = (),
-    timeout: int = 1800,
+    timeout: int = 3600,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
     project_description: str,
@@ -393,6 +393,10 @@ def triage(
             cwd=repo_dir,
             timeout=timeout,
             model=None,  # let CI_AGENT_CLAUDE_MODEL env override win
+            # Triage is a bounded include/exclude classification per PR with a
+            # deterministic release-safety guardrail behind it, so maximum
+            # deliberation buys nothing and costs the request's completion.
+            effort="medium",
             allowed_tools="",
             disallowed_tools="Read,Grep,Glob,Bash,Write,Edit",
         )
