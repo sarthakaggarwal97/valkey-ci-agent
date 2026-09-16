@@ -2283,3 +2283,63 @@ class TestReadRequired:
     def test_existing_file_read_verbatim(self, tmp_path) -> None:
         (tmp_path / "00-RELEASENOTES").write_text("content\n", encoding="utf-8")
         assert rc._read_required(str(tmp_path), "00-RELEASENOTES", "x") == "content\n"
+
+
+class TestDedupAgainstBaselineRelease:
+    """The backport dedup: drop PRs the baseline release already shipped.
+
+    A fix merges to the development branch and is cherry-picked onto the release
+    branch, so the same change has two commits with different SHAs. Discovery
+    excludes only what is reachable from the baseline tag, which is the
+    release-branch copy, so the development-branch copy enters the range even
+    though the PR already shipped. Reading the changelog at the baseline tag is
+    what catches it, and the first RC of a new line depends on it entirely: its
+    own changelog is freshly branched and credits nothing.
+    """
+
+    _NOTES = """\
+Valkey 9.1 release notes
+========================
+
+Valkey 9.1.2  -  Released Mon 31 August 2026
+--------------------------------------------
+
+### Bug Fixes
+* Fix HPERSIST on a wrong-type key by @madolson (#3516)
+* Fix a double free loading a corrupt RDB by @enjoy-binbin (#3498)
+"""
+
+    def test_reads_credited_prs_from_the_baseline_tag(self, monkeypatch) -> None:
+        seen = {}
+
+        def fake_git_output(repo_dir, *args, **kwargs):
+            seen["args"] = args
+            return self._NOTES
+
+        monkeypatch.setattr(rc, "git_output", fake_git_output)
+        released = rc._released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES")
+        assert released == {3516, 3498}
+        assert seen["args"] == ("show", "9.1.2:00-RELEASENOTES")
+
+    def test_no_baseline_tag_excludes_nothing(self) -> None:
+        assert rc._released_pr_numbers("/clone", "", "00-RELEASENOTES") == set()
+
+    def test_unreadable_baseline_notes_degrade_to_no_exclusions(self, monkeypatch) -> None:
+        # A baseline predating the changelog, or a tag absent from a shallow
+        # clone, must not fail the cut.
+        def boom(*_args, **_kwargs):
+            raise RuntimeError("no such ref")
+
+        monkeypatch.setattr(rc, "git_output", boom)
+        assert rc._released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES") == set()
+
+    def test_already_released_bullets_are_dropped(self) -> None:
+        grouped = {
+            "Bug Fixes": [
+                "* Fix HPERSIST on a wrong-type key by @madolson (#3516)",
+                "* Fix something genuinely new by @dev (#4700)",
+            ],
+        }
+        kept, dropped = rc._drop_already_credited(grouped, {3516})
+        assert dropped == [3516]
+        assert kept == {"Bug Fixes": ["* Fix something genuinely new by @dev (#4700)"]}

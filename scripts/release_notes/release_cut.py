@@ -553,6 +553,32 @@ def _drop_already_credited(
     return kept, dropped
 
 
+def _released_pr_numbers(repo_dir: str, base_tag: str, notes_file: str) -> set[int]:
+    """Return PR numbers the *base_tag* release already credited in its notes.
+
+    A fix merges to the development branch and is then cherry-picked onto the
+    release branch, so the same change exists as two commits with different
+    SHAs. Discovery excludes only what is reachable from *base_tag*, which is
+    the release-branch copy; the development-branch copy is not an ancestor of
+    that tag and therefore enters the range even though the PR already shipped.
+
+    Reading the changelog at *base_tag* answers the question reachability
+    cannot: has this PR number already been credited in a released version?
+    This matters most for the first RC of a new line, whose own changelog is
+    freshly branched and credits nothing yet.
+    """
+    if not base_tag:
+        return set()
+    try:
+        text = git_output(repo_dir, "show", f"{base_tag}:{notes_file}")
+    except Exception:
+        # A line whose baseline predates the changelog, or a tag missing from a
+        # shallow clone, simply yields no exclusions.
+        logger.warning("Could not read %s at %s; skipping released-PR dedup", notes_file, base_tag)
+        return set()
+    return _credited_pr_numbers(text)
+
+
 def _sanitize_security_fixes(
     security_fixes: Optional[Sequence[str]],
 ) -> Optional[Sequence[str]]:
@@ -866,8 +892,15 @@ def cut(
         # shipped. With nothing new, the dated section renders empty (heading +
         # version bump only) and the PR body says so. This is a no-op upstream,
         # where discovery already returns only new PRs.
+        # Two sources of "already shipped": the destination changelog (a
+        # continued cut on the same line) and the baseline release's changelog
+        # (a backported fix whose development-branch copy reachability treats
+        # as new). The first RC of a new line has only the second.
         already_credited = sorted(
-            _credited_pr_numbers(dest_notes_text)
+            (
+                _credited_pr_numbers(dest_notes_text)
+                | _released_pr_numbers(source_clone_dir, regen.base_tag, profile.notes_file)
+            )
             & _grouped_pr_numbers(grouped)
         )
         if already_credited:
