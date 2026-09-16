@@ -11,6 +11,7 @@ latest release-line tip, then replaces that prep branch and updates its open PR.
 
 from __future__ import annotations
 
+import datetime
 import logging
 import os
 import re
@@ -553,8 +554,18 @@ def _drop_already_credited(
     return kept, dropped
 
 
+# A backport subject carries the original PR and then its own: "... (#3516) (#4001)".
+_SUBJECT_PR_RE = re.compile(r"\(#(\d+)\)(?:\s*\(#(\d+)\))?\s*$")
+
+# The repository's history predates the fork, and those Redis-era PR numbers
+# collide with current ones. Bound the scan to a window around the baseline tag
+# so a 2016 "Merge pull request #4076" cannot mark a 2026 PR as shipped. Two
+# years generously covers any backport window on a supported line.
+_HISTORY_WINDOW_DAYS = 730
+
+
 def _released_pr_numbers(repo_dir: str, base_tag: str, notes_file: str) -> set[int]:
-    """Return PR numbers the *base_tag* release already credited in its notes.
+    """Return PR numbers the *base_tag* release already shipped.
 
     A fix merges to the development branch and is then cherry-picked onto the
     release branch, so the same change exists as two commits with different
@@ -562,21 +573,49 @@ def _released_pr_numbers(repo_dir: str, base_tag: str, notes_file: str) -> set[i
     the release-branch copy; the development-branch copy is not an ancestor of
     that tag and therefore enters the range even though the PR already shipped.
 
-    Reading the changelog at *base_tag* answers the question reachability
-    cannot: has this PR number already been credited in a released version?
-    This matters most for the first RC of a new line, whose own changelog is
-    freshly branched and credits nothing yet.
+    Two independent sources answer what reachability cannot, and they are
+    complementary rather than redundant:
+
+    - the baseline's own history, which records every shipped PR whether or not
+      anyone wrote a note for it;
+    - the baseline's changelog, which credits PRs whose commit subject lost the
+      reference (a differently-squashed or hand-applied cherry-pick).
+
+    Neither catches a fix backported under a *different* PR number, which needs
+    patch equivalence rather than reference matching; those remain for
+    maintainer review.
     """
     if not base_tag:
         return set()
+    released: set[int] = set()
+
     try:
-        text = git_output(repo_dir, "show", f"{base_tag}:{notes_file}")
+        tag_date = git_output(repo_dir, "log", "-1", "--format=%cI", base_tag).strip()
+        since = (
+            datetime.datetime.fromisoformat(tag_date)
+            - datetime.timedelta(days=_HISTORY_WINDOW_DAYS)
+        ).date().isoformat()
+        subjects = git_output(
+            repo_dir, "log", "--format=%s", f"--since={since}", base_tag,
+        )
     except Exception:
-        # A line whose baseline predates the changelog, or a tag missing from a
-        # shallow clone, simply yields no exclusions.
-        logger.warning("Could not read %s at %s; skipping released-PR dedup", notes_file, base_tag)
-        return set()
-    return _credited_pr_numbers(text)
+        logger.warning("Could not read history at %s; relying on its changelog alone", base_tag)
+        subjects = ""
+    for subject in subjects.splitlines():
+        match = _SUBJECT_PR_RE.search(subject)
+        if match:
+            released.add(int(match.group(1)))
+            if match.group(2):
+                released.add(int(match.group(2)))
+
+    try:
+        released |= _credited_pr_numbers(git_output(repo_dir, "show", f"{base_tag}:{notes_file}"))
+    except Exception:
+        # A baseline predating the changelog, or a tag missing from a shallow
+        # clone, simply contributes no exclusions from this source.
+        logger.warning("Could not read %s at %s", notes_file, base_tag)
+
+    return released
 
 
 def _sanitize_security_fixes(

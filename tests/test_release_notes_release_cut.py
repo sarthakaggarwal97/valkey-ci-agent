@@ -2309,22 +2309,46 @@ Valkey 9.1.2  -  Released Mon 31 August 2026
 * Fix a double free loading a corrupt RDB by @enjoy-binbin (#3498)
 """
 
-    def test_reads_credited_prs_from_the_baseline_tag(self, monkeypatch) -> None:
-        seen = {}
-
+    def test_history_and_changelog_are_both_consulted(self, monkeypatch) -> None:
+        # A PR that shipped without a note is only in the history; a PR whose
+        # subject lost its reference is only in the changelog. Both are shipped.
         def fake_git_output(repo_dir, *args, **kwargs):
-            seen["args"] = args
-            return self._NOTES
+            if args[0] == "log" and "-1" in args:
+                return "2026-08-31T16:40:24-07:00\n"
+            if args[0] == "log":
+                return "Fix a crash (#3601)\nBackport a fix (#3516) (#4001)\n"
+            if args[0] == "show":
+                return self._NOTES
+            raise AssertionError(args)
 
         monkeypatch.setattr(rc, "git_output", fake_git_output)
         released = rc._released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES")
-        assert released == {3516, 3498}
-        assert seen["args"] == ("show", "9.1.2:00-RELEASENOTES")
+        # 3601 from history only, 3498 from the changelog only, 3516 from both,
+        # 4001 as the backport PR that carried 3516.
+        assert released == {3601, 3516, 4001, 3498}
+
+    def test_history_scan_is_bounded_to_a_window_around_the_tag(self, monkeypatch) -> None:
+        # The repository predates the fork and those PR numbers collide with
+        # current ones, so a pre-fork "Merge pull request #4076" must not mark a
+        # current PR as shipped.
+        seen = {}
+
+        def fake_git_output(repo_dir, *args, **kwargs):
+            if args[0] == "log" and "-1" in args:
+                return "2026-08-31T16:40:24-07:00\n"
+            if args[0] == "log":
+                seen["args"] = args
+                return ""
+            return ""
+
+        monkeypatch.setattr(rc, "git_output", fake_git_output)
+        rc._released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES")
+        assert "--since=2024-08-31" in seen["args"]
 
     def test_no_baseline_tag_excludes_nothing(self) -> None:
         assert rc._released_pr_numbers("/clone", "", "00-RELEASENOTES") == set()
 
-    def test_unreadable_baseline_notes_degrade_to_no_exclusions(self, monkeypatch) -> None:
+    def test_unreadable_sources_degrade_to_no_exclusions(self, monkeypatch) -> None:
         # A baseline predating the changelog, or a tag absent from a shallow
         # clone, must not fail the cut.
         def boom(*_args, **_kwargs):
