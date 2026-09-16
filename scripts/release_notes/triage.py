@@ -19,6 +19,7 @@ import re
 from typing import Callable, Sequence
 
 from scripts.ai.claude_code import run_claude_code
+from scripts.release_notes.code_age import ReleasedCodeOracle
 from scripts.common.ai_output import extract_json_object
 from scripts.release_notes.ai_inputs import (
     PRDiffCollector,
@@ -380,6 +381,7 @@ def triage(
     already_noted_numbers = set(already_noted)
     collector = diff_collector or PRDiffCollector(repo_dir, prs)
 
+    oracle = ReleasedCodeOracle(repo_dir, base_ref)
     for start in range(0, len(prs), _BATCH_SIZE):
         batch = prs[start:start + _BATCH_SIZE]
         batch_numbers = {pr.number for pr in batch}
@@ -411,11 +413,32 @@ def triage(
         missing: list[int] = []
         for pr in batch:
             decision = decision_by_number.get(pr.number)
+            # A fix for code that never shipped is not a user-facing fix: the
+            # feature arrives correct in this same release and no released
+            # version had the bug. This precedes the guardrail deliberately -
+            # the guardrail exists to stop under-reporting fixes to code users
+            # are running, which by definition this is not.
+            if decision is not None and decision.included and oracle.usable:
+                if oracle.modifies_only_unreleased_code(pr.merge_commit_sha) is True:
+                    decision = TriageDecision(
+                        pr_number=pr.number,
+                        included=False,
+                        reason="fixes code first introduced in this release; never shipped broken",
+                        uncertain=False,
+                    )
+                    logger.info(
+                        "Excluding PR #%s: it only modifies code introduced after %s",
+                        pr.number, base_ref,
+                    )
             impact = release_impact_reason(pr)
             if (
                 impact
                 and pr.number not in already_noted_numbers
                 and (decision is None or not decision.included)
+                and not (
+                    decision is not None
+                    and decision.reason.startswith("fixes code first introduced")
+                )
             ):
                 prior = "no AI verdict" if decision is None else "AI exclusion"
                 decision = TriageDecision(

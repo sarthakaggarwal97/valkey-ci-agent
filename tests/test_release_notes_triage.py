@@ -285,3 +285,67 @@ class TestTestOnlyGuardrailExemption:
         from scripts.release_notes.triage import release_impact_reason
         pr = MergedPR(number=3, title="Fix crash in expire", author="a", url="u")
         assert release_impact_reason(pr) is not None
+
+
+class TestUnreleasedCodeExclusion:
+    """A fix for code introduced in this same release is not a user-facing fix.
+
+    The check precedes the release-safety guardrail on purpose: the guardrail
+    exists to stop under-reporting fixes to code users are running, and code
+    that has never shipped is by definition not that.
+    """
+
+    @staticmethod
+    def _oracle(monkeypatch, verdicts: dict[str, bool | None]):
+        import scripts.release_notes.triage as triage_mod
+
+        class FakeOracle:
+            usable = True
+
+            def __init__(self, *_args) -> None:
+                pass
+
+            def modifies_only_unreleased_code(self, sha):
+                return verdicts.get(sha)
+
+        monkeypatch.setattr(triage_mod, "ReleasedCodeOracle", FakeOracle)
+
+    def test_included_fix_to_unreleased_code_is_excluded(self, monkeypatch) -> None:
+        self._oracle(monkeypatch, {"a" * 40: True})
+        run = _fake_run({"verdicts": [
+            {"pr": 7, "include": True, "reason": "fixes a crash", "uncertain": False},
+        ]})
+        result = triage([_pr(7, sha="a" * 40)], repo_dir="/tmp", base_ref="9.1.2", run_fn=run)
+        assert [d.pr_number for d in result.included] == []
+        assert [d.pr_number for d in result.excluded] == [7]
+        assert "never shipped broken" in result.excluded[0].reason
+
+    def test_fix_to_released_code_is_kept(self, monkeypatch) -> None:
+        self._oracle(monkeypatch, {"b" * 40: False})
+        run = _fake_run({"verdicts": [
+            {"pr": 8, "include": True, "reason": "fixes a crash", "uncertain": False},
+        ]})
+        result = triage([_pr(8, sha="b" * 40)], repo_dir="/tmp", base_ref="9.1.2", run_fn=run)
+        assert [d.pr_number for d in result.included] == [8]
+
+    def test_unknown_code_age_keeps_the_note(self, monkeypatch) -> None:
+        # A pure addition or an unreadable commit must not silently drop a fix.
+        self._oracle(monkeypatch, {"c" * 40: None})
+        run = _fake_run({"verdicts": [
+            {"pr": 9, "include": True, "reason": "fixes a crash", "uncertain": False},
+        ]})
+        result = triage([_pr(9, sha="c" * 40)], repo_dir="/tmp", base_ref="9.1.2", run_fn=run)
+        assert [d.pr_number for d in result.included] == [9]
+
+    def test_guardrail_does_not_resurrect_an_unreleased_fix(self, monkeypatch) -> None:
+        # The PR body carries a memory-safety signal that would normally force
+        # inclusion; it must not override "this code never shipped".
+        self._oracle(monkeypatch, {"d" * 40: True})
+        run = _fake_run({"verdicts": [
+            {"pr": 10, "include": True, "reason": "fixes a crash", "uncertain": False},
+        ]})
+        pr = _pr(10, sha="d" * 40, body="Fixes a use-after-free crash on shutdown")
+        result = triage([pr], repo_dir="/tmp", base_ref="9.1.2", run_fn=run)
+        assert [d.pr_number for d in result.included] == []
+        assert [d.pr_number for d in result.excluded] == [10]
+        assert not result.excluded[0].guardrail
