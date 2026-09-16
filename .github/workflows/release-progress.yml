@@ -36,8 +36,8 @@ jobs:
         id: target-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey
           permission-contents: read
@@ -51,8 +51,8 @@ jobs:
         id: automation-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey-release-automation
           permission-actions: read

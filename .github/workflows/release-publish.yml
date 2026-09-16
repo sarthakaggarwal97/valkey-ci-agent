@@ -54,8 +54,8 @@ jobs:
         id: token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey
           permission-administration: read
@@ -183,8 +183,8 @@ jobs:
         id: token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEY_RELEASE_PUBLISH_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey
           permission-administration: read
@@ -204,7 +204,7 @@ jobs:
           EXPECTED_DIGEST: ${{ needs.validate.outputs.plan_digest }}
           APPROVAL_DIGEST: ${{ needs.approval-plan.outputs.approval_digest }}
           AUTOMATION_SHA: ${{ needs.qualify.outputs.automation_sha }}
-          PUBLISH_APP_ID: ${{ secrets.VALKEY_RELEASE_PUBLISH_APP_ID }}
+          PUBLISH_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
         run: |
           EXPECTED_APPROVAL_DIGEST=$(printf '%s\n%s\n' "$EXPECTED_DIGEST" "$AUTOMATION_SHA" | sha256sum | cut -d' ' -f1)
           [[ "$APPROVAL_DIGEST" == "$EXPECTED_APPROVAL_DIGEST" ]] || {
@@ -240,8 +240,8 @@ jobs:
         continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID }}
-          private-key: ${{ secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: valkey-ci-agent
           permission-contents: write
