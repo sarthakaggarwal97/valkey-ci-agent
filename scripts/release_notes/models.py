@@ -102,6 +102,11 @@ class TriageDecision:
     reason: str = ""
     uncertain: bool = False
     guardrail: bool = False
+    # Excluded because it only modifies code introduced after the baseline tag
+    # (see code_age). The release-safety guardrail must not resurrect these:
+    # it exists to stop under-reporting fixes to code users are running, which
+    # unreleased code by definition is not.
+    unreleased_code: bool = False
 
 
 @dataclass(frozen=True)

@@ -349,3 +349,14 @@ class TestUnreleasedCodeExclusion:
         assert [d.pr_number for d in result.included] == []
         assert [d.pr_number for d in result.excluded] == [10]
         assert not result.excluded[0].guardrail
+
+    def test_missing_verdict_consults_the_oracle_before_the_guardrail(self, monkeypatch) -> None:
+        # A parse failure leaves no verdict; the guardrail would force-include
+        # on the crash signal, but the oracle knows the code never shipped.
+        self._oracle(monkeypatch, {"e" * 40: True})
+        run = _fake_run({"verdicts": []})  # nothing parseable for this PR
+        pr = _pr(11, sha="e" * 40, body="Fixes a use-after-free crash on shutdown")
+        result = triage([pr], repo_dir="/tmp", base_ref="9.1.2", run_fn=run)
+        assert [d.pr_number for d in result.included] == []
+        assert [d.pr_number for d in result.excluded] == [11]
+        assert result.excluded[0].unreleased_code

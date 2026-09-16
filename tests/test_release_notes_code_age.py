@@ -31,7 +31,9 @@ def repo(tmp_path: Path) -> Path:
 
     old = tmp_path / "old.c"
     old.write_text("int shipped(void) { return 1; }\n")
-    _git(tmp_path, "add", "old.c")
+    stable = tmp_path / "stable.c"
+    stable.write_text("int stable(void) { return 1; }\n")
+    _git(tmp_path, "add", "old.c", "stable.c")
     _git(tmp_path, "commit", "-q", "-m", "shipped code")
     _git(tmp_path, "tag", "9.1.2")
 
@@ -91,3 +93,23 @@ class TestReleasedCodeOracle:
         monkeypatch.setattr(code_age, "git_output", counting)
         oracle.modifies_only_unreleased_code(sha)
         assert calls == []  # served from the cache built by the first call
+
+    def test_deleting_released_code_is_released(self, repo: Path) -> None:
+        # Regression: the parser once tracked files by the post-image path, so a
+        # deletion ("+++ /dev/null") left the previous file current and blamed
+        # the wrong file; editing a new file while deleting a released one then
+        # returned True and silently dropped a real note.
+        (repo / "new.c").write_text("int feature(void) { return 3; }\n")
+        _git(repo, "rm", "-q", "stable.c")
+        _git(repo, "commit", "-qam", "edit new and delete released (#103)")
+        oracle = code_age.ReleasedCodeOracle(str(repo), "9.1.2")
+        assert oracle.modifies_only_unreleased_code(_sha(repo, "edit new and delete")) is False
+
+    def test_rename_of_released_code_blames_the_old_path(self, repo: Path) -> None:
+        # A rename's pre-image path is the old name, which is what exists at
+        # <sha>^; blaming it must find the released introduction.
+        _git(repo, "mv", "stable.c", "renamed.c")
+        (repo / "renamed.c").write_text("int stable(void) { return 3; }\n")
+        _git(repo, "commit", "-qam", "rename and edit released code (#104)")
+        oracle = code_age.ReleasedCodeOracle(str(repo), "9.1.2")
+        assert oracle.modifies_only_unreleased_code(_sha(repo, "rename and edit")) is False

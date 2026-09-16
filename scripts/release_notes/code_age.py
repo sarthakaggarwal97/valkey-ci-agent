@@ -28,7 +28,11 @@ logger = logging.getLogger(__name__)
 
 # "@@ -12,7 +12,9 @@" - the pre-image start line and count.
 _HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@")
-_FILE_RE = re.compile(r"^\+\+\+ b/(.+)$")
+# The PRE-image path: blame runs at <sha>^, where only the old path exists.
+# This is also what makes deletions and renames correct: a deletion has
+# "+++ /dev/null" but a real "--- a/path", and a rename blames the old name.
+_FILE_RE = re.compile(r"^--- a/(.+)$")
+_NO_PREIMAGE_RE = re.compile(r"^--- /dev/null$")
 _BLAME_SHA_RE = re.compile(r"^([0-9a-f]{40})\s")
 
 # A commit touching more files than this is a sweep or a mass refactor rather
@@ -86,6 +90,9 @@ class ReleasedCodeOracle:
         current_file = ""
         files: set[str] = set()
         for line in diff.splitlines():
+            if _NO_PREIMAGE_RE.match(line):
+                current_file = ""  # new file: nothing to blame in this section
+                continue
             file_match = _FILE_RE.match(line)
             if file_match:
                 current_file = file_match.group(1)

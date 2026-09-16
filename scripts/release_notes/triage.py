@@ -418,13 +418,17 @@ def triage(
             # version had the bug. This precedes the guardrail deliberately -
             # the guardrail exists to stop under-reporting fixes to code users
             # are running, which by definition this is not.
-            if decision is not None and decision.included and oracle.usable:
+            # Consulted for an AI include AND for a missing verdict: a parse
+            # failure otherwise hands the PR straight to the guardrail, which
+            # must not include a fix to code nobody has run.
+            if (decision is None or decision.included) and oracle.usable:
                 if oracle.modifies_only_unreleased_code(pr.merge_commit_sha) is True:
                     decision = TriageDecision(
                         pr_number=pr.number,
                         included=False,
                         reason="fixes code first introduced in this release; never shipped broken",
                         uncertain=False,
+                        unreleased_code=True,
                     )
                     logger.info(
                         "Excluding PR #%s: it only modifies code introduced after %s",
@@ -435,10 +439,7 @@ def triage(
                 impact
                 and pr.number not in already_noted_numbers
                 and (decision is None or not decision.included)
-                and not (
-                    decision is not None
-                    and decision.reason.startswith("fixes code first introduced")
-                )
+                and not (decision is not None and decision.unreleased_code)
             ):
                 prior = "no AI verdict" if decision is None else "AI exclusion"
                 decision = TriageDecision(
