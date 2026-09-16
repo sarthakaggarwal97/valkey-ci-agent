@@ -1,3 +1,5 @@
+"""Tests for path-based validation command selection."""
+
 from __future__ import annotations
 
 import subprocess
@@ -70,6 +72,130 @@ def test_valkey_profile_runs_changed_tests_format_and_subsystem_checks(tmp_path)
     assert any("-DLOG_REQ_RES" in command for command in commands)
     assert any("--log-req-res" in command for command in commands)
     assert commands[-1].startswith("./utils/req-res-log-validator.py")
+
+
+def test_valkey_profile_only_clang_formats_paths_upstream_formats(tmp_path) -> None:
+    """Upstream runs clang-format inside src/ only, using src/.clang-format.
+
+    Checking a C file outside src/ falls back to clang's built-in LLVM style and
+    fails a candidate whose upstream CI is green.
+    """
+    for path in ("src/rdb.c", "tests/modules/basics.c", "deps/lua/src/lapi.c"):
+        destination = tmp_path / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("int main(void) {}\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["src/rdb.c", "tests/modules/basics.c", "deps/lua/src/lapi.c"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    formatting = [command for command in commands if command.startswith("clang-format-18")]
+    assert formatting == ["clang-format-18 --dry-run --Werror -- src/rdb.c"]
+
+
+def test_valkey_profile_runs_a_smoke_set_for_harness_changes(tmp_path) -> None:
+    """A whole serialized suite cannot finish inside the per-command timeout.
+
+    Upstream budgets 24 hours and three shards for that run, so a tests/support
+    change is proven with a fixed smoke set instead.
+    """
+    commands = select_validation_commands(
+        [],
+        [],
+        ["tests/support/util.tcl"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert commands == [
+        "git diff --check",
+        "./runtest --single unit/other --single unit/keyspace --single unit/dump "
+        "--single unit/protocol --single unit/type/incr --clients 1 --tags -slow",
+    ]
+    assert "./runtest --clients 1" not in commands
+
+
+def test_valkey_profile_targets_moduleapi_units_that_load_the_module(tmp_path) -> None:
+    """Module sources map to units by the .so path they name, not by basename.
+
+    tests/modules/defragtest.c is only exercised by defrag.tcl, so a basename
+    rule would silently skip the one unit that covers the change.
+    """
+    modules_dir = tmp_path / "tests/unit/moduleapi"
+    modules_dir.mkdir(parents=True)
+    (modules_dir / "defrag.tcl").write_text(
+        "set testmodule [file normalize tests/modules/defragtest.so]\n",
+        encoding="utf-8",
+    )
+    (modules_dir / "hash.tcl").write_text(
+        "set testmodule [file normalize tests/modules/hash.so]\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tests/modules").mkdir(parents=True)
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["tests/modules/defragtest.c"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert "./runtest-moduleapi --single unit/moduleapi/defrag --clients 1" in commands
+    assert not any(command.rstrip() == "./runtest-moduleapi --clients 1" for command in commands)
+    assert any(
+        command.startswith("CFLAGS='-Werror' ./runtest-moduleapi --single unit/moduleapi/defrag ")
+        for command in commands
+    )
+
+
+def test_valkey_profile_falls_back_to_whole_moduleapi_suite_when_unmappable(tmp_path) -> None:
+    """Module build infrastructure cannot be narrowed to a unit, so run everything.
+
+    The fallback drops --clients 1 as well: the whole suite serialized at one
+    client is exactly the shape that cannot finish inside the timeout.
+    """
+    (tmp_path / "tests/unit/moduleapi").mkdir(parents=True)
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["tests/modules/Makefile"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert "./runtest-moduleapi" in commands
+    assert "./runtest-moduleapi --clients 1" not in commands
+
+
+def test_valkey_profile_pre_cleans_when_no_runtest_leg_wrote_logs(tmp_path) -> None:
+    """--dont-pre-clean only exists to preserve logs a preceding ./runtest wrote.
+
+    Kept unconditionally, a previous candidate's tests/tmp reqres files survive
+    into this run and get validated against this branch's schemas.
+    """
+    (tmp_path / "tests/unit/moduleapi").mkdir(parents=True)
+    (tmp_path / "tests/unit/moduleapi/hash.tcl").write_text(
+        "set testmodule [file normalize tests/modules/hash.so]\n",
+        encoding="utf-8",
+    )
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["tests/modules/hash.c"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    reply = [command for command in commands if "--log-req-res" in command]
+    assert len(reply) == 1
+    assert "--dont-pre-clean" not in reply[0]
 
 
 def test_valkey_profile_does_not_reply_log_top_level_skipped_test(tmp_path) -> None:

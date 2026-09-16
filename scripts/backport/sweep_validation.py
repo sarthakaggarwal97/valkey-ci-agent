@@ -74,6 +74,13 @@ def validate_backport_branch(
     base_ref: str = "",
     log_path: str | None = None,
 ) -> tuple[bool, str]:
+    """Run the checks this candidate's diff selects, and report pass or fail.
+
+    The command list is derived from the diff against the target branch, so an
+    empty diff runs only the registry's base build commands. ``base_ref`` exists
+    for the sweep branch case, where the candidate has to be compared against the
+    commit it was applied onto rather than against ``origin/<target_branch>``.
+    """
     comparison_ref = base_ref or f"origin/{target_branch}"
     commands = select_validation_commands(
         test_commands,
@@ -207,6 +214,15 @@ def repair_validation_failure_with_claude(
     changed_paths_since_base_func: ChangedPathsSinceBase = changed_paths_since_base,
     has_staged_changes_func: HasStagedChanges = has_staged_changes,
 ) -> ValidationOutcome:
+    """Give Claude Code one scoped attempt at the validation failure.
+
+    The agent may only edit files already in the backport diff, and a repair is
+    accepted only when re-validation passes; on any other outcome the branch is
+    restored to exactly the commit handed in, so a red return never leaves a
+    half-repaired candidate behind. Editing outside the diff is treated as a
+    failure rather than trimmed, because the agent has then misunderstood the
+    task and its remaining edits cannot be trusted either.
+    """
     comparison_ref = base_ref or f"origin/{target_branch}"
     changed_paths = tuple(changed_paths_since_base_func(repo_dir, comparison_ref))
     if not changed_paths:
@@ -331,6 +347,13 @@ def prepare_generated_files(
     the current candidate commit instead of creating a misleading standalone
     "fix generated file" commit. Every matching generator is then run a second
     time; a second diff is a deterministic convergence failure.
+
+    A rule whose outputs are all absent from the target branch does not apply to
+    that branch and is skipped. Registry rules are shared across every release
+    line, and a generator can be introduced or retired between lines - Valkey's
+    unit-test header generator exists on 8.0 through 9.0 and not on 7.2 or 9.1 -
+    so an inapplicable rule must not fail an otherwise valid candidate. A rule
+    with only *some* outputs tracked is a real misconfiguration and fails closed.
     """
     amended_paths: list[str] = []
     amended_sha = ""
@@ -340,6 +363,14 @@ def prepare_generated_files(
         untracked_outputs = tuple(
             output for output in rule.outputs if not _is_tracked(repo_dir, output)
         )
+        if len(untracked_outputs) == len(rule.outputs):
+            logger.info(
+                "Skipping generated-file rule %r: none of its outputs (%s) are "
+                "tracked on this branch",
+                rule.command,
+                ", ".join(rule.outputs),
+            )
+            continue
         if untracked_outputs:
             return ValidationOutcome(
                 False,
@@ -401,6 +432,11 @@ def _discard_generator_edits(repo_dir: str, run_git: RunGit) -> None:
 
 
 def _is_tracked(repo_dir: str, path: str) -> bool:
+    """Report whether git tracks ``path`` on the currently checked-out branch.
+
+    Tracked-on-this-branch, not exists-on-disk: a generator's own untracked
+    output would otherwise look like proof that the rule applies here.
+    """
     try:
         git_output(repo_dir, "ls-files", "--error-unmatch", "--", path)
         return True

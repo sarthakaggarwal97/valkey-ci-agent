@@ -105,8 +105,10 @@ When `automatic_ci_followup` is enabled, `backport-ci-followup.yml` runs only
 for registered branches with an App-owned open
 `agent/backport/sweep/<target>` PR. It requires the exact base, head repository,
 branch and 40-character current SHA, waits for all current-head runs to finish,
-ignores configured jobs such as DCO, and records one attempt per failed job id
-in hidden PR-comment markers. One current head gets at most one pushed fix;
+ignores the Actions jobs named in `ci_followup_ignored_jobs`, and records one
+attempt per failed job id in hidden PR-comment markers. Only Actions jobs are
+ever candidates, so checks contributed by other GitHub Apps -- DCO and Codecov
+on Valkey core -- are out of scope without any configuration. One current head gets at most one pushed fix;
 after a proven fast-forward push, later runs wait for CI on the new head.
 Refusals and unverifiable failures are reported without changing the branch.
 The bot never adds DCO sign-off and never force-pushes a published sweep branch.

@@ -1,3 +1,5 @@
+"""Real-Git tests for generated-file regeneration, convergence, and rollback."""
+
 from __future__ import annotations
 
 import subprocess
@@ -95,7 +97,40 @@ def test_generated_command_fails_closed_on_unexpected_path(tmp_path: Path) -> No
     assert _git(tmp_path, "status", "--porcelain") == ""
 
 
-def test_generated_rule_rejects_output_not_tracked_on_target(tmp_path: Path) -> None:
+def test_generated_rule_rejects_partially_untracked_outputs(tmp_path: Path) -> None:
+    """One tracked output and one missing one is a misconfiguration, not a skip.
+
+    The generator demonstrably belongs on this branch, so a typo'd or renamed
+    second output would silently shrink the allowlist the generator is held to.
+    """
+    _init_repo(tmp_path)
+
+    outcome = prepare_generated_files(
+        str(tmp_path),
+        ("src/unit/test_example.c",),
+        [
+            GeneratedFileRule(
+                paths=("src/unit/*.c",),
+                command="python3 generate.py",
+                outputs=("src/unit/test_files.h", "src/unit/not-on-target.h"),
+            )
+        ],
+    )
+
+    assert outcome.ok is False
+    assert "not tracked on the target branch" in outcome.output
+    assert "src/unit/not-on-target.h" in outcome.output
+    assert (tmp_path / "src/unit/test_files.h").read_text() == "stale\n"
+    assert _git(tmp_path, "status", "--porcelain") == ""
+
+
+def test_generated_rule_with_no_tracked_outputs_is_skipped(tmp_path: Path) -> None:
+    """A generator that does not exist on this branch must not fail the candidate.
+
+    Registry rules are shared across every release line, and Valkey's unit-test
+    header generator is absent from 7.2 and 9.1, so a rule with nothing tracked
+    is inapplicable rather than broken.
+    """
     _init_repo(tmp_path)
 
     outcome = prepare_generated_files(
@@ -110,8 +145,10 @@ def test_generated_rule_rejects_output_not_tracked_on_target(tmp_path: Path) -> 
         ],
     )
 
-    assert outcome.ok is False
-    assert "not tracked on the target branch" in outcome.output
+    assert outcome.ok is True
+    assert outcome.generated_paths == ()
+    assert outcome.amended_commit_sha == ""
+    assert (tmp_path / "src/unit/test_files.h").read_text() == "stale\n"
     assert _git(tmp_path, "status", "--porcelain") == ""
 
 

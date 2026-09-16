@@ -377,6 +377,14 @@ def _prepare_branch(
     llm_conflict_label: str = "ai-resolved-conflicts",
     work_root: str | None = None,
 ) -> tuple[BranchSweepResult, PreparedBranchSweep | None]:
+    """Build one sweep branch locally and return it for a later publish step.
+
+    Nothing is pushed here. The clone is validated with the preparation token
+    already discarded -- everything from the setup commands onward runs against
+    repository code with no credential in the environment -- so publishing needs
+    a second, separately scoped token. A candidate that fails validation is reset
+    out of the branch rather than carried, keeping the published branch green.
+    """
     result = BranchSweepResult(
         target_branch=target_branch,
         candidates_found=len(candidates),

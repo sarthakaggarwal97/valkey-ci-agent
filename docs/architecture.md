@@ -86,7 +86,9 @@ ci_followup.py
   -> find the one open agent/backport/sweep/<target> PR
   -> require App ownership and exact repo/base/branch/current SHA
   -> wait until all workflow runs for that current head are complete
-  -> discard configured informational jobs (for Valkey, DCO)
+  -> consider Actions jobs only; checks owned by other Apps (DCO, Codecov)
+     are never visible here
+  -> discard the informational Actions jobs named in ci_followup_ignored_jobs
   -> skip job ids already recorded in hidden result-comment markers
   -> run_ci_fix_request(...) for one prioritized failure set
        existing diagnosis -> baseline/verification -> skeptic review

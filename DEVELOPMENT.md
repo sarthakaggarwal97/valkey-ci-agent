@@ -233,5 +233,8 @@ Use `validation_rules` for static path-to-command mappings and a supported
 `generated_file_rules` must list every tracked output a generator may edit;
 the validator runs the generator twice and fails if it touches anything else
 or does not converge. `automatic_ci_followup` is opt-in per repository, and
-`ci_followup_ignored_jobs` should include informational failures that the bot
-must never try to repair (for Valkey core, DCO).
+`ci_followup_ignored_jobs` should include the informational GitHub Actions jobs
+the bot must never try to repair -- for Valkey core, the `daily.yml` result
+aggregators and the coverage upload. Patterns match Actions job names only;
+checks published by other GitHub Apps, such as DCO and Codecov, cannot be
+follow-up candidates in the first place.

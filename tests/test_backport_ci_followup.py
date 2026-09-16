@@ -1,3 +1,5 @@
+"""Tests for the automatic backport CI follow-up gate and orchestration."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -49,6 +51,24 @@ def _run(run_id: int = 10, *, status: str = "completed", conclusion: str = "fail
         status=status,
         conclusion=conclusion,
     )
+
+
+def _record_comment(pr):
+    """Capture the claim comment and every in-place edit applied to it.
+
+    ``run_followup`` claims the job ids before the engine runs and then edits that
+    one comment, so a test has to see both the claim and the final body.
+    """
+    claims: list[str] = []
+    bodies: list[str] = []
+
+    def create(body: str):
+        claims.append(body)
+        bodies.append(body)
+        return SimpleNamespace(edit=bodies.append)
+
+    pr.create_issue_comment = create
+    return claims, bodies
 
 
 def _gh(runs, pr):
@@ -218,9 +238,8 @@ def test_ignores_handled_job_marker_from_another_user(monkeypatch) -> None:
 
 
 def test_run_followup_uses_shared_engine_and_posts_job_markers(monkeypatch) -> None:
-    posted: list[str] = []
     pr = _pr()
-    pr.create_issue_comment = posted.append
+    claims, bodies = _record_comment(pr)
     target = FollowupTarget(
         pr=pr,
         run=_run(),
@@ -257,17 +276,63 @@ def test_run_followup_uses_shared_engine_and_posts_job_markers(monkeypatch) -> N
         "Reply schema validator",
         "unit tests",
     )
-    assert len(posted) == 1
-    assert "job=2" in posted[0]
-    assert "job=3" in posted[0]
+    assert len(claims) == 1
+    assert "job=2" in claims[0]
+    assert "job=3" in claims[0]
+    assert "job=2" in bodies[-1]
+    assert "job=3" in bodies[-1]
+    assert "timing-dependent; no safe change" in bodies[-1]
+
+
+def test_run_followup_claims_job_ids_before_the_engine_runs(monkeypatch) -> None:
+    """A crash mid-fix must still retire these job ids.
+
+    The markers are the only record that an attempt happened, so writing them
+    only after the engine returns would make every scheduled run re-diagnose the
+    same failure on the same head forever.
+    """
+    pr = _pr()
+    claims, _bodies = _record_comment(pr)
+    target = FollowupTarget(
+        pr=pr,
+        run=_run(),
+        head_sha=_HEAD,
+        head_branch="agent/backport/sweep/9.0",
+        jobs=(FailedJob("unit tests", "failure", id=3),),
+    )
+    gh = _gh([target.run], pr)
+    monkeypatch.setattr(ci_followup, "find_followup_target", lambda *_args, **_kwargs: (target, "actionable"))
+
+    def explode(*_args, **_kwargs):
+        assert claims, "job ids must be claimed before the engine is invoked"
+        raise RuntimeError("engine crashed")
+
+    monkeypatch.setattr(ci_followup, "run_ci_fix_request", explode)
+
+    result = run_followup(
+        gh,
+        repo_entry=_entry(),
+        target_branch="9.0",
+        bot_login=_BOT,
+        git_env={},
+        artifact_client=MagicMock(),
+    )
+
+    assert result["action"] == "failed"
+    assert len(claims) == 1
+    assert "job=3" in claims[0]
 
 
 def test_run_followup_does_not_post_result_after_concurrent_head_move(monkeypatch) -> None:
+    """A moved head must be reported as discarded, never as a result.
+
+    The engine's verdict was reached against a head that no longer exists, so
+    publishing it would advertise a fix for code nobody is running.
+    """
     original = _pr()
     moved = _pr()
     moved.head.sha = "b" * 40
-    posted: list[str] = []
-    moved.create_issue_comment = posted.append
+    claims, bodies = _record_comment(original)
     target = FollowupTarget(
         pr=original,
         run=_run(),
@@ -296,4 +361,7 @@ def test_run_followup_does_not_post_result_after_concurrent_head_move(monkeypatc
     )
 
     assert result["action"] == "stale"
-    assert posted == []
+    assert len(claims) == 1
+    assert "was discarded" in bodies[-1]
+    assert "no safe change" not in bodies[-1]
+    assert "job=3" in bodies[-1]

@@ -107,6 +107,13 @@ def _parse_registry(raw: dict[str, Any]) -> Registry:
 
 
 def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
+    """Validate one ``repos[]`` mapping into a fully-typed entry.
+
+    Every field is checked here rather than at use time: the registry is the
+    single operator-controlled input that decides which repositories the agent
+    may push to and which shell commands it runs, so a typo has to fail loudly
+    at load time instead of surfacing halfway through a sweep.
+    """
     if not isinstance(raw, dict):
         raise ValueError(f"repos[{index}] must be a mapping")
 
@@ -292,6 +299,14 @@ def _parse_validation_rules(raw: Any, repo_idx: int) -> list[ValidationRule]:
 
 
 def _parse_generated_file_rules(raw: Any, repo_idx: int) -> list[GeneratedFileRule]:
+    """Validate ``generated_file_rules`` entries, rejecting anything path-unsafe.
+
+    ``outputs`` is the allowlist the validator holds a generator to, so an
+    absolute path, a ``..`` segment or an embedded NUL would let a rule declare
+    write access outside the checked-out candidate. Those are rejected here
+    rather than filtered later, because a silently narrowed allowlist would make
+    the generator's own diff look unexpected.
+    """
     if raw is None:
         return []
     if not isinstance(raw, list):

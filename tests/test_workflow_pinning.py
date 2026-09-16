@@ -127,6 +127,7 @@ def test_push_capable_app_tokens_can_update_workflows():
     """Push tokens need workflows:write for commits touching .github/workflows."""
     required_steps = {
         ".github/workflows/backport.yml": "Generate GitHub App token",
+        ".github/workflows/backport-ci-followup.yml": "Generate target repository token",
         ".github/workflows/backport-poll.yml": "Generate publication token",
         ".github/workflows/backport-sweep.yml": "Generate publication token",
         ".github/workflows/ci-fix.yml": "Generate GitHub App token",
