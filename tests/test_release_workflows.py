@@ -47,7 +47,13 @@ def test_publish_waits_for_qualification_before_protected_write() -> None:
     # anything, and packages.yml's deploy-pages (publish-only, skipped during
     # qualification) declares contents:write. Executing qualification jobs are
     # job-level pinned to contents:read in the called workflows.
-    assert jobs["qualify"]["permissions"]["contents"] == "write"
+    # The complete permission superset of the nested qualification graph:
+    # deploy-pages declares contents:write, standalone-approval actions:read.
+    # Pinned as the full mapping so a new nested permission shows up here
+    # before it shows up as a startup_failure on release day.
+    assert jobs["qualify"]["permissions"] == {
+        "contents": "write", "id-token": "write", "actions": "read",
+    }
     assert "EXPECTED_APPROVAL_DIGEST" in str(jobs["publish"])
     assert '"$APPROVAL_DIGEST" == "$EXPECTED_APPROVAL_DIGEST"' in str(jobs["publish"])
     assert 'if has("can_admins_bypass") then .can_admins_bypass else true end' in str(jobs["publish"])
