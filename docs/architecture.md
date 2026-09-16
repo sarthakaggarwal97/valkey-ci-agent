@@ -590,7 +590,7 @@ preparation PR and the exact release-branch commit:
 
 ```
 Prepare Release (this repository's Actions UI, dispatched by a maintainer)
-  -> authorize the dispatching maintainer against core-team live
+  -> authorize the dispatching maintainer against the authorized team (valkey-committers) live
   -> derive version from branch + tags
   -> create/update non-authoritative Release <tag> tracking issue
   -> open/update agent/release-cut/<version>-<stage> PR
@@ -608,7 +608,7 @@ Publish Release <branch, candidate SHA>
   -> validate version.h, release notes, tag availability, and report ci.yml status
   -> call the secretless no-publish qualification workflow synchronously
   -> protected release environment approval
-  -> live core-team authorization of the recorded approver
+  -> live authorized-team authorization of the recorded approver
   -> recompute and compare the complete plan digest
   -> atomically create tag at candidate SHA
   -> publish GitHub release
@@ -643,6 +643,6 @@ The publication App is separate and exists only in the reviewer-protected
 `release-publish` approval before public uploads and downstream writes, giving
 the flow two deployment approvals without a relay App, HMAC, or shared secret.
 Releases start from this repository's own Actions UI: Prepare Release
-authorizes the dispatching maintainer live against `core-team`, so there is no
+authorizes the dispatching maintainer live against `valkey-committers`, so there is no
 relay workflow, no forwarded-identity input, and no cross-repository
 Actions-write grant.

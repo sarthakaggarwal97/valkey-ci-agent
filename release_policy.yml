@@ -2,7 +2,7 @@
 # the release preparation PR and exact candidate SHA, not in this file.
 schema_version: 1
 repo: valkey-io/valkey
-authorized_team: valkey-io/core-team
+authorized_team: valkey-io/valkey-committers
 checks_workflow: ci.yml
 branches:
   - "7.2"
