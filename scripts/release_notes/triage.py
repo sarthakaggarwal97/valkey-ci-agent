@@ -25,7 +25,7 @@ from scripts.release_notes.ai_inputs import (
     build_prompt_payload,
     exact_pr_number,
 )
-from scripts.release_notes.code_age import ReleasedCodeOracle
+from scripts.release_notes.code_age import ReleasedCodeOracle, introduced_by_in_range
 from scripts.release_notes.models import MergedPR, TriageDecision, TriageResult
 
 logger = logging.getLogger(__name__)
@@ -352,6 +352,7 @@ def triage(
     repo_dir: str,
     base_ref: str = "",
     already_noted: Sequence[int] = (),
+    range_pr_numbers: frozenset[int] = frozenset(),
     timeout: int = 3600,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
@@ -421,19 +422,31 @@ def triage(
             # Consulted for an AI include AND for a missing verdict: a parse
             # failure otherwise hands the PR straight to the guardrail, which
             # must not include a fix to code nobody has run.
-            if (decision is None or decision.included) and oracle.usable:
-                if oracle.modifies_only_unreleased_code(pr.merge_commit_sha) is True:
+            if decision is None or decision.included:
+                unreleased_reason = ""
+                if oracle.usable and oracle.modifies_only_unreleased_code(pr.merge_commit_sha) is True:
+                    unreleased_reason = "fixes code first introduced in this release; never shipped broken"
+                else:
+                    # A fix to a new feature implemented inside a long-shipped
+                    # file blames released lines, but its own description names
+                    # the unreleased introducer ("regression from #N").
+                    introducer = introduced_by_in_range(
+                        f"{pr.title}\n{pr.body}", range_pr_numbers - {pr.number},
+                    )
+                    if introducer is not None:
+                        unreleased_reason = (
+                            f"fixes a change introduced in this release (#{introducer}); "
+                            "never shipped broken"
+                        )
+                if unreleased_reason:
                     decision = TriageDecision(
                         pr_number=pr.number,
                         included=False,
-                        reason="fixes code first introduced in this release; never shipped broken",
+                        reason=unreleased_reason,
                         uncertain=False,
                         unreleased_code=True,
                     )
-                    logger.info(
-                        "Excluding PR #%s: it only modifies code introduced after %s",
-                        pr.number, base_ref,
-                    )
+                    logger.info("Excluding PR #%s: %s", pr.number, unreleased_reason)
             impact = release_impact_reason(pr)
             if (
                 impact

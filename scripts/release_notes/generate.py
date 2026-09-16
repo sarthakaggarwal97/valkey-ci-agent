@@ -179,6 +179,13 @@ it to exactly one category.
 - Do NOT include the PR number, the author, "by @...", or any "(#N)". Those
   are added automatically. Write the description text ONLY. Do not end the text
   with sentence punctuation; attribution follows it in the canonical format.
+- A change that alters what an EXISTING command returns or reports belongs
+  under "Behavior Changes" regardless of its motivation: a performance rework
+  that changes OBJECT ENCODING output, a refactor that changes an error
+  message's wording, a new default visible in CONFIG GET. Users script against
+  that output, so the visible difference is the note, not the internal reason.
+  Brand-new commands or fields are not behavior changes; there was no prior
+  behavior to change.
 - Choose the single best-fitting category from the list above, copied verbatim.
   The list is exhaustive: every user-facing change has a home. Use "Other
   Changes" only when a change fits none of the specific categories.

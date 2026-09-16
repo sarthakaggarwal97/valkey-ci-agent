@@ -113,3 +113,40 @@ class TestReleasedCodeOracle:
         _git(repo, "commit", "-qam", "rename and edit released code (#104)")
         oracle = code_age.ReleasedCodeOracle(str(repo), "9.1.2")
         assert oracle.modifies_only_unreleased_code(_sha(repo, "rename and edit")) is False
+
+
+class TestIntroducedByInRange:
+    """Introduction-shaped references to in-range PRs mark a fix same-release."""
+
+    def test_regression_reference_to_in_range_pr_matches(self) -> None:
+        text = "Fix crash.\n\nThis is a regression from #4460 in the iterator."
+        assert code_age.introduced_by_in_range(text, frozenset({4460})) == 4460
+
+    def test_introduced_in_wording_matches(self) -> None:
+        text = "Fixes a bug introduced in #4356 when replicas disconnect"
+        assert code_age.introduced_by_in_range(text, frozenset({4356})) == 4356
+
+    def test_bare_reference_does_not_match(self) -> None:
+        # PR bodies cite related work freely; only an introduction claim says
+        # the bug arrived with that change.
+        text = "Similar cleanup to #4460. Fixes the flaky handling."
+        assert code_age.introduced_by_in_range(text, frozenset({4460})) is None
+
+    def test_reference_to_released_pr_does_not_match(self) -> None:
+        text = "Fixes a regression from #3324 in the IO threading model"
+        assert code_age.introduced_by_in_range(text, frozenset({4460})) is None
+
+    def test_empty_inputs_are_safe(self) -> None:
+        assert code_age.introduced_by_in_range("", frozenset({1})) is None
+        assert code_age.introduced_by_in_range("regression from #1", frozenset()) is None
+
+    def test_full_url_reference_with_introduction_context_matches(self) -> None:
+        text = "Fixes a regression caused by https://github.com/valkey-io/valkey/pull/4605"
+        assert code_age.introduced_by_in_range(text, frozenset({4605})) == 4605
+
+    def test_bare_see_url_does_not_match(self) -> None:
+        # "See <url>" is citation, not an introduction claim; matching it would
+        # false-positive on related-work links, and a false drop is the error
+        # this check refuses to make.
+        text = "Duplicate reply when flush is used. See https://github.com/valkey-io/valkey/pull/4605"
+        assert code_age.introduced_by_in_range(text, frozenset({4605})) is None

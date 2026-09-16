@@ -141,6 +141,7 @@ class TriagedPR:
     reason: str = ""
     uncertain: bool = False
     guardrail: bool = False
+    unreleased_code: bool = False
 
 
 @dataclass(frozen=True)

@@ -27,6 +27,7 @@ from scripts.release_notes import projects as projects_mod
 from scripts.release_notes import publish as publish_mod
 from scripts.release_notes import release_format as rn
 from scripts.release_notes import security as security_mod
+from scripts.release_notes import verdicts as verdicts_mod
 
 logger = logging.getLogger(__name__)
 
@@ -1002,6 +1003,14 @@ def cut(
             source_clone_dir, plan, head_ref=notes_head_ref, regen=regen,
         )
 
+        # Durable per-PR verdict audit trail: the body reports counts, the
+        # artifact holds the detail a reviewer needs to catch a wrong exclusion.
+        verdicts_path = os.environ.get("RELEASE_NOTES_VERDICTS_PATH", "")
+        if verdicts_path:
+            verdicts_mod.write_verdicts(
+                verdicts_path, regen, version=version, stage=plan.stage,
+            )
+
         notes_meta = _NotesMeta(
             regen=regen, already_credited=already_credited,
             noted_bullet_count=noted_bullet_count, urgency=urgency,
@@ -1897,8 +1906,9 @@ def _triage_counts_section(regen: Any) -> str:
         "",
         *[f"- {n} PR(s) {label}" for n, label in present],
         "",
-        "Per-PR verdicts are in the preparation run's log. To include a "
-        "wrongly-dropped PR, label it `release-notes` and re-cut.",
+        "Per-PR verdicts (with reasons) are in the run's `triage-verdicts` "
+        "artifact. To include a wrongly-dropped PR, label it `release-notes` "
+        "and re-cut.",
         "",
     ]
     return "\n".join(lines)

@@ -129,3 +129,32 @@ class ReleasedCodeOracle:
             if any(self._is_released(commit) for commit in introducing):
                 return False
         return True
+
+# References with introduction semantics: "introduced in #N", "regression from
+# #N", "follow-up to #N", "broke(n) ... #N". A bare "#N" is deliberately NOT
+# matched: PR bodies cite related work freely, and only an introduction claim
+# says the bug arrived with that change.
+# The reference itself may be "#N" or a full PR URL; valkey bodies use both.
+_INTRODUCER_RE = re.compile(
+    r"(?:introduced|added|regression|broke|broken|caused by|follow[- ]?up)"
+    r".{0,60}?(?:#(\d+)|github\.com/[\w.-]+/[\w.-]+/pull/(\d+))",
+    re.IGNORECASE,
+)
+
+
+def introduced_by_in_range(text: str, range_pr_numbers: frozenset[int]) -> Optional[int]:
+    """Return the in-range PR *text* claims introduced this bug, if any.
+
+    Complements the blame-based oracle: a fix to a new feature implemented
+    inside a long-shipped file blames released lines, but its own description
+    ("regression from #4460") names the unreleased introducer directly. Only an
+    introduction-shaped reference counts, and only when the referenced PR is
+    itself in the current unreleased range.
+    """
+    if not text or not range_pr_numbers:
+        return None
+    for match in _INTRODUCER_RE.finditer(text):
+        number = int(match.group(1) or match.group(2))
+        if number in range_pr_numbers:
+            return number
+    return None

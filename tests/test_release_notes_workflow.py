@@ -173,7 +173,11 @@ def _run_cut_step(
         }
     )
     env.update(env_overrides or {})
-    run_script = _workflow(_SIMPLE)["jobs"]["cut"]["steps"][-1]["run"]
+    # By name, not position: the artifact-upload step now follows the cut.
+    run_script = next(
+        step for step in _workflow(_SIMPLE)["jobs"]["cut"]["steps"]
+        if step.get("name") == "Cut release notes"
+    )["run"]
     result = subprocess.run(
         ["bash", "-c", run_script],
         env=env,
@@ -261,3 +265,16 @@ def test_workflow_shell_rejects_ambiguous_dot_zero_stage(tmp_path) -> None:
     assert result.returncode != 0
     assert "Stage is required for a .0 release" in result.stderr
     assert invocation == ""
+
+
+def test_cut_writes_and_uploads_the_triage_verdicts_artifact() -> None:
+    workflow = _workflow(_SIMPLE)
+    steps = workflow["jobs"]["cut"]["steps"]
+    cut = next(s for s in steps if s.get("name") == "Cut release notes")
+    assert "triage-verdicts.json" in cut["env"]["RELEASE_NOTES_VERDICTS_PATH"]
+    upload = next(s for s in steps if s.get("name") == "Upload triage verdicts")
+    # Runs even when the cut fails (the verdicts are most valuable then), and
+    # tolerates the legitimately-empty cases.
+    assert upload["if"] == "always()"
+    assert upload["with"]["if-no-files-found"] == "ignore"
+    assert steps.index(upload) > steps.index(cut)

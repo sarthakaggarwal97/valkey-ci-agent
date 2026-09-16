@@ -123,6 +123,10 @@ def regenerate_unreleased(
         candidates,
         repo_dir=clone_dir,
         base_ref=discovery.base_tag,
+        # Every PR in the unreleased range, labelled or not: the introducer
+        # check needs to recognize "regression from #N" where #N is a labelled
+        # feature that is not itself a triage candidate.
+        range_pr_numbers=frozenset(pr.number for pr in discovery.prs),
         diff_collector=diff_collector,
         project_description=profile.triage_prompt_project,
     )
@@ -246,6 +250,7 @@ def _triaged_prs(decisions, by_number):
         out.append(TriagedPR(
             number=pr.number, title=pr.title, author=pr.author, url=pr.url,
             included=d.included, reason=d.reason, uncertain=d.uncertain,
+            unreleased_code=getattr(d, "unreleased_code", False),
             guardrail=d.guardrail,
         ))
     return tuple(out)
