@@ -649,7 +649,10 @@ controller's long-lived post-release polling loop.
   is a secretless synchronous reusable workflow call, so it needs no
   cross-repository Actions-write token. The control App must not bypass
   release-tag protection.
-- Grant the control App only the permissions requested by the workflows:
+- Grant the control App only the permissions requested by the workflows.
+  The control App holds no tag-ruleset bypass, so it may be an existing
+  automation App (for example the Valkeyrie Bot) rather than a dedicated
+  one; only the publication App must be dedicated and separate:
   - on `valkey`: `administration:read`, `actions:read`, `checks:read`,
     `contents:write`, `issues:write`, `metadata:read`, and
     `pull-requests:write`;
