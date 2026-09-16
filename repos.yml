@@ -20,6 +20,8 @@ repos:
         project_number: 18
       - branch: "9.1"
         project_number: 41
+      - branch: "9.2"
+        project_number: 51
 
   - repo: valkey-io/valkey-search
     project_owner: valkey-io

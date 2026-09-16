@@ -10,6 +10,7 @@ branches:
   - "8.1"
   - "9.0"
   - "9.1"
+  - "9.2"
 required_checks:
   - test-ubuntu-latest
   - test-sanitizer-address
