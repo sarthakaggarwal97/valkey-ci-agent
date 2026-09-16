@@ -30,6 +30,19 @@ def find_existing_pr(
 
 _OWNER_NOTIFICATION_MARKER = "<!-- release-owner-notification -->"
 
+# GitHub rejects an issue or PR body over 65536 characters with a 422, which
+# would fail the whole cut after the notes commit is already pushed. Clamp with
+# margin for the marker line the notification path may add.
+_MAX_BODY_CHARS = 65000
+
+
+def clamp_body(body: str) -> str:
+    """Return *body* within GitHub's body-length limit, marking any truncation."""
+    if len(body) <= _MAX_BODY_CHARS:
+        return body
+    notice = "\n\n*Body truncated to fit GitHub's length limit; see the preparation run log for the full detail.*"
+    return body[: _MAX_BODY_CHARS - len(notice)].rstrip() + notice
+
 
 def _ensure_owner_notification(pr: Any, release_owner: str) -> None:
     """Ask the release owner to review, exactly once per PR.
@@ -75,7 +88,7 @@ def open_or_update_pr(
     """
     if existing is not None:
         retry_github_call(
-            lambda: existing.edit(title=title, body=body),
+            lambda: existing.edit(title=title, body=clamp_body(body)),
             retries=3, description=f"update PR #{existing.number}",
         )
         reconcile_draft(existing, draft)
@@ -84,7 +97,9 @@ def open_or_update_pr(
         return existing.html_url
     head_ref = build_pull_create_head_ref(base_repo, push_repo, branch)
     pr = retry_github_call(
-        lambda: repo.create_pull(title=title, body=body, head=head_ref, base=base_branch, draft=draft),
+        lambda: repo.create_pull(
+            title=title, body=clamp_body(body), head=head_ref, base=base_branch, draft=draft
+        ),
         retries=3, description="create release PR",
     )
     _ensure_owner_notification(pr, release_owner)

@@ -1352,9 +1352,7 @@ def _build_pr_body(
         + _security_dedup_section(notes_meta)
         + _security_warning_section(notes_meta)
         + _guardrail_included_section(regen.guardrail_included)
-        + _ai_included_section(regen.ai_included)
-        + _ai_excluded_section(regen.ai_excluded)
-        + _label_excluded_section(regen.label_excluded)
+        + _triage_counts_section(regen)
         + _triage_section(regen.triage)
         + _unresolved_section(regen.unresolved)
         + _unresolved_prs_section(regen.unresolved_prs)
@@ -1768,96 +1766,37 @@ def _guardrail_included_section(guardrail_included: Sequence[Any]) -> str:
     return "\n".join(lines)
 
 
-def _ai_included_section(ai_included: Sequence[Any]) -> str:
-    """Table of non-release-notes PRs AI added, for maintainer review.
 
-    These PRs did not carry the ``release-notes`` label, so valkey's label-only
-    gate would have dropped them, but AI triage judged them user-facing and they
-    were noted in the dated section above. A maintainer confirms each belongs (or
-    removes the note); a ``⚠️`` marks a call the model flagged low-confidence.
+
+
+def _triage_counts_section(regen: Any) -> str:
+    """Summarize triage outcomes as counts, not as per-PR tables.
+
+    A first RC of a new minor triages hundreds of PRs, and rendering each one
+    made the PR body exceed GitHub's 65536-character limit, which rejected the
+    PR outright. The per-PR detail was also the least readable part of the body
+    at that size and is recoverable elsewhere: the dated notes section in this
+    PR's own diff is the authoritative list of what was included, and the
+    preparation run's log records every verdict with its reason. What a
+    reviewer cannot reconstruct - a guardrail override, an uncertain call, an
+    undecided PR - keeps its own section above.
     """
-    if not ai_included:
-        return ""
-    table = [
-        "| PR | Title | Why included |",
-        "|----|-------|--------------|",
+    counts = [
+        (len(regen.ai_included), "triaged into the notes"),
+        (len(regen.ai_excluded), "triaged out"),
+        (len(regen.label_excluded), "hard-excluded by `no-release-notes`"),
     ]
-    for pr in ai_included:
-        table.append(
-            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
-            f"{_ai_triage_reason_cell(pr)} |"
-        )
+    present = [(n, label) for n, label in counts if n]
+    if not present:
+        return ""
     lines = [
         "",
-        "### AI-triaged into the notes",
+        "### Triage summary",
         "",
-        "These PRs had no `release-notes` label but were noted in the dated "
-        "section; remove any note that does not belong before merging.",
+        *[f"- {n} PR(s) {label}" for n, label in present],
         "",
-        *_details(f"{len(ai_included)} PR(s) triaged in", table),
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def _ai_excluded_section(ai_excluded: Sequence[Any]) -> str:
-    """Table of non-release-notes PRs AI dropped, for a sanity check.
-
-    Surfaced so a maintainer can catch a user-facing change the model wrongly
-    dropped: these PRs are **absent** from the notes. A ``⚠️`` marks a call the
-    model flagged low-confidence. Add the ``release-notes`` label and re-cut to
-    pull one back in.
-    """
-    if not ai_excluded:
-        return ""
-    table = [
-        "| PR | Title | Why excluded |",
-        "|----|-------|--------------|",
-    ]
-    for pr in ai_excluded:
-        table.append(
-            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
-            f"{_ai_triage_reason_cell(pr)} |"
-        )
-    lines = [
-        "",
-        "### AI-triaged out of the notes",
-        "",
-        "These PRs are **absent** from the notes; label a wrongly-dropped one "
-        "`release-notes` and re-cut to include it.",
-        "",
-        *_details(f"{len(ai_excluded)} PR(s) triaged out", table),
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def _label_excluded_section(label_excluded: Sequence[Any]) -> str:
-    """Table of PRs hard-excluded by the ``no-release-notes`` label.
-
-    These PRs carried an explicit ``no-release-notes`` opt-out, so they were dropped
-    before AI triage and are **absent** from the notes. Surfaced so a maintainer can
-    catch a user-facing change that was mislabelled: remove the ``no-release-notes``
-    label and re-cut to pull one back in.
-    """
-    if not label_excluded:
-        return ""
-    table = [
-        "| PR | Title |",
-        "|----|-------|",
-    ]
-    for pr in label_excluded:
-        table.append(
-            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} |"
-        )
-    lines = [
-        "",
-        "### Excluded by `no-release-notes`",
-        "",
-        "These PRs opted out via the `no-release-notes` label and are **absent** "
-        "from the notes; remove the label and re-cut if one was mislabelled.",
-        "",
-        *_details(f"{len(label_excluded)} PR(s) hard-excluded", table),
+        "Per-PR verdicts are in the preparation run's log. To include a "
+        "wrongly-dropped PR, label it `release-notes` and re-cut.",
         "",
     ]
     return "\n".join(lines)
