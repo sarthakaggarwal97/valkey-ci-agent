@@ -240,6 +240,11 @@ jobs:
           RELEASE_NOTES_FORCE_READY: ${{ inputs.force_ready && 'true' || 'false' }}
           RELEASE_NOTES_RELEASE_OWNER: ${{ inputs.release_owner || github.actor }}
           RELEASE_NOTES_DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+          # Operator override for the notes AI stages. Unset (the normal
+          # case) leaves the runner's default model in place; set the
+          # repository variable to "opus" or "fable" to change it
+          # without a code change.
+          CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
         run: |
           set -euo pipefail
           # The "Validate target repository" step already enforced the allowlist
