@@ -103,15 +103,21 @@ class TestFormatBullet:
 
 class TestGroupBullets:
     def test_canonical_order_preserved(self) -> None:
+        # Maintainer-reviewed order from the first 9.2.0-rc1 cut: the notes
+        # open with what the release adds, and Behavior Changes sits at the
+        # bottom, above only the catch-all.
         fmt = _fmt()
         bullets = [
             _bullet(3, "a", "Bug Fixes", "b"),
             _bullet(1, "a", "Behavior Changes", "c"),
+            _bullet(2, "a", "New Features and Enhanced Behavior", "d"),
+            _bullet(4, "a", "Other Changes", "e"),
         ]
         grouped = group_bullets(bullets)
         keys = list(grouped.keys())
-        # Behavior Changes precedes Bug Fixes (canonical order).
-        assert keys.index("Behavior Changes") < keys.index("Bug Fixes")
+        assert keys.index("New Features and Enhanced Behavior") < keys.index("Bug Fixes")
+        assert keys.index("Bug Fixes") < keys.index("Behavior Changes")
+        assert keys.index("Behavior Changes") < keys.index("Other Changes")
 
     def test_noncanonical_category_coerced_to_catch_all(self) -> None:
         # The model never creates a new header: an off-list category is a

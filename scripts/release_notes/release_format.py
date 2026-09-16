@@ -12,8 +12,11 @@ import re
 from typing import Dict, List, Optional, Sequence
 
 # Canonical category order; dated sections render in this order.
+# Render order. Features lead: the notes open with what the release ADDS, per
+# maintainer review of the first 9.2.0-rc1 cut. Behavior Changes sits at the
+# bottom (before only the catch-all): important for upgraders, but it reads as
+# a warning list, not as the release's story.
 CATEGORIES: List[str] = [
-    "Behavior Changes",
     "New Features and Enhanced Behavior",
     "Performance and Efficiency Improvements",
     "Bug Fixes",
@@ -24,6 +27,7 @@ CATEGORIES: List[str] = [
     "Observability and Logging",
     "CLI and Tools",        # user-facing CLI programs: valkey-cli, valkey-benchmark, etc.
     "Build and Tooling",    # build system, packaging, CI, developer tooling
+    "Behavior Changes",
     "Other Changes",        # catch-all: a user-facing change fitting none of the above
 ]
 
