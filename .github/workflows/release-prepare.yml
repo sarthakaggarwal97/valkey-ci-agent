@@ -34,7 +34,7 @@ jobs:
   derive:
     name: Authorize and derive release
     # The dispatching maintainer is authorized directly: prepare verifies the
-    # triggering actor against the policy's core-team live, so there is no
+    # triggering actor against the policy's authorized team live, so there is no
     # forwarded-identity input to spoof and no relay workflow to trust.
     if: github.repository == 'valkey-io/valkey-ci-agent'
     runs-on: ubuntu-latest
