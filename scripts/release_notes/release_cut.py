@@ -108,6 +108,7 @@ class _NotesMeta:
     security_noted_prs: Sequence[int]   # PRs dropped from generated bullets because supplied as a --security-fix (kept only under Security Fixes)
     baseline_unanchored: bool           # rc1 of M.0.0 with no --base-ref (over-broad range risk)
     advisories: Optional[Any] = None    # security.AdvisorySelection when --security-from-advisories ran, else None
+    uncategorized: Sequence[str] = ()   # bullets the model left in the catch-all category
     notes_range: Optional["_NotesRange"] = None  # resolved base/head refs + SHAs for the range display
 
 
@@ -1007,6 +1008,7 @@ def cut(
             security_fixes=security_fixes, security_noted_prs=security_noted_prs,
             baseline_unanchored=baseline_unanchored,
             advisories=advisories, notes_range=notes_range,
+            uncategorized=tuple(grouped.get(rn.CATCH_ALL_CATEGORY, ())),
         )
 
         if dry_run:
@@ -1271,6 +1273,10 @@ def _hold_reasons(plan: BranchPlan, notes_meta: "_NotesMeta") -> list[str]:
         reasons.append("notes flagged low-confidence")
     if regen.guardrail_included:
         reasons.append("release-safety guardrail overrode AI triage")
+    # Valkey's published notes have never carried the catch-all heading, so a
+    # bullet left there is an unfinished categorization rather than a section.
+    if notes_meta.uncategorized:
+        reasons.append("a note is uncategorized (assign it a real category)")
     # AI decided inclusion for PRs without release-notes, so a maintainer confirms
     # the include/exclude table before shipping.
     if regen.ai_included or regen.ai_excluded:
@@ -1418,6 +1424,7 @@ def _build_pr_body(
         + _no_new_prs_section(notes_meta, plan, profile)
         + _duplicate_pr_section(regen.duplicate_prs)
         + _skipped_section(regen.skipped)
+        + _uncategorized_section(notes_meta.uncategorized)
         + _uncertain_section(regen.uncertain)
         + _impact_review_section(regen.impact_review, notes_meta.urgency)
         + _advisory_section(notes_meta)
@@ -1587,6 +1594,29 @@ def _skipped_section(skipped: Sequence[int]) -> str:
         f"**absent** from the dated section: {refs}. Confirm each omission and "
         "re-cut if one should be noted.\n"
     )
+
+
+def _uncategorized_section(uncategorized: Sequence[str]) -> str:
+    """List bullets the model could not categorize, for a maintainer to assign.
+
+    The catch-all category exists so the model can admit uncertainty instead of
+    forcing a bad fit, but it is not a heading Valkey publishes: no released
+    changelog contains one. Surfacing the bullets here, and holding the PR,
+    keeps that admission from shipping as a section.
+    """
+    if not uncategorized:
+        return ""
+    lines = [
+        "",
+        f"### Uncategorized notes ({len(uncategorized)})",
+        "",
+        "These bullets landed in the catch-all category, which released notes "
+        "do not use. Move each one under a real category before merging.",
+        "",
+        *[f"- {line.lstrip('* ')}" for line in uncategorized],
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def _uncertain_section(uncertain: Sequence[Any]) -> str:

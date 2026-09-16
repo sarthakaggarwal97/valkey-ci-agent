@@ -2367,3 +2367,47 @@ Valkey 9.1.2  -  Released Mon 31 August 2026
         kept, dropped = rc._drop_already_credited(grouped, {3516})
         assert dropped == [3516]
         assert kept == {"Bug Fixes": ["* Fix something genuinely new by @dev (#4700)"]}
+
+
+class TestUncategorizedNotes:
+    """The catch-all category must not ship as a section.
+
+    It exists so the model can admit it could not place a bullet rather than
+    forcing a bad fit, but no released Valkey changelog contains that heading.
+    A bullet left there is unfinished categorization, so it holds the PR and is
+    listed for a maintainer to assign.
+    """
+
+    _PLAN = BranchPlan("rc1", "9.2", "9.2")
+
+    @staticmethod
+    def _meta(uncategorized):
+        from types import SimpleNamespace
+        regen = SimpleNamespace(
+            bullet_count=3, had_prs=True, triage=(), included=1, skipped=(),
+            duplicate_prs=(), uncertain=(), ai_included=(), guardrail_included=(),
+            ai_excluded=(), label_excluded=(), impact_review=(), unresolved=(),
+            unresolved_prs=(), unresolved_backports=(), unresolved_cherry_picks=(),
+            collided=(), reverted=(), base_tag="9.1.2",
+        )
+        return rc._NotesMeta(
+            regen=regen, already_credited=(), noted_bullet_count=3, urgency="LOW",
+            security_fixes=None, security_noted_prs=(), baseline_unanchored=False,
+            uncategorized=uncategorized,
+        )
+
+    def test_uncategorized_bullet_holds_the_pr(self) -> None:
+        reasons = rc._hold_reasons(self._PLAN, self._meta(("* Something odd by @dev (#1)",)))
+        assert "a note is uncategorized (assign it a real category)" in reasons
+
+    def test_no_uncategorized_bullet_does_not_hold(self) -> None:
+        assert rc._hold_reasons(self._PLAN, self._meta(())) == []
+
+    def test_section_lists_each_bullet_for_assignment(self) -> None:
+        section = rc._uncategorized_section(("* Something odd by @dev (#1)",))
+        assert "Uncategorized notes (1)" in section
+        assert "Something odd by @dev (#1)" in section
+        assert "before merging" in section
+
+    def test_section_is_silent_when_everything_was_categorized(self) -> None:
+        assert rc._uncategorized_section(()) == ""
