@@ -299,7 +299,7 @@ categories, prompt wording) live in `scripts/release_notes/projects.py`:
 | valkey-json | `CMakeLists.txt` (`project(... VERSION M.m.p)`) | no |
 | valkey-bloom | `Cargo.toml` (`[package] version`) | no |
 
-The Valkeyrie GitHub App installation must include every repository that can be
+The release-control GitHub App installation must include every repository that can be
 selected: `valkey`, `valkey-search`, `valkey-json`, and `valkey-bloom` (or choose
 **All repositories**). Each workflow token is scoped to only the selected
 `${{ inputs.repo }}` and requests `contents:write`, `pull-requests:write`, and
@@ -587,6 +587,120 @@ comment creates a new batch. Before pushing, the handler records the proposed
 commit and review-thread identities; if the push succeeds but the job loses its
 response or fails during bookkeeping, the poller finishes the replies and
 resolutions idempotently without running another AI edit.
+
+## Release automation
+
+The release path is a short pipeline with one maintainer-facing tracking issue,
+not a durable controller.
+
+1. A maintainer dispatches **Prepare Release** from this repository's Actions
+   tab. **Prepare Release** authorizes the dispatching maintainer against
+   `valkey-io/core-team`, derives the next version from the release line and
+   existing tags, opens one `Release <tag>` tracking issue, and invokes the
+   existing release-notes cutter. A real run opens or refreshes the
+   deterministic `agent/release-cut/...` PR. Real preparation is the default;
+   an explicitly selected dry run only displays the derived release.
+2. The narrow **Refresh Release Progress** watcher derives status from live
+   workflow, PR, branch, and release state. After the canonical release-notes
+   PR is reviewed and merged, it dispatches **Publish Release** for that merge
+   commit automatically. The issue only displays progress and the next action;
+   its bot-owned status comment contains the controller metadata; the editable
+   issue body and checkboxes cannot authorize a transition. Its hourly runner
+   stays alive for 55 minutes and polls every five minutes, reusing the shared
+   bounded polling mechanism while bridging delays in GitHub's scheduled-workflow
+   queue and remaining below the App token's one-hour lifetime.
+3. **Publish Release** requires the exact SHA to remain branch HEAD and to be
+   the canonical preparation PR's merge commit. It verifies `version.h`, the
+   release-notes section, advisory `ci.yml` status on that SHA, tag
+   availability, and the latest-release decision. It then invokes the
+   synchronous `valkey-release-automation` qualification workflow and waits
+   for that exact call to pass before entering the protected `release`
+   environment. After approval,
+   it repeats every validation, checks that the approver is still a live
+   `core-team` member, requires the approved plan digest to match, atomically
+   creates the tag at the candidate SHA, and publishes the GitHub release.
+
+If the release branch moves after the PR merge, automatic publication stops and
+the dashboard asks for a fresh preparation PR. If a build or qualification
+fails, the dashboard links the failed run and gives the next action. The watcher
+does not repair failures, infer success from issue text, or hold controller
+state. Once production starts, the same dashboard also exposes deterministic
+links for every applicable downstream target: hashes, container, documentation,
+website, Helm, and Bundle. The production run remains the completion authority;
+the links add follow-up visibility without granting the controller App access to
+those repositories.
+
+The GitHub release event starts the normal production workflow in
+`valkey-release-automation`. That workflow resolves the published tag to its
+commit and requires any supplied SHA to match. It retains the complete production fan-out: archives, RPM/DEB
+packages, hashes, container, docs, website, Try Valkey, Bundle, and a draft Helm
+chart bump for GA releases. The Helm PR remains draft until the matching public
+container image is available; that small human ordering check replaces the
+controller's long-lived post-release polling loop.
+
+### Security setup
+
+- Configure GitHub Actions actor policy so only release maintainers can run
+  the manual workflows. The live `core-team` check remains defense in depth.
+- `release-control` must allow only the exact default branch. It stores
+  `VALKEY_RELEASE_CONTROL_APP_ID`,
+  `VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY`, and the release-notes Bedrock
+  credentials. Qualification
+  is a secretless synchronous reusable workflow call, so it needs no
+  cross-repository Actions-write token. The control App must not bypass
+  release-tag protection.
+- Grant the control App only the permissions requested by the workflows.
+  The control App holds no tag-ruleset bypass, so it may be an existing
+  automation App (for example the Valkeyrie Bot) rather than a dedicated
+  one; only the publication App must be dedicated and separate:
+  - on `valkey`: `administration:read`, `actions:read`, `checks:read`,
+    `contents:write`, `issues:write`, `metadata:read`, and
+    `pull-requests:write`;
+  - on each module repository (`valkey-search`, `valkey-json`, and
+    `valkey-bloom`): `contents:write`, `metadata:read`, and
+    `pull-requests:write`;
+  - on any repository using advisory-backed cuts:
+    `repository-advisories:read`;
+  - on `valkey-ci-agent`: `contents:write`, `issues:write`, `metadata:read`,
+    and `pull-requests:write`;
+  - on `valkey-release-automation`: `actions:read`, `contents:read`, and
+    `metadata:read`;
+  - at organization scope: `members:read` for release authorization and
+    `organization-projects:read` for first-GA backport onboarding.
+- `release` must allow only the exact default branch, require a reviewer,
+  prevent self-review, and disallow admin bypass. It alone stores
+  `VALKEY_RELEASE_PUBLISH_APP_ID` and
+  `VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY`. On `valkey`, the publication App
+  needs `administration:read`, `actions:read`, `checks:read`, `contents:write`,
+  `metadata:read`, and `pull-requests:read`, plus organization
+  `members:read`. Both Apps use `administration:read` to inspect tag-rule
+  bypass actors. The publication App is the sole Integration allowed to create
+  protected release tags.
+- `valkey-release-automation` keeps its existing `release-publish`
+  production approval. It is the second deployment approval before public
+  packages and downstream updates are written.
+- GitHub environments require only one of their configured reviewers. The two
+  approvals here are the separate `release` and `release-publish` gates,
+  not two names listed on one environment.
+
+For a maintainer, the normal path is: dispatch **Prepare Release** here,
+merge the notes PR, approve `release`, and approve `release-publish`. Everything
+between those decisions advances automatically, and the tracking issue remains
+the single place to find the current run, failure, and next action.
+
+### Aborting a release
+
+Close the release-tracking issue to abandon that release. The hourly progress
+workflow scans only open trackers, so closing the issue stops reconciliation and
+prevents any new publication dispatch. If an operator needs to stop all release
+reconciliation while investigating an incident, disable **Refresh Release
+Progress** in `valkey-ci-agent`; re-enable it after every abandoned tracker has
+been closed. There is no `/release abort` command.
+
+Deploy `valkey-release-automation` before this CI-agent change: its public
+`qualify-release.yml` must expose `workflow_call` when **Publish Release** invokes
+it. The CI-agent repository's Actions policy must allow first-party reusable
+workflows from `valkey-io`.
 
 ## CVE Scan Workflow
 

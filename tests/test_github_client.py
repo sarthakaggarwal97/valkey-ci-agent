@@ -54,3 +54,19 @@ def test_retry_github_call_raises_after_exhausting_retries(monkeypatch) -> None:
         retry_github_call(operation, retries=3, description="test call")
 
     assert calls["count"] == 3
+
+
+def test_retry_github_call_honors_retry_after(monkeypatch) -> None:
+    calls = {"count": 0}
+    sleeps: list[float] = []
+
+    def operation() -> str:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise GithubException(429, {"message": "rate limit"}, {"Retry-After": "17"})
+        return "ok"
+
+    monkeypatch.setattr("scripts.common.github_client.time.sleep", sleeps.append)
+
+    assert retry_github_call(operation, retries=2, description="test call") == "ok"
+    assert sleeps == [17.0]
