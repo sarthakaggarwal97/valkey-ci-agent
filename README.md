@@ -593,9 +593,8 @@ resolutions idempotently without running another AI edit.
 The release path is a short pipeline with one maintainer-facing tracking issue,
 not a durable controller.
 
-1. **Start Release** in `valkey-io/valkey` forwards the initiating login to
-   **Prepare Release** through the narrowly scoped release-control App.
-   **Prepare Release** accepts only that App actor, authorizes the forwarded maintainer against
+1. A maintainer dispatches **Prepare Release** from this repository's Actions
+   tab. **Prepare Release** authorizes the dispatching maintainer against
    `valkey-io/core-team`, derives the next version from the release line and
    existing tags, opens one `Release <tag>` tracking issue, and invokes the
    existing release-notes cutter. A real run opens or refreshes the
@@ -646,9 +645,7 @@ controller's long-lived post-release polling loop.
 - `release-control` must allow only the exact default branch. It stores
   `VALKEY_RELEASE_CONTROL_APP_ID`,
   `VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY`, and the release-notes Bedrock
-  credentials. Set `VALKEY_RELEASE_START_ACTOR` to the release-control App's bot
-  login. In `valkey`, create a no-reviewer `release-control` environment restricted
-  to the exact `unstable` branch and store the same App id/key there. Qualification
+  credentials. Qualification
   is a secretless synchronous reusable workflow call, so it needs no
   cross-repository Actions-write token. The control App must not bypass
   release-tag protection.
@@ -667,8 +664,6 @@ controller's long-lived post-release polling loop.
     `metadata:read`;
   - at organization scope: `members:read` for release authorization and
     `organization-projects:read` for first-GA backport onboarding.
-  The thin Start Release handoff's installation token on `valkey-ci-agent`
-  additionally requests `actions:write` and `metadata:read`.
 - `release` must allow only the exact default branch, require a reviewer,
   prevent self-review, and disallow admin bypass. It alone stores
   `VALKEY_RELEASE_PUBLISH_APP_ID` and
@@ -685,7 +680,7 @@ controller's long-lived post-release polling loop.
   approvals here are the separate `release` and `release-publish` gates,
   not two names listed on one environment.
 
-For a maintainer, the normal path is: start **Start Release** in Valkey,
+For a maintainer, the normal path is: dispatch **Prepare Release** here,
 merge the notes PR, approve `release`, and approve `release-publish`. Everything
 between those decisions advances automatically, and the tracking issue remains
 the single place to find the current run, failure, and next action.

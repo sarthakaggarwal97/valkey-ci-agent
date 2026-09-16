@@ -2,7 +2,7 @@
 
 Given a release branch (``M.m``), the operator's intent (rc/ga/patch), and the
 repository's existing tags, exactly one next version and stage follow. The
-operator never types a version, so a Start Release dispatch cannot introduce a
+operator never types a version, so a Prepare Release dispatch cannot introduce a
 version that disagrees with the branch or repeats an existing tag.
 
 Valkey's tag model (mirrored from the release-notes cut):

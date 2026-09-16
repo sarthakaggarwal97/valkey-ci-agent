@@ -589,10 +589,8 @@ Release automation is a short pipeline whose durable identities are the
 preparation PR and the exact release-branch commit:
 
 ```
-Start Release (Valkey repository UI)
-  -> narrowly scoped App dispatches Prepare Release with the initiating login
-
-Prepare Release
+Prepare Release (this repository's Actions UI, dispatched by a maintainer)
+  -> authorize the dispatching maintainer against core-team live
   -> derive version from branch + tags
   -> create/update non-authoritative Release <tag> tracking issue
   -> open/update agent/release-cut/<version>-<stage> PR
@@ -644,6 +642,7 @@ The publication App is separate and exists only in the reviewer-protected
 `release` environment. The production automation repository retains its
 `release-publish` approval before public uploads and downstream writes, giving
 the flow two deployment approvals without a relay App, HMAC, or shared secret.
-The thin Valkey Start Release workflow reuses the control App with only
-Actions-write access to the CI-agent; it has no receiver service or payload
-authentication protocol.
+Releases start from this repository's own Actions UI: Prepare Release
+authorizes the dispatching maintainer live against `core-team`, so there is no
+relay workflow, no forwarded-identity input, and no cross-repository
+Actions-write grant.

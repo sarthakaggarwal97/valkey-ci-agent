@@ -12,11 +12,11 @@ def test_prepare_opens_dashboard_and_notes_pr_in_parallel() -> None:
     workflow = _load("release-prepare.yml")
     inputs = workflow["on"]["workflow_dispatch"]["inputs"]
     assert inputs["dry_run"]["default"] == "false"
-    assert list(workflow["jobs"]) == ["authorize-start", "derive", "cut-notes", "tracker"]
-    assert inputs["initiator"]["required"] == "true"
-    assert workflow["jobs"]["cut-notes"]["with"]["release_owner"] == "${{ inputs.initiator }}"
-    assert workflow["jobs"]["derive"]["needs"] == "authorize-start"
-    assert "VALKEY_RELEASE_START_ACTOR" in str(workflow["jobs"]["authorize-start"])
+    assert list(workflow["jobs"]) == ["derive", "cut-notes", "tracker"]
+    assert "initiator" not in inputs
+    assert workflow["jobs"]["cut-notes"]["with"]["release_owner"] == "${{ github.triggering_actor }}"
+    assert workflow["jobs"]["derive"]["if"] == "github.repository == 'valkey-io/valkey-ci-agent'"
+    assert "${{ github.triggering_actor }}" in str(workflow["jobs"]["derive"])
     assert workflow["jobs"]["derive"]["environment"] == "release-control"
     assert workflow["jobs"]["cut-notes"]["uses"] == "./.github/workflows/release-notes-cut.yml"
     assert workflow["jobs"]["cut-notes"]["secrets"] == "inherit"

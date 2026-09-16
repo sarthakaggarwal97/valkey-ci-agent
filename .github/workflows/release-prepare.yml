@@ -23,10 +23,6 @@ on:
         required: false
         type: boolean
         default: false
-      initiator:
-        description: "Maintainer login forwarded by the Valkey Start Release workflow"
-        required: true
-        type: string
 
 permissions: {}
 
@@ -35,28 +31,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  authorize-start:
-    name: Verify Valkey handoff
-    if: github.repository == 'valkey-io/valkey-ci-agent'
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    permissions: {}
-    steps:
-      - name: Require the release-control App actor
-        env:
-          ACTOR: ${{ github.triggering_actor }}
-          EXPECTED_ACTOR: ${{ vars.VALKEY_RELEASE_START_ACTOR }}
-        run: |
-          set -euo pipefail
-          [[ -n "$EXPECTED_ACTOR" ]] || { echo "VALKEY_RELEASE_START_ACTOR is not configured" >&2; exit 1; }
-          [[ "$ACTOR" == "$EXPECTED_ACTOR" ]] || {
-            echo "Prepare Release can be started only through valkey-io/valkey Start Release" >&2
-            exit 1
-          }
-
   derive:
     name: Authorize and derive release
-    needs: authorize-start
+    # The dispatching maintainer is authorized directly: prepare verifies the
+    # triggering actor against the policy's core-team live, so there is no
+    # forwarded-identity input to spoof and no relay workflow to trust.
+    if: github.repository == 'valkey-io/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release-control
@@ -92,7 +72,7 @@ jobs:
           RELEASE_GITHUB_TOKEN: ${{ steps.token.outputs.token }}
           BRANCH: ${{ inputs.branch }}
           INTENT: ${{ inputs.intent }}
-          ACTOR: ${{ inputs.initiator }}
+          ACTOR: ${{ github.triggering_actor }}
         run: |
           python -m scripts.release.main prepare \
             --branch "$BRANCH" --intent "$INTENT" --actor "$ACTOR"
@@ -124,7 +104,7 @@ jobs:
       version: ${{ needs.derive.outputs.version }}
       stage: ${{ needs.derive.outputs.stage }}
       urgency: ${{ inputs.urgency }}
-      release_owner: ${{ inputs.initiator }}
+      release_owner: ${{ github.triggering_actor }}
       dry_run: false
 
   tracker:
