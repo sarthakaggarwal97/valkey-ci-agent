@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from scripts.release_notes import publish as publish_mod
 from scripts.release_notes.publish import escape_cell, find_existing_pr, open_or_update_pr
 
 
@@ -80,7 +81,36 @@ class TestOpenOrUpdatePr:
             title="t", body="b", existing=None, release_owner="alice",
         )
         comment = pr.create_issue_comment.call_args.args[0]
-        assert comment == "@alice, please review this automated release PR."
+        assert "@alice, please review this automated release PR." in comment
+        assert publish_mod._OWNER_NOTIFICATION_MARKER in comment
+
+    def test_rerun_recovers_missing_owner_notification(self) -> None:
+        # A comment post that failed after PR creation must be reconciled on
+        # the next run, which finds the PR and takes the existing path.
+        repo = MagicMock()
+        existing = MagicMock(number=5, html_url="https://x/5", draft=False)
+        existing.get_issue_comments.return_value = []
+        open_or_update_pr(
+            repo, base_repo="o/r", push_repo=None,
+            branch="agent/release-cut/9.1.0-rc1", base_branch="9.1",
+            title="t", body="b", existing=existing, release_owner="alice",
+        )
+        comment = existing.create_issue_comment.call_args.args[0]
+        assert "@alice" in comment
+        assert publish_mod._OWNER_NOTIFICATION_MARKER in comment
+
+    def test_existing_owner_notification_is_never_duplicated(self) -> None:
+        repo = MagicMock()
+        existing = MagicMock(number=5, html_url="https://x/5", draft=False)
+        posted = MagicMock()
+        posted.body = f"{publish_mod._OWNER_NOTIFICATION_MARKER}\n@alice, please review this automated release PR."
+        existing.get_issue_comments.return_value = [posted]
+        open_or_update_pr(
+            repo, base_repo="o/r", push_repo=None,
+            branch="agent/release-cut/9.1.0-rc1", base_branch="9.1",
+            title="t", body="b", existing=existing, release_owner="bob",
+        )
+        existing.create_issue_comment.assert_not_called()
 
     def test_create_passes_draft_true_to_hold(self) -> None:
         # A held cut opens the PR as a draft so GitHub refuses to merge it.

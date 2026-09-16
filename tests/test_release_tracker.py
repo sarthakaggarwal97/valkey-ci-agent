@@ -104,6 +104,60 @@ def test_ensure_checks_issue_ownership_before_parsing(monkeypatch: pytest.Monkey
     parsed.assert_called_once_with(bot)
 
 
+def test_ensure_reuse_preserves_live_status_and_rebinds_marker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Prepare rerun must not reset the dashboard to the empty initial
+    render; it only points the authority marker at the new preparation run."""
+    live_status = (
+        f"{tracker_mod._STATUS_MARKER}\n{TRACKER.marker()}\n"
+        "**Phase: Publish** — waiting for release approval\n"
+    )
+    status_comment = MagicMock()
+    status_comment.body = live_status
+    status_comment.user.login = "release-app[bot]"
+    issue = _issue()
+    issue.state = "open"
+    issue.get_comments.return_value = [status_comment]
+    repo = MagicMock()
+    repo.get_issues.return_value = [issue]
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    monkeypatch.setattr(tracker_mod, "_tracker_from_issue", MagicMock(return_value=TRACKER))
+    rerun = tracker_mod.Tracker(**{**TRACKER.__dict__, "prepare_run_id": 456})
+
+    assert tracker_mod.ensure_tracker(gh, rerun, agent_repo="valkey-io/valkey-ci-agent") is issue
+
+    issue.create_comment.assert_not_called()
+    status_comment.edit.assert_called_once()
+    updated = status_comment.edit.call_args.args[0]
+    assert rerun.marker() in updated
+    assert TRACKER.marker() not in updated
+    assert "waiting for release approval" in updated
+
+
+def test_ensure_reuse_with_unchanged_marker_leaves_comment_untouched(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    status_comment = MagicMock()
+    status_comment.body = f"{tracker_mod._STATUS_MARKER}\n{TRACKER.marker()}\nlive evidence\n"
+    status_comment.user.login = "release-app[bot]"
+    issue = _issue()
+    issue.state = "open"
+    issue.get_comments.return_value = [status_comment]
+    repo = MagicMock()
+    repo.get_issues.return_value = [issue]
+    gh = MagicMock()
+    gh.get_repo.return_value = repo
+    monkeypatch.setattr(tracker_mod, "_tracker_from_issue", MagicMock(return_value=TRACKER))
+
+    tracker_mod.ensure_tracker(gh, TRACKER, agent_repo="valkey-io/valkey-ci-agent")
+
+    issue.create_comment.assert_not_called()
+    status_comment.edit.assert_not_called()
+
+
+
 @pytest.mark.parametrize(
     ("changes", "message"),
     [
@@ -394,24 +448,26 @@ def test_existing_exact_publication_run_prevents_duplicate_dispatch(
     )
 
     title = f"Publish release on {TRACKER.branch} @ {SHA}"
-    find_run.assert_called_once_with(workflow, title, SHA)
+    find_run.assert_called_once_with(workflow, title)
     workflow.create_dispatch.assert_not_called()
     assert result == "#42: validating and qualifying"
 
 
-def test_stale_waiting_publication_is_cancelled_before_redispatch(
+def test_publication_run_from_older_controller_commit_is_adopted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A merge to the controller's default branch must not orphan the
+    in-flight publication: the run is found by its deterministic title and
+    adopted, never cancelled and never re-dispatched."""
     issue = _issue()
     repo = MagicMock()
     agent = MagicMock()
     agent.default_branch = "main"
     agent.get_workflow_run.return_value = _run()
     workflow = MagicMock()
-    workflow.create_dispatch.return_value = True
-    stale = _run(status="waiting", conclusion=None)
-    stale.head_sha = "b" * 40
-    stale.cancel = MagicMock(return_value=True)
+    in_flight = _run(status="waiting", conclusion=None)
+    in_flight.head_sha = "b" * 40  # dispatched before controller main moved
+    in_flight.cancel = MagicMock(return_value=True)
     pr = SimpleNamespace(
         merged=True,
         merge_commit_sha=SHA,
@@ -422,8 +478,8 @@ def test_stale_waiting_publication_is_cancelled_before_redispatch(
     )
     monkeypatch.setattr(tracker_mod, "_find_prep_pr", lambda *a: pr)
     monkeypatch.setattr(tracker_mod, "_find_release", lambda *a: None)
-    monkeypatch.setattr(tracker_mod, "_branch_head", MagicMock(side_effect=[SHA, "c" * 40]))
-    monkeypatch.setattr(tracker_mod, "_find_run", MagicMock(side_effect=[None, stale]))
+    monkeypatch.setattr(tracker_mod, "_branch_head", MagicMock(return_value=SHA))
+    monkeypatch.setattr(tracker_mod, "_find_run", MagicMock(return_value=in_flight))
     monkeypatch.setattr(tracker_mod, "evaluate_candidate_ci", lambda *a: _candidate_ci())
     monkeypatch.setattr(tracker_mod, "_find_production_run", lambda *a: None)
 
@@ -439,12 +495,9 @@ def test_stale_waiting_publication_is_cancelled_before_redispatch(
         dispatch=True,
     )
 
-    stale.cancel.assert_called_once_with()
-    workflow.create_dispatch.assert_called_once_with(
-        "main",
-        inputs={"branch": "9.1", "candidate_sha": SHA},
-    )
-    assert result == "#42: publication dispatched"
+    in_flight.cancel.assert_not_called()
+    workflow.create_dispatch.assert_not_called()
+    assert result == "#42: waiting for release approval"
 
 
 def test_find_run_prefers_active_match_over_newer_completed_duplicate() -> None:

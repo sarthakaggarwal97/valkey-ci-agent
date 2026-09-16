@@ -123,20 +123,31 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
             description=f"refresh release tracker #{issue.number}",
         )
 
-    status, _ = _render_status(
-        tracker,
-        prepare_run=None,
-        pr=None,
-        branch_head="",
-        candidate_sha="",
-        candidate_ci=None,
-        publish_run=None,
-        release=None,
-        production_run=None,
-        agent_repo=agent_repo,
-        dispatched=False,
-    )
-    _upsert_status(issue, status, tracker=tracker)
+    existing_status = _find_status_comment(issue)
+    if existing_status is None:
+        # Seed the controller-owned status comment (and the authority marker
+        # it carries) for a brand-new dashboard, or migrate a pre-comment
+        # tracker whose marker still lives in the editable issue body.
+        status, _ = _render_status(
+            tracker,
+            prepare_run=None,
+            pr=None,
+            branch_head="",
+            candidate_sha="",
+            candidate_ci=None,
+            publish_run=None,
+            release=None,
+            production_run=None,
+            agent_repo=agent_repo,
+            dispatched=False,
+        )
+        _upsert_status(issue, status, tracker=tracker)
+    else:
+        # On reuse the comment already holds live evidence (linked PR,
+        # candidate, release, phase). Replacing it with the empty initial
+        # render would misreport the release until the next sync, so rebind
+        # only the marker: a Prepare rerun changes just its prepare_run_id.
+        _rebind_status_marker(existing_status, tracker)
     # The marker is needed in the create body only to recover an ambiguous
     # issue-creation response. Once the controller-owned status comment exists,
     # make the human-editable body purely presentational.
@@ -302,36 +313,16 @@ def _sync_one(
     release = _find_release(repo, tracker.tag, candidate_sha, tracker.stage != "ga")
 
     publish_title = f"Publish release on {tracker.branch} @ {candidate_sha}" if candidate_sha else ""
-    controller_sha = _branch_head(agent, getattr(agent, "default_branch", "main"))
-    publish_run = _find_run(publish_workflow, publish_title, controller_sha) if publish_title else None
-    any_publish_run = publish_run or (_find_run(publish_workflow, publish_title) if publish_title else None)
-    if (
-        publish_run is None
-        and any_publish_run is not None
-        and getattr(any_publish_run, "status", "") != "completed"
-        and getattr(any_publish_run, "head_sha", "") == controller_sha
-    ):
-        publish_run = any_publish_run
-    if (
-        publish_run is None
-        and any_publish_run is not None
-        and getattr(any_publish_run, "status", "") != "completed"
-        and getattr(any_publish_run, "head_sha", "") != controller_sha
-    ):
-        if dispatch:
-            cancelled = retry_github_call(
-                lambda: any_publish_run.cancel(),
-                retries=2,
-                description=f"cancel stale publication run {any_publish_run.id}",
-            )
-            if cancelled is False:
-                raise RuntimeError(f"GitHub refused cancellation of stale publication run {any_publish_run.id}")
-            logger.warning(
-                "Cancelled stale publication run %s after controller main moved",
-                any_publish_run.id,
-            )
-        else:
-            publish_run = any_publish_run
+    # The deterministic run title pins the branch and the exact candidate SHA,
+    # so it identifies the publication for this candidate regardless of which
+    # controller commit the run was dispatched from. Keying the lookup on the
+    # controller repository's current head would orphan an in-flight run every
+    # time an unrelated merge advances this repository's default branch, and
+    # the guard below would then dispatch a duplicate publication with a
+    # second protected approval prompt. The Publish workflow revalidates the
+    # candidate against live repository state, so a run dispatched from an
+    # older controller commit stays authoritative for its candidate.
+    publish_run = _find_run(publish_workflow, publish_title) if publish_title else None
 
     dispatched = False
     if (
@@ -891,11 +882,11 @@ def _find_release(
     return release
 
 
-def _find_run(workflow: Any, title: str, head_sha: str = "") -> Any | None:
+def _find_run(workflow: Any, title: str) -> Any | None:
     if not title:
         return None
     runs = retry_github_call(
-        lambda: workflow.get_runs(head_sha=head_sha) if head_sha else workflow.get_runs(),
+        lambda: workflow.get_runs(),
         retries=2,
         description=f"list {workflow.name} runs",
     )
@@ -948,16 +939,15 @@ def _ensure_label(repo: Any) -> Any:
     )
 
 
-def _upsert_status(issue: Any, body: str, *, tracker: Tracker | None = None) -> None:
-    marker = f"{tracker.marker()}\n" if tracker is not None else ""
-    rendered = f"{_STATUS_MARKER}\n{marker}{body.rstrip()}\n"
+def _find_status_comment(issue: Any) -> Any | None:
+    """Find the bot-owned controller status comment, if the dashboard has one."""
     comments = retry_github_call(
         lambda: list(issue.get_comments()),
         retries=2,
-        description=f"list tracker #{issue.number} comments",
+        description=f"list tracker #{getattr(issue, 'number', '?')} comments",
     )
     bot_login = getattr(getattr(issue, "user", None), "login", "")
-    existing = next(
+    return next(
         (
             comment
             for comment in comments
@@ -966,6 +956,39 @@ def _upsert_status(issue: Any, body: str, *, tracker: Tracker | None = None) -> 
         ),
         None,
     )
+
+
+def _rebind_status_marker(comment: Any, tracker: Tracker) -> None:
+    """Point the authority marker at this preparation run, nothing else.
+
+    The sync loop reads its authority (tag, prep branch, prepare_run_id) from
+    the marker inside the status comment, and a Prepare rerun mints a new
+    prepare_run_id. Splice the new marker into the existing comment so the
+    rendered live status survives the rerun untouched.
+    """
+    body = comment.body or ""
+    marker = tracker.marker()
+    start = body.find(_TRACKER_PREFIX)
+    if start >= 0:
+        end = body.find(" -->", start)
+        if end < 0:
+            return
+        updated = body[:start] + marker + body[end + len(" -->") :]
+    else:
+        updated = body.replace(_STATUS_MARKER, f"{_STATUS_MARKER}\n{marker}", 1)
+    if updated == body:
+        return
+    retry_github_call(
+        lambda: comment.edit(updated),
+        retries=2,
+        description="rebind tracker status marker",
+    )
+
+
+def _upsert_status(issue: Any, body: str, *, tracker: Tracker | None = None) -> None:
+    marker = f"{tracker.marker()}\n" if tracker is not None else ""
+    rendered = f"{_STATUS_MARKER}\n{marker}{body.rstrip()}\n"
+    existing = _find_status_comment(issue)
     if existing is None:
         retry_github_call(
             lambda: issue.create_comment(rendered),

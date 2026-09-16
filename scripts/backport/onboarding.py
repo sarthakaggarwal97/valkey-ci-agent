@@ -283,7 +283,7 @@ def onboard_first_ga(
         return OnboardingResult(action="not-applicable")
     if gh_agent is None:
         raise RuntimeError(
-            f"AGENT_GITHUB_TOKEN is unavailable; manually register {source_repo}@{branch} in "
+            f"ONBOARDING_GITHUB_TOKEN is unavailable; manually register {source_repo}@{branch} in "
             f"{agent_repo}/{_REGISTRY_PATH} after identifying its GitHub Project number"
         )
 

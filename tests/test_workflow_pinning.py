@@ -21,7 +21,11 @@ _TRUSTED_REUSABLE_WORKFLOW_REFS = {
     # tag-management bootstrap cycle. The called workflow pins all of its
     # implementation checkouts to github.workflow_sha, the exact commit this
     # reference resolved to. It receives no secrets, and candidate-code jobs
-    # are constrained to contents:read.
+    # are constrained to contents:read. Pinning this reference to a SHA would
+    # add no security boundary: the production artifacts themselves are built
+    # by build-release.yml in that same repository at its own protected refs,
+    # so an attacker who controls valkey-release-automation main already
+    # controls the release outputs regardless of how qualification is called.
     "valkey-io/valkey-release-automation/.github/workflows/qualify-release.yml@main",
 }
 
