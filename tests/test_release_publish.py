@@ -129,6 +129,38 @@ def test_plan_requires_candidate_from_canonical_merged_preparation_pr(
     repo.get_commit.assert_called_once_with(SHA)
 
 
+def test_plan_refuses_version_that_skips_the_derived_sequence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # version.h records 9.1.2 (ga) but the line's tags derive 9.1.4 as the
+    # next patch: a handcrafted canonical-looking preparation PR must not
+    # publish out of sequence.
+    monkeypatch.setattr(publish_mod, "require_green_checks", lambda *a: None)
+    repo = _repo()
+    repo.get_tags.return_value = [SimpleNamespace(name="9.1.3"), SimpleNamespace(name="9.1.1")]
+    with pytest.raises(publish_mod.ReleaseError, match="derives 9.1.4 as the next release"):
+        publish_mod.plan_publication(_gh(repo), POLICY, branch="9.1", candidate_sha=SHA)
+
+
+def test_plan_accepts_rerun_after_interrupted_attempt_created_the_tag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # An interrupted attempt already created tag 9.1.2 at this exact
+    # candidate. Re-derivation would now compute 9.1.3, so the existing
+    # same-SHA tag is the sequence evidence and the rerun must proceed.
+    monkeypatch.setattr(publish_mod, "require_green_checks", lambda *a: None)
+    monkeypatch.setattr(
+        publish_mod,
+        "tag_ruleset_protected",
+        lambda *a: publish_mod.TagRulesetVerdict(True, (123,)),
+    )
+    repo = _repo()
+    repo.get_tags.return_value = [SimpleNamespace(name="9.1.2"), SimpleNamespace(name="9.1.1")]
+    monkeypatch.setattr(publish_mod, "resolve_tag_commit", lambda *a: SHA)
+    plan = publish_mod.plan_publication(_gh(repo), POLICY, branch="9.1", candidate_sha=SHA)
+    assert plan.tag == "9.1.2"
+
+
 def _plan() -> PublishPlan:
     return PublishPlan(
         branch="9.1",

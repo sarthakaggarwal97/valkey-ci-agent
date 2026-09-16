@@ -10,9 +10,34 @@ import yaml
 from scripts.release.models import ReleasePolicy
 
 
+class _StrictLoader(yaml.SafeLoader):
+    """SafeLoader that refuses duplicate mapping keys.
+
+    yaml.safe_load silently keeps the last duplicate, which would let a
+    second `authorized_team:` line replace the reviewed one.
+    """
+
+
+def _construct_mapping_no_duplicates(loader: yaml.SafeLoader, node: yaml.MappingNode) -> dict:
+    keys = set()
+    for key_node, _ in node.value:
+        key = loader.construct_object(key_node)
+        if key in keys:
+            raise ValueError(f"duplicate release policy key: {key}")
+        keys.add(key)
+    return yaml.SafeLoader.construct_mapping(loader, node)
+
+
+_StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_mapping_no_duplicates,
+)
+
+
 def load_policy(path: str | Path) -> ReleasePolicy:
-    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(raw, dict) or raw.get("schema_version") != 1:
+    raw = yaml.load(Path(path).read_text(encoding="utf-8"), Loader=_StrictLoader)
+    # bool is an int subclass, so `True == 1`; require a literal integer 1.
+    if not isinstance(raw, dict) or type(raw.get("schema_version")) is not int or raw.get("schema_version") != 1:
         raise ValueError("release policy must be a schema_version: 1 mapping")
 
     allowed = {

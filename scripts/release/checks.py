@@ -35,8 +35,12 @@ class CandidateCI:
 
     @property
     def ready(self) -> bool:
+        # The overall workflow conclusion matters even when every configured
+        # named check passed: a failed run must never be presented as green
+        # evidence to the approver.
         return (
             self.workflow_status == "completed"
+            and self.workflow_conclusion == "success"
             and bool(self.suite_id)
             and all(check.passed for check in self.checks)
         )

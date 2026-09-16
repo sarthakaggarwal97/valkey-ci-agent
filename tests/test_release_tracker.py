@@ -101,7 +101,7 @@ def test_ensure_checks_issue_ownership_before_parsing(monkeypatch: pytest.Monkey
     monkeypatch.setattr(tracker_mod, "_tracker_from_issue", parsed)
 
     assert tracker_mod.ensure_tracker(gh, TRACKER, agent_repo="valkey-io/valkey-ci-agent") is bot
-    parsed.assert_called_once_with(bot)
+    parsed.assert_called_once_with(bot, allow_body_fallback=True)
 
 
 def test_ensure_reuse_preserves_live_status_and_rebinds_marker(
@@ -448,26 +448,28 @@ def test_existing_exact_publication_run_prevents_duplicate_dispatch(
     )
 
     title = f"Publish release on {TRACKER.branch} @ {SHA}"
-    find_run.assert_called_once_with(workflow, title)
+    find_run.assert_called_once_with(workflow, title, SHA)
     workflow.create_dispatch.assert_not_called()
     assert result == "#42: validating and qualifying"
 
 
-def test_publication_run_from_older_controller_commit_is_adopted(
+def test_stale_waiting_publication_is_cancelled_before_redispatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A merge to the controller's default branch must not orphan the
-    in-flight publication: the run is found by its deterministic title and
-    adopted, never cancelled and never re-dispatched."""
+    """Publication requires its workflow revision to still be controller main
+    (release-publish.yml fails otherwise), so an in-flight run from an older
+    controller commit can never succeed: it is cancelled and re-dispatched,
+    keeping exactly one live approval prompt."""
     issue = _issue()
     repo = MagicMock()
     agent = MagicMock()
     agent.default_branch = "main"
     agent.get_workflow_run.return_value = _run()
     workflow = MagicMock()
-    in_flight = _run(status="waiting", conclusion=None)
-    in_flight.head_sha = "b" * 40  # dispatched before controller main moved
-    in_flight.cancel = MagicMock(return_value=True)
+    workflow.create_dispatch.return_value = True
+    stale = _run(status="waiting", conclusion=None)
+    stale.head_sha = "b" * 40
+    stale.cancel = MagicMock(return_value=True)
     pr = SimpleNamespace(
         merged=True,
         merge_commit_sha=SHA,
@@ -478,8 +480,8 @@ def test_publication_run_from_older_controller_commit_is_adopted(
     )
     monkeypatch.setattr(tracker_mod, "_find_prep_pr", lambda *a: pr)
     monkeypatch.setattr(tracker_mod, "_find_release", lambda *a: None)
-    monkeypatch.setattr(tracker_mod, "_branch_head", MagicMock(return_value=SHA))
-    monkeypatch.setattr(tracker_mod, "_find_run", MagicMock(return_value=in_flight))
+    monkeypatch.setattr(tracker_mod, "_branch_head", MagicMock(side_effect=[SHA, "c" * 40]))
+    monkeypatch.setattr(tracker_mod, "_find_run", MagicMock(side_effect=[None, stale]))
     monkeypatch.setattr(tracker_mod, "evaluate_candidate_ci", lambda *a: _candidate_ci())
     monkeypatch.setattr(tracker_mod, "_find_production_run", lambda *a: None)
 
@@ -495,9 +497,61 @@ def test_publication_run_from_older_controller_commit_is_adopted(
         dispatch=True,
     )
 
-    in_flight.cancel.assert_not_called()
-    workflow.create_dispatch.assert_not_called()
-    assert result == "#42: waiting for release approval"
+    stale.cancel.assert_called_once_with()
+    workflow.create_dispatch.assert_called_once_with(
+        "main",
+        inputs={"branch": "9.1", "candidate_sha": SHA},
+    )
+    assert result == "#42: publication dispatched"
+
+
+def test_stale_completed_failure_does_not_suppress_redispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A publication run that already failed at an older controller commit is
+    not adopted: the head-filtered lookup misses it and the completed-run
+    fallback is head-scoped, so the watcher dispatches a fresh run."""
+    issue = _issue()
+    repo = MagicMock()
+    agent = MagicMock()
+    agent.default_branch = "main"
+    agent.get_workflow_run.return_value = _run()
+    workflow = MagicMock()
+    workflow.create_dispatch.return_value = True
+    failed = _run(status="completed", conclusion="failure")
+    failed.head_sha = "b" * 40
+    pr = SimpleNamespace(
+        merged=True,
+        merge_commit_sha=SHA,
+        number=7,
+        html_url="https://example/pull/7",
+        state="closed",
+        draft=False,
+    )
+    monkeypatch.setattr(tracker_mod, "_find_prep_pr", lambda *a: pr)
+    monkeypatch.setattr(tracker_mod, "_find_release", lambda *a: None)
+    monkeypatch.setattr(tracker_mod, "_branch_head", MagicMock(side_effect=[SHA, "c" * 40]))
+    monkeypatch.setattr(tracker_mod, "_find_run", MagicMock(side_effect=[None, failed]))
+    monkeypatch.setattr(tracker_mod, "evaluate_candidate_ci", lambda *a: _candidate_ci())
+    monkeypatch.setattr(tracker_mod, "_find_production_run", lambda *a: None)
+
+    result = tracker_mod._sync_one(
+        issue,
+        TRACKER,
+        repo,
+        agent,
+        MagicMock(),
+        workflow,
+        agent_repo="valkey-io/valkey-ci-agent",
+        policy=POLICY,
+        dispatch=True,
+    )
+
+    workflow.create_dispatch.assert_called_once_with(
+        "main",
+        inputs={"branch": "9.1", "candidate_sha": SHA},
+    )
+    assert result == "#42: publication dispatched"
 
 
 def test_find_run_prefers_active_match_over_newer_completed_duplicate() -> None:

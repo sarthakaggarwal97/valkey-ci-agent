@@ -46,6 +46,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       stage: ${{ steps.release.outputs.stage }}
       tag: ${{ steps.release.outputs.tag }}
+      actor: ${{ steps.release.outputs.actor }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -76,6 +77,10 @@ jobs:
         run: |
           python -m scripts.release.main prepare \
             --branch "$BRANCH" --intent "$INTENT" --actor "$ACTOR"
+          # Written only after prepare succeeds, so downstream jobs receive
+          # the identity this job actually authorized. A "re-run failed jobs"
+          # by a different actor keeps the originally authorized owner.
+          echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
 
       - name: Summary
         env:
@@ -104,7 +109,7 @@ jobs:
       version: ${{ needs.derive.outputs.version }}
       stage: ${{ needs.derive.outputs.stage }}
       urgency: ${{ inputs.urgency }}
-      release_owner: ${{ github.triggering_actor }}
+      release_owner: ${{ needs.derive.outputs.actor }}
       dry_run: false
 
   tracker:

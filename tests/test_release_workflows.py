@@ -14,7 +14,7 @@ def test_prepare_opens_dashboard_and_notes_pr_in_parallel() -> None:
     assert inputs["dry_run"]["default"] == "false"
     assert list(workflow["jobs"]) == ["derive", "cut-notes", "tracker"]
     assert "initiator" not in inputs
-    assert workflow["jobs"]["cut-notes"]["with"]["release_owner"] == "${{ github.triggering_actor }}"
+    assert workflow["jobs"]["cut-notes"]["with"]["release_owner"] == "${{ needs.derive.outputs.actor }}"
     assert workflow["jobs"]["derive"]["if"] == "github.repository == 'valkey-io/valkey-ci-agent'"
     assert "${{ github.triggering_actor }}" in str(workflow["jobs"]["derive"])
     assert workflow["jobs"]["derive"]["environment"] == "release-control"

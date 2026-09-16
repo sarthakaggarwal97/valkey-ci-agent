@@ -78,7 +78,7 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
     for candidate in itertools.islice(repo.get_issues(state="all", labels=[label]), 200):
         if not _is_bot_owned(candidate):
             continue
-        existing = _tracker_from_issue(candidate)
+        existing = _tracker_from_issue(candidate, allow_body_fallback=True)
         if existing is not None and existing.tag == tracker.tag:
             issue = candidate
             break
@@ -98,7 +98,7 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
                     candidate
                     for candidate in itertools.islice(repo.get_issues(state="all", labels=[label]), 200)
                     if _is_bot_owned(candidate)
-                    and (parsed := _tracker_from_issue(candidate)) is not None
+                    and (parsed := _tracker_from_issue(candidate, allow_body_fallback=True)) is not None
                     and parsed.tag == tracker.tag
                 ),
                 None,
@@ -313,16 +313,44 @@ def _sync_one(
     release = _find_release(repo, tracker.tag, candidate_sha, tracker.stage != "ga")
 
     publish_title = f"Publish release on {tracker.branch} @ {candidate_sha}" if candidate_sha else ""
-    # The deterministic run title pins the branch and the exact candidate SHA,
-    # so it identifies the publication for this candidate regardless of which
-    # controller commit the run was dispatched from. Keying the lookup on the
-    # controller repository's current head would orphan an in-flight run every
-    # time an unrelated merge advances this repository's default branch, and
-    # the guard below would then dispatch a duplicate publication with a
-    # second protected approval prompt. The Publish workflow revalidates the
-    # candidate against live repository state, so a run dispatched from an
-    # older controller commit stays authoritative for its candidate.
-    publish_run = _find_run(publish_workflow, publish_title) if publish_title else None
+    # Publication enforces that its own workflow revision is still the
+    # controller's current main (release-publish.yml fails otherwise), so a
+    # run dispatched from an older controller commit can never succeed. The
+    # lookup therefore prefers a run at the current controller head; an
+    # incomplete run from an older head is cancelled and re-dispatched fresh,
+    # which keeps exactly one live approval prompt. A completed run is only
+    # adopted at the current head, so a stale failure never suppresses the
+    # automatic re-dispatch.
+    controller_sha = _branch_head(agent, getattr(agent, "default_branch", "main"))
+    publish_run = _find_run(publish_workflow, publish_title, controller_sha) if publish_title else None
+    any_publish_run = publish_run or (_find_run(publish_workflow, publish_title) if publish_title else None)
+    if (
+        publish_run is None
+        and any_publish_run is not None
+        and getattr(any_publish_run, "status", "") != "completed"
+        and getattr(any_publish_run, "head_sha", "") == controller_sha
+    ):
+        publish_run = any_publish_run
+    if (
+        publish_run is None
+        and any_publish_run is not None
+        and getattr(any_publish_run, "status", "") != "completed"
+        and getattr(any_publish_run, "head_sha", "") != controller_sha
+    ):
+        if dispatch:
+            cancelled = retry_github_call(
+                lambda: any_publish_run.cancel(),
+                retries=2,
+                description=f"cancel stale publication run {any_publish_run.id}",
+            )
+            if cancelled is False:
+                raise RuntimeError(f"GitHub refused cancellation of stale publication run {any_publish_run.id}")
+            logger.warning(
+                "Cancelled stale publication run %s after controller main moved",
+                any_publish_run.id,
+            )
+        else:
+            publish_run = any_publish_run
 
     dispatched = False
     if (
@@ -882,11 +910,11 @@ def _find_release(
     return release
 
 
-def _find_run(workflow: Any, title: str) -> Any | None:
+def _find_run(workflow: Any, title: str, head_sha: str = "") -> Any | None:
     if not title:
         return None
     runs = retry_github_call(
-        lambda: workflow.get_runs(),
+        lambda: workflow.get_runs(head_sha=head_sha) if head_sha else workflow.get_runs(),
         retries=2,
         description=f"list {workflow.name} runs",
     )
@@ -968,12 +996,18 @@ def _rebind_status_marker(comment: Any, tracker: Tracker) -> None:
     """
     body = comment.body or ""
     marker = tracker.marker()
-    start = body.find(_TRACKER_PREFIX)
-    if start >= 0:
-        end = body.find(" -->", start)
-        if end < 0:
-            return
-        updated = body[:start] + marker + body[end + len(" -->") :]
+    if marker in body:
+        return
+    # The marker is always a single line. Replacing the whole line repairs a
+    # malformed (e.g. unterminated) marker instead of silently keeping it,
+    # which matters because ensure_tracker strips the issue-body copy right
+    # after this rebind.
+    lines = body.split("\n")
+    for index, line in enumerate(lines):
+        if _TRACKER_PREFIX in line:
+            lines[index] = marker
+            updated = "\n".join(lines)
+            break
     else:
         updated = body.replace(_STATUS_MARKER, f"{_STATUS_MARKER}\n{marker}", 1)
     if updated == body:
@@ -1007,11 +1041,14 @@ def _upsert_status(issue: Any, body: str, *, tracker: Tracker | None = None) -> 
         )
 
 
-def _tracker_from_issue(issue: Any) -> Tracker | None:
+def _tracker_from_issue(issue: Any, *, allow_body_fallback: bool = False) -> Tracker | None:
     """Read authority metadata from the bot-owned status comment.
 
-    The issue body fallback exists only to migrate trackers created before the
-    marker moved out of maintainer-editable content.
+    The issue-body fallback exists only to migrate trackers created before
+    the marker moved out of maintainer-editable content, and only the trusted
+    ensure_tracker path (which immediately re-seeds the status comment) may
+    use it. The sync loop must never derive dispatch decisions from content a
+    maintainer, or any App with issues:write, can edit.
     """
     bot_login = getattr(getattr(issue, "user", None), "login", "")
     comments = retry_github_call(
@@ -1026,7 +1063,9 @@ def _tracker_from_issue(issue: Any) -> Tracker | None:
             and (tracker := parse_tracker(comment.body or "")) is not None
         ):
             return tracker
-    return parse_tracker(issue.body or "")
+    if allow_body_fallback:
+        return parse_tracker(issue.body or "")
+    return None
 
 
 def _repo(gh: Any, name: str) -> Any:

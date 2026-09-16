@@ -96,6 +96,34 @@ def plan_publication(
     if existing_tag_sha and existing_tag_sha != candidate_sha:
         raise ReleaseError(f"tag {tag} already points at {existing_tag_sha}, not {candidate_sha}")
 
+    # Preparation derives the version deterministically, but publication must
+    # not trust that the merged PR came from Prepare: re-derive the expected
+    # release from the branch's live tag state so a handcrafted canonical
+    # preparation PR cannot skip an RC, publish a GA without one, or skip a
+    # patch number. A rerun after an interrupted attempt already created the
+    # tag at this exact candidate is exempt: the tag itself is the sequence
+    # evidence there.
+    if not existing_tag_sha:
+        intent = (
+            ReleaseIntent("rc")
+            if stage.startswith("rc")
+            else ReleaseIntent("ga") if version.endswith(".0") else ReleaseIntent("patch")
+        )
+        tag_names = retry_github_call(
+            lambda: [item.name for item in repo.get_tags()],
+            retries=2,
+            description="list release tags",
+        )
+        try:
+            expected = derive_version(branch, intent, tag_names)
+        except ValueError as exc:
+            raise ReleaseError(f"cannot derive a next release for {branch}: {exc}") from exc
+        if (expected.version, expected.stage) != (version, stage):
+            raise ReleaseError(
+                f"version.h records {tag}, but {branch}'s tag state derives "
+                f"{expected.tag} as the next release; rerun Prepare Release"
+            )
+
     # Candidate CI is useful maintainer context, but the exact no-publish
     # qualification matrix is the technical publication gate. A stale or
     # renamed advisory check must not strand a fully qualified release.
