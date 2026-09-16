@@ -1030,7 +1030,10 @@ class TestCutOrchestration:
 
         assert "1 PR(s) were labelled `no-release-notes`" in body
         assert "0 candidate PR(s) were judged internal-only" in body
-        assert "Excluded by `no-release-notes`" in body
+        # Counted, not tabulated: a per-PR table at release scale pushed the
+        # body past GitHub's length limit.
+        assert "1 PR(s) hard-excluded by `no-release-notes`" in body
+        assert "https://x/9" not in body
         assert "(or add `release-notes`)" not in body
 
     def test_duplicate_pr_warned_in_body(self, monkeypatch, clone):
@@ -1039,30 +1042,29 @@ class TestCutOrchestration:
         assert "noted more than once" in body
         assert "#40" in body
 
-    def test_ai_included_listed_in_body(self, monkeypatch, clone):
-        # A label-less PR AI triage added to the notes is listed with its reason so
-        # a maintainer can confirm the include.
+    def test_ai_included_counted_in_body(self, monkeypatch, clone):
+        # AI-triaged includes are counted, not tabulated: the dated notes
+        # section in this PR's own diff is the authoritative included list, and
+        # a per-PR table at release scale pushed the body past GitHub's limit.
         from scripts.release_notes.models import TriagedPR
         ai_included = (TriagedPR(number=8, title="adds a config", author="dev",
                                  url="https://x/8", included=True, reason="adds CONFIG foo"),)
         body = self._cut_body(monkeypatch, clone, line_exists={"9.1": True}, cut_kwargs={},
                               ai_included=ai_included)
-        assert "AI-triaged into the notes" in body
-        assert "[#8](https://x/8)" in body
-        assert "adds CONFIG foo" in body
+        assert "1 PR(s) triaged into the notes" in body
+        assert "https://x/8" not in body
 
-    def test_ai_excluded_listed_in_body(self, monkeypatch, clone):
-        # A label-less PR AI triage dropped is listed so a maintainer can catch a
-        # wrongly-dropped user-facing change; an uncertain call is marked.
+    def test_ai_excluded_counted_in_body(self, monkeypatch, clone):
+        # Exclusions are counted with the recovery instruction; an uncertain
+        # call still gets its own section above, so nothing actionable is lost.
         from scripts.release_notes.models import TriagedPR
         ai_excluded = (TriagedPR(number=9, title="refactor", author="dev",
                                  url="https://x/9", included=False,
                                  reason="internal refactor", uncertain=True),)
         body = self._cut_body(monkeypatch, clone, line_exists={"9.1": True}, cut_kwargs={},
                               ai_excluded=ai_excluded)
-        assert "AI-triaged out of the notes" in body
-        assert "[#9](https://x/9)" in body
-        assert "⚠️ internal refactor" in body  # uncertain calls are flagged
+        assert "1 PR(s) triaged out" in body
+        assert "label it `release-notes` and re-cut" in body
 
     def test_ai_triage_holds_pr_as_draft(self, monkeypatch, clone):
         # Any AI include/exclude decision holds the PR as a draft for confirmation.

@@ -185,3 +185,34 @@ class TestEscapeCell:
 
     def test_lone_backslash_escaped(self) -> None:
         assert escape_cell("C:\\path") == "C:\\\\path"
+
+
+class TestClampBody:
+    def test_short_body_is_unchanged(self) -> None:
+        assert publish_mod.clamp_body("notes\n") == "notes\n"
+
+    def test_oversized_body_is_clamped_and_marked(self) -> None:
+        # GitHub rejects a body over 65536 chars with a 422, which would fail the
+        # cut after the notes commit is already pushed.
+        body = "x" * 200_000
+        clamped = publish_mod.clamp_body(body)
+        assert len(clamped) <= 65_000
+        assert clamped.endswith("*")
+        assert "truncated" in clamped
+
+    def test_create_and_update_paths_clamp(self) -> None:
+        repo = MagicMock()
+        pr = MagicMock(number=9, html_url="https://x/9")
+        pr.get_issue_comments.return_value = []
+        repo.create_pull.return_value = pr
+        open_or_update_pr(repo, base_repo="o/r", push_repo=None,
+                          branch="agent/release-cut/9.2.0-rc1", base_branch="9.2",
+                          title="t", body="y" * 200_000, existing=None)
+        assert len(repo.create_pull.call_args.kwargs["body"]) <= 65_000
+
+        existing = MagicMock(number=5, html_url="https://x/5", draft=False)
+        existing.get_issue_comments.return_value = []
+        open_or_update_pr(repo, base_repo="o/r", push_repo=None,
+                          branch="agent/release-cut/9.2.0-rc1", base_branch="9.2",
+                          title="t", body="y" * 200_000, existing=existing)
+        assert len(existing.edit.call_args.kwargs["body"]) <= 65_000
