@@ -42,7 +42,12 @@ def test_publish_waits_for_qualification_before_protected_write() -> None:
     assert "TRIGGERING_ACTOR" in str(jobs["publish"])
     assert '"$APPROVER" != "$TRIGGERING_ACTOR"' in str(jobs["publish"])
     assert "release must disable admin bypass" in str(jobs["publish"])
-    assert jobs["qualify"]["permissions"]["contents"] == "read"
+    # A validation ceiling, not a runtime grant: GitHub validates every job in
+    # the nested workflow graph against the caller's block before running
+    # anything, and packages.yml's deploy-pages (publish-only, skipped during
+    # qualification) declares contents:write. Executing qualification jobs are
+    # job-level pinned to contents:read in the called workflows.
+    assert jobs["qualify"]["permissions"]["contents"] == "write"
     assert "EXPECTED_APPROVAL_DIGEST" in str(jobs["publish"])
     assert '"$APPROVAL_DIGEST" == "$EXPECTED_APPROVAL_DIGEST"' in str(jobs["publish"])
     assert 'if has("can_admins_bypass") then .can_admins_bypass else true end' in str(jobs["publish"])

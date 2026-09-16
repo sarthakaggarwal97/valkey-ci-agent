@@ -82,8 +82,18 @@ jobs:
     # one-hour App token surviving a multi-hour package matrix. No secrets are
     # passed; candidate-code jobs in the called workflow downgrade themselves
     # to contents:read and never receive OIDC.
+    #
+    # contents:write is a VALIDATION ceiling, not a runtime grant to
+    # qualification. GitHub validates every job in the nested workflow graph
+    # against this block before running anything, including jobs the
+    # qualification path skips - and packages.yml's deploy-pages job (publish
+    # only, skipped under publish:false) declares contents:write, so a read
+    # ceiling fails the whole call at startup. Every job that actually
+    # EXECUTES during qualification is job-level pinned to contents:read in
+    # the called workflows, and the token being scoped is this repository's
+    # own GITHUB_TOKEN, which holds nothing of value for the candidate.
     permissions:
-      contents: read
+      contents: write
       id-token: write
     # Deliberately follows the separately reviewed, branch-protected workflow
     # in the Valkey organization. Unlike third-party actions, this is a
