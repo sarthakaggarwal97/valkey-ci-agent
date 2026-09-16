@@ -96,8 +96,8 @@ def test_app_credentials_require_both_secrets() -> None:
     job_env = _workflow(_SIMPLE)["jobs"]["cut"]["env"]
 
     assert job_env["HAS_APP_CREDS"] == (
-        "${{ secrets.VALKEY_RELEASE_CONTROL_APP_ID != '' && "
-        "secrets.VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY != '' }}"
+        "${{ secrets.VALKEYRIE_BOT_APP_ID != '' && "
+        "secrets.VALKEYRIE_BOT_PRIVATE_KEY != '' }}"
     )
 
 

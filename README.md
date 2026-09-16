@@ -642,17 +642,13 @@ controller's long-lived post-release polling loop.
 
 - Configure GitHub Actions actor policy so only release maintainers can run
   the manual workflows. The live `core-team` check remains defense in depth.
-- `release-control` must allow only the exact default branch. It stores
-  `VALKEY_RELEASE_CONTROL_APP_ID`,
-  `VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY`, and the release-notes Bedrock
-  credentials. Qualification
+- `release-control` must allow only the exact default branch. The release
+  workflows authenticate with the `VALKEYRIE_BOT_APP_ID` and
+  `VALKEYRIE_BOT_PRIVATE_KEY` secrets (shared with the other agent
+  workflows), plus the release-notes Bedrock credentials. Qualification
   is a secretless synchronous reusable workflow call, so it needs no
-  cross-repository Actions-write token. The control App must not bypass
-  release-tag protection.
-- Grant the control App only the permissions requested by the workflows.
-  The control App holds no tag-ruleset bypass, so it may be an existing
-  automation App (for example the Valkeyrie Bot) rather than a dedicated
-  one; only the publication App must be dedicated and separate:
+  cross-repository Actions-write token.
+- Grant the App only the permissions requested by the workflows:
   - on `valkey`: `administration:read`, `actions:read`, `checks:read`,
     `contents:write`, `issues:write`, `metadata:read`, and
     `pull-requests:write`;
@@ -668,14 +664,21 @@ controller's long-lived post-release polling loop.
   - at organization scope: `members:read` for release authorization and
     `organization-projects:read` for first-GA backport onboarding.
 - `release` must allow only the exact default branch, require a reviewer,
-  prevent self-review, and disallow admin bypass. It alone stores
-  `VALKEY_RELEASE_PUBLISH_APP_ID` and
-  `VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY`. On `valkey`, the publication App
-  needs `administration:read`, `actions:read`, `checks:read`, `contents:write`,
+  prevent self-review, and disallow admin bypass. The publication job mints
+  its token there, and the App named as the tag-ruleset bypass needs
+  `administration:read`, `actions:read`, `checks:read`, `contents:write`,
   `metadata:read`, and `pull-requests:read`, plus organization
-  `members:read`. Both Apps use `administration:read` to inspect tag-rule
-  bypass actors. The publication App is the sole Integration allowed to create
-  protected release tags.
+  `members:read`, on `valkey`.
+- Current deployment runs control and publication as ONE App (the Valkeyrie
+  Bot), which is also the single Integration allowed to create protected
+  release tags. The accepted tradeoff: every workflow holding that App's key
+  can technically create release tags, so the reviewed `release` environment
+  gates the publication path rather than the credential. To split the roles
+  later without code changes, create a dedicated publication App and store
+  its id/key as environment-scoped `VALKEYRIE_BOT_APP_ID` /
+  `VALKEYRIE_BOT_PRIVATE_KEY` secrets inside `release` (environment secrets
+  shadow repository secrets of the same name), then re-point the ruleset
+  bypass to it.
 - `valkey-release-automation` keeps its existing `release-publish`
   production approval. It is the second deployment approval before public
   packages and downstream updates are written.

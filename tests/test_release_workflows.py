@@ -33,9 +33,12 @@ def test_publish_waits_for_qualification_before_protected_write() -> None:
     assert jobs["publish"]["needs"] == ["validate", "qualify", "approval-plan"]
     assert "automation_sha" in str(jobs["approval-plan"])
     assert jobs["publish"]["environment"] == "release"
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" in str(jobs["publish"])
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in str(jobs["validate"])
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in str(jobs["qualify"])
+    # Single-App deployment: control and publish both authenticate as the
+    # Valkeyrie App, so credential isolation between validate and publish is
+    # by role (token permissions and environment), not by secret name. The
+    # secretless qualification job is the assertion that still holds by name.
+    assert "VALKEYRIE_BOT_PRIVATE_KEY" in str(jobs["publish"])
+    assert "VALKEYRIE_BOT_PRIVATE_KEY" not in str(jobs["qualify"])
     assert "TRIGGERING_ACTOR" in str(jobs["publish"])
     assert '"$APPROVER" != "$TRIGGERING_ACTOR"' in str(jobs["publish"])
     assert "release must disable admin bypass" in str(jobs["publish"])
@@ -56,7 +59,7 @@ def test_publish_qualification_is_exact_and_synchronous() -> None:
     assert "automation_ref" not in job["with"]
     assert "github.run_id" in job["with"]["request_id"]
     assert "steps" not in job
-    assert "VALKEY_RELEASE_CONTROL_APP_PRIVATE_KEY" not in str(job)
+    assert "VALKEYRIE_BOT_PRIVATE_KEY" not in str(job)
 
 
 def test_no_controller_loop_workflows_remain() -> None:
@@ -79,7 +82,6 @@ def test_progress_watcher_is_narrow_and_serialized() -> None:
     assert "scripts.release.tracker sync" in str(job)
     assert "--poll-interval-seconds" in str(job)
     assert "'300'" in str(job) and "'3300'" in str(job)
-    assert "VALKEY_RELEASE_PUBLISH_APP_PRIVATE_KEY" not in str(job)
     steps = {step.get("id"): step for step in job["steps"] if step.get("id")}
     assert steps["target-token"]["with"]["repositories"] == "valkey"
     assert steps["target-token"]["with"]["permission-issues"] == "write"
