@@ -35,6 +35,9 @@ def test_loads_small_policy(tmp_path: Path) -> None:
     [
         ("schema_version: 2", "schema_version"),
         ("authorized_teams: [core-team]", "org/team-slug"),
+        ("authorized_teams: ['valkey-io/va team']", "org/team-slug"),
+        ("authorized_teams: ['valkey-io / core-team']", "org/team-slug"),
+        ("authorized_teams: ['valkey-io/core/team']", "org/team-slug"),
         ("authorized_teams: []", "non-empty list"),
         ("authorized_teams: [valkey-io/core-team, valkey-io/core-team]", "duplicates"),
         ("branches: []", "non-empty list"),

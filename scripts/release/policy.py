@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +56,7 @@ def load_policy(path: str | Path) -> ReleasePolicy:
     repo = _nonempty(raw.get("repo"), "repo")
     teams = _strings(raw.get("authorized_teams"), "authorized_teams")
     for team in teams:
-        if team.count("/") != 1 or any(not part for part in team.split("/")):
+        if not re.fullmatch(r"[^/\s]+/[^/\s]+", team):
             raise ValueError("every authorized_teams entry must be org/team-slug")
     if len(set(teams)) != len(teams):
         raise ValueError("authorized_teams contains duplicates")
