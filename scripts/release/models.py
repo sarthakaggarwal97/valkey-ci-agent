@@ -25,18 +25,14 @@ class DerivedRelease:
 @dataclass(frozen=True)
 class ReleasePolicy:
     repo: str
-    authorized_team: str
+    authorized_teams: tuple[str, ...]
     branches: tuple[str, ...]
     checks_workflow: str
     required_checks: tuple[str, ...]
 
     @property
-    def team_org(self) -> str:
-        return self.authorized_team.split("/", 1)[0]
-
-    @property
-    def team_slug(self) -> str:
-        return self.authorized_team.split("/", 1)[1]
+    def authorized_teams_display(self) -> str:
+        return " or ".join(self.authorized_teams)
 
 
 @dataclass(frozen=True)

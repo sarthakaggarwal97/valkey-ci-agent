@@ -16,7 +16,7 @@ def _write(tmp_path: Path, body: str) -> Path:
 VALID = """\
 schema_version: 1
 repo: valkey-io/valkey
-authorized_team: valkey-io/core-team
+authorized_teams: [valkey-io/core-team, valkey-io/valkey-release]
 checks_workflow: ci.yml
 branches: ['9.1']
 required_checks: [test]
@@ -26,7 +26,7 @@ required_checks: [test]
 def test_loads_small_policy(tmp_path: Path) -> None:
     policy = load_policy(_write(tmp_path, VALID))
     assert policy.repo == "valkey-io/valkey"
-    assert policy.team_slug == "core-team"
+    assert policy.authorized_teams == ("valkey-io/core-team", "valkey-io/valkey-release")
     assert validate_branch(policy, " 9.1 ") == "9.1"
 
 
@@ -34,7 +34,9 @@ def test_loads_small_policy(tmp_path: Path) -> None:
     "replacement, message",
     [
         ("schema_version: 2", "schema_version"),
-        ("authorized_team: core-team", "org/team-slug"),
+        ("authorized_teams: [core-team]", "org/team-slug"),
+        ("authorized_teams: []", "non-empty list"),
+        ("authorized_teams: [valkey-io/core-team, valkey-io/core-team]", "duplicates"),
         ("branches: []", "non-empty list"),
         ("required_checks: [test, test]", "duplicates"),
         ("checks_workflow: .github/workflows/ci.yml", "filename"),
