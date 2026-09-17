@@ -141,40 +141,6 @@ class ReleasedCodeOracle:
                 return None
         return True
 
-# References with introduction semantics: "introduced in #N", "regression from
-# #N", "follow-up to #N", "broke(n) ... #N". A bare "#N" is deliberately NOT
-# matched: PR bodies cite related work freely, and only an introduction claim
-# says the bug arrived with that change.
-# The reference itself may be "#N" or a full PR URL; valkey bodies use both.
-# Only DIRECTIONAL introduction claims match: "introduced in #N", "regression
-# from #N", "caused by <url>". A bare verb near a reference is not a claim -
-# "Added regression tests for #N" describes this PR's own work, and matching
-# it would drop a real fix, the one error this check refuses.
-_INTRODUCER_RE = re.compile(
-    r"(?:introduced (?:in|by|with)|added (?:in|by|with)|regression (?:from|in|of)"
-    r"|broke[n]? (?:in|by|since)|caused by|follow[- ]?up (?:to|of|for))"
-    r"\s.{0,50}?(?:#(\d+)|github\.com/[\w.-]+/[\w.-]+/pull/(\d+))",
-    re.IGNORECASE,
-)
-
-
-def introduced_by_in_range(text: str, range_pr_numbers: frozenset[int]) -> Optional[int]:
-    """Return the in-range PR *text* claims introduced this bug, if any.
-
-    Complements the blame-based oracle: a fix to a new feature implemented
-    inside a long-shipped file blames released lines, but its own description
-    ("regression from #4460") names the unreleased introducer directly. Only an
-    introduction-shaped reference counts, and only when the referenced PR is
-    itself in the current unreleased range.
-    """
-    if not text or not range_pr_numbers:
-        return None
-    for match in _INTRODUCER_RE.finditer(text):
-        number = int(match.group(1) or match.group(2))
-        if number in range_pr_numbers:
-            return number
-    return None
-
 
 # A backport subject carries the original PR and then its own: "... (#3516) (#4001)".
 _SUBJECT_PR_RE = re.compile(r"\(#(\d+)\)(?:\s*\(#(\d+)\))?\s*$")

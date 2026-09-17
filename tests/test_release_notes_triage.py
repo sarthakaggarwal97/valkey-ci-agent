@@ -361,29 +361,7 @@ class TestUnreleasedCodeExclusion:
         assert [d.pr_number for d in result.excluded] == [11]
         assert result.excluded[0].unreleased_code
 
-    def test_fix_referencing_an_in_range_introducer_is_excluded(self, monkeypatch) -> None:
-        # The blame oracle keeps this one (it touches released files), but the
-        # PR's own body names an unreleased introducer.
-        self._oracle(monkeypatch, {"f" * 40: False})
-        run = _fake_run({"verdicts": [
-            {"pr": 12, "include": True, "reason": "fixes a bug", "uncertain": False},
-        ]})
-        pr = _pr(12, sha="f" * 40, body="Fixes a regression from #4460 during iteration")
-        result = triage([pr], repo_dir="/tmp", base_ref="9.1.2", run_fn=run,
-                        range_pr_numbers=frozenset({12, 4460}))
-        assert [d.pr_number for d in result.excluded] == [12]
-        assert "#4460" in result.excluded[0].reason
-        assert result.excluded[0].unreleased_code
 
-    def test_self_reference_does_not_self_exclude(self, monkeypatch) -> None:
-        self._oracle(monkeypatch, {"a1" * 20: False})
-        run = _fake_run({"verdicts": [
-            {"pr": 13, "include": True, "reason": "fixes a bug", "uncertain": False},
-        ]})
-        pr = _pr(13, sha="a1" * 20, body="regression from #13 rework")
-        result = triage([pr], repo_dir="/tmp", base_ref="9.1.2", run_fn=run,
-                        range_pr_numbers=frozenset({13}))
-        assert [d.pr_number for d in result.included] == [13]
 
     def test_baseline_shipped_pr_is_never_marked_unreleased(self, monkeypatch) -> None:
         # A cherry-pick into the release branch has a different SHA, which
