@@ -595,7 +595,8 @@ not a durable controller.
 
 1. A maintainer dispatches **Prepare Release** from this repository's Actions
    tab. **Prepare Release** authorizes the dispatching maintainer against
-   `valkey-io/valkey-committers`, derives the next version from the release line and
+   `valkey-io/valkey-committers` or `valkey-io/valkey-release`, derives the next
+   version from the release line and
    existing tags, opens one `Release <tag>` tracking issue, and invokes the
    existing release-notes cutter. A real run opens or refreshes the
    deterministic `agent/release-cut/...` PR. Real preparation is the default;
@@ -617,7 +618,7 @@ not a durable controller.
    for that exact call to pass before entering the protected `release`
    environment. After approval,
    it repeats every validation, checks that the approver is still a live
-   `valkey-committers` member, requires the approved plan digest to match, atomically
+   `valkey-committers` or `valkey-release` member, requires the approved plan digest to match, atomically
    creates the tag at the candidate SHA, and publishes the GitHub release.
 
 If the release branch moves after the PR merge, automatic publication stops and
@@ -641,7 +642,8 @@ controller's long-lived post-release polling loop.
 ### Security setup
 
 - Configure GitHub Actions actor policy so only release maintainers can run
-  the manual workflows. The live `valkey-committers` check remains defense in depth.
+  the manual workflows. The live `valkey-committers` / `valkey-release` check
+  remains defense in depth.
 - `release-control` must allow only the exact default branch. The release
   workflows authenticate with the `VALKEYRIE_BOT_APP_ID` and
   `VALKEYRIE_BOT_PRIVATE_KEY` secrets (shared with the other agent

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,7 @@ class _StrictLoader(yaml.SafeLoader):
     """SafeLoader that refuses duplicate mapping keys.
 
     yaml.safe_load silently keeps the last duplicate, which would let a
-    second `authorized_team:` line replace the reviewed one.
+    second `authorized_teams:` line replace the reviewed one.
     """
 
 
@@ -43,7 +44,7 @@ def load_policy(path: str | Path) -> ReleasePolicy:
     allowed = {
         "schema_version",
         "repo",
-        "authorized_team",
+        "authorized_teams",
         "branches",
         "checks_workflow",
         "required_checks",
@@ -53,9 +54,12 @@ def load_policy(path: str | Path) -> ReleasePolicy:
         raise ValueError(f"unknown release policy key(s): {', '.join(sorted(unknown))}")
 
     repo = _nonempty(raw.get("repo"), "repo")
-    team = _nonempty(raw.get("authorized_team"), "authorized_team")
-    if team.count("/") != 1 or any(not part for part in team.split("/")):
-        raise ValueError("authorized_team must be org/team-slug")
+    teams = _strings(raw.get("authorized_teams"), "authorized_teams")
+    for team in teams:
+        if not re.fullmatch(r"[^/\s]+/[^/\s]+", team):
+            raise ValueError("every authorized_teams entry must be org/team-slug")
+    if len(set(teams)) != len(teams):
+        raise ValueError("authorized_teams contains duplicates")
     workflow = _nonempty(raw.get("checks_workflow"), "checks_workflow")
     if "/" in workflow or not workflow.endswith((".yml", ".yaml")):
         raise ValueError("checks_workflow must be a workflow filename")
@@ -69,7 +73,7 @@ def load_policy(path: str | Path) -> ReleasePolicy:
 
     return ReleasePolicy(
         repo=repo,
-        authorized_team=team,
+        authorized_teams=teams,
         branches=branches,
         checks_workflow=workflow,
         required_checks=checks,

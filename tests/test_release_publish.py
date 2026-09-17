@@ -12,7 +12,7 @@ from scripts.release.models import PublishPlan, ReleasePolicy
 SHA = "a" * 40
 POLICY = ReleasePolicy(
     repo="valkey-io/valkey",
-    authorized_team="valkey-io/core-team",
+    authorized_teams=("valkey-io/core-team",),
     branches=("9.1",),
     checks_workflow="ci.yml",
     required_checks=("test",),

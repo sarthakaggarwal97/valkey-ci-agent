@@ -590,7 +590,7 @@ preparation PR and the exact release-branch commit:
 
 ```
 Prepare Release (this repository's Actions UI, dispatched by a maintainer)
-  -> authorize the dispatching maintainer against the authorized team (valkey-committers) live
+  -> authorize the dispatching maintainer against the authorized teams (valkey-committers or valkey-release) live
   -> derive version from branch + tags
   -> create/update non-authoritative Release <tag> tracking issue
   -> open/update agent/release-cut/<version>-<stage> PR
@@ -643,6 +643,7 @@ The publication App is separate and exists only in the reviewer-protected
 `release-publish` approval before public uploads and downstream writes, giving
 the flow two deployment approvals without a relay App, HMAC, or shared secret.
 Releases start from this repository's own Actions UI: Prepare Release
-authorizes the dispatching maintainer live against `valkey-committers`, so there is no
+authorizes the dispatching maintainer live against `valkey-committers` or
+`valkey-release`, so there is no
 relay workflow, no forwarded-identity input, and no cross-repository
 Actions-write grant.

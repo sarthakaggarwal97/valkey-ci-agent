@@ -23,7 +23,7 @@ TRACKER = tracker_mod.Tracker(
 
 POLICY = ReleasePolicy(
     repo=TRACKER.repo,
-    authorized_team="valkey-io/core-team",
+    authorized_teams=("valkey-io/core-team",),
     branches=(TRACKER.branch,),
     checks_workflow="ci.yml",
     required_checks=("linux", "macos"),
@@ -698,7 +698,7 @@ def test_unavailable_candidate_ci_does_not_strand_qualification(
 def test_sync_rejects_policy_for_a_different_repository() -> None:
     wrong_policy = ReleasePolicy(
         repo="valkey-io/other",
-        authorized_team=POLICY.authorized_team,
+        authorized_teams=POLICY.authorized_teams,
         branches=POLICY.branches,
         checks_workflow=POLICY.checks_workflow,
         required_checks=POLICY.required_checks,

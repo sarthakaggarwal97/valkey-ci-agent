@@ -10,7 +10,7 @@ from scripts.release.models import ReleasePolicy
 
 POLICY = ReleasePolicy(
     repo="valkey-io/valkey",
-    authorized_team="valkey-io/core-team",
+    authorized_teams=("valkey-io/core-team",),
     branches=("9.1",),
     checks_workflow="ci.yml",
     required_checks=("linux", "macos"),
