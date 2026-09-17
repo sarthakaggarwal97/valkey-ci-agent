@@ -26,6 +26,8 @@ from scripts.release_notes import projects as projects_mod
 from scripts.release_notes import publish as publish_mod
 from scripts.release_notes import release_format as rn
 from scripts.release_notes import security as security_mod
+from scripts.release_notes import verdicts as verdicts_mod
+from scripts.release_notes.code_age import released_pr_numbers
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +109,7 @@ class _NotesMeta:
     security_noted_prs: Sequence[int]   # PRs dropped from generated bullets because supplied as a --security-fix (kept only under Security Fixes)
     baseline_unanchored: bool           # rc1 of M.0.0 with no --base-ref (over-broad range risk)
     advisories: Optional[Any] = None    # security.AdvisorySelection when --security-from-advisories ran, else None
+    uncategorized: Sequence[str] = ()   # bullets the model left in the catch-all category
     notes_range: Optional["_NotesRange"] = None  # resolved base/head refs + SHAs for the range display
 
 
@@ -553,6 +556,8 @@ def _drop_already_credited(
     return kept, dropped
 
 
+
+
 def _sanitize_security_fixes(
     security_fixes: Optional[Sequence[str]],
 ) -> Optional[Sequence[str]]:
@@ -866,8 +871,15 @@ def cut(
         # shipped. With nothing new, the dated section renders empty (heading +
         # version bump only) and the PR body says so. This is a no-op upstream,
         # where discovery already returns only new PRs.
+        # Two sources of "already shipped": the destination changelog (a
+        # continued cut on the same line) and the baseline release's changelog
+        # (a backported fix whose development-branch copy reachability treats
+        # as new). The first RC of a new line has only the second.
         already_credited = sorted(
-            _credited_pr_numbers(dest_notes_text)
+            (
+                _credited_pr_numbers(dest_notes_text)
+                | released_pr_numbers(source_clone_dir, regen.base_tag, profile.notes_file)
+            )
             & _grouped_pr_numbers(grouped)
         )
         if already_credited:
@@ -929,12 +941,21 @@ def cut(
             source_clone_dir, plan, head_ref=notes_head_ref, regen=regen,
         )
 
+        # Durable per-PR verdict audit trail: the body reports counts, the
+        # artifact holds the detail a reviewer needs to catch a wrong exclusion.
+        verdicts_path = os.environ.get("RELEASE_NOTES_VERDICTS_PATH", "")
+        if verdicts_path:
+            verdicts_mod.write_verdicts(
+                verdicts_path, regen, version=version, stage=plan.stage,
+            )
+
         notes_meta = _NotesMeta(
             regen=regen, already_credited=already_credited,
             noted_bullet_count=noted_bullet_count, urgency=urgency,
             security_fixes=security_fixes, security_noted_prs=security_noted_prs,
             baseline_unanchored=baseline_unanchored,
             advisories=advisories, notes_range=notes_range,
+            uncategorized=tuple(grouped.get(rn.CATCH_ALL_CATEGORY, ())),
         )
 
         if dry_run:
@@ -1199,6 +1220,10 @@ def _hold_reasons(plan: BranchPlan, notes_meta: "_NotesMeta") -> list[str]:
         reasons.append("notes flagged low-confidence")
     if regen.guardrail_included:
         reasons.append("release-safety guardrail overrode AI triage")
+    # Valkey's published notes have never carried the catch-all heading, so a
+    # bullet left there is an unfinished categorization rather than a section.
+    if notes_meta.uncategorized:
+        reasons.append("a note is uncategorized (assign it a real category)")
     # AI decided inclusion for PRs without release-notes, so a maintainer confirms
     # the include/exclude table before shipping.
     if regen.ai_included or regen.ai_excluded:
@@ -1346,6 +1371,7 @@ def _build_pr_body(
         + _no_new_prs_section(notes_meta, plan, profile)
         + _duplicate_pr_section(regen.duplicate_prs)
         + _skipped_section(regen.skipped)
+        + _uncategorized_section(notes_meta.uncategorized)
         + _uncertain_section(regen.uncertain)
         + _impact_review_section(regen.impact_review, notes_meta.urgency)
         + _advisory_section(notes_meta)
@@ -1515,6 +1541,29 @@ def _skipped_section(skipped: Sequence[int]) -> str:
         f"**absent** from the dated section: {refs}. Confirm each omission and "
         "re-cut if one should be noted.\n"
     )
+
+
+def _uncategorized_section(uncategorized: Sequence[str]) -> str:
+    """List bullets the model could not categorize, for a maintainer to assign.
+
+    The catch-all category exists so the model can admit uncertainty instead of
+    forcing a bad fit, but it is not a heading Valkey publishes: no released
+    changelog contains one. Surfacing the bullets here, and holding the PR,
+    keeps that admission from shipping as a section.
+    """
+    if not uncategorized:
+        return ""
+    lines = [
+        "",
+        f"### Uncategorized notes ({len(uncategorized)})",
+        "",
+        "These bullets landed in the catch-all category, which released notes "
+        "do not use. Move each one under a real category before merging.",
+        "",
+        *[f"- {line.lstrip('* ')}" for line in uncategorized],
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def _uncertain_section(uncertain: Sequence[Any]) -> str:
@@ -1795,8 +1844,9 @@ def _triage_counts_section(regen: Any) -> str:
         "",
         *[f"- {n} PR(s) {label}" for n, label in present],
         "",
-        "Per-PR verdicts are in the preparation run's log. To include a "
-        "wrongly-dropped PR, label it `release-notes` and re-cut.",
+        "Per-PR verdicts (with reasons) are in the run's `triage-verdicts` "
+        "artifact. To include a wrongly-dropped PR, label it `release-notes` "
+        "and re-cut.",
         "",
     ]
     return "\n".join(lines)

@@ -14,6 +14,7 @@ from functools import partial
 
 import pytest
 
+from scripts.release_notes import code_age as code_age_mod
 from scripts.release_notes import pipeline as pipeline_mod
 from scripts.release_notes import projects
 from scripts.release_notes import release_cut as rc
@@ -2283,3 +2284,131 @@ class TestReadRequired:
     def test_existing_file_read_verbatim(self, tmp_path) -> None:
         (tmp_path / "00-RELEASENOTES").write_text("content\n", encoding="utf-8")
         assert rc._read_required(str(tmp_path), "00-RELEASENOTES", "x") == "content\n"
+
+
+class TestDedupAgainstBaselineRelease:
+    """The backport dedup: drop PRs the baseline release already shipped.
+
+    A fix merges to the development branch and is cherry-picked onto the release
+    branch, so the same change has two commits with different SHAs. Discovery
+    excludes only what is reachable from the baseline tag, which is the
+    release-branch copy, so the development-branch copy enters the range even
+    though the PR already shipped. Reading the changelog at the baseline tag is
+    what catches it, and the first RC of a new line depends on it entirely: its
+    own changelog is freshly branched and credits nothing.
+    """
+
+    _NOTES = """\
+Valkey 9.1 release notes
+========================
+
+Valkey 9.1.2  -  Released Mon 31 August 2026
+--------------------------------------------
+
+### Bug Fixes
+* Fix HPERSIST on a wrong-type key by @madolson (#3516)
+* Fix a double free loading a corrupt RDB by @enjoy-binbin (#3498)
+"""
+
+    def test_history_and_changelog_are_both_consulted(self, monkeypatch) -> None:
+        # A PR that shipped without a note is only in the history; a PR whose
+        # subject lost its reference is only in the changelog. Both are shipped.
+        def fake_git_output(repo_dir, *args, **kwargs):
+            if args[0] == "log" and "-1" in args:
+                return "2026-08-31T16:40:24-07:00\n"
+            if args[0] == "log":
+                return "Fix a crash (#3601)\nBackport a fix (#3516) (#4001)\n"
+            if args[0] == "show":
+                return self._NOTES
+            raise AssertionError(args)
+
+        monkeypatch.setattr(code_age_mod, "git_output", fake_git_output)
+        released = code_age_mod.released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES")
+        # 3601 from history only, 3498 from the changelog only, 3516 from both,
+        # 4001 as the backport PR that carried 3516.
+        assert released == {3601, 3516, 4001, 3498}
+
+    def test_history_scan_is_bounded_to_a_window_around_the_tag(self, monkeypatch) -> None:
+        # The repository predates the fork and those PR numbers collide with
+        # current ones, so a pre-fork "Merge pull request #4076" must not mark a
+        # current PR as shipped.
+        seen = {}
+
+        def fake_git_output(repo_dir, *args, **kwargs):
+            if args[0] == "log" and "-1" in args:
+                return "2026-08-31T16:40:24-07:00\n"
+            if args[0] == "log":
+                seen["args"] = args
+                return ""
+            return ""
+
+        monkeypatch.setattr(code_age_mod, "git_output", fake_git_output)
+        code_age_mod.released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES")
+        assert "--since=2024-08-31" in seen["args"]
+
+    def test_no_baseline_tag_excludes_nothing(self) -> None:
+        assert code_age_mod.released_pr_numbers("/clone", "", "00-RELEASENOTES") == set()
+
+    def test_unreadable_sources_degrade_to_no_exclusions(self, monkeypatch) -> None:
+        # A baseline predating the changelog, or a tag absent from a shallow
+        # clone, must not fail the cut.
+        def boom(*_args, **_kwargs):
+            raise RuntimeError("no such ref")
+
+        monkeypatch.setattr(code_age_mod, "git_output", boom)
+        assert code_age_mod.released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES") == set()
+
+    def test_already_released_bullets_are_dropped(self) -> None:
+        grouped = {
+            "Bug Fixes": [
+                "* Fix HPERSIST on a wrong-type key by @madolson (#3516)",
+                "* Fix something genuinely new by @dev (#4700)",
+            ],
+        }
+        kept, dropped = rc._drop_already_credited(grouped, {3516})
+        assert dropped == [3516]
+        assert kept == {"Bug Fixes": ["* Fix something genuinely new by @dev (#4700)"]}
+
+
+class TestUncategorizedNotes:
+    """The catch-all category must not ship as a section.
+
+    It exists so the model can admit it could not place a bullet rather than
+    forcing a bad fit, but no released Valkey changelog contains that heading.
+    A bullet left there is unfinished categorization, so it holds the PR and is
+    listed for a maintainer to assign.
+    """
+
+    _PLAN = BranchPlan("rc1", "9.2", "9.2")
+
+    @staticmethod
+    def _meta(uncategorized):
+        from types import SimpleNamespace
+        regen = SimpleNamespace(
+            bullet_count=3, had_prs=True, triage=(), included=1, skipped=(),
+            duplicate_prs=(), uncertain=(), ai_included=(), guardrail_included=(),
+            ai_excluded=(), label_excluded=(), impact_review=(), unresolved=(),
+            unresolved_prs=(), unresolved_backports=(), unresolved_cherry_picks=(),
+            collided=(), reverted=(), base_tag="9.1.2",
+        )
+        return rc._NotesMeta(
+            regen=regen, already_credited=(), noted_bullet_count=3, urgency="LOW",
+            security_fixes=None, security_noted_prs=(), baseline_unanchored=False,
+            uncategorized=uncategorized,
+        )
+
+    def test_uncategorized_bullet_holds_the_pr(self) -> None:
+        reasons = rc._hold_reasons(self._PLAN, self._meta(("* Something odd by @dev (#1)",)))
+        assert "a note is uncategorized (assign it a real category)" in reasons
+
+    def test_no_uncategorized_bullet_does_not_hold(self) -> None:
+        assert rc._hold_reasons(self._PLAN, self._meta(())) == []
+
+    def test_section_lists_each_bullet_for_assignment(self) -> None:
+        section = rc._uncategorized_section(("* Something odd by @dev (#1)",))
+        assert "Uncategorized notes (1)" in section
+        assert "Something odd by @dev (#1)" in section
+        assert "before merging" in section
+
+    def test_section_is_silent_when_everything_was_categorized(self) -> None:
+        assert rc._uncategorized_section(()) == ""

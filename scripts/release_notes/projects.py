@@ -229,7 +229,6 @@ class CargoTomlVersion:
 # names stay subsets of core's CATEGORIES so render's catch-all coercion and
 # generate's observability guardrail behave identically across profiles.
 _MODULE_CATEGORIES: tuple[str, ...] = (
-    "Behavior Changes",
     "New Features and Enhanced Behavior",
     "Performance and Efficiency Improvements",
     "Bug Fixes",
@@ -238,6 +237,7 @@ _MODULE_CATEGORIES: tuple[str, ...] = (
     "Configuration",
     "Observability and Logging",
     "Build and Tooling",
+    "Behavior Changes",
     "Other Changes",
 )
 

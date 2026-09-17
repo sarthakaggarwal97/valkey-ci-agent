@@ -77,7 +77,7 @@ def test_plan_binds_branch_head_version_checks_and_notes(monkeypatch: pytest.Mon
     monkeypatch.setattr(
         publish_mod,
         "tag_ruleset_protected",
-        lambda *a: publish_mod.TagRulesetVerdict(True, (123,)),
+        lambda *a: publish_mod.TagRulesetVerdict(True),
     )
     plan = publish_mod.plan_publication(_gh(_repo()), POLICY, branch="9.1", candidate_sha=SHA)
     assert plan.tag == "9.1.2"
@@ -93,8 +93,6 @@ def test_plan_binds_branch_head_version_checks_and_notes(monkeypatch: pytest.Mon
     [
         (publish_mod.TagRulesetVerdict(False), "cannot verify an active immutable-tag ruleset"),
         (publish_mod.TagRulesetVerdict(None), "cannot verify an active immutable-tag ruleset"),
-        (publish_mod.TagRulesetVerdict(True, ()), "exactly one Integration bypass"),
-        (publish_mod.TagRulesetVerdict(True, (1, 2)), "exactly one Integration bypass"),
     ],
 )
 def test_plan_fails_closed_on_tag_ruleset_drift(
@@ -152,7 +150,7 @@ def test_plan_accepts_rerun_after_interrupted_attempt_created_the_tag(
     monkeypatch.setattr(
         publish_mod,
         "tag_ruleset_protected",
-        lambda *a: publish_mod.TagRulesetVerdict(True, (123,)),
+        lambda *a: publish_mod.TagRulesetVerdict(True),
     )
     repo = _repo()
     repo.get_tags.return_value = [SimpleNamespace(name="9.1.2"), SimpleNamespace(name="9.1.1")]
@@ -172,7 +170,6 @@ def _plan() -> PublishPlan:
         prerelease=False,
         make_latest="true",
         tag_protected=True,
-        tag_bypass_integration_ids=(123,),
     )
 
 
@@ -205,7 +202,6 @@ def test_publish_revalidates_digest_and_creates_exact_tag(monkeypatch: pytest.Mo
         candidate_sha=SHA,
         actor="approver",
         expected_digest=publish_mod.plan_digest(plan),
-        expected_bypass_integration_id=123,
     )
     assert url == "https://example/release"
     assert authorized == ["approver"]
@@ -224,18 +220,6 @@ def test_publish_refuses_plan_drift(monkeypatch: pytest.MonkeyPatch) -> None:
             candidate_sha=SHA,
             actor="approver",
             expected_digest="0" * 64,
-            expected_bypass_integration_id=123,
-        )
-
-
-def test_publish_refuses_a_different_ruleset_bypass_app(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *a, **k: None)
-    monkeypatch.setattr(publish_mod, "plan_publication", lambda *a, **k: _plan())
-    with pytest.raises(publish_mod.ReleaseError, match="configured publication App"):
-        publish_mod.publish_release(
-            _gh(_repo()), POLICY, branch="9.1", candidate_sha=SHA, actor="approver",
-            expected_digest=publish_mod.plan_digest(_plan()),
-            expected_bypass_integration_id=999,
         )
 
 
@@ -257,7 +241,6 @@ def test_publish_recovers_a_lost_release_creation_response(monkeypatch: pytest.M
         candidate_sha=SHA,
         actor="approver",
         expected_digest=publish_mod.plan_digest(plan),
-        expected_bypass_integration_id=123,
     )
 
     assert url == release.html_url
@@ -280,7 +263,6 @@ def test_publish_verifies_tag_sha_after_release_creation(monkeypatch: pytest.Mon
             candidate_sha=SHA,
             actor="approver",
             expected_digest=publish_mod.plan_digest(plan),
-            expected_bypass_integration_id=123,
         )
 
 
@@ -297,7 +279,12 @@ def test_make_latest_uses_numeric_ga_release_order() -> None:
     assert publish_mod._make_latest(repo, "10.0.0", "rc1") == "false"
 
 
-def test_ruleset_fails_closed_when_github_hides_bypass_actors() -> None:
+def test_ruleset_immutability_verified_without_bypass_visibility() -> None:
+    # GitHub omits bypass_actors from ruleset reads for tokens that cannot
+    # edit rulesets. Immutability verification must not depend on that field:
+    # requiring it forced administration:write onto an unattended credential,
+    # to detect drift only a repository admin could cause and could equally
+    # cause by editing the ruleset itself.
     repo = MagicMock()
     repo.url = "https://api.github.com/repos/valkey-io/valkey"
     repo._requester.requestJsonAndCheck.side_effect = [
@@ -314,7 +301,7 @@ def test_ruleset_fails_closed_when_github_hides_bypass_actors() -> None:
             },
         ),
     ]
-    assert publish_mod.tag_ruleset_protected(repo, "9.1.2") == publish_mod.TagRulesetVerdict(None, None)
+    assert publish_mod.tag_ruleset_protected(repo, "9.1.2") == publish_mod.TagRulesetVerdict(True)
 
 
 def test_non_fast_forward_rule_does_not_prove_tag_immutability() -> None:

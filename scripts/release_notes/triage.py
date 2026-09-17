@@ -25,6 +25,7 @@ from scripts.release_notes.ai_inputs import (
     build_prompt_payload,
     exact_pr_number,
 )
+from scripts.release_notes.code_age import ReleasedCodeOracle
 from scripts.release_notes.models import MergedPR, TriageDecision, TriageResult
 
 logger = logging.getLogger(__name__)
@@ -351,6 +352,7 @@ def triage(
     repo_dir: str,
     base_ref: str = "",
     already_noted: Sequence[int] = (),
+    released_pr_numbers: frozenset[int] = frozenset(),
     timeout: int = 3600,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
@@ -380,6 +382,7 @@ def triage(
     already_noted_numbers = set(already_noted)
     collector = diff_collector or PRDiffCollector(repo_dir, prs)
 
+    oracle = ReleasedCodeOracle(repo_dir, base_ref)
     for start in range(0, len(prs), _BATCH_SIZE):
         batch = prs[start:start + _BATCH_SIZE]
         batch_numbers = {pr.number for pr in batch}
@@ -411,11 +414,47 @@ def triage(
         missing: list[int] = []
         for pr in batch:
             decision = decision_by_number.get(pr.number)
+            # A fix for code that never shipped is not a user-facing fix: the
+            # feature arrives correct in this same release and no released
+            # version had the bug. This precedes the guardrail deliberately -
+            # the guardrail exists to stop under-reporting fixes to code users
+            # are running, which by definition this is not.
+            # Consulted for an AI include AND for a missing verdict: a parse
+            # failure otherwise hands the PR straight to the guardrail, which
+            # must not include a fix to code nobody has run.
+            # A PR the baseline provably shipped (its history or changelog
+            # names it) can never be a fix for unreleased code: a cherry-pick
+            # into the release branch has a different SHA, which defeats the
+            # blame oracle's ancestry test, so the shipped-PR set overrides it.
+            if (
+                (decision is None or decision.included)
+                and pr.number not in released_pr_numbers
+            ):
+                # Only the blame oracle decides. A prose heuristic over the
+                # PR's own description ("regression from #N") was tried and
+                # removed after two rounds of false-positive classes: a free-
+                # text matcher guarding a note-DROPPING decision is the wrong
+                # risk shape. Fixes to new features living in old files stay
+                # in the notes for maintainer review, with the verdicts
+                # artifact as the audit trail.
+                unreleased_reason = ""
+                if oracle.usable and oracle.modifies_only_unreleased_code(pr.merge_commit_sha) is True:
+                    unreleased_reason = "fixes code first introduced in this release; never shipped broken"
+                if unreleased_reason:
+                    decision = TriageDecision(
+                        pr_number=pr.number,
+                        included=False,
+                        reason=unreleased_reason,
+                        uncertain=False,
+                        unreleased_code=True,
+                    )
+                    logger.info("Excluding PR #%s: %s", pr.number, unreleased_reason)
             impact = release_impact_reason(pr)
             if (
                 impact
                 and pr.number not in already_noted_numbers
                 and (decision is None or not decision.included)
+                and not (decision is not None and decision.unreleased_code)
             ):
                 prior = "no AI verdict" if decision is None else "AI exclusion"
                 decision = TriageDecision(
