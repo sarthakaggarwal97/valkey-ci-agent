@@ -62,7 +62,6 @@ def main(argv: list[str] | None = None) -> int:
     publish.add_argument("--candidate-sha", required=True)
     publish.add_argument("--actor", required=True)
     publish.add_argument("--expected-digest", required=True)
-    publish.add_argument("--expected-bypass-integration-id", required=True, type=int)
 
     args = parser.parse_args(argv)
     if not args.token:
@@ -113,8 +112,7 @@ def main(argv: list[str] | None = None) -> int:
                 candidate_sha=args.candidate_sha,
                 actor=args.actor,
                 expected_digest=args.expected_digest,
-                expected_bypass_integration_id=args.expected_bypass_integration_id,
-            )
+                )
             _write_outputs({"release_url": url})
             print(f"Published {url}")
             return 0

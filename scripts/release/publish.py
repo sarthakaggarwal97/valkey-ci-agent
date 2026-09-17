@@ -32,7 +32,6 @@ class ReleaseError(Exception):
 
 class TagRulesetVerdict(NamedTuple):
     protected: bool | None
-    bypass_integration_ids: tuple[int, ...] | None = None
 
 
 def prepare_release(
@@ -141,11 +140,6 @@ def plan_publication(
     verdict = tag_ruleset_protected(repo, tag)
     if verdict.protected is not True:
         raise ReleaseError(f"cannot verify an active immutable-tag ruleset for {tag}; refusing publication")
-    if verdict.bypass_integration_ids is not None and len(verdict.bypass_integration_ids) != 1:
-        raise ReleaseError(
-            f"the immutable-tag ruleset for {tag} must name exactly one Integration bypass "
-            f"(found {len(verdict.bypass_integration_ids)})"
-        )
     return PublishPlan(
         branch=branch,
         tag=tag,
@@ -156,7 +150,6 @@ def plan_publication(
         prerelease=stage != "ga",
         make_latest=_make_latest(repo, version, stage),
         tag_protected=verdict.protected,
-        tag_bypass_integration_ids=verdict.bypass_integration_ids,
         candidate_ci=candidate_ci,
     )
 
@@ -164,7 +157,7 @@ def plan_publication(
 def plan_digest(plan: PublishPlan) -> str:
     payload = "\n".join(
         (
-            "release-plan-v1",
+            "release-plan-v2",
             f"branch={plan.branch}",
             f"tag={plan.tag}",
             f"sha={plan.sha}",
@@ -172,12 +165,6 @@ def plan_digest(plan: PublishPlan) -> str:
             f"make_latest={plan.make_latest}",
             f"body={hashlib.sha256(plan.body.encode()).hexdigest()}",
             f"tag_protected={plan.tag_protected}",
-            "tag_bypasses="
-            + (
-                "not-visible"
-                if plan.tag_bypass_integration_ids is None
-                else ",".join(map(str, plan.tag_bypass_integration_ids))
-            ),
         )
     )
     return hashlib.sha256(payload.encode()).hexdigest()
@@ -185,11 +172,6 @@ def plan_digest(plan: PublishPlan) -> str:
 
 def render_plan(plan: PublishPlan) -> str:
     protection = "verified" if plan.tag_protected else "NOT verified"
-    bypasses = (
-        "not visible to the read-only token"
-        if plan.tag_bypass_integration_ids is None
-        else ", ".join(map(str, plan.tag_bypass_integration_ids)) or "none"
-    )
     return "\n".join(
         (
             "## Release publication plan",
@@ -201,7 +183,7 @@ def render_plan(plan: PublishPlan) -> str:
             f"| Candidate | `{plan.sha}` |",
             f"| Prerelease | `{'yes' if plan.prerelease else 'no'}` |",
             f"| Make latest | `{plan.make_latest}` |",
-            f"| Immutable-tag ruleset | {protection} (App bypass ids: {bypasses}) |",
+            f"| Immutable-tag ruleset | {protection} |",
             f"| Candidate CI | {plan.candidate_ci} |",
             f"| Plan digest | `{plan_digest(plan)}` |",
             "",
@@ -224,16 +206,10 @@ def publish_release(
     candidate_sha: str,
     actor: str,
     expected_digest: str,
-    expected_bypass_integration_id: int,
 ) -> str:
     """Revalidate an approved plan, atomically bind its tag, and publish."""
     ensure_authorized(gh, policy, actor)
     plan = plan_publication(gh, policy, branch=branch, candidate_sha=candidate_sha)
-    if plan.tag_bypass_integration_ids != (expected_bypass_integration_id,):
-        raise ReleaseError(
-            "the immutable-tag ruleset bypass is not the configured publication App "
-            f"(expected {expected_bypass_integration_id}, found {plan.tag_bypass_integration_ids})"
-        )
     actual_digest = plan_digest(plan)
     if not expected_digest or actual_digest != expected_digest:
         raise ReleaseError(
@@ -425,23 +401,15 @@ def tag_ruleset_protected(repo: Any, tag: str) -> TagRulesetVerdict:
             rule_types = {rule.get("type") for rule in ruleset.get("rules") or []}
             if not {"creation", "update", "deletion"} <= rule_types:
                 continue
-            if "bypass_actors" not in ruleset:
-                # Immutability alone is insufficient: an unknown bypass actor
-                # could move or delete the release tag. Validation tokens must
-                # have Administration:read so this list is visible.
-                return TagRulesetVerdict(None, None)
-            ids: list[int] = []
-            for actor in ruleset.get("bypass_actors") or []:
-                actor_id = actor.get("actor_id") if isinstance(actor, dict) else None
-                if (
-                    not isinstance(actor, dict)
-                    or actor.get("actor_type") != "Integration"
-                    or not isinstance(actor_id, int)
-                    or isinstance(actor_id, bool)
-                ):
-                    return TagRulesetVerdict(True, ())
-                ids.append(actor_id)
-            return TagRulesetVerdict(True, tuple(ids))
+            # The bypass list is deliberately NOT verified. GitHub returns
+            # bypass_actors only to tokens that could edit the ruleset, so
+            # enumerating it forced administration:write onto an unattended
+            # credential; and the drift it would detect (an admin adding a
+            # bypass actor) is caused by the same role that can edit or delete
+            # this ruleset outright. Bypass membership is repository-admin
+            # configuration reviewed by humans, not a workflow-enforced
+            # boundary.
+            return TagRulesetVerdict(True)
         return TagRulesetVerdict(False)
     except Exception:
         logger.warning("cannot inspect tag rulesets for %s", tag, exc_info=True)

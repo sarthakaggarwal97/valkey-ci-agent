@@ -669,16 +669,20 @@ controller's long-lived post-release polling loop.
   `administration:read`, `actions:read`, `checks:read`, `contents:write`,
   `metadata:read`, and `pull-requests:read`, plus organization
   `members:read`, on `valkey`.
+- The workflow verifies the tag ruleset is ACTIVE and IMMUTABLE (restricts
+  creation, update, and deletion for release tags) before publishing, which
+  needs only `administration:read`. The ruleset's bypass list is deliberately
+  not enumerated: GitHub reveals `bypass_actors` only to tokens that could
+  edit the ruleset, so enumerating it forced `administration:write` onto an
+  unattended credential, and the drift it would detect is caused by the same
+  repository-admin role that can edit or delete the ruleset outright. Keep
+  the bypass list to exactly the publication App by admin review.
 - Current deployment runs control and publication as ONE App (the Valkeyrie
-  Bot), which is also the single Integration allowed to create protected
-  release tags. The accepted tradeoff: every workflow holding that App's key
-  can technically create release tags, so the reviewed `release` environment
-  gates the publication path rather than the credential. To split the roles
-  later without code changes, create a dedicated publication App and store
-  its id/key as environment-scoped `VALKEYRIE_BOT_APP_ID` /
-  `VALKEYRIE_BOT_PRIVATE_KEY` secrets inside `release` (environment secrets
-  shadow repository secrets of the same name), then re-point the ruleset
-  bypass to it.
+  Bot). To split the roles without code changes, create a dedicated
+  publication App, store its id/key as environment-scoped
+  `VALKEYRIE_BOT_APP_ID` / `VALKEYRIE_BOT_PRIVATE_KEY` secrets inside
+  `release` (environment secrets shadow repository secrets of the same
+  name), and re-point the ruleset bypass to it.
 - `valkey-release-automation` keeps its existing `release-publish`
   production approval. It is the second deployment approval before public
   packages and downstream updates are written.

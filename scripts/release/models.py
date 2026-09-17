@@ -50,5 +50,4 @@ class PublishPlan:
     prerelease: bool
     make_latest: str
     tag_protected: bool | None
-    tag_bypass_integration_ids: tuple[int, ...] | None = None
     candidate_ci: str = "not checked"
