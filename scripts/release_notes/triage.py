@@ -353,6 +353,7 @@ def triage(
     base_ref: str = "",
     already_noted: Sequence[int] = (),
     range_pr_numbers: frozenset[int] = frozenset(),
+    released_pr_numbers: frozenset[int] = frozenset(),
     timeout: int = 3600,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     diff_collector: PRDiffCollector | None = None,
@@ -422,7 +423,14 @@ def triage(
             # Consulted for an AI include AND for a missing verdict: a parse
             # failure otherwise hands the PR straight to the guardrail, which
             # must not include a fix to code nobody has run.
-            if decision is None or decision.included:
+            # A PR the baseline provably shipped (its history or changelog
+            # names it) can never be a fix for unreleased code: a cherry-pick
+            # into the release branch has a different SHA, which defeats the
+            # blame oracle's ancestry test, so the shipped-PR set overrides it.
+            if (
+                (decision is None or decision.included)
+                and pr.number not in released_pr_numbers
+            ):
                 unreleased_reason = ""
                 if oracle.usable and oracle.modifies_only_unreleased_code(pr.merge_commit_sha) is True:
                     unreleased_reason = "fixes code first introduced in this release; never shipped broken"

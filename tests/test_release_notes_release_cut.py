@@ -14,6 +14,7 @@ from functools import partial
 
 import pytest
 
+from scripts.release_notes import code_age as code_age_mod
 from scripts.release_notes import pipeline as pipeline_mod
 from scripts.release_notes import projects
 from scripts.release_notes import release_cut as rc
@@ -2321,8 +2322,8 @@ Valkey 9.1.2  -  Released Mon 31 August 2026
                 return self._NOTES
             raise AssertionError(args)
 
-        monkeypatch.setattr(rc, "git_output", fake_git_output)
-        released = rc._released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES")
+        monkeypatch.setattr(code_age_mod, "git_output", fake_git_output)
+        released = code_age_mod.released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES")
         # 3601 from history only, 3498 from the changelog only, 3516 from both,
         # 4001 as the backport PR that carried 3516.
         assert released == {3601, 3516, 4001, 3498}
@@ -2341,12 +2342,12 @@ Valkey 9.1.2  -  Released Mon 31 August 2026
                 return ""
             return ""
 
-        monkeypatch.setattr(rc, "git_output", fake_git_output)
-        rc._released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES")
+        monkeypatch.setattr(code_age_mod, "git_output", fake_git_output)
+        code_age_mod.released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES")
         assert "--since=2024-08-31" in seen["args"]
 
     def test_no_baseline_tag_excludes_nothing(self) -> None:
-        assert rc._released_pr_numbers("/clone", "", "00-RELEASENOTES") == set()
+        assert code_age_mod.released_pr_numbers("/clone", "", "00-RELEASENOTES") == set()
 
     def test_unreadable_sources_degrade_to_no_exclusions(self, monkeypatch) -> None:
         # A baseline predating the changelog, or a tag absent from a shallow
@@ -2354,8 +2355,8 @@ Valkey 9.1.2  -  Released Mon 31 August 2026
         def boom(*_args, **_kwargs):
             raise RuntimeError("no such ref")
 
-        monkeypatch.setattr(rc, "git_output", boom)
-        assert rc._released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES") == set()
+        monkeypatch.setattr(code_age_mod, "git_output", boom)
+        assert code_age_mod.released_pr_numbers("/clone", "9.1.2", "00-RELEASENOTES") == set()
 
     def test_already_released_bullets_are_dropped(self) -> None:
         grouped = {

@@ -150,3 +150,31 @@ class TestIntroducedByInRange:
         # this check refuses to make.
         text = "Duplicate reply when flush is used. See https://github.com/valkey-io/valkey/pull/4605"
         assert code_age.introduced_by_in_range(text, frozenset({4605})) is None
+
+    def test_git_failure_is_unknown_not_unreleased(self, repo: Path, monkeypatch) -> None:
+        # exit 1 means "not an ancestor"; anything else (128, timeout) is a
+        # broken question. Mapping failures to "not released" would classify
+        # shipped code as new and silently drop its note.
+        import subprocess as sp
+        real = code_age.git_output
+
+        def failing(repo_dir, *args, **kwargs):
+            if args and args[0] == "merge-base":
+                raise sp.CalledProcessError(128, ["git", "merge-base"], stderr="bad object")
+            return real(repo_dir, *args, **kwargs)
+
+        monkeypatch.setattr(code_age, "git_output", failing)
+        oracle = code_age.ReleasedCodeOracle(str(repo), "9.1.2")
+        assert oracle.modifies_only_unreleased_code(_sha(repo, "fix shipped code")) is None
+
+
+class TestIntroducerDirectionality:
+    def test_added_tests_for_is_not_an_introduction_claim(self) -> None:
+        # "Added regression tests for #N" describes this PR's own work; the
+        # old verb-proximity pattern matched it and dropped a real fix.
+        text = "Added regression tests for #123 and hardened the parser"
+        assert code_age.introduced_by_in_range(text, frozenset({123})) is None
+
+    def test_added_in_is_an_introduction_claim(self) -> None:
+        text = "Fixes a leak in the throttler added in #4356"
+        assert code_age.introduced_by_in_range(text, frozenset({4356})) == 4356

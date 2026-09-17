@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from scripts.release_notes import code_age as code_age_mod
 from scripts.release_notes import discover as discover_mod
 from scripts.release_notes import generate as generate_mod
 from scripts.release_notes import projects as projects_mod
@@ -119,10 +120,20 @@ def regenerate_unreleased(
     # triaged-in PRs appear in both AI stages. One collector omits ambiguous
     # shared patches and caches attributable commits across both stages.
     diff_collector = PRDiffCollector(clone_dir, discovery.prs)
+    # PRs the baseline already shipped (its history + its changelog). Needed
+    # BEFORE triage: a fix cherry-picked into the baseline under a different
+    # SHA defeats ancestry, so the code-age exclusion must never fire for a PR
+    # the baseline provably released.
+    released_pr_numbers = frozenset(
+        code_age_mod.released_pr_numbers(
+            clone_dir, discovery.base_tag, profile.notes_file,
+        )
+    )
     triage_result = triage_mod.triage(
         candidates,
         repo_dir=clone_dir,
         base_ref=discovery.base_tag,
+        released_pr_numbers=released_pr_numbers,
         # Every PR in the unreleased range, labelled or not: the introducer
         # check needs to recognize "regression from #N" where #N is a labelled
         # feature that is not itself a triage candidate.

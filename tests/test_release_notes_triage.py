@@ -384,3 +384,17 @@ class TestUnreleasedCodeExclusion:
         result = triage([pr], repo_dir="/tmp", base_ref="9.1.2", run_fn=run,
                         range_pr_numbers=frozenset({13}))
         assert [d.pr_number for d in result.included] == [13]
+
+    def test_baseline_shipped_pr_is_never_marked_unreleased(self, monkeypatch) -> None:
+        # A cherry-pick into the release branch has a different SHA, which
+        # defeats the blame oracle's ancestry test; the shipped-PR set from
+        # the baseline's history/changelog must override it.
+        self._oracle(monkeypatch, {"9" * 40: True})  # oracle wrongly says unreleased
+        run = _fake_run({"verdicts": [
+            {"pr": 14, "include": True, "reason": "fixes a crash", "uncertain": False},
+        ]})
+        pr = _pr(14, sha="9" * 40)
+        result = triage([pr], repo_dir="/tmp", base_ref="9.1.2", run_fn=run,
+                        released_pr_numbers=frozenset({14}))
+        assert [d.pr_number for d in result.included] == [14]
+        assert not result.excluded

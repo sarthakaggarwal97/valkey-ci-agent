@@ -18,8 +18,10 @@ the worse error.
 
 from __future__ import annotations
 
+import datetime
 import logging
 import re
+import subprocess
 from typing import Optional
 
 from scripts.common.proc import git_output
@@ -46,26 +48,32 @@ class ReleasedCodeOracle:
     def __init__(self, repo_dir: str, base_tag: str) -> None:
         self._repo_dir = repo_dir
         self._base_tag = base_tag
-        self._released: dict[str, bool] = {}
+        self._released: dict[str, Optional[bool]] = {}
 
     @property
     def usable(self) -> bool:
         return bool(self._base_tag)
 
-    def _is_released(self, sha: str) -> bool:
+    def _is_released(self, sha: str) -> Optional[bool]:
+        """True/False for a definite ancestry answer, None when git failed.
+
+        git exits 1 for "not an ancestor" and anything else (128 for a bad
+        object, a timeout, a scrubbed-config refusal) for a broken question.
+        Only the definite 1 may count as "not released": mapping failures to
+        False would classify shipped code as new and silently drop its note.
+        """
         cached = self._released.get(sha)
-        if cached is not None:
+        if cached is not None or sha in self._released:
             return cached
         try:
             git_output(
                 self._repo_dir, "merge-base", "--is-ancestor", sha, self._base_tag,
             )
-            released = True
+            released: Optional[bool] = True
+        except subprocess.CalledProcessError as exc:
+            released = False if exc.returncode == 1 else None
         except Exception:
-            # Non-zero exit means "not an ancestor", which is the answer we
-            # want; a genuinely broken invocation is indistinguishable here, so
-            # treat only a clean success as proof of release.
-            released = False
+            released = None
         self._released[sha] = released
         return released
 
@@ -126,8 +134,11 @@ class ReleasedCodeOracle:
             }
             if not introducing:
                 return None
-            if any(self._is_released(commit) for commit in introducing):
+            answers = [self._is_released(commit) for commit in introducing]
+            if any(answer is True for answer in answers):
                 return False
+            if any(answer is None for answer in answers):
+                return None
         return True
 
 # References with introduction semantics: "introduced in #N", "regression from
@@ -135,9 +146,14 @@ class ReleasedCodeOracle:
 # matched: PR bodies cite related work freely, and only an introduction claim
 # says the bug arrived with that change.
 # The reference itself may be "#N" or a full PR URL; valkey bodies use both.
+# Only DIRECTIONAL introduction claims match: "introduced in #N", "regression
+# from #N", "caused by <url>". A bare verb near a reference is not a claim -
+# "Added regression tests for #N" describes this PR's own work, and matching
+# it would drop a real fix, the one error this check refuses.
 _INTRODUCER_RE = re.compile(
-    r"(?:introduced|added|regression|broke|broken|caused by|follow[- ]?up)"
-    r".{0,60}?(?:#(\d+)|github\.com/[\w.-]+/[\w.-]+/pull/(\d+))",
+    r"(?:introduced (?:in|by|with)|added (?:in|by|with)|regression (?:from|in|of)"
+    r"|broke[n]? (?:in|by|since)|caused by|follow[- ]?up (?:to|of|for))"
+    r"\s.{0,50}?(?:#(\d+)|github\.com/[\w.-]+/[\w.-]+/pull/(\d+))",
     re.IGNORECASE,
 )
 
@@ -158,3 +174,72 @@ def introduced_by_in_range(text: str, range_pr_numbers: frozenset[int]) -> Optio
         if number in range_pr_numbers:
             return number
     return None
+
+
+# A backport subject carries the original PR and then its own: "... (#3516) (#4001)".
+_SUBJECT_PR_RE = re.compile(r"\(#(\d+)\)(?:\s*\(#(\d+)\))?\s*$")
+
+# The repository's history predates the fork, and those Redis-era PR numbers
+# collide with current ones. Bound the scan to a window around the baseline tag
+# so a 2016 "Merge pull request #4076" cannot mark a 2026 PR as shipped. Two
+# years generously covers any backport window on a supported line.
+_HISTORY_WINDOW_DAYS = 730
+
+
+def released_pr_numbers(repo_dir: str, base_tag: str, notes_file: str) -> set[int]:
+    """Return PR numbers the *base_tag* release already shipped.
+
+    A fix merges to the development branch and is then cherry-picked onto the
+    release branch, so the same change exists as two commits with different
+    SHAs. Discovery excludes only what is reachable from *base_tag*, which is
+    the release-branch copy; the development-branch copy is not an ancestor of
+    that tag and therefore enters the range even though the PR already shipped.
+
+    Two independent sources answer what reachability cannot, and they are
+    complementary rather than redundant:
+
+    - the baseline's own history, which records every shipped PR whether or not
+      anyone wrote a note for it;
+    - the baseline's changelog, which credits PRs whose commit subject lost the
+      reference (a differently-squashed or hand-applied cherry-pick).
+
+    Neither catches a fix backported under a *different* PR number, which needs
+    patch equivalence rather than reference matching; those remain for
+    maintainer review.
+    """
+    if not base_tag:
+        return set()
+    released: set[int] = set()
+
+    try:
+        tag_date = git_output(repo_dir, "log", "-1", "--format=%cI", base_tag).strip()
+        since = (
+            datetime.datetime.fromisoformat(tag_date)
+            - datetime.timedelta(days=_HISTORY_WINDOW_DAYS)
+        ).date().isoformat()
+        subjects = git_output(
+            repo_dir, "log", "--format=%s", f"--since={since}", base_tag,
+        )
+    except Exception:
+        logger.warning("Could not read history at %s; relying on its changelog alone", base_tag)
+        subjects = ""
+    for subject in subjects.splitlines():
+        match = _SUBJECT_PR_RE.search(subject)
+        if match:
+            released.add(int(match.group(1)))
+            if match.group(2):
+                released.add(int(match.group(2)))
+
+    # Call-time import: release_cut imports this module at load time, so a
+    # module-level import here would cycle. By the time this runs, both are
+    # fully loaded.
+    from scripts.release_notes.release_cut import _credited_pr_numbers
+
+    try:
+        released |= _credited_pr_numbers(git_output(repo_dir, "show", f"{base_tag}:{notes_file}"))
+    except Exception:
+        # A baseline predating the changelog, or a tag missing from a shallow
+        # clone, simply contributes no exclusions from this source.
+        logger.warning("Could not read %s at %s", notes_file, base_tag)
+
+    return released
