@@ -36,6 +36,12 @@ _STATUS_MARKER = "<!-- valkey-release-tracker:status -->"
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _REPO_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*", re.ASCII)
 _REFRESHED_RE = re.compile(r"Status last changed \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC")
+# Job names in .github/workflows/release-publish.yml, used only to read a
+# stage's real completion time off the run. A rename there costs a timestamp,
+# never a wrong one. The qualification job calls a reusable workflow, so its
+# jobs surface as "<name> / <child>".
+_QUALIFY_JOB = "Qualify exact candidate"
+_PUBLISH_JOB = "Publish approved release"
 _ROOT = Path(__file__).resolve().parents[2]
 _PHASES = (
     "Prepare",
@@ -136,6 +142,7 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
             candidate_sha="",
             candidate_ci=None,
             publish_run=None,
+            stage_times=(None, None),
             release=None,
             production_run=None,
             agent_repo=agent_repo,
@@ -318,9 +325,11 @@ def _sync_one(
     # run dispatched from an older controller commit can never succeed. The
     # lookup therefore prefers a run at the current controller head; an
     # incomplete run from an older head is cancelled and re-dispatched fresh,
-    # which keeps exactly one live approval prompt. A completed run is only
-    # adopted at the current head, so a stale failure never suppresses the
-    # automatic re-dispatch.
+    # which keeps exactly one live approval prompt. For the DISPATCH decision
+    # a completed run counts only at the current head, so a stale failure
+    # never suppresses the automatic re-dispatch. A stale SUCCESS is adopted
+    # afterwards for display only (see below), because that run is the
+    # shipped release and its rows are history.
     controller_sha = _branch_head(agent, getattr(agent, "default_branch", "main"))
     publish_run = _find_run(publish_workflow, publish_title, controller_sha) if publish_title else None
     any_publish_run = publish_run or (_find_run(publish_workflow, publish_title) if publish_title else None)
@@ -337,7 +346,11 @@ def _sync_one(
         and getattr(any_publish_run, "status", "") != "completed"
         and getattr(any_publish_run, "head_sha", "") != controller_sha
     ):
-        if dispatch:
+        if dispatch and release is None:
+            # Only while nothing shipped. After the release exists the run
+            # may still be finishing post-publication work (first-GA backport
+            # onboarding), and cancelling it would both interrupt that and
+            # destroy the evidence this dashboard reports.
             cancelled = retry_github_call(
                 lambda: any_publish_run.cancel(),
                 retries=2,
@@ -373,6 +386,22 @@ def _sync_one(
             raise RuntimeError(f"GitHub refused publication dispatch for {tracker.tag}")
         dispatched = True
 
+    # Display provenance for a SHIPPED release, decided separately from the
+    # dispatch selection above. `_find_run` answers an operational question
+    # ("is there a run to wait on or replace?"), so it prefers an active run
+    # and otherwise returns the newest COMPLETED match whatever its
+    # conclusion. Neither preference suits history: the release exists
+    # because one run succeeded, and a later failed or cancelled
+    # re-dispatch, or the controller's own main advancing past the head the
+    # successful run used, must not make a published release render as one
+    # that never qualified. Gated on the release existing, which is also
+    # what makes this unreachable from the dispatch decision (that requires
+    # `release is None`), so no stale run can ever suppress a re-dispatch.
+    if release is not None and publish_title:
+        shipped = _latest_successful_run(publish_workflow, publish_title)
+        if shipped is not None:
+            publish_run = shipped
+
     production_run = _find_production_run(automation, tracker.tag) if release else None
     body, summary = _render_status(
         tracker,
@@ -382,6 +411,7 @@ def _sync_one(
         candidate_sha=candidate_sha,
         candidate_ci=candidate_ci,
         publish_run=publish_run,
+        stage_times=_stage_times(publish_run),
         release=release,
         production_run=production_run,
         agent_repo=agent_repo,
@@ -400,6 +430,7 @@ def _render_status(
     candidate_sha: str,
     candidate_ci: CandidateCI | None,
     publish_run: Any | None,
+    stage_times: tuple[Any | None, Any | None] = (None, None),
     release: Any | None,
     production_run: Any | None,
     agent_repo: str,
@@ -513,6 +544,13 @@ def _render_status(
     approval_status = _status_badge("Not ready", "57606a")
     approval_evidence = "Qualification has not passed"
     approval_action = "No action yet."
+    publish_link = (
+        f"[Publish run {publish_run.id}]({publish_run.html_url})" if publish_run is not None else ""
+    )
+    qualification_passed = False
+    qualified_at, approved_at = stage_times
+    qualified_stamp = _stamp(qualified_at, "finished")
+    approved_stamp = _stamp(approved_at, "approved")
     if dispatched:
         qualification_status = _status_badge("Starting", "0969da")
         qualification_evidence = "Publish workflow dispatched"
@@ -521,13 +559,14 @@ def _render_status(
         next_action = qualification_action
         summary = "publication dispatched"
     elif publish_run is not None:
-        publish_link = f"[Publish run {publish_run.id}]({publish_run.html_url})"
         qualification_evidence = publish_link
         if publish_run.status == "completed" and publish_run.conclusion == "success":
+            qualification_passed = True
             qualification_status = _status_badge("Passed", "1a7f37")
+            qualification_evidence = f"{publish_link}{qualified_stamp}"
             qualification_action = "Complete"
             approval_status = _status_badge("Approved", "1a7f37")
-            approval_evidence = publish_link
+            approval_evidence = f"{publish_link}{approved_stamp}"
             approval_action = "Complete"
             current = "Qualification and protected publication completed."
             next_action = "Wait for production automation."
@@ -542,7 +581,9 @@ def _render_status(
             next_action = qualification_action
             summary = "publication failed"
         elif publish_run.status in {"waiting", "pending"}:
+            qualification_passed = True
             qualification_status = _status_badge("Passed", "1a7f37")
+            qualification_evidence = f"{publish_link}{qualified_stamp}"
             qualification_action = "Complete"
             approval_status = _status_badge("Waiting for approval", "8250df")
             approval_evidence = publish_link
@@ -560,12 +601,44 @@ def _render_status(
             next_action = qualification_action
             summary = "validating and qualifying"
 
+    if release is not None and not qualification_passed:
+        # A controller-published release PROVES both stages: publication is
+        # gated on qualification and on the protected `release` approval, and
+        # this row is history once the release exists. Anchoring on the
+        # release rather than on finding the run means no lookup failure can
+        # make a shipped release read as one that never qualified: a rerun
+        # replaces the run's listed conclusion with the newest attempt's,
+        # history ages past any scan window, `run-name` can be edited, and a
+        # run can be cancelled after it created the release.
+        if publish_run is None:
+            # No run found for this exact candidate. Do not claim the stages
+            # passed: this is also how a hand-created, out-of-band release
+            # looks, and that needs a human, not a green badge.
+            qualification_status = _status_badge("Unverified", "9a6700")
+            qualification_evidence = "Released, but no matching Publish run found"
+            qualification_action = "Confirm the publication run, or investigate an out-of-band release."
+            approval_status = _status_badge("Unverified", "9a6700")
+            approval_evidence = qualification_evidence
+            approval_action = qualification_action
+        else:
+            latest = getattr(publish_run, "conclusion", None) or getattr(publish_run, "status", "unknown")
+            note = f"{publish_link} · latest attempt {latest}"
+            qualification_status = _status_badge("Passed", "1a7f37")
+            qualification_evidence = f"{note}{qualified_stamp}"
+            qualification_action = "Complete"
+            approval_status = _status_badge("Approved", "1a7f37")
+            approval_evidence = f"{note}{approved_stamp}"
+            approval_action = "Complete"
+
     release_status = _status_badge("Not published", "57606a")
     release_evidence = "No GitHub release"
     release_action = "Complete qualification and release approval."
     if release is not None:
         release_status = _status_badge("Published", "1a7f37")
-        release_evidence = f"[GitHub release {tracker.tag}]({release.html_url})"
+        release_evidence = (
+            f"[GitHub release {tracker.tag}]({release.html_url})"
+            f"{_stamp(getattr(release, 'published_at', None), 'published')}"
+        )
         release_action = "Complete"
         current = "The GitHub release is published."
         next_action = "Wait for production automation and its protected approval."
@@ -583,6 +656,7 @@ def _render_status(
         follow_up_evidence = f"{production_link}<br>**Manual follow-up:** {_downstream_links(tracker)}"
         if production_run.status == "completed" and production_run.conclusion == "success":
             production_status = _status_badge("Passed", "1a7f37")
+            production_evidence = f"{production_link}{_stamp(getattr(production_run, 'updated_at', None), 'finished')}"
             production_action = "Complete"
             follow_up_status = _status_badge("Release owner review", "8250df")
             follow_up_action = _FOLLOW_UP_ACTION
@@ -908,6 +982,87 @@ def _find_release(
                 f"release {tag} resolves to {actual or '<unknown>'}, expected candidate {expected_sha}"
             )
     return release
+
+
+def _stage_times(run: Any) -> tuple[Any | None, Any | None]:
+    """(qualification finished, approval released) for a Publish run.
+
+    One Publish run spans qualification, the approval wait and publication,
+    so the run's own end time belongs to none of the first two: on the
+    9.2.0-rc1 run qualification finished at 22:37, approval released the
+    publish job at 22:48, and the run ended at 22:49. The job records carry
+    the real moments, so ask for them rather than inventing one from the run.
+
+    Job names mirror release-publish.yml; a rename here degrades to no
+    timestamp rather than a wrong one, which is the whole point.
+    """
+    if run is None:
+        return (None, None)
+    try:
+        jobs = list(
+            retry_github_call(
+                lambda: run.jobs(),
+                retries=2,
+                description=f"list jobs of publish run {getattr(run, 'id', '?')}",
+            )
+        )
+    except Exception:  # noqa: BLE001 - a dashboard never fails on decoration
+        return (None, None)
+
+    qualified_at = None
+    approved_at = None
+    for job in jobs:
+        name = getattr(job, "name", "") or ""
+        if name.startswith(f"{_QUALIFY_JOB} / ") and getattr(job, "conclusion", None) == "success":
+            # the last qualification job to finish IS qualification finishing
+            done = getattr(job, "completed_at", None)
+            if done is not None and (qualified_at is None or done > qualified_at):
+                qualified_at = done
+        elif name == _PUBLISH_JOB:
+            # the protected job starts the moment the approval is granted
+            approved_at = getattr(job, "started_at", None)
+    return (qualified_at, approved_at)
+
+
+def _stamp(moment: Any, label: str) -> str:
+    """Render " · <label> <UTC>" for a datetime, or "" for anything else.
+
+    Every row is recomputed from scratch on each pass, so without a time a
+    reader cannot tell a stage that finished minutes ago from one that
+    finished days ago. Only moments that genuinely belong to the row are
+    passed in: one Publish run spans qualification, approval and
+    publication, so its end time is not when qualification finished.
+    Read from the live object rather than stored on the tracker, keeping
+    the dashboard a projection of GitHub state.
+    """
+    formatter = getattr(moment, "strftime", None)
+    if formatter is None:
+        return ""
+    try:
+        return f" · {label} {formatter('%Y-%m-%d %H:%M UTC')}"
+    except (TypeError, ValueError):
+        return ""
+
+
+def _latest_successful_run(workflow: Any, title: str) -> Any | None:
+    """The newest SUCCEEDED run matching *title*, at any head.
+
+    Separate from :func:`_find_run`, which prefers an active run and then
+    the newest completed one whatever its conclusion: those preferences
+    answer "what should happen next", while this answers "which run
+    produced what already shipped".
+    """
+    if not title:
+        return None
+    runs = retry_github_call(
+        lambda: workflow.get_runs(status="success"),
+        retries=2,
+        description=f"list successful {workflow.name} runs",
+    )
+    for run in itertools.islice(runs, 500):
+        if (getattr(run, "display_title", "") or "") == title:
+            return run
+    return None
 
 
 def _find_run(workflow: Any, title: str, head_sha: str = "") -> Any | None:
