@@ -542,6 +542,9 @@ def _prepare_branch(
                 validation_profile=validation_profile,
                 generated_file_rules=generated_file_rules,
                 base_ref=pre_candidate_head,
+                candidate=candidate,
+                language=language,
+                test_path_patterns=test_path_patterns,
                 run_git=_run_git,
             )
             ok, output = validation_outcome

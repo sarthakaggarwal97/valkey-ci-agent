@@ -543,10 +543,24 @@ def _apply_plan(
                     resolutions=state.resolutions,
                     conflicting_files=state.conflicts,
                 )
+            if not test_adaptation.adapted_paths:
+                _abort_and_rollback(
+                    repo_dir, state.starting_head, run_git, run_process,
+                    state.starting_untracked_files,
+                )
+                return _application_result(
+                    candidate,
+                    "skipped-conflict",
+                    test_adaptation.summary
+                    or "test adaptation not applied: no branch-native test changes",
+                    resolutions=state.resolutions,
+                    conflicting_files=state.conflicts,
+                )
             adapted_by_ai = adapted_by_ai or bool(
                 test_adaptation.adapted_paths
             )
             if test_adaptation.adapted_paths:
+                state.resolutions.extend(test_adaptation.resolutions)
                 _append_detail(ai_summaries, test_adaptation.summary)
 
         if _has_llm_resolutions(resolutions):

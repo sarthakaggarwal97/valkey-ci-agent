@@ -21,9 +21,15 @@ from scripts.backport.git_commands import (
 from scripts.backport.git_commands import (
     run_git as run_git_default,
 )
-from scripts.backport.models import ResolutionResult
+from scripts.backport.missing_test_adaptation import (
+    MissingTestAdaptationResult,
+    adapt_target_missing_tests_with_claude,
+    is_test_path,
+)
+from scripts.backport.models import BackportCandidate, ResolutionResult
 from scripts.backport.sweep_git import untracked_paths, worktree_changed_paths
 from scripts.backport.validation import (
+    UNMAPPED_TEST_PATHS_PREFIX,
     changed_paths_since_base,
     select_validation_commands,
 )
@@ -38,6 +44,7 @@ RunAgent = Callable[..., Any]
 ChangedPaths = Callable[[str], tuple[str, ...]]
 ChangedPathsSinceBase = Callable[[str, str], Union[tuple[str, ...], list[str]]]
 HasStagedChanges = Callable[[str], bool]
+AdaptMissingTests = Callable[..., MissingTestAdaptationResult]
 
 
 @dataclass(frozen=True)
@@ -50,6 +57,7 @@ class ValidationOutcome:
     ai_summary: str = ""
     generated_paths: tuple[str, ...] = ()
     amended_commit_sha: str = ""
+    partial_repair: bool = False
 
     def __iter__(self):
         """Preserve the historical ``ok, output = ...`` calling convention."""
@@ -103,15 +111,20 @@ def validate_branch_with_optional_repair(
     validation_profile: str = "",
     generated_file_rules: list[Any] | None = None,
     base_ref: str = "",
+    candidate: BackportCandidate | None = None,
+    language: str = "c",
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
     run_git: RunGit = run_git_default,
+    adapt_missing_tests_func: AdaptMissingTests = adapt_target_missing_tests_with_claude,
 ) -> ValidationOutcome:
     """Validate the current branch, attempting one Claude repair if enabled.
 
     Returns a ``ValidationOutcome`` whose ``resolutions`` and ``ai_summary``
     describe a successful repair. When ``repair`` is set and the first
     validation fails, Claude Code gets one scoped repair attempt before giving
-    up. The repair helper removes its own repair commit on failure, so on a red
-    return the branch is left exactly as the caller handed it in.
+    up. A repair that exposes only an unsupported added test may be retained
+    long enough to combine with branch-native test adaptation; every red return
+    still restores the branch to the commit the caller handed in.
     """
     comparison_ref = base_ref or f"origin/{target_branch}"
     generated = prepare_generated_files(
@@ -142,24 +155,87 @@ def validate_branch_with_optional_repair(
                 amended_commit_sha=generated.amended_commit_sha,
             )
         pre_repair_head = head_sha(repo_dir)
-        repaired = repair_validation_failure_with_claude(
-            repo_dir,
-            target_branch,
-            test_commands,
-            validation_rules,
-            output,
-            validation_profile=validation_profile,
-            base_ref=comparison_ref,
-            validation_log_path=log_path,
-            run_git=run_git,
+        initial_log_output = (
+            _read_text_file(Path(log_path))
+            if log_path
+            else output
         )
-        if not repaired.ok:
-            return ValidationOutcome(
-                False,
-                repaired.output,
-                generated_paths=generated.generated_paths,
-                amended_commit_sha=generated.amended_commit_sha,
+        initial_unmapped_paths = (
+            _unmapped_test_paths_from_output(initial_log_output)
+            or _unmapped_test_paths_from_output(output)
+        )
+        if initial_unmapped_paths:
+            repaired = ValidationOutcome(False, output)
+        else:
+            repaired = repair_validation_failure_with_claude(
+                repo_dir,
+                target_branch,
+                test_commands,
+                validation_rules,
+                output,
+                validation_profile=validation_profile,
+                base_ref=comparison_ref,
+                validation_log_path=log_path,
+                test_path_patterns=test_path_patterns,
+                run_git=run_git,
             )
+        if not repaired.ok:
+            adaptation_output = repaired.output
+            if (
+                not _unmapped_test_paths_from_output(adaptation_output)
+                and initial_unmapped_paths
+            ):
+                adaptation_output = (
+                    f"{repaired.output}\n\n"
+                    f"{UNMAPPED_TEST_PATHS_PREFIX}"
+                    f"{json.dumps(initial_unmapped_paths, separators=(',', ':'))}"
+                    f"\nInitial validation output:\n{output}"
+                )
+            try:
+                adapted = adapt_added_tests_for_target(
+                    repo_dir,
+                    target_branch,
+                    test_commands,
+                    validation_rules,
+                    adaptation_output,
+                    candidate=candidate,
+                    language=language,
+                    test_path_patterns=test_path_patterns,
+                    validation_profile=validation_profile,
+                    base_ref=comparison_ref,
+                    run_git=run_git,
+                    adapt_missing_tests_func=adapt_missing_tests_func,
+                )
+            except Exception:
+                if repaired.partial_repair:
+                    run_git(repo_dir, "reset", "--hard", pre_repair_head)
+                raise
+            if not adapted.ok:
+                if repaired.partial_repair:
+                    run_git(repo_dir, "reset", "--hard", pre_repair_head)
+                return ValidationOutcome(
+                    False,
+                    adapted.output,
+                    generated_paths=generated.generated_paths,
+                    amended_commit_sha=generated.amended_commit_sha,
+                )
+            if repaired.partial_repair:
+                repaired = ValidationOutcome(
+                    True,
+                    adapted.output,
+                    resolutions=repaired.resolutions + adapted.resolutions,
+                    ai_summary="; ".join(
+                        part
+                        for part in (
+                            repaired.ai_summary,
+                            adapted.ai_summary,
+                        )
+                        if part
+                    ),
+                    amended_commit_sha=adapted.amended_commit_sha,
+                )
+            else:
+                repaired = adapted
 
         regenerated = prepare_generated_files(
             repo_dir,
@@ -190,8 +266,16 @@ def validate_branch_with_optional_repair(
             final_output,
             resolutions=repaired.resolutions,
             ai_summary=repaired.ai_summary,
-            generated_paths=regenerated.generated_paths,
-            amended_commit_sha=regenerated.amended_commit_sha,
+            generated_paths=tuple(
+                dict.fromkeys(
+                    generated.generated_paths + regenerated.generated_paths
+                )
+            ),
+            amended_commit_sha=(
+                regenerated.amended_commit_sha
+                or repaired.amended_commit_sha
+                or generated.amended_commit_sha
+            ),
         )
     finally:
         remove_validation_log_path(log_path)
@@ -207,6 +291,7 @@ def repair_validation_failure_with_claude(
     validation_profile: str = "",
     base_ref: str = "",
     validation_log_path: str | None = None,
+    test_path_patterns: tuple[str, ...] | list[str] | None = None,
     run_git: RunGit = run_git_default,
     run_agent_func: RunAgent = run_agent,
     validate_func: ValidateBranch = validate_backport_branch,
@@ -217,16 +302,24 @@ def repair_validation_failure_with_claude(
     """Give Claude Code one scoped attempt at the validation failure.
 
     The agent may only edit files already in the backport diff, and a repair is
-    accepted only when re-validation passes; on any other outcome the branch is
-    restored to exactly the commit handed in, so a red return never leaves a
-    half-repaired candidate behind. Editing outside the diff is treated as a
-    failure rather than trimmed, because the agent has then misunderstood the
-    task and its remaining edits cannot be trusted either.
+    accepted when re-validation passes. The sole intermediate exception is a
+    repair whose next failure is the machine-identified unsupported-test gate;
+    its signed commit is retained transactionally while branch-native test
+    adaptation runs, and the caller rolls both changes back if that cannot pass.
+    Editing outside the diff is treated as a failure rather than trimmed,
+    because the agent has then misunderstood the task and its remaining edits
+    cannot be trusted either.
     """
     comparison_ref = base_ref or f"origin/{target_branch}"
     changed_paths = tuple(changed_paths_since_base_func(repo_dir, comparison_ref))
     if not changed_paths:
         return ValidationOutcome(False, validation_output)
+    protected_test_paths = tuple(
+        path
+        for path in changed_paths
+        if is_test_path(path, test_path_patterns)
+        and Path(repo_dir, path).is_file()
+    )
 
     before_contents = {
         path: _read_text_file(Path(repo_dir, path))
@@ -267,6 +360,18 @@ def repair_validation_failure_with_claude(
             return ValidationOutcome(False, detail[:500] or validation_output)
 
         edited_paths = changed_paths_func(repo_dir)
+        removed_test_paths = tuple(
+            path
+            for path in protected_test_paths
+            if not Path(repo_dir, path).is_file()
+        )
+        if removed_test_paths:
+            run_git(repo_dir, "reset", "--hard", "HEAD")
+            return ValidationOutcome(
+                False,
+                "Claude Code validation repair removed changed test coverage: "
+                + ", ".join(removed_test_paths),
+            )
         unexpected_paths = sorted(set(edited_paths) - set(changed_paths))
         if unexpected_paths:
             run_git(repo_dir, "reset", "--hard", "HEAD")
@@ -287,13 +392,21 @@ def repair_validation_failure_with_claude(
                 False,
                 validation_output_with_diagnosis(validation_output, diagnosis),
             )
-        run_git(repo_dir, "commit", "-m", "Repair backport validation failure")
+        run_git(
+            repo_dir,
+            "commit",
+            "-s",
+            "-m",
+            "Repair backport validation failure",
+        )
 
         validate_kwargs: dict[str, str] = {}
         if validation_profile:
             validate_kwargs["validation_profile"] = validation_profile
         if base_ref:
             validate_kwargs["base_ref"] = base_ref
+        if validation_log_path:
+            validate_kwargs["log_path"] = validation_log_path
         ok, output = validate_func(
             repo_dir,
             target_branch,
@@ -301,23 +414,88 @@ def repair_validation_failure_with_claude(
             validation_rules,
             **validate_kwargs,
         )
+        summary = diagnosis or "Claude Code repaired the validation failure."
         if ok:
             logger.info("Claude Code validation repair passed for %s", target_branch)
-            summary = diagnosis or "Claude Code repaired the validation failure."
-            resolutions = tuple(
-                _validation_repair_resolution(
-                    path,
-                    before_contents.get(path, ""),
-                    _read_text_file(Path(repo_dir, path)),
-                    summary,
-                )
-                for path in edited_paths
-            )
             return ValidationOutcome(
                 True,
                 output,
-                resolutions=resolutions,
+                resolutions=tuple(
+                    _validation_repair_resolution(
+                        path,
+                        before_contents.get(path, ""),
+                        _read_text_file(Path(repo_dir, path)),
+                        summary,
+                    )
+                    for path in edited_paths
+                ),
                 ai_summary=summary,
+            )
+
+        full_revalidation_output = (
+            _read_text_file(Path(validation_log_path))
+            if validation_log_path
+            else ""
+        )
+        unmapped_paths = (
+            _unmapped_test_paths_from_output(output)
+            or _unmapped_test_paths_from_output(full_revalidation_output)
+        )
+        if unmapped_paths:
+            restored_paths = tuple(
+                path
+                for path in edited_paths
+                if path in set(unmapped_paths)
+                and _read_text_file(Path(repo_dir, path))
+                != before_contents.get(path, "")
+            )
+            if restored_paths:
+                run_git(repo_dir, "reset", "--soft", "HEAD^")
+                for path in restored_paths:
+                    Path(repo_dir, path).write_text(
+                        before_contents.get(path, ""),
+                        encoding="utf-8",
+                    )
+                    run_git(repo_dir, "add", "--", path)
+                if not has_staged_changes_func(repo_dir):
+                    run_git(repo_dir, "reset", "--hard", "HEAD")
+                    return ValidationOutcome(
+                        False,
+                        validation_output_with_diagnosis(output, diagnosis),
+                    )
+                run_git(
+                    repo_dir,
+                    "commit",
+                    "-s",
+                    "-m",
+                    "Repair backport validation failure",
+                )
+            retained_paths = tuple(
+                path
+                for path in edited_paths
+                if _read_text_file(Path(repo_dir, path))
+                != before_contents.get(path, "")
+            )
+            logger.info(
+                "Claude Code repaired the initial failure for %s; "
+                "retaining the repair while branch-native tests are adapted.",
+                target_branch,
+            )
+            return ValidationOutcome(
+                False,
+                validation_output_with_diagnosis(output, diagnosis),
+                resolutions=tuple(
+                    _validation_repair_resolution(
+                        path,
+                        before_contents.get(path, ""),
+                        _read_text_file(Path(repo_dir, path)),
+                        summary,
+                    )
+                    for path in retained_paths
+                ),
+                ai_summary=summary,
+                amended_commit_sha=head_sha(repo_dir),
+                partial_repair=True,
             )
 
         logger.warning(
@@ -332,6 +510,198 @@ def repair_validation_failure_with_claude(
     finally:
         if owns_log_path:
             remove_validation_log_path(log_path)
+
+
+def adapt_added_tests_for_target(
+    repo_dir: str,
+    target_branch: str,
+    test_commands: list[str],
+    validation_rules: list[Any],
+    validation_output: str,
+    *,
+    candidate: BackportCandidate | None,
+    language: str,
+    test_path_patterns: tuple[str, ...] | list[str] | None,
+    validation_profile: str = "",
+    base_ref: str = "",
+    run_git: RunGit = run_git_default,
+    adapt_missing_tests_func: AdaptMissingTests = adapt_target_missing_tests_with_claude,
+    validate_func: ValidateBranch = validate_backport_branch,
+) -> ValidationOutcome:
+    """Port cleanly-added upstream tests into the target branch's test layout.
+
+    A new test file often cherry-picks without a Git conflict even when the
+    older release has no compatible harness for that path. The ordinary repair
+    pass may edit the new file in place; if that fails, this fallback presents
+    the test's content to the existing missing-test adapter, permits edits only
+    to already-tracked branch-native tests, removes the incompatible added path,
+    and accepts the result only after the complete validation plan passes.
+    """
+    if candidate is None:
+        return ValidationOutcome(False, validation_output)
+    eligible_paths = _unmapped_test_paths_from_output(validation_output)
+    if not eligible_paths:
+        return ValidationOutcome(False, validation_output)
+    comparison_ref = base_ref or f"origin/{target_branch}"
+    added_sources = _added_test_sources(
+        repo_dir,
+        comparison_ref,
+        test_path_patterns=test_path_patterns,
+        eligible_paths=eligible_paths,
+    )
+    if not added_sources:
+        return ValidationOutcome(False, validation_output)
+
+    starting_head = head_sha(repo_dir)
+    try:
+        replacement_paths = _deleted_test_replacements(
+            repo_dir,
+            comparison_ref,
+            tuple(added_sources),
+            test_path_patterns=test_path_patterns,
+        )
+        if replacement_paths:
+            run_git(
+                repo_dir,
+                "checkout",
+                comparison_ref,
+                "--",
+                *replacement_paths,
+            )
+        adaptation = adapt_missing_tests_func(
+            repo_dir,
+            candidate,
+            added_sources,
+            language=language,
+            test_path_patterns=test_path_patterns,
+            excluded_test_paths=tuple(added_sources),
+            run_git=run_git,
+        )
+        if adaptation.fatal or not adaptation.adapted_paths:
+            detail = adaptation.summary or (
+                "test adaptation not applied: no branch-native test changes"
+            )
+            run_git(repo_dir, "reset", "--hard", starting_head)
+            return ValidationOutcome(
+                False,
+                f"{validation_output}\n\nBranch-native test adaptation: {detail}",
+            )
+
+        for path in sorted(added_sources):
+            run_git(repo_dir, "rm", "-f", "--ignore-unmatch", "--", path)
+        if not has_staged_changes(repo_dir):
+            run_git(repo_dir, "reset", "--hard", starting_head)
+            return ValidationOutcome(
+                False,
+                f"{validation_output}\n\n"
+                "Branch-native test adaptation produced no staged change.",
+            )
+        run_git(
+            repo_dir,
+            "commit",
+            "-s",
+            "-m",
+            "Adapt tests for target branch",
+        )
+        ok, output = validate_func(
+            repo_dir,
+            target_branch,
+            test_commands,
+            validation_rules,
+            validation_profile=validation_profile,
+            base_ref=comparison_ref,
+        )
+        if not ok:
+            run_git(repo_dir, "reset", "--hard", starting_head)
+            return ValidationOutcome(
+                False,
+                validation_output_with_diagnosis(output, adaptation.summary),
+            )
+        return ValidationOutcome(
+            True,
+            output,
+            resolutions=tuple(adaptation.resolutions),
+            ai_summary=adaptation.summary,
+            amended_commit_sha=head_sha(repo_dir),
+        )
+    except Exception:
+        run_git(repo_dir, "reset", "--hard", starting_head)
+        raise
+
+
+def _added_test_sources(
+    repo_dir: str,
+    base_ref: str,
+    *,
+    test_path_patterns: tuple[str, ...] | list[str] | None,
+    eligible_paths: tuple[str, ...],
+) -> dict[str, str]:
+    """Return regular test files added by this candidate relative to its base."""
+    changed = git_output(
+        repo_dir,
+        "diff",
+        "--diff-filter=A",
+        "--name-only",
+        "-z",
+        f"{base_ref}...HEAD",
+    )
+    sources: dict[str, str] = {}
+    eligible = set(eligible_paths)
+    for path in sorted(item for item in changed.split("\0") if item):
+        file_path = Path(repo_dir, path)
+        if (
+            path not in eligible
+            or not is_test_path(path, test_path_patterns)
+            or not file_path.is_file()
+            or file_path.is_symlink()
+        ):
+            continue
+        sources[path] = file_path.read_text(encoding="utf-8", errors="replace")
+    return sources
+
+
+def _deleted_test_replacements(
+    repo_dir: str,
+    base_ref: str,
+    added_paths: tuple[str, ...],
+    *,
+    test_path_patterns: tuple[str, ...] | list[str] | None,
+) -> tuple[str, ...]:
+    """Find branch-native tests replaced by added tests with the same stem."""
+    added_stems = {Path(path).stem for path in added_paths}
+    changed = git_output(
+        repo_dir,
+        "diff",
+        "--diff-filter=D",
+        "--name-only",
+        "-z",
+        f"{base_ref}...HEAD",
+    )
+    return tuple(
+        path
+        for path in sorted(item for item in changed.split("\0") if item)
+        if Path(path).stem in added_stems
+        and is_test_path(path, test_path_patterns)
+    )
+
+
+def _unmapped_test_paths_from_output(output: str) -> tuple[str, ...]:
+    """Read the machine marker emitted by fail-closed test-path validation."""
+    for line in output.splitlines():
+        marker_index = line.find(UNMAPPED_TEST_PATHS_PREFIX)
+        if marker_index < 0:
+            continue
+        payload = line[marker_index + len(UNMAPPED_TEST_PATHS_PREFIX):]
+        try:
+            paths = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(paths, list) and all(
+            isinstance(path, str) and path
+            for path in paths
+        ):
+            return tuple(dict.fromkeys(paths))
+    return ()
 
 
 def prepare_generated_files(

@@ -90,13 +90,16 @@ repos:
 
 By default, agent branches are pushed directly to `repo` under the `agent/backport/...` namespace and PRs are opened in that same upstream repository. `push_repo` is optional and only exists as an escape hatch for a real different-owner fork; same-owner `push_repo` values are rejected so staging repositories do not become the normal model.
 
-The sweep branch is always kept green: a candidate is only kept if the whole branch still validates after the cherry-pick, so one bad commit can never block later candidates. Each scheduled run keeps up to two validated cherry-picks (`--max-candidates 2`) and reports candidates that were skipped or failed validation in the PR's "Needs attention" section without committing them. When `repair_validation_failures` is enabled, Claude Code gets one narrow edit-only attempt to fix a failing cherry-pick before it is dropped.
+The sweep branch is always kept green: a candidate is only kept if the whole branch still validates after the cherry-pick, so one bad commit can never block later candidates. Each scheduled run keeps up to two validated cherry-picks (`--max-candidates 2`) and reports candidates that were skipped or failed validation in the PR's "Needs attention" section without committing them. When `repair_validation_failures` is enabled, Claude Code gets one narrow edit-only attempt to fix a failing cherry-pick before it is dropped. A test file that the target branch cannot build or run is never silently discarded: the agent must port its intent into an existing branch-native test and revalidate the full candidate, or the candidate fails closed.
 
 The `valkey-core` profile adds checks that static globs cannot express safely:
 `git diff --check` over the candidate range, `clang-format-18` over changed
 C/C++ files, directly changed Tcl tests, C/C++ unit tests, subsystem tests for
 cluster/TLS/RDB/sentinel/module or test-harness changes, and targeted
-reply-schema validation for changed tests that do not opt out. Generated-file
+reply-schema validation for changed tests that do not opt out. It checks the
+target branch's actual C/C++ unit-test discovery convention, so a clean
+cross-harness cherry-pick cannot pass while its new test file is ignored.
+Generated-file
 rules run twice to prove convergence. They may edit only their declared tracked
 outputs; an allowed update is amended into the candidate commit, while any
 unexpected path or non-convergent generator fails closed.

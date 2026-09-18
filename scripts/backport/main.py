@@ -357,6 +357,9 @@ def run_backport(
                         repair=repair_validation_failures,
                         validation_profile=validation_profile,
                         generated_file_rules=generated_file_rules,
+                        candidate=candidate,
+                        language=language,
+                        test_path_patterns=test_path_patterns,
                         run_git=_run_git,
                     )
                     validation_ok = validation_outcome.ok

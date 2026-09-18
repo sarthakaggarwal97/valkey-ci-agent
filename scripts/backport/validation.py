@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from fnmatch import fnmatch
 from pathlib import Path
@@ -10,6 +11,8 @@ from typing import TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
     from scripts.backport.registry import ValidationRule
+
+UNMAPPED_TEST_PATHS_PREFIX = "BACKPORT_UNMAPPED_TEST_PATHS="
 
 
 def changed_paths_since_base(repo_dir: str, base_ref: str) -> tuple[str, ...]:
@@ -79,6 +82,7 @@ def _append_commands(commands: list[str], seen: set[str], additions: Iterable[st
 
 
 _C_FAMILY_SUFFIXES = (".c", ".h", ".cpp", ".hpp")
+_UNIT_TEST_SOURCE_SUFFIXES = (".c", ".cc", ".cpp")
 # Valkey's clang-format workflow runs `cd src && clang-format-18 -i **/*.{c,h,cpp,hpp}`,
 # and the only `.clang-format` in the tree is `src/.clang-format`. Files outside
 # `src/` - `tests/modules/*.c`, anything vendored under `deps/` - are therefore
@@ -215,18 +219,43 @@ def _valkey_test_validation_commands(
         for path, unit in zip(direct_test_paths, direct_tests)
         if path.startswith("tests/unit/moduleapi/")
     )
+    covered_test_paths: set[str] = set()
     for _path, unit in regular_tests:
         commands.append(f"./runtest --single {quote(unit)} --clients 1")
+        covered_test_paths.add(_path)
     # Moduleapi units need their test modules built first. Newer wrappers accept
     # caller selection; legacy wrappers hard-code the full suite.
     for _path, unit in module_tests:
         commands.append(_targeted_moduleapi_command(repo_dir, (unit,)))
+        covered_test_paths.add(_path)
 
     if any(path.startswith("src/unit/") for path in changed_paths):
         commands.append("make -C src test-unit")
+        covered_test_paths.update(
+            path
+            for path in changed_paths
+            if (
+                path.startswith("src/unit/")
+                and _is_valkey_test_path(path)
+                and _unit_test_source_is_built(repo_dir, path)
+            )
+        )
+
+    legacy_cluster_tests = tuple(
+        path
+        for path in changed_paths
+        if path.startswith("tests/cluster/tests/")
+        and path.endswith(".tcl")
+        and _path_exists(repo_dir, path)
+    )
+    for path in legacy_cluster_tests:
+        pattern = path.removeprefix("tests/cluster/tests/").removesuffix(".tcl")
+        commands.append(f"./runtest-cluster --single {quote(pattern)}")
+        covered_test_paths.add(path)
 
     cluster_changed = any(
         path.startswith("tests/unit/cluster/")
+        or path.startswith("tests/cluster/")
         or fnmatch(path, "src/cluster*.c")
         or fnmatch(path, "src/cluster*.h")
         for path in changed_paths
@@ -237,6 +266,12 @@ def _valkey_test_validation_commands(
             ("unit/cluster/base", "unit/cluster/misc"),
         )
         commands.append(f"./runtest --single {quote(cluster_unit)} --clients 1")
+    if cluster_changed:
+        covered_test_paths.update(
+            path
+            for path in changed_paths
+            if path.startswith("tests/cluster/") and _is_valkey_test_path(path)
+        )
 
     if any(
         path.startswith("tests/sentinel/")
@@ -244,6 +279,11 @@ def _valkey_test_validation_commands(
         for path in changed_paths
     ):
         commands.append("./runtest-sentinel")
+        covered_test_paths.update(
+            path
+            for path in changed_paths
+            if path.startswith("tests/sentinel/") and _is_valkey_test_path(path)
+        )
 
     module_units, module_suite_needed = _moduleapi_units_for_module_sources(
         repo_dir,
@@ -254,6 +294,11 @@ def _valkey_test_validation_commands(
         # whole moduleapi suite serialized at one client does not fit the
         # per-command cap, and upstream runs it in parallel too.
         commands.append("./runtest-moduleapi")
+        covered_test_paths.update(
+            path
+            for path in changed_paths
+            if path.startswith(_MODULE_SOURCE_PREFIX) and _is_valkey_test_path(path)
+        )
     else:
         extra_module_units = tuple(
             unit for unit in module_units if unit not in set(direct_tests)
@@ -261,9 +306,23 @@ def _valkey_test_validation_commands(
         if extra_module_units:
             commands.append(_targeted_moduleapi_command(repo_dir, extra_module_units))
 
-    if any(path.startswith("tests/support/") or path == "tests/test_helper.tcl" for path in changed_paths):
+    harness_paths = tuple(
+        path
+        for path in changed_paths
+        if (
+            path.startswith("tests/support/")
+            or path.startswith("tests/helpers/")
+            or path in {"tests/instances.tcl", "tests/test_helper.tcl"}
+        )
+    )
+    if harness_paths:
         units = " ".join(f"--single {quote(unit)}" for unit in _HARNESS_SMOKE_UNITS)
         commands.append(f"./runtest {units} --clients 1 --tags -slow")
+        covered_test_paths.update(
+            path
+            for path in harness_paths
+            if _is_valkey_test_path(path)
+        )
 
     reply_tests = tuple(
         unit
@@ -325,6 +384,29 @@ def _valkey_test_validation_commands(
             "./utils/req-res-log-validator.py --verbose --fail-missing-reply-schemas"
         )
 
+    uncovered_tests = tuple(
+        path
+        for path in changed_paths
+        if _path_exists(repo_dir, path)
+        and _is_valkey_test_path(path)
+        and path not in covered_test_paths
+    )
+    if uncovered_tests:
+        marker = UNMAPPED_TEST_PATHS_PREFIX + json.dumps(
+            uncovered_tests,
+            separators=(",", ":"),
+        )
+        message = (
+            "changed test path(s) have no explicit validation mapping: "
+            + ", ".join(uncovered_tests)
+        )
+        diagnostic = f"{marker}\n{message}\n"
+        commands.insert(
+            0,
+            f"python3 -c "
+            f"{quote(f'import sys; sys.stderr.write({diagnostic!r}); sys.exit(1)')}",
+        )
+
     return tuple(commands)
 
 
@@ -381,6 +463,44 @@ def _is_direct_runtest(path: str) -> bool:
     return path.endswith(".tcl") and (
         path.startswith("tests/unit/") or path.startswith("tests/integration/")
     )
+
+
+def _is_valkey_test_path(path: str) -> bool:
+    return (
+        path.startswith("tests/")
+        and path.endswith(".tcl")
+    ) or (
+        path.startswith("src/unit/test_")
+        and path.endswith(_UNIT_TEST_SOURCE_SUFFIXES)
+    )
+
+
+def _unit_test_source_is_built(repo_dir: str, path: str) -> bool:
+    """Whether the target branch's Makefiles compile this unit-test suffix.
+
+    Valkey 8.0-9.0 discovers ``src/unit/*.c`` from ``src/Makefile``. Valkey
+    9.1+ instead discovers ``src/unit/*.cpp`` from ``src/unit/Makefile``, while
+    7.2 has no source-unit harness. A clean cherry-pick across that transition
+    can otherwise pass ``make test-unit`` while silently ignoring the new file.
+    """
+    if not repo_dir:
+        return True
+    suffix = Path(path).suffix.lower()
+    marker = {
+        ".c": "wildcard unit/*.c",
+        ".cc": "wildcard *.cc",
+        ".cpp": "wildcard *.cpp",
+    }.get(suffix)
+    if marker is None:
+        return False
+    for makefile in (Path(repo_dir, "src/Makefile"), Path(repo_dir, "src/unit/Makefile")):
+        try:
+            body = " ".join(makefile.read_text(encoding="utf-8", errors="replace").split())
+        except OSError:
+            continue
+        if marker in body:
+            return True
+    return False
 
 
 def _runtest_unit(path: str) -> str:

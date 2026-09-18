@@ -6,6 +6,7 @@ import subprocess
 
 from scripts.backport.registry import ValidationRule
 from scripts.backport.validation import (
+    UNMAPPED_TEST_PATHS_PREFIX,
     changed_paths_since_base,
     select_validation_commands,
 )
@@ -141,6 +142,30 @@ def test_valkey_profile_runs_a_smoke_set_for_harness_changes(tmp_path) -> None:
         "--single unit/protocol --single unit/type/incr --clients 1 --tags -slow",
     ]
     assert "./runtest --clients 1" not in commands
+
+
+def test_valkey_profile_maps_all_release_branch_harness_helpers(tmp_path) -> None:
+    changed_paths = [
+        "tests/helpers/fake_redis_node.tcl",
+        "tests/instances.tcl",
+        "tests/support/server.tcl",
+        "tests/test_helper.tcl",
+    ]
+    for path in changed_paths:
+        destination = tmp_path / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("helper body\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        changed_paths,
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert sum("--single unit/other" in command for command in commands) == 1
+    assert not any(UNMAPPED_TEST_PATHS_PREFIX in command for command in commands)
 
 
 def test_valkey_profile_targets_moduleapi_units_that_load_the_module(tmp_path) -> None:
@@ -318,3 +343,136 @@ def test_valkey_profile_uses_existing_cluster_smoke_on_legacy_branch(tmp_path) -
 
     assert "./runtest --single unit/cluster/misc --clients 1" in commands
     assert not any(command.startswith("./runtest-cluster") for command in commands)
+
+
+def test_valkey_profile_runs_changed_legacy_cluster_test_directly(tmp_path) -> None:
+    test_path = tmp_path / "tests/cluster/tests/03-failover-loop.tcl"
+    test_path.parent.mkdir(parents=True)
+    test_path.write_text("test body\n", encoding="utf-8")
+    smoke = tmp_path / "tests/unit/cluster/misc.tcl"
+    smoke.parent.mkdir(parents=True)
+    smoke.write_text("test body\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["tests/cluster/tests/03-failover-loop.tcl"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert "./runtest-cluster --single 03-failover-loop" in commands
+    assert not any("no explicit validation mapping" in command for command in commands)
+
+
+def test_valkey_profile_maps_legacy_cluster_runner_files(tmp_path) -> None:
+    runner = tmp_path / "tests/cluster/run.tcl"
+    runner.parent.mkdir(parents=True)
+    runner.write_text("runner body\n", encoding="utf-8")
+    smoke = tmp_path / "tests/unit/cluster/misc.tcl"
+    smoke.parent.mkdir(parents=True)
+    smoke.write_text("test body\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["tests/cluster/run.tcl"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert "./runtest --single unit/cluster/misc --clients 1" in commands
+    assert not any(UNMAPPED_TEST_PATHS_PREFIX in command for command in commands)
+
+
+def test_valkey_profile_rejects_unit_test_suffix_target_does_not_build(
+    tmp_path,
+) -> None:
+    makefile = tmp_path / "src/Makefile"
+    makefile.parent.mkdir(parents=True)
+    makefile.write_text(
+        "ENGINE_TEST_FILES := $(wildcard unit/*.c)\n"
+        "test-unit:\n\t@echo tests\n",
+        encoding="utf-8",
+    )
+    test_path = tmp_path / "src/unit/test_networking.cpp"
+    test_path.parent.mkdir()
+    test_path.write_text("TEST(Networking, Regression) {}\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["src/unit/test_networking.cpp"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert "make -C src test-unit" in commands
+    unmapped_command = next(
+        command
+        for command in commands
+        if UNMAPPED_TEST_PATHS_PREFIX in command
+        and "src/unit/test_networking.cpp" in command
+    )
+    assert commands.index(unmapped_command) < commands.index("make -C src test-unit")
+
+
+def test_valkey_profile_accepts_unit_test_suffix_target_builds(tmp_path) -> None:
+    makefile = tmp_path / "src/unit/Makefile"
+    makefile.parent.mkdir(parents=True)
+    makefile.write_text(
+        "SOURCES := $(wildcard *.cpp)\n"
+        "test-unit:\n\t@echo tests\n",
+        encoding="utf-8",
+    )
+    test_path = tmp_path / "src/unit/test_networking.cpp"
+    test_path.write_text("TEST(Networking, Regression) {}\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["src/unit/test_networking.cpp"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert "make -C src test-unit" in commands
+    assert not any(UNMAPPED_TEST_PATHS_PREFIX in command for command in commands)
+
+
+def test_valkey_profile_treats_unit_test_header_as_harness_input(tmp_path) -> None:
+    header = tmp_path / "src/unit/test_help.h"
+    header.parent.mkdir(parents=True)
+    header.write_text("#define TEST_HELP 1\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["src/unit/test_help.h"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert "make -C src test-unit" in commands
+    assert not any(UNMAPPED_TEST_PATHS_PREFIX in command for command in commands)
+
+
+def test_valkey_profile_fails_closed_for_unmapped_changed_test(tmp_path) -> None:
+    test_path = tmp_path / "tests/new-harness/case.tcl"
+    test_path.parent.mkdir(parents=True)
+    test_path.write_text("test body\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["tests/new-harness/case.tcl"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert any(
+        UNMAPPED_TEST_PATHS_PREFIX in command
+        and "no explicit validation mapping" in command
+        and "tests/new-harness/case.tcl" in command
+        for command in commands
+    )

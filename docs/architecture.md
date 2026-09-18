@@ -47,7 +47,12 @@ run keeps up to two validated cherry-picks (`--max-candidates 2`) and records
 skipped or failed candidates in the PR's "Needs attention" section without
 committing them. When `repair_validation_failures` is enabled, Claude Code
 gets one edit-only repair attempt scoped to the backport diff before a failing
-cherry-pick is dropped. Repos with no `build_commands` configured rely on
+cherry-pick is dropped. The repair may not delete changed tests. If a newly
+added test is structurally unsupported by the target branch's harness, a
+separate sandboxed adaptation may edit existing branch-native tests only; the
+unsupported path is removed and committed only after the complete validation
+plan passes. No safe adaptation means the candidate fails closed. Repos with no
+`build_commands` configured rely on
 upstream CI for verification.
 
 ### Poll
