@@ -571,7 +571,7 @@ def test_valkey_profile_rejects_unit_test_suffix_target_does_not_build(
     test_path.write_text("TEST(Networking, Regression) {}\n", encoding="utf-8")
 
     commands = select_validation_commands(
-        [],
+        ["make"],
         [],
         ["src/unit/test_networking.cpp"],
         validation_profile="valkey-core",
@@ -585,7 +585,8 @@ def test_valkey_profile_rejects_unit_test_suffix_target_does_not_build(
         if UNMAPPED_TEST_PATHS_PREFIX in command
         and "src/unit/test_networking.cpp" in command
     )
-    assert commands.index(unmapped_command) < commands.index("make -C src test-unit")
+    assert commands.index("make") < commands.index(unmapped_command)
+    assert commands.index("make -C src test-unit") < commands.index(unmapped_command)
 
 
 def test_valkey_profile_accepts_unit_test_suffix_target_builds(tmp_path) -> None:

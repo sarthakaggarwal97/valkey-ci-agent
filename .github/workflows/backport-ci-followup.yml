@@ -143,12 +143,14 @@ jobs:
           CI_FIX_MACOS_AGENT_REF: main
           CI_FIX_MACOS_TOKEN: ${{ steps.agent-token.outputs.token }}
           CI_FIX_VERIFY_RUNS: ${{ vars.CI_FIX_VERIFY_RUNS || '2' }}
+          TARGET_REPO: ${{ matrix.repo }}
+          TARGET_BRANCH: ${{ matrix.branch }}
         run: |
           set -euo pipefail
           python -m scripts.backport.ci_followup \
             --registry repos.yml \
-            --repo "${{ matrix.repo }}" \
-            --branch "${{ matrix.branch }}" \
+            --repo "${TARGET_REPO}" \
+            --branch "${TARGET_BRANCH}" \
             --verbose | tee backport-ci-followup-result.json
 
       - name: Upload result

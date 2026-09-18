@@ -90,7 +90,7 @@ repos:
 
 By default, agent branches are pushed directly to `repo` under the `agent/backport/...` namespace and PRs are opened in that same upstream repository. `push_repo` is optional and only exists as an escape hatch for a real different-owner fork; same-owner `push_repo` values are rejected so staging repositories do not become the normal model.
 
-The sweep branch is always kept green: a candidate is only kept if the whole branch still validates after the cherry-pick, so one bad commit can never block later candidates. Each scheduled run keeps up to two validated cherry-picks (`--max-candidates 2`) and reports candidates that were skipped or failed validation in the PR's "Needs attention" section without committing them. When `repair_validation_failures` is enabled, Claude Code gets one narrow edit-only attempt to fix a failing cherry-pick before it is dropped. A test file that the target branch cannot build or run is never silently discarded: the agent must port its intent into an existing branch-native test and revalidate the full candidate, or the candidate fails closed. Added files belonging only to that unsupported test harness are supplied as adaptation context and removed in the same validated commit; independently mapped tests remain unchanged.
+The sweep branch is always kept green: a candidate is only kept if the whole branch still validates after the cherry-pick, so one bad commit can never block later candidates. Each scheduled run keeps up to two validated cherry-picks (`--max-candidates 2`) and reports candidates that were skipped or failed validation in the PR's "Needs attention" section without committing them. When `repair_validation_failures` is enabled, Claude Code gets one narrow edit-only attempt to fix a failing cherry-pick before it is dropped. A test file that the target branch cannot build or run is never silently discarded: the agent must port its intent into an existing branch-native test and revalidate the full candidate, or the candidate fails closed. This adaptation preserves regression coverage that a fail-closed-only policy would discard when release branches use different test harnesses. Added files belonging only to that unsupported test harness are supplied as adaptation context and removed in the same validated commit; independently mapped tests remain unchanged.
 
 The `valkey-core` profile adds checks that static globs cannot express safely:
 `git diff --check` over the candidate range, branch-native `clang-format-18`
@@ -112,11 +112,12 @@ for registered branches with an App-owned open
 branch and 40-character current SHA, waits for all current-head runs to finish,
 ignores the Actions jobs named in `ci_followup_ignored_jobs`, and records one
 attempt per logical workflow job in hidden PR-comment markers, deduplicating
-twin push and pull-request runs for the same head. Only Actions jobs are ever
-candidates, so checks contributed by other GitHub Apps -- DCO and Codecov on
-Valkey core -- are out of scope without any configuration. Sweep publication
-and CI follow-up share one per-repository/branch concurrency group. One current
-head gets at most one pushed fix;
+twin push and pull-request runs for the same head. A sweep PR receives at most
+three automatic follow-up attempts across all of its heads. Only Actions jobs
+are ever candidates, so checks contributed by other GitHub Apps -- DCO and
+Codecov on Valkey core -- are out of scope without any configuration. Sweep
+publication, poll, and CI follow-up share one per-repository/branch concurrency
+group. One current head gets at most one pushed fix;
 after a lease-protected descendant push, later runs wait for CI on the new head.
 Refusals and unverifiable failures are reported without changing the branch.
 The bot never adds DCO sign-off and never rewrites a published sweep branch.

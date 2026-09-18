@@ -3488,7 +3488,6 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     assert ("add", "src/a.c") in git_calls
     assert (
         "commit",
-        "-s",
         "-m",
         "Repair backport validation failure",
     ) in git_calls

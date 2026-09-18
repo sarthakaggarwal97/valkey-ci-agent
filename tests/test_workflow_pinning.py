@@ -179,9 +179,10 @@ def test_backport_workflows_refresh_credentials_after_validation():
     assert "steps.poll.outputs.had_error == 'true'" in poll
 
 
-def test_sweep_and_ci_followup_serialize_branch_mutations():
+def test_backport_branch_mutations_share_one_concurrency_group():
     groups = []
     for filename, job_name in (
+        ("backport-poll.yml", "poll"),
         ("backport-sweep.yml", "sweep"),
         ("backport-ci-followup.yml", "follow-up"),
     ):
@@ -196,4 +197,18 @@ def test_sweep_and_ci_followup_serialize_branch_mutations():
     assert groups == [
         "backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}",
         "backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}",
+        "backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}",
     ]
+
+
+def test_backport_ci_followup_passes_matrix_values_through_step_env():
+    text = Path(
+        ".github/workflows/backport-ci-followup.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "TARGET_REPO: ${{ matrix.repo }}" in text
+    assert "TARGET_BRANCH: ${{ matrix.branch }}" in text
+    assert '--repo "${TARGET_REPO}"' in text
+    assert '--branch "${TARGET_BRANCH}"' in text
+    assert '--repo "${{ matrix.repo }}"' not in text
+    assert '--branch "${{ matrix.branch }}"' not in text

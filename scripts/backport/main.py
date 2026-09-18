@@ -348,7 +348,11 @@ def run_backport(
                 validation_outcome = None
                 validation_ok = True
                 validation_output = ""
-                if validation_profile or generated_file_rules:
+                if (
+                    validation_profile
+                    or generated_file_rules
+                    or repair_validation_failures
+                ):
                     validation_outcome = validate_branch_with_optional_repair(
                         tmp_dir,
                         target_branch,

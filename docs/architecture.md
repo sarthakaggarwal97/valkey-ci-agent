@@ -78,9 +78,9 @@ poller.py (short cron or manual dispatch)
 
 The open-PR check is the entire state model: a merge closes the sweep PR, the
 next poll finds the gap and tops the board back up, and the new PR locks the
-branch again until it too merges. The poll job shares the
-`backport-sweep-{repo}-{branch}` concurrency group with the daily sweep so the
-two never race for the same branch. Manual dispatches are one-shot; only
+branch again until it too merges. Poll, daily sweep, and automatic CI follow-up
+share the `backport-branch-mutation-{repo}-{branch}` concurrency group so they
+never race for the same rolling branch. Manual dispatches are one-shot; only
 scheduled runs use the sustained in-run cadence.
 
 ### Automatic CI Follow-up
@@ -97,8 +97,9 @@ ci_followup.py
   -> consider Actions jobs only; checks owned by other Apps (DCO, Codecov)
      are never visible here
   -> discard the informational Actions jobs named in ci_followup_ignored_jobs
-  -> skip job ids already recorded in hidden result-comment markers
-  -> run_ci_fix_request(...) for one prioritized failure set
+  -> skip logical jobs already recorded in hidden result-comment markers
+  -> stop after three automatic attempts across the PR's heads
+  -> run_ci_fix_request(...) for one prioritized failure
        existing diagnosis -> baseline/verification -> skeptic review
        descendant-only commit plus exact-head lease; no rewrite or DCO sign-off
   -> post the outcome and claim markers; wait for a new head before another fix

@@ -137,6 +137,31 @@ def test_selects_one_highest_priority_failure(monkeypatch) -> None:
     assert [job.id for job in target.jobs] == [2]
 
 
+def test_sanitizer_named_test_is_lower_priority_than_unit_test(monkeypatch) -> None:
+    pr = _pr()
+    gh = _gh([_run()], pr)
+    monkeypatch.setattr(ci_followup, "find_existing_pr", lambda *_args: pr)
+    monkeypatch.setattr(
+        ci_followup,
+        "failed_jobs_for_run",
+        lambda *_args: [
+            FailedJob("test-sanitizer-address", "failure", id=1),
+            FailedJob("unit tests", "failure", id=2),
+        ],
+    )
+
+    target, reason = find_followup_target(
+        gh,
+        repo_entry=_entry(),
+        target_branch="9.0",
+        bot_login=_BOT,
+    )
+
+    assert reason == "actionable"
+    assert target is not None
+    assert [job.id for job in target.jobs] == [2]
+
+
 def test_next_same_priority_failure_remains_actionable_after_claim(monkeypatch) -> None:
     marker = SimpleNamespace(
         user=SimpleNamespace(login=_BOT),
@@ -245,6 +270,33 @@ def test_handled_job_marker_prevents_retry(monkeypatch) -> None:
 
     assert target is None
     assert reason == "no-unhandled-actionable-failures"
+
+
+def test_per_pr_attempt_budget_stops_new_head_retries(monkeypatch) -> None:
+    comments = tuple(
+        SimpleNamespace(
+            user=SimpleNamespace(login=_BOT),
+            body=(
+                "<!-- valkey-ci-agent:auto-ci-followup "
+                f"head={digit * 40} run={index} job={index} -->"
+            ),
+        )
+        for index, digit in enumerate(("b", "c", "d"), start=1)
+    )
+    pr = _pr(comments=comments)
+    gh = _gh([_run()], pr)
+    monkeypatch.setattr(ci_followup, "find_existing_pr", lambda *_args: pr)
+
+    target, reason = find_followup_target(
+        gh,
+        repo_entry=_entry(),
+        target_branch="9.0",
+        bot_login=_BOT,
+    )
+
+    assert target is None
+    assert reason == "attempt-budget-exhausted"
+    gh.get_repo.return_value.get_workflow_runs.assert_not_called()
 
 
 def test_logical_job_marker_prevents_retry_from_twin_event_run(monkeypatch) -> None:
@@ -384,6 +436,103 @@ def test_run_followup_uses_shared_engine_and_posts_job_markers(monkeypatch) -> N
     assert "job=2" in bodies[-1]
     assert "job=3" not in bodies[-1]
     assert "timing-dependent; no safe change" in bodies[-1]
+
+
+def test_run_followup_reports_successful_push_against_expected_sha(
+    monkeypatch,
+) -> None:
+    original = _pr()
+    pushed_sha = "b" * 40
+    current = _pr()
+    current.head.sha = pushed_sha
+    claims, bodies = _record_comment(original)
+    target = FollowupTarget(
+        pr=original,
+        run=_run(),
+        head_sha=_HEAD,
+        head_branch="agent/backport/sweep/9.0",
+        jobs=(FailedJob("unit tests", "failure", id=3),),
+    )
+    gh = _gh([target.run], current)
+    monkeypatch.setattr(
+        ci_followup,
+        "find_followup_target",
+        lambda *_args, **_kwargs: (target, "actionable"),
+    )
+    monkeypatch.setattr(
+        ci_followup,
+        "run_ci_fix_request",
+        lambda *_args, **_kwargs: FixOutcome(
+            kind=OutcomeKind.PUSHED,
+            summary="fixed unit tests",
+            commit_sha=pushed_sha,
+        ),
+    )
+
+    result = run_followup(
+        gh,
+        repo_entry=_entry(),
+        target_branch="9.0",
+        bot_login=_BOT,
+        git_env={},
+        artifact_client=MagicMock(),
+    )
+
+    assert result["action"] == "pushed"
+    assert result["summary"] == "fixed unit tests"
+    assert "head_moved_after_push" not in result
+    assert len(claims) == 1
+    assert f"pushed `{pushed_sha[:12]}`" in bodies[-1]
+    assert "nothing was pushed" not in bodies[-1]
+
+
+def test_run_followup_keeps_pushed_result_when_head_moves_after_push(
+    monkeypatch,
+) -> None:
+    original = _pr()
+    pushed_sha = "b" * 40
+    newer_sha = "c" * 40
+    current = _pr()
+    current.head.sha = newer_sha
+    _claims, bodies = _record_comment(original)
+    target = FollowupTarget(
+        pr=original,
+        run=_run(),
+        head_sha=_HEAD,
+        head_branch="agent/backport/sweep/9.0",
+        jobs=(FailedJob("unit tests", "failure", id=3),),
+    )
+    gh = _gh([target.run], current)
+    monkeypatch.setattr(
+        ci_followup,
+        "find_followup_target",
+        lambda *_args, **_kwargs: (target, "actionable"),
+    )
+    monkeypatch.setattr(
+        ci_followup,
+        "run_ci_fix_request",
+        lambda *_args, **_kwargs: FixOutcome(
+            kind=OutcomeKind.PUSHED,
+            summary="fixed unit tests",
+            commit_sha=pushed_sha,
+        ),
+    )
+
+    result = run_followup(
+        gh,
+        repo_entry=_entry(),
+        target_branch="9.0",
+        bot_login=_BOT,
+        git_env={},
+        artifact_client=MagicMock(),
+    )
+
+    assert result["action"] == "pushed"
+    assert result["head_moved_after_push"] is True
+    assert result["current_head"] == newer_sha
+    assert f"fix was pushed as `{pushed_sha[:12]}`" in bodies[-1]
+    assert f"reported `{newer_sha[:12]}`" in bodies[-1]
+    assert "nothing was pushed" not in bodies[-1]
 
 
 def test_run_followup_pre_push_check_refuses_closed_pr(monkeypatch) -> None:

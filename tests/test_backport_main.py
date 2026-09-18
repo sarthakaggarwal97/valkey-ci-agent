@@ -27,6 +27,7 @@ from scripts.backport.models import (
     ResolutionResult,
 )
 from scripts.backport.registry import ValidationRule
+from scripts.backport.sweep_validation import ValidationOutcome
 
 # ======================================================================
 # ======================================================================
@@ -379,6 +380,62 @@ class TestRunBackportCleanCherryPick:
             backport_label="backport",
             llm_conflict_label="ai-resolved-conflicts",
         )
+
+    @patch(f"{_PATCH_PREFIX}.validate_branch_with_optional_repair")
+    @patch(f"{_PATCH_PREFIX}._clone_repo")
+    @patch(f"{_PATCH_PREFIX}._run_git")
+    @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
+    @patch(f"{_PATCH_PREFIX}.apply_candidate")
+    @patch(f"{_PATCH_PREFIX}.Github")
+    def test_repair_enabled_uses_optional_repair_without_profile_or_generators(
+        self,
+        mock_gh_cls: MagicMock,
+        mock_apply_candidate: MagicMock,
+        mock_pr_creator_cls: MagicMock,
+        mock_run_git: MagicMock,
+        mock_clone: MagicMock,
+        mock_validate: MagicMock,
+    ) -> None:
+        mock_gh = MagicMock()
+        mock_gh_cls.return_value = mock_gh
+        mock_repo = MagicMock()
+        mock_gh.get_repo.return_value = mock_repo
+        mock_repo.get_branch.return_value = MagicMock()
+        mock_repo.get_pull.return_value = _make_mock_pr()
+
+        mock_pr_creator = MagicMock()
+        mock_pr_creator_cls.return_value = mock_pr_creator
+        mock_pr_creator.check_duplicate.return_value = None
+        mock_pr_creator.create_backport_pr.return_value = (
+            "https://github.com/valkey-io/valkey/pull/200"
+        )
+        mock_apply_candidate.return_value = CandidateResult(
+            source_pr_number=100,
+            source_pr_title="Fix bug",
+            outcome="applied",
+            applied_commits=["commit_sha_1"],
+        )
+        mock_validate.return_value = ValidationOutcome(True, "validation passed")
+
+        result = run_backport(
+            repo_full_name="valkey-io/valkey",
+            source_pr_number=100,
+            target_branch="8.1",
+            config=_default_config(),
+            github_token="fake-token",
+            push_repo=_DEFAULT_PUSH_REPO,
+            build_commands=["make"],
+            repair_validation_failures=True,
+        )
+
+        assert result.outcome == "success"
+        mock_validate.assert_called_once()
+        args, kwargs = mock_validate.call_args
+        assert args[:4] == (ANY, "8.1", ["make"], [])
+        assert kwargs["repair"] is True
+        assert kwargs["validation_profile"] == ""
+        assert kwargs["generated_file_rules"] is None
+        assert kwargs["run_git"] is mock_run_git
 
     @patch(f"{_PATCH_PREFIX}.run_build_commands")
     @patch(f"{_PATCH_PREFIX}.changed_paths_since_base", return_value=("src/server.c",))

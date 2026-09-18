@@ -566,6 +566,7 @@ def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> N
         assert kwargs["excluded_test_paths"] == (
             "src/unit/test_networking.cpp",
             "src/unit/custom_matchers.hpp",
+            "src/unit/test_quicklist.c",
         )
         Path(repo_dir, "tests/unit/networking.tcl").write_text(
             "test existing {}\ntest regression {}\n",
@@ -619,7 +620,7 @@ def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> N
     assert _git(tmp_path, "log", "-1", "--format=%s") == (
         "Adapt tests for target branch"
     )
-    assert "Signed-off-by: Test <test@example.com>" in _git(
+    assert "Signed-off-by:" not in _git(
         tmp_path,
         "log",
         "-1",
@@ -959,7 +960,7 @@ def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
     assert [resolution.path for resolution in outcome.resolutions] == [
         "src/networking.c"
     ]
-    assert "Signed-off-by: Test <test@example.com>" in _git(
+    assert "Signed-off-by:" not in _git(
         tmp_path,
         "log",
         "-1",

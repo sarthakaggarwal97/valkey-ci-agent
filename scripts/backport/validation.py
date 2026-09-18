@@ -511,8 +511,7 @@ def _valkey_test_validation_commands(
             + ", ".join(uncovered_tests)
         )
         diagnostic = f"{marker}\n{message}\n"
-        commands.insert(
-            0,
+        commands.append(
             f"python3 -c "
             f"{quote(f'import sys; sys.stderr.write({diagnostic!r}); sys.exit(1)')}",
         )

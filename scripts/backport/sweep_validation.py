@@ -314,7 +314,7 @@ def repair_validation_failure_with_claude(
     The agent may only edit files already in the backport diff, and a repair is
     accepted when re-validation passes. The sole intermediate exception is a
     repair whose next failure is the machine-identified unsupported-test gate;
-    its signed commit is retained transactionally while branch-native test
+    its commit is retained transactionally while branch-native test
     adaptation runs, and the caller rolls both changes back if that cannot pass.
     Editing outside the diff is treated as a failure rather than trimmed,
     because the agent has then misunderstood the task and its remaining edits
@@ -405,7 +405,6 @@ def repair_validation_failure_with_claude(
         run_git(
             repo_dir,
             "commit",
-            "-s",
             "-m",
             "Repair backport validation failure",
         )
@@ -477,7 +476,6 @@ def repair_validation_failure_with_claude(
                 run_git(
                     repo_dir,
                     "commit",
-                    "-s",
                     "-m",
                     "Repair backport validation failure",
                 )
@@ -580,6 +578,16 @@ def adapt_added_tests_for_target(
         )
     adaptation_sources = {**added_sources, **companion_sources}
     incompatible_paths = tuple(adaptation_sources)
+    sandbox_excluded_paths = tuple(
+        dict.fromkeys(
+            incompatible_paths
+            + tuple(
+                path
+                for path in added_paths
+                if is_test_path(path, test_path_patterns)
+            )
+        )
+    )
 
     starting_head = head_sha(repo_dir)
     try:
@@ -603,7 +611,7 @@ def adapt_added_tests_for_target(
             adaptation_sources,
             language=language,
             test_path_patterns=test_path_patterns,
-            excluded_test_paths=incompatible_paths,
+            excluded_test_paths=sandbox_excluded_paths,
             run_git=run_git,
         )
         if adaptation.fatal or not adaptation.adapted_paths:
@@ -628,7 +636,6 @@ def adapt_added_tests_for_target(
         run_git(
             repo_dir,
             "commit",
-            "-s",
             "-m",
             "Adapt tests for target branch",
         )

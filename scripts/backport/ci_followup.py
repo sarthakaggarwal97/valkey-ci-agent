@@ -56,6 +56,7 @@ _MARKER_RE = re.compile(
 # can have failed here"; `failed_jobs_for_run` is what decides truth per job,
 # and it deliberately ignores cancelled *jobs*.
 _FAILED_RUN_CONCLUSIONS = {"failure", "timed_out", "cancelled"}
+_MAX_ATTEMPTS_PER_PR = 3
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,7 @@ class FollowupTarget:
 class _HandledFailures:
     job_ids: frozenset[int]
     job_keys: frozenset[str]
+    attempt_count: int
 
 
 def find_followup_target(
@@ -108,6 +110,8 @@ def find_followup_target(
 
     head_sha = str(getattr(pr.head, "sha", "") or "")
     handled = _handled_failures(pr, head_sha, bot_login)
+    if handled.attempt_count >= _MAX_ATTEMPTS_PER_PR:
+        return None, "attempt-budget-exhausted"
     repo = gh.get_repo(repo_entry.repo)
     # Filter by head SHA server-side: a long-lived sweep branch accumulates a
     # run per push, and paging its whole history every hour just to discard
@@ -273,13 +277,19 @@ def run_followup(
         description=f"recheck PR #{request.pr_number} head",
     )
     current_sha = str(getattr(current_pr.head, "sha", "") or "")
-    expected_sha = outcome.commit_sha if outcome.kind is OutcomeKind.PUSHED else request.head_sha
-    stale = not expected_sha or current_sha != expected_sha
-    body = (
-        _render_stale_comment(request, target.run, jobs)
-        if stale
-        else _render_followup_comment(outcome, request, target.run, jobs)
+    pushed = outcome.kind is OutcomeKind.PUSHED and bool(outcome.commit_sha)
+    head_mismatch_after_push = pushed and current_sha != outcome.commit_sha
+    stale = (
+        not outcome.commit_sha
+        if outcome.kind is OutcomeKind.PUSHED
+        else current_sha != request.head_sha
     )
+    if stale:
+        body = _render_stale_comment(request, target.run, jobs)
+    else:
+        body = _render_followup_comment(outcome, request, target.run, jobs)
+        if head_mismatch_after_push:
+            body += _render_post_push_head_mismatch(outcome.commit_sha, current_sha)
     retry_github_call(
         lambda: claim.edit(body),
         retries=3,
@@ -298,6 +308,9 @@ def run_followup(
         result["reason"] = "PR head moved during follow-up; the result was discarded"
     else:
         result["summary"] = outcome.summary
+        if head_mismatch_after_push:
+            result["head_moved_after_push"] = True
+            result["current_head"] = current_sha
     return result
 
 
@@ -339,16 +352,18 @@ def _handled_failures(
     head_sha: str,
     bot_login: str,
 ) -> _HandledFailures:
-    """Return exact and logical jobs already attempted for this exact head.
+    """Return the PR attempt count and jobs already attempted on this head.
 
-    A marker only counts when the comment is authored by the bot and the marker's
-    head matches, so neither a comment quoting an older attempt nor one written
-    by anybody else can suppress a retry. Job ids preserve compatibility with
-    existing markers; logical keys also suppress the twin push/pull_request run
-    of the same workflow job, whose GitHub job ids are necessarily different.
+    A bot-authored comment with at least one valid marker counts as one attempt,
+    regardless of how many jobs it names. Exact job ids and logical keys count
+    only when the marker's head matches, so an older attempt cannot suppress a
+    different failure on the current head. Logical keys suppress the twin
+    push/pull_request run of the same workflow job, whose GitHub job ids are
+    necessarily different.
     """
     job_ids: set[int] = set()
     job_keys: set[str] = set()
+    attempt_count = 0
     comments = retry_github_call(
         lambda: list(pr.get_issue_comments()),
         retries=2,
@@ -358,7 +373,12 @@ def _handled_failures(
         author = str(getattr(getattr(comment, "user", None), "login", "") or "")
         if author != bot_login:
             continue
-        for match in _MARKER_RE.finditer(str(getattr(comment, "body", "") or "")):
+        matches = tuple(
+            _MARKER_RE.finditer(str(getattr(comment, "body", "") or ""))
+        )
+        if matches:
+            attempt_count += 1
+        for match in matches:
             if match.group("head") == head_sha:
                 job_ids.add(int(match.group("job")))
                 if match.group("key"):
@@ -366,6 +386,7 @@ def _handled_failures(
     return _HandledFailures(
         job_ids=frozenset(job_ids),
         job_keys=frozenset(job_keys),
+        attempt_count=attempt_count,
     )
 
 
@@ -383,12 +404,18 @@ def _job_priority(name: str) -> int:
     flaky or to need a judgement call. Unrecognised names sort last.
     """
     lowered = name.lower()
-    if any(token in lowered for token in ("format", "lint", "schema", "generated", "build", "compile")):
+    if any(
+        token in lowered
+        for token in ("format", "lint", "schema", "generated", "build", "compile")
+    ):
         return 0
+    if any(
+        token in lowered
+        for token in ("asan", "ubsan", "tsan", "sanitizer", "valgrind")
+    ):
+        return 2
     if any(token in lowered for token in ("unit", "integration", "test")):
         return 1
-    if any(token in lowered for token in ("asan", "ubsan", "tsan", "sanitizer", "valgrind")):
-        return 2
     return 3
 
 
@@ -480,6 +507,18 @@ def _render_followup_comment(
         + render_comment(outcome)
         + "\n\n"
         + _markers(request, run, jobs)
+    )
+
+
+def _render_post_push_head_mismatch(pushed_sha: str, current_sha: str) -> str:
+    """Explain a post-push recheck mismatch without denying the real push."""
+    return (
+        "\n\nThe fix was pushed as `"
+        + pushed_sha[:12]
+        + "`. At the post-push recheck, the PR API reported `"
+        + (current_sha[:12] or "(missing)")
+        + "` as the current head, so CI follow-up will evaluate that head "
+        "separately."
     )
 
 
