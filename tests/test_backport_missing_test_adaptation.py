@@ -130,3 +130,52 @@ def test_adaptation_reports_removed_existing_test_without_deleting_it(
         "testing/acl_test.cc"
     )
     assert test_path.read_text(encoding="utf-8") == "TEST(ACL, Existing) {}\n"
+
+
+def test_adaptation_hides_cleanly_added_upstream_test_from_editable_sandbox(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    native = repo / "testing/acl_test.cc"
+    native.parent.mkdir()
+    native.write_text("TEST(ACL, Existing) {}\n", encoding="utf-8")
+    added = repo / "testing/new_test.cc"
+    added.write_text("TEST(NewTest, Works) {}\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "candidate")
+
+    def fake_agent(_profile, _prompt, *, cwd):
+        assert not Path(cwd, "testing/new_test.cc").exists()
+        Path(cwd, "testing/acl_test.cc").write_text(
+            "TEST(ACL, Existing) {}\nTEST(ACL, PortedRegression) {}\n",
+            encoding="utf-8",
+        )
+        return SimpleNamespace(
+            returncode=0,
+            stdout='{"type":"result","result":"ported regression"}\n',
+            stderr="",
+        )
+
+    result = adapt_target_missing_tests_with_claude(
+        str(repo),
+        BackportCandidate(
+            source_pr_number=42,
+            source_pr_title="test",
+            source_pr_url="https://example.test/pull/42",
+            target_branch="1.2",
+        ),
+        {"testing/new_test.cc": "TEST(NewTest, Works) {}\n"},
+        language="c++",
+        test_path_patterns=SEARCH_TEST_PATTERNS,
+        excluded_test_paths=("testing/new_test.cc",),
+        run_agent_func=fake_agent,
+    )
+
+    assert result.fatal is False
+    assert result.adapted_paths == ["testing/acl_test.cc"]
+    assert "PortedRegression" in native.read_text(encoding="utf-8")
+    assert added.exists()

@@ -49,8 +49,8 @@ jobs:
     concurrency:
       # Serialize ci-fix runs for the same PR so two dispatches don't push at
       # once. This does not coordinate with other workflows that write the same
-      # branch; the fast-forward-only push (see push.py) is what keeps a
-      # concurrent branch update from being clobbered.
+      # branch; the exact-head lease (see push.py) is what keeps a concurrent
+      # branch update or deletion from being clobbered.
       group: ci-fix-${{ inputs.pr }}
       cancel-in-progress: false
     env:

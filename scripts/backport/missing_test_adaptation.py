@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from scripts.ai.runtime import AgentRunResult, run_agent
 from scripts.backport.git_commands import (
@@ -25,6 +25,7 @@ from scripts.backport.git_commands import (
 from scripts.backport.models import (
     DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX,
     BackportCandidate,
+    ResolutionResult,
 )
 from scripts.backport.utils import has_conflict_markers
 
@@ -47,6 +48,7 @@ RunAgent = Callable[..., AgentRunResult]
 @dataclass
 class MissingTestAdaptationResult:
     adapted_paths: list[str] = field(default_factory=list)
+    resolutions: list[ResolutionResult] = field(default_factory=list)
     summary: str = ""
     fatal: bool = False
 
@@ -105,10 +107,12 @@ def adapt_target_missing_tests_with_claude(
     *,
     language: str,
     test_path_patterns: tuple[str, ...] | list[str] | None = None,
+    excluded_test_paths: Iterable[str] = (),
     run_git: RunGit = run_git_default,
     run_process: RunProcess = subprocess.run,
     run_agent_func: RunAgent = run_agent,
 ) -> MissingTestAdaptationResult:
+    excluded = set(excluded_test_paths) | set(missing_test_sources)
     existing_test_paths = set(
         list_existing_test_paths(
             repo_dir,
@@ -116,13 +120,14 @@ def adapt_target_missing_tests_with_claude(
             test_path_patterns=test_path_patterns,
             run_process=run_process,
         )
-    )
+    ) - excluded
     prompt = build_test_adaptation_prompt(
         repo_dir,
         candidate,
         missing_test_sources,
         language=language,
         test_path_patterns=test_path_patterns,
+        excluded_test_paths=excluded,
         run_process=run_process,
     )
 
@@ -132,6 +137,10 @@ def adapt_target_missing_tests_with_claude(
         ) as temp_dir:
             sandbox_dir = Path(temp_dir, "repo")
             copy_worktree_for_adaptation(repo_dir, sandbox_dir)
+            for path in sorted(excluded):
+                candidate_path = safe_regular_file(sandbox_dir, path)
+                if candidate_path is not None:
+                    candidate_path.unlink()
             sandbox_before = snapshot_regular_files(sandbox_dir)
 
             logger.info(
@@ -263,6 +272,21 @@ def adapt_target_missing_tests_with_claude(
 
             return MissingTestAdaptationResult(
                 adapted_paths=changed_paths,
+                resolutions=[
+                    _adaptation_resolution(
+                        path,
+                        (import_snapshots[path].content or b"").decode(
+                            "utf-8",
+                            errors="replace",
+                        ),
+                        Path(repo_dir, path).read_text(
+                            encoding="utf-8",
+                            errors="replace",
+                        ),
+                        result_text,
+                    )
+                    for path in changed_paths
+                ],
                 summary=(
                     f"{DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX} "
                     + ", ".join(changed_paths)
@@ -282,10 +306,12 @@ def build_test_adaptation_prompt(
     *,
     language: str,
     test_path_patterns: tuple[str, ...] | list[str] | None = None,
+    excluded_test_paths: Iterable[str] = (),
     run_process: RunProcess = subprocess.run,
 ) -> str:
+    excluded = set(excluded_test_paths)
     source_sections = "\n\n".join(
-        f"### Missing upstream test file: {path}\n"
+        f"### Missing upstream test or harness file: {path}\n"
         f"```\n{content[:MAX_TEST_CONTEXT_CHARS]}\n```"
         for path, content in sorted(missing_test_sources.items())
     )
@@ -296,17 +322,19 @@ def build_test_adaptation_prompt(
             test_path_patterns=test_path_patterns,
             run_process=run_process,
         )
+        if path not in excluded
     )
     return (
         f"You are adapting test coverage for a {language} backport.\n\n"
         f'Source PR #{candidate.source_pr_number}: "{candidate.source_pr_title}"\n'
         f"URL: {candidate.source_pr_url}\n"
         f"Target branch: {candidate.target_branch}\n\n"
-        f"The upstream PR changed test file(s) that do not exist on this target "
-        f"branch. The cherry-pick has already kept those missing files absent. "
+        f"The upstream PR changed test or test-harness file(s) that do not exist "
+        f"on this target branch. The cherry-pick has already kept those missing "
+        f"files absent. "
         f"Your task is to decide whether equivalent coverage can be added using "
         f"the target branch's existing test format.\n\n"
-        f"Missing upstream test context:\n{source_sections}\n\n"
+        f"Missing upstream test and harness context:\n{source_sections}\n\n"
         f"Existing test files on the target branch include:\n"
         f"{existing_tests or '- (none found)'}\n\n"
         f"CRITICAL constraints:\n"
@@ -452,6 +480,30 @@ def changed_snapshot_paths(
         path
         for path in set(before) | set(after)
         if before.get(path) != after.get(path)
+    )
+
+
+def _adaptation_resolution(
+    path: str,
+    before: str,
+    after: str,
+    summary: str,
+) -> ResolutionResult:
+    diff = "".join(
+        difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile=f"a/{path} (target branch)",
+            tofile=f"b/{path} (adapted test coverage)",
+        )
+    ).rstrip("\n")
+    return ResolutionResult(
+        path=path,
+        resolved_content=after,
+        resolution_summary="ported upstream test intent to a branch-native test",
+        resolution_diff=diff or None,
+        reviewer_diff=diff or None,
+        llm_summary=summary or "Adapted upstream test coverage for the target branch.",
     )
 
 

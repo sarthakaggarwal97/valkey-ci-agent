@@ -9,8 +9,9 @@ discipline:
   read a credential from the ambient environment.
 - The push target must live in the allowed agent namespace
   (``agent/backport/...``) on the PR's own head repo. Anything else is refused.
-- The push is fast-forward only: the refspec is ``HEAD:<branch>`` with no
-  ``+``, so git itself rejects a non-fast-forward rather than overwriting.
+- The generated commit must descend from the validated PR head, and the push
+  uses an exact-SHA lease. Git therefore rejects a moved or deleted branch
+  instead of overwriting it or recreating a branch whose PR was closed.
 
 The branch is never merged. The push re-triggers the PR's normal CI.
 """
@@ -23,6 +24,7 @@ import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
+from typing import Callable
 
 from scripts.ci_fix.models import FixProposal
 from scripts.ci_fix.port_discovery import resolve_default_branch
@@ -33,6 +35,7 @@ from scripts.common.proc import BOT_EMAIL, BOT_NAME, EmptyPatch, build_approved_
 logger = logging.getLogger(__name__)
 
 ALLOWED_BRANCH_PREFIX = "agent/backport/"
+PrePushCheck = Callable[[], str]
 
 
 class PushRefused(Exception):
@@ -48,6 +51,7 @@ def commit_and_push_fix(
     proposal: FixProposal,
     changed_paths: tuple[str, ...],
     git_env: dict[str, str],
+    pre_push_check: PrePushCheck | None = None,
 ) -> str:
     """Commit the working-tree fix and push it to the PR head branch.
 
@@ -59,9 +63,9 @@ def commit_and_push_fix(
     """
     if not head_branch.startswith(ALLOWED_BRANCH_PREFIX):
         # The prefix is a convention, not proof the branch is bot-owned: the
-        # push is contained by the fast-forward-only refspec (can only append,
-        # never rewrite), the gate's same-repo head requirement, and the App
-        # token being scoped to the one target repo.
+        # push is contained by the descendant check plus exact-head lease, the
+        # gate's same-repo head requirement, and the App token being scoped to
+        # the one target repo.
         raise PushRefused(
             f"Refusing to push to {head_branch!r}: ci_fix only pushes to branches "
             f"under {ALLOWED_BRANCH_PREFIX}."
@@ -99,8 +103,14 @@ def commit_and_push_fix(
             run_git(str(clean_repo), "config", "user.email", BOT_EMAIL)
             run_git(str(clean_repo), "commit", "-m", _commit_message(proposal))
 
-            run_git(str(clean_repo), "remote", "set-url", "origin", github_https_url(head_repo_full_name))
-            run_git(str(clean_repo), "push", "origin", f"HEAD:{head_branch}", env=git_env)
+            _push_with_expected_head(
+                str(clean_repo),
+                head_repo_full_name=head_repo_full_name,
+                head_branch=head_branch,
+                head_sha=head_sha,
+                git_env=git_env,
+                pre_push_check=pre_push_check,
+            )
         except subprocess.CalledProcessError as exc:
             # Keep the pipeline's "every outcome is a comment" guarantee: a git
             # failure in the clean clone (unreachable SHA, non-fast-forward
@@ -119,14 +129,15 @@ def commit_and_push_port(
     head_sha: str,
     unstable_fix_commit: str,
     git_env: dict[str, str],
+    pre_push_check: PrePushCheck | None = None,
 ) -> str:
     """Cherry-pick an existing upstream fix onto the PR branch and push it.
 
     Unlike an authored fix, a PORT carries an already-merged upstream commit, so
     we preserve its original authorship and add the standard ``cherry picked
     from`` trailer rather than re-authoring it as the bot. The same push
-    discipline applies: namespaced branch, validated repo/SHA, fast-forward-only
-    push from a fresh clone. A conflicting or empty cherry-pick, or any git
+    discipline applies: namespaced branch, validated repo/SHA, descendant-only
+    commit, and exact-head lease from a fresh clone. A conflicting or empty cherry-pick, or any git
     failure, becomes ``PushRefused`` so the outcome is always a comment.
     """
     if not head_branch.startswith(ALLOWED_BRANCH_PREFIX):
@@ -167,13 +178,62 @@ def commit_and_push_port(
             # -x records "cherry picked from commit <sha>".
             run_git(str(clean_repo), "cherry-pick", "-x", unstable_fix_commit)
 
-            run_git(str(clean_repo), "remote", "set-url", "origin", github_https_url(head_repo_full_name))
-            run_git(str(clean_repo), "push", "origin", f"HEAD:{head_branch}", env=git_env)
+            _push_with_expected_head(
+                str(clean_repo),
+                head_repo_full_name=head_repo_full_name,
+                head_branch=head_branch,
+                head_sha=head_sha,
+                git_env=git_env,
+                pre_push_check=pre_push_check,
+            )
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or str(exc)).strip()[:300]
             raise PushRefused(f"Refusing to push: git failed: {detail}") from exc
 
         return git_output(str(clean_repo), "rev-parse", "HEAD").strip()
+
+
+def _verify_push_authorized(pre_push_check: PrePushCheck | None) -> None:
+    """Fail closed when a trusted caller can no longer authorize this push."""
+    if pre_push_check is None:
+        return
+    try:
+        reason = pre_push_check()
+    except Exception as exc:  # noqa: BLE001 - authorization errors must fail closed
+        raise PushRefused(
+            "Refusing to push: the PR could not be revalidated immediately before push."
+        ) from exc
+    if reason:
+        raise PushRefused(f"Refusing to push: {reason}")
+
+
+def _push_with_expected_head(
+    clean_repo: str,
+    *,
+    head_repo_full_name: str,
+    head_branch: str,
+    head_sha: str,
+    git_env: dict[str, str],
+    pre_push_check: PrePushCheck | None,
+) -> None:
+    """Push only when HEAD descends from, and the remote still equals, ``head_sha``."""
+    if not _is_ancestor(clean_repo, head_sha, "HEAD"):
+        raise PushRefused(
+            "Refusing to push: the generated commit does not descend from the validated PR head."
+        )
+    destination = f"refs/heads/{head_branch}"
+    run_git(clean_repo, "remote", "set-url", "origin", github_https_url(head_repo_full_name))
+    # Keep the mutable PR-state check adjacent to the actual push. A concurrent
+    # head update or deletion after this call is still rejected by the lease.
+    _verify_push_authorized(pre_push_check)
+    run_git(
+        clean_repo,
+        "push",
+        f"--force-with-lease={destination}:{head_sha}",
+        "origin",
+        f"HEAD:{destination}",
+        env=git_env,
+    )
 
 
 def _verify_portable_commit(clean_repo: str, fix_commit: str, head_sha: str) -> None:

@@ -33,14 +33,29 @@ sweep.py (daily cron or manual dispatch)
 ```
 
 Validation first runs the registry's optional `validation_setup_commands`,
-then validates the branch after each cherry-pick. The sweep branch is kept
-green: a cherry-pick is only kept if the whole branch still validates, and a
-failure is reset off the branch so it can never block later candidates. The
+then validates each cherry-pick against its own pre-candidate commit. Generic
+`validation_rules` add commands by path; a repository `validation_profile` can
+derive commands from exact changed files. Valkey core uses this for candidate
+range whitespace checks, release-workflow-aware changed-file clang-format,
+direct Tcl tests in their required harness mode, subsystem suites, C/C++ unit
+tests, and targeted reply-schema coverage.
+`generated_file_rules` run deterministic generators twice, allow only declared
+tracked outputs, and amend converged output into the candidate commit. The
+sweep branch is kept green: a cherry-pick is only kept if the whole branch
+still validates, and a failure is reset off the branch so it can never block
+later candidates. The
 run keeps up to two validated cherry-picks (`--max-candidates 2`) and records
 skipped or failed candidates in the PR's "Needs attention" section without
 committing them. When `repair_validation_failures` is enabled, Claude Code
 gets one edit-only repair attempt scoped to the backport diff before a failing
-cherry-pick is dropped. Repos with no `build_commands` configured rely on
+cherry-pick is dropped. The repair may not delete changed tests. If a newly
+added test is structurally unsupported by the target branch's harness, a
+separate sandboxed adaptation may edit existing branch-native tests only. The
+unsupported path and added files belonging only to that harness are supplied as
+adaptation context, then removed and committed only after the complete
+validation plan passes. Independently mapped tests are retained. No safe
+adaptation means the candidate fails closed. Repos with no
+`build_commands` configured rely on
 upstream CI for verification.
 
 ### Poll
@@ -63,15 +78,46 @@ poller.py (short cron or manual dispatch)
 
 The open-PR check is the entire state model: a merge closes the sweep PR, the
 next poll finds the gap and tops the board back up, and the new PR locks the
-branch again until it too merges. The poll job shares the
-`backport-sweep-{repo}-{branch}` concurrency group with the daily sweep so the
-two never race for the same branch. Manual dispatches are one-shot; only
-scheduled runs use the sustained in-run cadence.
+branch again until it too merges. Poll, daily sweep, and automatic CI follow-up
+share the `backport-branch-mutation-{repo}-{branch}` concurrency group so they
+never race for the same rolling branch. The group uses the maximum pending
+queue so a later scheduled writer cannot replace an already-waiting sweep or
+follow-up. Manual dispatches are one-shot; only scheduled runs use the
+sustained in-run cadence.
+
+### Automatic CI Follow-up
+
+`backport-ci-followup.yml` covers the state the sweep poller intentionally
+leaves alone: an open sweep PR whose normal repository CI has completed. The
+registry must explicitly enable `automatic_ci_followup`. Each branch leg:
+
+```text
+ci_followup.py
+  -> find the one open agent/backport/sweep/<target> PR
+  -> require App ownership and exact repo/base/branch/current SHA
+  -> wait until all workflow runs for that current head are complete
+  -> consider Actions jobs only; checks owned by other Apps (DCO, Codecov)
+     are never visible here
+  -> discard the informational Actions jobs named in ci_followup_ignored_jobs
+  -> skip logical jobs already recorded in hidden result-comment markers
+  -> stop after three automatic attempts across the PR's heads
+  -> run_ci_fix_request(...) for one prioritized failure
+       existing diagnosis -> baseline/verification -> skeptic review
+       descendant-only commit plus exact-head lease; no rewrite or DCO sign-off
+  -> post the outcome and claim markers; wait for a new head before another fix
+```
+
+The automated caller does not impersonate a maintainer comment and does not
+weaken the CI-fix engine. It bypasses only the human-team membership gate after
+applying a stricter machine gate to the bot-owned sweep PR and SHA. A moved head
+cannot be pushed because the shared push path independently requires the remote
+head to equal the failed SHA.
 
 ### Entry Points
 
 - `scripts/backport/sweep.py` - daily sweep across registered repos and release branches
 - `scripts/backport/poller.py` - short-cron poll that sweeps a branch only when no sweep PR is open
+- `scripts/backport/ci_followup.py` - guarded current-head CI follow-up for open sweep PRs
 - `scripts/backport/main.py` - single-PR backport (manual dispatch)
 - `scripts/backport/matrix.py` - GitHub Actions matrix generation from `repos.yml`
 - `scripts/backport/registry.py` - typed registry loader and validation

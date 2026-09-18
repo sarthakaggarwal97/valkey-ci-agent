@@ -714,7 +714,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(m
     assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] not in subprocess_calls
 
 
-def test_apply_candidate_continues_when_test_adaptation_makes_no_changes(monkeypatch, tmp_path):
+def test_apply_candidate_rejects_when_test_adaptation_makes_no_changes(monkeypatch, tmp_path):
     candidate = ProjectBackportCandidate(
         source_pr_number=4060,
         source_pr_title="Fix io_last_written bookmark desync that corrupts replies with IO threads",
@@ -730,6 +730,8 @@ def test_apply_candidate_continues_when_test_adaptation_makes_no_changes(monkeyp
 
     def fake_subprocess_run(cmd, **_kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
         if cmd == ["git", "cherry-pick", "-m", "1", "cdf98a2"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -742,12 +744,10 @@ def test_apply_candidate_continues_when_test_adaptation_makes_no_changes(monkeyp
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
         if cmd == ["git", "cat-file", "-e", ":1:src/unit/test_networking.cpp"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
-        if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
-            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
-        if cmd == ["git", "-c", "core.editor=true", "cherry-pick", "--continue"]:
+        if cmd == ["git", "cherry-pick", "--abort"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-        if cmd == ["git", "rev-parse", "HEAD"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
+        if cmd == ["git", "ls-files", "--others", "--exclude-standard", "-z"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
         raise AssertionError(f"unexpected command: {cmd}")
 
     def fake_adapt(_repo_dir, _candidate, _sources, **_kwargs):
@@ -766,17 +766,18 @@ def test_apply_candidate_continues_when_test_adaptation_makes_no_changes(monkeyp
         source_plan=_source_plan(candidate),
     )
 
-    assert result.outcome == "applied"
-    assert result.detail == (
-        "dropped target-missing test file(s): src/unit/test_networking.cpp; "
-        "test adaptation not applied: no branch-native test changes"
-    )
+    assert result.outcome == "skipped-conflict"
+    assert result.detail == "test adaptation not applied: no branch-native test changes"
     assert result.resolved_by_ai is False
     assert ("add", "tests/unit/networking.tcl") not in git_calls
-    assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] in subprocess_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
+    assert ("reset", "--hard", "start") in git_calls
 
 
-def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatch, tmp_path):
+def test_apply_candidate_rolls_back_other_resolution_when_missing_test_cannot_adapt(
+    monkeypatch,
+    tmp_path,
+):
     candidate = ProjectBackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
@@ -793,6 +794,8 @@ def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatc
 
     def fake_subprocess_run(cmd, **kwargs):
         subprocess_calls.append(cmd)
+        if cmd == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="start\n", stderr="")
         if cmd == ["git", "cherry-pick", "-m", "1", "269b1c5"]:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
         if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
@@ -822,12 +825,8 @@ def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatc
             ["git", "ls-files", "--others", "--exclude-standard", "-z"],
         ):
             return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
-        if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
-            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
-        if cmd == ["git", "-c", "core.editor=true", "cherry-pick", "--continue"]:
+        if cmd == ["git", "cherry-pick", "--abort"]:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-        if cmd == ["git", "rev-parse", "HEAD"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
         raise AssertionError(f"unexpected command: {cmd} kwargs={kwargs}")
 
     def fake_resolve(_repo_dir, conflicted_files, *_args, **kwargs):
@@ -857,11 +856,13 @@ def test_apply_candidate_resolves_ordinary_conflict_with_missing_test(monkeypatc
         source_plan=_source_plan(candidate),
     )
 
-    assert result.outcome == "applied"
-    assert result.resolved_by_ai is True
+    assert result.outcome == "skipped-conflict"
+    assert result.detail == "test adaptation not applied: no branch-native test changes"
+    assert result.resolved_by_ai is False
     assert [cf.path for cf in resolve_calls[0][0]] == ["src/networking.c"]
     assert ("add", "src/networking.c") in git_calls
-    assert ["git", "-c", "core.editor=true", "cherry-pick", "--continue"] in subprocess_calls
+    assert ["git", "cherry-pick", "--abort"] in subprocess_calls
+    assert ("reset", "--hard", "start") in git_calls
 
 
 def test_apply_candidate_survives_failing_abort_and_still_rolls_back(monkeypatch, tmp_path):
@@ -3485,7 +3486,11 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
     assert "Read tool" in agent_calls[0][1]
     assert "/tmp/" in agent_calls[0][1] or "backport-validation-" in agent_calls[0][1]
     assert ("add", "src/a.c") in git_calls
-    assert ("commit", "-m", "Repair backport validation failure") in git_calls
+    assert (
+        "commit",
+        "-m",
+        "Repair backport validation failure",
+    ) in git_calls
     # The failing validation has already happened; repair only revalidates once
     # after Claude edits.
     assert validation_calls == [["make"]]

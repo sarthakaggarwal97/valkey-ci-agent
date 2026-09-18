@@ -79,10 +79,10 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.preflight.outputs.matrix) }}
     concurrency:
-      # Shared with Backport Sweep so the poller never races the daily cron
-      # for the same branch.
-      group: backport-sweep-${{ matrix.repo }}-${{ matrix.branch }}
+      # Shared by every workflow that mutates the rolling sweep branch.
+      group: backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}
       cancel-in-progress: false
+      queue: max
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       CLAUDE_CODE_USE_BEDROCK: "1"

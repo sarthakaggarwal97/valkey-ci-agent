@@ -127,6 +127,7 @@ def test_push_capable_app_tokens_can_update_workflows():
     """Push tokens need workflows:write for commits touching .github/workflows."""
     required_steps = {
         ".github/workflows/backport.yml": "Generate GitHub App token",
+        ".github/workflows/backport-ci-followup.yml": "Generate target repository token",
         ".github/workflows/backport-poll.yml": "Generate publication token",
         ".github/workflows/backport-sweep.yml": "Generate publication token",
         ".github/workflows/ci-fix.yml": "Generate GitHub App token",
@@ -176,3 +177,39 @@ def test_backport_workflows_refresh_credentials_after_validation():
     assert "if action=$(poll_once); then" in poll
     assert 'echo "had_error=${poll_had_error}"' in poll
     assert "steps.poll.outputs.had_error == 'true'" in poll
+
+
+def test_backport_branch_mutations_share_one_concurrency_group():
+    groups = []
+    for filename, job_name in (
+        ("backport-poll.yml", "poll"),
+        ("backport-sweep.yml", "sweep"),
+        ("backport-ci-followup.yml", "follow-up"),
+    ):
+        workflow = yaml.load(
+            (Path(".github/workflows") / filename).read_text(encoding="utf-8"),
+            Loader=yaml.BaseLoader,
+        )
+        concurrency = workflow["jobs"][job_name]["concurrency"]
+        groups.append(concurrency["group"])
+        assert concurrency["cancel-in-progress"] == "false"
+        assert concurrency["queue"] == "max"
+
+    assert groups == [
+        "backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}",
+        "backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}",
+        "backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}",
+    ]
+
+
+def test_backport_ci_followup_passes_matrix_values_through_step_env():
+    text = Path(
+        ".github/workflows/backport-ci-followup.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "TARGET_REPO: ${{ matrix.repo }}" in text
+    assert "TARGET_BRANCH: ${{ matrix.branch }}" in text
+    assert '--repo "${TARGET_REPO}"' in text
+    assert '--branch "${TARGET_BRANCH}"' in text
+    assert '--repo "${{ matrix.repo }}"' not in text
+    assert '--branch "${{ matrix.branch }}"' not in text

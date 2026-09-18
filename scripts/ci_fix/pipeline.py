@@ -61,6 +61,7 @@ Diagnose = Callable[..., FixProposal]
 RunLoop = Callable[..., LoopResult]
 Push = Callable[..., str]
 PortPush = Callable[..., str]
+PrePushCheck = Callable[[], str]
 
 _MACOS_FIX_MAX_ATTEMPTS = 5
 
@@ -91,15 +92,57 @@ def run_ci_fix(
     if isinstance(request, GateRejection):
         return FixOutcome(kind=OutcomeKind.REFUSED, summary=request.reason)
 
-    failed_jobs = tuple(j.name for j in failed_jobs_for_run(gh, request.repo_full_name, request.run_id))
+    return run_ci_fix_request(
+        gh,
+        request=request,
+        git_env=git_env,
+        artifact_client=artifact_client,
+        verify_runs=verify_runs,
+        diagnose_func=diagnose_func,
+        run_loop_func=run_loop_func,
+        push_func=push_func,
+        port_push_func=port_push_func,
+        macos_verifier=macos_verifier,
+    )
+
+
+def run_ci_fix_request(
+    gh: Any,
+    *,
+    request: FixRequest,
+    git_env: dict[str, str],
+    artifact_client: ArtifactClient,
+    verify_runs: int = DEFAULT_VERIFY_RUNS,
+    diagnose_func: Diagnose = diagnose_failure,
+    run_loop_func: RunLoop = run_fix_loop,
+    push_func: Push = commit_and_push_fix,
+    port_push_func: PortPush = commit_and_push_port,
+    macos_verifier: VerifyBackend | None = None,
+    failed_jobs: tuple[str, ...] | None = None,
+    pre_push_check: PrePushCheck | None = None,
+) -> FixOutcome:
+    """Run the fix engine for a request already validated by a trusted caller.
+
+    Interactive invocations reach this only after ``build_fix_request``. The
+    automatic backport follow-up has its own stricter gate (bot-owned sweep PR,
+    exact branch/base/SHA, completed current-head run) and uses this shared
+    execution path so diagnosis, verification, review, and lease-protected push
+    semantics cannot drift.
+    """
+    confirmed_jobs = failed_jobs
+    if confirmed_jobs is None:
+        confirmed_jobs = tuple(
+            job.name
+            for job in failed_jobs_for_run(gh, request.repo_full_name, request.run_id)
+        )
 
     with tempfile.TemporaryDirectory(prefix="ci-fix-") as workdir_str:
         outcome = _run_in_workspace(
-            Path(workdir_str), request, failed_jobs,
+            Path(workdir_str), request, confirmed_jobs,
             artifact_client=artifact_client, git_env=git_env,
             diagnose_func=diagnose_func, run_loop_func=run_loop_func, push_func=push_func,
             port_push_func=port_push_func, macos_verifier=macos_verifier,
-            verify_runs=verify_runs,
+            verify_runs=verify_runs, pre_push_check=pre_push_check,
         )
     run_url = f"https://github.com/{request.repo_full_name}/actions/runs/{request.run_id}"
     return replace(outcome, failing_run_url=run_url)
@@ -118,6 +161,7 @@ def _run_in_workspace(
     port_push_func: PortPush,
     macos_verifier: VerifyBackend | None,
     verify_runs: int,
+    pre_push_check: PrePushCheck | None,
 ) -> FixOutcome:
     logs = artifact_client.download_run_logs(request.repo_full_name, request.run_id)
     if not logs:
@@ -146,6 +190,7 @@ def _run_in_workspace(
         return _port_and_push(
             repo_dir, request, proposal, failed_jobs, git_env=git_env,
             port_push_func=port_push_func, port_candidates=port_candidates,
+            pre_push_check=pre_push_check,
         )
 
     plan = _plan_verification(repo_dir, request, proposal, failed_jobs)
@@ -156,11 +201,12 @@ def _run_in_workspace(
         return _verify_once_and_push(
             repo_dir, request, proposal, plan,
             verifier=macos_verifier, git_env=git_env, push_func=push_func,
+            pre_push_check=pre_push_check,
         )
     return _loop_and_push(
         repo_dir, request, proposal, plan,
         run_loop_func=run_loop_func, git_env=git_env, push_func=push_func,
-        verify_runs=verify_runs,
+        verify_runs=verify_runs, pre_push_check=pre_push_check,
     )
 
 
@@ -200,7 +246,7 @@ def _plan_verification(
 def _loop_and_push(
     repo_dir: Path, request: FixRequest, proposal: FixProposal, plan: VerificationPlan,
     *, run_loop_func: RunLoop, git_env: dict[str, str], push_func: Push,
-    verify_runs: int,
+    verify_runs: int, pre_push_check: PrePushCheck | None,
 ) -> FixOutcome:
     """Local/Docker: apply, verify in-loop (retry on fail), review, push on green."""
     loop = run_loop_func(
@@ -224,6 +270,7 @@ def _loop_and_push(
         repo_dir, request, proposal, loop.changed_paths,
         review=loop.review, run_result=loop.run_result,
         verify_backend=backend, git_env=git_env, push_func=push_func,
+        pre_push_check=pre_push_check,
     )
 
 
@@ -231,6 +278,7 @@ def _port_and_push(
     repo_dir: Path, request: FixRequest, proposal: FixProposal, failed_jobs: tuple[str, ...],
     *, git_env: dict[str, str], port_push_func: PortPush = commit_and_push_port,
     port_candidates: tuple[PortCandidate, ...] = (),
+    pre_push_check: PrePushCheck | None = None,
 ) -> FixOutcome:
     """Apply an already-merged upstream fix and publish it.
 
@@ -270,6 +318,7 @@ def _port_and_push(
             head_sha=request.head_sha,
             unstable_fix_commit=full_sha,
             git_env=git_env,
+            pre_push_check=pre_push_check,
         )
     except PushRefused as exc:
         return _refuse(proposal, str(exc))
@@ -293,6 +342,7 @@ def _port_and_push(
 def _verify_once_and_push(
     repo_dir: Path, request: FixRequest, proposal: FixProposal, plan: VerificationPlan,
     *, verifier: VerifyBackend | None, git_env: dict[str, str], push_func: Push,
+    pre_push_check: PrePushCheck | None,
 ) -> FixOutcome:
     """macOS: apply, review, and remotely verify with bounded feedback retries.
 
@@ -313,6 +363,7 @@ def _verify_once_and_push(
             return _macos_fix_loop(
                 repo_dir, request, proposal, plan,
                 verifier=verifier, git_env=git_env, push_func=push_func,
+                pre_push_check=pre_push_check,
             )
         finally:
             try:
@@ -336,6 +387,7 @@ def _verify_once_and_push(
 def _macos_fix_loop(
     repo_dir: Path, request: FixRequest, proposal: FixProposal, plan: VerificationPlan,
     *, verifier: VerifyBackend, git_env: dict[str, str], push_func: Push,
+    pre_push_check: PrePushCheck | None,
 ) -> FixOutcome:
     """Apply, review, and remotely verify the fix up to N times with feedback.
 
@@ -379,6 +431,7 @@ def _macos_fix_loop(
                 repo_dir, request, proposal, changed,
                 review=reviewed.review, verify_backend=backend_label(VerifyEnv.MACOS),
                 macos_run_url=result.run_url, git_env=git_env, push_func=push_func,
+                pre_push_check=pre_push_check,
             )
         if not result.ran:
             return FixOutcome(
@@ -414,6 +467,7 @@ def _push(
     repo_dir: Path, request: FixRequest, proposal: FixProposal, changed_paths: tuple[str, ...],
     *, review: Any = None, run_result: Any = None, verify_backend: str = "",
     macos_run_url: str = "", git_env: dict[str, str], push_func: Push,
+    pre_push_check: PrePushCheck | None = None,
 ) -> FixOutcome:
     try:
         commit_sha = push_func(
@@ -424,6 +478,7 @@ def _push(
             proposal=proposal,
             changed_paths=changed_paths,
             git_env=git_env,
+            pre_push_check=pre_push_check,
         )
     except PushRefused as exc:
         return FixOutcome(
