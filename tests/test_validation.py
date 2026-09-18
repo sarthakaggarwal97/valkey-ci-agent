@@ -42,6 +42,8 @@ def test_changed_paths_since_base_uses_merge_base(tmp_path) -> None:
 
 
 def test_valkey_profile_runs_changed_tests_format_and_subsystem_checks(tmp_path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/.clang-format").write_text("BasedOnStyle: LLVM\n", encoding="utf-8")
     for path in (
         "src/rdb.c",
         "tests/integration/corrupt-dump.tcl",
@@ -80,10 +82,15 @@ def test_valkey_profile_only_clang_formats_paths_upstream_formats(tmp_path) -> N
     Checking a C file outside src/ falls back to clang's built-in LLVM style and
     fails a candidate whose upstream CI is green.
     """
-    for path in ("src/rdb.c", "tests/modules/basics.c", "deps/lua/src/lapi.c"):
+    for path in (
+        "src/.clang-format",
+        "src/rdb.c",
+        "tests/modules/basics.c",
+        "deps/lua/src/lapi.c",
+    ):
         destination = tmp_path / path
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text("int main(void) {}\n", encoding="utf-8")
+        destination.write_text("BasedOnStyle: LLVM\n", encoding="utf-8")
 
     commands = select_validation_commands(
         [],
@@ -95,6 +102,23 @@ def test_valkey_profile_only_clang_formats_paths_upstream_formats(tmp_path) -> N
 
     formatting = [command for command in commands if command.startswith("clang-format-18")]
     assert formatting == ["clang-format-18 --dry-run --Werror -- src/rdb.c"]
+
+
+def test_valkey_profile_skips_clang_format_when_release_has_no_style(tmp_path) -> None:
+    """Valkey 7.2 has no src/.clang-format, so clang's LLVM default is unrelated."""
+    source = tmp_path / "src/server.c"
+    source.parent.mkdir(parents=True)
+    source.write_text("void f(void) {}\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["src/server.c"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert not any(command.startswith("clang-format-18") for command in commands)
 
 
 def test_valkey_profile_runs_a_smoke_set_for_harness_changes(tmp_path) -> None:
@@ -238,3 +262,59 @@ def test_valkey_profile_uses_module_runner_for_moduleapi_test(tmp_path) -> None:
         and "--log-req-res" in command
         for command in commands
     )
+
+
+def test_valkey_profile_targets_moduleapi_directly_with_legacy_wrapper(tmp_path) -> None:
+    """The 7.2/8.0 wrapper appends selection after a hard-coded full suite."""
+    test_path = tmp_path / "tests/unit/moduleapi/blockonkeys.tcl"
+    test_path.parent.mkdir(parents=True)
+    test_path.write_text("test body\n", encoding="utf-8")
+    (tmp_path / "runtest-moduleapi").write_text(
+        "$MAKE -C tests/modules && tclsh tests/test_helper.tcl "
+        "--single unit/moduleapi/basics \"${@}\"\n",
+        encoding="utf-8",
+    )
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["tests/unit/moduleapi/blockonkeys.tcl"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert (
+        "make -C tests/modules && ./runtest "
+        "--single unit/moduleapi/blockonkeys --clients 1"
+    ) in commands
+    assert any(
+        command.startswith(
+            "CFLAGS='-Werror' make -C tests/modules && ./runtest "
+            "--single unit/moduleapi/blockonkeys --clients 1 "
+        )
+        for command in commands
+    )
+    assert not any(
+        command.startswith("./runtest-moduleapi --single") for command in commands
+    )
+
+
+def test_valkey_profile_uses_existing_cluster_smoke_on_legacy_branch(tmp_path) -> None:
+    """7.2's cluster runner rejects --clients and has a different test namespace."""
+    source = tmp_path / "src/cluster.c"
+    source.parent.mkdir(parents=True)
+    source.write_text("void cluster(void) {}\n", encoding="utf-8")
+    smoke = tmp_path / "tests/unit/cluster/misc.tcl"
+    smoke.parent.mkdir(parents=True)
+    smoke.write_text("test body\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["src/cluster.c"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert "./runtest --single unit/cluster/misc --clients 1" in commands
+    assert not any(command.startswith("./runtest-cluster") for command in commands)

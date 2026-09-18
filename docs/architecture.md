@@ -92,7 +92,7 @@ ci_followup.py
   -> skip job ids already recorded in hidden result-comment markers
   -> run_ci_fix_request(...) for one prioritized failure set
        existing diagnosis -> baseline/verification -> skeptic review
-       existing fast-forward-only push; no force push and no DCO sign-off
+       descendant-only commit plus exact-head lease; no rewrite or DCO sign-off
   -> post the outcome and claim markers; wait for a new head before another fix
 ```
 

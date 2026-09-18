@@ -163,6 +163,19 @@ def test_port_push_refuses_malformed_commit(tmp_path):
         )
 
 
+def test_pre_push_check_refuses_expired_authorization():
+    with pytest.raises(PushRefused, match="authorization expired"):
+        push_mod._verify_push_authorized(lambda: "automatic follow-up authorization expired")
+
+
+def test_pre_push_check_fails_closed_on_revalidation_error():
+    def explode() -> str:
+        raise RuntimeError("GitHub unavailable")
+
+    with pytest.raises(PushRefused, match="could not be revalidated"):
+        push_mod._verify_push_authorized(explode)
+
+
 def test_author_fix_commit_message_uses_source_file_for_build_failure():
     proposal = FixProposal(
         path=FixPath.AUTHOR,

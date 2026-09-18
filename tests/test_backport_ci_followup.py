@@ -276,12 +276,52 @@ def test_run_followup_uses_shared_engine_and_posts_job_markers(monkeypatch) -> N
         "Reply schema validator",
         "unit tests",
     )
+    pre_push_check = engine.call_args.kwargs["pre_push_check"]
+    assert pre_push_check() == ""
     assert len(claims) == 1
     assert "job=2" in claims[0]
     assert "job=3" in claims[0]
     assert "job=2" in bodies[-1]
     assert "job=3" in bodies[-1]
     assert "timing-dependent; no safe change" in bodies[-1]
+
+
+def test_run_followup_pre_push_check_refuses_closed_pr(monkeypatch) -> None:
+    pr = _pr()
+    claims, bodies = _record_comment(pr)
+    target = FollowupTarget(
+        pr=pr,
+        run=_run(),
+        head_sha=_HEAD,
+        head_branch="agent/backport/sweep/9.0",
+        jobs=(FailedJob("unit tests", "failure", id=3),),
+    )
+    gh = _gh([target.run], pr)
+    monkeypatch.setattr(
+        ci_followup,
+        "find_followup_target",
+        lambda *_args, **_kwargs: (target, "actionable"),
+    )
+
+    def engine(*_args, **kwargs):
+        pr.state = "closed"
+        reason = kwargs["pre_push_check"]()
+        return FixOutcome(kind=OutcomeKind.REFUSED, summary=reason)
+
+    monkeypatch.setattr(ci_followup, "run_ci_fix_request", engine)
+
+    result = run_followup(
+        gh,
+        repo_entry=_entry(),
+        target_branch="9.0",
+        bot_login=_BOT,
+        git_env={},
+        artifact_client=MagicMock(),
+    )
+
+    assert result["action"] == "refused"
+    assert "pr-not-open" in bodies[-1]
+    assert len(claims) == 1
 
 
 def test_run_followup_claims_job_ids_before_the_engine_runs(monkeypatch) -> None:

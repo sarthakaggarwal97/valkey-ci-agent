@@ -4,7 +4,7 @@ The follow-up is deliberately narrower than the maintainer-triggered CI-fix
 entry point. It acts only on the one bot-owned ``agent/backport/sweep/<base>``
 PR for a registered branch, only after every current-head workflow run has
 completed, and never retries the same failed job id. The shared CI-fix engine
-still owns diagnosis, verification, skeptical review, and fast-forward push.
+still owns diagnosis, verification, skeptical review, and lease-protected push.
 """
 
 from __future__ import annotations
@@ -204,6 +204,35 @@ def run_followup(
     )
 
     try:
+        def pre_push_check() -> str:
+            """Revalidate the automation's authority at the last possible moment."""
+            try:
+                current = retry_github_call(
+                    lambda: gh.get_repo(repo_entry.repo).get_pull(request.pr_number),
+                    retries=2,
+                    description=f"revalidate PR #{request.pr_number} before push",
+                )
+            except Exception:  # noqa: BLE001 - a failed authorization check must deny the push
+                logger.exception("could not revalidate automatic follow-up before push")
+                return "the automatic follow-up PR could not be revalidated"
+
+            rejection = _validate_sweep_pr(
+                current,
+                repo_full_name=repo_entry.repo,
+                target_branch=target_branch,
+                head_branch=request.head_branch,
+                bot_login=bot_login,
+            )
+            if rejection:
+                return f"automatic follow-up authorization expired ({rejection})"
+            current_sha = str(getattr(current.head, "sha", "") or "")
+            if current_sha != request.head_sha:
+                return (
+                    "the PR head moved from "
+                    f"{request.head_sha[:12]} to {current_sha[:12] or '(missing)'}"
+                )
+            return ""
+
         outcome = run_ci_fix_request(
             gh,
             request=request,
@@ -212,6 +241,7 @@ def run_followup(
             artifact_client=artifact_client,
             macos_verifier=macos_verifier,
             verify_runs=verify_runs,
+            pre_push_check=pre_push_check,
         )
     except Exception:  # noqa: BLE001 - every automatic attempt needs an audit result
         logger.exception("automatic CI follow-up failed unexpectedly")

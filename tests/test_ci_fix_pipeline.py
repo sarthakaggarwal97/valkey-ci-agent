@@ -13,11 +13,12 @@ from scripts.ci_fix.models import (
     FixOutcome,
     FixPath,
     FixProposal,
+    FixRequest,
     OutcomeKind,
     ReviewVerdict,
     RunResult,
 )
-from scripts.ci_fix.pipeline import run_ci_fix
+from scripts.ci_fix.pipeline import run_ci_fix, run_ci_fix_request
 from scripts.ci_fix.push import PushRefused, commit_and_push_fix
 
 _RUN_URL = "https://github.com/valkey-io/valkey/actions/runs/27559908167"
@@ -136,6 +137,67 @@ def test_push_commits_and_pushes(tmp_path, monkeypatch):
     ).stdout
     assert "Signed-off-by:" not in msg
     assert "NAN score" in msg
+
+
+def test_push_exact_lease_refuses_deleted_branch(tmp_path, monkeypatch):
+    """A branch deleted while verification runs must not be recreated."""
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    repo = tmp_path / "repo"
+    subprocess.run(
+        ["git", "init", "-b", "agent/backport/sweep/8.0", str(repo)],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+    (repo / "seed.txt").write_text("seed")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-m", "seed"],
+        check=True,
+        capture_output=True,
+    )
+    head_sha = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    branch_ref = "refs/heads/agent/backport/sweep/8.0"
+    subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", str(remote)], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "push", "origin", f"HEAD:{branch_ref}"],
+        check=True,
+        capture_output=True,
+    )
+    monkeypatch.setattr("scripts.ci_fix.push.github_https_url", lambda _f: str(remote))
+    (repo / "test.tcl").write_text("fixed payload")
+
+    def delete_branch_at_last_check() -> str:
+        subprocess.run(
+            ["git", "--git-dir", str(remote), "update-ref", "-d", branch_ref],
+            check=True,
+        )
+        return ""
+
+    with pytest.raises(PushRefused, match="stale info|failed to push"):
+        commit_and_push_fix(
+            str(repo),
+            head_repo_full_name="valkey-io/valkey",
+            head_branch="agent/backport/sweep/8.0",
+            head_sha=head_sha,
+            proposal=_proposal(),
+            changed_paths=("test.tcl",),
+            git_env={},
+            pre_push_check=delete_branch_at_last_check,
+        )
+
+    remaining = subprocess.run(
+        ["git", "--git-dir", str(remote), "show-ref", "--verify", branch_ref],
+        capture_output=True,
+    )
+    assert remaining.returncode != 0
 
 
 def test_push_uses_clean_clone_not_source_git_config(tmp_path, monkeypatch):
@@ -343,6 +405,50 @@ def test_pipeline_happy_path(monkeypatch):
     outcome = _run_pipeline(monkeypatch)
     assert outcome.kind is OutcomeKind.PUSHED
     assert outcome.commit_sha.startswith("deadbeef")
+
+
+def test_pipeline_passes_pre_push_check_to_push(monkeypatch):
+    from scripts.ci_fix.verify.base import VerifyEnv
+    from scripts.ci_fix.verify.workflow_env import JobEnvironment
+
+    monkeypatch.setattr("scripts.ci_fix.pipeline.shallow_clone_at_sha", lambda *a, **k: True)
+    monkeypatch.setattr(
+        "scripts.ci_fix.pipeline._classify_failing_job",
+        lambda *a, **k: JobEnvironment(VerifyEnv.LOCAL),
+    )
+    monkeypatch.setattr(
+        "scripts.ci_fix.pipeline.discover_port_candidates",
+        lambda *a, **k: (),
+    )
+    guard = MagicMock(return_value="")
+
+    def push(*_args, **kwargs):
+        assert kwargs["pre_push_check"] is guard
+        assert kwargs["pre_push_check"]() == ""
+        return "deadbeef" * 5
+
+    outcome = run_ci_fix_request(
+        MagicMock(),
+        request=FixRequest(
+            repo_full_name="valkey-io/valkey",
+            pr_number=3988,
+            head_repo_full_name="valkey-io/valkey",
+            head_branch="agent/backport/sweep/8.0",
+            head_sha="a" * 40,
+            run_id=123,
+            requested_by="bot",
+        ),
+        git_env={},
+        artifact_client=_artifact_client({"1.txt": b"err"}),
+        failed_jobs=("test-ubuntu-latest",),
+        diagnose_func=lambda *a, **k: _proposal(),
+        run_loop_func=lambda *a, **k: _loop_success(),
+        push_func=push,
+        pre_push_check=guard,
+    )
+
+    assert outcome.kind is OutcomeKind.PUSHED
+    guard.assert_called_once_with()
 
 
 def test_pipeline_gate_rejection(monkeypatch):

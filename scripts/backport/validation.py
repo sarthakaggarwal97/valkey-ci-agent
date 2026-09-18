@@ -102,7 +102,7 @@ def _valkey_fast_validation_commands(
         and path.endswith(_C_FAMILY_SUFFIXES)
         and _path_exists(repo_dir, path)
     )
-    if c_family:
+    if c_family and _path_exists(repo_dir, "src/.clang-format"):
         # `src/.clang-format-ignore` still exempts the vendored sources inside
         # `src/`, so listing them explicitly is safe.
         arguments = " ".join(quote(path) for path in c_family)
@@ -217,10 +217,10 @@ def _valkey_test_validation_commands(
     )
     for _path, unit in regular_tests:
         commands.append(f"./runtest --single {quote(unit)} --clients 1")
-    # `tests/unit/moduleapi/*` is not in `./runtest`'s unit list at all; it has a
-    # separate wrapper that builds `tests/modules` first.
+    # Moduleapi units need their test modules built first. Newer wrappers accept
+    # caller selection; legacy wrappers hard-code the full suite.
     for _path, unit in module_tests:
-        commands.append(f"./runtest-moduleapi --single {quote(unit)} --clients 1")
+        commands.append(_targeted_moduleapi_command(repo_dir, (unit,)))
 
     if any(path.startswith("src/unit/") for path in changed_paths):
         commands.append("make -C src test-unit")
@@ -232,7 +232,11 @@ def _valkey_test_validation_commands(
         for path in changed_paths
     )
     if cluster_changed and not any(unit.startswith("unit/cluster/") for unit in direct_tests):
-        commands.append("./runtest-cluster --single unit/cluster/base --clients 1")
+        cluster_unit = _first_existing_unit(
+            repo_dir,
+            ("unit/cluster/base", "unit/cluster/misc"),
+        )
+        commands.append(f"./runtest --single {quote(cluster_unit)} --clients 1")
 
     if any(
         path.startswith("tests/sentinel/")
@@ -255,8 +259,7 @@ def _valkey_test_validation_commands(
             unit for unit in module_units if unit not in set(direct_tests)
         )
         if extra_module_units:
-            units = " ".join(f"--single {quote(unit)}" for unit in extra_module_units)
-            commands.append(f"./runtest-moduleapi {units} --clients 1")
+            commands.append(_targeted_moduleapi_command(repo_dir, extra_module_units))
 
     if any(path.startswith("tests/support/") or path == "tests/test_helper.tcl" for path in changed_paths):
         units = " ".join(f"--single {quote(unit)}" for unit in _HARNESS_SMOKE_UNITS)
@@ -307,17 +310,71 @@ def _valkey_test_validation_commands(
                 f"--dont-clean{keep_logs} --force-resp3"
             )
         elif reply_module_tests:
-            units = " ".join(f"--single {quote(unit)}" for unit in reply_module_tests)
             commands.append(
-                "CFLAGS='-Werror' ./runtest-moduleapi "
-                f"{units} --clients 1 --log-req-res --no-latency --dont-clean"
-                f"{keep_logs} --force-resp3"
+                _targeted_moduleapi_command(
+                    repo_dir,
+                    reply_module_tests,
+                    suffix=(
+                        " --log-req-res --no-latency --dont-clean"
+                        f"{keep_logs} --force-resp3"
+                    ),
+                    werror=True,
+                )
             )
         commands.append(
             "./utils/req-res-log-validator.py --verbose --fail-missing-reply-schemas"
         )
 
     return tuple(commands)
+
+
+def _targeted_moduleapi_command(
+    repo_dir: str,
+    units: tuple[str, ...],
+    *,
+    suffix: str = "",
+    werror: bool = False,
+) -> str:
+    """Run only selected moduleapi units on both legacy and current wrappers.
+
+    The 7.2 and 8.0 wrappers hard-code every moduleapi unit before appending
+    caller arguments, so adding ``--single`` to those wrappers still runs the
+    whole suite. On those branches, build the test modules explicitly and call
+    the general test harness, whose repeatable ``--single`` option accepts
+    moduleapi units directly.
+    """
+    unit_args = " ".join(f"--single {quote(unit)}" for unit in units)
+    if _moduleapi_wrapper_accepts_selection(repo_dir):
+        prefix = "CFLAGS='-Werror' " if werror else ""
+        return f"{prefix}./runtest-moduleapi {unit_args} --clients 1{suffix}"
+
+    make_prefix = "CFLAGS='-Werror' " if werror else ""
+    return f"{make_prefix}make -C tests/modules && ./runtest {unit_args} --clients 1{suffix}"
+
+
+def _moduleapi_wrapper_accepts_selection(repo_dir: str) -> bool:
+    """Whether ``runtest-moduleapi`` delegates selection to ``--moduleapi``."""
+    if not repo_dir:
+        return True
+    try:
+        body = Path(repo_dir, "runtest-moduleapi").read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:
+        # A partial fixture should retain the current command shape; real Valkey
+        # checkouts always contain the wrapper.
+        return True
+    return "--moduleapi" in body
+
+
+def _first_existing_unit(repo_dir: str, units: tuple[str, ...]) -> str:
+    """Choose a smoke unit that exists on the checked-out release branch."""
+    if repo_dir:
+        for unit in units:
+            if Path(repo_dir, f"tests/{unit}.tcl").is_file():
+                return unit
+    return units[0]
 
 
 def _is_direct_runtest(path: str) -> bool:
