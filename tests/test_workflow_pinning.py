@@ -193,6 +193,7 @@ def test_backport_branch_mutations_share_one_concurrency_group():
         concurrency = workflow["jobs"][job_name]["concurrency"]
         groups.append(concurrency["group"])
         assert concurrency["cancel-in-progress"] == "false"
+        assert concurrency["queue"] == "max"
 
     assert groups == [
         "backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}",

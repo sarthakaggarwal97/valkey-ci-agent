@@ -81,6 +81,7 @@ jobs:
     concurrency:
       group: backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}
       cancel-in-progress: false
+      queue: max
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       CLAUDE_CODE_USE_BEDROCK: "1"

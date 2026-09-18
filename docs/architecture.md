@@ -80,8 +80,10 @@ The open-PR check is the entire state model: a merge closes the sweep PR, the
 next poll finds the gap and tops the board back up, and the new PR locks the
 branch again until it too merges. Poll, daily sweep, and automatic CI follow-up
 share the `backport-branch-mutation-{repo}-{branch}` concurrency group so they
-never race for the same rolling branch. Manual dispatches are one-shot; only
-scheduled runs use the sustained in-run cadence.
+never race for the same rolling branch. The group uses the maximum pending
+queue so a later scheduled writer cannot replace an already-waiting sweep or
+follow-up. Manual dispatches are one-shot; only scheduled runs use the
+sustained in-run cadence.
 
 ### Automatic CI Follow-up
 
