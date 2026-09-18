@@ -58,6 +58,7 @@ class ValidationOutcome:
     generated_paths: tuple[str, ...] = ()
     amended_commit_sha: str = ""
     partial_repair: bool = False
+    unmapped_test_paths: tuple[str, ...] = ()
 
     def __iter__(self):
         """Preserve the historical ``ok, output = ...`` calling convention."""
@@ -165,7 +166,11 @@ def validate_branch_with_optional_repair(
             or _unmapped_test_paths_from_output(output)
         )
         if initial_unmapped_paths:
-            repaired = ValidationOutcome(False, output)
+            repaired = ValidationOutcome(
+                False,
+                output,
+                unmapped_test_paths=initial_unmapped_paths,
+            )
         else:
             repaired = repair_validation_failure_with_claude(
                 repo_dir,
@@ -181,14 +186,19 @@ def validate_branch_with_optional_repair(
             )
         if not repaired.ok:
             adaptation_output = repaired.output
+            adaptation_paths = (
+                repaired.unmapped_test_paths
+                or _unmapped_test_paths_from_output(adaptation_output)
+                or initial_unmapped_paths
+            )
             if (
                 not _unmapped_test_paths_from_output(adaptation_output)
-                and initial_unmapped_paths
+                and adaptation_paths
             ):
                 adaptation_output = (
                     f"{repaired.output}\n\n"
                     f"{UNMAPPED_TEST_PATHS_PREFIX}"
-                    f"{json.dumps(initial_unmapped_paths, separators=(',', ':'))}"
+                    f"{json.dumps(adaptation_paths, separators=(',', ':'))}"
                     f"\nInitial validation output:\n{output}"
                 )
             try:
@@ -462,6 +472,7 @@ def repair_validation_failure_with_claude(
                     return ValidationOutcome(
                         False,
                         validation_output_with_diagnosis(output, diagnosis),
+                        unmapped_test_paths=unmapped_paths,
                     )
                 run_git(
                     repo_dir,
@@ -496,6 +507,7 @@ def repair_validation_failure_with_claude(
                 ai_summary=summary,
                 amended_commit_sha=head_sha(repo_dir),
                 partial_repair=True,
+                unmapped_test_paths=unmapped_paths,
             )
 
         logger.warning(
@@ -543,14 +555,31 @@ def adapt_added_tests_for_target(
     if not eligible_paths:
         return ValidationOutcome(False, validation_output)
     comparison_ref = base_ref or f"origin/{target_branch}"
+    added_paths = _added_paths_since_base(repo_dir, comparison_ref)
     added_sources = _added_test_sources(
         repo_dir,
-        comparison_ref,
+        added_paths,
         test_path_patterns=test_path_patterns,
         eligible_paths=eligible_paths,
     )
     if not added_sources:
         return ValidationOutcome(False, validation_output)
+    companion_sources, unsafe_companions = _added_test_harness_companions(
+        repo_dir,
+        added_paths,
+        primary_test_paths=tuple(added_sources),
+        test_path_patterns=test_path_patterns,
+    )
+    if unsafe_companions:
+        return ValidationOutcome(
+            False,
+            f"{validation_output}\n\n"
+            "Branch-native test adaptation cannot safely inspect added "
+            "test-harness companion path(s): "
+            + ", ".join(unsafe_companions),
+        )
+    adaptation_sources = {**added_sources, **companion_sources}
+    incompatible_paths = tuple(adaptation_sources)
 
     starting_head = head_sha(repo_dir)
     try:
@@ -571,10 +600,10 @@ def adapt_added_tests_for_target(
         adaptation = adapt_missing_tests_func(
             repo_dir,
             candidate,
-            added_sources,
+            adaptation_sources,
             language=language,
             test_path_patterns=test_path_patterns,
-            excluded_test_paths=tuple(added_sources),
+            excluded_test_paths=incompatible_paths,
             run_git=run_git,
         )
         if adaptation.fatal or not adaptation.adapted_paths:
@@ -587,7 +616,7 @@ def adapt_added_tests_for_target(
                 f"{validation_output}\n\nBranch-native test adaptation: {detail}",
             )
 
-        for path in sorted(added_sources):
+        for path in sorted(incompatible_paths):
             run_git(repo_dir, "rm", "-f", "--ignore-unmatch", "--", path)
         if not has_staged_changes(repo_dir):
             run_git(repo_dir, "reset", "--hard", starting_head)
@@ -629,14 +658,8 @@ def adapt_added_tests_for_target(
         raise
 
 
-def _added_test_sources(
-    repo_dir: str,
-    base_ref: str,
-    *,
-    test_path_patterns: tuple[str, ...] | list[str] | None,
-    eligible_paths: tuple[str, ...],
-) -> dict[str, str]:
-    """Return regular test files added by this candidate relative to its base."""
+def _added_paths_since_base(repo_dir: str, base_ref: str) -> tuple[str, ...]:
+    """Return paths added by this candidate relative to its target base."""
     changed = git_output(
         repo_dir,
         "diff",
@@ -645,9 +668,20 @@ def _added_test_sources(
         "-z",
         f"{base_ref}...HEAD",
     )
+    return tuple(sorted(item for item in changed.split("\0") if item))
+
+
+def _added_test_sources(
+    repo_dir: str,
+    added_paths: tuple[str, ...],
+    *,
+    test_path_patterns: tuple[str, ...] | list[str] | None,
+    eligible_paths: tuple[str, ...],
+) -> dict[str, str]:
+    """Return regular test files added by this candidate relative to its base."""
     sources: dict[str, str] = {}
     eligible = set(eligible_paths)
-    for path in sorted(item for item in changed.split("\0") if item):
+    for path in added_paths:
         file_path = Path(repo_dir, path)
         if (
             path not in eligible
@@ -658,6 +692,46 @@ def _added_test_sources(
             continue
         sources[path] = file_path.read_text(encoding="utf-8", errors="replace")
     return sources
+
+
+def _added_test_harness_companions(
+    repo_dir: str,
+    added_paths: tuple[str, ...],
+    *,
+    primary_test_paths: tuple[str, ...],
+    test_path_patterns: tuple[str, ...] | list[str] | None,
+) -> tuple[dict[str, str], tuple[str, ...]]:
+    """Return added files that belong to an unsupported Valkey unit harness.
+
+    The C-to-C++ source-unit transition introduced shared headers, a test main,
+    fakes, and build metadata alongside ``src/unit/test_*.cpp``. An older target
+    may ignore those files after the primary test is adapted into its native
+    layout. Include every added, non-test path in that harness subtree in the
+    adaptation context and remove it transactionally with the unsupported test.
+    Recognized test paths that have their own validation mapping remain intact.
+    """
+    if not any(path.startswith("src/unit/") for path in primary_test_paths):
+        return {}, ()
+
+    companions: dict[str, str] = {}
+    unsafe: list[str] = []
+    primary = set(primary_test_paths)
+    for path in added_paths:
+        if (
+            path in primary
+            or not path.startswith("src/unit/")
+            or is_test_path(path, test_path_patterns)
+        ):
+            continue
+        file_path = Path(repo_dir, path)
+        if not file_path.is_file() or file_path.is_symlink():
+            unsafe.append(path)
+            continue
+        companions[path] = file_path.read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+    return companions, tuple(unsafe)
 
 
 def _deleted_test_replacements(

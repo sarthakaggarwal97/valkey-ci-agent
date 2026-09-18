@@ -177,3 +177,23 @@ def test_backport_workflows_refresh_credentials_after_validation():
     assert "if action=$(poll_once); then" in poll
     assert 'echo "had_error=${poll_had_error}"' in poll
     assert "steps.poll.outputs.had_error == 'true'" in poll
+
+
+def test_sweep_and_ci_followup_serialize_branch_mutations():
+    groups = []
+    for filename, job_name in (
+        ("backport-sweep.yml", "sweep"),
+        ("backport-ci-followup.yml", "follow-up"),
+    ):
+        workflow = yaml.load(
+            (Path(".github/workflows") / filename).read_text(encoding="utf-8"),
+            Loader=yaml.BaseLoader,
+        )
+        concurrency = workflow["jobs"][job_name]["concurrency"]
+        groups.append(concurrency["group"])
+        assert concurrency["cancel-in-progress"] == "false"
+
+    assert groups == [
+        "backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}",
+        "backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}",
+    ]

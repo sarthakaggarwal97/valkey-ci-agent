@@ -36,8 +36,9 @@ Validation first runs the registry's optional `validation_setup_commands`,
 then validates each cherry-pick against its own pre-candidate commit. Generic
 `validation_rules` add commands by path; a repository `validation_profile` can
 derive commands from exact changed files. Valkey core uses this for candidate
-range whitespace checks, changed-file clang-format, direct Tcl tests,
-subsystem suites, C/C++ unit tests, and targeted reply-schema coverage.
+range whitespace checks, release-workflow-aware changed-file clang-format,
+direct Tcl tests in their required harness mode, subsystem suites, C/C++ unit
+tests, and targeted reply-schema coverage.
 `generated_file_rules` run deterministic generators twice, allow only declared
 tracked outputs, and amend converged output into the candidate commit. The
 sweep branch is kept green: a cherry-pick is only kept if the whole branch
@@ -49,9 +50,11 @@ committing them. When `repair_validation_failures` is enabled, Claude Code
 gets one edit-only repair attempt scoped to the backport diff before a failing
 cherry-pick is dropped. The repair may not delete changed tests. If a newly
 added test is structurally unsupported by the target branch's harness, a
-separate sandboxed adaptation may edit existing branch-native tests only; the
-unsupported path is removed and committed only after the complete validation
-plan passes. No safe adaptation means the candidate fails closed. Repos with no
+separate sandboxed adaptation may edit existing branch-native tests only. The
+unsupported path and added files belonging only to that harness are supplied as
+adaptation context, then removed and committed only after the complete
+validation plan passes. Independently mapped tests are retained. No safe
+adaptation means the candidate fails closed. Repos with no
 `build_commands` configured rely on
 upstream CI for verification.
 

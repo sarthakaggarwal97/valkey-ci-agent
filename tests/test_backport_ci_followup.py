@@ -44,9 +44,16 @@ def _pr(*, author: str = _BOT, comments=()):
     )
 
 
-def _run(run_id: int = 10, *, status: str = "completed", conclusion: str = "failure"):
+def _run(
+    run_id: int = 10,
+    *,
+    status: str = "completed",
+    conclusion: str = "failure",
+    workflow_id: int = 100,
+):
     return SimpleNamespace(
         id=run_id,
+        workflow_id=workflow_id,
         head_sha=_HEAD,
         status=status,
         conclusion=conclusion,
@@ -105,7 +112,7 @@ def test_finds_current_head_failure_and_ignores_dco(monkeypatch) -> None:
     assert [job.id for job in target.jobs] == [2]
 
 
-def test_only_highest_priority_failure_tier_is_actionable(monkeypatch) -> None:
+def test_selects_one_highest_priority_failure(monkeypatch) -> None:
     pr = _pr()
     gh = _gh([_run()], pr)
     monkeypatch.setattr(ci_followup, "find_existing_pr", lambda *_args: pr)
@@ -127,7 +134,39 @@ def test_only_highest_priority_failure_tier_is_actionable(monkeypatch) -> None:
     )
 
     assert target is not None
-    assert [job.id for job in target.jobs] == [2, 3]
+    assert [job.id for job in target.jobs] == [2]
+
+
+def test_next_same_priority_failure_remains_actionable_after_claim(monkeypatch) -> None:
+    marker = SimpleNamespace(
+        user=SimpleNamespace(login=_BOT),
+        body=(
+            f"<!-- valkey-ci-agent:auto-ci-followup head={_HEAD} "
+            "run=10 job=2 -->"
+        ),
+    )
+    pr = _pr(comments=(marker,))
+    gh = _gh([_run()], pr)
+    monkeypatch.setattr(ci_followup, "find_existing_pr", lambda *_args: pr)
+    monkeypatch.setattr(
+        ci_followup,
+        "failed_jobs_for_run",
+        lambda *_args: [
+            FailedJob("clang format", "failure", id=2),
+            FailedJob("reply schema", "failure", id=3),
+        ],
+    )
+
+    target, reason = find_followup_target(
+        gh,
+        repo_entry=_entry(),
+        target_branch="9.0",
+        bot_login=_BOT,
+    )
+
+    assert reason == "actionable"
+    assert target is not None
+    assert [job.id for job in target.jobs] == [3]
 
 
 def test_waits_while_any_current_head_run_is_in_progress(monkeypatch) -> None:
@@ -208,6 +247,69 @@ def test_handled_job_marker_prevents_retry(monkeypatch) -> None:
     assert reason == "no-unhandled-actionable-failures"
 
 
+def test_logical_job_marker_prevents_retry_from_twin_event_run(monkeypatch) -> None:
+    first_run = _run(10, workflow_id=100)
+    key = ci_followup._job_key(first_run, "Reply schema validator")
+    marker = SimpleNamespace(
+        user=SimpleNamespace(login=_BOT),
+        body=(
+            f"<!-- valkey-ci-agent:auto-ci-followup head={_HEAD} "
+            f"run=10 job=2 key={key} -->"
+        ),
+    )
+    pr = _pr(comments=(marker,))
+    twin_run = _run(11, workflow_id=100)
+    gh = _gh([twin_run], pr)
+    monkeypatch.setattr(ci_followup, "find_existing_pr", lambda *_args: pr)
+    monkeypatch.setattr(
+        ci_followup,
+        "failed_jobs_for_run",
+        lambda *_args: [FailedJob("Reply schema validator", "failure", id=22)],
+    )
+
+    target, reason = find_followup_target(
+        gh,
+        repo_entry=_entry(),
+        target_branch="9.0",
+        bot_login=_BOT,
+    )
+
+    assert target is None
+    assert reason == "no-unhandled-actionable-failures"
+
+
+def test_same_job_name_in_different_workflow_remains_actionable(monkeypatch) -> None:
+    first_run = _run(10, workflow_id=100)
+    key = ci_followup._job_key(first_run, "build")
+    marker = SimpleNamespace(
+        user=SimpleNamespace(login=_BOT),
+        body=(
+            f"<!-- valkey-ci-agent:auto-ci-followup head={_HEAD} "
+            f"run=10 job=2 key={key} -->"
+        ),
+    )
+    pr = _pr(comments=(marker,))
+    other_workflow = _run(11, workflow_id=200)
+    gh = _gh([other_workflow], pr)
+    monkeypatch.setattr(ci_followup, "find_existing_pr", lambda *_args: pr)
+    monkeypatch.setattr(
+        ci_followup,
+        "failed_jobs_for_run",
+        lambda *_args: [FailedJob("build", "failure", id=22)],
+    )
+
+    target, reason = find_followup_target(
+        gh,
+        repo_entry=_entry(),
+        target_branch="9.0",
+        bot_login=_BOT,
+    )
+
+    assert reason == "actionable"
+    assert target is not None
+    assert [job.id for job in target.jobs] == [22]
+
+
 def test_ignores_handled_job_marker_from_another_user(monkeypatch) -> None:
     marker = SimpleNamespace(
         user=SimpleNamespace(login="untrusted-user"),
@@ -272,17 +374,15 @@ def test_run_followup_uses_shared_engine_and_posts_job_markers(monkeypatch) -> N
     assert result["action"] == "refused"
     request = engine.call_args.kwargs["request"]
     assert request.head_sha == _HEAD
-    assert engine.call_args.kwargs["failed_jobs"] == (
-        "Reply schema validator",
-        "unit tests",
-    )
+    assert engine.call_args.kwargs["failed_jobs"] == ("Reply schema validator",)
     pre_push_check = engine.call_args.kwargs["pre_push_check"]
     assert pre_push_check() == ""
     assert len(claims) == 1
     assert "job=2" in claims[0]
-    assert "job=3" in claims[0]
+    assert "job=3" not in claims[0]
+    assert "key=" in claims[0]
     assert "job=2" in bodies[-1]
-    assert "job=3" in bodies[-1]
+    assert "job=3" not in bodies[-1]
     assert "timing-dependent; no safe change" in bodies[-1]
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from fnmatch import fnmatch
 from pathlib import Path
@@ -83,12 +84,15 @@ def _append_commands(commands: list[str], seen: set[str], additions: Iterable[st
 
 _C_FAMILY_SUFFIXES = (".c", ".h", ".cpp", ".hpp")
 _UNIT_TEST_SOURCE_SUFFIXES = (".c", ".cc", ".cpp")
-# Valkey's clang-format workflow runs `cd src && clang-format-18 -i **/*.{c,h,cpp,hpp}`,
-# and the only `.clang-format` in the tree is `src/.clang-format`. Files outside
-# `src/` - `tests/modules/*.c`, anything vendored under `deps/` - are therefore
-# never formatted upstream, and checking them here would fall back to clang's
+# Valkey's clang-format workflow runs inside `src/`, and the only
+# `.clang-format` in the tree is `src/.clang-format`. Files outside `src/` -
+# `tests/modules/*.c`, anything vendored under `deps/` - are therefore never
+# formatted upstream, and checking them here would fall back to clang's
 # built-in LLVM style and fail a candidate whose upstream CI is green.
 _FORMATTED_PREFIX = "src/"
+_DIFF_HUNK_RE = re.compile(
+    r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@"
+)
 
 
 def _valkey_fast_validation_commands(
@@ -99,22 +103,111 @@ def _valkey_fast_validation_commands(
     """Return the cheap checks that should fail a candidate before any build."""
     diff_range = f" {quote(base_ref)}...HEAD" if base_ref else ""
     commands = [f"git diff --check{diff_range}"]
+    formatted_suffixes = _valkey_clang_format_suffixes(repo_dir)
     c_family = tuple(
         path
         for path in changed_paths
         if path.startswith(_FORMATTED_PREFIX)
-        and path.endswith(_C_FAMILY_SUFFIXES)
+        and path.endswith(formatted_suffixes)
         and _path_exists(repo_dir, path)
     )
-    if c_family and _path_exists(repo_dir, "src/.clang-format"):
-        # `src/.clang-format-ignore` still exempts the vendored sources inside
-        # `src/`, so listing them explicitly is safe.
-        arguments = " ".join(quote(path) for path in c_family)
-        commands.append(f"clang-format-18 --dry-run --Werror -- {arguments}")
+    if (
+        formatted_suffixes
+        and c_family
+        and _path_exists(repo_dir, "src/.clang-format")
+    ):
+        for path in c_family:
+            line_ranges = _changed_line_ranges(repo_dir, base_ref, path)
+            if line_ranges == ():
+                # A deletion-only change introduces no new line to format.
+                continue
+            range_args = (
+                ""
+                if line_ranges is None
+                else " " + " ".join(
+                    f"--lines={start}:{end}" for start, end in line_ranges
+                )
+            )
+            commands.append(
+                f"clang-format-18 --dry-run --Werror{range_args} -- {quote(path)}"
+            )
     return tuple(commands)
 
 
+def _changed_line_ranges(
+    repo_dir: str,
+    base_ref: str,
+    path: str,
+) -> tuple[tuple[int, int], ...] | None:
+    """Return new-file line ranges changed by ``base_ref...HEAD``.
+
+    ``None`` means no comparison range was supplied, so callers should retain
+    the historical whole-file check. An empty tuple means a real diff contained
+    only deletions and therefore introduced no line for clang-format to judge.
+    """
+    if not repo_dir or not base_ref:
+        return None
+    result = subprocess.run(
+        [
+            "git",
+            "diff",
+            "--unified=0",
+            f"{base_ref}...HEAD",
+            "--",
+            path,
+        ],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    ranges: list[tuple[int, int]] = []
+    for line in result.stdout.splitlines():
+        match = _DIFF_HUNK_RE.match(line)
+        if not match:
+            continue
+        start = int(match.group("start"))
+        count = int(match.group("count") or "1")
+        if count:
+            ranges.append((start, start + count - 1))
+    return tuple(ranges)
+
+
+def _valkey_clang_format_suffixes(repo_dir: str) -> tuple[str, ...]:
+    """Return exactly the suffixes formatted by this release branch's CI.
+
+    Valkey 8.0 has ``src/.clang-format`` but no formatting workflow, while 8.1
+    and 9.0 format only C headers/sources and newer branches also format C++.
+    The workflow is therefore the capability signal; the style file alone
+    cannot distinguish those release layouts.
+    """
+    if not repo_dir:
+        return _C_FAMILY_SUFFIXES
+
+    workflows_dir = Path(repo_dir, ".github/workflows")
+    suffixes: set[str] = set()
+    workflows = sorted(
+        (*workflows_dir.glob("*.yml"), *workflows_dir.glob("*.yaml"))
+    )
+    for workflow in workflows:
+        try:
+            body = workflow.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if "clang-format-18" not in body:
+            continue
+        suffixes.update(
+            suffix
+            for suffix in _C_FAMILY_SUFFIXES
+            if f"**/*{suffix}" in body
+        )
+    return tuple(
+        suffix for suffix in _C_FAMILY_SUFFIXES if suffix in suffixes
+    )
+
+
 _MODULE_SOURCE_PREFIX = "tests/modules/"
+_TLS_ONLY_UNITS = frozenset({"unit/tls"})
 
 # A `tests/support/*` or `tests/test_helper.tcl` change has to prove the harness
 # still loads and can drive servers; it does not need all 170 default units.
@@ -221,7 +314,10 @@ def _valkey_test_validation_commands(
     )
     covered_test_paths: set[str] = set()
     for _path, unit in regular_tests:
-        commands.append(f"./runtest --single {quote(unit)} --clients 1")
+        commands.append(
+            f"./runtest --single {quote(unit)} --clients 1"
+            f"{_runtest_mode_args(unit)}"
+        )
         covered_test_paths.add(_path)
     # Moduleapi units need their test modules built first. Newer wrappers accept
     # caller selection; legacy wrappers hard-code the full suite.
@@ -329,6 +425,12 @@ def _valkey_test_validation_commands(
         for path, unit in regular_tests
         if not _top_level_skips_reply_logging(repo_dir, path)
     )
+    regular_reply_tests = tuple(
+        unit for unit in reply_tests if unit not in _TLS_ONLY_UNITS
+    )
+    tls_reply_tests = tuple(
+        unit for unit in reply_tests if unit in _TLS_ONLY_UNITS
+    )
     # A changed module source reaches the reply-schema run through the units that
     # load it, so a module-only diff no longer degrades to the whole suite here.
     reply_module_tests = tuple(
@@ -347,22 +449,30 @@ def _valkey_test_validation_commands(
     )
     if reply_tests or reply_module_tests or module_suite_needed:
         commands.append("make -j$(nproc) BUILD_TLS=yes SERVER_CFLAGS='-Werror -DLOG_REQ_RES'")
-        if reply_tests:
+        wrote_reply_logs = False
+        for selected_reply_tests, mode_args in (
+            (regular_reply_tests, ""),
+            (tls_reply_tests, " --tls"),
+        ):
+            if not selected_reply_tests:
+                continue
             # `--tags -slow` matches the upstream reply-schema job. Blocks it has
             # never run under `--log-req-res --force-resp3` have never had their
             # logged replies schema-checked, so running them here can fail a
             # candidate for a pre-existing upstream violation.
-            units = " ".join(f"--single {quote(unit)}" for unit in reply_tests)
+            units = " ".join(f"--single {quote(unit)}" for unit in selected_reply_tests)
+            keep_logs = " --dont-pre-clean" if wrote_reply_logs else ""
             commands.append(
                 "./runtest "
                 f"{units} --clients 1 --tags -slow --log-req-res --no-latency "
-                "--dont-clean --force-resp3"
+                f"--dont-clean{keep_logs} --force-resp3{mode_args}"
             )
+            wrote_reply_logs = True
         # `--dont-pre-clean` only exists to keep the logs the `./runtest` leg
         # above just wrote. Without that leg the startup wipe has to run, or a
         # previous candidate's `tests/tmp/**/*.reqres` is validated against this
         # branch's schemas and fails for a reason unrelated to the diff.
-        keep_logs = " --dont-pre-clean" if reply_tests else ""
+        keep_logs = " --dont-pre-clean" if wrote_reply_logs else ""
         if module_suite_needed:
             commands.append(
                 "CFLAGS='-Werror' ./runtest-moduleapi --log-req-res --no-latency "
@@ -512,6 +622,11 @@ def _runtest_unit(path: str) -> str:
     if not _is_direct_runtest(path):
         return ""
     return path.removeprefix("tests/").removesuffix(".tcl")
+
+
+def _runtest_mode_args(unit: str) -> str:
+    """Return harness flags required for a unit to execute meaningful tests."""
+    return " --tls" if unit in _TLS_ONLY_UNITS else ""
 
 
 def _path_exists(repo_dir: str, path: str) -> bool:

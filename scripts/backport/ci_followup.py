@@ -3,13 +3,15 @@
 The follow-up is deliberately narrower than the maintainer-triggered CI-fix
 entry point. It acts only on the one bot-owned ``agent/backport/sweep/<base>``
 PR for a registered branch, only after every current-head workflow run has
-completed, and never retries the same failed job id. The shared CI-fix engine
-still owns diagnosis, verification, skeptical review, and lease-protected push.
+completed, and never retries the same logical workflow job on one head. The
+shared CI-fix engine still owns diagnosis, verification, skeptical review, and
+lease-protected push.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -45,7 +47,8 @@ logger = logging.getLogger(__name__)
 
 _MARKER_RE = re.compile(
     r"<!-- valkey-ci-agent:auto-ci-followup "
-    r"head=(?P<head>[0-9a-f]{40}) run=(?P<run>\d+) job=(?P<job>\d+) -->"
+    r"head=(?P<head>[0-9a-f]{40}) run=(?P<run>\d+) job=(?P<job>\d+)"
+    r"(?: key=(?P<key>[0-9a-f]{64}))? -->"
 )
 # A run can conclude "cancelled" (a manual stop, or a concurrency cancel) and
 # still contain a job that genuinely failed before the cancel landed. Matching
@@ -62,6 +65,12 @@ class FollowupTarget:
     head_sha: str
     head_branch: str
     jobs: tuple[FailedJob, ...]
+
+
+@dataclass(frozen=True)
+class _HandledFailures:
+    job_ids: frozenset[int]
+    job_keys: frozenset[str]
 
 
 def find_followup_target(
@@ -98,7 +107,7 @@ def find_followup_target(
         return None, rejection
 
     head_sha = str(getattr(pr.head, "sha", "") or "")
-    handled = _handled_job_ids(pr, head_sha, bot_login)
+    handled = _handled_failures(pr, head_sha, bot_login)
     repo = gh.get_repo(repo_entry.repo)
     # Filter by head SHA server-side: a long-lived sweep branch accumulates a
     # run per push, and paging its whole history every hour just to discard
@@ -125,13 +134,14 @@ def find_followup_target(
             job
             for job in failed_jobs_for_run(gh, repo_entry.repo, int(run.id))
             if job.id
-            and job.id not in handled
+            and job.id not in handled.job_ids
+            and _job_key(run, job.name) not in handled.job_keys
             and not _ignored_job(job.name, repo_entry.ci_followup_ignored_jobs)
         )
         if not failed:
             continue
-        priority = min(_job_priority(job.name) for job in failed)
-        prioritized = tuple(job for job in failed if _job_priority(job.name) == priority)
+        selected = _select_job(failed)
+        priority = _job_priority(selected.name)
         candidates.append(
             (
                 priority,
@@ -140,7 +150,7 @@ def find_followup_target(
                     run=run,
                     head_sha=head_sha,
                     head_branch=head_branch,
-                    jobs=prioritized,
+                    jobs=(selected,),
                 ),
             )
         )
@@ -177,7 +187,9 @@ def run_followup(
             "reason": reason,
         }
 
-    job_names = tuple(job.name for job in sorted(target.jobs, key=lambda job: _job_priority(job.name)))
+    selected_job = _select_job(target.jobs)
+    jobs = (selected_job,)
+    job_names = (selected_job.name,)
     request = FixRequest(
         repo_full_name=repo_entry.repo,
         pr_number=int(target.pr.number),
@@ -191,14 +203,16 @@ def run_followup(
             "in this order: " + ", ".join(job_names)
         )[:500],
     )
-    # Claim the job ids *before* the engine runs. The claim comment carries the
-    # same hidden markers as the result, so a crash, an OOM kill, or the job
+    # Claim the logical job *before* the engine runs. The claim comment carries
+    # the same hidden markers as the result, so a crash, an OOM kill, or the job
     # timeout can no longer leave the attempt unrecorded - without this, every
     # scheduled run would re-diagnose the same failure on the same head forever.
     # The claim is edited in place afterwards, so one attempt is still one
     # comment on the PR.
     claim = retry_github_call(
-        lambda: target.pr.create_issue_comment(_render_claim_comment(request, target.jobs)),
+        lambda: target.pr.create_issue_comment(
+            _render_claim_comment(request, target.run, jobs)
+        ),
         retries=3,
         description=f"claim automatic CI follow-up on #{request.pr_number}",
     )
@@ -262,9 +276,9 @@ def run_followup(
     expected_sha = outcome.commit_sha if outcome.kind is OutcomeKind.PUSHED else request.head_sha
     stale = not expected_sha or current_sha != expected_sha
     body = (
-        _render_stale_comment(request, target.jobs)
+        _render_stale_comment(request, target.run, jobs)
         if stale
-        else _render_followup_comment(outcome, request, target.jobs)
+        else _render_followup_comment(outcome, request, target.run, jobs)
     )
     retry_github_call(
         lambda: claim.edit(body),
@@ -278,7 +292,7 @@ def run_followup(
         "pr": request.pr_number,
         "head": request.head_sha,
         "run": request.run_id,
-        "jobs": [job.name for job in target.jobs],
+        "jobs": [job.name for job in jobs],
     }
     if stale:
         result["reason"] = "PR head moved during follow-up; the result was discarded"
@@ -320,14 +334,21 @@ def _validate_sweep_pr(
     return ""
 
 
-def _handled_job_ids(pr: Any, head_sha: str, bot_login: str) -> set[int]:
-    """Return the job ids already attempted for this exact head.
+def _handled_failures(
+    pr: Any,
+    head_sha: str,
+    bot_login: str,
+) -> _HandledFailures:
+    """Return exact and logical jobs already attempted for this exact head.
 
     A marker only counts when the comment is authored by the bot and the marker's
     head matches, so neither a comment quoting an older attempt nor one written
-    by anybody else can suppress a retry.
+    by anybody else can suppress a retry. Job ids preserve compatibility with
+    existing markers; logical keys also suppress the twin push/pull_request run
+    of the same workflow job, whose GitHub job ids are necessarily different.
     """
-    handled: set[int] = set()
+    job_ids: set[int] = set()
+    job_keys: set[str] = set()
     comments = retry_github_call(
         lambda: list(pr.get_issue_comments()),
         retries=2,
@@ -339,8 +360,13 @@ def _handled_job_ids(pr: Any, head_sha: str, bot_login: str) -> set[int]:
             continue
         for match in _MARKER_RE.finditer(str(getattr(comment, "body", "") or "")):
             if match.group("head") == head_sha:
-                handled.add(int(match.group("job")))
-    return handled
+                job_ids.add(int(match.group("job")))
+                if match.group("key"):
+                    job_keys.add(match.group("key"))
+    return _HandledFailures(
+        job_ids=frozenset(job_ids),
+        job_keys=frozenset(job_keys),
+    )
 
 
 def _ignored_job(name: str, patterns: Iterable[str]) -> bool:
@@ -366,16 +392,55 @@ def _job_priority(name: str) -> int:
     return 3
 
 
-def _markers(request: FixRequest, jobs: tuple[FailedJob, ...]) -> str:
-    """Render the hidden per-job claim markers read back by ``_handled_job_ids``."""
+def _select_job(jobs: Iterable[FailedJob]) -> FailedJob:
+    """Choose one deterministic failure for this automatic attempt."""
+    return min(
+        jobs,
+        key=lambda job: (
+            _job_priority(job.name),
+            int(job.id),
+            job.name.lower(),
+        ),
+    )
+
+
+def _job_key(run: Any, job_name: str) -> str:
+    """Identify one logical job across twin events for the same workflow/head."""
+    workflow_identity = ""
+    for attribute in ("workflow_id", "path", "name"):
+        value = str(getattr(run, attribute, "") or "").strip()
+        if value:
+            workflow_identity = f"{attribute}:{value}"
+            break
+    if not workflow_identity:
+        # Fail open when a partial API object exposes no workflow identity:
+        # distinct runs must not suppress one another merely because they both
+        # contain a generic job name such as "build".
+        workflow_identity = f"run:{int(getattr(run, 'id', 0) or 0)}"
+    normalized_name = " ".join(job_name.casefold().split())
+    return hashlib.sha256(
+        f"{workflow_identity}\0{normalized_name}".encode()
+    ).hexdigest()
+
+
+def _markers(
+    request: FixRequest,
+    run: Any,
+    jobs: tuple[FailedJob, ...],
+) -> str:
+    """Render hidden exact/logical claim markers read by ``_handled_failures``."""
     return "\n".join(
         f"<!-- valkey-ci-agent:auto-ci-followup head={request.head_sha} "
-        f"run={request.run_id} job={job.id} -->"
+        f"run={request.run_id} job={job.id} key={_job_key(run, job.name)} -->"
         for job in jobs
     )
 
 
-def _render_claim_comment(request: FixRequest, jobs: tuple[FailedJob, ...]) -> str:
+def _render_claim_comment(
+    request: FixRequest,
+    run: Any,
+    jobs: tuple[FailedJob, ...],
+) -> str:
     """Render the pre-attempt claim, replaced in place once the engine returns."""
     names = ", ".join(f"`{job.name}`" for job in jobs) or "the current failure"
     return (
@@ -383,11 +448,15 @@ def _render_claim_comment(request: FixRequest, jobs: tuple[FailedJob, ...]) -> s
         f"{names} at `{request.head_sha[:12]}`. This comment is replaced with "
         "the result; if it is not, the agent run itself failed and the "
         "valkey-ci-agent workflow logs have the details.\n\n"
-        + _markers(request, jobs)
+        + _markers(request, run, jobs)
     )
 
 
-def _render_stale_comment(request: FixRequest, jobs: tuple[FailedJob, ...]) -> str:
+def _render_stale_comment(
+    request: FixRequest,
+    run: Any,
+    jobs: tuple[FailedJob, ...],
+) -> str:
     """Render the outcome for an attempt whose head moved while it ran."""
     return (
         "Automatic follow-up for `"
@@ -395,21 +464,22 @@ def _render_stale_comment(request: FixRequest, jobs: tuple[FailedJob, ...]) -> s
         + "` was discarded: this PR's head moved while the fix was being "
         "verified, so nothing was pushed. CI on the new head is followed up "
         "separately.\n\n"
-        + _markers(request, jobs)
+        + _markers(request, run, jobs)
     )
 
 
 def _render_followup_comment(
     outcome: FixOutcome,
     request: FixRequest,
+    run: Any,
     jobs: tuple[FailedJob, ...],
 ) -> str:
-    """Render the engine's outcome plus the markers that retire these job ids."""
+    """Render the engine's outcome plus markers that retire this logical job."""
     return (
         "Automatic follow-up for the current backport head.\n\n"
         + render_comment(outcome)
         + "\n\n"
-        + _markers(request, jobs)
+        + _markers(request, run, jobs)
     )
 
 

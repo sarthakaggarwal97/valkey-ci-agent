@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from scripts.backport import sweep_validation
 from scripts.backport.missing_test_adaptation import MissingTestAdaptationResult
 from scripts.backport.models import BackportCandidate, ResolutionResult
@@ -411,6 +413,70 @@ def test_partial_source_repair_combines_with_native_test_adaptation(
     assert outcome.amended_commit_sha == "c" * 40
 
 
+def test_partial_source_repair_carries_unmapped_paths_outside_truncated_output(
+    monkeypatch,
+) -> None:
+    path = "src/unit/test_networking.cpp"
+    adaptation_outputs: list[str] = []
+
+    monkeypatch.setattr(
+        sweep_validation,
+        "prepare_generated_files",
+        lambda *_args, **_kwargs: ValidationOutcome(True, ""),
+    )
+    monkeypatch.setattr(
+        sweep_validation,
+        "validate_backport_branch",
+        lambda *_args, **_kwargs: (False, "source compile failed"),
+    )
+    monkeypatch.setattr(
+        sweep_validation,
+        "repair_validation_failure_with_claude",
+        lambda *_args, **_kwargs: ValidationOutcome(
+            False,
+            "tail without the machine marker",
+            partial_repair=True,
+            unmapped_test_paths=(path,),
+        ),
+    )
+    monkeypatch.setattr(
+        sweep_validation,
+        "adapt_added_tests_for_target",
+        lambda _repo, _branch, _commands, _rules, output, **_kwargs: (
+            adaptation_outputs.append(output)
+            or ValidationOutcome(
+                True,
+                "combined candidate passed",
+                amended_commit_sha="c" * 40,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        sweep_validation,
+        "changed_paths_since_base",
+        lambda *_args: ("src/networking.c", path),
+    )
+    monkeypatch.setattr(sweep_validation, "head_sha", lambda *_args: "a" * 40)
+
+    outcome = validate_branch_with_optional_repair(
+        "/repo",
+        "8.0",
+        ["make"],
+        [],
+        repair=True,
+        candidate=BackportCandidate(
+            source_pr_number=42,
+            source_pr_title="Fix networking regression",
+            source_pr_url="https://example.test/pull/42",
+            target_branch="8.0",
+        ),
+    )
+
+    assert outcome.ok is True
+    assert len(adaptation_outputs) == 1
+    assert f'{UNMAPPED_TEST_PATHS_PREFIX}["{path}"]' in adaptation_outputs[0]
+
+
 def test_failed_test_adaptation_rolls_back_retained_source_repair(
     monkeypatch,
 ) -> None:
@@ -485,14 +551,22 @@ def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> N
     added = tmp_path / "src/unit/test_networking.cpp"
     added.parent.mkdir(parents=True)
     added.write_text("TEST(Networking, Regression) {}\n", encoding="utf-8")
+    companion = tmp_path / "src/unit/custom_matchers.hpp"
+    companion.write_text("// shared C++ harness helper\n", encoding="utf-8")
+    native_added = tmp_path / "src/unit/test_quicklist.c"
+    native_added.write_text("void test_quicklist(void) {}\n", encoding="utf-8")
     _git(tmp_path, "add", ".")
     _git(tmp_path, "commit", "-q", "-m", "clean upstream test")
 
     def adapt(repo_dir, _candidate, sources, **kwargs):
         assert sources == {
-            "src/unit/test_networking.cpp": "TEST(Networking, Regression) {}\n"
+            "src/unit/custom_matchers.hpp": "// shared C++ harness helper\n",
+            "src/unit/test_networking.cpp": "TEST(Networking, Regression) {}\n",
         }
-        assert kwargs["excluded_test_paths"] == ("src/unit/test_networking.cpp",)
+        assert kwargs["excluded_test_paths"] == (
+            "src/unit/test_networking.cpp",
+            "src/unit/custom_matchers.hpp",
+        )
         Path(repo_dir, "tests/unit/networking.tcl").write_text(
             "test existing {}\ntest regression {}\n",
             encoding="utf-8",
@@ -508,6 +582,8 @@ def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> N
 
     def validate(repo_dir, *_args, **_kwargs):
         assert not Path(repo_dir, "src/unit/test_networking.cpp").exists()
+        assert not Path(repo_dir, "src/unit/custom_matchers.hpp").exists()
+        assert Path(repo_dir, "src/unit/test_quicklist.c").is_file()
         assert "test regression" in Path(
             repo_dir,
             "tests/unit/networking.tcl",
@@ -538,6 +614,8 @@ def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> N
     assert outcome.output == "branch-native test passed"
     assert outcome.amended_commit_sha == _git(tmp_path, "rev-parse", "HEAD")
     assert not added.exists()
+    assert not companion.exists()
+    assert native_added.exists()
     assert _git(tmp_path, "log", "-1", "--format=%s") == (
         "Adapt tests for target branch"
     )
@@ -547,6 +625,56 @@ def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> N
         "-1",
         "--format=%B",
     )
+
+
+def test_added_unsafe_test_harness_companion_fails_closed(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "Test")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+    native = tmp_path / "tests/unit/networking.tcl"
+    native.parent.mkdir(parents=True)
+    native.write_text("test existing {}\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "target branch")
+    base_sha = _git(tmp_path, "rev-parse", "HEAD")
+
+    unit_dir = tmp_path / "src/unit"
+    unit_dir.mkdir(parents=True)
+    added = unit_dir / "test_networking.cpp"
+    added.write_text("TEST(Networking, Regression) {}\n", encoding="utf-8")
+    companion = unit_dir / "custom_matchers.hpp"
+    companion.symlink_to("/tmp/external-test-helper")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "upstream C++ test")
+    candidate_head = _git(tmp_path, "rev-parse", "HEAD")
+
+    outcome = adapt_added_tests_for_target(
+        str(tmp_path),
+        "9.0",
+        ["make"],
+        [],
+        f'{UNMAPPED_TEST_PATHS_PREFIX}["src/unit/test_networking.cpp"]\n'
+        "new test harness is unavailable",
+        candidate=BackportCandidate(
+            source_pr_number=42,
+            source_pr_title="Fix networking regression",
+            source_pr_url="https://example.test/pull/42",
+            target_branch="9.0",
+        ),
+        language="c",
+        test_path_patterns=None,
+        base_ref=base_sha,
+        adapt_missing_tests_func=lambda *_args, **_kwargs: (
+            pytest.fail("unsafe companion must fail before adaptation")
+        ),
+    )
+
+    assert outcome.ok is False
+    assert "cannot safely inspect" in outcome.output
+    assert "src/unit/custom_matchers.hpp" in outcome.output
+    assert _git(tmp_path, "rev-parse", "HEAD") == candidate_head
+    assert added.exists()
+    assert companion.is_symlink()
 
 
 def test_replaced_test_is_restored_and_adapted_in_branch_native_format(
@@ -700,6 +828,61 @@ def test_validation_repair_cannot_delete_changed_test_coverage(
     assert _git(tmp_path, "status", "--porcelain") == ""
 
 
+def test_validation_repair_carries_unmapped_paths_without_retained_edits(
+    tmp_path: Path,
+) -> None:
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "Test")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+    unsupported_test = tmp_path / "src/unit/test_networking.cpp"
+    unsupported_test.parent.mkdir(parents=True)
+    unsupported_test.write_text(
+        "TEST(Networking, OriginalIntent) {}\n",
+        encoding="utf-8",
+    )
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "candidate")
+    candidate_head = _git(tmp_path, "rev-parse", "HEAD")
+
+    def rewrite_test(_profile, _prompt, *, cwd):
+        Path(cwd, "src/unit/test_networking.cpp").write_text(
+            "TEST(Networking, GenericRepairRewrite) {}\n",
+            encoding="utf-8",
+        )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    marker = f'{UNMAPPED_TEST_PATHS_PREFIX}["src/unit/test_networking.cpp"]'
+    validation_log = tmp_path.with_suffix(".validation.log")
+
+    def validate_after_repair(*_args, **kwargs):
+        Path(kwargs["log_path"]).write_text(marker, encoding="utf-8")
+        return False, "tail without the machine marker"
+
+    outcome = repair_validation_failure_with_claude(
+        str(tmp_path),
+        "8.0",
+        ["make"],
+        [],
+        "source compile failed",
+        run_agent_func=rewrite_test,
+        validate_func=validate_after_repair,
+        validation_log_path=str(validation_log),
+        changed_paths_func=lambda *_args: ("src/unit/test_networking.cpp",),
+        changed_paths_since_base_func=lambda *_args: (
+            "src/unit/test_networking.cpp",
+        ),
+    )
+
+    assert outcome.ok is False
+    assert outcome.partial_repair is False
+    assert outcome.unmapped_test_paths == ("src/unit/test_networking.cpp",)
+    assert _git(tmp_path, "rev-parse", "HEAD") == candidate_head
+    assert unsupported_test.read_text(encoding="utf-8") == (
+        "TEST(Networking, OriginalIntent) {}\n"
+    )
+    assert _git(tmp_path, "status", "--porcelain") == ""
+
+
 def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
     tmp_path: Path,
 ) -> None:
@@ -735,6 +918,15 @@ def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
         )
 
     marker = f'{UNMAPPED_TEST_PATHS_PREFIX}["src/unit/test_networking.cpp"]'
+    validation_log = tmp_path.with_suffix(".validation.log")
+
+    def validate_after_repair(*_args, **kwargs):
+        Path(kwargs["log_path"]).write_text(
+            f"{marker}\nunsupported test remains",
+            encoding="utf-8",
+        )
+        return False, "tail without the machine marker"
+
     outcome = repair_validation_failure_with_claude(
         str(tmp_path),
         "8.0",
@@ -742,10 +934,8 @@ def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
         [],
         "source compile failed",
         run_agent_func=repair_source,
-        validate_func=lambda *_args, **_kwargs: (
-            False,
-            f"{marker}\nunsupported test remains",
-        ),
+        validate_func=validate_after_repair,
+        validation_log_path=str(validation_log),
         changed_paths_func=lambda *_args: (
             "src/networking.c",
             "src/unit/test_networking.cpp",
@@ -758,6 +948,7 @@ def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
 
     assert outcome.ok is False
     assert outcome.partial_repair is True
+    assert outcome.unmapped_test_paths == ("src/unit/test_networking.cpp",)
     assert outcome.ai_summary == "adapted source API"
     assert outcome.amended_commit_sha == _git(tmp_path, "rev-parse", "HEAD")
     assert outcome.amended_commit_sha != candidate_head

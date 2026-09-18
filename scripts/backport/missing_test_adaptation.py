@@ -311,7 +311,7 @@ def build_test_adaptation_prompt(
 ) -> str:
     excluded = set(excluded_test_paths)
     source_sections = "\n\n".join(
-        f"### Missing upstream test file: {path}\n"
+        f"### Missing upstream test or harness file: {path}\n"
         f"```\n{content[:MAX_TEST_CONTEXT_CHARS]}\n```"
         for path, content in sorted(missing_test_sources.items())
     )
@@ -329,11 +329,12 @@ def build_test_adaptation_prompt(
         f'Source PR #{candidate.source_pr_number}: "{candidate.source_pr_title}"\n'
         f"URL: {candidate.source_pr_url}\n"
         f"Target branch: {candidate.target_branch}\n\n"
-        f"The upstream PR changed test file(s) that do not exist on this target "
-        f"branch. The cherry-pick has already kept those missing files absent. "
+        f"The upstream PR changed test or test-harness file(s) that do not exist "
+        f"on this target branch. The cherry-pick has already kept those missing "
+        f"files absent. "
         f"Your task is to decide whether equivalent coverage can be added using "
         f"the target branch's existing test format.\n\n"
-        f"Missing upstream test context:\n{source_sections}\n\n"
+        f"Missing upstream test and harness context:\n{source_sections}\n\n"
         f"Existing test files on the target branch include:\n"
         f"{existing_tests or '- (none found)'}\n\n"
         f"CRITICAL constraints:\n"

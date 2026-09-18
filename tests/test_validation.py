@@ -45,6 +45,12 @@ def test_changed_paths_since_base_uses_merge_base(tmp_path) -> None:
 def test_valkey_profile_runs_changed_tests_format_and_subsystem_checks(tmp_path) -> None:
     (tmp_path / "src").mkdir()
     (tmp_path / "src/.clang-format").write_text("BasedOnStyle: LLVM\n", encoding="utf-8")
+    workflow = tmp_path / ".github/workflows/clang-format.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "run: clang-format-18 -i **/*.c **/*.h\n",
+        encoding="utf-8",
+    )
     for path in (
         "src/rdb.c",
         "tests/integration/corrupt-dump.tcl",
@@ -92,6 +98,12 @@ def test_valkey_profile_only_clang_formats_paths_upstream_formats(tmp_path) -> N
         destination = tmp_path / path
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text("BasedOnStyle: LLVM\n", encoding="utf-8")
+    workflow = tmp_path / ".github/workflows/clang-format.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "run: clang-format-18 -i **/*.c **/*.h\n",
+        encoding="utf-8",
+    )
 
     commands = select_validation_commands(
         [],
@@ -120,6 +132,165 @@ def test_valkey_profile_skips_clang_format_when_release_has_no_style(tmp_path) -
     )
 
     assert not any(command.startswith("clang-format-18") for command in commands)
+
+
+def test_valkey_profile_skips_clang_format_when_release_has_style_but_no_ci(
+    tmp_path,
+) -> None:
+    """Valkey 8.0 carries a style file but does not enforce it in CI."""
+    source = tmp_path / "src/server.c"
+    source.parent.mkdir(parents=True)
+    source.write_text("void f(void) {}\n", encoding="utf-8")
+    (tmp_path / "src/.clang-format").write_text(
+        "BasedOnStyle: LLVM\n",
+        encoding="utf-8",
+    )
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["src/server.c"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert not any(command.startswith("clang-format-18") for command in commands)
+
+
+def test_valkey_profile_only_formats_suffixes_enforced_by_release_ci(
+    tmp_path,
+) -> None:
+    """Valkey 8.1/9.0 format C but not the C++ suffixes added in 9.1."""
+    for path in ("src/.clang-format", "src/server.c", "src/unit/test.cpp"):
+        destination = tmp_path / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("source\n", encoding="utf-8")
+    workflow = tmp_path / ".github/workflows/clang-format.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "run: clang-format-18 -i **/*.c **/*.h\n",
+        encoding="utf-8",
+    )
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["src/server.c", "src/unit/test.cpp"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    formatting = [command for command in commands if command.startswith("clang-format-18")]
+    assert formatting == ["clang-format-18 --dry-run --Werror -- src/server.c"]
+
+
+def test_valkey_profile_only_formats_candidate_line_ranges(tmp_path) -> None:
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=tmp_path,
+        check=True,
+    )
+    source = tmp_path / "src/server.c"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "void preexisting( ){ }\nvoid changed(void) { }\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "src/.clang-format").write_text(
+        "BasedOnStyle: LLVM\n",
+        encoding="utf-8",
+    )
+    workflow = tmp_path / ".github/workflows/clang-format.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        "run: clang-format-18 -i **/*.c **/*.h\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "base"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "branch", "base"], cwd=tmp_path, check=True)
+
+    source.write_text(
+        "void preexisting( ){ }\nvoid changed(int value) { }\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "src/server.c"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "candidate"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["src/server.c"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+        base_ref="base",
+    )
+
+    formatting = [command for command in commands if command.startswith("clang-format-18")]
+    assert formatting == ["clang-format-18 --dry-run --Werror --lines=2:2 -- src/server.c"]
+
+
+def test_valkey_profile_runs_tls_test_in_tls_mode_for_both_validation_legs(
+    tmp_path,
+) -> None:
+    """tests/unit/tls.tcl otherwise passes while skipping its entire body."""
+    test_path = tmp_path / "tests/unit/tls.tcl"
+    test_path.parent.mkdir(parents=True)
+    test_path.write_text(
+        'start_server {tags {"tls"}} { if {$::tls} { test body } }\n',
+        encoding="utf-8",
+    )
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["tests/unit/tls.tcl"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert "./runtest --single unit/tls --clients 1 --tls" in commands
+    reply = [command for command in commands if "--log-req-res" in command]
+    assert len(reply) == 1
+    assert "--single unit/tls" in reply[0]
+    assert reply[0].endswith("--force-resp3 --tls")
+
+
+def test_valkey_profile_preserves_reply_logs_when_tls_and_plain_tests_change(
+    tmp_path,
+) -> None:
+    for path in ("tests/unit/tls.tcl", "tests/unit/type/string.tcl"):
+        destination = tmp_path / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("test body\n", encoding="utf-8")
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["tests/unit/tls.tcl", "tests/unit/type/string.tcl"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    reply = [command for command in commands if "--log-req-res" in command]
+    assert len(reply) == 2
+    assert "--single unit/type/string" in reply[0]
+    assert "--dont-pre-clean" not in reply[0]
+    assert "--single unit/tls" in reply[1]
+    assert "--dont-pre-clean" in reply[1]
+    assert reply[1].endswith("--force-resp3 --tls")
 
 
 def test_valkey_profile_runs_a_smoke_set_for_harness_changes(tmp_path) -> None:
