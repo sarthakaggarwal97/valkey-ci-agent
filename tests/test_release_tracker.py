@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -718,34 +719,67 @@ _REAL_JOBS = (
 )
 
 
-def test_stage_times_read_each_stage_from_its_own_job() -> None:
+def _jobs_api(*jobs, latest=None):
+    """A run.jobs() that honours GitHub's filter: `all` spans every attempt."""
+
+    def api(_filter=None):
+        assert _filter in {"all", "latest", None}, _filter
+        return list(latest if (_filter != "all" and latest is not None) else jobs)
+
+    return api
+
+
+def test_publish_evidence_reads_each_stage_from_its_own_job() -> None:
     # One run spans qualification, the approval wait and publication, so the
     # run's end (22:49) belongs to none of the first two: qualification
     # finished at 22:37 and approval released the publish job at 22:48.
-    run = SimpleNamespace(id=1, jobs=lambda: _REAL_JOBS)
-    qualified_at, approved_at = tracker_mod._stage_times(run)
+    run = SimpleNamespace(id=1, jobs=_jobs_api(*_REAL_JOBS))
+    qualified_at, approved_at, published = tracker_mod._publish_evidence(run)
     assert qualified_at == datetime(2026, 9, 16, 22, 37, tzinfo=timezone.utc)
     assert approved_at == datetime(2026, 9, 16, 22, 48, tzinfo=timezone.utc)
+    assert published is True
 
 
-def test_stage_times_ignore_skipped_children_and_degrade_silently() -> None:
+def test_publish_evidence_ignores_skipped_children_and_degrades_silently() -> None:
     # A skipped child reports nonsensical ordering, and a renamed job must
-    # cost a timestamp rather than produce a wrong one or raise.
+    # cost a timestamp and the proof rather than produce a wrong one or raise.
     renamed = (_job("Qualify something else / Summary", started=37, completed=44),)
-    assert tracker_mod._stage_times(SimpleNamespace(id=1, jobs=lambda: renamed)) == (None, None)
+    empty = tracker_mod._PublishEvidence()
+    assert tracker_mod._publish_evidence(SimpleNamespace(id=1, jobs=_jobs_api(*renamed))) == empty
 
-    def boom():
+    def boom(_filter=None):
         raise RuntimeError("jobs unavailable")
 
-    assert tracker_mod._stage_times(SimpleNamespace(id=1, jobs=boom)) == (None, None)
-    assert tracker_mod._stage_times(None) == (None, None)
+    assert tracker_mod._publish_evidence(SimpleNamespace(id=1, jobs=boom)) == empty
+    assert tracker_mod._publish_evidence(None) == empty
+
+
+def test_publish_evidence_spans_every_attempt_of_a_rerun() -> None:
+    # A rerun keeps one run id; the default (latest) listing shows only the
+    # newest attempt, in which qualification failed and publish never ran.
+    # Attempt 1 is the one that shipped, and it is only visible under `all`.
+    attempt_2 = (
+        _job(
+            "Qualify exact candidate / Qualify x86 archives / Build package",
+            conclusion="failure",
+            started=50,
+            completed=52,
+        ),
+        _job("Publish approved release", conclusion="skipped", started=0, completed=0),
+    )
+    run = SimpleNamespace(id=1, jobs=_jobs_api(*_REAL_JOBS, *attempt_2, latest=attempt_2))
+    evidence = tracker_mod._publish_evidence(run)
+    assert evidence.published is True
+    assert evidence.approved_at == datetime(2026, 9, 16, 22, 48, tzinfo=timezone.utc)
+    # the failed attempt's qualification does not move the finish time
+    assert evidence.qualified_at == datetime(2026, 9, 16, 22, 37, tzinfo=timezone.utc)
 
 
 def test_passed_rows_state_each_stage_own_completion_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     shipped = _titled(_TITLE)
-    shipped.jobs = lambda: _REAL_JOBS
+    shipped.jobs = _jobs_api(*_REAL_JOBS)
     body = _shipped_body(monkeypatch, _publish_workflow(shipped))
     qualification = next(line for line in body.splitlines() if "| Qualification |" in line)
     approval = next(line for line in body.splitlines() if "| Release approval |" in line)
@@ -760,15 +794,72 @@ def test_a_rerun_of_the_shipped_run_does_not_erase_its_history(
 ) -> None:
     # A rerun keeps ONE run id and the listing shows only the newest
     # attempt, so `status=success` stops matching the moment someone reruns
-    # a shipped publication. The rows are anchored on the release instead:
-    # publication is gated on qualification and on the protected approval,
-    # so a controller-published release proves both.
+    # a shipped publication. The proof is the protected publish job having
+    # succeeded in some attempt, which `jobs?filter=all` still reports.
     rerun = _titled(_TITLE, status="in_progress", conclusion=None, run_id=555)
+    rerun.jobs = _jobs_api(*_REAL_JOBS)
     body = _shipped_body(monkeypatch, _publish_workflow(rerun))
     assert "No Publish run" not in body
     assert "Qualification has not passed" not in body
     assert "img.shields.io/badge/-Passed-1a7f37" in body
     assert "latest attempt in_progress" in body
+    assert "· approved 2026-09-16 22:48 UTC" in body
+
+
+def test_a_shipping_run_that_failed_after_publishing_still_reads_as_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # onboard-backports failing AFTER the release exists makes the run's
+    # conclusion `failure`, so `status=success` never finds it. Its publish
+    # job succeeded, and that is what created the release.
+    shipped = _titled(_TITLE, conclusion="failure", run_id=808)
+    shipped.jobs = _jobs_api(*_REAL_JOBS, _job("Onboard first-GA backport automation", conclusion="failure"))
+    body = _shipped_body(monkeypatch, _publish_workflow(shipped))
+    for stage in ("| Qualification |", "| Release approval |"):
+        row = next(line for line in body.splitlines() if stage in line)
+        assert "latest attempt failure" in row, row
+        assert "-Unverified-" not in row, row
+    assert "img.shields.io/badge/-Passed-1a7f37" in body
+    assert "img.shields.io/badge/-Approved-1a7f37" in body
+
+
+def test_a_failed_run_beside_a_release_is_flagged_not_claimed_green(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The run for this exact candidate failed in qualification and its publish
+    # job never ran, yet a release exists: someone created it by hand. The
+    # run's conclusion alone cannot tell this from onboard-backports failing
+    # after a real publication; the publish job can.
+    failed = _titled(_TITLE, conclusion="failure", run_id=909)
+    failed.jobs = _jobs_api(
+        _job(
+            "Qualify exact candidate / Qualify x86 archives / Build package",
+            conclusion="failure",
+            started=34,
+            completed=36,
+        ),
+        _job("Publish approved release", conclusion="skipped"),
+    )
+    body = _shipped_body(monkeypatch, _publish_workflow(failed))
+    for stage in ("| Qualification |", "| Release approval |"):
+        row = next(line for line in body.splitlines() if stage in line)
+        assert "img.shields.io/badge/-Unverified-9a6700" in row, row
+        assert "[Publish run 909](" in row and "did not publish it" in row, row
+        assert "-Passed-" not in row and "-Approved-" not in row, row
+    assert "investigate an out-of-band release" in body
+
+
+def test_jobs_are_not_read_while_nothing_would_show_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A running run with no release renders no stamp and needs no proof, so
+    # the extra jobs call is skipped on that pass.
+    running = _titled(_TITLE, status="in_progress", conclusion=None, run_id=1111)
+    running.head_sha = "c" * 40
+    running.jobs = MagicMock()
+    _shipped_body(monkeypatch, _publish_workflow(running), release=None)
+    running.jobs.assert_not_called()
+    running.cancel.assert_not_called()
 
 
 def test_a_release_with_no_publish_run_is_flagged_not_claimed_green(

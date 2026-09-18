@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from github import Auth, Github
 from github.GithubException import GithubException
@@ -42,6 +42,18 @@ _REFRESHED_RE = re.compile(r"Status last changed \d{4}-\d{2}-\d{2} \d{2}:\d{2} U
 # jobs surface as "<name> / <child>".
 _QUALIFY_JOB = "Qualify exact candidate"
 _PUBLISH_JOB = "Publish approved release"
+
+
+class _PublishEvidence(NamedTuple):
+    """What a Publish run's own jobs say about the stages it contains."""
+
+    qualified_at: Any | None = None
+    approved_at: Any | None = None
+    # The protected publish job succeeded in SOME attempt of this run. A run's
+    # listed conclusion cannot say that: onboard-backports failing after the
+    # release exists makes the run a failure, and a rerun replaces it with the
+    # newest attempt's. Only this job creates the release.
+    published: bool = False
 _ROOT = Path(__file__).resolve().parents[2]
 _PHASES = (
     "Prepare",
@@ -142,7 +154,7 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
             candidate_sha="",
             candidate_ci=None,
             publish_run=None,
-            stage_times=(None, None),
+            evidence=_PublishEvidence(),
             release=None,
             production_run=None,
             agent_repo=agent_repo,
@@ -397,10 +409,22 @@ def _sync_one(
     # that never qualified. Gated on the release existing, which is also
     # what makes this unreachable from the dispatch decision (that requires
     # `release is None`), so no stale run can ever suppress a re-dispatch.
+    # When no run is listed as a success (the shipping run's conclusion is
+    # `failure` once onboard-backports fails after publishing, and a rerun
+    # relists it under its newest attempt), fall back to the newest match at
+    # any head and let its jobs prove or refuse publication in the render.
     if release is not None and publish_title:
         shipped = _latest_successful_run(publish_workflow, publish_title)
-        if shipped is not None:
-            publish_run = shipped
+        publish_run = shipped or publish_run or any_publish_run
+
+    # The jobs are one more API call per pass; ask only when a row will show
+    # what they say: a stamp on a passed or approval-waiting stage, or proof
+    # of publication once the release exists.
+    evidence = _PublishEvidence()
+    if publish_run is not None and (
+        release is not None or getattr(publish_run, "status", "") in {"completed", "waiting", "pending"}
+    ):
+        evidence = _publish_evidence(publish_run)
 
     production_run = _find_production_run(automation, tracker.tag) if release else None
     body, summary = _render_status(
@@ -411,7 +435,7 @@ def _sync_one(
         candidate_sha=candidate_sha,
         candidate_ci=candidate_ci,
         publish_run=publish_run,
-        stage_times=_stage_times(publish_run),
+        evidence=evidence,
         release=release,
         production_run=production_run,
         agent_repo=agent_repo,
@@ -430,7 +454,7 @@ def _render_status(
     candidate_sha: str,
     candidate_ci: CandidateCI | None,
     publish_run: Any | None,
-    stage_times: tuple[Any | None, Any | None] = (None, None),
+    evidence: _PublishEvidence = _PublishEvidence(),
     release: Any | None,
     production_run: Any | None,
     agent_repo: str,
@@ -548,7 +572,7 @@ def _render_status(
         f"[Publish run {publish_run.id}]({publish_run.html_url})" if publish_run is not None else ""
     )
     qualification_passed = False
-    qualified_at, approved_at = stage_times
+    qualified_at, approved_at, published = evidence
     qualified_stamp = _stamp(qualified_at, "finished")
     approved_stamp = _stamp(approved_at, "approved")
     if dispatched:
@@ -604,23 +628,15 @@ def _render_status(
     if release is not None and not qualification_passed:
         # A controller-published release PROVES both stages: publication is
         # gated on qualification and on the protected `release` approval, and
-        # this row is history once the release exists. Anchoring on the
-        # release rather than on finding the run means no lookup failure can
-        # make a shipped release read as one that never qualified: a rerun
-        # replaces the run's listed conclusion with the newest attempt's,
-        # history ages past any scan window, `run-name` can be edited, and a
-        # run can be cancelled after it created the release.
-        if publish_run is None:
-            # No run found for this exact candidate. Do not claim the stages
-            # passed: this is also how a hand-created, out-of-band release
-            # looks, and that needs a human, not a green badge.
-            qualification_status = _status_badge("Unverified", "9a6700")
-            qualification_evidence = "Released, but no matching Publish run found"
-            qualification_action = "Confirm the publication run, or investigate an out-of-band release."
-            approval_status = _status_badge("Unverified", "9a6700")
-            approval_evidence = qualification_evidence
-            approval_action = qualification_action
-        else:
+        # this row is history once the release exists. The proof is the
+        # protected publish job succeeding in some attempt of the found run,
+        # never the run's listed conclusion: onboard-backports failing after
+        # the release exists makes the run a failure, a rerun replaces the
+        # conclusion with the newest attempt's, and a run can be cancelled
+        # after it created the release. Anchoring on the job rather than on
+        # the conclusion also separates that history from a genuinely failed
+        # run beside a hand-created release.
+        if published:
             latest = getattr(publish_run, "conclusion", None) or getattr(publish_run, "status", "unknown")
             note = f"{publish_link} · latest attempt {latest}"
             qualification_status = _status_badge("Passed", "1a7f37")
@@ -629,6 +645,22 @@ def _render_status(
             approval_status = _status_badge("Approved", "1a7f37")
             approval_evidence = f"{note}{approved_stamp}"
             approval_action = "Complete"
+        elif publish_run is None or getattr(publish_run, "status", "") == "completed":
+            # Nothing found that published this release: no run for the exact
+            # candidate, or a finished run whose publish job never succeeded.
+            # This is also how a hand-created, out-of-band release looks, and
+            # that needs a human, not a green badge. A live run that has not
+            # published is current state and keeps its own rows above.
+            qualification_status = _status_badge("Unverified", "9a6700")
+            qualification_evidence = (
+                "Released, but no matching Publish run found"
+                if publish_run is None
+                else f"Released, but {publish_link} did not publish it"
+            )
+            qualification_action = "Confirm the publication run, or investigate an out-of-band release."
+            approval_status = _status_badge("Unverified", "9a6700")
+            approval_evidence = qualification_evidence
+            approval_action = qualification_action
 
     release_status = _status_badge("Not published", "57606a")
     release_evidence = "No GitHub release"
@@ -984,8 +1016,8 @@ def _find_release(
     return release
 
 
-def _stage_times(run: Any) -> tuple[Any | None, Any | None]:
-    """(qualification finished, approval released) for a Publish run.
+def _publish_evidence(run: Any) -> _PublishEvidence:
+    """Read each stage's real moment, and whether publication happened, off the jobs.
 
     One Publish run spans qualification, the approval wait and publication,
     so the run's own end time belongs to none of the first two: on the
@@ -993,35 +1025,43 @@ def _stage_times(run: Any) -> tuple[Any | None, Any | None]:
     publish job at 22:48, and the run ended at 22:49. The job records carry
     the real moments, so ask for them rather than inventing one from the run.
 
-    Job names mirror release-publish.yml; a rename here degrades to no
-    timestamp rather than a wrong one, which is the whole point.
+    All attempts are read, so a rerun that failed early cannot hide the
+    attempt that shipped. Job names mirror release-publish.yml; a rename here
+    degrades to no timestamp and no proof rather than a wrong one, which is
+    the whole point.
     """
     if run is None:
-        return (None, None)
+        return _PublishEvidence()
     try:
         jobs = list(
             retry_github_call(
-                lambda: run.jobs(),
+                lambda: run.jobs(_filter="all"),
                 retries=2,
                 description=f"list jobs of publish run {getattr(run, 'id', '?')}",
             )
         )
     except Exception:  # noqa: BLE001 - a dashboard never fails on decoration
-        return (None, None)
+        return _PublishEvidence()
 
     qualified_at = None
     approved_at = None
+    published = False
     for job in jobs:
         name = getattr(job, "name", "") or ""
-        if name.startswith(f"{_QUALIFY_JOB} / ") and getattr(job, "conclusion", None) == "success":
+        if getattr(job, "conclusion", None) != "success":
+            continue
+        if name.startswith(f"{_QUALIFY_JOB} / "):
             # the last qualification job to finish IS qualification finishing
             done = getattr(job, "completed_at", None)
             if done is not None and (qualified_at is None or done > qualified_at):
                 qualified_at = done
         elif name == _PUBLISH_JOB:
             # the protected job starts the moment the approval is granted
-            approved_at = getattr(job, "started_at", None)
-    return (qualified_at, approved_at)
+            published = True
+            started = getattr(job, "started_at", None)
+            if started is not None and (approved_at is None or started > approved_at):
+                approved_at = started
+    return _PublishEvidence(qualified_at, approved_at, published)
 
 
 def _stamp(moment: Any, label: str) -> str:
