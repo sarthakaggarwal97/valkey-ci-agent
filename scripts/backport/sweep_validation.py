@@ -11,7 +11,7 @@ import tempfile
 from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Any, Callable, Union
+from typing import Any, Callable, Iterable, Union
 
 from scripts.ai.runtime import run_agent
 from scripts.backport.git_commands import (
@@ -335,6 +335,14 @@ def repair_validation_failure_with_claude(
         path: _read_text_file(Path(repo_dir, path))
         for path in changed_paths
     }
+    preexisting = _snapshot_paths(
+        repo_dir,
+        (
+            path
+            for path in changed_paths_func(repo_dir)
+            if path not in changed_paths
+        ),
+    )
 
     owns_log_path = validation_log_path is None
     log_path = validation_log_path or create_validation_log_path()
@@ -369,7 +377,11 @@ def repair_validation_failure_with_claude(
             )
             return ValidationOutcome(False, detail[:500] or validation_output)
 
-        edited_paths = changed_paths_func(repo_dir)
+        edited_paths = _paths_edited_since(
+            repo_dir,
+            changed_paths_func(repo_dir),
+            preexisting,
+        )
         removed_test_paths = tuple(
             path
             for path in protected_test_paths
@@ -828,6 +840,7 @@ def prepare_generated_files(
                 "generated-file rule declares output(s) not tracked on the "
                 "target branch: " + ", ".join(untracked_outputs),
             )
+        preexisting = _snapshot_paths(repo_dir, worktree_changed_paths(repo_dir))
         ok, output = run_test_commands(repo_dir, [rule.command])
         if not ok:
             _discard_generator_edits(repo_dir, run_git)
@@ -836,7 +849,9 @@ def prepare_generated_files(
                 f"generated-file command failed: {output or rule.command}",
             )
 
-        edited = tuple(worktree_changed_paths(repo_dir))
+        edited = _paths_edited_since(
+            repo_dir, worktree_changed_paths(repo_dir), preexisting
+        )
         unexpected = tuple(path for path in edited if path not in set(rule.outputs))
         if unexpected:
             _discard_generator_edits(repo_dir, run_git)
@@ -858,7 +873,9 @@ def prepare_generated_files(
                 False,
                 f"generated-file convergence command failed: {output or rule.command}",
             )
-        second_edit = tuple(worktree_changed_paths(repo_dir))
+        second_edit = _paths_edited_since(
+            repo_dir, worktree_changed_paths(repo_dir), preexisting
+        )
         if second_edit:
             _discard_generator_edits(repo_dir, run_git)
             return ValidationOutcome(
@@ -893,6 +910,37 @@ def _is_tracked(repo_dir: str, path: str) -> bool:
         return True
     except subprocess.CalledProcessError:
         return False
+
+
+def _snapshot_paths(repo_dir: str, paths: Iterable[str]) -> dict[str, bytes | None]:
+    """Record the bytes of paths that are already dirty before an edit step.
+
+    Validation builds can leave untracked, non-ignored artifacts in the shared
+    worktree that survive ``git reset --hard`` into later candidates; Valkey's
+    ``-DLOG_REQ_RES`` build writes ``src/commands_with_reply_schema.def``.
+    """
+    return {path: _read_bytes(Path(repo_dir, path)) for path in paths}
+
+
+def _paths_edited_since(
+    repo_dir: str,
+    paths: Iterable[str],
+    baseline: dict[str, bytes | None],
+) -> tuple[str, ...]:
+    """Return ``paths`` minus baseline entries whose bytes are unchanged."""
+    return tuple(
+        path
+        for path in paths
+        if path not in baseline
+        or _read_bytes(Path(repo_dir, path)) != baseline[path]
+    )
+
+
+def _read_bytes(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except OSError:
+        return None
 
 
 def _read_text_file(path: Path) -> str:

@@ -105,6 +105,59 @@ def test_generated_command_fails_closed_on_unexpected_path(tmp_path: Path) -> No
     assert _git(tmp_path, "status", "--porcelain") == ""
 
 
+_UNIT_TEST_HEADER_RULE = GeneratedFileRule(
+    paths=("src/unit/*.c",),
+    command="python3 generate.py",
+    outputs=("src/unit/test_files.h",),
+)
+
+
+def test_generated_files_ignore_untracked_artifact_from_earlier_build(
+    tmp_path: Path,
+) -> None:
+    _init_repo(tmp_path)
+    leftover = tmp_path / "src/commands_with_reply_schema.def"
+    leftover.write_text("earlier LOG_REQ_RES build\n", encoding="utf-8")
+
+    outcome = prepare_generated_files(
+        str(tmp_path),
+        ("src/unit/test_example.c",),
+        [_UNIT_TEST_HEADER_RULE],
+    )
+
+    assert outcome.ok is True
+    assert outcome.generated_paths == ("src/unit/test_files.h",)
+    assert _git(tmp_path, "ls-files", "src/commands_with_reply_schema.def") == ""
+    assert _git(tmp_path, "status", "--porcelain") == (
+        "?? src/commands_with_reply_schema.def"
+    )
+
+
+def test_generated_files_reject_edit_to_preexisting_untracked_artifact(
+    tmp_path: Path,
+) -> None:
+    _init_repo(tmp_path)
+    leftover = tmp_path / "src/commands_with_reply_schema.def"
+    leftover.write_text("earlier LOG_REQ_RES build\n", encoding="utf-8")
+    (tmp_path / "generate.py").write_text(
+        "from pathlib import Path\n"
+        "Path('src/unit/test_files.h').write_text('generated\\n')\n"
+        "Path('src/commands_with_reply_schema.def').write_text('changed\\n')\n",
+        encoding="utf-8",
+    )
+    _git(tmp_path, "commit", "-q", "-am", "generator touches the artifact")
+
+    outcome = prepare_generated_files(
+        str(tmp_path),
+        ("src/unit/test_example.c",),
+        [_UNIT_TEST_HEADER_RULE],
+    )
+
+    assert outcome.ok is False
+    assert "unexpected path(s): src/commands_with_reply_schema.def" in outcome.output
+    assert (tmp_path / "src/unit/test_files.h").read_text() == "stale\n"
+
+
 def test_generated_rule_rejects_partially_untracked_outputs(tmp_path: Path) -> None:
     """One tracked output and one missing one is a misconfiguration, not a skip.
 
@@ -966,3 +1019,96 @@ def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
         "-1",
         "--format=%B",
     )
+
+
+def _init_whitespace_candidate(repo: Path) -> Path:
+    """Mirror #4673 on 9.2: a whitespace-only diff failure after a LOG_REQ_RES build."""
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    test_path = repo / "tests/integration/rdb.tcl"
+    test_path.parent.mkdir(parents=True)
+    test_path.write_text("test deflake {\n        \n}\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "candidate")
+    (repo / "src").mkdir()
+    (repo / "src/commands_with_reply_schema.def").write_text(
+        "earlier LOG_REQ_RES build\n",
+        encoding="utf-8",
+    )
+    return test_path
+
+
+def test_validation_repair_ignores_untracked_artifact_from_earlier_build(
+    tmp_path: Path,
+) -> None:
+    test_path = _init_whitespace_candidate(tmp_path)
+    candidate_head = _git(tmp_path, "rev-parse", "HEAD")
+
+    def strip_whitespace(_profile, _prompt, *, cwd):
+        Path(cwd, "tests/integration/rdb.tcl").write_text(
+            "test deflake {\n\n}\n",
+            encoding="utf-8",
+        )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    outcome = repair_validation_failure_with_claude(
+        str(tmp_path),
+        "9.2",
+        ["git diff --check"],
+        [],
+        "tests/integration/rdb.tcl:2: trailing whitespace.",
+        run_agent_func=strip_whitespace,
+        validate_func=lambda *_args, **_kwargs: (True, "ok"),
+        changed_paths_since_base_func=lambda *_args: ("tests/integration/rdb.tcl",),
+    )
+
+    assert outcome.ok is True
+    assert [resolution.path for resolution in outcome.resolutions] == [
+        "tests/integration/rdb.tcl"
+    ]
+    assert _git(tmp_path, "rev-parse", "HEAD^") == candidate_head
+    assert _git(tmp_path, "show", "--name-only", "--format=", "HEAD") == (
+        "tests/integration/rdb.tcl"
+    )
+    assert test_path.read_text(encoding="utf-8") == "test deflake {\n\n}\n"
+    assert _git(tmp_path, "status", "--porcelain", "--untracked-files=all") == (
+        "?? src/commands_with_reply_schema.def"
+    )
+
+
+def test_validation_repair_rejects_edit_to_preexisting_untracked_artifact(
+    tmp_path: Path,
+) -> None:
+    test_path = _init_whitespace_candidate(tmp_path)
+    candidate_head = _git(tmp_path, "rev-parse", "HEAD")
+
+    def edit_artifact(_profile, _prompt, *, cwd):
+        Path(cwd, "tests/integration/rdb.tcl").write_text(
+            "test deflake {\n\n}\n",
+            encoding="utf-8",
+        )
+        Path(cwd, "src/commands_with_reply_schema.def").write_text(
+            "edited by the agent\n",
+            encoding="utf-8",
+        )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    outcome = repair_validation_failure_with_claude(
+        str(tmp_path),
+        "9.2",
+        ["git diff --check"],
+        [],
+        "tests/integration/rdb.tcl:2: trailing whitespace.",
+        run_agent_func=edit_artifact,
+        validate_func=lambda *_args, **_kwargs: pytest.fail("must not revalidate"),
+        changed_paths_since_base_func=lambda *_args: ("tests/integration/rdb.tcl",),
+    )
+
+    assert outcome.ok is False
+    assert outcome.output == (
+        "Claude Code validation repair edited files outside the backport diff: "
+        "src/commands_with_reply_schema.def"
+    )
+    assert _git(tmp_path, "rev-parse", "HEAD") == candidate_head
+    assert test_path.read_text(encoding="utf-8") == "test deflake {\n        \n}\n"
