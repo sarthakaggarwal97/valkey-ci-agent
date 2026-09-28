@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -908,3 +909,205 @@ def test_refresh_issue_body_migrates_legacy_dashboard_idempotently() -> None:
     issue.edit.reset_mock()
     tracker_mod._refresh_issue_body(issue, TRACKER, "valkey-io/valkey-ci-agent")
     issue.edit.assert_not_called()
+
+
+# --- A shipped release is history, and its rows must survive controller main moving ---
+
+_TITLE = f"Publish release on {TRACKER.branch} @ {SHA}"
+_PUBLISHED_AT = datetime(2026, 9, 16, 22, 49, tzinfo=timezone.utc)
+
+
+def _titled(title: str, *, status: str = "completed", conclusion: str | None = "success", run_id: int = 123):
+    run = _run(status=status, conclusion=conclusion)
+    run.id = run_id
+    run.display_title = title
+    run.head_sha = "b" * 40  # an older controller head, as after any merge
+    run.cancel = MagicMock(return_value=True)
+    return run
+
+
+def _publish_workflow(*history):
+    """A workflow whose get_runs honours the head filter, newest first."""
+    workflow = MagicMock()
+    workflow.name = "Publish Release"
+    workflow.create_dispatch.return_value = True
+    workflow.get_runs.side_effect = lambda head_sha="": [
+        run for run in history if not head_sha or getattr(run, "head_sha", "") == head_sha
+    ]
+    return workflow
+
+
+def _release(*, author_type: str = "Bot", login: str = "valkeyrie-ops[bot]") -> SimpleNamespace:
+    return SimpleNamespace(
+        tag_name=TRACKER.tag,
+        html_url=f"https://example/releases/{TRACKER.tag}",
+        draft=False,
+        prerelease=False,
+        published_at=_PUBLISHED_AT,
+        author=SimpleNamespace(type=author_type, login=login),
+    )
+
+
+def _shipped_body(monkeypatch: pytest.MonkeyPatch, workflow, *, release=..., production_run=None) -> str:
+    """Render a tracker whose candidate merged, driving the real run lookups."""
+    issue = _issue()
+    agent = MagicMock()
+    agent.default_branch = "main"
+    agent.get_workflow_run.return_value = _run()
+    pr = SimpleNamespace(
+        merged=True,
+        merge_commit_sha=SHA,
+        number=7,
+        html_url="https://example/pull/7",
+        state="closed",
+        draft=False,
+    )
+    monkeypatch.setattr(tracker_mod, "_find_prep_pr", lambda *a: pr)
+    monkeypatch.setattr(tracker_mod, "_find_release", lambda *a: _release() if release is ... else release)
+    # controller main has moved on since publication
+    monkeypatch.setattr(tracker_mod, "_branch_head", MagicMock(side_effect=[SHA, "c" * 40]))
+    monkeypatch.setattr(tracker_mod, "evaluate_candidate_ci", lambda *a: _candidate_ci())
+    monkeypatch.setattr(tracker_mod, "_find_production_run", lambda *a: production_run)
+
+    tracker_mod._sync_one(
+        issue,
+        TRACKER,
+        MagicMock(),
+        agent,
+        MagicMock(),
+        workflow,
+        agent_repo="valkey-io/valkey-ci-agent",
+        policy=POLICY,
+        dispatch=True,
+    )
+    return issue.create_comment.call_args.args[0]
+
+
+def _row(body: str, stage: str) -> str:
+    return next(line for line in body.splitlines() if f"| {stage} |" in line)
+
+
+def test_shipped_release_keeps_qualification_passed_after_controller_main_moves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The head-filtered lookup exists so a stale run cannot suppress a
+    re-dispatch, but controller main advances after every merge into this
+    repository. Applying that filter to a shipped release made the 9.2.0-rc1
+    tracker read 'Qualification: Not started / No Publish run' beside
+    'Publication: Published'."""
+    # A newer run for a DIFFERENT candidate sits in front of ours, so a lookup
+    # that forgot to match the title would name the wrong run.
+    other = _titled("Publish release on 9.2 @ " + "d" * 40, run_id=999)
+    body = _shipped_body(monkeypatch, _publish_workflow(other, _titled(_TITLE, run_id=800)))
+    for stage, badge in (("Qualification", "Passed"), ("Release approval", "Approved")):
+        row = _row(body, stage)
+        assert f"img.shields.io/badge/-{badge}-1a7f37" in row, row
+        assert "Publish run 800" in row, row
+    assert "Publish run 999" not in body
+    assert "No Publish run" not in body
+    assert "Qualification has not passed" not in body
+
+
+@pytest.mark.parametrize(
+    "shipping_run",
+    [
+        _titled(_TITLE, conclusion="failure", run_id=901),
+        _titled(_TITLE, status="in_progress", conclusion=None, run_id=903),
+    ],
+    ids=["onboard-backports-failed-after-publishing", "still-onboarding-backports"],
+)
+def test_release_proves_the_stages_whatever_the_run_conclusion_says(
+    monkeypatch: pytest.MonkeyPatch, shipping_run
+) -> None:
+    # The run's listed conclusion cannot say whether it published: the
+    # onboard-backports job failing after the release exists makes the whole
+    # run a failure. The release itself is the proof, and the run stays
+    # linked as the place to read what happened.
+    body = _shipped_body(monkeypatch, _publish_workflow(shipping_run))
+    assert "-Passed-1a7f37" in _row(body, "Qualification")
+    assert "-Approved-1a7f37" in _row(body, "Release approval")
+    assert f"Publish run {shipping_run.id}" in _row(body, "Qualification")
+    assert "-Failed-" not in body
+    assert "The Publish workflow failed" not in body
+    shipping_run.cancel.assert_not_called()
+
+
+def test_a_release_with_no_publish_run_is_anchored_on_the_release(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Run history ages past any scan window; the release does not.
+    body = _shipped_body(monkeypatch, _publish_workflow())
+    row = _row(body, "Qualification")
+    assert "-Passed-1a7f37" in row, row
+    assert f"GitHub release {TRACKER.tag}" in row, row
+    assert "Wait for exact-candidate qualification" not in body
+
+
+def test_a_release_made_by_a_person_is_flagged_not_claimed_green(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The controller publishes through its app. A person creating the release
+    # bypassed qualification and the protected approval, and that needs a
+    # human, not a green badge.
+    body = _shipped_body(monkeypatch, _publish_workflow(), release=_release(author_type="User", login="roshkhatri"))
+    for stage in ("Qualification", "Release approval"):
+        row = _row(body, stage)
+        assert "-Unverified-9a6700" in row, row
+        assert "Released by roshkhatri, not by the controller" in row, row
+        assert "-Passed-" not in row and "-Approved-" not in row, row
+    assert "-Published-1a7f37" in _row(body, "Publication")
+
+
+def test_an_unshipped_stale_success_still_triggers_the_redispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A completed run from an older controller head is only adopted once the
+    # release exists. Before that it is not proof of anything current, so the
+    # dispatch decision ignores it, whatever its conclusion.
+    stale = _titled(_TITLE, run_id=700)
+    workflow = _publish_workflow(stale)
+    body = _shipped_body(monkeypatch, workflow, release=None)
+    workflow.create_dispatch.assert_called_once()
+    assert "Publish workflow dispatched" in body
+    assert "Publish run 700" not in body
+
+
+def test_a_publish_run_is_never_cancelled_once_the_release_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # After publishing, the run may still be onboarding first-GA backports.
+    # Cancelling it would interrupt that for nothing: there is no re-dispatch
+    # to make room for, since dispatch requires no release.
+    live = _titled(_TITLE, status="in_progress", conclusion=None, run_id=555)
+    workflow = _publish_workflow(live)
+    _shipped_body(monkeypatch, workflow)
+    live.cancel.assert_not_called()
+    workflow.create_dispatch.assert_not_called()
+
+
+def test_an_unshipped_stale_active_run_is_still_cancelled_and_replaced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    live = _titled(_TITLE, status="waiting", conclusion=None, run_id=556)
+    workflow = _publish_workflow(live)
+    _shipped_body(monkeypatch, workflow, release=None)
+    live.cancel.assert_called_once()
+    workflow.create_dispatch.assert_called_once()
+
+
+def test_passed_rows_state_when_they_finished(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Every row is recomputed on each pass, so without a time a reader cannot
+    # tell a stage that finished minutes ago from one that finished days ago.
+    # Times come off the live objects, never off stored tracker state.
+    production = _run()
+    production.updated_at = datetime(2026, 9, 17, 3, 15, tzinfo=timezone.utc)
+    body = _shipped_body(monkeypatch, _publish_workflow(), production_run=production)
+    assert "published 2026-09-16 22:49 UTC" in _row(body, "Publication")
+    assert "finished 2026-09-17 03:15 UTC" in _row(body, "Production")
+
+
+def test_stamp_is_silent_for_anything_that_is_not_a_moment() -> None:
+    assert tracker_mod._stamp(_PUBLISHED_AT, "published") == " · published 2026-09-16 22:49 UTC"
+    assert tracker_mod._stamp(None, "published") == ""
+    assert tracker_mod._stamp("2026-09-16T22:49:00Z", "published") == ""
+    assert tracker_mod._stamp(MagicMock(), "published") == ""
