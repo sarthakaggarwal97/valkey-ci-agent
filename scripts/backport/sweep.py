@@ -23,11 +23,13 @@ from github.GithubException import GithubException
 from scripts.backport.candidate_apply import apply_candidate
 from scripts.backport.git_commands import head_sha
 from scripts.backport.git_commands import run_git as _run_git
+from scripts.backport.mark_done import prs_present_in_history
 from scripts.backport.models import CandidateOutcome, ResolutionResult
 from scripts.backport.source_plan import SourceChangeError, SourceChangePlan, prepare_source_change
 from scripts.backport.sweep_git import (
     branch_has_changes,
     clone_target_branch,
+    has_changes_since,
     list_already_applied,
     list_applied_prs_on_branch,
     push_backport_branch,
@@ -36,6 +38,8 @@ from scripts.backport.sweep_git import (
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
+    DETAIL_ALREADY_ON_TARGET,
+    DETAIL_EMPTY_ON_TARGET,
     DETAIL_RESOLVED_BY_AI,
     BranchSweepResult,
     CandidateResult,
@@ -475,10 +479,22 @@ def _prepare_branch(
                 target_branch,
                 backport_branch,
             )
+            # The board lags a merged sweep until the next reconcile, so the
+            # release branch history, not the board, decides what is missing.
+            on_target = prs_present_in_history(
+                tmpdir,
+                f"origin/{target_branch}",
+                {
+                    candidate.source_pr_number: candidate.merged_at
+                    for candidate in candidates
+                    if candidate.merged_at
+                    and str(candidate.source_pr_number) not in already_applied
+                },
+            )
             source_plans, plan_errors = _prepare_source_plans(
                 tmpdir,
                 candidates,
-                already_applied,
+                already_applied | {str(number) for number in on_target},
                 git_env,
             )
 
@@ -524,6 +540,23 @@ def _prepare_branch(
                         source_pr_title=candidate.source_pr_title,
                         outcome="skipped-existing",
                         detail=DETAIL_ALREADY_ON_SWEEP_BRANCH,
+                    )
+                )
+                continue
+
+            if candidate.source_pr_number in on_target:
+                logger.info(
+                    "BACKPORT SKIPPED: PR #%d | %s | already present on %s",
+                    candidate.source_pr_number,
+                    compact_log_value(candidate.source_pr_title),
+                    target_branch,
+                )
+                result.results.append(
+                    CandidateResult(
+                        source_pr_number=candidate.source_pr_number,
+                        source_pr_title=candidate.source_pr_title,
+                        outcome="skipped-existing",
+                        detail=DETAIL_ALREADY_ON_TARGET,
                     )
                 )
                 continue
@@ -587,6 +620,26 @@ def _prepare_branch(
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
                     target_branch,
+                )
+                continue
+
+            # A repair can undo the whole cherry-pick (e.g. re-stripping the
+            # whitespace a resolution reintroduced). Keeping that pair would
+            # publish two commits with no net change.
+            if not has_changes_since(tmpdir, pre_candidate_head):
+                _run_git(tmpdir, "reset", "--hard", pre_candidate_head)
+                candidate_result.outcome = "skipped-existing"
+                candidate_result.detail = DETAIL_EMPTY_ON_TARGET
+                candidate_result.skip_reason = (
+                    "Validation repair reverted the entire cherry-pick, so it "
+                    "adds no net change to this branch."
+                )
+                candidate_result.resolved_commit_sha = None
+                logger.warning(
+                    "BACKPORT NOT APPLIED: PR #%d | %s | no net change after "
+                    "validation; removed candidate and continuing",
+                    candidate.source_pr_number,
+                    compact_log_value(candidate.source_pr_title),
                 )
                 continue
 

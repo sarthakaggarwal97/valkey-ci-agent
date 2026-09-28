@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 import subprocess
@@ -33,6 +34,11 @@ from scripts.backport.sweep_git import (
     safe_tmp_component,
     sync_target_branch_to_source,
     worktree_changed_paths,
+)
+from scripts.backport.sweep_models import (
+    DETAIL_ALREADY_ON_TARGET,
+    DETAIL_EMPTY_ON_TARGET,
+    DETAIL_RESOLVED_BY_AI,
 )
 from scripts.backport.sweep_prs import upsert_pr
 from scripts.backport.sweep_reporting import (
@@ -1729,6 +1735,7 @@ def _mock_phase_boundary(monkeypatch, target_branch="8.1"):
             "pre-candidate-head" if branch == target_branch else None
         ),
     )
+    monkeypatch.setattr(backport_sweep, "has_changes_since", lambda *_a, **_k: True)
 
 
 def test_existing_sweep_pr_log_highlights_number_title_and_branch(caplog):
@@ -2023,6 +2030,7 @@ def _green_only_process_branch(
     max_applied=1,
     max_conflicting_files=100,
     head_shas=None,
+    changes_since=None,
 ):
     """Run _process_branch with the common green-only mocks wired up.
 
@@ -2031,6 +2039,8 @@ def _green_only_process_branch(
     (result, pushed, upserts, reset_count, reset_refs).
     """
     _mock_phase_boundary(monkeypatch)
+    if changes_since is not None:
+        monkeypatch.setattr(backport_sweep, "has_changes_since", changes_since)
     monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_a, **_k: None)
     monkeypatch.setattr(
@@ -2189,6 +2199,178 @@ def test_process_branch_forwards_repository_conflict_limit(monkeypatch):
     )
 
     assert limits == [7]
+
+
+def test_process_branch_skips_candidates_already_on_release_branch(monkeypatch):
+    """The release branch history, not a lagging board, decides what is missing."""
+    candidates = [
+        dataclasses.replace(_candidate(10), merged_at="2026-09-25T17:21:22Z"),
+        dataclasses.replace(_candidate(11), merged_at="2026-09-26T00:00:00Z"),
+        _candidate(12),  # no merge time: history cannot vouch for it
+    ]
+    history_queries: list[tuple[str, dict[int, str]]] = []
+
+    def fake_history(_repo_dir, rev, pr_merged_at):
+        history_queries.append((rev, dict(pr_merged_at)))
+        return {10}
+
+    monkeypatch.setattr(backport_sweep, "prs_present_in_history", fake_history)
+    attempted: list[int] = []
+
+    def apply_fn(_repo_dir, candidate, *_args, **_kwargs):
+        attempted.append(candidate.source_pr_number)
+        return _applied(_repo_dir, candidate)
+
+    result, pushed, _upserts, resets, _refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=candidates,
+        apply_fn=apply_fn,
+        validate_fn=lambda *_a, **_k: ValidationOutcome(True, ""),
+        max_applied=1,
+    )
+    assert history_queries == [
+        (
+            "origin/8.1",
+            {10: "2026-09-25T17:21:22Z", 11: "2026-09-26T00:00:00Z"},
+        )
+    ]
+    # #10 is skipped without a cherry-pick and does not consume the cap.
+    assert attempted == [11]
+    assert [(r.source_pr_number, r.outcome, r.detail) for r in result.results] == [
+        (10, "skipped-existing", DETAIL_ALREADY_ON_TARGET),
+        (11, "applied", ""),
+    ]
+    assert resets == 0
+    assert pushed
+
+
+def test_prepare_source_plans_skips_prs_already_present(monkeypatch):
+    planned: list[int] = []
+    _mock_phase_boundary(monkeypatch)
+
+    def fake_prepare(_repo, number, merge_sha, commits, **_kwargs):
+        planned.append(number)
+        return SourceChangePlan(
+            strategy="merge",
+            commits=(merge_sha,),
+            merge_commit_sha=merge_sha,
+            source_commits=tuple(commits),
+            aggregate_patch_id="test-patch",
+        )
+
+    monkeypatch.setattr(backport_sweep, "prepare_source_change", fake_prepare)
+    plans, errors = backport_sweep._prepare_source_plans(
+        "/unused",
+        [_candidate(10), _candidate(11), _candidate(12)],
+        {"10", "12"},
+        {},
+    )
+
+    assert planned == [11]
+    assert set(plans) == {11}
+    assert errors == {}
+
+
+def test_process_branch_drops_candidate_whose_repair_reverts_it(monkeypatch):
+    """A cherry-pick plus a repair that undoes it must not reach the sweep PR."""
+    repaired = ResolutionResult(
+        path="tests/integration/rdb.tcl",
+        resolved_content="clean\n",
+        resolution_summary="validation failure repaired by Claude Code",
+        reviewer_diff="strip trailing whitespace",
+    )
+    compared: list[str] = []
+
+    def changes_since(_repo_dir, base_ref):
+        compared.append(base_ref)
+        # First candidate nets to nothing; the second is a real change.
+        return len(compared) > 1
+
+    attempted: list[int] = []
+
+    def apply_fn(_repo_dir, candidate, *_args, **_kwargs):
+        attempted.append(candidate.source_pr_number)
+        return CandidateResult(
+            candidate.source_pr_number,
+            candidate.source_pr_title,
+            "applied",
+            DETAIL_RESOLVED_BY_AI,
+            resolved_by_ai=True,
+            resolved_commit_sha="cherrypicksha",
+        )
+
+    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(10), _candidate(11)],
+        apply_fn=apply_fn,
+        validate_fn=lambda *_a, **_k: ValidationOutcome(
+            True, "ok", resolutions=(repaired,)
+        ),
+        max_applied=1,
+        changes_since=changes_since,
+    )
+
+    dropped, kept = result.results
+    assert compared == ["pre-candidate-head", "pre-candidate-head"]
+    assert resets == 1
+    assert reset_refs == ["pre-candidate-head"]
+    assert dropped.outcome == "skipped-existing"
+    assert dropped.detail == DETAIL_EMPTY_ON_TARGET
+    assert "reverted the entire cherry-pick" in dropped.skip_reason
+    assert dropped.resolved_commit_sha is None
+    # The dropped candidate does not use the only slot.
+    assert attempted == [10, 11]
+    assert kept.outcome == "applied"
+    assert pushed and len(upserts) == 1
+
+
+def test_process_branch_does_not_publish_when_only_candidate_nets_to_nothing(monkeypatch):
+    result, pushed, upserts, resets, _refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(10)],
+        apply_fn=_applied,
+        validate_fn=lambda *_a, **_k: ValidationOutcome(True, "ok"),
+        changes_since=lambda *_a, **_k: False,
+    )
+
+    assert result.results[0].outcome == "skipped-existing"
+    assert resets == 1
+    assert pushed == []
+    assert upserts == []
+    assert result.pr_url == ""
+
+
+def test_has_changes_since_detects_net_empty_commit_pair(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+    }
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", *args], cwd=repo, check=True, env=env,
+            capture_output=True, text=True,
+        ).stdout.strip()
+
+    git("init", "-q")
+    (repo / "rdb.tcl").write_text("a\n\nb\n")
+    git("add", "rdb.tcl")
+    git("commit", "-qm", "base")
+    base = git("rev-parse", "HEAD")
+
+    (repo / "rdb.tcl").write_text("a\n    \nb\n")
+    git("commit", "-qam", "Deflake (#4673)")
+    assert sweep_git.has_changes_since(str(repo), base) is True
+
+    (repo / "rdb.tcl").write_text("a\n\nb\n")
+    git("commit", "-qam", "Repair backport validation failure")
+    assert sweep_git.has_changes_since(str(repo), base) is False
+
+    with pytest.raises(RuntimeError, match="could not compare"):
+        sweep_git.has_changes_since(str(repo), "no-such-ref")
 
 
 def test_process_branch_stops_after_unrestored_worktree(monkeypatch):
