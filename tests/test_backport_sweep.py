@@ -1040,6 +1040,47 @@ def test_upsert_pr_labels_ai_resolved_conflicts():
     mock_pr.add_to_labels.assert_called_once_with("backport", "ai-resolved-conflicts")
 
 
+@pytest.mark.parametrize(
+    ("outcome", "detail"),
+    [
+        ("skipped-existing", DETAIL_EMPTY_ON_TARGET),
+        ("skipped-validation-failed", "compiler error"),
+        ("skipped-conflict", "unresolved"),
+    ],
+)
+def test_upsert_pr_ignores_ai_resolution_that_left_no_commit(outcome, detail):
+    """An AI-resolved candidate that was dropped must not label the sweep PR."""
+    mock_gh = MagicMock()
+    mock_repo = MagicMock()
+    mock_gh.get_repo.return_value = mock_repo
+    mock_pr = MagicMock()
+    mock_pr.number = 777
+    mock_pr.html_url = "https://github.com/valkey-io/valkey/pull/777"
+    mock_repo.create_pull.return_value = mock_pr
+    result = BranchSweepResult(
+        target_branch="8.1",
+        candidates_found=2,
+        results=[
+            CandidateResult(10, "Dropped after AI resolution", outcome, detail, resolved_by_ai=True),
+            CandidateResult(11, "Clean cherry-pick", "applied", ""),
+        ],
+    )
+
+    upsert_pr(
+        mock_gh,
+        "valkey-io/valkey",
+        "valkey-io/valkey",
+        "8.1",
+        "agent/backport/sweep/8.1",
+        result,
+        existing_pr=None,
+        backport_label="backport",
+        llm_conflict_label="ai-resolved-conflicts",
+    )
+
+    mock_pr.add_to_labels.assert_called_once_with("backport")
+
+
 def test_upsert_pr_labels_ai_resolved_from_branch_applied():
     """The conflict label is applied even when the AI-resolved candidate is
     already on the branch (a later top-up run that re-resolves nothing)."""
