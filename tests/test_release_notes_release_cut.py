@@ -293,7 +293,7 @@ class TestTrailingPrRegex:
         ("* x by @a (#44)(#45)", {45}),
     ])
     def test_credited_tolerates_trailing_punctuation(self, line, expected) -> None:
-        assert rc._credited_pr_numbers(line) == expected
+        assert rc.rn.credited_pr_numbers(line) == expected
 
     def test_lowercase_security_section_local_pr_ref_is_credited(self) -> None:
         # Bloom 1.0 contains this real shape: GitHub PR numbers are unique in a
@@ -306,7 +306,7 @@ class TestTrailingPrRegex:
             "### Bug Fixes\n"
             "* Fix a thing by @a (#44)\n"
         )
-        assert rc._credited_pr_numbers(notes) == {44, 82}
+        assert rc.rn.credited_pr_numbers(notes) == {44, 82}
 
 
 class TestUnresolvedBackportsSection:
@@ -1792,7 +1792,7 @@ class TestDedupAgainstDestination:
             "* fix a thing by @a (#44)\n"
             "* and another by @b (#51)\n"
         )
-        assert rc._credited_pr_numbers(text) == {44, 51}
+        assert rc.rn.credited_pr_numbers(text) == {44, 51}
 
     def test_credited_ignores_non_bullet_and_inline_refs(self) -> None:
         # A "(#N)" in prose or a heading is not a credit; only a trailing ref on
@@ -1803,7 +1803,7 @@ class TestDedupAgainstDestination:
             "* real credit by @a (#44)\n"
             "* a bullet with a mid-line (#7) ref but no trailing one\n"
         )
-        assert rc._credited_pr_numbers(text) == {44}
+        assert rc.rn.credited_pr_numbers(text) == {44}
 
     def test_drop_removes_only_overlapping_bullets(self) -> None:
         grouped = {
@@ -1892,6 +1892,84 @@ class TestDedupAgainstDestination:
         assert not any("(#44)" in line for line in all_lines)
         assert captured["already"] == [44]
 
+    def test_alignment_results_for_a_dropped_pr_are_not_reported(self, clone, monkeypatch) -> None:
+        # Alignment ran before the already-credited drop. A carry or a
+        # contradiction for the dropped #44 must neither appear in the PR body
+        # nor hold the cut over a note it no longer publishes.
+        from scripts.release_notes import pipeline as pipeline_mod
+        from scripts.release_notes import render as render_mod
+        from scripts.release_notes.models import CategorizedBullet
+        from scripts.release_notes.pipeline import (
+            AlignedNote,
+            DeclinedAlignment,
+            RegenResult,
+        )
+
+        bl = [CategorizedBullet(pr_number=44, author="a", category="Bug Fixes", text="fix")]
+        grouped = render_mod.group_bullets(
+            bl, categories=projects.VALKEY_PROFILE.categories
+        )
+        monkeypatch.setattr(
+            pipeline_mod, "regenerate_unreleased",
+            lambda *a, **k: RegenResult(
+                base_tag="unstable", grouped=grouped,
+                included=1, bullet_count=1, skipped=(), triage=(), had_prs=True,
+                prior_lines_read=("9.0",),
+                aligned=(AlignedNote(
+                    pr_number=44, release_line="9.0", release_heading="Valkey 9.0.1",
+                    text="Fix a crash", generated_text="fix",
+                ),),
+                declined_alignments=(DeclinedAlignment(
+                    pr_number=44, release_line="8.1", release_heading="Valkey 8.1.2",
+                    reason="authors disagree", needs_review=True,
+                ),),
+                consistent_alignments=(44,),
+            ),
+        )
+        # Destination line already credits #44 (carried from rc1).
+        dest_notes = (
+            "Valkey 9.1 release notes\n========================\n\n"
+            "Valkey 9.1.0-rc1  -  Released 2026-06-01\n"
+            "---------------------------------------\n\n"
+            "Upgrade urgency LOW: ...\n\n### Bug Fixes\n* fix by @a (#44)\n"
+        )
+        captured = {}
+
+        # Drive cut() with git/GitHub/promote stubbed; capture the notes meta.
+        from scripts.release_notes import release_cut as rcmod
+        monkeypatch.setattr(rcmod, "resolve_branch_plan", lambda *a, **k: self._GA_PLAN)
+        monkeypatch.setattr(rcmod, "_remote_branch_exists", lambda d, b: b == "9.1")
+        monkeypatch.setattr(rcmod, "run_git", lambda *a, **k: None)
+        monkeypatch.setattr(
+            rcmod,
+            "git_output",
+            lambda _repo, *args, **k: (
+                "https://github.com/valkey-io/valkey.git"
+                if args == ("remote", "get-url", "origin")
+                else "a" * 40
+            ),
+        )
+        monkeypatch.setattr(rcmod, "_read",
+                            lambda p: dest_notes if p.endswith("00-RELEASENOTES")
+                            else open(os.path.join(clone, "src", "version.h")).read())
+        monkeypatch.setattr(rcmod, "promote_and_bump", lambda *a, **k: ("NEWNOTES", "NEWVERSION"))
+        monkeypatch.setattr(rcmod, "_print_dry_run",
+                            lambda *a, **k: captured.setdefault("meta", a[4]))
+
+        rcmod.cut(
+            object(), repo_full_name="valkey-io/valkey", source_clone_dir=clone,
+            profile=projects.VALKEY_PROFILE, version="9.1.0",
+            stage="ga", urgency="LOW", date="2026-06-29", tag_glob=None,
+            base_ref=None, contrib_base_ref=None, security_fixes=None,
+            token="t", git_env={}, dry_run=True,
+        )
+        regen = captured["meta"].regen
+        assert regen.aligned == ()
+        assert regen.declined_alignments == ()
+        assert regen.consistent_alignments == ()
+        reasons = rc._hold_reasons(self._GA_PLAN, captured["meta"])
+        assert "release lines contradict each other about a note" not in reasons
+
 
 
 
@@ -1908,14 +1986,9 @@ class TestSecurityOnlyCutNotEmpty:
 
     @staticmethod
     def _regen(bullet_count=0, had_prs=False, triage=()):
-        from types import SimpleNamespace
-        return SimpleNamespace(
-            bullet_count=bullet_count, had_prs=had_prs, triage=triage,
-            included=0, skipped=(), duplicate_prs=(), uncertain=(),
-            ai_included=(), guardrail_included=(), ai_excluded=(),
-            label_excluded=(), impact_review=(),
-            unresolved=(), unresolved_backports=(), unresolved_prs=(),
-            unresolved_cherry_picks=(), collided=(), reverted=(), base_tag="9.0.0",
+        return pipeline_mod.RegenResult(
+            base_tag="9.0.0", grouped={}, included=0, bullet_count=bullet_count,
+            skipped=(), triage=triage, had_prs=had_prs,
         )
 
     def _meta(self, *, security_fixes=None, already_credited=(), noted_bullet_count=0,
@@ -1977,13 +2050,9 @@ class TestNamedCveHold:
 
     @staticmethod
     def _regen(impacts):
-        from types import SimpleNamespace
-        return SimpleNamespace(
-            bullet_count=1, had_prs=True, triage=(), included=1, skipped=(),
-            duplicate_prs=(), uncertain=(), ai_included=(), guardrail_included=(),
-            ai_excluded=(), label_excluded=(), impact_review=impacts,
-            unresolved=(), unresolved_backports=(), unresolved_prs=(),
-            unresolved_cherry_picks=(), collided=(), reverted=(), base_tag="7.2.13",
+        return pipeline_mod.RegenResult(
+            base_tag="7.2.13", grouped={}, included=1, bullet_count=1,
+            skipped=(), triage=(), had_prs=True, impact_review=impacts,
         )
 
     def _meta(self, urgency, security_fixes, impacts):
@@ -2383,13 +2452,9 @@ class TestUncategorizedNotes:
 
     @staticmethod
     def _meta(uncategorized):
-        from types import SimpleNamespace
-        regen = SimpleNamespace(
-            bullet_count=3, had_prs=True, triage=(), included=1, skipped=(),
-            duplicate_prs=(), uncertain=(), ai_included=(), guardrail_included=(),
-            ai_excluded=(), label_excluded=(), impact_review=(), unresolved=(),
-            unresolved_prs=(), unresolved_backports=(), unresolved_cherry_picks=(),
-            collided=(), reverted=(), base_tag="9.1.2",
+        regen = pipeline_mod.RegenResult(
+            base_tag="9.1.2", grouped={}, included=1, bullet_count=3,
+            skipped=(), triage=(), had_prs=True,
         )
         return rc._NotesMeta(
             regen=regen, already_credited=(), noted_bullet_count=3, urgency="LOW",
@@ -2412,3 +2477,246 @@ class TestUncategorizedNotes:
 
     def test_section_is_silent_when_everything_was_categorized(self) -> None:
         assert rc._uncategorized_section(()) == ""
+class TestWordingAlignmentSections:
+    """The PR body must show every wording carry, decline, and unread line."""
+
+    _PLAN = BranchPlan("ga", "8.1", "8.1")
+
+    @staticmethod
+    def _regen(**overrides):
+        base = dict(
+            base_tag="8.1.8", grouped={}, included=1, bullet_count=1,
+            skipped=(), triage=(), had_prs=True,
+        )
+        base.update(overrides)
+        return pipeline_mod.RegenResult(**base)
+
+    def _meta(self, **overrides):
+        return rc._NotesMeta(
+            regen=self._regen(**overrides), already_credited=(),
+            noted_bullet_count=1, urgency="LOW", security_fixes=None,
+            security_noted_prs=(), baseline_unanchored=False,
+        )
+
+    @staticmethod
+    def _aligned(**overrides):
+        base = dict(
+            pr_number=42, release_line="9.0", release_heading="Valkey 9.0.1",
+            text="Fix a memory leak in ZDIFF", generated_text="Fix leak",
+        )
+        base.update(overrides)
+        return pipeline_mod.AlignedNote(**base)
+
+    @staticmethod
+    def _declined(**overrides):
+        base = dict(
+            pr_number=42, release_line="9.0", release_heading="Valkey 9.0.1",
+            reason="the published wording is not in the canonical bullet form",
+        )
+        base.update(overrides)
+        return pipeline_mod.DeclinedAlignment(**base)
+
+    def test_no_section_when_no_line_was_consulted(self) -> None:
+        # "We never looked" must not render as "we looked and found nothing":
+        # only one of the two promises cross-branch consistency.
+        assert rc._wording_alignment_section(self._regen()) == ""
+
+    def test_consulted_lines_reported_even_with_no_carry(self) -> None:
+        section = rc._wording_alignment_section(
+            self._regen(prior_lines_read=("9.0", "8.0"))
+        )
+        assert "Release lines consulted: `9.0`, `8.0`" in section
+        assert "No note needed its wording replaced." in section
+
+    def test_carried_wording_table_shows_both_wordings(self) -> None:
+        section = rc._wording_alignment_section(
+            self._regen(prior_lines_read=("9.0",), aligned=(self._aligned(),))
+        )
+        assert "| PR | Wording from | Carried wording | This cut generated |" in section
+        assert "#42" in section
+        assert "Fix a memory leak in ZDIFF" in section
+        # The generated text is what the model's own uncertainty flag referred to.
+        assert "Fix leak" in section
+
+    def test_unreadable_line_is_not_flagged_as_a_defect(self) -> None:
+        # A line older than the changelog file is the normal case; a ⚠️ here would
+        # make every 7.2 cut look broken.
+        section = rc._wording_alignment_section(
+            self._regen(prior_lines_failed=(("7.2", "path does not exist"),))
+        )
+        assert "Could not read the published notes of `7.2`" in section
+        assert "⚠️" not in section
+
+    def test_already_consistent_notes_counted(self) -> None:
+        section = rc._wording_alignment_section(
+            self._regen(prior_lines_read=("9.0",), consistent_alignments=(42, 43))
+        )
+        assert "2 generated note(s) already match" in section
+        assert "#42, #43" in section
+
+    def test_alignment_narrowed_to_the_notes_that_render(self) -> None:
+        # group_bullets drops a reserved-category bullet, so the note never
+        # renders; reporting a carry for it would describe text nobody can see.
+        from scripts.release_notes import render as render_mod
+        from scripts.release_notes.models import CategorizedBullet
+
+        grouped = render_mod.group_bullets(
+            [
+                CategorizedBullet(pr_number=40, author="a", category="Security Fixes", text="x y"),
+                CategorizedBullet(pr_number=42, author="a", category="Bug Fixes", text="x y"),
+            ],
+            categories=projects.VALKEY_PROFILE.categories,
+        )
+        regen = rc._alignment_for_noted_prs(
+            self._regen(
+                aligned=(self._aligned(pr_number=40), self._aligned(pr_number=42)),
+                declined_alignments=(self._declined(pr_number=40, needs_review=True),),
+                consistent_alignments=(40, 42),
+            ),
+            rc._grouped_pr_numbers(grouped),
+        )
+        assert [n.pr_number for n in regen.aligned] == [42]
+        assert regen.declined_alignments == ()
+        assert regen.consistent_alignments == (42,)
+
+    def test_alignment_reports_render_after_every_actionable_section(self) -> None:
+        # Both alignment tables grow with every shared PR; clamp_body truncates
+        # from the end, so they must sit after the sections a reviewer acts on.
+        # A contradiction still surfaces first, in the hold banner.
+        from scripts.release_notes.models import UnresolvedCommit
+
+        meta = self._meta(
+            prior_lines_read=("9.0",), aligned=(self._aligned(),),
+            declined_alignments=(self._declined(pr_number=43, needs_review=True),),
+            unresolved=(UnresolvedCommit(sha="abcdef1234567890", subject="pick"),),
+        )
+        body = rc._build_pr_body(
+            self._PLAN, "8.1.9", meta, profile=projects.VALKEY_PROFILE,
+        )
+        unresolved = body.index("### ⚠️ Commits with no resolvable PR")
+        assert unresolved < body.index("### ⚠️ Release lines disagree about a note")
+        assert unresolved < body.index("### Wording carried from other release lines")
+        assert body.index("release lines contradict each other about a note") < unresolved
+
+    def test_declined_section_is_quiet_when_nothing_declined(self) -> None:
+        assert rc._declined_alignment_section(()) == ""
+
+    def test_informational_decline_has_no_warning_heading(self) -> None:
+        section = rc._declined_alignment_section((self._declined(),))
+        assert "### Prior wording not reused" in section
+        assert "⚠️" not in section
+
+    def test_contradiction_gets_a_warning_heading(self) -> None:
+        section = rc._declined_alignment_section((
+            self._declined(needs_review=True, reason="`9.0` credits @carol but this cut resolved @alice"),
+        ))
+        assert "### ⚠️ Release lines disagree about a note" in section
+        assert "⚠️ #42" in section
+
+    def test_contradiction_holds_the_cut(self) -> None:
+        meta = self._meta(declined_alignments=(self._declined(needs_review=True),))
+        reasons = rc._hold_reasons(self._PLAN, meta)
+        assert "release lines contradict each other about a note" in reasons
+
+    def test_informational_decline_does_not_hold_the_cut(self) -> None:
+        # Hold fatigue is a real failure mode: the line publishes the wording it
+        # generated, which is exactly what it would have done anyway.
+        meta = self._meta(declined_alignments=(self._declined(),))
+        assert rc._hold_reasons(self._PLAN, meta) == []
+
+    def test_carrying_wording_never_holds_the_cut(self) -> None:
+        meta = self._meta(prior_lines_read=("9.0",), aligned=(self._aligned(),))
+        assert rc._hold_reasons(self._PLAN, meta) == []
+
+    def test_unread_line_never_holds_the_cut(self) -> None:
+        meta = self._meta(prior_lines_failed=(("7.2", "path does not exist"),))
+        assert rc._hold_reasons(self._PLAN, meta) == []
+
+    def test_sections_appear_in_the_pr_body(self) -> None:
+        meta = self._meta(
+            prior_lines_read=("9.0",),
+            aligned=(self._aligned(),),
+            declined_alignments=(self._declined(pr_number=43),),
+        )
+        body = rc._build_pr_body(
+            self._PLAN, "8.1.9", meta, profile=projects.VALKEY_PROFILE
+        )
+        assert "### Wording carried from other release lines" in body
+        assert "### Prior wording not reused" in body
+
+    def test_hold_survives_force_ready_only_as_a_banner_change(self) -> None:
+        # A wording contradiction is not a security signal, so --force-ready may
+        # open the PR ready; the body must still say what was flagged.
+        meta = self._meta(declined_alignments=(self._declined(needs_review=True),))
+        body = rc._build_pr_body(
+            self._PLAN, "8.1.9", meta, force_ready=True, profile=projects.VALKEY_PROFILE
+        )
+        assert "release lines contradict each other about a note" in body
+
+
+class TestAlignPriorWordingThreading:
+    """The opt-out must reach the pipeline, not be swallowed by the cut.
+
+    ``--no-align-prior-wording`` exists so a maintainer can word a line
+    independently when a sibling line's published text is wrong for this line.
+    If :func:`cut` accepted the flag and dropped it, the escape hatch would look
+    like it worked while the carry still happened, so the wiring is asserted
+    rather than assumed.
+    """
+
+    def _forwarded(self, monkeypatch, clone, **cut_kwargs):
+        from unittest.mock import MagicMock
+
+        from scripts.release_notes import render as render_mod
+        from scripts.release_notes.models import CategorizedBullet
+        from scripts.release_notes.pipeline import RegenResult
+
+        TestCutOrchestration()._setup(monkeypatch, clone, line_exists={"9.1": True})
+        grouped = render_mod.group_bullets(
+            [CategorizedBullet(pr_number=40, author="a", category="Bug Fixes", text="fix")],
+            categories=projects.VALKEY_PROFILE.categories,
+        )
+        captured = {}
+
+        def _spy(repo, clone_dir, **kwargs):
+            captured.update(kwargs)
+            return RegenResult(
+                base_tag="9.0.0", grouped=grouped, included=1, bullet_count=1,
+                skipped=(), triage=(), had_prs=True,
+            )
+
+        monkeypatch.setattr(pipeline_mod, "regenerate_unreleased", _spy)
+        repo = MagicMock()
+        repo.get_pulls.return_value = []
+        repo.create_pull.return_value = MagicMock(number=1, html_url="https://x/1")
+        monkeypatch.setattr(rc.publish_mod, "retry_github_call", lambda op, **k: op())
+
+        rc.cut(
+            repo, repo_full_name="valkey-io/valkey", source_clone_dir=clone,
+            profile=projects.VALKEY_PROFILE, version="9.1.0", stage="rc1",
+            urgency="LOW", date="2026-06-25", tag_glob=None, base_ref=None,
+            contrib_base_ref=None, security_fixes=None, token="t", git_env={},
+            dry_run=False, **cut_kwargs,
+        )
+        return captured
+
+    def test_opt_out_forwarded_to_the_pipeline(self, monkeypatch, clone) -> None:
+        captured = self._forwarded(monkeypatch, clone, align_prior_wording=False)
+        assert captured["align_prior_wording"] is False
+
+    def test_opt_in_forwarded_to_the_pipeline(self, monkeypatch, clone) -> None:
+        captured = self._forwarded(monkeypatch, clone, align_prior_wording=True)
+        assert captured["align_prior_wording"] is True
+
+    def test_alignment_is_on_by_default(self, monkeypatch, clone) -> None:
+        # Consistency across release lines is the desired behaviour, so a caller
+        # that does not mention the flag must still get the carry.
+        captured = self._forwarded(monkeypatch, clone)
+        assert captured["align_prior_wording"] is True
+
+    def test_profile_reaches_the_pipeline_with_it(self, monkeypatch, clone) -> None:
+        # The prior-note index needs the profile's notes_file and display_name to
+        # find and parse sibling changelogs; a cut that forwarded the flag but not
+        # the profile would index nothing and silently carry no wording.
+        captured = self._forwarded(monkeypatch, clone)
+        assert captured["profile"] is projects.VALKEY_PROFILE

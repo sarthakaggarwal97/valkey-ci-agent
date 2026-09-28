@@ -70,7 +70,20 @@ _PATCH_URGENCY_SENTENCES = {
     ),
 }
 
-_BULLET_RE = re.compile(r"^\s*[*-]\s+\S")
+# A rendered note bullet ends with "(#N)" naming the PR it credits. The
+# bullet-line guard keeps a "(#N)" in prose or a heading from being read as a
+# credit. Shared by the cut's already-credited dedup and by the cross-line
+# wording index (see :mod:`scripts.release_notes.prior_notes`); one grammar so
+# the two cannot drift apart.
+BULLET_LINE_RE = re.compile(r"^\s*[*-]\s+\S")
+# Trailing PR group: "(#N)" or a hand-written "(#N, #M)" at end of line,
+# tolerating trailing punctuation/closing parens. Generated notes always emit a
+# single canonical ref, while existing module changelogs sometimes credit
+# several PRs in one trailing group.
+TRAILING_PR_GROUP_RE = re.compile(
+    r"\((?P<refs>#\d+(?:\s*,\s*#\d+)*)\)[\s.,:;)]*$"
+)
+PR_NUMBER_RE = re.compile(r"#(\d+)")
 _VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 # rcN, N starting at 1 with no leading zeros: "rc1", "rc12" but not "rc0"/"rc01".
 _RC_STAGE_RE = re.compile(r"^rc([1-9]\d*)$")
@@ -124,6 +137,28 @@ def unrecognized_categories(
         for category, bullets in notes.items()
         if bullets and category not in known
     ]
+
+
+def trailing_pr_numbers(line: str) -> "set[int]":
+    """Return every PR number in a line's final ``(#N[, #M...])`` group."""
+    match = TRAILING_PR_GROUP_RE.search(line)
+    if match is None:
+        return set()
+    return {int(number) for number in PR_NUMBER_RE.findall(match.group("refs"))}
+
+
+def credited_pr_numbers(notes_text: str) -> "set[int]":
+    """Return the PR numbers a release-line changelog already credits.
+
+    Reads every bullet line's trailing local ``(#N[, #M...])`` reference from
+    *notes_text*. GitHub issue and PR numbers are unique within a repository, so
+    a trailing local reference is a valid credit regardless of section heading.
+    """
+    credited: set[int] = set()
+    for line in notes_text.splitlines():
+        if BULLET_LINE_RE.match(line):
+            credited.update(trailing_pr_numbers(line))
+    return credited
 
 
 def _format_date(date: str) -> str:
@@ -266,7 +301,7 @@ def _split_contributors_footer(text: str) -> "tuple[str, List[str]]":
         # The footer's bullets run until the next header.
         if line.lstrip().startswith("#"):
             break
-        if _BULLET_RE.match(line):
+        if BULLET_LINE_RE.match(line):
             names.append(_strip_bullet(line))
     return body, names
 
