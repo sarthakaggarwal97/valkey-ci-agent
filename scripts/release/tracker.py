@@ -478,7 +478,11 @@ def _render_status(
         candidate_evidence = f"[Candidate `{candidate_sha[:12]}`]({candidate_url})"
         if branch_head != candidate_sha:
             candidate_status = _status_badge("Blocked", "cf222e")
-            candidate_action = "Rerun Prepare Release for the new branch head."
+            candidate_action = (
+                "Cancel any active publication, revert the merged preparation "
+                "commit while keeping the desired branch changes, then rerun "
+                "Prepare Release."
+            )
             current = "The release branch moved after the candidate was reviewed."
             next_action = candidate_action
             summary = "candidate invalidated by branch movement"

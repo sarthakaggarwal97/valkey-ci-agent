@@ -410,7 +410,10 @@ def test_moved_branch_blocks_automatic_publication(monkeypatch: pytest.MonkeyPat
 
     workflow.create_dispatch.assert_not_called()
     assert result == "#42: candidate invalidated by branch movement"
-    assert "Rerun Prepare Release" in issue.create_comment.call_args.args[0]
+    body = issue.create_comment.call_args.args[0]
+    assert "revert the merged preparation commit" in body
+    assert "keeping the desired branch changes" in body
+    assert "rerun Prepare Release" in body
 
 
 def test_existing_exact_publication_run_prevents_duplicate_dispatch(
