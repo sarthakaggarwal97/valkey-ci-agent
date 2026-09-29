@@ -25,6 +25,7 @@ import subprocess
 from typing import Optional
 
 from scripts.common.proc import git_output
+from scripts.release_notes import release_format as rn
 
 logger = logging.getLogger(__name__)
 
@@ -196,13 +197,8 @@ def released_pr_numbers(repo_dir: str, base_tag: str, notes_file: str) -> set[in
             if match.group(2):
                 released.add(int(match.group(2)))
 
-    # Call-time import: release_cut imports this module at load time, so a
-    # module-level import here would cycle. By the time this runs, both are
-    # fully loaded.
-    from scripts.release_notes.release_cut import _credited_pr_numbers
-
     try:
-        released |= _credited_pr_numbers(git_output(repo_dir, "show", f"{base_tag}:{notes_file}"))
+        released |= rn.credited_pr_numbers(git_output(repo_dir, "show", f"{base_tag}:{notes_file}"))
     except Exception:
         # A baseline predating the changelog, or a tag missing from a shallow
         # clone, simply contributes no exclusions from this source.
