@@ -23,6 +23,7 @@ from github.GithubException import GithubException
 from scripts.backport.candidate_apply import apply_candidate
 from scripts.backport.git_commands import head_sha
 from scripts.backport.git_commands import run_git as _run_git
+from scripts.backport.mark_done import prs_on_ref
 from scripts.backport.models import CandidateOutcome, ResolutionResult
 from scripts.backport.source_plan import SourceChangeError, SourceChangePlan, prepare_source_change
 from scripts.backport.sweep_git import (
@@ -36,6 +37,7 @@ from scripts.backport.sweep_git import (
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
+    DETAIL_ALREADY_ON_TARGET_BRANCH,
     DETAIL_RESOLVED_BY_AI,
     BranchSweepResult,
     CandidateResult,
@@ -475,10 +477,24 @@ def _prepare_branch(
                 target_branch,
                 backport_branch,
             )
+            # The board lags the branch until Mark Done runs, so a PR that
+            # already landed can still be listed as "To be backported".
+            landed = {
+                str(number)
+                for number in prs_on_ref(
+                    tmpdir,
+                    f"origin/{target_branch}",
+                    {
+                        candidate.source_pr_number: candidate.merged_at
+                        for candidate in candidates
+                        if candidate.merged_at
+                    },
+                )
+            }
             source_plans, plan_errors = _prepare_source_plans(
                 tmpdir,
                 candidates,
-                already_applied,
+                already_applied | landed,
                 git_env,
             )
 
@@ -499,7 +515,18 @@ def _prepare_branch(
                 + (setup_output[:500] or "setup command failed")
             )
 
-        logger.info("Already applied on %s: %s", backport_branch, already_applied)
+        logger.info(
+            "Sweep branch %s carries: %s",
+            backport_branch,
+            sorted(already_applied, key=int),
+        )
+        for number in sorted(already_applied & landed, key=int):
+            logger.warning(
+                "BACKPORT DUPLICATE: PR #%s is already on %s and also carried by %s",
+                number,
+                target_branch,
+                backport_branch,
+            )
         applied_count = 0
         for index, candidate in enumerate(candidates):
             if max_applied > 0 and applied_count >= max_applied:
@@ -528,8 +555,31 @@ def _prepare_branch(
                 )
                 continue
 
+            if str(candidate.source_pr_number) in landed:
+                logger.info(
+                    "BACKPORT SKIPPED: PR #%d | %s | already on %s",
+                    candidate.source_pr_number,
+                    compact_log_value(candidate.source_pr_title),
+                    target_branch,
+                )
+                result.results.append(
+                    CandidateResult(
+                        source_pr_number=candidate.source_pr_number,
+                        source_pr_title=candidate.source_pr_title,
+                        outcome="skipped-existing",
+                        detail=DETAIL_ALREADY_ON_TARGET_BRANCH,
+                    )
+                )
+                continue
+
             plan_error = plan_errors.get(candidate.source_pr_number)
             if plan_error is not None:
+                logger.warning(
+                    "BACKPORT ERROR: PR #%d | %s | %s",
+                    candidate.source_pr_number,
+                    compact_log_value(candidate.source_pr_title),
+                    compact_log_value(plan_error.detail, limit=500),
+                )
                 result.results.append(plan_error)
                 continue
 
@@ -652,13 +702,13 @@ def _prepare_branch(
 def _prepare_source_plans(
     repo_dir: str,
     candidates: list[ProjectBackportCandidate],
-    already_applied: set[str],
+    skipped: set[str],
     git_env: dict[str, str],
 ) -> tuple[dict[int, SourceChangePlan], dict[int, CandidateResult]]:
     plans: dict[int, SourceChangePlan] = {}
     errors: dict[int, CandidateResult] = {}
     for candidate in candidates:
-        if str(candidate.source_pr_number) in already_applied:
+        if str(candidate.source_pr_number) in skipped:
             continue
         try:
             plans[candidate.source_pr_number] = prepare_source_change(

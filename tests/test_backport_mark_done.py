@@ -360,6 +360,35 @@ def test_verify_ignores_imported_history_pr_number_collision(tmp_path, monkeypat
     assert present == {5000}
 
 
+def test_prs_on_ref_scans_named_ref_not_checkout(tmp_path) -> None:
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+        "GIT_COMMITTER_DATE": "2026-09-26T09:11:42Z",
+    }
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=repo, check=True, env=env, capture_output=True)
+
+    git("init", "-q", "-b", "release")
+    (repo / "f").write_text("1")
+    git("add", "f")
+    git("commit", "-qm", "Deflake forkless bgsave tests\n\nBackport-Source-PR: 4673")
+    git("checkout", "-q", "-b", "sweep")
+    (repo / "f").write_text("2")
+    git("commit", "-aqm", "Deflake corrupt-dump-fuzzer (#4746)")
+
+    merged = {4673: "2026-09-25T17:21:22Z", 4746: "2026-09-25T17:21:22Z"}
+    assert mark_done.prs_on_ref(str(repo), "release", merged) == {4673}
+    assert mark_done.prs_on_ref(str(repo), "HEAD", merged) == {4673, 4746}
+    assert mark_done.prs_on_ref(str(repo), "release", {}) == set()
+
+
 def test_dry_run_reports_without_mutating() -> None:
     gql = FakeGraphQLClient(
         project_items=[

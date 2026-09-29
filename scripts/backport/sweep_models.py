@@ -23,6 +23,10 @@ DETAIL_RESOLVED_BY_AI = _models.DETAIL_RESOLVED_BY_AI
 # empty cherry-picks that mean "already on the release branch".
 DETAIL_ALREADY_ON_SWEEP_BRANCH = "already on backport branch"
 
+# Detail string used when a candidate PR has already landed on the target
+# branch but its board item has not been marked Done yet.
+DETAIL_ALREADY_ON_TARGET_BRANCH = "already on target branch"
+
 @dataclass
 class BranchSweepResult:
     target_branch: str

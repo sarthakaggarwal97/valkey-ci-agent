@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 import subprocess
@@ -19,7 +20,11 @@ from scripts.backport.missing_test_adaptation import (
     build_missing_test_context,
 )
 from scripts.backport.models import ResolutionResult
-from scripts.backport.source_plan import SourceChangePlan, SourceChangeStrategy
+from scripts.backport.source_plan import (
+    SourceChangeError,
+    SourceChangePlan,
+    SourceChangeStrategy,
+)
 from scripts.backport.sweep import (
     BranchSweepResult,
     CandidateResult,
@@ -2023,6 +2028,9 @@ def _green_only_process_branch(
     max_applied=1,
     max_conflicting_files=100,
     head_shas=None,
+    landed=None,
+    plan_error_for=None,
+    planned=None,
 ):
     """Run _process_branch with the common green-only mocks wired up.
 
@@ -2031,6 +2039,16 @@ def _green_only_process_branch(
     (result, pushed, upserts, reset_count, reset_refs).
     """
     _mock_phase_boundary(monkeypatch)
+    base_plan = backport_sweep.prepare_source_change
+
+    def plan(repo_dir, number, *args, **kwargs):
+        if planned is not None:
+            planned.append(number)
+        if plan_error_for and number in plan_error_for:
+            raise SourceChangeError(plan_error_for[number])
+        return base_plan(repo_dir, number, *args, **kwargs)
+
+    monkeypatch.setattr(backport_sweep, "prepare_source_change", plan)
     monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_a, **_k: None)
     monkeypatch.setattr(
@@ -2039,6 +2057,8 @@ def _green_only_process_branch(
         lambda *_a, **_k: set(already_applied or set()),
     )
     monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_a, **_k: [])
+    if landed is not None:
+        monkeypatch.setattr(backport_sweep, "prs_on_ref", landed)
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
     monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
     monkeypatch.setattr(backport_sweep, "apply_candidate", apply_fn)
@@ -2325,6 +2345,102 @@ def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
     assert result.results[0].outcome == "skipped-existing"
     assert result.results[1].outcome == "applied"
     assert pushed == [("agent/backport/sweep/8.1", True)]
+
+
+def _merged_candidate(num, merged_at="2026-09-25T17:21:22Z"):
+    return dataclasses.replace(_candidate(num), merged_at=merged_at)
+
+
+def test_process_branch_skips_candidate_already_on_target(monkeypatch, caplog):
+    """A PR that landed on the target but is still on the board is not re-applied.
+
+    Regression: #4673 needed a repair when first backported, so a second
+    cherry-pick conflicted instead of coming out empty, and the sweep re-applied
+    it while Mark Done had not yet flipped its board item.
+    """
+    attempted: list[int] = []
+    planned: list[int] = []
+    scans: list[tuple[str, dict[int, str]]] = []
+
+    def fake_apply(_repo_dir, candidate, *_args, **_kwargs):
+        attempted.append(candidate.source_pr_number)
+        return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
+
+    def fake_prs_on_ref(_repo_dir, ref, pr_merged_at):
+        scans.append((ref, dict(pr_merged_at)))
+        return {4673}
+
+    caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
+    result, pushed, _upserts, _resets, _reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_merged_candidate(4673), _merged_candidate(41)],
+        apply_fn=fake_apply,
+        validate_fn=lambda *_a, **_k: ValidationOutcome(True, ""),
+        landed=fake_prs_on_ref,
+        max_applied=2,
+        planned=planned,
+    )
+
+    assert scans == [
+        ("origin/8.1", {4673: "2026-09-25T17:21:22Z", 41: "2026-09-25T17:21:22Z"}),
+    ]
+    assert attempted == [41]
+    assert planned == [41]  # no source fetch for the landed PR
+    assert result.results[0] == CandidateResult(
+        4673, "PR 4673", "skipped-existing", backport_sweep.DETAIL_ALREADY_ON_TARGET_BRANCH,
+    )
+    assert result.results[1].outcome == "applied"
+    assert pushed == [("agent/backport/sweep/8.1", True)]
+    assert "BACKPORT SKIPPED: PR #4673 | PR 4673 | already on 8.1" in caplog.messages
+
+
+def test_process_branch_warns_when_sweep_branch_duplicates_target(monkeypatch, caplog):
+    """A PR carried by the sweep branch that also landed on the target is flagged."""
+    caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
+    result, _pushed, _upserts, _resets, _reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_merged_candidate(4673)],
+        apply_fn=_applied,
+        validate_fn=lambda *_a, **_k: ValidationOutcome(True, ""),
+        already_applied={"4673", "4746"},
+        landed=lambda *_a, **_k: {4673},
+    )
+
+    assert result.results[0].detail == DETAIL
+    assert (
+        "Sweep branch agent/backport/sweep/8.1 carries: ['4673', '4746']"
+        in caplog.messages
+    )
+    assert (
+        "BACKPORT DUPLICATE: PR #4673 is already on 8.1 and also carried by "
+        "agent/backport/sweep/8.1"
+    ) in caplog.messages
+
+
+def test_process_branch_logs_source_plan_error(monkeypatch, caplog):
+    """A candidate whose source history cannot be planned is logged, not silent."""
+    attempted: list[int] = []
+
+    def fake_apply(_repo_dir, candidate, *_args, **_kwargs):
+        attempted.append(candidate.source_pr_number)
+        return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
+
+    caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
+    result, _pushed, _upserts, _resets, _reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(4632), _candidate(41)],
+        apply_fn=fake_apply,
+        validate_fn=lambda *_a, **_k: ValidationOutcome(True, ""),
+        max_applied=2,
+        plan_error_for={4632: "merge SHA sha4632 does not match the aggregate patch"},
+    )
+
+    assert attempted == [41]
+    assert result.results[0].outcome == "error"
+    assert (
+        "BACKPORT ERROR: PR #4632 | PR 4632 | "
+        "merge SHA sha4632 does not match the aggregate patch"
+    ) in caplog.messages
 
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
