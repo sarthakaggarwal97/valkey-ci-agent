@@ -337,7 +337,10 @@ def _sync_one(
         and getattr(any_publish_run, "status", "") != "completed"
         and getattr(any_publish_run, "head_sha", "") != controller_sha
     ):
-        if dispatch:
+        # Only while nothing shipped. After the release exists the run may
+        # still be finishing post-publication work (first-GA backport
+        # onboarding), and cancelling it would interrupt that.
+        if dispatch and release is None:
             cancelled = retry_github_call(
                 lambda: any_publish_run.cancel(),
                 retries=2,
@@ -372,6 +375,14 @@ def _sync_one(
         if accepted is False:
             raise RuntimeError(f"GitHub refused publication dispatch for {tracker.tag}")
         dispatched = True
+
+    # Once the release exists the Publish run is history, not something to
+    # wait on or replace, so the head filter above (which exists for the
+    # dispatch decision) no longer applies: every merge into this repository
+    # moves controller main past the head the shipping run used. Decided after
+    # the dispatch decision so a stale run can never suppress a re-dispatch.
+    if release is not None:
+        publish_run = publish_run or any_publish_run
 
     production_run = _find_production_run(automation, tracker.tag) if release else None
     body, summary = _render_status(
@@ -564,8 +575,38 @@ def _render_status(
     release_evidence = "No GitHub release"
     release_action = "Complete qualification and release approval."
     if release is not None:
+        # A release the controller published PROVES both stages, because
+        # publication is gated on qualification and on the protected
+        # `release` approval, and `_find_release` has already checked that
+        # the tag resolves to this exact candidate. Anchoring the rows on the
+        # release rather than on the run's conclusion keeps them right when
+        # onboard-backports failed after the release existed, when a rerun
+        # relisted the run under a later attempt, or when no run was found at
+        # all. The controller publishes through its app, so a release
+        # authored by a person was created out of band and needs a human,
+        # not a green badge.
+        release_link = f"[GitHub release {tracker.tag}]({release.html_url})"
+        author = getattr(release, "author", None)
+        if getattr(author, "type", "") == "Bot":
+            history = (
+                f"[Publish run {publish_run.id}]({publish_run.html_url})" if publish_run is not None else release_link
+            )
+            qualification_status = _status_badge("Passed", "1a7f37")
+            qualification_evidence = history
+            qualification_action = "Complete"
+            approval_status = _status_badge("Approved", "1a7f37")
+            approval_evidence = history
+            approval_action = "Complete"
+        else:
+            login = getattr(author, "login", None) or "an unknown author"
+            qualification_status = _status_badge("Unverified", "9a6700")
+            qualification_evidence = f"Released by {login}, not by the controller"
+            qualification_action = "Confirm how the release was created."
+            approval_status = qualification_status
+            approval_evidence = qualification_evidence
+            approval_action = qualification_action
         release_status = _status_badge("Published", "1a7f37")
-        release_evidence = f"[GitHub release {tracker.tag}]({release.html_url})"
+        release_evidence = f"{release_link}{_stamp(getattr(release, 'published_at', None), 'published')}"
         release_action = "Complete"
         current = "The GitHub release is published."
         next_action = "Wait for production automation and its protected approval."
@@ -583,6 +624,7 @@ def _render_status(
         follow_up_evidence = f"{production_link}<br>**Manual follow-up:** {_downstream_links(tracker)}"
         if production_run.status == "completed" and production_run.conclusion == "success":
             production_status = _status_badge("Passed", "1a7f37")
+            production_evidence = f"{production_link}{_stamp(getattr(production_run, 'updated_at', None), 'finished')}"
             production_action = "Complete"
             follow_up_status = _status_badge("Release owner review", "8250df")
             follow_up_action = _FOLLOW_UP_ACTION
@@ -908,6 +950,18 @@ def _find_release(
                 f"release {tag} resolves to {actual or '<unknown>'}, expected candidate {expected_sha}"
             )
     return release
+
+
+def _stamp(moment: Any, label: str) -> str:
+    """Render " · <label> <UTC>" for a datetime, "" for anything else.
+
+    Every row is recomputed from live GitHub state on each pass, so without
+    a time a reader cannot tell a stage that finished minutes ago from one
+    that finished days ago.
+    """
+    if not isinstance(moment, datetime):
+        return ""
+    return f" · {label} {moment:%Y-%m-%d %H:%M UTC}"
 
 
 def _find_run(workflow: Any, title: str, head_sha: str = "") -> Any | None:
