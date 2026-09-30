@@ -63,6 +63,21 @@ def test_valkey_registry_installs_dependencies_for_cpp_unit_validation():
     assert "libgmock-dev" in setup
 
 
+def test_valkey_registry_installs_clang_format_from_llvm_apt():
+    """Upstream formats with apt.llvm.org's clang-format-18, not Ubuntu's."""
+    project_root = Path(__file__).resolve().parents[1]
+    registry = load_registry(str(project_root / "repos.yml"))
+    valkey = next(entry for entry in registry.repos if entry.repo == "valkey-io/valkey")
+    setup = list(valkey.validation_setup_commands)
+
+    source = next(i for i, cmd in enumerate(setup) if "apt.llvm.org" in cmd)
+    install = next(i for i, cmd in enumerate(setup) if "install -y clang-format-18" in cmd)
+
+    assert "llvm-toolchain-$(lsb_release -cs)-18 main" in setup[source]
+    assert source < install
+    assert "apt-get update" in setup[install]
+
+
 class TestLoadRegistry:
     def test_valid_minimal(self, tmp_path):
         path = _write_registry(tmp_path, _minimal_registry())
