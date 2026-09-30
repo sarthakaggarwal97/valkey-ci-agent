@@ -563,6 +563,12 @@ def _prepare_branch(
 
             plan_error = plan_errors.get(candidate.source_pr_number)
             if plan_error is not None:
+                logger.warning(
+                    "BACKPORT ERROR: PR #%d | %s | %s",
+                    candidate.source_pr_number,
+                    compact_log_value(candidate.source_pr_title),
+                    compact_log_value(plan_error.detail, limit=500),
+                )
                 result.results.append(plan_error)
                 continue
 

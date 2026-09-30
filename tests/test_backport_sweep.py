@@ -20,7 +20,11 @@ from scripts.backport.missing_test_adaptation import (
     build_missing_test_context,
 )
 from scripts.backport.models import ResolutionResult
-from scripts.backport.source_plan import SourceChangePlan, SourceChangeStrategy
+from scripts.backport.source_plan import (
+    SourceChangeError,
+    SourceChangePlan,
+    SourceChangeStrategy,
+)
 from scripts.backport.sweep import (
     BranchSweepResult,
     CandidateResult,
@@ -2072,6 +2076,7 @@ def _green_only_process_branch(
     max_conflicting_files=100,
     head_shas=None,
     changes_since=None,
+    plan_error_for=None,
 ):
     """Run _process_branch with the common green-only mocks wired up.
 
@@ -2080,6 +2085,15 @@ def _green_only_process_branch(
     (result, pushed, upserts, reset_count, reset_refs).
     """
     _mock_phase_boundary(monkeypatch)
+    if plan_error_for:
+        base_plan = backport_sweep.prepare_source_change
+
+        def plan(repo_dir, number, *args, **kwargs):
+            if number in plan_error_for:
+                raise SourceChangeError(plan_error_for[number])
+            return base_plan(repo_dir, number, *args, **kwargs)
+
+        monkeypatch.setattr(backport_sweep, "prepare_source_change", plan)
     if changes_since is not None:
         monkeypatch.setattr(backport_sweep, "has_changes_since", changes_since)
     monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
@@ -2147,6 +2161,32 @@ def _green_only_process_branch(
         repair_validation_failures=True,
     )
     return result, pushed, upserts, reset_count["n"], reset_refs
+
+
+def test_process_branch_logs_source_plan_error(monkeypatch, caplog):
+    """A candidate whose source history cannot be planned is logged, not silent."""
+    attempted: list[int] = []
+
+    def fake_apply(_repo_dir, candidate, *_args, **_kwargs):
+        attempted.append(candidate.source_pr_number)
+        return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
+
+    caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
+    result, _pushed, _upserts, _resets, _reset_refs = _green_only_process_branch(
+        monkeypatch,
+        candidates=[_candidate(4632), _candidate(41)],
+        apply_fn=fake_apply,
+        validate_fn=lambda *_a, **_k: ValidationOutcome(True, ""),
+        max_applied=2,
+        plan_error_for={4632: "merge SHA sha4632 does not match the aggregate patch"},
+    )
+
+    assert attempted == [41]
+    assert result.results[0].outcome == "error"
+    assert (
+        "BACKPORT ERROR: PR #4632 | PR 4632 | "
+        "merge SHA sha4632 does not match the aggregate patch"
+    ) in caplog.messages
 
 
 def _candidate(num):
