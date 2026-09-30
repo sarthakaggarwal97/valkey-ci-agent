@@ -23,6 +23,11 @@ DETAIL_RESOLVED_BY_AI = _models.DETAIL_RESOLVED_BY_AI
 # empty cherry-picks that mean "already on the release branch".
 DETAIL_ALREADY_ON_SWEEP_BRANCH = "already on backport branch"
 
+# Detail string used when the release branch history already records the
+# source PR (subject, Backport-Source-PR trailer, or a merged sweep's Applied
+# table). Such candidates are skipped before any cherry-pick is attempted.
+DETAIL_ALREADY_ON_TARGET = "already on release branch"
+
 @dataclass
 class BranchSweepResult:
     target_branch: str

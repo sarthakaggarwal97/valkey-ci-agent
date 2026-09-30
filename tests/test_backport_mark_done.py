@@ -360,6 +360,70 @@ def test_verify_ignores_imported_history_pr_number_collision(tmp_path, monkeypat
     assert present == {5000}
 
 
+def test_prs_present_in_history_reads_the_requested_ref(tmp_path) -> None:
+    """The sweep asks about origin/<branch>, not whatever HEAD has checked out."""
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+    }
+
+    def git(*args: str, committed_at: str | None = None) -> None:
+        run_env = dict(env)
+        if committed_at:
+            run_env["GIT_AUTHOR_DATE"] = committed_at
+            run_env["GIT_COMMITTER_DATE"] = committed_at
+        subprocess.run(["git", *args], cwd=repo, check=True, env=run_env, capture_output=True)
+
+    git("init", "-q", "-b", "release")
+    (repo / "f").write_text("1")
+    git("add", "f")
+    git(
+        "commit", "-qm",
+        "Deflake forkless bgsave tests (#4673)\n\n"
+        "Signed-off-by: A <a@example.com>\n"
+        "Backport-Source-PR: 4673",
+        committed_at="2026-09-28T15:53:05Z",
+    )
+    (repo / "f").write_text("2")
+    git(
+        "commit", "-qam",
+        "[backport] Backport sweep for 9.2 (#4763)\n\n"
+        "## Applied\n\n"
+        "| Source PR | Title | Detail |\n"
+        "|---|---|---|\n"
+        "| #4778 | Fix throttle-repl deadlock | |\n",
+        committed_at="2026-09-28T15:53:06Z",
+    )
+    # A sweep branch checked out on top must not change the answer for the
+    # release ref.
+    git("checkout", "-qb", "agent/backport/sweep/9.2")
+    (repo / "f").write_text("3")
+    git("commit", "-qam", "Deflake corrupt-dump-fuzzer (#4746)", committed_at="2026-09-28T16:29:50Z")
+
+    present = mark_done.prs_present_in_history(
+        str(repo),
+        "release",
+        {
+            4673: "2026-09-25T17:21:22Z",  # trailer and subject
+            4778: "2026-09-27T00:00:00Z",  # sweep Applied table
+            4746: "2026-09-28T13:17:01Z",  # only on the sweep branch
+            4800: "2026-09-28T00:00:00Z",  # never landed
+        },
+    )
+    assert present == {4673, 4778}
+
+    # A matching commit older than the source PR's merge is a collision.
+    assert mark_done.prs_present_in_history(
+        str(repo), "release", {4673: "2026-09-29T00:00:00Z"}
+    ) == set()
+    assert mark_done.prs_present_in_history(str(repo), "release", {}) == set()
+
+
 def test_dry_run_reports_without_mutating() -> None:
     gql = FakeGraphQLClient(
         project_items=[

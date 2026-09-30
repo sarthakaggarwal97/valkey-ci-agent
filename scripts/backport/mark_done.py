@@ -101,27 +101,42 @@ def verify_prs_on_branch(
     if not pr_merged_at:
         return set()
 
-    merge_times = {
-        number: _parse_timestamp(merged_at)
-        for number, merged_at in pr_merged_at.items()
-    }
     env = dict(os.environ if git_env is None else git_env)
     with GitAuth(token, prefix="mark-done-git-askpass-") as git_auth:
         env = git_auth.env(env)
         with tempfile.TemporaryDirectory(prefix="mark-done-verify-") as tmp:
             repo_dir = os.path.join(tmp, "repo")
             _shallow_clone(repo_full_name, target_branch, repo_dir, env)
+            return prs_present_in_history(repo_dir, "HEAD", pr_merged_at)
 
-            applied: set[int] = set()
-            for committed_at, message in _branch_commit_records(repo_dir):
-                matched = pr_numbers_from_commit_messages([message])
-                applied_section = _markdown_section(message, "Applied")
-                if applied_section:
-                    matched.update(_pr_numbers_from_table_cells(applied_section))
-                for number in matched & merge_times.keys():
-                    if committed_at >= merge_times[number]:
-                        applied.add(number)
 
+def prs_present_in_history(
+    repo_dir: str,
+    rev: str,
+    pr_merged_at: dict[int, str],
+) -> set[int]:
+    """Return which PRs in ``pr_merged_at`` landed in the history of ``rev``.
+
+    Applies the rules documented on :func:`verify_prs_on_branch` to a local
+    checkout, so the sweep can use the same definition of "already backported"
+    as the board reconcile.
+    """
+    if not pr_merged_at:
+        return set()
+
+    merge_times = {
+        number: _parse_timestamp(merged_at)
+        for number, merged_at in pr_merged_at.items()
+    }
+    applied: set[int] = set()
+    for committed_at, message in _branch_commit_records(repo_dir, rev):
+        matched = pr_numbers_from_commit_messages([message])
+        applied_section = _markdown_section(message, "Applied")
+        if applied_section:
+            matched.update(_pr_numbers_from_table_cells(applied_section))
+        for number in matched & merge_times.keys():
+            if committed_at >= merge_times[number]:
+                applied.add(number)
     return applied
 
 
@@ -129,9 +144,9 @@ def _parse_timestamp(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def _branch_commit_records(repo_dir: str) -> list[tuple[datetime, str]]:
+def _branch_commit_records(repo_dir: str, rev: str = "HEAD") -> list[tuple[datetime, str]]:
     result = subprocess.run(
-        ["git", "log", "-z", "--format=%cI%x00%B", "HEAD"],
+        ["git", "log", "-z", "--format=%cI%x00%B", rev, "--"],
         cwd=repo_dir,
         capture_output=True,
         text=True,

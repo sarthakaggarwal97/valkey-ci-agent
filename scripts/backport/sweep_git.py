@@ -204,8 +204,17 @@ def collect_git_paths_z(
 
 
 def branch_has_changes(repo_dir: str, target_branch: str) -> bool:
+    return _diff_is_nonempty(repo_dir, f"origin/{target_branch}...HEAD")
+
+
+def has_changes_since(repo_dir: str, base_ref: str) -> bool:
+    """Return whether HEAD's tree differs from ``base_ref``'s tree."""
+    return _diff_is_nonempty(repo_dir, base_ref, "HEAD")
+
+
+def _diff_is_nonempty(repo_dir: str, *revs: str) -> bool:
     result = subprocess.run(
-        ["git", "diff", "--quiet", f"origin/{target_branch}...HEAD"],
+        ["git", "diff", "--quiet", *revs],
         cwd=repo_dir,
         capture_output=True,
         text=True,
@@ -215,7 +224,7 @@ def branch_has_changes(repo_dir: str, target_branch: str) -> bool:
     if result.returncode == 1:
         return True
     raise RuntimeError(
-        f"could not compare branch to origin/{target_branch}: "
+        f"could not compare {' '.join(revs)}: "
         + (result.stderr.strip()[:300] or "git diff failed")
     )
 

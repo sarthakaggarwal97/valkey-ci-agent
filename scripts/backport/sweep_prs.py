@@ -83,8 +83,11 @@ def upsert_pr(
     # The AI-resolved signal is durable on each candidate, so scan this run's
     # results and everything already applied to the branch; a PR that first
     # gains an AI-resolved commit in a later top-up run still gets the label.
+    # Skipped and failed candidates left no commit behind, so they do not count.
     labels = [backport_label]
-    all_candidates = list(result.results) + list(branch_applied or [])
+    all_candidates = [
+        c for c in result.results if result_is_on_backport_branch(c)
+    ] + list(branch_applied or [])
     if any(getattr(c, "resolved_by_ai", False) for c in all_candidates):
         labels.append(llm_conflict_label)
 
