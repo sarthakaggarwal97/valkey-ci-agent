@@ -17,8 +17,10 @@ repos:
       # Certificates for the valkey-core profile's TLS checks. Runs once per
       # branch and writes only to the gitignored tests/tls/.
       - "./utils/gen-test-certs.sh"
+    # Pin SERVER_CFLAGS as upstream CI does. Otherwise src/Makefile reuses the
+    # previous candidate's -DLOG_REQ_RES flags from the shared worktree.
     build_commands:
-      - "make -j$(nproc) BUILD_TLS=yes"
+      - "make -j$(nproc) BUILD_TLS=yes SERVER_CFLAGS='-Werror'"
     validation_profile: valkey-core
     generated_file_rules:
       - paths:
