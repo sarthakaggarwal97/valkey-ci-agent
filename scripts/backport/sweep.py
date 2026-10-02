@@ -54,7 +54,7 @@ from scripts.backport.sweep_validation import (
 )
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.job_summary import emit_job_summary
-from scripts.common.logging_utils import configure_logging, log_group, log_outcome
+from scripts.common.logging_utils import annotate, configure_logging, log_group, log_outcome
 
 if TYPE_CHECKING:
     from scripts.backport.registry import BranchEntry, RepoEntry  # noqa: F401
@@ -433,7 +433,8 @@ def _process_branch(
                 target_branch,
                 backport_branch,
             )
-            logger.info("Already applied on %s: %s", backport_branch, already_applied)
+            logger.info("Already on %s: %s", backport_branch,
+                        ", ".join(f"#{n}" for n in sorted(already_applied, key=int)) or "nothing yet")
 
             applied_count = 0
 
@@ -739,8 +740,9 @@ def main() -> None:
                     result.candidates_found, result.target_branch)
         return
 
+    # run_backport_sweep already logged this sentence; only pin it here.
     level, text = sweep_outcome(result)
-    log_outcome(logger, level, "%s", text)
+    annotate(level, text)
     if level == logging.ERROR:
         sys.exit(1)
 

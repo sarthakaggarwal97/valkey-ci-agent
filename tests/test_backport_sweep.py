@@ -3147,3 +3147,13 @@ def test_candidate_log_is_a_single_line(caplog):
         "8.1", CandidateResult(5, "t", "error", "line one\n::error::forged"))
     message = caplog.records[-1].getMessage()
     assert "\n" not in message and "line one ::error::forged" in message
+
+
+def test_sweep_git_failure_carries_gits_reason(tmp_path):
+    from scripts.backport.main import _run_git
+    from scripts.common.proc import GitCommandError
+
+    with pytest.raises(GitCommandError) as raised:
+        _run_git(str(tmp_path), "rev-parse", "--verify", "no-such-ref")
+    # The sweep's outcome line is built from str(exc); git's reason must be in it.
+    assert "stderr:" in str(raised.value)

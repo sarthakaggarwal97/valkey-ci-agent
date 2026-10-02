@@ -53,6 +53,13 @@ def _escape_command_data(text: str) -> str:
     return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
+def annotate(level: int, text: str) -> None:
+    """Pin *text* to the top of the run page (Actions only) without logging it."""
+    if _in_actions():
+        kind = _ANNOTATION.get(level, "notice")
+        print(f"::{kind}::{_escape_command_data(text)}", file=sys.stderr, flush=True)
+
+
 def log_outcome(target_logger: logging.Logger, level: int, message: str, *args: object) -> None:
     """Log the run's final outcome and pin it to the top of the run page.
 
@@ -62,10 +69,7 @@ def log_outcome(target_logger: logging.Logger, level: int, message: str, *args: 
     """
     # stacklevel: tag the record with the caller's file, not this helper's.
     target_logger.log(level, message, *args, stacklevel=2)
-    if _in_actions():
-        kind = _ANNOTATION.get(level, "notice")
-        text = message % args if args else message
-        print(f"::{kind}::{_escape_command_data(text)}", file=sys.stderr, flush=True)
+    annotate(level, message % args if args else message)
 
 
 @contextmanager

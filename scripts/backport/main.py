@@ -40,6 +40,7 @@ from scripts.common.github_client import retry_github_call
 from scripts.common.identity import BOT_EMAIL, BOT_NAME
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_outcome
+from scripts.common.proc import GitCommandError
 
 logger = logging.getLogger(__name__)
 
@@ -572,11 +573,10 @@ def _run_git(repo_dir: str, *args: str, env: dict[str, str] | None = None) -> No
     logger.debug("Running: %s (cwd=%s)", " ".join(cmd), repo_dir)
     result = subprocess.run(cmd, cwd=repo_dir, capture_output=True, text=True, env=env)
     if result.returncode != 0:
-        logger.error("git %s failed (rc=%d)\nstdout: %s\nstderr: %s",
-                     args[0], result.returncode,
-                     result.stdout.strip()[-500:] if result.stdout else "",
-                     result.stderr.strip()[-500:] if result.stderr else "")
-        result.check_returncode()
+        detail = " ".join((result.stderr or result.stdout or "").split())[-500:]
+        logger.error("git %s failed with exit code %d: %s", args[0], result.returncode,
+                     detail or "no output")
+        raise GitCommandError(result.returncode, cmd, result.stdout, result.stderr)
 
 
 def _apply_resolutions(
