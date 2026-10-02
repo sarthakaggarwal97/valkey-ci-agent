@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +17,8 @@ from scripts.ai.claude_code import (
     _resolve_claude_model,
     run_claude_code,
 )
+
+logger = logging.getLogger(__name__)
 
 AgentProfileName = Literal[
     "conflict_resolve_edit_only",
@@ -131,6 +135,11 @@ def run_agent(
     profile = get_agent_profile(profile_name)
     started_at = datetime.now(timezone.utc).isoformat()
     resolved_model = _resolve_claude_model(model)
+    logger.info(
+        "Starting agent run: profile=%s model=%s cwd=%s",
+        profile_name, resolved_model or "<default>", cwd or "<inherited>",
+    )
+    started = time.monotonic()
     stdout, stderr, rc = run_claude_code(
         prompt,
         cwd=cwd,
@@ -143,6 +152,11 @@ def run_agent(
         env_allowlist=profile.env_allowlist,
     )
     finished_at = datetime.now(timezone.utc).isoformat()
+    logger.log(
+        logging.INFO if rc == 0 else logging.WARNING,
+        "Agent run finished: profile=%s exit=%d duration=%.1fs output_chars=%d",
+        profile_name, rc, time.monotonic() - started, len(stdout),
+    )
     result = AgentRunResult(
         profile=profile_name,
         stdout=stdout,
@@ -182,5 +196,8 @@ def _write_evidence(
             f"{result.started_at.replace(':', '').replace('+', 'Z')}-{result.profile}-{result.prompt_sha256[:12]}.json"
         )
         path.write_text(json.dumps(evidence, indent=2, sort_keys=True), encoding="utf-8")
-    except OSError:
-        return
+    except OSError as exc:
+        logger.warning(
+            "Could not write agent evidence for profile %s to %s: %s",
+            result.profile, target_dir, exc,
+        )

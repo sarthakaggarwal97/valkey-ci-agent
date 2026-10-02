@@ -201,3 +201,32 @@ def test_poll_branch_passes_max_candidates_through(monkeypatch, tmp_path):
         max_candidates=0,
     )
     assert captured["max_candidates"] == 0
+
+
+def test_poll_branch_reports_errored_candidates(monkeypatch, tmp_path):
+    repo_entry, branch_entry = _branch(tmp_path)
+    monkeypatch.setattr(poller, "Github", lambda *a, **k: object())
+    monkeypatch.setattr(poller, "find_existing_pr", lambda *a, **k: None)
+
+    def _sweep(results):
+        return lambda **_k: BranchSweepResult(
+            target_branch=branch_entry.branch, candidates_found=len(results), results=results,
+        )
+
+    monkeypatch.setattr(poller, "run_backport_sweep", _sweep([
+        CandidateResult(1, "first", "applied"),
+        CandidateResult(2, "second", "error", "fetch failed"),
+    ]))
+    mixed = poller.poll_branch(repo_entry=repo_entry, branch_entry=branch_entry,
+                               github_token="t", max_candidates=2)
+    assert mixed["errored_candidates"] == [2]
+    assert not mixed["error"]
+
+    monkeypatch.setattr(poller, "run_backport_sweep", _sweep([
+        CandidateResult(1, "first", "error", "x"),
+        CandidateResult(2, "second", "error", "y"),
+    ]))
+    all_errored = poller.poll_branch(repo_entry=repo_entry, branch_entry=branch_entry,
+                                     github_token="t", max_candidates=2)
+    # Matches the daily sweep: every candidate erroring fails the poll.
+    assert all_errored["error"] == "all 2 candidate(s) errored"

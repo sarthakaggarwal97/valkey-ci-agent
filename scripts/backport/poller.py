@@ -33,6 +33,7 @@ from github import Auth, Github
 from scripts.backport.registry import load_registry
 from scripts.backport.sweep import _BRANCH_PREFIX, run_backport_sweep
 from scripts.backport.sweep_prs import find_existing_pr
+from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import (
     add_poll_loop_args,
     format_poll_results,
@@ -115,14 +116,22 @@ def poll_branch(
         github_token=github_token,
         max_candidates=max_candidates,
     )
+    errored = [item.source_pr_number for item in result.results
+               if item.outcome == "error" and item.source_pr_number]
+    error = result.error
+    # Same rule as the daily sweep: a pass where every candidate errored is a
+    # failure, not a quiet "applied=0".
+    if not error and result.results and len(errored) == len(result.results):
+        error = f"all {len(errored)} candidate(s) errored"
     return {
         "repo": repo_full_name,
         "branch": target_branch,
         "action": "swept",
         "found": result.candidates_found,
         "applied": result.applied_count,
+        "errored_candidates": errored,
         "pr": result.pr_url,
-        "error": result.error,
+        "error": error,
     }
 
 
@@ -159,13 +168,17 @@ def main() -> None:
     add_poll_loop_args(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_logging(verbose=args.verbose)
 
     registry = load_registry(args.registry)
     repo_entry, branch_entry = registry.get_branch(args.repo, args.branch)
+    logger.info(
+        "Backport poll: %s branch %s (push repo %s, cap %s, dry run %s, interval %ds, "
+        "duration %ds)",
+        repo_entry.repo, branch_entry.branch, repo_entry.effective_push_repo,
+        args.max_candidates or "none", args.dry_run,
+        args.poll_interval_seconds, args.poll_duration_seconds,
+    )
 
     def _poll() -> dict:
         return poll_branch(

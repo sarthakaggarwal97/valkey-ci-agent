@@ -152,9 +152,10 @@ def evaluate_daily(
             lambda: repo.get_workflow(policy.daily_workflow),
             retries=2, description=f"get workflow {policy.daily_workflow}",
         )
-    except GithubException:
-        logger.warning("Cannot read %s on %s; the daily gate fails closed",
-                       policy.daily_workflow, policy.repo)
+    except GithubException as exc:
+        logger.warning("Cannot read %s on %s (HTTP %s: %s); the daily gate fails closed",
+                       policy.daily_workflow, policy.repo, exc.status,
+                       (exc.data or {}).get("message", "") if isinstance(exc.data, dict) else exc)
         return DailyCiStatus(state=DailyCiState.MISSING,
                              detail="Cannot read the daily workflow")
     runs = retry_github_call(
@@ -165,6 +166,9 @@ def evaluate_daily(
     saw_in_progress = False  # newer branch activity still executing
     for index, run in enumerate(runs):
         if index >= RUN_SCAN_LIMIT:
+            logger.warning("No completed %s run on %s within the newest %d runs; "
+                           "older runs are not considered", policy.daily_workflow,
+                           branch, RUN_SCAN_LIMIT)
             break
         if run.head_branch != branch:
             continue

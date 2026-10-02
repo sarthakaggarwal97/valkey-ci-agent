@@ -75,3 +75,22 @@ def test_fuzzer_profile_is_readonly() -> None:
     assert "Edit" not in profile.allowed_tools
     assert "Bash" not in profile.allowed_tools
     assert "Read" in profile.allowed_tools
+
+
+def test_run_agent_warns_when_evidence_cannot_be_written(tmp_path, monkeypatch, caplog) -> None:
+    blocker = tmp_path / "not-a-dir"
+    blocker.write_text("file in the way")
+    monkeypatch.setattr(
+        agent_runtime, "run_claude_code", lambda *_args, **_kwargs: ("out", "", 3),
+    )
+
+    result = agent_runtime.run_agent(
+        "conflict_resolve_edit_only", "summarize", cwd=str(tmp_path),
+        evidence_dir=str(blocker / "evidence"),
+    )
+
+    assert result.returncode == 3
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("Could not write agent evidence" in m for m in messages)
+    assert any("Agent run finished: profile=conflict_resolve_edit_only exit=3" in m
+               for m in messages)

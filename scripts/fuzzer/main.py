@@ -16,6 +16,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.common.issue_dedup import IssueDedupPublisher
+from scripts.common.logging_utils import configure_logging
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.fuzzer import issue_renderer
 from scripts.fuzzer.analyzer import FuzzerRunAnalyzer
@@ -47,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="List the latest run without analyzing or filing an issue")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
 
     token = args.target_token or os.environ.get("TARGET_TOKEN", "")
     if not token:

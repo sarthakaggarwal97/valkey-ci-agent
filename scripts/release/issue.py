@@ -16,6 +16,7 @@ issue is a *display surface and dedup anchor only*:
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import weakref
@@ -37,6 +38,8 @@ from scripts.release.models import (
     ReleaseStatus,
     release_tag,
 )
+
+logger = logging.getLogger(__name__)
 
 MARKER_NAMESPACE = "valkey-ci-agent:release"
 
@@ -308,6 +311,8 @@ def write_binding(issue: Any, binding: ReleaseBinding, gh: Any = None, *,
             retries=2, description=f"update binding on issue #{issue.number}",
         )
         invalidate_comment_memo(issue)
+        logger.info("Updated the release binding on tracker #%s: %s", issue.number,
+                    getattr(existing, "html_url", "") or "<no url>")
     else:
         post_comment(issue, body, f"record binding on issue #{issue.number}")
 
@@ -905,6 +910,8 @@ def post_comment(issue: Any, body: str, description: str) -> Any:
         retries=2, description=description,
     )
     invalidate_comment_memo(issue)
+    logger.info("Posted comment on tracker #%s (%s): %s", issue.number, description,
+                getattr(created, "html_url", "") or "<no url>")
     return created
 
 

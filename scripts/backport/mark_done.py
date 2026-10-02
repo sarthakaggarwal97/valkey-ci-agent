@@ -27,6 +27,7 @@ from typing import Any
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.utils import pr_numbers_from_commit_subjects
 from scripts.common.git_auth import GitAuth, github_https_url
+from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import (
     PollLoopError,
     add_poll_loop_args,
@@ -543,10 +544,7 @@ def main() -> None:
     add_poll_loop_args(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_logging(verbose=args.verbose)
 
     from scripts.backport.registry import load_registry
 

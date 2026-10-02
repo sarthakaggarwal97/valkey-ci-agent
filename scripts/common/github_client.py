@@ -58,12 +58,22 @@ def retry_github_call(
         try:
             return operation()
         except Exception as exc:
-            if not _is_retryable_error(exc) or attempt == retries - 1:
+            if not _is_retryable_error(exc):
+                # Non-retryable errors are often expected (404 probes); the
+                # caller decides whether they matter.
+                raise
+            if attempt == retries - 1:
+                logger.error(
+                    "GitHub API call for %s failed after %d attempt(s): %s",
+                    description, retries, exc,
+                )
                 raise
             wait_seconds = transient_backoff_delay(attempt)
             logger.warning(
-                "Retrying GitHub API call for %s after %.2fs: %s",
+                "Retrying GitHub API call for %s (attempt %d/%d) after %.2fs: %s",
                 description,
+                attempt + 1,
+                retries,
                 wait_seconds,
                 exc,
             )

@@ -1923,3 +1923,26 @@ class TestLookalikeNotesPr:
         status = _status(repo_mock(pulls=[pr]), tracking_issue=tracker())
         assert status.notes_pr_number == 42
         assert status.alerts == ()
+
+
+class TestReconcileLogging:
+    """The Actions log alone must explain the release state each pass."""
+
+    def test_reconcile_logs_state_blockers_and_tracker_edit(self, caplog) -> None:
+        caplog.set_level("INFO", logger="scripts.release.reconcile")
+        repo = repo_mock(issues=[tracker()], pulls=[])
+        with patch("scripts.release.actions.advance", return_value=[]):
+            status = reconcile_branch(gh_mock(repo), _POLICY, "9.1")
+        assert status is not None and status.blockers
+        messages = [r.getMessage() for r in caplog.records]
+        state = next(m for m in messages if m.startswith("Release "))
+        assert f"phase={status.phase.value}" in state and "ready=False" in state
+        assert "qualification=no run" in state
+        assert any(m.startswith("  Blocker: ") for m in messages)
+        assert any(m.startswith("Updated tracker #") for m in messages)
+
+    def test_no_active_release_says_what_was_looked_for(self, caplog) -> None:
+        caplog.set_level("INFO", logger="scripts.release.reconcile")
+        repo = repo_mock(issues=[])
+        assert reconcile_branch(gh_mock(repo), _POLICY, "9.1") is None
+        assert any("no open tracker labelled" in r.getMessage() for r in caplog.records)

@@ -316,6 +316,22 @@ class TestCreateReleaseRecovery:
                             expected_sha=MERGE_SHA)
         repo.create_git_release.assert_called_once()  # no blind retry
 
+    def test_failed_create_logs_the_tag_and_what_recovery_saw(self, caplog) -> None:
+        caplog.set_level("INFO", logger="scripts.release.publish")
+        repo = _publishable_repo()
+        repo.create_git_release.side_effect = GithubException(422, "boom", {})
+        with pytest.raises(GithubException):
+            publish_release(gh_mock(repo), _POLICY, branch="9.1",
+                            actor="madolson", expected_tag="9.1.1",
+                            expected_sha=MERGE_SHA)
+        messages = [r.getMessage() for r in caplog.records]
+        # The tag was created before the release failed: an operator must
+        # be able to see that irreversible write in this run's log.
+        assert any(m.startswith(f"Created tag 9.1.1 at {MERGE_SHA}") for m in messages)
+        assert any("Creating release 9.1.1 raised" in m for m in messages)
+        # The fixture's get_release is a 404 here: recovery found nothing.
+        assert any("No release 9.1.1 exists after the failed create" in m for m in messages)
+
     def test_release_existing_at_the_wrong_sha_re_raises(self) -> None:
         # Someone else's release under the same tag is not our success.
         repo = _publishable_repo()

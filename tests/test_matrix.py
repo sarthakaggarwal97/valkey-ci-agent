@@ -76,3 +76,24 @@ def test_build_matrix_filters_by_repo_and_project_number(tmp_path) -> None:
             }
         ]
     }
+
+
+def test_main_logs_selection_and_warns_when_nothing_matches(tmp_path, monkeypatch, caplog) -> None:
+    import logging
+    import sys
+
+    from scripts.backport import matrix as matrix_mod
+
+    output = tmp_path / "out"
+    monkeypatch.setattr(sys, "argv", [
+        "matrix", "--registry", _write_registry(tmp_path),
+        "--repo", "org/missing", "--output-file", str(output),
+    ])
+    with caplog.at_level(logging.INFO, logger="scripts.backport.matrix"):
+        matrix_mod.main()
+
+    assert "has_entries=false" in output.read_text()
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("repo filter: org/missing" in m and "0 entries" in m for m in messages)
+    assert any(r.levelname == "WARNING" and "No registry entries matched" in r.getMessage()
+               for r in caplog.records)

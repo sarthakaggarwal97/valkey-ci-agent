@@ -39,6 +39,7 @@ from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import BOT_EMAIL, BOT_NAME
 from scripts.common.job_summary import emit_job_summary
+from scripts.common.logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -654,10 +655,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    configure_logging(verbose=args.verbose)
 
     github_token = (
         args.token

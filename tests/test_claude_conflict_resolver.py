@@ -8,8 +8,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from scripts.backport.conflict_resolver import resolve_conflicts_with_claude
 from scripts.backport.models import BackportPRContext, ConflictedFile
+
+
+@pytest.fixture(autouse=True)
+def _tmp_path_is_a_git_repo(tmp_path: Path) -> None:
+    # The resolver always runs inside a clone, and its out-of-scope-edit
+    # check now refuses to run when git cannot list the worktree.
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
 
 
 def _pr_context() -> BackportPRContext:
@@ -329,3 +338,19 @@ def test_claude_editing_unlisted_file_is_rejected(tmp_path: Path) -> None:
     assert results[0].resolved_content is None
     assert "outside the allowed cherry-pick file set" in results[0].resolution_summary
     assert "src/server.c" in results[0].resolution_summary
+
+
+def test_failed_worktree_probe_fails_closed(tmp_path: Path) -> None:
+    """The out-of-scope-edit check must not run on a partial path set."""
+    from scripts.backport import conflict_resolver
+
+    real_run = subprocess.run
+
+    def failing_run(cmd, **kwargs):
+        if cmd[:3] == ["git", "ls-files", "--others"]:
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="fatal: index locked")
+        return real_run(cmd, **kwargs)
+
+    with patch.object(conflict_resolver.subprocess, "run", side_effect=failing_run), \
+            pytest.raises(RuntimeError, match="index locked"):
+        conflict_resolver._git_changed_paths(str(tmp_path))

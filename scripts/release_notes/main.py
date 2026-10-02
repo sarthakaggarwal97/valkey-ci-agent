@@ -27,6 +27,7 @@ from github import Auth, Github
 
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
+from scripts.common.logging_utils import configure_logging
 from scripts.common.proc import git_output, run_git
 from scripts.release_notes import discover as discover_mod
 from scripts.release_notes import release_cut as cut_mod
@@ -130,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
                              "and marks it ready.")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
 
     if not args.token:
         parser.error("a GitHub token is required (--token or RELEASE_NOTES_GITHUB_TOKEN/GITHUB_TOKEN)")

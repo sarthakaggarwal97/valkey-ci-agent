@@ -33,9 +33,10 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.common.job_summary import emit_job_summary
+from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import PollLoopError, env_seconds, run_poll_loop
 from scripts.release.authorize import NotAuthorizedError
-from scripts.release.models import ReleaseIntent
+from scripts.release.models import ReleaseIntent, ReleaseStatus, release_tag
 from scripts.release.policy import RepoReleasePolicy, load_policy
 from scripts.release.publish import (
     ensure_environment_protected,
@@ -91,6 +92,38 @@ def _emit_outputs(values: dict[str, str]) -> None:
             if "\n" in value:
                 raise ValueError(f"refusing multi-line GITHUB_OUTPUT value for {key!r}")
             fh.write(f"{key}={value}\n")
+
+
+# Non-secret arguments worth echoing at the start of a run. An explicit
+# allowlist, so a new secret-bearing flag can never leak into the log.
+_HEADER_ARGS = ("branch", "intent", "actor", "sha", "dry_run", "plan_only",
+                "unattended", "expected_tag", "expected_sha", "expected_digest")
+
+
+def _log_run_header(args: argparse.Namespace, policy: RepoReleasePolicy) -> None:
+    # Inputs are dispatch-supplied: collapse whitespace so a value cannot
+    # start a new line (and with it a forged Actions workflow command).
+    fields = [f"{name}={' '.join(str(getattr(args, name)).split())}"
+              for name in _HEADER_ARGS
+              if getattr(args, name, None) not in (None, "", False)]
+    logger.info("Release controller %s on %s (policy %s, run %s): %s",
+                args.command, policy.repo, args.policy, _actions_run_url() or "local",
+                " ".join(fields) or "no arguments")
+
+
+def _status_row(branch: str, status: "ReleaseStatus | None") -> str:
+    if status is None:
+        return f"| {branch} | none | - | - | No active release |"
+    release = release_tag(status.version, status.stage) if status.version else "not pinned yet"
+    next_step = " ".join(status.blockers[0].split()) if status.blockers else "-"
+    return (f"| {branch} | {release} | {status.phase.value} | "
+            f"{'yes' if status.ready else 'no'} | {next_step.replace('|', '/')} |")
+
+
+_STATUS_TABLE_HEADER = (
+    "| Branch | Release | Phase | Ready | Next blocker |\n"
+    "|--------|---------|-------|-------|--------------|"
+)
 
 
 def _resolve_policy(parser: argparse.ArgumentParser, args: argparse.Namespace) -> RepoReleasePolicy:
@@ -164,11 +197,12 @@ def main(argv: list[str] | None = None) -> int:
                                 "tag/SHA bindings apply)")
 
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
 
     if not args.token:
         parser.error("a GitHub token is required (--token or RELEASE_GITHUB_TOKEN/GITHUB_TOKEN)")
     policy = _resolve_policy(parser, args)
+    _log_run_header(args, policy)
     gh = Github(auth=Auth.Token(args.token))
     # Cross-repo work (qualification dispatch, downstream verification,
     # bundle/helm writes) uses a separately scoped token when provided, so
@@ -203,6 +237,7 @@ def main(argv: list[str] | None = None) -> int:
         raise AssertionError(f"unhandled command: {args.command}")
     except (ReleaseControlError, NotAuthorizedError, ValueError) as exc:
         logger.error("%s", exc)
+        emit_job_summary(f"## Release {args.command} refused\n\n{exc}")
         return 1
 
 
@@ -223,18 +258,21 @@ def _run_start(gh: Any, policy: RepoReleasePolicy, args: argparse.Namespace) -> 
         "created": "true" if result.created else "false",
         "cut_needed": "true" if result.cut_needed else "false",
     })
-    if result.created:
-        logger.info("Started release %s (%s) on %s", result.version, result.stage, args.branch)
+    if args.dry_run:
+        # Nothing was created; the workflow also skips the notes cut.
+        outcome = (f"Dry run: would {'start' if result.created else 'resume'} release "
+                   f"{result.tag} on {args.branch}; no tracker created and no notes cut")
+    elif result.created:
+        outcome = (f"Started release {result.version} ({result.stage}) on {args.branch}: "
+                   f"tracker {result.issue_url}; the notes cut runs next")
     elif result.cut_needed:
-        logger.info(
-            "Resuming release on %s: tracker %s has no notes PR; requesting a (re)cut of %s",
-            args.branch, result.issue_url, result.tag,
-        )
+        outcome = (f"Resuming release on {args.branch}: tracker {result.issue_url} has no "
+                   f"notes PR; requesting a (re)cut of {result.tag}")
     else:
-        logger.info(
-            "Duplicate start: release %s already in flight on %s, reusing issue %s",
-            result.tag, args.branch, result.issue_url,
-        )
+        outcome = (f"Duplicate start: release {result.tag} already in flight on "
+                   f"{args.branch}, reusing issue {result.issue_url}; no notes cut")
+    logger.info("%s", outcome)
+    emit_job_summary(f"## Release start: {result.tag}\n\n{outcome}.")
     return 0
 
 
@@ -254,9 +292,13 @@ def _run_reconcile_poll(gh: Any, gh_downstream: Any, gh_agent: Any, agent_repo: 
     exception) is promoted to an error for the same reason.
     """
 
+    # Each pass recomputes everything, so only the newest pass's table is
+    # worth showing; appending one per pass would bury it.
+    latest_summary: list[str] = []
+
     def poll_once() -> int:
         code = _run_reconcile(gh, gh_downstream, gh_agent, agent_repo,
-                              policy, parser, args)
+                              policy, parser, args, summary_out=latest_summary)
         if code != 0:
             raise ReleaseControlError("reconcile pass reported failed branches")
         return code
@@ -276,15 +318,30 @@ def _run_reconcile_poll(gh: Any, gh_downstream: Any, gh_agent: Any, agent_repo: 
         )
     except PollLoopError as exc:
         logger.error("%s", exc)
+        if latest_summary:
+            latest_summary[-1] += (
+                "\n\n> [!WARNING]\n> An earlier pass in this run failed, so the run "
+                "fails even if the newest pass above is clean; see the job log."
+            )
         return 1
+    finally:
+        if latest_summary:
+            emit_job_summary(latest_summary[-1])
     return 0
 
 
 def _run_reconcile(gh: Any, gh_downstream: Any, gh_agent: Any, agent_repo: str,
                    policy: RepoReleasePolicy, parser: argparse.ArgumentParser,
-                   args: argparse.Namespace) -> int:
+                   args: argparse.Namespace,
+                   summary_out: "list[str] | None" = None) -> int:
+    """One reconcile pass over the selected branches.
+
+    The pass's summary table is written to the job summary, or appended to
+    *summary_out* when the caller (the poll loop) decides what to show.
+    """
     branches = [args.branch] if args.branch else list(policy.branches)
     failed: list[str] = []
+    rows: list[str] = []
     for branch in branches:
         if branch not in policy.branches:
             parser.error(
@@ -293,12 +350,23 @@ def _run_reconcile(gh: Any, gh_downstream: Any, gh_agent: Any, agent_repo: str,
         # One branch's failure (deleted branch, transient API error)
         # must not skip the remaining branches until the next cron.
         try:
-            reconcile_branch(gh, policy, branch, act=True,
-                             gh_downstream=gh_downstream,
-                             gh_agent=gh_agent, agent_repo=agent_repo)
+            status = reconcile_branch(gh, policy, branch, act=True,
+                                      gh_downstream=gh_downstream,
+                                      gh_agent=gh_agent, agent_repo=agent_repo)
         except Exception:
             logger.exception("Reconcile failed for %s %s", policy.repo, branch)
             failed.append(branch)
+            rows.append(f"| {branch} | ? | ? | ? | Reconcile failed: see the job log |")
+            continue
+        rows.append(_status_row(branch, status))
+    logger.info("Reconcile pass over %d branch(es) of %s: %d failed%s", len(branches),
+                policy.repo, len(failed), f" ({', '.join(failed)})" if failed else "")
+    summary = (f"## Release reconcile: {policy.repo}\n\n{_STATUS_TABLE_HEADER}\n"
+               + "\n".join(rows))
+    if summary_out is None:
+        emit_job_summary(summary)
+    else:
+        summary_out.append(summary)
     if failed:
         logger.error("Reconcile failed for branch(es): %s", ", ".join(failed))
         return 1
@@ -310,9 +378,11 @@ def _run_adopt(gh: Any, policy: RepoReleasePolicy, args: argparse.Namespace) -> 
         gh, policy, branch=args.branch, sha=args.sha, actor=args.actor,
     )
     logger.info(
-        "Adopted %s as candidate on %s (ready=%s)",
-        status.candidate.sha, args.branch, status.ready,
+        "Adopted %s as candidate on %s (phase=%s, ready=%s)",
+        status.candidate.sha, args.branch, status.phase.value, status.ready,
     )
+    emit_job_summary(f"## Release adopt: {args.branch}\n\nAdopted `{status.candidate.sha}`."
+                     f"\n\n{_STATUS_TABLE_HEADER}\n{_status_row(args.branch, status)}")
     return 0
 
 
@@ -357,7 +427,12 @@ def _run_publish(gh: Any, gh_downstream: Any, agent_repo: str,
         run_url=_actions_run_url(),
         gh_downstream=gh_downstream,
     )
-    logger.info("Published: %s", url)
+    logger.info("Published %s at %s (approved by @%s): %s",
+                args.expected_tag, args.expected_sha, args.actor, url)
+    emit_job_summary(f"## Published {args.expected_tag}\n\n"
+                     f"- Release: {url}\n- Commit: `{args.expected_sha}`\n"
+                     f"- Approved by: @{args.actor}\n\n"
+                     "Downstream outputs are now tracked by the reconcile workflow.")
     _emit_outputs({"release_url": url})
     return 0
 

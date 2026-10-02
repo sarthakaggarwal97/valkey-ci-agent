@@ -81,3 +81,29 @@ def test_run_build_commands_overwrites_existing_log(tmp_path) -> None:
     text = log_path.read_text()
     assert "stale content" not in text
     assert "$ make" in text
+
+
+def test_run_build_commands_logs_each_outcome_and_skipped_commands(tmp_path, caplog) -> None:
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="scripts.common.build_validator"):
+        ok, _ = run_build_commands(str(tmp_path), ["true", "exit 4", "echo never"])
+
+    assert ok is False
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("1/3 passed" in m for m in messages)
+    assert any(
+        "2/3 failed with exit code 4" in m and "1 remaining command(s) not run" in m
+        for m in messages
+    )
+    assert not any("echo never" in m for m in messages)
+
+
+def test_run_build_commands_says_when_there_is_nothing_to_run(tmp_path, caplog) -> None:
+    import logging
+
+    # Routine (Valkey has no setup commands), so INFO, not a warning.
+    with caplog.at_level(logging.INFO, logger="scripts.common.build_validator"):
+        assert run_build_commands(str(tmp_path), []) == (True, "")
+    record = next(r for r in caplog.records if "nothing to run" in r.getMessage())
+    assert record.levelname == "INFO"

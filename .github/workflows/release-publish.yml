@@ -310,8 +310,23 @@ jobs:
           # records for other environments (or rejected states) must
           # resolve to the human who approved THIS gate. The newest
           # matching approval wins.
-          APPROVER=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/approvals" \
-            --jq '[.[] | select(.state == "approved") | select([.environments[]?.name] | index("release"))] | last.user.login // empty' 2>/dev/null || echo "")
+          # Keep the API error: "could not read the record" and "no record"
+          # are different failures and the log must say which one happened.
+          LOOKUP_ERR=$(mktemp)
+          if APPROVER=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/approvals" \
+              --jq '[.[] | select(.state == "approved") | select([.environments[]?.name] | index("release"))] | last.user.login // empty' 2>"$LOOKUP_ERR"); then
+            if [[ -n "$APPROVER" ]]; then
+              echo "Resolved release approver from the deployment approval record: @${APPROVER}"
+            else
+              echo "::warning::The approval record for run ${{ github.run_id }} has no approved entry for the release environment."
+            fi
+          else
+            # The API error goes out as plain text: printed inside ::error::
+            # it could carry its own workflow commands.
+            echo "::error::Could not read the approval record for run ${{ github.run_id }}; the gh api error follows."
+            head -c 2000 "$LOOKUP_ERR" >&2
+            APPROVER=""
+          fi
           if [[ -z "$APPROVER" ]]; then
             # Upstream the protected `release` environment always exists, so
             # a missing approval record means either the gate was bypassed or

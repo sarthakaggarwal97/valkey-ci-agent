@@ -27,6 +27,7 @@ from github import Auth, Github
 
 from scripts.ci_fix.gate import ParsedCommand, is_authorized, parse_command
 from scripts.common.github_client import retry_github_call
+from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import env_int, env_seconds, run_poll_loop
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,15 @@ _DEFAULT_LOOKBACK_MINUTES = 180
 # GitHub App installation tokens are short-lived. Sustained polling is capped
 # below an hour so a job does not keep sleeping past token expiry.
 _MAX_LOOP_SECONDS = 55 * 60
+
+class ClaimedDispatchFailed(Exception):
+    """Dispatch failed after this run claimed the comment.
+
+    The claim reaction stays (an ambiguous failure may still have started a
+    run, and retrying could double-dispatch), so later ticks skip the comment.
+    Surfacing it fails the poll run instead of losing the command silently.
+    """
+
 
 DispatchFn = Callable[[str, int, ParsedCommand, str, int], None]
 """(repo_full_name, pr_number, command, commenter, comment_id) -> None."""
@@ -74,8 +84,11 @@ def poll_once(
     repo = gh.get_repo(target_repo)
     since = time.time() - lookback_minutes * 60
     dispatched = 0
+    errors = 0
+    claimed_failures: list[str] = []
 
-    for comment in _recent_comments(repo, since):
+    comments = _recent_comments(repo, since)
+    for comment in comments:
         try:
             if _process_comment(
                 gh, repo, comment,
@@ -83,9 +96,26 @@ def poll_once(
                 bot_login=bot_login, dispatch=dispatch, claim=claim,
             ):
                 dispatched += 1
+        except ClaimedDispatchFailed as exc:
+            claimed_failures.append(str(getattr(comment, "id", "?")))
+            logger.error("%s", exc)
         except Exception as exc:  # noqa: BLE001 - one bad comment must not abort the tick
-            logger.warning("Skipping comment %s after error: %s", getattr(comment, "id", "?"), exc)
+            # Nothing was claimed, so a later tick retries this comment.
+            errors += 1
+            logger.warning(
+                "Skipping comment %s after error (not claimed; a later tick retries): %s",
+                getattr(comment, "id", "?"), exc,
+            )
 
+    logger.info(
+        "Scanned %d comment(s) on %s from the last %d minute(s): dispatched=%d "
+        "retryable_errors=%d claimed_dispatch_failures=%d",
+        len(comments), target_repo, lookback_minutes, dispatched, errors, len(claimed_failures),
+    )
+    if claimed_failures:
+        raise RuntimeError(
+            f"ci-fix dispatch failed for claimed comment(s) {', '.join(claimed_failures)}"
+        )
     return dispatched
 
 
@@ -110,22 +140,40 @@ def _process_comment(
     command = parse_command(comment.body or "")
     if command is None:
         return False
+    # Only comments carrying a fix command are logged: everything else on the
+    # repository is noise for this poller.
     if _is_bot(comment):
+        logger.debug("Skipping fix command in comment %s: posted by a bot", comment.id)
         return False
     pr_number = _pull_request_number(repo, comment)
     if pr_number is None:
+        logger.info("Skipping fix command in comment %s: not on a pull request", comment.id)
         return False
     commenter = _login(comment)
     if not is_authorized(gh, org, team_slug, commenter):
-        logger.info("Skipping comment %s from unauthorized %s", comment.id, commenter)
+        logger.info("Skipping comment %s from unauthorized %s (not in %s/%s)",
+                    comment.id, commenter, org, team_slug)
         return False
     if _already_claimed(comment, bot_login):
+        logger.debug("Skipping comment %s on %s#%d: already claimed", comment.id,
+                     target_repo, pr_number)
         return False
     if not claim(comment):
         # Another concurrent tick won the claim, or the claim call failed.
+        logger.info("Skipping comment %s on %s#%d: claim not acquired", comment.id,
+                    target_repo, pr_number)
         return False
-    dispatch(target_repo, pr_number, command, commenter, comment.id)
-    logger.info("Dispatched ci-fix for %s#%d (commenter %s)", target_repo, pr_number, commenter)
+    try:
+        dispatch(target_repo, pr_number, command, commenter, comment.id)
+    except Exception as exc:
+        raise ClaimedDispatchFailed(
+            f"Dispatch failed for comment {comment.id} on {target_repo}#{pr_number} "
+            f"(commenter {commenter}, run {command.run_id}) after it was claimed; "
+            f"remove the {_CLAIM_REACTION!r} reaction from the comment to let the "
+            f"poller retry: {exc}"
+        ) from exc
+    logger.info("Dispatched ci-fix for %s#%d (commenter %s, comment %s, run %s)",
+                target_repo, pr_number, commenter, comment.id, command.run_id)
     return True
 
 
@@ -245,11 +293,13 @@ def dispatch_ci_fix(
         if comment_id:
             inputs["comment_id"] = str(comment_id)
         wf = gh.get_repo(agent_repo).get_workflow(workflow)
-        retry_github_call(
+        dispatched = retry_github_call(
             lambda: wf.create_dispatch(ref, inputs),
             retries=2,
             description=f"dispatch {workflow} for {repo_full_name}#{pr_number}",
         )
+        if not dispatched:
+            raise RuntimeError(f"{agent_repo}/{workflow}@{ref} rejected the dispatch")
 
     return _dispatch
 
@@ -290,7 +340,7 @@ def _poll_duration_seconds() -> int:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
 
     token = os.environ["CI_FIX_POLL_TOKEN"]
     target_repo = os.environ.get("CI_FIX_POLL_TARGET_REPO", "valkey-io/valkey")
@@ -303,6 +353,15 @@ def main() -> int:
     # reaction. The installation token cannot reliably call GET /user, so the
     # bot login is derived from the slug rather than looked up.
     bot_login = _bot_login()
+
+    interval = _poll_interval_seconds()
+    duration = _poll_duration_seconds()
+    logger.info(
+        "CI fix comment poll: target=%s dispatches=%s/%s@%s authorized=%s/%s bot=%s "
+        "lookback=%dm interval=%ds duration=%ds",
+        target_repo, agent_repo, workflow, ref, org, team_slug, bot_login,
+        _lookback_minutes(), interval, duration,
+    )
 
     gh = Github(auth=Auth.Token(token))
     dispatch = dispatch_ci_fix(gh, agent_repo=agent_repo, workflow=workflow, ref=ref)
@@ -321,8 +380,8 @@ def main() -> int:
 
     results = run_poll_loop(
         _poll,
-        interval_seconds=_poll_interval_seconds(),
-        duration_seconds=_poll_duration_seconds(),
+        interval_seconds=interval,
+        duration_seconds=duration,
         logger=logger,
     )
     logger.info(

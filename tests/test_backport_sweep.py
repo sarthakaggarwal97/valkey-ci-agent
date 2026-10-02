@@ -3049,3 +3049,99 @@ def test_project_items_query_selects_repository_name_with_owner():
     query = backport_sweep._project_items_query("organization")
     assert "repository {" in query
     assert "nameWithOwner" in query
+
+
+def test_apply_candidate_reports_failed_conflict_listing(tmp_path):
+    candidate = ProjectBackportCandidate(
+        source_pr_number=11,
+        source_pr_title="Listing fails",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/11",
+        target_branch="8.1",
+        merge_commit_sha="abc123",
+    )
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        if cmd[:2] == ["git", "cherry-pick"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
+        if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="fatal: bad index")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    result = apply_candidate(
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
+        run_git=lambda *_a, **_k: None,
+        run_process=fake_subprocess_run,
+    )
+
+    # Not misreported as "cherry-pick failed" with no conflicts.
+    assert result.outcome == "error"
+    assert "could not list conflicted files (exit 128): fatal: bad index" in result.detail
+
+
+def test_sweep_outcome_log_calls_out_partial_errors(caplog):
+    from scripts.backport import sweep
+    from scripts.backport.sweep_models import BranchSweepResult
+
+    result = BranchSweepResult(
+        target_branch="8.1",
+        candidates_found=2,
+        results=[
+            CandidateResult(1, "ok", "applied"),
+            CandidateResult(2, "bad", "error", "boom"),
+        ],
+    )
+    caplog.set_level("INFO", logger="scripts.backport.sweep")
+    sweep._log_sweep_outcome(result)
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("outcomes: applied=1, error=1" in m for m in messages)
+    assert any(r.levelname == "WARNING" and "candidate(s) #2 errored" in r.getMessage()
+               for r in caplog.records)
+
+
+def test_apply_candidate_isolates_a_failed_resolver_safety_probe(tmp_path):
+    """A resolver that refuses to run (failed worktree probe) drops only this
+    candidate; it must not abort the whole sweep."""
+    candidate = ProjectBackportCandidate(
+        source_pr_number=13,
+        source_pr_title="Probe fails",
+        source_pr_url="https://github.com/valkey-io/valkey/pull/13",
+        target_branch="8.1",
+        merge_commit_sha="abc123",
+    )
+    git_calls = []
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        if cmd[:2] == ["git", "cherry-pick"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="conflict")
+        if cmd[:4] == ["git", "diff", "--name-only", "--diff-filter=U"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="src/a.c\n", stderr="")
+        if cmd[:2] == ["git", "show"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="text\n", stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    def failing_resolver(*_a, **_k):
+        raise RuntimeError("git ls-files failed with exit code 128")
+
+    result = apply_candidate(
+        repo_dir=str(tmp_path),
+        candidate=candidate,
+        repo_full_name="valkey-io/valkey",
+        git_env={},
+        run_git=lambda _d, *args, **_k: git_calls.append(args),
+        resolve_conflicts=failing_resolver,
+        run_process=fake_subprocess_run,
+    )
+    assert result.outcome == "error"
+    assert "conflict resolution aborted: git ls-files failed" in result.detail
+    assert ("cherry-pick", "--abort") in git_calls
+
+
+def test_candidate_log_is_a_single_line(caplog):
+    caplog.set_level("INFO", logger="scripts.backport.sweep")
+    backport_sweep._log_candidate(
+        "8.1", CandidateResult(5, "t", "error", "line one\n::error::forged"))
+    message = caplog.records[-1].getMessage()
+    assert "\n" not in message and "line one ::error::forged" in message

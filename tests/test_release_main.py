@@ -46,6 +46,57 @@ class TestCLI:
             "created": "true", "cut_needed": "true",
         }
 
+    def test_dry_run_start_never_claims_a_release_was_started(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+            caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level("INFO", logger="scripts.release.main")
+        summary = tmp_path / "summary"
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+        # start_release reports created=True in dry run (the derived release
+        # is new); the log and summary must still say nothing was created.
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.start_release", return_value=_start_result()):
+            code = main([*_POLICY_ARGS, "start", "--branch", "9.1",
+                         "--intent", "patch", "--actor", "madolson", "--dry-run"])
+        assert code == 0
+        messages = [r.getMessage() for r in caplog.records]
+        assert not any(m.startswith("Started release") for m in messages)
+        assert any("Dry run: would start release 9.1.1 on 9.1" in m for m in messages)
+        assert any("Release controller start on valkey-io/valkey" in m
+                   and "dry_run=True" in m and "actor=madolson" in m for m in messages)
+        assert "no tracker created" in summary.read_text()
+
+    def test_refusal_is_written_to_the_job_summary(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        summary = tmp_path / "summary"
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.start_release",
+                   side_effect=ReleaseControlError("tracker #7 still in flight")):
+            assert main([*_POLICY_ARGS, "start", "--branch", "9.1",
+                         "--intent", "patch", "--actor", "madolson"]) == 1
+        text = summary.read_text()
+        assert "## Release start refused" in text and "tracker #7 still in flight" in text
+
+    def test_header_cannot_be_split_by_a_newline_in_an_input(
+            self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level("INFO", logger="scripts.release.main")
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.start_release", return_value=_start_result()):
+            main([*_POLICY_ARGS, "start", "--branch", "9.1", "--intent", "patch",
+                  "--actor", "mallory\n::error::forged"])
+        header = next(r.getMessage() for r in caplog.records
+                      if r.getMessage().startswith("Release controller start"))
+        assert "\n" not in header and "actor=mallory ::error::forged" in header
+
+    def test_header_never_includes_the_token(self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level("INFO", logger="scripts.release.main")
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.reconcile_branch", return_value=None):
+            main(["--token", "sekrit-token", "--policy", str(_ROOT / "release_policy.yml"),
+                  "--repo", "valkey-io/valkey", "reconcile"])
+        assert not any("sekrit-token" in r.getMessage() for r in caplog.records)
+
     def test_refusal_exits_1(self) -> None:
         with patch("scripts.release.main.Github"), \
              patch("scripts.release.main.start_release",
@@ -89,6 +140,31 @@ class TestCLI:
         assert code == 1  # the failure is reported...
         branches = [call.args[2] for call in reconcile.call_args_list]
         assert branches == ["7.2", "8.0", "8.1", "9.0", "9.1"]  # ...but nothing is skipped
+
+    def test_reconcile_writes_one_summary_row_per_branch(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from scripts.release.models import ReleasePhase, ReleaseStatus
+
+        summary = tmp_path / "summary"
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+
+        def _reconcile(gh, policy, branch, **kwargs):
+            if branch == "8.0":
+                raise RuntimeError("boom")
+            if branch == "9.1":
+                return ReleaseStatus(repo="valkey-io/valkey", branch="9.1", version="9.1.1",
+                                     stage="ga", phase=ReleasePhase.QUALIFICATION,
+                                     blockers=("Qualification | is running",))
+            return None
+
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.reconcile_branch", side_effect=_reconcile):
+            assert main([*_POLICY_ARGS, "reconcile"]) == 1
+        text = summary.read_text()
+        assert "| 7.2 | none | - | - | No active release |" in text
+        assert "| 8.0 | ? | ? | ? | Reconcile failed: see the job log |" in text
+        # A pipe inside a blocker cannot break the table.
+        assert "| 9.1 | 9.1.1 | qualification | no | Qualification / is running |" in text
 
     def test_reconcile_rejects_unconfigured_branch(self) -> None:
         with patch("scripts.release.main.Github"), pytest.raises(SystemExit) as excinfo:
@@ -199,6 +275,40 @@ class TestReconcilePoll:
             code = main([*_POLICY_ARGS, "reconcile"])
         assert code == 1
         assert reconcile.call_count == 2 * len(self._BRANCHES)
+
+    def test_poll_mode_writes_only_the_newest_pass_summary(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._set_poll_env(monkeypatch, "10", "15")
+        summary = tmp_path / "summary"
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.reconcile_branch", return_value=None), \
+             patch("scripts.release.main.run_poll_loop",
+                   side_effect=self._controlled_loop([0, 0, 5, 10, 20])):
+            assert main([*_POLICY_ARGS, "reconcile"]) == 0
+        assert summary.read_text().count("## Release reconcile") == 1
+
+    def test_poll_summary_flags_an_earlier_failed_pass(
+            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._set_poll_env(monkeypatch, "10", "15")
+        summary = tmp_path / "summary"
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+        calls = {"n": 0}
+
+        def _fail_first_pass(gh, policy, branch, **kwargs):
+            calls["n"] += 1
+            if calls["n"] <= len(self._BRANCHES):
+                raise RuntimeError("transient")
+
+        with patch("scripts.release.main.Github"), \
+             patch("scripts.release.main.reconcile_branch", side_effect=_fail_first_pass), \
+             patch("scripts.release.main.run_poll_loop",
+                   side_effect=self._controlled_loop([0, 0, 5, 10, 20])):
+            assert main([*_POLICY_ARGS, "reconcile"]) == 1
+        text = summary.read_text()
+        # The newest (clean) table, plus why the run still failed.
+        assert "Reconcile failed" not in text
+        assert "An earlier pass in this run failed" in text
 
     def test_clean_passes_exit_zero(
             self, monkeypatch: pytest.MonkeyPatch) -> None:

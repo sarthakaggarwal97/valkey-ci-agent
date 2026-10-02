@@ -77,3 +77,47 @@ def test_refuses_base_branch_commit(fork):
 def test_rejects_non_agent_branch():
     with pytest.raises(ValueError, match="non-namespaced branch"):
         rc.revert_commit("o/r", "8.0", "abc1234", token="")
+
+
+def test_unknown_sha_is_reported_as_missing_not_as_a_base_commit(fork):
+    _, work, _base, _agent = fork
+    before = _agent_head(work)
+
+    with pytest.raises(RuntimeError, match="does not exist"):
+        rc.revert_commit("o/r", "agent/backport/sweep/8.0", "f" * 40, token="", base_branch="8.0")
+
+    assert _agent_head(work) == before
+
+
+def test_conflicting_revert_names_the_conflicting_path(fork):
+    _, work, _base, agent_sha = fork
+    (work / "feature.txt").write_text("feature, edited later\n")
+    _git(work, "commit", "-q", "-am", "later edit")
+    _git(work, "push", "-q", "origin", "agent/backport/sweep/8.0")
+    before = _agent_head(work)
+
+    with pytest.raises(RuntimeError, match="overlaps it. Conflicts: feature.txt"):
+        rc.revert_commit("o/r", "agent/backport/sweep/8.0", agent_sha, token="", base_branch="8.0")
+
+    assert _agent_head(work) == before
+
+
+def test_successful_revert_logs_the_new_commit(fork, caplog):
+    caplog.set_level("INFO", logger="scripts.backport.revert_commit")
+    _, work, _base, agent_sha = fork
+    rc.revert_commit("o/r", "agent/backport/sweep/8.0", agent_sha, token="", base_branch="8.0")
+
+    head = _agent_head(work)
+    assert any(f"/commit/{head}" in r.getMessage() for r in caplog.records)
+
+
+def test_failed_revert_keeps_gits_reason_when_there_is_nothing_to_abort(fork):
+    """Reverting the same commit twice is empty; git's reason must survive."""
+    _, work, _base, agent_sha = fork
+    rc.revert_commit("o/r", "agent/backport/sweep/8.0", agent_sha, token="", base_branch="8.0")
+    before = _agent_head(work)
+
+    with pytest.raises(RuntimeError, match="git revert exited"):
+        rc.revert_commit("o/r", "agent/backport/sweep/8.0", agent_sha, token="", base_branch="8.0")
+
+    assert _agent_head(work) == before

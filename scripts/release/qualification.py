@@ -467,6 +467,9 @@ def _automation_workflow(gh: Any, policy: RepoReleasePolicy) -> "tuple[Any, Any]
         )
     except GithubException as exc:
         if exc.status == 404:
+            logger.warning("Qualification workflow %s not found on %s (404)",
+                           policy.downstream.qualification_workflow,
+                           policy.downstream.automation_repo)
             return repo, None
         raise
     return repo, workflow
@@ -598,6 +601,9 @@ def _find_run(gh: Any, policy: RepoReleasePolicy, tag: str, sha: str,
     default_branch = repo.default_branch
     for index, run in enumerate(runs):
         if index >= RUN_SCAN_LIMIT:
+            logger.info("No qualification run titled %r within the newest %d runs "
+                           "of %s; older runs are not considered", marker, RUN_SCAN_LIMIT,
+                           policy.downstream.qualification_workflow)
             break
         if marker not in (run.display_title or ""):
             continue

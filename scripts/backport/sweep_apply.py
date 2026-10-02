@@ -137,6 +137,17 @@ def apply_candidate(
         capture_output=True,
         text=True,
     )
+    if conflict_result.returncode != 0:
+        # Without the conflict list the failure would be misread as "no
+        # conflicts" below, so report git's own error instead.
+        _abort_cherry_pick(repo_dir, run_git)
+        return CandidateResult(
+            candidate.source_pr_number,
+            candidate.source_pr_title,
+            "error",
+            f"could not list conflicted files (exit {conflict_result.returncode}): "
+            f"{(conflict_result.stderr or '')[:500]}",
+        )
     conflicting_paths = [line.strip() for line in conflict_result.stdout.splitlines() if line.strip()]
     if not conflicting_paths:
         _abort_cherry_pick(repo_dir, run_git)
@@ -229,14 +240,25 @@ def apply_candidate(
         )
         worktree_paths = changed_paths_in_index_or_worktree(repo_dir, run_process=run_process)
         allowed_resolution_paths = sorted(set(conflicting_paths) | set(worktree_paths))
-        resolutions = resolve_conflicts(
-            repo_dir,
-            conflicting_files,
-            pr_context,
-            language=language,
-            build_commands=resolver_validation_commands or None,
-            allowed_paths=allowed_resolution_paths,
-        )
+        try:
+            resolutions = resolve_conflicts(
+                repo_dir,
+                conflicting_files,
+                pr_context,
+                language=language,
+                build_commands=resolver_validation_commands or None,
+                allowed_paths=allowed_resolution_paths,
+            )
+        except RuntimeError as exc:
+            # A failed worktree safety probe: drop this candidate, keep the
+            # rest of the sweep going.
+            _abort_cherry_pick(repo_dir, run_git)
+            return CandidateResult(
+                candidate.source_pr_number,
+                candidate.source_pr_title,
+                "error",
+                f"conflict resolution aborted: {exc}",
+            )
     unresolved = [r for r in resolutions if r.resolved_content is None]
     if unresolved:
         _abort_cherry_pick(repo_dir, run_git)

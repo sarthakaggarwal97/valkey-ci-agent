@@ -11,6 +11,8 @@ from typing import Any, TypeVar
 
 T = TypeVar("T")
 
+_logger = logging.getLogger(__name__)
+
 
 class PollLoopError(RuntimeError):
     """Raised after a sustained poll loop had one or more failed iterations."""
@@ -53,10 +55,17 @@ def env_int(
         try:
             value = int(raw)
         except ValueError:
+            _logger.warning("%s=%r is not an integer; using default %d", name, raw, default)
             value = default
+    requested = value
     value = max(minimum, value)
     if maximum is not None:
         value = min(value, maximum)
+    if value != requested:
+        _logger.warning(
+            "%s=%d is outside [%d, %s]; using %d",
+            name, requested, minimum, "inf" if maximum is None else maximum, value,
+        )
     return value
 
 
@@ -98,10 +107,13 @@ def run_poll_loop(
         return [poll_once()]
 
     start = clock()
+    # Elapsed time for logs only; the injected clock drives the schedule.
+    loop_started = time.monotonic()
     deadline = start + duration_seconds
     next_start = start
     results: list[T] = []
     iteration = 0
+    failures = 0
     last_error: BaseException | None = None
 
     while True:
@@ -117,9 +129,15 @@ def run_poll_loop(
         iteration += 1
         if logger is not None:
             logger.info("Starting poll iteration %d", iteration)
+        iteration_started = time.monotonic()
         try:
             results.append(poll_once())
+            if logger is not None:
+                logger.info(
+                    "Poll iteration %d completed in %.1fs", iteration, time.monotonic() - iteration_started,
+                )
         except Exception as exc:  # noqa: BLE001 - keep sustained polling alive
+            failures += 1
             last_error = exc
             if logger is not None:
                 logger.exception("Poll iteration %d raised; continuing to next interval", iteration)
@@ -137,6 +155,11 @@ def run_poll_loop(
             if next_start > deadline:
                 break
 
+    if logger is not None:
+        logger.info(
+            "Poll loop finished: iterations=%d succeeded=%d failed=%d elapsed=%.1fs",
+            iteration, iteration - failures, failures, time.monotonic() - loop_started,
+        )
     if last_error is not None:
         raise PollLoopError(results=results, last_error=last_error) from last_error
     return results

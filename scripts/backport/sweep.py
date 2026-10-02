@@ -54,6 +54,7 @@ from scripts.backport.sweep_validation import (
 )
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.job_summary import emit_job_summary
+from scripts.common.logging_utils import configure_logging
 
 if TYPE_CHECKING:
     from scripts.backport.registry import BranchEntry, RepoEntry  # noqa: F401
@@ -208,6 +209,13 @@ def run_backport_sweep(
 
     gh = Github(auth=Auth.Token(github_token))
 
+    logger.info(
+        "Backport sweep: %s branch %s (project %s/%d, push repo %s, cap %s, "
+        "%d validation command(s), repair %s)",
+        repo_full_name, target_branch, repo_entry.project_owner, branch_entry.project_number,
+        push_repo, max_candidates if max_candidates > 0 else "none", len(test_commands),
+        "on" if repo_entry.repair_validation_failures else "off",
+    )
     discovery = ProjectBackportDiscovery(
         GitHubGraphQLClient(github_token),
         project_owner=repo_entry.project_owner,
@@ -248,6 +256,8 @@ def run_backport_sweep(
         return result
 
     if not candidates:
+        logger.info("Branch %s: no PR in %r status on project %d; nothing to sweep",
+                    target_branch, status_value, branch_entry.project_number)
         result = BranchSweepResult(target_branch=target_branch)
         emit_job_summary(build_summary([result]))
         return result
@@ -269,8 +279,45 @@ def run_backport_sweep(
         backport_label=repo_entry.backport_label,
         llm_conflict_label=repo_entry.llm_conflict_label,
     )
+    _log_sweep_outcome(result)
     emit_job_summary(build_summary([result]))
     return result
+
+
+def _log_candidate(target_branch: str, item: CandidateResult) -> None:
+    # Conflicts and validation failures need a human; already-applied and
+    # empty picks are routine.
+    if item.outcome == "error":
+        level = logging.ERROR
+    elif item.outcome in ("applied", "skipped-existing", "skipped-empty"):
+        level = logging.INFO
+    else:
+        level = logging.WARNING
+    # Details carry git stderr and AI output: one bounded line, so a
+    # multi-line value cannot forge an Actions workflow command.
+    detail = " ".join((item.detail or "").split())[:500]
+    logger.log(level, "Candidate #%d on %s: %s%s", item.source_pr_number, target_branch,
+               item.outcome, f" ({detail})" if detail else "")
+
+
+def _log_sweep_outcome(result: BranchSweepResult) -> None:
+    counts: dict[str, int] = {}
+    for item in result.results:
+        counts[item.outcome] = counts.get(item.outcome, 0) + 1
+    logger.info(
+        "Sweep of %s finished: %d candidate(s) found, outcomes: %s, PR: %s",
+        result.target_branch, result.candidates_found,
+        ", ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "none",
+        result.pr_url or "none",
+    )
+    errored = [item.source_pr_number for item in result.results
+               if item.outcome == "error" and item.source_pr_number]
+    if errored and not result.error and len(errored) < len(result.results):
+        logger.warning(
+            "Sweep of %s: candidate(s) %s errored and were left out; the run still "
+            "succeeds because other candidates were processed",
+            result.target_branch, ", ".join(f"#{n}" for n in errored),
+        )
 
 
 def _process_branch(
@@ -395,8 +442,11 @@ def _process_branch(
                             detail=DETAIL_ALREADY_ON_SWEEP_BRANCH,
                         )
                     )
+                    _log_candidate(target_branch, result.results[-1])
                     continue
 
+                logger.info("Applying candidate #%d (%s) on %s", candidate.source_pr_number,
+                            " ".join(candidate.source_pr_title.split())[:120], target_branch)
                 candidate_result = apply_candidate(
                     tmpdir,
                     candidate,
@@ -409,6 +459,7 @@ def _process_branch(
                 result.results.append(candidate_result)
 
                 if candidate_result.outcome != "applied":
+                    _log_candidate(target_branch, candidate_result)
                     continue
 
                 # The sweep branch must stay green: only keep a cherry-pick if
@@ -432,9 +483,11 @@ def _process_branch(
                         candidate.source_pr_number,
                         target_branch,
                     )
+                    _log_candidate(target_branch, candidate_result)
                     continue
 
                 applied_count += 1
+                _log_candidate(target_branch, candidate_result)
 
             committed = [
                 item for item in result.results
@@ -477,6 +530,12 @@ def _process_branch(
                     ),
                     backport_label=backport_label,
                     llm_conflict_label=llm_conflict_label,
+                )
+            else:
+                logger.info(
+                    "Not pushing %s: %s", backport_branch,
+                    "no candidate was committed" if not committed
+                    else f"the branch has no changes against {target_branch}",
                 )
 
     except Exception as exc:
@@ -624,10 +683,7 @@ def main() -> None:
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_logging(verbose=args.verbose)
 
     from scripts.backport.registry import load_registry
 

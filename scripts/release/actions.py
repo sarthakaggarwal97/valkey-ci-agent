@@ -265,14 +265,20 @@ def _dispatch_bundle(gh: Any, policy: RepoReleasePolicy, tag: str) -> None:
         lambda: gh.get_repo(policy.downstream.bundle_repo),
         retries=2, description=f"get repo {policy.downstream.bundle_repo}",
     )
-    retry_github_call(
+    dispatched = retry_github_call(
         lambda: repo.create_repository_dispatch(
             event_type="valkey-release",
             client_payload={"version": tag, "component": "valkey"},
         ),
         retries=1, description="dispatch bundle update",
     )
-    logger.info("Dispatched bundle update for valkey %s", tag)
+    # Raising keeps the two-phase done marker from landing on a rejected
+    # dispatch, matching the qualification and build dispatches.
+    if not dispatched:
+        raise RuntimeError(
+            f"bundle repository_dispatch was rejected by {policy.downstream.bundle_repo}"
+        )
+    logger.info("Dispatched bundle update for valkey %s to %s", tag, policy.downstream.bundle_repo)
 
 
 def _dispatch_bundle_once(gh: Any, policy: RepoReleasePolicy,
@@ -677,6 +683,8 @@ def _dispatch_build_release(gh: Any, policy: RepoReleasePolicy, tag: str,
             f"build-release dispatch was rejected by "
             f"{down.automation_repo}/{down.build_workflow}"
         )
+    logger.info("Dispatched %s/%s for %s @ %s", down.automation_repo,
+                down.build_workflow, tag, source_sha[:12])
 
 
 def _retry_qualification_once(
@@ -1635,9 +1643,16 @@ def _advance_publish(gh: Any, gh_agent: Any, agent_repo: str,
     candidate_sha = status.candidate.sha
     workflow = workflow_handle(gh_agent, agent_repo, _PUBLISH_WORKFLOW)
     if workflow is None:
-        return ""  # cannot see the workflow: do not dispatch blind
-    if _active_publish_run(workflow, status.branch, head_sha, tag=tag,
-                           candidate_sha=candidate_sha) is not None:
+        # Cannot see the workflow: do not dispatch blind.
+        logger.warning("Not dispatching %s for %s: the workflow is not visible on %s",
+                       _PUBLISH_WORKFLOW, status.branch, agent_repo)
+        return ""
+    active = _active_publish_run(workflow, status.branch, head_sha, tag=tag,
+                                 candidate_sha=candidate_sha)
+    if active is not None:
+        logger.info("Not dispatching publish for %s %s: run %s is already %s: %s",
+                    status.branch, tag, getattr(active, "id", "?"),
+                    getattr(active, "status", "active"), getattr(active, "html_url", ""))
         return ""
     halted = _halted_publish_failure(workflow, status.branch, head_sha,
                                      tag=tag, candidate_sha=candidate_sha)
@@ -1658,6 +1673,12 @@ def _advance_publish(gh: Any, gh_agent: Any, agent_repo: str,
             return (f"halted publish re-dispatch for {status.branch} "
                     f"(publish run {halted.id} concluded "
                     f"{conclusion})")
+        logger.warning(
+            "Not dispatching publish for %s %s: run %s concluded %s and the "
+            "controller will not retry it until its code or the candidate "
+            "changes (already reported on the tracker): %s",
+            status.branch, tag, halted.id, conclusion, halted.html_url,
+        )
         return ""
     _dispatch_publish(gh_agent, agent_repo, status.branch, tag=tag,
                       candidate_sha=candidate_sha)
@@ -1690,9 +1711,11 @@ def _dispatch_publish(gh_agent: Any, agent_repo: str, branch: str,
     # the Actions form gets the input's false default.
     inputs = {"branch": branch, "tag": tag, "candidate_sha": candidate_sha,
               "unattended": "true"}
-    retry_github_call(
+    dispatched = retry_github_call(
         lambda: workflow.create_dispatch(default_branch, inputs=inputs),
         retries=1, description="dispatch publish pipeline",
     )
+    if not dispatched:
+        raise RuntimeError(f"{_PUBLISH_WORKFLOW} dispatch was rejected by {agent_repo}")
     logger.info("Dispatched the publish pipeline for %s (%s @ %s)",
                 branch, tag or "<no tag>", candidate_sha[:12] or "<no sha>")

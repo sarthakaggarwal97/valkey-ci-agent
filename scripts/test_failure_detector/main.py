@@ -10,6 +10,7 @@ import sys
 from github import Auth, Github
 
 from scripts.common.job_summary import emit_job_summary
+from scripts.common.logging_utils import configure_logging
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.test_failure_detector.download import (
     download_all_test_failures,
@@ -90,8 +91,7 @@ def run(
         dry_run: If True, parse and report but don't create/update issues.
         verbose: Enable debug logging.
     """
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(level=level, format="%(levelname)s %(name)s: %(message)s")
+    configure_logging(verbose=verbose)
 
     gh = Github(auth=Auth.Token(github_token))
     artifact_client = ArtifactClient(gh, token=github_token)
@@ -118,9 +118,10 @@ def run(
     # alongside them, in which case the run is analyzed from an artifact known
     # to be incomplete: every report below has to say so.
     damaged: list[str] = []
+    unusable: list[str] = []
     artifact_content = download_all_test_failures(
         gh, repo_full_name, run_id, github_token,
-        artifact_client=artifact_client, damaged=damaged,
+        artifact_client=artifact_client, damaged=damaged, unusable=unusable,
     )
     if damaged:
         logger.error(
@@ -128,9 +129,23 @@ def run(
             len(damaged), run_id, "; ".join(damaged),
         )
     if artifact_content is None:
-        logger.info("No test failures artifact found — CI run likely passed cleanly.")
-        emit_job_summary(_build_job_summary(run_id, repo_full_name, 0, {}, damaged))
-        return 1 if damaged else 0
+        summary = _build_job_summary(run_id, repo_full_name, 0, {}, damaged)
+        if unusable:
+            # The artifact exists but was not analyzed: zero issues here does
+            # not mean zero failures, and the log must not suggest otherwise.
+            logger.warning(
+                "Run %d was NOT analyzed: %s. Any failure it recorded has no issue.",
+                run_id, "; ".join(unusable),
+            )
+            summary += (
+                "\n### Run not analyzed\n\n"
+                + "".join(f"- {_one_line(reason)}\n" for reason in unusable)
+            )
+        else:
+            logger.info("Run %d has no all-test-failures artifact; no test failures "
+                        "were recorded, so there is nothing to file.", run_id)
+        emit_job_summary(summary)
+        return 1 if damaged or unusable else 0
 
     try:
         all_failures = json.loads(artifact_content)

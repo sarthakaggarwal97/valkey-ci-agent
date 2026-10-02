@@ -193,3 +193,40 @@ def test_run_poll_loop_skips_missed_intervals_instead_of_bursting():
 def test_format_poll_results_preserves_one_shot_shape():
     assert format_poll_results([{"action": "swept"}]) == {"action": "swept"}
     assert format_poll_results([{"n": 1}, {"n": 2}]) == {"runs": [{"n": 1}, {"n": 2}]}
+
+
+def test_env_int_warns_when_value_is_invalid_or_clamped(caplog):
+    assert env_int("KNOB", 5, environ={"KNOB": "abc"}) == 5
+    assert env_int("KNOB", 5, minimum=1, maximum=10, environ={"KNOB": "99"}) == 10
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("KNOB='abc' is not an integer; using default 5" in m for m in messages)
+    assert any("KNOB=99 is outside [1, 10]; using 10" in m for m in messages)
+
+
+def test_run_poll_loop_logs_iteration_completion_and_totals(caplog):
+    import logging
+
+    now = 0.0
+
+    def clock():
+        return now
+
+    def sleep(seconds):
+        nonlocal now
+        now += seconds
+
+    calls = []
+
+    def poll():
+        calls.append(now)
+        if len(calls) == 2:
+            raise RuntimeError("boom")
+        return 1
+
+    log = logging.getLogger("test.poll")
+    with caplog.at_level(logging.INFO, logger="test.poll"), pytest.raises(PollLoopError):
+        run_poll_loop(poll, interval_seconds=10, duration_seconds=25,
+                      clock=clock, sleep=sleep, logger=log)
+    messages = [r.getMessage() for r in caplog.records]
+    assert any(m.startswith("Poll iteration 1 completed in") for m in messages)
+    assert any("iterations=3 succeeded=2 failed=1" in m for m in messages)

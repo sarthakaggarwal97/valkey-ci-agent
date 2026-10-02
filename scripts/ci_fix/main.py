@@ -35,6 +35,7 @@ from scripts.ci_fix.verify.macos import MacosVerifier
 from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import BOT_LOGIN
+from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import env_int
 from scripts.common.workflow_artifacts import ArtifactClient
 
@@ -81,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="Triggering comment id, reacted to with the outcome")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
 
     if not args.target_token:
         parser.error("--target-token/TARGET_TOKEN is required")

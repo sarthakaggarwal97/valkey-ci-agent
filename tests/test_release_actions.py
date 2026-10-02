@@ -686,6 +686,19 @@ class TestBundleDispatchIdempotency:
         assert harness.bodies(":autofix-intent:bundle-dispatch:")
         assert harness.bodies(":autofix-done:bundle-dispatch:")
 
+    def test_rejected_dispatch_never_stamps_done(self) -> None:
+        # create_repository_dispatch returns False on a non-204: that must
+        # not be logged as dispatched or stamped done, or the bundle
+        # update is silently lost for this candidate.
+        repo = MagicMock()
+        repo.create_repository_dispatch.return_value = False
+        harness = _IssueHarness()
+        actions.advance(gh_mock(repo), _POLICY,
+                        status=self._bundle_status(),
+                        tracking_issue=harness.issue)
+        assert harness.bodies(":autofix-intent:bundle-dispatch:")
+        assert not harness.bodies(":autofix-done:bundle-dispatch:")
+
     def test_done_marker_suppresses_re_dispatch_across_passes(self) -> None:
         repo = MagicMock()
         harness = _IssueHarness()
@@ -1360,6 +1373,28 @@ class TestAutoDispatchPublish:
         )
         assert any("publish pipeline" in p for p in performed)
 
+    def test_rejected_publish_dispatch_raises(self) -> None:
+        gh_agent = self._agent()
+        workflow = gh_agent.get_repo.return_value.get_workflow.return_value
+        workflow.create_dispatch.return_value = False
+        with pytest.raises(RuntimeError, match="dispatch was rejected"):
+            actions.advance(gh_mock(MagicMock()), _POLICY,
+                            status=self._ready(), tracking_issue=tracker(),
+                            gh_agent=gh_agent, agent_repo="o/agent")
+
+    def test_waiting_run_logs_why_no_dispatch(self, caplog) -> None:
+        caplog.set_level("INFO", logger="scripts.release.actions")
+        waiting = _publish_run(head_sha=_AGENT_HEAD, tag="9.1.1",
+                               candidate_sha=MERGE_SHA)
+        gh_agent = self._agent([waiting])
+        gh_agent.get_repo.return_value.get_branch.return_value.commit.sha = _AGENT_HEAD
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._ready(), tracking_issue=tracker(),
+                        gh_agent=gh_agent, agent_repo="o/agent",
+                        agent_head_sha=_AGENT_HEAD)
+        assert any("Not dispatching publish for 9.1 9.1.1: run" in r.getMessage()
+                   for r in caplog.records)
+
     def test_waiting_publish_run_blocks_a_duplicate_dispatch(self) -> None:
         # Only a run whose binding matches the current tag+candidate
         # may hold the slot. An unbound run cannot; a bound one does.
@@ -1419,6 +1454,17 @@ class TestAutoDispatchPublish:
                                     status=self._ready(), tracking_issue=tracker(),
                                     gh_agent=gh_agent, agent_repo="o/agent")
         assert not any("publish pipeline" in p for p in performed)
+
+    def test_unreadable_publish_workflow_is_logged(self, caplog) -> None:
+        gh_agent = MagicMock()
+        gh_agent.get_repo.return_value.get_workflow.side_effect = GithubException(
+            404, "not found", {},
+        )
+        actions.advance(gh_mock(MagicMock()), _POLICY,
+                        status=self._ready(), tracking_issue=tracker(),
+                        gh_agent=gh_agent, agent_repo="o/agent")
+        assert any(r.levelname == "WARNING" and "workflow is not visible on o/agent"
+                   in r.getMessage() for r in caplog.records)
 
     def test_no_agent_client_skips_auto_dispatch(self) -> None:
         performed = actions.advance(gh_mock(MagicMock()), _POLICY,
@@ -1758,6 +1804,20 @@ class TestPublishHalt:
                         agent_head_sha=_AGENT_HEAD)
         workflow.create_dispatch.assert_not_called()
         assert len(harness.bodies(":autofix:publish-halt:")) == 1
+
+    def test_already_reported_halt_still_logs_why_no_dispatch(self, caplog) -> None:
+        workflow = _runs_by_status([self._failed_run()])
+        gh_agent = _agent_with_workflow(workflow)
+        harness = _IssueHarness()
+        for _ in range(2):
+            actions.advance(gh_mock(MagicMock()), _POLICY, status=self._ready(),
+                            tracking_issue=harness.issue,
+                            gh_agent=gh_agent, agent_repo="o/agent",
+                            agent_head_sha=_AGENT_HEAD)
+        # The second pass posts nothing new, but the log still says why
+        # the READY release is not moving.
+        assert any(r.levelname == "WARNING" and "run 88 concluded failure"
+                   in r.getMessage() for r in caplog.records)
 
     @pytest.mark.parametrize("conclusion", [
         "failure",

@@ -517,6 +517,8 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
     # the lost-response case (first attempt succeeded server-side, response
     # never arrived) and the resume-after-crash case (release already
     # exists at the approved SHA).
+    logger.info("Creating release %s (prerelease=%s, make_latest=%s)",
+                plan.tag, plan.prerelease, plan.make_latest)
     try:
         release = repo.create_git_release(
             plan.tag,
@@ -527,7 +529,9 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
             target_commitish=plan.sha,
             make_latest=plan.make_latest,
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning("Creating release %s raised (%s); checking whether GitHub "
+                       "created it anyway", plan.tag, exc)
         release = _recover_created_release(repo, plan)
         if release is None:
             raise
@@ -584,6 +588,9 @@ def _ensure_tag_at_sha(repo: Any, plan: "PublishPlan") -> None:
                                         sha=plan.sha),
             retries=2, description=f"create tag {plan.tag} at {plan.sha[:12]}",
         )
+        # The first irreversible write: logged so a later failure in this
+        # run still leaves a record that the tag exists.
+        logger.info("Created tag %s at %s on %s", plan.tag, plan.sha, repo.full_name)
         return
     except GithubException as exc:
         if exc.status != 422:
@@ -629,8 +636,8 @@ def _post_publication_receipt(gh: Any, repo: Any, plan: "PublishPlan",
     """
     tracking_issue = _get_issue(repo, plan.issue_number)
     if issue_mod.has_marker(tracking_issue, _PUBLICATION_MARKER, gh):
-        logger.info("Publication receipt for %s already posted; skipping",
-                    plan.tag)
+        logger.info("Publication receipt for %s already posted on tracker #%s; skipping",
+                    plan.tag, plan.issue_number)
         return
     lines = [
         _PUBLICATION_MARKER,
@@ -649,6 +656,8 @@ def _post_publication_receipt(gh: Any, repo: Any, plan: "PublishPlan",
         "\n".join(lines),
         "record publication on tracker",
     )
+    logger.info("Posted the publication receipt for %s on tracker #%s",
+                plan.tag, plan.issue_number)
 
 
 def _recover_created_release(repo: Any, plan: PublishPlan) -> Any:
@@ -660,9 +669,18 @@ def _recover_created_release(repo: Any, plan: PublishPlan) -> Any:
     """
     try:
         release = repo.get_release(plan.tag)
-    except GithubException:
+    except GithubException as exc:
+        if exc.status == 404:
+            logger.error("No release %s exists after the failed create; it was not "
+                         "created", plan.tag)
+        else:
+            logger.error("Could not check whether release %s was created (HTTP %s); "
+                         "verify on GitHub before re-running", plan.tag, exc.status)
         return None
-    if resolve_tag_commit(repo, plan.tag) != plan.sha:
+    observed = resolve_tag_commit(repo, plan.tag)
+    if observed != plan.sha:
+        logger.error("Release %s exists but its tag resolves to %s, not the approved %s",
+                     plan.tag, observed or "<unresolved>", plan.sha)
         return None
     return release
 
@@ -814,9 +832,11 @@ def _make_latest_decision(repo: Any, version: str, stage: str) -> str:
     it as latest. ``<`` means an older line's patch and never sets latest.
     """
     if stage != "ga":
+        logger.info("Latest-release decision for %s: false (a %s is never latest)", version, stage)
         return "false"
     max_version = _max_published_ga(repo)
     if max_version is None:
+        logger.info("Latest-release decision for %s: true (first GA on the repo)", version)
         return "true"  # first GA on the repo
     try:
         publishing_version = parse_version(version)
@@ -824,8 +844,12 @@ def _make_latest_decision(repo: Any, version: str, stage: str) -> str:
         # Should be unreachable: version already parsed upstream to derive
         # the tag; if it somehow arrives malformed here, refuse to move
         # the pointer rather than take over.
+        logger.warning("Latest-release decision for %r: false (version does not parse)", version)
         return "false"
-    return "true" if publishing_version >= max_version else "false"
+    decision = "true" if publishing_version >= max_version else "false"
+    logger.info("Latest-release decision for %s: %s (highest published GA is %s)",
+                version, decision, ".".join(map(str, max_version)))
+    return decision
 
 
 def _max_published_ga(repo: Any) -> "tuple[int, int, int] | None":

@@ -124,3 +124,16 @@ def test_reset_worktree_removes_ignored_build_artifacts(tmp_path):
     assert not (repo / "build").exists()
     assert not (repo / "scratch.txt").exists()
     assert (repo / "f.c").exists()
+
+
+def test_git_failure_message_carries_stderr_and_subcommand(tmp_path):
+    import pytest
+
+    with pytest.raises(subprocess.CalledProcessError) as raised:
+        git_output(str(tmp_path), "rev-parse", "--verify", "no-such-ref")
+    message = str(raised.value)
+    # The locked-config prefix is dropped so the subcommand is readable...
+    assert raised.value.cmd[:2] == ["git", "rev-parse"]
+    # ...and git's own reason survives into the message an operator sees.
+    assert "stderr:" in message
+    assert "no-such-ref" in message or "not a git repository" in message

@@ -48,6 +48,7 @@ from scripts.release.models import (
     Candidate,
     CandidateState,
     DerivedRelease,
+    OutputState,
     QualificationStatus,
     ReleaseBinding,
     ReleaseIntent,
@@ -841,6 +842,50 @@ def _find_release(repo: Any, tag: str) -> Any:
 _ATTENTION_LABEL = "needs-attention"
 
 
+def _qualification_state(status: ReleaseStatus) -> str:
+    qual = status.qualification
+    if qual.passed:
+        return f"passed (run {qual.run_id})"
+    if qual.pending:
+        return f"running (run {qual.run_id})"
+    if qual.run_id:
+        failed = ", ".join(qual.failed_jobs) or "unknown jobs"
+        return f"failed (run {qual.run_id}: {failed})"
+    return "no run"
+
+
+def log_release_status(status: ReleaseStatus, tracker: str) -> None:
+    """Log the recomputed state the way the tracker shows it.
+
+    The tracker body is the human view; this is the same facts in the run
+    log, so an operator can tell from the Actions log alone why the release
+    did or did not move this pass.
+    """
+    release = (release_tag(status.version, status.stage) if status.version
+               else "<version not pinned>")
+    # Pre-publication gates are not re-evaluated once the release exists.
+    gates = ("published" if status.published else
+             f"daily={status.daily.state.value} qualification={_qualification_state(status)}")
+    logger.info(
+        "Release %s on %s %s (%s): phase=%s ready=%s candidate=%s %s branch_head=%s "
+        "%s notes_pr=%s%s",
+        release, status.repo, status.branch, tracker, status.phase.value, status.ready,
+        status.candidate.state.value, status.candidate.sha[:12] or "-",
+        status.candidate.branch_head[:12] or "-", gates,
+        f"#{status.notes_pr_number}" if status.notes_pr_number else "none",
+        " (merged)" if status.notes_pr_merged else "",
+    )
+    for blocker in status.blockers:
+        logger.info("  Blocker: %s", " ".join(blocker.split()))
+    for alert in status.alerts:
+        logger.warning("  Needs attention: %s", " ".join(alert.split()))
+    for output in status.outputs:
+        if output.state is not OutputState.VERIFIED:
+            logger.info("  Output %s: %s%s%s", output.name, output.state.value,
+                        f", {output.detail}" if output.detail else "",
+                        f" ({output.url})" if output.url else "")
+
+
 def _sync_phase_labels(repo: Any, tracking_issue: Any, status: ReleaseStatus) -> None:
     """Mirror the failure state into the ``needs-attention`` label, by diff.
 
@@ -863,11 +908,13 @@ def _sync_phase_labels(repo: Any, tracking_issue: Any, status: ReleaseStatus) ->
             lambda: tracking_issue.add_to_labels(*to_add),
             retries=2, description=f"add labels {', '.join(to_add)}",
         )
+        logger.info("Added label(s) %s to tracker #%s", ", ".join(to_add), tracking_issue.number)
     for name in to_remove:
         retry_github_call(
             partial(tracking_issue.remove_from_labels, name),
             retries=2, description=f"remove label {name}",
         )
+        logger.info("Removed label %s from tracker #%s", name, tracking_issue.number)
 
 
 def _render_tracker(tracking_issue: Any, status: ReleaseStatus) -> None:
@@ -901,6 +948,9 @@ def _render_tracker(tracking_issue: Any, status: ReleaseStatus) -> None:
         lambda: tracking_issue.edit(**kwargs),
         retries=2, description=f"update issue #{tracking_issue.number}",
     )
+    logger.info("Updated tracker #%s (%s): %s", tracking_issue.number,
+                "title and body" if "title" in kwargs else "body",
+                getattr(tracking_issue, "html_url", ""))
 
 
 def reconcile_branch(
@@ -952,9 +1002,11 @@ def reconcile_branch(
                     "Healed projection on closed tracker #%s (phase=%s); "
                     "not reopening", closed.number, status.phase.value,
                 )
+            log_release_status(status, f"closed tracker #{closed.number}")
             return status
         _warn_abandoned_tracker(gh, repo, branch, act=act)
-        logger.info("No active release on %s %s; nothing to reconcile", policy.repo, branch)
+        logger.info("No active release on %s %s (no open tracker labelled %s); "
+                    "nothing to reconcile", policy.repo, branch, TRACKER_LABEL)
         return None
 
     gh_downstream = gh_downstream or gh
@@ -1031,8 +1083,10 @@ def reconcile_branch(
     # encountered a tracker already closed.
     if act and close_when_complete and tracking_issue.state != "closed":
         _close_tracker_last_write(gh, status, tracking_issue)
+        logger.info("Closed tracker #%s: every required output is verified",
+                    tracking_issue.number)
 
-    logger.info("Reconciled issue #%s (phase=%s)", tracking_issue.number, status.phase.value)
+    log_release_status(status, f"tracker #{tracking_issue.number}")
     return status
 
 
@@ -1185,7 +1239,11 @@ def adopt_candidate(
     )
     issue_mod.post_comment(tracking_issue, comment,
                            f"record adoption on issue #{tracking_issue.number}")
-    logger.info("Recorded adoption of %s on issue #%s", sha, tracking_issue.number)
+    logger.info(
+        "Recorded adoption of %s on issue #%s by @%s: %s", sha, tracking_issue.number, actor,
+        "the moved branch head" if sha == status.candidate.branch_head
+        else "reconfirming the pinned notes-merge SHA despite the branch movement",
+    )
 
     refreshed = compute_status(gh, policy, branch, tracking_issue=tracking_issue,
                                act=False)

@@ -9,12 +9,15 @@ established, the actor is not authorized.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
 from scripts.release.policy import RepoReleasePolicy
+
+logger = logging.getLogger(__name__)
 
 
 class NotAuthorizedError(Exception):
@@ -44,6 +47,7 @@ def ensure_authorized(gh: Any, policy: RepoReleasePolicy, actor: str) -> None:
                 f"@{actor} is not the policy's authorized user (@{allowed}); "
                 f"only that user may perform release actions on {policy.repo}"
             )
+        logger.info("Authorized @%s: the policy's named user for %s", actor, policy.repo)
         return
 
     try:
@@ -71,3 +75,4 @@ def ensure_authorized(gh: Any, policy: RepoReleasePolicy, actor: str) -> None:
             f"@{actor} is not a member of {policy.authorized_team}; "
             f"only that team may perform release actions on {policy.repo}"
         )
+    logger.info("Authorized @%s: member of %s", actor, policy.authorized_team)

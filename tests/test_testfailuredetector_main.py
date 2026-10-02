@@ -212,6 +212,29 @@ class TestRunIncompleteArtifact:
         assert rc == 0
         assert "Incomplete artifact" not in mock_emit.call_args.args[0]
 
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_unusable_artifact_is_not_reported_as_a_clean_run(
+        self, _mock_gh, _mock_client, mock_download, mock_emit, caplog,
+    ) -> None:
+        def _download(*_args, **kwargs):
+            kwargs["unusable"].append("artifact 'all-test-failures' (id=9) has expired")
+            return None
+
+        mock_download.side_effect = _download
+        rc = detector_main.run(github_token="t", repo_full_name="valkey-io/valkey", run_id=123)
+
+        # Nothing was analyzed: the job must not finish green.
+        assert rc == 1
+
+        summary = mock_emit.call_args.args[0]
+        assert "Run not analyzed" in summary and "has expired" in summary
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert any("Run 123 was NOT analyzed" in m for m in warnings)
+        assert not any("no test failures" in r.getMessage() for r in caplog.records)
+
 
 class TestJobSummaryIncompleteSection:
     """The incomplete-artifact section is only for runs that actually lost
