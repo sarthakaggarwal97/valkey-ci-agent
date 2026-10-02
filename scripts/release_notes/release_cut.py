@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
 from scripts.common.git_auth import github_https_url
+from scripts.common.logging_utils import log_outcome
 from scripts.common.proc import BOT_EMAIL, BOT_NAME, git_output, run_git
 from scripts.release_notes import contributors as gc
 from scripts.release_notes import pipeline as pipeline_mod
@@ -786,6 +787,8 @@ def cut(
             )
             _print_dry_run(plan, version, new_dest_notes, new_version, notes_meta,
                            force_ready=force_ready)
+            log_outcome(logger, logging.INFO, "Dry run: release notes for %s rendered above; "
+                        "nothing pushed and no PR opened", version)
             return 0
 
         _write(dest_notes_path, new_dest_notes)
@@ -797,7 +800,7 @@ def cut(
             git_env=git_env, force_ready=force_ready,
             expected_base_sha=pinned_head_sha,
         )
-        logger.info("Release PR: %s", release_url)
+        log_outcome(logger, logging.INFO, "Release notes PR for %s: %s", version, release_url)
 
         return 0
     finally:

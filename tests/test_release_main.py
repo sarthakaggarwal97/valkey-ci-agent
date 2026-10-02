@@ -62,7 +62,7 @@ class TestCLI:
         messages = [r.getMessage() for r in caplog.records]
         assert not any(m.startswith("Started release") for m in messages)
         assert any("Dry run: would start release 9.1.1 on 9.1" in m for m in messages)
-        assert any("Release controller start on valkey-io/valkey" in m
+        assert any("Release start on valkey-io/valkey" in m
                    and "dry_run=True" in m and "actor=madolson" in m for m in messages)
         assert "no tracker created" in summary.read_text()
 
@@ -86,7 +86,7 @@ class TestCLI:
             main([*_POLICY_ARGS, "start", "--branch", "9.1", "--intent", "patch",
                   "--actor", "mallory\n::error::forged"])
         header = next(r.getMessage() for r in caplog.records
-                      if r.getMessage().startswith("Release controller start"))
+                      if r.getMessage().startswith("Release start on"))
         assert "\n" not in header and "actor=mallory ::error::forged" in header
 
     def test_header_never_includes_the_token(self, caplog: pytest.LogCaptureFixture) -> None:

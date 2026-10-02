@@ -14,7 +14,7 @@ from scripts.backport.main import _run_git as run_git_default
 from scripts.backport.sweep_git import BRANCH_PREFIX, clone_target_branch
 from scripts.backport.sweep_prs import find_existing_pr
 from scripts.common.git_auth import GitAuth
-from scripts.common.logging_utils import configure_logging
+from scripts.common.logging_utils import configure_logging, log_outcome
 
 logger = logging.getLogger(__name__)
 
@@ -152,12 +152,14 @@ def main(argv: list[str] | None = None) -> int:
             base_branch=args.base_branch or None,
         )
     except (ValueError, RuntimeError) as exc:
-        logger.error("%s", exc)
+        log_outcome(logger, logging.ERROR, "Revert refused: %s", " ".join(str(exc).split()))
         return 1
     except subprocess.CalledProcessError as exc:
-        logger.error("git command %s exited %d: %s", exc.cmd, exc.returncode,
-                     _tail(exc.stderr or exc.output or "") or "no output")
+        log_outcome(logger, logging.ERROR, "Revert failed: git %s exited %d: %s",
+                    " ".join(map(str, exc.cmd[1:2])), exc.returncode,
+                    _tail(exc.stderr or exc.output or "") or "no output")
         return 1
+    log_outcome(logger, logging.INFO, "Reverted %s on %s", args.commit_sha[:12], args.branch)
     return 0
 
 

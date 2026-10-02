@@ -517,8 +517,9 @@ def publish_release(gh: Any, policy: RepoReleasePolicy, *, branch: str, actor: s
     # the lost-response case (first attempt succeeded server-side, response
     # never arrived) and the resume-after-crash case (release already
     # exists at the approved SHA).
-    logger.info("Creating release %s (prerelease=%s, make_latest=%s)",
-                plan.tag, plan.prerelease, plan.make_latest)
+    logger.info("Creating release %s (%s, %s)", plan.tag,
+                "prerelease" if plan.prerelease else "GA",
+                "becomes latest" if plan.make_latest == "true" else "not latest")
     try:
         release = repo.create_git_release(
             plan.tag,

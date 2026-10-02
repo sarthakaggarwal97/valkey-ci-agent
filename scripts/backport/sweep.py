@@ -54,7 +54,7 @@ from scripts.backport.sweep_validation import (
 )
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.job_summary import emit_job_summary
-from scripts.common.logging_utils import configure_logging
+from scripts.common.logging_utils import configure_logging, log_group, log_outcome
 
 if TYPE_CHECKING:
     from scripts.backport.registry import BranchEntry, RepoEntry  # noqa: F401
@@ -210,10 +210,10 @@ def run_backport_sweep(
     gh = Github(auth=Auth.Token(github_token))
 
     logger.info(
-        "Backport sweep: %s branch %s (project %s/%d, push repo %s, cap %s, "
-        "%d validation command(s), repair %s)",
+        "Backport sweep of %s %s from project %s/%d (pushing to %s, up to %s PR(s), "
+        "%d validation command(s), validation repair %s)",
         repo_full_name, target_branch, repo_entry.project_owner, branch_entry.project_number,
-        push_repo, max_candidates if max_candidates > 0 else "none", len(test_commands),
+        push_repo, max_candidates if max_candidates > 0 else "unlimited", len(test_commands),
         "on" if repo_entry.repair_validation_failures else "off",
     )
     discovery = ProjectBackportDiscovery(
@@ -284,6 +284,16 @@ def run_backport_sweep(
     return result
 
 
+_OUTCOME_WORDS = {
+    "applied": "applied",
+    "skipped-existing": "already on the branch",
+    "skipped-empty": "empty on the target",
+    "skipped-conflict": "unresolved conflicts",
+    "skipped-validation-failed": "failed validation",
+    "error": "errored",
+}
+
+
 def _log_candidate(target_branch: str, item: CandidateResult) -> None:
     # Conflicts and validation failures need a human; already-applied and
     # empty picks are routine.
@@ -296,28 +306,35 @@ def _log_candidate(target_branch: str, item: CandidateResult) -> None:
     # Details carry git stderr and AI output: one bounded line, so a
     # multi-line value cannot forge an Actions workflow command.
     detail = " ".join((item.detail or "").split())[:500]
-    logger.log(level, "Candidate #%d on %s: %s%s", item.source_pr_number, target_branch,
-               item.outcome, f" ({detail})" if detail else "")
+    logger.log(level, "PR #%d on %s: %s%s", item.source_pr_number, target_branch,
+               _OUTCOME_WORDS.get(item.outcome, item.outcome), f" ({detail})" if detail else "")
 
 
-def _log_sweep_outcome(result: BranchSweepResult) -> None:
+def sweep_outcome(result: BranchSweepResult) -> tuple[int, str]:
+    """The sweep's result as one sentence and the log level it deserves."""
+    if result.error:
+        return logging.ERROR, f"Backport sweep of {result.target_branch} failed: {result.error}"
+    if not result.candidates_found:
+        return logging.INFO, f"Backport sweep of {result.target_branch}: nothing to backport"
     counts: dict[str, int] = {}
     for item in result.results:
         counts[item.outcome] = counts.get(item.outcome, 0) + 1
-    logger.info(
-        "Sweep of %s finished: %d candidate(s) found, outcomes: %s, PR: %s",
-        result.target_branch, result.candidates_found,
-        ", ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "none",
-        result.pr_url or "none",
-    )
-    errored = [item.source_pr_number for item in result.results
+    errored = [f"#{item.source_pr_number}" for item in result.results
                if item.outcome == "error" and item.source_pr_number]
-    if errored and not result.error and len(errored) < len(result.results):
-        logger.warning(
-            "Sweep of %s: candidate(s) %s errored and were left out; the run still "
-            "succeeds because other candidates were processed",
-            result.target_branch, ", ".join(f"#{n}" for n in errored),
-        )
+    parts = [f"{n} {_OUTCOME_WORDS.get(k, k)}" for k, n in sorted(counts.items())]
+    text = (f"Backport sweep of {result.target_branch}: {result.candidates_found} "
+            f"candidate(s)" + (f", {', '.join(parts)}" if parts else "")
+            + (f" (errored: {', '.join(errored)})" if errored else "")
+            + (f"; PR {result.pr_url}" if result.pr_url else "; no PR change"))
+    if errored and len(errored) == len(result.results):
+        return logging.ERROR, text
+    needs_look = errored or counts.get("skipped-conflict") or counts.get("skipped-validation-failed")
+    return (logging.WARNING if needs_look else logging.INFO), text
+
+
+def _log_sweep_outcome(result: BranchSweepResult) -> None:
+    level, text = sweep_outcome(result)
+    logger.log(level, "%s", text)
 
 
 def _process_branch(
@@ -354,11 +371,8 @@ def _process_branch(
                 validation_setup_commands or [],
             )
             if not setup_ok:
-                logger.warning(
-                    "Validation setup failed for %s.\nOutput (last 4000 chars):\n%s",
-                    target_branch,
-                    setup_output[-4000:],
-                )
+                with log_group(f"Validation setup output for {target_branch} (last 4000 chars)"):
+                    logger.warning("%s", setup_output[-4000:])
                 raise RuntimeError(
                     "validation setup failed: "
                     + (setup_output[:500] or "setup command failed")
@@ -445,17 +459,19 @@ def _process_branch(
                     _log_candidate(target_branch, result.results[-1])
                     continue
 
-                logger.info("Applying candidate #%d (%s) on %s", candidate.source_pr_number,
-                            " ".join(candidate.source_pr_title.split())[:120], target_branch)
-                candidate_result = apply_candidate(
-                    tmpdir,
-                    candidate,
-                    repo_full_name,
-                    git_env,
-                    language=language,
-                    build_commands=build_commands,
-                    validation_rules=validation_rules,
-                )
+                title = " ".join(candidate.source_pr_title.split())[:120]
+                # The cherry-pick, any AI conflict resolution, and validation
+                # are folded; the one-line result below stays visible.
+                with log_group(f"PR #{candidate.source_pr_number} ({title}): apply to {target_branch}"):
+                    candidate_result = apply_candidate(
+                        tmpdir,
+                        candidate,
+                        repo_full_name,
+                        git_env,
+                        language=language,
+                        build_commands=build_commands,
+                        validation_rules=validation_rules,
+                    )
                 result.results.append(candidate_result)
 
                 if candidate_result.outcome != "applied":
@@ -466,23 +482,20 @@ def _process_branch(
                 # the whole branch still validates. A red commit left on the
                 # branch would block every later candidate, so we always reset
                 # a failure off the branch and move on to the next candidate.
-                ok, output = validate_branch_with_optional_repair(
-                    tmpdir,
-                    target_branch,
-                    test_commands,
-                    validation_rules or [],
-                    repair=repair_validation_failures,
-                    run_git=_run_git,
-                )
+                with log_group(f"PR #{candidate.source_pr_number}: validate {target_branch}"):
+                    ok, output = validate_branch_with_optional_repair(
+                        tmpdir,
+                        target_branch,
+                        test_commands,
+                        validation_rules or [],
+                        repair=repair_validation_failures,
+                        run_git=_run_git,
+                    )
                 if not ok:
                     candidate_result.outcome = "skipped-validation-failed"
                     candidate_result.detail = validation_failure_detail(output)
+                    # Dropped from the branch so later candidates still validate.
                     _run_git(tmpdir, "reset", "--hard", "HEAD^")
-                    logger.warning(
-                        "Validation failed for candidate #%d on %s; removed candidate and continuing.",
-                        candidate.source_pr_number,
-                        target_branch,
-                    )
                     _log_candidate(target_branch, candidate_result)
                     continue
 
@@ -722,25 +735,14 @@ def main() -> None:
     }, indent=2))
 
     if args.discover_only or args.dry_run:
+        log_outcome(logger, logging.INFO, "Discovery only: %d backport candidate(s) for %s",
+                    result.candidates_found, result.target_branch)
         return
 
-    if result.error:
-        logger.error(
-            "Backport sweep failure: %s: %s",
-            result.target_branch,
-            result.error,
-        )
+    level, text = sweep_outcome(result)
+    log_outcome(logger, level, "%s", text)
+    if level == logging.ERROR:
         sys.exit(1)
-
-    if result.candidates_found > 0 and result.results:
-        errored = [item for item in result.results if item.outcome == "error"]
-        if len(errored) == len(result.results):
-            logger.error(
-                "Backport sweep failure: %s: all %d candidates errored",
-                result.target_branch,
-                len(errored),
-            )
-            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -197,7 +197,7 @@ def _guarded(name: str, verifier: Callable[[], Any]) -> tuple[DownstreamOutput, 
     try:
         result = verifier()
     except GithubException as exc:
-        logger.warning("Verifier %s failed: HTTP %s", name, exc.status)
+        logger.debug("Verifier %s failed: HTTP %s", name, exc.status)
         return (DownstreamOutput(
             name=name, state=OutputState.FAILED,
             detail=f"GitHub returned HTTP {exc.status}: the target repository "
@@ -208,7 +208,7 @@ def _guarded(name: str, verifier: Callable[[], Any]) -> tuple[DownstreamOutput, 
         # json.JSONDecodeError. public_endpoints deliberately raises on
         # 5xx/429 so registry outages surface loudly: they land here as a
         # probe error for THIS output only, never a pass abort.
-        logger.warning("Verifier %s failed: %s", name, exc)
+        logger.debug("Verifier %s failed: %s", name, exc)
         reason = str(exc).strip() or type(exc).__name__
         return (DownstreamOutput(
             name=name, state=OutputState.FAILED,

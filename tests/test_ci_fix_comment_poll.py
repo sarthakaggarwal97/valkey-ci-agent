@@ -315,4 +315,4 @@ def test_skips_of_fix_commands_are_logged(caplog):
     assert n == 0
     messages = [r.getMessage() for r in caplog.records]
     assert any("not on a pull request" in m for m in messages)
-    assert any("Scanned 1 comment(s)" in m and "dispatched=0" in m for m in messages)
+    assert any("Scanned 1 comment(s)" in m and "0 fix(es) dispatched" in m for m in messages)

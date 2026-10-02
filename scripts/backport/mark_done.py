@@ -27,7 +27,7 @@ from typing import Any
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.utils import pr_numbers_from_commit_subjects
 from scripts.common.git_auth import GitAuth, github_https_url
-from scripts.common.logging_utils import configure_logging
+from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import (
     PollLoopError,
     add_poll_loop_args,
@@ -575,8 +575,25 @@ def main() -> None:
             },
         ]
         print(json.dumps(format_poll_results(results), indent=2))
+        log_outcome(logger, logging.ERROR, "Mark-done for %s failed: %s", args.repo,
+                    " ".join(str(exc.last_error).split()))
         raise SystemExit(1) from exc
     print(json.dumps(format_poll_results(results), indent=2))
+    log_outcome(logger, logging.INFO, "%s", _outcome_text(args.repo, results[-1],
+                                                          dry_run=args.dry_run))
+
+
+def _outcome_text(repo: str, branches: dict[str, Any], *, dry_run: bool) -> str:
+    """One sentence: what the newest pass did on each branch's board."""
+    verb = "would mark" if dry_run else "marked"
+    parts = []
+    for branch, result in branches.items():
+        updated = result.get("updated") or []
+        waiting = len(result.get("unverified") or [])
+        parts.append(f"{branch}: {verb} {len(updated)} Done"
+                     + (f" ({', '.join(f'#{n}' for n in updated)})" if updated else "")
+                     + (f", {waiting} not on the branch yet" if waiting else ""))
+    return f"Backport board for {repo}: " + ("; ".join(parts) or "no branches")
 
 
 def _run_poll(

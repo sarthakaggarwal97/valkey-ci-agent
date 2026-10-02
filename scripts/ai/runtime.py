@@ -6,7 +6,6 @@ import hashlib
 import json
 import logging
 import os
-import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -135,11 +134,9 @@ def run_agent(
     profile = get_agent_profile(profile_name)
     started_at = datetime.now(timezone.utc).isoformat()
     resolved_model = _resolve_claude_model(model)
-    logger.info(
-        "Starting agent run: profile=%s model=%s cwd=%s",
-        profile_name, resolved_model or "<default>", cwd or "<inherited>",
-    )
-    started = time.monotonic()
+    # run_claude_code logs the working directory and the exit; this names
+    # which agent it was.
+    logger.info("Running the %s agent (model %s)", profile_name, resolved_model or "default")
     stdout, stderr, rc = run_claude_code(
         prompt,
         cwd=cwd,
@@ -152,11 +149,6 @@ def run_agent(
         env_allowlist=profile.env_allowlist,
     )
     finished_at = datetime.now(timezone.utc).isoformat()
-    logger.log(
-        logging.INFO if rc == 0 else logging.WARNING,
-        "Agent run finished: profile=%s exit=%d duration=%.1fs output_chars=%d",
-        profile_name, rc, time.monotonic() - started, len(stdout),
-    )
     result = AgentRunResult(
         profile=profile_name,
         stdout=stdout,

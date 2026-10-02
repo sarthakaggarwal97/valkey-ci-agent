@@ -223,7 +223,7 @@ def start_release(
     title = issue_mod.render_title(branch, derived.version, derived.stage)
     body = issue_mod.render_body(status, datetime.now(timezone.utc))
     if dry_run:
-        logger.info("[dry-run] would create issue %r on %s", title, policy.repo)
+        logger.debug("[dry-run] would create issue %r on %s", title, policy.repo)
         number, url = 0, ""
     else:
         issue_mod.ensure_tracker_labels(repo, branch, TRACKER_LABEL)
@@ -851,7 +851,33 @@ def _qualification_state(status: ReleaseStatus) -> str:
     if qual.run_id:
         failed = ", ".join(qual.failed_jobs) or "unknown jobs"
         return f"failed (run {qual.run_id}: {failed})"
-    return "no run"
+    return "not run yet"
+
+
+def _state_sentence(status: ReleaseStatus) -> str:
+    """One plain sentence: where the release is and what it waits on."""
+    sha = status.candidate.sha[:12]
+    phase = status.phase
+    if phase is ReleasePhase.NOTES:
+        return (f"waiting for release-notes PR #{status.notes_pr_number} to merge"
+                if status.notes_pr_number else "no release-notes PR yet")
+    if status.candidate.state is CandidateState.INVALIDATED and not status.published:
+        return (f"the branch moved to {status.candidate.branch_head[:12]} after candidate "
+                f"{sha}; adopt the new head or reconfirm the candidate")
+    if phase is ReleasePhase.CANDIDATE:
+        return "waiting for a candidate commit"
+    if phase is ReleasePhase.QUALIFICATION:
+        return (f"qualifying candidate {sha}: qualification {_qualification_state(status)}, "
+                f"daily CI {status.daily.state.value}")
+    if phase is ReleasePhase.READY:
+        return f"ready to publish candidate {sha}; waiting for the publish approval"
+    if phase is ReleasePhase.COMPLETE:
+        return f"complete; published at {sha}"
+    applicable = [o for o in status.outputs if o.state is not OutputState.SKIPPED]
+    done = sum(o.state is OutputState.VERIFIED for o in applicable)
+    failed = sum(o.state is OutputState.FAILED for o in applicable)
+    return (f"published at {sha}; {done} of {len(applicable)} downstream outputs done"
+            + (f", {failed} failed" if failed else ""))
 
 
 def log_release_status(status: ReleaseStatus, tracker: str) -> None:
@@ -859,31 +885,24 @@ def log_release_status(status: ReleaseStatus, tracker: str) -> None:
 
     The tracker body is the human view; this is the same facts in the run
     log, so an operator can tell from the Actions log alone why the release
-    did or did not move this pass.
+    did or did not move this pass. Only what needs a look is listed under
+    the summary: failures as warnings, waiting outputs as info; verified
+    and not-applicable outputs are left out.
     """
     release = (release_tag(status.version, status.stage) if status.version
-               else "<version not pinned>")
-    # Pre-publication gates are not re-evaluated once the release exists.
-    gates = ("published" if status.published else
-             f"daily={status.daily.state.value} qualification={_qualification_state(status)}")
-    logger.info(
-        "Release %s on %s %s (%s): phase=%s ready=%s candidate=%s %s branch_head=%s "
-        "%s notes_pr=%s%s",
-        release, status.repo, status.branch, tracker, status.phase.value, status.ready,
-        status.candidate.state.value, status.candidate.sha[:12] or "-",
-        status.candidate.branch_head[:12] or "-", gates,
-        f"#{status.notes_pr_number}" if status.notes_pr_number else "none",
-        " (merged)" if status.notes_pr_merged else "",
-    )
+               else f"{status.branch} (version not pinned yet)")
+    logger.info("Release %s (%s): %s", release, tracker, _state_sentence(status))
     for blocker in status.blockers:
-        logger.info("  Blocker: %s", " ".join(blocker.split()))
+        logger.info("  Blocked: %s", " ".join(blocker.split()))
     for alert in status.alerts:
         logger.warning("  Needs attention: %s", " ".join(alert.split()))
     for output in status.outputs:
-        if output.state is not OutputState.VERIFIED:
-            logger.info("  Output %s: %s%s%s", output.name, output.state.value,
-                        f", {output.detail}" if output.detail else "",
-                        f" ({output.url})" if output.url else "")
+        if output.state in (OutputState.VERIFIED, OutputState.SKIPPED):
+            continue
+        level = logging.WARNING if output.state is OutputState.FAILED else logging.INFO
+        logger.log(level, "  %s %s: %s%s", output.name, output.state.value,
+                   " ".join((output.detail or "").split()) or "no detail",
+                   f" ({output.url})" if output.url else "")
 
 
 def _sync_phase_labels(repo: Any, tracking_issue: Any, status: ReleaseStatus) -> None:

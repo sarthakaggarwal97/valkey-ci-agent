@@ -128,19 +128,19 @@ def run_poll_loop(
 
         iteration += 1
         if logger is not None:
-            logger.info("Starting poll iteration %d", iteration)
+            logger.info("Poll pass %d started", iteration)
         iteration_started = time.monotonic()
         try:
             results.append(poll_once())
             if logger is not None:
                 logger.info(
-                    "Poll iteration %d completed in %.1fs", iteration, time.monotonic() - iteration_started,
+                    "Poll pass %d finished in %.0fs", iteration, time.monotonic() - iteration_started,
                 )
         except Exception as exc:  # noqa: BLE001 - keep sustained polling alive
             failures += 1
             last_error = exc
             if logger is not None:
-                logger.exception("Poll iteration %d raised; continuing to next interval", iteration)
+                logger.exception("Poll pass %d failed; continuing with the next pass", iteration)
 
         next_start += interval_seconds
         if next_start > deadline:
@@ -151,14 +151,14 @@ def run_poll_loop(
             missed = int((now - next_start) // interval_seconds) + 1
             next_start += missed * interval_seconds
             if logger is not None:
-                logger.warning("Poll iteration overran cadence; skipped %d interval(s)", missed)
+                logger.warning("Poll pass ran past its slot; skipping %d interval(s)", missed)
             if next_start > deadline:
                 break
 
     if logger is not None:
         logger.info(
-            "Poll loop finished: iterations=%d succeeded=%d failed=%d elapsed=%.1fs",
-            iteration, iteration - failures, failures, time.monotonic() - loop_started,
+            "Polling finished after %.0fs: %d pass(es), %d failed",
+            time.monotonic() - loop_started, iteration, failures,
         )
     if last_error is not None:
         raise PollLoopError(results=results, last_error=last_error) from last_error

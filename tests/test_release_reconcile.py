@@ -1936,9 +1936,8 @@ class TestReconcileLogging:
         assert status is not None and status.blockers
         messages = [r.getMessage() for r in caplog.records]
         state = next(m for m in messages if m.startswith("Release "))
-        assert f"phase={status.phase.value}" in state and "ready=False" in state
-        assert "qualification=no run" in state
-        assert any(m.startswith("  Blocker: ") for m in messages)
+        assert "(tracker #" in state and "release-notes PR" in state
+        assert any(m.startswith("  Blocked: ") for m in messages)
         assert any(m.startswith("Updated tracker #") for m in messages)
 
     def test_no_active_release_says_what_was_looked_for(self, caplog) -> None:
@@ -1946,3 +1945,29 @@ class TestReconcileLogging:
         repo = repo_mock(issues=[])
         assert reconcile_branch(gh_mock(repo), _POLICY, "9.1") is None
         assert any("no open tracker labelled" in r.getMessage() for r in caplog.records)
+
+
+class TestStateSentence:
+    def test_published_release_counts_outputs_and_lists_only_what_needs_a_look(self, caplog):
+        from scripts.release.models import Candidate, ReleaseStatus
+        from scripts.release.reconcile import log_release_status
+
+        caplog.set_level("INFO", logger="scripts.release.reconcile")
+        status = ReleaseStatus(
+            repo="o/valkey", branch="8.0", version="8.0.11", stage="ga",
+            phase=ReleasePhase.PUBLISHED, published=True,
+            candidate=Candidate(state=CandidateState.CURRENT, sha="7" * 40, branch_head="b" * 40),
+            outputs=(
+                DownstreamOutput(name="docs", state=OutputState.VERIFIED),
+                DownstreamOutput(name="tarballs", state=OutputState.SKIPPED, detail="n/a"),
+                DownstreamOutput(name="hashes", state=OutputState.FAILED, detail="HTTP 404"),
+                DownstreamOutput(name="packages", state=OutputState.BLOCKED, detail="waiting"),
+            ),
+        )
+        log_release_status(status, "tracker #375")
+        records = [(r.levelname, r.getMessage()) for r in caplog.records]
+        assert records[0] == ("INFO", "Release 8.0.11 (tracker #375): published at "
+                                      "777777777777; 1 of 3 downstream outputs done, 1 failed")
+        assert ("WARNING", "  hashes failed: HTTP 404") in records
+        assert ("INFO", "  packages blocked: waiting") in records
+        assert not any("tarballs" in m or "docs" in m for _, m in records)

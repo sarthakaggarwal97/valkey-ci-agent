@@ -92,5 +92,4 @@ def test_run_agent_warns_when_evidence_cannot_be_written(tmp_path, monkeypatch, 
     assert result.returncode == 3
     messages = [r.getMessage() for r in caplog.records]
     assert any("Could not write agent evidence" in m for m in messages)
-    assert any("Agent run finished: profile=conflict_resolve_edit_only exit=3" in m
-               for m in messages)
+    assert result.profile == "conflict_resolve_edit_only"

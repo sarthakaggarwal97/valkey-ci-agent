@@ -228,5 +228,5 @@ def test_run_poll_loop_logs_iteration_completion_and_totals(caplog):
         run_poll_loop(poll, interval_seconds=10, duration_seconds=25,
                       clock=clock, sleep=sleep, logger=log)
     messages = [r.getMessage() for r in caplog.records]
-    assert any(m.startswith("Poll iteration 1 completed in") for m in messages)
-    assert any("iterations=3 succeeded=2 failed=1" in m for m in messages)
+    assert any(m.startswith("Poll pass 1 finished in") for m in messages)
+    assert any("3 pass(es), 1 failed" in m for m in messages)

@@ -10,7 +10,7 @@ import sys
 from github import Auth, Github
 
 from scripts.common.job_summary import emit_job_summary
-from scripts.common.logging_utils import configure_logging
+from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.test_failure_detector.download import (
     download_all_test_failures,
@@ -133,7 +133,8 @@ def run(
         if unusable:
             # The artifact exists but was not analyzed: zero issues here does
             # not mean zero failures, and the log must not suggest otherwise.
-            logger.warning(
+            log_outcome(
+                logger, logging.WARNING,
                 "Run %d was NOT analyzed: %s. Any failure it recorded has no issue.",
                 run_id, "; ".join(unusable),
             )
@@ -142,8 +143,8 @@ def run(
                 + "".join(f"- {_one_line(reason)}\n" for reason in unusable)
             )
         else:
-            logger.info("Run %d has no all-test-failures artifact; no test failures "
-                        "were recorded, so there is nothing to file.", run_id)
+            log_outcome(logger, logging.INFO, "Run %d has no all-test-failures artifact; "
+                        "no test failures were recorded, so there is nothing to file.", run_id)
         emit_job_summary(summary)
         return 1 if damaged or unusable else 0
 
@@ -190,7 +191,7 @@ def run(
     unique_failures = parse_and_deduplicate(all_failures, job_urls)
 
     if not unique_failures:
-        logger.info("No test failures to report.")
+        log_outcome(logger, logging.INFO, "Run %d: no test failures to report", run_id)
         emit_job_summary(_build_job_summary(run_id, repo_full_name, 0, {}, damaged))
         return 1 if damaged else 0
 
@@ -204,6 +205,8 @@ def run(
         emit_job_summary(
             _build_job_summary(run_id, repo_full_name, len(unique_failures), {}, damaged)
         )
+        log_outcome(logger, logging.INFO, "Dry run: %d unique failure(s) in run %d; no "
+                    "issues filed", len(unique_failures), run_id)
         return 1 if damaged else 0
 
     # Step 5: Create or update issues
@@ -212,6 +215,12 @@ def run(
 
     emit_job_summary(
         _build_job_summary(run_id, repo_full_name, len(unique_failures), result, damaged)
+    )
+    log_outcome(
+        logger, logging.ERROR if result.get("errors") or damaged else logging.INFO,
+        "Run %d: %d unique failure(s): %d issue(s) created, %d updated, %d skipped, %d error(s)",
+        run_id, len(unique_failures), result.get("created", 0), result.get("updated", 0),
+        result.get("skipped", 0) + result.get("skipped_closed", 0), result.get("errors", 0),
     )
 
     # process_failures isolates per-failure errors so one bad failure can't

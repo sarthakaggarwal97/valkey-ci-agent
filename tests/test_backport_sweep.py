@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -3093,12 +3094,13 @@ def test_sweep_outcome_log_calls_out_partial_errors(caplog):
             CandidateResult(2, "bad", "error", "boom"),
         ],
     )
-    caplog.set_level("INFO", logger="scripts.backport.sweep")
-    sweep._log_sweep_outcome(result)
-    messages = [r.getMessage() for r in caplog.records]
-    assert any("outcomes: applied=1, error=1" in m for m in messages)
-    assert any(r.levelname == "WARNING" and "candidate(s) #2 errored" in r.getMessage()
-               for r in caplog.records)
+    level, text = sweep.sweep_outcome(result)
+    assert level == logging.WARNING
+    assert text == ("Backport sweep of 8.1: 2 candidate(s), 1 applied, 1 errored "
+                    "(errored: #2); no PR change")
+
+    result.results[0] = CandidateResult(1, "ok", "error", "x")
+    assert sweep.sweep_outcome(result)[0] == logging.ERROR  # every candidate errored
 
 
 def test_apply_candidate_isolates_a_failed_resolver_safety_probe(tmp_path):

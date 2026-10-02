@@ -27,7 +27,7 @@ from github import Auth, Github
 
 from scripts.ci_fix.gate import ParsedCommand, is_authorized, parse_command
 from scripts.common.github_client import retry_github_call
-from scripts.common.logging_utils import configure_logging
+from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import env_int, env_seconds, run_poll_loop
 
 logger = logging.getLogger(__name__)
@@ -108,9 +108,10 @@ def poll_once(
             )
 
     logger.info(
-        "Scanned %d comment(s) on %s from the last %d minute(s): dispatched=%d "
-        "retryable_errors=%d claimed_dispatch_failures=%d",
-        len(comments), target_repo, lookback_minutes, dispatched, errors, len(claimed_failures),
+        "Scanned %d comment(s) on %s from the last %d minute(s): %d fix(es) dispatched%s%s",
+        len(comments), target_repo, lookback_minutes, dispatched,
+        f", {errors} will be retried next tick" if errors else "",
+        f", {len(claimed_failures)} claimed but not dispatched" if claimed_failures else "",
     )
     if claimed_failures:
         raise RuntimeError(
@@ -357,10 +358,10 @@ def main() -> int:
     interval = _poll_interval_seconds()
     duration = _poll_duration_seconds()
     logger.info(
-        "CI fix comment poll: target=%s dispatches=%s/%s@%s authorized=%s/%s bot=%s "
-        "lookback=%dm interval=%ds duration=%ds",
-        target_repo, agent_repo, workflow, ref, org, team_slug, bot_login,
-        _lookback_minutes(), interval, duration,
+        "CI fix comment poll on %s: dispatching %s@%s in %s for members of %s/%s "
+        "(bot %s, lookback %dm, %s)",
+        target_repo, workflow, ref, agent_repo, org, team_slug, bot_login, _lookback_minutes(),
+        f"every {interval}s for {duration}s" if interval and duration else "one pass",
     )
 
     gh = Github(auth=Auth.Token(token))
@@ -378,17 +379,19 @@ def main() -> int:
             claim=claim_via_status,
         )
 
-    results = run_poll_loop(
-        _poll,
-        interval_seconds=interval,
-        duration_seconds=duration,
-        logger=logger,
-    )
-    logger.info(
-        "CI fix comment poll dispatched %d fix(es) across %d iteration(s)",
-        sum(results),
-        len(results),
-    )
+    try:
+        results = run_poll_loop(
+            _poll,
+            interval_seconds=interval,
+            duration_seconds=duration,
+            logger=logger,
+        )
+    except Exception as exc:
+        log_outcome(logger, logging.ERROR, "CI fix comment poll failed: %s",
+                    " ".join(str(exc).split())[:500])
+        raise
+    log_outcome(logger, logging.INFO, "CI fix comment poll: %d fix(es) dispatched across %d "
+                "pass(es)", sum(results), len(results))
     return 0
 
 
