@@ -51,6 +51,7 @@ from scripts.release.reconcile import (
     adopt_candidate,
     reconcile_branch,
     start_release,
+    state_sentence,
 )
 
 logger = logging.getLogger(__name__)
@@ -349,6 +350,7 @@ def _run_reconcile(gh: Any, gh_downstream: Any, gh_agent: Any, agent_repo: str,
     failed: list[str] = []
     rows: list[str] = []
     active: list[str] = []
+    needs_attention = False
     for branch in branches:
         if branch not in policy.branches:
             parser.error(
@@ -367,12 +369,13 @@ def _run_reconcile(gh: Any, gh_downstream: Any, gh_agent: Any, agent_repo: str,
             continue
         rows.append(_status_row(branch, status))
         if status is not None:
-            active.append(f"{release_tag(status.version, status.stage) if status.version else branch}"
-                          f" {status.phase.value}")
+            name = release_tag(status.version, status.stage) if status.version else branch
+            active.append(f"{name} {state_sentence(status)}")
+            needs_attention = needs_attention or bool(status.alerts)
     outcome = (f"Reconciled {len(branches)} release branch(es) of {policy.repo}: "
-               + (f"active {', '.join(active)}" if active else "no active release")
+               + ("; ".join(active) if active else "no active release")
                + (f"; FAILED on {', '.join(failed)}" if failed else ""))
-    level = logging.ERROR if failed else logging.INFO
+    level = logging.ERROR if failed else logging.WARNING if needs_attention else logging.INFO
     summary = (f"## Release reconcile: {policy.repo}\n\n{_STATUS_TABLE_HEADER}\n"
                + "\n".join(rows))
     if summary_out is None:

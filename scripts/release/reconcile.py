@@ -854,7 +854,7 @@ def _qualification_state(status: ReleaseStatus) -> str:
     return "not run yet"
 
 
-def _state_sentence(status: ReleaseStatus) -> str:
+def state_sentence(status: ReleaseStatus) -> str:
     """One plain sentence: where the release is and what it waits on."""
     sha = status.candidate.sha[:12]
     phase = status.phase
@@ -891,7 +891,7 @@ def log_release_status(status: ReleaseStatus, tracker: str) -> None:
     """
     release = (release_tag(status.version, status.stage) if status.version
                else f"{status.branch} (version not pinned yet)")
-    logger.info("Release %s (%s): %s", release, tracker, _state_sentence(status))
+    logger.info("Release %s (%s): %s", release, tracker, state_sentence(status))
     for blocker in status.blockers:
         logger.info("  Blocked: %s", " ".join(blocker.split()))
     for alert in status.alerts:
