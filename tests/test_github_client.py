@@ -70,3 +70,31 @@ def test_retry_github_call_honors_retry_after(monkeypatch) -> None:
 
     assert retry_github_call(operation, retries=2, description="test call") == "ok"
     assert sleeps == [17.0]
+
+
+def test_retry_github_call_logs_exhausted_retries(monkeypatch, caplog) -> None:
+    monkeypatch.setattr("scripts.common.github_client.time.sleep", lambda _seconds: None)
+
+    def operation() -> str:
+        raise GithubException(503, {"message": "unavailable"})
+
+    with pytest.raises(GithubException):
+        retry_github_call(operation, retries=2, description="get repo org/x")
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("attempt 1/2" in m for m in messages)
+    assert any(
+        r.levelname == "ERROR" and "get repo org/x failed after 2 attempt(s)" in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_retry_github_call_does_not_log_permanent_errors(caplog) -> None:
+    def operation() -> str:
+        raise GithubException(404, {"message": "Not Found"})
+
+    with pytest.raises(GithubException):
+        retry_github_call(operation, retries=3, description="probe")
+
+    # A 404 probe is often expected; the caller decides whether it matters.
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]

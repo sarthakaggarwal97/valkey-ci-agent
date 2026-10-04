@@ -12,6 +12,7 @@ from github import Auth, Github
 from github.GithubException import GithubException
 
 from scripts.common.job_summary import emit_job_summary
+from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.release.authorize import NotAuthorizedError
 from scripts.release.models import ReleaseIntent
 from scripts.release.policy import load_policy
@@ -25,6 +26,8 @@ from scripts.release.publish import (
 )
 
 _ROOT = Path(__file__).resolve().parents[2]
+
+logger = logging.getLogger(__name__)
 
 
 def _token() -> str:
@@ -71,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError) as exc:
         parser.error(f"cannot load release policy: {exc}")
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    configure_logging()
     gh = Github(auth=Auth.Token(args.token))
     try:
         if args.command == "prepare":
@@ -83,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
                 actor=args.actor,
             )
             _write_outputs({"version": release.version, "stage": release.stage, "tag": release.tag})
-            print(f"Prepared {release.tag} on {args.branch}")
+            log_outcome(logger, logging.INFO, "Prepared %s on %s", release.tag, args.branch)
             return 0
         if args.command == "plan":
             publication = plan_publication(
@@ -114,11 +117,13 @@ def main(argv: list[str] | None = None) -> int:
                 expected_digest=args.expected_digest,
                 )
             _write_outputs({"release_url": url})
-            print(f"Published {url}")
+            log_outcome(logger, logging.INFO, "Published the %s release at %s (approved by @%s): %s",
+                        args.branch, args.candidate_sha[:12], args.actor, url)
             return 0
         raise AssertionError(args.command)
     except (ReleaseError, NotAuthorizedError, ValueError, GithubException, ConnectionError) as exc:
-        logging.error("%s", exc)
+        log_outcome(logger, logging.ERROR, "Release %s refused: %s", args.command,
+                    " ".join(str(exc).split()))
         return 1
 
 

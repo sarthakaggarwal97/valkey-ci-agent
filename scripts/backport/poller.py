@@ -34,6 +34,7 @@ from github import Auth, Github
 from scripts.backport.registry import load_registry
 from scripts.backport.sweep import _BRANCH_PREFIX, run_backport_sweep
 from scripts.backport.sweep_prs import find_existing_pr
+from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import (
     add_poll_loop_args,
     format_poll_results,
@@ -116,14 +117,22 @@ def poll_branch(
         github_token=github_token,
         max_candidates=max_candidates,
     )
+    errored = [item.source_pr_number for item in result.results
+               if item.outcome == "error" and item.source_pr_number]
+    error = result.error
+    # Same rule as the daily sweep: a pass where every candidate errored is a
+    # failure, not a quiet "applied=0".
+    if not error and result.results and len(errored) == len(result.results):
+        error = f"all {len(errored)} candidate(s) errored"
     return {
         "repo": repo_full_name,
         "branch": target_branch,
         "action": "swept",
         "found": result.candidates_found,
         "applied": result.applied_count,
+        "errored_candidates": errored,
         "pr": result.pr_url,
-        "error": result.error,
+        "error": error,
     }
 
 
@@ -168,13 +177,18 @@ def main() -> None:
     if not github_token:
         parser.error("--target-token or TARGET_TOKEN is required")
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_logging(verbose=args.verbose)
 
     registry = load_registry(args.registry)
     repo_entry, branch_entry = registry.get_branch(args.repo, args.branch)
+    logger.info(
+        "Backport poll of %s %s (pushing to %s, up to %s PR(s) per sweep, %s)%s",
+        repo_entry.repo, branch_entry.branch, repo_entry.effective_push_repo,
+        args.max_candidates or "unlimited",
+        f"every {args.poll_interval_seconds}s for {args.poll_duration_seconds}s"
+        if args.poll_interval_seconds and args.poll_duration_seconds else "one pass",
+        "; dry run" if args.dry_run else "",
+    )
 
     def _poll() -> dict:
         return poll_branch(
@@ -192,14 +206,36 @@ def main() -> None:
     )
     print(json.dumps(format_poll_results(results), indent=2))
 
-    failures = [result for result in results if result.get("error")]
-    if failures:
-        logger.error(
-            "Backport poll failure: %s: %s",
-            failures[0]["branch"],
-            failures[0]["error"],
-        )
+    log_outcome(logger, *_poll_outcome(branch_entry.branch, results))
+    if any(result.get("error") for result in results):
         sys.exit(1)
+
+
+_ACTION_WORDS = {
+    "skipped-open-pr": "skipped (sweep PR still open)",
+    "would-sweep": "would sweep (dry run)",
+    "swept": "swept",
+    "error": "failed",
+}
+
+
+def _poll_outcome(branch: str, results: list[dict]) -> tuple[int, str]:
+    """One sentence for the whole poll run: what each pass did."""
+    counts: dict[str, int] = {}
+    for result in results:
+        counts[result["action"]] = counts.get(result["action"], 0) + 1
+    passes = ", ".join(f"{n} {_ACTION_WORDS.get(a, a)}" for a, n in counts.items())
+    text = f"Backport poll of {branch}: {len(results)} pass(es): {passes}"
+    pr = next((r["pr"] for r in reversed(results) if r.get("pr")), "")
+    if pr:
+        text += f"; PR {pr}"
+    failures = [r for r in results if r.get("error")]
+    if failures:
+        return logging.ERROR, f"{text}; last error: {failures[-1]['error']}"
+    errored = sorted({n for r in results for n in r.get("errored_candidates", [])})
+    if errored:
+        return logging.WARNING, f"{text}; candidate(s) {', '.join(f'#{n}' for n in errored)} errored"
+    return logging.INFO, text
 
 
 if __name__ == "__main__":

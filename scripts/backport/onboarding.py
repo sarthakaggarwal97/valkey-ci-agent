@@ -18,6 +18,7 @@ from scripts.backport.registry import _parse_registry
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_prs import find_existing_pr
 from scripts.common.github_client import retry_github_call
+from scripts.common.logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -721,7 +722,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Expected login of the App/bot filing the issue",
     )
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
 
     branch = first_ga_branch(args.tag)
     if branch is None:

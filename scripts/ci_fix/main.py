@@ -35,6 +35,7 @@ from scripts.ci_fix.verify.macos import MacosVerifier
 from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import BOT_LOGIN
+from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import env_int
 from scripts.common.workflow_artifacts import ArtifactClient
 
@@ -81,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="Triggering comment id, reacted to with the outcome")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
 
     if not args.target_token:
         parser.error("--target-token/TARGET_TOKEN is required")
@@ -143,7 +144,10 @@ def _run_and_comment(
     except Exception:  # noqa: BLE001 - a failed comment must not mask the outcome
         logger.exception("Failed to post outcome comment on #%s", pr_number)
     _react_outcome(gh, repo_full_name, comment_id, outcome.kind)
-    logger.info("ci_fix outcome: %s - %s", outcome.kind.value, outcome.summary)
+    level = {OutcomeKind.FAILED: logging.ERROR, OutcomeKind.PUSHED: logging.INFO}.get(
+        outcome.kind, logging.WARNING)
+    log_outcome(logger, level, "CI fix for %s#%s %s: %s", repo_full_name, pr_number,
+                outcome.kind.value, " ".join(outcome.summary.split()))
     return 1 if outcome.kind is OutcomeKind.FAILED else 0
 
 

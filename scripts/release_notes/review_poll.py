@@ -13,6 +13,7 @@ from github import Auth, Github
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.ci_fix.gate import is_authorized
 from scripts.common.github_client import retry_github_call
+from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import env_seconds, run_poll_loop
 from scripts.release_notes.review import (
     REPOSITORIES,
@@ -305,10 +306,7 @@ def dispatch_release_review(
 
 
 def main() -> int:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_logging()
     token = os.environ["RELEASE_NOTES_REVIEW_TOKEN"]
     gh = Github(auth=Auth.Token(token))
     gql = GitHubGraphQLClient(token)

@@ -4,9 +4,49 @@ from __future__ import annotations
 
 import os
 import subprocess
+from typing import NoReturn
 
 # Re-exported for existing importers; canonical definition lives in identity.py.
 from scripts.common.identity import BOT_EMAIL, BOT_NAME  # noqa: F401
+
+
+class GitCommandError(subprocess.CalledProcessError):
+    """``CalledProcessError`` whose message carries git's stderr.
+
+    The stock message names only the command and exit status, so an uncaught
+    failure (or a caller that logs ``exc``) loses the one line that says why
+    git refused. The tail is bounded so a noisy command cannot flood the log.
+    """
+
+    def __str__(self) -> str:
+        detail = " ".join(str(self.stderr or self.stdout or "").split())[-500:]
+        return (f"git {git_subcommand(self.cmd)} exited {self.returncode}: "
+                f"{detail or 'no output'}")
+
+
+def git_subcommand(cmd: object) -> str:
+    """The git subcommand in *cmd*, skipping ``-c key=value`` and other flags."""
+    args = list(cmd) if isinstance(cmd, (list, tuple)) else str(cmd).split()
+    args = [str(a) for a in args]
+    if args[:1] == ["git"]:
+        args = args[1:]
+    i = 0
+    while i < len(args):
+        if args[i] in ("-c", "-C"):
+            i += 2
+        elif args[i].startswith("-"):
+            i += 1
+        else:
+            return args[i]
+    return "<command>"
+
+
+def _raise_git_failure(result: subprocess.CompletedProcess[str]) -> NoReturn:
+    # Drop the locked-config prefix so the message shows the git subcommand.
+    args = list(result.args)
+    cmd = ["git", *args[1 + len(LOCKED_GIT_CONFIG):]] if args[:1] == ["git"] else args
+    raise GitCommandError(result.returncode, cmd, result.stdout, result.stderr)
+
 
 # Bound every git invocation so a hung network/lock cannot stall the run.
 # Generous enough for a clone or push, short enough to fail fast on a hang.
@@ -39,9 +79,7 @@ def git_output(repo_dir: str, *args: str, timeout: int = _GIT_TIMEOUT_S) -> str:
         env=filter_env(_GIT_SAFE_ENV),
     )
     if result.returncode != 0:
-        raise subprocess.CalledProcessError(
-            result.returncode, result.args, result.stdout, result.stderr,
-        )
+        _raise_git_failure(result)
     return result.stdout
 
 
@@ -81,9 +119,7 @@ def run_git(
         timeout=timeout,
     )
     if result.returncode != 0:
-        raise subprocess.CalledProcessError(
-            result.returncode, result.args, result.stdout, result.stderr,
-        )
+        _raise_git_failure(result)
     return result
 
 

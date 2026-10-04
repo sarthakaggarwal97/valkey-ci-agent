@@ -42,6 +42,7 @@ from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import BOT_EMAIL, BOT_NAME
 from scripts.common.job_summary import emit_job_summary
+from scripts.common.logging_utils import configure_logging, log_outcome
 
 logger = logging.getLogger(__name__)
 
@@ -664,10 +665,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    configure_logging(verbose=args.verbose)
 
     github_token = (
         args.token
@@ -707,7 +705,10 @@ def main() -> None:
         test_path_patterns=repo_entry.test_path_patterns,
     )
 
-    logger.info("Backport outcome: %s", result.outcome)
+    detail = result.backport_pr_url or " ".join((result.error_message or "").split())[:500]
+    log_outcome(logger, logging.ERROR if result.outcome == "error" else logging.INFO,
+                "Backport of %s#%d to %s: %s%s", args.repo, args.pr_number, args.target_branch,
+                result.outcome, f" ({detail})" if detail else "")
     if result.outcome == "error":
         sys.exit(1)
 

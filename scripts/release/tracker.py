@@ -21,6 +21,7 @@ from github import Auth, Github
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
+from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import add_poll_loop_args, run_poll_loop_from_args
 from scripts.release.checks import CandidateCI, evaluate_candidate_ci
 from scripts.release.models import ReleasePolicy
@@ -1193,7 +1194,7 @@ def main(argv: list[str] | None = None) -> int:
     if not target_token:
         parser.error("TARGET_GITHUB_TOKEN is required")
     target_gh = Github(auth=Auth.Token(target_token))
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    configure_logging()
 
     if args.command == "ensure":
         tracker = Tracker(

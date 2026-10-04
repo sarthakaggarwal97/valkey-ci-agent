@@ -84,3 +84,21 @@ def test_release_notes_review_profile_is_edit_only() -> None:
     assert edit.allowed_tools == "Read,Edit,MultiEdit,Grep,Glob"
     assert edit.disallowed_tools == "Bash,Write"
     assert edit.timeout <= 10 * 60
+
+
+def test_run_agent_warns_when_evidence_cannot_be_written(tmp_path, monkeypatch, caplog) -> None:
+    blocker = tmp_path / "not-a-dir"
+    blocker.write_text("file in the way")
+    monkeypatch.setattr(
+        agent_runtime, "run_claude_code", lambda *_args, **_kwargs: ("out", "", 3),
+    )
+
+    result = agent_runtime.run_agent(
+        "conflict_resolve_edit_only", "summarize", cwd=str(tmp_path),
+        evidence_dir=str(blocker / "evidence"),
+    )
+
+    assert result.returncode == 3
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("Could not write agent evidence" in m for m in messages)
+    assert result.profile == "conflict_resolve_edit_only"

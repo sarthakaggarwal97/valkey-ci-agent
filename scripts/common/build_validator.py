@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import time
 from pathlib import Path
 
 from scripts.common.proc import NETWORK_ENV, PROCESS_BASICS, filter_env
@@ -43,12 +44,14 @@ def run_build_commands(
     are intentionally excluded because the checked-out code is untrusted.
     """
     if not commands:
+        logger.info("No validation commands configured for this step; nothing to run.")
         if log_path:
             Path(log_path).write_text("", encoding="utf-8")
         return True, ""
     full_log_parts: list[str] = []
-    for command in commands:
-        logger.info("Running backport validation command: %s", command)
+    for index, command in enumerate(commands, start=1):
+        logger.info("Running backport validation command %d/%d: %s", index, len(commands), command)
+        started = time.monotonic()
         try:
             # Registry build commands are operator-controlled repo config, not
             # user input from PRs or issues; shell=True is intentional so repos
@@ -63,6 +66,11 @@ def run_build_commands(
                 env=filter_env(_BUILD_ENV_ALLOWLIST),
             )
         except subprocess.TimeoutExpired as exc:
+            logger.error(
+                "Validation command %d/%d timed out after %.0fs: %s%s",
+                index, len(commands), time.monotonic() - started, command,
+                _skipped_note(len(commands) - index),
+            )
             full_stdout = _decode(exc.stdout)
             full_stderr = _decode(exc.stderr)
             full_log_parts.append(_full_log_section(command, None, full_stdout, full_stderr))
@@ -76,7 +84,13 @@ def run_build_commands(
         full_log_parts.append(
             _full_log_section(command, result.returncode, result.stdout, result.stderr)
         )
+        elapsed = time.monotonic() - started
         if result.returncode != 0:
+            logger.error(
+                "Validation command %d/%d failed with exit code %d after %.1fs: %s%s",
+                index, len(commands), result.returncode, elapsed, command,
+                _skipped_note(len(commands) - index),
+            )
             if log_path:
                 Path(log_path).write_text("\n".join(full_log_parts), encoding="utf-8")
             summary = "\n".join(
@@ -84,9 +98,16 @@ def run_build_commands(
                 if part
             ).strip()
             return False, summary or f"`{command}` failed with exit code {result.returncode}"
+        logger.info(
+            "Validation command %d/%d passed in %.1fs: %s", index, len(commands), elapsed, command,
+        )
     if log_path:
         Path(log_path).write_text("\n".join(full_log_parts), encoding="utf-8")
     return True, ""
+
+
+def _skipped_note(remaining: int) -> str:
+    return f" ({remaining} remaining command(s) not run)" if remaining else ""
 
 
 def _tail_text(value: str | bytes | None) -> str:

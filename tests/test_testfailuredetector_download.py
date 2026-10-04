@@ -229,6 +229,35 @@ class TestDownloadAllTestFailures:
         assert result is None
         client.download_artifact.assert_not_called()
 
+    def test_reports_why_an_existing_artifact_is_unusable(self) -> None:
+        client = MagicMock()
+        client.list_run_artifacts.return_value = [
+            self._make_artifact("all-test-failures", expired=True)
+        ]
+        unusable: list[str] = []
+        download_all_test_failures(
+            MagicMock(), "owner/repo", 123, "fake-token", artifact_client=client,
+            unusable=unusable,
+        )
+        assert len(unusable) == 1 and "expired" in unusable[0]
+
+        client.list_run_artifacts.return_value = [self._make_artifact("all-test-failures")]
+        client.download_artifact.return_value = {"other.txt": b""}
+        unusable = []
+        download_all_test_failures(
+            MagicMock(), "owner/repo", 123, "fake-token", artifact_client=client,
+            unusable=unusable,
+        )
+        assert len(unusable) == 1 and "does not contain" in unusable[0]
+
+        client.list_run_artifacts.return_value = []
+        unusable = []
+        download_all_test_failures(
+            MagicMock(), "owner/repo", 123, "fake-token", artifact_client=client,
+            unusable=unusable,
+        )
+        assert unusable == []
+
     def test_returns_none_when_no_artifacts_at_all(self) -> None:
         """Should return None if the run has no artifacts."""
         client = MagicMock()

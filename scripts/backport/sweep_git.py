@@ -19,6 +19,7 @@ from scripts.backport.utils import pr_numbers_from_commit_messages
 from scripts.common.git_auth import github_https_url
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import BOT_EMAIL, BOT_NAME
+from scripts.common.proc import GitCommandError
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +40,11 @@ def clone_target_branch(
     git_env: dict[str, str],
 ) -> None:
     clone_url = github_https_url(repo_full_name)
-    subprocess.run(
-        ["git", "clone", "--branch", target_branch, clone_url, dest_dir],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=git_env,
-    )
+    cmd = ["git", "clone", "--branch", target_branch, clone_url, dest_dir]
+    result = subprocess.run(cmd, capture_output=True, text=True, env=git_env)
+    if result.returncode != 0:
+        # The error's message carries git's reason (auth, missing branch).
+        raise GitCommandError(result.returncode, cmd, result.stdout, result.stderr)
     run_git_default(dest_dir, "config", "user.name", BOT_NAME)
     run_git_default(dest_dir, "config", "user.email", BOT_EMAIL)
 
