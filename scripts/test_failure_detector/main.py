@@ -101,7 +101,8 @@ def run(
         logger.info("Looking for latest %s run on %s/%s...", workflow_name, repo_full_name, branch)
         daily_run = get_latest_daily_run(gh, repo_full_name, workflow_name, branch)
         if daily_run is None:
-            logger.error("No qualifying workflow run found.")
+            log_outcome(logger, logging.ERROR, "No qualifying %s run found on %s (branch %s)",
+                        workflow_name, repo_full_name, branch)
             emit_job_summary(
                 f"### ⚠️ Test Failure Detector\n\n"
                 f"No qualifying `{workflow_name}` run found on "
@@ -153,8 +154,9 @@ def run(
     except json.JSONDecodeError as exc:
         # A malformed or truncated artifact must not crash the run before we
         # report; surface it in the job summary and exit non-zero instead.
-        logger.error(
-            "Could not parse all-test-failures artifact from run %d: %s", run_id, exc,
+        log_outcome(
+            logger, logging.ERROR,
+            "Could not parse the all-test-failures artifact from run %d: %s", run_id, exc,
         )
         emit_job_summary(
             f"### ⚠️ Test Failure Detector\n\n"
@@ -168,7 +170,8 @@ def run(
     # shape still gets here: a bare scalar would crash on len() below, and a
     # top-level list would parse as "no failures". Require a dict.
     if not isinstance(all_failures, dict):
-        logger.error(
+        log_outcome(
+            logger, logging.ERROR,
             "Unexpected all-test-failures artifact from run %d: expected a JSON "
             "object, got %s",
             run_id, type(all_failures).__name__,

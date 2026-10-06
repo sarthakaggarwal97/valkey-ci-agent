@@ -69,9 +69,13 @@ def log_outcome(target_logger: logging.Logger, level: int, message: str, *args: 
     annotation, so the result is visible without opening the log. Written
     to stderr: several workflows tee stdout into a JSON result file.
     """
+    # Render once and collapse every whitespace run (newlines included): the
+    # log line is printed raw, so an embedded "\n::warning::" in a value would
+    # otherwise reach the runner as a workflow command of its own.
+    text = " ".join((message % args if args else message).split())
     # stacklevel: tag the record with the caller's file, not this helper's.
-    target_logger.log(level, message, *args, stacklevel=2)
-    annotate(level, message % args if args else message)
+    target_logger.log(level, "%s", text, stacklevel=2)
+    annotate(level, text)
 
 
 @contextmanager

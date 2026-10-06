@@ -39,7 +39,15 @@ def test_outcome_is_annotated_only_in_actions(monkeypatch, capsys, caplog):
 def test_outcome_cannot_forge_a_second_workflow_command(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     log_outcome(logging.getLogger("t"), logging.INFO, "%s", "a\n::error::forged 100%")
-    assert capsys.readouterr().err.splitlines() == ["::notice::a%0A::error::forged 100%25"]
+    assert capsys.readouterr().err.splitlines() == ["::notice::a ::error::forged 100%25"]
+
+
+def test_annotate_escapes_command_data_for_direct_callers(monkeypatch, capsys):
+    from scripts.common.logging_utils import annotate
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    annotate(logging.ERROR, "a\r\n::error::forged 100%")
+    assert capsys.readouterr().err.splitlines() == ["::error::a%0D%0A::error::forged 100%25"]
 
 
 def test_groups_do_not_nest(monkeypatch, capsys):
@@ -58,3 +66,18 @@ def test_group_closes_when_the_body_raises(monkeypatch, capsys):
         raise RuntimeError("boom")
     assert capsys.readouterr().err.splitlines()[-1] == "::endgroup::"
     assert logging_utils._group_open is False
+
+
+def test_outcome_log_line_cannot_forge_a_workflow_command(monkeypatch, capsys, caplog):
+    """The raw log line is printed before the annotation; it must be one line too."""
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    caplog.set_level(logging.INFO, logger="t.forge")
+    log_outcome(logging.getLogger("t.forge"), logging.INFO, "PR %s", "x\n::warning::forged")
+    assert caplog.records[-1].getMessage() == "PR x ::warning::forged"
+    assert capsys.readouterr().err.splitlines() == ["::notice::PR x ::warning::forged"]
+
+
+def test_outcome_with_a_literal_percent_and_no_args(caplog):
+    caplog.set_level(logging.INFO, logger="t.pct")
+    log_outcome(logging.getLogger("t.pct"), logging.INFO, "100% done")
+    assert caplog.records[-1].getMessage() == "100% done"
