@@ -61,7 +61,13 @@ def _git_changed_paths(repo_dir: str) -> set[str]:
             text=True,
         )
         if result.returncode != 0:
-            continue
+            # This set feeds the out-of-scope-edit check; continuing with a
+            # partial set would let an unexpected edit through unnoticed.
+            raise RuntimeError(
+                f"{' '.join(command)} failed with exit code {result.returncode} "
+                f"while checking which files the resolver touched: "
+                f"{' '.join((result.stderr or '').split())[-500:] or 'no output'}"
+            )
         paths.update(line.strip() for line in result.stdout.splitlines() if line.strip())
     return paths
 

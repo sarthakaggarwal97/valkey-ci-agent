@@ -40,6 +40,7 @@ from scripts.ci_fix.verify.macos import MacosVerifier
 from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import APP_LOGIN
+from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import env_int
 from scripts.common.workflow_artifacts import ArtifactClient
 
@@ -553,10 +554,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.target_token:
         parser.error("--target-token or TARGET_TOKEN is required")
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_logging(verbose=args.verbose)
     registry = load_registry(args.registry)
     repo_entry, _branch_entry = registry.get_branch(args.repo, args.branch)
     gh = Github(auth=Auth.Token(args.target_token))

@@ -16,6 +16,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.common.issue_dedup import IssueDedupPublisher
+from scripts.common.logging_utils import configure_logging, log_group, log_outcome
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.fuzzer import issue_renderer
 from scripts.fuzzer.analyzer import FuzzerRunAnalyzer
@@ -47,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="List the latest run without analyzing or filing an issue")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
 
     token = args.target_token or os.environ.get("TARGET_TOKEN", "")
     if not token:
@@ -58,9 +59,15 @@ def main(argv: list[str] | None = None) -> int:
     analyzer = FuzzerRunAnalyzer(gh, github_token=token, artifact_client=client)
     publisher = IssueDedupPublisher(gh, marker_namespace=issue_renderer.MARKER_NAMESPACE)
 
+    logger.info("Fuzzer monitor for %s (%s, scheduled runs)%s", TARGET_REPO, WORKFLOW_FILE,
+                "; dry run" if args.dry_run else "")
     runs = client.list_recent_runs(TARGET_REPO, WORKFLOW_FILE, event="schedule", max_runs=1)
+    if not runs:
+        logger.warning("No completed scheduled %s run found on %s", WORKFLOW_FILE, TARGET_REPO)
     results: list[dict[str, Any]] = []
     for run in runs:
+        logger.info("Latest fuzzer run %s concluded %s: %s", run.id,
+                    run.conclusion or "unknown", run.html_url)
         entry: dict[str, Any] = {
             "run_id": run.id,
             "conclusion": run.conclusion or "",
@@ -73,7 +80,10 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         try:
-            analysis = analyzer.analyze(TARGET_REPO, run.id, workflow_file=WORKFLOW_FILE)
+            with log_group(f"Analyze fuzzer run {run.id}"):
+                analysis = analyzer.analyze(TARGET_REPO, run.id, workflow_file=WORKFLOW_FILE)
+            logger.info("Run %s: status %s, verdict %s", run.id, analysis.overall_status,
+                        analysis.triage_verdict or "none")
             entry["action"] = "analyzed"
             entry["status"] = analysis.overall_status
             entry["verdict"] = analysis.triage_verdict
@@ -109,9 +119,26 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.output).write_text(rendered, encoding="utf-8")
     else:
         print(rendered)
+    log_outcome(logger, *_outcome(results, dry_run=args.dry_run))
     # Surface monitor errors via the workflow's exit code so a failed run
     # shows ❌ in the Actions tab instead of being hidden in the JSON artifact.
     return 1 if any(r.get("action") == "error" for r in results) else 0
+
+
+def _outcome(results: list[dict[str, Any]], *, dry_run: bool) -> tuple[int, str]:
+    if not results:
+        return logging.WARNING, "Fuzzer monitor: no run to analyze"
+    entry = results[-1]
+    run = f"Fuzzer run {entry['run_id']}"
+    if dry_run:
+        return logging.INFO, f"Dry run: would analyze {run} ({entry['html_url']})"
+    if entry["action"] == "error":
+        return logging.ERROR, f"{run}: analysis failed: {' '.join(entry['error'].split())}"
+    issue = entry.get("issue_action")
+    if not issue:
+        return logging.INFO, f"{run}: {entry['status']}, verdict {entry['verdict']}; no issue needed"
+    return logging.WARNING, (f"{run}: {entry['status']}, verdict {entry['verdict']}; "
+                             f"issue {issue}: {entry.get('issue_url') or 'no URL'}")
 
 
 if __name__ == "__main__":

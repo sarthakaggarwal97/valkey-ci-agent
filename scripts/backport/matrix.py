@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -17,6 +18,9 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.backport.registry import load_registry
+from scripts.common.logging_utils import configure_logging
+
+logger = logging.getLogger(__name__)
 
 
 def build_matrix(
@@ -74,6 +78,7 @@ def main() -> None:
         help="Include only repositories with automatic_ci_followup enabled",
     )
     args = parser.parse_args()
+    configure_logging()
 
     matrix = build_matrix(
         args.registry,
@@ -83,6 +88,16 @@ def main() -> None:
     )
 
     has_entries = len(matrix["include"]) > 0
+    # Logs go to stderr, so they never mix with the stdout matrix output.
+    logger.info(
+        "Backport matrix from %s (repo filter: %s, project filter: %s): %d entr%s: %s",
+        args.registry, args.repo or "all",
+        "all" if args.project_number is None else args.project_number,
+        len(matrix["include"]), "y" if len(matrix["include"]) == 1 else "ies",
+        ", ".join(f"{e['repo']}@{e['branch']}" for e in matrix["include"]) or "none",
+    )
+    if not has_entries:
+        logger.warning("No registry entries matched the filters; every downstream job will be skipped.")
     matrix_json = json.dumps(matrix)
 
     if args.output_file:

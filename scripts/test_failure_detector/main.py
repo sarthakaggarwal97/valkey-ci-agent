@@ -10,6 +10,7 @@ import sys
 from github import Auth, Github
 
 from scripts.common.job_summary import emit_job_summary
+from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.test_failure_detector.download import (
     download_all_test_failures,
@@ -90,8 +91,7 @@ def run(
         dry_run: If True, parse and report but don't create/update issues.
         verbose: Enable debug logging.
     """
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(level=level, format="%(levelname)s %(name)s: %(message)s")
+    configure_logging(verbose=verbose)
 
     gh = Github(auth=Auth.Token(github_token))
     artifact_client = ArtifactClient(gh, token=github_token)
@@ -101,7 +101,8 @@ def run(
         logger.info("Looking for latest %s run on %s/%s...", workflow_name, repo_full_name, branch)
         daily_run = get_latest_daily_run(gh, repo_full_name, workflow_name, branch)
         if daily_run is None:
-            logger.error("No qualifying workflow run found.")
+            log_outcome(logger, logging.ERROR, "No qualifying %s run found on %s (branch %s)",
+                        workflow_name, repo_full_name, branch)
             emit_job_summary(
                 f"### ⚠️ Test Failure Detector\n\n"
                 f"No qualifying `{workflow_name}` run found on "
@@ -118,9 +119,10 @@ def run(
     # alongside them, in which case the run is analyzed from an artifact known
     # to be incomplete: every report below has to say so.
     damaged: list[str] = []
+    unusable: list[str] = []
     artifact_content = download_all_test_failures(
         gh, repo_full_name, run_id, github_token,
-        artifact_client=artifact_client, damaged=damaged,
+        artifact_client=artifact_client, damaged=damaged, unusable=unusable,
     )
     if damaged:
         logger.error(
@@ -128,17 +130,33 @@ def run(
             len(damaged), run_id, "; ".join(damaged),
         )
     if artifact_content is None:
-        logger.info("No test failures artifact found — CI run likely passed cleanly.")
-        emit_job_summary(_build_job_summary(run_id, repo_full_name, 0, {}, damaged))
-        return 1 if damaged else 0
+        summary = _build_job_summary(run_id, repo_full_name, 0, {}, damaged)
+        if unusable:
+            # The artifact exists but was not analyzed: zero issues here does
+            # not mean zero failures, and the log must not suggest otherwise.
+            log_outcome(
+                logger, logging.WARNING,
+                "Run %d was NOT analyzed: %s. Any failure it recorded has no issue.",
+                run_id, "; ".join(unusable),
+            )
+            summary += (
+                "\n### Run not analyzed\n\n"
+                + "".join(f"- {_one_line(reason)}\n" for reason in unusable)
+            )
+        else:
+            log_outcome(logger, logging.INFO, "Run %d has no all-test-failures artifact; "
+                        "no test failures were recorded, so there is nothing to file.", run_id)
+        emit_job_summary(summary)
+        return 1 if damaged or unusable else 0
 
     try:
         all_failures = json.loads(artifact_content)
     except json.JSONDecodeError as exc:
         # A malformed or truncated artifact must not crash the run before we
         # report; surface it in the job summary and exit non-zero instead.
-        logger.error(
-            "Could not parse all-test-failures artifact from run %d: %s", run_id, exc,
+        log_outcome(
+            logger, logging.ERROR,
+            "Could not parse the all-test-failures artifact from run %d: %s", run_id, exc,
         )
         emit_job_summary(
             f"### ⚠️ Test Failure Detector\n\n"
@@ -152,7 +170,8 @@ def run(
     # shape still gets here: a bare scalar would crash on len() below, and a
     # top-level list would parse as "no failures". Require a dict.
     if not isinstance(all_failures, dict):
-        logger.error(
+        log_outcome(
+            logger, logging.ERROR,
             "Unexpected all-test-failures artifact from run %d: expected a JSON "
             "object, got %s",
             run_id, type(all_failures).__name__,
@@ -175,7 +194,7 @@ def run(
     unique_failures = parse_and_deduplicate(all_failures, job_urls)
 
     if not unique_failures:
-        logger.info("No test failures to report.")
+        log_outcome(logger, logging.INFO, "Run %d: no test failures to report", run_id)
         emit_job_summary(_build_job_summary(run_id, repo_full_name, 0, {}, damaged))
         return 1 if damaged else 0
 
@@ -189,6 +208,8 @@ def run(
         emit_job_summary(
             _build_job_summary(run_id, repo_full_name, len(unique_failures), {}, damaged)
         )
+        log_outcome(logger, logging.INFO, "Dry run: %d unique failure(s) in run %d; no "
+                    "issues filed", len(unique_failures), run_id)
         return 1 if damaged else 0
 
     # Step 5: Create or update issues
@@ -197,6 +218,12 @@ def run(
 
     emit_job_summary(
         _build_job_summary(run_id, repo_full_name, len(unique_failures), result, damaged)
+    )
+    log_outcome(
+        logger, logging.ERROR if result.get("errors") or damaged else logging.INFO,
+        "Run %d: %d unique failure(s): %d issue(s) created, %d updated, %d skipped, %d error(s)",
+        run_id, len(unique_failures), result.get("created", 0), result.get("updated", 0),
+        result.get("skipped", 0) + result.get("skipped_closed", 0), result.get("errors", 0),
     )
 
     # process_failures isolates per-failure errors so one bad failure can't

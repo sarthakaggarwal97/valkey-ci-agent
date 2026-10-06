@@ -212,6 +212,29 @@ class TestRunIncompleteArtifact:
         assert rc == 0
         assert "Incomplete artifact" not in mock_emit.call_args.args[0]
 
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_unusable_artifact_is_not_reported_as_a_clean_run(
+        self, _mock_gh, _mock_client, mock_download, mock_emit, caplog,
+    ) -> None:
+        def _download(*_args, **kwargs):
+            kwargs["unusable"].append("artifact 'all-test-failures' (id=9) has expired")
+            return None
+
+        mock_download.side_effect = _download
+        rc = detector_main.run(github_token="t", repo_full_name="valkey-io/valkey", run_id=123)
+
+        # Nothing was analyzed: the job must not finish green.
+        assert rc == 1
+
+        summary = mock_emit.call_args.args[0]
+        assert "Run not analyzed" in summary and "has expired" in summary
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert any("Run 123 was NOT analyzed" in m for m in warnings)
+        assert not any("no test failures" in r.getMessage() for r in caplog.records)
+
 
 class TestJobSummaryIncompleteSection:
     """The incomplete-artifact section is only for runs that actually lost
@@ -244,3 +267,42 @@ class TestJobSummaryIncompleteSection:
         for item in items:
             assert item.count("`") == 2
             assert "\n" not in item
+
+
+from scripts.test_failure_detector import main as detector_main  # noqa: E402
+
+
+class TestFailurePathsAreAnnotated:
+    """Every early failure exit pins its reason to the run page."""
+
+    @staticmethod
+    def _errors(capsys) -> list[str]:
+        return [line for line in capsys.readouterr().err.splitlines()
+                if line.startswith("::error::")]
+
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.get_latest_daily_run", return_value=None)
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_no_qualifying_run(self, _gh, _client, _latest, _emit, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
+        assert detector_main.run(github_token="t", repo_full_name="valkey-io/valkey") == 1
+        assert self._errors(capsys) == [
+            "::error::No qualifying Daily run found on valkey-io/valkey (branch unstable)"]
+
+    @pytest.mark.parametrize("content, expected", [
+        (b"{not json", "Could not parse the all-test-failures artifact from run 123"),
+        (b"[]", "expected a JSON object, got list"),
+    ])
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_bad_artifact(self, _gh, _client, download, _emit, content, expected,
+                          monkeypatch, capsys) -> None:
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
+        download.return_value = content
+        assert detector_main.run(github_token="t", repo_full_name="valkey-io/valkey",
+                                 run_id=123) == 1
+        errors = self._errors(capsys)
+        assert len(errors) == 1 and expected in errors[0]

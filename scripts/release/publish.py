@@ -219,6 +219,9 @@ def publish_release(
 
     repo = _repo(gh, policy.repo)
     _ensure_tag(repo, plan.tag, plan.sha)
+    logger.info("Creating release %s (%s, %s)", plan.tag,
+                "prerelease" if plan.prerelease else "GA",
+                "becomes latest" if plan.make_latest == "true" else "not latest")
     try:
         release = repo.create_git_release(
             plan.tag,
@@ -229,9 +232,18 @@ def publish_release(
             target_commitish=plan.sha,
             make_latest=plan.make_latest,
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning("Creating release %s raised (%s); checking whether GitHub "
+                       "created it anyway", plan.tag, exc)
         release = _find_release(repo, plan.tag)
-        if release is None or resolve_tag_commit(repo, plan.tag) != plan.sha:
+        if release is None:
+            logger.error("No release %s exists after the failed create; it was not created",
+                         plan.tag)
+            raise
+        observed = resolve_tag_commit(repo, plan.tag)
+        if observed != plan.sha:
+            logger.error("Release %s exists but its tag resolves to %s, not the approved %s",
+                         plan.tag, observed or "<unresolved>", plan.sha)
             raise
         logger.warning("release creation response was lost; recovered %s", plan.tag)
 
@@ -271,6 +283,9 @@ def _ensure_tag(repo: Any, tag: str, sha: str) -> None:
             retries=2,
             description=f"create tag {tag}",
         )
+        # The first irreversible write: logged so a later failure in this
+        # run still leaves a record that the tag exists.
+        logger.info("Created tag %s at %s", tag, sha)
         return
     except GithubException as exc:
         if exc.status != 422:

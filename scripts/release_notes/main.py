@@ -28,6 +28,7 @@ from github import Auth, Github
 
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
+from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.proc import git_output, run_git
 from scripts.release_notes import discover as discover_mod
 from scripts.release_notes import projects as projects_mod
@@ -144,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
                              "and marks it ready.")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
 
     if not args.token:
         parser.error("a GitHub token is required (--token or RELEASE_NOTES_GITHUB_TOKEN/GITHUB_TOKEN)")
@@ -206,19 +207,20 @@ def main(argv: list[str] | None = None) -> int:
             profile=profile,
         )
     except subprocess.CalledProcessError as exc:
-        stderr = (exc.stderr or "").strip()
-        logger.error(
-            "Release cut failed: %s exited %s%s",
+        stderr = " ".join((exc.stderr or "").split())[-500:]
+        log_outcome(
+            logger, logging.ERROR, "Release cut failed: %s exited %s: %s",
             " ".join(exc.cmd) if isinstance(exc.cmd, (list, tuple)) else exc.cmd,
-            exc.returncode,
-            f"\n{stderr}" if stderr else " (no stderr captured)",
+            exc.returncode, stderr or "no stderr captured",
         )
         return 1
     except ValueError as exc:
-        logger.error("Release cut failed: %s", exc)
+        log_outcome(logger, logging.ERROR, "Release cut failed: %s", " ".join(str(exc).split()))
         return 1
-    except Exception:  # noqa: BLE001 - never crash the workflow uncaught
+    except Exception as exc:  # noqa: BLE001 - never crash the workflow uncaught
         logger.exception("Release cut failed")
+        log_outcome(logger, logging.ERROR, "Release cut failed unexpectedly (%s); see the log",
+                    type(exc).__name__)
         return 1
 
 

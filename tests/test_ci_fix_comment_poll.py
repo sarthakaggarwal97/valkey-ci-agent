@@ -268,3 +268,51 @@ def test_poll_loop_env_clamped_below_token_ttl(monkeypatch):
     monkeypatch.setenv("CI_FIX_POLL_DURATION_SECONDS", str(_MAX_LOOP_SECONDS * 10))
     assert _poll_interval_seconds() == 1800
     assert _poll_duration_seconds() == _MAX_LOOP_SECONDS
+
+
+def test_dispatch_failure_after_claim_fails_the_tick_and_keeps_going(caplog):
+    """A claimed comment whose dispatch fails would otherwise be skipped by
+    every later tick: the tick must say so loudly and fail, after still
+    processing the remaining comments."""
+    import pytest
+
+    first = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}", comment_id=1)
+    second = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}", comment_id=2)
+    gh = _gh([first, second])
+    calls = []
+
+    def dispatch(repo, pr, cmd, commenter, comment_id):
+        calls.append(comment_id)
+        if comment_id == 1:
+            raise RuntimeError("422 Unprocessable")
+
+    with pytest.raises(RuntimeError, match="claimed comment\\(s\\) 1"):
+        _run(gh, dispatch=dispatch)
+    assert calls == [1, 2]
+    errors = [r.getMessage() for r in caplog.records if r.levelname == "ERROR"]
+    assert any("comment 1" in m and "remove the 'eyes' reaction" in m and "422" in m
+               for m in errors)
+
+
+def test_rejected_dispatch_raises():
+    wf = MagicMock()
+    wf.create_dispatch.return_value = False
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow.return_value = wf
+    dispatch = comment_poll.dispatch_ci_fix(gh, agent_repo="o/agent", workflow="ci-fix.yml",
+                                            ref="main")
+    command = comment_poll.parse_command(f"@valkeyrie-ops fix {_RUN_URL}")
+    import pytest
+
+    with pytest.raises(RuntimeError, match="rejected the dispatch"):
+        dispatch("valkey-io/valkey", 42, command, "alice", 1)
+
+
+def test_skips_of_fix_commands_are_logged(caplog):
+    caplog.set_level("INFO", logger="scripts.ci_fix.comment_poll")
+    issue_comment = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}", is_pr=False)
+    n, _dispatch = _run(_gh([issue_comment]))
+    assert n == 0
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("not on a pull request" in m for m in messages)
+    assert any("Scanned 1 comment(s)" in m and "0 fix(es) dispatched" in m for m in messages)

@@ -27,6 +27,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.common.job_summary import emit_job_summary
+from scripts.common.logging_utils import configure_logging
 from scripts.cve_scan.config import CveScanSettings, load_settings
 from scripts.cve_scan.image_matrix import resolve_matrix
 from scripts.cve_scan.models import Classification
@@ -306,10 +307,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    configure_logging(verbose=args.verbose)
 
     settings = load_settings()
 

@@ -18,6 +18,7 @@ from scripts.ci_fix.gate import is_authorized
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.git_clone import shallow_clone_at_sha
 from scripts.common.github_client import retry_github_call
+from scripts.common.logging_utils import configure_logging
 from scripts.common.proc import (
     BOT_EMAIL,
     BOT_NAME,
@@ -486,10 +487,7 @@ def _reply_and_resolve(
 
 
 def main() -> int:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_logging()
     try:
         request = parse_request(
             os.environ.get("RELEASE_NOTES_REVIEW_REPO", ""),

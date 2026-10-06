@@ -84,6 +84,7 @@ def download_all_test_failures(
     *,
     artifact_client: ArtifactClient | None = None,
     damaged: list[str] | None = None,
+    unusable: list[str] | None = None,
 ) -> bytes | None:
     """Download the 'all-test-failures' artifact from a workflow run.
 
@@ -95,7 +96,10 @@ def download_all_test_failures(
 
     Pass ``damaged`` to collect the zip members that could not be read. The
     failures JSON can survive alongside them, so the caller needs this to know
-    the run was only partly analyzed.
+    the run was only partly analyzed. Pass ``unusable`` to learn why None was
+    returned for an artifact that exists but could not be analyzed (expired,
+    or missing the failures JSON); it stays empty when the run simply has no
+    such artifact.
     """
     client = artifact_client or ArtifactClient(gh, token=github_token)
 
@@ -113,6 +117,8 @@ def download_all_test_failures(
             "Artifact %r (id=%d) in run %d has expired",
             target.name, target.artifact_id, run_id,
         )
+        if unusable is not None:
+            unusable.append(f"artifact {target.name!r} (id={target.artifact_id}) has expired")
         return None
 
     logger.info("Downloading artifact: %s (id=%d)", target.name, target.artifact_id)
@@ -126,6 +132,8 @@ def download_all_test_failures(
             "Artifact zip for run %d does not contain %s; found: %s",
             run_id, _FAILURES_JSON_NAME, sorted(files),
         )
+        if unusable is not None:
+            unusable.append(f"artifact does not contain {_FAILURES_JSON_NAME}")
         return None
 
     logger.info("Extracted %s from artifact zip", _FAILURES_JSON_NAME)

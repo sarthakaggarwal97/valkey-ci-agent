@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 
+from scripts.common.logging_utils import configure_logging
 from scripts.cve_scan.scanner import ScanError, scan_image
 
 logger = logging.getLogger(__name__)
@@ -89,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--trivy-bin", default="trivy")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+    configure_logging(verbose=args.verbose)
 
     try:
         cves = parse_cves(args.cves_json)

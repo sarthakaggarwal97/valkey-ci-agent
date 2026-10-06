@@ -7,6 +7,8 @@ import subprocess
 from collections.abc import Mapping
 from typing import Callable
 
+from scripts.common.proc import GitCommandError, git_subcommand
+
 logger = logging.getLogger(__name__)
 
 RunProcess = Callable[..., subprocess.CompletedProcess[str]]
@@ -50,14 +52,12 @@ def run_git(
     )
     if result.returncode == 0:
         return
-    logger.error(
-        "git %s failed (rc=%d)\nstdout: %s\nstderr: %s",
-        args[0],
-        result.returncode,
-        result.stdout.strip()[-500:] if result.stdout else "",
-        result.stderr.strip()[-500:] if result.stderr else "",
-    )
-    result.check_returncode()
+    detail = " ".join((result.stderr or result.stdout or "").split())[-500:]
+    logger.error("git %s failed with exit code %d: %s", git_subcommand(cmd),
+                 result.returncode, detail or "no output")
+    # The error's message carries git's reason, so an outcome line built
+    # from str(exc) still says why.
+    raise GitCommandError(result.returncode, cmd, result.stdout, result.stderr)
 
 
 def has_staged_changes(

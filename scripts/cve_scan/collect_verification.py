@@ -10,6 +10,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.common.logging_utils import configure_logging
+
 logger = logging.getLogger(__name__)
 _PLAN_KEYS = {"line", "variant", "platform", "cves"}
 _MARKER_KEYS = {"line", "variant", "platform", "outcome"}
@@ -176,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--plan", required=True)
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+    configure_logging(verbose=args.verbose)
 
     try:
         expected = parse_plan(args.plan)

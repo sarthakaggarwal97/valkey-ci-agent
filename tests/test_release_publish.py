@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -318,3 +319,29 @@ def test_non_fast_forward_rule_does_not_prove_tag_immutability() -> None:
         }),
     ]
     assert publish_mod.tag_ruleset_protected(repo, "9.1.2").protected is False
+
+
+def test_failed_create_logs_the_tag_and_what_recovery_saw(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    plan = _plan()
+    repo = _repo()
+    repo.create_git_ref.side_effect = None
+    repo.create_git_ref.return_value = object()
+    repo.create_git_release.side_effect = ConnectionError("response lost")
+    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *a, **k: None)
+    monkeypatch.setattr(publish_mod, "plan_publication", lambda *a, **k: plan)
+    monkeypatch.setattr(publish_mod, "_find_release", lambda *a, **k: None)
+
+    caplog.set_level(logging.INFO, logger="scripts.release.publish")
+    with pytest.raises(ConnectionError):
+        publish_mod.publish_release(
+            _gh(repo), POLICY, branch="9.1", candidate_sha=SHA, actor="approver",
+            expected_digest=publish_mod.plan_digest(plan),
+        )
+    messages = [r.getMessage() for r in caplog.records]
+    # The tag was created before the release failed: the log must show that
+    # irreversible write, and what the recovery check found.
+    assert f"Created tag 9.1.2 at {SHA}" in messages
+    assert any("Creating release 9.1.2 raised" in m for m in messages)
+    assert any("No release 9.1.2 exists after the failed create" in m for m in messages)

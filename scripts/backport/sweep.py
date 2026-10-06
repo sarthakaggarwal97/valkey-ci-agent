@@ -58,7 +58,13 @@ from scripts.backport.sweep_validation import (
 )
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.job_summary import emit_job_summary
-from scripts.common.logging_utils import compact_log_value, log_highlight
+from scripts.common.logging_utils import (
+    annotate,
+    compact_log_value,
+    configure_logging,
+    log_group,
+    log_highlight,
+)
 
 if TYPE_CHECKING:
     from scripts.backport.registry import BranchEntry, RepoEntry  # noqa: F401
@@ -261,6 +267,13 @@ def prepare_backport_sweep(
         else list(repo_entry.validation_rules)
     )
 
+    logger.info(
+        "Backport sweep of %s %s from project %s/%d (pushing to %s, up to %s PR(s), "
+        "%d validation command(s), validation repair %s)",
+        repo_full_name, target_branch, repo_entry.project_owner, branch_entry.project_number,
+        repo_entry.effective_push_repo, max_candidates if max_candidates > 0 else "unlimited",
+        len(test_commands), "on" if repo_entry.repair_validation_failures else "off",
+    )
     discovery = ProjectBackportDiscovery(
         GitHubGraphQLClient(github_token),
         project_owner=repo_entry.project_owner,
@@ -299,6 +312,8 @@ def prepare_backport_sweep(
         ), None
 
     if not candidates:
+        logger.info("Branch %s: no PR in %r status on project %d; nothing to sweep",
+                    target_branch, status_value, branch_entry.project_number)
         return BranchSweepResult(target_branch=target_branch), None
 
     return _prepare_branch(
@@ -505,17 +520,16 @@ def _prepare_branch(
             validation_setup_commands or [],
         )
         if not setup_ok:
-            logger.warning(
-                "Validation setup failed for %s.\nOutput (last 4000 chars):\n%s",
-                target_branch,
-                setup_output[-4000:],
-            )
+            logger.warning("Validation setup failed for %s", target_branch)
+            with log_group(f"Validation setup output for {target_branch} (last 4000 chars)"):
+                logger.warning("%s", setup_output[-4000:])
             raise RuntimeError(
                 "validation setup failed: "
                 + (setup_output[:500] or "setup command failed")
             )
 
-        logger.info("Already applied on %s: %s", backport_branch, already_applied)
+        logger.info("Already on %s: %s", backport_branch,
+                    ", ".join(f"#{n}" for n in sorted(already_applied, key=int)) or "nothing yet")
         applied_count = 0
         for index, candidate in enumerate(candidates):
             if max_applied > 0 and applied_count >= max_applied:
@@ -573,18 +587,23 @@ def _prepare_branch(
                 continue
 
             pre_candidate_head = head_sha(tmpdir)
-            candidate_result = apply_candidate(
-                tmpdir,
-                candidate,
-                repo_full_name,
-                {},
-                language=language,
-                build_commands=build_commands,
-                validation_rules=validation_rules,
-                test_path_patterns=test_path_patterns,
-                max_conflicting_files=max_conflicting_files,
-                source_plan=source_plans[candidate.source_pr_number],
-            )
+            # The cherry-pick and any AI conflict resolution are folded; the
+            # one-line BACKPORT result below stays visible.
+            with log_group(f"PR #{candidate.source_pr_number} "
+                           f"({compact_log_value(candidate.source_pr_title, limit=120)}): "
+                           f"apply to {target_branch}"):
+                candidate_result = apply_candidate(
+                    tmpdir,
+                    candidate,
+                    repo_full_name,
+                    {},
+                    language=language,
+                    build_commands=build_commands,
+                    validation_rules=validation_rules,
+                    test_path_patterns=test_path_patterns,
+                    max_conflicting_files=max_conflicting_files,
+                    source_plan=source_plans[candidate.source_pr_number],
+                )
             result.results.append(candidate_result)
 
             if not candidate_result.worktree_restored:
@@ -593,28 +612,32 @@ def _prepare_branch(
                     "restore the worktree; aborting this branch"
                 )
             if candidate_result.outcome != "applied":
-                logger.warning(
-                    "BACKPORT NOT APPLIED: PR #%d | %s | outcome=%s",
+                logger.log(
+                    logging.ERROR if candidate_result.outcome == "error" else logging.WARNING,
+                    "BACKPORT NOT APPLIED: PR #%d | %s | %s%s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
-                    candidate_result.outcome,
+                    _OUTCOME_WORDS.get(candidate_result.outcome, candidate_result.outcome),
+                    f" | {compact_log_value(candidate_result.detail, limit=500)}"
+                    if candidate_result.detail else "",
                 )
                 continue
 
-            validation_outcome = validate_branch_with_optional_repair(
-                tmpdir,
-                target_branch,
-                test_commands,
-                validation_rules or [],
-                repair=repair_validation_failures,
-                validation_profile=validation_profile,
-                generated_file_rules=generated_file_rules,
-                base_ref=pre_candidate_head,
-                candidate=candidate,
-                language=language,
-                test_path_patterns=test_path_patterns,
-                run_git=_run_git,
-            )
+            with log_group(f"PR #{candidate.source_pr_number}: validate {target_branch}"):
+                validation_outcome = validate_branch_with_optional_repair(
+                    tmpdir,
+                    target_branch,
+                    test_commands,
+                    validation_rules or [],
+                    repair=repair_validation_failures,
+                    validation_profile=validation_profile,
+                    generated_file_rules=generated_file_rules,
+                    base_ref=pre_candidate_head,
+                    candidate=candidate,
+                    language=language,
+                    test_path_patterns=test_path_patterns,
+                    run_git=_run_git,
+                )
             ok, output = validation_outcome
             if not ok:
                 candidate_result.outcome = "skipped-validation-failed"
@@ -622,10 +645,11 @@ def _prepare_branch(
                 _run_git(tmpdir, "reset", "--hard", pre_candidate_head)
                 logger.warning(
                     "BACKPORT REJECTED: PR #%d | %s | target=%s | "
-                    "validation failed; removed candidate and continuing",
+                    "validation failed; removed candidate and continuing | %s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
                     target_branch,
+                    compact_log_value(candidate_result.detail, limit=500),
                 )
                 continue
 
@@ -697,6 +721,11 @@ def _prepare_branch(
             )
             preserve_repo = True
             return result, prepared
+        logger.info(
+            "Not publishing %s: %s", backport_branch,
+            "no candidate was committed" if not committed
+            else f"the branch has no changes against {target_branch}",
+        )
 
     except Exception as exc:
         logger.exception("Error preparing branch %s", target_branch)
@@ -1087,23 +1116,44 @@ def _print_result(result: BranchSweepResult) -> None:
     }, indent=2))
 
 
-def _exit_for_result(result: BranchSweepResult) -> None:
+_OUTCOME_WORDS = {
+    "applied": "applied",
+    "skipped-existing": "already on the branch",
+    "skipped-empty": "empty on the target",
+    "skipped-conflict": "unresolved conflicts",
+    "skipped-validation-failed": "failed validation",
+    "error": "errored",
+}
+
+
+def sweep_outcome(result: BranchSweepResult) -> tuple[int, str]:
+    """The sweep's result as one sentence and the log level it deserves."""
     if result.error:
-        logger.error(
-            "Backport sweep failure: %s: %s",
-            result.target_branch,
-            result.error,
-        )
+        return logging.ERROR, f"Backport sweep of {result.target_branch} failed: {result.error}"
+    if not result.candidates_found:
+        return logging.INFO, f"Backport sweep of {result.target_branch}: nothing to backport"
+    counts: dict[str, int] = {}
+    for item in result.results:
+        counts[item.outcome] = counts.get(item.outcome, 0) + 1
+    errored = [f"#{item.source_pr_number}" for item in result.results
+               if item.outcome == "error" and item.source_pr_number]
+    parts = [f"{n} {_OUTCOME_WORDS.get(k, k)}" for k, n in sorted(counts.items())]
+    text = (f"Backport sweep of {result.target_branch}: {result.candidates_found} "
+            f"candidate(s)" + (f", {', '.join(parts)}" if parts else "")
+            + (f" (errored: {', '.join(errored)})" if errored else "")
+            + (f"; PR {result.pr_url}" if result.pr_url else "; no PR change"))
+    if errored and len(errored) == len(result.results):
+        return logging.ERROR, text
+    needs_look = errored or counts.get("skipped-conflict") or counts.get("skipped-validation-failed")
+    return (logging.WARNING if needs_look else logging.INFO), text
+
+
+def _exit_for_result(result: BranchSweepResult) -> None:
+    level, text = sweep_outcome(result)
+    logger.log(level, "%s", " ".join(text.split()))
+    annotate(level, text)
+    if level == logging.ERROR:
         raise SystemExit(1)
-    if result.candidates_found > 0 and result.results:
-        errored = [item for item in result.results if item.outcome == "error"]
-        if len(errored) == len(result.results):
-            logger.error(
-                "Backport sweep failure: %s: all %d candidates errored",
-                result.target_branch,
-                len(errored),
-            )
-            raise SystemExit(1)
 
 
 def main() -> None:
@@ -1154,10 +1204,7 @@ def main() -> None:
     if args.publish_state and (args.dry_run or args.discover_only):
         parser.error("--publish-state cannot be combined with non-writing modes")
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+    configure_logging(verbose=args.verbose)
 
     env_token = os.environ.pop("TARGET_TOKEN", "")
     github_token = args.target_token or env_token
@@ -1225,6 +1272,14 @@ def main() -> None:
 
     _print_result(result)
     if args.discover_only or args.dry_run:
+        annotate(logging.INFO, f"Discovery only: {result.candidates_found} backport "
+                               f"candidate(s) for {result.target_branch}")
+        return
+    if args.prepare_state and sweep_outcome(result)[0] != logging.ERROR:
+        # Preparation publishes nothing; the publish step reports the outcome.
+        # Failures still end the run here, as before.
+        logger.info("Prepared %s: %d candidate(s), %d applied locally; publication follows",
+                    result.target_branch, result.candidates_found, result.applied_count)
         return
     _exit_for_result(result)
 

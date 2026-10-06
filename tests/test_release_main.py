@@ -75,3 +75,19 @@ def test_connection_failure_is_a_named_cli_refusal(
 
     assert result == 1
     assert "offline" in caplog.text
+
+
+def test_refusal_is_pinned_to_the_run_page(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setattr(main_mod, "load_policy", lambda path: POLICY)
+    monkeypatch.setattr(
+        main_mod, "prepare_release",
+        lambda *a, **k: (_ for _ in ()).throw(main_mod.ReleaseError("line\n::error::forged")),
+    )
+    assert main_mod.main(["--token", "t", "prepare", "--branch", "9.1", "--intent", "rc",
+                          "--actor", "maintainer"]) == 1
+    err = capsys.readouterr().err.splitlines()
+    # One escaped annotation: a newline in the reason cannot open a second command.
+    assert "::error::Release prepare refused: line ::error::forged" in err

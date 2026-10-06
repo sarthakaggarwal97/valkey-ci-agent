@@ -8,8 +8,10 @@ import os
 import re
 import subprocess
 import threading
+import time
 from typing import Any
 
+from scripts.common.logging_utils import log_group
 from scripts.common.proc import filter_env
 
 logger = logging.getLogger(__name__)
@@ -113,7 +115,27 @@ def run_claude_code(
     if effort:
         cmd.extend(["--effort", effort])
 
-    logger.info("Running claude: cwd=%s, timeout=%d, prompt=%s…", cwd, timeout, prompt[:120])
+    logger.info("Running Claude Code in %s (timeout %ds)", cwd or ".", timeout)
+    started = time.monotonic()
+    # The event stream is long; fold it so the lines around it stay readable.
+    with log_group("Claude Code output"):
+        logger.debug("Prompt starts: %s", " ".join(prompt[:200].split()))
+        stdout, stderr, returncode = _run_streaming(cmd, prompt, cwd=cwd, env=env, timeout=timeout)
+    elapsed = time.monotonic() - started
+    if stderr.startswith("timeout"):
+        logger.error("Claude Code timed out after %ds.", timeout)
+    elif returncode == 127 and stderr == "claude not found":
+        logger.error("claude CLI not found on PATH.")
+    else:
+        logger.log(logging.INFO if returncode == 0 else logging.WARNING,
+                   "Claude Code exited %d after %.0fs (%d chars of output).",
+                   returncode, elapsed, len(stdout))
+    return stdout, stderr, returncode
+
+
+def _run_streaming(
+    cmd: list[str], prompt: str, *, cwd: str | None, env: dict[str, str], timeout: int,
+) -> tuple[str, str, int]:
     stdout_parts: list[str] = []
     process = None
     try:
@@ -144,7 +166,6 @@ def run_claude_code(
         returncode = process.wait(timeout=timeout)
         reader.join(timeout=5)
         stdout = "".join(stdout_parts)
-        logger.info("Claude exited %d (%d chars stdout).", returncode, len(stdout))
         return stdout, "", returncode
     except subprocess.TimeoutExpired:
         if process is not None:
@@ -155,10 +176,8 @@ def run_claude_code(
         # Let the reader thread flush buffered output before we read it.
         reader.join(timeout=5)
         stdout = "".join(stdout_parts)
-        logger.error("Claude timed out after %ds.", timeout)
         return stdout, f"timeout after {timeout}s", 1
     except FileNotFoundError:
-        logger.error("claude CLI not found on PATH.")
         return "", "claude not found", 127
 
 

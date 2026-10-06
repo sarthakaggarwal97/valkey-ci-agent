@@ -1720,7 +1720,6 @@ def test_clone_target_branch_invokes_git_clone_without_destination_cwd(
             str(dest),
         ],
         {
-            "check": True,
             "capture_output": True,
             "text": True,
             "env": {"GIT_ASKPASS": "/tmp/askpass"},
@@ -3945,3 +3944,39 @@ def test_project_items_query_selects_repository_name_with_owner():
     assert "repository {" in query
     assert "nameWithOwner" in query
     assert "pageInfo { hasNextPage endCursor }" in query
+
+
+def test_clone_failure_carries_gits_reason(monkeypatch, tmp_path):
+    from scripts.common.proc import GitCommandError
+
+    monkeypatch.setattr(sweep_git, "github_https_url", lambda _r: str(tmp_path / "missing.git"))
+    with pytest.raises(GitCommandError) as raised:
+        clone_target_branch("owner/repo", "1.0", str(tmp_path / "dest"), {})
+    assert str(raised.value).startswith("git clone exited 128: ")
+
+
+def test_sweep_git_failure_carries_gits_reason(tmp_path):
+    from scripts.backport.git_commands import run_git
+    from scripts.common.proc import GitCommandError
+
+    with pytest.raises(GitCommandError) as raised:
+        run_git(str(tmp_path), "-c", "core.editor=true", "rev-parse", "--verify", "no-such-ref")
+    # The sweep's outcome line is built from str(exc): it must name the
+    # subcommand and carry git's own reason, not just an exit status.
+    assert str(raised.value).startswith("git rev-parse exited 128: ")
+
+
+def test_sweep_outcome_sentence_and_level():
+    from scripts.backport import sweep as sweep_mod
+    from scripts.backport.sweep_models import BranchSweepResult
+
+    result = BranchSweepResult(
+        target_branch="8.1", candidates_found=2,
+        results=[CandidateResult(1, "ok", "applied"), CandidateResult(2, "bad", "error", "boom")],
+    )
+    level, text = sweep_mod.sweep_outcome(result)
+    assert level == logging.WARNING
+    assert text == ("Backport sweep of 8.1: 2 candidate(s), 1 applied, 1 errored "
+                    "(errored: #2); no PR change")
+    result.results[0] = CandidateResult(1, "ok", "error", "x")
+    assert sweep_mod.sweep_outcome(result)[0] == logging.ERROR
