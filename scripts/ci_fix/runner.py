@@ -13,17 +13,33 @@ Commands run through Bash when available because GitHub-hosted Linux/macOS
 jobs default to Bash and real build+test recipes may use Bash conditionals;
 otherwise they fall back to ``/bin/sh -c``. Docker verification still uses the
 container's ``/bin/sh`` because minimal images may not include Bash.
+
+A scrubbed environment is not isolation on its own: a process running as the
+workflow user can read the credentialed parent's ``/proc/<pid>/environ``,
+rewrite the state file the publish step trusts, or plant an executable on its
+``PATH``, and a background process outlives the command. So when
+``CI_FIX_VERIFY_USER`` names an unprivileged account (the workflows create
+one), a host command runs as that user over a checkout handed to it for the
+run, and every process the user owns is killed before the checkout is handed
+back. A container command runs in its own PID and mount namespace and is
+removed when the run ends.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import pwd
 import select
 import shlex
 import shutil
+import signal
+import stat
 import subprocess
 import time
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from scripts.ci_fix.models import RunResult
@@ -43,6 +59,8 @@ _OUTPUT_TAIL_CHARS = 32 * 1024
 # so a command that floods stdout cannot exhaust the runner. We keep only the
 # tail, which is where build/test failure summaries live.
 _MAX_CAPTURED_BYTES = 8 * 1024 * 1024
+
+VERIFY_USER_ENV = "CI_FIX_VERIFY_USER"
 
 
 def run_verification_command(
@@ -83,15 +101,26 @@ def run_verification_command(
             output_tail=f"workdir {workdir!r} escapes or does not exist under repo",
         )
 
-    exec_command = (
-        _dockerize(command, Path(repo_dir).resolve(), workdir, container_image)
-        if container_image else command
-    )
+    repo_root = Path(repo_dir).resolve()
     env = filter_env(env_allowlist)
+    user = "" if container_image else os.environ.get(VERIFY_USER_ENV, "")
     where = f"docker[{container_image}]" if container_image else str(cwd)
     logger.info("Running verification command in %s (timeout=%ds): %s", where, timeout, command)
     try:
-        ran, exit_code, output, timed_out = _run_capped(exec_command, cwd, env, timeout)
+        if container_image:
+            name = f"ci-fix-verify-{uuid.uuid4().hex[:12]}"
+            argv = [*_verification_shell(), _dockerize(command, repo_root, workdir, container_image, name=name)]
+            try:
+                ran, exit_code, output, timed_out = _run_capped(argv, cwd, env, timeout)
+            finally:
+                # Killing the docker client on a timeout leaves the container running.
+                subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
+        elif user:
+            with _handed_to(user, repo_root):
+                argv = _as_user(user, env, [*_verification_shell(), command])
+                ran, exit_code, output, timed_out = _run_capped(argv, cwd, env, timeout)
+        else:
+            ran, exit_code, output, timed_out = _run_capped([*_verification_shell(), command], cwd, env, timeout)
     except OSError as exc:
         logger.warning("Verification command failed to start: %s", exc)
         return RunResult(
@@ -114,7 +143,7 @@ def run_verification_command(
     )
 
 
-def _dockerize(command: str, repo_root: Path, workdir: str, image: str) -> str:
+def _dockerize(command: str, repo_root: Path, workdir: str, image: str, *, name: str) -> str:
     """Wrap ``command`` to run inside ``image`` via docker, mounting the repo.
 
     The whole repository (including ``.git`` and any sibling paths the command
@@ -132,12 +161,59 @@ def _dockerize(command: str, repo_root: Path, workdir: str, image: str) -> str:
     uid = os.getuid()
     gid = os.getgid()
     return (
-        "docker run --rm --network none --cap-drop ALL "
+        f"docker run --rm --name {shlex.quote(name)} --network none --cap-drop ALL "
         "--security-opt no-new-privileges "
         f"--user {uid}:{gid} "
         f"-v {shlex.quote(str(repo_root))}:/src -w /src "
         f"{shlex.quote(image)} /bin/sh -c {shlex.quote(inner)}"
     )
+
+
+def _as_user(user: str, env: dict[str, str], argv: list[str]) -> list[str]:
+    """``argv`` run as ``user`` with ``env``, its home and temp directories its own."""
+    home = pwd.getpwnam(user).pw_dir
+    scrubbed = {**{k: v for k, v in env.items() if k not in ("TMPDIR", "TMP")},
+                "HOME": home, "USER": user, "LOGNAME": user}
+    # runuser, not ``sudo -u``: it needs only root, which a runner's sudo grants.
+    return ["sudo", "-n", "runuser", "-u", user, "--", "env", "-i",
+            *(f"{key}={value}" for key, value in scrubbed.items()), *argv]
+
+
+@contextmanager
+def _handed_to(user: str, repo_root: Path) -> Iterator[None]:
+    """Give ``repo_root`` to ``user`` for one command, then take it back.
+
+    Every process ``user`` owns is killed before ownership returns, so nothing
+    started by the command can touch the checkout once it is reviewed.
+    ``chown -h -P`` changes symbolic links themselves and never follows them,
+    so a link in the checkout cannot redirect the privileged chown.
+    """
+    for parent in repo_root.parents:
+        if not parent.stat().st_mode & stat.S_IXOTH:
+            raise OSError(f"{user} cannot reach the checkout: {parent} is not traversable")
+    _sudo("chown", "-R", "-h", "-P", "--", f"{user}:", str(repo_root))
+    try:
+        yield
+    finally:
+        _kill_all(user)
+        _sudo("chown", "-R", "-h", "-P", "--", f"{os.getuid()}:{os.getgid()}", str(repo_root))
+
+
+def _kill_all(user: str) -> None:
+    deadline = time.monotonic() + 30
+    while True:
+        subprocess.run(["sudo", "-n", "pkill", "-KILL", "-u", user], capture_output=True, check=False)
+        if subprocess.run(["pgrep", "-u", user], capture_output=True, check=False).returncode == 1:
+            return
+        if time.monotonic() > deadline:
+            raise OSError(f"processes of {user} survived the verification run")
+        time.sleep(0.2)
+
+
+def _sudo(*argv: str) -> None:
+    result = subprocess.run(["sudo", "-n", *argv], capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise OSError(f"sudo {' '.join(argv)} failed: {result.stderr.strip()}")
 
 
 def _resolve_workdir(repo_dir: str, workdir: str) -> Path | None:
@@ -161,9 +237,9 @@ def _tail(text: str) -> str:
 
 
 def _run_capped(
-    command: str, cwd: Path, env: dict[str, str], timeout: int
+    argv: list[str], cwd: Path, env: dict[str, str], timeout: int
 ) -> tuple[bool, int, str, bool]:
-    """Run ``command`` capturing at most ``_MAX_CAPTURED_BYTES`` of tail output.
+    """Run ``argv`` capturing at most ``_MAX_CAPTURED_BYTES`` of tail output.
 
     Merges stdout and stderr and keeps only the trailing bytes, so a command
     that floods output cannot exhaust memory. The deadline is enforced with
@@ -171,13 +247,14 @@ def _run_capped(
     Returns ``(ran, exit_code, output, timed_out)``. Raises ``OSError`` if the
     process cannot start.
     """
-    shell = _verification_shell()
     proc = subprocess.Popen(
-        [*shell, command],
+        argv,
         cwd=str(cwd),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        # Its own process group, so what it started dies with it.
+        start_new_session=True,
     )
     assert proc.stdout is not None
     fd = proc.stdout
@@ -202,14 +279,22 @@ def _run_capped(
     finally:
         fd.close()
         if timed_out:
-            proc.kill()
+            _kill_group(proc.pid)
         try:
             proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
-            proc.kill()
+            _kill_group(proc.pid)
             proc.wait()
+        _kill_group(proc.pid)  # anything it left running in the background
     return True, proc.returncode if proc.returncode is not None else -1, \
         buf.decode("utf-8", errors="replace"), timed_out
+
+
+def _kill_group(pgid: int) -> None:
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 def _verification_shell() -> tuple[str, ...]:

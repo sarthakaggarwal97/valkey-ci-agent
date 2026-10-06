@@ -309,6 +309,14 @@ def _reconcile(
             return _end_attempt(repo, attempt, result, "the verification runs did not finish in time")
         return {**result, "action": "waiting"}
 
+    if "cancelled" in (baseline.state, candidate.state):
+        return _end_attempt(repo, attempt, result, "a verification run was cancelled, so the result is inconclusive")
+    if not baseline.reproduces(plan):
+        # A pass with the fix means nothing if the failure does not happen
+        # without it.
+        return _end_attempt(
+            repo, attempt, result, f"the run without the fix did not reproduce the failure ({baseline.detail})",
+        )
     if not candidate.verified:
         data["candidate_result"] = asdict(candidate)
         return _end_attempt(repo, attempt, result, candidate.detail)
@@ -340,15 +348,9 @@ def _end_attempt(repo: Any, attempt: Attempt, result: dict[str, Any], summary: s
 
 
 def _evidence(plan: DailyPlan, baseline: DailyResult, candidate: DailyResult) -> str:
-    if baseline.test_failures:
-        before = f"reproduced the failure ({baseline.detail})"
-    elif baseline.state == "failed" and not plan.test_name:
-        # A whole-job rerun shows only that the job failed, not how.
-        before = f"failed ({baseline.detail})"
-    elif baseline.state == "failed":
-        before = f"failed for another reason ({baseline.detail})"
-    else:
-        before = f"did not reproduce it ({baseline.detail})"
+    # Only called once the baseline reproduced the failure. A whole-job rerun
+    # shows only that the job failed, not how.
+    before = f"reproduced the failure ({baseline.detail})" if plan.test_name else f"failed ({baseline.detail})"
     return (
         f"\n\n**Verification** in the Daily workflow, {plan.describe()}:\n"
         f"- Without the fix: [run]({baseline.run_url}) {before}.\n"
@@ -523,13 +525,24 @@ def _prepare_attempt(
         failing_sha=failing_sha,
         issue_number=failure.number,
         target=failure.describe(job),
+        job=job,
     )
     outcome = run_ci_fix_request(gh, request=request, failed_jobs=(job,), artifact_client=artifact_client)
-    if outcome.kind is OutcomeKind.READY and not failure.addressed_by(outcome.proposal):
+    if outcome.kind is not OutcomeKind.READY:
+        return outcome, request
+    if not failure.addressed_by(outcome.proposal):
         named = outcome.proposal.failing_check if outcome.proposal else "another failure"
         return replace(
             outcome, kind=OutcomeKind.REFUSED,
             summary=f"the diagnosis addressed {named!r}, not the test this issue tracks",
+        ), request
+    workflows = [path for path in outcome.changed_paths if path.startswith(".github/workflows/")]
+    if workflows:
+        # Verification dispatches the Daily workflow from the default branch,
+        # so a changed workflow file would never run.
+        return replace(
+            outcome, kind=OutcomeKind.REFUSED,
+            summary=f"the fix changes {', '.join(workflows)}, which the Daily verification cannot exercise",
         ), request
     return outcome, request
 

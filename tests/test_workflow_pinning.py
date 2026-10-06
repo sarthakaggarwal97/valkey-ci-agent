@@ -259,6 +259,24 @@ def test_ci_fix_workflows_prepare_read_only_and_publish_with_a_fresh_token():
         assert int(aws["role-duration-seconds"]) >= int(job["timeout-minutes"]) * 60, filename
 
 
+def test_workflows_that_run_pr_code_run_it_as_a_separate_user():
+    """Local verification must not run as the runner user that holds credentials and state."""
+    for filename, job_name, prepare in (
+        ("ci-fix.yml", "ci-fix", "Prepare the CI fix"),
+        ("backport-ci-followup.yml", "follow-up", "Prepare follow-up"),
+    ):
+        workflow = yaml.load((Path(".github/workflows") / filename).read_text(encoding="utf-8"),
+                             Loader=yaml.BaseLoader)
+        steps = workflow["jobs"][job_name]["steps"]
+        names = [step.get("name") for step in steps]
+        create = steps[names.index("Create the verification user")]
+        assert names.index("Create the verification user") < names.index(prepare), filename
+        assert "useradd" in create["run"] and "CI_FIX_VERIFY_USER=ci-fix-verify" in create["run"], filename
+        # Same condition as the step that may need it, so it is never skipped when code runs.
+        if filename == "ci-fix.yml":
+            assert create["if"] == "steps.gate.outputs.execute == 'true'"
+
+
 def test_ci_fix_scopes_the_publication_token_by_the_gate_decision():
     """A fork or contributor PR never gets a push-capable token in the job."""
     workflow = yaml.load(Path(".github/workflows/ci-fix.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)

@@ -20,7 +20,7 @@ from scripts.ci_fix.gate import (
     is_authorized,
     parse_command,
 )
-from scripts.ci_fix.models import FixRequest, Policy, Publication
+from scripts.ci_fix.models import FixRequest, Policy, Publication, request_from_dict, to_dict
 from scripts.ci_fix.verify.base import FailedJob
 
 _RUN_URL = "https://github.com/valkey-io/valkey/actions/runs/27559908167"
@@ -327,6 +327,7 @@ def test_without_a_link_the_most_deterministic_failure_on_the_head_is_chosen(mon
     assert isinstance(result, FixRequest)
     assert result.run_id == 2
     assert result.target == "the failure in job `build-macos`"
+    assert result.job == "build-macos"
 
 
 def test_without_a_link_and_no_failed_run_the_gate_explains(monkeypatch):
@@ -399,6 +400,8 @@ def test_a_job_link_targets_that_job(monkeypatch):
     )
     assert isinstance(result, FixRequest)
     assert result.target == "the failure in job `test-sanitizer-address`"
+    assert result.job == "test-sanitizer-address"
+    assert request_from_dict(to_dict(result)).job == "test-sanitizer-address"
 
 
 def test_a_job_link_to_a_job_that_did_not_fail_is_refused(monkeypatch):

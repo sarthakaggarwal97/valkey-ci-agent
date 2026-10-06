@@ -15,35 +15,61 @@ from typing import Any
 
 
 def extract_json_object(stdout: str, *, required_key: str) -> dict[str, Any] | None:
-    """Return the first ``{...}`` object containing ``required_key``, or None.
+    """Return the one ``{...}`` object containing ``required_key``, or None.
 
-    Prefers the last stream-json ``result`` event's text, then scans for a
-    JSON object carrying ``required_key`` so we ignore unrelated braces in
-    surrounding prose.
+    Reads the stream-json ``result`` event's text when there is one, then scans
+    it for top-level JSON objects carrying ``required_key`` so unrelated braces
+    in surrounding prose are ignored. Output that is ambiguous returns None
+    rather than a guess: more than one ``result`` event, two different objects
+    carrying the key (an example verdict followed by the real one), or an
+    object with a duplicated key.
     """
     text = stdout
+    results = 0
     for line in stdout.strip().splitlines():
         try:
             event = json.loads(line)
         except ValueError:
             continue
         if isinstance(event, dict) and event.get("type") == "result":
+            results += 1
             result = event.get("result")
             if isinstance(result, str):
                 text = result
+    if results > 1:
+        return None
 
-    decoder = json.JSONDecoder()
+    decoder = json.JSONDecoder(object_pairs_hook=_unique_keys)
+    found: list[dict[str, Any]] = []
     start = text.find("{")
     while start != -1:
         try:
-            obj, _ = decoder.raw_decode(text[start:])
+            obj, length = decoder.raw_decode(text[start:])
+        except _DuplicateKey:
+            return None
         except ValueError:
             start = text.find("{", start + 1)
             continue
         if isinstance(obj, dict) and required_key in obj:
-            return obj
-        start = text.find("{", start + 1)
-    return None
+            found.append(obj)
+            # Skip the object's body so its nested objects are not candidates.
+            start = text.find("{", start + length)
+        else:
+            start = text.find("{", start + 1)
+    if not found or any(obj != found[0] for obj in found[1:]):
+        return None
+    return found[0]
+
+
+class _DuplicateKey(ValueError):
+    pass
+
+
+def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    keys = [key for key, _value in pairs]
+    if len(set(keys)) != len(keys):
+        raise _DuplicateKey(f"duplicate key in {keys}")
+    return dict(pairs)
 
 
 def last_agent_text(stdout: str, *, limit: int = 500) -> str:

@@ -225,6 +225,7 @@ def prepare_followup(
         requested_by=bot_login,
         base_branch=target_branch,
         target=f"the failure in job `{selected_job.name}`",
+        job=selected_job.name,
         policy=Policy.BACKPORT,
         publication=Publication.PUSH,
     )

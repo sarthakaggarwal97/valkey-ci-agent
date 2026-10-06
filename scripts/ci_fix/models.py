@@ -89,6 +89,9 @@ class FixRequest:
     # Code-chosen description of the one failure to fix, when the run holds
     # several (a Daily run usually does). Empty lets the diagnosis pick.
     target: str = ""
+    # The failed job the front door chose. When set, it is the only job the
+    # engine diagnoses and verifies, whatever job the AI names.
+    job: str = ""
 
 
 @dataclass(frozen=True)
@@ -226,6 +229,7 @@ def request_from_dict(data: dict[str, Any]) -> FixRequest:
         failing_sha=_s(data, "failing_sha"),
         issue_number=_i(data, "issue_number"),
         target=_s(data, "target"),
+        job=_s(data, "job"),
     )
 
 

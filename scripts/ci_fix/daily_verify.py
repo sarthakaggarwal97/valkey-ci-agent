@@ -106,7 +106,7 @@ class DailyResult:
     a job that failed for another reason.
     """
 
-    state: str            # "passed" | "skipped" | "failed" | "not-run"
+    state: str            # "passed" | "skipped" | "failed" | "cancelled" | "not-run"
     run_url: str
     job_url: str = ""
     detail: str = ""
@@ -114,7 +114,17 @@ class DailyResult:
 
     @property
     def verified(self) -> bool:
-        return self.state in ("passed", "skipped")
+        return self.state == "passed"
+
+    def reproduces(self, plan: DailyPlan) -> bool:
+        """Whether this run shows the failure the plan targets.
+
+        A test plan needs the test's own failure lines; a whole-job plan has
+        only the job's result to go on.
+        """
+        if plan.test_name:
+            return self.test_failures > 0
+        return self.state == "failed"
 
 
 def stress_loops() -> int:
@@ -353,11 +363,17 @@ def evaluate_daily_run(
     if job is None:
         if str(getattr(run, "status", "") or "") != "completed":
             return None
+        if str(getattr(run, "conclusion", "") or "") == "cancelled":
+            return DailyResult("cancelled", run_url, detail="the run was cancelled")
         return DailyResult("not-run", run_url, detail=f"the run has no {plan.job or plan.job_id} job")
     if str(getattr(job, "status", "") or "") != "completed":
         return None
     job_url = str(getattr(job, "html_url", "") or "")
     conclusion = str(getattr(job, "conclusion", "") or "")
+    if conclusion == "cancelled":
+        # Daily cancels a run when another starts on the same ref, so a
+        # cancellation says nothing about the code.
+        return DailyResult("cancelled", run_url, job_url, detail="the job was cancelled")
     if not plan.test_name:
         if conclusion != "success":
             return DailyResult("failed", run_url, job_url, detail=f"the job concluded {conclusion or 'unknown'}")

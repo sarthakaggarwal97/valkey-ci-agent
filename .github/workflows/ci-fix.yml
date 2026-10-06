@@ -161,6 +161,15 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-duration-seconds: 7200
 
+      - name: Create the verification user
+        if: steps.gate.outputs.execute == 'true'
+        # Untrusted PR code runs as this account, not as the runner user that
+        # holds the job's credentials and state (see scripts/ci_fix/runner.py).
+        shell: bash
+        run: |
+          sudo useradd --create-home --shell /bin/bash ci-fix-verify
+          echo "CI_FIX_VERIFY_USER=ci-fix-verify" >> "${GITHUB_ENV}"
+
       - name: Prepare the CI fix
         if: steps.gate.outputs.publication == 'push' || steps.gate.outputs.publication == 'suggest'
         # Shorter than the job timeout so publication still reports a timeout.

@@ -23,7 +23,7 @@ from scripts.ci_fix.models import (
 from scripts.ci_fix.pipeline import _recent_changes, run_ci_fix_request
 from scripts.ci_fix.port_discovery import PortCandidate
 from scripts.ci_fix.review import LoopResult, PatchReview
-from scripts.ci_fix.verify.base import VerificationResult, VerifyEnv
+from scripts.ci_fix.verify.base import FailedJob, VerificationResult, VerifyEnv
 from scripts.ci_fix.verify.workflow_env import JobEnvironment
 
 _FULL_PORT_SHA = "9f374e15848d7b070cdd58a071a741c0a59a6c75"
@@ -188,6 +188,47 @@ def test_engine_refuses_a_job_that_did_not_fail(monkeypatch):
     assert "not among the failed jobs" in outcome.summary
 
 
+def _two_failed_jobs(monkeypatch, request, hint):
+    monkeypatch.setattr("scripts.ci_fix.pipeline.shallow_clone_at_sha", lambda *a, **k: True)
+    classified = []
+    monkeypatch.setattr("scripts.ci_fix.pipeline._classify_failing_job",
+                        lambda _repo, job: classified.append(job) or JobEnvironment(VerifyEnv.LOCAL))
+    monkeypatch.setattr("scripts.ci_fix.pipeline.commits_in_range", lambda *a, **k: ())
+    monkeypatch.setattr("scripts.ci_fix.pipeline.failed_jobs_for_run", lambda *a, **k: [
+        FailedJob("job-A", "failure", 1), FailedJob("job-B", "failure", 2)])
+    loop = MagicMock(return_value=_loop_success())
+    outcome = run_ci_fix_request(
+        MagicMock(), request=request, artifact_client=_artifact_client({"1.txt": b"err"}),
+        diagnose_func=lambda *a, **k: _proposal(failing_job_hint=hint), run_loop_func=loop,
+    )
+    return outcome, loop, classified
+
+
+def test_engine_verifies_only_the_job_the_front_door_selected(monkeypatch):
+    outcome, loop, classified = _two_failed_jobs(monkeypatch, _request(job="job-A"), hint="job-B")
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert "'job-B' is not among the failed jobs of the linked run (job-A)" in outcome.summary
+    assert classified == []
+    loop.assert_not_called()
+
+    outcome, loop, classified = _two_failed_jobs(monkeypatch, _request(job="job-A"), hint="job-A")
+    assert outcome.kind is OutcomeKind.READY
+    assert classified == ["job-A"]
+
+
+def test_without_a_selected_job_any_failed_job_may_be_verified(monkeypatch):
+    outcome, _loop, classified = _two_failed_jobs(monkeypatch, _request(), hint="job-B")
+    assert outcome.kind is OutcomeKind.READY
+    assert classified == ["job-B"]
+
+
+def test_engine_refuses_a_selected_job_that_is_no_longer_failed(monkeypatch):
+    outcome, loop, _classified = _two_failed_jobs(monkeypatch, _request(job="job-C"), hint="job-C")
+    assert outcome.kind is OutcomeKind.REFUSED
+    assert "'job-C' is not a failed job" in outcome.summary
+    loop.assert_not_called()
+
+
 def test_engine_passes_request_and_recent_changes_to_diagnosis(monkeypatch):
     seen = {}
 
@@ -210,10 +251,12 @@ def test_port_is_ready_with_the_full_discovered_sha(monkeypatch):
     outcome = _engine(
         monkeypatch, loop=loop, classify=classify,
         diagnose=lambda *a, **k: _proposal(FixPath.PORT, unstable_fix_commit="9f374e15848d"),
-        discover=lambda *a, **k: (PortCandidate(sha=_FULL_PORT_SHA, subject="the upstream fix"),),
+        discover=lambda *a, **k: (PortCandidate(sha=_FULL_PORT_SHA, subject="the upstream fix",
+                                                paths=(".github/workflows/daily.yml", "src/x.c")),),
     )
     assert outcome.kind is OutcomeKind.READY
     assert outcome.port_commit == _FULL_PORT_SHA
+    assert outcome.changed_paths == (".github/workflows/daily.yml", "src/x.c")
     assert outcome.verify_backend == "upstream-port"
     loop.assert_not_called()
     classify.assert_not_called()

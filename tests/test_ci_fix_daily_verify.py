@@ -9,6 +9,7 @@ import pytest
 
 from scripts.ci_fix.daily_verify import (
     DailyPlan,
+    DailyResult,
     dispatch_daily,
     evaluate_daily_run,
     plan_daily_run,
@@ -229,9 +230,36 @@ def test_a_green_job_that_never_ran_the_test_proves_nothing():
     assert (result.state, result.verified) == ("not-run", False)
 
 
-def test_a_skipped_test_is_reported_as_skipped():
+def test_a_skipped_test_is_reported_as_skipped_and_never_verifies():
     result = _evaluate("[skip]: TTL expiration\n", _job())
-    assert result is not None and result.state == "skipped"
+    assert result is not None
+    assert (result.state, result.verified) == ("skipped", False)
+
+
+def test_a_cancelled_job_is_cancelled_not_failed():
+    result = _evaluate("[err]: TTL expiration in tests/integration/rdb.tcl\n", _job(conclusion="cancelled"))
+    assert result is not None
+    assert (result.state, result.verified, result.test_failures) == ("cancelled", False, 0)
+
+
+def test_a_run_cancelled_before_the_job_started_is_cancelled():
+    run = SimpleNamespace(html_url="https://run/1", status="completed", conclusion="cancelled", jobs=lambda: [])
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow_run.return_value = run
+    plan = DailyPlan(job="j", job_id="j", inputs={})
+    result = evaluate_daily_run(gh, MagicMock(), "o/r", 1, plan)
+    assert result is not None and result.state == "cancelled"
+
+
+def test_reproduction_needs_the_tests_own_failure_for_a_test_plan():
+    test_plan = DailyPlan(job="j", job_id="j", inputs={}, test_name="TTL expiration")
+    job_plan = DailyPlan(job="j", job_id="j", inputs={})
+    other_reason = DailyResult("failed", "u", test_failures=0)
+    own_failure = DailyResult("failed", "u", test_failures=2)
+    assert not other_reason.reproduces(test_plan)
+    assert own_failure.reproduces(test_plan)
+    assert other_reason.reproduces(job_plan)
+    assert not DailyResult("passed", "u").reproduces(job_plan)
 
 
 def test_a_failed_job_counts_the_tests_own_failures():

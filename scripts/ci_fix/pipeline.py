@@ -21,6 +21,7 @@ A READY outcome carries exactly what publication applies: the approved patch
 from __future__ import annotations
 
 import logging
+import os
 import tempfile
 from dataclasses import replace
 from pathlib import Path
@@ -101,8 +102,18 @@ def run_ci_fix_request(
             job.name
             for job in failed_jobs_for_run(gh, request.repo_full_name, request.run_id)
         )
+    if request.job:
+        if request.job not in confirmed_jobs:
+            return FixOutcome(
+                kind=OutcomeKind.REFUSED,
+                summary=f"The selected job {request.job!r} is not a failed job of the linked run; refusing.",
+            )
+        confirmed_jobs = (request.job,)
 
     with tempfile.TemporaryDirectory(prefix="ci-fix-") as workdir_str:
+        # Traversable but not listable, so a separate verification user can
+        # reach the checkout inside it (see runner.py).
+        os.chmod(workdir_str, 0o711)
         outcome = _run_in_workspace(
             Path(workdir_str), request, confirmed_jobs,
             artifact_client=artifact_client, diagnose_func=diagnose_func,
@@ -359,7 +370,7 @@ def _port(
         kind=OutcomeKind.READY,
         summary=f"Port upstream fix for {proposal.failing_check}",
         proposal=proposal, review=review, port_commit=candidate.sha,
-        verify_backend="upstream-port",
+        changed_paths=candidate.paths, verify_backend="upstream-port",
         other_failing_checks=proposal.other_failing_checks,
     )
 

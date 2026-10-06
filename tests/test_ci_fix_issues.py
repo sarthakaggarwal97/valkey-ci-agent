@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -390,10 +391,48 @@ def test_a_verified_fix_becomes_a_pr_with_both_runs_as_evidence(monkeypatch):
     assert deleted == []
 
 
-def test_a_fix_whose_baseline_did_not_reproduce_still_opens_with_that_evidence(monkeypatch):
-    _out, _edited, _deleted, opened = _reconcile(monkeypatch, results={
-        11: _result("passed", "the test passed 20 time(s)"), 12: _result("passed", "the test passed 20 time(s)")})
-    assert "did not reproduce it" in opened[0]["body"]
+@pytest.mark.parametrize("baseline", [
+    _result("passed", "the test passed 20 time(s)"),
+    _result("failed", "the job concluded failure without the test failing"),
+    _result("not-run", "the job passed but never ran the test"),
+])
+def test_a_baseline_that_did_not_reproduce_the_failure_opens_nothing(monkeypatch, baseline):
+    out, edited, deleted, opened = _reconcile(monkeypatch, results={
+        11: baseline, 12: _result("passed", "the test passed 20 time(s)")})
+    assert out[0]["action"] == "failed"
+    assert opened == []
+    assert deleted == ["agent/ci-fix/issue-7-100"]
+    assert f"did not reproduce the failure ({baseline.detail})" in edited
+
+
+def test_a_whole_job_baseline_reproduces_by_failing(monkeypatch):
+    pending = _pending(plan={"job": "test-freebsd", "job_id": "test-freebsd", "inputs": {}})
+    out, _edited, _deleted, opened = _reconcile(monkeypatch, pending=pending, results={
+        11: _result("failed", "the job concluded failure"), 12: _result("passed", "the job passed")})
+    assert out[0]["action"] == "opened"
+    assert "failed (the job concluded failure)" in opened[0]["body"]
+
+
+@pytest.mark.parametrize("state", ["skipped", "not-run"])
+def test_a_candidate_that_did_not_run_the_test_opens_nothing(monkeypatch, state):
+    out, edited, deleted, opened = _reconcile(monkeypatch, results={
+        11: _result("failed", "the test failed 1 time(s)", failures=1), 12: _result(state, "the test is skipped")})
+    assert out[0]["action"] == "failed"
+    assert opened == []
+    assert deleted == ["agent/ci-fix/issue-7-100"]
+    assert "did not pass verification" in edited and "passed verification" not in edited.replace("not pass", "")
+
+
+@pytest.mark.parametrize("cancelled", [11, 12])
+def test_a_cancelled_run_is_inconclusive(monkeypatch, cancelled):
+    results = {11: _result("failed", failures=1), 12: _result("passed")}
+    results[cancelled] = _result("cancelled", "the job was cancelled")
+    out, edited, deleted, opened = _reconcile(monkeypatch, results=results)
+    assert out[0]["action"] == "failed"
+    assert opened == []
+    assert deleted == ["agent/ci-fix/issue-7-100"]
+    assert "inconclusive" in edited
+    assert "did not pass verification" not in edited
 
 
 def test_a_failed_candidate_is_reported_and_its_branch_deleted(monkeypatch):
@@ -716,6 +755,25 @@ def test_a_fix_for_another_test_is_refused(monkeypatch, tmp_path):
 
 def test_a_fix_for_the_target_test_is_kept(monkeypatch, tmp_path):
     result, _state, _engine = _prepare(monkeypatch, tmp_path, outcome=_ready_for("ttl  expiration (forkless)"))
+    assert result["decision"] == "ready"
+
+
+@pytest.mark.parametrize("paths", [
+    (".github/workflows/daily.yml",),
+    ("tests/integration/rdb.tcl", ".github/workflows/ci.yml"),
+])
+def test_a_fix_that_changes_a_workflow_is_refused(monkeypatch, tmp_path, paths):
+    outcome = replace(_ready_for("ttl expiration (forkless)"), changed_paths=paths)
+    result, state, _engine = _prepare(monkeypatch, tmp_path, outcome=outcome)
+    assert result["decision"] == "refused"
+    workflows = ", ".join(path for path in paths if path.startswith(".github/workflows/"))
+    assert state["outcome"]["summary"] == f"the fix changes {workflows}, which the Daily verification cannot exercise"
+
+
+def test_a_change_to_a_local_action_is_not_a_workflow_change(monkeypatch, tmp_path):
+    outcome = replace(_ready_for("ttl expiration (forkless)"),
+                      changed_paths=(".github/actions/setup/action.yml",))
+    result, _state, _engine = _prepare(monkeypatch, tmp_path, outcome=outcome)
     assert result["decision"] == "ready"
 
 

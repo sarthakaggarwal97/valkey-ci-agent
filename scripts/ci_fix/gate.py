@@ -219,7 +219,7 @@ def build_fix_request(
     if not pr_head_repo:
         return GateRejection(reason="Could not determine the PR head repository; refusing.")
 
-    target = ""
+    target = selected_job = ""
     if command.run_id:
         try:
             run = retry_github_call(
@@ -237,7 +237,8 @@ def build_fix_request(
                     f"{pr_head_sha[:12]}; link the failing run to target one."
                 )
             )
-        run, target = picked
+        run, selected_job = picked
+        target = f"the failure in job `{selected_job}`"
 
     run_status = str(getattr(run, "status", "") or "")
     if run_status != "completed":
@@ -279,7 +280,8 @@ def build_fix_request(
             return GateRejection(
                 reason=f"Job {command.job_id} is not a failed job of run {command.run_id}; refusing."
             )
-        target = f"the failure in job `{job.name}`"
+        selected_job = job.name
+        target = f"the failure in job `{selected_job}`"
 
     same_repo = pr_head_repo == pr_repo_full_name
     bot_branch = same_repo and pr_head_ref.startswith(ALLOWED_BRANCH_PREFIXES)
@@ -302,6 +304,7 @@ def build_fix_request(
         # A fork's code is never run here; see the module docstring.
         execute=same_repo,
         target=target,
+        job=selected_job,
     )
 
 
@@ -310,8 +313,8 @@ def _most_actionable_failed_run(
 ) -> tuple[Any, str] | None:
     """Pick the completed run on ``head_sha`` holding the most deterministic failure.
 
-    Returns the run and a target naming the chosen job, so the diagnosis works on
-    the same failure the choice was made for.
+    Returns the run and the chosen job's name, so the diagnosis works on the
+    same failure the choice was made for.
     """
     try:
         runs = retry_github_call(
@@ -335,5 +338,5 @@ def _most_actionable_failed_run(
         job = select_job(failed)
         key = (job_priority(job.name), -int(run.id), job.name)
         if best is None or key < best[0]:
-            best = (key, run, f"the failure in job `{job.name}`")
+            best = (key, run, job.name)
     return (best[1], best[2]) if best else None

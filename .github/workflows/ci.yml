@@ -47,6 +47,12 @@ jobs:
         if: matrix.python-version != '3.11'
         run: pytest -v
 
+      - name: Create an account for the verification isolation tests
+        if: matrix.python-version == '3.11'
+        run: |
+          sudo useradd --create-home --shell /bin/bash ci-fix-verify
+          echo "CI_FIX_TEST_VERIFY_USER=ci-fix-verify" >> "${GITHUB_ENV}"
+
       - name: Run pytest with coverage
         if: matrix.python-version == '3.11'
         env:
