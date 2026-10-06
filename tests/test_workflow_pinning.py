@@ -127,10 +127,11 @@ def test_push_capable_app_tokens_can_update_workflows():
     """Push tokens need workflows:write for commits touching .github/workflows."""
     required_steps = {
         ".github/workflows/backport.yml": "Generate GitHub App token",
-        ".github/workflows/backport-ci-followup.yml": "Generate target repository token",
+        ".github/workflows/backport-ci-followup.yml": "Generate publication token",
         ".github/workflows/backport-poll.yml": "Generate publication token",
         ".github/workflows/backport-sweep.yml": "Generate publication token",
-        ".github/workflows/ci-fix.yml": "Generate GitHub App token",
+        ".github/workflows/ci-fix.yml": "Generate publication token",
+        ".github/workflows/ci-fix-issues.yml": "Generate publication token",
         ".github/workflows/manual-revert-commit.yml": "Generate GitHub App token",
     }
     offenders = []
@@ -226,3 +227,54 @@ def test_backport_ci_followup_passes_matrix_values_through_step_env():
     assert '--branch "${TARGET_BRANCH}"' in text
     assert '--repo "${{ matrix.repo }}"' not in text
     assert '--branch "${{ matrix.branch }}"' not in text
+
+
+def test_ci_fix_workflows_prepare_read_only_and_publish_with_a_fresh_token():
+    """Diagnosis can outlive a one-hour App token, so writes use a token minted after it."""
+    for filename, prepare, publish in (
+        ("ci-fix.yml", "Prepare the CI fix", "Publish the CI fix"),
+        ("backport-ci-followup.yml", "Prepare follow-up", "Publish follow-up"),
+        ("ci-fix-issues.yml", "Prepare a fix", "Publish the fix for verification"),
+    ):
+        text = (Path(".github/workflows") / filename).read_text(encoding="utf-8")
+        assert (
+            text.index("- name: Generate preparation token")
+            < text.index(f"- name: {prepare}")
+            < text.index("- name: Generate publication token")
+            < text.index(f"- name: {publish}")
+        ), filename
+        workflow = yaml.load(text, Loader=yaml.BaseLoader)
+        job = next(iter(workflow["jobs"].values())) if filename != "backport-ci-followup.yml" \
+            else workflow["jobs"]["follow-up"]
+        steps = {step.get("name"): step for step in job["steps"]}
+        prepare_token = steps["Generate preparation token"]["with"]
+        writes = {key for key, value in prepare_token.items()
+                  if key.startswith("permission-") and value == "write"}
+        # At most the claim comment: never contents, workflows, or actions.
+        assert writes <= {"permission-issues"}, (filename, writes)
+        # The prepare step has its own timeout so publication still reports.
+        assert int(steps[prepare]["timeout-minutes"]) < int(job["timeout-minutes"]), filename
+        assert "!cancelled()" in steps[publish]["if"], filename
+        aws = steps["Configure AWS credentials"]["with"]
+        assert int(aws["role-duration-seconds"]) >= int(job["timeout-minutes"]) * 60, filename
+
+
+def test_ci_fix_scopes_the_publication_token_by_the_gate_decision():
+    """A fork or contributor PR never gets a push-capable token in the job."""
+    workflow = yaml.load(Path(".github/workflows/ci-fix.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    steps = {step.get("name"): step for step in workflow["jobs"]["ci-fix"]["steps"]}
+    push = steps["Generate publication token"]
+    comment = steps["Generate comment token"]
+    assert "steps.gate.outputs.publication == 'push'" in push["if"]
+    assert "steps.gate.outputs.publication != 'push'" in comment["if"]
+    assert not any(key in comment["with"] for key in ("permission-contents", "permission-workflows", "permission-actions"))
+    assert steps["Generate agent-repo token (macOS verify dispatch)"]["if"] == "steps.gate.outputs.execute == 'true'"
+    names = list(steps)
+    assert names.index("Gate the request") < names.index("Configure AWS credentials") < names.index("Prepare the CI fix")
+
+
+def test_ci_fix_concurrency_groups_never_drop_a_queued_run():
+    for filename, job in (("ci-fix.yml", "ci-fix"), ("ci-fix-issues.yml", "fix-issues")):
+        workflow = yaml.load((Path(".github/workflows") / filename).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+        concurrency = workflow["jobs"][job]["concurrency"]
+        assert (concurrency["cancel-in-progress"], concurrency["queue"]) == ("false", "max"), filename

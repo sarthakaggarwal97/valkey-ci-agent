@@ -202,3 +202,11 @@ def test_extract_zip_leaves_damaged_empty_when_intact():
     damaged: list[str] = []
     assert _extract_zip(buf.getvalue(), damaged) == {"all-test-failures.json": b"[]"}
     assert damaged == []
+
+
+def test_download_job_log_returns_plain_text(monkeypatch):
+    client = ArtifactClient(MagicMock(), token="t")
+    seen = []
+    monkeypatch.setattr(client, "_download", lambda path: seen.append(path) or b"[ok]: t (1 ms)\n\xff")
+    assert client.download_job_log("o/r", 42) == "[ok]: t (1 ms)\n\ufffd"
+    assert seen == ["/repos/o/r/actions/jobs/42/logs"]

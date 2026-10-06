@@ -259,3 +259,82 @@ def test_run_claude_code_reports_missing_cli(monkeypatch):
     monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
 
     assert claude_code.run_claude_code("prompt") == ("", "claude not found", 127)
+
+
+# --- confined runs: the CLI's working-directory boundary is kept ---------------------
+
+def _captured_cmd(monkeypatch, **kwargs):
+    from scripts.ai import claude_code
+
+    captured = {}
+
+    class _Proc:
+        stdout = iter(())
+        stdin = None
+
+        def wait(self, timeout=None):
+            return 0
+
+    def fake_popen(cmd, **_kw):
+        captured["cmd"] = cmd
+        return _Proc()
+
+    monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
+    claude_code.run_claude_code("p", cwd="/repo", **kwargs)
+    return captured["cmd"]
+
+
+def test_a_confined_read_only_run_keeps_permission_checks(monkeypatch):
+    cmd = _captured_cmd(monkeypatch, allowed_tools="Read,Grep", confined=True, extra_dirs=("/work/logs",))
+    assert "--dangerously-skip-permissions" not in cmd
+    assert cmd[cmd.index("--permission-mode") + 1] == "default"
+    assert cmd[cmd.index("--add-dir") + 1] == "/work/logs"
+    assert "--allowedTools" not in cmd  # a blanket allow would lift the path boundary
+    # A checkout's or user's settings file could add directories or allow rules.
+    assert cmd[cmd.index("--setting-sources") + 1] == ""
+
+
+def test_a_confined_edit_run_accepts_edits_only_inside(monkeypatch):
+    cmd = _captured_cmd(monkeypatch, allowed_tools="Read,Edit,MultiEdit,Grep", confined=True)
+    assert "--dangerously-skip-permissions" not in cmd
+    assert cmd[cmd.index("--permission-mode") + 1] == "acceptEdits"
+    assert cmd[cmd.index("--setting-sources") + 1] == ""
+    assert "--add-dir" not in cmd
+
+
+def test_a_confined_profile_cannot_allow_bash(monkeypatch):
+    import pytest
+
+    with pytest.raises(ValueError, match="cannot allow Bash"):
+        _captured_cmd(monkeypatch, allowed_tools="Read,Bash", confined=True)
+
+
+def test_a_confined_profile_cannot_allow_glob(monkeypatch):
+    """Glob's absolute patterns are not boundary-checked, so it would list names anywhere."""
+    import pytest
+
+    with pytest.raises(ValueError, match="cannot allow Glob"):
+        _captured_cmd(monkeypatch, allowed_tools="Read,Grep,Glob", confined=True)
+
+
+def test_the_ci_fix_profiles_are_confined_without_bash_or_glob():
+    from scripts.ai.runtime import AGENT_PROFILES
+
+    for name in ("ci_fix_diagnose_readonly", "ci_fix_apply_edit_only"):
+        profile = AGENT_PROFILES[name]
+        tools = set(profile.allowed_tools.split(","))
+        assert profile.confined and not tools & {"Bash", "Glob", "Write"}, name
+
+
+def test_unconfined_runs_keep_their_existing_flags(monkeypatch):
+    cmd = _captured_cmd(monkeypatch, allowed_tools="Read,Edit,Bash")
+    assert "--dangerously-skip-permissions" in cmd
+    assert "--permission-mode" not in cmd
+
+
+def test_every_agent_that_reads_ci_fix_input_is_confined():
+    """Fork PR code and logs reach these agents; they must not see outside their checkout."""
+    from scripts.ai.runtime import AGENT_PROFILES
+
+    for name in ("ci_fix_diagnose_readonly", "ci_fix_apply_edit_only"):
+        assert AGENT_PROFILES[name].confined, name

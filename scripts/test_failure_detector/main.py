@@ -9,6 +9,7 @@ import sys
 
 from github import Auth, Github
 
+from scripts.backport.registry import load_registry
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.workflow_artifacts import ArtifactClient
@@ -16,6 +17,11 @@ from scripts.test_failure_detector.download import (
     download_all_test_failures,
     get_job_urls,
     get_latest_daily_run,
+)
+from scripts.test_failure_detector.job_failures import (
+    JobFailure,
+    find_unrecorded_failures,
+    merge_failures,
 )
 from scripts.test_failure_detector.manage_issues import process_failures
 from scripts.test_failure_detector.parse_failures import parse_and_deduplicate
@@ -29,6 +35,7 @@ def _build_job_summary(
     num_failures: int,
     result: dict[str, int],
     damaged: list[str] | None = None,
+    num_job_failures: int = 0,
 ) -> str:
     lines = [
         "## Test Failure Detector",
@@ -39,6 +46,7 @@ def _build_job_summary(
         "| Metric | Count |",
         "|--------|-------|",
         f"| Unique failures detected | {num_failures} |",
+        f"| Job failures without a test record | {num_job_failures} |",
         f"| Issues created | {result.get('created', 0)} |",
         f"| Issues skipped (duplicate run) | {result.get('skipped', 0)} |",
         f"| Issues skipped (recently closed) | {result.get('skipped_closed', 0)} |",
@@ -79,6 +87,7 @@ def run(
     branch: str = "unstable",
     dry_run: bool = False,
     verbose: bool = False,
+    registry_path: str = "repos.yml",
 ) -> int:
     """Run the test failure detector pipeline.
 
@@ -130,10 +139,10 @@ def run(
             len(damaged), run_id, "; ".join(damaged),
         )
     if artifact_content is None:
-        summary = _build_job_summary(run_id, repo_full_name, 0, {}, damaged)
         if unusable:
             # The artifact exists but was not analyzed: zero issues here does
             # not mean zero failures, and the log must not suggest otherwise.
+            summary = _build_job_summary(run_id, repo_full_name, 0, {}, damaged)
             log_outcome(
                 logger, logging.WARNING,
                 "Run %d was NOT analyzed: %s. Any failure it recorded has no issue.",
@@ -143,11 +152,13 @@ def run(
                 "\n### Run not analyzed\n\n"
                 + "".join(f"- {_one_line(reason)}\n" for reason in unusable)
             )
-        else:
-            log_outcome(logger, logging.INFO, "Run %d has no all-test-failures artifact; "
-                        "no test failures were recorded, so there is nothing to file.", run_id)
-        emit_job_summary(summary)
-        return 1 if damaged or unusable else 0
+            emit_job_summary(summary)
+            return 1
+        # Without the artifact no failure is recorded, but a job can still have
+        # failed (a build break leaves nothing to merge); the job check below
+        # covers it. A clean run has no failed job and reports nothing.
+        logger.info("Run %d has no all-test-failures artifact; checking failed jobs only.", run_id)
+        artifact_content = b"{}"
 
     try:
         all_failures = json.loads(artifact_content)
@@ -193,38 +204,54 @@ def run(
     logger.info("Parsing and deduplicating failures...")
     unique_failures = parse_and_deduplicate(all_failures, job_urls)
 
-    if not unique_failures:
+    # Step 5: Failed jobs the artifact does not record (timeouts, valgrind or
+    # sanitizer reports, build breaks), read from each job's own log.
+    log_failures, job_failures = _unrecorded_failures(
+        gh, artifact_client, repo_full_name, run_id, all_failures, registry_path,
+    )
+    unique_failures = merge_failures(unique_failures, log_failures)
+
+    if not unique_failures and not job_failures:
         log_outcome(logger, logging.INFO, "Run %d: no test failures to report", run_id)
         emit_job_summary(_build_job_summary(run_id, repo_full_name, 0, {}, damaged))
         return 1 if damaged else 0
 
-    logger.info("Found %d unique failure(s)", len(unique_failures))
+    logger.info(
+        "Found %d unique failure(s) and %d job failure(s) without a test record",
+        len(unique_failures), len(job_failures),
+    )
 
     if dry_run:
         logger.info("Dry run — skipping issue creation/update.")
         for f in unique_failures:
             envs = ", ".join(j.job for j in f.jobs)
             logger.info("  %s [%s]", f.display_name, envs)
-        emit_job_summary(
-            _build_job_summary(run_id, repo_full_name, len(unique_failures), {}, damaged)
-        )
-        log_outcome(logger, logging.INFO, "Dry run: %d unique failure(s) in run %d; no "
-                    "issues filed", len(unique_failures), run_id)
+        for job in job_failures:
+            names = ", ".join(ref.job for ref in job.jobs) or job.job
+            logger.info("  job %s (%s)", names, "; ".join(job.summary) or job.step)
+        emit_job_summary(_build_job_summary(
+            run_id, repo_full_name, len(unique_failures), {}, damaged, len(job_failures),
+        ))
+        log_outcome(logger, logging.INFO, "Dry run: %d unique failure(s) and %d job failure(s) "
+                    "in run %d; no issues filed", len(unique_failures), len(job_failures), run_id)
         return 1 if damaged else 0
 
-    # Step 5: Create or update issues
+    # Step 6: Create or update issues
     logger.info("Processing issues on %s...", repo_full_name)
-    result = process_failures(gh, repo_full_name, unique_failures, run_id=run_id)
-
-    emit_job_summary(
-        _build_job_summary(run_id, repo_full_name, len(unique_failures), result, damaged)
+    result = process_failures(
+        gh, repo_full_name, unique_failures, run_id=run_id, job_failures=job_failures,
     )
     log_outcome(
         logger, logging.ERROR if result.get("errors") or damaged else logging.INFO,
-        "Run %d: %d unique failure(s): %d issue(s) created, %d updated, %d skipped, %d error(s)",
-        run_id, len(unique_failures), result.get("created", 0), result.get("updated", 0),
+        "Run %d: %d unique failure(s) and %d job failure(s): %d issue(s) created, %d updated, "
+        "%d skipped, %d error(s)",
+        run_id, len(unique_failures), len(job_failures), result.get("created", 0), result.get("updated", 0),
         result.get("skipped", 0) + result.get("skipped_closed", 0), result.get("errors", 0),
     )
+
+    emit_job_summary(_build_job_summary(
+        run_id, repo_full_name, len(unique_failures), result, damaged, len(job_failures),
+    ))
 
     # process_failures isolates per-failure errors so one bad failure can't
     # abort the batch, but those failures got no issue created or updated. Exit
@@ -244,6 +271,32 @@ def run(
         )
         return 1
     return 0
+
+def _unrecorded_failures(
+    gh: Github,
+    artifact_client: ArtifactClient,
+    repo_full_name: str,
+    run_id: int,
+    all_failures: dict,
+    registry_path: str,
+) -> tuple[list, list[JobFailure]]:
+    """Find failed jobs without a recorded test failure, or nothing on error.
+
+    The registry's ``ci_followup_ignored_jobs`` names the informational jobs
+    (failure aggregators, coverage) that fail only because another job did.
+    """
+    try:
+        ignored = load_registry(registry_path).get_repo(repo_full_name).ci_followup_ignored_jobs
+    except (OSError, KeyError, ValueError):
+        ignored = ()
+    try:
+        return find_unrecorded_failures(
+            gh, artifact_client, repo_full_name, run_id, all_failures, ignored_jobs=ignored,
+        )
+    except Exception:  # noqa: BLE001 - the recorded failures still get their issues
+        logger.warning("Could not check run %d for unrecorded job failures", run_id, exc_info=True)
+        return [], []
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -285,6 +338,11 @@ def main() -> None:
         action="store_true",
         help="Enable debug logging.",
     )
+    parser.add_argument(
+        "--registry",
+        default="repos.yml",
+        help="Registry naming informational jobs to ignore (default: repos.yml).",
+    )
 
     args = parser.parse_args()
 
@@ -297,6 +355,7 @@ def main() -> None:
             branch=args.branch,
             dry_run=args.dry_run,
             verbose=args.verbose,
+            registry_path=args.registry,
         )
     )
 

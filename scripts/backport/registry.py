@@ -52,6 +52,7 @@ class RepoEntry:
     repair_validation_failures: bool = False
     automatic_ci_followup: bool = False
     ci_followup_ignored_jobs: tuple[str, ...] = ()
+    automatic_issue_followup: bool = False
     backport_label: str = "backport"
     llm_conflict_label: str = "ai-resolved-conflicts"
     max_conflicting_files: int = 100
@@ -199,6 +200,11 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         raise ValueError(
             f"repos[{index}].automatic_ci_followup must be a boolean"
         )
+    automatic_issue_followup = raw.get("automatic_issue_followup", False)
+    if not isinstance(automatic_issue_followup, bool):
+        raise ValueError(
+            f"repos[{index}].automatic_issue_followup must be a boolean"
+        )
     ci_followup_ignored_jobs = raw.get("ci_followup_ignored_jobs", [])
     if not isinstance(ci_followup_ignored_jobs, list):
         raise ValueError(f"repos[{index}].ci_followup_ignored_jobs must be a list")
@@ -244,6 +250,7 @@ def _parse_repo_entry(raw: Any, index: int, seen_repos: set[str]) -> RepoEntry:
         repair_validation_failures=repair_validation_failures,
         automatic_ci_followup=automatic_ci_followup,
         ci_followup_ignored_jobs=tuple(str(item) for item in ci_followup_ignored_jobs),
+        automatic_issue_followup=automatic_issue_followup,
         backport_label=backport_label,
         llm_conflict_label=llm_conflict_label,
         max_conflicting_files=max_conflicting_files,

@@ -71,7 +71,6 @@ def test_port_push_preserves_original_authorship(tmp_path, monkeypatch):
     monkeypatch.setattr(push_mod, "github_https_url", lambda _n: str(bare))
 
     pushed_sha = commit_and_push_port(
-        str(work),
         head_repo_full_name="valkey-io/valkey",
         head_branch="agent/backport/sweep/9.0",
         head_sha=head_sha,
@@ -113,7 +112,6 @@ def test_port_push_refuses_commit_not_on_default_branch(tmp_path, monkeypatch):
 
     with pytest.raises(PushRefused, match="not reachable from"):
         commit_and_push_port(
-            str(work),
             head_repo_full_name="valkey-io/valkey",
             head_branch="agent/backport/sweep/9.0",
             head_sha=head_sha,
@@ -137,7 +135,6 @@ def test_port_push_refuses_commit_already_on_head(tmp_path, monkeypatch):
 
     with pytest.raises(PushRefused, match="already present on the PR head"):
         commit_and_push_port(
-            str(work),
             head_repo_full_name="valkey-io/valkey",
             head_branch="agent/backport/sweep/9.0",
             head_sha=head_with_fix,
@@ -146,18 +143,21 @@ def test_port_push_refuses_commit_already_on_head(tmp_path, monkeypatch):
         )
 
 
-def test_port_push_refuses_non_namespaced_branch(tmp_path):
-    with pytest.raises(PushRefused):
+@pytest.mark.parametrize("branch", ["main", "unstable", "9.0", "contributor/fix", "agentx/fix",
+                                    "agent/release-cut/9.0.4-ga", "agent/other/x"])
+def test_port_push_refuses_non_namespaced_branch(branch):
+    """Only agent/... branches are ever written: never unstable or a release line."""
+    with pytest.raises(PushRefused, match="only pushes to branches under agent/backport/ or agent/ci-fix/"):
         commit_and_push_port(
-            str(tmp_path), head_repo_full_name="valkey-io/valkey",
-            head_branch="main", head_sha="a" * 40, unstable_fix_commit="b" * 40, git_env={},
+            head_repo_full_name="valkey-io/valkey",
+            head_branch=branch, head_sha="a" * 40, unstable_fix_commit="b" * 40, git_env={},
         )
 
 
-def test_port_push_refuses_malformed_commit(tmp_path):
+def test_port_push_refuses_malformed_commit():
     with pytest.raises(PushRefused):
         commit_and_push_port(
-            str(tmp_path), head_repo_full_name="valkey-io/valkey",
+            head_repo_full_name="valkey-io/valkey",
             head_branch="agent/backport/sweep/9.0", head_sha="a" * 40,
             unstable_fix_commit="not-a-sha", git_env={},
         )
@@ -260,3 +260,117 @@ def test_author_fix_commit_message_preserves_body_paragraphs():
     message = push_mod._commit_message(proposal)
     assert "\n\nSecond sentence explains why the fix is safe.\n" in message
     assert all(len(line) <= 72 for line in message.splitlines())
+
+
+# --- Authored-fix push: the approved patch text is applied in a clean clone ---
+
+
+def _fix_proposal() -> FixProposal:
+    return FixProposal(
+        path=FixPath.AUTHOR, failing_check="corrupt payload: zset listpack with NAN score",
+        root_cause="payload embeds RDB v80; branch is v11", reasoning="scaffolding fix",
+        confidence=0.9,
+    )
+
+
+def _remote_with_branch(tmp_path, branch: str = "agent/backport/sweep/8.0"):
+    """A bare remote with ``branch`` and ``unstable`` at one seed commit.
+
+    Returns (remote, head_sha, patch) where ``patch`` adds test.tcl.
+    """
+    work = tmp_path / "work"
+    work.mkdir()
+    _git(work, "init", "-q", "-b", "unstable")
+    _git(work, "config", "user.email", "t@t")
+    _git(work, "config", "user.name", "t")
+    (work / "seed.txt").write_text("seed\n")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-qm", "seed")
+    head_sha = _git(work, "rev-parse", "HEAD").strip()
+    _git(work, "branch", branch)
+    (work / "test.tcl").write_text("fixed payload\n")
+    _git(work, "add", "--intent-to-add", "test.tcl")
+    patch = _git(work, "diff", "--binary", "HEAD")
+    remote = tmp_path / "remote.git"
+    _git(tmp_path, "clone", "-q", "--bare", str(work), str(remote))
+    return remote, head_sha, patch
+
+
+def _fix_push(remote, monkeypatch, **overrides):
+    monkeypatch.setattr(push_mod, "github_https_url", lambda _n: str(remote))
+    kwargs = dict(
+        changed_paths=("test.tcl",), head_repo_full_name="valkey-io/valkey",
+        head_branch="agent/backport/sweep/8.0", proposal=_fix_proposal(), git_env={},
+    )
+    kwargs.update(overrides)
+    return push_mod.commit_and_push_fix(**kwargs)
+
+
+def test_fix_push_commits_the_patch_as_the_bot_without_signoff(tmp_path, monkeypatch):
+    remote, head_sha, patch = _remote_with_branch(tmp_path)
+    sha = _fix_push(remote, monkeypatch, patch=patch, head_sha=head_sha)
+
+    assert _git(remote, "rev-parse", "agent/backport/sweep/8.0").strip() == sha
+    assert _git(remote, "rev-parse", f"{sha}^").strip() == head_sha
+    assert _git(remote, "show", "--name-only", "--format=", sha).split() == ["test.tcl"]
+    message = _git(remote, "log", "-1", "--format=%B", sha)
+    assert "Signed-off-by:" not in message
+    assert "NAN score" in message
+    assert "valkeyrie-bot" in _git(remote, "log", "-1", "--format=%an", sha)
+
+
+def test_fix_push_refuses_paths_outside_the_approved_set(tmp_path, monkeypatch):
+    remote, head_sha, patch = _remote_with_branch(tmp_path)
+    with pytest.raises(PushRefused, match="unexpected paths"):
+        _fix_push(remote, monkeypatch, patch=patch, head_sha=head_sha, changed_paths=("other.tcl",))
+    assert _git(remote, "rev-parse", "agent/backport/sweep/8.0").strip() == head_sha
+
+
+def test_fix_push_refuses_empty_patch(monkeypatch):
+    with pytest.raises(PushRefused, match="empty"):
+        push_mod.commit_and_push_fix(
+            patch="  \n", changed_paths=("t",), head_repo_full_name="valkey-io/valkey",
+            head_branch="agent/backport/sweep/8.0", head_sha="a" * 40,
+            proposal=_fix_proposal(), git_env={},
+        )
+
+
+@pytest.mark.parametrize("branch", ["unstable", "9.0", "feature/x", "agent/release-cut/9.0.4-ga"])
+def test_fix_push_refuses_non_agent_branches(branch):
+    with pytest.raises(PushRefused, match="only pushes to branches under agent/backport/ or agent/ci-fix/"):
+        push_mod.commit_and_push_fix(
+            patch="diff", changed_paths=("t",), head_repo_full_name="valkey-io/valkey",
+            head_branch=branch, head_sha="a" * 40, proposal=_fix_proposal(), git_env={},
+        )
+
+
+def test_fix_push_exact_lease_refuses_deleted_branch(tmp_path, monkeypatch):
+    """A branch deleted while the fix was prepared must not be recreated."""
+    remote, head_sha, patch = _remote_with_branch(tmp_path)
+
+    def delete_branch_at_last_check() -> str:
+        _git(remote, "update-ref", "-d", "refs/heads/agent/backport/sweep/8.0")
+        return ""
+
+    with pytest.raises(PushRefused, match="stale info|failed to push"):
+        _fix_push(remote, monkeypatch, patch=patch, head_sha=head_sha,
+                  pre_push_check=delete_branch_at_last_check)
+    assert "agent/backport/sweep/8.0" not in _git(remote, "branch", "--list")
+
+
+def test_fix_push_create_opens_a_new_branch_on_the_base(tmp_path, monkeypatch):
+    """The issue flow creates agent/ci-fix/...; the base branch is untouched."""
+    remote, head_sha, patch = _remote_with_branch(tmp_path)
+    sha = _fix_push(remote, monkeypatch, patch=patch, head_sha=head_sha,
+                    head_branch="agent/ci-fix/issue-7-99", create=True)
+
+    assert _git(remote, "rev-parse", "agent/ci-fix/issue-7-99").strip() == sha
+    assert _git(remote, "rev-parse", "unstable").strip() == head_sha
+
+
+def test_fix_push_create_refuses_an_existing_branch(tmp_path, monkeypatch):
+    """Create mode must never overwrite a branch that already exists."""
+    remote, head_sha, patch = _remote_with_branch(tmp_path)
+    with pytest.raises(PushRefused, match="stale info|failed to push|rejected"):
+        _fix_push(remote, monkeypatch, patch=patch, head_sha=head_sha, create=True)
+    assert _git(remote, "rev-parse", "agent/backport/sweep/8.0").strip() == head_sha

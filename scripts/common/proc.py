@@ -76,7 +76,7 @@ def git_output(repo_dir: str, *args: str, timeout: int = _GIT_TIMEOUT_S) -> str:
         capture_output=True,
         text=True,
         timeout=timeout,
-        env=filter_env(_GIT_SAFE_ENV),
+        env=_git_safe_env(),
     )
     if result.returncode != 0:
         _raise_git_failure(result)
@@ -115,7 +115,7 @@ def run_git(
         capture_output=True,
         text=True,
         input=input,
-        env=env if env is not None else filter_env(_GIT_SAFE_ENV),
+        env=env if env is not None else _git_safe_env(),
         timeout=timeout,
     )
     if result.returncode != 0:
@@ -132,6 +132,7 @@ def run_git(
 LOCKED_GIT_CONFIG = (
     "--literal-pathspecs",
     "-c", "core.hooksPath=/dev/null",
+    "-c", "core.fsmonitor=false",
     "-c", "credential.helper=",
     "-c", "diff.external=",
 )
@@ -146,6 +147,18 @@ NETWORK_ENV = ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE")
 
 # Minimal environment for local git commands: process basics only.
 _GIT_SAFE_ENV = PROCESS_BASICS
+
+
+def _git_safe_env() -> dict[str, str]:
+    """The scrubbed git environment, also ignoring user and system config.
+
+    A global ``~/.gitconfig`` is writable by the same user that runs untrusted
+    tests and edit agents, so it must not be able to add hooks or commands.
+    """
+    env = filter_env(_GIT_SAFE_ENV)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    return env
 
 
 def filter_env(allowlist: tuple[str, ...]) -> dict[str, str]:
@@ -168,7 +181,7 @@ def worktree_changed_paths(repo_dir: str) -> tuple[str, ...]:
     """
     paths: set[str] = set()
     for args in (
-        ("diff", "--name-only", "-z", "HEAD"),
+        ("diff", "--no-renames", "--name-only", "-z", "HEAD"),
         ("ls-files", "--others", "--exclude-standard", "-z"),
     ):
         out = run_git(repo_dir, *args).stdout
@@ -204,7 +217,13 @@ def build_approved_patch(repo_dir: str, changed_paths: tuple[str, ...]) -> str:
     )
     if untracked:
         run_git(repo_dir, "add", "--intent-to-add", "--", *untracked)
-    patch = git_output(repo_dir, "diff", "--no-ext-diff", "--binary", "HEAD", "--", *changed_paths)
+    # No renames: the push re-checks the staged paths against ``changed_paths``,
+    # which lists both sides. No textconv: the patch must be the bytes, and a
+    # textconv driver is a command.
+    patch = git_output(
+        repo_dir, "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--binary",
+        "HEAD", "--", *changed_paths,
+    )
     if not patch.strip():
         raise EmptyPatch("approved paths produced an empty patch")
     return patch

@@ -1,9 +1,9 @@
 """Comment-triggered entry point for the CI fix bot.
 
-A maintainer comments ``@valkeyrie-ops fix <ci-link>`` on a valkey-io/valkey PR.
-This scheduled poller finds that comment and dispatches the existing ``ci-fix``
-workflow, which does the actual diagnose/verify/push. The poller is only the
-trigger; it owns no fix logic.
+A maintainer comments ``@valkeyrie-ops fix [<ci-link>] [hint]`` on a
+valkey-io/valkey PR. This scheduled poller finds that comment and dispatches the
+existing ``ci-fix`` workflow, which does the actual diagnose/verify/publish. The
+poller is only the trigger; it owns no fix logic.
 
 Idempotency is a reaction marker on GitHub, not external state. The claim is
 atomic: GitHub's create-reaction returns ``201`` when this call added the
@@ -282,7 +282,8 @@ def dispatch_ci_fix(
     ) -> None:
         run_url = (
             f"https://github.com/{command.run_owner}/{command.run_repo}"
-            f"/actions/runs/{command.run_id}"
+            f"/actions/runs/{command.run_id}" + (f"/job/{command.job_id}" if command.job_id else "")
+            if command.run_id else ""
         )
         inputs = {
             "repo": repo_full_name,

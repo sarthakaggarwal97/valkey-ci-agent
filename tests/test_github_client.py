@@ -98,3 +98,46 @@ def test_retry_github_call_does_not_log_permanent_errors(caplog) -> None:
 
     # A 404 probe is often expected; the caller decides whether it matters.
     assert not [r for r in caplog.records if r.levelname == "ERROR"]
+
+
+
+# --- replace_or_post_comment ---
+
+def test_replace_or_post_edits_the_claim():
+    from types import SimpleNamespace
+
+    from scripts.common.github_client import replace_or_post_comment
+
+    edits, posts = [], []
+    comment = SimpleNamespace(edit=edits.append)
+    replace_or_post_comment(lambda cid: comment, posts.append, 5, "result", description="d")
+    assert (edits, posts) == (["result"], [])
+
+
+def test_replace_or_post_posts_when_the_claim_is_gone_or_unknown():
+    from github.GithubException import GithubException
+
+    from scripts.common.github_client import replace_or_post_comment
+
+    def gone(_cid):
+        raise GithubException(404, {"message": "Not Found"})
+
+    posts = []
+    replace_or_post_comment(gone, posts.append, 5, "result", description="d")
+    replace_or_post_comment(gone, posts.append, None, "again", description="d")
+    assert posts == ["result", "again"]
+
+
+def test_replace_or_post_does_not_hide_a_server_error_behind_a_duplicate():
+    import pytest
+    from github.GithubException import GithubException
+
+    from scripts.common.github_client import replace_or_post_comment
+
+    def broken(_cid):
+        raise GithubException(422, {"message": "Unprocessable"})
+
+    posts = []
+    with pytest.raises(GithubException):
+        replace_or_post_comment(broken, posts.append, 5, "result", description="d")
+    assert posts == []

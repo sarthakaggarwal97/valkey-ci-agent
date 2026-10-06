@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import subprocess
 
-from scripts.ci_fix.port_discovery import discover_port_candidates, format_port_candidates
+import pytest
+
+from scripts.ci_fix.port_discovery import (
+    PortCandidate,
+    commits_in_range,
+    discover_port_candidates,
+    format_port_candidates,
+    resolve_commit,
+)
 
 
 def _git(repo, *args):
@@ -127,3 +135,55 @@ def test_discovers_fix_when_default_branch_is_main(tmp_path):
     candidates = discover_port_candidates(str(repo), str(logs))
 
     assert [c.sha for c in candidates] == [upstream]
+
+
+# --- culprit candidates -----------------------------------------------------------
+
+
+
+def _commit_file(repo, name, message):
+    (repo / name).parent.mkdir(parents=True, exist_ok=True)
+    (repo / name).write_text(message)
+    subprocess.run(["git", "-C", str(repo), "add", name], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", message], check=True)
+    return subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                          check=True, capture_output=True, text=True).stdout.strip()
+
+
+def _history(tmp_path):
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+    base = _commit_file(repo, "a.txt", "base")
+    first = _commit_file(repo, "src/tls.c", "Change TLS handshake (#100)")
+    second = _commit_file(repo, "tests/unit/x.tcl", "Add a test (#101)")
+    return repo, base, first, second
+
+
+def test_commits_in_range_lists_newest_first_with_paths(tmp_path):
+    repo, base, first, second = _history(tmp_path)
+    commits = commits_in_range(str(repo), f"{base}..HEAD")
+    assert [c.sha for c in commits] == [second, first]
+    assert commits[1].subject == "Change TLS handshake (#100)"
+    assert commits[1].paths == ("src/tls.c",)
+
+
+def test_commits_in_range_honors_the_limit(tmp_path):
+    repo, base, _first, second = _history(tmp_path)
+    assert [c.sha for c in commits_in_range(str(repo), f"{base}..HEAD", limit=1)] == [second]
+
+
+@pytest.mark.parametrize("rev_range", ["", "HEAD", "--all..HEAD", "a b..HEAD", "nope..HEAD"])
+def test_commits_in_range_rejects_malformed_or_unknown_ranges(tmp_path, rev_range):
+    repo, *_ = _history(tmp_path)
+    assert commits_in_range(str(repo), rev_range) == ()
+
+
+def test_resolve_commit_matches_a_unique_prefix_only():
+    commits = (PortCandidate(sha="abcdef1" + "0" * 33, subject="a"),
+               PortCandidate(sha="abcdef2" + "0" * 33, subject="b"))
+    assert resolve_commit("abcdef1", commits) is commits[0]
+    assert resolve_commit("ABCDEF2" + "0" * 33, commits) is commits[1]
+    assert resolve_commit("abcdef", commits) is None      # too short to trust
+    assert resolve_commit("abcdef0", commits) is None     # not listed

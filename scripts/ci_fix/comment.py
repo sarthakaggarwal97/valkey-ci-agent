@@ -3,14 +3,16 @@
 The comment is the agent's accountability surface: for a push it shows exactly
 what was changed, the command that was run, its captured output, and the
 review rationale - the evidence a maintainer needs to trust (or reject) the
-fix. For a refusal it explains why, so the maintainer can take over.
+fix. Every outcome also carries the triage: the root cause, how the failure
+behaves, and the commit that introduced it when code could confirm one. For a
+refusal it explains why, so a maintainer can take over.
 """
 
 from __future__ import annotations
 
 import re
 
-from scripts.ci_fix.models import FixOutcome, OutcomeKind
+from scripts.ci_fix.models import FailureType, FixOutcome, OutcomeKind
 
 _OUTPUT_TAIL_IN_COMMENT = 3000
 
@@ -29,6 +31,8 @@ def _fenced(body: str, *, lang: str = "") -> str:
 def render_comment(outcome: FixOutcome) -> str:
     if outcome.kind is OutcomeKind.PUSHED:
         return _render_pushed(outcome)
+    if outcome.kind is OutcomeKind.SUGGESTED:
+        return _render_suggested(outcome)
     if outcome.kind is OutcomeKind.REFUSED:
         return _render_refused(outcome)
     if outcome.kind is OutcomeKind.HANDOFF:
@@ -36,9 +40,22 @@ def render_comment(outcome: FixOutcome) -> str:
     return _render_failed(outcome)
 
 
+def triage_lines(outcome: FixOutcome) -> list[str]:
+    """Root cause, failure type, and confirmed culprit, as Markdown paragraphs."""
+    proposal = outcome.proposal
+    lines: list[str] = []
+    if proposal is not None and proposal.root_cause:
+        lines += [f"**Root cause:** {proposal.root_cause}", ""]
+    if proposal is not None and proposal.failure_type is not FailureType.UNKNOWN:
+        lines += [f"**Failure type:** {proposal.failure_type.value}", ""]
+    if outcome.culprit_sha:
+        # A bare full SHA autolinks to the commit; a "(#N)" subject links its PR.
+        lines += [f"**Introduced by:** {outcome.culprit_sha} {outcome.culprit_subject}".rstrip(), ""]
+    return lines
+
+
 def _render_pushed(outcome: FixOutcome) -> str:
     proposal = outcome.proposal
-    run = outcome.run_result
     review = outcome.review
     lines = [
         f"Fixed **{proposal.failing_check if proposal else 'the failing check'}** "
@@ -47,10 +64,46 @@ def _render_pushed(outcome: FixOutcome) -> str:
     ]
     if outcome.failing_run_url:
         lines += [f"Fixing the failure from [this run]({outcome.failing_run_url}).", ""]
-    lines += [
-        f"**Root cause:** {proposal.root_cause if proposal else ''}",
-        "",
-    ]
+    lines += triage_lines(outcome)
+    lines += _evidence_lines(outcome)
+    if review is not None and review.reasoning:
+        lines += [f"**Review:** {review.reasoning}", ""]
+    lines += _remaining_checks(outcome)
+    if outcome.verify_backend == "upstream-port":
+        lines.append(
+            "_This is a port of an upstream fix; this PR's normal CI is the "
+            "verification authority. I do not merge._"
+        )
+    else:
+        lines.append(
+            "_The fix passed targeted verification of the failing check; this PR's "
+            "full CI will confirm. I do not merge._"
+        )
+    return "\n".join(lines)
+
+
+def _render_suggested(outcome: FixOutcome) -> str:
+    proposal = outcome.proposal
+    check = proposal.failing_check if proposal else "the failing check"
+    lines = [f"Here is a fix for **{check}**. {outcome.summary}", ""]
+    if outcome.failing_run_url:
+        lines += [f"From the failure in [this run]({outcome.failing_run_url}).", ""]
+    lines += triage_lines(outcome)
+    lines += _evidence_lines(outcome)
+    # A port's "review" is the code's own note that CI verifies it, which is
+    # not true of a suggestion nobody pushed.
+    if outcome.review is not None and outcome.review.reasoning and not outcome.port_commit:
+        lines += [f"**Review:** {outcome.review.reasoning}", ""]
+    lines += _patch_lines(outcome)
+    lines += _remaining_checks(outcome)
+    lines.append("_I did not push this; apply it on your branch and let CI confirm._")
+    return "\n".join(lines)
+
+
+def _evidence_lines(outcome: FixOutcome) -> list[str]:
+    proposal = outcome.proposal
+    run = outcome.run_result
+    lines: list[str] = []
     if run is not None:
         check_name = proposal.failing_check if proposal else ""
         highlight = _result_lines_for(run.output_tail, check_name)
@@ -69,23 +122,25 @@ def _render_pushed(outcome: FixOutcome) -> str:
             "</details>",
             "",
         ]
-    if outcome.verify_backend:
-        where = _backend_label(outcome)
-        lines += [f"**Verified by:** {where}", ""]
-    if review is not None and review.reasoning:
-        lines += [f"**Review:** {review.reasoning}", ""]
-    lines += _remaining_checks(outcome)
-    if outcome.verify_backend == "upstream-port":
-        lines.append(
-            "_This is a port of an upstream fix; this PR's normal CI is the "
-            "verification authority. I do not merge._"
-        )
-    else:
-        lines.append(
-            "_The fix passed targeted verification of the failing check; this PR's "
-            "full CI will confirm. I do not merge._"
-        )
-    return "\n".join(lines)
+    # A suggested port was not pushed, so no CI will verify it; say nothing.
+    if outcome.verify_backend and not (outcome.kind is OutcomeKind.SUGGESTED and outcome.port_commit):
+        lines += [f"**Verified by:** {_backend_label(outcome)}", ""]
+    return lines
+
+
+def _patch_lines(outcome: FixOutcome) -> list[str]:
+    if outcome.port_commit:
+        return [
+            f"The fix is upstream commit `{outcome.port_commit[:12]}`. If this PR's base "
+            "branch already has it, update the branch; otherwise apply it with:",
+            "",
+            _fenced(f"git cherry-pick -x {outcome.port_commit}", lang="sh"),
+            "",
+        ]
+    patch = outcome.patch or outcome.handoff_patch
+    if not patch:
+        return []
+    return ["Proposed patch (`git apply` it):", "", _fenced(patch, lang="diff"), ""]
 
 
 def _result_lines_for(output: str, check_name: str) -> str:
@@ -128,9 +183,10 @@ def _backend_label(outcome: FixOutcome) -> str:
 
 
 def _render_refused(outcome: FixOutcome) -> str:
-    lines = [f"I did not push a fix: {outcome.summary}", ""]
+    lines = [f"I did not prepare a fix: {outcome.summary}", ""]
     if outcome.failing_run_url:
         lines += [f"Looked at the failure from [this run]({outcome.failing_run_url}).", ""]
+    lines += triage_lines(outcome)
     if outcome.run_result is not None and outcome.run_result.output_tail:
         lines += [
             "<details><summary>Evidence</summary>",
@@ -148,28 +204,18 @@ def _render_failed(outcome: FixOutcome) -> str:
 
 
 def _render_handoff(outcome: FixOutcome) -> str:
-    proposal = outcome.proposal
     lines = [
-        "I diagnosed this and prepared a fix, but I could not verify it in my "
-        "environment, so I am handing it off rather than pushing it unverified.",
+        f"I prepared a fix but did not push it: {outcome.summary}.",
         "",
     ]
     if outcome.failing_run_url:
         lines += [f"From the failure in [this run]({outcome.failing_run_url}).", ""]
-    if proposal is not None and proposal.root_cause:
-        lines += [f"**Root cause:** {proposal.root_cause}", ""]
-    lines += [f"**Why not verified:** {outcome.summary}", ""]
+    lines += triage_lines(outcome)
     if outcome.review is not None and outcome.review.reasoning:
         lines += [f"**Review:** {outcome.review.reasoning}", ""]
-    if outcome.handoff_patch:
-        lines += [
-            "Proposed patch (apply and let this PR's CI judge it):",
-            "",
-            _fenced(outcome.handoff_patch, lang="diff"),
-            "",
-        ]
+    lines += _patch_lines(outcome)
     lines += _remaining_checks(outcome)
-    lines.append("_I did not push this; a human should apply it. I do not merge._")
+    lines.append("_A human should apply it and let CI judge it. I do not merge._")
     return "\n".join(lines)
 
 
@@ -178,8 +224,8 @@ def _remaining_checks(outcome: FixOutcome) -> list[str]:
         return []
     listed = "\n".join(f"- `{name}`" for name in outcome.other_failing_checks)
     return [
-        "Other checks also failed in that run; re-invoke with the same command to "
-        "address the next one:",
+        "Other checks also failed in that run; to address one, comment the fix "
+        "command with that job's link:",
         listed,
         "",
     ]

@@ -1,0 +1,196 @@
+name: CI Fix Issues
+
+# Fixes failures the Test Failure Detector filed from the Daily run. Every hour:
+#
+# 1. Reconcile: finish attempts whose Daily verification runs completed (open
+#    the fix PR, or report and delete the candidate branch). No AI.
+# 2. Prepare: pick one open test-failure issue with a new occurrence and
+#    diagnose it with a read-only token. Nothing from the checkout is run.
+# 3. Publish: push the fix to a new agent/ci-fix/... branch and dispatch the
+#    Daily workflow on the unfixed base and on the fix, running the failing
+#    job and test only.
+#
+# The bot only creates agent/ci-fix/... branches; it never pushes to unstable
+# or a release branch. State lives in one comment per attempt on the issue.
+on:
+  schedule:
+    - cron: "40 * * * *"
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Attempt only this issue number (empty = pick the next one)"
+        required: false
+        type: string
+        default: ""
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  fix-issues:
+    name: "Fix test-failure issues"
+    if: github.repository == 'valkey-io/valkey-ci-agent'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      # One attempt at a time: Daily's concurrency group would cancel a second
+      # run of the same commit.
+      group: ci-fix-issues
+      cancel-in-progress: false
+      # A maintainer's dispatch must not be replaced by the next scheduled run.
+      queue: max
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_EVIDENCE_DIR: agent-evidence
+      TARGET_REPO: valkey-io/valkey
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          install-claude: "true"
+
+      - name: Configure runtime paths
+        shell: bash
+        env:
+          ISSUE_INPUT: ${{ inputs.issue || '' }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${ISSUE_INPUT}" && ! "${ISSUE_INPUT}" =~ ^[0-9]+$ ]]; then
+            echo "Invalid issue number: ${ISSUE_INPUT}" >&2
+            exit 1
+          fi
+          echo "ISSUE_NUMBER=${ISSUE_INPUT:-0}" >> "${GITHUB_ENV}"
+          echo "ISSUES_STATE_FILE=${RUNNER_TEMP}/ci-fix-issues/state.json" >> "${GITHUB_ENV}"
+
+      - name: Generate reconcile token
+        id: reconcile-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: valkey
+          # actions:read for the verification runs and job logs;
+          # pull-requests:write to open the fix PR; contents:write to delete a
+          # rejected agent/ci-fix/... branch; issues:write to update the attempt.
+          permission-actions: read
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-metadata: read
+
+      - name: Reconcile finished verifications
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.reconcile-token.outputs.token }}
+          CI_FIX_ISSUES_BOT_LOGIN: ${{ steps.reconcile-token.outputs.app-slug }}[bot]
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.issues reconcile --repo "${TARGET_REPO}" | tee ci-fix-issues-reconcile.json
+
+      - name: Generate preparation token
+        id: prepare-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: valkey
+          # Read access to runs, artifacts, logs and the workflow file;
+          # issues:write only to post the attempt's claim comment before the
+          # engine runs, so a crash still uses up the occurrence. Nothing here
+          # can push or dispatch.
+          permission-actions: read
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: read
+          permission-metadata: read
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: ci-fix-issues-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-duration-seconds: 7200
+
+      - name: Prepare a fix
+        # Shorter than the job timeout so publication still records the attempt.
+        timeout-minutes: 90
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.prepare-token.outputs.token }}
+          CI_FIX_ISSUES_BOT_LOGIN: ${{ steps.prepare-token.outputs.app-slug }}[bot]
+          CI_FIX_STRESS_LOOPS: ${{ vars.CI_FIX_STRESS_LOOPS || '20' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.issues prepare \
+            --repo "${TARGET_REPO}" \
+            --state "${ISSUES_STATE_FILE}" \
+            --issue "${ISSUE_NUMBER}" | tee ci-fix-issues-prepare.json
+
+      - name: Check for a prepared decision
+        id: prepared
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          [[ -f "${ISSUES_STATE_FILE}" ]] && publish=true || publish=false
+          echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate publication token
+        id: publish-token
+        if: ${{ !cancelled() && steps.prepared.outputs.publish == 'true' }}
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: valkey
+          # contents:write + workflows:write to push the agent/ci-fix/...
+          # branch; actions:write to dispatch the Daily verification runs;
+          # issues:write to record the attempt on the issue.
+          permission-actions: write
+          permission-contents: write
+          permission-workflows: write
+          permission-issues: write
+          permission-metadata: read
+
+      - name: Publish the fix for verification
+        if: ${{ !cancelled() && steps.prepared.outputs.publish == 'true' }}
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.publish-token.outputs.token }}
+          CI_FIX_ISSUES_BOT_LOGIN: ${{ steps.publish-token.outputs.app-slug }}[bot]
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.issues publish \
+            --repo "${TARGET_REPO}" \
+            --state "${ISSUES_STATE_FILE}" | tee ci-fix-issues-publish.json
+
+      - name: Clean up prepared state
+        if: always()
+        shell: bash
+        run: rm -rf -- "${RUNNER_TEMP}/ci-fix-issues"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-fix-issues-${{ github.run_id }}
+          path: |
+            ci-fix-issues-*.json
+            agent-evidence
+          if-no-files-found: ignore
+          retention-days: 30

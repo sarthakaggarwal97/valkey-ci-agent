@@ -23,6 +23,9 @@ DEFAULT_BRANCH_FALLBACK = "unstable"
 _MAX_LOG_BYTES = 512 * 1024
 _MAX_TERMS = 16
 _MAX_CANDIDATES = 8
+# Culprit candidates: a day of Daily changes, or a sweep's backports, fits well
+# under this; a larger range is truncated to its newest commits.
+_MAX_RANGE_COMMITS = 40
 
 _PATH_RE = re.compile(r"(?:[A-Za-z0-9_.@+-]+/)+[A-Za-z0-9_.@+-]+")
 _TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{4,}")
@@ -99,6 +102,47 @@ def format_port_candidates(candidates: tuple[PortCandidate, ...]) -> str:
         paths = f" [{', '.join(c.paths[:4])}]" if c.paths else ""
         lines.append(f"- {c.sha[:12]} {c.subject}{paths}")
     return "\n".join(lines) + "\n"
+
+
+_RANGE_RE = re.compile(r"^[A-Za-z0-9_./-]+\.\.[A-Za-z0-9_./-]+$")
+
+
+def commits_in_range(
+    repo_dir: str, rev_range: str, *, limit: int = _MAX_RANGE_COMMITS,
+) -> tuple[PortCandidate, ...]:
+    """List up to ``limit`` commits in ``rev_range`` (newest first), with paths.
+
+    Used as the culprit candidates for a failure. A malformed range, an
+    unknown revision, or any git failure yields no commits; diagnosis then
+    proceeds without a culprit list.
+    """
+    if not _RANGE_RE.fullmatch(rev_range) or rev_range.startswith("-"):
+        return ()
+    try:
+        out = git_output(
+            repo_dir, "log", "--no-merges", f"--max-count={limit}",
+            "--format=%H%x00%s", rev_range, "--",
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return ()
+    return tuple(_candidate_from_line(repo_dir, line) for line in out.splitlines() if line)
+
+
+def resolve_commit(chosen: str, commits: tuple[PortCandidate, ...]) -> PortCandidate | None:
+    """Resolve a model-chosen (possibly short) SHA to exactly one listed commit.
+
+    Prompts render 12-character SHAs while the lists hold full ones, so match
+    by prefix in either direction. Returns None for no match or an ambiguous
+    prefix: code never reports or acts on a commit it did not list itself.
+    """
+    chosen = chosen.strip().lower()
+    if len(chosen) < 7:
+        return None
+    matches = {
+        c.sha: c for c in commits
+        if c.sha.lower().startswith(chosen) or chosen.startswith(c.sha.lower())
+    }
+    return next(iter(matches.values())) if len(matches) == 1 else None
 
 
 def resolve_default_branch(repo_dir: str) -> str:

@@ -244,3 +244,113 @@ def test_genuine_agent_failure_still_raises(monkeypatch):
     except RuntimeError:
         raised = True
     assert raised
+
+
+# --- situation, classification, culprit -----------------------------------------------
+
+from scripts.ci_fix.models import FailureType, FixRequest, Policy, Publication  # noqa: E402
+
+
+def _request(**overrides) -> FixRequest:
+    values = dict(repo_full_name="valkey-io/valkey", pr_number=1, head_repo_full_name="valkey-io/valkey",
+                  head_branch="agent/backport/sweep/9.0", head_sha="a" * 40, run_id=2,
+                  requested_by="bot", base_branch="9.0")
+    values.update(overrides)
+    return FixRequest(**values)
+
+
+def _captured_prompt(monkeypatch, **kwargs) -> str:
+    captured = {}
+
+    def fake(profile, prompt, **_kw):
+        captured["prompt"] = prompt
+        return MagicMock(stdout=_stream_json_result({"path": "refuse"}), stderr="", returncode=0)
+
+    monkeypatch.setattr(diagnose_mod, "run_agent", fake)
+    diagnose_failure("/tmp/logs", "/tmp/repo", **kwargs)
+    return captured["prompt"]
+
+
+def test_backport_situation_allows_only_ports_and_adaptations(monkeypatch):
+    prompt = _captured_prompt(monkeypatch, request=_request())
+    assert "bot-owned backport PR into release branch `9.0`" in prompt
+    assert "Never change product behavior" in prompt
+    assert "A product bug: fix the product code" not in prompt
+
+
+def test_contributor_situation_separates_pr_caused_from_pre_existing(monkeypatch):
+    prompt = _captured_prompt(monkeypatch, request=_request(
+        head_branch="fix-x", policy=Policy.FIX, publication=Publication.SUGGEST))
+    assert "contributor's PR into `9.0`" in prompt
+    assert "this PR did not cause it" in prompt
+    assert "A product bug: fix the product code" in prompt
+
+
+def test_daily_situation_names_the_issue_and_the_target(monkeypatch):
+    prompt = _captured_prompt(monkeypatch, request=_request(
+        head_branch="agent/ci-fix/issue-7-2", policy=Policy.FIX, publication=Publication.NEW_PR,
+        execute=False, issue_number=7, base_branch="unstable",
+        target="`TTL expiration` in `tests/integration/rdb.tcl`"))
+    assert "scheduled Daily CI run on `unstable` (issue #7)" in prompt
+    assert "Diagnose only this failure: `TTL expiration`" in prompt
+    # Nothing runs before publication, so no command is asked for.
+    assert "Nothing from this checkout is run before your fix is published" in prompt
+    assert "Propose the NARROWEST command" not in prompt
+
+
+def test_recent_changes_are_part_of_the_prompt(monkeypatch):
+    prompt = _captured_prompt(monkeypatch, recent_changes="### Commits on this PR\n- abc Fix x\n")
+    assert "## Recent changes (code-listed culprit candidates)" in prompt
+    assert "- abc Fix x" in prompt
+
+
+def test_classification_and_culprit_are_parsed(monkeypatch):
+    _mock_agent(monkeypatch, _stream_json_result({
+        "path": "author", "failure_type": "Flaky", "failing_check": "t", "root_cause": "race",
+        "culprit_commit": " abc1234 ", "confidence": 0.7,
+    }))
+    proposal = diagnose_failure("/tmp/l", "/tmp/r")
+    assert proposal.failure_type is FailureType.FLAKY
+    assert proposal.culprit_commit == "abc1234"
+
+
+def test_infrastructure_failures_always_refuse(monkeypatch):
+    _mock_agent(monkeypatch, _stream_json_result({
+        "path": "author", "failure_type": "infrastructure", "failing_check": "t",
+        "root_cause": "apt mirror returned 503", "build_command": "make", "verify_command": "x",
+    }))
+    proposal = diagnose_failure("/tmp/l", "/tmp/r")
+    assert proposal.path is FixPath.REFUSE
+    assert proposal.verify_command == ""
+    assert proposal.failure_type is FailureType.INFRASTRUCTURE
+
+
+def test_unknown_failure_type_is_unknown(monkeypatch):
+    _mock_agent(monkeypatch, _stream_json_result({"path": "refuse", "failure_type": "cosmic-rays"}))
+    assert diagnose_failure("/tmp/l", "/tmp/r").failure_type is FailureType.UNKNOWN
+
+
+def test_last_agent_text_returns_the_final_assistant_text():
+    from scripts.common.ai_output import last_agent_text
+
+    stream = "\n".join([
+        json.dumps({"type": "assistant", "text": "looking"}),
+        "not json",
+        json.dumps({"type": "result", "result": "  I will not weaken\nthe assertion.  "}),
+    ])
+    assert last_agent_text(stream) == "I will not weaken the assertion."
+    assert last_agent_text("", limit=5) == ""
+    assert last_agent_text(json.dumps({"result": "x" * 50}), limit=5) == "xxxxx"
+
+
+
+def test_diagnosis_may_read_only_the_checkout_and_the_logs(monkeypatch):
+    seen = {}
+
+    def fake(profile, prompt, **kwargs):
+        seen.update(profile=profile, **kwargs)
+        return MagicMock(stdout=_stream_json_result({"path": "refuse"}), stderr="", returncode=0)
+
+    monkeypatch.setattr(diagnose_mod, "run_agent", fake)
+    diagnose_failure("/work/logs", "/work/repo")
+    assert seen == {"profile": "ci_fix_diagnose_readonly", "cwd": "/work/repo", "extra_dirs": ("/work/logs",)}

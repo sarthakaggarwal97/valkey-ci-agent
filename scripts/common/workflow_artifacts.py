@@ -117,6 +117,11 @@ class ArtifactClient:
             f"/repos/{repo_full_name}/actions/runs/{run_id}/logs"
         ))
 
+    def download_job_log(self, repo_full_name: str, job_id: int) -> str:
+        """Return one job's plain-text console log ("" when it has expired)."""
+        data = self._download(f"/repos/{repo_full_name}/actions/jobs/{int(job_id)}/logs")
+        return data[:_MAX_UNCOMPRESSED_BYTES].decode("utf-8", errors="replace")
+
     def _download(self, path: str) -> bytes:
         url = f"https://api.github.com{path}"
         req = Request(url, headers={

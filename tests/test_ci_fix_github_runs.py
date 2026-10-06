@@ -35,3 +35,11 @@ def test_read_failure_yields_empty():
     gh = MagicMock()
     gh.get_repo.return_value.get_workflow_run.side_effect = RuntimeError("boom")
     assert failed_jobs_for_run(gh, "o/r", 1) == []
+
+
+def test_a_whole_suite_schema_validator_is_not_ranked_as_a_build_break():
+    from scripts.ci_fix.verify.github_runs import job_priority
+
+    assert job_priority("reply-schemas-linter") == 0   # a lint: deterministic
+    assert job_priority("build-macos-latest") == 0
+    assert job_priority("reply-schemas-validator") > job_priority("build-macos-latest")

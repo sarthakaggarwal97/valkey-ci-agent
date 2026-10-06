@@ -13,11 +13,14 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 import re
 import shlex
 import time
 import uuid
 from typing import Any
+
+from github import Auth, Github
 
 from scripts.ci_fix.review import MAX_REVIEWABLE_PATCH_CHARS
 from scripts.ci_fix.verify.base import VerificationPlan, VerificationResult
@@ -255,6 +258,27 @@ class MacosVerifier:
         except Exception as exc:  # noqa: BLE001
             logger.warning("reloading verify-macos run failed: %s", exc)
             return run
+
+
+def macos_verifier_from_env() -> MacosVerifier | None:
+    """The macOS backend configured by ``CI_FIX_MACOS_*``, or None when it is not.
+
+    Both the agent repository and its token must be set, so macOS verification
+    stays opt-in and a deployment without it refuses macOS failures instead.
+    The token needs actions:write on the agent repository, which the target
+    repository's token does not carry.
+    """
+    agent_repo = os.environ.get("CI_FIX_MACOS_AGENT_REPO", "")
+    token = os.environ.get("CI_FIX_MACOS_TOKEN", "")
+    if not agent_repo or not token:
+        return None
+    agent_gh = Github(auth=Auth.Token(token))
+    return MacosVerifier(
+        agent_gh,
+        agent_repo_full_name=agent_repo,
+        ref=os.environ.get("CI_FIX_MACOS_AGENT_REF", "main"),
+        artifact_client=ArtifactClient(agent_gh, token=token),
+    )
 
 
 # Tolerance for comparing the run's server-side created_at against our local

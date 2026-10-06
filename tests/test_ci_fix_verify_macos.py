@@ -317,3 +317,19 @@ def _advancing_clock(step):
         return state["t"]
 
     return _now
+
+
+def test_macos_verifier_is_opt_in_and_built_from_env(monkeypatch):
+    from scripts.ci_fix.verify import macos as macos_mod
+
+    monkeypatch.delenv("CI_FIX_MACOS_AGENT_REPO", raising=False)
+    monkeypatch.setenv("CI_FIX_MACOS_TOKEN", "t")
+    assert macos_mod.macos_verifier_from_env() is None
+    monkeypatch.setenv("CI_FIX_MACOS_AGENT_REPO", "valkey-io/valkey-ci-agent")
+    monkeypatch.delenv("CI_FIX_MACOS_TOKEN")
+    assert macos_mod.macos_verifier_from_env() is None
+    monkeypatch.setenv("CI_FIX_MACOS_TOKEN", "t")
+    monkeypatch.setenv("CI_FIX_MACOS_AGENT_REF", "release")
+    verifier = macos_mod.macos_verifier_from_env()
+    assert isinstance(verifier, macos_mod.MacosVerifier)
+    assert (verifier._agent_repo, verifier._ref) == ("valkey-io/valkey-ci-agent", "release")

@@ -137,3 +137,66 @@ jobs:
 def test_registry_port_and_digest_images_classify_docker():
     assert classify_job_environment(_REGISTRY_WF, "port-image").env is VerifyEnv.DOCKER
     assert classify_job_environment(_REGISTRY_WF, "digest-image").env is VerifyEnv.DOCKER
+
+
+# --- matrix display names ---------------------------------------------------------
+
+from scripts.ci_fix.verify.workflow_env import load_workflow, resolve_job  # noqa: E402
+
+_MATRIX_WORKFLOW = """
+jobs:
+  test-rpm-distros:
+    strategy:
+      matrix:
+        include:
+          - name: test-almalinux8-jemalloc
+            container: almalinux:8
+          - name: test-fedorarawhide-jemalloc
+            container: fedora:rawhide
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.container }}
+  test-sanitizer-address:
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    runs-on: ubuntu-latest
+  test-valgrind-test:
+    name: test-valgrind-test (${{ matrix.shard }})
+    strategy:
+      matrix:
+        shard: ${{ fromJSON(inputs.valgrind_test && '["targeted"]' || '["unit"]') }}
+    runs-on: ubuntu-latest
+  test-arm:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+"""
+
+
+def test_rendered_matrix_name_resolves_to_its_container():
+    env = classify_job_environment(_MATRIX_WORKFLOW, "test-fedorarawhide-jemalloc")
+    assert (env.env, env.image) == (VerifyEnv.DOCKER, "fedora:rawhide")
+
+
+def test_default_matrix_suffix_resolves_to_its_values():
+    resolved = resolve_job(load_workflow(_MATRIX_WORKFLOW), "test-sanitizer-address (clang)")
+    assert resolved is not None
+    assert (resolved.job_id, resolved.matrix) == ("test-sanitizer-address", {"compiler": "clang"})
+
+
+def test_name_with_a_runtime_matrix_falls_back_to_the_job_key():
+    resolved = resolve_job(load_workflow(_MATRIX_WORKFLOW), "test-valgrind-test (targeted)")
+    assert resolved is not None and resolved.job_id == "test-valgrind-test"
+    assert classify_job_environment(_MATRIX_WORKFLOW, "test-valgrind-test (unit)").env is VerifyEnv.LOCAL
+
+
+def test_matrix_runner_is_resolved_before_classification():
+    """An arm runner chosen through the matrix must stay unsupported on x86."""
+    env = classify_job_environment(_MATRIX_WORKFLOW, "test-arm (ubuntu-24.04-arm)")
+    assert env.env is VerifyEnv.UNSUPPORTED
+
+
+def test_unknown_display_name_is_unsupported():
+    assert classify_job_environment(_MATRIX_WORKFLOW, "test-almalinux9-jemalloc").env is VerifyEnv.UNSUPPORTED

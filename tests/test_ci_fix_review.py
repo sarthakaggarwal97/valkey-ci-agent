@@ -14,6 +14,7 @@ import subprocess
 from unittest.mock import MagicMock, patch
 
 from scripts.ci_fix import review as review_mod
+from scripts.ci_fix.apply import ApplyResult
 from scripts.ci_fix.models import FixPath, FixProposal, ReviewVerdict, RunResult
 from scripts.ci_fix.review import combined_command, review_fix, run_fix_loop
 
@@ -69,7 +70,7 @@ def _loop(*, path: FixPath = FixPath.AUTHOR, patch: str = "the diff", **override
     command fake makes the baseline reproduce fail, then lets the fix verify.
     """
     defaults = dict(
-        apply_func=lambda *a, **k: (True, ("test.tcl",)),
+        apply_func=lambda *a, **k: ApplyResult(True, ("test.tcl",)),
         run_command=_reproduce_then_pass(),
         review_func=lambda *a, **k: _approved(),
         reset_func=MagicMock(),
@@ -84,10 +85,12 @@ def test_success_requires_pass_and_approval():
     assert result.success is True
     assert result.attempts == 1
     assert result.changed_paths == ("test.tcl",)
+    # Publication applies exactly what the skeptic reviewed.
+    assert result.patch == "the diff"
 
 
 def test_refuse_proposal_short_circuits():
-    result = _loop(path=FixPath.REFUSE, apply_func=lambda *a, **k: (False, ()))
+    result = _loop(path=FixPath.REFUSE, apply_func=lambda *a, **k: ApplyResult(False, ()))
     assert result.success is False
     assert "not applied" in result.detail
 
@@ -176,11 +179,11 @@ def test_generated_diff_failure_is_verified_after_temporary_commit(tmp_path):
     )
     calls: list[str] = []
 
-    def apply_source_fix(repo_dir: str, _proposal: FixProposal, *, feedback: str = ""):
-        del feedback
+    def apply_source_fix(repo_dir: str, _proposal: FixProposal, *, feedback: str = "", policy=None):
+        del feedback, policy
         assert repo_dir == str(repo)
         (repo / "source.c").write_text("new source\n")
-        return True, ("source.c",)
+        return ApplyResult(True, ("source.c",))
 
     def run_command(_repo_dir: str, command: str, **_kwargs) -> RunResult:
         calls.append(command)
@@ -208,6 +211,8 @@ def test_generated_diff_failure_is_verified_after_temporary_commit(tmp_path):
     assert result.success is True
     assert result.changed_paths == ("generated.h", "source.c")
     assert "generated files converged" in result.detail
+    # Publication applies exactly this patch, so both files must be in it.
+    assert "+++ b/generated.h" in result.patch and "+++ b/source.c" in result.patch
     assert (repo / "generated.h").read_text() == "new generated\n"
     assert git("diff", "--name-only", "HEAD").splitlines() == ["generated.h", "source.c"]
     assert calls == [
@@ -287,15 +292,20 @@ def test_zero_max_attempts_is_clamped():
 
 def test_feedback_passed_to_apply_on_retry():
     seen_feedback = []
+    seen_policy = []
 
-    def fake_apply(repo, proposal, *, feedback=""):
+    def fake_apply(repo, proposal, *, feedback="", policy=None):
         seen_feedback.append(feedback)
-        return True, ("test.tcl",)
+        seen_policy.append(policy)
+        return ApplyResult(True, ("test.tcl",))
 
     runs = [_failed(), _passed(), _failed(), _passed(), _passed(), _passed()]
     _loop(max_attempts=2, apply_func=fake_apply, run_command=lambda *a, **k: runs.pop(0))
     assert seen_feedback[0] == ""           # first attempt: no feedback
     assert "did not make the check pass" in seen_feedback[1]
+    # The loop forwards the caller's policy; the default is the conservative one.
+    from scripts.ci_fix.models import Policy
+    assert seen_policy == [Policy.BACKPORT, Policy.BACKPORT]
 
 
 def _stream_result(obj: dict) -> str:
@@ -354,7 +364,7 @@ def test_empty_verify_command_refuses():
     )
     result = run_fix_loop(
         "/repo", proposal,
-        apply_func=lambda *a, **k: (True, ("test.tcl",)),
+        apply_func=lambda *a, **k: ApplyResult(True, ("test.tcl",)),
         run_command=lambda *a, **k: _passed(),
         review_func=lambda *a, **k: _approved(),
         reset_func=MagicMock(),
@@ -372,7 +382,7 @@ def test_noop_verify_command_refuses():
     ran = MagicMock()
     result = run_fix_loop(
         "/repo", proposal,
-        apply_func=lambda *a, **k: (True, ("test.tcl",)),
+        apply_func=lambda *a, **k: ApplyResult(True, ("test.tcl",)),
         run_command=ran,
         review_func=lambda *a, **k: _approved(),
         reset_func=MagicMock(),
@@ -456,7 +466,7 @@ def test_oversized_patch_refuses():
     with patch_build_approved(lambda *a, **k: big):
         result = run_fix_loop(
             "/repo", _proposal(),
-            apply_func=lambda *a, **k: (True, ("test.tcl",)),
+            apply_func=lambda *a, **k: ApplyResult(True, ("test.tcl",)),
             run_command=_reproduce_then_pass(),
             review_func=review_called,
             reset_func=MagicMock(),
@@ -482,7 +492,7 @@ def test_empty_patch_refuses_instead_of_approving():
     with patch_build_approved(empty_patch):
         result = run_fix_loop(
             "/repo", _proposal(),
-            apply_func=lambda *a, **k: (True, ("test.tcl",)),
+            apply_func=lambda *a, **k: ApplyResult(True, ("test.tcl",)),
             run_command=_reproduce_then_pass(),
             review_func=review_called,
             reset_func=MagicMock(),
@@ -556,7 +566,7 @@ def test_empty_build_runs_verify_command_k_times():
     with patch_build_approved(lambda *a, **k: "diff"):
         result = run_fix_loop(
             "/repo", proposal, verify_runs=2,
-            apply_func=lambda *a, **k: (True, ("f",)),
+            apply_func=lambda *a, **k: ApplyResult(True, ("f",)),
             run_command=run,
             review_func=lambda *a, **k: _approved(),
             reset_func=MagicMock(),
@@ -643,3 +653,94 @@ def test_build_and_review_patch_empty_oversized_rejected_ok(monkeypatch):
     # ok
     r = build_and_review_patch("/repo", ("f",), _proposal(), review_func=lambda *a, **k: _approved())
     assert r.ok is True and r.patch == "small diff" and r.review.approved is True
+
+
+def _review_prompt(monkeypatch, policy):
+    from scripts.ci_fix.models import Policy  # noqa: F401
+
+    captured = {}
+
+    def fake(profile, prompt, **_kw):
+        captured["prompt"] = prompt
+        return MagicMock(returncode=0, stdout=_stream_result({"approved": True, "reasoning": "ok"}), stderr="")
+
+    monkeypatch.setattr(review_mod, "run_agent", fake)
+    review_fix("/repo", _proposal(), "diff", policy=policy)
+    return captured["prompt"]
+
+
+def test_the_skeptic_rejects_product_changes_on_backport_branches(monkeypatch):
+    from scripts.ci_fix.models import Policy
+
+    prompt = _review_prompt(monkeypatch, Policy.BACKPORT)
+    assert "Reject any change to product behavior" in prompt
+    assert "an iteration count too high for this branch's CI" in prompt
+    assert "may change tests or product code" not in prompt
+
+
+def test_the_skeptic_allows_product_fixes_on_fix_prs(monkeypatch):
+    from scripts.ci_fix.models import Policy
+
+    prompt = _review_prompt(monkeypatch, Policy.FIX)
+    assert "may change tests or product code" in prompt
+    assert "Reject any change to product behavior" not in prompt
+
+
+def test_the_loop_passes_its_policy_to_the_skeptic():
+    from scripts.ci_fix.models import Policy
+
+    seen = []
+
+    def review(_repo, _proposal, _patch, **kwargs):
+        seen.append(kwargs["policy"])
+        return _approved()
+
+    _loop(review_func=review, policy=Policy.FIX)
+    assert seen == [Policy.FIX]
+
+
+def test_missing_binaries_are_recognized_in_every_container_shell():
+    from scripts.ci_fix.review import looks_like_missing_dependency
+
+    assert looks_like_missing_dependency("/bin/sh: make: not found")          # busybox ash (alpine)
+    assert looks_like_missing_dependency("/bin/sh: 1: make: not found")       # dash (debian)
+    assert looks_like_missing_dependency("bash: line 1: tclsh: command not found")
+    assert not looks_like_missing_dependency("[err]: key not found in tests/unit/keyspace.tcl")
+
+
+def _flaky_proposal():
+    from scripts.ci_fix.models import FailureType
+
+    return FixProposal(
+        path=FixPath.AUTHOR, failing_check="corrupt payload: zset listpack with NAN score",
+        root_cause="timing race", reasoning="wait for the condition", confidence=0.7,
+        failure_type=FailureType.FLAKY, build_command="make",
+        verify_command="./runtest --single x --loops 20 --fastfail",
+    )
+
+
+def test_a_flaky_fix_on_a_fix_pr_is_handed_off_when_the_baseline_passes():
+    """A clean baseline is expected for a flake; the reviewed fix goes to a human, never pushed."""
+    from scripts.ci_fix.models import Policy
+
+    applied = MagicMock(return_value=ApplyResult(True, ("test.tcl",)))
+    with patch_build_approved(lambda *a, **k: "the diff"):
+        result = run_fix_loop(
+            "/repo", _flaky_proposal(), apply_func=applied, run_command=lambda *a, **k: _passed(),
+            review_func=lambda *a, **k: _approved(), reset_func=MagicMock(), policy=Policy.FIX,
+        )
+    assert (result.success, result.handoff, result.handoff_patch) == (False, True, "the diff")
+    assert "could not establish a local failing baseline" in result.detail
+    applied.assert_called_once()
+
+
+def test_a_flaky_failure_on_a_backport_branch_is_still_refused():
+    applied = MagicMock()
+    with patch_build_approved(lambda *a, **k: "the diff"):
+        result = run_fix_loop(
+            "/repo", _flaky_proposal(), apply_func=applied, run_command=lambda *a, **k: _passed(),
+            review_func=lambda *a, **k: _approved(), reset_func=MagicMock(),
+        )
+    assert (result.success, result.handoff) == (False, False)
+    assert "did not reproduce on a clean checkout" in result.detail
+    applied.assert_not_called()

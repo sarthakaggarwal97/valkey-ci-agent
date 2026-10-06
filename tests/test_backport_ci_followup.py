@@ -6,9 +6,15 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from scripts.backport import ci_followup
-from scripts.backport.ci_followup import FollowupTarget, find_followup_target, run_followup
+from scripts.backport.ci_followup import (
+    FollowupTarget,
+    find_followup_target,
+    prepare_followup,
+    publish_followup,
+)
 from scripts.backport.registry import BranchEntry, RepoEntry
-from scripts.ci_fix.models import FixOutcome, OutcomeKind
+from scripts.ci_fix.models import FixOutcome, OutcomeKind, Policy, Publication, to_dict
+from scripts.ci_fix.publish import read_state
 from scripts.ci_fix.verify.base import FailedJob
 
 _HEAD = "a" * 40
@@ -391,266 +397,199 @@ def test_ignores_handled_job_marker_from_another_user(monkeypatch) -> None:
     assert [job.id for job in target.jobs] == [2]
 
 
-def test_run_followup_uses_shared_engine_and_posts_job_markers(monkeypatch) -> None:
-    pr = _pr()
-    claims, bodies = _record_comment(pr)
-    target = FollowupTarget(
-        pr=pr,
-        run=_run(),
-        head_sha=_HEAD,
-        head_branch="agent/backport/sweep/9.0",
-        jobs=(
-            FailedJob("Reply schema validator", "failure", id=2),
-            FailedJob("unit tests", "failure", id=3),
-        ),
+def _target(pr, *jobs):
+    return FollowupTarget(
+        pr=pr, run=_run(), head_sha=_HEAD, head_branch="agent/backport/sweep/9.0",
+        jobs=jobs or (FailedJob("unit tests", "failure", id=3),),
     )
-    gh = _gh([target.run], pr)
-    monkeypatch.setattr(ci_followup, "find_followup_target", lambda *_args, **_kwargs: (target, "actionable"))
-    engine = MagicMock(
-        return_value=FixOutcome(
-            kind=OutcomeKind.REFUSED,
-            summary="timing-dependent; no safe change",
-        )
-    )
+
+
+class _Claims:
+    """A PR comment store: the claim posted by prepare, edited by publish."""
+
+    def __init__(self, pr):
+        self.bodies: dict[int, list[str]] = {}
+        pr.create_issue_comment = self.create
+        pr.get_issue_comment = lambda cid: SimpleNamespace(edit=self.bodies[cid].append)
+
+    def create(self, body):
+        cid = len(self.bodies) + 1
+        self.bodies[cid] = [body]
+        return SimpleNamespace(id=cid, edit=self.bodies[cid].append)
+
+    def latest(self, cid=1):
+        return self.bodies[cid][-1]
+
+
+def _prepare(monkeypatch, tmp_path, target, engine):
+    if not hasattr(target.pr, "claims"):
+        target.pr.claims = _Claims(target.pr)
+    monkeypatch.setattr(ci_followup, "find_followup_target", lambda *_a, **_k: (target, "actionable"))
     monkeypatch.setattr(ci_followup, "run_ci_fix_request", engine)
-
-    result = run_followup(
-        gh,
-        repo_entry=_entry(),
-        target_branch="9.0",
-        bot_login=_BOT,
-        git_env={},
-        artifact_client=MagicMock(),
+    state = tmp_path / "state.json"
+    result = prepare_followup(
+        _gh([target.run], target.pr), repo_entry=_entry(), target_branch="9.0", bot_login=_BOT,
+        artifact_client=MagicMock(), state_path=str(state),
     )
+    return result, state
 
-    assert result["action"] == "refused"
+
+def test_prepare_runs_the_engine_on_one_job_and_records_its_markers(monkeypatch, tmp_path) -> None:
+    target = _target(_pr(), FailedJob("Reply schema validator", "failure", id=2),
+                     FailedJob("unit tests", "failure", id=3))
+    engine = MagicMock(return_value=FixOutcome(kind=OutcomeKind.REFUSED, summary="timing-dependent"))
+    result, state = _prepare(monkeypatch, tmp_path, target, engine)
+
+    assert result["action"] == "prepared"
+    assert result["decision"] == "refused"
     request = engine.call_args.kwargs["request"]
-    assert request.head_sha == _HEAD
-    assert engine.call_args.kwargs["failed_jobs"] == ("Reply schema validator",)
-    pre_push_check = engine.call_args.kwargs["pre_push_check"]
-    assert pre_push_check() == ""
-    assert len(claims) == 1
-    assert "job=2" in claims[0]
-    assert "job=3" not in claims[0]
-    assert "key=" in claims[0]
-    assert "job=2" in bodies[-1]
-    assert "job=3" not in bodies[-1]
-    assert "timing-dependent; no safe change" in bodies[-1]
+    assert (request.head_sha, request.base_branch) == (_HEAD, "9.0")
+    assert (request.policy, request.publication) == (Policy.BACKPORT, Publication.PUSH)
+    # A test job outranks Daily's whole-suite reply-schemas validator.
+    assert request.target == "the failure in job `unit tests`"
+    assert engine.call_args.kwargs["failed_jobs"] == ("unit tests",)
+    markers = "\n".join(read_state(str(state))["context"]["markers"])
+    assert "job=3" in markers and "key=" in markers
+    assert "job=2" not in markers
 
 
-def test_run_followup_reports_successful_push_against_expected_sha(
-    monkeypatch,
-) -> None:
-    original = _pr()
+def test_prepare_claims_the_job_on_the_pr_before_the_engine_runs(monkeypatch, tmp_path) -> None:
+    """A lost runner or cancelled job must still retire the job id on GitHub."""
+    pr = _pr()
+    claims = _Claims(pr)
+    state = tmp_path / "state.json"
+
+    def explode(*_a, **_k):
+        assert "job=3" in claims.latest(), "the markers must be on the PR before the engine runs"
+        assert read_state(str(state))["outcome"]["kind"] == "failed"
+        raise RuntimeError("engine crashed")
+
+    target = _target(pr)
+    target.pr.claims = claims
+    result, _ = _prepare(monkeypatch, tmp_path, target, explode)
+    assert result["decision"] == "failed"
+    assert read_state(str(state))["context"]["comment"] == 1
+    assert "diagnosing the failure in job `unit tests`" in claims.latest()
+
+
+def test_prepare_claim_happens_before_the_engine(monkeypatch, tmp_path) -> None:
+    """Order is recorded outside the engine's exception handler, which would swallow an assert."""
+    events = []
+    pr = _pr()
+    claims = _Claims(pr)
+    post = pr.create_issue_comment
+    pr.create_issue_comment = lambda body: events.append("claim") or post(body)
+    target = _target(pr)
+    target.pr.claims = claims
+    _prepare(monkeypatch, tmp_path, target,
+             lambda *_a, **_k: events.append("engine") or FixOutcome(kind=OutcomeKind.REFUSED, summary="no"))
+    assert events == ["claim", "engine"]
+
+
+def test_prepare_without_a_target_records_nothing(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(ci_followup, "find_followup_target", lambda *_a, **_k: (None, "current-head-ci-running"))
+    state = tmp_path / "state.json"
+    result = prepare_followup(
+        MagicMock(), repo_entry=_entry(), target_branch="9.0", bot_login=_BOT,
+        artifact_client=MagicMock(), state_path=str(state),
+    )
+    assert result == {"repo": "valkey-io/valkey", "branch": "9.0", "action": "skipped",
+                      "reason": "current-head-ci-running"}
+    assert not state.exists()
+
+
+def _publish(monkeypatch, tmp_path, *, outcome, current_pr, publish, target_pr=None):
+    """Prepare with ``outcome``, then publish against ``current_pr``."""
+    pr = target_pr or _pr()
+    claims = _Claims(pr)
+    target = _target(pr)
+    target.pr.claims = claims
+    _prepare(monkeypatch, tmp_path, target, MagicMock(return_value=outcome))
+    monkeypatch.setattr(ci_followup, "publish_to_pr", publish)
+    # The publish step sees the PR as it is now, with the claim it posted.
+    current_pr.get_issue_comment = pr.get_issue_comment
+    current_pr.create_issue_comment = pr.create_issue_comment
+    result = publish_followup(
+        _gh([], current_pr), repo_entry=_entry(), target_branch="9.0", bot_login=_BOT,
+        git_env={}, state_path=str(tmp_path / "state.json"),
+    )
+    assert len(claims.bodies) == 1, "the result replaces the claim instead of adding a comment"
+    return result, claims.bodies[1][1:]
+
+
+_READY = FixOutcome(kind=OutcomeKind.READY, summary="Fix for unit tests", patch="diff",
+                    changed_paths=("tests/x.tcl",), verify_backend="local")
+
+
+def test_publish_pushes_and_posts_the_result_with_markers(monkeypatch, tmp_path) -> None:
     pushed_sha = "b" * 40
     current = _pr()
     current.head.sha = pushed_sha
-    claims, bodies = _record_comment(original)
-    target = FollowupTarget(
-        pr=original,
-        run=_run(),
-        head_sha=_HEAD,
-        head_branch="agent/backport/sweep/9.0",
-        jobs=(FailedJob("unit tests", "failure", id=3),),
-    )
-    gh = _gh([target.run], current)
-    monkeypatch.setattr(
-        ci_followup,
-        "find_followup_target",
-        lambda *_args, **_kwargs: (target, "actionable"),
-    )
-    monkeypatch.setattr(
-        ci_followup,
-        "run_ci_fix_request",
-        lambda *_args, **_kwargs: FixOutcome(
-            kind=OutcomeKind.PUSHED,
-            summary="fixed unit tests",
-            commit_sha=pushed_sha,
-        ),
-    )
 
-    result = run_followup(
-        gh,
-        repo_entry=_entry(),
-        target_branch="9.0",
-        bot_login=_BOT,
-        git_env={},
-        artifact_client=MagicMock(),
-    )
+    def publish(outcome, request, **kwargs):
+        assert kwargs["pre_push_check"]() == "the PR head moved from aaaaaaaaaaaa to bbbbbbbbbbbb"
+        return FixOutcome(kind=OutcomeKind.PUSHED, summary="Pushed fix for unit tests",
+                          commit_sha=pushed_sha, proposal=outcome.proposal)
 
+    result, posted = _publish(monkeypatch, tmp_path, outcome=_READY, current_pr=current, publish=publish)
     assert result["action"] == "pushed"
-    assert result["summary"] == "fixed unit tests"
     assert "head_moved_after_push" not in result
-    assert len(claims) == 1
-    assert f"pushed `{pushed_sha[:12]}`" in bodies[-1]
-    assert "nothing was pushed" not in bodies[-1]
+    assert len(posted) == 1
+    assert f"pushed `{pushed_sha[:12]}`" in posted[0]
+    assert "job=3" in posted[0]
 
 
-def test_run_followup_keeps_pushed_result_when_head_moves_after_push(
-    monkeypatch,
-) -> None:
-    original = _pr()
-    pushed_sha = "b" * 40
-    newer_sha = "c" * 40
+def test_publish_pre_push_check_refuses_a_closed_pr(monkeypatch, tmp_path) -> None:
+    closed = _pr()
+    closed.state = "closed"
+
+    def publish(outcome, request, **kwargs):
+        return FixOutcome(kind=OutcomeKind.REFUSED, summary=kwargs["pre_push_check"]())
+
+    result, posted = _publish(monkeypatch, tmp_path, outcome=_READY, current_pr=closed, publish=publish)
+    assert result["action"] == "refused"
+    assert "pr-not-open" in posted[0]
+
+
+def test_publish_keeps_a_pushed_result_when_the_head_moves_after_push(monkeypatch, tmp_path) -> None:
     current = _pr()
-    current.head.sha = newer_sha
-    _claims, bodies = _record_comment(original)
-    target = FollowupTarget(
-        pr=original,
-        run=_run(),
-        head_sha=_HEAD,
-        head_branch="agent/backport/sweep/9.0",
-        jobs=(FailedJob("unit tests", "failure", id=3),),
-    )
-    gh = _gh([target.run], current)
-    monkeypatch.setattr(
-        ci_followup,
-        "find_followup_target",
-        lambda *_args, **_kwargs: (target, "actionable"),
-    )
-    monkeypatch.setattr(
-        ci_followup,
-        "run_ci_fix_request",
-        lambda *_args, **_kwargs: FixOutcome(
-            kind=OutcomeKind.PUSHED,
-            summary="fixed unit tests",
-            commit_sha=pushed_sha,
-        ),
-    )
+    current.head.sha = "c" * 40
 
-    result = run_followup(
-        gh,
-        repo_entry=_entry(),
-        target_branch="9.0",
-        bot_login=_BOT,
-        git_env={},
-        artifact_client=MagicMock(),
-    )
+    def publish(outcome, request, **kwargs):
+        return FixOutcome(kind=OutcomeKind.PUSHED, summary="Pushed", commit_sha="b" * 40)
 
+    result, posted = _publish(monkeypatch, tmp_path, outcome=_READY, current_pr=current, publish=publish)
     assert result["action"] == "pushed"
     assert result["head_moved_after_push"] is True
-    assert result["current_head"] == newer_sha
-    assert f"fix was pushed as `{pushed_sha[:12]}`" in bodies[-1]
-    assert f"reported `{newer_sha[:12]}`" in bodies[-1]
-    assert "nothing was pushed" not in bodies[-1]
+    assert "fix was pushed as `bbbbbbbbbbbb`" in posted[0]
 
 
-def test_run_followup_pre_push_check_refuses_closed_pr(monkeypatch) -> None:
-    pr = _pr()
-    claims, bodies = _record_comment(pr)
-    target = FollowupTarget(
-        pr=pr,
-        run=_run(),
-        head_sha=_HEAD,
-        head_branch="agent/backport/sweep/9.0",
-        jobs=(FailedJob("unit tests", "failure", id=3),),
-    )
-    gh = _gh([target.run], pr)
-    monkeypatch.setattr(
-        ci_followup,
-        "find_followup_target",
-        lambda *_args, **_kwargs: (target, "actionable"),
-    )
-
-    def engine(*_args, **kwargs):
-        pr.state = "closed"
-        reason = kwargs["pre_push_check"]()
-        return FixOutcome(kind=OutcomeKind.REFUSED, summary=reason)
-
-    monkeypatch.setattr(ci_followup, "run_ci_fix_request", engine)
-
-    result = run_followup(
-        gh,
-        repo_entry=_entry(),
-        target_branch="9.0",
-        bot_login=_BOT,
-        git_env={},
-        artifact_client=MagicMock(),
-    )
-
-    assert result["action"] == "refused"
-    assert "pr-not-open" in bodies[-1]
-    assert len(claims) == 1
-
-
-def test_run_followup_claims_job_ids_before_the_engine_runs(monkeypatch) -> None:
-    """A crash mid-fix must still retire these job ids.
-
-    The markers are the only record that an attempt happened, so writing them
-    only after the engine returns would make every scheduled run re-diagnose the
-    same failure on the same head forever.
-    """
-    pr = _pr()
-    claims, _bodies = _record_comment(pr)
-    target = FollowupTarget(
-        pr=pr,
-        run=_run(),
-        head_sha=_HEAD,
-        head_branch="agent/backport/sweep/9.0",
-        jobs=(FailedJob("unit tests", "failure", id=3),),
-    )
-    gh = _gh([target.run], pr)
-    monkeypatch.setattr(ci_followup, "find_followup_target", lambda *_args, **_kwargs: (target, "actionable"))
-
-    def explode(*_args, **_kwargs):
-        assert claims, "job ids must be claimed before the engine is invoked"
-        raise RuntimeError("engine crashed")
-
-    monkeypatch.setattr(ci_followup, "run_ci_fix_request", explode)
-
-    result = run_followup(
-        gh,
-        repo_entry=_entry(),
-        target_branch="9.0",
-        bot_login=_BOT,
-        git_env={},
-        artifact_client=MagicMock(),
-    )
-
-    assert result["action"] == "failed"
-    assert len(claims) == 1
-    assert "job=3" in claims[0]
-
-
-def test_run_followup_does_not_post_result_after_concurrent_head_move(monkeypatch) -> None:
-    """A moved head must be reported as discarded, never as a result.
-
-    The engine's verdict was reached against a head that no longer exists, so
-    publishing it would advertise a fix for code nobody is running.
-    """
-    original = _pr()
+def test_publish_discards_a_result_reached_on_a_moved_head(monkeypatch, tmp_path) -> None:
     moved = _pr()
     moved.head.sha = "b" * 40
-    claims, bodies = _record_comment(original)
-    target = FollowupTarget(
-        pr=original,
-        run=_run(),
-        head_sha=_HEAD,
-        head_branch="agent/backport/sweep/9.0",
-        jobs=(FailedJob("unit tests", "failure", id=3),),
-    )
-    gh = _gh([target.run], moved)
-    monkeypatch.setattr(ci_followup, "find_followup_target", lambda *_args, **_kwargs: (target, "actionable"))
-    monkeypatch.setattr(
-        ci_followup,
-        "run_ci_fix_request",
-        lambda *_args, **_kwargs: FixOutcome(
-            kind=OutcomeKind.REFUSED,
-            summary="no safe change",
-        ),
-    )
-
-    result = run_followup(
-        gh,
-        repo_entry=_entry(),
-        target_branch="9.0",
-        bot_login=_BOT,
-        git_env={},
-        artifact_client=MagicMock(),
-    )
-
+    refused = FixOutcome(kind=OutcomeKind.REFUSED, summary="no safe change")
+    result, posted = _publish(monkeypatch, tmp_path, outcome=refused, current_pr=moved,
+                              publish=lambda outcome, *_a, **_k: outcome)
     assert result["action"] == "stale"
-    assert len(claims) == 1
-    assert "was discarded" in bodies[-1]
-    assert "no safe change" not in bodies[-1]
-    assert "job=3" in bodies[-1]
+    assert "was discarded" in posted[0]
+    assert "no safe change" not in posted[0]
+    assert "job=3" in posted[0]
+
+
+def test_publish_rejects_state_for_another_branch(monkeypatch, tmp_path) -> None:
+    _prepare(monkeypatch, tmp_path, _target(_pr()), MagicMock(return_value=_READY))
+    import pytest
+
+    with pytest.raises(ValueError, match="does not match"):
+        publish_followup(
+            _gh([], _pr()), repo_entry=_entry(), target_branch="8.0", bot_login=_BOT,
+            git_env={}, state_path=str(tmp_path / "state.json"),
+        )
+
+
+def test_publish_without_state_skips(tmp_path) -> None:
+    result = publish_followup(
+        MagicMock(), repo_entry=_entry(), target_branch="9.0", bot_login=_BOT,
+        git_env={}, state_path=str(tmp_path / "none.json"),
+    )
+    assert result["reason"] == "nothing-prepared"

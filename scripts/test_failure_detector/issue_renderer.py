@@ -16,14 +16,20 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+from urllib.parse import quote, unquote
 
 from scripts.common.incidents import compute_fingerprint
 from scripts.common.issue_dedup import IssueContent
-from scripts.test_failure_detector.parse_failures import UniqueFailure
+from scripts.test_failure_detector.job_failures import JobFailure
+from scripts.test_failure_detector.parse_failures import JobReference, UniqueFailure
 
 MARKER_NAMESPACE = "valkey-ci-agent:test-failure"
 
 LABEL_NAME = "test-failure"
+
+# Hidden marker naming the job of a job-level failure issue, read back by the
+# CI-fix issue flow. The name is percent-encoded so it cannot end the comment.
+_JOB_MARKER_RE = re.compile(rf"<!-- {re.escape(MARKER_NAMESPACE)}:job:(?P<job>[^\s>]+) -->")
 
 
 def fingerprint_for(failure: UniqueFailure) -> str:
@@ -280,3 +286,73 @@ def _update_environments_in_body(body: str, all_envs: list[str]) -> str:
     """Replace the Environments line in the issue body with an updated list."""
     new_env_line = f"**Environments:** {', '.join(f'`{e}`' for e in all_envs)}"
     return re.sub(r"\*\*Environments:\*\*\s*.+", new_env_line, body)
+
+
+# --- Job-level failures -------------------------------------------------------
+
+
+def job_fingerprint_for(failure: JobFailure) -> str:
+    """Stable dedup key for a job-level failure (see ``JobFailure.identity``)."""
+    namespace, shapes = failure.identity()
+    return compute_fingerprint(namespace=(MARKER_NAMESPACE, "job", *namespace), shapes=shapes)
+
+
+def job_title_for(failure: JobFailure) -> str:
+    return f"[JOB-FAILURE] {failure.job} in Daily"
+
+
+def job_marker(job: str) -> str:
+    return f"<!-- {MARKER_NAMESPACE}:job:{quote(job, safe='')} -->"
+
+
+def parse_job_marker(body: str) -> str:
+    """The job a job-level failure issue tracks, or "" for a test failure issue."""
+    match = _JOB_MARKER_RE.search(body or "")
+    return unquote(match.group("job")) if match else ""
+
+
+def job_renderer_for(failure: JobFailure) -> "_JobRenderer":
+    return _JobRenderer(failure)
+
+
+class _JobRenderer:
+    """``render`` callback for a job-level failure issue."""
+
+    def __init__(self, failure: JobFailure) -> None:
+        self._failure = failure
+
+    def render(self, marker: str, occurrences: int) -> IssueContent:
+        failure = self._failure
+        summary = "\n".join(failure.summary) or "No failure summary was printed; see the job log."
+        jobs = failure.jobs or [JobReference(job=failure.job, suite="job log", url=failure.url)]
+        links = "\n".join(f"  - `{ref.job}`: [job log]({ref.url})" for ref in jobs)
+        named = ", ".join(f"`{ref.job}`" for ref in jobs)
+        body = "\n".join([
+            marker,
+            f"<!-- {MARKER_NAMESPACE}:occurrences:{occurrences} -->",
+            job_marker(failure.job),
+            "",
+            "**Summary**",
+            "",
+            f"The Daily CI job{'s' if len(jobs) > 1 else ''} {named} failed without recording a test failure.",
+            "",
+            f"- Failed step: `{failure.step or 'unknown'}`",
+            "- CI link(s):",
+            links,
+            "",
+            "**Failure summary from the job log**",
+            "",
+            "```",
+            summary,
+            "```",
+            "",
+            "---",
+            "*Auto-created by Test Failure Detector*",
+        ])
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        comment = f"Failed again on {today}: " + ", ".join(f"[`{ref.job}`]({ref.url})" for ref in jobs) + "."
+        if failure.summary:
+            comment += "\n\n```\n" + "\n".join(failure.summary) + "\n```"
+        return IssueContent(
+            title=job_title_for(failure), body=body, comment=comment, labels=(LABEL_NAME,),
+        )

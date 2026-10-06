@@ -44,3 +44,27 @@ def extract_json_object(stdout: str, *, required_key: str) -> dict[str, Any] | N
             return obj
         start = text.find("{", start + 1)
     return None
+
+
+def last_agent_text(stdout: str, *, limit: int = 500) -> str:
+    """Best-effort final assistant text from a stream-json transcript.
+
+    Scans for the last ``result``/``text`` field. Used to surface an agent's
+    own explanation when it stops without the structured output (out of turns,
+    or an edit agent that deliberately made no change). Returns "" when nothing
+    parseable is found.
+    """
+    last = ""
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(event, dict):
+            text = event.get("result") or event.get("text")
+            if isinstance(text, str) and text.strip():
+                last = text.strip()
+    return " ".join(last.split())[:limit]

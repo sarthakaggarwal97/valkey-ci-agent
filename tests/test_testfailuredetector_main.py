@@ -306,3 +306,67 @@ class TestFailurePathsAreAnnotated:
                                  run_id=123) == 1
         errors = self._errors(capsys)
         assert len(errors) == 1 and expected in errors[0]
+
+
+class TestUnrecordedJobFailures:
+    """Failed jobs that record no test failure still reach an issue."""
+
+    @patch("scripts.test_failure_detector.main.process_failures")
+    @patch("scripts.test_failure_detector.main.find_unrecorded_failures")
+    @patch("scripts.test_failure_detector.main.get_job_urls")
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_a_run_without_an_artifact_still_files_job_failures(
+        self, _gh, _client, mock_download, mock_emit, _urls, mock_find, mock_process,
+    ) -> None:
+        from scripts.test_failure_detector.job_failures import JobFailure
+
+        mock_download.return_value = None
+        job = JobFailure(job="test-freebsd", url="https://job/1", step="make")
+        mock_find.return_value = ([], [job])
+        mock_process.return_value = {"created": 1}
+
+        rc = detector_main.run(github_token="t", repo_full_name="valkey-io/valkey", run_id=5)
+
+        assert rc == 0
+        assert mock_process.call_args.kwargs["job_failures"] == [job]
+        assert "| Job failures without a test record | 1 |" in mock_emit.call_args.args[0]
+
+    @patch("scripts.test_failure_detector.main.find_unrecorded_failures")
+    @patch("scripts.test_failure_detector.main.get_job_urls")
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_a_job_check_error_does_not_drop_recorded_failures(
+        self, _gh, _client, mock_download, _emit, _urls, mock_find,
+    ) -> None:
+        mock_download.return_value = b'{"job": {"valkey": [{"test_name": "t", "test_file": "tests/a.tcl"}]}}'
+        mock_find.side_effect = RuntimeError("jobs API down")
+        with patch("scripts.test_failure_detector.main.process_failures",
+                   return_value={"created": 1}) as mock_process:
+            rc = detector_main.run(github_token="t", repo_full_name="valkey-io/valkey", run_id=5)
+        assert rc == 0
+        assert [f.test_name for f in mock_process.call_args.args[2]] == ["t"]
+        assert mock_process.call_args.kwargs["job_failures"] == []
+
+
+def test_process_failures_upserts_job_failures_with_their_own_identity():
+    from scripts.test_failure_detector import manage_issues
+    from scripts.test_failure_detector.job_failures import JobFailure
+
+    publisher = MagicMock()
+    publisher.upsert.return_value = ("created", "https://issue/1")
+    with patch.object(manage_issues, "IssueDedupPublisher", return_value=publisher):
+        summary = manage_issues.process_failures(
+            MagicMock(), "valkey-io/valkey", [], run_id=9,
+            job_failures=[JobFailure(job="test-freebsd", url="https://job/1", step="make")],
+        )
+    assert summary["created"] == 1
+    kwargs = publisher.upsert.call_args.kwargs
+    assert kwargs["idempotency_key"] == "9"
+    # Job issues are found by their marker only, never adopted by title.
+    assert "title_fallback" not in kwargs
+    assert kwargs["render"]("<!-- m -->", 1).title == "[JOB-FAILURE] test-freebsd in Daily"

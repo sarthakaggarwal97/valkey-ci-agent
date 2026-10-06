@@ -31,6 +31,9 @@ repos:
           - "src/unit/test_files.h"
     repair_validation_failures: true
     automatic_ci_followup: true
+    # Diagnose Test Failure Detector issues and open verified fix PRs
+    # (ci-fix-issues.yml). Uses ci_followup_ignored_jobs below too.
+    automatic_issue_followup: true
     ci_followup_ignored_jobs:
       # Only Actions job names are matched. DCO and Codecov reach the PR as check
       # runs owned by their own GitHub Apps, never as jobs of a workflow run, so

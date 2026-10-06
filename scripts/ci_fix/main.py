@@ -1,15 +1,20 @@
-"""Entry point for the ``@valkeyrie-bot fix <ci-link>`` workflow.
+"""Entry point for the ``@valkeyrie-ops fix [<ci-link>]`` workflow.
 
-Driven by ``workflow_dispatch``: a maintainer supplies the PR and failing-run
-URL, and we run the pipeline and post the rendered outcome as a PR comment. It
-also accepts a raw ``issue_comment`` event payload (``--event-path``) so a
-future target-repo wrapper can forward a comment event here without changing
-this entry point.
+Three steps connected by a state file:
 
-When the input is not an actionable fix command, we exit silently (rc 0). The
-pipeline itself never raises for a refusal - it returns a ``FixOutcome`` we
-always turn into a comment - so the only error path here is an unexpected
-internal failure, which we surface both as a comment and a non-zero exit code.
+- ``gate`` authorizes the commenter and binds the run to the PR head. No AI or
+  PR code runs yet. It records the request with an "interrupted" outcome, so a
+  later step killed by a timeout still leaves something to report, and tells
+  the workflow whether publication may push (a bot-owned ``agent/...`` branch)
+  or only comment (any other PR), so the workflow mints a token no wider.
+- ``prepare`` runs the engine with read-only credentials.
+- ``publish`` receives the token the gate's decision allowed. It pushes to the
+  bot-owned PR branch or posts the fix as a suggestion, then comments the
+  outcome and reacts to the command.
+
+``gate`` takes the command pieces from ``workflow_dispatch`` inputs, or a raw
+``issue_comment`` event payload (``--event-path``). When the input is not an
+actionable fix command it records nothing and exits 0.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -27,14 +33,14 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.ci_fix.comment import render_comment
-from scripts.ci_fix.gate import ParsedCommand, parse_command
-from scripts.ci_fix.models import FixOutcome, OutcomeKind
-from scripts.ci_fix.pipeline import run_ci_fix
+from scripts.ci_fix.gate import GateRejection, ParsedCommand, build_fix_request, parse_command, parse_run_url
+from scripts.ci_fix.models import FixOutcome, OutcomeKind, outcome_from_dict, request_from_dict, to_dict
+from scripts.ci_fix.pipeline import run_ci_fix_request
+from scripts.ci_fix.publish import pr_head_check, publish_to_pr, read_state, write_state
 from scripts.ci_fix.review import DEFAULT_VERIFY_RUNS
-from scripts.ci_fix.verify.macos import MacosVerifier
+from scripts.ci_fix.verify.macos import macos_verifier_from_env
 from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
-from scripts.common.identity import BOT_LOGIN
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import env_int
 from scripts.common.workflow_artifacts import ArtifactClient
@@ -47,12 +53,12 @@ logger = logging.getLogger(__name__)
 _AUTH_ORG = os.environ.get("CI_FIX_AUTH_ORG", "valkey-io")
 _AUTH_TEAM = os.environ.get("CI_FIX_AUTH_TEAM", "contributors")
 
-# The agent repo hosting the verify-macos workflow, and the ref to dispatch it
-# on. When unset, macOS verification is unavailable and macOS failures refuse.
-_MACOS_AGENT_REPO = os.environ.get("CI_FIX_MACOS_AGENT_REPO", "")
-_MACOS_AGENT_REF = os.environ.get("CI_FIX_MACOS_AGENT_REF", "main")
-_MACOS_TOKEN = os.environ.get("CI_FIX_MACOS_TOKEN", "")
 _MAX_VERIFY_RUNS = 10
+
+_INTERRUPTED = FixOutcome(
+    kind=OutcomeKind.FAILED,
+    summary="The run stopped before it finished; see the bot run logs for details.",
+)
 
 
 def _verify_runs() -> int:
@@ -67,88 +73,146 @@ def _verify_runs() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--event-path", default=os.environ.get("GITHUB_EVENT_PATH", ""),
-                        help="Path to the issue_comment event JSON")
-    parser.add_argument("--target-token", default=os.environ.get("TARGET_TOKEN", ""),
-                        help="GitHub App installation token")
+    sub = parser.add_subparsers(dest="step", required=True)
+
+    gate = sub.add_parser("gate", help="Authorize and bind the request; no AI runs")
+    gate.add_argument("--event-path", default="", help="Path to an issue_comment event JSON")
     # Dispatch mode: supply the command pieces directly instead of an event.
-    # Used by the workflow_dispatch entry for manual/fork testing.
-    parser.add_argument("--repo", default="", help="PR repository (owner/name)")
-    parser.add_argument("--pr", type=int, default=0, help="PR number")
-    parser.add_argument("--run-url", default="", help="Failing CI run URL")
-    parser.add_argument("--commenter", default="", help="Requesting user login")
-    parser.add_argument("--hint", default="", help="Optional diagnosis hint")
-    parser.add_argument("--comment-id", type=int, default=env_int("CI_FIX_COMMENT_ID", 0, minimum=0),
-                        help="Triggering comment id, reacted to with the outcome")
+    gate.add_argument("--repo", default="", help="PR repository (owner/name)")
+    gate.add_argument("--pr", type=int, default=0, help="PR number")
+    gate.add_argument("--run-url", default="", help="Failing CI run URL (optional)")
+    gate.add_argument("--commenter", default="", help="Requesting user login")
+    gate.add_argument("--hint", default="", help="Optional diagnosis hint")
+    gate.add_argument("--comment-id", type=int, default=0,
+                      help="Triggering comment id, reacted to with the outcome")
+
+    sub.add_parser("prepare", help="Diagnose and verify the gated request with read-only credentials")
+
+    publish = sub.add_parser("publish", help="Publish the prepared decision with a write token")
+    publish.add_argument("--publication", required=True, choices=_GATE_PUBLICATIONS,
+                         help="The gate step's publication output")
+
+    for step in sub.choices.values():
+        step.add_argument("--state", required=True, help="Path of the handoff state file")
+        step.add_argument("--target-token", default=os.environ.get("TARGET_TOKEN", ""),
+                          help="GitHub App installation token for this step")
     args = parser.parse_args(argv)
 
     configure_logging()
-
     if not args.target_token:
         parser.error("--target-token/TARGET_TOKEN is required")
+    if args.step == "gate":
+        return _gate(args)
+    if args.step == "prepare":
+        return _prepare(args.state, args.target_token)
+    return _publish(args.state, args.target_token, args.publication)
 
-    request = _request_from_dispatch(args) if args.run_url else _request_from_event(args)
+
+# What the gate step reports to the workflow. The workflow mints a push-capable
+# token only for "push", decided here before any AI or PR code runs, so nothing
+# a later step does can widen the token it publishes with.
+_GATE_PUBLICATIONS = ("push", "suggest", "none")
+
+
+def _gate(args: argparse.Namespace) -> int:
+    request = _request_from_dispatch(args) if (args.repo or args.run_url) else _request_from_event(args)
     if request is None:
         logger.info("No actionable fix command; nothing to do.")
+        _set_outputs(publication="none", execute="false")
         return 0
-
     repo_full_name, pr_number, commenter, command, comment_id = request
-    return _run_and_comment(
-        args.target_token, repo_full_name, pr_number, commenter, command, comment_id,
-    )
-
-
-def _run_and_comment(
-    token: str,
-    repo_full_name: str,
-    pr_number: int,
-    commenter: str,
-    command: ParsedCommand,
-    comment_id: int = 0,
-) -> int:
-    gh = Github(auth=Auth.Token(token))
-    artifact_client = ArtifactClient(gh, token=token)
-    macos_verifier = None
-    if _MACOS_AGENT_REPO and _MACOS_TOKEN:
-        # Dispatching the verify-macos workflow needs actions:write on the agent
-        # repo, which the target (valkey-scoped) token does not carry; use the
-        # dedicated agent-repo token for that client.
-        agent_gh = Github(auth=Auth.Token(_MACOS_TOKEN))
-        macos_verifier = MacosVerifier(
-            agent_gh, agent_repo_full_name=_MACOS_AGENT_REPO, ref=_MACOS_AGENT_REF,
-            artifact_client=ArtifactClient(agent_gh, token=_MACOS_TOKEN),
-        )
+    context = {"repo": repo_full_name, "pr": pr_number, "comment_id": comment_id}
+    gh = Github(auth=Auth.Token(args.target_token))
     try:
-        with GitAuth(token=token) as auth:
-            outcome = run_ci_fix(
-                gh,
-                command=command,
-                pr_repo_full_name=repo_full_name,
-                pr_number=pr_number,
-                commenter=commenter,
-                git_env=auth.env(),
-                artifact_client=artifact_client,
-                org=_AUTH_ORG,
-                auth_team=_AUTH_TEAM,
-                verify_runs=_verify_runs(),
-                macos_verifier=macos_verifier,
-            )
-    except Exception:  # noqa: BLE001 - never crash without telling the PR
+        gated = build_fix_request(
+            gh, command=command, pr_repo_full_name=repo_full_name, pr_number=pr_number,
+            commenter=commenter, org=_AUTH_ORG, auth_team=_AUTH_TEAM,
+        )
+    except Exception:  # noqa: BLE001 - never stop without telling the PR
+        logger.exception("ci_fix gate raised unexpectedly")
+        gated = GateRejection("An internal error stopped the run; see the bot run logs for details.")
+    if isinstance(gated, GateRejection):
+        refused = FixOutcome(kind=OutcomeKind.REFUSED, summary=gated.reason)
+        write_state(args.state, {"context": context, "request": None, "outcome": to_dict(refused)})
+        _set_outputs(publication="none", execute="false")
+        return 0
+    write_state(args.state, {"context": context, "request": to_dict(gated), "outcome": to_dict(_INTERRUPTED)})
+    _set_outputs(publication=gated.publication.value, execute=str(gated.execute).lower())
+    return 0
+
+
+def _prepare(state_path: str, token: str) -> int:
+    state = read_state(state_path)
+    if state is None or not state.get("request"):
+        logger.info("Nothing gated for preparation.")
+        return 0
+    request = request_from_dict(state["request"])
+    gh = Github(auth=Auth.Token(token))
+    try:
+        outcome = run_ci_fix_request(
+            gh,
+            request=request,
+            artifact_client=ArtifactClient(gh, token=token),
+            verify_runs=_verify_runs(),
+            macos_verifier=macos_verifier_from_env(),
+        )
+    except Exception:  # noqa: BLE001 - never stop without telling the PR
         logger.exception("ci_fix pipeline raised unexpectedly")
         outcome = FixOutcome(
             kind=OutcomeKind.FAILED,
             summary="An internal error stopped the run; see the bot run logs for details.",
         )
+    write_state(state_path, {**state, "outcome": to_dict(outcome)})
+    logger.info("ci_fix decision: %s - %s", outcome.kind.value, outcome.summary)
+    return 0
+
+
+def _publish(state_path: str, token: str, gate_publication: str) -> int:
+    state = read_state(state_path)
+    if state is None:
+        logger.info("No prepared decision; nothing to publish.")
+        return 0
+    context: dict[str, Any] = state["context"]
+    repo_full_name = str(context["repo"])
+    pr_number = int(context["pr"])
+    outcome = outcome_from_dict(state["outcome"])
+    gh = Github(auth=Auth.Token(token))
+    if state.get("request") and outcome.kind is OutcomeKind.READY:
+        request = request_from_dict(state["request"])
+        try:
+            if request.publication.value != gate_publication:
+                raise RuntimeError("the prepared decision does not match the gate step")
+            with GitAuth(token=token) as auth:
+                outcome = publish_to_pr(
+                    outcome, request, git_env=auth.env(), pre_push_check=pr_head_check(gh, request),
+                )
+        except Exception:  # noqa: BLE001 - the PR must still hear about it
+            logger.exception("ci_fix publication raised unexpectedly")
+            outcome = FixOutcome(
+                kind=OutcomeKind.FAILED,
+                summary="An internal error stopped publication; see the bot run logs for details.",
+                proposal=outcome.proposal, failing_run_url=outcome.failing_run_url,
+            )
     try:
         _post_comment(gh, repo_full_name, pr_number, render_comment(outcome))
     except Exception:  # noqa: BLE001 - a failed comment must not mask the outcome
         logger.exception("Failed to post outcome comment on #%s", pr_number)
-    _react_outcome(gh, repo_full_name, comment_id, outcome.kind)
+    _react_outcome(gh, repo_full_name, int(context.get("comment_id") or 0), outcome.kind)
     level = {OutcomeKind.FAILED: logging.ERROR, OutcomeKind.PUSHED: logging.INFO}.get(
         outcome.kind, logging.WARNING)
     log_outcome(logger, level, "CI fix for %s#%s %s: %s", repo_full_name, pr_number,
                 outcome.kind.value, " ".join(outcome.summary.split()))
     return 1 if outcome.kind is OutcomeKind.FAILED else 0
+
+
+def _set_outputs(**outputs: str) -> None:
+    """Write step outputs for the workflow (no-op outside GitHub Actions)."""
+    path = os.environ.get("GITHUB_OUTPUT", "")
+    if not path:
+        return
+    with open(path, "a", encoding="utf-8") as handle:
+        for key, value in outputs.items():
+            handle.write(f"{key}={value}\n")
 
 
 def _request_from_event(args: argparse.Namespace) -> tuple[str, int, str, ParsedCommand, int] | None:
@@ -168,9 +232,13 @@ def _request_from_event(args: argparse.Namespace) -> tuple[str, int, str, Parsed
 def _request_from_dispatch(args: argparse.Namespace) -> tuple[str, int, str, ParsedCommand, int] | None:
     if not (args.repo and args.pr and args.commenter):
         return None
-    command = parse_command(f"@{BOT_LOGIN} fix {args.run_url} {args.hint}".strip())
-    if command is None:
-        return None
+    if args.run_url:
+        command = parse_run_url(args.run_url)
+        if command is None:
+            return None
+        command = ParsedCommand(command.run_owner, command.run_repo, command.run_id, args.hint.strip(), command.job_id)
+    else:
+        command = ParsedCommand("", "", 0, args.hint.strip())
     return args.repo, args.pr, args.commenter, command, args.comment_id
 
 
@@ -205,11 +273,11 @@ def _post_comment(gh: Github, repo_full_name: str, pr_number: int, body: str) ->
 
 # Reaction added to the triggering comment once the run is done, on top of the
 # poller's "eyes" claim marker, so the comment shows the verdict at a glance:
-# "+1" when a fix was pushed, "-1" for any non-push outcome (refused, handoff,
-# or internal failure). The eyes marker is left in place - it is the poller's
-# idempotency claim, not a progress indicator.
+# "+1" when a fix was pushed or a verified fix was posted, "-1" for anything
+# else. The eyes marker is left in place - it is the poller's idempotency claim.
 _OUTCOME_REACTIONS: dict[OutcomeKind, str] = {
     OutcomeKind.PUSHED: "+1",
+    OutcomeKind.SUGGESTED: "+1",
     OutcomeKind.REFUSED: "-1",
     OutcomeKind.HANDOFF: "-1",
     OutcomeKind.FAILED: "-1",
@@ -231,7 +299,7 @@ def _react_outcome(gh: Github, repo_full_name: str, comment_id: int, kind: Outco
 
     def _react() -> None:
         # A new OutcomeKind without a mapping falls back to "-1": any outcome we
-        # did not explicitly mark as pushed is a non-success. The whole body -
+        # did not explicitly mark as a success is a non-success. The whole body -
         # including the repo/requester lookup - is inside the guarded call so a
         # transient API error here can never escape into the run's exit code.
         content = _OUTCOME_REACTIONS.get(kind, "-1")

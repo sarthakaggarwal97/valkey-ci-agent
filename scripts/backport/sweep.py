@@ -56,6 +56,7 @@ from scripts.backport.sweep_validation import (
     run_test_commands,
     validate_branch_with_optional_repair,
 )
+from scripts.common.atomic_json import write_json_atomic
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import (
@@ -883,8 +884,6 @@ def _record_sweep_error(result: BranchSweepResult, exc: Exception) -> None:
 
 def write_prepared_sweep(path: str, prepared: PreparedBranchSweep) -> None:
     """Atomically persist the small, token-free publication handoff."""
-    state_path = Path(path)
-    state_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": 1,
         "identity": {
@@ -901,21 +900,7 @@ def write_prepared_sweep(path: str, prepared: PreparedBranchSweep) -> None:
         "candidates_found": prepared.result.candidates_found,
         "results": [_result_to_dict(item) for item in prepared.result.results],
     }
-    fd, temporary = tempfile.mkstemp(
-        dir=state_path.parent,
-        prefix=f".{state_path.name}.",
-        suffix=".tmp",
-        text=True,
-    )
-    temporary_path = Path(temporary)
-    try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, sort_keys=True)
-            handle.write("\n")
-        os.replace(temporary_path, state_path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
+    write_json_atomic(path, payload)
 
 
 def load_prepared_sweep(

@@ -67,7 +67,7 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.has_entries == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.preflight.outputs.matrix) }}
@@ -94,26 +94,24 @@ jobs:
         with:
           install-claude: "true"
 
-      - name: Generate target repository token
-        id: target-token
+      - name: Configure runtime paths
+        shell: bash
+        run: echo "FOLLOWUP_STATE_FILE=${RUNNER_TEMP}/backport-ci-followup/state.json" >> "${GITHUB_ENV}"
+
+      - name: Generate preparation token
+        id: prepare-token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: ${{ matrix.repo_owner }}
           repositories: ${{ matrix.repo_name }}
-          # Same scopes as ci-fix.yml minus members:read, because this caller
-          # replaces the human-team gate with a machine gate on the bot-owned
-          # sweep PR. contents:write + workflows:write to push the fix: a
-          # release-branch CI fix is often a workflow-file change, and the port
-          # path cherry-picks an upstream commit that may touch one, so a push
-          # without workflows:write is rejected outright. pull-requests:write +
-          # issues:write to comment (the PR comment uses the Issues comments
-          # API); actions:read for run logs.
+          # Read access to runs, logs and the PR; issues:write only to post
+          # the claim comment before the engine runs, so even a lost runner
+          # leaves the attempt recorded. Nothing here can push.
           permission-actions: read
-          permission-contents: write
-          permission-workflows: write
-          permission-pull-requests: write
+          permission-contents: read
+          permission-pull-requests: read
           permission-issues: write
           permission-metadata: read
 
@@ -134,12 +132,15 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: backport-ci-followup-${{ github.run_id }}-${{ matrix.branch }}
           aws-region: ${{ env.AWS_REGION }}
+          role-duration-seconds: 7200
 
-      - name: Follow up on current-head CI
+      - name: Prepare follow-up
+        # Shorter than the job timeout so publication still records the attempt.
+        timeout-minutes: 100
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
-          AUTO_CI_FOLLOWUP_BOT_LOGIN: ${{ steps.target-token.outputs.app-slug }}[bot]
+          TARGET_TOKEN: ${{ steps.prepare-token.outputs.token }}
+          AUTO_CI_FOLLOWUP_BOT_LOGIN: ${{ steps.prepare-token.outputs.app-slug }}[bot]
           CI_FIX_MACOS_AGENT_REPO: valkey-io/valkey-ci-agent
           CI_FIX_MACOS_AGENT_REF: main
           CI_FIX_MACOS_TOKEN: ${{ steps.agent-token.outputs.token }}
@@ -152,7 +153,57 @@ jobs:
             --registry repos.yml \
             --repo "${TARGET_REPO}" \
             --branch "${TARGET_BRANCH}" \
+            --prepare-state "${FOLLOWUP_STATE_FILE}" \
             --verbose | tee backport-ci-followup-result.json
+
+      - name: Check for a prepared decision
+        id: prepared
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          [[ -f "${FOLLOWUP_STATE_FILE}" ]] && publish=true || publish=false
+          echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate publication token
+        id: publish-token
+        if: ${{ !cancelled() && steps.prepared.outputs.publish == 'true' }}
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ matrix.repo_owner }}
+          repositories: ${{ matrix.repo_name }}
+          # contents:write + workflows:write to push the fix: a release-branch
+          # CI fix is often a workflow-file change, and the port path
+          # cherry-picks an upstream commit that may touch one. issues:write +
+          # pull-requests:write to post the outcome comment.
+          permission-contents: write
+          permission-workflows: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-metadata: read
+
+      - name: Publish follow-up
+        if: ${{ !cancelled() && steps.prepared.outputs.publish == 'true' }}
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.publish-token.outputs.token }}
+          AUTO_CI_FOLLOWUP_BOT_LOGIN: ${{ steps.publish-token.outputs.app-slug }}[bot]
+          TARGET_REPO: ${{ matrix.repo }}
+          TARGET_BRANCH: ${{ matrix.branch }}
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.ci_followup \
+            --registry repos.yml \
+            --repo "${TARGET_REPO}" \
+            --branch "${TARGET_BRANCH}" \
+            --publish-state "${FOLLOWUP_STATE_FILE}" \
+            --verbose | tee backport-ci-followup-result.json
+
+      - name: Clean up prepared state
+        if: always()
+        shell: bash
+        run: rm -rf -- "${RUNNER_TEMP}/backport-ci-followup"
 
       - name: Upload result
         if: always()

@@ -25,6 +25,7 @@ AgentProfileName = Literal[
     "validation_repair_edit_only",
     "fuzzer_analysis_readonly",
     "ci_fix_diagnose_readonly",
+    "ci_fix_apply_edit_only",
     "release_notes_review_edit_only",
 ]
 
@@ -43,6 +44,9 @@ class AgentProfile:
     failure_policy: str = "fail-closed"
     disallowed_tools: str = ""
     env_allowlist: tuple[str, ...] = DEFAULT_CLAUDE_ENV_ALLOWLIST
+    # Keep the CLI's working-directory boundary (see claude_code.run_claude_code).
+    # Every profile whose prompt or files can carry fork or log content is confined.
+    confined: bool = False
 
 
 @dataclass(frozen=True)
@@ -103,12 +107,24 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
     ),
     "ci_fix_diagnose_readonly": AgentProfile(
         name="ci_fix_diagnose_readonly",
-        allowed_tools="Read,Grep,Glob",
+        allowed_tools="Read,Grep",
         timeout=3600,
         effort="high",
         max_turns=200,
         writes_allowed=False,
         output_schema="text",
+        confined=True,
+    ),
+    "ci_fix_apply_edit_only": AgentProfile(
+        name="ci_fix_apply_edit_only",
+        allowed_tools="Read,Edit,MultiEdit,Grep",
+        timeout=1800,
+        effort="max",
+        max_turns=160,
+        writes_allowed=True,
+        output_schema="edited-files",
+        disallowed_tools="Bash,Write",
+        confined=True,
     ),
     "release_notes_review_edit_only": AgentProfile(
         name="release_notes_review_edit_only",
@@ -135,10 +151,12 @@ def run_agent(
     timeout: int | None = None,
     model: str | None = None,
     evidence_dir: str | Path | None = None,
+    extra_dirs: tuple[str, ...] = (),
 ) -> AgentRunResult:
     """Run Claude Code under a named capability profile.
 
     The profile controls tool permissions, timeout, effort, and audit labels.
+    ``extra_dirs`` are directories besides ``cwd`` a confined profile may read.
     Optional evidence is written after the process exits so generated files in
     the working tree cannot influence the prompt that just ran.
     """
@@ -158,6 +176,8 @@ def run_agent(
         allowed_tools=profile.allowed_tools,
         disallowed_tools=profile.disallowed_tools,
         env_allowlist=profile.env_allowlist,
+        confined=profile.confined,
+        extra_dirs=extra_dirs,
     )
     finished_at = datetime.now(timezone.utc).isoformat()
     result = AgentRunResult(

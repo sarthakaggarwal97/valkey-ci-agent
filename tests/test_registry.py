@@ -410,3 +410,22 @@ class TestValidation:
         path = _write_registry(tmp_path, data)
         with pytest.raises(ValueError, match="non-empty list"):
             load_registry(path)
+
+
+def test_automatic_issue_followup_defaults_off_and_must_be_boolean(tmp_path):
+    import pytest as _pytest
+
+    from scripts.backport.registry import load_registry as _load
+
+    base = (
+        "repos:\n  - repo: o/r\n    project_owner: o\n    language: c\n"
+        "    branches:\n      - branch: '1.0'\n        project_number: 1\n"
+    )
+    path = tmp_path / "repos.yml"
+    path.write_text(base)
+    assert _load(str(path)).get_repo("o/r").automatic_issue_followup is False
+    path.write_text(base + "    automatic_issue_followup: true\n")
+    assert _load(str(path)).get_repo("o/r").automatic_issue_followup is True
+    path.write_text(base + "    automatic_issue_followup: 'yes'\n")
+    with _pytest.raises(ValueError, match="automatic_issue_followup must be a boolean"):
+        _load(str(path))

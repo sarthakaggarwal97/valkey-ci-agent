@@ -6,7 +6,7 @@ import logging
 import random
 import time
 from collections.abc import Callable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from github.GithubException import GithubException
 
@@ -90,3 +90,29 @@ def retry_github_call(
             )
             time.sleep(wait_seconds)
     raise RuntimeError("unreachable: retry loop exited without returning or raising")
+
+
+def replace_or_post_comment(
+    get_comment: Callable[[int], Any],
+    post_comment: Callable[[str], Any],
+    comment_id: object,
+    body: str,
+    *,
+    description: str,
+) -> Any:
+    """Edit the comment ``comment_id`` to ``body``, or post ``body`` if it is gone.
+
+    Used to turn a claim comment into its result. Only a missing comment (404)
+    falls back to a new one; any other error is raised rather than hidden
+    behind a duplicate comment. Returns the comment that now holds ``body``,
+    so a caller that records again edits that one instead of posting another.
+    """
+    if isinstance(comment_id, int) and comment_id:
+        try:
+            comment = retry_github_call(lambda: get_comment(comment_id), retries=2, description=description)
+            retry_github_call(lambda: comment.edit(body), retries=3, description=description)
+            return comment
+        except GithubException as exc:
+            if exc.status != 404:
+                raise
+    return retry_github_call(lambda: post_comment(body), retries=3, description=description)
