@@ -19,8 +19,9 @@ from dataclasses import dataclass, replace
 from typing import Any, Optional, Sequence
 
 from scripts.common.git_auth import github_https_url
+from scripts.common.identity import BOT_EMAIL, BOT_NAME
 from scripts.common.logging_utils import log_outcome
-from scripts.common.proc import BOT_EMAIL, BOT_NAME, git_output, run_git
+from scripts.common.proc import git_output, run_git
 from scripts.release_notes import contributors as gc
 from scripts.release_notes import pipeline as pipeline_mod
 from scripts.release_notes import projects as projects_mod
@@ -1393,7 +1394,7 @@ def _build_pr_body(
         + _notes_range_body_section(notes_meta.notes_range, regen)
         + _rc_warning_section(plan)
         + _baseline_warning_section(notes_meta, version)
-        + _empty_notes_section(notes_meta, plan, profile)
+        + _empty_notes_section(notes_meta, profile)
         + _no_new_prs_section(notes_meta, plan, profile)
         + _duplicate_pr_section(regen.duplicate_prs)
         + _skipped_section(regen.skipped)
@@ -1506,7 +1507,8 @@ def _baseline_warning_section(notes_meta: "_NotesMeta", version: str) -> str:
 
 
 def _empty_notes_section(
-    notes_meta: "_NotesMeta", plan: BranchPlan, profile: projects_mod.ProjectProfile
+    notes_meta: "_NotesMeta",
+    profile: projects_mod.ProjectProfile,
 ) -> str:
     """Explain an empty dated section, keyed on the cause.
 

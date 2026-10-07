@@ -19,13 +19,13 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from scripts.common.github_actions import write_outputs
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging
 from scripts.cve_scan.config import CveScanSettings, load_settings
@@ -84,13 +84,8 @@ def _verification_plan(fixable: list[Classification]) -> str:
 
 def _emit_outputs(plan: str = "[]") -> None:
     """Emit the GitHub Actions verification plan."""
-    github_output = os.environ.get("GITHUB_OUTPUT")
-    if github_output:
-        with open(github_output, "a") as f:
-            f.write(f"plan={plan}\n")
+    if write_outputs({"plan": plan}, print_if_unset=True):
         logger.info("Wrote %d plan leg(s) to GITHUB_OUTPUT", len(json.loads(plan)))
-    else:
-        print(f"plan={plan}")
 
 
 def _print_dry_run(

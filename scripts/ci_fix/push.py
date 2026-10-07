@@ -30,7 +30,8 @@ from scripts.ci_fix.models import FixProposal
 from scripts.ci_fix.port_discovery import resolve_default_branch
 from scripts.common.git_auth import github_https_url
 from scripts.common.git_clone import REPO_RE, SHA_RE
-from scripts.common.proc import BOT_EMAIL, BOT_NAME, EmptyPatch, build_approved_patch, git_output, run_git
+from scripts.common.identity import BOT_EMAIL, BOT_NAME
+from scripts.common.proc import EmptyPatch, build_approved_patch, git_output, run_git
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,6 @@ def commit_and_push_fix(
 
 
 def commit_and_push_port(
-    repo_dir: str,
     *,
     head_repo_full_name: str,
     head_branch: str,

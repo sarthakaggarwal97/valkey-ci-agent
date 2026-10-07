@@ -20,6 +20,7 @@ from typing import Any
 from github import Auth, Github
 from github.GithubException import GithubException
 
+from scripts.common.github_actions import write_outputs
 from scripts.common.github_client import retry_github_call
 from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import add_poll_loop_args, run_poll_loop_from_args
@@ -68,6 +69,20 @@ class Tracker:
         _validate_tracker(self)
         payload = json.dumps(self.__dict__, sort_keys=True, separators=(",", ":"))
         return f"{_TRACKER_PREFIX}{payload} -->"
+
+
+@dataclass(frozen=True)
+class _StageStatus:
+    badge: str
+    evidence: str
+    action: str
+
+
+@dataclass(frozen=True)
+class _StatusMessage:
+    current: str
+    next_action: str
+    summary: str
 
 
 def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
@@ -426,230 +441,20 @@ def _render_status(
         fallback_url=prep_url,
     )
 
-    notes_status = _status_badge("Waiting", "9a6700")
-    notes_evidence = f"[Preparation branch `{tracker.prep_branch}`]({prep_branch_url})"
-    notes_action = "Wait for the preparation PR."
-    current = "Preparing the release notes."
-    next_action = "Wait for preparation to finish."
-    summary = "preparing notes"
-    pr_link = ""
-    if prepare_run is not None and prepare_run.status == "completed":
-        if prepare_run.conclusion == "success":
-            current = "Release preparation completed and the release-notes PR is pending."
-            next_action = "Wait for the release-notes PR to appear."
-            summary = "preparation completed"
-        else:
-            current = "Release preparation failed."
-            next_action = "Open the Prepare run, fix the failure, and rerun Prepare Release."
-            summary = "preparation failed"
-
-    if pr is not None:
-        pr_link = f"[PR #{pr.number}]({pr.html_url})"
-        notes_evidence = f"{pr_link} · [Preparation branch `{tracker.prep_branch}`]({prep_branch_url})"
-        if getattr(pr, "merged", False):
-            notes_status = _status_badge("Merged", "1a7f37")
-            notes_action = "Complete"
-            current = "The release-notes PR is merged and the candidate is fixed."
-            next_action = "Wait for exact-candidate qualification."
-            summary = "notes PR merged"
-        elif pr.state == "closed":
-            notes_status = _status_badge("Closed", "cf222e")
-            notes_action = "Rerun Prepare Release."
-            current = "The release-notes PR closed without merging."
-            next_action = notes_action
-            summary = "notes PR closed"
-        elif getattr(pr, "draft", False):
-            notes_status = _status_badge("Review needed", "9a6700")
-            notes_action = "Review, mark ready, and merge the PR."
-            current = "The release-notes PR is waiting for maintainer review."
-            next_action = notes_action
-            summary = "notes PR held"
-        else:
-            notes_status = _status_badge("Ready for review", "0969da")
-            notes_action = "Review and merge the PR."
-            current = "The release-notes PR is ready for review."
-            next_action = notes_action
-            summary = "waiting for notes PR merge"
-
-    candidate_status = _status_badge("Not started", "57606a")
-    candidate_evidence = "Candidate not established"
-    candidate_action = "Merge the canonical release-notes PR."
-    if candidate_sha:
-        candidate_url = f"{repo_url}/commit/{candidate_sha}"
-        candidate_evidence = f"[Candidate `{candidate_sha[:12]}`]({candidate_url})"
-        if branch_head != candidate_sha:
-            candidate_status = _status_badge("Blocked", "cf222e")
-            candidate_action = "Rerun Prepare Release for the new branch head."
-            current = "The release branch moved after the candidate was reviewed."
-            next_action = candidate_action
-            summary = "candidate invalidated by branch movement"
-        elif candidate_ci is None or candidate_ci.state == "missing":
-            candidate_status = _status_badge("Not available", "9a6700")
-            candidate_action = "Advisory only; qualification can continue."
-        elif candidate_ci.state == "unavailable":
-            candidate_status = _status_badge("Unavailable", "9a6700")
-            candidate_action = "Advisory only; inspect progress logs if this persists."
-        else:
-            ci_run_id = candidate_ci.workflow_url.rstrip("/").rsplit("/", 1)[-1]
-            ci_link = (
-                f"[Candidate CI run {ci_run_id}]({candidate_ci.workflow_url})"
-                if candidate_ci.workflow_url
-                else "Candidate CI run not found"
-            )
-            candidate_evidence += (
-                f" · {ci_link} · {candidate_ci.passed_count} of {len(candidate_ci.checks)} configured checks passed"
-            )
-            if candidate_ci.state == "passed":
-                candidate_status = _status_badge("Passed", "1a7f37")
-                candidate_action = "Complete"
-            elif candidate_ci.state == "running":
-                candidate_status = _status_badge("Running", "0969da")
-                pending = ", ".join(check.name for check in candidate_ci.checks if not check.passed)
-                candidate_action = (
-                    f"Advisory only; still running: {pending}."
-                    if pending
-                    else "Advisory only; qualification can continue."
-                )
-            else:
-                candidate_status = _status_badge("Failed", "cf222e")
-                failed_checks = ", ".join(check.name for check in candidate_ci.checks if not check.passed)
-                candidate_action = (
-                    f"Advisory only; inspect if unexpected: {failed_checks}."
-                    if failed_checks
-                    else "Advisory only; inspect if unexpected."
-                )
-
-    qualification_status = _status_badge("Not started", "57606a")
-    qualification_evidence = "No Publish run"
-    qualification_action = "Wait for exact-candidate qualification."
-    approval_status = _status_badge("Not ready", "57606a")
-    approval_evidence = "Qualification has not passed"
-    approval_action = "No action yet."
-    if dispatched:
-        qualification_status = _status_badge("Starting", "0969da")
-        qualification_evidence = "Publish workflow dispatched"
-        qualification_action = "Wait for the run to appear."
-        current = "Qualification is starting."
-        next_action = qualification_action
-        summary = "publication dispatched"
-    elif publish_run is not None:
-        publish_link = f"[Publish run {publish_run.id}]({publish_run.html_url})"
-        qualification_evidence = publish_link
-        if publish_run.status == "completed" and publish_run.conclusion == "success":
-            qualification_status = _status_badge("Passed", "1a7f37")
-            qualification_action = "Complete"
-            approval_status = _status_badge("Approved", "1a7f37")
-            approval_evidence = publish_link
-            approval_action = "Complete"
-            current = "Qualification and protected publication completed."
-            next_action = "Wait for production automation."
-            summary = "publication completed"
-        elif publish_run.status == "completed":
-            qualification_status = _status_badge("Failed", "cf222e")
-            qualification_action = "Inspect and rerun the Publish workflow."
-            approval_status = _status_badge("Not reached", "57606a")
-            approval_evidence = publish_link
-            approval_action = "Fix the failed Publish run first."
-            current = "The Publish workflow failed."
-            next_action = qualification_action
-            summary = "publication failed"
-        elif publish_run.status in {"waiting", "pending"}:
-            qualification_status = _status_badge("Passed", "1a7f37")
-            qualification_action = "Complete"
-            approval_status = _status_badge("Waiting for approval", "8250df")
-            approval_evidence = publish_link
-            approval_action = "Review the plan, then approve the `release` environment."
-            current = "Qualification passed and release approval is required."
-            next_action = approval_action
-            summary = "waiting for release approval"
-        else:
-            qualification_status = _status_badge("Running", "0969da")
-            qualification_action = "Wait for exact-candidate qualification."
-            approval_status = _status_badge("Not ready", "57606a")
-            approval_evidence = publish_link
-            approval_action = "No action until qualification passes."
-            current = "Exact-candidate qualification is running."
-            next_action = qualification_action
-            summary = "validating and qualifying"
-
-    release_status = _status_badge("Not published", "57606a")
-    release_evidence = "No GitHub release"
-    release_action = "Complete qualification and release approval."
-    if release is not None:
-        # A release the controller published PROVES both stages, because
-        # publication is gated on qualification and on the protected
-        # `release` approval, and `_find_release` has already checked that
-        # the tag resolves to this exact candidate. Anchoring the rows on the
-        # release rather than on the run's conclusion keeps them right when
-        # onboard-backports failed after the release existed, when a rerun
-        # relisted the run under a later attempt, or when no run was found at
-        # all. The controller publishes through its app, so a release
-        # authored by a person was created out of band and needs a human,
-        # not a green badge.
-        release_link = f"[GitHub release {tracker.tag}]({release.html_url})"
-        author = getattr(release, "author", None)
-        if getattr(author, "type", "") == "Bot":
-            history = (
-                f"[Publish run {publish_run.id}]({publish_run.html_url})" if publish_run is not None else release_link
-            )
-            qualification_status = _status_badge("Passed", "1a7f37")
-            qualification_evidence = history
-            qualification_action = "Complete"
-            approval_status = _status_badge("Approved", "1a7f37")
-            approval_evidence = history
-            approval_action = "Complete"
-        else:
-            login = getattr(author, "login", None) or "an unknown author"
-            qualification_status = _status_badge("Unverified", "9a6700")
-            qualification_evidence = f"Released by {login}, not by the controller"
-            qualification_action = "Confirm how the release was created."
-            approval_status = qualification_status
-            approval_evidence = qualification_evidence
-            approval_action = qualification_action
-        release_status = _status_badge("Published", "1a7f37")
-        release_evidence = f"{release_link}{_stamp(getattr(release, 'published_at', None), 'published')}"
-        release_action = "Complete"
-        current = "The GitHub release is published."
-        next_action = "Wait for production automation and its protected approval."
-        summary = "release published"
-
-    production_status = _status_badge("Not started", "57606a")
-    production_evidence = "No production run"
-    production_action = "Wait for the GitHub release event."
-    follow_up_status = _status_badge("Not started", "57606a")
-    follow_up_evidence = "Downstream work has not completed"
-    follow_up_action = "No action yet."
-    if production_run is not None:
-        production_link = f"[Production run {production_run.id}]({production_run.html_url})"
-        production_evidence = production_link
-        follow_up_evidence = f"{production_link}<br>**Manual follow-up:** {_downstream_links(tracker)}"
-        if production_run.status == "completed" and production_run.conclusion == "success":
-            production_status = _status_badge("Passed", "1a7f37")
-            production_evidence = f"{production_link}{_stamp(getattr(production_run, 'updated_at', None), 'finished')}"
-            production_action = "Complete"
-            follow_up_status = _status_badge("Release owner review", "8250df")
-            follow_up_action = _FOLLOW_UP_ACTION
-            current = "Production automation completed."
-            next_action = follow_up_action
-            summary = "production automation completed"
-        elif production_run.status == "completed":
-            production_status = _status_badge("Failed", "cf222e")
-            production_action = "Inspect and rerun the failed production workflow."
-            current = "Production automation failed."
-            next_action = production_action
-            summary = "production automation failed"
-        elif production_run.status in {"waiting", "pending"}:
-            production_status = _status_badge("Waiting for approval", "8250df")
-            production_action = "Approve the `release-publish` environment."
-            current = "Production approval is required."
-            next_action = production_action
-            summary = "waiting for production approval"
-        else:
-            production_status = _status_badge("Running", "0969da")
-            production_action = "Wait for production automation."
-            current = "Production automation is running."
-            next_action = production_action
-            summary = "production automation running"
+    notes, message = _notes_status(tracker, prepare_run, pr, prep_branch_url)
+    candidate, candidate_message = _candidate_status(repo_url, branch_head, candidate_sha, candidate_ci)
+    qualification, approval, qualification_message = _qualification_status(publish_run, dispatched)
+    qualification, approval, publication, publication_message = _publication_status(
+        tracker,
+        release,
+        publish_run,
+        qualification,
+        approval,
+    )
+    production, follow_up, production_message = _production_status(tracker, production_run)
+    for update in (candidate_message, qualification_message, publication_message, production_message):
+        if update is not None:
+            message = update
 
     refreshed = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     phase, failed = _presentation_state(
@@ -662,17 +467,17 @@ def _render_status(
         production_run=production_run,
         dispatched=dispatched,
     )
-    callout = "CAUTION" if failed else ("IMPORTANT" if "approval" in summary else "NOTE")
+    callout = "CAUTION" if failed else ("IMPORTANT" if "approval" in message.summary else "NOTE")
     phase_color = "cf222e" if failed else ("1a7f37" if phase == len(_PHASES) else "0969da")
     rows = (
         ("Prepare", prepare_status, prepare_evidence, "Complete" if prepare_run and prepare_run.conclusion == "success" else "Wait for or rerun Prepare Release."),
-        ("Release notes", notes_status, notes_evidence, notes_action),
-        ("Candidate CI", candidate_status, candidate_evidence, candidate_action),
-        ("Qualification", qualification_status, qualification_evidence, qualification_action),
-        ("Release approval", approval_status, approval_evidence, approval_action),
-        ("Publication", release_status, release_evidence, release_action),
-        ("Production", production_status, production_evidence, production_action),
-        ("Follow-up", follow_up_status, follow_up_evidence, follow_up_action),
+        ("Release notes", notes.badge, notes.evidence, notes.action),
+        ("Candidate CI", candidate.badge, candidate.evidence, candidate.action),
+        ("Qualification", qualification.badge, qualification.evidence, qualification.action),
+        ("Release approval", approval.badge, approval.evidence, approval.action),
+        ("Publication", publication.badge, publication.evidence, publication.action),
+        ("Production", production.badge, production.evidence, production.action),
+        ("Follow-up", follow_up.badge, follow_up.evidence, follow_up.action),
     )
     lines = [
         '<div align="center">',
@@ -684,9 +489,9 @@ def _render_status(
         "</div>",
         "",
         f"> [!{callout}]",
-        f"> **{current}**",
+        f"> **{message.current}**",
         ">",
-        f"> **Next step:** {next_action}",
+        f"> **Next step:** {message.next_action}",
         "",
         "## Live release status",
         "",
@@ -719,7 +524,325 @@ def _render_status(
         "",
         f"<sub>Status last changed {refreshed} · Dashboard only; not release authority.</sub>",
     ))
-    return "\n".join(lines), summary
+    return "\n".join(lines), message.summary
+
+
+def _notes_status(
+    tracker: Tracker,
+    prepare_run: Any | None,
+    pr: Any | None,
+    prep_branch_url: str,
+) -> tuple[_StageStatus, _StatusMessage]:
+    stage = _StageStatus(
+        _status_badge("Waiting", "9a6700"),
+        f"[Preparation branch `{tracker.prep_branch}`]({prep_branch_url})",
+        "Wait for the preparation PR.",
+    )
+    message = _StatusMessage(
+        "Preparing the release notes.",
+        "Wait for preparation to finish.",
+        "preparing notes",
+    )
+    if prepare_run is not None and prepare_run.status == "completed":
+        if prepare_run.conclusion == "success":
+            message = _StatusMessage(
+                "Release preparation completed and the release-notes PR is pending.",
+                "Wait for the release-notes PR to appear.",
+                "preparation completed",
+            )
+        else:
+            message = _StatusMessage(
+                "Release preparation failed.",
+                "Open the Prepare run, fix the failure, and rerun Prepare Release.",
+                "preparation failed",
+            )
+
+    if pr is None:
+        return stage, message
+
+    evidence = f"[PR #{pr.number}]({pr.html_url}) · [Preparation branch `{tracker.prep_branch}`]({prep_branch_url})"
+    if getattr(pr, "merged", False):
+        return (
+            _StageStatus(_status_badge("Merged", "1a7f37"), evidence, "Complete"),
+            _StatusMessage(
+                "The release-notes PR is merged and the candidate is fixed.",
+                "Wait for exact-candidate qualification.",
+                "notes PR merged",
+            ),
+        )
+    if pr.state == "closed":
+        action = "Rerun Prepare Release."
+        return (
+            _StageStatus(_status_badge("Closed", "cf222e"), evidence, action),
+            _StatusMessage("The release-notes PR closed without merging.", action, "notes PR closed"),
+        )
+    if getattr(pr, "draft", False):
+        action = "Review, mark ready, and merge the PR."
+        return (
+            _StageStatus(_status_badge("Review needed", "9a6700"), evidence, action),
+            _StatusMessage("The release-notes PR is waiting for maintainer review.", action, "notes PR held"),
+        )
+    action = "Review and merge the PR."
+    return (
+        _StageStatus(_status_badge("Ready for review", "0969da"), evidence, action),
+        _StatusMessage("The release-notes PR is ready for review.", action, "waiting for notes PR merge"),
+    )
+
+
+def _candidate_status(
+    repo_url: str,
+    branch_head: str,
+    candidate_sha: str,
+    candidate_ci: CandidateCI | None,
+) -> tuple[_StageStatus, _StatusMessage | None]:
+    if not candidate_sha:
+        return (
+            _StageStatus(
+                _status_badge("Not started", "57606a"),
+                "Candidate not established",
+                "Merge the canonical release-notes PR.",
+            ),
+            None,
+        )
+
+    evidence = f"[Candidate `{candidate_sha[:12]}`]({repo_url}/commit/{candidate_sha})"
+    if branch_head != candidate_sha:
+        action = "Rerun Prepare Release for the new branch head."
+        return (
+            _StageStatus(_status_badge("Blocked", "cf222e"), evidence, action),
+            _StatusMessage(
+                "The release branch moved after the candidate was reviewed.",
+                action,
+                "candidate invalidated by branch movement",
+            ),
+        )
+    if candidate_ci is None or candidate_ci.state == "missing":
+        return (
+            _StageStatus(
+                _status_badge("Not available", "9a6700"),
+                evidence,
+                "Advisory only; qualification can continue.",
+            ),
+            None,
+        )
+    if candidate_ci.state == "unavailable":
+        return (
+            _StageStatus(
+                _status_badge("Unavailable", "9a6700"),
+                evidence,
+                "Advisory only; inspect progress logs if this persists.",
+            ),
+            None,
+        )
+
+    ci_run_id = candidate_ci.workflow_url.rstrip("/").rsplit("/", 1)[-1]
+    ci_link = (
+        f"[Candidate CI run {ci_run_id}]({candidate_ci.workflow_url})"
+        if candidate_ci.workflow_url
+        else "Candidate CI run not found"
+    )
+    evidence += f" · {ci_link} · {candidate_ci.passed_count} of {len(candidate_ci.checks)} configured checks passed"
+    if candidate_ci.state == "passed":
+        stage = _StageStatus(_status_badge("Passed", "1a7f37"), evidence, "Complete")
+    elif candidate_ci.state == "running":
+        pending = ", ".join(check.name for check in candidate_ci.checks if not check.passed)
+        action = (
+            f"Advisory only; still running: {pending}." if pending else "Advisory only; qualification can continue."
+        )
+        stage = _StageStatus(_status_badge("Running", "0969da"), evidence, action)
+    else:
+        failed_checks = ", ".join(check.name for check in candidate_ci.checks if not check.passed)
+        action = (
+            f"Advisory only; inspect if unexpected: {failed_checks}."
+            if failed_checks
+            else "Advisory only; inspect if unexpected."
+        )
+        stage = _StageStatus(_status_badge("Failed", "cf222e"), evidence, action)
+    return stage, None
+
+
+def _qualification_status(
+    publish_run: Any | None,
+    dispatched: bool,
+) -> tuple[_StageStatus, _StageStatus, _StatusMessage | None]:
+    qualification = _StageStatus(
+        _status_badge("Not started", "57606a"),
+        "No Publish run",
+        "Wait for exact-candidate qualification.",
+    )
+    approval = _StageStatus(
+        _status_badge("Not ready", "57606a"),
+        "Qualification has not passed",
+        "No action yet.",
+    )
+    if dispatched:
+        action = "Wait for the run to appear."
+        return (
+            _StageStatus(_status_badge("Starting", "0969da"), "Publish workflow dispatched", action),
+            approval,
+            _StatusMessage("Qualification is starting.", action, "publication dispatched"),
+        )
+    if publish_run is None:
+        return qualification, approval, None
+
+    evidence = f"[Publish run {publish_run.id}]({publish_run.html_url})"
+    if publish_run.status == "completed" and publish_run.conclusion == "success":
+        return (
+            _StageStatus(_status_badge("Passed", "1a7f37"), evidence, "Complete"),
+            _StageStatus(_status_badge("Approved", "1a7f37"), evidence, "Complete"),
+            _StatusMessage(
+                "Qualification and protected publication completed.",
+                "Wait for production automation.",
+                "publication completed",
+            ),
+        )
+    if publish_run.status == "completed":
+        action = "Inspect and rerun the Publish workflow."
+        return (
+            _StageStatus(_status_badge("Failed", "cf222e"), evidence, action),
+            _StageStatus(
+                _status_badge("Not reached", "57606a"),
+                evidence,
+                "Fix the failed Publish run first.",
+            ),
+            _StatusMessage("The Publish workflow failed.", action, "publication failed"),
+        )
+    if publish_run.status in {"waiting", "pending"}:
+        action = "Review the plan, then approve the `release` environment."
+        return (
+            _StageStatus(_status_badge("Passed", "1a7f37"), evidence, "Complete"),
+            _StageStatus(_status_badge("Waiting for approval", "8250df"), evidence, action),
+            _StatusMessage(
+                "Qualification passed and release approval is required.",
+                action,
+                "waiting for release approval",
+            ),
+        )
+    action = "Wait for exact-candidate qualification."
+    return (
+        _StageStatus(_status_badge("Running", "0969da"), evidence, action),
+        _StageStatus(
+            _status_badge("Not ready", "57606a"),
+            evidence,
+            "No action until qualification passes.",
+        ),
+        _StatusMessage("Exact-candidate qualification is running.", action, "validating and qualifying"),
+    )
+
+
+def _publication_status(
+    tracker: Tracker,
+    release: Any | None,
+    publish_run: Any | None,
+    qualification: _StageStatus,
+    approval: _StageStatus,
+) -> tuple[_StageStatus, _StageStatus, _StageStatus, _StatusMessage | None]:
+    publication = _StageStatus(
+        _status_badge("Not published", "57606a"),
+        "No GitHub release",
+        "Complete qualification and release approval.",
+    )
+    if release is None:
+        return qualification, approval, publication, None
+
+    # A controller-authored release proves qualification and protected
+    # approval even if a later job changed the workflow's final conclusion.
+    release_link = f"[GitHub release {tracker.tag}]({release.html_url})"
+    author = getattr(release, "author", None)
+    if getattr(author, "type", "") == "Bot":
+        history = f"[Publish run {publish_run.id}]({publish_run.html_url})" if publish_run is not None else release_link
+        qualification = _StageStatus(_status_badge("Passed", "1a7f37"), history, "Complete")
+        approval = _StageStatus(_status_badge("Approved", "1a7f37"), history, "Complete")
+    else:
+        login = getattr(author, "login", None) or "an unknown author"
+        evidence = f"Released by {login}, not by the controller"
+        qualification = _StageStatus(
+            _status_badge("Unverified", "9a6700"),
+            evidence,
+            "Confirm how the release was created.",
+        )
+        approval = qualification
+
+    publication = _StageStatus(
+        _status_badge("Published", "1a7f37"),
+        f"{release_link}{_stamp(getattr(release, 'published_at', None), 'published')}",
+        "Complete",
+    )
+    return (
+        qualification,
+        approval,
+        publication,
+        _StatusMessage(
+            "The GitHub release is published.",
+            "Wait for production automation and its protected approval.",
+            "release published",
+        ),
+    )
+
+
+def _production_status(
+    tracker: Tracker,
+    production_run: Any | None,
+) -> tuple[_StageStatus, _StageStatus, _StatusMessage | None]:
+    production = _StageStatus(
+        _status_badge("Not started", "57606a"),
+        "No production run",
+        "Wait for the GitHub release event.",
+    )
+    follow_up = _StageStatus(
+        _status_badge("Not started", "57606a"),
+        "Downstream work has not completed",
+        "No action yet.",
+    )
+    if production_run is None:
+        return production, follow_up, None
+
+    link = f"[Production run {production_run.id}]({production_run.html_url})"
+    follow_up = _StageStatus(
+        follow_up.badge,
+        f"{link}<br>**Manual follow-up:** {_downstream_links(tracker)}",
+        follow_up.action,
+    )
+    if production_run.status == "completed" and production_run.conclusion == "success":
+        production = _StageStatus(
+            _status_badge("Passed", "1a7f37"),
+            f"{link}{_stamp(getattr(production_run, 'updated_at', None), 'finished')}",
+            "Complete",
+        )
+        follow_up = _StageStatus(
+            _status_badge("Release owner review", "8250df"),
+            follow_up.evidence,
+            _FOLLOW_UP_ACTION,
+        )
+        return (
+            production,
+            follow_up,
+            _StatusMessage(
+                "Production automation completed.",
+                _FOLLOW_UP_ACTION,
+                "production automation completed",
+            ),
+        )
+    if production_run.status == "completed":
+        action = "Inspect and rerun the failed production workflow."
+        return (
+            _StageStatus(_status_badge("Failed", "cf222e"), link, action),
+            follow_up,
+            _StatusMessage("Production automation failed.", action, "production automation failed"),
+        )
+    if production_run.status in {"waiting", "pending"}:
+        action = "Approve the `release-publish` environment."
+        return (
+            _StageStatus(_status_badge("Waiting for approval", "8250df"), link, action),
+            follow_up,
+            _StatusMessage("Production approval is required.", action, "waiting for production approval"),
+        )
+    action = "Wait for production automation."
+    return (
+        _StageStatus(_status_badge("Running", "0969da"), link, action),
+        follow_up,
+        _StatusMessage("Production automation is running.", action, "production automation running"),
+    )
 
 
 def _downstream_links(tracker: Tracker) -> str:
@@ -1160,17 +1283,6 @@ def _validate_tracker(tracker: Tracker) -> None:
         raise ValueError("tracker prepare run id must be positive")
 
 
-def _write_outputs(values: dict[str, str]) -> None:
-    path = os.environ.get("GITHUB_OUTPUT", "")
-    if not path:
-        return
-    with open(path, "a", encoding="utf-8") as output:
-        for key, value in values.items():
-            if "\n" in value or "\r" in value:
-                raise ValueError(f"multiline workflow output refused for {key}")
-            output.write(f"{key}={value}\n")
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1207,7 +1319,7 @@ def main(argv: list[str] | None = None) -> int:
             prepare_run_id=args.prepare_run_id,
         )
         issue = ensure_tracker(target_gh, tracker, agent_repo=args.agent_repo)
-        _write_outputs({"issue_number": str(issue.number), "issue_url": issue.html_url})
+        write_outputs({"issue_number": str(issue.number), "issue_url": issue.html_url})
         print(issue.html_url)
         return 0
 

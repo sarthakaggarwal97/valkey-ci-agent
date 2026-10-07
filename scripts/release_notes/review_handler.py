@@ -18,10 +18,9 @@ from scripts.ci_fix.gate import is_authorized
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.git_clone import shallow_clone_at_sha
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import BOT_EMAIL, BOT_NAME
 from scripts.common.logging_utils import configure_logging
 from scripts.common.proc import (
-    BOT_EMAIL,
-    BOT_NAME,
     build_approved_patch,
     git_output,
     run_git,

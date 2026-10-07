@@ -10,11 +10,17 @@ import pytest
 
 from scripts.backport import sweep_validation
 from scripts.backport.missing_test_adaptation import MissingTestAdaptationResult
-from scripts.backport.models import BackportCandidate, ResolutionResult
+from scripts.backport.models import (
+    DETAIL_RESOLVED_BY_AI,
+    BackportCandidate,
+    CandidateResult,
+    ResolutionResult,
+)
 from scripts.backport.registry import GeneratedFileRule
 from scripts.backport.sweep_validation import (
     ValidationOutcome,
     adapt_added_tests_for_target,
+    merge_validation_outcome,
     prepare_generated_files,
     repair_validation_failure_with_claude,
     validate_branch_with_optional_repair,
@@ -30,6 +36,39 @@ def _git(repo: Path, *args: str) -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+def test_merge_validation_outcome_preserves_existing_summary() -> None:
+    candidate = CandidateResult(
+        42,
+        "Fix bug",
+        "applied",
+        detail="existing detail",
+        ai_summary="conflict summary",
+    )
+    resolution = ResolutionResult(
+        path="src/server.c",
+        resolved_content="fixed\n",
+        resolution_summary="validation repaired",
+    )
+
+    merge_validation_outcome(
+        candidate,
+        ValidationOutcome(
+            True,
+            "passed",
+            resolutions=(resolution,),
+            ai_summary="validation summary",
+            amended_commit_sha="generated-sha",
+        ),
+        resolved_head_sha="repair-sha",
+    )
+
+    assert candidate.resolutions == [resolution]
+    assert candidate.resolved_by_ai
+    assert candidate.resolved_commit_sha == "repair-sha"
+    assert candidate.ai_summary == "conflict summary; validation summary"
+    assert candidate.detail == f"existing detail; {DETAIL_RESOLVED_BY_AI}"
 
 
 def _init_repo(repo: Path) -> None:

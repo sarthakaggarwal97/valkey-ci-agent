@@ -5,7 +5,6 @@ from __future__ import annotations
 import difflib
 import fnmatch
 import hashlib
-import json
 import logging
 import shutil
 import subprocess
@@ -28,6 +27,7 @@ from scripts.backport.models import (
     ResolutionResult,
 )
 from scripts.backport.utils import has_conflict_markers
+from scripts.common.ai_output import extract_result_text
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ def adapt_target_missing_tests_with_claude(
                 prompt,
                 cwd=str(sandbox_dir),
             )
-            result_text = extract_agent_result_text(agent_result)
+            result_text = extract_result_text(agent_result.stdout)
             logger.info(
                 "Claude Code test adaptation finished (rc=%d). Result: %s",
                 agent_result.returncode,
@@ -375,27 +375,6 @@ def list_existing_test_paths(
         if line.strip() and is_test_path(line.strip(), test_path_patterns)
     ]
     return paths if limit is None else paths[:limit]
-
-
-def extract_agent_result_text(agent_result: AgentRunResult) -> str:
-    result_text = ""
-    for line in agent_result.stdout.strip().splitlines():
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if event.get("type") != "result" or "result" not in event:
-            continue
-        raw_result = event.get("result")
-        if isinstance(raw_result, str):
-            result_text = raw_result
-        elif raw_result is not None:
-            result_text = json.dumps(
-                raw_result,
-                sort_keys=True,
-                default=str,
-            )
-    return result_text
 
 
 def copy_worktree_for_adaptation(repo_dir: str, sandbox_dir: Path) -> None:

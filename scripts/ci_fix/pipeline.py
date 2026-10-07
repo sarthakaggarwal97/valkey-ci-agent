@@ -188,7 +188,7 @@ def _run_in_workspace(
 
     if proposal.path is FixPath.PORT:
         return _port_and_push(
-            repo_dir, request, proposal, failed_jobs, git_env=git_env,
+            request, proposal, failed_jobs, git_env=git_env,
             port_push_func=port_push_func, port_candidates=port_candidates,
             pre_push_check=pre_push_check,
         )
@@ -275,7 +275,9 @@ def _loop_and_push(
 
 
 def _port_and_push(
-    repo_dir: Path, request: FixRequest, proposal: FixProposal, failed_jobs: tuple[str, ...],
+    request: FixRequest,
+    proposal: FixProposal,
+    failed_jobs: tuple[str, ...],
     *, git_env: dict[str, str], port_push_func: PortPush = commit_and_push_port,
     port_candidates: tuple[PortCandidate, ...] = (),
     pre_push_check: PrePushCheck | None = None,
@@ -312,7 +314,6 @@ def _port_and_push(
 
     try:
         commit_sha = port_push_func(
-            str(repo_dir),
             head_repo_full_name=request.head_repo_full_name,
             head_branch=request.head_branch,
             head_sha=request.head_sha,

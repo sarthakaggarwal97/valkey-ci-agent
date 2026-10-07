@@ -6,9 +6,6 @@ import os
 import subprocess
 from typing import NoReturn
 
-# Re-exported for existing importers; canonical definition lives in identity.py.
-from scripts.common.identity import BOT_EMAIL, BOT_NAME  # noqa: F401
-
 
 class GitCommandError(subprocess.CalledProcessError):
     """``CalledProcessError`` whose message carries git's stderr.

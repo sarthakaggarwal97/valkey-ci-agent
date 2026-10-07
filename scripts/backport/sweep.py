@@ -24,7 +24,13 @@ from scripts.backport.candidate_apply import apply_candidate
 from scripts.backport.git_commands import head_sha
 from scripts.backport.git_commands import run_git as _run_git
 from scripts.backport.mark_done import prs_present_in_history
-from scripts.backport.models import CandidateOutcome, ResolutionResult
+from scripts.backport.models import (
+    DETAIL_EMPTY_ON_TARGET,
+    BackportCandidate,
+    CandidateOutcome,
+    CandidateResult,
+    ResolutionResult,
+)
 from scripts.backport.source_plan import SourceChangeError, SourceChangePlan, prepare_source_change
 from scripts.backport.sweep_git import (
     branch_has_changes,
@@ -39,12 +45,8 @@ from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
     DETAIL_ALREADY_ON_TARGET,
-    DETAIL_EMPTY_ON_TARGET,
-    DETAIL_RESOLVED_BY_AI,
     BranchSweepResult,
-    CandidateResult,
     PreparedBranchSweep,
-    ProjectBackportCandidate,
 )
 from scripts.backport.sweep_prs import find_existing_pr, upsert_pr
 from scripts.backport.sweep_reporting import (
@@ -53,9 +55,10 @@ from scripts.backport.sweep_reporting import (
     validation_failure_detail,
 )
 from scripts.backport.sweep_validation import (
-    run_test_commands,
+    merge_validation_outcome,
     validate_branch_with_optional_repair,
 )
+from scripts.common.build_validator import run_build_commands
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import (
@@ -122,8 +125,8 @@ class ProjectBackportDiscovery:
     def discover(
         self,
         release_branches: list[str],
-    ) -> dict[str, list[ProjectBackportCandidate]]:
-        by_branch: dict[str, list[ProjectBackportCandidate]] = {
+    ) -> dict[str, list[BackportCandidate]]:
+        by_branch: dict[str, list[BackportCandidate]] = {
             branch: [] for branch in release_branches
         }
         for item in self._iter_items():
@@ -156,7 +159,7 @@ class ProjectBackportDiscovery:
         self,
         item: dict[str, Any],
         branches: list[str],
-    ) -> ProjectBackportCandidate | None:
+    ) -> BackportCandidate | None:
         content = item.get("content") or {}
         if content.get("__typename") != "PullRequest" or not content.get("merged"):
             return None
@@ -193,7 +196,7 @@ class ProjectBackportDiscovery:
         ]
         commits_page = content.get("commits") or {}
         merge_sha = (content.get("mergeCommit") or {}).get("oid")
-        return ProjectBackportCandidate(
+        return BackportCandidate(
             source_pr_number=int(content["number"]),
             source_pr_title=str(content.get("title") or ""),
             source_pr_url=str(content.get("url") or ""),
@@ -327,7 +330,6 @@ def prepare_backport_sweep(
         validation_setup_commands=validation_setup_commands,
         max_applied=max_candidates,
         language=repo_entry.language,
-        build_commands=list(repo_entry.build_commands) or None,
         validation_rules=validation_rules,
         validation_profile=repo_entry.validation_profile,
         generated_file_rules=list(repo_entry.generated_file_rules),
@@ -340,68 +342,18 @@ def prepare_backport_sweep(
     )
 
 
-def _process_branch(
-    *,
-    gh: Any,
-    repo_full_name: str,
-    github_token: str,
-    target_branch: str,
-    candidates: list[ProjectBackportCandidate],
-    push_repo: str,
-    test_commands: list[str],
-    validation_setup_commands: list[str] | None = None,
-    max_applied: int = 0,
-    language: str = "c",
-    build_commands: list[str] | None = None,
-    validation_rules: list[Any] | None = None,
-    validation_profile: str = "",
-    generated_file_rules: list[Any] | None = None,
-    test_path_patterns: tuple[str, ...] | list[str] | None = None,
-    repair_validation_failures: bool = False,
-    max_conflicting_files: int = 100,
-    backport_label: str = "backport",
-    llm_conflict_label: str = "ai-resolved-conflicts",
-) -> BranchSweepResult:
-    """Compatibility wrapper for existing direct callers and tests."""
-    result, prepared = _prepare_branch(
-        gh=gh,
-        repo_full_name=repo_full_name,
-        github_token=github_token,
-        target_branch=target_branch,
-        candidates=candidates,
-        push_repo=push_repo,
-        test_commands=test_commands,
-        validation_setup_commands=validation_setup_commands,
-        max_applied=max_applied,
-        language=language,
-        build_commands=build_commands,
-        validation_rules=validation_rules,
-        validation_profile=validation_profile,
-        generated_file_rules=generated_file_rules,
-        test_path_patterns=test_path_patterns,
-        repair_validation_failures=repair_validation_failures,
-        max_conflicting_files=max_conflicting_files,
-        backport_label=backport_label,
-        llm_conflict_label=llm_conflict_label,
-    )
-    if prepared is not None:
-        return publish_prepared_sweep(prepared, github_token, gh=gh)
-    return result
-
-
 def _prepare_branch(
     *,
     gh: Any,
     repo_full_name: str,
     github_token: str,
     target_branch: str,
-    candidates: list[ProjectBackportCandidate],
+    candidates: list[BackportCandidate],
     push_repo: str,
     test_commands: list[str],
     validation_setup_commands: list[str] | None = None,
     max_applied: int = 0,
     language: str = "c",
-    build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
     validation_profile: str = "",
     generated_file_rules: list[Any] | None = None,
@@ -515,7 +467,7 @@ def _prepare_branch(
 
         # Everything after this point is local; the preparation token and
         # askpass helper no longer exist while repository code is validated.
-        setup_ok, setup_output = run_test_commands(
+        setup_ok, setup_output = run_build_commands(
             tmpdir,
             validation_setup_commands or [],
         )
@@ -598,8 +550,6 @@ def _prepare_branch(
                     repo_full_name,
                     {},
                     language=language,
-                    build_commands=build_commands,
-                    validation_rules=validation_rules,
                     test_path_patterns=test_path_patterns,
                     max_conflicting_files=max_conflicting_files,
                     source_plan=source_plans[candidate.source_pr_number],
@@ -638,10 +588,11 @@ def _prepare_branch(
                     test_path_patterns=test_path_patterns,
                     run_git=_run_git,
                 )
-            ok, output = validation_outcome
-            if not ok:
+            if not validation_outcome.ok:
                 candidate_result.outcome = "skipped-validation-failed"
-                candidate_result.detail = validation_failure_detail(output)
+                candidate_result.detail = validation_failure_detail(
+                    validation_outcome.output
+                )
                 _run_git(tmpdir, "reset", "--hard", pre_candidate_head)
                 logger.warning(
                     "BACKPORT REJECTED: PR #%d | %s | target=%s | "
@@ -673,25 +624,15 @@ def _prepare_branch(
                 )
                 continue
 
-            if validation_outcome.amended_commit_sha:
-                candidate_result.resolved_commit_sha = validation_outcome.amended_commit_sha
-
-            repair_resolutions = list(validation_outcome.resolutions)
-            if repair_resolutions:
-                candidate_result.resolutions.extend(repair_resolutions)
-                candidate_result.resolved_by_ai = True
-                candidate_result.resolved_commit_sha = head_sha(tmpdir)
-                if validation_outcome.ai_summary:
-                    candidate_result.ai_summary = validation_outcome.ai_summary
-                if DETAIL_RESOLVED_BY_AI not in candidate_result.detail:
-                    candidate_result.detail = "; ".join(
-                        part
-                        for part in (
-                            candidate_result.detail,
-                            DETAIL_RESOLVED_BY_AI,
-                        )
-                        if part
-                    )
+            merge_validation_outcome(
+                candidate_result,
+                validation_outcome,
+                resolved_head_sha=(
+                    head_sha(tmpdir)
+                    if validation_outcome.resolutions
+                    else ""
+                ),
+            )
             logger.info(
                 "BACKPORT ACCEPTED: PR #%d | %s | target=%s",
                 candidate.source_pr_number,
@@ -739,7 +680,7 @@ def _prepare_branch(
 
 def _prepare_source_plans(
     repo_dir: str,
-    candidates: list[ProjectBackportCandidate],
+    candidates: list[BackportCandidate],
     already_applied: set[str],
     git_env: dict[str, str],
 ) -> tuple[dict[int, SourceChangePlan], dict[int, CandidateResult]]:

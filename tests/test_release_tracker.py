@@ -811,17 +811,6 @@ def test_sync_cli_uses_the_shared_bounded_poll_loop(
     assert capsys.readouterr().out.splitlines() == ["#42: refreshed", "#42: refreshed"]
 
 
-def test_tracker_outputs_refuse_multiline_values(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path,
-) -> None:
-    output = tmp_path / "outputs"
-    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
-
-    with pytest.raises(ValueError, match="multiline workflow output refused"):
-        tracker_mod._write_outputs({"issue_url": "safe\nforged=true"})
-
-
 def test_unchanged_status_does_not_churn_comment_for_timestamp_only() -> None:
     issue = _issue()
     comment = MagicMock()

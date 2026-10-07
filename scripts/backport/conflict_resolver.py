@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import difflib
 import hashlib
-import json
 import logging
 import os
 import subprocess
@@ -17,6 +16,7 @@ from scripts.backport.utils import (
     has_conflict_markers,
     is_whitespace_only_conflict,
 )
+from scripts.common.ai_output import extract_result_text
 
 if TYPE_CHECKING:
     from scripts.backport.models import BackportPRContext
@@ -131,24 +131,6 @@ def _reviewer_diff(path: str, before: str, after: str) -> str | None:
     )
     rendered = "".join(diff).rstrip("\n")
     return rendered or None
-
-
-def _agent_result_text(stdout: str) -> str:
-    """Extract Claude Code's final result text from its JSONL stream."""
-    result_text = ""
-    for line in stdout.strip().splitlines():
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if event.get("type") != "result" or "result" not in event:
-            continue
-        raw_result = event.get("result")
-        if isinstance(raw_result, str):
-            result_text = raw_result
-        elif raw_result is not None:
-            result_text = json.dumps(raw_result, sort_keys=True, default=str)
-    return result_text.strip()
 
 
 def _build_prompt(
@@ -329,7 +311,6 @@ def resolve_conflicts_with_claude(
     pr_context: BackportPRContext,
     *,
     language: str = "c",
-    build_commands: list[str] | None = None,  # noqa: ARG001 — kept for API stability
     allowed_paths: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> list[ResolutionResult]:
     """Resolve cherry-pick merge conflicts using Claude Code.
@@ -404,7 +385,7 @@ def resolve_conflicts_with_claude(
     )
     agent_result = run_agent("conflict_resolve_edit_only", prompt, cwd=repo_dir)
 
-    result_text = _agent_result_text(agent_result.stdout)
+    result_text = extract_result_text(agent_result.stdout)
 
     logger.info(
         "Claude Code finished (rc=%d). Result: %s",
@@ -463,7 +444,7 @@ def resolve_conflicts_with_claude(
         "Do NOT run `git add` or `git commit`."
     )
     retry_result = run_agent("conflict_resolve_edit_only", retry_prompt, cwd=repo_dir)
-    retry_summary = _agent_result_text(retry_result.stdout)
+    retry_summary = extract_result_text(retry_result.stdout)
     if retry_result.returncode != 0:
         retry_detail = (retry_result.stderr or "")[:200]
         for cf, err in needs_retry:

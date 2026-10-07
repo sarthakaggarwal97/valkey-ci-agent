@@ -805,7 +805,7 @@ def _source_is_trusted(src_pull: Any, backport_pull: Any) -> bool:
     return _titles_consistent(expected, src_pull.title)
 
 
-def _recover_source_pr(repo: Any, pull: Any) -> int | None:
+def _recover_source_pr(pull: Any) -> int | None:
     """Return the original PR of a per-PR backport, or None.
 
     Tries: ## Backport Summary Source PR row, a manual ``backport of <PR URL>``
@@ -962,7 +962,7 @@ def hydrate_prs(
                                 source_pull, source_number, sha
                             )
                     continue
-            source = _recover_source_pr(repo, pull)
+            source = _recover_source_pr(pull)
             depth = 0
             visited = {number}
             while source is not None and source not in visited and depth < _MAX_BACKPORT_DEPTH:
@@ -980,7 +980,7 @@ def hydrate_prs(
                 target_pull, target_number = src_pull, source
                 if not _is_backport_pull(src_pull):
                     break
-                source = _recover_source_pr(repo, src_pull)
+                source = _recover_source_pr(src_pull)
                 depth += 1
             if not _is_backport_pull(target_pull):
                 logger.info(

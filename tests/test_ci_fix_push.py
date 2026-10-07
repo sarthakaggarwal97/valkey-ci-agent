@@ -71,7 +71,6 @@ def test_port_push_preserves_original_authorship(tmp_path, monkeypatch):
     monkeypatch.setattr(push_mod, "github_https_url", lambda _n: str(bare))
 
     pushed_sha = commit_and_push_port(
-        str(work),
         head_repo_full_name="valkey-io/valkey",
         head_branch="agent/backport/sweep/9.0",
         head_sha=head_sha,
@@ -113,7 +112,6 @@ def test_port_push_refuses_commit_not_on_default_branch(tmp_path, monkeypatch):
 
     with pytest.raises(PushRefused, match="not reachable from"):
         commit_and_push_port(
-            str(work),
             head_repo_full_name="valkey-io/valkey",
             head_branch="agent/backport/sweep/9.0",
             head_sha=head_sha,
@@ -137,7 +135,6 @@ def test_port_push_refuses_commit_already_on_head(tmp_path, monkeypatch):
 
     with pytest.raises(PushRefused, match="already present on the PR head"):
         commit_and_push_port(
-            str(work),
             head_repo_full_name="valkey-io/valkey",
             head_branch="agent/backport/sweep/9.0",
             head_sha=head_with_fix,
@@ -149,7 +146,7 @@ def test_port_push_refuses_commit_already_on_head(tmp_path, monkeypatch):
 def test_port_push_refuses_non_namespaced_branch(tmp_path):
     with pytest.raises(PushRefused):
         commit_and_push_port(
-            str(tmp_path), head_repo_full_name="valkey-io/valkey",
+            head_repo_full_name="valkey-io/valkey",
             head_branch="main", head_sha="a" * 40, unstable_fix_commit="b" * 40, git_env={},
         )
 
@@ -157,7 +154,7 @@ def test_port_push_refuses_non_namespaced_branch(tmp_path):
 def test_port_push_refuses_malformed_commit(tmp_path):
     with pytest.raises(PushRefused):
         commit_and_push_port(
-            str(tmp_path), head_repo_full_name="valkey-io/valkey",
+            head_repo_full_name="valkey-io/valkey",
             head_branch="agent/backport/sweep/9.0", head_sha="a" * 40,
             unstable_fix_commit="not-a-sha", git_env={},
         )

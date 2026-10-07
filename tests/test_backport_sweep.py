@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from github.GithubException import GithubException
 
 from scripts.backport import candidate_apply, sweep_git, sweep_graphql, sweep_validation
 from scripts.backport import sweep as backport_sweep
@@ -19,16 +18,17 @@ from scripts.backport.missing_test_adaptation import (
     adapt_target_missing_tests_with_claude,
     build_missing_test_context,
 )
-from scripts.backport.models import ResolutionResult
+from scripts.backport.models import (
+    DETAIL_EMPTY_ON_TARGET,
+    DETAIL_RESOLVED_BY_AI,
+    BackportCandidate,
+    CandidateResult,
+    ResolutionResult,
+)
 from scripts.backport.source_plan import (
     SourceChangeError,
     SourceChangePlan,
     SourceChangeStrategy,
-)
-from scripts.backport.sweep import (
-    BranchSweepResult,
-    CandidateResult,
-    ProjectBackportCandidate,
 )
 from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
@@ -36,14 +36,9 @@ from scripts.backport.sweep_git import (
     list_applied_prs_on_branch,
     push_backport_branch,
     safe_tmp_component,
-    sync_target_branch_to_source,
     worktree_changed_paths,
 )
-from scripts.backport.sweep_models import (
-    DETAIL_ALREADY_ON_TARGET,
-    DETAIL_EMPTY_ON_TARGET,
-    DETAIL_RESOLVED_BY_AI,
-)
+from scripts.backport.sweep_models import DETAIL_ALREADY_ON_TARGET, BranchSweepResult
 from scripts.backport.sweep_prs import upsert_pr
 from scripts.backport.sweep_reporting import (
     build_pr_body,
@@ -55,7 +50,6 @@ from scripts.backport.sweep_validation import (
     ValidationOutcome,
     build_validation_repair_prompt,
     repair_validation_failure_with_claude,
-    run_test_commands,
     validate_backport_branch,
 )
 from scripts.common.git_auth import GitAuth
@@ -83,7 +77,7 @@ DETAIL = backport_sweep.DETAIL_ALREADY_ON_SWEEP_BRANCH
 
 
 def _source_plan(
-    candidate: ProjectBackportCandidate,
+    candidate: BackportCandidate,
     strategy: SourceChangeStrategy = "merge",
 ) -> SourceChangePlan:
     assert candidate.merge_commit_sha
@@ -123,7 +117,7 @@ def test_git_auth_default_env_strips_ambient_tokens(monkeypatch):
 
 
 def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=10,
         source_pr_title="Already applied",
         source_pr_url="https://github.com/valkey-io/valkey/pull/10",
@@ -171,7 +165,7 @@ def test_apply_candidate_aborts_empty_cherry_pick(monkeypatch, tmp_path):
 
 
 def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=12,
         source_pr_title="Binary fixture conflict",
         source_pr_url="https://github.com/valkey-io/valkey-search/pull/12",
@@ -222,7 +216,7 @@ def test_apply_candidate_skips_binary_only_conflict(monkeypatch, tmp_path):
 def test_apply_candidate_does_not_invoke_resolver_for_mixed_binary_conflict(
     tmp_path,
 ):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=13,
         source_pr_title="Mixed binary conflict",
         source_pr_url="https://github.com/valkey-io/valkey-search/pull/13",
@@ -296,7 +290,7 @@ def test_apply_candidate_uses_planned_squash_without_mainline_probe(
     monkeypatch,
     tmp_path,
 ):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=11,
         source_pr_title="Squash merged fix",
         source_pr_url="https://github.com/valkey-io/valkey/pull/11",
@@ -339,7 +333,7 @@ def test_apply_candidate_uses_planned_squash_without_mainline_probe(
 def test_apply_candidate_skips_noop_conflict_resolution(monkeypatch, tmp_path):
     conflicted_file = tmp_path / "conflict.txt"
     conflicted_file.write_text("target content\n", encoding="utf-8")
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3317,
         source_pr_title="Fix macOS workflow",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3317",
@@ -409,7 +403,7 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
     missing_on_target = tmp_path / "src" / "cluster_legacy.c"
     missing_on_target.parent.mkdir()
     missing_on_target.write_text("<<<<<<< HEAD\n=======\nlarge source file\n>>>>>>> source\n", encoding="utf-8")
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=2174,
         source_pr_title="Converge divergent shard-id",
         source_pr_url="https://github.com/valkey-io/valkey/pull/2174",
@@ -465,7 +459,7 @@ def test_apply_candidate_does_not_recreate_target_missing_file(monkeypatch, tmp_
 
 
 def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -554,7 +548,7 @@ def test_apply_candidate_ports_target_missing_test_file(monkeypatch, tmp_path):
 
 
 def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -617,7 +611,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_fails(monkey
 
 
 def test_apply_candidate_aborts_when_target_missing_test_adaptation_raises(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -670,7 +664,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_raises(monke
 
 
 def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -727,7 +721,7 @@ def test_apply_candidate_aborts_when_target_missing_test_adaptation_is_invalid(m
 
 
 def test_apply_candidate_rejects_when_test_adaptation_makes_no_changes(monkeypatch, tmp_path):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=4060,
         source_pr_title="Fix io_last_written bookmark desync that corrupts replies with IO threads",
         source_pr_url="https://github.com/valkey-io/valkey/pull/4060",
@@ -790,7 +784,7 @@ def test_apply_candidate_rolls_back_other_resolution_when_missing_test_cannot_ad
     monkeypatch,
     tmp_path,
 ):
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=3306,
         source_pr_title="Improve COB memory tracking with copy avoidance",
         source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -884,7 +878,7 @@ def test_apply_candidate_survives_failing_abort_and_still_rolls_back(monkeypatch
     and the worktree is reset so later candidates are unaffected."""
     conflicted_file = tmp_path / "conflict.txt"
     conflicted_file.write_text("<<<<<<< HEAD\ntarget\n=======\nsource\n>>>>>>> source\n", encoding="utf-8")
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=631,
         source_pr_title="Fix ordering",
         source_pr_url="https://github.com/valkey-io/valkey-search/pull/631",
@@ -950,17 +944,6 @@ def test_apply_candidate_survives_failing_abort_and_still_rolls_back(monkeypatch
     assert ("reset", "--hard", "start") in git_calls
     # The failed abort itself must trigger the tree-clearing fallback.
     assert ["git", "reset", "--hard", "HEAD"] in subprocess_calls
-
-
-def test_run_test_commands_returns_failure_output(tmp_path):
-    ok, output = run_test_commands(
-        str(tmp_path),
-        ["printf stdout; printf stderr >&2; exit 3"],
-    )
-
-    assert ok is False
-    assert "stdout" in output
-    assert "stderr" in output
 
 
 def test_upsert_pr_uses_direct_upstream_branch_by_default():
@@ -1262,8 +1245,6 @@ def test_upsert_pr_preserves_existing_applied_detail_on_update():
 
 
 def test_sweep_body_points_to_ai_comments_when_ai_resolved():
-    from scripts.backport.sweep_models import DETAIL_RESOLVED_BY_AI
-
     with_ai = build_pr_body(
         BranchSweepResult(
             target_branch="8.1",
@@ -1284,8 +1265,6 @@ def test_sweep_body_points_to_ai_comments_when_ai_resolved():
 
 
 def test_sweep_body_links_ai_row_to_comment_when_url_known():
-    from scripts.backport.sweep_models import DETAIL_RESOLVED_BY_AI
-
     result = BranchSweepResult(
         target_branch="8.1",
         candidates_found=2,
@@ -1307,10 +1286,7 @@ def test_sweep_body_links_ai_row_to_comment_when_url_known():
 def test_sweep_body_preserves_ai_resolution_across_unprocessed_runs():
     """A day-0 AI resolution must not flatten to the generic prior-sweep
     string on a later run where the candidate is not re-processed."""
-    from scripts.backport.sweep_models import (
-        DETAIL_ALREADY_ON_SWEEP_BRANCH,
-        DETAIL_RESOLVED_BY_AI,
-    )
+    from scripts.backport.sweep_models import DETAIL_ALREADY_ON_SWEEP_BRANCH
 
     # Day 0: candidate resolved by the AI this run.
     day0 = BranchSweepResult(
@@ -1827,7 +1803,7 @@ def test_prepare_prefetches_before_token_free_validation(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         backport_sweep,
-        "run_test_commands",
+        "run_build_commands",
         lambda *_a, **_k: (events.append("setup") or True, ""),
     )
 
@@ -1936,9 +1912,22 @@ def test_prepared_state_binds_identity_and_uses_fresh_token(monkeypatch, tmp_pat
     )
     assert failed.error == "Target branch 8.1 changed during preparation"
     assert published == []
-def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
+
+
+def _run_prepare_and_publish(**kwargs):
+    result, prepared = backport_sweep._prepare_branch(**kwargs)
+    if prepared is None:
+        return result
+    return backport_sweep.publish_prepared_sweep(
+        prepared,
+        kwargs["github_token"],
+        gh=kwargs["gh"],
+    )
+
+
+def test_prepare_and_publish_applied_cap_ignores_skipped_candidates(monkeypatch):
     candidates = [
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=i,
             source_pr_title=f"PR {i}",
             source_pr_url=f"https://github.com/valkey-io/valkey/pull/{i}",
@@ -1957,7 +1946,7 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: {"2"})
     monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(sweep_validation, "changed_paths_since_base", lambda *_args, **_kwargs: [], raising=False)
-    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(backport_sweep, "run_build_commands", lambda *_args, **_kwargs: (True, ""))
     monkeypatch.setattr(backport_sweep, "head_sha", lambda _repo: "pre-candidate-head")
     monkeypatch.setattr(
         backport_sweep,
@@ -1995,7 +1984,7 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
 
     monkeypatch.setattr(backport_sweep, "apply_candidate", fake_apply)
 
-    result = backport_sweep._process_branch(
+    result = _run_prepare_and_publish(
         gh=MagicMock(),
         repo_full_name="valkey-io/valkey",
         github_token="token",
@@ -2015,8 +2004,8 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
     assert result.pr_url == "https://github.com/valkey-io/valkey/pull/100"
 
 
-def test_process_branch_push_failure_reconciles_applied(monkeypatch):
-    candidate = ProjectBackportCandidate(
+def test_prepare_and_publish_push_failure_reconciles_applied(monkeypatch):
+    candidate = BackportCandidate(
         source_pr_number=1,
         source_pr_title="PR 1",
         source_pr_url="https://github.com/valkey-io/valkey/pull/1",
@@ -2029,7 +2018,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     monkeypatch.setattr(backport_sweep, "_run_git", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "find_existing_pr", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_args, **_kwargs: set())
-    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_args, **_kwargs: (True, ""))
+    monkeypatch.setattr(backport_sweep, "run_build_commands", lambda *_args, **_kwargs: (True, ""))
     monkeypatch.setattr(backport_sweep, "head_sha", lambda _repo: "pre-candidate-head")
     monkeypatch.setattr(
         backport_sweep,
@@ -2048,7 +2037,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
 
     monkeypatch.setattr(backport_sweep, "push_backport_branch", fail_push)
 
-    result = backport_sweep._process_branch(
+    result = _run_prepare_and_publish(
         gh=MagicMock(),
         repo_full_name="valkey-io/valkey",
         github_token="token",
@@ -2064,7 +2053,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
     assert sum(1 for r in result.results if r.outcome == "applied") == 0
 
 
-def _green_only_process_branch(
+def _run_green_prepare_and_publish(
     monkeypatch,
     *,
     candidates,
@@ -2077,7 +2066,7 @@ def _green_only_process_branch(
     changes_since=None,
     plan_error_for=None,
 ):
-    """Run _process_branch with the common green-only mocks wired up.
+    """Run the prepare/publish path with the common green-only mocks wired up.
 
     Tests supply how each candidate applies (apply_fn) and how the branch
     validates after each kept cherry-pick (validate_fn). Returns
@@ -2104,7 +2093,7 @@ def _green_only_process_branch(
     )
     monkeypatch.setattr(backport_sweep, "list_applied_prs_on_branch", lambda *_a, **_k: [])
     monkeypatch.setattr(backport_sweep, "branch_has_changes", lambda *_a, **_k: True)
-    monkeypatch.setattr(backport_sweep, "run_test_commands", lambda *_a, **_k: (True, ""))
+    monkeypatch.setattr(backport_sweep, "run_build_commands", lambda *_a, **_k: (True, ""))
     monkeypatch.setattr(backport_sweep, "apply_candidate", apply_fn)
     monkeypatch.setattr(backport_sweep, "validate_branch_with_optional_repair", validate_fn)
     if head_shas is None:
@@ -2147,7 +2136,7 @@ def _green_only_process_branch(
 
     monkeypatch.setattr(backport_sweep, "upsert_pr", fake_upsert)
 
-    result = backport_sweep._process_branch(
+    result = _run_prepare_and_publish(
         gh=MagicMock(),
         repo_full_name="valkey-io/valkey",
         github_token="token",
@@ -2162,7 +2151,7 @@ def _green_only_process_branch(
     return result, pushed, upserts, reset_count["n"], reset_refs
 
 
-def test_process_branch_logs_source_plan_error(monkeypatch, caplog):
+def test_prepare_and_publish_logs_source_plan_error(monkeypatch, caplog):
     """A candidate whose source history cannot be planned is logged, not silent."""
     attempted: list[int] = []
 
@@ -2171,7 +2160,7 @@ def test_process_branch_logs_source_plan_error(monkeypatch, caplog):
         return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
 
     caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
-    result, _pushed, _upserts, _resets, _reset_refs = _green_only_process_branch(
+    result, _pushed, _upserts, _resets, _reset_refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(4632), _candidate(41)],
         apply_fn=fake_apply,
@@ -2189,7 +2178,7 @@ def test_process_branch_logs_source_plan_error(monkeypatch, caplog):
 
 
 def _candidate(num):
-    return ProjectBackportCandidate(
+    return BackportCandidate(
         source_pr_number=num,
         source_pr_title=f"PR {num}",
         source_pr_url=f"https://github.com/valkey-io/valkey/pull/{num}",
@@ -2202,9 +2191,9 @@ def _applied(_repo_dir, candidate, *_args, **_kwargs):
     return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
 
 
-def test_process_branch_does_not_push_when_only_candidate_fails_validation(monkeypatch):
+def test_prepare_and_publish_does_not_push_when_only_candidate_fails_validation(monkeypatch):
     """A red cherry-pick is reset off the branch and never pushed."""
-    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(10)],
         apply_fn=_applied,
@@ -2220,7 +2209,7 @@ def test_process_branch_does_not_push_when_only_candidate_fails_validation(monke
     assert "compiler error" in result.results[0].detail
 
 
-def test_process_branch_reports_successful_ai_validation_repair(monkeypatch):
+def test_prepare_and_publish_reports_successful_ai_validation_repair(monkeypatch):
     resolution = ResolutionResult(
         path="src/module.c",
         resolved_content="fixed\n",
@@ -2228,7 +2217,7 @@ def test_process_branch_reports_successful_ai_validation_repair(monkeypatch):
         reviewer_diff="repair diff",
         llm_summary="Adjusted the backport for the target branch API.",
     )
-    result, pushed, upserts, resets, _reset_refs = _green_only_process_branch(
+    result, pushed, upserts, resets, _reset_refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(10)],
         apply_fn=_applied,
@@ -2259,7 +2248,7 @@ def test_process_branch_reports_successful_ai_validation_repair(monkeypatch):
     assert resets == 0
 
 
-def test_process_branch_forwards_repository_conflict_limit(monkeypatch):
+def test_prepare_and_publish_forwards_repository_conflict_limit(monkeypatch):
     limits: list[int] = []
 
     def apply_with_limit(_repo_dir, candidate, *_args, **kwargs):
@@ -2270,7 +2259,7 @@ def test_process_branch_forwards_repository_conflict_limit(monkeypatch):
             "applied",
         )
 
-    _green_only_process_branch(
+    _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(10)],
         apply_fn=apply_with_limit,
@@ -2281,7 +2270,7 @@ def test_process_branch_forwards_repository_conflict_limit(monkeypatch):
     assert limits == [7]
 
 
-def test_process_branch_skips_candidates_already_on_release_branch(monkeypatch):
+def test_prepare_and_publish_skips_candidates_already_on_release_branch(monkeypatch):
     """The release branch history, not a lagging board, decides what is missing."""
     candidates = [
         dataclasses.replace(_candidate(10), merged_at="2026-09-25T17:21:22Z"),
@@ -2301,7 +2290,7 @@ def test_process_branch_skips_candidates_already_on_release_branch(monkeypatch):
         attempted.append(candidate.source_pr_number)
         return _applied(_repo_dir, candidate)
 
-    result, pushed, _upserts, resets, _refs = _green_only_process_branch(
+    result, pushed, _upserts, resets, _refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=candidates,
         apply_fn=apply_fn,
@@ -2351,7 +2340,7 @@ def test_prepare_source_plans_skips_prs_already_present(monkeypatch):
     assert errors == {}
 
 
-def test_process_branch_drops_candidate_whose_repair_reverts_it(monkeypatch):
+def test_prepare_and_publish_drops_candidate_whose_repair_reverts_it(monkeypatch):
     """A cherry-pick plus a repair that undoes it must not reach the sweep PR."""
     repaired = ResolutionResult(
         path="tests/integration/rdb.tcl",
@@ -2379,7 +2368,7 @@ def test_process_branch_drops_candidate_whose_repair_reverts_it(monkeypatch):
             resolved_commit_sha="cherrypicksha",
         )
 
-    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(10), _candidate(11)],
         apply_fn=apply_fn,
@@ -2404,8 +2393,8 @@ def test_process_branch_drops_candidate_whose_repair_reverts_it(monkeypatch):
     assert pushed and len(upserts) == 1
 
 
-def test_process_branch_does_not_publish_when_only_candidate_nets_to_nothing(monkeypatch):
-    result, pushed, upserts, resets, _refs = _green_only_process_branch(
+def test_prepare_and_publish_does_not_publish_when_candidate_nets_to_nothing(monkeypatch):
+    result, pushed, upserts, resets, _refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(10)],
         apply_fn=_applied,
@@ -2453,7 +2442,7 @@ def test_has_changes_since_detects_net_empty_commit_pair(tmp_path):
         sweep_git.has_changes_since(str(repo), "no-such-ref")
 
 
-def test_process_branch_stops_after_unrestored_worktree(monkeypatch):
+def test_prepare_and_publish_stops_after_unrestored_worktree(monkeypatch):
     attempted: list[int] = []
 
     def apply_with_cleanup_failure(
@@ -2471,7 +2460,7 @@ def test_process_branch_stops_after_unrestored_worktree(monkeypatch):
             worktree_restored=False,
         )
 
-    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(10), _candidate(11)],
         apply_fn=apply_with_cleanup_failure,
@@ -2489,7 +2478,7 @@ def test_process_branch_stops_after_unrestored_worktree(monkeypatch):
     assert reset_refs == []
 
 
-def test_process_branch_rolls_back_to_captured_pre_candidate_head(
+def test_prepare_and_publish_rolls_back_to_captured_pre_candidate_head(
     monkeypatch,
 ):
     def apply_two_commits(_repo_dir, candidate, *_args, **_kwargs):
@@ -2500,7 +2489,7 @@ def test_process_branch_rolls_back_to_captured_pre_candidate_head(
             applied_commits=["source-one", "source-two"],
         )
 
-    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(10)],
         apply_fn=apply_two_commits,
@@ -2517,7 +2506,7 @@ def test_process_branch_rolls_back_to_captured_pre_candidate_head(
     assert reset_refs == ["pre-candidate-head"]
 
 
-def test_process_branch_keeps_trying_until_green(monkeypatch):
+def test_prepare_and_publish_keeps_trying_until_green(monkeypatch):
     """Skip failing candidates, keep the first green one, stop after the cap."""
     validations = iter(
         (
@@ -2527,7 +2516,7 @@ def test_process_branch_keeps_trying_until_green(monkeypatch):
         )
     )
 
-    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(11), _candidate(12), _candidate(13), _candidate(14)],
         apply_fn=_applied,
@@ -2550,9 +2539,9 @@ def test_process_branch_keeps_trying_until_green(monkeypatch):
     assert upserts[0].get("draft", False) is False
 
 
-def test_process_branch_pushes_green_branch_as_ready(monkeypatch):
+def test_prepare_and_publish_pushes_green_branch_as_ready(monkeypatch):
     """A single green cherry-pick is pushed as a normal (non-draft) PR."""
-    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(20)],
         apply_fn=_applied,
@@ -2566,7 +2555,7 @@ def test_process_branch_pushes_green_branch_as_ready(monkeypatch):
     assert upserts[0].get("draft", False) is False
 
 
-def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
+def test_prepare_and_publish_skips_already_applied_without_reapplying(monkeypatch):
     """Candidates already on the branch are reported, not re-applied."""
     attempted: list[int] = []
 
@@ -2574,7 +2563,7 @@ def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
         attempted.append(candidate.source_pr_number)
         return CandidateResult(candidate.source_pr_number, candidate.source_pr_title, "applied")
 
-    result, pushed, upserts, resets, reset_refs = _green_only_process_branch(
+    result, pushed, upserts, resets, reset_refs = _run_green_prepare_and_publish(
         monkeypatch,
         candidates=[_candidate(40), _candidate(41)],
         apply_fn=fake_apply,
@@ -2650,7 +2639,7 @@ def test_adapt_target_missing_tests_accepts_edit_beyond_prompt_path_cap(
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -2698,7 +2687,7 @@ def test_adapt_target_missing_tests_stages_branch_native_test(tmp_path):
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -2748,7 +2737,7 @@ def test_adapt_target_missing_tests_allows_existing_c_unit_test(tmp_path):
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3263,
             source_pr_title="Fix OOM aborts in large-memory ASAN tests on GitHub Actions",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3263",
@@ -2820,7 +2809,7 @@ def test_adapt_target_missing_tests_fails_closed_on_production_edit(tmp_path):
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -2868,7 +2857,7 @@ def test_adapt_target_missing_tests_rejects_ignored_sandbox_edit(tmp_path):
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -2919,7 +2908,7 @@ def test_adapt_target_missing_tests_fails_closed_on_production_unstage(tmp_path)
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -2970,7 +2959,7 @@ def test_adapt_target_missing_tests_rolls_back_on_agent_failure(tmp_path):
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -3024,7 +3013,7 @@ def test_adapt_target_missing_tests_fails_closed_on_conflict_marker_output(tmp_p
 
     result = adapt_target_missing_tests_with_claude(
         str(repo),
-        ProjectBackportCandidate(
+        BackportCandidate(
             source_pr_number=3306,
             source_pr_title="Improve COB memory tracking with copy avoidance",
             source_pr_url="https://github.com/valkey-io/valkey/pull/3306",
@@ -3114,7 +3103,7 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
     (repo / "file.txt").write_text("line1\nresolved-content\nline3\n", encoding="utf-8")
     _git(repo, "add", "file.txt")
 
-    candidate = ProjectBackportCandidate(
+    candidate = BackportCandidate(
         source_pr_number=42,
         source_pr_title="Test PR",
         source_pr_url="https://github.com/example/repo/pull/42",
@@ -3171,34 +3160,6 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
     assert committer == "Local Committer <committer@local.invalid>"
     # Don't rely on the unused `candidate` local.
     assert candidate.source_pr_number == 42
-
-
-def test_sync_target_branch_creates_missing_fork_branch():
-    gh = MagicMock()
-    source_repo = MagicMock()
-    fork_repo = MagicMock()
-    source_repo.get_branch.return_value.commit.sha = "abc123def"
-    fork_repo.get_branch.side_effect = GithubException(
-        status=404,
-        data={"message": "Branch not found"},
-        headers={},
-    )
-    gh.get_repo.side_effect = lambda name: {
-        "valkey-io/valkey": source_repo,
-        "ci-bot/valkey": fork_repo,
-    }[name]
-
-    sync_target_branch_to_source(
-        gh,
-        "ci-bot/valkey",
-        "valkey-io/valkey",
-        "8.1",
-    )
-
-    fork_repo.create_git_ref.assert_called_once_with(
-        ref="refs/heads/8.1",
-        sha="abc123def",
-    )
 
 
 def test_graphql_client_retry_exhaustion_raises_clear_error(monkeypatch):
@@ -3407,8 +3368,6 @@ def test_build_pr_body_surfaces_no_op_resolution_under_skipped():
     ``skip_reason``. It must not appear in Applied, but the body must list it
     under "Skipped" with that reason so maintainers see why it was skipped.
     """
-    from scripts.backport.sweep_models import DETAIL_EMPTY_ON_TARGET
-
     result = BranchSweepResult(
         target_branch="8.0",
         candidates_found=2,
@@ -3617,8 +3576,6 @@ def test_parse_previous_failed_normalizes_unknown_outcome_to_error():
 
 
 def test_parse_previous_applied_preserves_ai_detail_from_linked_row():
-    from scripts.backport.sweep_models import DETAIL_RESOLVED_BY_AI
-
     body = "\n".join(
         [
             "## Applied",
@@ -3752,7 +3709,7 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
         log_paths.append(log_path)
         return True, "ok"
 
-    ok, output = repair_validation_failure_with_claude(
+    outcome = repair_validation_failure_with_claude(
         "/repo",
         "8.1",
         ["make"],
@@ -3766,8 +3723,8 @@ def test_repair_validation_failure_invokes_edit_only_agent(monkeypatch):
         has_staged_changes_func=lambda *_args: True,
     )
 
-    assert ok is True
-    assert output == "ok"
+    assert outcome.ok is True
+    assert outcome.output == "ok"
     assert agent_calls[0][0] == "validation_repair_edit_only"
     # The prompt points Claude at the validation log path it should Read,
     # rather than embedding a truncated tail.

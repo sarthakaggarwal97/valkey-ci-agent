@@ -26,13 +26,19 @@ from scripts.backport.missing_test_adaptation import (
     adapt_target_missing_tests_with_claude,
     is_test_path,
 )
-from scripts.backport.models import BackportCandidate, ResolutionResult
+from scripts.backport.models import (
+    DETAIL_RESOLVED_BY_AI,
+    BackportCandidate,
+    CandidateResult,
+    ResolutionResult,
+)
 from scripts.backport.sweep_git import untracked_paths, worktree_changed_paths
 from scripts.backport.validation import (
     UNMAPPED_TEST_PATHS_PREFIX,
     changed_paths_since_base,
     select_validation_commands,
 )
+from scripts.common.ai_output import extract_result_text
 from scripts.common.build_validator import run_build_commands
 from scripts.common.proc import git_output
 
@@ -60,18 +66,36 @@ class ValidationOutcome:
     partial_repair: bool = False
     unmapped_test_paths: tuple[str, ...] = ()
 
-    def __iter__(self):
-        """Preserve the historical ``ok, output = ...`` calling convention."""
-        yield self.ok
-        yield self.output
 
+def merge_validation_outcome(
+    candidate: CandidateResult,
+    outcome: ValidationOutcome,
+    *,
+    resolved_head_sha: str = "",
+) -> None:
+    """Merge successful validation repairs into one candidate result."""
+    if outcome.amended_commit_sha:
+        candidate.resolved_commit_sha = outcome.amended_commit_sha
+    if not outcome.resolutions:
+        return
+    if not resolved_head_sha:
+        raise ValueError("resolved_head_sha is required for validation repairs")
 
-def run_test_commands(
-    repo_dir: str,
-    test_commands: list[str],
-    log_path: str | None = None,
-) -> tuple[bool, str]:
-    return run_build_commands(repo_dir, test_commands, log_path=log_path)
+    candidate.resolutions.extend(outcome.resolutions)
+    candidate.resolved_by_ai = True
+    candidate.resolved_commit_sha = resolved_head_sha
+    if outcome.ai_summary:
+        candidate.ai_summary = "; ".join(
+            dict.fromkeys(
+                summary
+                for summary in (candidate.ai_summary, outcome.ai_summary)
+                if summary
+            )
+        )
+    details = candidate.detail.split("; ") if candidate.detail else []
+    if DETAIL_RESOLVED_BY_AI not in details:
+        details.append(DETAIL_RESOLVED_BY_AI)
+        candidate.detail = "; ".join(details)
 
 
 def validate_backport_branch(
@@ -99,7 +123,7 @@ def validate_backport_branch(
         repo_dir=repo_dir,
         base_ref=comparison_ref,
     )
-    return run_test_commands(repo_dir, commands, log_path=log_path)
+    return run_build_commands(repo_dir, commands, log_path=log_path)
 
 
 def validate_branch_with_optional_repair(
@@ -367,7 +391,7 @@ def repair_validation_failure_with_claude(
             prompt,
             cwd=repo_dir,
         )
-        diagnosis = extract_agent_result_text(getattr(agent_result, "stdout", ""))
+        diagnosis = extract_result_text(getattr(agent_result, "stdout", ""))
         if agent_result.returncode != 0:
             run_git(repo_dir, "reset", "--hard", "HEAD")
             detail = (
@@ -841,7 +865,7 @@ def prepare_generated_files(
                 "target branch: " + ", ".join(untracked_outputs),
             )
         preexisting = _snapshot_paths(repo_dir, worktree_changed_paths(repo_dir))
-        ok, output = run_test_commands(repo_dir, [rule.command])
+        ok, output = run_build_commands(repo_dir, [rule.command])
         if not ok:
             _discard_generator_edits(repo_dir, run_git)
             return ValidationOutcome(
@@ -866,7 +890,7 @@ def prepare_generated_files(
             amended_paths.extend(path for path in edited if path not in amended_paths)
             amended_sha = head_sha(repo_dir)
 
-        ok, output = run_test_commands(repo_dir, [rule.command])
+        ok, output = run_build_commands(repo_dir, [rule.command])
         if not ok:
             _discard_generator_edits(repo_dir, run_git)
             return ValidationOutcome(
@@ -972,25 +996,6 @@ def _validation_repair_resolution(
         reviewer_diff=diff or None,
         llm_summary=summary,
     )
-
-
-def extract_agent_result_text(stdout: str) -> str:
-    result_text = ""
-    for line in stdout.strip().splitlines():
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if not isinstance(event, dict):
-            continue
-        if event.get("type") != "result" or "result" not in event:
-            continue
-        raw_result = event.get("result")
-        if isinstance(raw_result, str):
-            result_text = raw_result.strip()
-        elif raw_result is not None:
-            result_text = json.dumps(raw_result, sort_keys=True, default=str)
-    return result_text
 
 
 def validation_output_with_diagnosis(

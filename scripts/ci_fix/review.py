@@ -34,9 +34,8 @@ from scripts.ci_fix.apply import apply_fix
 from scripts.ci_fix.models import FixProposal, ReviewVerdict, RunResult
 from scripts.ci_fix.runner import run_verification_command
 from scripts.common.ai_output import extract_json_object
+from scripts.common.identity import BOT_EMAIL, BOT_NAME
 from scripts.common.proc import (
-    BOT_EMAIL,
-    BOT_NAME,
     EmptyPatch,
     build_approved_patch,
     git_output,

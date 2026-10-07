@@ -11,6 +11,7 @@ from pathlib import Path
 from github import Auth, Github
 from github.GithubException import GithubException
 
+from scripts.common.github_actions import write_outputs
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.release.authorize import NotAuthorizedError
@@ -32,17 +33,6 @@ logger = logging.getLogger(__name__)
 
 def _token() -> str:
     return os.environ.get("RELEASE_GITHUB_TOKEN", "") or os.environ.get("GITHUB_TOKEN", "")
-
-
-def _write_outputs(values: dict[str, str]) -> None:
-    path = os.environ.get("GITHUB_OUTPUT", "")
-    if not path:
-        return
-    with open(path, "a", encoding="utf-8") as output:
-        for key, value in values.items():
-            if "\n" in value or "\r" in value:
-                raise ValueError(f"multiline workflow output refused for {key}")
-            output.write(f"{key}={value}\n")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -85,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
                 intent=ReleaseIntent(args.intent),
                 actor=args.actor,
             )
-            _write_outputs({"version": release.version, "stage": release.stage, "tag": release.tag})
+            write_outputs({"version": release.version, "stage": release.stage, "tag": release.tag})
             log_outcome(logger, logging.INFO, "Prepared %s on %s", release.tag, args.branch)
             return 0
         if args.command == "plan":
@@ -98,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
             summary = render_plan(publication)
             emit_job_summary(summary)
             print(summary)
-            _write_outputs(
+            write_outputs(
                 {
                     "version": publication.tag,
                     "tag": publication.tag,
@@ -116,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
                 actor=args.actor,
                 expected_digest=args.expected_digest,
                 )
-            _write_outputs({"release_url": url})
+            write_outputs({"release_url": url})
             log_outcome(logger, logging.INFO, "Published the %s release at %s (approved by @%s): %s",
                         args.branch, args.candidate_sha[:12], args.actor, url)
             return 0

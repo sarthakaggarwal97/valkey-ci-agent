@@ -5,9 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 
+from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging
 from scripts.cve_scan.scanner import ScanError, scan_image
 
@@ -73,13 +73,6 @@ def _summary(args: argparse.Namespace, cves: list[str], survivors: list[tuple[st
     return "\n".join(lines) + "\n"
 
 
-def _write_summary(text: str) -> None:
-    path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if path:
-        with open(path, "a", encoding="utf-8") as handle:
-            handle.write(text)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image-ref", required=True)
@@ -102,10 +95,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     except VerifyError as exc:
         logger.error("Verification failed: %s", exc)
-        _write_summary(f"## CVE Candidate Verification\n\nFAIL (fail closed): {exc}\n")
+        emit_job_summary(f"## CVE Candidate Verification\n\nFAIL (fail closed): {exc}")
         return 2
 
-    _write_summary(_summary(args, cves, survivors))
+    emit_job_summary(_summary(args, cves, survivors).rstrip("\n"))
     if survivors:
         logger.error("Targeted CVEs survived: %s", survivors)
         return 1

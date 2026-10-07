@@ -2015,12 +2015,12 @@ class TestSecurityOnlyCutNotEmpty:
 
     def test_empty_notes_section_suppressed_with_security_fixes(self):
         meta = self._meta(security_fixes=["Fix CVE-2025-1234 (CVSS 9.8)"])
-        section = rc._empty_notes_section(meta, self._RC_PLAN, projects.VALKEY_PROFILE)
+        section = rc._empty_notes_section(meta, projects.VALKEY_PROFILE)
         assert section == ""
 
     def test_empty_notes_section_renders_without_security_fixes(self):
         meta = self._meta(security_fixes=None)
-        section = rc._empty_notes_section(meta, self._RC_PLAN, projects.VALKEY_PROFILE)
+        section = rc._empty_notes_section(meta, projects.VALKEY_PROFILE)
         assert "Empty release notes" in section
 
     def test_no_new_prs_section_suppressed_with_security_fixes(self):
@@ -2333,7 +2333,7 @@ class TestBodyNamesProfileVersionFile:
         assert "src/version.h" not in body
 
     def test_empty_notes_section(self) -> None:
-        section = rc._empty_notes_section(self._meta(), self._PLAN, self._JSON)
+        section = rc._empty_notes_section(self._meta(), self._JSON)
         assert "`CMakeLists.txt`" in section
 
     def test_no_new_prs_section(self) -> None:

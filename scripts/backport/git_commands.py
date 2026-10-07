@@ -7,7 +7,7 @@ import subprocess
 from collections.abc import Mapping
 from typing import Callable
 
-from scripts.common.proc import GitCommandError, git_subcommand
+from scripts.common.proc import run_git as run_shared_git
 
 logger = logging.getLogger(__name__)
 
@@ -39,25 +39,19 @@ def run_git(
     *args: str,
     env: Mapping[str, str] | None = None,
 ) -> None:
-    """Run Git in *repo_dir*, raising with bounded diagnostics on failure."""
+    """Run Git through the shared hardened wrapper."""
 
     cmd = ["git", *args]
     logger.debug("Running: %s (cwd=%s)", " ".join(cmd), repo_dir)
-    result = subprocess.run(
-        cmd,
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    if result.returncode == 0:
-        return
-    detail = " ".join((result.stderr or result.stdout or "").split())[-500:]
-    logger.error("git %s failed with exit code %d: %s", git_subcommand(cmd),
-                 result.returncode, detail or "no output")
-    # The error's message carries git's reason, so an outcome line built
-    # from str(exc) still says why.
-    raise GitCommandError(result.returncode, cmd, result.stdout, result.stderr)
+    try:
+        run_shared_git(
+            repo_dir,
+            *args,
+            env=dict(env) if env is not None else None,
+        )
+    except subprocess.CalledProcessError as exc:
+        logger.error("%s", exc)
+        raise
 
 
 def has_staged_changes(

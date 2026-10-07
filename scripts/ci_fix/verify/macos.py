@@ -114,7 +114,7 @@ class MacosVerifier:
         self._timeout = timeout
         self._artifact_client = artifact_client
 
-    def verify(self, repo_dir: str, plan: VerificationPlan, patch: str) -> VerificationResult:
+    def verify(self, _repo_dir: str, plan: VerificationPlan, patch: str) -> VerificationResult:
         """Verify ``patch`` against ``plan.head_sha`` on a macOS runner."""
         encoded = base64.b64encode(patch.encode("utf-8")).decode("ascii")
         if len(encoded) > _MAX_PATCH_BYTES:

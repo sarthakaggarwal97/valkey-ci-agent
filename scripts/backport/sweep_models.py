@@ -4,19 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from scripts.backport import models as _models
-
-ProjectBackportCandidate = _models.BackportCandidate
-CandidateResult = _models.CandidateResult
-DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX = (
-    _models.DETAIL_DROPPED_TARGET_MISSING_TEST_PREFIX
-)
-DETAIL_EMPTY_ON_TARGET = _models.DETAIL_EMPTY_ON_TARGET
-DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX = (
-    _models.DETAIL_PORTED_TARGET_MISSING_TEST_PREFIX
-)
-DETAIL_RESOLVED_BY_AI = _models.DETAIL_RESOLVED_BY_AI
-
+from scripts.backport.models import CandidateResult
 
 # Detail string used when a candidate PR is already cherry-picked onto the
 # backport sweep branch. Reporting treats this as "on the branch", unlike

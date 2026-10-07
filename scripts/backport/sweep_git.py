@@ -8,16 +8,11 @@ import re
 import subprocess
 from typing import Any, Callable
 
-from github.GithubException import GithubException
-
 from scripts.backport.git_commands import run_git as run_git_default
-from scripts.backport.sweep_models import (
-    DETAIL_ALREADY_ON_SWEEP_BRANCH,
-    CandidateResult,
-)
+from scripts.backport.models import CandidateResult
+from scripts.backport.sweep_models import DETAIL_ALREADY_ON_SWEEP_BRANCH
 from scripts.backport.utils import pr_numbers_from_commit_messages
 from scripts.common.git_auth import github_https_url
-from scripts.common.github_client import retry_github_call
 from scripts.common.identity import BOT_EMAIL, BOT_NAME
 from scripts.common.proc import GitCommandError
 
@@ -226,72 +221,3 @@ def _diff_is_nonempty(repo_dir: str, *revs: str) -> bool:
         f"could not compare {' '.join(revs)}: "
         + (result.stderr.strip()[:300] or "git diff failed")
     )
-
-
-def sync_target_branch_to_source(
-    gh: Any, push_repo: str, source_repo: str, target_branch: str,
-) -> None:
-    source_repo_obj = retry_github_call(
-        lambda: gh.get_repo(source_repo),
-        retries=2, description=f"get {source_repo}",
-    )
-    push_repo_obj = retry_github_call(
-        lambda: gh.get_repo(push_repo),
-        retries=2, description=f"get {push_repo}",
-    )
-    source_sha = retry_github_call(
-        lambda: source_repo_obj.get_branch(target_branch).commit.sha,
-        retries=2, description=f"get {source_repo}:{target_branch} head",
-    )
-
-    try:
-        push_sha = retry_github_call(
-            lambda: push_repo_obj.get_branch(target_branch).commit.sha,
-            retries=2, description=f"get {push_repo}:{target_branch} head",
-        )
-    except GithubException as exc:
-        if exc.status != 404:
-            raise
-        logger.info(
-            "Creating missing fork branch %s:%s at %s",
-            push_repo, target_branch, source_sha[:8],
-        )
-        retry_github_call(
-            lambda: push_repo_obj.create_git_ref(
-                ref=f"refs/heads/{target_branch}",
-                sha=source_sha,
-            ),
-            retries=2,
-            description=f"create {push_repo}:{target_branch}",
-        )
-        return
-
-    if push_sha == source_sha:
-        logger.info("push_repo %s:%s already in sync with %s", push_repo, target_branch, source_repo)
-        return
-
-    compare = retry_github_call(
-        lambda: gh.get_repo(source_repo).compare(push_sha, source_sha),
-        retries=2, description=f"compare {push_sha[:8]}..{source_sha[:8]}",
-    )
-
-    if compare.status in ("identical", "ahead"):
-        logger.info(
-            "Fast-forwarding %s:%s from %s to %s (behind by %d)",
-            push_repo, target_branch, push_sha[:8], source_sha[:8], compare.ahead_by,
-        )
-        ref = retry_github_call(
-            lambda: gh.get_repo(push_repo).get_git_ref(f"heads/{target_branch}"),
-            retries=2, description=f"get ref {target_branch}",
-        )
-        retry_github_call(
-            lambda: ref.edit(source_sha, force=False),
-            retries=2, description=f"fast-forward {target_branch}",
-        )
-    elif compare.status in ("diverged", "behind"):
-        raise RuntimeError(
-            f"{push_repo}:{target_branch} has diverged from "
-            f"{source_repo}:{target_branch} (ahead={compare.ahead_by}, "
-            f"behind={compare.behind_by}). Cannot safely fast-forward. "
-            "Resolve the divergence manually before running the sweep."
-        )

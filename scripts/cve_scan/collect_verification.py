@@ -5,11 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.common.github_actions import write_outputs
+from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -151,25 +152,13 @@ def _summary(statuses: list[Status]) -> str:
 
 
 def _write_outputs(versions: list[str], report: str) -> None:
-    values = {
-        "verified_versions": " ".join(versions),
-        "arch_report": report,
-    }
-    path = os.environ.get("GITHUB_OUTPUT")
-    if path:
-        with open(path, "a", encoding="utf-8") as handle:
-            for key, value in values.items():
-                handle.write(f"{key}={value}\n")
-    else:
-        for key, value in values.items():
-            print(f"{key}={value}")
-
-
-def _write_summary(text: str) -> None:
-    path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if path:
-        with open(path, "a", encoding="utf-8") as handle:
-            handle.write(text)
+    write_outputs(
+        {
+            "verified_versions": " ".join(versions),
+            "arch_report": report,
+        },
+        print_if_unset=True,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -186,13 +175,13 @@ def main(argv: list[str] | None = None) -> int:
     except CollectError as exc:
         logger.error("Aggregation failed: %s", exc)
         _write_outputs([], '{"lines":[]}')
-        _write_summary(f"## CVE Verification Aggregation\n\nFAIL: {exc}\n")
+        emit_job_summary(f"## CVE Verification Aggregation\n\nFAIL: {exc}")
         return 2
 
     lines = _group(statuses)
     versions = sorted(line for line, items in lines.items() if any(item.outcome == "verified" for item in items))
     _write_outputs(versions, _arch_report(statuses))
-    _write_summary(_summary(statuses))
+    emit_job_summary(_summary(statuses).rstrip("\n"))
 
     unresolved = [item for item in statuses if item.outcome in {"error", "missing"}]
     if not versions and unresolved:

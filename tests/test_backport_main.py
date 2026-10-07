@@ -437,8 +437,7 @@ class TestRunBackportCleanCherryPick:
         assert kwargs["generated_file_rules"] is None
         assert kwargs["run_git"] is mock_run_git
 
-    @patch(f"{_PATCH_PREFIX}.run_build_commands")
-    @patch(f"{_PATCH_PREFIX}.changed_paths_since_base", return_value=("src/server.c",))
+    @patch(f"{_PATCH_PREFIX}.validate_branch_with_optional_repair")
     @patch(f"{_PATCH_PREFIX}._clone_repo")
     @patch(f"{_PATCH_PREFIX}._run_git")
     @patch(f"{_PATCH_PREFIX}.BackportPRCreator")
@@ -451,8 +450,7 @@ class TestRunBackportCleanCherryPick:
         mock_pr_creator_cls: MagicMock,
         mock_run_git: MagicMock,
         mock_clone: MagicMock,
-        mock_changed_paths: MagicMock,
-        mock_run_build_commands: MagicMock,
+        mock_validate: MagicMock,
     ) -> None:
         mock_gh = MagicMock()
         mock_gh_cls.return_value = mock_gh
@@ -471,7 +469,7 @@ class TestRunBackportCleanCherryPick:
             outcome="applied",
             applied_commits=["commit_sha_1"],
         )
-        mock_run_build_commands.return_value = (False, "compile failed")
+        mock_validate.return_value = ValidationOutcome(False, "compile failed")
 
         result = run_backport(
             repo_full_name="valkey-io/valkey",
@@ -491,11 +489,16 @@ class TestRunBackportCleanCherryPick:
 
         assert result.outcome == "error"
         assert "Build validation failed" in (result.error_message or "")
-        mock_changed_paths.assert_called_once()
-        mock_run_build_commands.assert_called_once_with(
-            ANY,
-            ["make", "./runtest --single unit/cluster/slot-migration"],
-        )
+        mock_validate.assert_called_once()
+        args, kwargs = mock_validate.call_args
+        assert args[:3] == (ANY, "8.1", ["make"])
+        assert args[3] == [
+            ValidationRule(
+                paths=("src/server.c",),
+                commands=("./runtest --single unit/cluster/slot-migration",),
+            )
+        ]
+        assert kwargs["repair"] is False
         mock_pr_creator.create_backport_pr.assert_not_called()
         assert not any(
             len(call_args.args) > 1 and call_args.args[1] == "push"

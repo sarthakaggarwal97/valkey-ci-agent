@@ -3,8 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from scripts.backport import poller
+from scripts.backport.models import CandidateResult
 from scripts.backport.registry import load_registry
-from scripts.backport.sweep_models import BranchSweepResult, CandidateResult
+from scripts.backport.sweep_models import BranchSweepResult
 
 
 def _registry(tmp_path) -> str:

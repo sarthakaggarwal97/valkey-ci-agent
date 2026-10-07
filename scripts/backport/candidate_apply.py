@@ -43,7 +43,6 @@ from scripts.backport.sweep_git import (
     changed_paths_in_index_or_worktree,
     untracked_paths,
 )
-from scripts.backport.validation import select_validation_commands
 from scripts.common.logging_utils import compact_log_value, log_highlight
 
 logger = logging.getLogger(__name__)
@@ -154,8 +153,6 @@ def apply_candidate(
     git_env: dict[str, str],
     *,
     language: str = "c",
-    build_commands: list[str] | None = None,
-    validation_rules: list[Any] | None = None,
     test_path_patterns: tuple[str, ...] | list[str] | None = None,
     max_conflicting_files: int = 100,
     run_git: RunGit = run_git_default,
@@ -214,8 +211,6 @@ def apply_candidate(
             plan,
             state,
             language=language,
-            build_commands=build_commands,
-            validation_rules=validation_rules,
             test_path_patterns=test_path_patterns,
             max_conflicting_files=max_conflicting_files,
             run_git=run_git,
@@ -262,8 +257,6 @@ def _apply_plan(
     state: _ApplyState,
     *,
     language: str,
-    build_commands: list[str] | None,
-    validation_rules: list[Any] | None,
     test_path_patterns: tuple[str, ...] | list[str] | None,
     max_conflicting_files: int,
     run_git: RunGit,
@@ -459,11 +452,6 @@ def _apply_plan(
 
         resolutions: list[ResolutionResult] = []
         if conflicting_files:
-            resolver_validation_commands = select_validation_commands(
-                build_commands or [],
-                validation_rules or [],
-                conflicting_paths,
-            )
             worktree_paths = set(changed_paths_in_index_or_worktree(
                 repo_dir,
                 run_process=run_process,
@@ -476,7 +464,6 @@ def _apply_plan(
                 conflicting_files,
                 candidate.to_pr_context(),
                 language=language,
-                build_commands=resolver_validation_commands or None,
                 allowed_paths=allowed_resolution_paths,
             )
             state.resolutions.extend(resolutions)

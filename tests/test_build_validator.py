@@ -58,6 +58,17 @@ def test_run_build_commands_returns_failure_on_timeout(tmp_path) -> None:
     assert "partial stderr" in output
 
 
+def test_run_build_commands_returns_failure_output(tmp_path) -> None:
+    ok, output = run_build_commands(
+        str(tmp_path),
+        ["printf stdout; printf stderr >&2; exit 3"],
+    )
+
+    assert ok is False
+    assert "stdout" in output
+    assert "stderr" in output
+
+
 def test_run_build_commands_skips_empty_command_list(tmp_path) -> None:
     ok, output = run_build_commands(str(tmp_path), [])
 
