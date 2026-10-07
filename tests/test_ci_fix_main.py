@@ -118,12 +118,18 @@ def test_gate_rejection_is_recorded_for_publication_without_a_request(tmp_path, 
     assert payload["outcome"] == {**payload["outcome"], "kind": "refused", "summary": "not a member"}
 
 
-def test_gate_error_becomes_a_refusal_without_leaking_it(tmp_path, monkeypatch):
+def test_gate_error_is_reported_as_a_failure_without_leaking_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "valkey-io/valkey-ci-agent")
+    monkeypatch.setenv("GITHUB_RUN_ID", "42")
     _stub_gate(monkeypatch, MagicMock(side_effect=RuntimeError("boom")))
     _rc, state, outputs = _gate(tmp_path, monkeypatch, "--event-path", _write_event(tmp_path, _event()))
-    outcome = json.loads(state.read_text())["outcome"]
+    payload = json.loads(state.read_text())
     assert outputs["publication"] == "none"
-    assert "boom" not in outcome["summary"]
+    assert payload["request"] is None
+    assert payload["outcome"]["kind"] == "failed"
+    assert "boom" not in payload["outcome"]["summary"]
+    assert "(https://github.com/valkey-io/valkey-ci-agent/actions/runs/42)" in payload["outcome"]["summary"]
 
 
 def _gated_state(tmp_path, request=None):
@@ -178,13 +184,17 @@ def test_a_killed_prepare_leaves_the_gate_record(tmp_path, monkeypatch):
     assert (outcome["kind"], "stopped before it finished" in outcome["summary"]) == ("failed", True)
 
 
-def _publish(tmp_path, monkeypatch, outcome, *, request=True, publication="push"):
+def test_prepare_without_gate_state_fails_the_step(tmp_path):
+    assert main(["prepare", "--state", str(tmp_path / "none.json"), "--target-token", "t"]) == 1
+
+
+def _publish(tmp_path, monkeypatch, outcome, *, request=True, publication="push", pr=3988):
     from scripts.ci_fix.models import to_dict
     from scripts.ci_fix.publish import write_state
 
     state = tmp_path / "state.json"
     write_state(str(state), {
-        "context": {"repo": "valkey-io/valkey", "pr": 3988, "comment_id": 7},
+        "context": {"repo": "valkey-io/valkey", "pr": pr, "comment_id": 7},
         "request": to_dict(_request()) if request else None,
         "outcome": to_dict(outcome),
     })
@@ -224,6 +234,15 @@ def test_publish_refuses_a_decision_the_gate_did_not_allow(tmp_path, monkeypatch
     assert rc == 1
     publish.assert_not_called()
     assert "internal error stopped publication" in posted["body"]
+
+
+def test_publish_refuses_a_decision_prepared_for_another_pr(tmp_path, monkeypatch):
+    publish = MagicMock()
+    monkeypatch.setattr(main_mod, "publish_to_pr", publish)
+    rc, posted, _ = _publish(tmp_path, monkeypatch, _READY, pr=7)
+    assert rc == 1
+    publish.assert_not_called()
+    assert posted["num"] == 7 and "internal error stopped publication" in posted["body"]
 
 
 def test_publish_reports_a_final_outcome_without_publishing(tmp_path, monkeypatch):

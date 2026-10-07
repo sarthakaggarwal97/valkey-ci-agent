@@ -168,15 +168,23 @@ updating issues on `valkey-fuzzer`.
 
 ## CI Fix Flow
 
-On-demand, triggered by a maintainer commenting `@valkeyrie-bot fix <ci-link>`
-on a backport PR. Decoupled from the backport sweep; it shares only the
-common infrastructure.
+One engine, `pipeline.run_ci_fix_request`, behind three front doors. Each front
+door validates its own request into a `FixRequest`, runs the engine in a
+prepare step with a read-only token, and hands the decision to a publish step
+through a state file. Only the publish step pushes or opens a PR.
+
+- `ci_fix/main.py` (`ci-fix.yml`): `@valkeyrie-ops fix [<run-or-job-url>] [hint]`
+  on a PR, found by `ci_fix/comment_poll.py`.
+- `backport/ci_followup.py` (`backport-ci-followup.yml`): the open sweep PR.
+- `ci_fix/issues.py` (`ci-fix-issues.yml`): Test Failure Detector issues.
 
 ```text
-ci_fix/main.py (workflow_dispatch event)
+ci_fix/main.py gate
   -> gate.build_fix_request(...)        fail-closed auth (contributors team)
-                                        + SHA-bound run gating
-  -> pipeline.run_ci_fix(...)
+                                        + SHA-bound run gating; a job link (or
+                                        the job the gate picks) is FixRequest.job
+ci_fix/main.py prepare
+  -> pipeline.run_ci_fix_request(...)
        verify.github_runs        -> list the jobs that actually failed (code,
                                     not the AI, owns this)
        common.workflow_artifacts -> download the failed run's logs
@@ -210,12 +218,28 @@ ci_fix/main.py (workflow_dispatch event)
          apply + build_and_review_patch, then
          verify.macos.MacosVerifier -> dispatch the agent's verify-macos job,
                                        wait, conclusion is the verdict
+ci_fix/main.py publish
+  -> publish.publish_to_pr(...)
        push.commit_and_push_fix  -> extract approved patch
                                     -> apply in a fresh trusted clone
                                     -> commit (no sign-off), push to the PR's own
-                                       agent/backport/... branch (never merge)
+                                       agent/... branch (never merge); any other
+                                       PR gets the patch as a suggestion
   -> comment.render_comment(outcome) -> posted on the PR
 ```
+
+Local verification runs as a separate unprivileged user (`CI_FIX_VERIFY_USER`)
+that the workflow creates. It owns the checkout only for the command, and every
+process it started is killed before the checkout is handed back, so untrusted
+code cannot read the credentialed parent's environment, rewrite the state file
+publication trusts, or outlive verification.
+
+The Daily issue flow does not execute anything locally. Its publish step pushes
+the candidate to `agent/ci-fix/...` and dispatches `daily.yml` on the base and
+on the candidate (`daily_verify.plan_daily_run` narrows the inputs, evaluating
+the workflow's `if:` expressions with `verify/gha_if.py`). A later run
+reconciles: a PR opens only when the base run reproduces the failure and the
+candidate run passes it.
 
 The defining invariant is the AI/code split plus a hard checkout boundary: the
 AI proposes (which check failed, how to fix, a targeted command, a job hint,
@@ -255,7 +279,11 @@ skeptically review a patch, but it is returned as a handoff rather than pushed.
 
 ### Entry Points
 
-- `scripts/ci_fix/main.py` - workflow_dispatch entry point; mints the target and agent-repo tokens
+- `scripts/ci_fix/main.py` - gate, prepare and publish steps for `ci-fix.yml`
+- `scripts/ci_fix/comment_poll.py` - finds fix commands on PRs and dispatches `ci-fix.yml`
+- `scripts/ci_fix/issues.py` - reconcile, prepare and publish steps for `ci-fix-issues.yml`
+- `scripts/ci_fix/daily_verify.py` - plan, dispatch and evaluate the Daily verification runs
+- `scripts/ci_fix/publish.py` - state handoff and publication to a PR
 - `scripts/ci_fix/gate.py` - command parsing, fail-closed team auth, SHA-bound run gating
 - `scripts/ci_fix/diagnose.py` - read-only AI diagnosis into a structured proposal (fix + job hint)
 - `scripts/ci_fix/apply.py` - edit-only AI fix application
@@ -270,6 +298,7 @@ skeptically review a patch, but it is returned as a handoff rather than pushed.
   - `workflow_env.py` - classify a failed job's runner (x86 Linux / Docker / macOS / unsupported)
   - `github_runs.py` - list the jobs that actually failed in a run (code-owned)
   - `macos.py` - the macOS verifier: dispatch the verify-macos job and wait
+  - `gha_if.py` - evaluate the GitHub Actions `if:` expressions `daily.yml` uses; anything it does not model raises
 - `.github/workflows/ci-fix-verify-macos.yml` - the macOS verification job
 
 ## AI Layer
@@ -645,10 +674,7 @@ raise immediately rather than acting on defaults.
 Future sibling modules and extensions:
 
 - **PR Reviewer** - two-stage code review with skeptic pass
-- **Autonomous CI-fix poller** - the CI-fix engine, driven by a poller that
-  detects red backport PRs (or test-failure issues) instead of a maintainer
-  `@`-mention. Same pipeline, a different front door.
-- **Additional Daily CI Analysis** - detect flaky tests, generate fix PRs
+- **Flaky test detection** - detect flaky tests across Daily runs
 
 
 ## Release automation

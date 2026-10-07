@@ -222,9 +222,10 @@ def request_from_dict(data: dict[str, Any]) -> FixRequest:
         requested_by=_s(data, "requested_by"),
         hint=_s(data, "hint"),
         base_branch=_s(data, "base_branch"),
-        policy=Policy(data.get("policy", Policy.BACKPORT.value)),
-        publication=Publication(data.get("publication", Publication.PUSH.value)),
-        execute=bool(data.get("execute", True)),
+        # These decide what may run and be pushed, so they are never defaulted.
+        policy=Policy(data["policy"]),
+        publication=Publication(data["publication"]),
+        execute=_bool(data, "execute"),
         culprit_range=_s(data, "culprit_range"),
         failing_sha=_s(data, "failing_sha"),
         issue_number=_i(data, "issue_number"),
@@ -284,6 +285,13 @@ def _proposal_from_dict(data: dict[str, Any]) -> FixProposal:
 def _s(data: dict[str, Any], key: str) -> str:
     value = data.get(key, "")
     return value if isinstance(value, str) else ""
+
+
+def _bool(data: dict[str, Any], key: str) -> bool:
+    value = data[key]
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean, got {value!r}")
+    return value
 
 
 def _i(data: dict[str, Any], key: str) -> int:

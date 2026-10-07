@@ -188,3 +188,19 @@ def test_a_suggested_port_is_not_called_verified():
     for claim in ("Verified by", "awaiting", "verification authority"):
         assert claim not in body
     assert f"git cherry-pick -x {'9' * 40}" in body and "update the branch" in body
+
+
+@pytest.mark.parametrize("broken", [
+    {"execute": "false"}, {"execute": None}, {"policy": None}, {"publication": None},
+])
+def test_a_state_file_missing_a_safety_field_is_rejected(broken):
+    data = to_dict(FixRequest(repo_full_name="o/r", pr_number=1, head_repo_full_name="o/r",
+                              head_branch="agent/ci-fix/x", head_sha="a" * 40, run_id=2, requested_by="u",
+                              policy=Policy.FIX, publication=Publication.SUGGEST, execute=False))
+    for key, value in broken.items():
+        if value is None:
+            del data[key]
+        else:
+            data[key] = value
+    with pytest.raises((KeyError, ValueError)):
+        request_from_dict(data)

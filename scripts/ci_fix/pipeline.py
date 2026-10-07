@@ -51,7 +51,6 @@ from scripts.ci_fix.review import (
     combined_command,
     precheck_command,
     reset_worktree,
-    review_fix,
     run_fix_loop,
 )
 from scripts.ci_fix.verify.base import (
@@ -64,13 +63,13 @@ from scripts.ci_fix.verify.base import (
 from scripts.ci_fix.verify.github_runs import failed_jobs_for_run
 from scripts.ci_fix.verify.workflow_env import JobEnvironment, classify_job_environment
 from scripts.common.git_clone import shallow_clone_at_sha
+from scripts.common.logging_utils import workflow_logs
 from scripts.common.workflow_artifacts import ArtifactClient
 
 logger = logging.getLogger(__name__)
 
 Diagnose = Callable[..., FixProposal]
 RunLoop = Callable[..., LoopResult]
-ReviewFix = Callable[..., ReviewVerdict]
 
 _MACOS_FIX_MAX_ATTEMPTS = 5
 # Without local execution only the skeptic can send a fix back, so fewer
@@ -88,7 +87,6 @@ def run_ci_fix_request(
     run_loop_func: RunLoop = run_fix_loop,
     macos_verifier: VerifyBackend | None = None,
     failed_jobs: tuple[str, ...] | None = None,
-    review_func: ReviewFix = review_fix,
 ) -> FixOutcome:
     """Run the engine for a request a trusted front door already validated.
 
@@ -118,7 +116,7 @@ def run_ci_fix_request(
             Path(workdir_str), request, confirmed_jobs,
             artifact_client=artifact_client, diagnose_func=diagnose_func,
             run_loop_func=run_loop_func, macos_verifier=macos_verifier,
-            verify_runs=verify_runs, review_func=review_func,
+            verify_runs=verify_runs,
         )
     run_url = f"https://github.com/{request.repo_full_name}/actions/runs/{request.run_id}"
     return replace(outcome, failing_run_url=run_url)
@@ -134,7 +132,6 @@ def _run_in_workspace(
     run_loop_func: RunLoop,
     macos_verifier: VerifyBackend | None,
     verify_runs: int,
-    review_func: ReviewFix,
 ) -> FixOutcome:
     logs = artifact_client.download_run_logs(request.repo_full_name, request.run_id)
     if not logs:
@@ -162,7 +159,7 @@ def _run_in_workspace(
     outcome = _decide(
         repo_dir, request, proposal, failed_jobs,
         port_candidates=port_candidates, run_loop_func=run_loop_func,
-        macos_verifier=macos_verifier, verify_runs=verify_runs, review_func=review_func,
+        macos_verifier=macos_verifier, verify_runs=verify_runs,
     )
     culprit = resolve_commit(proposal.culprit_commit, suspects) if proposal.culprit_commit else None
     if culprit is None:
@@ -180,7 +177,6 @@ def _decide(
     run_loop_func: RunLoop,
     macos_verifier: VerifyBackend | None,
     verify_runs: int,
-    review_func: ReviewFix,
 ) -> FixOutcome:
     if proposal.path is FixPath.REFUSE:
         return _refuse(proposal, proposal.reasoning or "No safe fix found.")
@@ -189,7 +185,7 @@ def _decide(
         return _port(request, proposal, failed_jobs, port_candidates=port_candidates)
 
     if not request.execute:
-        return _author_without_execution(repo_dir, request, proposal, review_func=review_func)
+        return _author_without_execution(repo_dir, request, proposal)
 
     plan = _plan_verification(repo_dir, request, proposal, failed_jobs)
     if isinstance(plan, str):  # a refusal reason
@@ -293,7 +289,7 @@ def _verify_locally(
 
 
 def _author_without_execution(
-    repo_dir: Path, request: FixRequest, proposal: FixProposal, *, review_func: ReviewFix,
+    repo_dir: Path, request: FixRequest, proposal: FixProposal,
 ) -> FixOutcome:
     """Apply and skeptically review a fix without running the checkout's code.
 
@@ -311,7 +307,7 @@ def _author_without_execution(
             if not applied.applied:
                 return _refuse(proposal, declined_detail(applied), review=last_review)
             reviewed = build_and_review_patch(
-                str(repo_dir), applied.changed, proposal, review_func=review_func, policy=request.policy,
+                str(repo_dir), applied.changed, proposal, policy=request.policy,
             )
             last_review = reviewed.review
             if reviewed.ok:
@@ -405,7 +401,7 @@ def _verify_on_macos(
             kind=OutcomeKind.FAILED,
             summary=(
                 "An internal error stopped macOS verification before a fix could "
-                "be confirmed; see the bot run logs for details."
+                f"be confirmed; see {workflow_logs()}."
             ),
             proposal=proposal, other_failing_checks=proposal.other_failing_checks,
         )

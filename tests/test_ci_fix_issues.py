@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import replace
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -163,6 +165,26 @@ def test_nothing_new_starts_while_a_verification_is_in_flight():
     assert select_issue(_gh_with_issues(busy, fresh), "o/r", bot_login=_BOT) == "verification-in-flight"
 
 
+def test_a_recent_running_attempt_also_blocks_new_ones():
+    busy = _issue(number=1, comments=[_comment({"run": 100, "state": "running", "started_at": int(time.time())})])
+    fresh = _issue(number=2, body=_test_issue_body(run_id=200, name="x"))
+    assert select_issue(_gh_with_issues(busy, fresh), "o/r", bot_login=_BOT) == "verification-in-flight"
+    busy.comments = [_comment({"run": 100, "state": "running", "started_at": int(time.time()) - 4 * 3600})]
+    assert select_issue(_gh_with_issues(busy, fresh), "o/r", bot_login=_BOT)[0] is fresh
+
+
+@pytest.mark.parametrize("author, created, picked", [
+    ("github-actions[bot]", datetime(2026, 6, 20, tzinfo=timezone.utc), True),
+    ("github-actions[bot]", datetime(2026, 8, 1, tzinfo=timezone.utc), False),
+    ("someone", datetime(2026, 6, 20, tzinfo=timezone.utc), False),
+])
+def test_issues_filed_by_the_detector_before_it_moved_to_the_app_are_eligible(author, created, picked):
+    issue = _issue(number=1, author=author)
+    issue.created_at = created
+    result = select_issue(_gh_with_issues(issue), "o/r", bot_login=_BOT)
+    assert (result != "no-actionable-issue") is picked
+
+
 def test_selection_ignores_pull_requests_in_the_issue_listing():
     pr_like = _issue(number=9)
     pr_like._rawData = {"pull_request": {}}
@@ -236,13 +258,13 @@ def test_prepare_builds_a_new_pr_request_on_the_branch_tip(monkeypatch, tmp_path
 def test_prepare_refuses_when_the_failing_job_cannot_be_found(monkeypatch, tmp_path):
     result, state, engine = _prepare(monkeypatch, tmp_path, job=None)
     assert result["decision"] == "refused"
-    assert "could not find the job" in state["outcome"]["summary"]
+    assert "no job of run 100 failed with this failure" in state["outcome"]["summary"]
     engine.assert_not_called()
 
 
 def test_prepare_refuses_what_daily_cannot_verify(monkeypatch, tmp_path):
     _result, state, engine = _prepare(monkeypatch, tmp_path, job="notify")
-    assert "cannot verify a fix for this in the Daily workflow" in state["outcome"]["summary"]
+    assert "cannot be verified in the Daily workflow" in state["outcome"]["summary"]
     engine.assert_not_called()
 
 
@@ -327,6 +349,28 @@ def test_publish_cleans_up_when_dispatch_fails(monkeypatch, tmp_path):
                                state_path=str(_ready_state(tmp_path)))
     assert result["action"] == "failed"
     assert deleted == ["agent/ci-fix/issue-7-100"]
+
+
+def test_a_failed_second_dispatch_cancels_the_first_after_recording_it(monkeypatch, tmp_path):
+    issue = _issue()
+    monkeypatch.setattr(issues_mod, "commit_and_push_fix", MagicMock(return_value=_CANDIDATE))
+    recorded = []
+
+    def dispatch(_gh, _repo, *, ref, plan, sha):
+        # The baseline run is on the issue before the candidate is dispatched.
+        recorded.append(attempts_for(issue, _BOT)[-1].data.get("baseline"))
+        if sha == _CANDIDATE:
+            raise RuntimeError("502")
+        return 11, "https://run/11"
+
+    monkeypatch.setattr(issues_mod, "dispatch_daily", dispatch)
+    monkeypatch.setattr(issues_mod, "_delete_branch", lambda *_a: None)
+    gh = _publish_gh(issue)
+    result = publish_issue_fix(gh, "o/r", git_env={}, state_path=str(_ready_state(tmp_path)))
+    assert result["action"] == "failed"
+    assert recorded == [None, 11]
+    gh.get_repo.return_value.get_workflow_run.assert_called_once_with(11)
+    gh.get_repo.return_value.get_workflow_run.return_value.cancel.assert_called_once_with()
 
 
 def test_publish_on_a_closed_issue_records_it_without_pushing(monkeypatch, tmp_path):
@@ -454,7 +498,7 @@ def test_a_closed_issue_abandons_the_attempt(monkeypatch):
     out, edited, deleted, _opened = _reconcile(monkeypatch, results={}, issue_state="closed")
     assert out[0]["action"] == "abandoned"
     assert deleted == ["agent/ci-fix/issue-7-100"]
-    assert "closed before the attempt finished, so I deleted `agent/ci-fix/issue-7-100`" in edited
+    assert "closed before the attempt finished; deleted `agent/ci-fix/issue-7-100`" in edited
 
 
 def test_a_moved_candidate_branch_is_never_opened(monkeypatch):

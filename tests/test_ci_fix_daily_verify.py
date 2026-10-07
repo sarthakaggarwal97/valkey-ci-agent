@@ -487,3 +487,28 @@ def test_a_whole_shard_reruns_as_the_one_targeted_leg_with_the_shard_selection()
 def test_a_job_that_only_collects_results_is_not_rerun():
     reason = plan_daily_run(_GATED, job_name="collect")
     assert isinstance(reason, str) and "only collects" in reason
+
+
+def test_a_target_job_condition_that_cannot_be_modelled_is_refused():
+    workflow = _DAILY.replace(
+        "if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && "
+        "!contains(github.event.inputs.skipjobs, 'ubuntu')",
+        "if: fromJSON('true') && !contains(github.event.inputs.skipjobs, 'ubuntu')",
+    )
+    assert workflow != _DAILY
+    plan = plan_daily_run(workflow, job_name="test-ubuntu-jemalloc", test_file="tests/unit/x.tcl",
+                          test_name="t", loops=20)
+    assert isinstance(plan, str) and "cannot tell whether job 'test-ubuntu-jemalloc' runs" in plan
+
+
+def test_another_jobs_unmodelled_condition_only_counts_it_as_started(caplog):
+    workflow = _DAILY.replace(
+        "if: (github.event_name == 'workflow_dispatch') && !contains(github.event.inputs.skipjobs, 'rpm-distros')",
+        "if: fromJSON('false')",
+    )
+    assert workflow != _DAILY
+    with caplog.at_level("INFO"):
+        plan = plan_daily_run(workflow, job_name="test-ubuntu-jemalloc", test_file="tests/unit/x.tcl",
+                              test_name="t", loops=20)
+    assert isinstance(plan, DailyPlan)
+    assert "also starts: test-rpm-distros" in caplog.text

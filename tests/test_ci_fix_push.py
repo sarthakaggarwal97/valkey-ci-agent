@@ -313,6 +313,7 @@ def test_fix_push_commits_the_patch_as_the_bot_without_signoff(tmp_path, monkeyp
     assert _git(remote, "rev-parse", "agent/backport/sweep/8.0").strip() == sha
     assert _git(remote, "rev-parse", f"{sha}^").strip() == head_sha
     assert _git(remote, "show", "--name-only", "--format=", sha).split() == ["test.tcl"]
+    assert _git(remote, "show", f"{sha}:test.tcl") == "fixed payload\n"
     message = _git(remote, "log", "-1", "--format=%B", sha)
     assert "Signed-off-by:" not in message
     assert "NAN score" in message
@@ -361,11 +362,19 @@ def test_fix_push_exact_lease_refuses_deleted_branch(tmp_path, monkeypatch):
 def test_fix_push_create_opens_a_new_branch_on_the_base(tmp_path, monkeypatch):
     """The issue flow creates agent/ci-fix/...; the base branch is untouched."""
     remote, head_sha, patch = _remote_with_branch(tmp_path)
+    # The base moves on after the failing run; the fix is built on head_sha, not the tip.
+    work = tmp_path / "work"
+    (work / "later.txt").write_text("later\n")
+    _git(work, "add", "later.txt")
+    _git(work, "commit", "-qm", "later")
+    _git(work, "push", "-q", str(remote), "unstable")
+    tip = _git(work, "rev-parse", "HEAD").strip()
     sha = _fix_push(remote, monkeypatch, patch=patch, head_sha=head_sha,
                     head_branch="agent/ci-fix/issue-7-99", create=True)
 
     assert _git(remote, "rev-parse", "agent/ci-fix/issue-7-99").strip() == sha
-    assert _git(remote, "rev-parse", "unstable").strip() == head_sha
+    assert _git(remote, "rev-parse", f"{sha}^").strip() == head_sha
+    assert _git(remote, "rev-parse", "unstable").strip() == tip
 
 
 def test_fix_push_create_refuses_an_existing_branch(tmp_path, monkeypatch):

@@ -41,7 +41,7 @@ from scripts.ci_fix.review import DEFAULT_VERIFY_RUNS
 from scripts.ci_fix.verify.macos import macos_verifier_from_env
 from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
-from scripts.common.logging_utils import configure_logging, log_outcome
+from scripts.common.logging_utils import configure_logging, log_outcome, workflow_logs
 from scripts.common.polling import env_int
 from scripts.common.workflow_artifacts import ArtifactClient
 
@@ -57,7 +57,7 @@ _MAX_VERIFY_RUNS = 10
 
 _INTERRUPTED = FixOutcome(
     kind=OutcomeKind.FAILED,
-    summary="The run stopped before it finished; see the bot run logs for details.",
+    summary=f"The run stopped before it finished; see {workflow_logs()}.",
 )
 
 
@@ -130,7 +130,10 @@ def _gate(args: argparse.Namespace) -> int:
         )
     except Exception:  # noqa: BLE001 - never stop without telling the PR
         logger.exception("ci_fix gate raised unexpectedly")
-        gated = GateRejection("An internal error stopped the run; see the bot run logs for details.")
+        failed = FixOutcome(kind=OutcomeKind.FAILED, summary=f"An internal error stopped the run; see {workflow_logs()}.")
+        write_state(args.state, {"context": context, "request": None, "outcome": to_dict(failed)})
+        _set_outputs(publication="none", execute="false")
+        return 0
     if isinstance(gated, GateRejection):
         refused = FixOutcome(kind=OutcomeKind.REFUSED, summary=gated.reason)
         write_state(args.state, {"context": context, "request": None, "outcome": to_dict(refused)})
@@ -143,8 +146,12 @@ def _gate(args: argparse.Namespace) -> int:
 
 def _prepare(state_path: str, token: str) -> int:
     state = read_state(state_path)
-    if state is None or not state.get("request"):
-        logger.info("Nothing gated for preparation.")
+    if state is None:
+        # The gate step always writes state, so its absence is a broken run.
+        logger.error("No gate state at %s; cannot prepare.", state_path)
+        return 1
+    if not state.get("request"):
+        logger.info("The gate refused the request; nothing to prepare.")
         return 0
     request = request_from_dict(state["request"])
     gh = Github(auth=Auth.Token(token))
@@ -160,7 +167,7 @@ def _prepare(state_path: str, token: str) -> int:
         logger.exception("ci_fix pipeline raised unexpectedly")
         outcome = FixOutcome(
             kind=OutcomeKind.FAILED,
-            summary="An internal error stopped the run; see the bot run logs for details.",
+            summary=f"An internal error stopped the run; see {workflow_logs()}.",
         )
     write_state(state_path, {**state, "outcome": to_dict(outcome)})
     logger.info("ci_fix decision: %s - %s", outcome.kind.value, outcome.summary)
@@ -182,6 +189,8 @@ def _publish(state_path: str, token: str, gate_publication: str) -> int:
         try:
             if request.publication.value != gate_publication:
                 raise RuntimeError("the prepared decision does not match the gate step")
+            if (request.repo_full_name, request.pr_number) != (repo_full_name, pr_number):
+                raise RuntimeError("the prepared decision is for a different PR")
             with GitAuth(token=token) as auth:
                 outcome = publish_to_pr(
                     outcome, request, git_env=auth.env(), pre_push_check=pr_head_check(gh, request),
@@ -190,7 +199,7 @@ def _publish(state_path: str, token: str, gate_publication: str) -> int:
             logger.exception("ci_fix publication raised unexpectedly")
             outcome = FixOutcome(
                 kind=OutcomeKind.FAILED,
-                summary="An internal error stopped publication; see the bot run logs for details.",
+                summary=f"An internal error stopped publication; see {workflow_logs()}.",
                 proposal=outcome.proposal, failing_run_url=outcome.failing_run_url,
             )
     try:

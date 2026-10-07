@@ -81,6 +81,7 @@ from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import replace_or_post_comment, retry_github_call
 from scripts.common.identity import APP_LOGIN
 from scripts.common.issue_dedup import drop_pull_requests
+from scripts.common.logging_utils import workflow_logs
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.test_failure_detector.download import download_all_test_failures
 from scripts.test_failure_detector.issue_renderer import (
@@ -353,8 +354,8 @@ def _evidence(plan: DailyPlan, baseline: DailyResult, candidate: DailyResult) ->
     before = f"reproduced the failure ({baseline.detail})" if plan.test_name else f"failed ({baseline.detail})"
     return (
         f"\n\n**Verification** in the Daily workflow, {plan.describe()}:\n"
-        f"- Without the fix: [run]({baseline.run_url}) {before}.\n"
-        f"- With the fix: [run]({candidate.run_url}) {candidate.detail}.\n"
+        f"- Without the fix: [run]({baseline.job_url or baseline.run_url}) {before}.\n"
+        f"- With the fix: [run]({candidate.job_url or candidate.run_url}) {candidate.detail}.\n"
     )
 
 
@@ -369,14 +370,14 @@ def select_issue(
     candidates = []
     for issue in _labelled_issues(repo, state="open"):
         # The label alone is not a trust anchor: Valkey's issue template adds
-        # it to any user's report. Only issues the detector (this App) filed.
-        if str(getattr(getattr(issue, "user", None), "login", "") or "") != bot_login:
+        # it to any user's report. Only issues the detector filed.
+        if not _filed_by_detector(issue, bot_login):
             continue
         failure = parse_issue(issue)
         if failure is None:
             continue
         attempts = attempts_for(issue, bot_login)
-        if any(attempt.state == "pending" for attempt in attempts):
+        if any(_in_flight(attempt) for attempt in attempts):
             return "verification-in-flight"
         candidates.append((issue, failure, attempts))
     for issue, failure, attempts in sorted(candidates, key=lambda item: -item[1].run_id):
@@ -396,6 +397,32 @@ def select_issue(
             continue
         return issue, failure
     return "no-actionable-issue"
+
+
+# Before the detector moved to this App it ran as the workflow's own token.
+# Issues it filed then are still open and still detector issues; a later
+# github-actions issue is not, since any workflow in the repository can file one.
+_LEGACY_DETECTOR_LOGIN = "github-actions[bot]"
+_LEGACY_DETECTOR_UNTIL = datetime(2026, 7, 3, tzinfo=timezone.utc)
+
+
+def _filed_by_detector(issue: Any, bot_login: str) -> bool:
+    login = str(getattr(getattr(issue, "user", None), "login", "") or "")
+    if login == bot_login:
+        return True
+    created = getattr(issue, "created_at", None)
+    return (
+        login == _LEGACY_DETECTOR_LOGIN and isinstance(created, datetime)
+        and created.astimezone(timezone.utc) < _LEGACY_DETECTOR_UNTIL
+    )
+
+
+def _in_flight(attempt: Attempt) -> bool:
+    """Whether the attempt may still have Daily runs going, which blocks a new one."""
+    if attempt.state == "pending":
+        return True
+    started = float(attempt.data.get("started_at") or 0)
+    return attempt.state == "running" and time.time() - started <= _RUNNING_LIMIT_S
 
 
 def prepare_issue_fix(
@@ -449,7 +476,7 @@ def prepare_issue_fix(
         logger.exception("issue fix attempt failed unexpectedly")
         outcome = FixOutcome(
             kind=OutcomeKind.FAILED,
-            summary="an internal error stopped the attempt; see the valkey-ci-agent workflow logs",
+            summary=f"an internal error stopped the attempt; see {workflow_logs()}",
         )
     return record(outcome, request)
 
@@ -482,7 +509,7 @@ def _prepare_attempt(
 
     job = _failing_job(gh, artifact_client, repo_full_name, run, failure, ignored_jobs)
     if job is None:
-        return _refusal(f"I could not find the job in which this failed in run {failure.run_id}"), None
+        return _refusal(f"no job of run {failure.run_id} failed with this failure"), None
     context["job"] = job
     workflow = retry_github_call(
         lambda: repo.get_contents(f".github/workflows/{DAILY_WORKFLOW}", ref=repo.default_branch),
@@ -497,7 +524,7 @@ def _prepare_attempt(
         loops=stress_loops(),
     )
     if isinstance(plan, str):
-        return _refusal(f"I cannot verify a fix for this in the Daily workflow: {plan}"), None
+        return _refusal(f"a fix for this cannot be verified in the Daily workflow: {plan}"), None
     context["plan"] = plan.to_dict()
 
     base_sha = retry_github_call(
@@ -671,13 +698,17 @@ def _start_verification(
         baseline, baseline_url = dispatch_daily(
             gh, repo.full_name, ref=repo.default_branch, plan=plan, sha=request.head_sha,
         )
+        fields.update(baseline=baseline, baseline_url=baseline_url)
+        checkpoint(fields)
         candidate, candidate_url = dispatch_daily(
             gh, repo.full_name, ref=repo.default_branch, plan=plan, sha=sha,
         )
     except Exception as exc:  # noqa: BLE001 - report and clean up instead of leaving a branch behind
         logger.exception("could not dispatch the Daily verification")
+        if fields.get("baseline"):
+            _cancel_run(repo, int(fields["baseline"]))
         _delete_branch(repo, fields)
-        return {"state": "failed", "summary": f"I could not start the Daily verification: {exc}"}
+        return {"state": "failed", "summary": f"the Daily verification could not start: {exc}"}
     return {
         **fields,
         "state": "pending",
@@ -746,30 +777,26 @@ def render_attempt(data: dict[str, Any]) -> str:
     state = data.get("state")
     plan = DailyPlan.from_dict(data["plan"]) if data.get("plan") else None
     if state == "running":
-        lines.append(
-            "I am diagnosing this failure; this comment is updated with the result. If it "
-            "is not, the attempt stopped before finishing and the valkey-ci-agent workflow "
-            "logs have the details."
-        )
+        lines.append(f"Diagnosing. This comment is updated with the result; if it is not, see {workflow_logs()}.")
     elif state == "pending" and plan is not None:
         lines.append(
-            f"I pushed a candidate fix to `{data['branch']}` and am verifying it with the Daily "
-            f"workflow, {plan.describe()}: {_run_link(data, 'baseline', 'without the fix')} and "
-            f"{_run_link(data, 'candidate', 'with the fix')}. I will open a PR if the fix passes."
+            f"Candidate fix pushed to `{data['branch']}`, verifying in the Daily workflow, {plan.describe()}: "
+            f"{_run_link(data, 'baseline', 'without the fix')} and {_run_link(data, 'candidate', 'with the fix')}. "
+            "A PR opens if the run without the fix reproduces the failure and the run with it passes."
         )
     elif state == "done":
-        lines.append(f"The fix passed verification; opened #{data['pr']}.")
+        lines.append(f"Verified; opened #{data['pr']}.")
     elif state == "failed" and data.get("candidate_result"):
         result = data["candidate_result"]
         lines.append(
             f"The candidate fix did not pass verification ([run]({result['run_url']}): "
-            f"{result['detail']}), so I deleted `{data['branch']}`."
+            f"{result['detail']}); deleted `{data['branch']}`."
         )
     elif state == "abandoned":
-        deleted = f", so I deleted `{data['branch']}`" if data.get("branch") else ""
+        deleted = f"; deleted `{data['branch']}`" if data.get("branch") else ""
         lines.append(f"The issue was closed before the attempt finished{deleted}.")
     elif state == "refused":
-        lines.append(f"I did not prepare a fix: {data.get('summary', '')}")
+        lines.append(f"No fix prepared: {data.get('summary', '')}")
     else:
         lines.append(f"The attempt did not complete: {data.get('summary', '')}")
     lines += ["", f"<!-- {ATTEMPT_MARKER} {_encode(data)} -->"]
@@ -815,6 +842,13 @@ def _branch_sha(repo: Any, branch: str) -> str:
     return str(ref.object.sha)
 
 
+def _cancel_run(repo: Any, run_id: int) -> None:
+    try:
+        repo.get_workflow_run(run_id).cancel()
+    except Exception as exc:  # noqa: BLE001 - an orphaned run only costs runner time
+        logger.warning("Could not cancel run %s: %s", run_id, exc)
+
+
 def _delete_branch(repo: Any, data: dict[str, Any]) -> None:
     """Delete a candidate branch, but only ours and only if nobody moved it."""
     branch = str(data.get("branch", ""))
@@ -847,7 +881,7 @@ def _refusal(summary: str) -> FixOutcome:
 def _interrupted() -> FixOutcome:
     return FixOutcome(
         kind=OutcomeKind.FAILED,
-        summary="the attempt stopped before it finished; see the valkey-ci-agent workflow logs",
+        summary=f"the attempt stopped before it finished; see {workflow_logs()}",
     )
 
 

@@ -9,12 +9,11 @@ injection. Returns ``True`` on success, ``False`` on any failure.
 from __future__ import annotations
 
 import logging
-import os
 import re
 import subprocess
 from pathlib import Path
 
-from scripts.common.proc import LOCKED_GIT_CONFIG, PROCESS_BASICS, filter_env
+from scripts.common.proc import LOCKED_GIT_CONFIG, git_safe_env
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +89,7 @@ def _run(args: list[str], *, timeout: int, desc: str, cwd: Path | None = None) -
     # environment (no GitHub token, no AWS credentials) so a checkout filter can
     # neither run a credential helper nor read a secret from the environment.
     git_args = [args[0], *LOCKED_GIT_CONFIG, *args[1:]] if args and args[0] == "git" else args
-    env = filter_env(PROCESS_BASICS)
-    env["GIT_CONFIG_NOSYSTEM"] = "1"
-    env["GIT_CONFIG_GLOBAL"] = os.devnull
-    env["GIT_TERMINAL_PROMPT"] = "0"
+    env = git_safe_env()
     try:
         result = subprocess.run(
             git_args, cwd=str(cwd) if cwd else None,

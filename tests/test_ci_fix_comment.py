@@ -42,7 +42,7 @@ def test_pushed_comment_includes_evidence_and_review():
     assert "minimal and correct" in body
     assert "targeted verification on a Linux runner" in body
     assert "actions/runs/9" in body
-    assert "do not merge" in body.lower()
+    assert "full CI still runs" in body
 
 
 def test_pushed_comment_leads_with_the_target_checks_result():
@@ -52,7 +52,7 @@ def test_pushed_comment_leads_with_the_target_checks_result():
         kind=OutcomeKind.PUSHED, summary="pushed", proposal=_proposal(), run_result=_run(noisy),
         commit_sha="abcdef1234567890",
     ))
-    assert "previously-failing check now passes" in body
+    assert "The failing check with the fix:" in body
     assert body.index("NAN score (12 ms)") < body.index("Full verification output")
 
 
@@ -62,7 +62,7 @@ def test_port_comment_names_pr_ci_as_the_authority():
         commit_sha="abcdef1234567890", verify_backend="upstream-port",
     ))
     assert "ported upstream fix" in body
-    assert "normal CI is the verification authority" in body
+    assert "this PR's CI verifies it" in body
 
 
 def test_untrusted_output_cannot_break_out_of_its_fence():
@@ -97,7 +97,7 @@ def test_refused_comment_explains_and_lists_other_failures():
         kind=OutcomeKind.REFUSED, summary="genuinely flaky timing failure; no safe fix",
         other_failing_checks=("other test",), failing_run_url=_RUN, proposal=_proposal(FixPath.REFUSE),
     ))
-    assert body.startswith("I did not prepare a fix: genuinely flaky")
+    assert body.startswith("No fix prepared: genuinely flaky")
     assert "**Root cause:**" in body
     assert "other test" in body
 
@@ -108,9 +108,9 @@ def test_suggested_comment_carries_the_patch_and_never_claims_a_push():
         proposal=_proposal(), run_result=_run(), verify_backend="local",
         patch="--- a/f\n+++ b/f\n+fix\n", review=ReviewVerdict(True, "sound"),
     ))
-    assert "Here is a fix for **corrupt payload" in body
+    assert "Proposed fix for **corrupt payload" in body
     assert "```diff\n--- a/f\n+++ b/f\n+fix\n" in body
-    assert "I did not push this" in body
+    assert "Not pushed" in body
     assert "pushed `" not in body
 
 
@@ -127,9 +127,9 @@ def test_handoff_comment_includes_patch_and_reason():
         kind=OutcomeKind.HANDOFF, summary="could not verify the fix here (no jsonschema)",
         proposal=_proposal(), handoff_patch="--- a/f\n+++ b/f\n+fix\n", failing_run_url=_RUN,
     ))
-    assert "did not push it: could not verify the fix here" in body
+    assert "Unverified fix, not pushed: could not verify the fix here" in body
     assert "+fix" in body
-    assert "A human should apply it" in body
+    assert "apply it by hand" in body
 
 
 def test_failed_comment():

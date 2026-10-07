@@ -120,6 +120,12 @@ def test_allowlist_empty_by_default(monkeypatch):
 
 # --- build_fix_request ---
 
+@pytest.fixture(autouse=True)
+def _linked_run_has_a_failed_job(monkeypatch):
+    monkeypatch.setattr(gate_mod, "failed_jobs_for_run",
+                        lambda *a, **k: [FailedJob(name="test-ubuntu-latest", conclusion="failure", id=1)])
+
+
 def _gh_for_request(*, member_state="active", pr_head_sha="abc123",
                     pr_head_ref="agent/backport/sweep/8.0",
                     pr_head_repo="valkey-io/valkey",
@@ -337,17 +343,17 @@ def test_without_a_link_and_no_failed_run_the_gate_explains(monkeypatch):
     result = build_fix_request(gh, command=parse_command("@valkeyrie-ops fix"),
                                pr_repo_full_name="valkey-io/valkey", pr_number=3988, commenter="alice")
     assert isinstance(result, GateRejection)
-    assert "no completed, failed CI run" in result.reason
+    assert "No completed, failed CI run found" in result.reason
 
 
 
-def test_without_a_link_a_failed_run_listing_is_a_clear_refusal(monkeypatch):
+def test_without_a_link_a_failed_run_listing_is_an_error_not_a_refusal(monkeypatch):
+    """An API outage must not be reported as "this PR has no failed run"."""
     gh = _gh_for_request()
     gh.get_repo.return_value.get_workflow_runs.side_effect = RuntimeError("API down")
-    result = build_fix_request(gh, command=parse_command("@valkeyrie-ops fix"),
-                               pr_repo_full_name="valkey-io/valkey", pr_number=3988, commenter="alice")
-    assert isinstance(result, GateRejection)
-    assert "no completed, failed CI run" in result.reason
+    with pytest.raises(RuntimeError, match="API down"):
+        build_fix_request(gh, command=parse_command("@valkeyrie-ops fix"),
+                          pr_repo_full_name="valkey-io/valkey", pr_number=3988, commenter="alice")
 
 
 @pytest.mark.parametrize("body, run_id, hint", [
@@ -404,8 +410,17 @@ def test_a_job_link_targets_that_job(monkeypatch):
     assert request_from_dict(to_dict(result)).job == "test-sanitizer-address"
 
 
-def test_a_job_link_to_a_job_that_did_not_fail_is_refused(monkeypatch):
+def test_a_linked_run_without_a_failed_job_is_refused(monkeypatch):
     monkeypatch.setattr(gate_mod, "failed_jobs_for_run", lambda *a, **k: [])
+    result = build_fix_request(
+        _gh_for_request(pr_head_repo="contributor/valkey", run_conclusion="success"),
+        command=ParsedCommand("valkey-io", "valkey", 42, ""),
+        pr_repo_full_name="valkey-io/valkey", pr_number=3988, commenter="alice",
+    )
+    assert isinstance(result, GateRejection) and result.reason == "Run 42 has no failed job to fix."
+
+
+def test_a_job_link_to_a_job_that_did_not_fail_is_refused(monkeypatch):
     result = build_fix_request(
         _gh_for_request(), command=ParsedCommand("valkey-io", "valkey", 42, "", job_id=999),
         pr_repo_full_name="valkey-io/valkey", pr_number=3988, commenter="alice",

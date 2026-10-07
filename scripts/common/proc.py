@@ -76,7 +76,7 @@ def git_output(repo_dir: str, *args: str, timeout: int = _GIT_TIMEOUT_S) -> str:
         capture_output=True,
         text=True,
         timeout=timeout,
-        env=_git_safe_env(),
+        env=git_safe_env(),
     )
     if result.returncode != 0:
         _raise_git_failure(result)
@@ -115,7 +115,7 @@ def run_git(
         capture_output=True,
         text=True,
         input=input,
-        env=env if env is not None else _git_safe_env(),
+        env=env if env is not None else git_safe_env(),
         timeout=timeout,
     )
     if result.returncode != 0:
@@ -149,7 +149,7 @@ NETWORK_ENV = ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE")
 _GIT_SAFE_ENV = PROCESS_BASICS
 
 
-def _git_safe_env() -> dict[str, str]:
+def git_safe_env() -> dict[str, str]:
     """The scrubbed git environment, also ignoring user and system config.
 
     A global ``~/.gitconfig`` is writable by the same user that runs untrusted
@@ -158,6 +158,7 @@ def _git_safe_env() -> dict[str, str]:
     env = filter_env(_GIT_SAFE_ENV)
     env["GIT_CONFIG_NOSYSTEM"] = "1"
     env["GIT_CONFIG_GLOBAL"] = os.devnull
+    env["GIT_TERMINAL_PROMPT"] = "0"
     return env
 
 

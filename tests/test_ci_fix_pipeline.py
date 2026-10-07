@@ -336,16 +336,20 @@ def test_recent_changes_default_to_the_prs_own_commits(monkeypatch):
 
 def test_recent_changes_for_a_daily_issue_split_before_and_after_the_failure(monkeypatch):
     seen = []
-    commit = PortCandidate(sha="d" * 40, subject="x")
+    before = PortCandidate(sha="d" * 40, subject="introduced it")
+    after = PortCandidate(sha="e" * 40, subject="landed later")
+    ranges = {"p" * 40 + ".." + "f" * 40: (before,), "f" * 40 + "..HEAD": (after,)}
     monkeypatch.setattr("scripts.ci_fix.pipeline.commits_in_range",
-                        lambda _repo, rev_range, **k: seen.append(rev_range) or (commit,))
+                        lambda _repo, rev_range, **k: seen.append(rev_range) or ranges[rev_range])
     request = _request(publication=Publication.NEW_PR, culprit_range="p" * 40 + ".." + "f" * 40,
                        failing_sha="f" * 40, head_sha="t" * 40)
     suspects, text = _recent_changes("/repo", request)
     assert seen == ["p" * 40 + ".." + "f" * 40, "f" * 40 + "..HEAD"]
-    assert suspects == (commit,)
+    assert suspects == (before,)  # only what landed before the failure can have caused it
+    culprits, later = text.split("cannot have caused it")
+    assert "introduced it" in culprits and "landed later" not in culprits
+    assert "landed later" in later
     assert "between the previous Daily run and the failing run" in text
-    assert "cannot have caused it" in text
 
 
 # --- no execution (fork PRs, Daily issues) ------------------------------------------

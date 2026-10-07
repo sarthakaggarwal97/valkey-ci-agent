@@ -233,7 +233,7 @@ def build_fix_request(
         if picked is None:
             return GateRejection(
                 reason=(
-                    f"I found no completed, failed CI run for this PR's head "
+                    f"No completed, failed CI run found for this PR's head "
                     f"{pr_head_sha[:12]}; link the failing run to target one."
                 )
             )
@@ -273,8 +273,13 @@ def build_fix_request(
             )
         )
 
-    if command.job_id:  # a job link names the failure to fix
+    if command.run_id:
         failed = failed_jobs_for_run(gh, pr_repo_full_name, command.run_id, retries=retries)
+        if not failed:
+            # Without a failed job nothing could be verified, and a fork's fix
+            # is never run here, so the AI would be guessing at a green run.
+            return GateRejection(reason=f"Run {command.run_id} has no failed job to fix.")
+    if command.job_id:  # a job link names the failure to fix
         job = next((job for job in failed if job.id == command.job_id), None)
         if job is None:
             return GateRejection(
@@ -316,14 +321,11 @@ def _most_actionable_failed_run(
     Returns the run and the chosen job's name, so the diagnosis works on the
     same failure the choice was made for.
     """
-    try:
-        runs = retry_github_call(
-            lambda: list(repo.get_workflow_runs(head_sha=head_sha)), retries=retries,
-            description=f"list runs for {head_sha[:12]}",
-        )
-    except Exception as exc:  # noqa: BLE001 - fail closed
-        logger.warning("Could not list runs for %s: %s", head_sha, exc)
-        return None
+    # A listing error propagates: "no failed run" would be a false answer.
+    runs = retry_github_call(
+        lambda: list(repo.get_workflow_runs(head_sha=head_sha)), retries=retries,
+        description=f"list runs for {head_sha[:12]}",
+    )
     best: tuple[tuple[int, int, str], Any, str] | None = None
     for run in runs:
         if str(getattr(run, "head_sha", "") or "") != head_sha:

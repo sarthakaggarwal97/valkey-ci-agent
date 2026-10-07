@@ -17,7 +17,6 @@ which reuses the same push functions.
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
@@ -26,8 +25,6 @@ from scripts.ci_fix.models import FixOutcome, FixRequest, OutcomeKind, Publicati
 from scripts.ci_fix.push import PrePushCheck, PushRefused, commit_and_push_fix, commit_and_push_port
 from scripts.common.atomic_json import write_json_atomic
 from scripts.common.github_client import retry_github_call
-
-logger = logging.getLogger(__name__)
 
 STATE_VERSION = 1
 # Backends whose verdict a push may rely on. A READY outcome without one is a
@@ -114,12 +111,12 @@ def _suggestion(outcome: FixOutcome) -> FixOutcome:
     if outcome.verify_backend:
         return replace(
             outcome, kind=OutcomeKind.SUGGESTED,
-            summary="I do not push to contributor branches, so here is the verified fix.",
+            summary="Targeted verification passed.",
         )
     return replace(
         outcome, kind=OutcomeKind.HANDOFF, handoff_patch=outcome.patch,
         summary=(
-            "this PR's branch is in a fork, so I did not run its code; the fix "
+            "the PR branch is in a fork, so its code was not run here; the fix "
             "was reviewed but not executed"
         ),
     )

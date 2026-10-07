@@ -7,8 +7,9 @@ name: CI Fix Issues
 # 2. Prepare: pick one open test-failure issue with a new occurrence and
 #    diagnose it with a read-only token. Nothing from the checkout is run.
 # 3. Publish: push the fix to a new agent/ci-fix/... branch and dispatch the
-#    Daily workflow on the unfixed base and on the fix, running the failing
-#    job and test only.
+#    Daily workflow on the unfixed base and on the fix, narrowed to the failing
+#    job and test as far as its inputs allow. A PR opens only when the base run
+#    reproduces the failure and the fix run passes it.
 #
 # The bot only creates agent/ci-fix/... branches; it never pushes to unstable
 # or a release branch. State lives in one comment per attempt on the issue.
@@ -47,6 +48,7 @@ jobs:
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
       CI_AGENT_EVIDENCE_DIR: agent-evidence
       TARGET_REPO: valkey-io/valkey
     steps:

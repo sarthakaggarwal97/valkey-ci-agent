@@ -62,6 +62,7 @@ jobs:
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
       CI_AGENT_EVIDENCE_DIR: agent-evidence
     steps:
       - name: Check out agent repository

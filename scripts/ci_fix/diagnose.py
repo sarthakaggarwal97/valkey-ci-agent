@@ -23,7 +23,6 @@ Three boundaries are load-bearing:
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
@@ -31,8 +30,6 @@ from scripts.ai.runtime import run_agent
 from scripts.ci_fix.models import FailureType, FixPath, FixProposal, FixRequest, Policy, Publication
 from scripts.ci_fix.port_discovery import PortCandidate, format_port_candidates
 from scripts.common.ai_output import extract_json_object, last_agent_text
-
-logger = logging.getLogger(__name__)
 
 # Cap the untrusted free-text hint before it enters a prompt.
 _MAX_HINT_CHARS = 500

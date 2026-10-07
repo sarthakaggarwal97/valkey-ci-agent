@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import signal
 import subprocess
 import threading
 import time
@@ -143,8 +144,14 @@ def run_claude_code(
 def _run_streaming(
     cmd: list[str], prompt: str, *, cwd: str | None, env: dict[str, str], timeout: int,
 ) -> tuple[str, str, int]:
+    """Run ``cmd`` with ``prompt`` on stdin, streaming its output, within ``timeout``.
+
+    The deadline starts at spawn: the prompt is written from a thread, so a
+    process that never reads stdin cannot hold the caller past it. The CLI
+    runs in its own process group, and the whole group is killed when it ends
+    or times out, so a tool process it started cannot outlive it.
+    """
     stdout_parts: list[str] = []
-    process = None
     try:
         process = subprocess.Popen(
             cmd,
@@ -155,37 +162,47 @@ def _run_streaming(
             cwd=cwd,
             env=env,
             bufsize=1,
+            start_new_session=True,
         )
-
-        def _read_stdout() -> None:
-            if process.stdout is None:
-                return
-            for line in process.stdout:
-                stdout_parts.append(line)
-                _log_stream_event(line)
-
-        reader = threading.Thread(target=_read_stdout, daemon=True)
-        reader.start()
-        if process.stdin is not None:
-            process.stdin.write(prompt)
-            process.stdin.close()
-
-        returncode = process.wait(timeout=timeout)
-        reader.join(timeout=5)
-        stdout = "".join(stdout_parts)
-        return stdout, "", returncode
-    except subprocess.TimeoutExpired:
-        if process is not None:
-            try:
-                process.kill()
-            except ProcessLookupError:
-                pass
-        # Let the reader thread flush buffered output before we read it.
-        reader.join(timeout=5)
-        stdout = "".join(stdout_parts)
-        return stdout, f"timeout after {timeout}s", 1
     except FileNotFoundError:
         return "", "claude not found", 127
+
+    def _read_stdout() -> None:
+        assert process.stdout is not None
+        for line in process.stdout:
+            stdout_parts.append(line)
+            _log_stream_event(line)
+
+    def _write_prompt() -> None:
+        assert process.stdin is not None
+        try:
+            process.stdin.write(prompt)
+            process.stdin.close()
+        except (BrokenPipeError, ValueError):
+            pass  # the process exited or was killed before reading it all
+
+    reader = threading.Thread(target=_read_stdout, daemon=True)
+    writer = threading.Thread(target=_write_prompt, daemon=True)
+    reader.start()
+    writer.start()
+    try:
+        returncode = process.wait(timeout=timeout)
+        error = ""
+    except subprocess.TimeoutExpired:
+        returncode, error = 1, f"timeout after {timeout}s"
+    finally:
+        _kill_group(process.pid)
+        process.wait()
+    # Let the reader thread flush buffered output before we read it.
+    reader.join(timeout=5)
+    return "".join(stdout_parts), error, returncode
+
+
+def _kill_group(pgid: int) -> None:
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 def _permission_args(allowed_tools: str, confined: bool, extra_dirs: tuple[str, ...]) -> list[str]:

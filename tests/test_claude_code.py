@@ -3,6 +3,9 @@ from __future__ import annotations
 import io
 import logging
 import subprocess
+import time
+
+import pytest
 
 from scripts.ai import claude_code
 
@@ -24,19 +27,34 @@ class _FakeProcess:
     ):
         self.cmd = cmd
         self.kwargs = kwargs
+        _FakeProcess.instances.append(self)
         self.stdin = _RecordingStdin()
         self.stdout = io.StringIO(stdout_text)
         self.returncode = returncode
         self.timeout = timeout
         self.killed = False
+        self.pid = id(self)
 
     def wait(self, timeout=None):
-        if self.timeout:
+        if self.timeout and not self.killed:
             raise subprocess.TimeoutExpired(cmd=self.cmd, timeout=timeout)
         return self.returncode
 
-    def kill(self):
-        self.killed = True
+
+@pytest.fixture(autouse=True)
+def _record_group_kills(monkeypatch):
+    """Fake processes have fake pids, so the real killpg must never see them."""
+    killed = []
+
+    def kill_group(pgid):
+        killed.append(pgid)
+        for process in _FakeProcess.instances:
+            if process.pid == pgid:
+                process.killed = True
+
+    _FakeProcess.instances = []
+    monkeypatch.setattr(claude_code, "_kill_group", kill_group)
+    return killed
 
 
 def test_run_claude_code_streams_json_and_uses_bedrock_env(monkeypatch, caplog):
@@ -270,7 +288,8 @@ def _captured_cmd(monkeypatch, **kwargs):
 
     class _Proc:
         stdout = iter(())
-        stdin = None
+        stdin = io.StringIO()
+        pid = 0
 
         def wait(self, timeout=None):
             return 0
@@ -338,3 +357,20 @@ def test_every_agent_that_reads_ci_fix_input_is_confined():
 
     for name in ("ci_fix_diagnose_readonly", "ci_fix_apply_edit_only"):
         assert AGENT_PROFILES[name].confined, name
+
+
+def test_the_deadline_holds_and_nothing_survives_when_the_cli_ignores_stdin(monkeypatch, tmp_path):
+    """A real process that never reads a large prompt and spawns a child is still stopped on time."""
+    monkeypatch.undo()  # the real killpg
+    marker = tmp_path / "late"
+    script = tmp_path / "claude"
+    script.write_text(f"#!/bin/sh\n(sleep 3; touch {marker}) &\nsleep 30\n")
+    script.chmod(0o755)
+    start = time.monotonic()
+    stdout, stderr, rc = claude_code._run_streaming(
+        [str(script)], "x" * (4 * 1024 * 1024), cwd=str(tmp_path), env={"PATH": "/usr/bin:/bin"}, timeout=1,
+    )
+    assert (stderr, rc) == ("timeout after 1s", 1)
+    assert time.monotonic() - start < 5
+    time.sleep(3)
+    assert not marker.exists()

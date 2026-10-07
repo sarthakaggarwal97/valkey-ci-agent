@@ -349,23 +349,30 @@ class TestUnrecordedJobFailures:
                    return_value={"created": 1}) as mock_process:
             rc = detector_main.run(github_token="t", repo_full_name="valkey-io/valkey", run_id=5)
         assert rc == 0
+        mock_find.assert_called_once()  # the job check ran, and its error was contained
         assert [f.test_name for f in mock_process.call_args.args[2]] == ["t"]
         assert mock_process.call_args.kwargs["job_failures"] == []
 
 
 def test_process_failures_upserts_job_failures_with_their_own_identity():
     from scripts.test_failure_detector import manage_issues
+    from scripts.test_failure_detector.issue_renderer import job_fingerprint_for
     from scripts.test_failure_detector.job_failures import JobFailure
 
     publisher = MagicMock()
     publisher.upsert.return_value = ("created", "https://issue/1")
+    freebsd = JobFailure(job="test-freebsd", url="https://job/1", step="make")
+    alpine = JobFailure(job="test-alpine", url="https://job/2", step="make")
     with patch.object(manage_issues, "IssueDedupPublisher", return_value=publisher):
         summary = manage_issues.process_failures(
-            MagicMock(), "valkey-io/valkey", [], run_id=9,
-            job_failures=[JobFailure(job="test-freebsd", url="https://job/1", step="make")],
+            MagicMock(), "valkey-io/valkey", [], run_id=9, job_failures=[freebsd, alpine],
         )
-    assert summary["created"] == 1
-    kwargs = publisher.upsert.call_args.kwargs
+    assert summary["created"] == 2
+    fingerprints = [call.kwargs["fingerprint"] for call in publisher.upsert.call_args_list]
+    assert sorted(fingerprints) == sorted([job_fingerprint_for(freebsd), job_fingerprint_for(alpine)])
+    assert len(set(fingerprints)) == 2
+    kwargs = next(call.kwargs for call in publisher.upsert.call_args_list
+                  if call.kwargs["fingerprint"] == job_fingerprint_for(freebsd))
     assert kwargs["idempotency_key"] == "9"
     # Job issues are found by their marker only, never adopted by title.
     assert "title_fallback" not in kwargs

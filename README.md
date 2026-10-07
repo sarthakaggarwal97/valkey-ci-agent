@@ -11,7 +11,7 @@ scripts/
   ai/          AI layer: Claude Code subprocess orchestration
   backport/    Automated backports (active)
   fuzzer/      Fuzzer run monitoring (active)
-  ci_fix/      On-demand CI test-fix bot (active)
+  ci_fix/      CI failure triage and fix (active)
   release_notes/  Release cutter + guarded review-comment edits (active)
   cve_scan/    CVE scanning + verified rebuild dispatch (build-and-prove, active)
   common/      Shared infrastructure (git auth, GitHub client, safety guards)
@@ -28,13 +28,13 @@ New workflows are added as sibling directories to `backport/`. Each workflow pic
 |----------|--------|-------------|
 | Backport | Active | Cherry-picks merged PRs onto release branches with AI conflict resolution |
 | Fuzzer Monitor | Active | Analyzes scheduled fuzzer runs and files issues for anomalous failures |
-| CI Fix | Active | Maintainer-triggered or guarded automatic follow-up that diagnoses and verifies a failing check on a backport PR |
+| CI Fix | Active | Diagnoses a failing CI run and proposes a verified fix: on request on a PR, on the open backport sweep PR, and for Test Failure Detector issues |
 | Test Failure Detector | Active | Detects test failures from Daily CI, files/updates GitHub issues |
 | Release Notes | Active | Cuts a release for valkey core or a module repo (search/json/bloom): AI-generates notes from `release-notes` PRs plus AI-triaged candidates without that label, promotes them onto a release line branch, bumps the repo's version file, opens a PR (held as a draft when the cut flags issues) |
 | Release Note Review | Active | Polls unresolved inline comments on automated release PRs, applies a guarded AI edit to the current dated section, replies, and resolves addressed threads |
 | CVE Scan | Active | Scans container images for vulnerabilities, builds and scans the candidate image itself to prove the fix, then dispatches a targeted rebuild |
 | PR Reviewer | Planned | Two-stage code review with skeptic pass |
-| Additional Daily CI Analysis | Planned | Detects flaky tests, generates fix PRs |
+| Flaky Test Detection | Planned | Detects flaky tests across Daily runs |
 
 ## Backport Workflow
 
@@ -77,6 +77,7 @@ repos:
         outputs: ["src/unit/test_files.h"]
     repair_validation_failures: false    # optional; one AI repair attempt on failure
     automatic_ci_followup: false         # inspect CI on the open sweep PR
+    automatic_issue_followup: false      # fix Test Failure Detector issues (ci-fix-issues.yml)
     ci_followup_ignored_jobs: ["*dco*"]  # informational failures, never fixed
     backport_label: backport
     llm_conflict_label: ai-resolved-conflicts
@@ -208,8 +209,28 @@ gh workflow run test-failure-detector-sweep.yml \
 
 ## CI Fix Workflow
 
-An on-demand workflow that fixes a single failing test on a backport PR when a
-maintainer asks for it. From this agent repository, run it explicitly:
+One engine diagnoses a failing CI run and proposes a fix, behind three front
+doors:
+
+- **On request** - an active member of `valkey-io/contributors` comments on a
+  `valkey-io/valkey` PR, and `ci-fix-comment-poll.yml` dispatches `ci-fix.yml`.
+  The command must start the comment; the hint is the rest of that line.
+
+  ```text
+  @valkeyrie-ops fix [<run-or-job-url>] [hint]
+  ```
+
+  Without a link the bot picks the most actionable failed run on the PR head. A
+  job link (`.../actions/runs/<id>/job/<id>`) restricts the fix to that job. On
+  an `agent/backport/...` or `agent/ci-fix/...` branch the bot pushes the fix;
+  on any other PR, including forks, it posts the patch. A fork's code is never
+  run, so its fix is only reviewed.
+- **Backport sweep PRs** - `backport-ci-followup.yml` gives one actionable
+  failure on the open sweep PR to the engine and pushes a verified fix to the
+  `agent/backport/...` branch (see `automatic_ci_followup`).
+- **Daily issues** - `ci-fix-issues.yml`, see [Daily issue fixes](#daily-issue-fixes).
+
+`ci-fix.yml` can also be dispatched by hand:
 
 ```bash
 gh workflow run ci-fix.yml \
@@ -219,20 +240,7 @@ gh workflow run ci-fix.yml \
   --field run_url=https://github.com/valkey-io/valkey/actions/runs/<run_id>
 ```
 
-The workflow is scoped to `valkey-io/valkey`, matching the GitHub App token it
-mints. Maintainers can dispatch it manually, or comment on a `valkey-io/valkey`
-PR and let `ci-fix-comment-poll.yml` dispatch it. The invocation must start the
-comment, and the hint is only the rest of that line, so a conversational comment
-that merely quotes or mentions the command does not trigger a run. The intended
-comment shape is:
-
-```text
-@valkeyrie-bot fix https://github.com/valkey-io/valkey/actions/runs/<run_id>
-```
-
-Add a free-text hint via the dispatch `hint` input to steer the diagnosis
-(e.g. `look at the valgrind timeout`). The bot fixes one test per invocation;
-re-run it to address the next failing test in the same run.
+The bot fixes one failure per invocation.
 
 ### How it works
 
@@ -262,7 +270,9 @@ owns every verdict.** The AI never runs a command and never pushes.
      cleanly, the bot may push the port and rely on this PR's normal CI as the
      authority. This exception is limited to already-merged upstream fixes.
    - Linux/Docker: first run the AI's targeted build+verify recipe on the clean
-     checkout. If it passes before any fix, the bot treats the linked failure
+     checkout. On the host it runs as the unprivileged `CI_FIX_VERIFY_USER`
+     the workflow creates, so it cannot read the job's credentials, write the
+     state the publish step trusts, or leave a process running. If it passes before any fix, the bot treats the linked failure
      as flaky or environment-specific and refuses. If the local environment
      cannot establish a baseline because a setup dependency is missing, any
      authored patch is handoff-only. Otherwise, apply the fix and run it in a
@@ -292,14 +302,13 @@ an unverifiable environment), a maintainer can take over immediately.
 ### Configuration
 
 Reuses the same secrets and OIDC role as the other workflows (see
-[Step 1](#step-1-configure-secrets-and-variables)). The workflow mints two
-short-lived App tokens:
-
-- On `valkey-io/valkey`: `members:read` (team authorization), `actions:read`
-  (run logs and failed-job listing), `contents:write` (push the fix),
-  `issues:write` (PR comments), `pull-requests:write` (PR metadata).
-- On `valkey-io/valkey-ci-agent`: `actions:write` (dispatch and read the
-  macOS verification workflow). Used only for the macOS backend.
+[Step 1](#step-1-configure-secrets-and-variables)). Preparation runs with a
+read-only App token on `valkey-io/valkey` (`members:read`, `actions:read`,
+`contents:read`, `pull-requests:read`). Publication mints a fresh token scoped
+by the gate's decision: `contents:write` and `workflows:write` only when
+pushing to an `agent/...` branch, otherwise only `issues:write` and
+`pull-requests:write` to comment. A token on `valkey-io/valkey-ci-agent` with
+`actions:write` dispatches the macOS verification workflow.
 
 `ci-fix-comment-poll.yml` runs hourly and polls twice inside the same runner,
 30 minutes apart. The in-run loop is capped below the GitHub App token lifetime,
@@ -311,6 +320,36 @@ Optional verification tuning: `CI_FIX_VERIFY_RUNS` sets how many times a
 Linux/Docker fix must pass the verify command before it is trusted (default 2,
 maximum 10). The build runs once regardless, so raising it only repeats the
 verify step. macOS verification runs once on its dedicated runner.
+
+### Daily issue fixes
+
+`ci-fix-issues.yml` runs hourly for repositories with
+`automatic_issue_followup: true`. Each run:
+
+1. **Reconciles** earlier attempts. A fix PR (`Fixes #N`) opens only when the
+   Daily run without the fix reproduces the failure and the run with it passes
+   the test. A skipped or never-run test is not a pass, and a cancelled run
+   ends the attempt as inconclusive. Failed and abandoned attempts delete their
+   `agent/ci-fix/...` branch.
+2. **Selects** at most one open detector issue with a new occurrence. Nothing
+   starts while another attempt is still verifying. An issue gets at most three
+   attempts, counted from the bot's attempt comments on it, so a maintainer who
+   deletes one gives the issue another try. Assigned issues and issues with an
+   open linked PR are skipped. Dispatch with `issue=<N>` to retry one issue's
+   current occurrence.
+3. **Prepares** a fix with a read-only token. Nothing from the checkout runs.
+   A fix that changes `.github/workflows/` is refused, because verification
+   runs the Daily workflow from the default branch.
+4. **Publishes** the fix to `agent/ci-fix/issue-<N>-<run>-<comment>` and
+   dispatches `daily.yml` twice, on the unfixed base and on the fix. The inputs
+   are narrowed to the failing job and test as far as `daily.yml` allows, so a
+   dispatch can also start jobs that share the failing job's `skipjobs` token.
+
+The target's `daily.yml` must accept the `skipjobs`, `skiptests`, `test_args`,
+`use_repo` and `use_git_ref` dispatch inputs. `CI_FIX_STRESS_LOOPS` sets how
+many times the test file is repeated (default 20, range 1-100; Valgrind jobs
+use 5). The publish token needs `actions:write`, `contents:write`,
+`workflows:write` and `issues:write` on the target repository.
 
 ## Release Notes Workflow
 
@@ -875,7 +914,7 @@ After each scan, check the workflow run's job summary in GitHub Actions. The sum
 
 ## Safety
 
-- **Branch namespace** - the agent writes only `agent/backport/...` (backports) and `agent/release-cut/...` (release cuts) branches and opens PRs for maintainer review. It never force-pushes a release line directly.
+- **Branch namespace** - the agent writes only `agent/backport/...` (backports), `agent/ci-fix/...` (CI fixes) and `agent/release-cut/...` (release cuts) branches and opens PRs for maintainer review. It never force-pushes a release line directly.
 - **Credential isolation** - all GitHub auth uses `GIT_ASKPASS`; tokens never appear in `.git/config` or URLs
 - **Claude Code env isolation** - `GITHUB_TOKEN`, `GH_TOKEN`, and `*_SECRET` are stripped from the subprocess environment. Claude cannot see credentials.
 - **Deterministic validation** - registry-configured build commands run before push. A validation failure blocks the push.

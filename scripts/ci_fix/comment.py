@@ -71,13 +71,11 @@ def _render_pushed(outcome: FixOutcome) -> str:
     lines += _remaining_checks(outcome)
     if outcome.verify_backend == "upstream-port":
         lines.append(
-            "_This is a port of an upstream fix; this PR's normal CI is the "
-            "verification authority. I do not merge._"
+            "_Ported from upstream; this PR's CI verifies it._"
         )
     else:
         lines.append(
-            "_The fix passed targeted verification of the failing check; this PR's "
-            "full CI will confirm. I do not merge._"
+            "_Targeted verification passed; this PR's full CI still runs._"
         )
     return "\n".join(lines)
 
@@ -85,7 +83,7 @@ def _render_pushed(outcome: FixOutcome) -> str:
 def _render_suggested(outcome: FixOutcome) -> str:
     proposal = outcome.proposal
     check = proposal.failing_check if proposal else "the failing check"
-    lines = [f"Here is a fix for **{check}**. {outcome.summary}", ""]
+    lines = [f"Proposed fix for **{check}**. {outcome.summary}", ""]
     if outcome.failing_run_url:
         lines += [f"From the failure in [this run]({outcome.failing_run_url}).", ""]
     lines += triage_lines(outcome)
@@ -96,7 +94,7 @@ def _render_suggested(outcome: FixOutcome) -> str:
         lines += [f"**Review:** {outcome.review.reasoning}", ""]
     lines += _patch_lines(outcome)
     lines += _remaining_checks(outcome)
-    lines.append("_I did not push this; apply it on your branch and let CI confirm._")
+    lines.append("_Not pushed: the bot does not push to contributor branches._")
     return "\n".join(lines)
 
 
@@ -109,7 +107,7 @@ def _evidence_lines(outcome: FixOutcome) -> list[str]:
         highlight = _result_lines_for(run.output_tail, check_name)
         if highlight:
             lines += [
-                "The previously-failing check now passes:",
+                "The failing check with the fix:",
                 "",
                 _fenced(highlight),
                 "",
@@ -183,9 +181,9 @@ def _backend_label(outcome: FixOutcome) -> str:
 
 
 def _render_refused(outcome: FixOutcome) -> str:
-    lines = [f"I did not prepare a fix: {outcome.summary}", ""]
+    lines = [f"No fix prepared: {outcome.summary}", ""]
     if outcome.failing_run_url:
-        lines += [f"Looked at the failure from [this run]({outcome.failing_run_url}).", ""]
+        lines += [f"Failure: [this run]({outcome.failing_run_url}).", ""]
     lines += triage_lines(outcome)
     if outcome.run_result is not None and outcome.run_result.output_tail:
         lines += [
@@ -200,12 +198,12 @@ def _render_refused(outcome: FixOutcome) -> str:
 
 
 def _render_failed(outcome: FixOutcome) -> str:
-    return f"I hit an error and could not complete the fix: {outcome.summary}"
+    return f"The fix attempt stopped with an error: {outcome.summary}"
 
 
 def _render_handoff(outcome: FixOutcome) -> str:
     lines = [
-        f"I prepared a fix but did not push it: {outcome.summary}.",
+        f"Unverified fix, not pushed: {outcome.summary}.",
         "",
     ]
     if outcome.failing_run_url:
@@ -215,7 +213,7 @@ def _render_handoff(outcome: FixOutcome) -> str:
         lines += [f"**Review:** {outcome.review.reasoning}", ""]
     lines += _patch_lines(outcome)
     lines += _remaining_checks(outcome)
-    lines.append("_A human should apply it and let CI judge it. I do not merge._")
+    lines.append("_Review it and apply it by hand; this PR's CI is its only verification._")
     return "\n".join(lines)
 
 

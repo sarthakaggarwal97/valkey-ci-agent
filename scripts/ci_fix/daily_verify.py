@@ -251,13 +251,19 @@ def _narrowest(plan: DailyPlan, doc: dict[str, Any]) -> DailyPlan | str:
     combinations (e.g. ``ubuntu || arm``), so every subset of the tokens the
     plan keeps is evaluated against every job's ``if:``, and the one starting
     the fewest other jobs wins. A plan that would not start the target job at
-    all is refused. An expression this module cannot model leaves the plan as
-    it was.
+    all is refused, and so is one whose own ``if:`` this module cannot model.
+    Another job's unmodelled ``if:`` counts that job as started.
     """
     jobs = {key: job for key, job in (doc.get("jobs") or {}).items() if isinstance(job, dict)}
     target = jobs.get(plan.job_id)
     if target is None:
         return plan
+
+    def starts(job: dict[str, Any], context: dict[str, Any]) -> bool:
+        try:
+            return evaluate(job.get("if"), context)
+        except UnsupportedExpression:
+            return True
     every = set(_SKIPJOBS_RE.findall(" ".join(str(job.get("if", "")) for job in jobs.values())))
     every |= set(filter(None, plan.inputs.get("skipjobs", "").split(",")))
     kept = sorted(set(_SKIPJOBS_RE.findall(str(target.get("if", "")))))
@@ -267,14 +273,14 @@ def _narrowest(plan: DailyPlan, doc: dict[str, Any]) -> DailyPlan | str:
     for size in range(len(kept) + 1):
         for keep in itertools.combinations(kept, size):
             candidate = replace(plan, inputs={**plan.inputs, "skipjobs": ",".join(sorted(every - set(keep)))})
+            context = _dispatch_context(candidate)
             try:
-                started = {key for key, job in jobs.items() if evaluate(job.get("if"), _dispatch_context(candidate))}
+                if not evaluate(target.get("if"), context):
+                    continue
             except UnsupportedExpression as exc:
-                logger.info("Not narrowing the Daily dispatch: %s", exc)
-                return plan
-            if plan.job_id not in started:
-                continue
-            others = tuple(sorted(started - {plan.job_id} - summaries))
+                return f"cannot tell whether job {plan.job_id!r} runs: {exc}"
+            started = {key for key, job in jobs.items() if key != plan.job_id and starts(job, context)}
+            others = tuple(sorted(started - summaries))
             key = (len(others), size)
             if best is None or key < best[0]:
                 best = (key, candidate, others)

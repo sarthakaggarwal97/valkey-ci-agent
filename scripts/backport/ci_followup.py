@@ -59,7 +59,7 @@ from scripts.ci_fix.verify.macos import macos_verifier_from_env
 from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import replace_or_post_comment, retry_github_call
 from scripts.common.identity import APP_LOGIN
-from scripts.common.logging_utils import configure_logging
+from scripts.common.logging_utils import configure_logging, workflow_logs
 from scripts.common.polling import env_int
 from scripts.common.workflow_artifacts import ArtifactClient
 
@@ -252,8 +252,7 @@ def prepare_followup(
     record(FixOutcome(
         kind=OutcomeKind.FAILED,
         summary=(
-            "The follow-up stopped before it finished; see the valkey-ci-agent "
-            "workflow logs for details."
+            f"The follow-up stopped before it finished; see {workflow_logs()}."
         ),
     ))
     try:
@@ -270,8 +269,7 @@ def prepare_followup(
         outcome = FixOutcome(
             kind=OutcomeKind.FAILED,
             summary=(
-                "An internal error stopped automatic CI follow-up; see the "
-                "valkey-ci-agent workflow logs for details."
+                f"An internal error stopped automatic CI follow-up; see {workflow_logs()}."
             ),
         )
     record(outcome)
@@ -347,7 +345,7 @@ def publish_followup(
         logger.exception("automatic CI follow-up publication failed unexpectedly")
         outcome = FixOutcome(
             kind=OutcomeKind.FAILED,
-            summary="An internal error stopped publication; see the valkey-ci-agent workflow logs.",
+            summary=f"An internal error stopped publication; see {workflow_logs()}.",
             proposal=outcome.proposal,
         )
 
@@ -509,8 +507,7 @@ def _render_claim_comment(request: FixRequest, markers: list[str]) -> str:
     return (
         "Automatic follow-up for the current backport head is diagnosing "
         f"{request.target or 'the current failure'} at `{request.head_sha[:12]}`. This "
-        "comment is replaced with the result; if it is not, the agent run itself "
-        "failed and the valkey-ci-agent workflow logs have the details.\n\n"
+        f"comment is replaced with the result; if it is not, see {workflow_logs()}.\n\n"
         + "\n".join(markers)
     )
 
