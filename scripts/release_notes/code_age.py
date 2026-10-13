@@ -87,60 +87,77 @@ class ReleasedCodeOracle:
         """
         if not self.usable or not sha:
             return None
+        introducing = modified_line_origins(self._repo_dir, sha)
+        if introducing is None:
+            return None
+        answers = [self._is_released(commit) for commit in introducing]
+        if any(answer is True for answer in answers):
+            return False
+        if any(answer is None for answer in answers):
+            return None
+        return True
+
+
+def modified_line_origins(repo_dir: str, sha: str) -> Optional[set[str]]:
+    """Return the commits that introduced every line *sha* modifies or deletes.
+
+    Blames the pre-image of each hunk at ``<sha>^``. Returns None when the
+    answer is unknown: an unreadable commit, one that only adds lines, one
+    touching more than ``_MAX_FILES`` files, or a range blame cannot read.
+    """
+    if not sha:
+        return None
+    try:
+        diff = git_output(
+            repo_dir, "show", "--format=", "--unified=0", "--no-color", sha,
+        )
+    except Exception:
+        logger.debug("Could not read diff for %s; leaving code age unknown", sha[:12])
+        return None
+
+    ranges: list[tuple[str, int, int]] = []
+    current_file = ""
+    files: set[str] = set()
+    for line in diff.splitlines():
+        if _NO_PREIMAGE_RE.match(line):
+            current_file = ""  # new file: nothing to blame in this section
+            continue
+        file_match = _FILE_RE.match(line)
+        if file_match:
+            current_file = file_match.group(1)
+            files.add(current_file)
+            if len(files) > _MAX_FILES:
+                return None
+            continue
+        hunk = _HUNK_RE.match(line)
+        if hunk and current_file:
+            start = int(hunk.group(1))
+            count = int(hunk.group(2) or "1")
+            if count:  # count 0 is a pure insertion: no pre-image to blame
+                ranges.append((current_file, start, start + count - 1))
+
+    if not ranges:
+        return None
+
+    origins: set[str] = set()
+    for path, start, end in ranges:
         try:
-            diff = git_output(
-                self._repo_dir, "show", "--format=", "--unified=0", "--no-color", sha,
+            blame = git_output(
+                repo_dir, "blame", "--line-porcelain",
+                f"-L{start},{end}", f"{sha}^", "--", path,
             )
         except Exception:
-            logger.debug("Could not read diff for %s; leaving code age unknown", sha[:12])
+            logger.debug("Could not blame %s:%s-%s at %s^", path, start, end, sha[:12])
             return None
-
-        ranges: list[tuple[str, int, int]] = []
-        current_file = ""
-        files: set[str] = set()
-        for line in diff.splitlines():
-            if _NO_PREIMAGE_RE.match(line):
-                current_file = ""  # new file: nothing to blame in this section
-                continue
-            file_match = _FILE_RE.match(line)
-            if file_match:
-                current_file = file_match.group(1)
-                files.add(current_file)
-                if len(files) > _MAX_FILES:
-                    return None
-                continue
-            hunk = _HUNK_RE.match(line)
-            if hunk and current_file:
-                start = int(hunk.group(1))
-                count = int(hunk.group(2) or "1")
-                if count:  # count 0 is a pure insertion: no pre-image to blame
-                    ranges.append((current_file, start, start + count - 1))
-
-        if not ranges:
+        introducing = {
+            m.group(1)
+            for m in (_BLAME_SHA_RE.match(line) for line in blame.splitlines())
+            if m
+        }
+        if not introducing:
             return None
-
-        for path, start, end in ranges:
-            try:
-                blame = git_output(
-                    self._repo_dir, "blame", "--line-porcelain",
-                    f"-L{start},{end}", f"{sha}^", "--", path,
-                )
-            except Exception:
-                logger.debug("Could not blame %s:%s-%s at %s^", path, start, end, sha[:12])
-                return None
-            introducing = {
-                m.group(1)
-                for m in (_BLAME_SHA_RE.match(line) for line in blame.splitlines())
-                if m
-            }
-            if not introducing:
-                return None
-            answers = [self._is_released(commit) for commit in introducing]
-            if any(answer is True for answer in answers):
-                return False
-            if any(answer is None for answer in answers):
-                return None
-        return True
+        origins |= introducing
+    return origins
 
 
 # A backport subject carries the original PR and then its own: "... (#3516) (#4001)".

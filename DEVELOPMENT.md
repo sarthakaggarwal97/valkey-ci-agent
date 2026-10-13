@@ -218,6 +218,28 @@ gh workflow run backport-mark-done-poll.yml \
   --field repo=valkey-io/valkey
 ```
 
+### Backport Eligibility
+
+`.github/workflows/backport-eligibility.yml` runs daily (cron `30 0 * * *`) over
+the PRs merged to the development branch on the previous UTC day and comments on
+the ones that look eligible for backport. Manual dispatch defaults to
+`dry_run=true`, which reports verdicts in the job summary and result artifact
+without commenting.
+
+```bash
+gh workflow run backport-eligibility.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field date=2026-09-16 \
+  --field dry_run=true
+```
+
+Locally, with Bedrock credentials:
+
+```bash
+TARGET_TOKEN=$(gh auth token) python -m scripts.backport.eligibility \
+  --repo valkey-io/valkey --date 2026-09-16 --dry-run
+```
+
 ## Registry Changes
 
 `repos.yml` is the source of truth for onboarded repositories, release branches,
