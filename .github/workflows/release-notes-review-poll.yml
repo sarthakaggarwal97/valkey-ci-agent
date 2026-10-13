@@ -4,6 +4,9 @@ name: Release Notes Review Poll
 # that PR immediately and every five minutes for 55 minutes, then starts the
 # next run while the PR is open. Dispatch manually to restart polling.
 on:
+  push:
+    branches: [e2e/release-notes-review-poll]
+    paths: [.e2e/register]
   workflow_dispatch:
     inputs:
       repo:
@@ -29,8 +32,9 @@ jobs:
   poll:
     name: Poll release-note review comments
     if: >-
-      github.repository == 'valkey-io/valkey-ci-agent' &&
-      github.ref == 'refs/heads/main'
+      github.repository == 'sarthakaggarwal97/valkey-ci-agent' &&
+      github.ref == 'refs/heads/e2e/release-notes-review-poll' &&
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 65
     concurrency:
@@ -50,23 +54,19 @@ jobs:
 
       - name: Generate App token
         id: token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: |
-            ${{ inputs.repo }}
-            valkey-ci-agent
-          permission-actions: write
-          permission-members: read
-          permission-pull-requests: write
-          permission-metadata: read
+        # E2E harness: the PAT stands in for the App token.
+        shell: bash
+        env:
+          PAT: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+        run: |
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+          echo "app-slug=sarthakaggarwal97" >> "$GITHUB_OUTPUT"
 
       - name: Poll and dispatch
         env:
           RELEASE_NOTES_REVIEW_TOKEN: ${{ steps.token.outputs.token }}
           RELEASE_NOTES_REVIEW_APP_SLUG: ${{ steps.token.outputs.app-slug }}
+          CI_FIX_AUTH_ALLOWLIST: sarthakaggarwal97
           RELEASE_NOTES_REVIEW_REPO: ${{ inputs.repo }}
           RELEASE_NOTES_REVIEW_PR: ${{ inputs.pr }}
           RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS: "300"

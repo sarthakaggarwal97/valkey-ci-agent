@@ -496,7 +496,7 @@ def main() -> int:
             os.environ.get("RELEASE_NOTES_REVIEW_STATUS_COMMENT_ID", ""),
         )
         token = os.environ["RELEASE_NOTES_REVIEW_TOKEN"]
-        bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
+        bot_login = os.environ["RELEASE_NOTES_REVIEW_APP_SLUG"]
     except (KeyError, ReviewRefused) as exc:
         logger.error("Invalid release-review dispatch: %s", exc)
         return 1

@@ -257,9 +257,9 @@ def _needs_reconciliation(
 def dispatch_release_review(
     gh: Github,
     *,
-    agent_repo: str = "valkey-io/valkey-ci-agent",
+    agent_repo: str = "sarthakaggarwal97/valkey-ci-agent",
     workflow: str = "release-notes-review.yml",
-    ref: str = "main",
+    ref: str = "e2e/release-notes-review-poll",
 ) -> DispatchFn:
     def dispatch(release: ReleasePR, status_comment_id: int) -> None:
         target = retry_github_call(
@@ -289,9 +289,9 @@ def continue_polling(
     repo_full_name: str,
     pr_number: int,
     *,
-    agent_repo: str = "valkey-io/valkey-ci-agent",
+    agent_repo: str = "sarthakaggarwal97/valkey-ci-agent",
     workflow: str = "release-notes-review-poll.yml",
-    ref: str = "main",
+    ref: str = "e2e/release-notes-review-poll",
 ) -> bool:
     """Start the next poll run while the release PR is still open."""
 
@@ -322,7 +322,7 @@ def continue_polling(
 
 def main() -> int:
     configure_logging()
-    repo_full_name = f"valkey-io/{os.environ['RELEASE_NOTES_REVIEW_REPO']}"
+    repo_full_name = f"sarthakaggarwal97/{os.environ['RELEASE_NOTES_REVIEW_REPO']}"
     if repo_full_name not in REPOSITORIES:
         raise SystemExit(f"unsupported repository: {repo_full_name}")
     pr_number = int(os.environ["RELEASE_NOTES_REVIEW_PR"])
@@ -331,7 +331,7 @@ def main() -> int:
     token = os.environ["RELEASE_NOTES_REVIEW_TOKEN"]
     gh = Github(auth=Auth.Token(token))
     gql = GitHubGraphQLClient(token)
-    bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
+    bot_login = os.environ["RELEASE_NOTES_REVIEW_APP_SLUG"]
     dispatch = dispatch_release_review(gh)
 
     try:

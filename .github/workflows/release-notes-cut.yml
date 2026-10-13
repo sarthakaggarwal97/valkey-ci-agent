@@ -125,10 +125,9 @@ env:
 
 jobs:
   cut:
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 300
-    environment: release-control
     permissions:
       actions: write # Start release-notes review polling for the opened PR.
       contents: read
@@ -187,18 +186,14 @@ jobs:
       # is read as (default || advisory) below, and a skipped step yields "".
       - name: Generate GitHub App token
         id: generate-token
-        if: ${{ !inputs.security_from_advisories && env.HAS_APP_CREDS == 'true' }}
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: ${{ inputs.repo }}
-          # contents:write to push the agent-namespaced prep branch;
-          # pull-requests:write to open the release PR; metadata:read is always required.
-          permission-contents: write
-          permission-pull-requests: write
-          permission-metadata: read
+        if: ${{ !inputs.security_from_advisories }}
+        # E2E harness: the PAT stands in for the App token.
+        shell: bash
+        env:
+          PAT: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+        run: |
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+          echo "app-slug=sarthakaggarwal97" >> "$GITHUB_OUTPUT"
 
       - name: Generate GitHub App token (with advisories)
         id: generate-token-advisories
@@ -265,7 +260,7 @@ jobs:
             echo "Invalid repo name shape: ${RELEASE_NOTES_TARGET_REPO_NAME}" >&2
             exit 1
           fi
-          export RELEASE_NOTES_REPO="valkey-io/${RELEASE_NOTES_TARGET_REPO_NAME}"
+          export RELEASE_NOTES_REPO="sarthakaggarwal97/${RELEASE_NOTES_TARGET_REPO_NAME}"
           # With no App credentials, a personal-token fallback
           # (VALKEY_GITHUB_TOKEN) may run READ-ONLY dry runs. It must never
           # publish: a PAT push would bypass the App's audited identity.
@@ -368,7 +363,7 @@ jobs:
           RELEASE_PR_NUMBER: ${{ steps.cut.outputs.release_pr_number }}
         run: |
           gh workflow run release-notes-review-poll.yml \
-            --repo "${GITHUB_REPOSITORY}" --ref main \
+            --repo "${GITHUB_REPOSITORY}" --ref e2e/release-notes-review-poll \
             -f repo="${RELEASE_NOTES_TARGET_REPO_NAME}" \
             -f pr="${RELEASE_PR_NUMBER}"
 

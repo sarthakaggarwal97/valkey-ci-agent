@@ -18,7 +18,7 @@ from scripts.release_notes import projects
 from scripts.release_notes import release_format as rn
 
 REPOSITORY_NAMES = ("valkey", "valkey-search", "valkey-json", "valkey-bloom")
-REPOSITORIES = tuple(f"valkey-io/{name}" for name in REPOSITORY_NAMES)
+REPOSITORIES = tuple(f"sarthakaggarwal97/{name}" for name in REPOSITORY_NAMES)
 
 _BRANCH_RE = re.compile(
     r"^agent/release-cut/"
@@ -153,7 +153,7 @@ def parse_request(
         raise ReviewRefused(f"invalid status comment id: {status_comment_id!r}")
     return ReviewRequest(
         repo_name=repo_name,
-        repo_full_name=f"valkey-io/{repo_name}",
+        repo_full_name=f"sarthakaggarwal97/{repo_name}",
         pr_number=int(pr_number),
         head_sha=head_sha,
         status_comment_id=int(status_comment_id),
@@ -168,7 +168,7 @@ def validate_release_pr(pr: Any, repo_full_name: str) -> ReleasePR:
     profile = projects.profile_for(repo_full_name)
     if str(getattr(pr, "state", "")).lower() != "open":
         raise ReviewRefused("release PR is not open")
-    if getattr(getattr(pr, "user", None), "login", "") != f"{APP_LOGIN}[bot]":
+    if getattr(getattr(pr, "user", None), "login", "") != "sarthakaggarwal97":
         raise ReviewRefused("release PR was not opened by the release bot")
 
     head = getattr(pr, "head", None)
