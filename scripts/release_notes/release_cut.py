@@ -976,10 +976,23 @@ def cut(
             release_owner=release_owner,
         )
         log_outcome(logger, logging.INFO, "Release notes PR for %s: %s", version, release_url)
+        _write_release_pr_output(release_url)
 
         return 0
     finally:
         run_git(source_clone_dir, "worktree", "remove", "--force", dest_dir)
+
+
+def _write_release_pr_output(release_url: str) -> None:
+    """Expose the release PR number so the workflow can start review polling."""
+    path = os.environ.get("GITHUB_OUTPUT", "")
+    if not path:
+        return
+    number = release_url.rstrip("/").rsplit("/", 1)[-1]
+    if not number.isdigit():
+        raise ValueError(f"release PR URL has no PR number: {release_url}")
+    with open(path, "a", encoding="utf-8") as output:
+        output.write(f"release_pr_number={number}\n")
 
 
 def _print_dry_run(

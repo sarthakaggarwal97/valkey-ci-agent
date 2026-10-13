@@ -2720,3 +2720,29 @@ class TestAlignPriorWordingThreading:
         # the profile would index nothing and silently carry no wording.
         captured = self._forwarded(monkeypatch, clone)
         assert captured["profile"] is projects.VALKEY_PROFILE
+
+
+def test_release_pr_number_is_written_for_review_polling(tmp_path, monkeypatch):
+    output = tmp_path / "github_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+
+    rc._write_release_pr_output("https://github.com/valkey-io/valkey/pull/3456")
+
+    assert output.read_text(encoding="utf-8") == "release_pr_number=3456\n"
+
+
+def test_release_pr_output_is_skipped_outside_actions(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+
+    rc._write_release_pr_output("https://github.com/valkey-io/valkey/pull/3456")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_release_pr_output_refuses_a_url_without_a_number(tmp_path, monkeypatch):
+    output = tmp_path / "github_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+
+    with pytest.raises(ValueError, match="no PR number"):
+        rc._write_release_pr_output("https://github.com/valkey-io/valkey/pull/abc")
+    assert not output.exists()

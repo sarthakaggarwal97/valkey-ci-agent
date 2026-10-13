@@ -15,3 +15,10 @@ def block_unstubbed_network(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(socket, "create_connection", denied)
     monkeypatch.setattr(urllib3.util.connection, "create_connection", denied)
+
+
+@pytest.fixture(autouse=True)
+def isolate_workflow_outputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep code under test from writing into the CI job's own step outputs."""
+
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)

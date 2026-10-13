@@ -644,10 +644,11 @@ to read the advisories.
 ### Automated review comments
 
 Leave an inline comment on the current `00-RELEASENOTES` change in an automated
-release PR; no bot command is required. The hourly poll workflow scans
-immediately, then every five minutes for 55 minutes. PR creation does not start
-a timer, so a comment is normally found by the next scan plus any Actions queue
-delay.
+release PR; no bot command is required. The cut starts the poll workflow for
+the PR it opens, which scans that PR every five minutes until it is merged or
+closed, so a comment is normally found by the next scan plus any Actions queue
+delay. To restart polling, dispatch Release Notes Review Poll with the
+repository and PR number.
 
 The poller batches every unresolved, current notes comment whose latest human
 author is an active `valkey-io/contributors` member. It posts

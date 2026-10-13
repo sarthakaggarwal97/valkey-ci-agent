@@ -130,6 +130,7 @@ jobs:
     timeout-minutes: 300
     environment: release-control
     permissions:
+      actions: write # Start release-notes review polling for the opened PR.
       contents: read
       id-token: write
     concurrency:
@@ -227,6 +228,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Cut release notes
+        id: cut
         shell: bash
         env:
           # Exactly one token step ran (gated by security_from_advisories); the
@@ -356,6 +358,19 @@ jobs:
             args+=(--dry-run)
           fi
           python "${args[@]}"
+
+      - name: Start release-note review polling
+        if: ${{ steps.cut.outputs.release_pr_number != '' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES_TARGET_REPO_NAME: ${{ inputs.repo }}
+          RELEASE_PR_NUMBER: ${{ steps.cut.outputs.release_pr_number }}
+        run: |
+          gh workflow run release-notes-review-poll.yml \
+            --repo "${GITHUB_REPOSITORY}" --ref main \
+            -f repo="${RELEASE_NOTES_TARGET_REPO_NAME}" \
+            -f pr="${RELEASE_PR_NUMBER}"
 
       - name: Upload triage verdicts
         if: always()

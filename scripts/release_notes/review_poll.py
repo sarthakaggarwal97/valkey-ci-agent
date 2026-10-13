@@ -1,4 +1,4 @@
-"""Poll automated release PRs and dispatch one batch per PR."""
+"""Poll one automated release PR and dispatch each actionable review batch."""
 
 from __future__ import annotations
 
@@ -43,14 +43,15 @@ def poll_once(
     gh: Github,
     gql: GitHubGraphQLClient,
     *,
-    repositories: tuple[str, ...],
+    repo_full_name: str,
+    pr_number: int,
     bot_login: str,
     dispatch: DispatchFn,
     authorize: Callable[[str], bool] | None = None,
     org: str = "valkey-io",
     team_slug: str = "contributors",
 ) -> int:
-    """Scan all open PRs and dispatch every complete actionable batch."""
+    """Scan one release PR and dispatch its complete actionable batch."""
 
     auth_cache: dict[str, bool] = {}
 
@@ -63,50 +64,28 @@ def poll_once(
             )
         return auth_cache[login]
 
-    dispatched = 0
-    for repo_full_name in repositories:
-        try:
-            repo = retry_github_call(
-                lambda: gh.get_repo(repo_full_name),
-                retries=3,
-                description=f"get release-review repository {repo_full_name}",
+    pr = retry_github_call(
+        lambda: gh.get_repo(repo_full_name).get_pull(pr_number),
+        retries=3,
+        description=f"get release PR {repo_full_name}#{pr_number}",
+    )
+    try:
+        release = validate_release_pr(pr, repo_full_name)
+        return int(
+            _process_pr(
+                pr,
+                release,
+                gql,
+                bot_login=bot_login,
+                authorized=authorized,
+                dispatch=dispatch,
             )
-            pulls = retry_github_call(
-                lambda: list(repo.get_pulls(state="open")),
-                retries=3,
-                description=f"list open PRs in {repo_full_name}",
-            )
-        except Exception as exc:  # noqa: BLE001 - continue with sibling repos
-            logger.warning("Could not scan %s: %s", repo_full_name, exc)
-            continue
-
-        for pr in pulls:
-            try:
-                release = validate_release_pr(pr, repo_full_name)
-                if _process_pr(
-                    pr,
-                    release,
-                    gql,
-                    bot_login=bot_login,
-                    authorized=authorized,
-                    dispatch=dispatch,
-                ):
-                    dispatched += 1
-            except ReviewRefused as exc:
-                logger.info(
-                    "Skipping %s#%s: %s",
-                    repo_full_name,
-                    getattr(pr, "number", "?"),
-                    exc,
-                )
-            except Exception as exc:  # noqa: BLE001 - continue with sibling PRs
-                logger.warning(
-                    "Could not process %s#%s: %s",
-                    repo_full_name,
-                    getattr(pr, "number", "?"),
-                    exc,
-                )
-    return dispatched
+        )
+    except ReviewRefused as exc:
+        logger.info("Skipping %s#%s: %s", repo_full_name, pr_number, exc)
+    except Exception as exc:  # noqa: BLE001 - the next pass retries
+        logger.warning("Could not process %s#%s: %s", repo_full_name, pr_number, exc)
+    return 0
 
 
 def _process_pr(
@@ -305,35 +284,82 @@ def dispatch_release_review(
     return dispatch
 
 
+def continue_polling(
+    gh: Github,
+    repo_full_name: str,
+    pr_number: int,
+    *,
+    agent_repo: str = "valkey-io/valkey-ci-agent",
+    workflow: str = "release-notes-review-poll.yml",
+    ref: str = "main",
+) -> bool:
+    """Start the next poll run while the release PR is still open."""
+
+    pr = retry_github_call(
+        lambda: gh.get_repo(repo_full_name).get_pull(pr_number),
+        retries=3,
+        description=f"get release PR {repo_full_name}#{pr_number}",
+    )
+    if str(getattr(pr, "state", "")).lower() != "open":
+        logger.info("%s#%d is closed; review polling stops", repo_full_name, pr_number)
+        return False
+    target = retry_github_call(
+        lambda: gh.get_repo(agent_repo).get_workflow(workflow),
+        retries=3,
+        description=f"get workflow {workflow}",
+    )
+    retry_github_call(
+        lambda: target.create_dispatch(
+            ref,
+            {"repo": repo_full_name.rsplit("/", 1)[-1], "pr": str(pr_number)},
+        ),
+        retries=3,
+        description=f"dispatch next review poll for {repo_full_name}#{pr_number}",
+    )
+    logger.info("Started the next review poll for %s#%d", repo_full_name, pr_number)
+    return True
+
+
 def main() -> int:
     configure_logging()
+    repo_full_name = f"valkey-io/{os.environ['RELEASE_NOTES_REVIEW_REPO']}"
+    if repo_full_name not in REPOSITORIES:
+        raise SystemExit(f"unsupported repository: {repo_full_name}")
+    pr_number = int(os.environ["RELEASE_NOTES_REVIEW_PR"])
+    if pr_number <= 0:
+        raise SystemExit(f"invalid release PR number: {pr_number}")
     token = os.environ["RELEASE_NOTES_REVIEW_TOKEN"]
     gh = Github(auth=Auth.Token(token))
     gql = GitHubGraphQLClient(token)
     bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
     dispatch = dispatch_release_review(gh)
 
-    results = run_poll_loop(
-        lambda: poll_once(
-            gh,
-            gql,
-            repositories=REPOSITORIES,
-            bot_login=bot_login,
-            dispatch=dispatch,
-        ),
-        interval_seconds=env_seconds(
-            "RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS",
-            0,
-            minimum=0,
-        ),
-        duration_seconds=env_seconds(
-            "RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS",
-            0,
-            minimum=0,
-            maximum=_MAX_LOOP_SECONDS,
-        ),
-        logger=logger,
-    )
+    try:
+        results = run_poll_loop(
+            lambda: poll_once(
+                gh,
+                gql,
+                repo_full_name=repo_full_name,
+                pr_number=pr_number,
+                bot_login=bot_login,
+                dispatch=dispatch,
+            ),
+            interval_seconds=env_seconds(
+                "RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS",
+                0,
+                minimum=0,
+            ),
+            duration_seconds=env_seconds(
+                "RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS",
+                0,
+                minimum=0,
+                maximum=_MAX_LOOP_SECONDS,
+            ),
+            logger=logger,
+        )
+    finally:
+        # A failed pass must not end polling for a PR that is still open.
+        continue_polling(gh, repo_full_name, pr_number)
     logger.info(
         "Dispatched %d release-review batch(es) across %d iteration(s)",
         sum(results),

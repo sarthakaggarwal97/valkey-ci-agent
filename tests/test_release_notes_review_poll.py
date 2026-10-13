@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from scripts.release_notes import review_poll
 from scripts.release_notes.review import (
     ReviewComment,
     ReviewThread,
@@ -17,6 +18,7 @@ from scripts.release_notes.review import (
     validate_release_pr,
 )
 from scripts.release_notes.review_poll import (
+    continue_polling,
     dispatch_release_review,
     poll_once,
 )
@@ -99,8 +101,8 @@ def _pr(issue_comments: list[StatusComment] | None = None) -> SimpleNamespace:
 
 def _github(pr: SimpleNamespace) -> MagicMock:
     gh = MagicMock()
-    gh.get_repo.return_value = SimpleNamespace(
-        get_pulls=lambda **_kwargs: [pr],
+    gh.get_repo.return_value.get_pull.side_effect = (
+        lambda number: pr if number == pr.number else None
     )
     return gh
 
@@ -118,7 +120,8 @@ def _poll(
     return poll_once(
         _github(pr),
         MagicMock(),
-        repositories=("valkey-io/valkey",),
+        repo_full_name="valkey-io/valkey",
+        pr_number=pr.number,
         bot_login=_BOT,
         dispatch=dispatch,
         authorize=lambda login: login in {"alice", "bob"},
@@ -321,3 +324,94 @@ def test_dispatcher_passes_only_pr_identity() -> None:
             "status_comment_id": "99",
         },
     )
+
+
+def test_closed_release_pr_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    pr = _pr()
+    pr.state = "closed"
+    dispatch = MagicMock()
+
+    assert _poll(monkeypatch, pr, (_thread("thread-one", 1),), dispatch) == 0
+    dispatch.assert_not_called()
+    assert pr.issue_comments == []
+
+
+def test_open_release_pr_starts_the_next_poll() -> None:
+    gh = _github(_pr())
+    workflow = gh.get_repo.return_value.get_workflow.return_value
+
+    assert continue_polling(gh, "valkey-io/valkey", 42) is True
+    gh.get_repo.return_value.get_workflow.assert_called_once_with(
+        "release-notes-review-poll.yml"
+    )
+    workflow.create_dispatch.assert_called_once_with(
+        "main",
+        {"repo": "valkey", "pr": "42"},
+    )
+
+
+@pytest.mark.parametrize("state", ["closed", "merged"])
+def test_closed_release_pr_stops_polling(state: str) -> None:
+    pr = _pr()
+    pr.state = state
+    gh = _github(pr)
+
+    assert continue_polling(gh, "valkey-io/valkey", 42) is False
+    gh.get_repo.return_value.get_workflow.assert_not_called()
+
+
+def _main_env(monkeypatch: pytest.MonkeyPatch, repo: str, pr: str) -> None:
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_REPO", repo)
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_PR", pr)
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_TOKEN", "token")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_APP_SLUG", "valkeyrie-ops")
+    monkeypatch.setattr(review_poll, "Github", MagicMock())
+    monkeypatch.setattr(review_poll, "GitHubGraphQLClient", MagicMock())
+
+
+def test_main_polls_only_the_requested_pr_and_continues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _main_env(monkeypatch, "valkey-search", "7")
+    polled = MagicMock(return_value=0)
+    continued = MagicMock()
+    monkeypatch.setattr(review_poll, "poll_once", polled)
+    monkeypatch.setattr(review_poll, "continue_polling", continued)
+
+    assert review_poll.main() == 0
+    assert polled.call_args.kwargs["repo_full_name"] == "valkey-io/valkey-search"
+    assert polled.call_args.kwargs["pr_number"] == 7
+    assert continued.call_args.args[1:] == ("valkey-io/valkey-search", 7)
+
+
+def test_failed_poll_window_still_continues(monkeypatch: pytest.MonkeyPatch) -> None:
+    _main_env(monkeypatch, "valkey", "42")
+    continued = MagicMock()
+    monkeypatch.setattr(
+        review_poll,
+        "run_poll_loop",
+        MagicMock(side_effect=RuntimeError("pass failed")),
+    )
+    monkeypatch.setattr(review_poll, "continue_polling", continued)
+
+    with pytest.raises(RuntimeError, match="pass failed"):
+        review_poll.main()
+    assert continued.call_args.args[1:] == ("valkey-io/valkey", 42)
+
+
+@pytest.mark.parametrize(
+    ("repo", "pr"),
+    [("valkey-ci-agent", "1"), ("../valkey", "1"), ("valkey", "0"), ("valkey", "-3")],
+)
+def test_main_refuses_unsupported_targets(
+    monkeypatch: pytest.MonkeyPatch,
+    repo: str,
+    pr: str,
+) -> None:
+    _main_env(monkeypatch, repo, pr)
+    continued = MagicMock()
+    monkeypatch.setattr(review_poll, "continue_polling", continued)
+
+    with pytest.raises(SystemExit):
+        review_poll.main()
+    continued.assert_not_called()

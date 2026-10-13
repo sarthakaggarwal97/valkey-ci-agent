@@ -429,7 +429,7 @@ previous AI-generated branch as durable input.
 Review handling is a second, narrower flow over those generated PRs:
 
 ```text
-release-notes-review-poll.yml (hourly runner; immediate + five-minute ticks)
+release-notes-review-poll.yml (started by the cut for its PR; immediate + five-minute ticks)
   -> review_poll.poll_once()
        -> validate automated release PR and authorized review threads
        -> batch every actionable thread on the PR
@@ -445,10 +445,13 @@ release-notes-review.yml (serialized per repo/PR; trusted App sender only)
   -> update status, reply, and resolve unchanged threads
 ```
 
-The poll job runs for 55 minutes. `run_poll_loop` invokes the first scan as soon
-as the runner reaches the poll step, then targets five-minute intervals. PR
-creation does not start a separate timer. Workflow concurrency serializes poll
-runs, and the per-PR handler concurrency serializes edits.
+A non-dry-run cut dispatches the poll for the PR it opened or updated. Each poll
+job scans only that PR, immediately and then at five-minute intervals for 55
+minutes, and dispatches the next poll job while the PR is still open, including
+after a failed pass. Polling stops once the PR is merged or closed. If a run
+cannot start its successor, dispatch the poll manually with the repository and
+PR number. Per-PR workflow concurrency keeps one active chain, and the per-PR
+handler concurrency serializes edits.
 
 The PR comment doubles as deduplication and recovery state through a hidden
 status, head SHA, content-bound batch identifier, target thread identities, and
@@ -497,10 +500,10 @@ calendar date.
 - `scripts/release_notes/release_format.py` - `00-RELEASENOTES` dated-section rendering
 - `scripts/release_notes/version_bump.py` - `src/version.h` macro rewriting
 - `scripts/release_notes/contributors.py` - contributor discovery; reconciles display-name, login, co-author trailers, and PR-resolved logins
-- `.github/workflows/release-notes-review-poll.yml` - discover, authorize,
-  batch, mark, and dispatch unresolved inline review comments
+- `.github/workflows/release-notes-review-poll.yml` - authorize, batch, mark,
+  and dispatch unresolved inline review comments on one release PR
 - `.github/workflows/release-notes-review.yml` - guarded AI edit/publication job
-- `scripts/release_notes/review_poll.py` - multi-repository poll orchestration
+- `scripts/release_notes/review_poll.py` - single release-PR poll and run chaining
 - `scripts/release_notes/review.py` - shared PR, thread, marker, and edit contracts
 - `scripts/release_notes/review_handler.py` - revalidation, one AI pass, fresh-clone
   publication, replies, and resolution

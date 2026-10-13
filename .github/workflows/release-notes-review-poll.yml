@@ -1,10 +1,24 @@
 name: Release Notes Review Poll
 
-# One hourly runner scans immediately and every five minutes for 55 minutes.
+# Started by Cut Release Notes for the PR it opened or updated. Each run scans
+# that PR immediately and every five minutes for 55 minutes, then starts the
+# next run while the PR is open. Dispatch manually to restart polling.
 on:
-  schedule:
-    - cron: "0 * * * *"
   workflow_dispatch:
+    inputs:
+      repo:
+        description: Target repository name
+        required: true
+        type: choice
+        options:
+          - valkey
+          - valkey-search
+          - valkey-json
+          - valkey-bloom
+      pr:
+        description: Release pull request number
+        required: true
+        type: string
 
 permissions: {}
 
@@ -20,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 65
     concurrency:
-      group: release-notes-review-poll
+      group: release-notes-review-poll-${{ inputs.repo }}-${{ inputs.pr }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -42,10 +56,7 @@ jobs:
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
           repositories: |
-            valkey
-            valkey-search
-            valkey-json
-            valkey-bloom
+            ${{ inputs.repo }}
             valkey-ci-agent
           permission-actions: write
           permission-members: read
@@ -56,6 +67,8 @@ jobs:
         env:
           RELEASE_NOTES_REVIEW_TOKEN: ${{ steps.token.outputs.token }}
           RELEASE_NOTES_REVIEW_APP_SLUG: ${{ steps.token.outputs.app-slug }}
-          RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS: ${{ github.event_name == 'schedule' && '300' || '0' }}
-          RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS: ${{ github.event_name == 'schedule' && '3300' || '0' }}
+          RELEASE_NOTES_REVIEW_REPO: ${{ inputs.repo }}
+          RELEASE_NOTES_REVIEW_PR: ${{ inputs.pr }}
+          RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS: "300"
+          RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS: "3300"
         run: python3 -m scripts.release_notes.review_poll
