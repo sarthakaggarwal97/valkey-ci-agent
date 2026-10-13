@@ -12,8 +12,9 @@ History bounds the candidate branches and the model can only narrow them: it
 sees which branches carry each introducing commit, so a fix to a recent
 feature that merely touches an old signature is not offered to old branches.
 Branches the PR already landed on, or whose backport project already holds
-the PR, are never candidates. Each eligible PR gets one marker comment naming its branches. Nothing
-is added to a project: that remains a maintainer decision.
+the PR, are never candidates. Each eligible PR gets one marker comment naming
+its branches. Nothing is added to a project: that remains a maintainer
+decision.
 """
 
 from __future__ import annotations
@@ -22,7 +23,6 @@ import argparse
 import json
 import logging
 import os
-import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -38,17 +38,20 @@ from github import Auth, Github
 from scripts.ai.claude_code import run_claude_code
 from scripts.backport.mark_done import prs_present_in_history
 from scripts.backport.registry import RepoEntry, load_registry
+from scripts.backport.sweep_git import clone_target_branch
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.utils import pr_numbers_from_commit_messages
 from scripts.common.ai_output import extract_json_object
-from scripts.common.git_auth import GitAuth, github_https_url
+from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_outcome
-from scripts.common.proc import git_output
+from scripts.common.proc import git_output, is_ancestor
+from scripts.release.versioning import parse_release_branch
 from scripts.release_notes.ai_inputs import PRDiffCollector, build_prompt_payload, exact_pr_number
 from scripts.release_notes.code_age import modified_line_origins
 from scripts.release_notes.models import MergedPR
+from scripts.release_notes.publish import escape_cell
 
 logger = logging.getLogger(__name__)
 
@@ -134,23 +137,16 @@ Emit exactly one verdict per input PR. Use an empty `branches` list when
 
 @dataclass(frozen=True)
 class MergedSourcePR:
-    """A PR merged to the development branch, with what eligibility needs."""
+    """A merged PR plus the GitHub state eligibility decides on."""
 
-    number: int
-    title: str
-    body: str
-    url: str
-    author: str
-    merge_commit_sha: str
+    pr: MergedPR
     merged_at: str
     project_numbers: frozenset[int] = frozenset()
     already_commented: bool = False
 
-    def as_merged_pr(self) -> MergedPR:
-        return MergedPR(
-            number=self.number, title=self.title, author=self.author,
-            url=self.url, body=self.body, merge_commit_sha=self.merge_commit_sha,
-        )
+    @property
+    def number(self) -> int:
+        return self.pr.number
 
 
 @dataclass(frozen=True)
@@ -164,7 +160,7 @@ class LineOrigin:
 
 @dataclass(frozen=True)
 class Candidate:
-    pr: MergedSourcePR
+    source: MergedSourcePR
     origins: tuple[LineOrigin, ...]
 
     @property
@@ -226,12 +222,14 @@ def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
         for comment in (node.get("comments") or {}).get("nodes") or []
     )
     return MergedSourcePR(
-        number=node["number"],
-        title=node.get("title") or "",
-        body=node.get("body") or "",
-        url=node.get("url") or "",
-        author=(node.get("author") or {}).get("login") or "",
-        merge_commit_sha=sha,
+        pr=MergedPR(
+            number=node["number"],
+            title=node.get("title") or "",
+            body=node.get("body") or "",
+            url=node.get("url") or "",
+            author=(node.get("author") or {}).get("login") or "",
+            merge_commit_sha=sha,
+        ),
         merged_at=node["mergedAt"],
         project_numbers=projects,
         already_commented=commented,
@@ -239,9 +237,9 @@ def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
 
 
 def trace_origins(
-    repo_dir: str, pr: MergedSourcePR, branches: Sequence[str],
+    repo_dir: str, source: MergedSourcePR, branches: Sequence[str],
 ) -> tuple[LineOrigin, ...] | None:
-    """Return the commits that introduced the lines *pr* modifies, per branch.
+    """Return the commits that introduced the lines *source* modifies, oldest first.
 
     A branch carries an origin when the origin is an ancestor of it, or when
     the origin's own PR was backported to it. Branches the PR itself already
@@ -250,44 +248,49 @@ def trace_origins(
     Returns None when blame cannot answer (see ``modified_line_origins``),
     which includes purely additive PRs: new code has nothing to backport into.
     """
-    shas = modified_line_origins(repo_dir, pr.merge_commit_sha)
+    shas = modified_line_origins(repo_dir, source.pr.merge_commit_sha)
     if shas is None:
         return None
+    records = _commit_records(repo_dir, shas)
     # Post-fork origins reach a branch by cherry-pick under a different SHA,
     # so they are traced by PR number, gated on the origin's own commit time.
-    records: dict[str, tuple[str, str, set[int]]] = {}
-    origin_prs: dict[int, str] = {}
-    for sha in sorted(shas):
-        record = git_output(repo_dir, "log", "-1", "--format=%cI%x00%B", sha)
-        committed_at, _, message = record.partition("\x00")
-        committed_at = committed_at.strip()
-        numbers = pr_numbers_from_commit_messages([message]) - {pr.number}
-        records[sha] = (message.split("\n", 1)[0].strip(), committed_at, numbers)
-        origin_prs.update(dict.fromkeys(numbers, committed_at))
+    origin_prs = {
+        number: committed_at
+        for _, committed_at, numbers in records.values()
+        for number in numbers - {source.number}
+    }
 
     carried: dict[str, list[str]] = {sha: [] for sha in records}
     for branch in branches:
         ref = f"origin/{branch}"
-        present = prs_present_in_history(repo_dir, ref, {**origin_prs, pr.number: pr.merged_at})
-        if pr.number in present:
+        present = prs_present_in_history(
+            repo_dir, ref, {**origin_prs, source.number: source.merged_at},
+        )
+        if source.number in present:
             continue
         for sha, (_, _, numbers) in records.items():
-            if numbers & present or _is_ancestor(repo_dir, sha, ref):
+            if numbers & present or is_ancestor(repo_dir, sha, ref):
                 carried[sha].append(branch)
+    ordered = sorted(records.items(), key=lambda item: datetime.fromisoformat(item[1][1]))
     return tuple(
         LineOrigin(subject=subject, committed_at=committed_at, branches=tuple(carried[sha]))
-        for sha, (subject, committed_at, _) in sorted(records.items(), key=lambda kv: datetime.fromisoformat(kv[1][1]))
+        for sha, (subject, committed_at, _) in ordered
     )
 
 
-def _is_ancestor(repo_dir: str, sha: str, ref: str) -> bool:
-    try:
-        git_output(repo_dir, "merge-base", "--is-ancestor", sha, ref)
-    except subprocess.CalledProcessError as exc:
-        if exc.returncode != 1:
-            logger.warning("Could not test %s against %s: %s", sha[:12], ref, exc)
-        return False
-    return True
+def _commit_records(repo_dir: str, shas: set[str]) -> dict[str, tuple[str, str, set[int]]]:
+    """Map each SHA to (subject, committer ISO time, PR numbers it names)."""
+    out = git_output(repo_dir, "log", "--no-walk", "-z", "--format=%H%x00%cI%x00%B", *sorted(shas))
+    fields = out.split("\x00")
+    records: dict[str, tuple[str, str, set[int]]] = {}
+    for index in range(0, len(fields) - 2, 3):
+        sha, committed_at, message = fields[index].strip(), fields[index + 1], fields[index + 2]
+        records[sha] = (
+            message.split("\n", 1)[0].strip(),
+            committed_at,
+            pr_numbers_from_commit_messages([message]),
+        )
+    return records
 
 
 def judge(
@@ -303,10 +306,10 @@ def judge(
     PRs missing from the result are undecided and must not be commented on.
     """
     verdicts: dict[int, Verdict] = {}
-    collector = PRDiffCollector(repo_dir, [c.pr.as_merged_pr() for c in candidates])
+    collector = PRDiffCollector(repo_dir, [c.source.pr for c in candidates])
     for start in range(0, len(candidates), _BATCH_SIZE):
         batch = candidates[start:start + _BATCH_SIZE]
-        prs = [c.pr.as_merged_pr() for c in batch]
+        prs = [c.source.pr for c in batch]
         payload = json.loads(build_prompt_payload(prs, diffs=collector.collect(prs)))
         for entry, candidate in zip(payload, batch):
             entry["line_origins"] = [
@@ -323,7 +326,7 @@ def judge(
             allowed_tools="",
             disallowed_tools="Read,Grep,Glob,Bash,Write,Edit",
         )
-        parsed = _parse_verdicts(stdout, {c.pr.number: c.branches for c in batch})
+        parsed = _parse_verdicts(stdout, {c.source.number: c.branches for c in batch})
         if parsed is None:
             logger.error(
                 "No parseable verdicts for %d PR(s) (exit=%d): %s",
@@ -396,18 +399,11 @@ def render_comment(repo_entry: RepoEntry, branches: Sequence[str], reason: str) 
 
 
 def _branch_sort_key(branch: str) -> tuple[int, ...]:
+    """Newest-first ordering for ``M.m`` branches; other names sort last."""
     try:
-        return tuple(int(part) for part in branch.split("."))
+        return parse_release_branch(branch)
     except ValueError:
         return ()
-
-
-def _clone(repo: str, dest: str, token: str) -> None:
-    with GitAuth(token, prefix="backport-eligibility-askpass-") as auth:
-        subprocess.run(
-            ["git", "clone", "--quiet", "--no-checkout", "--no-tags", github_https_url(repo), dest],
-            check=True, capture_output=True, text=True, env=auth.env(dict(os.environ)), timeout=1800,
-        )
 
 
 def run(
@@ -432,26 +428,27 @@ def run(
         date=date, project_owner=repo_entry.project_owner,
     )
     logger.info("%d PR(s) merged into %s on %s", len(prs), base_branch, date)
-    results: dict[int, dict[str, Any]] = {}
-    pending = [pr for pr in prs if not pr.already_commented]
-    for pr in prs:
-        if pr.already_commented:
-            results[pr.number] = {"action": "already-commented"}
+    results: dict[int, dict[str, Any]] = {
+        source.number: {"action": "already-commented"}
+        for source in prs if source.already_commented
+    }
+    pending = [source for source in prs if not source.already_commented]
 
     candidates: list[Candidate] = []
     with tempfile.TemporaryDirectory(prefix="backport-eligibility-") as tmp:
         repo_dir = os.path.join(tmp, "repo")
         if pending:
-            _clone(repo_entry.repo, repo_dir, token)
-        for pr in pending:
-            queued = {b for b, number in projects.items() if number in pr.project_numbers}
-            origins = trace_origins(repo_dir, pr, [b for b in branches if b not in queued])
+            with GitAuth(token, prefix="backport-eligibility-askpass-") as auth:
+                clone_target_branch(repo_entry.repo, base_branch, repo_dir, auth.env())
+        for source in pending:
+            queued = {b for b, number in projects.items() if number in source.project_numbers}
+            origins = trace_origins(repo_dir, source, [b for b in branches if b not in queued])
             if origins is None:
-                results[pr.number] = {"action": "not-eligible", "detail": "no existing code modified, or too large to trace"}
+                results[source.number] = {"action": "not-eligible", "detail": "no existing code modified, or too large to trace"}
                 continue
-            candidate = Candidate(pr, origins)
+            candidate = Candidate(source, origins)
             if not candidate.branches:
-                results[pr.number] = {
+                results[source.number] = {
                     "action": "not-eligible",
                     "detail": "no release branch still needs the change",
                 }
@@ -464,32 +461,32 @@ def run(
 
     errors: list[str] = []
     for candidate in candidates:
-        pr = candidate.pr
-        verdict = verdicts.get(pr.number)
+        number = candidate.source.number
+        verdict = verdicts.get(number)
         if verdict is None:
-            results[pr.number] = {"action": "undecided"}
-            errors.append(f"#{pr.number}: no verdict")
+            results[number] = {"action": "undecided"}
+            errors.append(f"#{number}: no verdict")
             continue
         if not verdict.backport:
-            results[pr.number] = {"action": "not-eligible", "detail": verdict.reason}
+            results[number] = {"action": "not-eligible", "detail": verdict.reason}
             continue
         result = {"action": "would-comment" if dry_run else "commented",
                   "branches": list(verdict.branches), "reason": verdict.reason}
-        results[pr.number] = result
+        results[number] = result
         if dry_run:
             continue
         body = render_comment(repo_entry, verdict.branches, verdict.reason)
         try:
             issue = retry_github_call(
-                lambda: repo.get_issue(pr.number), retries=3, description=f"issue #{pr.number}",
+                lambda: repo.get_issue(number), retries=3, description=f"issue #{number}",
             )
             retry_github_call(
-                lambda: issue.create_comment(body), retries=3, description=f"comment on #{pr.number}",
+                lambda: issue.create_comment(body), retries=3, description=f"comment on #{number}",
             )
         except Exception as exc:
-            logger.exception("Could not comment on #%d", pr.number)
+            logger.exception("Could not comment on #%d", number)
             result["action"] = "error"
-            errors.append(f"#{pr.number}: {exc}")
+            errors.append(f"#{number}: {exc}")
 
     return {
         "repo": repo_entry.repo,
@@ -506,9 +503,9 @@ def _summary(result: dict[str, Any]) -> str:
         return "\n".join(lines + ["No PRs merged."])
     lines += ["| PR | Outcome | Branches | Detail |", "| --- | --- | --- | --- |"]
     for number, entry in result["prs"].items():
-        detail = " ".join(str(entry.get("reason") or entry.get("detail") or "").split())
+        detail = escape_cell(str(entry.get("reason") or entry.get("detail") or ""))
         branches = ", ".join(entry.get("branches", []))
-        lines.append(f"| #{number} | {entry['action']} | {branches} | {detail.replace('|', '/')} |")
+        lines.append(f"| #{number} | {entry['action']} | {branches} | {detail} |")
     return "\n".join(lines)
 
 
@@ -530,7 +527,10 @@ def main() -> None:
     configure_logging(verbose=args.verbose)
 
     date = args.date or _yesterday_utc()
-    datetime.strptime(date, "%Y-%m-%d")  # reject anything that is not a date
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        parser.error(f"--date must be YYYY-MM-DD, got {date!r}")
     repo_entry = load_registry(args.registry).get_repo(args.repo)
     result = run(repo_entry=repo_entry, date=date, token=args.target_token, dry_run=args.dry_run)
     print(json.dumps(result, indent=2))

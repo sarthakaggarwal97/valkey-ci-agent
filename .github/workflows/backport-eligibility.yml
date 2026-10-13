@@ -77,8 +77,8 @@ jobs:
           owner: ${{ steps.target.outputs.owner }}
           repositories: ${{ steps.target.outputs.name }}
           permission-contents: read
+          # Commenting on a PR needs pull-requests:write; issues:write is not needed.
           permission-pull-requests: write
-          permission-issues: write
           permission-organization-projects: read
           permission-metadata: read
 

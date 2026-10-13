@@ -18,6 +18,7 @@ from scripts.backport.eligibility import (
     MergedSourcePR,
 )
 from scripts.backport.registry import load_registry
+from scripts.release_notes.models import MergedPR
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -75,13 +76,12 @@ def clone(upstream: dict[str, Any], tmp_path: Path) -> str:
     return str(dest)
 
 
-def _pr(number: int, sha: str, **overrides: Any) -> MergedSourcePR:
-    fields: dict[str, Any] = {
-        "number": number, "title": f"PR {number}", "body": "", "url": f"https://x/{number}",
-        "author": "dev", "merge_commit_sha": sha, "merged_at": "2000-01-01T00:00:00Z",
-    }
-    fields.update(overrides)
-    return MergedSourcePR(**fields)
+def _pr(number: int, sha: str) -> MergedSourcePR:
+    return MergedSourcePR(
+        pr=MergedPR(number=number, title=f"PR {number}", author="dev",
+                    url=f"https://x/{number}", merge_commit_sha=sha),
+        merged_at="2000-01-01T00:00:00Z",
+    )
 
 
 class TestTraceOrigins:
@@ -162,7 +162,7 @@ class TestPrFromNode:
         pr = eligibility._pr_from_node(self._node(), "org")
         assert pr is not None
         assert pr.project_numbers == frozenset({2})
-        assert (pr.body, pr.author, pr.already_commented) == ("", "", False)
+        assert (pr.pr.body, pr.pr.author, pr.already_commented) == ("", "", False)
 
     def test_detects_an_earlier_eligibility_comment(self):
         node = self._node(comments={"nodes": [{"body": f"{COMMENT_MARKER}\nold"}]})
@@ -277,13 +277,15 @@ def wired(monkeypatch, upstream, tmp_path):
     )
     monkeypatch.setattr(eligibility, "Github", lambda **_: SimpleNamespace(get_repo=lambda _: repo))
     monkeypatch.setattr(eligibility, "GitHubGraphQLClient", Gql)
-    monkeypatch.setattr(
-        eligibility, "_clone",
-        lambda _repo, dest, _token: subprocess.run(
-            ["git", "clone", "-q", "--no-checkout", str(upstream["path"]), dest], check=True,
-        ),
-    )
-    return SimpleNamespace(entry=_repo_entry(tmp_path), posted=posted)
+    cloned: list[str] = []
+
+    def clone(repo_name: str, branch: str, dest: str, env: dict[str, str]) -> None:
+        cloned.append(branch)
+        subprocess.run(["git", "clone", "-q", "--no-checkout", str(upstream["path"]), dest],
+                       check=True)
+
+    monkeypatch.setattr(eligibility, "clone_target_branch", clone)
+    return SimpleNamespace(entry=_repo_entry(tmp_path), posted=posted, cloned=cloned)
 
 
 def _model(verdicts: list[dict[str, Any]], prompts: list[str] | None = None):
@@ -303,6 +305,7 @@ def test_run_comments_only_on_eligible_prs(wired):
                       prompts),
     )
     assert result["errors"] == []
+    assert wired.cloned == ["unstable"]
     assert result["prs"] == {
         "101": {"action": "commented", "branches": ["9.1"], "reason": "Fixes f."},
         "102": {"action": "not-eligible", "detail": "no release branch still needs the change"},

@@ -21,10 +21,9 @@ from __future__ import annotations
 import datetime
 import logging
 import re
-import subprocess
 from typing import Optional
 
-from scripts.common.proc import git_output
+from scripts.common.proc import git_output, is_ancestor
 from scripts.release_notes import release_format as rn
 
 logger = logging.getLogger(__name__)
@@ -58,25 +57,12 @@ class ReleasedCodeOracle:
     def _is_released(self, sha: str) -> Optional[bool]:
         """True/False for a definite ancestry answer, None when git failed.
 
-        git exits 1 for "not an ancestor" and anything else (128 for a bad
-        object, a timeout, a scrubbed-config refusal) for a broken question.
-        Only the definite 1 may count as "not released": mapping failures to
-        False would classify shipped code as new and silently drop its note.
+        Mapping a failure to False would classify shipped code as new and
+        silently drop its note.
         """
-        cached = self._released.get(sha)
-        if cached is not None or sha in self._released:
-            return cached
-        try:
-            git_output(
-                self._repo_dir, "merge-base", "--is-ancestor", sha, self._base_tag,
-            )
-            released: Optional[bool] = True
-        except subprocess.CalledProcessError as exc:
-            released = False if exc.returncode == 1 else None
-        except Exception:
-            released = None
-        self._released[sha] = released
-        return released
+        if sha not in self._released:
+            self._released[sha] = is_ancestor(self._repo_dir, sha, self._base_tag)
+        return self._released[sha]
 
     def modifies_only_unreleased_code(self, sha: str) -> Optional[bool]:
         """True when every line *sha* modifies was introduced after the baseline.

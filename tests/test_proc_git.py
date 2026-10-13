@@ -145,3 +145,22 @@ def test_git_subcommand_skips_config_flags():
     assert git_subcommand(["git", "-c", "core.hooksPath=/dev/null", "--literal-pathspecs",
                            "push", "--force-with-lease", "origin"]) == "push"
     assert git_subcommand("git clone --branch 9.1 url dir") == "clone"
+
+
+def test_is_ancestor_separates_no_from_unknown(tmp_path):
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=tmp_path, check=True,
+                              capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "T")
+    git("commit", "-q", "--allow-empty", "-m", "first")
+    first = git("rev-parse", "HEAD")
+    git("commit", "-q", "--allow-empty", "-m", "second")
+    second = git("rev-parse", "HEAD")
+
+    assert proc.is_ancestor(str(tmp_path), first, second) is True
+    assert proc.is_ancestor(str(tmp_path), second, first) is False
+    # A missing object is a broken question, not a negative answer.
+    assert proc.is_ancestor(str(tmp_path), "0" * 40, second) is None
