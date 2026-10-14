@@ -87,15 +87,26 @@ class ReleasedCodeOracle:
 def modified_line_origins(repo_dir: str, sha: str) -> Optional[set[str]]:
     """Return the commits that introduced every line *sha* modifies or deletes.
 
-    Blames the pre-image of each hunk at ``<sha>^``. Returns None when the
+    Diffs the commit against its first parent and blames that same pre-image.
+    Using an explicit first-parent diff makes a two-parent GitHub merge commit
+    behave like its pull-request patch instead of Git's combined-diff format.
+    Returns None when the
     answer is unknown: an unreadable commit, one that only adds lines, one
     touching more than ``_MAX_FILES`` files, or a range blame cannot read.
     """
     if not sha:
         return None
     try:
+        parent = git_output(repo_dir, "rev-parse", f"{sha}^1").strip()
         diff = git_output(
-            repo_dir, "show", "--format=", "--unified=0", "--no-color", sha,
+            repo_dir,
+            "diff",
+            "--no-ext-diff",
+            "--unified=0",
+            "--no-color",
+            parent,
+            sha,
+            "--",
         )
     except Exception:
         logger.debug("Could not read diff for %s; leaving code age unknown", sha[:12])
@@ -130,10 +141,10 @@ def modified_line_origins(repo_dir: str, sha: str) -> Optional[set[str]]:
         try:
             blame = git_output(
                 repo_dir, "blame", "--line-porcelain",
-                f"-L{start},{end}", f"{sha}^", "--", path,
+                f"-L{start},{end}", parent, "--", path,
             )
         except Exception:
-            logger.debug("Could not blame %s:%s-%s at %s^", path, start, end, sha[:12])
+            logger.debug("Could not blame %s:%s-%s at %s", path, start, end, parent[:12])
             return None
         introducing = {
             m.group(1)
@@ -184,7 +195,7 @@ def released_pr_numbers(repo_dir: str, base_tag: str, notes_file: str) -> set[in
     try:
         tag_date = git_output(repo_dir, "log", "-1", "--format=%cI", base_tag).strip()
         since = (
-            datetime.datetime.fromisoformat(tag_date)
+            datetime.datetime.fromisoformat(tag_date.replace("Z", "+00:00"))
             - datetime.timedelta(days=_HISTORY_WINDOW_DAYS)
         ).date().isoformat()
         subjects = git_output(

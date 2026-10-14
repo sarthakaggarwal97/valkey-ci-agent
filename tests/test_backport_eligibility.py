@@ -81,6 +81,7 @@ def _pr(number: int, sha: str) -> MergedSourcePR:
         pr=MergedPR(number=number, title=f"PR {number}", author="dev",
                     url=f"https://x/{number}", merge_commit_sha=sha),
         merged_at="2000-01-01T00:00:00Z",
+        source_commit_shas=(sha,),
     )
 
 
@@ -116,6 +117,7 @@ class TestTraceOrigins:
             pr=MergedPR(number=101, title="t", author="a", url="u",
                         merge_commit_sha=upstream["shas"][101]),
             merged_at="2999-01-01T00:00:00Z",
+            source_commit_shas=(upstream["shas"][101],),
         )
         origins = eligibility.trace_origins(str(dest), source, ["9.2", "9.1"])
         assert origins is not None
@@ -136,6 +138,48 @@ class TestTraceOrigins:
 
     def test_purely_additive_pr_is_not_traced(self, clone, upstream):
         assert eligibility.trace_origins(clone, _pr(103, upstream["shas"][103]), ["9.1"]) is None
+
+    def test_unreadable_merge_commit_is_a_source_change_error(self, clone):
+        source = _pr(999, "0" * 40)
+        with pytest.raises(eligibility.SourceChangeError):
+            eligibility.trace_origins(clone, source, ["9.1"])
+
+    def test_multi_commit_squash_traces_the_complete_change(self, tmp_path):
+        upstream = tmp_path / "upstream"
+        upstream.mkdir()
+        _git(upstream, "init", "-q", "-b", "main")
+        _git(upstream, "config", "user.email", "t@example.com")
+        _git(upstream, "config", "user.name", "T")
+        _commit(upstream, "value.txt", "one\n", "introduce one (#1)")
+        _commit(upstream, "value.txt", "one\ntwo\n", "introduce two (#2)")
+        _git(upstream, "branch", "9.0")
+        _git(upstream, "checkout", "-q", "-b", "source")
+        first = _commit(upstream, "value.txt", "ONE\ntwo\n", "change one")
+        second = _commit(upstream, "value.txt", "ONE\nTWO\n", "change two")
+        _git(upstream, "checkout", "-q", "main")
+        _git(upstream, "merge", "-q", "--squash", "source")
+        _git(upstream, "commit", "-q", "-m", "squash change (#10)")
+        squash = _git(upstream, "rev-parse", "HEAD")
+
+        clone = tmp_path / "clone"
+        subprocess.run(
+            ["git", "clone", "-q", "--no-checkout", str(upstream), str(clone)],
+            check=True,
+            capture_output=True,
+        )
+        source = MergedSourcePR(
+            pr=MergedPR(number=10, title="t", author="a", url="u",
+                        merge_commit_sha=squash),
+            merged_at="2000-01-01T00:00:00Z",
+            source_commit_shas=(first, second),
+        )
+
+        origins = eligibility.trace_origins(str(clone), source, ["9.0"])
+        assert origins is not None
+        assert {(origin.subject, origin.branches) for origin in origins} == {
+            ("introduce one (#1)", ("9.0",)),
+            ("introduce two (#2)", ("9.0",)),
+        }
 
 
 class TestParseVerdicts:
@@ -179,6 +223,10 @@ class TestPrFromNode:
             "number": 7, "title": "t", "body": None, "url": "u",
             "mergedAt": "2026-01-01T00:00:00Z", "author": None,
             "mergeCommit": {"oid": "abc"},
+            "commits": {
+                "nodes": [{"commit": {"oid": "abc"}}],
+                "pageInfo": {"hasNextPage": False},
+            },
             "projectItems": {"nodes": [
                 {"project": {"number": 2, "owner": {"login": "Org"}}},
                 {"project": {"number": 3, "owner": {"login": "someone-else"}}},
@@ -195,9 +243,18 @@ class TestPrFromNode:
         assert (pr.pr.body, pr.pr.author, pr.already_commented) == ("", "", False)
 
     def test_detects_an_earlier_eligibility_comment(self):
-        node = self._node(comments={"nodes": [{"body": f"{COMMENT_MARKER}\nold"}]})
+        node = self._node(comments={"nodes": [
+            {"body": f"{COMMENT_MARKER}\nold", "viewerDidAuthor": True},
+        ]})
         pr = eligibility._pr_from_node(node, "org")
         assert pr is not None and pr.already_commented
+
+    def test_ignores_a_forged_eligibility_comment(self):
+        node = self._node(comments={"nodes": [
+            {"body": f"{COMMENT_MARKER}\nforged", "viewerDidAuthor": False},
+        ]})
+        pr = eligibility._pr_from_node(node, "org")
+        assert pr is not None and not pr.already_commented
 
     def test_unreadable_project_item_leaves_projects_unknown(self):
         pr = eligibility._pr_from_node(self._node(projectItems={"nodes": [None]}), "org")
@@ -206,6 +263,16 @@ class TestPrFromNode:
     def test_skips_a_node_without_merge_commit(self):
         assert eligibility._pr_from_node(self._node(mergeCommit=None), "org") is None
         assert eligibility._pr_from_node({}, "org") is None
+
+    def test_reads_source_commit_listing_completeness(self):
+        node = self._node(commits={
+            "nodes": [{"commit": {"oid": "one"}}, {"commit": {"oid": "two"}}],
+            "pageInfo": {"hasNextPage": True},
+        })
+        pr = eligibility._pr_from_node(node, "org")
+        assert pr is not None
+        assert pr.source_commit_shas == ("one", "two")
+        assert pr.source_commits_complete is False
 
 
 def test_discover_pages_and_queries_one_utc_day():
@@ -287,15 +354,21 @@ def wired(monkeypatch, upstream, tmp_path):
     shas = upstream["shas"]
     nodes = [
         # #101 fixes the feature that only 9.1 carries.
-        {"number": 101, "mergedAt": "2000-01-01T00:00:00Z", "mergeCommit": {"oid": shas[101]}},
+        {"number": 101, "mergedAt": "2000-01-01T00:00:00Z",
+         "mergeCommit": {"oid": shas[101]},
+         "commits": {"nodes": [{"commit": {"oid": shas[101]}}]}},
         # #102 is on the 9.1 project already and has landed on 9.0.
         {"number": 102, "mergedAt": "2000-01-01T00:00:00Z", "mergeCommit": {"oid": shas[102]},
+         "commits": {"nodes": [{"commit": {"oid": shas[102]}}]},
          "projectItems": {"nodes": [{"project": {"number": 11, "owner": {"login": "org"}}}]}},
         # #103 adds code only.
-        {"number": 103, "mergedAt": "2000-01-01T00:00:00Z", "mergeCommit": {"oid": shas[103]}},
+        {"number": 103, "mergedAt": "2000-01-01T00:00:00Z",
+         "mergeCommit": {"oid": shas[103]},
+         "commits": {"nodes": [{"commit": {"oid": shas[103]}}]}},
         # #104 was handled by an earlier run.
         {"number": 104, "mergedAt": "2000-01-01T00:00:00Z", "mergeCommit": {"oid": shas[101]},
-         "comments": {"nodes": [{"body": COMMENT_MARKER}]}},
+         "commits": {"nodes": [{"commit": {"oid": shas[101]}}]},
+         "comments": {"nodes": [{"body": COMMENT_MARKER, "viewerDidAuthor": True}]}},
     ]
 
     class Gql:
@@ -399,9 +472,54 @@ def test_run_unreadable_projects_fail_only_that_pr(wired):
     assert [number for number, _ in wired.posted] == [101]
 
 
-def test_run_model_may_only_name_branches_it_was_shown(wired, monkeypatch):
+def test_run_skips_history_when_every_branch_is_already_queued(wired, monkeypatch):
+    wired.nodes[1]["projectItems"]["nodes"].append(
+        {"project": {"number": 10, "owner": {"login": "org"}}}
+    )
+    real_trace_origins = eligibility.trace_origins
+    traced: list[int] = []
+
+    def trace(repo_dir, source, branches, **kwargs):
+        assert branches
+        traced.append(source.number)
+        return real_trace_origins(repo_dir, source, branches, **kwargs)
+
+    monkeypatch.setattr(eligibility, "trace_origins", trace)
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": False, "reason": "r"}]),
+    )
+
+    assert 102 not in traced
+    assert result["prs"]["102"] == {
+        "action": "not-eligible",
+        "detail": "no release branch still needs the change",
+    }
+
+
+def test_run_source_change_failure_is_contained_to_that_pr(wired, monkeypatch):
+    real_trace_origins = eligibility.trace_origins
+
+    def trace(repo_dir, source, branches, **kwargs):
+        if source.number == 101:
+            raise eligibility.SourceChangeError("unreadable merge history")
+        return real_trace_origins(repo_dir, source, branches, **kwargs)
+
+    monkeypatch.setattr(eligibility, "trace_origins", trace)
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=_model([]),
+    )
+
+    assert result["prs"]["101"] == {
+        "action": "undecided",
+        "detail": "complete merged change needs manual eligibility review",
+    }
+    assert result["errors"] == ["#101: unreadable merge history"]
+
+
+def test_run_origin_cap_preserves_evidence_for_every_branch(wired, monkeypatch):
     monkeypatch.setattr(eligibility, "_MAX_ORIGINS", 1)
-    monkeypatch.setattr(eligibility, "trace_origins", lambda *_: (
+    monkeypatch.setattr(eligibility, "trace_origins", lambda *_, **__: (
         LineOrigin("old (#1)", "2000-01-01T00:00:00+00:00", ("9.0",)),
         LineOrigin("new (#2)", "2001-01-01T00:00:00+00:00", ("9.1",)),
     ))
@@ -410,7 +528,39 @@ def test_run_model_may_only_name_branches_it_was_shown(wired, monkeypatch):
         repo_entry=wired.entry, date="2026-10-12", token="t",
         run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.0"]}], prompts),
     )
-    assert "new (#2)" in prompts[0] and "old (#1)" not in prompts[0]
-    # 9.0 came only from the origin the model never saw.
-    assert result["prs"]["101"] == {"action": "undecided"}
-    assert wired.posted == []
+    assert "new (#2)" in prompts[0] and "old (#1)" in prompts[0]
+    assert result["prs"]["101"]["action"] == "commented"
+    assert result["prs"]["101"]["branches"] == ["9.0"]
+
+
+def test_parse_git_timestamp_accepts_utc_z_on_python_39():
+    assert eligibility._parse_git_timestamp("2026-10-14T20:09:22Z").isoformat() == (
+        "2026-10-14T20:09:22+00:00"
+    )
+
+
+def test_multi_commit_rebase_is_undecided_instead_of_partially_traced(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@example.com")
+    _git(repo, "config", "user.name", "T")
+    _commit(repo, "value.txt", "base\n", "base")
+    _git(repo, "checkout", "-q", "-b", "source")
+    first = _commit(repo, "value.txt", "first\n", "first source commit")
+    second = _commit(repo, "other.txt", "second\n", "second source commit")
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, "main.txt", "advance\n", "advance main")
+    _git(repo, "checkout", "-q", "source")
+    _git(repo, "rebase", "-q", "main")
+    rebased_tip = _git(repo, "rev-parse", "HEAD")
+    assert rebased_tip != second
+
+    source = MergedSourcePR(
+        pr=MergedPR(number=10, title="t", author="a", url="u",
+                    merge_commit_sha=rebased_tip),
+        merged_at="2026-01-01T00:00:00Z",
+        source_commit_shas=(first, second),
+    )
+    with pytest.raises(eligibility.SourceChangeError, match="rebase-merged"):
+        eligibility.trace_origins(str(repo), source, ["9.0"])

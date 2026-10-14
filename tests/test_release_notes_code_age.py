@@ -114,3 +114,24 @@ class TestReleasedCodeOracle:
         oracle = code_age.ReleasedCodeOracle(str(repo), "9.1.2")
         assert oracle.modifies_only_unreleased_code(_sha(repo, "rename and edit")) is False
 
+    def test_merge_commit_uses_its_first_parent_patch(self, repo: Path) -> None:
+        _git(repo, "checkout", "-q", "-b", "fix-branch")
+        (repo / "stable.c").write_text("int stable(void) { return 7; }\n")
+        _git(repo, "commit", "-qam", "fix on a branch")
+        _git(repo, "checkout", "-q", "main")
+        (repo / "main-only.c").write_text("int unrelated;\n")
+        _git(repo, "add", "main-only.c")
+        _git(repo, "commit", "-q", "-m", "advance main")
+        _git(
+            repo,
+            "merge",
+            "--no-ff",
+            "-q",
+            "fix-branch",
+            "-m",
+            "Merge pull request #105 from example/fix",
+        )
+
+        oracle = code_age.ReleasedCodeOracle(str(repo), "9.1.2")
+        assert oracle.modifies_only_unreleased_code(_git(repo, "rev-parse", "HEAD").strip()) is False
+

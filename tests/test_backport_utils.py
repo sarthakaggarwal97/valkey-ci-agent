@@ -7,6 +7,7 @@ from scripts.backport.utils import (
     build_pr_title,
     has_conflict_markers,
     is_whitespace_only_conflict,
+    source_pr_from_backport_commit_subject,
 )
 
 
@@ -16,6 +17,47 @@ class TestParseBackportLabels:
 
     def test_large_pr_number(self) -> None:
         assert build_branch_name(99999, "7.2") == "backport/99999-to-7.2"
+
+
+class TestBackportCommitSubject:
+    def test_release_prefix_recovers_source_pr(self) -> None:
+        subject = (
+            "[9.0] Fix lua-enable-insecure-api default value "
+            "cannot be changed to yes (#3548) (#4182)"
+        )
+        assert source_pr_from_backport_commit_subject(subject) == 3548
+
+    def test_explicit_backport_prefix_recovers_source_pr(self) -> None:
+        assert (
+            source_pr_from_backport_commit_subject(
+                "[Backport 7.2] Allow Tcl 9.0 for tests (#1673) (#4164)"
+            )
+            == 1673
+        )
+
+    def test_unbracketed_backport_prefix_recovers_source_pr(self) -> None:
+        assert (
+            source_pr_from_backport_commit_subject(
+                "Backport 8.1: Fix some flaky tests (#3430) (#3513)"
+            )
+            == 3430
+        )
+
+    def test_ordinary_reference_is_not_treated_as_a_backport(self) -> None:
+        assert (
+            source_pr_from_backport_commit_subject(
+                'Revert "Fix the bug (#3544)" (#3756)'
+            )
+            is None
+        )
+
+    def test_unprefixed_double_suffix_is_not_trusted(self) -> None:
+        assert (
+            source_pr_from_backport_commit_subject(
+                "Follow up on another change (#3548) (#4182)"
+            )
+            is None
+        )
 
 
 

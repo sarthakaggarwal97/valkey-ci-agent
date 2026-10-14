@@ -23,12 +23,14 @@ import argparse
 import json
 import logging
 import os
+import subprocess
 import sys
 import tempfile
+from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -38,6 +40,7 @@ from github import Auth, Github
 from scripts.ai.claude_code import run_claude_code
 from scripts.backport.mark_done import prs_present_in_history
 from scripts.backport.registry import RepoEntry, load_registry
+from scripts.backport.source_plan import SourceChangeError, prepare_source_change
 from scripts.backport.sweep_git import clone_target_branch
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.utils import pr_numbers_from_commit_messages
@@ -74,6 +77,10 @@ query($q: String!, $cursor: String) {
         mergedAt
         author { login }
         mergeCommit { oid }
+        commits(first: 100) {
+          pageInfo { hasNextPage }
+          nodes { commit { oid } }
+        }
         projectItems(first: 50) {
           nodes {
             project {
@@ -82,7 +89,7 @@ query($q: String!, $cursor: String) {
             }
           }
         }
-        comments(last: 100) { nodes { body } }
+        comments(last: 100) { nodes { body viewerDidAuthor } }
       }
     }
     pageInfo { hasNextPage endCursor }
@@ -145,6 +152,8 @@ class MergedSourcePR:
     # be queued, so it must not be suggested.
     project_numbers: frozenset[int] | None = frozenset()
     already_commented: bool = False
+    source_commit_shas: tuple[str, ...] = ()
+    source_commits_complete: bool = True
 
     @property
     def number(self) -> int:
@@ -223,8 +232,16 @@ def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
             == project_owner.lower()
         )
     commented = any(
-        COMMENT_MARKER in ((comment or {}).get("body") or "")
+        (comment or {}).get("viewerDidAuthor") is True
+        and COMMENT_MARKER in ((comment or {}).get("body") or "")
         for comment in (node.get("comments") or {}).get("nodes") or []
+    )
+    raw_commits_page = node.get("commits")
+    commits_page = raw_commits_page if isinstance(raw_commits_page, dict) else {}
+    source_commit_shas = tuple(
+        sha
+        for commit_node in commits_page.get("nodes") or []
+        if (sha := ((commit_node or {}).get("commit") or {}).get("oid"))
     )
     return MergedSourcePR(
         pr=MergedPR(
@@ -238,11 +255,18 @@ def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
         merged_at=node["mergedAt"],
         project_numbers=projects,
         already_commented=commented,
+        source_commit_shas=source_commit_shas,
+        source_commits_complete=isinstance(raw_commits_page, dict)
+        and not bool((commits_page.get("pageInfo") or {}).get("hasNextPage")),
     )
 
 
 def trace_origins(
-    repo_dir: str, source: MergedSourcePR, branches: Sequence[str],
+    repo_dir: str,
+    source: MergedSourcePR,
+    branches: Sequence[str],
+    *,
+    git_env: Mapping[str, str] | None = None,
 ) -> tuple[LineOrigin, ...] | None:
     """Return the commits that introduced the lines *source* modifies, oldest first.
 
@@ -253,6 +277,7 @@ def trace_origins(
     Returns None when blame cannot answer (see ``modified_line_origins``),
     which includes purely additive PRs: new code has nothing to backport into.
     """
+    _validate_complete_change(repo_dir, source, git_env=git_env)
     shas = modified_line_origins(repo_dir, source.pr.merge_commit_sha)
     if shas is None:
         return None
@@ -283,11 +308,83 @@ def trace_origins(
         for sha, (_, _, numbers) in records.items():
             if numbers & present or is_ancestor(repo_dir, sha, ref):
                 carried[sha].append(branch)
-    ordered = sorted(records.items(), key=lambda item: datetime.fromisoformat(item[1][1]))
+    ordered = sorted(records.items(), key=lambda item: _parse_git_timestamp(item[1][1]))
     return tuple(
         LineOrigin(subject=subject, committed_at=committed_at, branches=tuple(carried[sha]))
         for sha, (subject, committed_at, _) in ordered
     )
+
+
+def _validate_complete_change(
+    repo_dir: str,
+    source: MergedSourcePR,
+    *,
+    git_env: Mapping[str, str] | None,
+) -> None:
+    """Fail closed when a one-parent merge SHA is not the PR's full change."""
+    try:
+        fields = git_output(
+            repo_dir, "rev-list", "--parents", "-n", "1", source.pr.merge_commit_sha,
+        ).strip().split()
+    except subprocess.SubprocessError:
+        _prepare_complete_change(repo_dir, source, git_env=git_env)
+        return
+    if not fields or fields[0] != source.pr.merge_commit_sha:
+        _prepare_complete_change(repo_dir, source, git_env=git_env)
+        return
+    if len(fields) > 2:
+        return  # A true merge commit is complete; diff against its first parent.
+    if source.source_commits_complete and len(source.source_commit_shas) == 1:
+        return  # One source commit is complete under squash or rebase.
+
+
+    _prepare_complete_change(repo_dir, source, git_env=git_env)
+
+
+def _prepare_complete_change(
+    repo_dir: str,
+    source: MergedSourcePR,
+    *,
+    git_env: Mapping[str, str] | None,
+) -> None:
+    """Fetch missing objects and validate squash/rebase completeness."""
+    prepare_source_change(
+        repo_dir,
+        source.number,
+        source.pr.merge_commit_sha,
+        source.source_commit_shas,
+        source_commits_complete=source.source_commits_complete,
+        git_env=git_env,
+    )
+
+
+def _parse_git_timestamp(value: str) -> datetime:
+    """Parse git's strict ISO timestamp on every supported Python version."""
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _select_origins(
+    origins: Sequence[LineOrigin], limit: int,
+) -> tuple[LineOrigin, ...]:
+    """Keep recent origins while preserving evidence for every offered branch."""
+    if len(origins) <= limit:
+        return tuple(origins)
+
+    mandatory: set[int] = set()
+    represented: set[str] = set()
+    for index in range(len(origins) - 1, -1, -1):
+        missing = set(origins[index].branches) - represented
+        if missing:
+            mandatory.add(index)
+            represented.update(missing)
+
+    target = max(limit, len(mandatory))
+    selected = set(mandatory)
+    for index in range(len(origins) - 1, -1, -1):
+        if len(selected) >= target:
+            break
+        selected.add(index)
+    return tuple(origins[index] for index in sorted(selected))
 
 
 def _commit_records(repo_dir: str, shas: set[str]) -> dict[str, tuple[str, str, set[int]]]:
@@ -448,23 +545,46 @@ def run(
 
     candidates: list[Candidate] = []
     errors: list[str] = []
-    with tempfile.TemporaryDirectory(prefix="backport-eligibility-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="backport-eligibility-") as tmp, ExitStack() as stack:
         repo_dir = os.path.join(tmp, "repo")
+        git_env: Mapping[str, str] | None = None
         if pending:
-            with GitAuth(token, prefix="backport-eligibility-askpass-") as auth:
-                clone_target_branch(repo_entry.repo, base_branch, repo_dir, auth.env())
+            auth = stack.enter_context(GitAuth(token, prefix="backport-eligibility-askpass-"))
+            git_env = auth.env()
+            clone_target_branch(repo_entry.repo, base_branch, repo_dir, git_env)
         for source in pending:
             if source.project_numbers is None:
                 results[source.number] = {"action": "undecided"}
                 errors.append(f"#{source.number}: project items unreadable")
                 continue
             queued = {b for b, number in projects.items() if number in source.project_numbers}
-            origins = trace_origins(repo_dir, source, [b for b in branches if b not in queued])
+            remaining_branches = [b for b in branches if b not in queued]
+            if not remaining_branches:
+                results[source.number] = {
+                    "action": "not-eligible",
+                    "detail": "no release branch still needs the change",
+                }
+                continue
+            try:
+                origins = trace_origins(
+                    repo_dir,
+                    source,
+                    remaining_branches,
+                    git_env=git_env,
+                )
+            except SourceChangeError as exc:
+                results[source.number] = {
+                    "action": "undecided",
+                    "detail": "complete merged change needs manual eligibility review",
+                }
+                errors.append(f"#{source.number}: {exc}")
+                continue
             if origins is None:
                 results[source.number] = {"action": "not-eligible", "detail": "no existing code modified, or too large to trace"}
                 continue
-            # One cap for what the model sees and what its answer may name.
-            candidate = Candidate(source, origins[-_MAX_ORIGINS:])
+            # Bound the prompt without dropping the only history evidence for
+            # an older release branch.
+            candidate = Candidate(source, _select_origins(origins, _MAX_ORIGINS))
             if not candidate.branches:
                 results[source.number] = {
                     "action": "not-eligible",

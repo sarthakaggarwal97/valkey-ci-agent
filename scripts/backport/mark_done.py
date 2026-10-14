@@ -26,7 +26,10 @@ from datetime import datetime
 from typing import Any
 
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
-from scripts.backport.utils import pr_numbers_from_commit_messages
+from scripts.backport.utils import (
+    pr_numbers_from_commit_messages,
+    source_pr_from_backport_commit_subject,
+)
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import (
@@ -132,6 +135,11 @@ def prs_present_in_history(
     applied: set[int] = set()
     for committed_at, message in _branch_commit_records(repo_dir, rev):
         matched = pr_numbers_from_commit_messages([message])
+        lines = message.splitlines()
+        subject = lines[0] if lines else ""
+        source_pr = source_pr_from_backport_commit_subject(subject)
+        if source_pr is not None:
+            matched.add(source_pr)
         applied_section = _markdown_section(message, "Applied")
         if applied_section:
             matched.update(_pr_numbers_from_table_cells(applied_section))
