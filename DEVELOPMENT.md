@@ -221,15 +221,21 @@ gh workflow run backport-mark-done-poll.yml \
 ### Backport Eligibility
 
 `.github/workflows/backport-eligibility.yml` runs daily (cron `30 0 * * *`) over
-the PRs merged to the development branch on the previous UTC day and comments on
-the ones that look eligible for backport. Manual dispatch defaults to
-`dry_run=true`, which reports verdicts in the job summary and result artifact
-without commenting.
+the PRs merged to the development branch on the last three UTC days and comments
+on the ones that look eligible for backport. The overlap means a failed or
+skipped run is caught up by the next one; PRs already commented on are skipped.
+Manual dispatch defaults to `dry_run=true`, which reports verdicts in the job
+summary and result artifact without commenting.
+
+A failed run lists the undecided PRs in its job summary. To re-cover an older
+window after fixing the cause, dispatch with `dry_run=false`, the last date,
+and the number of days:
 
 ```bash
 gh workflow run backport-eligibility.yml \
   --repo valkey-io/valkey-ci-agent \
   --field date=2026-09-16 \
+  --field days=7 \
   --field dry_run=true
 ```
 
@@ -237,7 +243,7 @@ Locally, with Bedrock credentials:
 
 ```bash
 TARGET_TOKEN=$(gh auth token) python -m scripts.backport.eligibility \
-  --repo valkey-io/valkey --date 2026-09-16 --dry-run
+  --repo valkey-io/valkey --date 2026-09-16 --days 1 --dry-run
 ```
 
 ## Registry Changes

@@ -116,15 +116,18 @@ head to equal the failed SHA.
 ### Eligibility
 
 `backport-eligibility.yml` runs at 00:30 UTC and looks at every PR merged to
-the development branch on the UTC day that just ended. It suggests backports;
-putting a PR on a project board stays a maintainer decision.
+the development branch on the last three UTC days, so a day one run missed is
+covered by the next. It suggests backports; putting a PR on a project board
+stays a maintainer decision.
 
 ```text
 eligibility.py
-  -> GraphQL search: PRs merged into the default branch on that date
+  -> GraphQL search: PRs merged into the default branch in that window
   -> skip PRs that already carry the eligibility marker comment
-  -> git blame the lines each PR modifies or deletes, at its parent
-       purely additive PR -> not eligible
+  -> git blame the lines each PR modifies or deletes, and the lines on
+     either side of what it only inserts, at its parent, looking through
+     .git-blame-ignore-revs
+       PR that only adds files -> not eligible
   -> per registered branch, a commit that introduced those lines is
      an ancestor, or its PR was backported there -> candidate branch
        drop branches the PR already landed on or is queued on
@@ -136,8 +139,10 @@ eligibility.py
 
 History bounds the branches and the model can only narrow them, so a fix to a
 feature that arrived after a release line forked is not offered to that line
-even when it touches an older signature. A missing or unparseable verdict
-posts nothing and fails the run.
+even when it touches an older signature. Whatever history cannot answer (a
+PR too large to blame, an unreadable branch, a git failure) and a missing or
+unparseable verdict post nothing for that PR and fail the run; the other PRs
+are still judged, and comments go out after each model batch.
 
 ### Entry Points
 

@@ -1,8 +1,10 @@
 name: Backport Eligibility
 
-# Once a day, look at every PR merged to the development branch on the UTC day
-# that just ended and comment on the ones that look eligible for backport,
-# naming the release branches. It only suggests: nothing is added to a project.
+# Once a day, look at every PR merged to the development branch on the last
+# three UTC days and comment on the ones that look eligible for backport,
+# naming the release branches. The overlap re-covers a day a failed or skipped
+# run missed; the marker comment keeps a PR from being commented on twice. It
+# only suggests: nothing is added to a project.
 
 on:
   schedule:
@@ -15,10 +17,15 @@ on:
         type: string
         default: "valkey-io/valkey"
       date:
-        description: "UTC merge date YYYY-MM-DD (empty = yesterday)"
+        description: "Last UTC merge date YYYY-MM-DD (empty = yesterday)"
         required: false
         type: string
         default: ""
+      days:
+        description: "UTC dates to cover, ending at date"
+        required: false
+        type: string
+        default: "3"
       dry_run:
         description: "Report verdicts without commenting"
         required: false
@@ -35,7 +42,7 @@ jobs:
     name: "eligibility/${{ inputs.repo || 'valkey-io/valkey' }}"
     if: github.repository == 'valkey-io/valkey-ci-agent'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     concurrency:
       # Runs for one repo are serialized so two runs over the same date cannot
       # both comment; queue: max keeps every pending dispatch instead of only
@@ -48,6 +55,7 @@ jobs:
       CLAUDE_CODE_USE_BEDROCK: "1"
       TARGET_REPO: ${{ inputs.repo || 'valkey-io/valkey' }}
       MERGE_DATE: ${{ inputs.date || '' }}
+      MERGE_DAYS: ${{ inputs.days || '3' }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
     permissions:
       contents: read
@@ -99,7 +107,7 @@ jobs:
           TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           set -euo pipefail
-          args=(--registry repos.yml --repo "${TARGET_REPO}" --verbose)
+          args=(--registry repos.yml --repo "${TARGET_REPO}" --days "${MERGE_DAYS}" --verbose)
           if [[ -n "${MERGE_DATE}" ]]; then
             args+=(--date "${MERGE_DATE}")
           fi

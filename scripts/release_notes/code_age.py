@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import datetime
 import logging
+import os
 import re
+import tempfile
 from typing import Optional
 
 from scripts.common.proc import git_output, is_ancestor
@@ -36,6 +38,8 @@ _HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@")
 _FILE_RE = re.compile(r"^--- a/(.+)$")
 _NO_PREIMAGE_RE = re.compile(r"^--- /dev/null$")
 _BLAME_SHA_RE = re.compile(r"^([0-9a-f]{40})\s")
+# Formatting sweeps the repository asks blame to look through.
+_IGNORE_REVS_FILE = ".git-blame-ignore-revs"
 
 # A commit touching more files than this is a sweep or a mass refactor rather
 # than a targeted fix; blaming all of it costs more than the answer is worth.
@@ -84,18 +88,43 @@ class ReleasedCodeOracle:
         return True
 
 
+class OriginsUnknown(Exception):
+    """Blame could not say which commits introduced the lines a change touches."""
+
+
 def modified_line_origins(repo_dir: str, sha: str) -> Optional[set[str]]:
     """Return the commits that introduced every line *sha* modifies or deletes.
+
+    Returns None when the answer is unknown, and when the commit only adds
+    lines: purely additive code has no pre-image, so its age says nothing.
+    """
+    try:
+        return line_origins(repo_dir, sha) or None
+    except OriginsUnknown as exc:
+        logger.debug("Leaving code age of %s unknown: %s", sha[:12], exc)
+        return None
+
+
+def line_origins(repo_dir: str, sha: str, *, anchor_insertions: bool = False) -> set[str]:
+    """Return the commits that introduced the pre-image lines *sha* touches.
 
     Diffs the commit against its first parent and blames that same pre-image.
     Using an explicit first-parent diff makes a two-parent GitHub merge commit
     behave like its pull-request patch instead of Git's combined-diff format.
-    Returns None when the
-    answer is unknown: an unreadable commit, one that only adds lines, one
-    touching more than ``_MAX_FILES`` files, or a range blame cannot read.
+    Blame honours the parent's ``.git-blame-ignore-revs``, so a mass reformat
+    does not stand in for the commit that actually wrote a line.
+
+    With *anchor_insertions*, a hunk that only inserts lines is attributed to
+    the existing lines on either side of it: a fix that adds a NULL or bounds
+    check repairs the code around it. Without it such hunks contribute nothing.
+
+    Returns an empty set when the commit touches no pre-existing line (for
+    example, it only adds files). Raises ``OriginsUnknown`` when the answer is
+    unknown: an unreadable commit, one touching more than ``_MAX_FILES``
+    files, or a range blame cannot read.
     """
     if not sha:
-        return None
+        raise OriginsUnknown("no commit")
     try:
         parent = git_output(repo_dir, "rev-parse", f"{sha}^1").strip()
         diff = git_output(
@@ -108,11 +137,10 @@ def modified_line_origins(repo_dir: str, sha: str) -> Optional[set[str]]:
             sha,
             "--",
         )
-    except Exception:
-        logger.debug("Could not read diff for %s; leaving code age unknown", sha[:12])
-        return None
+    except Exception as exc:
+        raise OriginsUnknown(f"could not read the diff of {sha[:12]}") from exc
 
-    ranges: list[tuple[str, int, int]] = []
+    ranges: dict[str, list[tuple[int, int]]] = {}
     current_file = ""
     files: set[str] = set()
     for line in diff.splitlines():
@@ -124,37 +152,74 @@ def modified_line_origins(repo_dir: str, sha: str) -> Optional[set[str]]:
             current_file = file_match.group(1)
             files.add(current_file)
             if len(files) > _MAX_FILES:
-                return None
+                raise OriginsUnknown(f"touches more than {_MAX_FILES} files")
             continue
         hunk = _HUNK_RE.match(line)
         if hunk and current_file:
             start = int(hunk.group(1))
             count = int(hunk.group(2) or "1")
-            if count:  # count 0 is a pure insertion: no pre-image to blame
-                ranges.append((current_file, start, start + count - 1))
+            if count:
+                ranges.setdefault(current_file, []).append((start, start + count - 1))
+            elif anchor_insertions:
+                # "-N,0" inserts after pre-image line N; anchor on N and N+1.
+                # The end is clamped to the file length once it is known.
+                ranges.setdefault(current_file, []).append((max(start, 1), start + 1))
 
     if not ranges:
-        return None
+        return set()
 
     origins: set[str] = set()
-    for path, start, end in ranges:
-        try:
-            blame = git_output(
-                repo_dir, "blame", "--line-porcelain",
-                f"-L{start},{end}", parent, "--", path,
-            )
-        except Exception:
-            logger.debug("Could not blame %s:%s-%s at %s", path, start, end, parent[:12])
-            return None
-        introducing = {
-            m.group(1)
-            for m in (_BLAME_SHA_RE.match(line) for line in blame.splitlines())
-            if m
-        }
-        if not introducing:
-            return None
-        origins |= introducing
+    with tempfile.TemporaryDirectory(prefix="code-age-") as tmp:
+        ignore_args = _ignore_revs_args(repo_dir, parent, tmp)
+        for path, spans in ranges.items():
+            length = _line_count(repo_dir, parent, path) if anchor_insertions else None
+            bounds = [
+                (start, min(end, length) if length is not None else end)
+                for start, end in spans
+                if length is None or start <= length
+            ]
+            if not bounds:
+                continue  # an insertion into an empty file anchors on nothing
+            try:
+                blame = git_output(
+                    repo_dir, "blame", "--line-porcelain", *ignore_args,
+                    *(f"-L{start},{end}" for start, end in bounds), parent, "--", path,
+                )
+            except Exception as exc:
+                raise OriginsUnknown(f"could not blame {path} at {parent[:12]}") from exc
+            introducing = {
+                m.group(1)
+                for m in (_BLAME_SHA_RE.match(line) for line in blame.splitlines())
+                if m
+            }
+            if not introducing:
+                raise OriginsUnknown(f"blame of {path} at {parent[:12]} named no commit")
+            origins |= introducing
     return origins
+
+
+def _ignore_revs_args(repo_dir: str, rev: str, tmp: str) -> list[str]:
+    """Blame arguments for the ``.git-blame-ignore-revs`` file *rev* carries.
+
+    Read from the blamed revision rather than a checkout, so the list matches
+    the history being blamed. A missing file means nothing is ignored.
+    """
+    try:
+        content = git_output(repo_dir, "show", f"{rev}:{_IGNORE_REVS_FILE}")
+    except Exception:
+        return []
+    path = os.path.join(tmp, "ignore-revs")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(content)
+    return [f"--ignore-revs-file={path}"]
+
+
+def _line_count(repo_dir: str, rev: str, path: str) -> int:
+    try:
+        content = git_output(repo_dir, "show", f"{rev}:{path}")
+    except Exception as exc:
+        raise OriginsUnknown(f"could not read {path} at {rev[:12]}") from exc
+    return len(content.splitlines())
 
 
 # A backport subject carries the original PR and then its own: "... (#3516) (#4001)".

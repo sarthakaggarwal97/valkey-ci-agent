@@ -18,6 +18,7 @@ from scripts.backport.eligibility import (
     MergedSourcePR,
 )
 from scripts.backport.registry import load_registry
+from scripts.release_notes import code_age
 from scripts.release_notes.models import MergedPR
 
 
@@ -123,21 +124,73 @@ class TestTraceOrigins:
         assert origins is not None
         assert Candidate(source, origins).branches == {"9.1"}
 
-    def test_unknown_ancestry_of_the_merge_commit_skips_the_branch(
-        self, clone, upstream, monkeypatch,
-    ):
-        merge_sha = upstream["shas"][101]
-        real = eligibility.is_ancestor
-        monkeypatch.setattr(
-            eligibility, "is_ancestor",
-            lambda repo, sha, ref: None if sha == merge_sha else real(repo, sha, ref),
-        )
-        origins = eligibility.trace_origins(clone, _pr(101, merge_sha), ["9.1"])
-        assert origins is not None
-        assert Candidate(_pr(101, merge_sha), origins).branches == set()
+    def test_unreadable_branch_raises_instead_of_offering_nothing(self, clone, upstream):
+        # A branch whose history cannot be read must not pass for one that
+        # lacks the code.
+        with pytest.raises(subprocess.CalledProcessError):
+            eligibility.trace_origins(clone, _pr(101, upstream["shas"][101]), ["9.9"])
 
-    def test_purely_additive_pr_is_not_traced(self, clone, upstream):
-        assert eligibility.trace_origins(clone, _pr(103, upstream["shas"][103]), ["9.1"]) is None
+    def test_unreadable_ancestry_raises(self, clone, upstream, monkeypatch):
+        def broken(self, sha):
+            raise subprocess.CalledProcessError(129, ["git", "for-each-ref"])
+
+        monkeypatch.setattr(eligibility.BranchHistory, "containing", broken)
+        with pytest.raises(subprocess.CalledProcessError):
+            eligibility.trace_origins(clone, _pr(101, upstream["shas"][101]), ["9.1"])
+
+    def test_pr_adding_only_new_files_has_no_origins(self, clone, upstream):
+        assert eligibility.trace_origins(clone, _pr(103, upstream["shas"][103]), ["9.1"]) == ()
+
+    def test_too_large_to_blame_is_unknown(self, clone, upstream, monkeypatch):
+        monkeypatch.setattr(code_age, "_MAX_FILES", 0)
+        with pytest.raises(eligibility.OriginsUnknown):
+            eligibility.trace_origins(clone, _pr(101, upstream["shas"][101]), ["9.1"])
+
+    @pytest.mark.parametrize(
+        ("after", "expected"),
+        [
+            ("int a;\nif (!a) return;\nint b;\nint c;\n", "middle"),
+            ("/* guard */\nint a;\nint b;\nint c;\n", "top"),
+            ("int a;\nint b;\nint c;\nfree(a);\n", "end"),
+        ],
+    )
+    def test_insertion_only_fix_is_traced_to_the_code_around_it(
+        self, tmp_path, after, expected,
+    ):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _git(repo, "init", "-q", "-b", "unstable")
+        _git(repo, "config", "user.email", "t@example.com")
+        _git(repo, "config", "user.name", "T")
+        _commit(repo, "old.c", "int a;\nint b;\nint c;\n", "base (#1)")
+        _git(repo, "branch", "9.0")
+        fix = _commit(repo, "old.c", after, f"add a check at the {expected} (#2)")
+        clone = tmp_path / "clone"
+        subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(clone)],
+                       check=True, capture_output=True)
+
+        origins = eligibility.trace_origins(str(clone), _pr(2, fix), ["9.0"])
+        assert [(o.subject, o.branches) for o in origins] == [("base (#1)", ("9.0",))]
+
+    def test_blame_looks_through_ignored_reformats(self, tmp_path):
+        # 9.0 forks before a reformat it never receives. Blame must reach the
+        # commit that wrote the line, which 9.0 carries.
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _git(repo, "init", "-q", "-b", "unstable")
+        _git(repo, "config", "user.email", "t@example.com")
+        _git(repo, "config", "user.name", "T")
+        _commit(repo, "old.c", "int  a;\nint  b;\n", "write code (#1)")
+        _git(repo, "branch", "9.0")
+        reformat = _commit(repo, "old.c", "int a;\nint b;\n", "reformat (#2)")
+        _commit(repo, ".git-blame-ignore-revs", f"# formatting\n{reformat}\n", "ignore it (#3)")
+        fix = _commit(repo, "old.c", "int a;\nint B;\n", "fix b (#4)")
+        clone = tmp_path / "clone"
+        subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(clone)],
+                       check=True, capture_output=True)
+
+        origins = eligibility.trace_origins(str(clone), _pr(4, fix), ["9.0"])
+        assert [(o.subject, o.branches) for o in origins] == [("write code (#1)", ("9.0",))]
 
     def test_unreadable_merge_commit_is_a_source_change_error(self, clone):
         source = _pr(999, "0" * 40)
@@ -260,6 +313,12 @@ class TestPrFromNode:
         pr = eligibility._pr_from_node(self._node(projectItems={"nodes": [None]}), "org")
         assert pr is not None and pr.project_numbers is None
 
+    def test_unlisted_project_page_leaves_projects_unknown(self):
+        node = self._node()
+        node["projectItems"]["pageInfo"] = {"hasNextPage": True}
+        pr = eligibility._pr_from_node(node, "org")
+        assert pr is not None and pr.project_numbers is None
+
     def test_skips_a_node_without_merge_commit(self):
         assert eligibility._pr_from_node(self._node(mergeCommit=None), "org") is None
         assert eligibility._pr_from_node({}, "org") is None
@@ -300,6 +359,21 @@ def test_discover_pages_and_queries_one_utc_day():
     assert calls[1]["cursor"] == "c1"
 
 
+def test_discover_covers_a_window_of_days():
+    calls: list[dict[str, Any]] = []
+
+    class Gql:
+        def execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+            calls.append(variables)
+            return {"search": {"nodes": [], "pageInfo": {"hasNextPage": False}}}
+
+    eligibility.discover_merged_prs(
+        Gql(), repo="org/core", base_branch="unstable", date="2026-03-01",
+        project_owner="org", days=3,
+    )
+    assert calls[0]["q"].endswith("merged:2026-02-27T00:00:00Z..2026-03-01T23:59:59Z")
+
+
 _REGISTRY = """
 repos:
   - repo: org/core
@@ -333,9 +407,22 @@ def test_render_comment_bounds_the_model_reason(tmp_path):
         _repo_entry(tmp_path), ("9.0",), "Pings @maintainers\n\n## Heading " + "x" * 1000,
     )
     reason = body.splitlines()[3]
-    assert reason.startswith("Pings @\u200bmaintainers ## Heading")
-    assert len(reason) <= 401
+    assert reason.startswith("> Pings @\u200bmaintainers ## Heading")
+    assert len(reason) <= 402
     assert "\n## Heading" not in body
+
+
+def test_render_comment_reason_cannot_carry_markup(tmp_path):
+    body = eligibility.render_comment(
+        _repo_entry(tmp_path), ("9.0",),
+        "## [details](https://evil.example/x) ![i](http://e/i.png) <img src=x> `c` www.evil.example",
+    )
+    quote = body.splitlines()[3]
+    assert quote.startswith("> details")
+    reason = quote[2:]
+    for char in "[]()<>!`":
+        assert char not in reason
+    assert "://" not in reason and "www." not in reason
 
 
 class _FakeIssue:
@@ -416,7 +503,7 @@ def test_run_comments_only_on_eligible_prs(wired):
     assert result["prs"] == {
         "101": {"action": "commented", "branches": ["9.1"], "reason": "Fixes f."},
         "102": {"action": "not-eligible", "detail": "no release branch still needs the change"},
-        "103": {"action": "not-eligible", "detail": "no existing code modified, or too large to trace"},
+        "103": {"action": "not-eligible", "detail": "only adds new files"},
         "104": {"action": "already-commented"},
     }
     # Only #101 reaches the model, with the origin and its branch.
@@ -564,3 +651,67 @@ def test_multi_commit_rebase_is_undecided_instead_of_partially_traced(tmp_path):
     )
     with pytest.raises(eligibility.SourceChangeError, match="rebase-merged"):
         eligibility.trace_origins(str(repo), source, ["9.0"])
+
+
+def test_run_any_tracing_failure_is_contained_to_that_pr(wired, monkeypatch):
+    real_trace_origins = eligibility.trace_origins
+
+    def trace(repo_dir, source, branches, **kwargs):
+        if source.number == 103:
+            raise subprocess.CalledProcessError(128, ["git", "log"])
+        return real_trace_origins(repo_dir, source, branches, **kwargs)
+
+    monkeypatch.setattr(eligibility, "trace_origins", trace)
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "r"}]),
+    )
+    assert result["prs"]["103"] == {"action": "undecided", "detail": "tracing failed"}
+    assert len(result["errors"]) == 1 and result["errors"][0].startswith("#103: tracing failed")
+    assert [number for number, _ in wired.posted] == [101]
+
+
+def test_run_untraceable_pr_is_undecided(wired, monkeypatch):
+    def trace(repo_dir, source, branches, **kwargs):
+        raise eligibility.OriginsUnknown("touches more than 40 files")
+
+    monkeypatch.setattr(eligibility, "trace_origins", trace)
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=_model([]),
+    )
+    assert result["prs"]["101"] == {
+        "action": "undecided", "detail": "could not trace: touches more than 40 files",
+    }
+    assert "#101: could not trace: touches more than 40 files" in result["errors"]
+
+
+def test_run_comments_after_each_batch(wired, monkeypatch):
+    monkeypatch.setattr(eligibility, "_BATCH_SIZE", 1)
+    monkeypatch.setattr(eligibility, "trace_origins", lambda *_, **__: (
+        LineOrigin("old (#1)", "2000-01-01T00:00:00+00:00", ("9.0",)),
+    ))
+    calls: list[int] = []
+
+    def run_fn(prompt: str, **kwargs: Any) -> tuple[str, str, int]:
+        calls.append(len(wired.posted))
+        if len(calls) == 1:
+            return json.dumps({"verdicts": [
+                {"pr": 101, "backport": True, "branches": ["9.0"], "reason": "r"},
+            ]}), "", 0
+        return "", "timeout after 900s", 1
+
+    result = eligibility.run(repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=run_fn)
+    # The second batch is judged only after the first batch's comment is up.
+    assert calls[:2] == [0, 1]
+    assert result["prs"]["101"]["action"] == "commented"
+    assert result["prs"]["103"] == {"action": "undecided"}
+
+
+def test_run_ignores_a_registered_branch_that_does_not_exist(wired, upstream):
+    _git(upstream["path"], "branch", "-D", "9.0")
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "r"}]),
+    )
+    assert result["errors"] == []
+    assert result["prs"]["101"]["action"] == "commented"
