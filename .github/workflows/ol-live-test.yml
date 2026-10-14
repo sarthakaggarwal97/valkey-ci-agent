@@ -1,0 +1,173 @@
+name: OL Operator Logs Live Test
+
+# THROWAWAY fork-only harness: runs the real backport sweep (prepare, then
+# publish, exactly as backport-sweep.yml does) against synthetic branches and
+# PRs on this fork, driven by a user-owned project board, using the fork PAT.
+# Not for upstream.
+
+on:
+  push:
+    branches: [e2e/operator-logs]
+    paths: [.e2e/register]
+  workflow_dispatch:
+    inputs:
+      op:
+        description: "Operation"
+        required: true
+        type: choice
+        options: [board-setup, board-add, board-list, sweep]
+      project_number:
+        description: "User project board number"
+        required: false
+        type: string
+        default: ""
+      branch:
+        description: "Target branch"
+        required: false
+        type: string
+        default: ""
+      pr:
+        description: "PR number (board-add)"
+        required: false
+        type: string
+        default: ""
+      test_commands:
+        description: "Newline-separated validation commands"
+        required: false
+        type: string
+        default: ""
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  OL_REPO: sarthakaggarwal97/valkey-ci-agent
+  OL_OWNER: sarthakaggarwal97
+
+jobs:
+  ol:
+    if: >-
+      github.repository == 'sarthakaggarwal97/valkey-ci-agent' &&
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_EVIDENCE_DIR: agent-evidence
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          install-claude: ${{ inputs.op == 'sweep' && 'true' || 'false' }}
+
+      - name: Board operation
+        if: startsWith(inputs.op, 'board-')
+        env:
+          LT_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          OP: ${{ inputs.op }}
+          PROJECT_NUMBER: ${{ inputs.project_number }}
+          PR: ${{ inputs.pr }}
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          set -euo pipefail
+          case "${OP}" in
+            board-setup)
+              python -m scripts.dev.lt_board setup --title "OL Operator Logs" ;;
+            board-add)
+              python -m scripts.dev.lt_board add \
+                --project-number "${PROJECT_NUMBER}" --repo "${OL_REPO}" \
+                --pr "${PR}" --branch "${BRANCH}" --status "To be backported" ;;
+            board-list)
+              python -m scripts.dev.lt_board list --project-number "${PROJECT_NUMBER}" ;;
+          esac
+
+      - name: Write fork registry
+        if: inputs.op == 'sweep'
+        env:
+          BRANCH: ${{ inputs.branch }}
+          PROJECT_NUMBER: ${{ inputs.project_number }}
+        run: |
+          set -euo pipefail
+          echo "SWEEP_STATE_FILE=${RUNNER_TEMP}/backport-sweep/state.json" >> "${GITHUB_ENV}"
+          cat > /tmp/ol-repos.yml <<EOF
+          repos:
+            - repo: ${OL_REPO}
+              project_owner: ${OL_OWNER}
+              project_owner_type: user
+              language: text
+              validation_setup_commands:
+                - "echo installing toolchain && sleep 2 && echo toolchain ready"
+              build_commands: []
+              branches:
+                - branch: "${BRANCH}"
+                  project_number: ${PROJECT_NUMBER}
+          EOF
+
+      - name: Configure AWS credentials
+        if: inputs.op == 'sweep'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: ol-live-test-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Same invocation as backport-sweep.yml: no --verbose, stdout to the file.
+      - name: Prepare backport sweep
+        if: inputs.op == 'sweep'
+        id: prepare
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          BRANCH: ${{ inputs.branch }}
+          TEST_COMMANDS: ${{ inputs.test_commands }}
+        run: |
+          set -euo pipefail
+          args=(
+            -m scripts.backport.sweep
+            --registry /tmp/ol-repos.yml
+            --repo "${OL_REPO}"
+            --branch "${BRANCH}"
+            --status-field "LT Status"
+            --max-candidates 0
+            --prepare-state "${SWEEP_STATE_FILE}"
+          )
+          if [[ -n "${TEST_COMMANDS}" ]]; then
+            args+=(--test-commands "${TEST_COMMANDS}")
+          fi
+          python "${args[@]}" > backport-sweep-result.json
+          [[ -f "${SWEEP_STATE_FILE}" ]] && publish=true || publish=false
+          echo "needs_publish=${publish}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish backport sweep
+        if: inputs.op == 'sweep' && steps.prepare.outputs.needs_publish == 'true'
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          set -euo pipefail
+          python -m scripts.backport.sweep \
+            --registry /tmp/ol-repos.yml \
+            --repo "${OL_REPO}" \
+            --branch "${BRANCH}" \
+            --status-field "LT Status" \
+            --publish-state "${SWEEP_STATE_FILE}" > backport-sweep-result.json
+
+      - name: Upload result
+        if: always() && inputs.op == 'sweep'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ol-result-${{ github.run_id }}
+          path: backport-sweep-result.json
+          if-no-files-found: ignore
+          retention-days: 7
