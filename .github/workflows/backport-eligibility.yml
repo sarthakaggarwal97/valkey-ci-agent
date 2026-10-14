@@ -37,8 +37,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
+      # Runs for one repo are serialized so two runs over the same date cannot
+      # both comment; queue: max keeps every pending dispatch instead of only
+      # the latest.
       group: backport-eligibility-${{ inputs.repo || 'valkey-io/valkey' }}
       cancel-in-progress: false
+      queue: max
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       CLAUDE_CODE_USE_BEDROCK: "1"
