@@ -104,6 +104,23 @@ class TestTraceOrigins:
         assert origins is not None
         assert Candidate(_pr(102, upstream["shas"][102]), origins).branches == set()
 
+    def test_branch_cut_after_the_merge_already_has_the_pr(self, clone, upstream):
+        # A branch forked from unstable after #101 merged carries its commit
+        # under the same SHA, even if mergedAt is later than the commit time.
+        repo = upstream["path"]
+        _git(repo, "branch", "9.2", upstream["shas"][101])
+        dest = Path(clone).parent / "clone-92"
+        subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(dest)],
+                       check=True, capture_output=True)
+        source = MergedSourcePR(
+            pr=MergedPR(number=101, title="t", author="a", url="u",
+                        merge_commit_sha=upstream["shas"][101]),
+            merged_at="2999-01-01T00:00:00Z",
+        )
+        origins = eligibility.trace_origins(str(dest), source, ["9.2", "9.1"])
+        assert origins is not None
+        assert Candidate(source, origins).branches == {"9.1"}
+
     def test_purely_additive_pr_is_not_traced(self, clone, upstream):
         assert eligibility.trace_origins(clone, _pr(103, upstream["shas"][103]), ["9.1"]) is None
 

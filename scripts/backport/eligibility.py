@@ -266,7 +266,10 @@ def trace_origins(
         present = prs_present_in_history(
             repo_dir, ref, {**origin_prs, source.number: source.merged_at},
         )
-        if source.number in present:
+        # A branch cut after the merge carries the merge commit itself. Its
+        # committer time can precede mergedAt by a second, which the
+        # time-gated subject match in prs_present_in_history then rejects.
+        if source.number in present or is_ancestor(repo_dir, source.pr.merge_commit_sha, ref):
             continue
         for sha, (_, _, numbers) in records.items():
             if numbers & present or is_ancestor(repo_dir, sha, ref):
@@ -453,6 +456,8 @@ def run(
                     "detail": "no release branch still needs the change",
                 }
                 continue
+            logger.info("#%d: history offers %s", source.number,
+                        ", ".join(sorted(candidate.branches, key=_branch_sort_key, reverse=True)))
             candidates.append(candidate)
 
         verdicts = judge(
