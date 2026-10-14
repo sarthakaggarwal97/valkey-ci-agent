@@ -186,6 +186,11 @@ class TestPrFromNode:
         pr = eligibility._pr_from_node(node, "org")
         assert pr is not None and pr.already_commented
 
+    def test_unreadable_project_item_fails_closed(self):
+        node = self._node(projectItems={"nodes": [None]})
+        with pytest.raises(RuntimeError, match="organization-projects:read"):
+            eligibility._pr_from_node(node, "org")
+
     def test_skips_a_node_without_merge_commit(self):
         assert eligibility._pr_from_node(self._node(mergeCommit=None), "org") is None
         assert eligibility._pr_from_node({}, "org") is None

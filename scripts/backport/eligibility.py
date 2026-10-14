@@ -211,11 +211,19 @@ def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
     sha = (node.get("mergeCommit") or {}).get("oid") or ""
     if not sha or not node.get("mergedAt"):
         return None
+    items = (node.get("projectItems") or {}).get("nodes") or []
+    # GitHub returns null for a project item the token cannot read. Treating
+    # that as "not queued" would suggest backports that are already queued.
+    if any(item is None or item.get("project") is None for item in items):
+        raise RuntimeError(
+            f"Cannot read the projects of #{node['number']}; the token needs "
+            "organization-projects:read"
+        )
     projects = frozenset(
-        project["number"]
-        for item in (node.get("projectItems") or {}).get("nodes") or []
-        if (project := (item or {}).get("project"))
-        and ((project.get("owner") or {}).get("login") or "").lower() == project_owner.lower()
+        item["project"]["number"]
+        for item in items
+        if ((item["project"].get("owner") or {}).get("login") or "").lower()
+        == project_owner.lower()
     )
     commented = any(
         COMMENT_MARKER in ((comment or {}).get("body") or "")
