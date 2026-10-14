@@ -107,7 +107,8 @@ jobs:
               language: text
               validation_setup_commands:
                 - "echo installing toolchain && sleep 2 && echo toolchain ready"
-              build_commands: []
+              build_commands:
+                - "test ! -e ol/forbidden.txt || { echo 'ol/forbidden.txt must not exist on a release branch' >&2; exit 1; }"
               branches:
                 - branch: "${BRANCH}"
                   project_number: ${PROJECT_NUMBER}
