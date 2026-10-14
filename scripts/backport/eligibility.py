@@ -141,7 +141,9 @@ class MergedSourcePR:
 
     pr: MergedPR
     merged_at: str
-    project_numbers: frozenset[int] = frozenset()
+    # None when GitHub hid a project item from the token: the PR may already
+    # be queued, so it must not be suggested.
+    project_numbers: frozenset[int] | None = frozenset()
     already_commented: bool = False
 
     @property
@@ -212,19 +214,14 @@ def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
     if not sha or not node.get("mergedAt"):
         return None
     items = (node.get("projectItems") or {}).get("nodes") or []
-    # GitHub returns null for a project item the token cannot read. Treating
-    # that as "not queued" would suggest backports that are already queued.
-    if any(item is None or item.get("project") is None for item in items):
-        raise RuntimeError(
-            f"Cannot read the projects of #{node['number']}; the token needs "
-            "organization-projects:read"
+    projects: frozenset[int] | None = None
+    if all(item and item.get("project") for item in items):
+        projects = frozenset(
+            item["project"]["number"]
+            for item in items
+            if ((item["project"].get("owner") or {}).get("login") or "").lower()
+            == project_owner.lower()
         )
-    projects = frozenset(
-        item["project"]["number"]
-        for item in items
-        if ((item["project"].get("owner") or {}).get("login") or "").lower()
-        == project_owner.lower()
-    )
     commented = any(
         COMMENT_MARKER in ((comment or {}).get("body") or "")
         for comment in (node.get("comments") or {}).get("nodes") or []
@@ -277,7 +274,11 @@ def trace_origins(
         # A branch cut after the merge carries the merge commit itself. Its
         # committer time can precede mergedAt by a second, which the
         # time-gated subject match in prs_present_in_history then rejects.
-        if source.number in present or is_ancestor(repo_dir, source.pr.merge_commit_sha, ref):
+        # An unknown answer skips the branch too: suggesting a branch that
+        # already has the PR is the error to avoid.
+        if source.number in present or (
+            is_ancestor(repo_dir, source.pr.merge_commit_sha, ref) is not False
+        ):
             continue
         for sha, (_, _, numbers) in records.items():
             if numbers & present or is_ancestor(repo_dir, sha, ref):
@@ -326,7 +327,7 @@ def judge(
             entry["line_origins"] = [
                 {"commit": o.subject, "date": o.committed_at[:10],
                  "candidate_branches": list(o.branches)}
-                for o in candidate.origins[-_MAX_ORIGINS:]
+                for o in candidate.origins
             ]
         stdout, stderr, code = run_fn(
             _PROMPT_TEMPLATE.format(repo=repo, prs_json=json.dumps(payload, indent=2)),
@@ -446,18 +447,24 @@ def run(
     pending = [source for source in prs if not source.already_commented]
 
     candidates: list[Candidate] = []
+    errors: list[str] = []
     with tempfile.TemporaryDirectory(prefix="backport-eligibility-") as tmp:
         repo_dir = os.path.join(tmp, "repo")
         if pending:
             with GitAuth(token, prefix="backport-eligibility-askpass-") as auth:
                 clone_target_branch(repo_entry.repo, base_branch, repo_dir, auth.env())
         for source in pending:
+            if source.project_numbers is None:
+                results[source.number] = {"action": "undecided"}
+                errors.append(f"#{source.number}: project items unreadable")
+                continue
             queued = {b for b, number in projects.items() if number in source.project_numbers}
             origins = trace_origins(repo_dir, source, [b for b in branches if b not in queued])
             if origins is None:
                 results[source.number] = {"action": "not-eligible", "detail": "no existing code modified, or too large to trace"}
                 continue
-            candidate = Candidate(source, origins)
+            # One cap for what the model sees and what its answer may name.
+            candidate = Candidate(source, origins[-_MAX_ORIGINS:])
             if not candidate.branches:
                 results[source.number] = {
                     "action": "not-eligible",
@@ -472,7 +479,6 @@ def run(
             candidates, repo=repo_entry.repo, repo_dir=repo_dir, run_fn=run_fn,
         ) if candidates else {}
 
-    errors: list[str] = []
     for candidate in candidates:
         number = candidate.source.number
         verdict = verdicts.get(number)

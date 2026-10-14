@@ -121,6 +121,19 @@ class TestTraceOrigins:
         assert origins is not None
         assert Candidate(source, origins).branches == {"9.1"}
 
+    def test_unknown_ancestry_of_the_merge_commit_skips_the_branch(
+        self, clone, upstream, monkeypatch,
+    ):
+        merge_sha = upstream["shas"][101]
+        real = eligibility.is_ancestor
+        monkeypatch.setattr(
+            eligibility, "is_ancestor",
+            lambda repo, sha, ref: None if sha == merge_sha else real(repo, sha, ref),
+        )
+        origins = eligibility.trace_origins(clone, _pr(101, merge_sha), ["9.1"])
+        assert origins is not None
+        assert Candidate(_pr(101, merge_sha), origins).branches == set()
+
     def test_purely_additive_pr_is_not_traced(self, clone, upstream):
         assert eligibility.trace_origins(clone, _pr(103, upstream["shas"][103]), ["9.1"]) is None
 
@@ -186,10 +199,9 @@ class TestPrFromNode:
         pr = eligibility._pr_from_node(node, "org")
         assert pr is not None and pr.already_commented
 
-    def test_unreadable_project_item_fails_closed(self):
-        node = self._node(projectItems={"nodes": [None]})
-        with pytest.raises(RuntimeError, match="organization-projects:read"):
-            eligibility._pr_from_node(node, "org")
+    def test_unreadable_project_item_leaves_projects_unknown(self):
+        pr = eligibility._pr_from_node(self._node(projectItems={"nodes": [None]}), "org")
+        assert pr is not None and pr.project_numbers is None
 
     def test_skips_a_node_without_merge_commit(self):
         assert eligibility._pr_from_node(self._node(mergeCommit=None), "org") is None
@@ -307,7 +319,7 @@ def wired(monkeypatch, upstream, tmp_path):
                        check=True)
 
     monkeypatch.setattr(eligibility, "clone_target_branch", clone)
-    return SimpleNamespace(entry=_repo_entry(tmp_path), posted=posted, cloned=cloned)
+    return SimpleNamespace(entry=_repo_entry(tmp_path), posted=posted, cloned=cloned, nodes=nodes)
 
 
 def _model(verdicts: list[dict[str, Any]], prompts: list[str] | None = None):
@@ -368,4 +380,37 @@ def test_run_missing_verdict_is_an_error_without_a_comment(wired):
     )
     assert result["prs"]["101"] == {"action": "undecided"}
     assert result["errors"] == ["#101: no verdict"]
+    assert wired.posted == []
+
+
+def test_run_unreadable_projects_fail_only_that_pr(wired):
+    wired.nodes.append({
+        "number": 105, "mergedAt": "2000-01-01T00:00:00Z",
+        "mergeCommit": {"oid": wired.nodes[0]["mergeCommit"]["oid"]},
+        "projectItems": {"nodes": [None]},
+    })
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "r"}]),
+    )
+    assert result["prs"]["105"] == {"action": "undecided"}
+    assert result["prs"]["101"]["action"] == "commented"
+    assert result["errors"] == ["#105: project items unreadable"]
+    assert [number for number, _ in wired.posted] == [101]
+
+
+def test_run_model_may_only_name_branches_it_was_shown(wired, monkeypatch):
+    monkeypatch.setattr(eligibility, "_MAX_ORIGINS", 1)
+    monkeypatch.setattr(eligibility, "trace_origins", lambda *_: (
+        LineOrigin("old (#1)", "2000-01-01T00:00:00+00:00", ("9.0",)),
+        LineOrigin("new (#2)", "2001-01-01T00:00:00+00:00", ("9.1",)),
+    ))
+    prompts: list[str] = []
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.0"]}], prompts),
+    )
+    assert "new (#2)" in prompts[0] and "old (#1)" not in prompts[0]
+    # 9.0 came only from the origin the model never saw.
+    assert result["prs"]["101"] == {"action": "undecided"}
     assert wired.posted == []

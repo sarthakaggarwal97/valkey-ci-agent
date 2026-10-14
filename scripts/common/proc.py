@@ -83,7 +83,6 @@ def git_output(repo_dir: str, *args: str, timeout: int = _GIT_TIMEOUT_S) -> str:
     return result.stdout
 
 
-
 def is_ancestor(repo_dir: str, ancestor: str, descendant: str) -> bool | None:
     """True/False for a definite ``git merge-base --is-ancestor`` answer.
 
@@ -99,6 +98,8 @@ def is_ancestor(repo_dir: str, ancestor: str, descendant: str) -> bool | None:
     except subprocess.TimeoutExpired:
         return None
     return True
+
+
 def run_git(
     repo_dir: str | None,
     *args: str,
