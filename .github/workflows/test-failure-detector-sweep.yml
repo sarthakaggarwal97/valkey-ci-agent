@@ -64,7 +64,6 @@ jobs:
             -m scripts.test_failure_detector.main
             --token "${TARGET_TOKEN}"
             --repo "${TARGET_REPO}"
-            --verbose
           )
 
           if [[ -n "${RUN_ID}" ]]; then

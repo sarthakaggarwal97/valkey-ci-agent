@@ -654,3 +654,37 @@ def test_run_followup_does_not_post_result_after_concurrent_head_move(monkeypatc
     assert "was discarded" in bodies[-1]
     assert "no safe change" not in bodies[-1]
     assert "job=3" in bodies[-1]
+
+
+def _run_main(monkeypatch, result):
+    registry = MagicMock()
+    registry.get_branch.return_value = (MagicMock(), MagicMock())
+    monkeypatch.setattr(ci_followup, "configure_logging", lambda **_: None)
+    monkeypatch.setattr(ci_followup, "load_registry", lambda _path: registry)
+    monkeypatch.setattr(ci_followup, "Github", MagicMock())
+    monkeypatch.setattr(ci_followup, "GitAuth", MagicMock())
+    monkeypatch.setattr(ci_followup, "ArtifactClient", MagicMock())
+    monkeypatch.setattr(ci_followup, "_macos_verifier", lambda: None)
+    monkeypatch.setattr(ci_followup, "run_followup", lambda *_a, **_k: result)
+    return ci_followup.main(
+        ["--repo", "valkey-io/valkey", "--branch", "9.0", "--target-token", "t"])
+
+
+def test_main_logs_the_outcome_when_nothing_needs_a_follow_up(monkeypatch, caplog):
+    caplog.set_level("INFO", logger=ci_followup.__name__)
+    code = _run_main(monkeypatch, {"action": "skipped", "reason": "no failed run on the sweep PR"})
+
+    assert code == 0
+    assert caplog.records[-1].levelname == "INFO"
+    assert caplog.records[-1].getMessage() == (
+        "CI follow-up for valkey-io/valkey 9.0: skipped: no failed run on the sweep PR")
+
+
+def test_main_logs_a_failed_follow_up_as_an_error(monkeypatch, caplog):
+    caplog.set_level("INFO", logger=ci_followup.__name__)
+    code = _run_main(monkeypatch, {"action": "failed", "pr": 42, "summary": "engine crashed"})
+
+    assert code == 1
+    assert caplog.records[-1].levelname == "ERROR"
+    assert caplog.records[-1].getMessage() == (
+        "CI follow-up for valkey-io/valkey 9.0: failed on PR #42: engine crashed")

@@ -81,3 +81,79 @@ def test_outcome_with_a_literal_percent_and_no_args(caplog):
     caplog.set_level(logging.INFO, logger="t.pct")
     log_outcome(logging.getLogger("t.pct"), logging.INFO, "100% done")
     assert caplog.records[-1].getMessage() == "100% done"
+
+
+def _console_record(level: int, msg: str, **extra: object) -> logging.LogRecord:
+    record = logging.LogRecord("x", level, "/w/scripts/backport/sweep.py", 1, msg, (), None)
+    record.__dict__.update(extra)
+    return record
+
+
+def test_actions_line_is_tag_and_message_with_level_only_when_not_info():
+    from scripts.common.logging_utils import _ConsoleFormatter
+
+    fmt = _ConsoleFormatter(actions=True, colour=False)
+    assert fmt.format(_console_record(logging.INFO, "hello")) == "[backport] hello"
+    assert fmt.format(_console_record(logging.WARNING, "careful")) == "[backport] WARNING careful"
+    assert (fmt.format(_console_record(logging.INFO, "PR #1", highlight="success"))
+            == "[backport] ▶ PR #1")
+
+
+def test_actions_colours_warnings_and_highlights():
+    from scripts.common.logging_utils import _ConsoleFormatter
+
+    fmt = _ConsoleFormatter(actions=True, colour=True)
+    warning = fmt.format(_console_record(logging.WARNING, "careful"))
+    assert "\x1b[33mWARNING careful\x1b[0m" in warning
+    accepted = fmt.format(_console_record(logging.INFO, "ok", highlight="success"))
+    assert "\x1b[1;32m▶ ok\x1b[0m" in accepted
+    rejected = fmt.format(_console_record(logging.WARNING, "no", highlight="notice"))
+    assert "\x1b[1;33mWARNING ▶ no\x1b[0m" in rejected
+
+
+def test_local_line_keeps_time_and_level():
+    from scripts.common.logging_utils import _ConsoleFormatter
+
+    line = _ConsoleFormatter(actions=False, colour=False).format(
+        _console_record(logging.INFO, "hello", highlight="notice"))
+    assert line.endswith(" INFO    [backport] ▶ hello")
+
+
+def test_highlight_is_one_record_at_the_requested_level(caplog):
+    from scripts.common.logging_utils import log_highlight
+
+    caplog.set_level(logging.INFO, logger="t.hl")
+    log_highlight(logging.getLogger("t.hl"), "PR #%d", 7, level=logging.WARNING)
+    assert [(r.levelno, r.getMessage(), r.highlight) for r in caplog.records] == [
+        (logging.WARNING, "PR #7", "notice"),
+    ]
+
+
+def test_configure_logging_quiets_http_clients_and_honours_runner_debug(monkeypatch):
+    root = logging.getLogger()
+    saved = root.handlers[:], root.level
+    try:
+        root.handlers = []
+        monkeypatch.setenv("RUNNER_DEBUG", "1")
+        logging_utils.configure_logging()
+        assert root.level == logging.DEBUG
+        assert logging.getLogger("urllib3").level == logging.WARNING
+        assert logging.getLogger("github").level == logging.INFO
+
+        root.handlers = []
+        monkeypatch.delenv("RUNNER_DEBUG")
+        logging_utils.configure_logging()
+        assert root.level == logging.INFO
+    finally:
+        root.handlers, level = saved
+        root.setLevel(level)
+
+
+def test_outcome_is_printed_once_in_actions(monkeypatch):
+    from scripts.common.logging_utils import _SkipAnnotated
+
+    record = _console_record(logging.INFO, "done", annotated=True)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert _SkipAnnotated().filter(record) is False
+    monkeypatch.delenv("GITHUB_ACTIONS")
+    assert _SkipAnnotated().filter(record) is True

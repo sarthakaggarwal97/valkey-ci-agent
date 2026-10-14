@@ -7,6 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from scripts.common.logging_utils import compact_log_value
 from scripts.common.proc import NETWORK_ENV, PROCESS_BASICS, filter_env
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,8 @@ def run_build_commands(
         return True, ""
     full_log_parts: list[str] = []
     for index, command in enumerate(commands, start=1):
-        logger.info("Running backport validation command %d/%d: %s", index, len(commands), command)
+        logger.info("Validation command %d/%d: %s", index, len(commands),
+                    compact_log_value(command, limit=160))
         started = time.monotonic()
         try:
             # Registry build commands are operator-controlled repo config, not
@@ -98,9 +100,8 @@ def run_build_commands(
                 if part
             ).strip()
             return False, summary or f"`{command}` failed with exit code {result.returncode}"
-        logger.info(
-            "Validation command %d/%d passed in %.1fs: %s", index, len(commands), elapsed, command,
-        )
+        # The command is on the line just above; repeating it adds nothing.
+        logger.info("Validation command %d/%d passed in %.1fs", index, len(commands), elapsed)
     if log_path:
         Path(log_path).write_text("\n".join(full_log_parts), encoding="utf-8")
     return True, ""

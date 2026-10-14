@@ -146,7 +146,7 @@ def _apply_labels(repo: Any, pr: Any, labels: list[str]) -> None:
     for label in labels:
         _ensure_label_exists(repo, label)
     try:
-        logger.info("Applying labels %s to PR #%d", labels, pr.number)
+        logger.debug("Applying labels %s to PR #%d", labels, pr.number)
         retry_github_call(
             lambda: pr.add_to_labels(*labels),
             retries=3,

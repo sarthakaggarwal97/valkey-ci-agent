@@ -117,8 +117,7 @@ jobs:
             --target-branch "${BRANCH}" \
             --target-token "${TARGET_TOKEN}" \
             --poll-interval-seconds "${POLL_INTERVAL_SECONDS}" \
-            --poll-duration-seconds "${POLL_DURATION_SECONDS}" \
-            --verbose | tee mark-done-result.json
+            --poll-duration-seconds "${POLL_DURATION_SECONDS}" > mark-done-result.json
 
       - name: Upload result
         if: always()

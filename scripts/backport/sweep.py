@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -64,6 +65,7 @@ from scripts.common.logging_utils import (
     configure_logging,
     log_group,
     log_highlight,
+    log_outcome,
 )
 
 if TYPE_CHECKING:
@@ -267,7 +269,8 @@ def prepare_backport_sweep(
         else list(repo_entry.validation_rules)
     )
 
-    logger.info(
+    log_highlight(
+        logger,
         "Backport sweep of %s %s from project %s/%d (pushing to %s, up to %s PR(s), "
         "%d validation command(s), validation repair %s)",
         repo_full_name, target_branch, repo_entry.project_owner, branch_entry.project_number,
@@ -465,7 +468,7 @@ def _prepare_branch(
                     target_branch,
                     backport_branch,
                 )
-                logger.info("Fetching existing backport sweep branch...")
+                logger.debug("Fetching existing backport sweep branch")
                 _run_git(tmpdir, "fetch", "push_target", backport_branch, env=git_env)
                 _run_git(tmpdir, "checkout", f"push_target/{backport_branch}")
                 _run_git(tmpdir, "checkout", "-B", backport_branch)
@@ -515,10 +518,15 @@ def _prepare_branch(
 
         # Everything after this point is local; the preparation token and
         # askpass helper no longer exist while repository code is validated.
-        setup_ok, setup_output = run_test_commands(
-            tmpdir,
-            validation_setup_commands or [],
-        )
+        # Package installs and the like: folded, with one visible line.
+        setup_commands = validation_setup_commands or []
+        setup_started = time.monotonic()
+        with log_group(f"Validation setup for {target_branch} "
+                       f"({len(setup_commands)} command(s))"):
+            setup_ok, setup_output = run_test_commands(tmpdir, setup_commands)
+        if setup_ok and setup_commands:
+            logger.info("Validation setup ready: %d command(s) in %.0fs",
+                        len(setup_commands), time.monotonic() - setup_started)
         if not setup_ok:
             logger.warning("Validation setup failed for %s", target_branch)
             with log_group(f"Validation setup output for {target_branch} (last 4000 chars)"):
@@ -528,8 +536,17 @@ def _prepare_branch(
                 + (setup_output[:500] or "setup command failed")
             )
 
-        logger.info("Already on %s: %s", backport_branch,
-                    ", ".join(f"#{n}" for n in sorted(already_applied, key=int)) or "nothing yet")
+        # One line per reason instead of one per PR: these need no attention.
+        _log_skipped_group(
+            f"Already on {backport_branch}",
+            [c for c in candidates if str(c.source_pr_number) in already_applied],
+        )
+        _log_skipped_group(
+            f"Already in {target_branch}",
+            [c for c in candidates
+             if str(c.source_pr_number) not in already_applied
+             and c.source_pr_number in on_target],
+        )
         applied_count = 0
         for index, candidate in enumerate(candidates):
             if max_applied > 0 and applied_count >= max_applied:
@@ -542,7 +559,7 @@ def _prepare_branch(
                 break
 
             if str(candidate.source_pr_number) in already_applied:
-                logger.info(
+                logger.debug(
                     "BACKPORT SKIPPED: PR #%d | %s | already present on %s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
@@ -559,7 +576,7 @@ def _prepare_branch(
                 continue
 
             if candidate.source_pr_number in on_target:
-                logger.info(
+                logger.debug(
                     "BACKPORT SKIPPED: PR #%d | %s | already present on %s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
@@ -577,11 +594,13 @@ def _prepare_branch(
 
             plan_error = plan_errors.get(candidate.source_pr_number)
             if plan_error is not None:
-                logger.warning(
+                log_highlight(
+                    logger,
                     "BACKPORT ERROR: PR #%d | %s | %s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
                     compact_log_value(plan_error.detail, limit=500),
+                    level=logging.WARNING,
                 )
                 result.results.append(plan_error)
                 continue
@@ -611,15 +630,27 @@ def _prepare_branch(
                     f"candidate #{candidate.source_pr_number} could not "
                     "restore the worktree; aborting this branch"
                 )
+            if candidate_result.outcome in ("skipped-existing", "skipped-empty"):
+                # Nothing to do and nothing wrong: a plain line, not a warning.
+                logger.info(
+                    "BACKPORT SKIPPED: PR #%d | %s | %s",
+                    candidate.source_pr_number,
+                    compact_log_value(candidate.source_pr_title),
+                    compact_log_value(candidate_result.detail, limit=500)
+                    if candidate_result.detail
+                    else _OUTCOME_WORDS[candidate_result.outcome],
+                )
+                continue
             if candidate_result.outcome != "applied":
-                logger.log(
-                    logging.ERROR if candidate_result.outcome == "error" else logging.WARNING,
+                log_highlight(
+                    logger,
                     "BACKPORT NOT APPLIED: PR #%d | %s | %s%s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
                     _OUTCOME_WORDS.get(candidate_result.outcome, candidate_result.outcome),
                     f" | {compact_log_value(candidate_result.detail, limit=500)}"
                     if candidate_result.detail else "",
+                    level=logging.ERROR if candidate_result.outcome == "error" else logging.WARNING,
                 )
                 continue
 
@@ -643,13 +674,15 @@ def _prepare_branch(
                 candidate_result.outcome = "skipped-validation-failed"
                 candidate_result.detail = validation_failure_detail(output)
                 _run_git(tmpdir, "reset", "--hard", pre_candidate_head)
-                logger.warning(
+                log_highlight(
+                    logger,
                     "BACKPORT REJECTED: PR #%d | %s | target=%s | "
                     "validation failed; removed candidate and continuing | %s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
                     target_branch,
                     compact_log_value(candidate_result.detail, limit=500),
+                    level=logging.WARNING,
                 )
                 continue
 
@@ -665,8 +698,8 @@ def _prepare_branch(
                     "adds no net change to this branch."
                 )
                 candidate_result.resolved_commit_sha = None
-                logger.warning(
-                    "BACKPORT NOT APPLIED: PR #%d | %s | no net change after "
+                logger.info(
+                    "BACKPORT SKIPPED: PR #%d | %s | no net change after "
                     "validation; removed candidate and continuing",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
@@ -692,11 +725,13 @@ def _prepare_branch(
                         )
                         if part
                     )
-            logger.info(
+            log_highlight(
+                logger,
                 "BACKPORT ACCEPTED: PR #%d | %s | target=%s",
                 candidate.source_pr_number,
                 compact_log_value(candidate.source_pr_title),
                 target_branch,
+                style="success",
             )
             applied_count += 1
 
@@ -735,6 +770,16 @@ def _prepare_branch(
             shutil.rmtree(tmpdir, ignore_errors=True)
 
     return result, None
+
+
+def _log_skipped_group(reason: str, skipped: list[ProjectBackportCandidate]) -> None:
+    if skipped:
+        logger.info(
+            "%s, skipping %d PR(s): %s",
+            reason,
+            len(skipped),
+            ", ".join(f"#{c.source_pr_number}" for c in skipped),
+        )
 
 
 def _prepare_source_plans(
@@ -1150,8 +1195,7 @@ def sweep_outcome(result: BranchSweepResult) -> tuple[int, str]:
 
 def _exit_for_result(result: BranchSweepResult) -> None:
     level, text = sweep_outcome(result)
-    logger.log(level, "%s", " ".join(text.split()))
-    annotate(level, text)
+    log_outcome(logger, level, "%s", text)
     if level == logging.ERROR:
         raise SystemExit(1)
 
@@ -1278,8 +1322,10 @@ def main() -> None:
     if args.prepare_state and sweep_outcome(result)[0] != logging.ERROR:
         # Preparation publishes nothing; the publish step reports the outcome.
         # Failures still end the run here, as before.
-        logger.info("Prepared %s: %d candidate(s), %d applied locally; publication follows",
-                    result.target_branch, result.candidates_found, result.applied_count)
+        logger.info(
+            "Prepared %s: %d new backport(s) committed locally; the next step publishes the branch",
+            result.target_branch, result.applied_count,
+        )
         return
     _exit_for_result(result)
 

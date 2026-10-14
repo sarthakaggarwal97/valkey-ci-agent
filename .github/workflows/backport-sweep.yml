@@ -142,12 +142,11 @@ jobs:
             --branch "${{ matrix.branch }}"
             --max-candidates "${MAX_CANDIDATES}"
             --prepare-state "${SWEEP_STATE_FILE}"
-            --verbose
           )
           if [[ "${DRY_RUN}" == "true" ]]; then
             args+=(--discover-only)
           fi
-          python "${args[@]}" | tee backport-sweep-result.json
+          python "${args[@]}" > backport-sweep-result.json
           [[ -f "${SWEEP_STATE_FILE}" ]] && publish=true || publish=false
           echo "needs_publish=${publish}" >> "${GITHUB_OUTPUT}"
 
@@ -177,8 +176,7 @@ jobs:
             --registry repos.yml \
             --repo "${{ matrix.repo }}" \
             --branch "${{ matrix.branch }}" \
-            --publish-state "${SWEEP_STATE_FILE}" \
-            --verbose | tee backport-sweep-result.json
+            --publish-state "${SWEEP_STATE_FILE}" > backport-sweep-result.json
 
       - name: Clean up prepared sweep
         if: always()

@@ -59,7 +59,6 @@ from scripts.backport.sweep_validation import (
     validate_backport_branch,
 )
 from scripts.common.git_auth import GitAuth
-from scripts.common.logging_utils import LOG_HIGHLIGHT_RULE
 
 
 def _candidate_apply_process(fake_run):
@@ -1796,13 +1795,11 @@ def test_existing_sweep_pr_log_highlights_number_title_and_branch(caplog):
     )
 
     assert caplog.messages == [
-        LOG_HIGHLIGHT_RULE,
         (
             "BACKPORT SWEEP PR: resuming PR #4731 | "
             "[backport] Backport sweep for 9.2 | target=9.2 | "
             "branch=agent/backport/sweep/9.2"
         ),
-        LOG_HIGHLIGHT_RULE,
     ]
 
 
