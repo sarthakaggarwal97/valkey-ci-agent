@@ -333,6 +333,17 @@ class TestPrFromNode:
         assert pr.source_commit_shas == ("one", "two")
         assert pr.source_commits_complete is False
 
+    def test_source_commits_do_not_replace_the_merge_commit(self):
+        # Reading a squash-merged PR's branch commits must keep the merge SHA,
+        # or the squash looks like a rebase merge and blame reads the wrong diff.
+        node = self._node(commits={
+            "nodes": [{"commit": {"oid": "one"}}, {"commit": {"oid": "two"}}],
+            "pageInfo": {"hasNextPage": False},
+        })
+        pr = eligibility._pr_from_node(node, "org")
+        assert pr is not None
+        assert pr.pr.merge_commit_sha == node["mergeCommit"]["oid"]
+
 
 def test_discover_pages_and_queries_one_utc_day():
     calls: list[dict[str, Any]] = []

@@ -107,8 +107,9 @@ You are triaging pull requests merged to the development branch of {repo}.
 For each PR, decide whether maintainers should backport it to the maintained
 release branches, and to which of them.
 
-Each PR lists `line_origins`: the commits that introduced the lines it modifies
-or deletes, each with the `candidate_branches` that carry that commit. Pick the
+Each PR lists `line_origins`: the commits that introduced the lines it modifies,
+deletes, or inserts next to, each with the `candidate_branches` that carry that
+commit. Pick the
 branches where the problem the PR fixes actually exists. When the fix targets
 code a recent commit introduced, only branches carrying that commit qualify;
 lines touched only incidentally (a signature, a call site, a moved block) do
@@ -248,10 +249,14 @@ def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
     )
     raw_commits_page = node.get("commits")
     commits_page = raw_commits_page if isinstance(raw_commits_page, dict) else {}
+    # A walrus here would bind in this function's scope and clobber ``sha``.
     source_commit_shas = tuple(
-        sha
-        for commit_node in commits_page.get("nodes") or []
-        if (sha := ((commit_node or {}).get("commit") or {}).get("oid"))
+        oid
+        for oid in (
+            ((commit_node or {}).get("commit") or {}).get("oid")
+            for commit_node in commits_page.get("nodes") or []
+        )
+        if oid
     )
     return MergedSourcePR(
         pr=MergedPR(
