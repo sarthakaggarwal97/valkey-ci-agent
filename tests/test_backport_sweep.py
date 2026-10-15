@@ -1792,7 +1792,7 @@ def _box_candidate(num, title):
 
 
 def test_sweep_plan_box_names_the_open_pr_every_candidate_and_what_is_applied(caplog):
-    from scripts.common.logging_utils import BOX_RULE
+    from scripts.common.logging_utils import LOG_HIGHLIGHT_RULE as BOX_RULE
 
     caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
     candidates = [
@@ -1849,7 +1849,7 @@ def test_sweep_plan_box_without_an_open_pr_or_anything_new(caplog):
 
 
 def test_sweep_verdict_box_gives_every_candidate_its_outcome(caplog):
-    from scripts.common.logging_utils import BOX_RULE
+    from scripts.common.logging_utils import LOG_HIGHLIGHT_RULE as BOX_RULE
 
     caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
     candidates = [_box_candidate(n, f"PR {n}") for n in range(1, 8)]

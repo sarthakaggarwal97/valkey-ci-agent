@@ -19,6 +19,7 @@ from scripts.backport.models import (
 )
 from scripts.backport.source_plan import SourceChangePlan
 from scripts.backport.sweep_git import list_applied_prs_on_branch
+from scripts.common.logging_utils import LOG_HIGHLIGHT_RULE
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -100,11 +101,13 @@ def test_apply_candidate_highlights_number_title_and_plan(
 
     assert result.outcome == "error"
     assert caplog.messages == [
+        LOG_HIGHLIGHT_RULE,
         (
             "BACKPORT ATTEMPT: PR #4714 | "
             "Deflake BgIterationTest.createAndCleanup | "
             "source=valkey-io/valkey | plan=single | commits=1"
         ),
+        LOG_HIGHLIGHT_RULE,
     ]
 
 

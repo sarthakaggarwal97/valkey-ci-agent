@@ -64,7 +64,6 @@ from scripts.common.logging_utils import (
     compact_log_value,
     configure_logging,
     log_box,
-    log_highlight,
     log_outcome,
 )
 
@@ -562,13 +561,11 @@ def _prepare_branch(
 
             plan_error = plan_errors.get(candidate.source_pr_number)
             if plan_error is not None:
-                log_highlight(
-                    logger,
+                logger.warning(
                     "BACKPORT ERROR: PR #%d | %s | %s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
                     compact_log_value(plan_error.detail, limit=500),
-                    level=logging.WARNING,
                 )
                 result.results.append(plan_error)
                 continue
@@ -605,15 +602,14 @@ def _prepare_branch(
                 )
                 continue
             if candidate_result.outcome != "applied":
-                log_highlight(
-                    logger,
+                logger.log(
+                    logging.ERROR if candidate_result.outcome == "error" else logging.WARNING,
                     "BACKPORT NOT APPLIED: PR #%d | %s | %s%s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
                     _OUTCOME_WORDS.get(candidate_result.outcome, candidate_result.outcome),
                     f" | {compact_log_value(candidate_result.detail, limit=500)}"
                     if candidate_result.detail else "",
-                    level=logging.ERROR if candidate_result.outcome == "error" else logging.WARNING,
                 )
                 continue
 
@@ -636,15 +632,13 @@ def _prepare_branch(
                 candidate_result.outcome = "skipped-validation-failed"
                 candidate_result.detail = validation_failure_detail(output)
                 _run_git(tmpdir, "reset", "--hard", pre_candidate_head)
-                log_highlight(
-                    logger,
+                logger.warning(
                     "BACKPORT REJECTED: PR #%d | %s | target=%s | "
                     "validation failed; removed candidate and continuing | %s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
                     target_branch,
                     compact_log_value(candidate_result.detail, limit=500),
-                    level=logging.WARNING,
                 )
                 continue
 
@@ -687,13 +681,11 @@ def _prepare_branch(
                         )
                         if part
                     )
-            log_highlight(
-                logger,
+            logger.info(
                 "BACKPORT ACCEPTED: PR #%d | %s | target=%s",
                 candidate.source_pr_number,
                 compact_log_value(candidate.source_pr_title),
                 target_branch,
-                style="success",
             )
             applied_count += 1
 

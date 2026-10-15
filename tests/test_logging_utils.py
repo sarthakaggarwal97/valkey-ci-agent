@@ -1,23 +1,11 @@
-"""Tests for the shared log format, run annotations, and groups."""
+"""Tests for the shared log format, highlights and run annotations."""
 
 from __future__ import annotations
 
 import logging
 
 from scripts.common import logging_utils
-from scripts.common.logging_utils import _TagFormatter, log_outcome
-
-
-def _record(path: str) -> logging.LogRecord:
-    return logging.LogRecord("x", logging.INFO, path, 1, "hello %s", ("world",), None)
-
-
-def test_records_are_tagged_by_feature_area_not_module_path():
-    fmt = _TagFormatter("[%(tag)s] %(message)s")
-    assert fmt.format(_record("/w/scripts/release/reconcile.py")) == "[release] hello world"
-    assert fmt.format(_record("/w/scripts/ci_fix/main.py")) == "[ci-fix] hello world"
-    # Shared helpers act for their caller, so the file is the useful tag.
-    assert fmt.format(_record("/w/scripts/common/proc.py")) == "[proc] hello world"
+from scripts.common.logging_utils import LOG_HIGHLIGHT_RULE, log_outcome
 
 
 def test_outcome_is_annotated_only_in_actions(monkeypatch, capsys, caplog):
@@ -65,49 +53,23 @@ def test_outcome_with_a_literal_percent_and_no_args(caplog):
     assert caplog.records[-1].getMessage() == "100% done"
 
 
-def _console_record(level: int, msg: str, **extra: object) -> logging.LogRecord:
-    record = logging.LogRecord("x", level, "/w/scripts/backport/sweep.py", 1, msg, (), None)
-    record.__dict__.update(extra)
-    return record
+def test_line_is_time_level_and_message():
+    import re
+
+    record = logging.LogRecord("x", logging.WARNING, "/w/a.py", 1, "PR #%d", (7,), None)
+    line = logging.Formatter(logging_utils.LOG_FORMAT).format(record)
+    assert re.fullmatch(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} WARNING PR #7", line)
 
 
-def test_actions_line_is_tag_and_message_with_level_only_when_not_info():
-    from scripts.common.logging_utils import _ConsoleFormatter
-
-    fmt = _ConsoleFormatter(actions=True, colour=False)
-    assert fmt.format(_console_record(logging.INFO, "hello")) == "[backport] hello"
-    assert fmt.format(_console_record(logging.WARNING, "careful")) == "[backport] WARNING careful"
-    assert (fmt.format(_console_record(logging.INFO, "PR #1", highlight="success"))
-            == "[backport] ▶ PR #1")
-
-
-def test_actions_colours_warnings_and_highlights():
-    from scripts.common.logging_utils import _ConsoleFormatter
-
-    fmt = _ConsoleFormatter(actions=True, colour=True)
-    warning = fmt.format(_console_record(logging.WARNING, "careful"))
-    assert "\x1b[33mWARNING careful\x1b[0m" in warning
-    accepted = fmt.format(_console_record(logging.INFO, "ok", highlight="success"))
-    assert "\x1b[1;32m▶ ok\x1b[0m" in accepted
-    rejected = fmt.format(_console_record(logging.WARNING, "no", highlight="notice"))
-    assert "\x1b[1;33mWARNING ▶ no\x1b[0m" in rejected
-
-
-def test_local_line_keeps_time_and_level():
-    from scripts.common.logging_utils import _ConsoleFormatter
-
-    line = _ConsoleFormatter(actions=False, colour=False).format(
-        _console_record(logging.INFO, "hello", highlight="notice"))
-    assert line.endswith(" INFO    [backport] ▶ hello")
-
-
-def test_highlight_is_one_record_at_the_requested_level(caplog):
+def test_highlight_frames_the_record_with_rules_at_its_level(caplog):
     from scripts.common.logging_utils import log_highlight
 
     caplog.set_level(logging.INFO, logger="t.hl")
     log_highlight(logging.getLogger("t.hl"), "PR #%d", 7, level=logging.WARNING)
-    assert [(r.levelno, r.getMessage(), r.highlight) for r in caplog.records] == [
-        (logging.WARNING, "PR #7", "notice"),
+    assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+        (logging.WARNING, LOG_HIGHLIGHT_RULE),
+        (logging.WARNING, "PR #7"),
+        (logging.WARNING, LOG_HIGHLIGHT_RULE),
     ]
 
 
@@ -134,19 +96,18 @@ def test_configure_logging_quiets_http_clients_and_honours_runner_debug(monkeypa
 def test_outcome_is_printed_once_in_actions(monkeypatch):
     from scripts.common.logging_utils import _SkipAnnotated
 
-    record = _console_record(logging.INFO, "done", annotated=True)
+    record = logging.LogRecord("x", logging.INFO, "/w/a.py", 1, "done", (), None)
+    record.annotated = True
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     assert _SkipAnnotated().filter(record) is False
     monkeypatch.delenv("GITHUB_ACTIONS")
     assert _SkipAnnotated().filter(record) is True
 
 
-def test_box_is_a_rule_a_highlighted_title_the_lines_and_a_rule(caplog):
-    from scripts.common.logging_utils import BOX_RULE, log_box
+def test_box_is_the_title_and_lines_between_rules(caplog):
+    from scripts.common.logging_utils import log_box
 
     caplog.set_level(logging.INFO, logger="t.box")
     log_box(logging.getLogger("t.box"), "TITLE 100%", ["a", "b %s"], level=logging.WARNING)
-    assert caplog.messages == [BOX_RULE, "TITLE 100%", "a", "b %s", BOX_RULE]
+    assert caplog.messages == [LOG_HIGHLIGHT_RULE, "TITLE 100%", "a", "b %s", LOG_HIGHLIGHT_RULE]
     assert {r.levelno for r in caplog.records} == {logging.WARNING}
-    assert [getattr(r, "highlight", None) for r in caplog.records] == [
-        None, "notice", None, None, None]
