@@ -1781,27 +1781,109 @@ def _mock_phase_boundary(monkeypatch, target_branch="8.1"):
     monkeypatch.setattr(backport_sweep, "has_changes_since", lambda *_a, **_k: True)
 
 
-def test_existing_sweep_pr_log_highlights_number_title_and_branch(caplog):
-    existing_pr = SimpleNamespace(
-        number=4731,
-        title="\x1b[32m[backport]\nBackport sweep for 9.2\x1b[0m",
+def _box_candidate(num, title):
+    return ProjectBackportCandidate(
+        source_pr_number=num,
+        source_pr_title=title,
+        source_pr_url=f"https://github.com/o/r/pull/{num}",
+        target_branch="9.2",
+        merge_commit_sha=f"sha{num}",
     )
-    caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
 
-    backport_sweep._log_existing_sweep_pr(
-        existing_pr,
-        "9.2",
-        "agent/backport/sweep/9.2",
+
+def test_sweep_plan_box_names_the_open_pr_every_candidate_and_what_is_applied(caplog):
+    from scripts.common.logging_utils import BOX_RULE
+
+    caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
+    candidates = [
+        _box_candidate(1, "\x1b[32mHostile\n::error::title\x1b[0m"),
+        _box_candidate(2, "On target"),
+        _box_candidate(3, "Bad plan"),
+        _box_candidate(4, "New one"),
+        _box_candidate(5, "Another"),
+    ]
+    backport_sweep._log_sweep_plan(
+        target_branch="9.2",
+        backport_branch="agent/backport/sweep/9.2",
+        push_repo="o/r",
+        existing_pr=SimpleNamespace(number=4731),
+        candidates=candidates,
+        already_applied={"1"},
+        on_target={2},
+        plan_errors={3: CandidateResult(3, "Bad plan", "error", "merge carries\nchanges")},
+        max_applied=1,
     )
 
     assert caplog.messages == [
-        (
-            "BACKPORT SWEEP PR: resuming PR #4731 | "
-            "[backport] Backport sweep for 9.2 | target=9.2 | "
-            "branch=agent/backport/sweep/9.2"
-        ),
+        BOX_RULE,
+        "BACKPORT SWEEP for 9.2",
+        "Sweep PR: #4731 is open on agent/backport/sweep/9.2; new backports are added to it",
+        "Candidates (5):",
+        "  #1 Hostile ::error::title: already on the sweep PR",
+        "  #2 On target: already in 9.2",
+        "  #3 Bad plan: cannot be applied: merge carries changes",
+        "  #4 New one: to apply",
+        "  #5 Another: to apply",
+        "Applying 2 PR(s) (stopping after 1 applied): #4, #5",
+        BOX_RULE,
     ]
 
+
+def test_sweep_plan_box_without_an_open_pr_or_anything_new(caplog):
+    caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
+    backport_sweep._log_sweep_plan(
+        target_branch="9.2",
+        backport_branch="agent/backport/sweep/9.2",
+        push_repo="o/r",
+        existing_pr=None,
+        candidates=[_box_candidate(2, "On target")],
+        already_applied=set(),
+        on_target={2},
+        plan_errors={},
+        max_applied=0,
+    )
+
+    assert caplog.messages[2] == (
+        "Sweep PR: none open; a new one is opened on o/r from agent/backport/sweep/9.2")
+    assert caplog.messages[-2] == "Applying: nothing new"
+
+
+def test_sweep_verdict_box_gives_every_candidate_its_outcome(caplog):
+    from scripts.common.logging_utils import BOX_RULE
+
+    caplog.set_level(logging.INFO, logger=backport_sweep.__name__)
+    candidates = [_box_candidate(n, f"PR {n}") for n in range(1, 8)]
+    results = [
+        CandidateResult(1, "PR 1", "skipped-existing", DETAIL),
+        CandidateResult(2, "PR 2", "skipped-existing", DETAIL_ALREADY_ON_TARGET),
+        CandidateResult(3, "PR 3", "applied"),
+        CandidateResult(4, "PR 4", "applied", resolved_by_ai=True),
+        CandidateResult(5, "PR 5", "skipped-validation-failed", "make failed\nline 2"),
+        CandidateResult(6, "PR 6", "skipped-existing", "already applied or empty cherry-pick"),
+    ]
+    backport_sweep._log_sweep_verdict(
+        target_branch="9.2",
+        candidates=candidates,
+        results=results,
+        already_applied={"1"},
+        on_target={2},
+        next_step="publish to sweep PR #4731",
+    )
+
+    assert caplog.messages == [
+        BOX_RULE,
+        "VERDICT for 9.2: 2 already present, 2 applied, 1 failed validation, 1 skipped, "
+        "1 deferred to the next sweep",
+        "  #1 PR 1: already on the sweep PR",
+        "  #2 PR 2: already in 9.2",
+        "  #3 PR 3: applied",
+        "  #4 PR 4: applied (conflicts resolved by Claude)",
+        "  #5 PR 5: failed validation: make failed line 2",
+        "  #6 PR 6: skipped: already applied or empty cherry-pick",
+        "  #7 PR 7: deferred to the next sweep",
+        "Next: publish to sweep PR #4731",
+        BOX_RULE,
+    ]
 
 
 def test_prepare_prefetches_before_token_free_validation(monkeypatch, tmp_path):

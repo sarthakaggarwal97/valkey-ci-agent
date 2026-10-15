@@ -59,7 +59,7 @@ def test_run_claude_code_streams_json_and_uses_bedrock_env(monkeypatch, caplog):
     monkeypatch.delenv("CI_AGENT_CLAUDE_BEDROCK_OPUS_MODEL", raising=False)
     monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
 
-    with caplog.at_level(logging.INFO, logger="scripts.ai.claude_code"):
+    with caplog.at_level(logging.DEBUG, logger="scripts.ai.claude_code"):
         stdout, stderr, rc = claude_code.run_claude_code(
             "fix this", cwd="/tmp/checkout"
         )

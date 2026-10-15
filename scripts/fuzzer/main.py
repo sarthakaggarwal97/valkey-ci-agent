@@ -16,7 +16,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.common.issue_dedup import IssueDedupPublisher
-from scripts.common.logging_utils import configure_logging, log_group, log_outcome
+from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.fuzzer import issue_renderer
 from scripts.fuzzer.analyzer import FuzzerRunAnalyzer
@@ -80,8 +80,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         try:
-            with log_group(f"Analyze fuzzer run {run.id}"):
-                analysis = analyzer.analyze(TARGET_REPO, run.id, workflow_file=WORKFLOW_FILE)
+            analysis = analyzer.analyze(TARGET_REPO, run.id, workflow_file=WORKFLOW_FILE)
             logger.info("Run %s: status %s, verdict %s", run.id, analysis.overall_status,
                         analysis.triage_verdict or "none")
             entry["action"] = "analyzed"

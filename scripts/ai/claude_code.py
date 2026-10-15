@@ -11,7 +11,6 @@ import threading
 import time
 from typing import Any
 
-from scripts.common.logging_utils import log_group
 from scripts.common.proc import filter_env
 
 logger = logging.getLogger(__name__)
@@ -117,10 +116,8 @@ def run_claude_code(
 
     logger.info("Running Claude Code in %s (timeout %ds)", cwd or ".", timeout)
     started = time.monotonic()
-    # The event stream is long; fold it so the lines around it stay readable.
-    with log_group("Claude Code output"):
-        logger.debug("Prompt starts: %s", " ".join(prompt[:200].split()))
-        stdout, stderr, returncode = _run_streaming(cmd, prompt, cwd=cwd, env=env, timeout=timeout)
+    logger.debug("Prompt starts: %s", " ".join(prompt[:200].split()))
+    stdout, stderr, returncode = _run_streaming(cmd, prompt, cwd=cwd, env=env, timeout=timeout)
     elapsed = time.monotonic() - started
     if stderr.startswith("timeout"):
         logger.error("Claude Code timed out after %ds.", timeout)
@@ -232,18 +229,20 @@ def _default_disallowed_tools(allowed_tools: str) -> str:
 
 
 def _log_stream_event(raw_line: str) -> None:
+    # The event stream is long and is not what an operator reads for; it is
+    # DEBUG, shown in a run re-run with "Enable debug logging".
     raw_line = raw_line.strip()
     if not raw_line:
         return
     try:
         event = json.loads(raw_line)
     except json.JSONDecodeError:
-        logger.info("Claude stream: %s", _truncate(raw_line, 500))
+        logger.debug("Claude stream: %s", _truncate(raw_line, 500))
         return
 
     summary = _summarize_stream_event(event)
     if summary:
-        logger.info("Claude stream: %s", summary)
+        logger.debug("Claude stream: %s", summary)
     else:
         logger.debug("Claude stream event: %s", _truncate(raw_line, 1000))
 

@@ -17,6 +17,7 @@ from scripts.backport.utils import (
     has_conflict_markers,
     is_whitespace_only_conflict,
 )
+from scripts.common.logging_utils import compact_log_value
 
 if TYPE_CHECKING:
     from scripts.backport.models import BackportPRContext
@@ -409,7 +410,7 @@ def resolve_conflicts_with_claude(
     logger.info(
         "Claude Code finished (rc=%d). Result: %s",
         agent_result.returncode,
-        result_text[:200] if result_text else "(no result text)",
+        compact_log_value(result_text, fallback="(no result text)"),
     )
 
     if agent_result.returncode != 0:

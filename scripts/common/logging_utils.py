@@ -8,8 +8,8 @@ What makes an Actions log readable for an operator:
 * nothing they did not come for: no per-request HTTP chatter from client
   libraries, no timestamps the runner already shows, and debug detail only
   when a run is re-run with "Enable debug logging";
-* the run's outcome pinned as an annotation at the top of the run page;
-* noisy output (AI streams, build output) folded into collapsible groups.
+* a run's plan and verdict in an asterisk box, so they are found at a glance;
+* the run's outcome pinned as an annotation at the top of the run page.
 """
 
 from __future__ import annotations
@@ -17,8 +17,6 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 
 from scripts.common.text_utils import strip_ansi
@@ -27,7 +25,6 @@ LOG_FORMAT = "%(asctime)s %(levelname)-7s [%(tag)s] %(message)s"
 LOG_DATE_FORMAT = "%H:%M:%S"
 
 _ANNOTATION = {logging.ERROR: "error", logging.WARNING: "warning"}
-_group_open = False
 
 # Client libraries log every HTTP request at DEBUG. That is never what an
 # operator opens the log for, so they are held at WARNING even in debug runs.
@@ -191,28 +188,6 @@ def log_outcome(target_logger: logging.Logger, level: int, message: str, *args: 
     annotate(level, text)
 
 
-@contextmanager
-def log_group(title: str) -> Iterator[None]:
-    """Fold everything logged inside into one collapsible Actions group.
-
-    Actions groups cannot nest, so an inner group is a no-op and its output
-    simply stays inside the outer one.
-    """
-    global _group_open
-    if not _in_actions() or _group_open:
-        yield
-        return
-    sys.stderr.flush()
-    print(f"::group::{_escape_command_data(' '.join(title.split()))}", file=sys.stderr, flush=True)
-    _group_open = True
-    try:
-        yield
-    finally:
-        _group_open = False
-        sys.stderr.flush()
-        print("::endgroup::", file=sys.stderr, flush=True)
-
-
 def compact_log_value(
     value: object,
     *,
@@ -243,3 +218,26 @@ def log_highlight(
     """
     # stacklevel: tag the record with the caller's file, not this helper's.
     target_logger.log(level, message, *args, stacklevel=2, extra={"highlight": style})
+
+
+BOX_RULE = "*" * 88
+
+
+def log_box(
+    target_logger: logging.Logger,
+    title: str,
+    lines: list[str],
+    *,
+    level: int = logging.INFO,
+) -> None:
+    """Log *title* and *lines* inside an asterisk box: the run's plan or verdict.
+
+    Each line is its own record, so every line keeps its tag and colour. Pass
+    untrusted values through :func:`compact_log_value` first.
+    """
+    # stacklevel: tag the records with the caller's file, not this helper's.
+    target_logger.log(level, BOX_RULE, stacklevel=2)
+    target_logger.log(level, "%s", title, stacklevel=2, extra={"highlight": "notice"})
+    for line in lines:
+        target_logger.log(level, "%s", line, stacklevel=2)
+    target_logger.log(level, BOX_RULE, stacklevel=2)

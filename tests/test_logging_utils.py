@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from scripts.common import logging_utils
-from scripts.common.logging_utils import _TagFormatter, log_group, log_outcome
+from scripts.common.logging_utils import _TagFormatter, log_outcome
 
 
 def _record(path: str) -> logging.LogRecord:
@@ -48,24 +48,6 @@ def test_annotate_escapes_command_data_for_direct_callers(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     annotate(logging.ERROR, "a\r\n::error::forged 100%")
     assert capsys.readouterr().err.splitlines() == ["::error::a%0D%0A::error::forged 100%25"]
-
-
-def test_groups_do_not_nest(monkeypatch, capsys):
-    monkeypatch.setenv("GITHUB_ACTIONS", "true")
-    with log_group("outer"), log_group("inner"):
-        pass
-    assert capsys.readouterr().err.splitlines() == ["::group::outer", "::endgroup::"]
-    assert logging_utils._group_open is False
-
-
-def test_group_closes_when_the_body_raises(monkeypatch, capsys):
-    import pytest
-
-    monkeypatch.setenv("GITHUB_ACTIONS", "true")
-    with pytest.raises(RuntimeError), log_group("work"):
-        raise RuntimeError("boom")
-    assert capsys.readouterr().err.splitlines()[-1] == "::endgroup::"
-    assert logging_utils._group_open is False
 
 
 def test_outcome_log_line_cannot_forge_a_workflow_command(monkeypatch, capsys, caplog):
@@ -157,3 +139,14 @@ def test_outcome_is_printed_once_in_actions(monkeypatch):
     assert _SkipAnnotated().filter(record) is False
     monkeypatch.delenv("GITHUB_ACTIONS")
     assert _SkipAnnotated().filter(record) is True
+
+
+def test_box_is_a_rule_a_highlighted_title_the_lines_and_a_rule(caplog):
+    from scripts.common.logging_utils import BOX_RULE, log_box
+
+    caplog.set_level(logging.INFO, logger="t.box")
+    log_box(logging.getLogger("t.box"), "TITLE 100%", ["a", "b %s"], level=logging.WARNING)
+    assert caplog.messages == [BOX_RULE, "TITLE 100%", "a", "b %s", BOX_RULE]
+    assert {r.levelno for r in caplog.records} == {logging.WARNING}
+    assert [getattr(r, "highlight", None) for r in caplog.records] == [
+        None, "notice", None, None, None]
