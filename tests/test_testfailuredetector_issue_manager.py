@@ -50,7 +50,7 @@ def _make_failure(
         test_name=test_name,
         test_file=test_file,
         error=error,
-        jobs=[JobReference(job=j, suite=s, url=u) for j, s, u in jobs],
+        jobs=[JobReference(job=j, url=u) for j, _suite, u in jobs],
     )
 
 
@@ -230,14 +230,20 @@ class TestProcessFailures:
         }
 
     @patch("scripts.test_failure_detector.manage_issues.IssueDedupPublisher")
-    def test_passes_run_id_as_idempotency_key(self, mock_publisher_cls) -> None:
+    def test_passes_run_and_attempt_as_idempotency_key(self, mock_publisher_cls) -> None:
         publisher = mock_publisher_cls.return_value
         publisher.upsert.return_value = ("created", "https://x/issues/1")
 
-        process_failures(MagicMock(), "valkey-io/valkey", [_make_failure()], run_id=12345)
+        process_failures(
+            MagicMock(),
+            "valkey-io/valkey",
+            [_make_failure()],
+            run_id=12345,
+            run_attempt=3,
+        )
 
         kwargs = publisher.upsert.call_args.kwargs
-        assert kwargs["idempotency_key"] == "12345"
+        assert kwargs["idempotency_key"] == "12345:3"
         assert kwargs["fingerprint"] == fingerprint_for(_make_failure())
         assert callable(kwargs["body_transform"])
         # The migration fallback title matches what render produces.

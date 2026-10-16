@@ -2,16 +2,30 @@ name: Test Failure Detector
 
 on:
   schedule:
+    # Daily: 23 hours after Valkey's Daily (00:00 UTC) starts.
     - cron: "0 23 * * *"
+    # Weekly: Valkey's Weekly starts Sunday 06:00 UTC and runs every release
+    # branch two at a time; it has finished as late as 01:42 UTC Monday. A
+    # Weekly run older than 7 days is never read, so a run still going at
+    # this time is skipped rather than replaced by last week's.
+    - cron: "0 12 * * 1"
   workflow_dispatch:
     inputs:
+      workflow:
+        description: "Scheduled workflow to analyze"
+        required: false
+        type: choice
+        options:
+          - daily
+          - weekly
+        default: daily
       repo:
         description: "Repository to scan (default: valkey-io/valkey)"
         required: false
         type: string
         default: "valkey-io/valkey"
       run_id:
-        description: "Specific workflow run ID to analyze (empty = latest completed Daily run)"
+        description: "Specific workflow run ID to analyze (empty = latest completed run of the workflow)"
         required: false
         type: string
         default: ""
@@ -57,6 +71,7 @@ jobs:
           TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
           TARGET_REPO: ${{ inputs.repo || 'valkey-io/valkey' }}
           RUN_ID: ${{ inputs.run_id || '' }}
+          WORKFLOW: ${{ inputs.workflow || (github.event.schedule == '0 12 * * 1' && 'weekly') || 'daily' }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
         run: |
           set -euo pipefail
@@ -64,6 +79,7 @@ jobs:
             -m scripts.test_failure_detector.main
             --token "${TARGET_TOKEN}"
             --repo "${TARGET_REPO}"
+            --workflow "${WORKFLOW}"
             --verbose
           )
 

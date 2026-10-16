@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime, timedelta, timezone
+from typing import Any, Iterable
 
 from github import Github
 from github.WorkflowRun import WorkflowRun
@@ -17,13 +19,20 @@ logger = logging.getLogger(__name__)
 _FAILURES_JSON_NAME = "all-test-failures.json"
 _FAILURES_ARTIFACT_NAME = "all-test-failures"
 
-def get_latest_daily_run(
+def get_latest_scheduled_run(
     gh: Github,
     repo_full_name: str,
-    workflow_name: str = "Daily",
+    workflow_file: str = "daily.yml",
     branch: str = "unstable",
+    *,
+    max_age: timedelta | None = None,
 ) -> WorkflowRun | None:
-    """Find the most recent completed (non-cancelled) Daily workflow run."""
+    """Find the most recent completed (non-cancelled) scheduled run of ``workflow_file``.
+
+    With ``max_age``, an older run is not returned: the newest one is still
+    running, and re-reading the previous one would re-file failures whose
+    issues were closed since.
+    """
     repo = retry_github_call(
         lambda: gh.get_repo(repo_full_name),
         retries=3,
@@ -36,25 +45,25 @@ def get_latest_daily_run(
         description="list workflows",
     )
 
-    daily_workflow = None
+    workflow = None
     for wf in workflows:
-        if wf.name == workflow_name:
-            daily_workflow = wf
+        if str(getattr(wf, "path", "") or "") == f".github/workflows/{workflow_file}":
+            workflow = wf
             break
 
-    if daily_workflow is None:
-        logger.warning("Workflow %r not found in %s", workflow_name, repo_full_name)
+    if workflow is None:
+        logger.warning("Workflow %r not found in %s", workflow_file, repo_full_name)
         return None
 
     # Restrict to scheduled runs. The Valkey Daily workflow also runs on
     # pull_request (and fork PRs sit at action_required with no artifacts),
     # so we'd sometimes silently analyze the wrong run.
     runs = retry_github_call(
-        lambda: daily_workflow.get_runs(
+        lambda: workflow.get_runs(
             branch=branch, status="completed", event="schedule",
         ),
         retries=3,
-        description=f"list runs for {workflow_name}",
+        description=f"list runs for {workflow_file}",
     )
 
     for run in runs:
@@ -62,19 +71,31 @@ def get_latest_daily_run(
         # awaiting approval (action_required, e.g. fork PRs) or expired
         # (stale), and runs with no conclusion yet. These produce no test
         # artifacts and would be mistaken for a clean pass.
-        if run.conclusion in ("cancelled", "skipped", "action_required", "stale", None):
+        if run.conclusion in ("cancelled", "skipped", "action_required", "stale", "startup_failure", None):
             logger.debug(
                 "Skipping run #%d (conclusion=%s)", run.run_number, run.conclusion,
             )
             continue
+        if max_age is not None and _older_than(run.created_at, max_age):
+            logger.warning(
+                "The newest completed %s run #%d (created %s) is older than %s; not analyzing it.",
+                workflow_file, run.run_number, run.created_at, max_age,
+            )
+            return None
         logger.info(
-            "Found daily run #%d (id=%d, conclusion=%s, created=%s)",
-            run.run_number, run.id, run.conclusion, run.created_at,
+            "Found %s run #%d (id=%d, conclusion=%s, created=%s)",
+            workflow_file, run.run_number, run.id, run.conclusion, run.created_at,
         )
         return run
 
-    logger.warning("No completed non-cancelled run found for %s/%s", workflow_name, branch)
+    logger.warning("No completed non-cancelled run found for %s/%s", workflow_file, branch)
     return None
+
+def _older_than(created_at: datetime, age: timedelta) -> bool:
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - created_at > age
+
 
 def download_all_test_failures(
     gh: Github,
@@ -139,37 +160,15 @@ def download_all_test_failures(
     logger.info("Extracted %s from artifact zip", _FAILURES_JSON_NAME)
     return content
 
-def get_job_urls(
-    gh: Github,
-    repo_full_name: str,
-    run_id: int,
+def job_urls_for_jobs(
+    jobs: Iterable[Any],
+    *,
+    run_id: int | None = None,
 ) -> dict[str, str]:
-    """Get a mapping of job name -> HTML URL for all jobs in a workflow run.
-
-    Also includes normalized variants (parentheses replaced with dashes,
-    spaces replaced with dashes) for fuzzy matching.
-    """
-
-    repo = retry_github_call(
-        lambda: gh.get_repo(repo_full_name),
-        retries=3,
-        description=f"get repo {repo_full_name}",
-    )
-
-    run = retry_github_call(
-        lambda: repo.get_workflow_run(run_id),
-        retries=3,
-        description=f"get run {run_id}",
-    )
-
-    jobs = retry_github_call(
-        lambda: run.jobs(),
-        retries=3,
-        description=f"list jobs for run {run_id}",
-    )
-
-    # Materialize once: jobs may be a lazy paginated list, and we iterate twice.
-    job_list = list(jobs)
+    """Return exact and normalized URL aliases from one jobs snapshot."""
+    # Materialize once: callers may supply a lazy paginated list, and the
+    # mapping intentionally uses two passes to preserve exact-name precedence.
+    job_list = tuple(jobs)
 
     # First pass: exact job names. These are authoritative, so they take
     # precedence over any normalized alias.
@@ -185,5 +184,12 @@ def get_job_urls(
         if normalized != job.name and normalized not in job_url_map:
             job_url_map[normalized] = job.html_url
 
-    logger.info("Found %d job URL mappings for run %d", len(job_url_map), run_id)
+    if run_id is None:
+        logger.info("Found %d job URL mappings", len(job_url_map))
+    else:
+        logger.info(
+            "Found %d job URL mappings for run %d",
+            len(job_url_map),
+            run_id,
+        )
     return job_url_map

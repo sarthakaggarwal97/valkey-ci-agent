@@ -13,7 +13,6 @@ class JobReference:
     """A reference to a specific CI job where a test failed."""
 
     job: str
-    suite: str
     url: str = ""
 
 @dataclass
@@ -24,10 +23,14 @@ class UniqueFailure:
     test_file: str
     error: str = ""
     jobs: list[JobReference] = field(default_factory=list)
+    # The release branch a Weekly failure was on; "" for Daily, whose
+    # failures are all on the run's own branch.
+    branch: str = ""
 
     @property
     def display_name(self) -> str:
-        return f"{self.test_name} in {self.test_file}"
+        suffix = f" ({self.branch})" if self.branch else ""
+        return f"{self.test_name} in {self.test_file}{suffix}"
 
 def parse_and_deduplicate(
     all_failures: dict[str, Any],
@@ -96,7 +99,6 @@ def parse_and_deduplicate(
                     failure.jobs.append(
                         JobReference(
                             job=job_name,
-                            suite=suite_name,
                             url=job_urls.get(job_name, ""),
                         )
                     )

@@ -10,8 +10,8 @@ import pytest
 try:
     from scripts.test_failure_detector.download import (
         download_all_test_failures,
-        get_job_urls,
-        get_latest_daily_run,
+        get_latest_scheduled_run,
+        job_urls_for_jobs,
     )
 
     _SKIP_REASON = None
@@ -39,7 +39,7 @@ class TestGetLatestDailyRun:
         success_run = _make_mock_run(9, 99, "success")
 
         mock_workflow = MagicMock()
-        mock_workflow.name = "Daily"
+        mock_workflow.path = ".github/workflows/daily.yml"
         mock_workflow.get_runs.return_value = [cancelled_run, success_run]
 
         mock_repo = MagicMock()
@@ -50,7 +50,7 @@ class TestGetLatestDailyRun:
         mock_gh = MagicMock()
         mock_gh.get_repo.return_value = mock_repo
 
-        result = get_latest_daily_run(mock_gh, "owner/repo")
+        result = get_latest_scheduled_run(mock_gh, "owner/repo")
         assert result == success_run
 
     @patch("scripts.test_failure_detector.download.retry_github_call")
@@ -60,7 +60,7 @@ class TestGetLatestDailyRun:
         failure_run = _make_mock_run(12, 199, "failure")
 
         mock_workflow = MagicMock()
-        mock_workflow.name = "Daily"
+        mock_workflow.path = ".github/workflows/daily.yml"
         mock_workflow.get_runs.return_value = [skipped_run, failure_run]
 
         mock_repo = MagicMock()
@@ -71,7 +71,7 @@ class TestGetLatestDailyRun:
         mock_gh = MagicMock()
         mock_gh.get_repo.return_value = mock_repo
 
-        result = get_latest_daily_run(mock_gh, "owner/repo")
+        result = get_latest_scheduled_run(mock_gh, "owner/repo")
         assert result == failure_run
 
     @patch("scripts.test_failure_detector.download.retry_github_call")
@@ -85,7 +85,7 @@ class TestGetLatestDailyRun:
         ]
 
         mock_workflow = MagicMock()
-        mock_workflow.name = "Daily"
+        mock_workflow.path = ".github/workflows/daily.yml"
         mock_workflow.get_runs.return_value = runs
 
         mock_repo = MagicMock()
@@ -96,7 +96,7 @@ class TestGetLatestDailyRun:
         mock_gh = MagicMock()
         mock_gh.get_repo.return_value = mock_repo
 
-        result = get_latest_daily_run(mock_gh, "owner/repo")
+        result = get_latest_scheduled_run(mock_gh, "owner/repo")
         assert result.id == 298
         assert result.conclusion == "success"
 
@@ -109,7 +109,7 @@ class TestGetLatestDailyRun:
         ]
 
         mock_workflow = MagicMock()
-        mock_workflow.name = "Daily"
+        mock_workflow.path = ".github/workflows/daily.yml"
         mock_workflow.get_runs.return_value = runs
 
         mock_repo = MagicMock()
@@ -120,7 +120,7 @@ class TestGetLatestDailyRun:
         mock_gh = MagicMock()
         mock_gh.get_repo.return_value = mock_repo
 
-        result = get_latest_daily_run(mock_gh, "owner/repo")
+        result = get_latest_scheduled_run(mock_gh, "owner/repo")
         assert result is None
 
     @patch("scripts.test_failure_detector.download.retry_github_call")
@@ -134,7 +134,7 @@ class TestGetLatestDailyRun:
         mock_gh = MagicMock()
         mock_gh.get_repo.return_value = mock_repo
 
-        result = get_latest_daily_run(mock_gh, "owner/repo")
+        result = get_latest_scheduled_run(mock_gh, "owner/repo")
         assert result is None
 
     @patch("scripts.test_failure_detector.download.retry_github_call")
@@ -148,7 +148,7 @@ class TestGetLatestDailyRun:
         scheduled_run = _make_mock_run(12, 199, "failure")
 
         mock_workflow = MagicMock()
-        mock_workflow.name = "Daily"
+        mock_workflow.path = ".github/workflows/daily.yml"
         mock_workflow.get_runs.return_value = [scheduled_run]
 
         mock_repo = MagicMock()
@@ -159,7 +159,7 @@ class TestGetLatestDailyRun:
         mock_gh = MagicMock()
         mock_gh.get_repo.return_value = mock_repo
 
-        result = get_latest_daily_run(mock_gh, "owner/repo")
+        result = get_latest_scheduled_run(mock_gh, "owner/repo")
         assert result == scheduled_run
         mock_workflow.get_runs.assert_called_once_with(
             branch="unstable", status="completed", event="schedule",
@@ -173,7 +173,7 @@ class TestGetLatestDailyRun:
         failure_run = _make_mock_run(12, 297, "failure")
 
         mock_workflow = MagicMock()
-        mock_workflow.name = "Daily"
+        mock_workflow.path = ".github/workflows/daily.yml"
         mock_workflow.get_runs.return_value = [pending_run, failure_run]
 
         mock_repo = MagicMock()
@@ -184,7 +184,7 @@ class TestGetLatestDailyRun:
         mock_gh = MagicMock()
         mock_gh.get_repo.return_value = mock_repo
 
-        result = get_latest_daily_run(mock_gh, "owner/repo")
+        result = get_latest_scheduled_run(mock_gh, "owner/repo")
         assert result == failure_run
 
 
@@ -293,96 +293,63 @@ class TestDownloadAllTestFailures:
         assert result is None
 
 
-class TestGetJobUrls:
-    @patch("scripts.test_failure_detector.download.retry_github_call")
-    def test_maps_job_names_to_urls(self, mock_retry) -> None:
-        """Should return a mapping of job name to HTML URL."""
-        job1 = MagicMock()
-        job1.name = "test-ubuntu-latest"
-        job1.html_url = "https://github.com/owner/repo/actions/runs/1/job/10"
-
-        job2 = MagicMock()
-        job2.name = "test-arm64"
-        job2.html_url = "https://github.com/owner/repo/actions/runs/1/job/20"
-
-        mock_run = MagicMock()
-        mock_run.jobs.return_value = [job1, job2]
-
-        mock_repo = MagicMock()
-        mock_repo.get_workflow_run.return_value = mock_run
-
-        mock_retry.side_effect = lambda op, **kwargs: op()
-
-        mock_gh = MagicMock()
-        mock_gh.get_repo.return_value = mock_repo
-
-        result = get_job_urls(mock_gh, "owner/repo", 123)
-        assert result["test-ubuntu-latest"] == job1.html_url
-        assert result["test-arm64"] == job2.html_url
-
-    @patch("scripts.test_failure_detector.download.retry_github_call")
-    def test_includes_normalized_names(self, mock_retry) -> None:
-        """Job names with parens/spaces should also be stored in normalized form."""
+class TestJobUrlsForJobs:
+    @staticmethod
+    def _job(name: str, url: str) -> MagicMock:
         job = MagicMock()
-        job.name = "test ubuntu (arm64)"
-        job.html_url = "https://example.com/job/1"
+        job.name = name
+        job.html_url = url
+        return job
 
-        mock_run = MagicMock()
-        mock_run.jobs.return_value = [job]
+    def test_maps_exact_and_normalized_names(self) -> None:
+        job = self._job("test ubuntu (arm64)", "https://example.com/job/1")
 
-        mock_repo = MagicMock()
-        mock_repo.get_workflow_run.return_value = mock_run
+        assert job_urls_for_jobs((job,), run_id=123) == {
+            "test ubuntu (arm64)": "https://example.com/job/1",
+            "test-ubuntu-arm64": "https://example.com/job/1",
+        }
 
-        mock_retry.side_effect = lambda op, **kwargs: op()
-
-        mock_gh = MagicMock()
-        mock_gh.get_repo.return_value = mock_repo
-
-        result = get_job_urls(mock_gh, "owner/repo", 123)
-        assert result["test ubuntu (arm64)"] == job.html_url
-        assert result["test-ubuntu-arm64"] == job.html_url
-
-    @patch("scripts.test_failure_detector.download.retry_github_call")
-    def test_alias_does_not_overwrite_exact_job_name(self, mock_retry) -> None:
+    def test_alias_does_not_overwrite_exact_job_name(self) -> None:
         """A normalized alias of one job must not clobber another job's exact
         name mapping (which would attach the wrong CI URL)."""
         # job1's normalized form is "test-ubuntu-arm64", which is exactly job2's name.
-        job1 = MagicMock()
-        job1.name = "test ubuntu (arm64)"
-        job1.html_url = "https://example.com/job/1"
+        job1 = self._job("test ubuntu (arm64)", "https://example.com/job/1")
+        job2 = self._job("test-ubuntu-arm64", "https://example.com/job/2")
 
-        job2 = MagicMock()
-        job2.name = "test-ubuntu-arm64"
-        job2.html_url = "https://example.com/job/2"
+        result = job_urls_for_jobs((job1, job2))
 
-        mock_run = MagicMock()
-        mock_run.jobs.return_value = [job1, job2]
-
-        mock_repo = MagicMock()
-        mock_repo.get_workflow_run.return_value = mock_run
-
-        mock_retry.side_effect = lambda op, **kwargs: op()
-
-        mock_gh = MagicMock()
-        mock_gh.get_repo.return_value = mock_repo
-
-        result = get_job_urls(mock_gh, "owner/repo", 123)
-        # The exact job name keeps its own URL; the colliding alias is dropped.
         assert result["test-ubuntu-arm64"] == job2.html_url
         assert result["test ubuntu (arm64)"] == job1.html_url
 
-    @patch("scripts.test_failure_detector.download.retry_github_call")
-    def test_empty_jobs_returns_empty_dict(self, mock_retry) -> None:
-        mock_run = MagicMock()
-        mock_run.jobs.return_value = []
+    def test_empty_jobs_returns_empty_dict(self) -> None:
+        assert job_urls_for_jobs(()) == {}
 
-        mock_repo = MagicMock()
-        mock_repo.get_workflow_run.return_value = mock_run
 
-        mock_retry.side_effect = lambda op, **kwargs: op()
+class TestScheduledRunGuards:
+    @staticmethod
+    def _gh(*runs):
+        workflow = MagicMock()
+        workflow.path = ".github/workflows/weekly.yml"
+        workflow.get_runs.return_value = list(runs)
+        gh = MagicMock()
+        gh.get_repo.return_value.get_workflows.return_value = [workflow]
+        return gh
 
-        mock_gh = MagicMock()
-        mock_gh.get_repo.return_value = mock_repo
+    @patch("scripts.test_failure_detector.download.retry_github_call", side_effect=lambda op, **_: op())
+    def test_a_run_that_never_started_is_skipped(self, _retry) -> None:
+        from datetime import datetime, timezone
 
-        result = get_job_urls(mock_gh, "owner/repo", 123)
-        assert result == {}
+        never = _make_mock_run(2, 20, "startup_failure")
+        ran = _make_mock_run(1, 10, "failure")
+        ran.created_at = datetime.now(timezone.utc)
+
+        assert get_latest_scheduled_run(self._gh(never, ran), "o/r", "weekly.yml") is ran
+
+    @patch("scripts.test_failure_detector.download.retry_github_call", side_effect=lambda op, **_: op())
+    def test_last_weeks_run_is_not_read_again(self, _retry) -> None:
+        from datetime import datetime, timedelta, timezone
+
+        old = _make_mock_run(1, 10, "failure")
+        old.created_at = datetime.now(timezone.utc) - timedelta(days=8)
+
+        assert get_latest_scheduled_run(self._gh(old), "o/r", "weekly.yml", max_age=timedelta(days=7)) is None

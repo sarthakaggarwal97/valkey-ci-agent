@@ -16,14 +16,20 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+from urllib.parse import quote, unquote
 
 from scripts.common.incidents import compute_fingerprint
 from scripts.common.issue_dedup import IssueContent
-from scripts.test_failure_detector.parse_failures import UniqueFailure
+from scripts.test_failure_detector.job_failures import JobFailure
+from scripts.test_failure_detector.parse_failures import JobReference, UniqueFailure
 
 MARKER_NAMESPACE = "valkey-ci-agent:test-failure"
 
 LABEL_NAME = "test-failure"
+
+# Hidden marker naming the job of a job-level failure issue, read back by the
+# CI-fix issue flow. The name is percent-encoded so it cannot end the comment.
+_JOB_MARKER_RE = re.compile(rf"<!-- {re.escape(MARKER_NAMESPACE)}:job:(?P<job>[^\s>]+) -->")
 
 
 def fingerprint_for(failure: UniqueFailure) -> str:
@@ -38,8 +44,11 @@ def fingerprint_for(failure: UniqueFailure) -> str:
     PSYNC2 and PSYNC3 stay distinct, and preserves order so a name/file swap
     cannot collide.
     """
+    # A Weekly failure is one issue per release branch, apart from the
+    # Daily issue for the same test: each needs its own fix on its branch.
+    branch = ("branch", failure.branch) if failure.branch else ()
     return compute_fingerprint(
-        namespace=(MARKER_NAMESPACE, failure.test_name, failure.test_file),
+        namespace=(MARKER_NAMESPACE, failure.test_name, failure.test_file, *branch),
         shapes=(),
     )
 
@@ -147,7 +156,7 @@ class _FailureRenderer:
 
 
 def _build_title(failure: UniqueFailure) -> str:
-    return f"[TEST-FAILURE] {failure.test_name} in {failure.test_file}"
+    return f"[TEST-FAILURE] {failure.display_name}"
 
 
 def _build_body(failure: UniqueFailure, marker: str, *, occurrences: int) -> str:
@@ -169,6 +178,7 @@ def _build_body(failure: UniqueFailure, marker: str, *, occurrences: int) -> str
         "",
         f"- Test name: `{failure.test_name}`",
         f"- Test file: `{failure.test_file}`",
+        *([release_branch_line(failure.branch)] if failure.branch else []),
         "- CI link(s):",
         ci_links,
         "",
@@ -280,3 +290,92 @@ def _update_environments_in_body(body: str, all_envs: list[str]) -> str:
     """Replace the Environments line in the issue body with an updated list."""
     new_env_line = f"**Environments:** {', '.join(f'`{e}`' for e in all_envs)}"
     return re.sub(r"\*\*Environments:\*\*\s*.+", new_env_line, body)
+
+
+# --- Job-level failures -------------------------------------------------------
+
+
+def job_fingerprint_for(failure: JobFailure) -> str:
+    """Stable dedup key for a job-level failure (see ``JobFailure.identity``)."""
+    namespace, shapes = failure.identity()
+    return compute_fingerprint(namespace=(MARKER_NAMESPACE, "job", *namespace), shapes=shapes)
+
+
+def job_title_for(failure: JobFailure) -> str:
+    return f"[JOB-FAILURE] {failure.job} in {_source_label(failure)}"
+
+
+def _source_label(failure: JobFailure) -> str:
+    return "Weekly" if failure.branch else "Daily"
+
+
+# The body line naming a Weekly test failure's release branch, read back by
+# the CI-fix issue flow.
+_RELEASE_BRANCH_RE = re.compile(r"^- Release branch: `(?P<branch>[^`]+)` \(Weekly\)\s*$", re.MULTILINE)
+
+
+def release_branch_line(branch: str) -> str:
+    return f"- Release branch: `{branch}` (Weekly)"
+
+
+def parse_release_branch(body: str) -> str:
+    """The release branch a Weekly test failure issue records, or ""."""
+    match = _RELEASE_BRANCH_RE.search(body or "")
+    return match.group("branch") if match else ""
+
+
+def job_marker(job: str) -> str:
+    return f"<!-- {MARKER_NAMESPACE}:job:{quote(job, safe='')} -->"
+
+
+def parse_job_marker(body: str) -> str:
+    """The job a job-level failure issue tracks, or "" for a test failure issue."""
+    match = _JOB_MARKER_RE.search(body or "")
+    return unquote(match.group("job")) if match else ""
+
+
+def job_renderer_for(failure: JobFailure) -> "_JobRenderer":
+    return _JobRenderer(failure)
+
+
+class _JobRenderer:
+    """``render`` callback for a job-level failure issue."""
+
+    def __init__(self, failure: JobFailure) -> None:
+        self._failure = failure
+
+    def render(self, marker: str, occurrences: int) -> IssueContent:
+        failure = self._failure
+        summary = "\n".join(failure.summary) or "No failure summary was printed; see the job log."
+        jobs = failure.jobs or [JobReference(job=failure.job, url=failure.url)]
+        links = "\n".join(f"  - `{ref.job}`: [job log]({ref.url})" for ref in jobs)
+        named = ", ".join(f"`{ref.job}`" for ref in jobs)
+        body = "\n".join([
+            marker,
+            f"<!-- {MARKER_NAMESPACE}:occurrences:{occurrences} -->",
+            job_marker(failure.job),
+            "",
+            "**Summary**",
+            "",
+            f"The {_source_label(failure)} CI job{'s' if len(jobs) > 1 else ''} {named} failed without recording a test failure.",
+            "",
+            f"- Failed step: `{failure.step or 'unknown'}`",
+            "- CI link(s):",
+            links,
+            "",
+            "**Failure summary from the job log**",
+            "",
+            "```",
+            summary,
+            "```",
+            "",
+            "---",
+            "*Auto-created by Test Failure Detector*",
+        ])
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        comment = f"Failed again on {today}: " + ", ".join(f"[`{ref.job}`]({ref.url})" for ref in jobs) + "."
+        if failure.summary:
+            comment += "\n\n```\n" + "\n".join(failure.summary) + "\n```"
+        return IssueContent(
+            title=job_title_for(failure), body=body, comment=comment, labels=(LABEL_NAME,),
+        )

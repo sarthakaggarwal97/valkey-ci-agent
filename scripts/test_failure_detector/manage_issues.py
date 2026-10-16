@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from typing import Any, Callable
 
 from github import Github
 
 from scripts.common.issue_dedup import IssueDedupPublisher
 from scripts.test_failure_detector import issue_renderer
+from scripts.test_failure_detector.job_failures import JobFailure
 from scripts.test_failure_detector.parse_failures import UniqueFailure
 
 logger = logging.getLogger(__name__)
@@ -33,12 +35,15 @@ def process_failures(
     failures: list[UniqueFailure],
     *,
     run_id: int | None = None,
+    run_attempt: int = 1,
+    job_failures: list[JobFailure] | None = None,
 ) -> dict[str, int]:
     """Create or update GitHub issues for each unique failure.
 
-    ``run_id``, when supplied, is used as the dedup idempotency key so a
-    re-triggered cron analyzing the same CI run does not inflate the
-    occurrence counter or post a duplicate comment.
+    ``run_id`` and ``run_attempt``, when supplied, form the dedup idempotency
+    key. A re-triggered detector analyzing the same workflow attempt therefore
+    does not inflate the occurrence counter, while a GitHub Actions rerun of
+    the same run id is a distinct failure occurrence.
 
     Returns a summary dict with counts:
     ``{created, updated, skipped, skipped_closed, errors}``. ``skipped_closed``
@@ -55,43 +60,65 @@ def process_failures(
         closed_lookback=CLOSED_ISSUE_LOOKBACK,
         filter_label=issue_renderer.LABEL_NAME,
     )
-    idempotency_key = str(run_id) if run_id is not None else None
+    idempotency_key = (
+        f"{run_id}:{max(1, int(run_attempt))}"
+        if run_id is not None
+        else None
+    )
 
     summary = {"created": 0, "updated": 0, "skipped": 0, "skipped_closed": 0, "errors": 0}
 
-    for failure in failures:
+    def upsert_test(failure: UniqueFailure) -> tuple[str, str]:
+        # The render and body_transform hooks are coupled (they share the set
+        # of newly failing environments), so they come from one renderer.
+        renderer = issue_renderer.renderer_for(failure)
+        return publisher.upsert(
+            repo_full_name,
+            fingerprint=issue_renderer.fingerprint_for(failure),
+            render=renderer.render,
+            idempotency_key=idempotency_key,
+            body_transform=renderer.merge_environments,
+            # The title is unchanged by the switch to hashed fingerprints, so
+            # an exact title match adopts issues from the old raw-fingerprint
+            # scheme and re-stamps them instead of creating duplicates.
+            title_fallback=issue_renderer.title_for(failure),
+        )
+
+    def upsert_job(failure: JobFailure) -> tuple[str, str]:
+        # No title fallback: job issues have no legacy scheme to adopt, and a
+        # title match would adopt any user's issue that copies the title.
+        return publisher.upsert(
+            repo_full_name,
+            fingerprint=issue_renderer.job_fingerprint_for(failure),
+            render=issue_renderer.job_renderer_for(failure).render,
+            idempotency_key=idempotency_key,
+        )
+
+    work: list[tuple[str, Callable[[], tuple[str, str]]]] = [
+        (failure.display_name, _bind(upsert_test, failure)) for failure in failures
+    ] + [
+        (f"job {failure.job}", _bind(upsert_job, failure)) for failure in job_failures or ()
+    ]
+    for display_name, upsert in work:
         # Isolate each failure: a raised exception (e.g. a GitHub API error that
         # outlasts retries, or an unexpected upsert action) must not abort the
         # loop and silently drop every remaining failure. Log it, count it, and
         # move on so the rest of the batch is still processed.
         try:
-            # The render and body_transform hooks are coupled (they share the
-            # set of newly failing environments), so they come from one renderer.
-            renderer = issue_renderer.renderer_for(failure)
-            action, url = publisher.upsert(
-                repo_full_name,
-                fingerprint=issue_renderer.fingerprint_for(failure),
-                render=renderer.render,
-                idempotency_key=idempotency_key,
-                body_transform=renderer.merge_environments,
-                # The title is unchanged by the switch to hashed fingerprints, so
-                # an exact title match adopts issues from the old raw-fingerprint
-                # scheme and re-stamps them instead of creating duplicates.
-                title_fallback=issue_renderer.title_for(failure),
-            )
+            action, url = upsert()
             if action == "created":
-                logger.info("Created issue for %s: %s", failure.display_name, url)
+                logger.info("Created issue for %s: %s", display_name, url)
                 summary["created"] += 1
             elif action == "updated":
-                logger.info("Updated issue for %s: %s", failure.display_name, url)
+                logger.info("Updated issue for %s: %s", display_name, url)
                 summary["updated"] += 1
             elif action == "skipped-duplicate":
-                logger.info("Skipped duplicate for %s: %s", failure.display_name, url)
+                logger.info("Skipped duplicate for %s: %s", display_name, url)
                 summary["skipped"] += 1
             elif action == "skipped-recently-closed":
                 logger.info(
                     "Skipped %s (issue recently closed): %s",
-                    failure.display_name, url,
+                    display_name, url,
                 )
                 summary["skipped_closed"] += 1
             else:
@@ -99,7 +126,7 @@ def process_failures(
         except Exception:
             logger.warning(
                 "Failed to process failure %s; skipping it",
-                failure.display_name, exc_info=True,
+                display_name, exc_info=True,
             )
             summary["errors"] += 1
             continue
@@ -110,3 +137,7 @@ def process_failures(
         summary["skipped_closed"], summary["errors"],
     )
     return summary
+
+
+def _bind(func: Callable[[Any], tuple[str, str]], item: Any) -> Callable[[], tuple[str, str]]:
+    return lambda: func(item)
