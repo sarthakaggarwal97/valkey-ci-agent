@@ -76,7 +76,7 @@ def git_output(repo_dir: str, *args: str, timeout: int = _GIT_TIMEOUT_S) -> str:
         capture_output=True,
         text=True,
         timeout=timeout,
-        env=filter_env(_GIT_SAFE_ENV),
+        env=git_safe_env(),
     )
     if result.returncode != 0:
         _raise_git_failure(result)
@@ -132,7 +132,7 @@ def run_git(
         capture_output=True,
         text=True,
         input=input,
-        env=env if env is not None else filter_env(_GIT_SAFE_ENV),
+        env=env if env is not None else git_safe_env(),
         timeout=timeout,
     )
     if result.returncode != 0:
@@ -149,6 +149,7 @@ def run_git(
 LOCKED_GIT_CONFIG = (
     "--literal-pathspecs",
     "-c", "core.hooksPath=/dev/null",
+    "-c", "core.fsmonitor=false",
     "-c", "credential.helper=",
     "-c", "diff.external=",
 )
@@ -165,6 +166,19 @@ NETWORK_ENV = ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE")
 _GIT_SAFE_ENV = PROCESS_BASICS
 
 
+def git_safe_env() -> dict[str, str]:
+    """The scrubbed git environment, also ignoring user and system config.
+
+    A global ``~/.gitconfig`` is writable by the same user that runs untrusted
+    tests and edit agents, so it must not be able to add hooks or commands.
+    """
+    env = filter_env(_GIT_SAFE_ENV)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
+
 def filter_env(allowlist: tuple[str, ...]) -> dict[str, str]:
     """Return os.environ filtered to non-empty allowlisted names.
 
@@ -173,6 +187,30 @@ def filter_env(allowlist: tuple[str, ...]) -> dict[str, str]:
     """
     allowed = set(allowlist)
     return {name: value for name, value in os.environ.items() if name in allowed and value}
+
+
+def default_branch_ref(repo_dir: str) -> str:
+    """``origin/<default branch>`` of a clone, or "" when it cannot be resolved."""
+    try:
+        ref = git_output(repo_dir, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").strip()
+    except subprocess.CalledProcessError:
+        return ""
+    return ref if ref.startswith("origin/") else ""
+
+
+def git_paths(repo_dir: str, *args: str) -> tuple[str, ...]:
+    """The NUL-separated paths a ``-z`` git listing prints.
+
+    A path may be any bytes, not only UTF-8: surrogateescape keeps them as
+    they are, and passing such a path back to git reproduces the same bytes.
+    """
+    result = subprocess.run(
+        ["git", *LOCKED_GIT_CONFIG, *args], cwd=repo_dir, capture_output=True,
+        encoding="utf-8", errors="surrogateescape", timeout=_GIT_TIMEOUT_S, env=git_safe_env(),
+    )
+    if result.returncode != 0:
+        _raise_git_failure(result)
+    return tuple(path for path in result.stdout.split("\0") if path)
 
 
 def worktree_changed_paths(repo_dir: str) -> tuple[str, ...]:
@@ -185,11 +223,10 @@ def worktree_changed_paths(repo_dir: str) -> tuple[str, ...]:
     """
     paths: set[str] = set()
     for args in (
-        ("diff", "--name-only", "-z", "HEAD"),
+        ("diff", "--no-renames", "--name-only", "-z", "HEAD"),
         ("ls-files", "--others", "--exclude-standard", "-z"),
     ):
-        out = run_git(repo_dir, *args).stdout
-        paths.update(p for p in out.split("\0") if p)
+        paths.update(git_paths(repo_dir, *args))
     return tuple(sorted(paths))
 
 
@@ -203,8 +240,8 @@ def build_approved_patch(repo_dir: str, changed_paths: tuple[str, ...]) -> str:
     Includes untracked approved files (staged with ``--intent-to-add`` so they
     appear in the diff) and uses ``--binary`` so the patch reapplies verbatim
     in a clean clone. This is the single source of truth for "the change": the
-    skeptic review inspects this patch, and the push reapplies it - so the
-    review never judges something different from what ships.
+    publisher reapplies exactly this patch rather than trusting the agent's
+    working tree.
 
     Raises ``EmptyPatch`` when there are no approved paths, or when the approved
     paths yield no content, so an empty or vanished edit is refused rather than
@@ -212,16 +249,16 @@ def build_approved_patch(repo_dir: str, changed_paths: tuple[str, ...]) -> str:
     """
     if not changed_paths:
         raise EmptyPatch("no approved paths to build a patch from")
-    untracked = tuple(
-        p
-        for p in run_git(
-            repo_dir, "ls-files", "--others", "--exclude-standard", "-z", "--", *changed_paths
-        ).stdout.split("\0")
-        if p
-    )
+    untracked = git_paths(repo_dir, "ls-files", "--others", "--exclude-standard", "-z", "--", *changed_paths)
     if untracked:
         run_git(repo_dir, "add", "--intent-to-add", "--", *untracked)
-    patch = git_output(repo_dir, "diff", "--no-ext-diff", "--binary", "HEAD", "--", *changed_paths)
+    # No renames: the push re-checks the staged paths against ``changed_paths``,
+    # which lists both sides. No textconv: the patch must be the bytes, and a
+    # textconv driver is a command.
+    patch = git_output(
+        repo_dir, "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--binary",
+        "HEAD", "--", *changed_paths,
+    )
     if not patch.strip():
         raise EmptyPatch("approved paths produced an empty patch")
     return patch

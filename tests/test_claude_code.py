@@ -3,6 +3,9 @@ from __future__ import annotations
 import io
 import logging
 import subprocess
+import time
+
+import pytest
 
 from scripts.ai import claude_code
 
@@ -24,19 +27,34 @@ class _FakeProcess:
     ):
         self.cmd = cmd
         self.kwargs = kwargs
+        _FakeProcess.instances.append(self)
         self.stdin = _RecordingStdin()
         self.stdout = io.StringIO(stdout_text)
         self.returncode = returncode
         self.timeout = timeout
         self.killed = False
+        self.pid = id(self)
 
     def wait(self, timeout=None):
-        if self.timeout:
+        if self.timeout and not self.killed:
             raise subprocess.TimeoutExpired(cmd=self.cmd, timeout=timeout)
         return self.returncode
 
-    def kill(self):
-        self.killed = True
+
+@pytest.fixture(autouse=True)
+def _record_group_kills(monkeypatch):
+    """Fake processes have fake pids, so the real killpg must never see them."""
+    killed = []
+
+    def kill_group(pgid):
+        killed.append(pgid)
+        for process in _FakeProcess.instances:
+            if process.pid == pgid:
+                process.killed = True
+
+    _FakeProcess.instances = []
+    monkeypatch.setattr(claude_code, "_kill_group", kill_group)
+    return killed
 
 
 def test_run_claude_code_streams_json_and_uses_bedrock_env(monkeypatch, caplog):
@@ -259,3 +277,101 @@ def test_run_claude_code_reports_missing_cli(monkeypatch):
     monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
 
     assert claude_code.run_claude_code("prompt") == ("", "claude not found", 127)
+
+
+# --- confined runs: the CLI's working-directory boundary is kept ---------------------
+
+def _captured_cmd(monkeypatch, **kwargs):
+    from scripts.ai import claude_code
+
+    captured = {}
+
+    class _Proc:
+        stdout = iter(())
+        stdin = io.StringIO()
+        pid = 0
+
+        def wait(self, timeout=None):
+            return 0
+
+    def fake_popen(cmd, **_kw):
+        captured["cmd"] = cmd
+        return _Proc()
+
+    monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
+    claude_code.run_claude_code("p", cwd="/repo", **kwargs)
+    return captured["cmd"]
+
+
+def test_a_confined_read_only_run_keeps_permission_checks(monkeypatch):
+    cmd = _captured_cmd(monkeypatch, allowed_tools="Read,Grep", confined=True, extra_dirs=("/work/logs",))
+    assert "--dangerously-skip-permissions" not in cmd
+    assert cmd[cmd.index("--permission-mode") + 1] == "default"
+    assert cmd[cmd.index("--add-dir") + 1] == "/work/logs"
+    assert "--allowedTools" not in cmd  # a blanket allow would lift the path boundary
+    # A checkout's or user's settings file could add directories or allow rules.
+    assert cmd[cmd.index("--setting-sources") + 1] == ""
+
+
+def test_a_confined_edit_run_accepts_edits_only_inside(monkeypatch):
+    cmd = _captured_cmd(monkeypatch, allowed_tools="Read,Edit,MultiEdit,Grep", confined=True)
+    assert "--dangerously-skip-permissions" not in cmd
+    assert cmd[cmd.index("--permission-mode") + 1] == "acceptEdits"
+    assert cmd[cmd.index("--setting-sources") + 1] == ""
+    assert "--add-dir" not in cmd
+
+
+def test_a_confined_profile_cannot_allow_bash(monkeypatch):
+    import pytest
+
+    with pytest.raises(ValueError, match="cannot allow Bash"):
+        _captured_cmd(monkeypatch, allowed_tools="Read,Bash", confined=True)
+
+
+def test_a_confined_profile_cannot_allow_glob(monkeypatch):
+    """Glob's absolute patterns are not boundary-checked, so it would list names anywhere."""
+    import pytest
+
+    with pytest.raises(ValueError, match="cannot allow Glob"):
+        _captured_cmd(monkeypatch, allowed_tools="Read,Grep,Glob", confined=True)
+
+
+def test_ci_fix_suggestion_profile_is_confined_without_bash_or_glob():
+    from scripts.ai.runtime import AGENT_PROFILES
+
+    profile = AGENT_PROFILES["ci_fix_suggest"]
+    tools = set(profile.allowed_tools.split(","))
+    assert profile.confined
+    assert not tools & {"Bash", "Glob"}
+
+
+def test_unconfined_runs_keep_their_existing_flags(monkeypatch):
+    cmd = _captured_cmd(monkeypatch, allowed_tools="Read,Edit,Bash")
+    assert "--dangerously-skip-permissions" in cmd
+    assert "--permission-mode" not in cmd
+
+
+def test_ci_fix_edit_matches_the_backport_agent_model():
+    """Bot-owned branches use the same unconfined edit model as backports."""
+    from scripts.ai.runtime import AGENT_PROFILES
+
+    profile = AGENT_PROFILES["ci_fix_edit"]
+    assert profile.confined is False
+    assert {"Edit", "Bash"} <= set(profile.allowed_tools.split(","))
+
+
+def test_the_deadline_holds_and_nothing_survives_when_the_cli_ignores_stdin(monkeypatch, tmp_path):
+    """A real process that never reads a large prompt and spawns a child is still stopped on time."""
+    monkeypatch.undo()  # the real killpg
+    marker = tmp_path / "late"
+    script = tmp_path / "claude"
+    script.write_text(f"#!/bin/sh\n(sleep 3; touch {marker}) &\nsleep 30\n")
+    script.chmod(0o755)
+    start = time.monotonic()
+    stdout, stderr, rc = claude_code._run_streaming(
+        [str(script)], "x" * (4 * 1024 * 1024), cwd=str(tmp_path), env={"PATH": "/usr/bin:/bin"}, timeout=1,
+    )
+    assert (stderr, rc) == ("timeout after 1s", 1)
+    assert time.monotonic() - start < 5
+    time.sleep(3)
+    assert not marker.exists()

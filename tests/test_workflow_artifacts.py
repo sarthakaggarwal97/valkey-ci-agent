@@ -63,43 +63,6 @@ def test_client_requires_token():
         ArtifactClient(MagicMock(), token="")
 
 
-def test_download_run_logs_extracts_per_step_logs(monkeypatch):
-    """Run logs come back as a zip of per-step text files."""
-    from scripts.common import workflow_artifacts as artifacts_mod
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("1_build.txt", "make output")
-        zf.writestr("2_test.txt", "[err]: NAN score")
-
-    captured = {}
-
-    class _Resp:
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def read(self): return buf.getvalue()
-
-    def fake_urlopen(req, timeout=0):
-        captured["url"] = req.full_url
-        return _Resp()
-
-    monkeypatch.setattr(artifacts_mod, "urlopen", fake_urlopen)
-    client = ArtifactClient(MagicMock(), token="t")
-    logs = client.download_run_logs("valkey-io/valkey", 27559908167)
-
-    assert logs == {"1_build.txt": b"make output", "2_test.txt": b"[err]: NAN score"}
-    assert captured["url"].endswith("/actions/runs/27559908167/logs")
-
-
-def test_download_run_logs_empty_on_expired(monkeypatch):
-    """Expired logs (404) yield an empty map, not an exception."""
-    from scripts.common import workflow_artifacts as artifacts_mod
-
-    client = ArtifactClient(MagicMock(), token="t")
-    monkeypatch.setattr(client, "_download", lambda path: b"")
-    assert client.download_run_logs("r", 1) == {}
-
-
 def test_list_run_artifacts():
     mock_repo = MagicMock()
     mock_repo._requester.requestJsonAndCheck.return_value = (
@@ -202,3 +165,23 @@ def test_extract_zip_leaves_damaged_empty_when_intact():
     damaged: list[str] = []
     assert _extract_zip(buf.getvalue(), damaged) == {"all-test-failures.json": b"[]"}
     assert damaged == []
+
+
+def test_download_job_log_returns_plain_text(monkeypatch):
+    client = ArtifactClient(MagicMock(), token="t")
+    seen = []
+    monkeypatch.setattr(client, "_download", lambda path: seen.append(path) or b"[ok]: t (1 ms)\n\xff")
+    assert client.download_job_log("o/r", 42) == "[ok]: t (1 ms)\n\ufffd"
+    assert seen == ["/repos/o/r/actions/jobs/42/logs"]
+
+
+def test_a_job_log_read_again_is_not_downloaded_again(monkeypatch):
+    client = ArtifactClient(MagicMock(), token="t")
+    downloads = []
+    monkeypatch.setattr(client, "_download", lambda path: downloads.append(path) or b"log")
+
+    for job_id in (1, 1, 2, 3, 1):
+        assert client.download_job_log("r", job_id) == "log"
+
+    # Only the last two logs are kept, so job 1 is fetched again after 2 and 3.
+    assert [path.rsplit("/", 2)[1] for path in downloads] == ["1", "2", "3", "1"]

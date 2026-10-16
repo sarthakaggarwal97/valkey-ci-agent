@@ -9,29 +9,38 @@ injection. Returns ``True`` on success, ``False`` on any failure.
 from __future__ import annotations
 
 import logging
-import os
 import re
 import subprocess
 from pathlib import Path
 
-from scripts.common.proc import LOCKED_GIT_CONFIG, PROCESS_BASICS, filter_env
+from scripts.common.proc import LOCKED_GIT_CONFIG, git_safe_env
 
 logger = logging.getLogger(__name__)
 
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
+FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
 REPO_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 
 _CLONE_TIMEOUT_S = 120
 _CHECKOUT_TIMEOUT_S = 30
 
 
-def shallow_clone_at_sha(repo: str, dest: Path, sha: str | None = None) -> bool:
+def is_full_sha(value: str) -> bool:
+    """Return whether ``value`` is an unabbreviated hexadecimal commit SHA."""
+    return bool(FULL_SHA_RE.fullmatch(value))
+
+
+def shallow_clone_at_sha(
+    repo: str, dest: Path, sha: str | None = None, *, pull_number: int = 0,
+) -> bool:
     """Clone ``repo`` (e.g. ``"valkey-io/valkey"``) into ``dest``.
 
     If ``sha`` is provided, blobless-clones the full history and checks out
     that exact commit (GitHub refuses fetching an arbitrary non-tip SHA, so a
     shallow clone + fetch cannot reach it). If ``sha`` is None, does a
-    ``--depth 1`` clone of the default branch.
+    ``--depth 1`` clone of the default branch. ``pull_number`` additionally
+    fetches ``refs/pull/<n>/head`` first, so the head commit of a PR opened
+    from a fork - which no branch of ``repo`` contains - can be checked out.
 
     Returns True on success, False on any failure. Failures are logged at
     warning level - callers are expected to keep going (e.g. tell their
@@ -45,6 +54,8 @@ def shallow_clone_at_sha(repo: str, dest: Path, sha: str | None = None) -> bool:
         return False
     if sha is not None and not SHA_RE.fullmatch(sha):
         logger.warning("Refusing to clone %s at non-SHA value: %r", repo, sha)
+        return False
+    if pull_number < 0:
         return False
 
     url = f"https://github.com/{repo}.git"
@@ -66,6 +77,11 @@ def shallow_clone_at_sha(repo: str, dest: Path, sha: str | None = None) -> bool:
         timeout=_CLONE_TIMEOUT_S, desc=f"clone {repo}",
     ):
         return False
+    if pull_number and not _run(
+        ["git", "fetch", "origin", f"refs/pull/{pull_number}/head"],
+        cwd=dest, timeout=_CLONE_TIMEOUT_S, desc=f"fetch PR #{pull_number} head",
+    ):
+        return False
     return _run(
         ["git", "checkout", sha],
         cwd=dest, timeout=_CHECKOUT_TIMEOUT_S, desc=f"checkout {sha[:12]} in {repo}",
@@ -79,10 +95,7 @@ def _run(args: list[str], *, timeout: int, desc: str, cwd: Path | None = None) -
     # environment (no GitHub token, no AWS credentials) so a checkout filter can
     # neither run a credential helper nor read a secret from the environment.
     git_args = [args[0], *LOCKED_GIT_CONFIG, *args[1:]] if args and args[0] == "git" else args
-    env = filter_env(PROCESS_BASICS)
-    env["GIT_CONFIG_NOSYSTEM"] = "1"
-    env["GIT_CONFIG_GLOBAL"] = os.devnull
-    env["GIT_TERMINAL_PROMPT"] = "0"
+    env = git_safe_env()
     try:
         result = subprocess.run(
             git_args, cwd=str(cwd) if cwd else None,

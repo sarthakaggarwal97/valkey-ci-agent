@@ -239,7 +239,7 @@ class IssueDedupPublisher:
                 lambda: list(repo.get_issues(**kwargs)),
                 retries=2, description="list open issues",
             )
-            self._open_issues[repo_name] = _drop_pull_requests(issues)
+            self._open_issues[repo_name] = drop_pull_requests(issues)
             logger.info(
                 "Cached %d open issue(s) from %s for dedup matching",
                 len(self._open_issues[repo_name]), repo_name,
@@ -263,7 +263,7 @@ class IssueDedupPublisher:
                 retries=2, description="list recently closed issues",
             )
             self._recently_closed[repo_name] = [
-                issue for issue in _drop_pull_requests(issues)
+                issue for issue in drop_pull_requests(issues)
                 if issue.closed_at is not None and issue.closed_at >= cutoff
             ]
             logger.info(
@@ -329,7 +329,7 @@ class IssueDedupPublisher:
         )
 
 
-def _drop_pull_requests(issues: list[Any]) -> list[Any]:
+def drop_pull_requests(issues: list[Any]) -> list[Any]:
     """Filter pull requests out of an issue listing.
 
     The REST issues list endpoint returns pull requests alongside issues.

@@ -54,10 +54,6 @@ class GitAuth:
     def __exit__(self, *_exc_info: object) -> None:
         self.cleanup()
 
-    @property
-    def askpass_path(self) -> str:
-        return self._askpass_path
-
     def env(self, base: dict[str, str] | None = None) -> dict[str, str]:
         env = dict(base) if base is not None else filter_env(_GIT_AUTH_ENV_ALLOWLIST)
         if self.token:

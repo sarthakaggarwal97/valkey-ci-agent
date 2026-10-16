@@ -45,6 +45,16 @@ def configure_logging(*, verbose: bool = False) -> None:
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, handlers=[handler])
 
 
+def workflow_logs() -> str:
+    """Name this run's logs for a public comment, linked when running in Actions."""
+    server = os.environ.get("GITHUB_SERVER_URL", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    if server and repo and run_id:
+        return f"the [workflow logs]({server}/{repo}/actions/runs/{run_id})"
+    return "the workflow logs"
+
+
 def _in_actions() -> bool:
     return os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
 

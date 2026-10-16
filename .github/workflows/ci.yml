@@ -36,6 +36,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           install-mode: dev
+          # The confinement test drives the pinned CLI the agents run.
+          install-claude: ${{ matrix.python-version == '3.11' && 'true' || 'false' }}
 
       - name: Run ruff lint
         if: matrix.python-version == '3.11'
@@ -45,10 +47,19 @@ jobs:
         if: matrix.python-version != '3.11'
         run: pytest -v
 
+      - name: Create an account for the isolation tests
+        if: matrix.python-version == '3.11'
+        run: |
+          sudo useradd --create-home --shell /bin/bash ci-fix-agent
+          echo "CI_FIX_TEST_AGENT_USER=ci-fix-agent" >> "${GITHUB_ENV}"
+
       - name: Run pytest with coverage
         if: matrix.python-version == '3.11'
+        env:
+          REQUIRE_CLAUDE_CLI: "1"
         run: pytest --cov=scripts --cov-report=term-missing --cov-report=xml --cov-fail-under=60 -v
 
       - name: Run mypy type checking
         if: matrix.python-version == '3.11'
         run: mypy scripts/
+
