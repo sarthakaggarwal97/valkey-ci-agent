@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from scripts.ci_fix import copies as copies_mod
 from scripts.valkey_workflows import normalize as normalize_mod
 from scripts.valkey_workflows import sync as sync_mod
 
@@ -197,6 +198,9 @@ def test_a_matrix_named_by_its_entries_selects_the_entry_by_the_failed_jobs_name
     assert steps["CI fix: prepare the fix in this job"]["if"] == (
         "inputs.fix != '' && matrix.name == inputs.fix_matrix"
     )
+    manifest = {"unstable/daily": {"jobs": copy.jobs, "fixable": copy.fixable}}
+    found = copies_mod.copy_job_for(manifest, "unstable", "daily", "test-fedoralatest")
+    assert found is not None and (found.job, found.matrix_key) == ("test-rpm-distros", "name")
 
 
 @pytest.mark.parametrize("change", [

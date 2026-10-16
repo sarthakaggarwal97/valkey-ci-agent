@@ -1,0 +1,251 @@
+name: CI Fix Run
+
+# One CI fix, whichever front door asked for it: a maintainer's command on a
+# PR (ci-fix.yml), or a bot-owned PR's red head (backport-ci-followup.yml).
+#
+#   plan -> fix-in-copy | fix-local -> publish
+#
+# plan binds the request to one exact failed job (scripts/ci_fix/run.py). The
+# fix is prepared inside that very Valkey job, from this repository's copy of
+# its workflow (valkey-copy-*.yml): the job's runner, setup and build run as
+# they always do, and then, instead of its tests, the agent reproduces the
+# failure, fixes it and verifies the fix with the job's own build and test
+# commands (scripts/ci_fix/job.sh). A job no copy can host is fixed by the
+# same steps on the bot's own runner (fix-local). The fix job holds no GitHub
+# token; plan and publish do the GitHub work, each with its own App token.
+on:
+  workflow_call:
+    inputs:
+      front_door:
+        description: "pr or follow-up (scripts/ci_fix/models.py FrontDoor)"
+        required: true
+        type: string
+      request:
+        description: "The front door's request, as JSON"
+        required: true
+        type: string
+      key:
+        description: "Names this fix's artifacts apart from the other fixes in the run"
+        required: true
+        type: string
+      target_owner:
+        type: string
+        default: valkey-io
+      target_repo:
+        type: string
+        default: valkey
+    secrets:
+      VALKEYRIE_BOT_APP_ID:
+        required: true
+      VALKEYRIE_BOT_PRIVATE_KEY:
+        required: true
+      AWS_ROLE_ARN:
+        required: true
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  plan:
+    name: "Plan the fix (${{ inputs.key }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      branch: ${{ steps.plan.outputs.branch }}
+      workflow: ${{ steps.plan.outputs.workflow }}
+      job: ${{ steps.plan.outputs.job }}
+      use_repo: ${{ steps.plan.outputs.use_repo }}
+      use_git_ref: ${{ steps.plan.outputs.use_git_ref }}
+      fix_matrix: ${{ steps.plan.outputs.fix_matrix }}
+      valgrind_test: ${{ steps.plan.outputs.valgrind_test }}
+      accurate: ${{ steps.plan.outputs.accurate }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate target repository token
+        id: target-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ inputs.target_owner }}
+          repositories: ${{ inputs.target_repo }}
+          permission-members: read
+          permission-actions: read
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-metadata: read
+
+      - name: Validate the request and plan its fix
+        id: plan
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
+          CI_FIX_BOT_LOGIN: ${{ steps.target-token.outputs.app-slug }}[bot]
+          FRONT_DOOR: ${{ inputs.front_door }}
+          REQUEST: ${{ inputs.request }}
+        run: |
+          python -m scripts.ci_fix.run plan --front-door "${FRONT_DOOR}" \
+            --request "${REQUEST}" --out ci-fix-plan
+
+      - name: Upload the plan
+        if: hashFiles('ci-fix-plan/plan.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-fix-plan-${{ inputs.key }}
+          path: ci-fix-plan/
+          retention-days: 30
+
+  fix-in-copy:
+    name: "Fix in ${{ needs.plan.outputs.job }}"
+    needs: plan
+    if: needs.plan.outputs.mode == 'copy'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/valkey-copy-job.yml
+    with:
+      branch: ${{ needs.plan.outputs.branch }}
+      workflow: ${{ needs.plan.outputs.workflow }}
+      job: ${{ needs.plan.outputs.job }}
+      use_repo: ${{ needs.plan.outputs.use_repo }}
+      use_git_ref: ${{ needs.plan.outputs.use_git_ref }}
+      valgrind_test: ${{ needs.plan.outputs.valgrind_test }}
+      accurate: ${{ needs.plan.outputs.accurate == 'true' }}
+      fix: ${{ inputs.key }}
+      fix_matrix: ${{ needs.plan.outputs.fix_matrix }}
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+  fix-local:
+    name: "Fix on the bot's runner"
+    needs: plan
+    if: needs.plan.outputs.mode == 'local'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      id-token: write
+    # The same steps a copied job's fix mode runs (normalize.fix_steps).
+    steps:
+      - name: 'CI fix: check out the agent'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: .ci-fix-agent
+          persist-credentials: false
+      - name: Install Valkey build and test dependencies
+        shell: bash
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            build-essential pkg-config libssl-dev tcl8.6 tclx tcl-tls valgrind
+      - name: 'CI fix: set up the agent'
+        uses: ./.ci-fix-agent/.github/actions/setup-agent
+        with:
+          path: .ci-fix-agent
+          install-claude: 'true'
+      - name: 'CI fix: download the plan'
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        with:
+          name: ci-fix-plan-${{ inputs.key }}
+          path: ${{ runner.temp }}/ci-fix-plan
+      - name: 'CI fix: configure AWS credentials'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: ci-fix-${{ github.run_id }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-duration-seconds: 4500
+      - name: 'CI fix: prepare the fix in this job'
+        shell: bash
+        env:
+          CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
+        run: bash .ci-fix-agent/scripts/ci_fix/job.sh
+      - name: 'CI fix: upload the result'
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-fix-result-${{ inputs.key }}
+          path: ${{ runner.temp }}/ci-fix-out/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  publish:
+    name: "Publish the fix (${{ inputs.key }})"
+    needs: [plan, fix-in-copy, fix-local]
+    if: always() && needs.plan.result == 'success' && (needs.plan.outputs.mode == 'copy' || needs.plan.outputs.mode == 'local')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download the plan
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: ci-fix-plan-${{ inputs.key }}
+          path: ci-fix-plan
+
+      - name: Download the fix
+        # A fix job that crashed uploaded nothing; publish reports that.
+        continue-on-error: true
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: ci-fix-result-${{ inputs.key }}
+          path: ci-fix-result
+
+      - name: Generate target repository token
+        id: target-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ inputs.target_owner }}
+          repositories: ${{ inputs.target_repo }}
+          permission-actions: read
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-metadata: read
+
+      - name: Publish the fix and report it
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
+          CI_FIX_BOT_LOGIN: ${{ steps.target-token.outputs.app-slug }}[bot]
+        run: |
+          set -euo pipefail
+          python -m scripts.ci_fix.run publish --plan ci-fix-plan --outcome ci-fix-result \
+            | tee ci-fix-result.json
+
+      - name: Upload the result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-fix-published-${{ inputs.key }}-${{ github.run_attempt }}
+          path: ci-fix-result.json
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,9 +1,9 @@
 """Comment-triggered entry point for the CI fix bot.
 
-A maintainer comments ``@valkeyrie-ops fix <ci-link>`` on a valkey-io/valkey PR.
-This scheduled poller finds that comment and dispatches the existing ``ci-fix``
-workflow, which does the actual diagnose/verify/push. The poller is only the
-trigger; it owns no fix logic.
+A maintainer comments ``@valkeyrie-ops fix [<ci-link>] [hint]`` on a
+valkey-io/valkey PR. This scheduled poller finds that comment and dispatches the
+existing ``ci-fix`` workflow, which does the actual diagnose/edit/publish. The
+poller is only the trigger; it owns no fix logic.
 
 Idempotency is a reaction marker on GitHub, not external state. The claim is
 atomic: GitHub's create-reaction returns ``201`` when this call added the
@@ -21,6 +21,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from functools import partial
 from typing import Any, Callable
 
 from github import Auth, Github
@@ -167,11 +168,17 @@ def _process_comment(
     try:
         dispatch(target_repo, pr_number, command, commenter, comment.id)
     except Exception as exc:
+        # Give the claim back so the next tick retries. A dispatch whose
+        # response was lost may then run twice; ci-fix.yml serializes runs per
+        # PR and pushes only onto the head it gated, so the second one finds
+        # the head moved and stops. A command that is never retried is worse.
+        released = _release_claim(comment, bot_login)
         raise ClaimedDispatchFailed(
             f"Dispatch failed for comment {comment.id} on {target_repo}#{pr_number} "
             f"(commenter {commenter}, run {command.run_id}) after it was claimed; "
-            f"remove the {_CLAIM_REACTION!r} reaction from the comment to let the "
-            f"poller retry: {exc}"
+            + ("the claim was released and a later tick retries" if released else
+               f"remove the {_CLAIM_REACTION!r} reaction from the comment to let the poller retry")
+            + f": {exc}"
         ) from exc
     logger.info("Dispatched ci-fix for %s#%d (commenter %s, comment %s, run %s)",
                 target_repo, pr_number, commenter, comment.id, command.run_id)
@@ -242,6 +249,24 @@ def _from_epoch(epoch: float) -> datetime:
     return datetime.fromtimestamp(epoch, tz=timezone.utc)
 
 
+def _release_claim(comment: Any, bot_login: str) -> bool:
+    """Delete this App's claim reaction from ``comment``; return whether it is gone."""
+    try:
+        reactions = retry_github_call(
+            lambda: list(comment.get_reactions()), retries=2,
+            description=f"read reactions on comment {comment.id}",
+        )
+        for reaction_id in [r.id for r in reactions if r.content == _CLAIM_REACTION and r.user.login == bot_login]:
+            retry_github_call(
+                partial(comment.delete_reaction, reaction_id), retries=2,
+                description=f"release the claim on comment {comment.id}",
+            )
+        return True
+    except Exception as exc:  # noqa: BLE001 - the raised error tells a person what to do
+        logger.warning("Could not release the claim on comment %s: %s", comment.id, exc)
+        return False
+
+
 def claim_via_status(comment: Any) -> bool:
     """Atomically claim ``comment`` by creating the reaction, return True on win.
 
@@ -283,6 +308,9 @@ def dispatch_ci_fix(
         run_url = (
             f"https://github.com/{command.run_owner}/{command.run_repo}"
             f"/actions/runs/{command.run_id}"
+            + (f"/attempts/{command.run_attempt}" if command.run_attempt else "")
+            + (f"/job/{command.job_id}" if command.job_id else "")
+            if command.run_id else ""
         )
         inputs = {
             "repo": repo_full_name,
@@ -365,7 +393,11 @@ def main() -> int:
     )
 
     gh = Github(auth=Auth.Token(token))
-    dispatch = dispatch_ci_fix(gh, agent_repo=agent_repo, workflow=workflow, ref=ref)
+    # Dispatch on the agent repository with its own token, so the target
+    # repository's token never carries actions:write.
+    dispatch_token = os.environ.get("CI_FIX_POLL_DISPATCH_TOKEN", "") or token
+    dispatch = dispatch_ci_fix(Github(auth=Auth.Token(dispatch_token)), agent_repo=agent_repo,
+                               workflow=workflow, ref=ref)
 
     def _poll() -> int:
         return poll_once(

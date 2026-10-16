@@ -1,185 +1,153 @@
-"""Render a ``FixOutcome`` into a PR comment.
-
-The comment is the agent's accountability surface: for a push it shows exactly
-what was changed, the command that was run, its captured output, and the
-review rationale - the evidence a maintainer needs to trust (or reject) the
-fix. For a refusal it explains why, so the maintainer can take over.
-"""
+"""Render a CI-fix result for a pull request or detector issue."""
 
 from __future__ import annotations
 
 import re
 
-from scripts.ci_fix.models import FixOutcome, OutcomeKind
+from scripts.ci_fix.models import (
+    CandidateAction,
+    FixCandidate,
+    FixResult,
+    ResultKind,
+    TargetKind,
+)
+from scripts.ci_fix.policy import target_capabilities
+from scripts.common.text_utils import compact_text
 
-_OUTPUT_TAIL_IN_COMMENT = 3000
+_MAX_OTHER_JOBS = 10
+
+
+def render_result(result: FixResult) -> str:
+    """Return the maintainer-facing report for one fix attempt."""
+    if result.kind is ResultKind.PUSHED:
+        body = [
+            f"Pushed `{result.commit_sha[:12]}` to this bot-owned PR branch.",
+            "",
+        ]
+        body += _context(result)
+        body += [
+            "_Normal pull-request CI is now the verification authority; the bot "
+            "does not merge the PR._",
+        ]
+        return "\n".join(body)
+
+    if result.kind is ResultKind.SUGGESTED:
+        body = ["Prepared a fix for the PR author; nothing was pushed.", ""]
+        body += _context(result)
+        body += _candidate_patch(result.candidate)
+        body += [
+            "_Apply the change on the contributor branch and let normal PR CI verify it._",
+        ]
+        return "\n".join(body)
+
+    if result.kind is ResultKind.OPENED:
+        link = f"[#{result.pr_number}]({result.pr_url})" if result.pr_url else f"#{result.pr_number}"
+        body = [f"Opened draft PR {link}.", ""]
+        body += _context(result)
+        body += [
+            "_The draft stays unmerged until normal PR CI passes and a human reviews it._",
+        ]
+        return "\n".join(body)
+
+    if result.kind is ResultKind.REFUSED:
+        body = [
+            f"No fix prepared: {compact_text(result.summary, 2_000)}",
+            "",
+        ]
+        body += _context(result, include_reasoning=False)
+        return "\n".join(body).rstrip()
+
+    return (
+        "The CI-fix attempt stopped with an error: "
+        f"{compact_text(result.summary, 2_000)}"
+    )
+
+
+def _context(result: FixResult, *, include_reasoning: bool = True) -> list[str]:
+    failure = result.task.failure
+    candidate = result.candidate
+    lines = [
+        f"Failure: [`{compact_text(failure.job_name, 300)}` in this run]"
+        f"({failure.run_url}).",
+        f"Prepared for commit `{result.task.target.expected_sha[:12]}`.",
+        "",
+    ]
+    if failure.description:
+        lines += [compact_text(failure.description, 2_000), ""]
+    if candidate is not None:
+        lines += _candidate_context(candidate, include_reasoning=include_reasoning)
+    if failure.other_failed_jobs:
+        visible = failure.other_failed_jobs[:_MAX_OTHER_JOBS]
+        lines += [
+            "Other jobs also failed in that run:",
+            *[f"- `{compact_text(name, 300)}`" for name in visible],
+            "",
+        ]
+        hidden = len(failure.other_failed_jobs) - len(visible)
+        if hidden:
+            lines[-1:-1] = [f"- …and {hidden} more.", ""]
+    return lines
+
+
+def _candidate_context(candidate: FixCandidate, *, include_reasoning: bool) -> list[str]:
+    lines: list[str] = []
+    if candidate.failing_check:
+        lines += [
+            f"**Failing check:** {compact_text(candidate.failing_check, 300)}",
+            "",
+        ]
+    if candidate.root_cause:
+        lines += [
+            f"**Root cause:** {compact_text(candidate.root_cause, 2_000)}",
+            "",
+        ]
+    if candidate.failure_type.value != "unknown":
+        lines += [f"**Failure type:** {candidate.failure_type.value}", ""]
+    if include_reasoning and candidate.reasoning:
+        lines += [
+            f"**Change:** {compact_text(candidate.reasoning, 3_000)}",
+            "",
+        ]
+    if candidate.verification:
+        lines += ["**Checked by the bot:**", ""]
+        lines += [f"- {line}" for line in candidate.verification.splitlines() if line.strip()]
+        lines += [""]
+    if candidate.validation:
+        lines += [
+            f"**Agent validation notes:** {compact_text(candidate.validation, 2_000)}",
+            "",
+        ]
+    return lines
+
+
+def _candidate_patch(candidate: FixCandidate | None) -> list[str]:
+    if candidate is None:
+        return []
+    if candidate.action is CandidateAction.PORT:
+        return [
+            "The fix is an upstream commit:",
+            "",
+            _fenced(f"git cherry-pick -x {candidate.port_commit}", lang="sh"),
+            "",
+        ]
+    if not candidate.patch:
+        return []
+    patch_limit = target_capabilities(TargetKind.SUGGEST).patch_limit
+    if len(candidate.patch) > patch_limit:
+        return [
+            "The proposed patch exceeded the comment-size limit and was not posted.",
+            "",
+        ]
+    return [
+        "Proposed patch:",
+        "",
+        _fenced(candidate.patch, lang="diff"),
+        "",
+    ]
 
 
 def _fenced(body: str, *, lang: str = "") -> str:
-    """Wrap untrusted text in a code fence it cannot break out of.
-
-    Command output may itself contain ``` runs; per CommonMark, the fence must
-    be longer than the longest backtick run inside, so we size it accordingly.
-    """
-    longest = max((len(m) for m in re.findall(r"`+", body)), default=0)
+    """Fence untrusted text with a delimiter longer than any inside it."""
+    longest = max((len(match) for match in re.findall(r"`+", body)), default=0)
     fence = "`" * max(3, longest + 1)
     return f"{fence}{lang}\n{body}\n{fence}"
-
-
-def render_comment(outcome: FixOutcome) -> str:
-    if outcome.kind is OutcomeKind.PUSHED:
-        return _render_pushed(outcome)
-    if outcome.kind is OutcomeKind.REFUSED:
-        return _render_refused(outcome)
-    if outcome.kind is OutcomeKind.HANDOFF:
-        return _render_handoff(outcome)
-    return _render_failed(outcome)
-
-
-def _render_pushed(outcome: FixOutcome) -> str:
-    proposal = outcome.proposal
-    run = outcome.run_result
-    review = outcome.review
-    lines = [
-        f"Fixed **{proposal.failing_check if proposal else 'the failing check'}** "
-        f"and pushed `{outcome.commit_sha[:12]}` to this PR's branch.",
-        "",
-    ]
-    if outcome.failing_run_url:
-        lines += [f"Fixing the failure from [this run]({outcome.failing_run_url}).", ""]
-    lines += [
-        f"**Root cause:** {proposal.root_cause if proposal else ''}",
-        "",
-    ]
-    if run is not None:
-        check_name = proposal.failing_check if proposal else ""
-        highlight = _result_lines_for(run.output_tail, check_name)
-        if highlight:
-            lines += [
-                "The previously-failing check now passes:",
-                "",
-                _fenced(highlight),
-                "",
-            ]
-        block = f"$ {run.command}\nexit {run.exit_code}\n{run.output_tail[-_OUTPUT_TAIL_IN_COMMENT:]}"
-        lines += [
-            "<details><summary>Full verification output</summary>",
-            "",
-            _fenced(block),
-            "</details>",
-            "",
-        ]
-    if outcome.verify_backend:
-        where = _backend_label(outcome)
-        lines += [f"**Verified by:** {where}", ""]
-    if review is not None and review.reasoning:
-        lines += [f"**Review:** {review.reasoning}", ""]
-    lines += _remaining_checks(outcome)
-    if outcome.verify_backend == "upstream-port":
-        lines.append(
-            "_This is a port of an upstream fix; this PR's normal CI is the "
-            "verification authority. I do not merge._"
-        )
-    else:
-        lines.append(
-            "_The fix passed targeted verification of the failing check; this PR's "
-            "full CI will confirm. I do not merge._"
-        )
-    return "\n".join(lines)
-
-
-def _result_lines_for(output: str, check_name: str) -> str:
-    """Pull the lines that show the target check's result out of the output.
-
-    A verification run can emit hundreds of lines for other passing tests; a
-    maintainer wants the one line proving the previously-failing check now
-    passes. Prefer lines mentioning the check name; otherwise fall back to the
-    last few result-marker lines. Returns an empty string if nothing matches,
-    in which case the caller just shows the full output.
-    """
-    lines = output.splitlines()
-    if check_name:
-        # Match on a distinctive slice of the check name (the AI's name and the
-        # log's wording can differ slightly), longest word first.
-        words = sorted((w for w in re.split(r"\W+", check_name) if len(w) > 3), key=len, reverse=True)
-        for w in words:
-            hits = [ln for ln in lines if w in ln and _RESULT_MARKER.search(ln)]
-            if hits:
-                return "\n".join(hits[-5:])
-    markers = [ln for ln in lines if _RESULT_MARKER.search(ln)]
-    return "\n".join(markers[-3:]) if markers else ""
-
-
-_RESULT_MARKER = re.compile(r"\[ok\]|\[err\]|\[exception\]|\bPASS\b|\bFAIL\b", re.IGNORECASE)
-
-
-def _backend_label(outcome: FixOutcome) -> str:
-    backend = outcome.verify_backend
-    if backend == "local":
-        return "targeted verification on a Linux runner"
-    if backend.startswith("docker:"):
-        return f"targeted verification in the `{backend[len('docker:'):]}` container"
-    if backend == "macos":
-        run = f" ([run]({outcome.macos_run_url}))" if outcome.macos_run_url else ""
-        return f"targeted verification on a macOS runner{run}"
-    if backend == "upstream-port":
-        return "ported upstream fix; awaiting this PR's normal CI"
-    return backend
-
-
-def _render_refused(outcome: FixOutcome) -> str:
-    lines = [f"I did not push a fix: {outcome.summary}", ""]
-    if outcome.failing_run_url:
-        lines += [f"Looked at the failure from [this run]({outcome.failing_run_url}).", ""]
-    if outcome.run_result is not None and outcome.run_result.output_tail:
-        lines += [
-            "<details><summary>Evidence</summary>",
-            "",
-            _fenced(outcome.run_result.output_tail[-_OUTPUT_TAIL_IN_COMMENT:]),
-            "</details>",
-            "",
-        ]
-    lines += _remaining_checks(outcome)
-    return "\n".join(lines)
-
-
-def _render_failed(outcome: FixOutcome) -> str:
-    return f"I hit an error and could not complete the fix: {outcome.summary}"
-
-
-def _render_handoff(outcome: FixOutcome) -> str:
-    proposal = outcome.proposal
-    lines = [
-        "I diagnosed this and prepared a fix, but I could not verify it in my "
-        "environment, so I am handing it off rather than pushing it unverified.",
-        "",
-    ]
-    if outcome.failing_run_url:
-        lines += [f"From the failure in [this run]({outcome.failing_run_url}).", ""]
-    if proposal is not None and proposal.root_cause:
-        lines += [f"**Root cause:** {proposal.root_cause}", ""]
-    lines += [f"**Why not verified:** {outcome.summary}", ""]
-    if outcome.review is not None and outcome.review.reasoning:
-        lines += [f"**Review:** {outcome.review.reasoning}", ""]
-    if outcome.handoff_patch:
-        lines += [
-            "Proposed patch (apply and let this PR's CI judge it):",
-            "",
-            _fenced(outcome.handoff_patch, lang="diff"),
-            "",
-        ]
-    lines += _remaining_checks(outcome)
-    lines.append("_I did not push this; a human should apply it. I do not merge._")
-    return "\n".join(lines)
-
-
-def _remaining_checks(outcome: FixOutcome) -> list[str]:
-    if not outcome.other_failing_checks:
-        return []
-    listed = "\n".join(f"- `{name}`" for name in outcome.other_failing_checks)
-    return [
-        "Other checks also failed in that run; re-invoke with the same command to "
-        "address the next one:",
-        listed,
-        "",
-    ]

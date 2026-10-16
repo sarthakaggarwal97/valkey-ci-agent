@@ -12,6 +12,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from scripts.ci_fix import comment_poll
 from scripts.ci_fix.comment_poll import poll_once
 
@@ -274,7 +276,6 @@ def test_dispatch_failure_after_claim_fails_the_tick_and_keeps_going(caplog):
     """A claimed comment whose dispatch fails would otherwise be skipped by
     every later tick: the tick must say so loudly and fail, after still
     processing the remaining comments."""
-    import pytest
 
     first = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}", comment_id=1)
     second = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}", comment_id=2)
@@ -302,7 +303,6 @@ def test_rejected_dispatch_raises():
     dispatch = comment_poll.dispatch_ci_fix(gh, agent_repo="o/agent", workflow="ci-fix.yml",
                                             ref="main")
     command = comment_poll.parse_command(f"@valkeyrie-ops fix {_RUN_URL}")
-    import pytest
 
     with pytest.raises(RuntimeError, match="rejected the dispatch"):
         dispatch("valkey-io/valkey", 42, command, "alice", 1)
@@ -316,3 +316,53 @@ def test_skips_of_fix_commands_are_logged(caplog):
     messages = [r.getMessage() for r in caplog.records]
     assert any("not on a pull request" in m for m in messages)
     assert any("Scanned 1 comment(s)" in m and "0 fix(es) dispatched" in m for m in messages)
+
+
+def test_dispatch_forwards_a_job_link_intact():
+    from scripts.ci_fix.comment_poll import dispatch_ci_fix
+    from scripts.ci_fix.gate import parse_command
+
+    gh = MagicMock()
+    dispatch = dispatch_ci_fix(gh, agent_repo="o/agent", workflow="ci-fix.yml", ref="main")
+    command = parse_command(f"@valkeyrie-ops fix {_RUN_URL}/job/77 the tcl one")
+    dispatch("valkey-io/valkey", 5, command, "alice", 9)
+    inputs = gh.get_repo.return_value.get_workflow.return_value.create_dispatch.call_args.args[1]
+    assert inputs["run_url"] == f"{_RUN_URL}/job/77"
+    assert parse_command(f"@valkeyrie-ops fix {inputs['run_url']}").job_id == 77
+
+
+def test_dispatch_forwards_a_run_attempt_link_intact():
+    from scripts.ci_fix.comment_poll import dispatch_ci_fix
+    from scripts.ci_fix.gate import parse_command
+
+    gh = MagicMock()
+    dispatch = dispatch_ci_fix(
+        gh,
+        agent_repo="o/agent",
+        workflow="ci-fix.yml",
+        ref="main",
+    )
+    command = parse_command(f"@valkeyrie-ops fix {_RUN_URL}/attempts/3")
+    dispatch("valkey-io/valkey", 5, command, "alice", 9)
+    inputs = (
+        gh.get_repo.return_value.get_workflow.return_value.create_dispatch
+        .call_args.args[1]
+    )
+    assert inputs["run_url"] == f"{_RUN_URL}/attempts/3"
+
+
+def test_a_failed_dispatch_releases_the_claim_so_the_next_tick_retries(caplog):
+    caplog.set_level("ERROR")
+    comment = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}")
+    ours = SimpleNamespace(id=55, content="eyes", user=SimpleNamespace(login="valkeyrie-ops[bot]"))
+    theirs = SimpleNamespace(id=56, content="eyes", user=SimpleNamespace(login="alice"))
+    comment.get_reactions = lambda: [ours, theirs]
+    comment.delete_reaction = MagicMock()
+
+    def dispatch(*_a):
+        raise RuntimeError("502")
+
+    with pytest.raises(RuntimeError, match="claimed comment"):
+        _run(_gh([comment]), dispatch=dispatch)
+    comment.delete_reaction.assert_called_once_with(55)
+    assert any("the claim was released and a later tick retries" in r.getMessage() for r in caplog.records)
