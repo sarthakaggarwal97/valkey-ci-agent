@@ -246,6 +246,71 @@ TARGET_TOKEN=$(gh auth token) python -m scripts.backport.eligibility \
   --repo valkey-io/valkey --date 2026-09-16 --days 1 --dry-run
 ```
 
+### CI Fix Manual Trial
+
+The CI-fix front doors are dispatch-only during the initial trial. A direct PR
+request accepts an exact run or job URL; leave `run_url` empty to select the
+most actionable completed failure on the PR's current head:
+
+```bash
+gh workflow run ci-fix.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey \
+  --field pr=1234 \
+  --field run_url=https://github.com/valkey-io/valkey/actions/runs/123456789/job/987654321
+```
+
+To exercise the comment front door, first place
+`@valkeyrie-ops fix [<run-or-job-url>] [hint]` at the start of an authorized PR
+comment, then scan recent comments once:
+
+```bash
+gh workflow run ci-fix-comment-poll.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field lookback_minutes=180
+```
+
+The poller only claims and dispatches the command. `ci-fix.yml` runs the fix
+like every other (`ci-fix-run.yml`): it downloads the exact failed-job log,
+searches history for a merged fix, and runs the fix agent. For a bot-owned
+branch it also reproduces a failing Valkey Tcl test and verifies and reviews
+the candidate in a loop, inside the copied CI job that failed when one can
+host it; a contributor or fork PR's suggestion is reviewed but never run (see the CI Fix Workflow section of
+[README.md](README.md)). It may push a lease-protected descendant commit only to a same-repository,
+bot-authored `backport/...`, `agent/backport/...`, or `agent/ci-fix/...` PR
+branch. Contributor and fork PRs receive a concrete patch suggestion instead.
+The target PR's normal CI and human review remain authoritative.
+
+Run the backport follow-up front door for enabled registry entries:
+
+```bash
+gh workflow run backport-ci-followup.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey \
+  --field project_number=14
+```
+
+Run the detector-issue front door with one explicit Daily or Weekly issue
+number:
+
+```bash
+gh workflow run ci-fix-issues.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field issue=1234
+```
+
+The issue workflow validates that exact detector occurrence, prepares one
+candidate, and immediately opens a draft `agent/ci-fix/...` PR against the
+branch the run tested (`unstable` for Daily, the job's release branch for
+Weekly) when successful.
+It has no later reconciliation phase. To see which issues the dispatcher
+would start runs for, without starting any:
+
+```bash
+gh workflow run ci-fix-issue-dispatch.yml \
+  --repo valkey-io/valkey-ci-agent \
+  --field dry_run=true
+```
 ## Registry Changes
 
 `repos.yml` is the source of truth for onboarded repositories, release branches,
@@ -260,9 +325,13 @@ Use `validation_rules` for static path-to-command mappings and a supported
 `validation_profile` when checks must be derived from exact changed files.
 `generated_file_rules` must list every tracked output a generator may edit;
 the validator runs the generator twice and fails if it touches anything else
-or does not converge. `automatic_ci_followup` is opt-in per repository, and
-`ci_followup_ignored_jobs` should include the informational GitHub Actions jobs
+or does not converge. `automatic_ci_followup` (the open sweep PR) is opt-in
+per repository. Both the sweep follow-up and explicit detector-issue
+front door skip the jobs in `ci_followup_ignored_jobs`, which should include
+the informational GitHub Actions jobs
 the bot must never try to repair -- for Valkey core, the `daily.yml` result
 aggregators and the coverage upload. Patterns match Actions job names only;
 checks published by other GitHub Apps, such as DCO and Codecov, cannot be
-follow-up candidates in the first place.
+follow-up candidates in the first place. During the initial CI-fix rollout all
+CI-fix front doors remain dispatch-only, even when `automatic_ci_followup` is
+enabled.

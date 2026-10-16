@@ -88,30 +88,39 @@ sustained in-run cadence.
 ### Automatic CI Follow-up
 
 `backport-ci-followup.yml` covers the state the sweep poller intentionally
-leaves alone: an open sweep PR whose normal repository CI has completed. The
-registry must explicitly enable `automatic_ci_followup`. Each branch leg:
+leaves alone: an open bot-owned PR whose normal repository CI has completed.
+That is the sweep PR, and equally a CI fix this engine pushed or a draft PR it
+opened -- nothing else watches whether their own CI goes red. The
+registry must explicitly enable `automatic_ci_followup`. During the initial
+rollout it is dispatch-only; scheduling can be enabled after manual trials.
+Each branch leg:
 
 ```text
 ci_followup.py
-  -> find the one open agent/backport/sweep/<target> PR
+  -> find the open bot-owned PRs into <target> whose head branch this engine
+     writes: agent/backport/sweep/<target> first, then backport/,
+     agent/backport/ and agent/ci-fix/ heads
   -> require App ownership and exact repo/base/branch/current SHA
   -> wait until all workflow runs for that current head are complete
   -> consider Actions jobs only; checks owned by other Apps (DCO, Codecov)
      are never visible here
   -> discard the informational Actions jobs named in ci_followup_ignored_jobs
   -> skip logical jobs already recorded in hidden result-comment markers
-  -> stop after three automatic attempts across the PR's heads
-  -> run_ci_fix_request(...) for one prioritized failure
-       existing diagnosis -> baseline/verification -> skeptic review
+  -> stop after three attempts on the current head
+  -> plan one FixTask for the exact prioritized failed job
+  -> run it like every other fix (ci_fix/run.py, ci-fix-run.yml)
+       one diagnose-and-edit session -> patch | upstream port | refusal
+       (backport policy for a backport head, general policy otherwise)
        descendant-only commit plus exact-head lease; no rewrite or DCO sign-off
   -> post the outcome and claim markers; wait for a new head before another fix
 ```
 
 The automated caller does not impersonate a maintainer comment and does not
-weaken the CI-fix engine. It bypasses only the human-team membership gate after
-applying a stricter machine gate to the bot-owned sweep PR and SHA. A moved head
-cannot be pushed because the shared push path independently requires the remote
-head to equal the failed SHA.
+weaken the CI-fix engine. It replaces the human-team membership gate with a
+machine gate that requires the exact bot-owned sweep PR, branch, and SHA. A
+moved head cannot be pushed because the shared push path independently
+requires the remote head to equal the failed SHA. The pushed commit starts the
+target PR's normal CI; that CI and human review remain authoritative.
 
 ### Eligibility
 
@@ -149,7 +158,7 @@ are still judged, and comments go out after each model batch.
 - `scripts/backport/sweep.py` - daily sweep across registered repos and release branches
 - `scripts/backport/eligibility.py` - daily backport-eligibility comments on newly merged PRs
 - `scripts/backport/poller.py` - short-cron poll that sweeps a branch only when no sweep PR is open
-- `scripts/backport/ci_followup.py` - guarded current-head CI follow-up for open sweep PRs
+- `scripts/backport/ci_followup.py` - guarded current-head CI follow-up for open bot-owned PRs (plan and report)
 - `scripts/backport/main.py` - single-PR backport (manual dispatch)
 - `scripts/backport/matrix.py` - GitHub Actions matrix generation from `repos.yml`
 - `scripts/backport/registry.py` - typed registry loader and validation
@@ -200,109 +209,205 @@ updating issues on `valkey-fuzzer`.
 
 ## CI Fix Flow
 
-On-demand, triggered by a maintainer commenting `@valkeyrie-bot fix <ci-link>`
-on a backport PR. Decoupled from the backport sweep; it shares only the
-common infrastructure.
+The CI-fix engine deliberately uses the same publication model as backports:
+prepare one candidate, put it on a bot-owned PR branch, and rely on the target
+repository's normal PR CI plus human review. It does not create a separate
+verification verdict.
+
+Three front doors construct the same typed `FixTask`, and every fix then runs
+the same three jobs (`ci_fix/run.py`, `ci-fix-run.yml`): the front door's plan
+binds one exact failed job (a `FixPlan`); the fix runs inside that failed job
+itself, from this repository's copy of Valkey's workflow (`ci_fix/copies.py`
+finds it), after the job's own setup and build and with its own build and test
+commands, or on the bot's runner when no copy can host it; and the front
+door's publication and report follow. The fix job holds no GitHub token. The
+plan and the fix's outcome pass between the jobs as JSON (`ci_fix/state.py`).
+A front door is a planner and a reporter:
+
+- `ci_fix/main.py` (`ci-fix.yml`) handles
+  `@valkeyrie-ops fix [<run-or-job-url>] [hint]` on a PR. The manual
+  `ci_fix/comment_poll.py` trigger scans recent comments once, atomically claims
+  authorized commands with a reaction, and dispatches `ci-fix.yml`; it contains
+  no diagnosis or publication logic.
+- `backport/ci_followup.py` (`backport-ci-followup.yml`) selects one unhandled
+  failure on the exact current head of an open bot-owned PR into a registered
+  branch (sweep PR, pushed CI fix, or draft fix PR).
+- `ci_fix/issues.py` (`ci-fix-issues.yml`) handles one explicitly selected Test
+  Failure Detector issue (Daily, or Weekly on a release branch) and opens a
+  draft PR against the branch that run tested when a candidate is found; it
+  rechecks the issue right before publication.
+  `ci_fix/issue_dispatch.py` (`ci-fix-issue-dispatch.yml`) chooses the
+  issues: one `ci-fix-issues.yml` run per eligible open Daily issue, with at
+  most a configured number of those runs active at once.
+
+The front doors share the state-reading primitives rather than reimplementing
+GitHub semantics. `github_runs.jobs_for_run_attempt()` returns one immutable
+raw-job snapshot for an exact rerun attempt; job selection, detector URL
+mapping, and detector log analysis all derive from that same tuple.
+`github_runs.newest_runs_for_head()` owns branch/SHA filtering and superseded
+workflow-run collapse. `issue_state.py` owns detector occurrence parsing and
+linked-PR inspection.
 
 ```text
-ci_fix/main.py (workflow_dispatch event)
-  -> gate.build_fix_request(...)        fail-closed auth (contributors team)
-                                        + SHA-bound run gating
-  -> pipeline.run_ci_fix(...)
-       verify.github_runs        -> list the jobs that actually failed (code,
-                                    not the AI, owns this)
-       common.workflow_artifacts -> download the failed run's logs
-       common.git_clone          -> shallow-clone the repo at the failed SHA
-       port_discovery            -> code-discovers default-branch candidates
-                                    for likely missing backports
-       diagnose.diagnose_failure -> read-only AI returns a FixProposal
-                                    (port | author | refuse) + a failing-job hint,
-                                    using the discovered port candidates so
-                                    missing backports are preferred over refusals
-       pipeline._plan_verification
-                                 -> code matches the hint to a real failed job
-                                    and classifies its workflow environment
-                                    (verify.workflow_env) into a VerificationPlan:
-                                    local | docker(image) | macos | refuse
-       port:
-         apply.apply_port_commit -> cherry-pick the upstream fix commit without
-                                    committing; push and rely on this PR's
-                                    normal CI as the verification authority
-       local/docker:
-         review.run_fix_loop     -> reproduce the failure on a clean checkout
-                                    -> apply (edit-only AI)
-                                    -> runner.run_verification_command (code runs
-                                       the AI command in a sanitized subprocess,
-                                       inside the job's container for docker;
-                                       exit code is the verdict; build once,
-                                       verify K times)
-                                    -> build_and_review_patch (skeptic AI)
-                                    retry on feedback; needs pass AND approve
-       macos:
-         apply + build_and_review_patch, then
-         verify.macos.MacosVerifier -> dispatch the agent's verify-macos job,
-                                       wait, conclusion is the verdict
-       push.commit_and_push_fix  -> extract approved patch
-                                    -> apply in a fresh trusted clone
-                                    -> commit (no sign-off), push to the PR's own
-                                       agent/backport/... branch (never merge)
-  -> comment.render_comment(outcome) -> posted on the PR
+front-door gate
+  -> FixTask
+       Failure: repo, run id + attempt, exact failed job id + name, tested SHA
+       FixTarget: update bot PR | suggest on contributor PR | open draft PR
+       FixPolicy: backport | general
+
+engine.prepare_fix
+  -> workflow_artifacts.download_job_log(exact job id)
+  -> shallow_clone_at_sha(expected publication commit; full blobless history)
+  -> failing tests = front door's (detector issue) + the log's [err] lines
+  -> prior_fixes.find_prior_fixes(checkout, tests, tested SHA, issue)
+       git log for commits naming the test, changing its file, or
+       referencing the issue: landed since the failing run, or on the
+       default branch and not yet ported here
+  -> reproduce.plan_for(job name, tests) + reproduce(unfixed checkout)
+       build like the job, ./runtest --single --only --loops N --fastfail:
+       once, looped, looped under load; reproduced | not | unrunnable
+  -> loop, at most MAX_ROUNDS:
+       agent.run_fix_agent(task, checkout, job log, feedback, FixContext)
+         FixContext = existing fixes + reproduction + repo test guide
+         one result: port | patch | refuse
+       code checks unchanged HEAD, exact declared paths, complete diagnosis,
+       patch size, and full port SHA
+       a port is cherry-picked (--no-commit) into the checkout
+       verify: the reproduction looped with the candidate, or the agent's
+       own test command failing without it and passing with it
+       agent.review_candidate(candidate, FixContext)
+       failure -> feedback to the next round; a port is undone either way
+
+publish.publish_candidate
+  -> suggestion:
+       revalidate the open PR and post the concrete patch
+  -> existing bot PR:
+       revalidate PR ownership, branch, and exact head
+       apply the patch or cherry-pick the merged upstream commit in a clean clone
+       push one descendant with an exact force-with-lease
+  -> detector issue:
+       revalidate issue occurrence and source-branch head
+       create agent/ci-fix/... and open a draft PR against the tested branch
+       containing Fixes #N (Weekly: Refs #N, titled [<release branch>])
+  -> render the terminal result; never merge
 ```
 
-The defining invariant is the AI/code split plus a hard checkout boundary: the
-AI proposes (which check failed, how to fix, a targeted command, a job hint,
-whether the fix is sound) and code disposes (selects the verifier environment
-from the real failed job, runs the command, owns pass/fail, performs the push).
-The AI never selects where verification runs, never executes a command, and
-never touches the remote. The checkout that runs untrusted test code never
-receives push credentials; publishing applies the approved patch in a fresh
-clone at the gated SHA. This is targeted verification of the one failing check,
-not a replay of the whole CI job.
+`Failure` preserves the exact evidence identity even when publication uses a
+newer commit. PR requests require the run's SHA and branch to equal the current
+PR head. Detector issues require a scheduled `daily.yml` or `weekly.yml`
+occurrence and an exact matching failed job; their candidate is prepared on the
+current tip of the branch that run tested (Daily's own branch, or the release
+branch a Weekly issue records), with both the tested and working SHAs visible
+to the agent. A detector issue's fix reproduces and verifies only that issue's
+test; other tests the same job failed have issues of their own.
 
-Nothing about the test framework is hardcoded. The diagnosis reads the target
-repo's own CI workflow files to learn how it builds and runs tests, and the
-port-discovery and verification logic resolve the default branch from the
-clone (so a repo whose default is `main`, like Valkey Search, works the same as
-Valkey core's `unstable`). The engine is repo-agnostic in principle.
+The agent's structured result contains the failing check, root cause,
+rationale, failure type, changed paths, and optional validation notes. Those
+notes are reviewer evidence, not a trusted CI conclusion. Code rejects
+agent-created commits, a patch whose actual files differ from its declaration,
+an incomplete diagnosis, a malformed or unmerged port, a port already present
+on the target, and an oversized suggestion.
 
-The deployment is not yet fully registry-driven. `ci-fix.yml` and
-`ci-fix-comment-poll.yml` are operationally scoped to `valkey-io/valkey`: the
-workflow guards on the repo, mints a token for it, and the poller watches only
-it. The comment poller runs hourly but uses a shared in-run polling loop to scan
-immediately and again 30 minutes later, avoiding dependence on GitHub's
-scheduled-workflow queue for every half-hour tick. The loop is capped below the
-GitHub App token lifetime. Onboarding another repo (e.g. Valkey Search) still
-needs a registry-driven token/poll/dispatch path in the workflows; the Python
-engine being repo-agnostic is a precondition, not the whole job.
+The publication boundary is intentionally small. The agent subprocess does not
+receive GitHub credentials and cannot push. Code reconstructs the candidate in
+a clean clone, writes only `backport/...`, `agent/backport/...`, or
+`agent/ci-fix/...`, and rechecks the destination immediately before an exact
+lease-protected push. Contributor and fork PRs are never changed; they receive
+only a patch suggestion. Each fix workflow uses one repository-scoped App token
+and one OIDC session for the invocation, matching the existing backport
+operating model.
 
-Every failure mode - un-runnable variant, a real product bug, a flaky test, a
-moved branch, a non-member commenter - returns a `FixOutcome` that becomes an
-explanatory PR comment rather than a silent failure or an unsafe push.
+Target behavior is data-driven but deliberately not a plugin framework.
+`policy.py` has one exhaustive `TargetKind` capability map covering agent
+profile, patch limit, port support, push permission, and branch creation.
+`publish.py` has one exhaustive map from `TargetKind` to the three small target
+handlers. Adding a target therefore requires an explicit capability record and
+publisher, while front doors continue to produce the same `FixTask`.
 
-For local and Docker verification, a push requires a failing baseline first. If
-the command passes before the fix, the agent treats the CI failure as flaky or
-environment-specific and refuses. If the baseline cannot be established because
-the local verifier is missing setup dependencies, the agent may still author and
-skeptically review a patch, but it is returned as a handoff rather than pushed.
+Within `engine.prepare_fix`, nothing is edited before two facts are
+established. `prior_fixes.py` searches the checkout's history (the clone holds
+every branch) for merged commits that name the failing test, change its file
+or a source file the log names (a compile error's), or reference its issue; a
+match on only the leading words of a long test name counts for less. On a
+release branch those are port candidates unless
+a cherry-pick (`-x` trailer or identical subject) is already there, and on the
+default branch one that landed after the failing run means the failure may
+already be fixed. `reproduce.py` turns the job name into Valkey's build and
+`runtest` flags (from Valkey's `daily.yml`) and runs only the failing tests on
+the unfixed code, looped and then with every core busy. A run counts as a
+reproduction only when its output shows one of those tests failing, or a
+valgrind or sanitizer report; a build break or a harness exception outside the
+test is "unrunnable", and so is a pass that ran none of those tests.
+Reproduction may use `REPRO_BUDGET_S` (20 minutes) of
+the 45-minute `PREPARE_BUDGET_S`.
+
+The agent gets both results and the repository's test conventions
+(`ci_fix/guides/<owner>__<repo>.md`, plus the repository's own docs that exist
+in the checkout) and prefers porting a fitting existing fix over writing one.
+A candidate for a bot PR or a draft PR then goes through a feedback loop of at
+most `MAX_ROUNDS` (3) rounds: a port must be merged on the default branch and
+is cherry-picked into the checkout (a conflict goes back to the agent, which
+may adapt it as a patch); the reproduction is looped with the candidate
+applied, under load when that is how it reproduced (10 loops after a failure
+on both plain runs, 40 after an intermittent one, 4 under valgrind), and,
+when code's reproduction never failed or there was none, the agent's
+`test_command`, if given, must fail without the patch
+within `TEST_RUNS` (2) or `FLAKY_TEST_RUNS` (10) tries and pass that many
+times with it; and a confined read-only `ci_fix_review` session, given the
+same conventions and reproduction, must approve it. A failed check or a
+rejection is fed back to the agent, with whether the tree still holds its patch
+(a port round resets it). A
+failure that never reproduced can still be fixed, but the report says the
+fix is unproven. Suggestions are reviewed, never run. Every CI-fix agent
+(`ci_fix_edit`, which has Bash, `ci_fix_review` and `ci_fix_suggest`) and every
+build and test command run as `CI_FIX_AGENT_USER` via
+`scripts/common/isolation.py`; that account cannot read the job's
+`TARGET_TOKEN`, cannot write inside `.git`, and leaves nothing behind. It owns
+the checkout's directory while it runs, so `handed_to` refuses to hand back a
+checkout whose `.git` was replaced (a planted config's filter or merge driver
+would otherwise run as the workflow user), and verification first removes
+every ignored file so a planted binary cannot stand in for the build. `push.py`
+refuses any change under `.github/`, so the tokens have no `workflows` scope.
+
+There is no local/Docker workflow interpreter, macOS verification dispatch,
+prepare/publish state file, or Daily
+reconciliation loop. A pushed commit or newly opened draft PR simply starts
+ordinary target-repository CI, which remains the verification authority.
+
+The rollout is manual-first. `ci-fix.yml`, `ci-fix-comment-poll.yml`,
+`backport-ci-followup.yml`, and `ci-fix-issues.yml` are dispatch-only;
+`ci-fix-issue-dispatch.yml`'s schedule acts only once the
+`CI_FIX_ISSUES_AUTO_DISPATCH` variable is `true`.
+`ci-fix.yml` and its comment poller are currently scoped operationally to
+`valkey-io/valkey`; the shared Python engine is repository-agnostic, while
+onboarding another repository still requires the corresponding workflow token
+and trigger configuration. Detector issue handling has no registry
+enablement setting.
 
 ### Entry Points
 
-- `scripts/ci_fix/main.py` - workflow_dispatch entry point; mints the target and agent-repo tokens
+- `scripts/ci_fix/run.py` - one fix as three jobs (plan, fix, publish) for every front door
+- `scripts/ci_fix/main.py` - authorize and plan one PR request, and report its result
+- `scripts/ci_fix/comment_poll.py` - finds fix commands on PRs and dispatches `ci-fix.yml`
+- `scripts/ci_fix/issues.py` - validate and plan one Daily or Weekly detector issue, recheck it before publication, and report on it
+- `scripts/ci_fix/issue_dispatch.py` - start one issue fix per eligible open Daily issue, up to a cap
+- `scripts/ci_fix/copies.py` - map a failed job to the copied job that hosts its fix, and that job's inputs
+- `scripts/ci_fix/job.sh` - run the fix inside the job that hosts it: the agent's account and checkout
+- `scripts/ci_fix/state.py` - JSON state carried between a fix's jobs
+- `scripts/ci_fix/engine.py` - exact-log checkout, existing-fix search, reproduction, fix/verify/review loop, publication
+- `scripts/ci_fix/prior_fixes.py` - find merged commits that may already fix the failing tests
+- `scripts/ci_fix/reproduce.py` - build and loop the failing Tcl tests with their CI job's commands, or the closest
+- `scripts/ci_fix/guides/` - per-repository test conventions for the fix agent and its reviewer
+- `scripts/valkey_workflows/` - callable per-branch copies of Valkey's `daily.yml`/`ci.yml` with a fix mode (`normalize.py`), their weekly sync, router and job manifest (`sync.py`)
+- `scripts/ci_fix/agent.py` - combined diagnosis-and-edit prompt and structured result parser
+- `scripts/ci_fix/publish.py` - target revalidation and publication adapter
+- `scripts/ci_fix/policy.py` - shared target capabilities, bot identities, and writable namespaces
+- `scripts/ci_fix/issue_state.py` - detector occurrence and linked-PR state readers
 - `scripts/ci_fix/gate.py` - command parsing, fail-closed team auth, SHA-bound run gating
-- `scripts/ci_fix/diagnose.py` - read-only AI diagnosis into a structured proposal (fix + job hint)
-- `scripts/ci_fix/apply.py` - edit-only AI fix application
-- `scripts/ci_fix/runner.py` - sanitized local/Docker command execution that owns the verdict
-- `scripts/ci_fix/review.py` - skeptic review, the apply/run/review loop, and the shared patch helpers
-- `scripts/ci_fix/push.py` - patch handoff, commit (no sign-off), namespace-restricted push
-- `scripts/ci_fix/comment.py` - render the outcome into a PR comment
-- `scripts/ci_fix/pipeline.py` - top-level orchestration; code-owned verifier selection
-- `scripts/ci_fix/models.py` - typed dataclasses for the pipeline
-- `scripts/ci_fix/verify/` - the verifier layer:
-  - `base.py` - VerifyEnv, FailedJob, VerificationPlan, VerificationResult, the VerifyBackend protocol
-  - `workflow_env.py` - classify a failed job's runner (x86 Linux / Docker / macOS / unsupported)
-  - `github_runs.py` - list the jobs that actually failed in a run (code-owned)
-  - `macos.py` - the macOS verifier: dispatch the verify-macos job and wait
-- `.github/workflows/ci-fix-verify-macos.yml` - the macOS verification job
+- `scripts/ci_fix/github_runs.py` - exact-attempt job snapshots and current-head run selection
+- `scripts/ci_fix/push.py` - clean-clone patch/port commit and namespace-restricted push
+- `scripts/ci_fix/comment.py` - render a pushed fix, suggestion, refusal, or failure
+- `scripts/ci_fix/models.py` - `Failure`, `FixTarget`, `FixTask`, `FixCandidate`, and `FixResult`
 
 ## AI Layer
 
@@ -316,7 +421,10 @@ Profiles registered today:
 
 - `conflict_resolve_edit_only` - backport conflict resolution (Read/Edit/Bash, writes allowed)
 - `fuzzer_analysis_readonly` - fuzzer triage (Read/Grep/Glob only, no writes)
-- `ci_fix_diagnose_readonly` - CI-fix diagnosis and skeptic review (Read/Grep/Glob only, no writes)
+- `ci_fix_edit` - combined CI-fix diagnosis and editing for bot-owned branches
+  (Read/Edit/MultiEdit/Write/Grep/Glob/Bash; no commit or push)
+- `ci_fix_suggest` - confined combined diagnosis and editing for contributor
+  patch suggestions (Read/Edit/MultiEdit/Write/Grep; no Bash or Glob)
 - `release_notes_review_edit_only` - one-file current-section release-note edits
   (Read/Edit/MultiEdit/Grep/Glob; no shell or file creation)
 
@@ -327,14 +435,13 @@ Workflow-agnostic helpers in `scripts/common/`:
 - `git_auth.py` - GIT_ASKPASS credential helper
 - `github_client.py` - retry wrapper for GitHub API
 - `text_utils.py` - ANSI stripping for log scanning
-- `workflow_artifacts.py` - list and download GitHub Actions workflow runs
-  and their uploaded artifact bundles, plus `download_run_logs(...)` for a
-  run's raw console logs. Used by the fuzzer flow (artifacts) and the CI-fix
-  flow (run logs).
+- `workflow_artifacts.py` - list and download GitHub Actions workflow runs and
+  their uploaded artifact bundles, plus exact job-console logs. Used by the
+  fuzzer flow (artifacts) and the CI-fix flow (one bound failed-job log).
 - `git_clone.py` - `shallow_clone_at_sha(repo, dest, sha)` - defensive
   shallow clone of a public repo at a specific commit, with input
   validation against argument injection. Gives the AI source access at the
-  tested SHA in both the fuzzer and CI-fix flows.
+  tested or publication-bound SHA in the fuzzer and CI-fix flows.
 - `polling.py` - shared one-shot-or-sustained poll loop helpers for scheduled
   pollers that need a predictable in-run cadence.
 - `proc.py` - `git_output(...)` (run a git command and return stdout) and
@@ -373,13 +480,27 @@ the normal deployment model.
 ## Test Failure Detector Flow
 
 ```text
-main.py (daily cron or manual dispatch)
-  -> get_latest_daily_run() or use provided run_id
-  -> download_all_test_failures() from the run's artifacts
-  -> get_job_urls() for CI links
+main.py (Daily or Weekly cron, or manual dispatch; --workflow daily|weekly)
+  -> get_latest_scheduled_run(workflow file) or use provided run_id
+  -> source_for_run(): Daily or Weekly, from the run's workflow path
+  -> Daily: download_all_test_failures() from the run's artifacts
+     Weekly: no artifact (see below)
+  -> job_urls_for_jobs() for CI links
   -> parse_and_deduplicate() groups by {test_name, test_file}
+  -> find_unrecorded_failures() adds what only the job logs show
+  -> Weekly: split_by_branch() makes one failure per release branch
   -> process_failures() creates/updates GitHub issues
 ```
+
+Valkey's Weekly calls `daily.yml` once per release branch inside one run. The
+run's own branch and SHA are `unstable`'s; each job name carries the branch it
+tested (`run-daily-for-release-branches (8.1) / <job>`), and its log's checkout
+step names the commit. Every call uploads an `all-test-failures` artifact
+under the same name, each merging whichever branches' per-job artifacts
+existed at that moment, so no artifact can be attributed to one branch:
+Weekly failures come from job logs only (`scripts/common/valkey_ci.py`).
+A Weekly failure's issue fingerprint includes its branch, so it is one issue
+per release branch, apart from the Daily issue for the same test.
 
 ### Entry Points
 
@@ -388,6 +509,7 @@ main.py (daily cron or manual dispatch)
 - `scripts/test_failure_detector/parse_failures.py` - JSON parsing and deduplication
 - `scripts/test_failure_detector/manage_issues.py` - orchestration over the shared dedup publisher to create/update issues
 - `scripts/test_failure_detector/issue_renderer.py` - test-failure-specific title/body/comment rendering and label assignment
+- `scripts/common/valkey_ci.py` - Daily vs Weekly runs, a Weekly job's release branch and tested commit, and runtest result lines (shared with the CI-fix engine)
 
 ## Release Notes Flow
 
@@ -677,10 +799,7 @@ raise immediately rather than acting on defaults.
 Future sibling modules and extensions:
 
 - **PR Reviewer** - two-stage code review with skeptic pass
-- **Autonomous CI-fix poller** - the CI-fix engine, driven by a poller that
-  detects red backport PRs (or test-failure issues) instead of a maintainer
-  `@`-mention. Same pipeline, a different front door.
-- **Additional Daily CI Analysis** - detect flaky tests, generate fix PRs
+- **Flaky test detection** - detect flaky tests across Daily runs
 
 
 ## Release automation
