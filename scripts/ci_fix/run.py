@@ -1,8 +1,9 @@
 """Run one CI fix as three jobs: plan, fix, publish.
 
 Every front door runs its fix the same way, through ``ci-fix-run.yml``:
-a maintainer's command on a pull request (:mod:`scripts.ci_fix.main`), and a
-bot-owned pull request's red head (:mod:`scripts.backport.ci_followup`).
+a Test Failure Detector issue (:mod:`scripts.ci_fix.issues`), a maintainer's
+command on a pull request (:mod:`scripts.ci_fix.main`), and a bot-owned pull
+request's red head (:mod:`scripts.backport.ci_followup`).
 
 1. ``plan``: the front door validates its request and binds one exact failed
    job (a :class:`FixPlan`); this module finds the copied Valkey job that can
@@ -11,8 +12,8 @@ bot-owned pull request's red head (:mod:`scripts.backport.ci_followup`).
    after its own setup and build (``scripts/ci_fix/job.sh``), or on the bot's
    own runner. It holds no GitHub token.
 3. ``publish``: the candidate goes out through the front door's publication
-   and report (a push or a suggestion, and a PR comment), also when the fix
-   job failed or never finished.
+   and report (a draft PR and an issue comment, or a push or a suggestion and
+   a PR comment), also when the fix job failed or never finished.
 
 The plan and the fix's outcome pass between the jobs as JSON
 (:mod:`scripts.ci_fix.state`).
@@ -31,6 +32,7 @@ from typing import Any, Callable
 from github import Auth, Github
 
 from scripts.backport import ci_followup
+from scripts.ci_fix import issues
 from scripts.ci_fix import main as pr_command
 from scripts.ci_fix.copies import copy_for, fix_inputs, load_manifest
 from scripts.ci_fix.engine import failed_tests, prepare_fix, publish
@@ -52,6 +54,7 @@ Reporter = Callable[..., "dict[str, Any]"]
 # Each front door: how it plans a request, how its candidate is published
 # (None: as the target says), and how the result is reported.
 _FRONT_DOORS: dict[FrontDoor, tuple[Planner, Callable[..., Any], Reporter]] = {
+    FrontDoor.ISSUE: (issues.plan_request, issues.publisher, issues.report_result),
     FrontDoor.PR: (pr_command.plan_request, lambda _plan, **_kwargs: None, pr_command.report_result),
     FrontDoor.FOLLOW_UP: (ci_followup.plan_request, lambda _plan, **_kwargs: None, ci_followup.report_result),
 }

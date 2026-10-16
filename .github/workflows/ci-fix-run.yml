@@ -1,7 +1,8 @@
 name: CI Fix Run
 
-# One CI fix, whichever front door asked for it: a maintainer's command on a
-# PR (ci-fix.yml), or a bot-owned PR's red head (backport-ci-followup.yml).
+# One CI fix, whichever front door asked for it: a Test Failure Detector issue
+# (ci-fix-issues.yml), a maintainer's command on a PR (ci-fix.yml), or a
+# bot-owned PR's red head (backport-ci-followup.yml).
 #
 #   plan -> fix-in-copy | fix-local -> publish
 #
@@ -17,7 +18,7 @@ on:
   workflow_call:
     inputs:
       front_door:
-        description: "pr or follow-up (scripts/ci_fix/models.py FrontDoor)"
+        description: "issue, pr or follow-up (scripts/ci_fix/models.py FrontDoor)"
         required: true
         type: string
       request:

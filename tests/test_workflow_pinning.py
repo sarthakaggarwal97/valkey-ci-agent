@@ -219,9 +219,11 @@ def test_ci_fix_concurrency_groups_never_drop_a_queued_run():
         "backport-ci-followup.yml": (
             "backport-branch-mutation-${{ matrix.repo }}-${{ matrix.branch }}"
         ),
+        # The whole run of one issue is the unit, not a job of it.
+        "ci-fix-issues.yml": "ci-fix-issue-${{ inputs.issue }}",
     }
     for filename, job_name in (
-        ("ci-fix.yml", "ci-fix"), ("backport-ci-followup.yml", "follow-up"),
+        ("ci-fix.yml", "ci-fix"), ("backport-ci-followup.yml", "follow-up"), ("ci-fix-issues.yml", None),
     ):
         workflow = yaml.load(
             (Path(".github/workflows") / filename).read_text(encoding="utf-8"),
@@ -250,6 +252,7 @@ def test_ci_fix_rollout_is_manual_only():
         "ci-fix-comment-poll.yml",
         "ci-fix.yml",
         "backport-ci-followup.yml",
+        "ci-fix-issues.yml",
     ):
         workflow = yaml.load(
             (Path(".github/workflows") / filename).read_text(encoding="utf-8"),
@@ -285,7 +288,8 @@ def test_every_fix_front_door_runs_the_shared_fix():
     from scripts.ci_fix.models import FrontDoor
 
     doors = set()
-    for filename, job_id in (("ci-fix.yml", "ci-fix"), ("backport-ci-followup.yml", "follow-up")):
+    for filename, job_id in (("ci-fix.yml", "ci-fix"), ("backport-ci-followup.yml", "follow-up"),
+                             ("ci-fix-issues.yml", "fix")):
         job = yaml.safe_load((Path(".github/workflows") / filename).read_text(encoding="utf-8"))["jobs"][job_id]
         assert job["uses"] == f"./{_RUN.as_posix()}", filename
         assert job["permissions"] == {"contents": "read", "id-token": "write"}, filename

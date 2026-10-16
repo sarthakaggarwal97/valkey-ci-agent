@@ -208,9 +208,48 @@ class FixResult:
     pr_url: str = ""
 
 
+@dataclass(frozen=True)
+class IssueFailure:
+    """The failure occurrence recorded in a detector issue body."""
+
+    number: int
+    run_id: int
+    test_name: str = ""
+    test_file: str = ""
+    job_name: str = ""
+    fingerprint: str = ""
+    run_attempt: int = 1
+    # The release branch of a Weekly test failure issue.
+    branch: str = ""
+
+    @property
+    def occurrence(self) -> tuple[int, int]:
+        return self.run_id, self.run_attempt
+
+    @property
+    def failed_tests(self) -> tuple[FailedTest, ...]:
+        if not (self.test_name and self.test_file):
+            return ()
+        return (FailedTest.from_report(self.test_name, self.test_file),)
+
+    def describe(self, job: str, source: Source) -> str:
+        if self.job_name:
+            return f"The {source.label} job `{job}` failed without a recorded test failure."
+        if self.test_name == FILE_TIMEOUT_TEST_NAME:
+            return (
+                f"A test client running `{self.test_file}` timed out without "
+                f"reporting a test name in {source.label} job `{job}`."
+            )
+        return (
+            f"`{self.test_name}` in `{self.test_file}` failed in {source.label} job "
+            f"`{job}`."
+        )
+
+
 class FrontDoor(str, Enum):
     """Where a fix request came from: it decides how the result is published and reported."""
 
+    ISSUE = "issue"  # a Test Failure Detector issue (scripts/ci_fix/issues.py)
     PR = "pr"  # a maintainer's command on a PR (scripts/ci_fix/main.py)
     FOLLOW_UP = "follow-up"  # a bot-owned PR's red head (scripts/backport/ci_followup.py)
 
@@ -222,6 +261,8 @@ class FixPlan:
     front_door: FrontDoor
     task: FixTask
     job_log: str = ""
+    # ISSUE: the occurrence the issue records; publication rechecks it.
+    issue: Optional[IssueFailure] = None
     # PR: the command comment, which gets the outcome as a reaction.
     comment_id: int = 0
     # FOLLOW-UP: the markers that retire the job once its result is terminal.
