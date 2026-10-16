@@ -5,6 +5,9 @@ name: CI Fix Issues
 # and human review decide whether it is mergeable; this workflow never merges.
 # The fix runs like every other (ci-fix-run.yml), inside the copied Valkey job
 # that failed when one can host it.
+# ci-fix-issue-dispatch.yml finds active runs for an issue by this name.
+run-name: "CI fix issue #${{ inputs.issue }}"
+
 on:
   workflow_dispatch:
     inputs:

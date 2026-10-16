@@ -261,6 +261,28 @@ def test_ci_fix_rollout_is_manual_only():
         assert set(workflow["on"]) == {"workflow_dispatch"}, filename
 
 
+def test_the_issue_dispatcher_schedule_waits_for_its_switch_and_never_writes_valkey():
+    workflow = yaml.load(Path(".github/workflows/ci-fix-issue-dispatch.yml").read_text(encoding="utf-8"),
+                         Loader=yaml.BaseLoader)
+    job = workflow["jobs"]["dispatch"]
+    assert "vars.CI_FIX_ISSUES_AUTO_DISPATCH == 'true'" in job["if"]
+    assert "github.event_name == 'workflow_dispatch'" in job["if"]
+    steps = {step.get("name"): step for step in job["steps"]}
+    token = steps["Generate target repository token"]["with"]
+    assert token["repositories"] == "valkey"
+    assert {k: v for k, v in token.items() if k.startswith("permission-")} == {
+        "permission-issues": "read", "permission-pull-requests": "read", "permission-metadata": "read",
+    }
+
+
+def test_ci_fix_issue_runs_are_named_for_the_dispatcher():
+    from scripts.ci_fix.issue_dispatch import RUN_NAME
+
+    workflow = yaml.load(Path(".github/workflows/ci-fix-issues.yml").read_text(encoding="utf-8"),
+                         Loader=yaml.BaseLoader)
+    assert RUN_NAME.match(workflow["run-name"].replace("${{ inputs.issue }}", "123"))
+
+
 def test_llvm_dependent_jobs_stay_on_ubuntu_24_04():
     jobs = {
         "backport.yml": "backport",
