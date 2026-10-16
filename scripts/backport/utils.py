@@ -9,6 +9,12 @@ _CONFLICT_MARKERS = re.compile(
     re.MULTILINE,
 )
 _TRAILER_LINE = re.compile(r"^[A-Za-z0-9-]+:\s*.*$")
+_MANUAL_BACKPORT_COMMIT_SUBJECT = re.compile(
+    r"^\s*(?:\[(?:Backport\b[^\]]*|\d+\.\d+)\]\s+"
+    r"|Backport\s+\d+\.\d+\s*:\s*).*"
+    r"\(#(\d+)\)\s+\(#\d+\)\s*$",
+    re.IGNORECASE,
+)
 
 
 def build_branch_name(source_pr_number: int, target_branch: str) -> str:
@@ -55,6 +61,20 @@ def pr_numbers_from_commit_messages(messages: list[str]) -> set[int]:
             if trailer:
                 numbers.add(int(trailer.group(1)))
     return numbers
+
+
+def source_pr_from_backport_commit_subject(subject: str) -> int | None:
+    """Return the source PR from a release-prefixed backport commit subject.
+
+    GitHub appends the backport PR number to a squash-merged title, producing
+    subjects such as ``[9.0] Fix bug (#3548) (#4182)`` or
+    ``Backport 8.1: Fix bug (#3430) (#3513)``. The first trailing number is the
+    source PR and the second is the backport PR. Requiring a recognized
+    release/backport prefix avoids treating an ordinary reference in subjects
+    such as ``Revert "... (#3544)" (#3756)`` as shipped code.
+    """
+    match = _MANUAL_BACKPORT_COMMIT_SUBJECT.match(subject)
+    return int(match.group(1)) if match else None
 
 
 def _terminal_trailer_block(lines: list[str]) -> list[str]:

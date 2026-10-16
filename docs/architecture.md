@@ -113,9 +113,41 @@ applying a stricter machine gate to the bot-owned sweep PR and SHA. A moved head
 cannot be pushed because the shared push path independently requires the remote
 head to equal the failed SHA.
 
+### Eligibility
+
+`backport-eligibility.yml` runs at 00:30 UTC and looks at every PR merged to
+the development branch on the last three UTC days, so a day one run missed is
+covered by the next. It suggests backports; putting a PR on a project board
+stays a maintainer decision.
+
+```text
+eligibility.py
+  -> GraphQL search: PRs merged into the default branch in that window
+  -> skip PRs that already carry the eligibility marker comment
+  -> git blame the lines each PR modifies or deletes, and the lines on
+     either side of what it only inserts, at its parent, looking through
+     .git-blame-ignore-revs
+       PR that only adds files -> not eligible
+  -> per registered branch, a commit that introduced those lines is
+     an ancestor, or its PR was backported there -> candidate branch
+       drop branches the PR already landed on or is queued on
+  -> Claude (no tools) sees the diff and which branches carry each
+     introducing commit; answers backport yes/no and a subset of the
+     candidate branches
+  -> one marker comment per eligible PR naming the branches and projects
+```
+
+History bounds the branches and the model can only narrow them, so a fix to a
+feature that arrived after a release line forked is not offered to that line
+even when it touches an older signature. Whatever history cannot answer (a
+PR too large to blame, an unreadable branch, a git failure) and a missing or
+unparseable verdict post nothing for that PR and fail the run; the other PRs
+are still judged, and comments go out after each model batch.
+
 ### Entry Points
 
 - `scripts/backport/sweep.py` - daily sweep across registered repos and release branches
+- `scripts/backport/eligibility.py` - daily backport-eligibility comments on newly merged PRs
 - `scripts/backport/poller.py` - short-cron poll that sweeps a branch only when no sweep PR is open
 - `scripts/backport/ci_followup.py` - guarded current-head CI follow-up for open sweep PRs
 - `scripts/backport/main.py` - single-PR backport (manual dispatch)

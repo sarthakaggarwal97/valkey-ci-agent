@@ -83,6 +83,23 @@ def git_output(repo_dir: str, *args: str, timeout: int = _GIT_TIMEOUT_S) -> str:
     return result.stdout
 
 
+def is_ancestor(repo_dir: str, ancestor: str, descendant: str) -> bool | None:
+    """True/False for a definite ``git merge-base --is-ancestor`` answer.
+
+    git exits 1 for "not an ancestor" and anything else (128 for a bad object,
+    a timeout, a scrubbed-config refusal) for a broken question. Only the
+    definite 1 is False; a broken question is None so callers cannot mistake
+    an unreadable history for a negative answer.
+    """
+    try:
+        git_output(repo_dir, "merge-base", "--is-ancestor", ancestor, descendant)
+    except subprocess.CalledProcessError as exc:
+        return False if exc.returncode == 1 else None
+    except subprocess.TimeoutExpired:
+        return None
+    return True
+
+
 def run_git(
     repo_dir: str | None,
     *args: str,

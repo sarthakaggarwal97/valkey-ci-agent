@@ -26,7 +26,10 @@ from datetime import datetime
 from typing import Any
 
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
-from scripts.backport.utils import pr_numbers_from_commit_messages
+from scripts.backport.utils import (
+    pr_numbers_from_commit_messages,
+    source_pr_from_backport_commit_subject,
+)
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import (
@@ -124,21 +127,40 @@ def prs_present_in_history(
     """
     if not pr_merged_at:
         return set()
+    return present_in_index(branch_pr_index(repo_dir, rev), pr_merged_at)
 
-    merge_times = {
-        number: _parse_timestamp(merged_at)
-        for number, merged_at in pr_merged_at.items()
-    }
-    applied: set[int] = set()
+
+def branch_pr_index(repo_dir: str, rev: str) -> dict[int, datetime]:
+    """Map every PR number ``rev``'s history names to its latest commit time.
+
+    A PR is present once any commit naming it was committed at or after the
+    PR merged, so the latest such time is all :func:`present_in_index` needs.
+    Build this once per branch to answer many PRs from one ``git log``.
+    """
+    index: dict[int, datetime] = {}
     for committed_at, message in _branch_commit_records(repo_dir, rev):
         matched = pr_numbers_from_commit_messages([message])
+        lines = message.splitlines()
+        subject = lines[0] if lines else ""
+        source_pr = source_pr_from_backport_commit_subject(subject)
+        if source_pr is not None:
+            matched.add(source_pr)
         applied_section = _markdown_section(message, "Applied")
         if applied_section:
             matched.update(_pr_numbers_from_table_cells(applied_section))
-        for number in matched & merge_times.keys():
-            if committed_at >= merge_times[number]:
-                applied.add(number)
-    return applied
+        for number in matched:
+            if number not in index or committed_at > index[number]:
+                index[number] = committed_at
+    return index
+
+
+def present_in_index(index: dict[int, datetime], pr_merged_at: dict[int, str]) -> set[int]:
+    """Return which PRs in ``pr_merged_at`` a :func:`branch_pr_index` carries."""
+    return {
+        number
+        for number, merged_at in pr_merged_at.items()
+        if number in index and index[number] >= _parse_timestamp(merged_at)
+    }
 
 
 def _parse_timestamp(value: str) -> datetime:

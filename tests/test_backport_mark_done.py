@@ -399,6 +399,13 @@ def test_prs_present_in_history_reads_the_requested_ref(tmp_path) -> None:
         "| #4778 | Fix throttle-repl deadlock | |\n",
         committed_at="2026-09-28T15:53:06Z",
     )
+    (repo / "f").write_text("manual backport")
+    git(
+        "commit", "-qam",
+        "[9.0] Fix lua-enable-insecure-api default value "
+        "cannot be changed to yes (#3548) (#4182)",
+        committed_at="2026-09-28T15:53:07Z",
+    )
     # A sweep branch checked out on top must not change the answer for the
     # release ref.
     git("checkout", "-qb", "agent/backport/sweep/9.2")
@@ -411,11 +418,12 @@ def test_prs_present_in_history_reads_the_requested_ref(tmp_path) -> None:
         {
             4673: "2026-09-25T17:21:22Z",  # trailer and subject
             4778: "2026-09-27T00:00:00Z",  # sweep Applied table
+            3548: "2026-04-27T03:04:15Z",  # manual backport subject
             4746: "2026-09-28T13:17:01Z",  # only on the sweep branch
             4800: "2026-09-28T00:00:00Z",  # never landed
         },
     )
-    assert present == {4673, 4778}
+    assert present == {3548, 4673, 4778}
 
     # A matching commit older than the source PR's merge is a collision.
     assert mark_done.prs_present_in_history(

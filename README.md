@@ -53,6 +53,8 @@ The currently active workflow. Cherry-picks merged PRs onto release branches wit
 
 Manual single-PR backports are also supported via `workflow_dispatch`.
 
+A daily eligibility pass (`backport-eligibility.yml`) comments on PRs merged to the development branch that look worth backporting, naming the release branches that carry the changed code. It only suggests; maintainers still add the PR to the project boards.
+
 ### Registry (`repos.yml`)
 
 The registry is the single source of truth. To onboard a new repo, add an entry to `repos.yml`:
