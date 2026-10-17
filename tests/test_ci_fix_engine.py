@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -14,10 +12,8 @@ from scripts.ci_fix.models import (
     Failure,
     FixCandidate,
     FixPolicy,
-    FixResult,
     FixTarget,
     FixTask,
-    ResultKind,
     TargetKind,
 )
 from scripts.ci_fix.reproduce import TestRun

@@ -230,7 +230,6 @@ class TestIsWhitespaceOnlyConflictProperty:
     @settings(max_examples=100, deadline=None)
     def test_whitespace_variations_detected(self, base: str) -> None:
         """Adding whitespace-only changes to a string is detected as whitespace-only."""
-        import re
 
         # Create a version with whitespace modifications:
         # replace each whitespace char with a different whitespace sequence

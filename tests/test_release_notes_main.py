@@ -216,7 +216,7 @@ def test_malformed_date_is_usage_error(bad_date):
 
 
 def test_valid_iso_date_accepted(patched):
-    captured = _capture_cut(patched)
+    _capture_cut(patched)
     rc = main(["--token", "t", "--version", "9.1.0",
                "--stage", "rc2", "--urgency", "LOW", "--date", "2026-06-30"])
     assert rc == 0

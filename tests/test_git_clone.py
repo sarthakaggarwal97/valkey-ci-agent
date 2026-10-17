@@ -1,10 +1,7 @@
 """Tests for shallow git-clone helper."""
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import patch
-
-import pytest
 
 from scripts.common.git_clone import is_full_sha, shallow_clone_at_sha
 

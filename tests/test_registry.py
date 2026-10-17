@@ -11,7 +11,6 @@ from scripts.backport.registry import (
     BranchEntry,
     GeneratedFileRule,
     Registry,
-    RepoEntry,
     ValidationRule,
     load_registry,
 )

@@ -9,8 +9,6 @@ because the typed property mis-parses the ``{"identifier": ...}`` payload.
 
 from __future__ import annotations
 
-import pytest
-
 from scripts.release_notes import security as sec
 
 

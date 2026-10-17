@@ -7,16 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# PyGithub requires urllib3 v2 + OpenSSL 1.1.1+. On older dev hosts the import
-# fails at collection time. Guard with a skip so the test file is still valid.
-try:
-    from scripts.test_failure_detector import main as detector_main
-
-    _SKIP_REASON = None
-except ImportError as _exc:
-    _SKIP_REASON = f"PyGithub import failed: {_exc}"
-
-pytestmark = pytest.mark.skipif(_SKIP_REASON is not None, reason=_SKIP_REASON or "")
+from scripts.test_failure_detector import main as detector_main
 
 
 @pytest.fixture(autouse=True)

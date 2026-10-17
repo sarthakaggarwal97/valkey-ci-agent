@@ -106,7 +106,6 @@ class TestGroupBullets:
         # Maintainer-reviewed order from the first 9.2.0-rc1 cut: the notes
         # open with what the release adds, and Behavior Changes sits at the
         # bottom, above only the catch-all.
-        fmt = _fmt()
         bullets = [
             _bullet(3, "a", "Bug Fixes", "b"),
             _bullet(1, "a", "Behavior Changes", "c"),
@@ -140,7 +139,6 @@ class TestGroupBullets:
         assert set(grouped).issubset(set(fmt.CATEGORIES))
 
     def test_reserved_sections_refused(self) -> None:
-        fmt = _fmt()
         grouped = group_bullets(
             [_bullet(1, "a", "Security Fixes", "x"), _bullet(2, "a", "Contributors", "y")]
         )
@@ -149,14 +147,12 @@ class TestGroupBullets:
     def test_reserved_section_refused_case_insensitively(self) -> None:
         # A lowercase "security fixes" must be refused too, not coerced into the
         # catch-all where it would ship next to the real auto-generated section.
-        fmt = _fmt()
         grouped = group_bullets(
             [_bullet(1, "a", "security fixes", "x"), _bullet(2, "a", "CONTRIBUTORS", "y")]
         )
         assert grouped == {}
 
     def test_multiple_bullets_same_category(self) -> None:
-        fmt = _fmt()
         grouped = group_bullets(
             [_bullet(1, "a", "Bug Fixes", "one"), _bullet(2, "b", "Bug Fixes", "two")]
         )

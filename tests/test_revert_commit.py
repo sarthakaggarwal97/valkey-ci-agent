@@ -6,12 +6,7 @@ import pytest
 
 from scripts.backport import revert_commit as rc
 from scripts.backport import sweep_git
-
-
-def _git(cwd, *args):
-    return subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, check=True
-    ).stdout.strip()
+from tests.git_helpers import git
 
 
 @pytest.fixture
@@ -30,19 +25,19 @@ def fork(tmp_path, monkeypatch):
     work = tmp_path / "work"
     subprocess.run(["git", "clone", "-q", str(bare), str(work)], check=True)
 
-    _git(work, "checkout", "-q", "-b", "8.0")
+    git(work, "checkout", "-q", "-b", "8.0")
     (work / "base.txt").write_text("base\n")
-    _git(work, "add", "base.txt")
-    _git(work, "commit", "-q", "-m", "base commit")
-    base_sha = _git(work, "rev-parse", "HEAD")
-    _git(work, "push", "-q", "origin", "8.0")
+    git(work, "add", "base.txt")
+    git(work, "commit", "-q", "-m", "base commit")
+    base_sha = git(work, "rev-parse", "HEAD")
+    git(work, "push", "-q", "origin", "8.0")
 
-    _git(work, "checkout", "-q", "-b", "agent/backport/sweep/8.0")
+    git(work, "checkout", "-q", "-b", "agent/backport/sweep/8.0")
     (work / "feature.txt").write_text("feature\n")
-    _git(work, "add", "feature.txt")
-    _git(work, "commit", "-q", "-m", "backported feature")
-    agent_sha = _git(work, "rev-parse", "HEAD")
-    _git(work, "push", "-q", "origin", "agent/backport/sweep/8.0")
+    git(work, "add", "feature.txt")
+    git(work, "commit", "-q", "-m", "backported feature")
+    agent_sha = git(work, "rev-parse", "HEAD")
+    git(work, "push", "-q", "origin", "agent/backport/sweep/8.0")
 
     monkeypatch.setattr("scripts.backport.sweep_git.github_https_url", lambda _r: str(bare))
     monkeypatch.setattr(rc, "_note_pr", lambda *a, **k: None)
@@ -50,16 +45,16 @@ def fork(tmp_path, monkeypatch):
 
 
 def _agent_head(work):
-    _git(work, "fetch", "-q", "origin")
-    return _git(work, "rev-parse", "origin/agent/backport/sweep/8.0")
+    git(work, "fetch", "-q", "origin")
+    return git(work, "rev-parse", "origin/agent/backport/sweep/8.0")
 
 
 def test_reverts_agent_commit(fork):
     _, work, _base, agent_sha = fork
     rc.revert_commit("o/r", "agent/backport/sweep/8.0", agent_sha, token="", base_branch="8.0")
 
-    _git(work, "fetch", "-q", "origin")
-    subjects = _git(work, "log", "--format=%s", "origin/agent/backport/sweep/8.0").splitlines()
+    git(work, "fetch", "-q", "origin")
+    subjects = git(work, "log", "--format=%s", "origin/agent/backport/sweep/8.0").splitlines()
     assert subjects[0] == 'Revert "backported feature"'
     assert "backported feature" in subjects
 
@@ -92,8 +87,8 @@ def test_unknown_sha_is_reported_as_missing_not_as_a_base_commit(fork):
 def test_conflicting_revert_names_the_conflicting_path(fork):
     _, work, _base, agent_sha = fork
     (work / "feature.txt").write_text("feature, edited later\n")
-    _git(work, "commit", "-q", "-am", "later edit")
-    _git(work, "push", "-q", "origin", "agent/backport/sweep/8.0")
+    git(work, "commit", "-q", "-am", "later edit")
+    git(work, "push", "-q", "origin", "agent/backport/sweep/8.0")
     before = _agent_head(work)
 
     with pytest.raises(RuntimeError, match="overlaps it. Conflicts: feature.txt"):

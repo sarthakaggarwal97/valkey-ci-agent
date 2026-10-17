@@ -624,7 +624,7 @@ class TestCutOrchestration:
 
     def test_rc1_prs_prep_branch_into_target(self, monkeypatch, clone):
         from unittest.mock import MagicMock
-        calls = self._setup(monkeypatch, clone, line_exists={"9.1": True})
+        self._setup(monkeypatch, clone, line_exists={"9.1": True})
         repo = MagicMock()
         repo.get_pulls.return_value = []
         created = []
@@ -763,7 +763,7 @@ class TestCutOrchestration:
 
         from scripts.release_notes.models import MergedPR
         triage = (MergedPR(number=7, title="Untagged | thing", author="bob", url="https://x/7"),)
-        calls = self._setup(monkeypatch, clone, line_exists={"9.1": True}, triage=triage)
+        self._setup(monkeypatch, clone, line_exists={"9.1": True}, triage=triage)
         repo = MagicMock()
         repo.get_pulls.return_value = []
         created = []
@@ -889,7 +889,7 @@ class TestCutOrchestration:
     def test_rc_out_of_sequence_warned_in_pr_body(self, monkeypatch, clone):
         # rc2 dispatched: the sequence warning must surface in the PR body.
         from unittest.mock import MagicMock
-        calls = self._setup(monkeypatch, clone, line_exists={"9.1": True})
+        self._setup(monkeypatch, clone, line_exists={"9.1": True})
         monkeypatch.setattr(rc, "_warn_rc_sequence", lambda *a, **k: "rc2 out-of-seq: expected rc1")
         repo = MagicMock()
         repo.get_pulls.return_value = []
@@ -915,7 +915,7 @@ class TestCutOrchestration:
     def test_in_sequence_rc_has_no_warning_in_pr_body(self, monkeypatch, clone):
         # rc1 first cut is in sequence: no warning section in the body.
         from unittest.mock import MagicMock
-        calls = self._setup(monkeypatch, clone, line_exists={"9.1": True})
+        self._setup(monkeypatch, clone, line_exists={"9.1": True})
         repo = MagicMock()
         repo.get_pulls.return_value = []
         created = []

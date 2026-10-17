@@ -6,34 +6,22 @@ import re
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-# PyGithub requires urllib3 v2 + OpenSSL 1.1.1+. On older dev hosts the import
-# fails at collection time. Guard with a skip so the test file is still valid.
-try:
-    from scripts.test_failure_detector.issue_renderer import (
-        MARKER_NAMESPACE,
-        _build_body,
-        _build_title,
-        _extract_environments_from_body,
-        _extract_error_from_body,
-        _update_environments_in_body,
-        fingerprint_for,
-        renderer_for,
-        title_for,
-    )
-    from scripts.test_failure_detector.manage_issues import (
-        CLOSED_ISSUE_LOOKBACK,
-        process_failures,
-    )
-    from scripts.test_failure_detector.parse_failures import JobReference, UniqueFailure
-
-    _SKIP_REASON = None
-except ImportError as _exc:
-    _SKIP_REASON = f"PyGithub import failed: {_exc}"
-
-pytestmark = pytest.mark.skipif(_SKIP_REASON is not None, reason=_SKIP_REASON or "")
-
+from scripts.test_failure_detector.issue_renderer import (
+    MARKER_NAMESPACE,
+    _build_body,
+    _build_title,
+    _extract_environments_from_body,
+    _extract_error_from_body,
+    _update_environments_in_body,
+    fingerprint_for,
+    renderer_for,
+    title_for,
+)
+from scripts.test_failure_detector.manage_issues import (
+    CLOSED_ISSUE_LOOKBACK,
+    process_failures,
+)
+from scripts.test_failure_detector.parse_failures import JobReference, UniqueFailure
 
 # --- Helper fixtures ---
 

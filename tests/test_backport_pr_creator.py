@@ -12,7 +12,6 @@ from scripts.backport.pr_creator import (
     BackportPRCreator,
     build_pull_create_head_ref,
     build_pull_search_head_ref,
-    create_pull_from_push_repo,
     pull_matches_push_repo,
 )
 from scripts.backport.utils import build_branch_name, build_pr_title

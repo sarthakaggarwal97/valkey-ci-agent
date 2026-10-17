@@ -139,7 +139,6 @@ def test_is_ancestor_separates_no_from_unknown(tmp_path):
 
 # --- repo- and user-controlled git config must never execute -------------------------
 
-import os  # noqa: E402
 
 from scripts.common.proc import build_approved_patch, worktree_changed_paths  # noqa: E402
 

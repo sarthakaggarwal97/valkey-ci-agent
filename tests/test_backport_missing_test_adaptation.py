@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,6 +10,7 @@ from scripts.backport.missing_test_adaptation import (
     is_test_path,
 )
 from scripts.backport.models import BackportCandidate
+from tests.git_helpers import git
 
 SEARCH_TEST_PATTERNS = (
     "testing/*.cc",
@@ -18,15 +18,6 @@ SEARCH_TEST_PATTERNS = (
     "integration/test_*.py",
 )
 
-
-def _git(repo: Path, *args: str) -> None:
-    subprocess.run(
-        ["git", *args],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
 
 
 def test_valkey_search_test_layout_is_registry_extensible() -> None:
@@ -45,18 +36,18 @@ def test_adaptation_rejects_repository_symlink_without_touching_target(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "config", "user.email", "test@example.com")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Test")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "commit.gpgsign", "false")
     tests_dir = repo / "testing"
     tests_dir.mkdir()
     victim = tmp_path / "outside.cc"
     victim.write_text("outside original\n", encoding="utf-8")
     link = tests_dir / "acl_test.cc"
     link.symlink_to(victim)
-    _git(repo, "add", "testing/acl_test.cc")
-    _git(repo, "commit", "-q", "-m", "tracked test symlink")
+    git(repo, "add", "testing/acl_test.cc")
+    git(repo, "commit", "-q", "-m", "tracked test symlink")
 
     def fake_agent(_profile, _prompt, *, cwd):
         sandbox_path = Path(cwd, "testing", "acl_test.cc")
@@ -92,15 +83,15 @@ def test_adaptation_reports_removed_existing_test_without_deleting_it(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "config", "user.email", "test@example.com")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Test")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "commit.gpgsign", "false")
     test_path = repo / "testing" / "acl_test.cc"
     test_path.parent.mkdir()
     test_path.write_text("TEST(ACL, Existing) {}\n", encoding="utf-8")
-    _git(repo, "add", "testing/acl_test.cc")
-    _git(repo, "commit", "-q", "-m", "existing test")
+    git(repo, "add", "testing/acl_test.cc")
+    git(repo, "commit", "-q", "-m", "existing test")
 
     def fake_agent(_profile, _prompt, *, cwd):
         Path(cwd, "testing", "acl_test.cc").unlink()
@@ -137,16 +128,16 @@ def test_adaptation_hides_cleanly_added_upstream_test_from_editable_sandbox(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "config", "user.email", "test@example.com")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Test")
+    git(repo, "config", "user.email", "test@example.com")
     native = repo / "testing/acl_test.cc"
     native.parent.mkdir()
     native.write_text("TEST(ACL, Existing) {}\n", encoding="utf-8")
     added = repo / "testing/new_test.cc"
     added.write_text("TEST(NewTest, Works) {}\n", encoding="utf-8")
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "candidate")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "candidate")
 
     def fake_agent(_profile, _prompt, *, cwd):
         assert not Path(cwd, "testing/new_test.cc").exists()

@@ -1,12 +1,7 @@
 from scripts.ci_fix.models import (
     CandidateAction,
     Failure,
-    FailureType,
-    FixCandidate,
     FixPolicy,
-    FixResult,
-    FixTarget,
-    FixTask,
     ResultKind,
     TargetKind,
 )

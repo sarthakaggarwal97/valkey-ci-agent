@@ -50,10 +50,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = [
-    "F401",  # test fixtures often reuse imports
     "F811",  # test fixtures often rebind names
     "E402",  # test files frequently set up sys.path before imports
-    "F841",  # test bindings sometimes kept for documentation
     "E741",  # ambiguous names in tests
 ]
 # Scripts with deliberate late imports (sys.path shim before scripts.*)

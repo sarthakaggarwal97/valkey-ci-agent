@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from github.GithubException import GithubException
 
 from scripts.backport import candidate_apply, sweep_git, sweep_validation
 from scripts.backport import sweep as backport_sweep
@@ -55,11 +54,11 @@ from scripts.backport.sweep_validation import (
     build_validation_repair_prompt,
     repair_validation_failure_with_claude,
     run_test_commands,
-    validate_backport_branch,
 )
 from scripts.common import github_graphql
 from scripts.common.git_auth import GitAuth
 from scripts.common.logging_utils import LOG_HIGHLIGHT_RULE
+from tests.git_helpers import git
 
 
 def _candidate_apply_process(fake_run):
@@ -2597,18 +2596,6 @@ def test_process_branch_skips_already_applied_without_reapplying(monkeypatch):
     assert pushed == [("agent/backport/sweep/8.1", True)]
 
 
-def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    full_env = dict(os.environ)
-    full_env.update(env or {})
-    return subprocess.run(
-        ["git", *args],
-        cwd=str(repo),
-        check=True,
-        capture_output=True,
-        text=True,
-        env=full_env,
-    )
-
 
 def test_adapt_target_missing_tests_accepts_edit_beyond_prompt_path_cap(
     tmp_path,
@@ -2621,10 +2608,10 @@ def test_adapt_target_missing_tests_accepts_edit_beyond_prompt_path_cap(
 
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Local Committer")
-    _git(repo, "config", "user.email", "committer@local.invalid")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Local Committer")
+    git(repo, "config", "user.email", "committer@local.invalid")
+    git(repo, "config", "commit.gpgsign", "false")
     (repo / "src").mkdir()
     (repo / "tests" / "unit").mkdir(parents=True)
     (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
@@ -2637,10 +2624,10 @@ def test_adapt_target_missing_tests_accepts_edit_beyond_prompt_path_cap(
     (repo / "tests" / "unit" / "zzz.tcl").write_text(
         "start_server {} {}\n", encoding="utf-8"
     )
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "base")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "base")
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
-    _git(repo, "add", "src/networking.c")
+    git(repo, "add", "src/networking.c")
 
     def fake_run_agent(profile, prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
@@ -2677,18 +2664,18 @@ def test_adapt_target_missing_tests_accepts_edit_beyond_prompt_path_cap(
 def test_adapt_target_missing_tests_stages_branch_native_test(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Local Committer")
-    _git(repo, "config", "user.email", "committer@local.invalid")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Local Committer")
+    git(repo, "config", "user.email", "committer@local.invalid")
+    git(repo, "config", "commit.gpgsign", "false")
     (repo / "src").mkdir()
     (repo / "tests" / "unit").mkdir(parents=True)
     (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
     (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "base")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "base")
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
-    _git(repo, "add", "src/networking.c")
+    git(repo, "add", "src/networking.c")
 
     def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
@@ -2720,26 +2707,26 @@ def test_adapt_target_missing_tests_stages_branch_native_test(tmp_path):
 
     assert result.adapted_paths == ["tests/unit/networking.tcl"]
     assert result.summary == "ported target-missing test coverage to: tests/unit/networking.tcl"
-    staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
+    staged = git(repo, "diff", "--cached", "--name-only").splitlines()
     assert staged == ["src/networking.c", "tests/unit/networking.tcl"]
 
 
 def test_adapt_target_missing_tests_allows_existing_c_unit_test(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Local Committer")
-    _git(repo, "config", "user.email", "committer@local.invalid")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Local Committer")
+    git(repo, "config", "user.email", "committer@local.invalid")
+    git(repo, "config", "commit.gpgsign", "false")
     (repo / "src" / "unit").mkdir(parents=True)
     (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
     (repo / "src" / "unit" / "test_quicklist.c").write_text(
         "int quicklist_test(void) { return 0; }\n", encoding="utf-8"
     )
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "base")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "base")
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
-    _git(repo, "add", "src/networking.c")
+    git(repo, "add", "src/networking.c")
 
     def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
@@ -2771,7 +2758,7 @@ def test_adapt_target_missing_tests_allows_existing_c_unit_test(tmp_path):
     assert result.fatal is False
     assert result.adapted_paths == ["src/unit/test_quicklist.c"]
     assert result.summary == "ported target-missing test coverage to: src/unit/test_quicklist.c"
-    staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
+    staged = git(repo, "diff", "--cached", "--name-only").splitlines()
     assert staged == ["src/networking.c", "src/unit/test_quicklist.c"]
 
 
@@ -2803,18 +2790,18 @@ def test_missing_test_context_uses_diff_for_modify_delete_conflict(tmp_path):
 def test_adapt_target_missing_tests_fails_closed_on_production_edit(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Local Committer")
-    _git(repo, "config", "user.email", "committer@local.invalid")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Local Committer")
+    git(repo, "config", "user.email", "committer@local.invalid")
+    git(repo, "config", "commit.gpgsign", "false")
     (repo / "src").mkdir()
     (repo / "tests" / "unit").mkdir(parents=True)
     (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
     (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "base")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "base")
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
-    _git(repo, "add", "src/networking.c")
+    git(repo, "add", "src/networking.c")
 
     def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
@@ -2849,20 +2836,20 @@ def test_adapt_target_missing_tests_fails_closed_on_production_edit(tmp_path):
 def test_adapt_target_missing_tests_rejects_ignored_sandbox_edit(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Local Committer")
-    _git(repo, "config", "user.email", "committer@local.invalid")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Local Committer")
+    git(repo, "config", "user.email", "committer@local.invalid")
+    git(repo, "config", "commit.gpgsign", "false")
     (repo / "src").mkdir()
     (repo / "tests" / "unit").mkdir(parents=True)
     (repo / ".gitignore").write_text("ignored.cfg\n", encoding="utf-8")
     (repo / "ignored.cfg").write_text("before\n", encoding="utf-8")
     (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
     (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "base")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "base")
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
-    _git(repo, "add", "src/networking.c")
+    git(repo, "add", "src/networking.c")
 
     def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
@@ -2891,25 +2878,25 @@ def test_adapt_target_missing_tests_rejects_ignored_sandbox_edit(tmp_path):
     assert result.fatal is True
     assert "invalid generated test path(s): ignored.cfg" in result.summary
     assert (repo / "ignored.cfg").read_text(encoding="utf-8") == "before\n"
-    staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
+    staged = git(repo, "diff", "--cached", "--name-only").splitlines()
     assert staged == ["src/networking.c"]
 
 
 def test_adapt_target_missing_tests_fails_closed_on_production_unstage(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Local Committer")
-    _git(repo, "config", "user.email", "committer@local.invalid")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Local Committer")
+    git(repo, "config", "user.email", "committer@local.invalid")
+    git(repo, "config", "commit.gpgsign", "false")
     (repo / "src").mkdir()
     (repo / "tests" / "unit").mkdir(parents=True)
     (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
     (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "base")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "base")
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
-    _git(repo, "add", "src/networking.c")
+    git(repo, "add", "src/networking.c")
 
     def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
@@ -2943,25 +2930,25 @@ def test_adapt_target_missing_tests_fails_closed_on_production_unstage(tmp_path)
     assert "invalid generated test path(s): src/networking.c" in result.summary
     assert (repo / "src" / "networking.c").read_text(encoding="utf-8") == "int fix = 1;\n"
     assert (repo / "tests" / "unit" / "networking.tcl").read_text(encoding="utf-8") == "start_server {} {}\n"
-    staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
+    staged = git(repo, "diff", "--cached", "--name-only").splitlines()
     assert staged == ["src/networking.c"]
 
 
 def test_adapt_target_missing_tests_rolls_back_on_agent_failure(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Local Committer")
-    _git(repo, "config", "user.email", "committer@local.invalid")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Local Committer")
+    git(repo, "config", "user.email", "committer@local.invalid")
+    git(repo, "config", "commit.gpgsign", "false")
     (repo / "src").mkdir()
     (repo / "tests" / "unit").mkdir(parents=True)
     (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
     (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "base")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "base")
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
-    _git(repo, "add", "src/networking.c")
+    git(repo, "add", "src/networking.c")
 
     def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
@@ -2997,25 +2984,25 @@ def test_adapt_target_missing_tests_rolls_back_on_agent_failure(tmp_path):
     assert (repo / "src" / "networking.c").read_text(encoding="utf-8") == "int fix = 1;\n"
     assert (repo / "tests" / "unit" / "networking.tcl").read_text(encoding="utf-8") == "start_server {} {}\n"
     assert not (repo / "tests" / "unit" / "stray.tcl").exists()
-    staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
+    staged = git(repo, "diff", "--cached", "--name-only").splitlines()
     assert staged == ["src/networking.c"]
 
 
 def test_adapt_target_missing_tests_fails_closed_on_conflict_marker_output(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Local Committer")
-    _git(repo, "config", "user.email", "committer@local.invalid")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Local Committer")
+    git(repo, "config", "user.email", "committer@local.invalid")
+    git(repo, "config", "commit.gpgsign", "false")
     (repo / "src").mkdir()
     (repo / "tests" / "unit").mkdir(parents=True)
     (repo / "src" / "networking.c").write_text("int fix = 0;\n", encoding="utf-8")
     (repo / "tests" / "unit" / "networking.tcl").write_text("start_server {} {}\n", encoding="utf-8")
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "base")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "base")
     (repo / "src" / "networking.c").write_text("int fix = 1;\n", encoding="utf-8")
-    _git(repo, "add", "src/networking.c")
+    git(repo, "add", "src/networking.c")
 
     def fake_run_agent(profile, _prompt, **kwargs):
         assert profile == "test_adaptation_edit_only"
@@ -3048,7 +3035,7 @@ def test_adapt_target_missing_tests_fails_closed_on_conflict_marker_output(tmp_p
     assert result.adapted_paths == []
     assert result.summary == "test adaptation not applied: invalid generated test path(s): tests/unit/networking.tcl"
     assert (repo / "tests" / "unit" / "networking.tcl").read_text(encoding="utf-8") == "start_server {} {}\n"
-    staged = _git(repo, "diff", "--cached", "--name-only").stdout.splitlines()
+    staged = git(repo, "diff", "--cached", "--name-only").splitlines()
     assert staged == ["src/networking.c"]
 
 
@@ -3081,33 +3068,33 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
     """
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Local Committer")
-    _git(repo, "config", "user.email", "committer@local.invalid")
-    _git(repo, "config", "commit.gpgsign", "false")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Local Committer")
+    git(repo, "config", "user.email", "committer@local.invalid")
+    git(repo, "config", "commit.gpgsign", "false")
 
     # Initial commit on main
     (repo / "file.txt").write_text("line1\nline2\nline3\n", encoding="utf-8")
-    _git(repo, "add", "file.txt")
-    _git(repo, "commit", "-q", "-m", "initial")
+    git(repo, "add", "file.txt")
+    git(repo, "commit", "-q", "-m", "initial")
 
     # Create source branch with a commit authored by someone else
-    _git(repo, "checkout", "-q", "-b", "source")
+    git(repo, "checkout", "-q", "-b", "source")
     (repo / "file.txt").write_text("line1\nsource-change\nline3\n", encoding="utf-8")
-    _git(repo, "add", "file.txt")
+    git(repo, "add", "file.txt")
     source_author_env = {
         "GIT_AUTHOR_NAME": "Original Author",
         "GIT_AUTHOR_EMAIL": "original@example.com",
     }
-    _git(repo, "commit", "-q", "-m", "source change", env=source_author_env)
-    source_sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    git(repo, "commit", "-q", "-m", "source change", env=source_author_env)
+    source_sha = git(repo, "rev-parse", "HEAD").strip()
 
     # Diverge main with a conflicting change, then try to cherry-pick source
-    _git(repo, "checkout", "-q", "main")
+    git(repo, "checkout", "-q", "main")
     (repo / "file.txt").write_text("line1\nmain-change\nline3\n", encoding="utf-8")
-    _git(repo, "add", "file.txt")
-    _git(repo, "commit", "-q", "-m", "main conflicting change")
-    _git(repo, "checkout", "-q", "-b", "backport")
+    git(repo, "add", "file.txt")
+    git(repo, "commit", "-q", "-m", "main conflicting change")
+    git(repo, "checkout", "-q", "-b", "backport")
 
     # Attempt cherry-pick - will conflict
     result = subprocess.run(
@@ -3120,7 +3107,7 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
 
     # Simulate Claude's resolution: pick source side. Stage it manually.
     (repo / "file.txt").write_text("line1\nresolved-content\nline3\n", encoding="utf-8")
-    _git(repo, "add", "file.txt")
+    git(repo, "add", "file.txt")
 
     candidate = ProjectBackportCandidate(
         source_pr_number=42,
@@ -3152,7 +3139,7 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
         resolution_summary="resolved",
     )
     (repo / resolution.path).write_text(resolution.resolved_content or "", encoding="utf-8")
-    _git(repo, "add", resolution.path)
+    git(repo, "add", resolution.path)
 
     # This is the exact commit flow _apply_candidate now uses after the fix.
     commit_result = subprocess.run(
@@ -3170,8 +3157,8 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
     assert commit_result.returncode == 0, commit_result.stderr
 
     # Author should be the source commit's author; committer is local.
-    author = _git(repo, "log", "-1", "--format=%an <%ae>").stdout.strip()
-    committer = _git(repo, "log", "-1", "--format=%cn <%ce>").stdout.strip()
+    author = git(repo, "log", "-1", "--format=%an <%ae>").strip()
+    committer = git(repo, "log", "-1", "--format=%cn <%ce>").strip()
 
     assert author == "Original Author <original@example.com>", (
         f"author not preserved after conflict resolution: got {author!r}"
@@ -3277,19 +3264,19 @@ def test_safe_tmp_component_removes_branch_separators():
 def test_list_applied_prs_on_branch_reads_backport_commit_subjects(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "8.0")
-    _git(repo, "config", "user.name", "Test User")
-    _git(repo, "config", "user.email", "test@example.com")
+    git(repo, "init", "-q", "-b", "8.0")
+    git(repo, "config", "user.name", "Test User")
+    git(repo, "config", "user.email", "test@example.com")
     (repo / "file.txt").write_text("base\n", encoding="utf-8")
-    _git(repo, "add", "file.txt")
-    _git(repo, "commit", "-q", "-m", "base")
-    _git(repo, "update-ref", "refs/remotes/origin/8.0", "HEAD")
-    _git(repo, "checkout", "-q", "-b", "agent/backport/sweep/8.0")
+    git(repo, "add", "file.txt")
+    git(repo, "commit", "-q", "-m", "base")
+    git(repo, "update-ref", "refs/remotes/origin/8.0", "HEAD")
+    git(repo, "checkout", "-q", "-b", "agent/backport/sweep/8.0")
 
     (repo / "file.txt").write_text("base\none\n", encoding="utf-8")
-    _git(repo, "commit", "-q", "-am", "Preserve original fd blocking state (#1298)")
+    git(repo, "commit", "-q", "-am", "Preserve original fd blocking state (#1298)")
     (repo / "file.txt").write_text("base\none\ntwo\n", encoding="utf-8")
-    _git(repo, "commit", "-q", "-am", "Fix CLUSTER SLOTS crash (#2915)")
+    git(repo, "commit", "-q", "-am", "Fix CLUSTER SLOTS crash (#2915)")
 
     applied = list_applied_prs_on_branch(
         str(repo),

@@ -5,20 +5,11 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-try:
-    from scripts.test_failure_detector.download import (
-        download_all_test_failures,
-        get_latest_scheduled_run,
-        job_urls_for_jobs,
-    )
-
-    _SKIP_REASON = None
-except ImportError as _exc:
-    _SKIP_REASON = f"Import failed: {_exc}"
-
-pytestmark = pytest.mark.skipif(_SKIP_REASON is not None, reason=_SKIP_REASON or "")
+from scripts.test_failure_detector.download import (
+    download_all_test_failures,
+    get_latest_scheduled_run,
+    job_urls_for_jobs,
+)
 
 
 def _make_mock_run(run_number: int, run_id: int, conclusion: str, status: str = "completed"):

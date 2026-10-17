@@ -5,7 +5,6 @@ from scripts.fuzzer.issue_renderer import (
     MARKER_NAMESPACE,
     _build_title,
     _render_body,
-    _render_comment,
     render_for,
 )
 from scripts.fuzzer.models import FuzzerRunAnalysis, FuzzerSignal

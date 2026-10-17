@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,22 +19,11 @@ from scripts.backport.sweep_validation import (
     validate_branch_with_optional_repair,
 )
 from scripts.backport.validation import UNMAPPED_TEST_PATHS_PREFIX
-
-
-def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", *args],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+from tests.git_helpers import git, init_repo
 
 
 def _init_repo(repo: Path) -> None:
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "config", "user.email", "test@example.com")
+    init_repo(repo)
     (repo / "src/unit").mkdir(parents=True)
     (repo / "src/unit/test_example.c").write_text("int test_new(void) {}\n", encoding="utf-8")
     (repo / "src/unit/test_files.h").write_text("stale\n", encoding="utf-8")
@@ -44,13 +32,13 @@ def _init_repo(repo: Path) -> None:
         "Path('src/unit/test_files.h').write_text('generated\\n')\n",
         encoding="utf-8",
     )
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "candidate")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "candidate")
 
 
 def test_generated_output_is_amended_into_candidate_and_converges(tmp_path: Path) -> None:
     _init_repo(tmp_path)
-    starting_count = _git(tmp_path, "rev-list", "--count", "HEAD")
+    starting_count = git(tmp_path, "rev-list", "--count", "HEAD")
 
     outcome = prepare_generated_files(
         str(tmp_path),
@@ -66,25 +54,25 @@ def test_generated_output_is_amended_into_candidate_and_converges(tmp_path: Path
 
     assert outcome.ok is True
     assert outcome.generated_paths == ("src/unit/test_files.h",)
-    assert outcome.amended_commit_sha == _git(tmp_path, "rev-parse", "HEAD")
-    assert _git(tmp_path, "rev-list", "--count", "HEAD") == starting_count
+    assert outcome.amended_commit_sha == git(tmp_path, "rev-parse", "HEAD")
+    assert git(tmp_path, "rev-list", "--count", "HEAD") == starting_count
     assert (tmp_path / "src/unit/test_files.h").read_text() == "generated\n"
-    assert _git(tmp_path, "status", "--porcelain") == ""
+    assert git(tmp_path, "status", "--porcelain") == ""
 
 
 def test_generated_command_fails_closed_on_unexpected_path(tmp_path: Path) -> None:
     _init_repo(tmp_path)
     (tmp_path / "unexpected.txt").write_text("before\n", encoding="utf-8")
-    _git(tmp_path, "add", "unexpected.txt")
-    _git(tmp_path, "commit", "-q", "-m", "track unexpected")
+    git(tmp_path, "add", "unexpected.txt")
+    git(tmp_path, "commit", "-q", "-m", "track unexpected")
     (tmp_path / "generate.py").write_text(
         "from pathlib import Path\n"
         "Path('src/unit/test_files.h').write_text('generated\\n')\n"
         "Path('unexpected.txt').write_text('changed\\n')\n",
         encoding="utf-8",
     )
-    _git(tmp_path, "add", "generate.py")
-    _git(tmp_path, "commit", "-q", "-m", "bad generator")
+    git(tmp_path, "add", "generate.py")
+    git(tmp_path, "commit", "-q", "-m", "bad generator")
 
     outcome = prepare_generated_files(
         str(tmp_path),
@@ -102,7 +90,7 @@ def test_generated_command_fails_closed_on_unexpected_path(tmp_path: Path) -> No
     assert "unexpected path" in outcome.output
     assert (tmp_path / "src/unit/test_files.h").read_text() == "stale\n"
     assert (tmp_path / "unexpected.txt").read_text() == "before\n"
-    assert _git(tmp_path, "status", "--porcelain") == ""
+    assert git(tmp_path, "status", "--porcelain") == ""
 
 
 _UNIT_TEST_HEADER_RULE = GeneratedFileRule(
@@ -127,8 +115,8 @@ def test_generated_files_ignore_untracked_artifact_from_earlier_build(
 
     assert outcome.ok is True
     assert outcome.generated_paths == ("src/unit/test_files.h",)
-    assert _git(tmp_path, "ls-files", "src/commands_with_reply_schema.def") == ""
-    assert _git(tmp_path, "status", "--porcelain") == (
+    assert git(tmp_path, "ls-files", "src/commands_with_reply_schema.def") == ""
+    assert git(tmp_path, "status", "--porcelain") == (
         "?? src/commands_with_reply_schema.def"
     )
 
@@ -145,7 +133,7 @@ def test_generated_files_reject_edit_to_preexisting_untracked_artifact(
         "Path('src/commands_with_reply_schema.def').write_text('changed\\n')\n",
         encoding="utf-8",
     )
-    _git(tmp_path, "commit", "-q", "-am", "generator touches the artifact")
+    git(tmp_path, "commit", "-q", "-am", "generator touches the artifact")
 
     outcome = prepare_generated_files(
         str(tmp_path),
@@ -182,7 +170,7 @@ def test_generated_rule_rejects_partially_untracked_outputs(tmp_path: Path) -> N
     assert "not tracked on the target branch" in outcome.output
     assert "src/unit/not-on-target.h" in outcome.output
     assert (tmp_path / "src/unit/test_files.h").read_text() == "stale\n"
-    assert _git(tmp_path, "status", "--porcelain") == ""
+    assert git(tmp_path, "status", "--porcelain") == ""
 
 
 def test_generated_rule_with_no_tracked_outputs_is_skipped(tmp_path: Path) -> None:
@@ -210,7 +198,7 @@ def test_generated_rule_with_no_tracked_outputs_is_skipped(tmp_path: Path) -> No
     assert outcome.generated_paths == ()
     assert outcome.amended_commit_sha == ""
     assert (tmp_path / "src/unit/test_files.h").read_text() == "stale\n"
-    assert _git(tmp_path, "status", "--porcelain") == ""
+    assert git(tmp_path, "status", "--porcelain") == ""
 
 
 def test_successful_repair_regenerates_and_revalidates_final_tree(monkeypatch) -> None:
@@ -591,15 +579,15 @@ def test_failed_test_adaptation_rolls_back_retained_source_repair(
 
 
 def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> None:
-    _git(tmp_path, "init", "-q", "-b", "main")
-    _git(tmp_path, "config", "user.name", "Test")
-    _git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "config", "user.name", "Test")
+    git(tmp_path, "config", "user.email", "test@example.com")
     native = tmp_path / "tests/unit/networking.tcl"
     native.parent.mkdir(parents=True)
     native.write_text("test existing {}\n", encoding="utf-8")
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "target branch")
-    base_sha = _git(tmp_path, "rev-parse", "HEAD")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "target branch")
+    base_sha = git(tmp_path, "rev-parse", "HEAD")
 
     added = tmp_path / "src/unit/test_networking.cpp"
     added.parent.mkdir(parents=True)
@@ -608,8 +596,8 @@ def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> N
     companion.write_text("// shared C++ harness helper\n", encoding="utf-8")
     native_added = tmp_path / "src/unit/test_quicklist.c"
     native_added.write_text("void test_quicklist(void) {}\n", encoding="utf-8")
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "clean upstream test")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "clean upstream test")
 
     def adapt(repo_dir, _candidate, sources, **kwargs):
         assert sources == {
@@ -625,7 +613,7 @@ def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> N
             "test existing {}\ntest regression {}\n",
             encoding="utf-8",
         )
-        _git(Path(repo_dir), "add", "tests/unit/networking.tcl")
+        git(Path(repo_dir), "add", "tests/unit/networking.tcl")
         return MissingTestAdaptationResult(
             adapted_paths=["tests/unit/networking.tcl"],
             summary=(
@@ -666,14 +654,14 @@ def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> N
 
     assert outcome.ok is True
     assert outcome.output == "branch-native test passed"
-    assert outcome.amended_commit_sha == _git(tmp_path, "rev-parse", "HEAD")
+    assert outcome.amended_commit_sha == git(tmp_path, "rev-parse", "HEAD")
     assert not added.exists()
     assert not companion.exists()
     assert native_added.exists()
-    assert _git(tmp_path, "log", "-1", "--format=%s") == (
+    assert git(tmp_path, "log", "-1", "--format=%s") == (
         "Adapt tests for target branch"
     )
-    assert "Signed-off-by:" not in _git(
+    assert "Signed-off-by:" not in git(
         tmp_path,
         "log",
         "-1",
@@ -682,15 +670,15 @@ def test_cleanly_added_test_is_ported_to_branch_native_test(tmp_path: Path) -> N
 
 
 def test_added_unsafe_test_harness_companion_fails_closed(tmp_path: Path) -> None:
-    _git(tmp_path, "init", "-q", "-b", "main")
-    _git(tmp_path, "config", "user.name", "Test")
-    _git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "config", "user.name", "Test")
+    git(tmp_path, "config", "user.email", "test@example.com")
     native = tmp_path / "tests/unit/networking.tcl"
     native.parent.mkdir(parents=True)
     native.write_text("test existing {}\n", encoding="utf-8")
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "target branch")
-    base_sha = _git(tmp_path, "rev-parse", "HEAD")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "target branch")
+    base_sha = git(tmp_path, "rev-parse", "HEAD")
 
     unit_dir = tmp_path / "src/unit"
     unit_dir.mkdir(parents=True)
@@ -698,9 +686,9 @@ def test_added_unsafe_test_harness_companion_fails_closed(tmp_path: Path) -> Non
     added.write_text("TEST(Networking, Regression) {}\n", encoding="utf-8")
     companion = unit_dir / "custom_matchers.hpp"
     companion.symlink_to("/tmp/external-test-helper")
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "upstream C++ test")
-    candidate_head = _git(tmp_path, "rev-parse", "HEAD")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "upstream C++ test")
+    candidate_head = git(tmp_path, "rev-parse", "HEAD")
 
     outcome = adapt_added_tests_for_target(
         str(tmp_path),
@@ -726,7 +714,7 @@ def test_added_unsafe_test_harness_companion_fails_closed(tmp_path: Path) -> Non
     assert outcome.ok is False
     assert "cannot safely inspect" in outcome.output
     assert "src/unit/custom_matchers.hpp" in outcome.output
-    assert _git(tmp_path, "rev-parse", "HEAD") == candidate_head
+    assert git(tmp_path, "rev-parse", "HEAD") == candidate_head
     assert added.exists()
     assert companion.is_symlink()
 
@@ -734,21 +722,21 @@ def test_added_unsafe_test_harness_companion_fails_closed(tmp_path: Path) -> Non
 def test_replaced_test_is_restored_and_adapted_in_branch_native_format(
     tmp_path: Path,
 ) -> None:
-    _git(tmp_path, "init", "-q", "-b", "main")
-    _git(tmp_path, "config", "user.name", "Test")
-    _git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "config", "user.name", "Test")
+    git(tmp_path, "config", "user.email", "test@example.com")
     native = tmp_path / "src/unit/test_networking.c"
     native.parent.mkdir(parents=True)
     native.write_text("void test_existing(void) {}\n", encoding="utf-8")
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "target branch")
-    base_sha = _git(tmp_path, "rev-parse", "HEAD")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "target branch")
+    base_sha = git(tmp_path, "rev-parse", "HEAD")
 
     native.unlink()
     added = tmp_path / "src/unit/test_networking.cpp"
     added.write_text("TEST(Networking, Regression) {}\n", encoding="utf-8")
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "replace C test with C++ test")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "replace C test with C++ test")
 
     def adapt(repo_dir, _candidate, sources, **_kwargs):
         restored = Path(repo_dir, "src/unit/test_networking.c")
@@ -763,7 +751,7 @@ def test_replaced_test_is_restored_and_adapted_in_branch_native_format(
             "void test_regression(void) {}\n",
             encoding="utf-8",
         )
-        _git(Path(repo_dir), "add", "src/unit/test_networking.c")
+        git(Path(repo_dir), "add", "src/unit/test_networking.c")
         return MissingTestAdaptationResult(
             adapted_paths=["src/unit/test_networking.c"],
             summary=(
@@ -798,7 +786,7 @@ def test_replaced_test_is_restored_and_adapted_in_branch_native_format(
     assert outcome.ok is True
     assert not added.exists()
     assert "test_regression" in native.read_text(encoding="utf-8")
-    assert _git(tmp_path, "diff", "--name-status", f"{base_sha}...HEAD") == (
+    assert git(tmp_path, "diff", "--name-status", f"{base_sha}...HEAD") == (
         "M\tsrc/unit/test_networking.c"
     )
 
@@ -806,19 +794,19 @@ def test_replaced_test_is_restored_and_adapted_in_branch_native_format(
 def test_cleanly_added_test_without_native_adaptation_fails_closed(
     tmp_path: Path,
 ) -> None:
-    _git(tmp_path, "init", "-q", "-b", "main")
-    _git(tmp_path, "config", "user.name", "Test")
-    _git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "config", "user.name", "Test")
+    git(tmp_path, "config", "user.email", "test@example.com")
     (tmp_path / "README.md").write_text("target\n", encoding="utf-8")
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "target branch")
-    base_sha = _git(tmp_path, "rev-parse", "HEAD")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "target branch")
+    base_sha = git(tmp_path, "rev-parse", "HEAD")
     added = tmp_path / "src/unit/test_networking.cpp"
     added.parent.mkdir(parents=True)
     added.write_text("TEST(Networking, Regression) {}\n", encoding="utf-8")
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "clean upstream test")
-    candidate_head = _git(tmp_path, "rev-parse", "HEAD")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "clean upstream test")
+    candidate_head = git(tmp_path, "rev-parse", "HEAD")
 
     outcome = adapt_added_tests_for_target(
         str(tmp_path),
@@ -843,21 +831,21 @@ def test_cleanly_added_test_without_native_adaptation_fails_closed(
 
     assert outcome.ok is False
     assert "no branch-native test changes" in outcome.output
-    assert _git(tmp_path, "rev-parse", "HEAD") == candidate_head
+    assert git(tmp_path, "rev-parse", "HEAD") == candidate_head
     assert added.exists()
 
 
 def test_validation_repair_cannot_delete_changed_test_coverage(
     tmp_path: Path,
 ) -> None:
-    _git(tmp_path, "init", "-q", "-b", "main")
-    _git(tmp_path, "config", "user.name", "Test")
-    _git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "config", "user.name", "Test")
+    git(tmp_path, "config", "user.email", "test@example.com")
     test_path = tmp_path / "tests/unit/networking.tcl"
     test_path.parent.mkdir(parents=True)
     test_path.write_text("test regression {}\n", encoding="utf-8")
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "candidate")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "candidate")
 
     def remove_test(_profile, _prompt, *, cwd):
         Path(cwd, "tests/unit/networking.tcl").unlink()
@@ -879,24 +867,24 @@ def test_validation_repair_cannot_delete_changed_test_coverage(
     assert outcome.ok is False
     assert "removed changed test coverage" in outcome.output
     assert test_path.read_text(encoding="utf-8") == "test regression {}\n"
-    assert _git(tmp_path, "status", "--porcelain") == ""
+    assert git(tmp_path, "status", "--porcelain") == ""
 
 
 def test_validation_repair_carries_unmapped_paths_without_retained_edits(
     tmp_path: Path,
 ) -> None:
-    _git(tmp_path, "init", "-q", "-b", "main")
-    _git(tmp_path, "config", "user.name", "Test")
-    _git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "config", "user.name", "Test")
+    git(tmp_path, "config", "user.email", "test@example.com")
     unsupported_test = tmp_path / "src/unit/test_networking.cpp"
     unsupported_test.parent.mkdir(parents=True)
     unsupported_test.write_text(
         "TEST(Networking, OriginalIntent) {}\n",
         encoding="utf-8",
     )
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "candidate")
-    candidate_head = _git(tmp_path, "rev-parse", "HEAD")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "candidate")
+    candidate_head = git(tmp_path, "rev-parse", "HEAD")
 
     def rewrite_test(_profile, _prompt, *, cwd):
         Path(cwd, "src/unit/test_networking.cpp").write_text(
@@ -930,19 +918,19 @@ def test_validation_repair_carries_unmapped_paths_without_retained_edits(
     assert outcome.ok is False
     assert outcome.partial_repair is False
     assert outcome.unmapped_test_paths == ("src/unit/test_networking.cpp",)
-    assert _git(tmp_path, "rev-parse", "HEAD") == candidate_head
+    assert git(tmp_path, "rev-parse", "HEAD") == candidate_head
     assert unsupported_test.read_text(encoding="utf-8") == (
         "TEST(Networking, OriginalIntent) {}\n"
     )
-    assert _git(tmp_path, "status", "--porcelain") == ""
+    assert git(tmp_path, "status", "--porcelain") == ""
 
 
 def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
     tmp_path: Path,
 ) -> None:
-    _git(tmp_path, "init", "-q", "-b", "main")
-    _git(tmp_path, "config", "user.name", "Test")
-    _git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "config", "user.name", "Test")
+    git(tmp_path, "config", "user.email", "test@example.com")
     source = tmp_path / "src/networking.c"
     source.parent.mkdir(parents=True)
     source.write_text("old API\n", encoding="utf-8")
@@ -952,9 +940,9 @@ def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
         "TEST(Networking, OriginalIntent) {}\n",
         encoding="utf-8",
     )
-    _git(tmp_path, "add", ".")
-    _git(tmp_path, "commit", "-q", "-m", "candidate")
-    candidate_head = _git(tmp_path, "rev-parse", "HEAD")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "candidate")
+    candidate_head = git(tmp_path, "rev-parse", "HEAD")
 
     def repair_source(_profile, _prompt, *, cwd):
         Path(cwd, "src/networking.c").write_text(
@@ -1004,7 +992,7 @@ def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
     assert outcome.partial_repair is True
     assert outcome.unmapped_test_paths == ("src/unit/test_networking.cpp",)
     assert outcome.ai_summary == "adapted source API"
-    assert outcome.amended_commit_sha == _git(tmp_path, "rev-parse", "HEAD")
+    assert outcome.amended_commit_sha == git(tmp_path, "rev-parse", "HEAD")
     assert outcome.amended_commit_sha != candidate_head
     assert source.read_text(encoding="utf-8") == "target branch API\n"
     assert unsupported_test.read_text(encoding="utf-8") == (
@@ -1013,7 +1001,7 @@ def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
     assert [resolution.path for resolution in outcome.resolutions] == [
         "src/networking.c"
     ]
-    assert "Signed-off-by:" not in _git(
+    assert "Signed-off-by:" not in git(
         tmp_path,
         "log",
         "-1",
@@ -1023,14 +1011,14 @@ def test_validation_repair_retains_commit_when_only_unmapped_test_remains(
 
 def _init_whitespace_candidate(repo: Path) -> Path:
     """Mirror #4673 on 9.2: a whitespace-only diff failure after a LOG_REQ_RES build."""
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.name", "Test")
-    _git(repo, "config", "user.email", "test@example.com")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Test")
+    git(repo, "config", "user.email", "test@example.com")
     test_path = repo / "tests/integration/rdb.tcl"
     test_path.parent.mkdir(parents=True)
     test_path.write_text("test deflake {\n        \n}\n", encoding="utf-8")
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", "candidate")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "candidate")
     (repo / "src").mkdir()
     (repo / "src/commands_with_reply_schema.def").write_text(
         "earlier LOG_REQ_RES build\n",
@@ -1043,7 +1031,7 @@ def test_validation_repair_ignores_untracked_artifact_from_earlier_build(
     tmp_path: Path,
 ) -> None:
     test_path = _init_whitespace_candidate(tmp_path)
-    candidate_head = _git(tmp_path, "rev-parse", "HEAD")
+    candidate_head = git(tmp_path, "rev-parse", "HEAD")
 
     def strip_whitespace(_profile, _prompt, *, cwd):
         Path(cwd, "tests/integration/rdb.tcl").write_text(
@@ -1067,12 +1055,12 @@ def test_validation_repair_ignores_untracked_artifact_from_earlier_build(
     assert [resolution.path for resolution in outcome.resolutions] == [
         "tests/integration/rdb.tcl"
     ]
-    assert _git(tmp_path, "rev-parse", "HEAD^") == candidate_head
-    assert _git(tmp_path, "show", "--name-only", "--format=", "HEAD") == (
+    assert git(tmp_path, "rev-parse", "HEAD^") == candidate_head
+    assert git(tmp_path, "show", "--name-only", "--format=", "HEAD") == (
         "tests/integration/rdb.tcl"
     )
     assert test_path.read_text(encoding="utf-8") == "test deflake {\n\n}\n"
-    assert _git(tmp_path, "status", "--porcelain", "--untracked-files=all") == (
+    assert git(tmp_path, "status", "--porcelain", "--untracked-files=all") == (
         "?? src/commands_with_reply_schema.def"
     )
 
@@ -1081,7 +1069,7 @@ def test_validation_repair_rejects_edit_to_preexisting_untracked_artifact(
     tmp_path: Path,
 ) -> None:
     test_path = _init_whitespace_candidate(tmp_path)
-    candidate_head = _git(tmp_path, "rev-parse", "HEAD")
+    candidate_head = git(tmp_path, "rev-parse", "HEAD")
 
     def edit_artifact(_profile, _prompt, *, cwd):
         Path(cwd, "tests/integration/rdb.tcl").write_text(
@@ -1110,5 +1098,5 @@ def test_validation_repair_rejects_edit_to_preexisting_untracked_artifact(
         "Claude Code validation repair edited files outside the backport diff: "
         "src/commands_with_reply_schema.def"
     )
-    assert _git(tmp_path, "rev-parse", "HEAD") == candidate_head
+    assert git(tmp_path, "rev-parse", "HEAD") == candidate_head
     assert test_path.read_text(encoding="utf-8") == "test deflake {\n        \n}\n"

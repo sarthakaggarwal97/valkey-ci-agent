@@ -20,33 +20,16 @@ from scripts.backport.models import (
 from scripts.backport.source_plan import SourceChangePlan
 from scripts.backport.sweep_git import list_applied_prs_on_branch
 from scripts.common.logging_utils import LOG_HIGHLIGHT_RULE
-
-
-def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", *args],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-
-
-def _init_repo(path: Path) -> None:
-    path.mkdir()
-    _git(path, "init", "-q", "-b", "main")
-    _git(path, "config", "user.name", "Test")
-    _git(path, "config", "user.email", "test@example.com")
-    _git(path, "config", "commit.gpgsign", "false")
+from tests.git_helpers import git, init_repo
 
 
 def _commit(repo: Path, path: str, content: str, message: str) -> str:
     destination = repo / path
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(content, encoding="utf-8")
-    _git(repo, "add", "--", path)
-    _git(repo, "commit", "-q", "-m", message)
-    return _git(repo, "rev-parse", "HEAD")
+    git(repo, "add", "--", path)
+    git(repo, "commit", "-q", "-m", message)
+    return git(repo, "rev-parse", "HEAD")
 
 
 def _candidate(
@@ -119,20 +102,20 @@ def test_rebase_merged_pull_request_fails_closed_end_to_end(
     one'. Replaying rebased series is not supported, so the candidate must
     error loudly with a clean worktree."""
     source = tmp_path / "source"
-    _init_repo(source)
+    init_repo(source)
     _commit(source, "base.txt", "base\n", "base")
-    base = _git(source, "rev-parse", "HEAD")
-    _git(source, "branch", "release", base)
+    base = git(source, "rev-parse", "HEAD")
+    git(source, "branch", "release", base)
 
-    _git(source, "checkout", "-q", "-b", "pull-request")
+    git(source, "checkout", "-q", "-b", "pull-request")
     first = _commit(source, "one.txt", "one\n", "source one")
     second = _commit(source, "two.txt", "two\n", "source two")
 
-    _git(source, "checkout", "-q", "main")
+    git(source, "checkout", "-q", "main")
     _commit(source, "main.txt", "main advanced\n", "advance main")
-    _git(source, "checkout", "-q", "-b", "rebased")
-    _git(source, "cherry-pick", first, second)
-    rebased_tip = _git(source, "rev-parse", "HEAD")
+    git(source, "checkout", "-q", "-b", "rebased")
+    git(source, "cherry-pick", first, second)
+    rebased_tip = git(source, "rev-parse", "HEAD")
 
     remote = tmp_path / "origin.git"
     subprocess.run(
@@ -141,10 +124,10 @@ def test_rebase_merged_pull_request_fails_closed_end_to_end(
         capture_output=True,
         text=True,
     )
-    _git(source, "remote", "add", "origin", str(remote))
-    _git(source, "push", "-q", "origin", "release")
-    _git(source, "push", "-q", "origin", "rebased:main")
-    _git(
+    git(source, "remote", "add", "origin", str(remote))
+    git(source, "push", "-q", "origin", "release")
+    git(source, "push", "-q", "origin", "rebased:main")
+    git(
         source,
         "push",
         "-q",
@@ -167,8 +150,8 @@ def test_rebase_merged_pull_request_fails_closed_end_to_end(
         capture_output=True,
         text=True,
     )
-    _git(worktree, "config", "user.name", "Test")
-    _git(worktree, "config", "user.email", "test@example.com")
+    git(worktree, "config", "user.name", "Test")
+    git(worktree, "config", "user.email", "test@example.com")
 
     result = apply_candidate(
         str(worktree),
@@ -185,32 +168,32 @@ def test_rebase_merged_pull_request_fails_closed_end_to_end(
     assert result.applied_commits == []
     assert not (worktree / "one.txt").exists()
     assert not (worktree / "two.txt").exists()
-    assert _git(worktree, "rev-list", "--count", "origin/release..HEAD") == "0"
-    assert _git(worktree, "status", "--porcelain") == ""
+    assert git(worktree, "rev-list", "--count", "origin/release..HEAD") == "0"
+    assert git(worktree, "status", "--porcelain") == ""
 
 
 def test_conflict_limit_rolls_back_without_invoking_resolver(
     tmp_path: Path,
 ) -> None:
     repo = tmp_path / "repo"
-    _init_repo(repo)
+    init_repo(repo)
     _commit(repo, "one.txt", "base one\n", "base one")
     _commit(repo, "two.txt", "base two\n", "base two")
-    base = _git(repo, "rev-parse", "HEAD")
+    base = git(repo, "rev-parse", "HEAD")
 
-    _git(repo, "checkout", "-q", "-b", "source")
+    git(repo, "checkout", "-q", "-b", "source")
     source_sha = _commit(repo, "one.txt", "source one\n", "source one")
     (repo / "two.txt").write_text("source two\n", encoding="utf-8")
-    _git(repo, "add", "two.txt")
-    _git(repo, "commit", "--amend", "-q", "--no-edit")
-    source_sha = _git(repo, "rev-parse", "HEAD")
+    git(repo, "add", "two.txt")
+    git(repo, "commit", "--amend", "-q", "--no-edit")
+    source_sha = git(repo, "rev-parse", "HEAD")
 
-    _git(repo, "checkout", "-q", "-b", "release", base)
+    git(repo, "checkout", "-q", "-b", "release", base)
     _commit(repo, "one.txt", "release one\n", "release one")
     (repo / "two.txt").write_text("release two\n", encoding="utf-8")
-    _git(repo, "add", "two.txt")
-    _git(repo, "commit", "--amend", "-q", "--no-edit")
-    starting_head = _git(repo, "rev-parse", "HEAD")
+    git(repo, "add", "two.txt")
+    git(repo, "commit", "--amend", "-q", "--no-edit")
+    starting_head = git(repo, "rev-parse", "HEAD")
     resolver = MagicMock()
 
     result = apply_candidate(
@@ -231,8 +214,8 @@ def test_conflict_limit_rolls_back_without_invoking_resolver(
 
     assert result.outcome == "skipped-conflict"
     assert "Too many conflicting files (2 >" in result.detail
-    assert _git(repo, "rev-parse", "HEAD") == starting_head
-    assert _git(repo, "status", "--porcelain") == ""
+    assert git(repo, "rev-parse", "HEAD") == starting_head
+    assert git(repo, "status", "--porcelain") == ""
     resolver.assert_not_called()
 
 
@@ -243,15 +226,15 @@ def test_hard_cherry_pick_failure_is_not_reported_as_empty(
     error, never 'already applied' — misclassifying it would silently drop
     the commit while the sweep reports the PR as applied."""
     repo = tmp_path / "repo"
-    _init_repo(repo)
+    init_repo(repo)
     _commit(repo, "base.txt", "base\n", "base")
-    base = _git(repo, "rev-parse", "HEAD")
+    base = git(repo, "rev-parse", "HEAD")
 
-    _git(repo, "checkout", "-q", "-b", "source")
+    git(repo, "checkout", "-q", "-b", "source")
     source_sha = _commit(repo, "data.txt", "source\n", "source change")
 
-    _git(repo, "checkout", "-q", "-b", "release", base)
-    starting_head = _git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "-q", "-b", "release", base)
+    starting_head = git(repo, "rev-parse", "HEAD")
     (repo / "data.txt").write_text("untracked\n", encoding="utf-8")
 
     result = apply_candidate(
@@ -271,7 +254,7 @@ def test_hard_cherry_pick_failure_is_not_reported_as_empty(
     assert result.outcome == "error"
     assert "cherry-pick failed" in result.detail
     assert result.applied_commits == []
-    assert _git(repo, "rev-parse", "HEAD") == starting_head
+    assert git(repo, "rev-parse", "HEAD") == starting_head
 
 
 def test_failed_abort_falls_back_to_hard_reset(tmp_path: Path) -> None:
@@ -568,12 +551,12 @@ def test_preexisting_untracked_file_is_not_allowed_or_committed(
     tmp_path: Path,
 ) -> None:
     repo = tmp_path / "repo"
-    _init_repo(repo)
+    init_repo(repo)
     _commit(repo, "shared.txt", "base\n", "base")
-    base = _git(repo, "rev-parse", "HEAD")
-    _git(repo, "checkout", "-q", "-b", "source")
+    base = git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "-q", "-b", "source")
     source_sha = _commit(repo, "shared.txt", "source\n", "source change")
-    _git(repo, "checkout", "-q", "-b", "release", base)
+    git(repo, "checkout", "-q", "-b", "release", base)
     _commit(repo, "shared.txt", "release\n", "release change")
     artifact = repo / "validation-output.txt"
     artifact.write_text("keep me\n", encoding="utf-8")
@@ -607,22 +590,22 @@ def test_preexisting_untracked_file_is_not_allowed_or_committed(
     assert result.outcome == "applied"
     assert allowed == ["shared.txt"]
     assert artifact.read_text(encoding="utf-8") == "keep me\n"
-    assert "validation-output.txt" not in _git(
+    assert "validation-output.txt" not in git(
         repo, "show", "--pretty=", "--name-only", "HEAD"
     ).splitlines()
-    assert "Backport-Source-PR: 42" in _git(repo, "log", "-1", "--format=%B")
+    assert "Backport-Source-PR: 42" in git(repo, "log", "-1", "--format=%B")
 
 
 def test_failed_resolution_removes_only_candidate_created_untracked_files(
     tmp_path: Path,
 ) -> None:
     repo = tmp_path / "repo"
-    _init_repo(repo)
+    init_repo(repo)
     _commit(repo, "shared.txt", "base\n", "base")
-    base = _git(repo, "rev-parse", "HEAD")
-    _git(repo, "checkout", "-q", "-b", "source")
+    base = git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "-q", "-b", "source")
     source_sha = _commit(repo, "shared.txt", "source\n", "source change")
-    _git(repo, "checkout", "-q", "-b", "release", base)
+    git(repo, "checkout", "-q", "-b", "release", base)
     _commit(repo, "shared.txt", "release\n", "release change")
     preserved = repo / "validation-output" / "cache.txt"
     preserved.parent.mkdir()
@@ -658,17 +641,17 @@ def test_failed_resolution_removes_only_candidate_created_untracked_files(
     assert result.worktree_restored is True
     assert not (repo / "scratch.txt").exists()
     assert preserved.read_text(encoding="utf-8") == "original\n"
-    assert _git(repo, "status", "--porcelain") == "?? validation-output/"
+    assert git(repo, "status", "--porcelain") == "?? validation-output/"
 
 
 def test_merge_commit_subject_is_detected_as_already_applied(
     tmp_path: Path,
 ) -> None:
     repo = tmp_path / "repo"
-    _init_repo(repo)
+    init_repo(repo)
     _commit(repo, "base.txt", "base\n", "base")
-    _git(repo, "branch", "release")
-    _git(repo, "update-ref", "refs/remotes/origin/release", "release")
+    git(repo, "branch", "release")
+    git(repo, "update-ref", "refs/remotes/origin/release", "release")
     _commit(
         repo,
         "merged.txt",

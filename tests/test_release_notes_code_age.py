@@ -8,50 +8,44 @@ anything unknown keeps the note, because under-reporting a real fix is worse.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from scripts.release_notes import code_age
-
-
-def _git(cwd: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
-    ).stdout
+from tests.git_helpers import git
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A repo whose baseline tag predates one feature and its later fix."""
-    _git(tmp_path, "init", "-q", "-b", "main")
-    _git(tmp_path, "config", "user.email", "t@example.com")
-    _git(tmp_path, "config", "user.name", "T")
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "config", "user.email", "t@example.com")
+    git(tmp_path, "config", "user.name", "T")
 
     old = tmp_path / "old.c"
     old.write_text("int shipped(void) { return 1; }\n")
     stable = tmp_path / "stable.c"
     stable.write_text("int stable(void) { return 1; }\n")
-    _git(tmp_path, "add", "old.c", "stable.c")
-    _git(tmp_path, "commit", "-q", "-m", "shipped code")
-    _git(tmp_path, "tag", "9.1.2")
+    git(tmp_path, "add", "old.c", "stable.c")
+    git(tmp_path, "commit", "-q", "-m", "shipped code")
+    git(tmp_path, "tag", "9.1.2")
 
     new = tmp_path / "new.c"
     new.write_text("int feature(void) { return 0; }\n")
-    _git(tmp_path, "add", "new.c")
-    _git(tmp_path, "commit", "-q", "-m", "add feature (#100)")
+    git(tmp_path, "add", "new.c")
+    git(tmp_path, "commit", "-q", "-m", "add feature (#100)")
 
     new.write_text("int feature(void) { return 1; }\n")
-    _git(tmp_path, "commit", "-q", "-am", "fix the new feature (#101)")
+    git(tmp_path, "commit", "-q", "-am", "fix the new feature (#101)")
 
     old.write_text("int shipped(void) { return 2; }\n")
-    _git(tmp_path, "commit", "-q", "-am", "fix shipped code (#102)")
+    git(tmp_path, "commit", "-q", "-am", "fix shipped code (#102)")
     return tmp_path
 
 
 def _sha(repo: Path, subject: str) -> str:
-    return _git(repo, "log", "--format=%H", "--grep", subject).splitlines()[0]
+    return git(repo, "log", "--format=%H", "--grep", subject).splitlines()[0]
 
 
 class TestReleasedCodeOracle:
@@ -100,29 +94,29 @@ class TestReleasedCodeOracle:
         # the wrong file; editing a new file while deleting a released one then
         # returned True and silently dropped a real note.
         (repo / "new.c").write_text("int feature(void) { return 3; }\n")
-        _git(repo, "rm", "-q", "stable.c")
-        _git(repo, "commit", "-qam", "edit new and delete released (#103)")
+        git(repo, "rm", "-q", "stable.c")
+        git(repo, "commit", "-qam", "edit new and delete released (#103)")
         oracle = code_age.ReleasedCodeOracle(str(repo), "9.1.2")
         assert oracle.modifies_only_unreleased_code(_sha(repo, "edit new and delete")) is False
 
     def test_rename_of_released_code_blames_the_old_path(self, repo: Path) -> None:
         # A rename's pre-image path is the old name, which is what exists at
         # <sha>^; blaming it must find the released introduction.
-        _git(repo, "mv", "stable.c", "renamed.c")
+        git(repo, "mv", "stable.c", "renamed.c")
         (repo / "renamed.c").write_text("int stable(void) { return 3; }\n")
-        _git(repo, "commit", "-qam", "rename and edit released code (#104)")
+        git(repo, "commit", "-qam", "rename and edit released code (#104)")
         oracle = code_age.ReleasedCodeOracle(str(repo), "9.1.2")
         assert oracle.modifies_only_unreleased_code(_sha(repo, "rename and edit")) is False
 
     def test_merge_commit_uses_its_first_parent_patch(self, repo: Path) -> None:
-        _git(repo, "checkout", "-q", "-b", "fix-branch")
+        git(repo, "checkout", "-q", "-b", "fix-branch")
         (repo / "stable.c").write_text("int stable(void) { return 7; }\n")
-        _git(repo, "commit", "-qam", "fix on a branch")
-        _git(repo, "checkout", "-q", "main")
+        git(repo, "commit", "-qam", "fix on a branch")
+        git(repo, "checkout", "-q", "main")
         (repo / "main-only.c").write_text("int unrelated;\n")
-        _git(repo, "add", "main-only.c")
-        _git(repo, "commit", "-q", "-m", "advance main")
-        _git(
+        git(repo, "add", "main-only.c")
+        git(repo, "commit", "-q", "-m", "advance main")
+        git(
             repo,
             "merge",
             "--no-ff",
@@ -133,5 +127,5 @@ class TestReleasedCodeOracle:
         )
 
         oracle = code_age.ReleasedCodeOracle(str(repo), "9.1.2")
-        assert oracle.modifies_only_unreleased_code(_git(repo, "rev-parse", "HEAD").strip()) is False
+        assert oracle.modifies_only_unreleased_code(git(repo, "rev-parse", "HEAD").strip()) is False
 

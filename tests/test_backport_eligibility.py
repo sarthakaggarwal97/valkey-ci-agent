@@ -20,19 +20,14 @@ from scripts.backport.eligibility import (
 from scripts.backport.registry import load_registry
 from scripts.release_notes import code_age
 from scripts.release_notes.models import MergedPR
-
-
-def _git(cwd: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
-    ).stdout.strip()
+from tests.git_helpers import git
 
 
 def _commit(repo: Path, path: str, text: str, subject: str) -> str:
     (repo / path).write_text(text)
-    _git(repo, "add", path)
-    _git(repo, "commit", "-q", "-m", subject)
-    return _git(repo, "rev-parse", "HEAD")
+    git(repo, "add", path)
+    git(repo, "commit", "-q", "-m", subject)
+    return git(repo, "rev-parse", "HEAD")
 
 
 @pytest.fixture
@@ -44,23 +39,23 @@ def upstream(tmp_path: Path) -> dict[str, Any]:
     """
     repo = tmp_path / "upstream"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "unstable")
-    _git(repo, "config", "user.email", "t@example.com")
-    _git(repo, "config", "user.name", "T")
+    git(repo, "init", "-q", "-b", "unstable")
+    git(repo, "config", "user.email", "t@example.com")
+    git(repo, "config", "user.name", "T")
     _commit(repo, "old.c", "int a;\nint b;\nint c;\n", "base (#1)")
-    _git(repo, "branch", "9.0")
-    _git(repo, "branch", "9.1")
+    git(repo, "branch", "9.0")
+    git(repo, "branch", "9.1")
 
     feature = _commit(repo, "feat.c", "int f(void) { return 0; }\n", "add feature (#100)")
     fix_feature = _commit(repo, "feat.c", "int f(void) { return 1; }\n", "fix feature (#101)")
     fix_old = _commit(repo, "old.c", "int a;\nint B;\nint c;\n", "fix old (#102)")
     additive = _commit(repo, "more.c", "int m;\n", "add more (#103)")
 
-    _git(repo, "checkout", "-q", "9.1")
-    _git(repo, "cherry-pick", feature)
-    _git(repo, "checkout", "-q", "9.0")
-    _git(repo, "cherry-pick", fix_old)
-    _git(repo, "checkout", "-q", "unstable")
+    git(repo, "checkout", "-q", "9.1")
+    git(repo, "cherry-pick", feature)
+    git(repo, "checkout", "-q", "9.0")
+    git(repo, "cherry-pick", fix_old)
+    git(repo, "checkout", "-q", "unstable")
     return {
         "path": repo,
         "shas": {101: fix_feature, 102: fix_old, 103: additive},
@@ -110,7 +105,7 @@ class TestTraceOrigins:
         # A branch forked from unstable after #101 merged carries its commit
         # under the same SHA, even if mergedAt is later than the commit time.
         repo = upstream["path"]
-        _git(repo, "branch", "9.2", upstream["shas"][101])
+        git(repo, "branch", "9.2", upstream["shas"][101])
         dest = Path(clone).parent / "clone-92"
         subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(dest)],
                        check=True, capture_output=True)
@@ -159,11 +154,11 @@ class TestTraceOrigins:
     ):
         repo = tmp_path / "repo"
         repo.mkdir()
-        _git(repo, "init", "-q", "-b", "unstable")
-        _git(repo, "config", "user.email", "t@example.com")
-        _git(repo, "config", "user.name", "T")
+        git(repo, "init", "-q", "-b", "unstable")
+        git(repo, "config", "user.email", "t@example.com")
+        git(repo, "config", "user.name", "T")
         _commit(repo, "old.c", "int a;\nint b;\nint c;\n", "base (#1)")
-        _git(repo, "branch", "9.0")
+        git(repo, "branch", "9.0")
         fix = _commit(repo, "old.c", after, f"add a check at the {expected} (#2)")
         clone = tmp_path / "clone"
         subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(clone)],
@@ -177,11 +172,11 @@ class TestTraceOrigins:
         # commit that wrote the line, which 9.0 carries.
         repo = tmp_path / "repo"
         repo.mkdir()
-        _git(repo, "init", "-q", "-b", "unstable")
-        _git(repo, "config", "user.email", "t@example.com")
-        _git(repo, "config", "user.name", "T")
+        git(repo, "init", "-q", "-b", "unstable")
+        git(repo, "config", "user.email", "t@example.com")
+        git(repo, "config", "user.name", "T")
         _commit(repo, "old.c", "int  a;\nint  b;\n", "write code (#1)")
-        _git(repo, "branch", "9.0")
+        git(repo, "branch", "9.0")
         reformat = _commit(repo, "old.c", "int a;\nint b;\n", "reformat (#2)")
         _commit(repo, ".git-blame-ignore-revs", f"# formatting\n{reformat}\n", "ignore it (#3)")
         fix = _commit(repo, "old.c", "int a;\nint B;\n", "fix b (#4)")
@@ -200,19 +195,19 @@ class TestTraceOrigins:
     def test_multi_commit_squash_traces_the_complete_change(self, tmp_path):
         upstream = tmp_path / "upstream"
         upstream.mkdir()
-        _git(upstream, "init", "-q", "-b", "main")
-        _git(upstream, "config", "user.email", "t@example.com")
-        _git(upstream, "config", "user.name", "T")
+        git(upstream, "init", "-q", "-b", "main")
+        git(upstream, "config", "user.email", "t@example.com")
+        git(upstream, "config", "user.name", "T")
         _commit(upstream, "value.txt", "one\n", "introduce one (#1)")
         _commit(upstream, "value.txt", "one\ntwo\n", "introduce two (#2)")
-        _git(upstream, "branch", "9.0")
-        _git(upstream, "checkout", "-q", "-b", "source")
+        git(upstream, "branch", "9.0")
+        git(upstream, "checkout", "-q", "-b", "source")
         first = _commit(upstream, "value.txt", "ONE\ntwo\n", "change one")
         second = _commit(upstream, "value.txt", "ONE\nTWO\n", "change two")
-        _git(upstream, "checkout", "-q", "main")
-        _git(upstream, "merge", "-q", "--squash", "source")
-        _git(upstream, "commit", "-q", "-m", "squash change (#10)")
-        squash = _git(upstream, "rev-parse", "HEAD")
+        git(upstream, "checkout", "-q", "main")
+        git(upstream, "merge", "-q", "--squash", "source")
+        git(upstream, "commit", "-q", "-m", "squash change (#10)")
+        squash = git(upstream, "rev-parse", "HEAD")
 
         clone = tmp_path / "clone"
         subprocess.run(
@@ -640,18 +635,18 @@ def test_parse_git_timestamp_accepts_utc_z_on_python_39():
 def test_multi_commit_rebase_is_undecided_instead_of_partially_traced(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.email", "t@example.com")
-    _git(repo, "config", "user.name", "T")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "t@example.com")
+    git(repo, "config", "user.name", "T")
     _commit(repo, "value.txt", "base\n", "base")
-    _git(repo, "checkout", "-q", "-b", "source")
+    git(repo, "checkout", "-q", "-b", "source")
     first = _commit(repo, "value.txt", "first\n", "first source commit")
     second = _commit(repo, "other.txt", "second\n", "second source commit")
-    _git(repo, "checkout", "-q", "main")
+    git(repo, "checkout", "-q", "main")
     _commit(repo, "main.txt", "advance\n", "advance main")
-    _git(repo, "checkout", "-q", "source")
-    _git(repo, "rebase", "-q", "main")
-    rebased_tip = _git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "-q", "source")
+    git(repo, "rebase", "-q", "main")
+    rebased_tip = git(repo, "rev-parse", "HEAD")
     assert rebased_tip != second
 
     source = MergedSourcePR(
@@ -719,7 +714,7 @@ def test_run_comments_after_each_batch(wired, monkeypatch):
 
 
 def test_run_ignores_a_registered_branch_that_does_not_exist(wired, upstream):
-    _git(upstream["path"], "branch", "-D", "9.0")
+    git(upstream["path"], "branch", "-D", "9.0")
     result = eligibility.run(
         repo_entry=wired.entry, date="2026-10-12", token="t",
         run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "r"}]),

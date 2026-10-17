@@ -13,32 +13,24 @@ from scripts.ci_fix.models import (
     TargetKind,
 )
 from scripts.ci_fix.push import PushFailed, PushRefused, commit_message, push_candidate
-
-
-def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", "-C", str(repo), *args],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
+from tests.git_helpers import git
 
 
 def _remote(tmp_path: Path, branch: str = "agent/backport/sweep/9.0") -> tuple[Path, str, str]:
     work = tmp_path / "work"
     work.mkdir()
-    _git(work, "init", "-q", "-b", "unstable")
-    _git(work, "config", "user.name", "Base")
-    _git(work, "config", "user.email", "base@example.com")
+    git(work, "init", "-q", "-b", "unstable")
+    git(work, "config", "user.name", "Base")
+    git(work, "config", "user.email", "base@example.com")
     (work / "seed.txt").write_text("seed\n")
-    _git(work, "add", "seed.txt")
-    _git(work, "commit", "-qm", "seed")
-    head_sha = _git(work, "rev-parse", "HEAD").strip()
-    _git(work, "branch", branch, head_sha)
+    git(work, "add", "seed.txt")
+    git(work, "commit", "-qm", "seed")
+    head_sha = git(work, "rev-parse", "HEAD").strip()
+    git(work, "branch", branch, head_sha)
 
     (work / "upstream.txt").write_text("fixed upstream\n")
-    _git(work, "add", "upstream.txt")
-    _git(
+    git(work, "add", "upstream.txt")
+    git(
         work,
         "-c",
         "user.name=Real Author",
@@ -48,11 +40,11 @@ def _remote(tmp_path: Path, branch: str = "agent/backport/sweep/9.0") -> tuple[P
         "-qm",
         "upstream fix\n\nSigned-off-by: Real Author <author@example.com>",
     )
-    port_sha = _git(work, "rev-parse", "HEAD").strip()
+    port_sha = git(work, "rev-parse", "HEAD").strip()
 
     bare = tmp_path / "remote.git"
-    _git(tmp_path, "clone", "-q", "--bare", str(work), str(bare))
-    _git(bare, "symbolic-ref", "HEAD", "refs/heads/unstable")
+    git(tmp_path, "clone", "-q", "--bare", str(work), str(bare))
+    git(bare, "symbolic-ref", "HEAD", "refs/heads/unstable")
     return bare, head_sha, port_sha
 
 
@@ -65,74 +57,74 @@ def _diverged_port_remote(
 ) -> tuple[Path, str, str]:
     work = tmp_path / "diverged-work"
     work.mkdir()
-    _git(work, "init", "-q", "-b", "unstable")
-    _git(work, "config", "user.name", "Base")
-    _git(work, "config", "user.email", "base@example.com")
+    git(work, "init", "-q", "-b", "unstable")
+    git(work, "config", "user.name", "Base")
+    git(work, "config", "user.email", "base@example.com")
     seed = work / "seed.txt"
     seed.write_text("seed\n")
-    _git(work, "add", "seed.txt")
+    git(work, "add", "seed.txt")
     if base_text is not None:
         (work / "collision.txt").write_text(base_text)
-        _git(work, "add", "collision.txt")
-    _git(work, "commit", "-qm", "seed")
-    base_sha = _git(work, "rev-parse", "HEAD").strip()
+        git(work, "add", "collision.txt")
+    git(work, "commit", "-qm", "seed")
+    base_sha = git(work, "rev-parse", "HEAD").strip()
     branch = "agent/backport/sweep/9.0"
-    _git(work, "branch", branch, base_sha)
+    git(work, "branch", branch, base_sha)
 
     (work / "collision.txt").write_text(upstream_text)
-    _git(work, "add", "collision.txt")
-    _git(work, "commit", "-qm", "upstream fix")
-    port_sha = _git(work, "rev-parse", "HEAD").strip()
+    git(work, "add", "collision.txt")
+    git(work, "commit", "-qm", "upstream fix")
+    port_sha = git(work, "rev-parse", "HEAD").strip()
 
-    _git(work, "checkout", "-q", branch)
+    git(work, "checkout", "-q", branch)
     (work / "collision.txt").write_text(target_text)
-    _git(work, "add", "collision.txt")
-    _git(work, "commit", "-qm", "target change")
-    head_sha = _git(work, "rev-parse", "HEAD").strip()
+    git(work, "add", "collision.txt")
+    git(work, "commit", "-qm", "target change")
+    head_sha = git(work, "rev-parse", "HEAD").strip()
 
     bare = tmp_path / "diverged-remote.git"
-    _git(tmp_path, "clone", "-q", "--bare", str(work), str(bare))
-    _git(bare, "symbolic-ref", "HEAD", "refs/heads/unstable")
+    git(tmp_path, "clone", "-q", "--bare", str(work), str(bare))
+    git(bare, "symbolic-ref", "HEAD", "refs/heads/unstable")
     return bare, head_sha, port_sha
 
 
 def _merge_port_remote(tmp_path: Path) -> tuple[Path, str, str]:
     work = tmp_path / "merge-work"
     work.mkdir()
-    _git(work, "init", "-q", "-b", "unstable")
-    _git(work, "config", "user.name", "Base")
-    _git(work, "config", "user.email", "base@example.com")
+    git(work, "init", "-q", "-b", "unstable")
+    git(work, "config", "user.name", "Base")
+    git(work, "config", "user.email", "base@example.com")
     (work / "seed.txt").write_text("seed\n")
-    _git(work, "add", "seed.txt")
-    _git(work, "commit", "-qm", "seed")
-    head_sha = _git(work, "rev-parse", "HEAD").strip()
-    _git(work, "branch", "agent/backport/sweep/9.0", head_sha)
-    _git(work, "checkout", "-qb", "fix")
+    git(work, "add", "seed.txt")
+    git(work, "commit", "-qm", "seed")
+    head_sha = git(work, "rev-parse", "HEAD").strip()
+    git(work, "branch", "agent/backport/sweep/9.0", head_sha)
+    git(work, "checkout", "-qb", "fix")
     (work / "fix.txt").write_text("fix\n")
-    _git(work, "add", "fix.txt")
-    _git(work, "commit", "-qm", "fix")
-    _git(work, "checkout", "-q", "unstable")
+    git(work, "add", "fix.txt")
+    git(work, "commit", "-qm", "fix")
+    git(work, "checkout", "-q", "unstable")
     (work / "main.txt").write_text("main\n")
-    _git(work, "add", "main.txt")
-    _git(work, "commit", "-qm", "main")
-    _git(work, "merge", "-q", "--no-ff", "-m", "merge fix", "fix")
-    port_sha = _git(work, "rev-parse", "HEAD").strip()
+    git(work, "add", "main.txt")
+    git(work, "commit", "-qm", "main")
+    git(work, "merge", "-q", "--no-ff", "-m", "merge fix", "fix")
+    port_sha = git(work, "rev-parse", "HEAD").strip()
 
     bare = tmp_path / "merge-remote.git"
-    _git(tmp_path, "clone", "-q", "--bare", str(work), str(bare))
-    _git(bare, "symbolic-ref", "HEAD", "refs/heads/unstable")
+    git(tmp_path, "clone", "-q", "--bare", str(work), str(bare))
+    git(bare, "symbolic-ref", "HEAD", "refs/heads/unstable")
     return bare, head_sha, port_sha
 
 
 def _patch_for(tmp_path: Path, head_sha: str, remote: Path, path: str = "fix.txt") -> str:
     checkout = tmp_path / f"patch-{path.replace('/', '-')}"
-    _git(tmp_path, "clone", "-q", str(remote), str(checkout))
-    _git(checkout, "checkout", "-q", head_sha)
+    git(tmp_path, "clone", "-q", str(remote), str(checkout))
+    git(checkout, "checkout", "-q", head_sha)
     destination = checkout / path
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text("the fix\n")
-    _git(checkout, "add", "--intent-to-add", path)
-    return _git(checkout, "diff", "--binary", "HEAD")
+    git(checkout, "add", "--intent-to-add", path)
+    return git(checkout, "diff", "--binary", "HEAD") + "\n"  # git() strips the final newline
 
 
 def _target(
@@ -170,10 +162,10 @@ def test_patch_is_committed_to_the_existing_branch_with_an_exact_parent(
 
     pushed = push_candidate(_candidate(patch), _target(head_sha), git_env={})
 
-    assert _git(remote, "rev-parse", "agent/backport/sweep/9.0").strip() == pushed
-    assert _git(remote, "rev-parse", f"{pushed}^").strip() == head_sha
-    assert _git(remote, "show", f"{pushed}:fix.txt") == "the fix\n"
-    assert "Signed-off-by:" not in _git(remote, "log", "-1", "--format=%B", pushed)
+    assert git(remote, "rev-parse", "agent/backport/sweep/9.0").strip() == pushed
+    assert git(remote, "rev-parse", f"{pushed}^").strip() == head_sha
+    assert git(remote, "show", f"{pushed}:fix.txt") == "the fix"
+    assert "Signed-off-by:" not in git(remote, "log", "-1", "--format=%B", pushed)
 
 
 def test_a_suggestion_target_is_never_pushed() -> None:
@@ -197,7 +189,7 @@ def test_a_ci_definition_change_is_never_pushed(
 
     with pytest.raises(PushRefused, match=f"changes {path}"):
         push_candidate(_candidate(patch, path), _target(head_sha), git_env={})
-    assert _git(remote, "rev-parse", "agent/backport/sweep/9.0").strip() == head_sha
+    assert git(remote, "rev-parse", "agent/backport/sweep/9.0").strip() == head_sha
 
 
 def test_new_draft_target_requires_the_branch_not_to_exist(
@@ -214,7 +206,7 @@ def test_new_draft_target_requires_the_branch_not_to_exist(
     )
 
     pushed = push_candidate(_candidate(patch), target, git_env={})
-    assert _git(remote, "rev-parse", target.branch).strip() == pushed
+    assert git(remote, "rev-parse", target.branch).strip() == pushed
     with pytest.raises(PushRefused, match="target branch changed"):
         push_candidate(_candidate(patch), target, git_env={})
 
@@ -228,7 +220,7 @@ def test_moved_or_deleted_existing_branch_is_not_recreated(
     monkeypatch.setattr(push_mod, "github_https_url", lambda _repo: str(remote))
 
     def delete_at_last_check() -> str:
-        _git(remote, "update-ref", "-d", "refs/heads/agent/backport/sweep/9.0")
+        git(remote, "update-ref", "-d", "refs/heads/agent/backport/sweep/9.0")
         return ""
 
     with pytest.raises(PushRefused):
@@ -238,7 +230,7 @@ def test_moved_or_deleted_existing_branch_is_not_recreated(
             git_env={},
             pre_push_check=delete_at_last_check,
         )
-    assert "agent/backport/sweep/9.0" not in _git(remote, "branch", "--list")
+    assert "agent/backport/sweep/9.0" not in git(remote, "branch", "--list")
 
 
 def test_patch_apply_failure_is_retryable(
@@ -314,10 +306,10 @@ def test_port_preserves_the_merged_commit_author(
 
     pushed = push_candidate(candidate, _target(head_sha), git_env={})
 
-    assert _git(remote, "log", "-1", "--format=%an <%ae>", pushed).strip() == (
+    assert git(remote, "log", "-1", "--format=%an <%ae>", pushed).strip() == (
         "Real Author <author@example.com>"
     )
-    body = _git(remote, "log", "-1", "--format=%B", pushed)
+    body = git(remote, "log", "-1", "--format=%B", pushed)
     assert "Signed-off-by: Real Author" in body
     assert "cherry picked from commit" in body
 
@@ -328,15 +320,15 @@ def test_port_must_be_merged_on_the_default_branch(
 ) -> None:
     remote, head_sha, _port_sha = _remote(tmp_path)
     work = tmp_path / "rogue"
-    _git(tmp_path, "clone", "-q", str(remote), str(work))
-    _git(work, "checkout", "-qb", "rogue", head_sha)
-    _git(work, "config", "user.name", "Rogue")
-    _git(work, "config", "user.email", "rogue@example.com")
+    git(tmp_path, "clone", "-q", str(remote), str(work))
+    git(work, "checkout", "-qb", "rogue", head_sha)
+    git(work, "config", "user.name", "Rogue")
+    git(work, "config", "user.email", "rogue@example.com")
     (work / "rogue.txt").write_text("rogue\n")
-    _git(work, "add", "rogue.txt")
-    _git(work, "commit", "-qm", "rogue")
-    rogue_sha = _git(work, "rev-parse", "HEAD").strip()
-    _git(work, "push", "-q", str(remote), "rogue")
+    git(work, "add", "rogue.txt")
+    git(work, "commit", "-qm", "rogue")
+    rogue_sha = git(work, "rev-parse", "HEAD").strip()
+    git(work, "push", "-q", str(remote), "rogue")
     monkeypatch.setattr(push_mod, "github_https_url", lambda _repo: str(remote))
 
     with pytest.raises(PushRefused, match="not merged"):
@@ -461,22 +453,22 @@ def test_a_ported_upstream_commit_that_changes_ci_definitions_is_not_pushed(
 ) -> None:
     work = tmp_path / "w"
     work.mkdir()
-    _git(work, "init", "-q", "-b", "unstable")
-    _git(work, "config", "user.name", "Base")
-    _git(work, "config", "user.email", "base@example.com")
+    git(work, "init", "-q", "-b", "unstable")
+    git(work, "config", "user.name", "Base")
+    git(work, "config", "user.email", "base@example.com")
     (work / "seed.txt").write_text("seed\n")
-    _git(work, "add", "seed.txt")
-    _git(work, "commit", "-qm", "seed")
-    head_sha = _git(work, "rev-parse", "HEAD").strip()
-    _git(work, "branch", "agent/backport/sweep/9.0", head_sha)
+    git(work, "add", "seed.txt")
+    git(work, "commit", "-qm", "seed")
+    head_sha = git(work, "rev-parse", "HEAD").strip()
+    git(work, "branch", "agent/backport/sweep/9.0", head_sha)
     (work / ".github" / "workflows").mkdir(parents=True)
     (work / ".github" / "workflows" / "ci.yml").write_text("on: push\n")
-    _git(work, "add", ".github")
-    _git(work, "commit", "-qm", "upstream workflow fix")
-    port_sha = _git(work, "rev-parse", "HEAD").strip()
+    git(work, "add", ".github")
+    git(work, "commit", "-qm", "upstream workflow fix")
+    port_sha = git(work, "rev-parse", "HEAD").strip()
     bare = tmp_path / "r.git"
-    _git(tmp_path, "clone", "-q", "--bare", str(work), str(bare))
-    _git(bare, "symbolic-ref", "HEAD", "refs/heads/unstable")
+    git(tmp_path, "clone", "-q", "--bare", str(work), str(bare))
+    git(bare, "symbolic-ref", "HEAD", "refs/heads/unstable")
     monkeypatch.setattr(push_mod, "github_https_url", lambda _repo: str(bare))
 
     with pytest.raises(PushRefused, match="changes .github/workflows/ci.yml"):

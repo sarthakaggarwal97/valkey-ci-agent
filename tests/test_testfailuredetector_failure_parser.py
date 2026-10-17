@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from scripts.test_failure_detector.parse_failures import (
-    JobReference,
     UniqueFailure,
     parse_and_deduplicate,
 )
