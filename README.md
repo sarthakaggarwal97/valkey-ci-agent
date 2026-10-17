@@ -428,7 +428,7 @@ for the Weekly flow. At most `max_runs` (`CI_FIX_ISSUES_MAX_RUNS`, default 2)
 it finds by their run name. Manual dispatches default to a dry run that only
 lists what it would start. The front door requires an open,
 unassigned detector-authored issue with no open linked PR, parses its latest
-run and run-attempt marker, verifies that it names a scheduled `daily.yml` or
+run marker, verifies that it names a scheduled `daily.yml` or
 `weekly.yml` run, and resolves the recorded failure to one exact failed job.
 
 The shared engine then prepares the candidate on the current tip of the
@@ -436,7 +436,7 @@ branch that run tested: `unstable` for Daily, and for Weekly the release
 branch in the failing job's name (its tested commit is read from the job
 log's checkout step). It keeps the tested SHA and exact job log as evidence.
 If it finds a candidate, code creates a unique
-`agent/ci-fix/issue-<issue>-<run>-<attempt>` branch and immediately opens a
+`agent/ci-fix/issue-<issue>-<run>` branch and immediately opens a
 draft PR against that branch, containing `Fixes #<issue>` (for Weekly,
 `Refs #<issue>` and a note to close it: GitHub closes issues only from merges
 into the default branch). One test file often holds several open failures, so

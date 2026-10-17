@@ -417,11 +417,10 @@ def _validate_issue_target(gh: Any, task: FixTask) -> str:
     occurrence = parse_detector_occurrence(body)
     if occurrence is None:
         return f"Issue #{issue_number} no longer contains a detector occurrence."
-    run_id, run_attempt = occurrence
-    if (run_id, run_attempt) != (task.failure.run_id, task.failure.run_attempt):
+    if occurrence != task.failure.run_id:
         return (
-            f"Issue #{issue_number} now points at run {run_id} attempt "
-            f"{run_attempt}, not the occurrence that was analyzed."
+            f"Issue #{issue_number} now points at run {occurrence}, "
+            "not the occurrence that was analyzed."
         )
     return ""
 

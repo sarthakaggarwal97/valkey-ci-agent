@@ -36,15 +36,13 @@ def process_failures(
     failures: list[UniqueFailure],
     *,
     run_id: int | None = None,
-    run_attempt: int = 1,
     job_failures: list[JobFailure] | None = None,
 ) -> dict[str, int]:
     """Create or update GitHub issues for each unique failure.
 
-    ``run_id`` and ``run_attempt``, when supplied, form the dedup idempotency
-    key. A re-triggered detector analyzing the same workflow attempt therefore
-    does not inflate the occurrence counter, while a GitHub Actions rerun of
-    the same run id is a distinct failure occurrence.
+    ``run_id``, when supplied, is used as the dedup idempotency key so a
+    re-triggered cron analyzing the same CI run does not inflate the
+    occurrence counter or post a duplicate comment.
 
     Returns a summary dict with counts:
     ``{created, updated, skipped, skipped_closed, errors}``. ``skipped_closed``
@@ -61,11 +59,7 @@ def process_failures(
         closed_lookback=CLOSED_ISSUE_LOOKBACK,
         filter_label=issue_renderer.LABEL_NAME,
     )
-    idempotency_key = (
-        f"{run_id}:{max(1, int(run_attempt))}"
-        if run_id is not None
-        else None
-    )
+    idempotency_key = str(run_id) if run_id is not None else None
 
     summary = {"created": 0, "updated": 0, "skipped": 0, "skipped_closed": 0, "errors": 0}
 

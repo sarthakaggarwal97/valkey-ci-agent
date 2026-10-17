@@ -10,20 +10,8 @@ from scripts.ci_fix.issue_state import has_open_linked_pr, parse_detector_occurr
 from scripts.test_failure_detector.issue_renderer import MARKER_NAMESPACE
 
 
-@pytest.mark.parametrize(
-    ("key", "expected"),
-    [
-        ("100", (100, 1)),
-        ("100:3", (100, 3)),
-        ("100.3", (100, 3)),
-    ],
-)
-def test_parse_detector_occurrence_supports_all_marker_formats(
-    key: str,
-    expected: tuple[int, int],
-) -> None:
-    body = f"<!-- {MARKER_NAMESPACE}:last-key:{key} -->"
-    assert parse_detector_occurrence(body) == expected
+def test_parse_detector_occurrence_reads_the_run() -> None:
+    assert parse_detector_occurrence(f"<!-- {MARKER_NAMESPACE}:last-key:100 -->") == 100
 
 
 def test_parse_detector_occurrence_rejects_missing_or_malformed_markers() -> None:

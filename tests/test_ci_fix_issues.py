@@ -54,24 +54,16 @@ def run_issue_fix(gh, artifact_client, repo_full_name, *, issue_number, bot_logi
     return issues_mod.report_result(gh, prepared, result)
 
 
-def _last_key(
-    run_id: int,
-    run_attempt: int | None,
-    *,
-    separator: str = ":",
-) -> str:
-    key = str(run_id) if run_attempt is None else f"{run_id}{separator}{run_attempt}"
-    return f"<!-- {issue_renderer.MARKER_NAMESPACE}:last-key:{key} -->"
+def _last_key(run_id: int) -> str:
+    return f"<!-- {issue_renderer.MARKER_NAMESPACE}:last-key:{run_id} -->"
 
 
 def _test_issue_body(
     *,
     run_id: int = 100,
-    run_attempt: int | None = 1,
     name: str = "TTL expiration",
     file: str = "tests/integration/rdb.tcl",
     occurrences: int = 1,
-    occurrence_separator: str = ":",
 ) -> str:
     failure = UniqueFailure(
         test_name=name,
@@ -87,16 +79,12 @@ def _test_issue_body(
         marker,
         occurrences,
     ).body
-    return (
-        f"{body}\n"
-        f"{_last_key(run_id, run_attempt, separator=occurrence_separator)}"
-    )
+    return f"{body}\n{_last_key(run_id)}"
 
 
 def _job_issue_body(
     *,
     run_id: int = 100,
-    run_attempt: int | None = 1,
     job: str = "test-valgrind-test (unit)",
 ) -> str:
     failure = JobFailure(
@@ -110,7 +98,7 @@ def _job_issue_body(
         f"{issue_renderer.job_fingerprint_for(failure)} -->"
     )
     body = issue_renderer.render_job_issue(failure, marker, 1).body
-    return f"{body}\n{_last_key(run_id, run_attempt)}"
+    return f"{body}\n{_last_key(run_id)}"
 
 
 def _issue(
@@ -221,37 +209,15 @@ def _run(
     return result, seen
 
 
-def test_test_failure_issue_parses_run_attempt_and_legacy_marker():
-    current = parse_issue(_issue(body=_test_issue_body(run_id=321, run_attempt=4)))
+def test_test_failure_issue_parses_its_run_and_test():
+    current = parse_issue(_issue(body=_test_issue_body(run_id=321)))
     assert current is not None
-    assert (
-        current.run_id,
-        current.run_attempt,
-        current.test_name,
-        current.test_file,
-    ) == (
+    assert (current.run_id, current.test_name, current.test_file) == (
         321,
-        4,
         "TTL expiration",
         "tests/integration/rdb.tcl",
     )
     assert current.fingerprint
-
-    legacy = parse_issue(_issue(body=_test_issue_body(run_id=321, run_attempt=None)))
-    assert legacy is not None
-    assert (legacy.run_id, legacy.run_attempt) == (321, 1)
-
-    legacy_dot = parse_issue(
-        _issue(
-            body=_test_issue_body(
-                run_id=321,
-                run_attempt=4,
-                occurrence_separator=".",
-            )
-        )
-    )
-    assert legacy_dot is not None
-    assert (legacy_dot.run_id, legacy_dot.run_attempt) == (321, 4)
 
 
 def test_job_failure_issue_preserves_its_detector_identity():
@@ -261,16 +227,15 @@ def test_job_failure_issue_preserves_its_detector_identity():
         step="test",
         summary=("[err]: Valgrind error",),
     )
-    parsed = parse_issue(_issue(body=_job_issue_body(run_attempt=2)))
+    parsed = parse_issue(_issue(body=_job_issue_body()))
     assert parsed is not None
     assert parsed.job_name == "test-valgrind-test (unit)"
-    assert parsed.run_attempt == 2
     assert parsed.fingerprint == issue_renderer.job_fingerprint_for(failure)
 
 
 def test_non_detector_body_is_not_parsed():
     assert parse_issue(_issue(body="Please fix this test")) is None
-    body = _test_issue_body().replace(_last_key(100, 1), "")
+    body = _test_issue_body().replace(_last_key(100), "")
     assert parse_issue(_issue(body=body)) is None
 
 
@@ -319,7 +284,7 @@ def test_legacy_detector_issue_remains_eligible_before_cutover():
 def test_ready_fix_uses_exact_job_and_opens_draft_in_target_repo(
     monkeypatch,
 ):
-    issue = _issue(body=_test_issue_body(run_attempt=3))
+    issue = _issue(body=_test_issue_body())
     jobs = (
         FailedJob("test-valgrind-test (unit)", 44),
         FailedJob("test-ubuntu-jemalloc", 55),
@@ -345,7 +310,7 @@ def test_ready_fix_uses_exact_job_and_opens_draft_in_target_repo(
     assert task.target.kind is TargetKind.DRAFT_PR
     assert task.target.repo_full_name == "o/r"
     assert task.target.base_repo_full_name == "o/r"
-    assert task.target.branch == "agent/ci-fix/issue-7-100-3"
+    assert task.target.branch == "agent/ci-fix/issue-7-100"
     assert task.target.expected_sha == _BASE
     assert task.failure.base_branch == "unstable"
     assert result["action"] == "opened"
@@ -445,13 +410,12 @@ def test_log_only_failure_keeps_exact_job_id(monkeypatch):
         MagicMock(),
         MagicMock(),
         "o/r",
-        SimpleNamespace(id=100),
+        SimpleNamespace(id=100, run_attempt=4),
         IssueFailure(
             7,
             100,
             "Throttling tears down",
             "tests/integration/throttle-repl.tcl",
-            run_attempt=4,
         ),
         (),
         issues_mod.Source.DAILY,
@@ -553,26 +517,6 @@ def test_non_daily_source_run_is_refused_with_terminal_comment(
     engine.assert_not_called()
 
 
-def test_source_run_attempt_must_match_issue_marker(monkeypatch):
-    issue = _issue(body=_test_issue_body(run_attempt=2))
-    gh, _repo, _run_ = _gh(issue, run_attempt=3)
-    engine = MagicMock()
-    monkeypatch.setitem(_ENGINE, "run_fix", engine)
-
-    result = run_issue_fix(
-        gh,
-        MagicMock(),
-        "o/r",
-        issue_number=7,
-        bot_login=_BOT,
-        git_env={},
-    )
-
-    assert result["action"] == "refused"
-    assert "currently attempt 3" in result["summary"]
-    engine.assert_not_called()
-
-
 def test_job_level_issue_reaches_shared_engine(monkeypatch):
     issue = _issue(body=_job_issue_body())
     result, seen = _run(
@@ -587,14 +531,7 @@ def test_job_level_issue_reaches_shared_engine(monkeypatch):
 
 
 def test_branch_name_is_stable_for_the_exact_detector_occurrence():
-    assert (
-        issues_mod._branch_name(IssueFailure(7, 100, run_attempt=3))
-        == "agent/ci-fix/issue-7-100-3"
-    )
-    assert (
-        issues_mod._branch_name(IssueFailure(7, 100, run_attempt=4))
-        == "agent/ci-fix/issue-7-100-4"
-    )
+    assert issues_mod._branch_name(IssueFailure(7, 100)) == "agent/ci-fix/issue-7-100"
 
 
 def test_explicit_positive_issue_number_is_required():
@@ -626,7 +563,7 @@ def _weekly_issue_body() -> str:
     )
     marker = f"<!-- {issue_renderer.MARKER_NAMESPACE}:{issue_renderer.fingerprint_for(failure)} -->"
     body = issue_renderer.renderer_for(failure).render(marker, 1).body
-    return f"{body}\n{_last_key(100, 1)}"
+    return f"{body}\n{_last_key(100)}"
 
 
 def test_a_weekly_issue_is_fixed_on_the_release_branch_its_job_tested(monkeypatch):
@@ -736,7 +673,7 @@ def test_a_weekly_issue_resolves_to_its_job_through_the_detectors_own_parsing(mo
     tests, _job_failures = find_unrecorded_failures(artifacts, "o/r", {}, jobs=jobs)
     (filed,) = [f for f in split_by_branch(tests) if f.branch == "8.1"]
     marker = f"<!-- {issue_renderer.MARKER_NAMESPACE}:{issue_renderer.fingerprint_for(filed)} -->"
-    body = issue_renderer.renderer_for(filed).render(marker, 1).body + "\n" + _last_key(100, 1)
+    body = issue_renderer.renderer_for(filed).render(marker, 1).body + "\n" + _last_key(100)
     failure = parse_issue(_issue(body=body))
     monkeypatch.setattr(issues_mod, "jobs_for_run_attempt", lambda *a, **k: jobs)
     _gh_, _repo, run = _weekly_gh(_issue(body=body))

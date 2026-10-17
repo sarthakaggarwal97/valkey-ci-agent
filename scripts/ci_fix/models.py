@@ -213,7 +213,6 @@ class IssueFailure:
     test_file: str = ""
     job_name: str = ""
     fingerprint: str = ""
-    run_attempt: int = 1
     # The release branch of a Weekly test failure issue.
     branch: str = ""
 

@@ -328,7 +328,6 @@ def run(
         repo_full_name,
         unique_failures,
         run_id=run_id,
-        run_attempt=run_attempt,
         job_failures=job_failures,
     )
     log_outcome(

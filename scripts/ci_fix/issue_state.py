@@ -9,17 +9,16 @@ from scripts.common.github_client import retry_github_call
 from scripts.test_failure_detector.issue_renderer import MARKER_NAMESPACE
 
 _OCCURRENCE_RE = re.compile(
-    rf"<!-- {re.escape(MARKER_NAMESPACE)}:last-key:(?P<run>\d+)"
-    rf"(?:[.:](?P<attempt>\d+))? -->"
+    rf"<!-- {re.escape(MARKER_NAMESPACE)}:last-key:(?P<run>\d+) -->"
 )
 
 
-def parse_detector_occurrence(body: str) -> tuple[int, int] | None:
-    """Return ``(run_id, run_attempt)`` from a detector occurrence marker."""
+def parse_detector_occurrence(body: str) -> int | None:
+    """Return the run id from a detector occurrence marker."""
     marker = _OCCURRENCE_RE.search(body)
     if marker is None:
         return None
-    return int(marker.group("run")), int(marker.group("attempt") or 1)
+    return int(marker.group("run"))
 
 
 def has_open_linked_pr(issue: Any) -> bool:

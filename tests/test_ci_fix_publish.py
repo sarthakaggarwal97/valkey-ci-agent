@@ -419,7 +419,7 @@ def test_wrong_base_existing_occurrence_pr_is_not_reused(
         (_issue(state="closed"), "no longer open"),
         (_issue(assignees=[SimpleNamespace(login="alice")]), "now assigned"),
         (
-            _issue(body="<!-- valkey-ci-agent:test-failure:last-key:101.2 -->"),
+            _issue(body="<!-- valkey-ci-agent:test-failure:last-key:101 -->"),
             "now points at run 101",
         ),
         (_issue(body="detector marker removed"), "no longer contains"),

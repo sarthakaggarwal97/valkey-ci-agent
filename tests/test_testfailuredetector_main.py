@@ -431,7 +431,6 @@ def test_process_failures_upserts_job_failures_with_their_own_identity():
             "valkey-io/valkey",
             [],
             run_id=9,
-            run_attempt=2,
             job_failures=[freebsd, alpine],
         )
     assert summary["created"] == 2
@@ -440,58 +439,10 @@ def test_process_failures_upserts_job_failures_with_their_own_identity():
     assert len(set(fingerprints)) == 2
     kwargs = next(call.kwargs for call in publisher.upsert.call_args_list
                   if call.kwargs["fingerprint"] == job_fingerprint_for(freebsd))
-    assert kwargs["idempotency_key"] == "9:2"
+    assert kwargs["idempotency_key"] == "9"
     # Job issues are found by their marker only, never adopted by title.
     assert "title_fallback" not in kwargs
     assert kwargs["render"]("<!-- m -->", 1).title == "[JOB-FAILURE] test-freebsd in Daily"
-
-
-def test_explicit_run_passes_its_attempt_to_issue_idempotency(monkeypatch):
-    gh = MagicMock()
-    gh.get_repo.return_value.get_workflow_run.return_value = MagicMock(
-        run_attempt=4,
-    )
-    monkeypatch.setattr(detector_main, "Github", lambda **_kwargs: gh)
-    monkeypatch.setattr(detector_main, "ArtifactClient", MagicMock())
-    monkeypatch.setattr(
-        detector_main,
-        "download_all_test_failures",
-        lambda *args, **kwargs: b'{"job": {"suite": []}}',
-    )
-    failure = MagicMock(display_name="t", jobs=[])
-    monkeypatch.setattr(
-        detector_main,
-        "parse_and_deduplicate",
-        lambda *args, **kwargs: [failure],
-    )
-    monkeypatch.setattr(
-        detector_main,
-        "jobs_for_run_attempt",
-        lambda *args, **kwargs: (),
-    )
-    monkeypatch.setattr(
-        detector_main,
-        "find_unrecorded_failures",
-        lambda *args, **kwargs: ([], []),
-    )
-    process = MagicMock(
-        return_value={
-            "created": 1,
-            "updated": 0,
-            "skipped": 0,
-            "skipped_closed": 0,
-            "errors": 0,
-        },
-    )
-    monkeypatch.setattr(detector_main, "process_failures", process)
-    monkeypatch.setattr(detector_main, "emit_job_summary", MagicMock())
-
-    assert detector_main.run(
-        github_token="t",
-        repo_full_name="valkey-io/valkey",
-        run_id=123,
-    ) == 0
-    assert process.call_args.kwargs["run_attempt"] == 4
 
 
 class TestWeeklyRun:

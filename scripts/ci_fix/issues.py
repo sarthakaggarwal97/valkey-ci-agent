@@ -84,7 +84,7 @@ _TEST_FILE_RE = re.compile(r"^- Test file: `(?P<value>.+)`\s*$", re.MULTILINE)
 
 
 def parse_issue(issue: Any) -> IssueFailure | None:
-    """Parse a detector issue, accepting legacy occurrence-marker formats."""
+    """Parse a detector issue."""
     body = str(getattr(issue, "body", "") or "")
     occurrence = parse_detector_occurrence(body)
     detector = _DETECTOR_RE.search(body)
@@ -92,14 +92,13 @@ def parse_issue(issue: Any) -> IssueFailure | None:
         return None
 
     number = int(issue.number)
-    run_id, run_attempt = occurrence
+    run_id = occurrence
     fingerprint = detector.group("fingerprint")
     job = parse_job_marker(body)
     if job:
         return IssueFailure(
             number=number,
             run_id=run_id,
-            run_attempt=run_attempt,
             job_name=job,
             fingerprint=fingerprint,
         )
@@ -111,7 +110,6 @@ def parse_issue(issue: Any) -> IssueFailure | None:
     return IssueFailure(
         number=number,
         run_id=run_id,
-        run_attempt=run_attempt,
         test_name=name.group("value"),
         test_file=file.group("value"),
         fingerprint=fingerprint,
@@ -181,12 +179,6 @@ def _run_mismatch(run: Any, repo_full_name: str, failure: IssueFailure) -> str:
     )
     if head_repo != repo_full_name:
         return f"run {failure.run_id} belongs to {head_repo or 'another repository'}"
-    run_attempt = int(getattr(run, "run_attempt", 1) or 1)
-    if run_attempt != failure.run_attempt:
-        return (
-            f"run {failure.run_id} is currently attempt {run_attempt}, while "
-            f"the issue records attempt {failure.run_attempt}"
-        )
     if not str(getattr(run, "head_branch", "") or ""):
         return f"run {failure.run_id} has no source branch"
     if not str(getattr(run, "head_sha", "") or ""):
@@ -212,7 +204,7 @@ def _failing_jobs(
         gh,
         repo_full_name,
         int(run.id),
-        run_attempt=failure.run_attempt,
+        run_attempt=int(getattr(run, "run_attempt", 1) or 1),
     )
     failed = [
         job
@@ -345,8 +337,7 @@ def _other_open_issues(repo: Any, bot_login: str, *, exclude: int, branch: str) 
 def _branch_name(failure: IssueFailure) -> str:
     """Return the one durable branch name for this detector occurrence."""
     return (
-        f"{BRANCH_PREFIX}issue-{failure.number}-{failure.run_id}-"
-        f"{failure.run_attempt}"
+        f"{BRANCH_PREFIX}issue-{failure.number}-{failure.run_id}"
     )
 
 
@@ -356,8 +347,6 @@ _RESULT_HEADING = "**Automatic CI fix — "
 def _source_link(repo_full_name: str, failure: IssueFailure) -> str:
     """The Markdown link to the run that recorded ``failure``."""
     run_url = f"https://github.com/{repo_full_name}/actions/runs/{failure.run_id}"
-    if failure.run_attempt > 1:
-        return f"[run {failure.run_id} attempt {failure.run_attempt}]({run_url}/attempts/{failure.run_attempt})"
     return f"[run {failure.run_id}]({run_url})"
 
 
@@ -442,7 +431,6 @@ def _result_dict(
         "repo": repo_full_name,
         "issue": failure.number,
         "run": failure.run_id,
-        "run_attempt": failure.run_attempt,
         "job": job_name,
         "branch": branch,
         "action": action,
@@ -587,7 +575,7 @@ def prepare_issue(
         failure=Failure(
             repo_full_name=repo_full_name,
             run_id=failure.run_id,
-            run_attempt=failure.run_attempt,
+            run_attempt=int(getattr(run, "run_attempt", 1) or 1),
             head_sha=tested_sha or base_sha,
             job_id=0,
             job_name=failure.job_name or f"{source.label} CI failure",
