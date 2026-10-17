@@ -320,9 +320,9 @@ OIDC session for the model.
 Target behavior is data-driven but deliberately not a plugin framework.
 `policy.py` has one exhaustive `TargetKind` capability map covering agent
 profile, patch limit, port support, push permission, and branch creation.
-`publish.py` has one exhaustive map from `TargetKind` to the three small target
-handlers. Adding a target therefore requires an explicit capability record and
-publisher, while front doors continue to produce the same `FixTask`.
+`publish.py` branches on `TargetKind` to one of three small target handlers.
+Adding a target therefore requires a capability record and a handler, while
+front doors continue to produce the same `FixTask`.
 
 Within `engine.prepare_fix`, nothing is edited before two facts are
 established. `prior_fixes.py` searches the checkout's history (the clone holds
