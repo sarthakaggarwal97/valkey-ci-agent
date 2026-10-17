@@ -33,7 +33,7 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.ci_fix.issues import IssueFailure, fix_reported, open_detector_issues, validate_issue
-from scripts.common.github_client import retry_github_call
+from scripts.common.github_client import dispatch_workflow, retry_github_call
 from scripts.common.identity import APP_LOGIN
 from scripts.common.logging_utils import configure_logging
 from scripts.common.valkey_ci import release_branch
@@ -140,13 +140,11 @@ def main(argv: list[str] | None = None) -> int:
     def dispatch(issue: int) -> None:
         if args.dry_run:
             return
-        dispatched = retry_github_call(
-            lambda: workflow.create_dispatch(ref, {"issue": str(issue)}),
+        dispatch_workflow(
+            workflow, ref, {"issue": str(issue)},
             retries=2,
-            description=f"dispatch {WORKFLOW} for issue #{issue}",
+            description=f"{agent_repo}/{WORKFLOW}@{ref} for issue #{issue}",
         )
-        if not dispatched:
-            raise RuntimeError(f"{agent_repo}/{WORKFLOW}@{ref} rejected the dispatch for #{issue}")
 
     decisions = dispatch_issues(
         target, workflow, repo_full_name=args.repo, bot_login=bot_login,

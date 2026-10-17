@@ -22,6 +22,7 @@ from scripts.common.git_auth import github_https_url
 from scripts.common.identity import RELEASE_CUT_BRANCH_PREFIX
 from scripts.common.logging_utils import log_outcome
 from scripts.common.proc import BOT_EMAIL, BOT_NAME, git_output, run_git
+from scripts.common.text_utils import escape_cell
 from scripts.release_notes import contributors as gc
 from scripts.release_notes import pipeline as pipeline_mod
 from scripts.release_notes import projects as projects_mod
@@ -111,7 +112,7 @@ def canonical_version(version: str) -> str:
     """Return the canonical ``M.m.p`` form of *version* (strips, drops leading zeros).
 
     The single normalization choke point for ``version``, mirroring
-    :func:`_normalize_stage` for the stage. Raw dispatch input may carry a trailing
+    :func:`release_format.normalize_stage` for the stage. Raw dispatch input may carry a trailing
     space (``"9.1.0 "`` -> an invalid prep-branch ref) or leading zeros
     (``"09.1.0"`` -> ``version.h``/heading/commit carry ``09.1.0`` while the branch
     name is ``9.1.0``, a self-inconsistent release). Canonicalizing once and
@@ -120,13 +121,6 @@ def canonical_version(version: str) -> str:
     """
     major, minor, patch = _split_version(version)
     return f"{major}.{minor}.{patch}"
-
-
-def _normalize_stage(stage: str) -> str:
-    s = stage.strip().lower()
-    if s == "ga" or _RC_STAGE_RE.match(s):
-        return s
-    raise ValueError(f"stage must be 'ga' or 'rcN' (e.g. rc1), got {stage!r}")
 
 
 def _remote_branch_exists(repo_dir: str, branch: str) -> bool:
@@ -169,7 +163,7 @@ def resolve_branch_plan(
     The target is always M.m (derived from version). The branch must already
     exist on origin (created by maintainers).
     """
-    stage_lc = _normalize_stage(stage)
+    stage_lc = rn.normalize_stage(stage)
     major, minor, _patch = _split_version(version)
     target = f"{major}.{minor}"
 
@@ -227,11 +221,6 @@ def _warn_rc_sequence(
     return detail
 
 
-def stage_release_name(version: str, stage_lc: str) -> str:
-    """``9.1.0`` at ga, else ``9.1.0-rcN``."""
-    return version if stage_lc == "ga" else f"{version}-{stage_lc}"
-
-
 def commit_title(version: str, stage_lc: str, display_name: str) -> str:
     """Match valkey's release commit titles."""
     if stage_lc == "ga":
@@ -280,7 +269,7 @@ def validate_release_progression(
         return
 
     target_canonical = canonical_version(target_version)
-    target_stage_lc = _normalize_stage(target_stage)
+    target_stage_lc = rn.normalize_stage(target_stage)
     if not bumper.records_stage:
         if _split_version(target_canonical) >= _split_version(current_version):
             return
@@ -1383,7 +1372,7 @@ def _build_pr_body(
     regen = notes_meta.regen
     return (
         _hold_banner(_hold_reasons(plan, notes_meta), force_ready)
-        + f"Cuts **{stage_release_name(version, plan.stage)}** onto release line "
+        + f"Cuts **{rn.stage_release_name(version, plan.stage)}** onto release line "
         f"`{plan.target}`.\n\n"
         f"- Promotes the release notes into a dated section, bumps "
         f"`{profile.bumper.version_file}`, and refreshes the running contributor list.\n"
@@ -1617,8 +1606,8 @@ def _uncertain_section(uncertain: Sequence[Any]) -> str:
         "|----|----------|-------------|",
     ]
     for note in uncertain:
-        reason = publish_mod.escape_cell(note.reason) if note.reason else "(no reason given)"
-        category = publish_mod.escape_cell(note.category) if note.category else "(none)"
+        reason = escape_cell(note.reason) if note.reason else "(no reason given)"
+        category = escape_cell(note.category) if note.category else "(none)"
         lines.append(f"| #{note.pr_number} | {category} | {reason} |")
     lines.append("")
     return "\n".join(lines)
@@ -1675,8 +1664,8 @@ def _impact_review_section(impacts: Sequence[Any], urgency: str) -> str:
     for impact in impacts:
         table.append(
             f"| [#{impact.number}]({impact.url}) | "
-            f"{publish_mod.escape_cell(impact.title)} | "
-            f"{publish_mod.escape_cell(impact.reason)} |"
+            f"{escape_cell(impact.title)} | "
+            f"{escape_cell(impact.reason)} |"
         )
     lines.extend(_details(f"{len(impacts)} PR(s) with impact signals", table))
     lines.append("")
@@ -1701,7 +1690,7 @@ def _advisory_section(notes_meta: "_NotesMeta") -> str:
             "\n### ⚠️ Security advisories could not be read\n\n"
             "`--security-from-advisories` was set, but listing the repository's "
             "security advisories failed (often the token lacks advisory-read "
-            f"permission): {publish_mod.escape_cell(sel.fetch_error)}. No CVEs were "
+            f"permission): {escape_cell(sel.fetch_error)}. No CVEs were "
             "auto-added. A maintainer with access should add any Security Fixes by "
             "hand and re-cut.\n"
         )
@@ -1720,7 +1709,7 @@ def _advisory_section(notes_meta: "_NotesMeta") -> str:
             f"({sel.considered} published advisor{'y' if sel.considered == 1 else 'ies'} examined)."
         )
     if sel.unreadable_ids:
-        refs = ", ".join(f"`{publish_mod.escape_cell(i)}`" for i in sel.unreadable_ids)
+        refs = ", ".join(f"`{escape_cell(i)}`" for i in sel.unreadable_ids)
         lines.append(
             f"\n⚠️ {len(sel.unreadable_ids)} published advisor"
             f"{'y' if len(sel.unreadable_ids) == 1 else 'ies'} could **not** be read "
@@ -1794,7 +1783,7 @@ def _wording_alignment_section(regen: Any) -> str:
         lines.append("- No release line's published notes could be read.")
     if lines_failed:
         for line, reason in lines_failed:
-            detail = publish_mod.escape_cell(reason) if reason else "unknown reason"
+            detail = escape_cell(reason) if reason else "unknown reason"
             # Deliberately not a ⚠️: a line older than the changelog file, or one
             # that never had it, is the normal case and must not read as a defect.
             lines.append(
@@ -1828,9 +1817,9 @@ def _wording_alignment_section(regen: Any) -> str:
         generated = note.generated_text
         table.append(
             f"| #{note.pr_number} | `{note.release_line}` "
-            f"({publish_mod.escape_cell(note.release_heading)}) | "
-            f"{publish_mod.escape_cell(note.text)} | "
-            f"{publish_mod.escape_cell(generated) if generated else '—'} |"
+            f"({escape_cell(note.release_heading)}) | "
+            f"{escape_cell(note.text)} | "
+            f"{escape_cell(generated) if generated else '—'} |"
         )
     lines.extend(_details(f"{len(aligned)} note(s) reusing published wording", table))
     lines.append("")
@@ -1877,11 +1866,11 @@ def _declined_alignment_section(declined: Sequence[Any]) -> str:
     ]
     for item in declined:
         mark = "⚠️ " if item.needs_review else ""
-        heading_cell = publish_mod.escape_cell(item.release_heading)
+        heading_cell = escape_cell(item.release_heading)
         lines_cell = f"`{item.release_line}` ({heading_cell})" if heading_cell else f"`{item.release_line}`"
         table.append(
             f"| #{item.pr_number} | {lines_cell} | "
-            f"{mark}{publish_mod.escape_cell(item.reason)} |"
+            f"{mark}{escape_cell(item.reason)} |"
         )
     lines.extend(_details(f"{len(declined)} note(s) not reusing published wording", table))
     lines.append("")
@@ -1935,7 +1924,7 @@ def _no_new_prs_section(
 
 def _ai_triage_reason_cell(pr: Any) -> str:
     """Render the reason cell for an AI-triaged PR, flagging low-confidence calls."""
-    reason = publish_mod.escape_cell(pr.reason) if pr.reason else "(no reason given)"
+    reason = escape_cell(pr.reason) if pr.reason else "(no reason given)"
     return f"⚠️ {reason}" if pr.uncertain else reason
 
 
@@ -1965,7 +1954,7 @@ def _guardrail_included_section(guardrail_included: Sequence[Any]) -> str:
     ]
     for pr in guardrail_included:
         lines.append(
-            f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} | "
+            f"| [#{pr.number}]({pr.url}) | {escape_cell(pr.title)} | "
             f"{_ai_triage_reason_cell(pr)} |"
         )
     lines.append("")
@@ -2024,7 +2013,7 @@ def _triage_section(triage: Sequence[Any]) -> str:
         "|----|-------|",
     ]
     for pr in triage:
-        lines.append(f"| [#{pr.number}]({pr.url}) | {publish_mod.escape_cell(pr.title)} |")
+        lines.append(f"| [#{pr.number}]({pr.url}) | {escape_cell(pr.title)} |")
     lines.append("")
     return "\n".join(lines)
 
@@ -2055,7 +2044,7 @@ def _unresolved_section(unresolved: Sequence[Any]) -> str:
     ]
     for commit in unresolved:
         sha = (commit.sha or "")[:12]
-        lines.append(f"| `{sha}` | {publish_mod.escape_cell(commit.subject)} |")
+        lines.append(f"| `{sha}` | {escape_cell(commit.subject)} |")
     lines.append("")
     return "\n".join(lines)
 
@@ -2118,7 +2107,7 @@ def _unresolved_backports_section(unresolved_backports: Sequence[Any]) -> str:
     ]
     for bp in unresolved_backports:
         ref = f"[#{bp.number}]({bp.url})" if bp.url else f"#{bp.number}"
-        lines.append(f"| {ref} | {publish_mod.escape_cell(bp.title)} |")
+        lines.append(f"| {ref} | {escape_cell(bp.title)} |")
     lines.append("")
     return "\n".join(lines)
 
@@ -2154,7 +2143,7 @@ def _unresolved_cherry_picks_section(unresolved_cherry_picks: Sequence[Any]) -> 
     ]
     for cp in unresolved_cherry_picks:
         sha = (cp.sha or "")[:12]
-        subj = publish_mod.escape_cell(cp.subject) if cp.subject else ""
+        subj = escape_cell(cp.subject) if cp.subject else ""
         sources = ", ".join(f"`{s[:12]}`" for s in cp.source_shas) or "(none)"
         lines.append(f"| #{cp.number} | `{sha}` | {subj} | {sources} |")
     lines.append("")
@@ -2190,7 +2179,7 @@ def _collided_section(collided: Sequence[Any]) -> str:
         sha = (c.sha or "")[:12]
         kept = (c.kept_sha or "")[:12]
         lines.append(
-            f"| `{sha}` | {publish_mod.escape_cell(c.subject)} | #{c.number} | `{kept}` |"
+            f"| `{sha}` | {escape_cell(c.subject)} | #{c.number} | `{kept}` |"
         )
     lines.append("")
     return "\n".join(lines)
@@ -2224,7 +2213,7 @@ def _reverted_section(reverted: Sequence[Any]) -> str:
     for r in reverted:
         sha = (r.sha or "")[:12]
         lines.append(
-            f"| #{r.number} | {publish_mod.escape_cell(r.title)} | `{sha}` |"
+            f"| #{r.number} | {escape_cell(r.title)} | `{sha}` |"
         )
     lines.append("")
     return "\n".join(lines)

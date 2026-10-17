@@ -80,6 +80,7 @@ def test_rerun_regenerates_latest_tip_and_updates_same_open_pr(
     repo.get_pull.side_effect = lambda number: pulls[number]
 
     existing = MagicMock(number=77, html_url="https://example.test/pull/77", draft=False)
+    existing.head.repo.full_name = "valkey-io/valkey"
 
     def _convert_to_draft() -> None:
         existing.draft = True

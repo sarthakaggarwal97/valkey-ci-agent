@@ -42,6 +42,7 @@ from scripts.ci_fix.reproduce import JobCommands
 from scripts.ci_fix.state import load, save
 from scripts.common.git_auth import GitAuth
 from scripts.common.identity import APP_LOGIN
+from scripts.common.job_summary import write_outputs
 from scripts.common.workflow_artifacts import ArtifactClient
 
 logger = logging.getLogger(__name__)
@@ -175,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
             gh, ArtifactClient(gh, token=token), FrontDoor(args.front_door), request,
             bot_login=bot_login, out=args.out,
         )
-        _write_outputs(outputs)
+        write_outputs(outputs)
         return 1 if outputs.get("action") == ResultKind.FAILED.value else 0
 
     run_url = "{}/{}/actions/runs/{}".format(
@@ -188,16 +189,6 @@ def main(argv: list[str] | None = None) -> int:
         )
     print(json.dumps(result, indent=2))
     return 1 if result.get("action") == ResultKind.FAILED.value else 0
-
-
-def _write_outputs(outputs: dict[str, str]) -> None:
-    path = os.environ.get("GITHUB_OUTPUT")
-    if not path:
-        print(json.dumps(outputs, indent=2))
-        return
-    with open(path, "a", encoding="utf-8") as handle:
-        for key, value in outputs.items():
-            handle.write(f"{key}={value}\n")
 
 
 if __name__ == "__main__":

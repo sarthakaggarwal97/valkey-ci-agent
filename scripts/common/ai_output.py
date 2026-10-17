@@ -1,4 +1,4 @@
-"""Parse a JSON object out of a Claude Code subprocess's output.
+"""Parse the final text, or a JSON object in it, out of a Claude Code subprocess's output.
 
 Claude Code emits stream-json: a sequence of event lines ending in a
 ``result`` event whose ``result`` field holds the model's final text. The
@@ -12,6 +12,27 @@ from __future__ import annotations
 
 import json
 from typing import Any
+
+
+def agent_result_text(stdout: str) -> str:
+    """Return the stripped text of the last stream-json ``result`` event, or "".
+
+    A non-string result is rendered as sorted JSON.
+    """
+    result_text = ""
+    for line in stdout.strip().splitlines():
+        try:
+            event = json.loads(line)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(event, dict) or event.get("type") != "result" or "result" not in event:
+            continue
+        raw_result = event.get("result")
+        if isinstance(raw_result, str):
+            result_text = raw_result
+        elif raw_result is not None:
+            result_text = json.dumps(raw_result, sort_keys=True, default=str)
+    return result_text.strip()
 
 
 def extract_json_object(stdout: str, *, required_key: str) -> dict[str, Any] | None:

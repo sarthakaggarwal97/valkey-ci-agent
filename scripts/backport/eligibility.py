@@ -46,20 +46,20 @@ from scripts.backport.mark_done import branch_pr_index, present_in_index
 from scripts.backport.registry import RepoEntry, load_registry
 from scripts.backport.source_plan import SourceChangeError, prepare_source_change
 from scripts.backport.sweep_git import clone_target_branch
-from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.utils import pr_numbers_from_commit_messages
 from scripts.common.ai_output import extract_json_object
 from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
+from scripts.common.github_graphql import GitHubGraphQLClient
 from scripts.common.identity import VALKEY_REPO
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.proc import git_output
+from scripts.common.text_utils import escape_cell
 from scripts.release.versioning import parse_release_branch
 from scripts.release_notes.ai_inputs import PRDiffCollector, build_prompt_payload, exact_pr_number
 from scripts.release_notes.code_age import OriginsUnknown, line_origins
 from scripts.release_notes.models import MergedPR
-from scripts.release_notes.publish import escape_cell
 
 logger = logging.getLogger(__name__)
 

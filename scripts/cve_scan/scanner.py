@@ -13,8 +13,8 @@ import subprocess
 from typing import Any
 
 from scripts.cve_scan.config import DEFAULT_PLATFORMS
+from scripts.cve_scan.cve_findings_parser import ParseError, filter_by_threshold, parse_trivy
 from scripts.cve_scan.models import Finding, Severity
-from scripts.parsers.cve_findings_parser import ParseError, filter_by_threshold, parse_trivy
 
 logger = logging.getLogger(__name__)
 

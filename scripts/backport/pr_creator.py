@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from github import Github
-from github.GithubException import GithubException
 
 from scripts.backport.models import (
     BackportPRContext,
@@ -14,7 +13,8 @@ from scripts.backport.models import (
     ResolutionResult,
 )
 from scripts.backport.utils import build_branch_name, build_pr_title
-from scripts.common.github_client import retry_github_call
+from scripts.common.github_client import ensure_label, retry_github_call
+from scripts.common.text_utils import escape_cell
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +85,56 @@ def pull_matches_push_repo(pr: Any, push_repo: str) -> bool:
     return isinstance(full_name, str) and full_name == push_repo
 
 
-def _escape_table_cell(value: object) -> str:
-    """Return markdown-table-safe text."""
-    text = str(value).replace("\r\n", "\n").replace("\r", "\n").strip()
-    if not text:
-        return ""
-    return text.replace("|", "\\|").replace("\n", "<br>")
+def find_pulls_by_head(
+    repo: Any,
+    *,
+    base_repo: str,
+    push_repo: str | None,
+    branch: str,
+    state: str = "open",
+    base: str | None = None,
+) -> list[Any]:
+    """Return the *state* PRs on *repo* whose head is *branch* of the push repo.
+
+    GitHub's head filter names only the owner, so each PR's head repository is
+    checked as well. A missing *push_repo* means *base_repo* itself.
+    """
+    head_ref = build_pull_search_head_ref(base_repo, push_repo, branch)
+    filters = {"state": state, "head": head_ref}
+    if base:
+        filters["base"] = base
+    pulls = retry_github_call(
+        lambda: list(repo.get_pulls(**filters)),
+        retries=3,
+        description=f"list {state} PRs for {head_ref}",
+    )
+    return [pull for pull in pulls if pull_matches_push_repo(pull, push_repo or base_repo)]
+
+
+def apply_labels(repo: Any, pr: Any, labels: list[str]) -> None:
+    """Apply *labels* to *pr*, creating any missing on *repo* first.
+
+    Best-effort and idempotent: a failure is logged and swallowed, so labeling
+    never fails a run whose PR is already open, and ``add_to_labels`` re-adds
+    existing labels without error.
+    """
+    for label in labels:
+        color, description = _LABEL_DEFAULTS.get(
+            label, ("ededed", f"Created by valkey-ci-agent for label {label!r}"),
+        )
+        try:
+            ensure_label(repo, label, color=color, description=description)
+        except Exception as exc:  # noqa: BLE001 - add_to_labels below surfaces a lasting problem
+            logger.warning("Could not ensure label %r: %s", label, exc)
+    try:
+        logger.info("Applying labels %s to PR #%d", labels, pr.number)
+        retry_github_call(
+            lambda: pr.add_to_labels(*labels),
+            retries=3,
+            description=f"apply labels to PR #{pr.number}",
+        )
+    except Exception as exc:  # noqa: BLE001 - labeling must not fail the run
+        logger.warning("Failed to apply labels to PR #%d: %s", pr.number, exc)
 
 
 def _was_llm_resolved(result: ResolutionResult) -> bool:
@@ -182,82 +226,13 @@ class BackportPRCreator:
             description="create backport PR",
         )
 
-        # Apply labels (best-effort — don't fail the run if labels are missing).
         labels = [self._backport_label]
         if any_ai_changes:
             labels.append(self._llm_conflict_label)
-
-        for label in labels:
-            self._ensure_label_exists(repo, label)
-
-        try:
-            logger.info("Applying labels %s to PR #%d", labels, pr.number)
-            retry_github_call(
-                lambda: pr.add_to_labels(*labels),
-                retries=3,
-                description="apply labels to backport PR",
-            )
-        except Exception as exc:
-            logger.warning("Failed to apply labels to PR #%d: %s", pr.number, exc)
+        apply_labels(repo, pr, labels)
 
         logger.info("Backport PR created: %s", pr.html_url)
         return pr.html_url
-
-    def _ensure_label_exists(self, repo: Any, label: str) -> None:
-        """Create *label* on *repo* if it does not already exist.
-
-        Best-effort: a failure here is logged and swallowed so the PR
-        creation flow continues. The subsequent ``add_to_labels`` call
-        will surface the same problem if it persists.
-        """
-        try:
-            retry_github_call(
-                lambda: repo.get_label(label),
-                retries=3,
-                description=f"check label {label!r}",
-            )
-            return
-        except GithubException as exc:
-            if exc.status != 404:
-                logger.warning(
-                    "Could not verify label %r on %s: %s",
-                    label, self._base_repo, exc,
-                )
-                return
-        except Exception as exc:
-            # Best-effort: a transport/parse failure must not abort PR creation.
-            logger.warning(
-                "Could not verify label %r on %s: %s",
-                label, self._base_repo, exc,
-            )
-            return
-
-        color, description = _LABEL_DEFAULTS.get(
-            label, ("ededed", f"Created by valkey-ci-agent for label {label!r}"),
-        )
-        try:
-            logger.info("Creating missing label %r on %s", label, self._base_repo)
-            retry_github_call(
-                lambda: repo.create_label(
-                    name=label, color=color, description=description,
-                ),
-                retries=3,
-                description=f"create label {label!r}",
-            )
-        except GithubException as exc:
-            # 422 means the label was created concurrently — fine.
-            if exc.status == 422:
-                return
-            logger.error(
-                "Failed to create label %r on %s: %s",
-                label, self._base_repo, exc,
-            )
-        except Exception as exc:
-            # Best-effort: a transport/parse failure must not abort PR creation.
-            logger.error(
-                "Failed to create label %r on %s: %s",
-                label, self._base_repo, exc,
-            )
 
     @staticmethod
     def build_pr_body(
@@ -308,7 +283,7 @@ class BackportPRCreator:
                 "| Field | Value |",
                 "|---|---|",
                 f"| Source PR | [#{context.source_pr_number}]({context.source_pr_url}) |",
-                f"| Source title | {_escape_table_cell(context.source_pr_title)} |",
+                f"| Source title | {escape_cell(context.source_pr_title)} |",
                 f"| Target branch | `{context.target_branch}` |",
                 f"| Cherry-picked commits | {len(applied_commits or context.commits)} |",
                 f"| Conflicts detected | {'yes' if had_conflicts else 'no'} |",
@@ -392,25 +367,10 @@ class BackportPRCreator:
             description=f"get repo {self._base_repo}",
         )
 
-        # Check open PRs with matching head branch.
-        head_ref = build_pull_search_head_ref(
-            self._base_repo,
-            self._push_repo,
-            branch_name,
-        )
-        logger.info(
-            "Checking for duplicate backport PR with head ref %s",
-            head_ref,
-        )
-        open_pulls = retry_github_call(
-            lambda: repo.get_pulls(state="open", head=head_ref),
-            retries=3,
-            description="search open PRs for duplicate",
-        )
-        expected_push_repo = self._push_repo or self._base_repo
-        for pr in open_pulls:
-            if not pull_matches_push_repo(pr, expected_push_repo):
-                continue
+        logger.info("Checking for duplicate backport PR on branch %s", branch_name)
+        for pr in find_pulls_by_head(
+            repo, base_repo=self._base_repo, push_repo=self._push_repo, branch=branch_name,
+        ):
             logger.info("Found existing open backport PR: %s", pr.html_url)
             return pr.html_url
 
@@ -419,14 +379,10 @@ class BackportPRCreator:
         # means the work was abandoned, and we should be free to reopen a
         # fresh backport. GitHub returns merged PRs as state=closed with
         # merged_at set.
-        closed_pulls = retry_github_call(
-            lambda: repo.get_pulls(state="closed", head=head_ref),
-            retries=3,
-            description="search closed PRs for duplicate",
-        )
-        for pr in closed_pulls:
-            if not pull_matches_push_repo(pr, expected_push_repo):
-                continue
+        for pr in find_pulls_by_head(
+            repo, base_repo=self._base_repo, push_repo=self._push_repo, branch=branch_name,
+            state="closed",
+        ):
             if pr.merged_at is not None:
                 logger.info(
                     "Found existing merged backport PR: %s", pr.html_url,

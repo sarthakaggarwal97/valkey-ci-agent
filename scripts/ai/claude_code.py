@@ -16,6 +16,7 @@ from typing import Any
 from scripts.common.isolation import as_user, handed_to
 from scripts.common.logging_utils import log_group
 from scripts.common.proc import filter_env
+from scripts.common.text_utils import compact_text
 
 logger = logging.getLogger(__name__)
 
@@ -303,14 +304,14 @@ def _log_stream_event(raw_line: str) -> None:
     try:
         event = json.loads(raw_line)
     except json.JSONDecodeError:
-        logger.info("Claude stream: %s", _truncate(raw_line, 500))
+        logger.info("Claude stream: %s", compact_text(raw_line, 500))
         return
 
     summary = _summarize_stream_event(event)
     if summary:
         logger.info("Claude stream: %s", summary)
     else:
-        logger.debug("Claude stream event: %s", _truncate(raw_line, 1000))
+        logger.debug("Claude stream event: %s", compact_text(raw_line, 1000))
 
 
 def _summarize_stream_event(event: dict[str, Any]) -> str:
@@ -346,7 +347,7 @@ def _summarize_stream_event(event: dict[str, Any]) -> str:
                 if block_type == "text":
                     text = str(block.get("text") or "").strip()
                     if text:
-                        summaries.append(f"text={_truncate(text, 240)}")
+                        summaries.append(f"text={compact_text(text, 240)}")
                 elif block_type == "tool_use":
                     name = str(block.get("name") or "tool")
                     summaries.append(f"tool={name} {_summarize_tool_input(block.get('input'))}")
@@ -381,7 +382,7 @@ def _summarize_stream_event(event: dict[str, Any]) -> str:
         if cost is not None:
             parts.append(f"cost_usd={cost}")
         if result:
-            parts.append(f"text={_truncate(result, 300)}")
+            parts.append(f"text={compact_text(result, 300)}")
         return " ".join(parts)
 
     return f"{event_type or 'unknown'} event"
@@ -393,12 +394,5 @@ def _summarize_tool_input(tool_input: Any) -> str:
     for key in ("file_path", "path", "pattern", "command"):
         value = tool_input.get(key)
         if isinstance(value, str) and value:
-            return f"{key}={_truncate(value, 180)}"
-    return _truncate(json.dumps(tool_input, sort_keys=True, default=str), 180)
-
-
-def _truncate(text: str, limit: int) -> str:
-    text = " ".join(text.split())
-    if len(text) <= limit:
-        return text
-    return text[: max(0, limit - 1)] + "…"
+            return f"{key}={compact_text(value, 180)}"
+    return compact_text(json.dumps(tool_input, sort_keys=True, default=str), 180)

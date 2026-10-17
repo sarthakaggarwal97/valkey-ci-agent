@@ -18,16 +18,17 @@ from pathlib import Path
 from typing import Any
 
 from github import Auth, Github
-from github.GithubException import GithubException
 
-from scripts.common.github_client import retry_github_call
+from scripts.common.github_client import dispatch_workflow, ensure_label, retry_github_call
 from scripts.common.identity import RELEASE_CUT_BRANCH_PREFIX, VALKEY_REPO
+from scripts.common.job_summary import write_outputs
 from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import add_poll_loop_args, run_poll_loop_from_args
 from scripts.release.checks import CandidateCI, evaluate_candidate_ci
 from scripts.release.models import ReleasePolicy
 from scripts.release.policy import load_policy
 from scripts.release.publish import resolve_tag_commit
+from scripts.release_notes.release_format import stage_release_name
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +75,9 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
     """Create or reuse the one open dashboard for *tracker.tag*."""
     _validate_tracker(tracker)
     repo = _repo(gh, tracker.repo)
-    label = _ensure_label(repo)
+    _ensure_label(repo)
     issue = None
-    for candidate in itertools.islice(repo.get_issues(state="all", labels=[label]), 200):
+    for candidate in itertools.islice(repo.get_issues(state="all", labels=[TRACKING_LABEL]), 200):
         if not _is_bot_owned(candidate):
             continue
         existing = _tracker_from_issue(candidate, allow_body_fallback=True)
@@ -91,13 +92,13 @@ def ensure_tracker(gh: Any, tracker: Tracker, *, agent_repo: str) -> Any:
             issue = repo.create_issue(
                 title=f"Release {tracker.tag}",
                 body=_issue_body(tracker, agent_repo),
-                labels=[label],
+                labels=[TRACKING_LABEL],
             )
         except Exception:
             issue = next(
                 (
                     candidate
-                    for candidate in itertools.islice(repo.get_issues(state="all", labels=[label]), 200)
+                    for candidate in itertools.islice(repo.get_issues(state="all", labels=[TRACKING_LABEL]), 200)
                     if _is_bot_owned(candidate)
                     and (parsed := _tracker_from_issue(candidate, allow_body_fallback=True)) is not None
                     and parsed.tag == tracker.tag
@@ -217,9 +218,9 @@ def sync_trackers(
         retries=2,
         description="get release publication workflow",
     )
-    label = _ensure_label(repo)
+    _ensure_label(repo)
     results: list[str] = []
-    for issue in itertools.islice(repo.get_issues(state="open", labels=[label]), 100):
+    for issue in itertools.islice(repo.get_issues(state="open", labels=[TRACKING_LABEL]), 100):
         if not _is_bot_owned(issue):
             logger.warning("Ignoring non-bot release tracker lookalike #%s", issue.number)
             continue
@@ -365,16 +366,13 @@ def _sync_one(
         and branch_head == candidate_sha
         and publish_run is None
     ):
-        accepted = retry_github_call(
-            lambda: publish_workflow.create_dispatch(
-                agent.default_branch,
-                inputs={"branch": tracker.branch, "candidate_sha": candidate_sha},
-            ),
+        dispatch_workflow(
+            publish_workflow,
+            agent.default_branch,
+            {"branch": tracker.branch, "candidate_sha": candidate_sha},
             retries=1,
-            description=f"dispatch publication for {tracker.tag}",
+            description=f"publication for {tracker.tag}",
         )
-        if accepted is False:
-            raise RuntimeError(f"GitHub refused publication dispatch for {tracker.tag}")
         dispatched = True
 
     # Once the release exists the Publish run is history, not something to
@@ -1001,25 +999,8 @@ def _branch_head(repo: Any, branch: str) -> str:
     )
 
 
-def _ensure_label(repo: Any) -> Any:
-    try:
-        return retry_github_call(
-            lambda: repo.get_label(TRACKING_LABEL),
-            retries=2,
-            description=f"get {TRACKING_LABEL} label",
-        )
-    except GithubException as exc:
-        if exc.status != 404:
-            raise
-    return retry_github_call(
-        lambda: repo.create_label(
-            TRACKING_LABEL,
-            "1d76db",
-            "Tracks an in-progress Valkey release",
-        ),
-        retries=2,
-        description=f"create {TRACKING_LABEL} label",
-    )
+def _ensure_label(repo: Any) -> None:
+    ensure_label(repo, TRACKING_LABEL, color="1d76db", description="Tracks an in-progress Valkey release", retries=2)
 
 
 def _find_status_comment(issue: Any) -> Any | None:
@@ -1151,24 +1132,12 @@ def _validate_tracker(tracker: Tracker) -> None:
         raise ValueError("tracker version must be MAJOR.MINOR.PATCH")
     if not re.fullmatch(r"ga|rc[1-9][0-9]*", tracker.stage, re.ASCII):
         raise ValueError("tracker stage must be ga or rcN")
-    expected_tag = tracker.version if tracker.stage == "ga" else f"{tracker.version}-{tracker.stage}"
-    if tracker.tag != expected_tag:
+    if tracker.tag != stage_release_name(tracker.version, tracker.stage):
         raise ValueError("tracker tag does not match version and stage")
     if tracker.prep_branch != f"{RELEASE_CUT_BRANCH_PREFIX}/{tracker.version}-{tracker.stage}":
         raise ValueError("tracker preparation branch is not canonical")
     if type(tracker.prepare_run_id) is not int or tracker.prepare_run_id <= 0:
         raise ValueError("tracker prepare run id must be positive")
-
-
-def _write_outputs(values: dict[str, str]) -> None:
-    path = os.environ.get("GITHUB_OUTPUT", "")
-    if not path:
-        return
-    with open(path, "a", encoding="utf-8") as output:
-        for key, value in values.items():
-            if "\n" in value or "\r" in value:
-                raise ValueError(f"multiline workflow output refused for {key}")
-            output.write(f"{key}={value}\n")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1207,7 +1176,7 @@ def main(argv: list[str] | None = None) -> int:
             prepare_run_id=args.prepare_run_id,
         )
         issue = ensure_tracker(target_gh, tracker, agent_repo=args.agent_repo)
-        _write_outputs({"issue_number": str(issue.number), "issue_url": issue.html_url})
+        write_outputs({"issue_number": str(issue.number), "issue_url": issue.html_url})
         print(issue.html_url)
         return 0
 

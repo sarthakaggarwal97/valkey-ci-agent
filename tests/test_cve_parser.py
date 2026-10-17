@@ -6,13 +6,13 @@ from unittest.mock import patch
 
 import pytest
 
-from scripts.cve_scan.models import Finding, Severity
-from scripts.cve_scan.scanner import ScanError, scan_image
-from scripts.parsers.cve_findings_parser import (
+from scripts.cve_scan.cve_findings_parser import (
     ParseError,
     filter_by_threshold,
     parse_trivy,
 )
+from scripts.cve_scan.models import Finding, Severity
+from scripts.cve_scan.scanner import ScanError, scan_image
 
 _IMAGE = "valkey/valkey:8.0"
 

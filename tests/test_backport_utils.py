@@ -7,6 +7,7 @@ from scripts.backport.utils import (
     build_pr_title,
     has_conflict_markers,
     is_whitespace_only_conflict,
+    pr_numbers_from_commit_subjects,
     source_pr_from_backport_commit_subject,
 )
 
@@ -271,4 +272,14 @@ class TestIsWhitespaceOnlyConflictProperty:
         assert is_whitespace_only_conflict(base, modified) is False
 
 
+class TestPrNumbersFromCommitSubjects:
+    def test_trailing_ref_may_be_followed_by_closing_punctuation(self) -> None:
+        assert pr_numbers_from_commit_subjects(["Fix a leak (#12).", "Fix (inner (#13))"]) == {12, 13}
+
+    def test_quoted_ref_of_a_revert_is_not_its_own_pr(self) -> None:
+        assert pr_numbers_from_commit_subjects(['Revert "Fix a leak (#12)"']) == set()
+        assert pr_numbers_from_commit_subjects(['Revert "Fix a leak (#12)" (#14)']) == {14}
+
+    def test_merge_commit_subject_in_any_case(self) -> None:
+        assert pr_numbers_from_commit_subjects(["Merge pull request #5 from a/b", "merge pull request #6 from a/c"]) == {5, 6}
 

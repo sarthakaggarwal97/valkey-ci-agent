@@ -13,11 +13,11 @@ from typing import Any
 from github import Auth, Github
 
 from scripts.ai.runtime import AgentRunResult, run_agent
-from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.ci_fix.gate import is_authorized
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.git_clone import shallow_clone_at_sha
 from scripts.common.github_client import retry_github_call
+from scripts.common.github_graphql import GitHubGraphQLClient
 from scripts.common.identity import MAINTAINER_ORG, MAINTAINER_TEAM
 from scripts.common.logging_utils import configure_logging
 from scripts.common.proc import (

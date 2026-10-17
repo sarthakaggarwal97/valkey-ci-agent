@@ -34,6 +34,7 @@ from scripts.common.proc import git_output, run_git
 from scripts.release_notes import discover as discover_mod
 from scripts.release_notes import projects as projects_mod
 from scripts.release_notes import release_cut as cut_mod
+from scripts.release_notes import release_format as rn
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ def _resolve_stage(version: str, stage: str) -> str:
     an explicit stage so dispatch cannot guess the maintainer's intent.
     """
     if stage.strip():
-        return cut_mod._normalize_stage(stage)
+        return rn.normalize_stage(stage)
     _major, _minor, patch = cut_mod._split_version(version)
     if patch > 0:
         return "ga"

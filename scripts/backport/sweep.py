@@ -35,7 +35,6 @@ from scripts.backport.sweep_git import (
     push_backport_branch,
     safe_tmp_component,
 )
-from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
     DETAIL_ALREADY_ON_TARGET,
@@ -57,6 +56,7 @@ from scripts.backport.sweep_validation import (
     validate_branch_with_optional_repair,
 )
 from scripts.common.git_auth import GitAuth, github_https_url
+from scripts.common.github_graphql import GitHubGraphQLClient, project_pages
 from scripts.common.identity import BACKPORT_STATUS_FIELD, BACKPORT_STATUS_OPTION, SWEEP_BRANCH_PREFIX
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import (
@@ -131,24 +131,10 @@ class ProjectBackportDiscovery:
         return by_branch
 
     def _iter_items(self) -> list[dict[str, Any]]:
-        owner_field = "user" if self._owner_type == "user" else "organization"
-        query = _project_items_query(owner_field)
-        cursor = None
-        items: list[dict[str, Any]] = []
-        while True:
-            data = self._gql.execute(
-                query,
-                {"owner": self._owner, "number": self._number, "cursor": cursor},
-            )
-            project = (data.get(owner_field) or {}).get("projectV2")
-            if not project:
-                raise RuntimeError(f"Project {self._owner}/{self._number} not found")
-            page = project.get("items") or {}
-            items.extend(page.get("nodes") or [])
-            page_info = page.get("pageInfo") or {}
-            if not page_info.get("hasNextPage"):
-                return items
-            cursor = page_info.get("endCursor")
+        pages = project_pages(
+            self._gql, _project_items_query, owner=self._owner, number=self._number, owner_type=self._owner_type,
+        )
+        return [item for project in pages for item in (project.get("items") or {}).get("nodes") or []]
 
     def _candidate_from_item(
         self,

@@ -26,7 +26,7 @@ from typing import Any, Callable
 from github import Auth, Github
 
 from scripts.ci_fix.gate import ParsedCommand, is_authorized, parse_command
-from scripts.common.github_client import retry_github_call
+from scripts.common.github_client import dispatch_workflow, retry_github_call
 from scripts.common.identity import MAINTAINER_ORG, MAINTAINER_TEAM, VALKEY_REPO
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import env_int, env_seconds, run_poll_loop
@@ -297,14 +297,11 @@ def dispatch_ci_fix(
         }
         if comment_id:
             inputs["comment_id"] = str(comment_id)
-        wf = gh.get_repo(agent_repo).get_workflow(workflow)
-        dispatched = retry_github_call(
-            lambda: wf.create_dispatch(ref, inputs),
+        dispatch_workflow(
+            gh.get_repo(agent_repo).get_workflow(workflow), ref, inputs,
             retries=2,
-            description=f"dispatch {workflow} for {repo_full_name}#{pr_number}",
+            description=f"{agent_repo}/{workflow}@{ref} for {repo_full_name}#{pr_number}",
         )
-        if not dispatched:
-            raise RuntimeError(f"{agent_repo}/{workflow}@{ref} rejected the dispatch")
 
     return _dispatch
 

@@ -312,9 +312,9 @@ def test_dispatcher_passes_only_pr_identity() -> None:
 
     dispatch_release_review(gh)(release, 99)
 
-    assert workflow.create_dispatch.call_args.args == (
+    workflow.create_dispatch.assert_called_once_with(
         "main",
-        {
+        inputs={
             "repo": "valkey",
             "pr": "42",
             "head_sha": _HEAD,

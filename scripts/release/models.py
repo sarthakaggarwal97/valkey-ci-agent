@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from scripts.release_notes.release_format import stage_release_name
+
 
 class ReleaseIntent(str, Enum):
     RC = "rc"
@@ -19,7 +21,7 @@ class DerivedRelease:
 
     @property
     def tag(self) -> str:
-        return self.version if self.stage == "ga" else f"{self.version}-{self.stage}"
+        return stage_release_name(self.version, self.stage)
 
 
 @dataclass(frozen=True)

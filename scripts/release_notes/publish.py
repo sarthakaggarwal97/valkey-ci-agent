@@ -7,10 +7,9 @@ updating it, and a Markdown-table escape helper for the triage list in the PR bo
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
-from scripts.backport.pr_creator import build_pull_create_head_ref, build_pull_search_head_ref
+from scripts.backport.pr_creator import build_pull_create_head_ref, find_pulls_by_head
 from scripts.common.github_client import retry_github_call
 
 logger = logging.getLogger(__name__)
@@ -20,11 +19,7 @@ def find_existing_pr(
     repo: Any, *, base_repo: str, push_repo: str | None, branch: str, base_branch: str
 ) -> Any | None:
     """Return the open PR whose head is *branch* and base is *base_branch*, or None."""
-    head_ref = build_pull_search_head_ref(base_repo, push_repo, branch)
-    pulls = retry_github_call(
-        lambda: list(repo.get_pulls(state="open", head=head_ref, base=base_branch)),
-        retries=3, description=f"search open PR for {head_ref} into {base_branch}",
-    )
+    pulls = find_pulls_by_head(repo, base_repo=base_repo, push_repo=push_repo, branch=branch, base=base_branch)
     return pulls[0] if pulls else None
 
 
@@ -121,12 +116,3 @@ def reconcile_draft(existing: Any, draft: bool) -> None:
             lambda: existing.mark_ready_for_review(),
             retries=3, description=f"mark PR #{existing.number} ready",
         )
-
-
-_LINEBREAK_RE = re.compile(r"[\r\n]+")
-
-
-def escape_cell(text: str) -> str:
-    """Escape pipes and line breaks for a markdown table cell."""
-    escaped = text.replace("\\", "\\\\").replace("|", "\\|")
-    return _LINEBREAK_RE.sub(" ", escaped).strip()

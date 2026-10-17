@@ -17,6 +17,7 @@ from scripts.backport.sweep_models import (
     DETAIL_ALREADY_ON_SWEEP_BRANCH,
     BranchSweepResult,
 )
+from scripts.common.text_utils import escape_cell, split_table_row
 
 AI_DETAIL_MARKERS = (
     DETAIL_RESOLVED_BY_AI,
@@ -122,12 +123,12 @@ def build_pr_body(
     if applied:
         lines.extend(["## Applied", "", "| Source PR | Title | Detail |", "|---|---|---|"])
         for r in applied:
-            detail = _esc(r.detail)
+            detail = escape_cell(r.detail)
             url = comment_urls.get(r.source_pr_number)
             if url and _is_ai_resolved(r):
                 detail = f"[{detail}]({url})"
             lines.append(
-                f"| #{r.source_pr_number} | {_esc(r.source_pr_title)} | {detail} |",
+                f"| #{r.source_pr_number} | {escape_cell(r.source_pr_title)} | {detail} |",
             )
         lines.append("")
         if any(_is_ai_resolved(r) for r in applied):
@@ -153,7 +154,7 @@ def build_pr_body(
         )
         for r in skipped_empty:
             lines.append(
-                f"| #{r.source_pr_number} | {_esc(r.source_pr_title)} | {_esc(_skip_reason(r))} |",
+                f"| #{r.source_pr_number} | {escape_cell(r.source_pr_title)} | {escape_cell(_skip_reason(r))} |",
             )
         lines.append("")
 
@@ -172,7 +173,7 @@ def build_pr_body(
         )
         for r in failed:
             lines.append(
-                f"| #{r.source_pr_number} | {_esc(r.source_pr_title)} | {r.outcome} | {_esc(r.detail)} |",
+                f"| #{r.source_pr_number} | {escape_cell(r.source_pr_title)} | {r.outcome} | {escape_cell(r.detail)} |",
             )
         lines.extend(["", "</details>", ""])
 
@@ -284,7 +285,7 @@ def _parse_section_rows(body: str, heading: str, *, min_cells: int) -> Iterator[
         if not in_section or not stripped.startswith("|"):
             continue
 
-        cells = _split_markdown_table_row(stripped)
+        cells = split_table_row(stripped)
         if len(cells) < min_cells:
             continue
         source = cells[0]
@@ -333,36 +334,3 @@ def _merge_applied_result(
         detail=detail,
         resolved_by_ai=resolved_by_ai,
     )
-
-
-def _split_markdown_table_row(row: str) -> list[str]:
-    text = row.strip()
-    if text.startswith("|"):
-        text = text[1:]
-    if text.endswith("|"):
-        text = text[:-1]
-
-    cells: list[str] = []
-    current: list[str] = []
-    escaped = False
-    for char in text:
-        if char == "\\" and not escaped:
-            escaped = True
-            current.append(char)
-            continue
-        if char == "|" and not escaped:
-            cells.append(_unesc("".join(current).strip()))
-            current = []
-            continue
-        current.append(char)
-        escaped = False
-    cells.append(_unesc("".join(current).strip()))
-    return cells
-
-
-def _unesc(value: str) -> str:
-    return value.replace("\\|", "|")
-
-
-def _esc(value: object) -> str:
-    return str(value).replace("|", "\\|").replace("\n", " ")

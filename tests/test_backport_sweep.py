@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 from github.GithubException import GithubException
 
-from scripts.backport import candidate_apply, sweep_git, sweep_graphql, sweep_validation
+from scripts.backport import candidate_apply, sweep_git, sweep_validation
 from scripts.backport import sweep as backport_sweep
 from scripts.backport.candidate_apply import apply_candidate
 from scripts.backport.missing_test_adaptation import (
@@ -58,6 +58,7 @@ from scripts.backport.sweep_validation import (
     run_test_commands,
     validate_backport_branch,
 )
+from scripts.common import github_graphql
 from scripts.common.git_auth import GitAuth
 from scripts.common.logging_utils import LOG_HIGHLIGHT_RULE
 
@@ -3217,13 +3218,13 @@ def test_graphql_client_retry_exhaustion_raises_clear_error(monkeypatch):
         call_count["n"] += 1
         raise urllib.error.URLError("simulated network down")
 
-    monkeypatch.setattr(sweep_graphql.urllib.request, "urlopen", always_fails)
+    monkeypatch.setattr(github_graphql.urllib.request, "urlopen", always_fails)
     # Skip actual sleeps in the backoff loop.
     monkeypatch.setattr(backport_sweep, "_random", None, raising=False)
     monkeypatch.setattr("random.uniform", lambda *_args, **_kwargs: 0.0)
     monkeypatch.setattr("time.sleep", lambda *_args, **_kwargs: None)
 
-    client = sweep_graphql.GitHubGraphQLClient("fake-token")
+    client = github_graphql.GitHubGraphQLClient("fake-token")
     try:
         client.execute("query {}", {})
     except urllib.error.URLError:
@@ -3264,11 +3265,11 @@ def test_graphql_client_retries_transient_errors_in_200_body(monkeypatch):
     def fake_urlopen(*_args, **_kwargs):
         return _fake_graphql_response(responses.pop(0))
 
-    monkeypatch.setattr(sweep_graphql.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(github_graphql.urllib.request, "urlopen", fake_urlopen)
     monkeypatch.setattr("random.uniform", lambda *_args, **_kwargs: 0.0)
     monkeypatch.setattr("time.sleep", lambda *_args, **_kwargs: None)
 
-    result = sweep_graphql.GitHubGraphQLClient("fake-token").execute("query {}", {})
+    result = github_graphql.GitHubGraphQLClient("fake-token").execute("query {}", {})
     assert result == {"ok": True}
     assert responses == []
 
@@ -3281,11 +3282,11 @@ def test_graphql_client_raises_immediately_on_non_transient_error(monkeypatch):
         call_count["n"] += 1
         return _fake_graphql_response({"errors": [{"type": "INVALID", "message": "Field 'bogus' doesn't exist"}]})
 
-    monkeypatch.setattr(sweep_graphql.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(github_graphql.urllib.request, "urlopen", fake_urlopen)
     monkeypatch.setattr("time.sleep", lambda *_args, **_kwargs: None)
 
     with pytest.raises(RuntimeError, match="GraphQL errors"):
-        sweep_graphql.GitHubGraphQLClient("fake-token").execute("query {}", {})
+        github_graphql.GitHubGraphQLClient("fake-token").execute("query {}", {})
     assert call_count["n"] == 1
 
 

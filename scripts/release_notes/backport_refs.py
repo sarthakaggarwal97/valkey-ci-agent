@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 
+from scripts.common.text_utils import markdown_section, split_table_row
+
 # Matches the ``(cherry picked from commit <sha>)`` trailer git appends with -x.
 _CHERRY_PICK_TRAILER_RE = re.compile(
     r"(?im)^[ \t]*\(cherry picked from commit ([0-9a-f]{7,40})\)[ \t]*$"
@@ -98,15 +100,6 @@ def cherry_pick_source_shas(commit_message: str) -> list[str]:
     return _CHERRY_PICK_TRAILER_RE.findall(commit_message)
 
 
-def _markdown_section(body: str, heading: str) -> str:
-    """Return the body of the ``## <heading>`` section, or ``""`` if absent."""
-    pattern = re.compile(
-        rf"(?ims)^##\s+{re.escape(heading)}\s*$([\s\S]*?)(?=^##\s+|\Z)"
-    )
-    match = pattern.search(body)
-    return match.group(1) if match else ""
-
-
 # Matches a Revert-titled manifest row: the sweep cherry-picked a revert of the
 # named PR, so the PR's change is absent from (not shipped by) this range.
 _REVERT_TITLE_RE = re.compile(r"^\s*revert\b", re.IGNORECASE)
@@ -117,7 +110,7 @@ def _applied_rows(body: str) -> list[tuple[int, str]]:
 
     Title is "" when the table has no Title column.
     """
-    applied = _markdown_section(body, "Applied")
+    applied = markdown_section(body, "Applied")
     if not applied:
         return []
     rows: list[str] = []
@@ -196,7 +189,7 @@ def summary_source_title_from_body(body: str) -> str | None:
 
 def _summary_value_cell(body: str, label: str) -> str | None:
     """Return the value cell for *label* in the ``## Backport Summary`` table, or None."""
-    summary = _markdown_section(body, "Backport Summary")
+    summary = markdown_section(body, "Backport Summary")
     if not summary:
         return None
     rows: list[str] = []
@@ -206,36 +199,11 @@ def _summary_value_cell(body: str, label: str) -> str | None:
         elif rows:
             rows[-1] += " " + line.strip()  # fold wrapped cell
     for row in rows:
-        cells = _split_table_row(row)
+        cells = split_table_row(row)
         if len(cells) < 2 or cells[0].strip().lower() != label:
             continue
         return cells[1]
     return None
-
-
-def _split_table_row(row: str) -> list[str]:
-    """Split a markdown table row on unescaped ``|`` and unescape ``\\|`` in cells."""
-    text = row.strip()
-    if text.startswith("|"):
-        text = text[1:]
-    if text.endswith("|"):
-        text = text[:-1]
-    cells: list[str] = []
-    current: list[str] = []
-    escaped = False
-    for char in text:
-        if char == "\\" and not escaped:
-            escaped = True
-            current.append(char)
-            continue
-        if char == "|" and not escaped:
-            cells.append("".join(current).strip().replace("\\|", "|"))
-            current = []
-            continue
-        current.append(char)
-        escaped = False
-    cells.append("".join(current).strip().replace("\\|", "|"))
-    return cells
 
 
 def source_pr_from_branch(head_ref: str) -> int | None:

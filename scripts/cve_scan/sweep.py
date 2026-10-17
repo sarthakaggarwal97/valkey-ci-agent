@@ -19,14 +19,13 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.common.job_summary import emit_job_summary
+from scripts.common.job_summary import emit_job_summary, write_outputs
 from scripts.common.logging_utils import configure_logging
 from scripts.cve_scan.config import CveScanSettings, load_settings
 from scripts.cve_scan.image_matrix import resolve_matrix
@@ -80,17 +79,6 @@ def _verification_plan(fixable: list[Classification]) -> str:
         if f.cve_id not in cves:
             cves.append(f.cve_id)
     return json.dumps(list(legs.values()), separators=(",", ":"))
-
-
-def _emit_outputs(plan: str = "[]") -> None:
-    """Emit the GitHub Actions verification plan."""
-    github_output = os.environ.get("GITHUB_OUTPUT")
-    if github_output:
-        with open(github_output, "a") as f:
-            f.write(f"plan={plan}\n")
-        logger.info("Wrote %d plan leg(s) to GITHUB_OUTPUT", len(json.loads(plan)))
-    else:
-        print(f"plan={plan}")
 
 
 def _print_dry_run(
@@ -237,7 +225,7 @@ def run_sweep(
 
     if not findings:
         logger.info("No findings above threshold. Exiting cleanly.")
-        _emit_outputs()
+        write_outputs({"plan": "[]"})
         if dry_run:
             print("[DRY RUN] No findings. No rebuild needed.")
         _emit_run_summary(
@@ -261,7 +249,8 @@ def run_sweep(
 
     versions = _fixable_versions(fixable)
     plan = _verification_plan(fixable)
-    _emit_outputs(plan)
+    write_outputs({"plan": plan})
+    logger.info("Wrote %d plan leg(s) to the step outputs", len(json.loads(plan)))
 
     if dry_run:
         _print_dry_run(fixable, not_fixable)

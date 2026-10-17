@@ -18,11 +18,11 @@ from scripts.release_notes import code_age as code_age_mod
 from scripts.release_notes import pipeline as pipeline_mod
 from scripts.release_notes import projects
 from scripts.release_notes import release_cut as rc
+from scripts.release_notes import release_format as rn
 from scripts.release_notes.release_cut import (
     BranchPlan,
     promote_and_bump,
     resolve_branch_plan,
-    stage_release_name,
 )
 from scripts.release_notes.release_cut import (
     commit_title as _commit_title,
@@ -47,35 +47,35 @@ def clone(tmp_path):
 class TestNormalizeStage:
     """Stage is case-insensitive: RC1/GA/Rc2 normalize to rc1/ga/rc2.
 
-    _normalize_stage is the single normalization choke point feeding plan.stage;
+    normalize_stage is the single normalization choke point feeding plan.stage;
     commit_title/stage_release_name/branch names all consume that normalized
     value (they do not lowercase their own argument), so this guards the whole
     cut against a maintainer dispatching an uppercase stage.
     """
 
     def test_uppercase_rc_lowercased(self) -> None:
-        assert rc._normalize_stage("RC1") == "rc1"
-        assert rc._normalize_stage("Rc2") == "rc2"
-        assert rc._normalize_stage("RC10") == "rc10"
+        assert rn.normalize_stage("RC1") == "rc1"
+        assert rn.normalize_stage("Rc2") == "rc2"
+        assert rn.normalize_stage("RC10") == "rc10"
 
     def test_uppercase_ga_lowercased(self) -> None:
-        assert rc._normalize_stage("GA") == "ga"
-        assert rc._normalize_stage("Ga") == "ga"
+        assert rn.normalize_stage("GA") == "ga"
+        assert rn.normalize_stage("Ga") == "ga"
 
     def test_surrounding_whitespace_stripped(self) -> None:
-        assert rc._normalize_stage("  RC1  ") == "rc1"
+        assert rn.normalize_stage("  RC1  ") == "rc1"
 
     def test_invalid_mixed_case_still_rejected(self) -> None:
         with pytest.raises(ValueError):
-            rc._normalize_stage("Beta")
+            rn.normalize_stage("Beta")
 
 
 class TestStageHelpers:
     def test_release_name_rc(self) -> None:
-        assert stage_release_name("9.1.0", "rc2") == "9.1.0-rc2"
+        assert rn.stage_release_name("9.1.0", "rc2") == "9.1.0-rc2"
 
     def test_release_name_ga(self) -> None:
-        assert stage_release_name("9.1.0", "ga") == "9.1.0"
+        assert rn.stage_release_name("9.1.0", "ga") == "9.1.0"
 
     def test_commit_title_rc(self) -> None:
         assert commit_title("9.1.0", "rc2") == "Update version to 9.1.0-rc2 and add release notes"

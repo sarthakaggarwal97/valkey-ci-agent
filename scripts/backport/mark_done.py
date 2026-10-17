@@ -25,12 +25,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.utils import (
     pr_numbers_from_commit_messages,
     source_pr_from_backport_commit_subject,
 )
 from scripts.common.git_auth import GitAuth, github_https_url
+from scripts.common.github_graphql import GitHubGraphQLClient, project_pages
 from scripts.common.identity import BACKPORT_STATUS_FIELD, BACKPORT_STATUS_OPTION
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import (
@@ -39,6 +39,7 @@ from scripts.common.polling import (
     format_poll_results,
     run_poll_loop_from_args,
 )
+from scripts.common.text_utils import markdown_section
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +145,7 @@ def branch_pr_index(repo_dir: str, rev: str) -> dict[int, datetime]:
         source_pr = source_pr_from_backport_commit_subject(subject)
         if source_pr is not None:
             matched.add(source_pr)
-        applied_section = _markdown_section(message, "Applied")
+        applied_section = markdown_section(message, "Applied")
         if applied_section:
             matched.update(_pr_numbers_from_table_cells(applied_section))
         for number in matched:
@@ -367,14 +368,6 @@ def reconcile_project_board(
     )
 
 
-def _markdown_section(body: str, heading: str) -> str:
-    pattern = re.compile(
-        rf"(?ims)^##\s+{re.escape(heading)}\s*$([\s\S]*?)(?=^##\s+|\Z)"
-    )
-    match = pattern.search(body)
-    return match.group(1) if match else ""
-
-
 def _pr_numbers_from_table_cells(markdown: str) -> set[int]:
     """Source PR numbers from the ``Source PR`` column of a markdown table.
 
@@ -426,32 +419,16 @@ def _load_project(
     project_number: int,
     project_owner_type: str,
 ) -> dict[str, Any]:
-    owner_field = "user" if project_owner_type == "user" else "organization"
-    query = _project_query(owner_field)
-    cursor = None
     project_id = ""
     fields: list[dict[str, Any]] = []
     items: list[dict[str, Any]] = []
-
-    while True:
-        data = gql.execute(
-            query,
-            {"owner": project_owner, "number": project_number, "cursor": cursor},
-        )
-        project = (data.get(owner_field) or {}).get("projectV2")
-        if not project:
-            raise RuntimeError(f"Project {project_owner}/{project_number} not found")
-
+    for project in project_pages(
+        gql, _project_query, owner=project_owner, number=project_number, owner_type=project_owner_type,
+    ):
         project_id = project_id or str(project.get("id") or "")
         if not fields:
             fields = (project.get("fields") or {}).get("nodes") or []
-
-        page = project.get("items") or {}
-        items.extend(page.get("nodes") or [])
-        page_info = page.get("pageInfo") or {}
-        if not page_info.get("hasNextPage"):
-            break
-        cursor = page_info.get("endCursor")
+        items.extend((project.get("items") or {}).get("nodes") or [])
 
     if not project_id:
         raise RuntimeError(f"Project {project_owner}/{project_number} has no id")

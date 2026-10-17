@@ -5,17 +5,26 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from scripts.release_notes import publish as publish_mod
-from scripts.release_notes.publish import escape_cell, find_existing_pr, open_or_update_pr
+from scripts.release_notes.publish import find_existing_pr, open_or_update_pr
 
 
 class TestFindExistingPr:
     def test_returns_first_open_pr(self) -> None:
         repo = MagicMock()
         existing = MagicMock(number=5)
+        existing.head.repo.full_name = "valkey-io/valkey"
         repo.get_pulls.return_value = [existing]
         found = find_existing_pr(repo, base_repo="valkey-io/valkey", push_repo=None,
                                  branch="agent/release-cut/9.1.0-rc1", base_branch="9.1")
         assert found is existing
+
+    def test_ignores_a_pr_from_another_repository_of_the_owner(self) -> None:
+        repo = MagicMock()
+        other = MagicMock(number=6)
+        other.head.repo.full_name = "valkey-io/valkey-fork"
+        repo.get_pulls.return_value = [other]
+        assert find_existing_pr(repo, base_repo="valkey-io/valkey", push_repo=None,
+                                branch="agent/release-cut/9.1.0-rc1", base_branch="9.1") is None
 
     def test_returns_none_when_no_open_pr(self) -> None:
         repo = MagicMock()
@@ -159,32 +168,6 @@ class TestOpenOrUpdatePr:
                           title="t", body="b", existing=existing, draft=True)
         existing.convert_to_draft.assert_not_called()
         existing.mark_ready_for_review.assert_not_called()
-
-
-class TestEscapeCell:
-    def test_escapes_pipe_and_newline(self) -> None:
-        assert escape_cell("a | b\nc") == "a \\| b c"
-
-    def test_plain_text_unchanged(self) -> None:
-        assert escape_cell("normal title") == "normal title"
-
-    def test_collapses_cr_and_crlf(self) -> None:
-        # A raw \r (CRLF or lone CR) in a contributor PR title must not survive
-        # into the cell, or it breaks the Markdown table row. Any run of CR/LF
-        # collapses to one space.
-        assert escape_cell("fix\r\nbug") == "fix bug"      # CRLF
-        assert escape_cell("fix\rbug") == "fix bug"        # lone CR
-        assert escape_cell("a\r\n\r\nb") == "a b"          # consecutive breaks
-        assert "\r" not in escape_cell("fix\r\nbug")
-
-    def test_backslash_before_pipe_stays_escaped(self) -> None:
-        # A pre-existing backslash right before a pipe must not consume the pipe's
-        # escape. "a\|b" -> "a\\\|b" renders as literal "a\|b" (no cell break),
-        # not "a\\|b" (literal backslash + a live delimiter that splits the row).
-        assert escape_cell("a\\|b") == "a\\\\\\|b"
-
-    def test_lone_backslash_escaped(self) -> None:
-        assert escape_cell("C:\\path") == "C:\\\\path"
 
 
 class TestClampBody:

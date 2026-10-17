@@ -10,9 +10,9 @@ from typing import Any
 
 from github import Auth, Github
 
-from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.ci_fix.gate import is_authorized
-from scripts.common.github_client import retry_github_call
+from scripts.common.github_client import dispatch_workflow, retry_github_call
+from scripts.common.github_graphql import GitHubGraphQLClient
 from scripts.common.identity import MAINTAINER_ORG, MAINTAINER_TEAM
 from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import env_seconds, run_poll_loop
@@ -289,18 +289,17 @@ def dispatch_release_review(
             retries=3,
             description=f"get workflow {workflow}",
         )
-        retry_github_call(
-            lambda: target.create_dispatch(
-                ref,
-                {
-                    "repo": release.repo_full_name.rsplit("/", 1)[-1],
-                    "pr": str(release.number),
-                    "head_sha": release.head_sha,
-                    "status_comment_id": str(status_comment_id),
-                },
-            ),
+        dispatch_workflow(
+            target,
+            ref,
+            {
+                "repo": release.repo_full_name.rsplit("/", 1)[-1],
+                "pr": str(release.number),
+                "head_sha": release.head_sha,
+                "status_comment_id": str(status_comment_id),
+            },
             retries=3,
-            description=f"dispatch release review for {release.repo_full_name}#{release.number}",
+            description=f"release review for {release.repo_full_name}#{release.number}",
         )
 
     return dispatch

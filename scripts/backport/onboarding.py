@@ -15,9 +15,9 @@ from github.GithubException import GithubException
 
 from scripts.backport.pr_creator import create_pull_from_push_repo
 from scripts.backport.registry import _parse_registry
-from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_prs import find_existing_pr
 from scripts.common.github_client import retry_github_call
+from scripts.common.github_graphql import GitHubGraphQLClient
 from scripts.common.identity import BACKPORT_STATUS_FIELD, BACKPORT_STATUS_OPTION, VALKEY_REPO
 from scripts.common.logging_utils import configure_logging
 

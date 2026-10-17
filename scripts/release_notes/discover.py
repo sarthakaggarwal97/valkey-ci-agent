@@ -19,6 +19,7 @@ from typing import Any
 
 from github.GithubException import GithubException, UnknownObjectException
 
+from scripts.backport.utils import TRAILING_PR_REF_RE, pr_numbers_from_commit_subjects
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import SWEEP_BRANCH_PREFIX
 from scripts.common.proc import git_output
@@ -45,6 +46,7 @@ from scripts.release_notes.models import (
     UnresolvedCommit,
     UnresolvedPR,
 )
+from scripts.release_notes.release_format import stage_release_name
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +63,6 @@ _SWEEP_MERGE_RE = re.compile(re.escape(SWEEP_BRANCH_PREFIX))
 # associated PR's head branch is verified below.
 _SWEEP_SQUASH_RE = re.compile(r"^\[backport\]\s+Backport sweep for\b", re.IGNORECASE)
 
-# Trailing (#N) in squash/normal merge subjects. Anchored to avoid matching a
-# quoted inner ref (e.g. a reverted title).
-_TRAILING_REF_RE = re.compile(r"\(#(\d+)\)[)\s.]*$")
-# GitHub merge-commit subject: ``Merge pull request #N from ...``.
-_MERGE_COMMIT_RE = re.compile(r"^Merge pull request #(\d+)\b")
 # Canonical git-revert shape without a trailing PR number of its own. A revert
 # merged through an ordinary PR has ``... (#container)`` after the quote and is
 # intentionally left to the normal subject/API tiers.
@@ -73,18 +70,6 @@ _CANONICAL_REVERT_SUBJECT_RE = re.compile(r'^Revert "(.+)"$')
 _CANONICAL_REVERT_BODY_RE = re.compile(
     r"(?im)^This reverts commit ([0-9a-f]{7,40})\.\s*$"
 )
-
-
-def _pr_numbers_from_subjects(subjects: list[str]) -> set[int]:
-    """Extract PR numbers from subjects via trailing (#N) or merge-commit prefix."""
-    numbers: set[int] = set()
-    for line in subjects:
-        m = _TRAILING_REF_RE.search(line)
-        if m is None:
-            m = _MERGE_COMMIT_RE.search(line)
-        if m:
-            numbers.add(int(m.group(1)))
-    return numbers
 
 
 def _canonical_revert_source_pr(repo: Any, subject: str, body: str) -> int | None:
@@ -119,7 +104,7 @@ def _canonical_revert_source_pr(repo: Any, subject: str, body: str) -> int | Non
             subject[:80], target_sha[:12],
         )
         return None
-    numbers = _pr_numbers_from_subjects([target_subject])
+    numbers = pr_numbers_from_commit_subjects([target_subject])
     return next(iter(numbers)) if len(numbers) == 1 else None
 
 
@@ -248,8 +233,7 @@ def validate_target_release_tag(
     writing an older version over a newer release. Only tags from the target
     ``M.m`` line are compared, so tags from sibling branches do not interfere.
     """
-    stage = target_stage.strip().lower()
-    target_tag = target_version if stage == "ga" else f"{target_version}-{stage}"
+    target_tag = stage_release_name(target_version, target_stage.strip().lower())
     target_key = _tag_sort_key(target_tag)
     if target_key is None:
         raise ValueError(f"invalid release target {target_tag!r}")
@@ -396,7 +380,7 @@ def resolve_commit_prs(
             continue
         via_applied = bool(numbers)
         if not numbers:
-            numbers = _pr_numbers_from_subjects([subject])
+            numbers = pr_numbers_from_commit_subjects([subject])
             via_subject = bool(numbers)
             source_shas = tuple(cherry_pick_source_shas(body))
             if numbers and source_shas:
@@ -540,7 +524,7 @@ def _trusted_applied_source_prs(
         # The commit subject must identify this exact associated PR. Otherwise a
         # contributor-controlled commit cherry-picked into a real sweep could
         # imitate the sweep title and inject its own ## Applied table.
-        subject_numbers = _pr_numbers_from_subjects([subject])
+        subject_numbers = pr_numbers_from_commit_subjects([subject])
         if (
             _is_trusted_sweep_pull(
                 repo, pull, release_branch=release_branch
@@ -753,7 +737,7 @@ def _title_core(title: Any) -> str:
         return ""
     stripped = source_title_from_backport_title(title)
     core = stripped if stripped is not None else title
-    while match := _TRAILING_REF_RE.search(core):
+    while match := TRAILING_PR_REF_RE.search(core):
         core = core[:match.start()].rstrip()
     return core
 
@@ -827,7 +811,7 @@ def _recover_source_pr(repo: Any, pull: Any) -> int | None:
             description=f"commits of PR #{pull.number}",
         )
         subjects = [c.commit.message.splitlines()[0] for c in commits if c.commit.message]
-        numbers = _pr_numbers_from_subjects(subjects)
+        numbers = pr_numbers_from_commit_subjects(subjects)
         # Take the sole number when unambiguous.
         if len(numbers) == 1:
             return next(iter(numbers))
@@ -857,7 +841,7 @@ def _recover_multi_source_prs(pull: Any) -> tuple[int, ...]:
     except Exception as exc:  # noqa: BLE001 - failed proof falls back safely
         logger.warning("Could not read commits of multi-source PR #%s: %s", pull.number, exc)
         return ()
-    commit_sources = _pr_numbers_from_subjects(subjects)
+    commit_sources = pr_numbers_from_commit_subjects(subjects)
     return body_sources if set(body_sources) == commit_sources else ()
 
 

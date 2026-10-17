@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import io
 import urllib.error
+import urllib.request
 
+from scripts.common import github_client
 from scripts.release_notes import contributors as contrib
 
 
@@ -40,10 +43,10 @@ def test_empty_original_author_list_does_not_guess_from_commits() -> None:
 
 
 def test_profile_lookup_failure_keeps_original_login(monkeypatch) -> None:
-    def _offline(url, token, label):
+    def _offline(url, token):
         raise urllib.error.URLError("offline")
 
-    monkeypatch.setattr(contrib, "_api_get_with_retry", _offline)
+    monkeypatch.setattr(contrib, "_api_get", _offline)
 
     assert contrib.list_contributors(["source-author"]) == ["source-author @source-author"]
 
@@ -51,14 +54,14 @@ def test_profile_lookup_failure_keeps_original_login(monkeypatch) -> None:
 def test_transient_profile_lookup_is_retried(monkeypatch) -> None:
     calls = {"count": 0}
 
-    def _flaky(url, token):
+    def _flaky(request, timeout):
         calls["count"] += 1
         if calls["count"] == 1:
-            raise urllib.error.HTTPError(url, 503, "busy", {}, None)
-        return {"name": "Recovered Name"}
+            raise urllib.error.HTTPError(request.full_url, 503, "busy", {}, None)
+        return io.BytesIO(b'{"name": "Recovered Name"}')
 
-    monkeypatch.setattr(contrib, "_api_get", _flaky)
-    monkeypatch.setattr(contrib.time, "sleep", lambda delay: None)
+    monkeypatch.setattr(urllib.request, "urlopen", _flaky)
+    monkeypatch.setattr(github_client.time, "sleep", lambda delay: None)
 
     assert contrib.list_contributors(["recovered"]) == ["Recovered Name @recovered"]
     assert calls["count"] == 2

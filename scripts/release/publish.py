@@ -17,7 +17,7 @@ from scripts.release.checks import require_green_checks
 from scripts.release.models import DerivedRelease, PublishPlan, ReleaseIntent, ReleasePolicy
 from scripts.release.policy import validate_branch
 from scripts.release.versioning import derive_version
-from scripts.release_notes.release_format import parse_version
+from scripts.release_notes.release_format import parse_version, stage_release_name
 from scripts.release_notes.version_bump import current_release_state
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ def plan_publication(
         raise ReleaseError(f"version.h records {version}, which does not belong to branch {branch}")
     if stage == "dev":
         raise ReleaseError("version.h still records development stage 'dev'")
-    tag = version if stage == "ga" else f"{version}-{stage}"
+    tag = stage_release_name(version, stage)
 
     _require_merged_preparation_pr(repo, policy.repo, branch, version, stage, candidate_sha)
 

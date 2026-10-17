@@ -10,6 +10,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.common.job_summary import write_outputs
 from scripts.common.logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -150,21 +151,6 @@ def _summary(statuses: list[Status]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _write_outputs(versions: list[str], report: str) -> None:
-    values = {
-        "verified_versions": " ".join(versions),
-        "arch_report": report,
-    }
-    path = os.environ.get("GITHUB_OUTPUT")
-    if path:
-        with open(path, "a", encoding="utf-8") as handle:
-            for key, value in values.items():
-                handle.write(f"{key}={value}\n")
-    else:
-        for key, value in values.items():
-            print(f"{key}={value}")
-
-
 def _write_summary(text: str) -> None:
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if path:
@@ -185,13 +171,13 @@ def main(argv: list[str] | None = None) -> int:
         statuses = reconcile(load_markers(Path(args.markers_dir)), expected)
     except CollectError as exc:
         logger.error("Aggregation failed: %s", exc)
-        _write_outputs([], '{"lines":[]}')
+        write_outputs({"verified_versions": "", "arch_report": '{"lines":[]}'})
         _write_summary(f"## CVE Verification Aggregation\n\nFAIL: {exc}\n")
         return 2
 
     lines = _group(statuses)
     versions = sorted(line for line, items in lines.items() if any(item.outcome == "verified" for item in items))
-    _write_outputs(versions, _arch_report(statuses))
+    write_outputs({"verified_versions": " ".join(versions), "arch_report": _arch_report(statuses)})
     _write_summary(_summary(statuses))
 
     unresolved = [item for item in statuses if item.outcome in {"error", "missing"}]

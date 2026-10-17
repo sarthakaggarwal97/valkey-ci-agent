@@ -33,6 +33,7 @@ from scripts.backport.validation import (
     changed_paths_since_base,
     select_validation_commands,
 )
+from scripts.common.ai_output import agent_result_text
 from scripts.common.build_validator import run_build_commands
 from scripts.common.proc import git_output
 
@@ -367,7 +368,7 @@ def repair_validation_failure_with_claude(
             prompt,
             cwd=repo_dir,
         )
-        diagnosis = extract_agent_result_text(getattr(agent_result, "stdout", ""))
+        diagnosis = agent_result_text(getattr(agent_result, "stdout", ""))
         if agent_result.returncode != 0:
             run_git(repo_dir, "reset", "--hard", "HEAD")
             detail = (
@@ -972,25 +973,6 @@ def _validation_repair_resolution(
         reviewer_diff=diff or None,
         llm_summary=summary,
     )
-
-
-def extract_agent_result_text(stdout: str) -> str:
-    result_text = ""
-    for line in stdout.strip().splitlines():
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if not isinstance(event, dict):
-            continue
-        if event.get("type") != "result" or "result" not in event:
-            continue
-        raw_result = event.get("result")
-        if isinstance(raw_result, str):
-            result_text = raw_result.strip()
-        elif raw_result is not None:
-            result_text = json.dumps(raw_result, sort_keys=True, default=str)
-    return result_text
 
 
 def validation_output_with_diagnosis(

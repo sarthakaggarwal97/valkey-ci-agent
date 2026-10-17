@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from scripts.common.ai_output import extract_json_object
+from scripts.common.ai_output import agent_result_text, extract_json_object
 
 
 def _stream(*results: str) -> str:
@@ -39,3 +39,17 @@ def test_a_repeated_identical_object_is_not_ambiguous():
 ])
 def test_ambiguous_or_missing_output_yields_none(stdout):
     assert extract_json_object(stdout, required_key="approved") is None
+
+
+def test_agent_result_text_is_the_last_result_stripped():
+    stdout = "\n".join(["[1, 2]", '"a string event"', "not json", _stream("  first  ", "  final text \n")])
+
+    assert agent_result_text(stdout) == "final text"
+
+
+def test_agent_result_text_renders_a_structured_result_as_json():
+    stdout = json.dumps({"type": "result", "result": {"b": 1, "a": 2}})
+
+    assert agent_result_text(stdout) == '{"a": 2, "b": 1}'
+    assert agent_result_text("") == ""
+

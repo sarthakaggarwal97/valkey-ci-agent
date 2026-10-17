@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 import urllib.error
 import urllib.request
 from typing import List, Optional, Sequence
 
+from scripts.common.github_client import urlopen_with_retry
+
 logger = logging.getLogger(__name__)
 
 _API_ROOT = "https://api.github.com"
-_RETRYABLE_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
 _API_RETRIES = 3
 
 
@@ -34,34 +34,19 @@ def _api_get(url: str, token: Optional[str]) -> object:
     }
     if token:
         headers["Authorization"] = "Bearer {}".format(token)
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 (trusted host)
-        return json.loads(resp.read().decode("utf-8"))
-
-
-def _api_get_with_retry(url: str, token: Optional[str], label: str) -> object:
-    """Call ``_api_get`` with bounded retries for transient HTTP errors."""
-    for attempt in range(_API_RETRIES):
-        try:
-            return _api_get(url, token)
-        except urllib.error.HTTPError as exc:
-            if exc.code in _RETRYABLE_HTTP_CODES and attempt < _API_RETRIES - 1:
-                delay = min(8.0, 1.0 * (2**attempt))
-                logger.warning("Retrying %s after %.1fs (HTTP %d)", label, delay, exc.code)
-                time.sleep(delay)
-                continue
-            raise
-    raise RuntimeError("unreachable")
+    body = urlopen_with_retry(
+        urllib.request.Request(url, headers=headers),
+        timeout=30,
+        retries=_API_RETRIES - 1,
+        description=url.removeprefix(_API_ROOT),
+    )
+    return json.loads(body.decode("utf-8"))
 
 
 def _display_name(repo_login: str, token: Optional[str]) -> Optional[str]:
     """Resolve a login to its profile full name, or ``None`` if unavailable."""
     try:
-        data = _api_get_with_retry(
-            "{}/users/{}".format(_API_ROOT, repo_login),
-            token,
-            "/users/{}".format(repo_login),
-        )
+        data = _api_get("{}/users/{}".format(_API_ROOT, repo_login), token)
     except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError):
         return None
     if isinstance(data, dict):

@@ -11,8 +11,8 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.common.github_client import retry_github_call
+from scripts.common.github_graphql import GitHubGraphQLClient
 from scripts.common.identity import APP_LOGIN, RELEASE_CUT_BRANCH_PREFIX
 from scripts.release_notes import projects
 from scripts.release_notes import release_format as rn

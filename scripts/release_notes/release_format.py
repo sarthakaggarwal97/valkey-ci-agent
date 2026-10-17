@@ -170,13 +170,19 @@ def _format_date(date: str) -> str:
     return parsed.strftime("%a %d %B %Y")
 
 
-def _normalize_stage(stage: str) -> str:
+def normalize_stage(stage: str) -> str:
+    """Return *stage* as ``ga`` or ``rcN``, case- and whitespace-insensitive."""
     s = stage.strip().lower()
     if s == "ga":
         return "ga"
     if _RC_STAGE_RE.match(s):
         return s
     raise ValueError("release stage must be 'ga' or 'rcN' (e.g. rc1), got {!r}".format(stage))
+
+
+def stage_release_name(version: str, stage: str) -> str:
+    """The release's tag and name: ``9.1.0`` at ga, else ``9.1.0-rcN``."""
+    return version if stage == "ga" else f"{version}-{stage}"
 
 
 def render_header(major: int, minor: int, display_name: str) -> str:
@@ -237,7 +243,7 @@ def render_version_section(
     profile's canonical ordering.
     """
     ordered_categories = categories
-    stage = _normalize_stage(stage)
+    stage = normalize_stage(stage)
     urgency = urgency.strip().upper()
     if urgency not in VALID_URGENCIES:
         raise ValueError(

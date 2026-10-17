@@ -16,6 +16,11 @@ _MANUAL_BACKPORT_COMMIT_SUBJECT = re.compile(
     re.IGNORECASE,
 )
 
+# A squash subject's own PR: the last ``(#N)``, followed by nothing but closing
+# parentheses, dots or whitespace.
+TRAILING_PR_REF_RE = re.compile(r"\(#(\d+)\)[)\s.]*$")
+_MERGE_SUBJECT_RE = re.compile(r"^Merge pull request #(\d+)\b", re.IGNORECASE)
+
 
 def build_branch_name(source_pr_number: int, target_branch: str) -> str:
     return f"backport/{source_pr_number}-to-{target_branch}"
@@ -25,8 +30,8 @@ def pr_numbers_from_commit_subjects(subjects: list[str]) -> set[int]:
     """Source PR numbers from squash or standard GitHub merge subjects.
 
     Single source of truth for "which PRs does this commit history contain",
-    shared by the sweep (to skip already-applied PRs) and mark-done (to verify
-    a board item actually landed).
+    shared by the sweep (to skip already-applied PRs), mark-done (to verify
+    a board item actually landed) and release-notes discovery.
 
     A trailing ``(#N)`` identifies a squash commit's PR. An earlier
     ``(#N)`` in the subject is a reference, not the commit's own PR — e.g.
@@ -35,13 +40,9 @@ def pr_numbers_from_commit_subjects(subjects: list[str]) -> set[int]:
     """
     numbers: set[int] = set()
     for line in subjects:
-        m = re.search(r"\(#(\d+)\)\s*$", line)
+        m = TRAILING_PR_REF_RE.search(line) or _MERGE_SUBJECT_RE.match(line)
         if m:
             numbers.add(int(m.group(1)))
-            continue
-        merge = re.match(r"Merge pull request #(\d+)\b", line, re.IGNORECASE)
-        if merge:
-            numbers.add(int(merge.group(1)))
     return numbers
 
 
