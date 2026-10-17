@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -298,14 +299,55 @@ def test_a_shell_variable_the_test_command_uses_is_not_setup():
     assert "test" not in steps
 
 
-@pytest.mark.parametrize("line, expected", [
-    ("make 32bit # the script below has no argument", "make 32bit"),
-    ("make CFLAGS='-DA#B' X=1", "make CFLAGS='-DA#B' X=1"),
-    ('make CFLAGS="#1" # note', 'make CFLAGS="#1"'),
-    ("# only a comment", ""),
+def _bash_words(args: str) -> str:
+    """How bash itself splits ``args`` into words, one ``<word>`` each."""
+    result = subprocess.run(["bash", "-c", f"set -f; printf '<%s>' {args}"],
+                            capture_output=True, text=True, check=False)
+    return result.stdout if result.returncode == 0 else f"error: {result.stderr.strip()}"
+
+
+@pytest.mark.parametrize("args", [
+    "32bit # the script below has no argument",  # a comment Valkey's daily.yml has
+    "X=1\t# after a tab", "a;#b", "a #b 'c # d'", "x ##y", "#",
+    "CFLAGS=-DX#Y", "a#",  # inside a word
+    "${#list[@]}",  # parameter length
+    "CFLAGS='-DA#B' X=1", 'CFLAGS="#1" # note', "'it'\\''s' # q",  # quoted
+    'A="x \\" # y"', 'x="a\\"#b"', "a\\ #b", "a\\#b # c",  # escaped
 ])
-def test_a_builds_comment_is_dropped_but_a_quoted_hash_is_not(line, expected):
-    assert normalize_mod._without_comment(line) == expected
+def test_a_comment_is_dropped_exactly_where_bash_starts_one(args):
+    assert _bash_words(normalize_mod._without_comment(args)) == _bash_words(args)
+
+
+@pytest.mark.parametrize("line", [
+    "export TCLSH=tclsh8.6",  # the next step's fresh shell would not see it
+    "cd tests/tmp",
+    "TCLSH=tclsh8.6",
+    "sudo apt-get install $PACKAGES",
+    "sudo apt-get install tclx && rm -rf tests/tmp",
+    "if true; then sudo apt-get install tclx; fi",
+])
+def test_only_an_install_or_a_fixture_build_is_hoisted_out_of_a_test_step(line):
+    step = {"name": "test", "run": f"{line}\n./runtest --verbose"}
+
+    assert normalize_mod._setup_of(step) is None
+
+
+def test_only_the_lines_before_the_test_command_are_its_setup():
+    step = {"name": "test", "run": "sudo apt-get install tclx\n./runtest --verbose\nsudo apt-get install valgrind"}
+
+    setup = normalize_mod._setup_of(step)
+
+    assert setup is not None and setup["run"] == "sudo apt-get install tclx"
+
+
+def test_a_fixture_build_with_a_comment_is_hoisted_whole():
+    step = {"name": "module api test",
+            "run": "make -C tests/modules 32bit # build them ahead of time\n./runtest-moduleapi --verbose"}
+
+    setup = normalize_mod._setup_of(step)
+
+    assert setup is not None and setup["name"] == "module api test setup"
+    assert setup["run"] == "make -C tests/modules 32bit # build them ahead of time"
 
 
 def test_no_fixable_jobs_command_carries_a_comment():

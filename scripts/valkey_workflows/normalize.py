@@ -220,15 +220,35 @@ def _fix_mode(job: dict[str, Any]) -> tuple[str, dict[str, str]] | None:
 
 
 def _without_comment(line: str) -> str:
-    """``line`` without a trailing shell comment, or "" when it is only one."""
+    """``line`` without a trailing shell comment, or "" when it is only one.
+
+    As the shell reads it: ``#`` starts a comment only at the start of a word,
+    never inside quotes or a word (``-DX#Y``, ``${#list[@]}``, ``a\\ #b``), and
+    a backslash outside single quotes makes the next character literal.
+    """
     quote = ""
-    for index, char in enumerate(line):
+    word_start = True
+    index = 0
+    while index < len(line):
+        char = line[index]
         if quote:
-            quote = "" if char == quote else quote
-        elif char in "\"'":
-            quote = char
-        elif char == "#":
+            if char == "\\" and quote == '"':
+                index += 1
+            elif char == quote:
+                quote = ""
+        elif char == "\\":
+            index += 1
+            word_start = False
+        elif char in " \t":
+            word_start = True
+        elif char == "#" and word_start:
             return line[:index].rstrip()
+        else:
+            if char in "\"'":
+                quote = char
+            # A shell operator ends a word, so a comment may follow it.
+            word_start = char in ";&|()<>"
+        index += 1
     return line.rstrip()
 
 
@@ -357,19 +377,25 @@ def fix_steps(
     return steps
 
 
-# A line of a test step that is the step's own setup: one plain command,
-# with no shell state the test invocation beside it may depend on.
-_SETUP_LINE_RE = re.compile(
-    r"^(?:if|then|else|elif|fi|for|while|until|do|done|case|esac|\{|\})\b|[;&|]\s*$|^\w+="
+# The only commands a test step's setup may hoist: they install something or
+# build test fixtures, which a later step's fresh shell sees just the same.
+# Anything else (``export``, ``cd``, an assignment, a control structure) is
+# the invocation's own shell state and stays with it.
+_HOISTABLE_RE = re.compile(
+    r"^(?:sudo\s+)?(?:"
+    r"apt-get\s+(?:update|install)\b|apt\s+install\b|(?:yum|dnf)\s+(?:-y\s+)?install\b"
+    r"|apk\s+add\b|brew\s+install\b|(?:python3?\s+-m\s+)?pip3?\s+install\b"
+    r"|make\s+-C\s+\S+"
+    r")[^;&|<>`$\\]*$"
 )
 
 
 def _setup_of(step: dict[str, Any]) -> dict[str, Any] | None:
     """The setup a test step does before its test invocation, as a step of its own, or None.
 
-    Only the plain commands before the invocation count: a line that assigns
-    a variable, uses one, or opens a control structure belongs to the
-    invocation's own shell.
+    Only installs and fixture builds before the test invocation count
+    (``_HOISTABLE_RE``): any other line is the invocation's own shell state,
+    which the fresh shell of a step of its own would not see.
     """
     key, script = _script(step)
     if not script or not _suite(script):
@@ -378,18 +404,11 @@ def _setup_of(step: dict[str, Any]) -> dict[str, Any] | None:
     invocation = next((index for index, line in enumerate(lines) if _suite(line)), None)
     if invocation is None:
         return None
-    setup = [line for line in lines[:invocation] if _is_setup_line(line)]
+    setup = [line for line in lines[:invocation] if _HOISTABLE_RE.match(_without_comment(line).strip())]
     if not setup:
         return None
     name = str(step.get("name") or "").strip()
     return _with_script({**step, "name": f"{name} setup" if name else "setup"}, key, "\n".join(setup))
-
-
-def _is_setup_line(line: str) -> bool:
-    text = line.strip()
-    if not text or text.startswith("#") or text.endswith("\\") or "$" in text:
-        return False
-    return not _SETUP_LINE_RE.search(text)
 
 
 def _is_main_checkout(step: dict[str, Any]) -> bool:
