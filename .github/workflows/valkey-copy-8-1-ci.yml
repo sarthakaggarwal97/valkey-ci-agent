@@ -71,10 +71,11 @@ jobs:
         wget https://download.valkey.io/releases/valkey-7.2.7-noble-x86_64.tar.gz
         tar -xvf valkey-7.2.7-noble-x86_64.tar.gz
       if: inputs.compat
+    - name: test setup
+      run: sudo apt-get install tcl8.6 tclx
+      if: '!contains(inputs.skiptests, ''valkey'')'
     - name: test
-      run: |
-        sudo apt-get install tcl8.6 tclx
-        ./runtest --verbose --tags -slow --dump-logs --other-server-path tests/tmp/valkey-7.2.7-noble-x86_64/bin/valkey-server ${{ inputs.test_args }}
+      run: ./runtest --verbose --tags -slow --dump-logs --other-server-path tests/tmp/valkey-7.2.7-noble-x86_64/bin/valkey-server ${{ inputs.test_args }}
       if: (!contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
     - name: module api test
       run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --other-server-path tests/tmp/valkey-7.2.7-noble-x86_64/bin/valkey-server ${{ inputs.test_args }}
@@ -123,8 +124,8 @@ jobs:
       env:
         CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
         CI_FIX_BUILD: make -j4 all-with-unit-tests SERVER_CFLAGS='-Werror' BUILD_TLS=yes USE_FAST_FLOAT=yes
-        CI_FIX_RUNTEST: ./runtest --verbose --tags -slow --dump-logs --other-server-path tests/tmp/valkey-7.2.7-noble-x86_64/bin/valkey-server
-        CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --other-server-path tests/tmp/valkey-7.2.7-noble-x86_64/bin/valkey-server
+        CI_FIX_RUNTEST: ./runtest --verbose --tags -slow --dump-logs
+        CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
       if: inputs.fix != ''
     - name: 'CI fix: upload the result'

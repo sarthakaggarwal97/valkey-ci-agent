@@ -187,8 +187,17 @@ def _normalize_job(job_id: str, job: dict[str, Any], copy: Copy) -> dict[str, An
         matrix_key, env = fix
         container = bool(job.get("container"))
         # Fix mode runs the job up to its tests; the agent takes over there.
+        # A test step that also sets up (installs Tcl, builds the test
+        # modules) keeps that setup: the agent's own runs need it just as the
+        # job's tests do, so it is hoisted out before the step is gated off.
         first_test = next(i for i, step in enumerate(steps) if _suite(_script(step)[1]))
-        steps = steps[:first_test] + [_gate(step, _NOT_FIX) for step in steps[first_test:]]
+        gated: list[dict[str, Any]] = []
+        for step in steps[first_test:]:
+            setup, step = _hoisted_setup(step)
+            if setup is not None:
+                gated.append(setup)
+            gated.append(_gate(step, _NOT_FIX))
+        steps = steps[:first_test] + gated
         selects = f" && matrix.{matrix_key} == inputs.fix_matrix" if matrix_key else ""
         if matrix_key:
             # The other matrix entries skip everything, build included.
@@ -257,7 +266,11 @@ def _matrix_key(job: dict[str, Any]) -> str | None:
 
 
 _TEST_ARGS_RE = re.compile(r"\$\{\{\s*inputs\.test_args\s*\}\}")
-_DROPPED_OPTION_RE = re.compile(r"\s--(?:failures-output|single)\s+\S+")
+# Options of the job's own test selection and fixtures: the fix runs its own
+# tests, and a path to another server the fix mode never downloads.
+_DROPPED_OPTION_RE = re.compile(
+    r"""\s--(?:failures-output|single|only|other-server-path)\s+(?:"[^"]*"|'[^']*'|\S+)"""
+)
 _SHELL_VARIABLE_RE = re.compile(r"(?:^|\s)\S*\$(?!\{\{)\S*")
 
 
@@ -353,6 +366,45 @@ def fix_steps(
         for step in steps[:-1]:
             step["if"] = when
     return steps
+
+
+# A line of a test step that is the step's own setup: one plain command,
+# with no shell state the test invocation beside it may depend on.
+_SETUP_LINE_RE = re.compile(
+    r"^(?:if|then|else|elif|fi|for|while|until|do|done|case|esac|\{|\})\b|[;&|]\s*$|^\w+="
+)
+
+
+def _hoisted_setup(step: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """``(setup step, step without it)`` for a test step that also sets up, else ``(None, step)``.
+
+    Only the plain commands before the test invocation move: a line that
+    assigns a variable, uses one, or opens a control structure belongs to the
+    invocation's own shell and stays with it.
+    """
+    key, script = _script(step)
+    if not script or not _suite(script):
+        return None, step
+    lines = script.splitlines()
+    invocation = next((index for index, line in enumerate(lines) if _suite(line)), None)
+    if invocation is None:
+        return None, step
+    setup = [line for line in lines[:invocation] if _is_setup_line(line)]
+    if not setup:
+        return None, step
+    kept = [line for line in lines if line not in setup]
+    name = str(step.get("name") or "").strip()
+    return (
+        _with_script({**step, "name": f"{name} setup" if name else "setup"}, key, "\n".join(setup)),
+        _with_script(step, key, "\n".join(kept)),
+    )
+
+
+def _is_setup_line(line: str) -> bool:
+    text = line.strip()
+    if not text or text.startswith("#") or text.endswith("\\") or "$" in text:
+        return False
+    return not _SETUP_LINE_RE.search(text)
 
 
 def _is_main_checkout(step: dict[str, Any]) -> bool:

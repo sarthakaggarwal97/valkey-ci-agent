@@ -544,4 +544,3 @@ def test_the_sweep_pr_is_followed_up_before_a_fix_pr(monkeypatch) -> None:
         _gh([], sweep, open_prs=[fix]), repo_entry=_entry(), target_branch="9.0", bot_login=_BOT,
     )
     assert target is not None and target.pr is sweep
-

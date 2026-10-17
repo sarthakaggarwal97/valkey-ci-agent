@@ -738,5 +738,3 @@ def prepare_issue(
         ),
     )
     return PreparedIssue(failure=failure, task=task, branch_name=branch_name)
-
-

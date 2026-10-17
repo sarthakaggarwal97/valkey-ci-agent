@@ -119,10 +119,11 @@ jobs:
         cd tests/tmp/redis-6.2.14
         make
       if: (inputs.compat) && inputs.fix == ''
+    - name: backward compatibility tests with OSS Redis 6.2 setup
+      run: sudo apt-get install tcl8.6 tclx
+      if: inputs.compat
     - name: backward compatibility tests with OSS Redis 6.2
-      run: |
-        sudo apt-get install tcl8.6 tclx
-        ./runtest --verbose --tags compatible-redis --dump-logs --other-server-path tests/tmp/redis-6.2.14/src/redis-server
+      run: ./runtest --verbose --tags compatible-redis --dump-logs --other-server-path tests/tmp/redis-6.2.14/src/redis-server
       if: (inputs.compat) && inputs.fix == ''
     - name: install Redis OSS 7.0 server for compatibility testing
       run: |
@@ -135,10 +136,11 @@ jobs:
         cd tests/tmp/redis-7.0.15
         make
       if: (inputs.compat) && inputs.fix == ''
+    - name: backward compatibility tests with OSS Redis 7.0 setup
+      run: sudo apt-get install tcl8.6 tclx
+      if: inputs.compat
     - name: backward compatibility tests with OSS Redis 7.0
-      run: |
-        sudo apt-get install tcl8.6 tclx
-        ./runtest --verbose --tags compatible-redis --dump-logs --other-server-path tests/tmp/redis-7.0.15/src/redis-server
+      run: ./runtest --verbose --tags compatible-redis --dump-logs --other-server-path tests/tmp/redis-7.0.15/src/redis-server
       if: (inputs.compat) && inputs.fix == ''
     - name: Upload test failures
       if: (always()) && inputs.fix == ''
@@ -660,11 +662,12 @@ jobs:
     - name: test
       if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
       run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --failures-output test-failures/valkey.json --verbose --dump-logs ${{inputs.test_args}}
+    - name: module api test setup
+      if: true && !contains(inputs.skiptests, 'modules')
+      run: 'make -C tests/modules 32bit # the script below doesn''t have an argument, we must build manually ahead of time'
     - name: module api test
       if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: |
-        make -C tests/modules 32bit # the script below doesn't have an argument, we must build manually ahead of time
-        CFLAGS='-Werror' ./runtest-moduleapi --failures-output test-failures/moduleapi.json --verbose --dump-logs ${{inputs.test_args}}
+      run: CFLAGS='-Werror' ./runtest-moduleapi --failures-output test-failures/moduleapi.json --verbose --dump-logs ${{inputs.test_args}}
     - name: sentinel tests
       if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
       run: ./runtest-sentinel --failures-output test-failures/sentinel.json ${{inputs.cluster_test_args}}

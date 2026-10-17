@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -60,10 +61,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: make
+        run: make SERVER_CFLAGS='-Werror'
       - name: test
         run: |
           sudo apt-get install tcl8.6 tclx
-          ./runtest --verbose --tags -slow \\
+          ./runtest --verbose --other-server-path tests/tmp/old/bin/valkey-server --tags -slow \\
             --dump-logs
       - name: module api test
         run: CFLAGS='-Werror' ./runtest-moduleapi --verbose
@@ -218,11 +221,11 @@ def test_ci_test_commands_receive_the_test_selection():
     steps = {step.get("name"): step for step in
              _load(normalize_mod.normalize(CI, origin="x").text)["jobs"]["test-ubuntu-latest"]["steps"]}
 
-    assert steps["test"]["if"] == "!contains(inputs.skiptests, 'valkey')"
+    assert steps["test"]["if"] == "(!contains(inputs.skiptests, 'valkey')) && inputs.fix == ''"
     # The argument ends the runtest command, after its continuation line.
     assert steps["test"]["run"].splitlines()[-1].strip() == "--dump-logs ${{ inputs.test_args }}"
     assert steps["module api test"]["run"].endswith("${{ inputs.test_args }}")
-    assert steps["module api test"]["if"] == "!contains(inputs.skiptests, 'modules')"
+    assert steps["module api test"]["if"] == "(!contains(inputs.skiptests, 'modules')) && inputs.fix == ''"
 
 
 def test_the_branches_weekly_tests_are_synced_newest_first():
@@ -294,3 +297,75 @@ def test_the_router_calls_every_copy_and_no_other():
 
     assert called == {entry["file"] for entry in _MANIFEST.values()}
     assert {path.name for path in sync_mod.WORKFLOW_DIR.glob("valkey-copy-*.yml")} == called | {sync_mod.ROUTER}
+
+
+def test_a_test_step_that_also_installs_keeps_that_setup_in_fix_mode():
+    copy = normalize_mod.normalize(CI, origin="x")
+    steps = _load(copy.text)["jobs"]["test-ubuntu-latest"]["steps"]
+    names = [step.get("name") or step.get("uses") for step in steps]
+    by_name = dict(zip(names, steps))
+
+    assert copy.fixable == {"test-ubuntu-latest": ""}
+    # The install is a step of its own, which fix mode runs, before the tests.
+    assert names.index("test setup") < names.index("test")
+    assert by_name["test setup"]["run"] == "sudo apt-get install tcl8.6 tclx"
+    assert "inputs.fix" not in str(by_name["test setup"].get("if") or "")
+    assert "apt-get" not in by_name["test"]["run"]
+    # The agent runs its own tests: not the job's selection, and not against
+    # another server the fix mode never downloads.
+    env = by_name["CI fix: prepare the fix in this job"]["env"]
+    assert env["CI_FIX_RUNTEST"] == "./runtest --verbose --tags -slow --dump-logs"
+
+
+def test_a_shell_variable_the_test_command_uses_stays_with_it():
+    source = CI.replace(
+        "          sudo apt-get install tcl8.6 tclx\n",
+        "          shard=unit\n          sudo apt-get install tcl8.6 tclx\n",
+    )
+    steps = {step.get("name"): step for step in
+             _load(normalize_mod.normalize(source, origin="x").text)["jobs"]["test-ubuntu-latest"]["steps"]}
+
+    assert steps["test setup"]["run"] == "sudo apt-get install tcl8.6 tclx"
+    assert steps["test"]["run"].splitlines()[0].strip() == "shard=unit"
+
+
+_INSTALLS = re.compile(r"\b(?:apt-get|yum|dnf) install\b|\bapk add\b|\bbrew install\b|\bpip install\b")
+
+
+def _skipped_in_fix_mode(step: dict) -> bool:
+    """Whether fix mode skips ``step``: its condition requires ``inputs.fix == ''``.
+
+    A matrix job's steps are also conditional on ``inputs.fix``, but as an
+    alternative (run in test mode, or in the entry that prepares the fix), so
+    only the conjunction means skipped.
+    """
+    condition = str(step.get("if") or "")
+    return condition == normalize_mod._NOT_FIX or f"&& {normalize_mod._NOT_FIX}" in condition
+
+
+def test_no_fixable_job_leaves_its_dependency_install_behind_in_fix_mode():
+    """A job the agent fixes in must still install what its own tests need."""
+    offenders = []
+    for key, entry in _MANIFEST.items():
+        workflow = _load((sync_mod.WORKFLOW_DIR / entry["file"]).read_text(encoding="utf-8"))
+        for job_id in entry["fixable"]:
+            for step in workflow["jobs"][job_id]["steps"]:
+                if _skipped_in_fix_mode(step) and _INSTALLS.search(str(step.get("run") or "")):
+                    offenders.append(f"{key} {job_id}: {step.get('name')}")
+
+    assert offenders == []
+
+
+def test_no_fixable_jobs_test_command_names_a_fixture_fix_mode_skips():
+    """``--other-server-path`` points into tests/tmp, which only a skipped step fills."""
+    offenders = []
+    for key, entry in _MANIFEST.items():
+        workflow = _load((sync_mod.WORKFLOW_DIR / entry["file"]).read_text(encoding="utf-8"))
+        for job_id in entry["fixable"]:
+            for step in workflow["jobs"][job_id]["steps"]:
+                env = step.get("env") or {}
+                for name in ("CI_FIX_RUNTEST", "CI_FIX_RUNTEST_MODULEAPI"):
+                    if "--other-server-path" in str(env.get(name) or "") or "--only" in str(env.get(name) or ""):
+                        offenders.append(f"{key} {job_id}: {name}")
+
+    assert offenders == []

@@ -571,4 +571,3 @@ def test_a_draft_closes_only_the_extra_issues_whose_tests_were_verified():
     assert "Fixes #9 Fixes #10 Fixes #11" in body
     assert "Fixes #12" not in body
     assert "also changes the test(s) of #12, without showing that it fixes them" in body
-

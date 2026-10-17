@@ -65,10 +65,11 @@ jobs:
         ref: ${{ inputs.use_git_ref }}
     - name: make
       run: make -j4 all-with-unit-tests SERVER_CFLAGS='-Werror' BUILD_TLS=yes USE_FAST_FLOAT=yes
+    - name: test setup
+      run: sudo apt-get install tcl8.6 tclx
+      if: '!contains(inputs.skiptests, ''valkey'')'
     - name: test
-      run: |
-        sudo apt-get install tcl8.6 tclx
-        ./runtest --verbose --tags -slow --dump-logs ${{ inputs.test_args }}
+      run: ./runtest --verbose --tags -slow --dump-logs ${{ inputs.test_args }}
       if: (!contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
     - name: module api test
       run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{ inputs.test_args }}

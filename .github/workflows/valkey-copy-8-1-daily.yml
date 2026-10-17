@@ -505,11 +505,12 @@ jobs:
     - name: test
       if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
       run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
+    - name: module api test setup
+      if: true && !contains(inputs.skiptests, 'modules')
+      run: 'make -C tests/modules 32bit # the script below doesn''t have an argument, we must build manually ahead of time'
     - name: module api test
       if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: |
-        make -C tests/modules 32bit # the script below doesn't have an argument, we must build manually ahead of time
-        CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
+      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
     - name: sentinel tests
       if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
       run: ./runtest-sentinel ${{inputs.cluster_test_args}}

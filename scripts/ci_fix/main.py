@@ -145,4 +145,3 @@ def _react_outcome(
         )
     except Exception:  # noqa: BLE001 - reaction is best effort
         logger.warning("Could not react to triggering comment %s", comment_id, exc_info=True)
-
