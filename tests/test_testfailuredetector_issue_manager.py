@@ -50,7 +50,7 @@ def _make_failure(
         test_name=test_name,
         test_file=test_file,
         error=error,
-        jobs=[JobReference(job=j, suite=s, url=u) for j, s, u in jobs],
+        jobs=[JobReference(job=j, url=u) for j, _suite, u in jobs],
     )
 
 

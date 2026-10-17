@@ -13,7 +13,6 @@ class JobReference:
     """A reference to a specific CI job where a test failed."""
 
     job: str
-    suite: str
     url: str = ""
 
 @dataclass
@@ -96,7 +95,6 @@ def parse_and_deduplicate(
                     failure.jobs.append(
                         JobReference(
                             job=job_name,
-                            suite=suite_name,
                             url=job_urls.get(job_name, ""),
                         )
                     )

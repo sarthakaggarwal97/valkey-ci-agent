@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
+from itertools import islice
+from typing import Any, Iterable
 
 from github import Github
 from github.WorkflowRun import WorkflowRun
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Name of the JSON file the Valkey CI workflow uploads inside its artifact zip.
 _FAILURES_JSON_NAME = "all-test-failures.json"
 _FAILURES_ARTIFACT_NAME = "all-test-failures"
+_RUNS_SCANNED = 30
 
 def get_latest_daily_run(
     gh: Github,
@@ -31,7 +34,7 @@ def get_latest_daily_run(
     )
 
     workflows = retry_github_call(
-        lambda: repo.get_workflows(),
+        lambda: list(repo.get_workflows()),
         retries=3,
         description="list workflows",
     )
@@ -50,9 +53,11 @@ def get_latest_daily_run(
     # pull_request (and fork PRs sit at action_required with no artifacts),
     # so we'd sometimes silently analyze the wrong run.
     runs = retry_github_call(
-        lambda: daily_workflow.get_runs(
+        # Listed inside the retry: the runs list is lazy, so only reading it
+        # makes the requests. The newest runs are enough to find one.
+        lambda: list(islice(daily_workflow.get_runs(
             branch=branch, status="completed", event="schedule",
-        ),
+        ), _RUNS_SCANNED)),
         retries=3,
         description=f"list runs for {workflow_name}",
     )
@@ -62,7 +67,7 @@ def get_latest_daily_run(
         # awaiting approval (action_required, e.g. fork PRs) or expired
         # (stale), and runs with no conclusion yet. These produce no test
         # artifacts and would be mistaken for a clean pass.
-        if run.conclusion in ("cancelled", "skipped", "action_required", "stale", None):
+        if run.conclusion in ("cancelled", "skipped", "action_required", "stale", "startup_failure", None):
             logger.debug(
                 "Skipping run #%d (conclusion=%s)", run.run_number, run.conclusion,
             )
@@ -139,37 +144,15 @@ def download_all_test_failures(
     logger.info("Extracted %s from artifact zip", _FAILURES_JSON_NAME)
     return content
 
-def get_job_urls(
-    gh: Github,
-    repo_full_name: str,
+def job_urls_for_jobs(
+    jobs: Iterable[Any],
+    *,
     run_id: int,
 ) -> dict[str, str]:
-    """Get a mapping of job name -> HTML URL for all jobs in a workflow run.
-
-    Also includes normalized variants (parentheses replaced with dashes,
-    spaces replaced with dashes) for fuzzy matching.
-    """
-
-    repo = retry_github_call(
-        lambda: gh.get_repo(repo_full_name),
-        retries=3,
-        description=f"get repo {repo_full_name}",
-    )
-
-    run = retry_github_call(
-        lambda: repo.get_workflow_run(run_id),
-        retries=3,
-        description=f"get run {run_id}",
-    )
-
-    jobs = retry_github_call(
-        lambda: run.jobs(),
-        retries=3,
-        description=f"list jobs for run {run_id}",
-    )
-
-    # Materialize once: jobs may be a lazy paginated list, and we iterate twice.
-    job_list = list(jobs)
+    """Return exact and normalized URL aliases from one jobs snapshot."""
+    # Materialize once: callers may supply a lazy paginated list, and the
+    # mapping intentionally uses two passes to preserve exact-name precedence.
+    job_list = tuple(jobs)
 
     # First pass: exact job names. These are authoritative, so they take
     # precedence over any normalized alias.

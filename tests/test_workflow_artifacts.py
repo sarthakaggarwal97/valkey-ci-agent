@@ -115,6 +115,37 @@ def test_list_run_artifacts():
     assert arts[0].name == "fuzzer-run-artifacts-123"
 
 
+def test_list_run_artifacts_reads_every_page():
+    """A Daily run uploads more artifacts than one page holds."""
+    pages = [
+        [{"id": n, "name": f"job-{n}"} for n in range(100)],
+        [{"id": 100, "name": "all-test-failures"}],
+    ]
+    mock_repo = MagicMock()
+    mock_repo._requester.requestJsonAndCheck.side_effect = (
+        lambda _verb, _url, parameters: ({}, {"artifacts": pages[parameters["page"] - 1]})
+    )
+    mock_gh = MagicMock()
+    mock_gh.get_repo.return_value = mock_repo
+
+    arts = ArtifactClient(mock_gh, token="t").list_run_artifacts("r", 99)
+
+    assert len(arts) == 101 and arts[-1].name == "all-test-failures"
+
+
+@pytest.mark.parametrize("code", [404, 410])
+def test_an_expired_artifact_downloads_as_empty(monkeypatch, code):
+    from urllib.error import HTTPError
+
+    from scripts.common import workflow_artifacts as artifacts_mod
+
+    def fake_urlopen(req, timeout=0):
+        raise HTTPError(req.full_url, code, "gone", {}, None)
+
+    monkeypatch.setattr(artifacts_mod, "urlopen", fake_urlopen)
+    assert ArtifactClient(MagicMock(), token="t")._download("/repos/x/actions/artifacts/1/zip") == b""
+
+
 def test_list_run_artifacts_skips_malformed_entries():
     """An artifact entry missing id or name is skipped, not a hard error."""
     mock_repo = MagicMock()
@@ -202,3 +233,11 @@ def test_extract_zip_leaves_damaged_empty_when_intact():
     damaged: list[str] = []
     assert _extract_zip(buf.getvalue(), damaged) == {"all-test-failures.json": b"[]"}
     assert damaged == []
+
+
+def test_download_job_log_returns_plain_text(monkeypatch):
+    client = ArtifactClient(MagicMock(), token="t")
+    seen = []
+    monkeypatch.setattr(client, "_download", lambda path: seen.append(path) or b"[ok]: t (1 ms)\n\xff")
+    assert client.download_job_log("o/r", 42) == "[ok]: t (1 ms)\n\ufffd"
+    assert seen == ["/repos/o/r/actions/jobs/42/logs"]

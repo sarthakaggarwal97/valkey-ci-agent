@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -61,7 +62,7 @@ class TestRunArtifactJSONGuard:
         assert "unexpected format" in mock_emit.call_args.args[0]
 
     @patch("scripts.test_failure_detector.main.parse_and_deduplicate")
-    @patch("scripts.test_failure_detector.main.get_job_urls")
+    @patch("scripts.test_failure_detector.main.jobs_for_run_attempt")
     @patch("scripts.test_failure_detector.main.emit_job_summary")
     @patch("scripts.test_failure_detector.main.download_all_test_failures")
     @patch("scripts.test_failure_detector.main.ArtifactClient")
@@ -91,7 +92,7 @@ class TestRunProcessingErrorsExitCode:
 
     @patch("scripts.test_failure_detector.main.process_failures")
     @patch("scripts.test_failure_detector.main.parse_and_deduplicate")
-    @patch("scripts.test_failure_detector.main.get_job_urls")
+    @patch("scripts.test_failure_detector.main.jobs_for_run_attempt")
     @patch("scripts.test_failure_detector.main.emit_job_summary")
     @patch("scripts.test_failure_detector.main.download_all_test_failures")
     @patch("scripts.test_failure_detector.main.ArtifactClient")
@@ -116,7 +117,7 @@ class TestRunProcessingErrorsExitCode:
 
     @patch("scripts.test_failure_detector.main.process_failures")
     @patch("scripts.test_failure_detector.main.parse_and_deduplicate")
-    @patch("scripts.test_failure_detector.main.get_job_urls")
+    @patch("scripts.test_failure_detector.main.jobs_for_run_attempt")
     @patch("scripts.test_failure_detector.main.emit_job_summary")
     @patch("scripts.test_failure_detector.main.download_all_test_failures")
     @patch("scripts.test_failure_detector.main.ArtifactClient")
@@ -144,7 +145,7 @@ class TestRunIncompleteArtifact:
     every readable failure got an issue."""
 
     @patch("scripts.test_failure_detector.main.process_failures")
-    @patch("scripts.test_failure_detector.main.get_job_urls")
+    @patch("scripts.test_failure_detector.main.jobs_for_run_attempt")
     @patch("scripts.test_failure_detector.main.emit_job_summary")
     @patch("scripts.test_failure_detector.main.download_all_test_failures")
     @patch("scripts.test_failure_detector.main.ArtifactClient")
@@ -158,7 +159,7 @@ class TestRunIncompleteArtifact:
             return b'{"job": {"valkey": [{"test_name": "t", "test_file": "f.tcl", "error": "e"}]}}'
 
         mock_download.side_effect = _download
-        mock_urls.return_value = {"job": "http://x"}
+        mock_urls.return_value = ()
         mock_process.return_value = {
             "created": 1, "updated": 0, "skipped": 0, "skipped_closed": 0, "errors": 0,
         }
@@ -195,12 +196,13 @@ class TestRunIncompleteArtifact:
         assert rc == 1
         assert "Incomplete artifact" in mock_emit.call_args.args[0]
 
+    @patch("scripts.test_failure_detector.main.jobs_for_run_attempt", return_value=())
     @patch("scripts.test_failure_detector.main.emit_job_summary")
     @patch("scripts.test_failure_detector.main.download_all_test_failures")
     @patch("scripts.test_failure_detector.main.ArtifactClient")
     @patch("scripts.test_failure_detector.main.Github")
     def test_missing_artifact_without_damage_still_passes(
-        self, _mock_gh, _mock_client, mock_download, mock_emit,
+        self, _mock_gh, _mock_client, mock_download, mock_emit, _jobs,
     ) -> None:
         """A run with no artifact and no damage keeps the clean-pass path."""
         mock_download.return_value = None
@@ -306,3 +308,126 @@ class TestFailurePathsAreAnnotated:
                                  run_id=123) == 1
         errors = self._errors(capsys)
         assert len(errors) == 1 and expected in errors[0]
+
+
+class TestUnrecordedJobFailures:
+    """Failed jobs that record no test failure still reach an issue."""
+
+    @patch("scripts.test_failure_detector.main.process_failures")
+    @patch("scripts.test_failure_detector.main.find_unrecorded_failures")
+    @patch("scripts.test_failure_detector.main.jobs_for_run_attempt")
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_a_run_without_an_artifact_still_files_job_failures(
+        self, _gh, _client, mock_download, mock_emit, _urls, mock_find, mock_process,
+    ) -> None:
+        from scripts.test_failure_detector.job_failures import JobFailure
+
+        mock_download.return_value = None
+        job = JobFailure(job="test-freebsd", url="https://job/1", step="make")
+        mock_find.return_value = ([], [job])
+        mock_process.return_value = {"created": 1}
+
+        rc = detector_main.run(github_token="t", repo_full_name="valkey-io/valkey", run_id=5)
+
+        assert rc == 0
+        assert mock_process.call_args.kwargs["job_failures"] == [job]
+        assert "| Job failures without a test record | 1 |" in mock_emit.call_args.args[0]
+
+    @patch("scripts.test_failure_detector.main.find_unrecorded_failures")
+    @patch("scripts.test_failure_detector.main.jobs_for_run_attempt")
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_a_job_check_error_fails_instead_of_reporting_clean(
+        self, _gh, _client, mock_download, mock_emit, _urls, mock_find,
+    ) -> None:
+        mock_download.return_value = b'{"job": {"valkey": [{"test_name": "t", "test_file": "tests/a.tcl"}]}}'
+        mock_find.side_effect = RuntimeError("jobs API down")
+        with patch("scripts.test_failure_detector.main.process_failures",
+                   return_value={"created": 1}) as mock_process:
+            rc = detector_main.run(github_token="t", repo_full_name="valkey-io/valkey", run_id=5)
+        assert rc == 1
+        mock_find.assert_called_once()
+        mock_process.assert_not_called()
+        assert "Incomplete CI inspection" in mock_emit.call_args.args[0]
+        assert "jobs API down" in mock_emit.call_args.args[0]
+
+
+def test_one_exact_job_snapshot_is_reused_for_urls_and_logs(monkeypatch):
+    source_run = SimpleNamespace(run_attempt=3)
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow_run.return_value = source_run
+    snapshot = (
+        SimpleNamespace(
+            id=44,
+            name="test-ubuntu",
+            html_url="https://job/44",
+            conclusion="failure",
+            run_attempt=3,
+        ),
+    )
+    load_jobs = MagicMock(return_value=snapshot)
+    build_urls = MagicMock(return_value={"test-ubuntu": "https://job/44"})
+    inspect_logs = MagicMock(return_value=([], []))
+
+    monkeypatch.setattr(detector_main, "Github", lambda **_kwargs: gh)
+    monkeypatch.setattr(detector_main, "ArtifactClient", MagicMock())
+    monkeypatch.setattr(
+        detector_main,
+        "download_all_test_failures",
+        lambda *args, **kwargs: b"{}",
+    )
+    monkeypatch.setattr(detector_main, "jobs_for_run_attempt", load_jobs)
+    monkeypatch.setattr(detector_main, "job_urls_for_jobs", build_urls)
+    monkeypatch.setattr(detector_main, "find_unrecorded_failures", inspect_logs)
+    monkeypatch.setattr(detector_main, "emit_job_summary", MagicMock())
+
+    assert detector_main.run(
+        github_token="t",
+        repo_full_name="valkey-io/valkey",
+        run_id=123,
+        dry_run=True,
+    ) == 0
+
+    load_jobs.assert_called_once_with(
+        gh,
+        "valkey-io/valkey",
+        123,
+        run_attempt=3,
+        retries=3,
+    )
+    build_urls.assert_called_once_with(snapshot, run_id=123)
+    assert inspect_logs.call_args.kwargs["jobs"] is snapshot
+
+
+def test_process_failures_upserts_job_failures_with_their_own_identity():
+    from scripts.test_failure_detector import manage_issues
+    from scripts.test_failure_detector.issue_renderer import job_fingerprint_for
+    from scripts.test_failure_detector.job_failures import JobFailure
+
+    publisher = MagicMock()
+    publisher.upsert.return_value = ("created", "https://issue/1")
+    freebsd = JobFailure(job="test-freebsd", url="https://job/1", step="make")
+    alpine = JobFailure(job="test-alpine", url="https://job/2", step="make")
+    with patch.object(manage_issues, "IssueDedupPublisher", return_value=publisher):
+        summary = manage_issues.process_failures(
+            MagicMock(),
+            "valkey-io/valkey",
+            [],
+            run_id=9,
+            job_failures=[freebsd, alpine],
+        )
+    assert summary["created"] == 2
+    fingerprints = [call.kwargs["fingerprint"] for call in publisher.upsert.call_args_list]
+    assert sorted(fingerprints) == sorted([job_fingerprint_for(freebsd), job_fingerprint_for(alpine)])
+    assert len(set(fingerprints)) == 2
+    kwargs = next(call.kwargs for call in publisher.upsert.call_args_list
+                  if call.kwargs["fingerprint"] == job_fingerprint_for(freebsd))
+    assert kwargs["idempotency_key"] == "9"
+    # Job issues are found by their marker only, never adopted by title.
+    assert "title_fallback" not in kwargs
+    assert kwargs["render"]("<!-- m -->", 1).title == "[JOB-FAILURE] test-freebsd in Daily"

@@ -375,19 +375,29 @@ the normal deployment model.
 ```text
 main.py (daily cron or manual dispatch)
   -> get_latest_daily_run() or use provided run_id
+  -> jobs_for_run_attempt(): one jobs snapshot of the run's current attempt
   -> download_all_test_failures() from the run's artifacts
-  -> get_job_urls() for CI links
+  -> job_urls_for_jobs() for CI links
   -> parse_and_deduplicate() groups by {test_name, test_file}
+  -> find_unrecorded_failures() adds what only the failed jobs' logs show
   -> process_failures() creates/updates GitHub issues
 ```
+
+A job also fails on a build break, a timeout, a valgrind or sanitizer report,
+or a crash, which never reach the artifact. Each failed job's log summary
+either names a test (it joins that test's issue) or becomes a job-level
+`[JOB-FAILURE]` issue, one per failure shared by jobs that fail the same way.
 
 ### Entry Points
 
 - `scripts/test_failure_detector/main.py` - CLI entry point and pipeline orchestration
 - `scripts/test_failure_detector/download.py` - workflow run discovery and artifact download
 - `scripts/test_failure_detector/parse_failures.py` - JSON parsing and deduplication
+- `scripts/test_failure_detector/job_failures.py` - failed jobs the artifact does not record, from their logs
 - `scripts/test_failure_detector/manage_issues.py` - orchestration over the shared dedup publisher to create/update issues
 - `scripts/test_failure_detector/issue_renderer.py` - test-failure-specific title/body/comment rendering and label assignment
+- `scripts/common/valkey_ci.py` - runtest result lines
+- `scripts/common/workflow_jobs.py` - one exact-attempt jobs snapshot of a run
 
 ## Release Notes Flow
 
