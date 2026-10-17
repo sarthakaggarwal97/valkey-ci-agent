@@ -23,17 +23,29 @@
 # judges and exports its work.
 set -euo pipefail
 
-agent="${RUNNER_TEMP}/ci-fix-agent"
-mv "${GITHUB_WORKSPACE}/.ci-fix-agent" "${agent}"
-# The job's own cleanup runs the post phase of every action it used, and the
-# agent's setup is one of this checkout's own composite actions: put it back
-# where the runner expects to find it, however this script ends.
-trap 'mv -f "${agent}" "${GITHUB_WORKSPACE}/.ci-fix-agent" 2>/dev/null || true' EXIT
-
 # A container job runs as root, and has no sudo.
 as_root() {
   if (( EUID == 0 )); then "$@"; else sudo "$@"; fi
 }
+
+agent="${RUNNER_TEMP}/ci-fix-agent"
+home="${GITHUB_WORKSPACE}/.ci-fix-agent"
+
+# The job's own cleanup runs the post phase of every action it used, and the
+# agent's setup is one of this checkout's own composite actions: the runner
+# reads it from ${home} again then. In a copied job the agent's account owns
+# the workspace while it works, so whatever is at ${home} by now may be the
+# account's: it goes first (a link is removed, never followed), or a move
+# would land the real code inside it and the runner would read the account's
+# action instead.
+restore_agent() {
+  [[ -d "${agent}" ]] || return 0
+  as_root rm -rf -- "${home}"
+  mv -- "${agent}" "${home}"
+}
+
+mv -- "${home}" "${agent}"
+trap 'restore_agent || echo "::warning::could not put the CI-fix agent back for the job cleanup"' EXIT
 
 # The agent and its commands run as this account, which cannot read the
 # job's credentials (scripts/common/isolation.py).

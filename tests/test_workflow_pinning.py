@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 _USE_RE = re.compile(r"uses:\s*([^@\s]+)@([^#\s]+)")
@@ -367,13 +369,68 @@ def test_the_fix_steps_install_dependencies_before_any_credential_and_run_the_ag
     assert "TOKEN" not in script
 
 
-def test_the_agents_code_is_put_back_for_the_jobs_own_cleanup():
-    """Its setup is a composite action of this checkout: the post phase needs it there."""
+def _restore_agent(workspace: Path, temp: Path) -> subprocess.CompletedProcess[str]:
+    """Run job.sh's own ``restore_agent`` (and ``as_root``) against ``workspace``."""
     script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
-    moved = script.index('mv "${GITHUB_WORKSPACE}/.ci-fix-agent" "${agent}"')
-    restored = script.index('trap \'mv -f "${agent}" "${GITHUB_WORKSPACE}/.ci-fix-agent"')
+    functions = "".join(
+        re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", script, re.MULTILINE | re.DOTALL).group(0)
+        for name in ("as_root", "restore_agent")
+    )
+    program = (
+        'set -euo pipefail\nsudo() { "$@"; }\n' + functions
+        + f'agent={temp / "ci-fix-agent"}\nhome={workspace / ".ci-fix-agent"}\nrestore_agent\n'
+    )
+    return subprocess.run(["bash", "-c", program], capture_output=True, text=True, check=False)
 
-    assert moved < restored < script.index("python -m scripts.ci_fix.run fix")
+
+def _agent_code(root: Path) -> Path:
+    action = root / ".github" / "actions" / "setup-agent" / "action.yml"
+    action.parent.mkdir(parents=True)
+    action.write_text("name: the real agent setup\n")
+    return action
+
+
+def test_the_agents_code_is_put_back_for_the_jobs_own_cleanup():
+    """Its setup is a composite action of this checkout: the post phase reads it from there."""
+    script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
+
+    moved = script.index('mv -- "${home}" "${agent}"')
+    assert moved < script.index("trap 'restore_agent") < script.index("python -m scripts.ci_fix.run fix")
+
+
+@pytest.mark.parametrize("planted", ["directory", "link"])
+def test_what_the_agent_left_at_the_agents_path_is_never_what_the_cleanup_reads(tmp_path, planted):
+    workspace, temp, outside = tmp_path / "workspace", tmp_path / "temp", tmp_path / "outside"
+    workspace.mkdir()
+    _agent_code(temp / "ci-fix-agent")
+    home = workspace / ".ci-fix-agent"
+    if planted == "directory":
+        # The account owns the workspace: it can make the path a directory of
+        # its own, which a plain move would move the real code into.
+        (_agent_code(home)).write_text("name: the agent's own action\n")
+    else:
+        _agent_code(outside).write_text("name: the agent's own action\n")
+        home.symlink_to(outside)
+
+    result = _restore_agent(workspace, temp)
+
+    assert result.returncode == 0, result.stderr
+    assert not home.is_symlink()
+    assert (home / ".github/actions/setup-agent/action.yml").read_text() == "name: the real agent setup\n"
+    assert not (home / "ci-fix-agent").exists()
+    if planted == "link":
+        # The link went; what it pointed at was not followed.
+        assert (outside / ".github/actions/setup-agent/action.yml").exists()
+
+
+def test_the_agents_code_is_put_back_where_nothing_was_left(tmp_path):
+    workspace, temp = tmp_path / "workspace", tmp_path / "temp"
+    workspace.mkdir()
+    _agent_code(temp / "ci-fix-agent")
+
+    assert _restore_agent(workspace, temp).returncode == 0
+    assert (workspace / ".ci-fix-agent/.github/actions/setup-agent/action.yml").is_file()
+    assert not (temp / "ci-fix-agent").exists()
 
 
 def test_a_container_fix_mode_installs_the_agents_tools_from_the_distribution():
