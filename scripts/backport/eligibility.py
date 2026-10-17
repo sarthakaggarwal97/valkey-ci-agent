@@ -16,8 +16,9 @@ feature that merely touches an old signature is not offered to old branches.
 Branches the PR already landed on, or whose backport project already holds
 the PR, are never candidates. Each eligible PR gets one marker comment naming
 its branches. Nothing is added to a project: that remains a maintainer
-decision. Anything history cannot answer leaves the PR undecided and fails
-the run rather than passing for "not eligible".
+decision. A PR whose change history cannot trace is reported for manual
+review rather than passing for "not eligible"; a GitHub, git, or model failure
+leaves the PR undecided and fails the run.
 """
 
 from __future__ import annotations
@@ -331,8 +332,8 @@ def trace_origins(
     cannot be read: neither may pass for "not carried".
     """
     history = history or BranchHistory(repo_dir)
-    _validate_complete_change(repo_dir, source, git_env=git_env)
-    shas = line_origins(repo_dir, source.pr.merge_commit_sha, anchor_insertions=True)
+    base = _change_base(repo_dir, source, git_env=git_env)
+    shas = line_origins(repo_dir, source.pr.merge_commit_sha, base=base, anchor_insertions=True)
     if not shas:
         return ()
     records = _commit_records(repo_dir, shas)
@@ -362,28 +363,100 @@ def trace_origins(
     )
 
 
-def _validate_complete_change(
+def _change_base(
     repo_dir: str,
     source: MergedSourcePR,
     *,
     git_env: Mapping[str, str] | None,
-) -> None:
-    """Fail closed when a one-parent merge SHA is not the PR's full change."""
+) -> str | None:
+    """Return where the PR's complete change starts, or None for the merge SHA's parent.
+
+    Eligibility only blames the lines a change touches, so it needs the whole
+    change but not the exact patch identity the backport apply path insists
+    on. The strict check runs first; when it fails on a one-parent merge SHA:
+
+    * a subject ending in ``(#<pr>)`` is GitHub's squash commit, complete
+      even when the branch merged the base branch in and the base then moved
+      over the same lines; and
+    * otherwise, when the first-parent commits ending at the merge SHA repeat
+      the PR's own commit subjects in order, the PR was rebase-merged and the
+      change is that series, read from the commit before it.
+
+    Anything else raises ``SourceChangeError``: a partial change must not be
+    traced as if it were the whole one.
+    """
+    sha = source.pr.merge_commit_sha
+    parents = _parents(repo_dir, sha)
+    if parents is not None and len(parents) > 1:
+        return None  # A true merge commit is complete; diff against its first parent.
+    if parents is not None and source.source_commits_complete and len(source.source_commit_shas) == 1:
+        return None  # One source commit is complete under squash or rebase.
     try:
-        fields = git_output(
-            repo_dir, "rev-list", "--parents", "-n", "1", source.pr.merge_commit_sha,
-        ).strip().split()
+        _prepare_complete_change(repo_dir, source, git_env=git_env)
+        return None
+    except SourceChangeError:
+        # The strict check fetched every object it could; read them again.
+        if _parents(repo_dir, sha) is None:
+            raise
+        if _subject(repo_dir, sha).endswith(f"(#{source.number})"):
+            return None
+        base = _rebased_series_base(repo_dir, source)
+        if base is None:
+            raise
+        return base
+
+
+def _parents(repo_dir: str, sha: str) -> list[str] | None:
+    """Parents of *sha*, or None when the clone cannot read it."""
+    try:
+        fields = git_output(repo_dir, "rev-list", "--parents", "-n", "1", sha).split()
     except subprocess.SubprocessError:
-        _prepare_complete_change(repo_dir, source, git_env=git_env)
-        return
-    if not fields or fields[0] != source.pr.merge_commit_sha:
-        _prepare_complete_change(repo_dir, source, git_env=git_env)
-        return
-    if len(fields) > 2:
-        return  # A true merge commit is complete; diff against its first parent.
-    if source.source_commits_complete and len(source.source_commit_shas) == 1:
-        return  # One source commit is complete under squash or rebase.
-    _prepare_complete_change(repo_dir, source, git_env=git_env)
+        return None
+    if not fields or fields[0] != sha:
+        return None
+    return fields[1:]
+
+
+def _subject(repo_dir: str, sha: str) -> str:
+    return git_output(repo_dir, "log", "-1", "--format=%s", sha).strip()
+
+
+def _rebased_series_base(repo_dir: str, source: MergedSourcePR) -> str | None:
+    """Return the commit before a rebase-merged series, or None if it is not one.
+
+    Rebase-and-merge drops the PR's merge commits and replays the rest, one
+    first-parent commit each, keeping their subjects. A complete commit
+    listing is required: a missing commit would leave part of the change out.
+    """
+    if not source.source_commits_complete or not source.source_commit_shas:
+        return None
+    try:
+        listed = _parents_and_subjects(
+            repo_dir, "--no-walk=unsorted", *source.source_commit_shas,
+        )
+        expected = [subject for parents, subject in listed if len(parents) == 1]
+        if not expected:
+            return None
+        landed = _parents_and_subjects(
+            repo_dir, "--first-parent", "-n", str(len(expected)), source.pr.merge_commit_sha,
+        )
+        landed.reverse()
+        if len(landed) != len(expected) or any(len(parents) != 1 for parents, _ in landed):
+            return None
+        if [subject for _, subject in landed] != expected:
+            return None
+        return landed[0][0][0]
+    except subprocess.SubprocessError:
+        return None
+
+
+def _parents_and_subjects(repo_dir: str, *args: str) -> list[tuple[list[str], str]]:
+    out = git_output(repo_dir, "log", "--format=%P%x1f%s", *args)
+    rows = []
+    for line in out.splitlines():
+        parents, _, subject = line.partition("\x1f")
+        rows.append((parents.split(), subject.strip()))
+    return rows
 
 
 def _prepare_complete_change(
@@ -645,15 +718,15 @@ def run(
                     history=history,
                 )
             except SourceChangeError as exc:
+                # History cannot say what the PR changed. Nothing is wrong
+                # with the run, so this warns rather than failing it.
                 results[source.number] = {
-                    "action": "undecided",
-                    "detail": "complete merged change needs manual eligibility review",
+                    "action": "needs-review",
+                    "detail": f"complete merged change unknown: {exc}",
                 }
-                errors.append(f"#{source.number}: {exc}")
                 continue
             except OriginsUnknown as exc:
-                results[source.number] = {"action": "undecided", "detail": f"could not trace: {exc}"}
-                errors.append(f"#{source.number}: could not trace: {exc}")
+                results[source.number] = {"action": "needs-review", "detail": f"could not trace: {exc}"}
                 continue
             except Exception as exc:
                 # Contain any other git failure to this PR so the rest of the
@@ -796,6 +869,10 @@ def main() -> None:
     emit_job_summary(_summary(result))
 
     eligible = [n for n, e in result["prs"].items() if e["action"] in {"commented", "would-comment"}]
+    review = [f"#{n}: {e['detail']}" for n, e in result["prs"].items() if e["action"] == "needs-review"]
+    if review:
+        log_outcome(logger, logging.WARNING, "Backport eligibility through %s: %d PR(s) need manual review: %s",
+                    date, len(review), "; ".join(review))
     if result["errors"]:
         log_outcome(logger, logging.ERROR, "Backport eligibility through %s: %s",
                     date, "; ".join(result["errors"]))

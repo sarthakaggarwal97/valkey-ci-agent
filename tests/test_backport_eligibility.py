@@ -18,6 +18,7 @@ from scripts.backport.eligibility import (
     MergedSourcePR,
 )
 from scripts.backport.registry import load_registry
+from scripts.backport.source_plan import prepare_source_change
 from scripts.release_notes import code_age
 from scripts.release_notes.models import MergedPR
 
@@ -233,6 +234,53 @@ class TestTraceOrigins:
             ("introduce one (#1)", ("9.0",)),
             ("introduce two (#2)", ("9.0",)),
         }
+
+    def _squash_after_syncing_the_base(self, tmp_path: Path, subject: str) -> tuple[str, MergedSourcePR]:
+        """#4644's shape: the PR branch merges the base in, then the base moves
+        over a line the PR also changes before the PR is squashed."""
+        repo = tmp_path / "upstream"
+        repo.mkdir()
+        _git(repo, "init", "-q", "-b", "unstable")
+        _git(repo, "config", "user.email", "t@example.com")
+        _git(repo, "config", "user.name", "T")
+        _commit(repo, "old.c", "a\nb\nc\nd\ne\n", "base (#1)")
+        _git(repo, "branch", "9.0")
+        _git(repo, "checkout", "-q", "-b", "source")
+        first = _commit(repo, "old.c", "A\nb\nc\nd\ne\n", "fix a")
+        _git(repo, "checkout", "-q", "unstable")
+        _commit(repo, "other.c", "x\n", "unrelated (#2)")
+        _git(repo, "checkout", "-q", "source")
+        _git(repo, "merge", "-q", "--no-edit", "unstable")
+        sync = _git(repo, "rev-parse", "HEAD")
+        second = _commit(repo, "old.c", "A\nb\nc\nd\nE\n", "fix e")
+        _git(repo, "checkout", "-q", "unstable")
+        _commit(repo, "old.c", "A\nb\nc\nd\ne\n", "same fix to a (#3)")
+        _git(repo, "merge", "-q", "--squash", "source")
+        _git(repo, "commit", "-q", "-m", subject)
+        squash = _git(repo, "rev-parse", "HEAD")
+        clone = tmp_path / "clone"
+        subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(clone)],
+                       check=True, capture_output=True)
+        source = MergedSourcePR(
+            pr=MergedPR(number=10, title="t", author="a", url="u", merge_commit_sha=squash),
+            merged_at="2000-01-01T00:00:00Z",
+            source_commit_shas=(first, sync, second),
+        )
+        # The apply path's exact patch check rejects this squash.
+        with pytest.raises(eligibility.SourceChangeError):
+            prepare_source_change(str(clone), 10, squash, source.source_commit_shas)
+        return str(clone), source
+
+    def test_squash_of_a_branch_that_merged_the_base_is_traced(self, tmp_path):
+        clone, source = self._squash_after_syncing_the_base(tmp_path, "fix a and e (#10)")
+        origins = eligibility.trace_origins(clone, source, ["9.0"])
+        assert [(o.subject, o.branches) for o in origins] == [("base (#1)", ("9.0",))]
+
+    def test_one_parent_merge_sha_that_is_neither_squash_nor_rebase_is_undecided(self, tmp_path):
+        # Without GitHub's "(#10)" squash subject, nothing shows the SHA is the whole change.
+        clone, source = self._squash_after_syncing_the_base(tmp_path, "fix a and e")
+        with pytest.raises(eligibility.SourceChangeError):
+            eligibility.trace_origins(clone, source, ["9.0"])
 
 
 class TestParseVerdicts:
@@ -595,7 +643,7 @@ def test_run_skips_history_when_every_branch_is_already_queued(wired, monkeypatc
     }
 
 
-def test_run_source_change_failure_is_contained_to_that_pr(wired, monkeypatch):
+def test_run_source_change_failure_needs_review_without_failing(wired, monkeypatch):
     real_trace_origins = eligibility.trace_origins
 
     def trace(repo_dir, source, branches, **kwargs):
@@ -609,10 +657,10 @@ def test_run_source_change_failure_is_contained_to_that_pr(wired, monkeypatch):
     )
 
     assert result["prs"]["101"] == {
-        "action": "undecided",
-        "detail": "complete merged change needs manual eligibility review",
+        "action": "needs-review",
+        "detail": "complete merged change unknown: unreadable merge history",
     }
-    assert result["errors"] == ["#101: unreadable merge history"]
+    assert result["errors"] == []
 
 
 def test_run_origin_cap_preserves_evidence_for_every_branch(wired, monkeypatch):
@@ -637,13 +685,15 @@ def test_parse_git_timestamp_accepts_utc_z_on_python_39():
     )
 
 
-def test_multi_commit_rebase_is_undecided_instead_of_partially_traced(tmp_path):
+def _rebase_merged(tmp_path: Path, reword_tip: bool = False) -> tuple[str, MergedSourcePR]:
+    """A two-commit PR replayed onto an advanced main, one commit at a time."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "config", "user.email", "t@example.com")
     _git(repo, "config", "user.name", "T")
     _commit(repo, "value.txt", "base\n", "base")
+    _git(repo, "branch", "9.0")
     _git(repo, "checkout", "-q", "-b", "source")
     first = _commit(repo, "value.txt", "first\n", "first source commit")
     second = _commit(repo, "other.txt", "second\n", "second source commit")
@@ -651,17 +701,33 @@ def test_multi_commit_rebase_is_undecided_instead_of_partially_traced(tmp_path):
     _commit(repo, "main.txt", "advance\n", "advance main")
     _git(repo, "checkout", "-q", "source")
     _git(repo, "rebase", "-q", "main")
+    if reword_tip:
+        _git(repo, "commit", "-q", "--amend", "-m", "reworded on merge")
     rebased_tip = _git(repo, "rev-parse", "HEAD")
     assert rebased_tip != second
-
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(clone)],
+                   check=True, capture_output=True)
     source = MergedSourcePR(
         pr=MergedPR(number=10, title="t", author="a", url="u",
                     merge_commit_sha=rebased_tip),
         merged_at="2026-01-01T00:00:00Z",
         source_commit_shas=(first, second),
     )
+    return str(clone), source
+
+
+def test_multi_commit_rebase_traces_the_whole_series(tmp_path):
+    # The merge SHA alone only adds other.txt; the series also rewrites value.txt.
+    clone, source = _rebase_merged(tmp_path)
+    origins = eligibility.trace_origins(clone, source, ["9.0"])
+    assert [(o.subject, o.branches) for o in origins] == [("base", ("9.0",))]
+
+
+def test_rebase_that_does_not_match_the_pr_commits_is_undecided(tmp_path):
+    clone, source = _rebase_merged(tmp_path, reword_tip=True)
     with pytest.raises(eligibility.SourceChangeError, match="rebase-merged"):
-        eligibility.trace_origins(str(repo), source, ["9.0"])
+        eligibility.trace_origins(clone, source, ["9.0"])
 
 
 def test_run_any_tracing_failure_is_contained_to_that_pr(wired, monkeypatch):
@@ -682,7 +748,7 @@ def test_run_any_tracing_failure_is_contained_to_that_pr(wired, monkeypatch):
     assert [number for number, _ in wired.posted] == [101]
 
 
-def test_run_untraceable_pr_is_undecided(wired, monkeypatch):
+def test_run_untraceable_pr_needs_review_without_failing(wired, monkeypatch):
     def trace(repo_dir, source, branches, **kwargs):
         raise eligibility.OriginsUnknown("touches more than 40 files")
 
@@ -691,9 +757,9 @@ def test_run_untraceable_pr_is_undecided(wired, monkeypatch):
         repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=_model([]),
     )
     assert result["prs"]["101"] == {
-        "action": "undecided", "detail": "could not trace: touches more than 40 files",
+        "action": "needs-review", "detail": "could not trace: touches more than 40 files",
     }
-    assert "#101: could not trace: touches more than 40 files" in result["errors"]
+    assert result["errors"] == []
 
 
 def test_run_comments_after_each_batch(wired, monkeypatch):
@@ -726,3 +792,24 @@ def test_run_ignores_a_registered_branch_that_does_not_exist(wired, upstream):
     )
     assert result["errors"] == []
     assert result["prs"]["101"]["action"] == "commented"
+
+
+@pytest.mark.parametrize(("errors", "exits"), [([], False), (["#2: no verdict"], True)])
+def test_main_warns_on_needs_review_and_fails_only_on_errors(monkeypatch, caplog, errors, exits):
+    monkeypatch.setattr(eligibility, "load_registry", lambda _: SimpleNamespace(get_repo=lambda _: None))
+    monkeypatch.setattr(eligibility, "emit_job_summary", lambda _: None)
+    monkeypatch.setattr(eligibility, "run", lambda **_: {
+        "repo": "org/core", "since": "2026-10-12", "date": "2026-10-12", "dry_run": False,
+        "prs": {"1": {"action": "needs-review", "detail": "could not trace: x"}},
+        "errors": errors,
+    })
+    monkeypatch.setattr("sys.argv", ["eligibility", "--date", "2026-10-12", "--target-token", "t"])
+    if exits:
+        with pytest.raises(SystemExit):
+            eligibility.main()
+    else:
+        eligibility.main()
+    assert any(
+        r.levelname == "WARNING" and "1 PR(s) need manual review: #1: could not trace: x" in r.getMessage()
+        for r in caplog.records
+    )
