@@ -35,8 +35,9 @@ from scripts.backport import ci_followup
 from scripts.ci_fix import issues
 from scripts.ci_fix import main as pr_command
 from scripts.ci_fix.copies import copy_for, fix_inputs, load_manifest
-from scripts.ci_fix.engine import failed_tests, prepare_fix, publish
+from scripts.ci_fix.engine import failed_tests, prepare_fix
 from scripts.ci_fix.models import FixOutcome, FixPlan, FixResult, FrontDoor, ResultKind
+from scripts.ci_fix.publish import publish_candidate
 from scripts.ci_fix.reproduce import JobCommands
 from scripts.ci_fix.state import load, save
 from scripts.common.git_auth import GitAuth
@@ -92,22 +93,12 @@ def plan(
     return {"mode": "copy", **inputs}
 
 
-class _SavedLog:
-    """The job log the plan job downloaded, for the fix job, which has no token."""
-
-    def __init__(self, log: str) -> None:
-        self._log = log
-
-    def download_job_log(self, _repo: str, _job_id: int) -> str:
-        return self._log
-
-
 def fix(plan_dir: Path, out: Path, *, repo_dir: str = "") -> FixOutcome:
     """Prepare the planned fix, in the copied job's checkout ``repo_dir`` or a clone."""
     fix_plan = load(plan_dir / PLAN_FILE, FixPlan)
     try:
         candidate = prepare_fix(
-            fix_plan.task, _SavedLog(fix_plan.job_log),
+            fix_plan.task, fix_plan.job_log,
             repo_dir=repo_dir, job=JobCommands.from_env() if repo_dir else None,
         )
         outcome = FixOutcome(candidate=candidate)
@@ -139,7 +130,12 @@ def publish_and_report(
             kind=ResultKind.FAILED, summary=f"The CI-fix attempt failed: {outcome.error}", task=fix_plan.task,
         )
     else:
-        result = publish(gh, fix_plan.task, outcome.candidate, git_env=git_env)
+        try:
+            result = publish_candidate(gh, fix_plan.task, outcome.candidate, git_env=git_env)
+        except Exception as exc:  # noqa: BLE001 - every request gets a reported result
+            logger.exception("CI-fix publication failed")
+            result = FixResult(kind=ResultKind.FAILED, summary=f"The CI-fix attempt failed: {exc}",
+                               task=fix_plan.task, candidate=outcome.candidate)
     return reporter(gh, fix_plan, result, bot_login=bot_login)
 
 

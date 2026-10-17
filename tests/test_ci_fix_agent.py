@@ -94,7 +94,6 @@ def test_run_fix_agent_uses_exact_log_and_one_edit_session(tmp_path, monkeypatch
                 "root_cause": "The parser skipped the final token.",
                 "reasoning": "Keep the last token in the result.",
                 "failure_type": "deterministic",
-                "confidence": 0.9,
                 "changed_paths": ["src/parser.c"],
                 "port_commit": "",
                 "validation": "pytest tests/test_parser.py -k alpha",
@@ -114,7 +113,6 @@ def test_run_fix_agent_uses_exact_log_and_one_edit_session(tmp_path, monkeypatch
     assert "Do not commit or push" in seen["prompt"]
     assert candidate.action is CandidateAction.PATCH
     assert candidate.failure_type is FailureType.DETERMINISTIC
-    assert candidate.confidence == 0.9
     assert candidate.changed_paths == ("src/parser.c",)
     assert candidate.validation == "pytest tests/test_parser.py -k alpha"
 
@@ -188,7 +186,6 @@ def test_infrastructure_classification_cannot_produce_a_patch(tmp_path, monkeypa
                 "action": "patch",
                 "summary": "",
                 "failure_type": "infrastructure",
-                "confidence": 8,
                 "validation": "ignored",
             }
         ),
@@ -198,7 +195,6 @@ def test_infrastructure_classification_cannot_produce_a_patch(tmp_path, monkeypa
 
     assert candidate.action is CandidateAction.REFUSE
     assert candidate.failure_type is FailureType.INFRASTRUCTURE
-    assert candidate.confidence == 1.0
     assert candidate.validation == ""
 
 

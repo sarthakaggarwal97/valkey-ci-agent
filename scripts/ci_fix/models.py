@@ -126,7 +126,6 @@ class FixTarget:
     base_branch: str = ""
     pr_number: int = 0
     issue_number: int = 0
-    draft: bool = True
 
 
 @dataclass(frozen=True)
@@ -159,7 +158,6 @@ class FixCandidate:
     root_cause: str = ""
     reasoning: str = ""
     failure_type: FailureType = FailureType.UNKNOWN
-    confidence: float = 0.0
     patch: str = ""
     changed_paths: tuple[str, ...] = ()
     port_commit: str = ""
@@ -221,10 +219,6 @@ class IssueFailure:
     run_attempt: int = 1
     # The release branch of a Weekly test failure issue.
     branch: str = ""
-
-    @property
-    def occurrence(self) -> tuple[int, int]:
-        return self.run_id, self.run_attempt
 
     @property
     def failed_tests(self) -> tuple[FailedTest, ...]:

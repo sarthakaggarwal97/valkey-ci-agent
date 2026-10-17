@@ -232,7 +232,7 @@ def test_test_failure_issue_parses_run_attempt_and_legacy_marker():
 
     legacy = parse_issue(_issue(body=_test_issue_body(run_id=321, run_attempt=None)))
     assert legacy is not None
-    assert legacy.occurrence == (321, 1)
+    assert (legacy.run_id, legacy.run_attempt) == (321, 1)
 
     legacy_dot = parse_issue(
         _issue(
@@ -244,7 +244,7 @@ def test_test_failure_issue_parses_run_attempt_and_legacy_marker():
         )
     )
     assert legacy_dot is not None
-    assert legacy_dot.occurrence == (321, 4)
+    assert (legacy_dot.run_id, legacy_dot.run_attempt) == (321, 4)
 
 
 def test_job_failure_issue_preserves_its_detector_identity():
@@ -341,7 +341,6 @@ def test_ready_fix_uses_exact_job_and_opens_draft_in_target_repo(
     assert task.target.branch == "agent/ci-fix/issue-7-100-3"
     assert task.target.expected_sha == _BASE
     assert task.target.base_branch == "unstable"
-    assert task.target.draft is True
     assert result["action"] == "opened"
     assert result["pr"] == 55
     assert len(issue.comments) == 1

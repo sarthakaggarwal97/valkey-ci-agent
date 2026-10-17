@@ -1,4 +1,4 @@
-"""Prepare and publish one CI fix.
+"""Prepare one CI fix.
 
 Preparation runs in this order, every step on one checkout: a disposable
 clone, or the checkout of the copied CI job the fix is prepared in, after
@@ -31,7 +31,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Callable, Optional, Protocol
+from typing import Callable, Protocol
 
 from scripts.ci_fix.agent import review_candidate, run_fix_agent
 from scripts.ci_fix.models import (
@@ -40,9 +40,7 @@ from scripts.ci_fix.models import (
     FailureType,
     FixCandidate,
     FixContext,
-    FixResult,
     FixTask,
-    ResultKind,
     TargetKind,
 )
 from scripts.ci_fix.policy import target_capabilities
@@ -124,12 +122,11 @@ class ReviewFunc(Protocol):
 
 
 TestFunc = Callable[[str, str, int], TestRun]
-PublishFunc = Callable[..., FixResult]
 
 
 def prepare_fix(
     task: FixTask,
-    artifact_client: Any,
+    job_log: str,
     agent_func: AgentFunc = run_fix_agent,
     review_func: ReviewFunc | None = None,
     test_func: TestFunc | None = None,
@@ -137,7 +134,7 @@ def prepare_fix(
     repo_dir: str = "",
     job: JobCommands | None = None,
 ) -> FixCandidate:
-    """Build a patch or port candidate from the exact failed job.
+    """Build a patch or port candidate from the exact failed job and its log.
 
     A candidate for a branch the bot pushes to is verified and reviewed in a
     feedback loop (see the module docstring). A suggestion is reviewed but
@@ -149,10 +146,9 @@ def prepare_fix(
     if failure.job_id <= 0:
         return _refusal("The failed job has no valid job id.")
 
-    job_log = artifact_client.download_job_log(failure.repo_full_name, failure.job_id)
     if not job_log:
         return _refusal("The exact failed-job log is unavailable; no fix was prepared.")
-    job_log = bounded_job_log(str(job_log))
+    job_log = bounded_job_log(job_log)
 
     with checkout(task, repo_dir) as (repo_dir, original_head):
         deadline = time.monotonic() + PREPARE_BUDGET_S
@@ -283,8 +279,13 @@ def _establish(
     repro_deadline: float,
     job: JobCommands | None = None,
 ) -> tuple[FixContext, ReproPlan | None, Reproduction | None]:
-    """Search for existing fixes and reproduce the failure, before any edit."""
+    """Reproduce the failure and search for existing fixes, before any edit.
+
+    What both found, and the repository's test guide, is what the agent is
+    told before it starts.
+    """
     plan = reproduction = None
+    described = ""
     if run_test is not None:
         plan = plan_for(repo_dir, tests, scheduled=task.failure.scheduled, job=job)
     if plan is not None and run_test is not None:
@@ -295,26 +296,7 @@ def _establish(
             deadline=repro_deadline,
         )
         logger.info("Reproduction: %s", reproduction.describe())
-    context = search_context(
-        task, repo_dir, tests, paths,
-        reproduction=_describe_reproduction(plan, reproduction),
-        reproduction_output=reproduction.output if reproduction else "",
-        verified_by_code=reproduction is not None and reproduction.status is not ReproStatus.UNRUNNABLE,
-    )
-    return context, plan, reproduction
-
-
-def search_context(
-    task: FixTask,
-    repo_dir: str,
-    tests: tuple[FailedTest, ...],
-    paths: tuple[str, ...],
-    *,
-    reproduction: str = "",
-    reproduction_output: str = "",
-    verified_by_code: bool = False,
-) -> FixContext:
-    """What the agent is told before it starts: existing fixes, the reproduction, the guide."""
+        described = " ".join([reproduction.describe(), *plan.notes])
     found = find_prior_fixes(
         repo_dir, tests, tested_sha=task.failure.head_sha, issue_number=task.failure.issue_number,
         paths=paths,
@@ -323,25 +305,17 @@ def search_context(
     if fixes:
         logger.info("Existing-fix candidates: %s", "; ".join(f"{f.sha[:12]} {f.subject}" for f in fixes))
     guide = guide_for(task.failure.repo_full_name)
-    return FixContext(
+    context = FixContext(
         prior_fixes=summarize_prior_fixes(fixes),
         prior_fixes_detail=render_prior_fixes(repo_dir, fixes),
         prior_fixes_searched=found is not None,
-        reproduction=reproduction,
-        reproduction_output=reproduction_output,
-        verified_by_code=verified_by_code,
+        reproduction=described,
+        reproduction_output=reproduction.output if reproduction else "",
+        verified_by_code=reproduction is not None and reproduction.status is not ReproStatus.UNRUNNABLE,
         guide=guide,
         guide_paths=tuple(path for path in _REPO_DOCS if guide and (Path(repo_dir) / path).is_file()),
     )
-
-
-def _describe_reproduction(plan: ReproPlan | None, reproduction: Reproduction | None) -> str:
-    if plan is None or reproduction is None:
-        return ""
-    text = reproduction.describe()
-    if plan.notes:
-        text += " " + " ".join(plan.notes)
-    return text
+    return context, plan, reproduction
 
 
 def guide_for(repo_full_name: str) -> str:
@@ -650,8 +624,6 @@ def _apply_port(repo_dir: str, commit: str) -> str:
     here, not a merge) run first. Raises ``PortNotApplied`` with the reason,
     after restoring the tree.
     """
-    if not is_full_sha(commit):
-        raise PortNotApplied(f"Refusing to port {commit!r}: it is not a full commit SHA.")
     try:
         check_port(Path(repo_dir), commit, "HEAD")
     except (PushRefused, PushFailed) as exc:
@@ -880,41 +852,6 @@ def _excerpt(output: str) -> str:
     start = max(0, output.rfind("\n", 0, max(0, at - 500)) + 1)
     head = output[start:start + _TEST_OUTPUT_CHARS // 2]
     return f"{head}\n[... output trimmed ...]\n{tail}"
-
-
-def publish(
-    gh: Any,
-    task: FixTask,
-    candidate: FixCandidate,
-    *,
-    git_env: dict[str, str],
-    publish_func: Optional[PublishFunc] = None,
-) -> FixResult:
-    """Publish ``candidate`` through the target adapter, or report why not."""
-    if candidate.action is CandidateAction.REFUSE:
-        return FixResult(
-            kind=ResultKind.REFUSED,
-            summary=candidate.summary or "No safe fix was prepared.",
-            task=task,
-            candidate=candidate,
-        )
-    try:
-        publisher = publish_func
-        if publisher is None:
-            from scripts.ci_fix.publish import publish_candidate
-
-            publisher = publish_candidate
-        result = publisher(gh, task, candidate, git_env=git_env)
-        if not isinstance(result, FixResult):
-            raise TypeError("CI-fix publisher did not return a FixResult")
-        return result
-    except Exception as exc:  # noqa: BLE001 - every front door gets a terminal result
-        return _failed(task, exc)
-
-
-def _failed(task: FixTask, exc: Exception) -> FixResult:
-    logger.exception("CI-fix failed")
-    return FixResult(kind=ResultKind.FAILED, summary=f"The CI-fix attempt failed: {exc}", task=task)
 
 
 def _refusal(summary: str, verification: str = "") -> FixCandidate:

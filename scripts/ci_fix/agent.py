@@ -75,7 +75,6 @@ Finish with only this JSON object:
   "root_cause": "concise evidence-backed cause",
   "reasoning": "why this fix is appropriate",
   "failure_type": "deterministic|flaky|infrastructure|unknown",
-  "confidence": 0.0,
   "changed_paths": ["path/edited/by/the/patch"],
   "port_commit": "{port_instruction}",
   "test_command": "focused command that runs the failing check",
@@ -171,9 +170,8 @@ def run_fix_agent(
     """Diagnose and edit in one session, returning structured candidate metadata."""
     capabilities = target_capabilities(task.target.kind)
     profile: AgentProfileName = capabilities.agent_profile
-    action_guidance, action_values, port_instruction = _action_prompt(
-        capabilities.allowed_actions
-    )
+    allows_port = CandidateAction.PORT in capabilities.allowed_actions
+    action_guidance, action_values, port_instruction = _action_prompt(allows_port)
     context = context or FixContext()
     with tempfile.TemporaryDirectory(prefix="ci-fix-job-log-") as log_dir:
         log_path = Path(log_dir) / f"job-{task.failure.job_id}.log"
@@ -192,9 +190,7 @@ def run_fix_agent(
             other_jobs=", ".join(task.failure.other_failed_jobs) or "(none)",
             policy=_POLICY[task.policy],
             target=capabilities.publication_guidance,
-            context=_context_prompt(
-                context, Path(log_dir), CandidateAction.PORT in capabilities.allowed_actions
-            ),
+            context=_context_prompt(context, Path(log_dir), allows_port),
             test_guidance=_TEST_COMMAND_VERIFIED_BY_CODE if context.verified_by_code else _TEST_COMMAND,
             action_guidance=action_guidance,
             action_values=action_values,
@@ -219,44 +215,30 @@ def run_fix_agent(
     return _candidate_from_payload(payload)
 
 
-def _action_prompt(
-    allowed: frozenset[CandidateAction],
-) -> tuple[str, str, str]:
-    guidance = {
-        CandidateAction.PATCH: (
-            "- `patch`: edit the working tree with a minimal fix. You may add "
-            "a needed test or fixture. Do not commit or push."
-        ),
-        CandidateAction.PORT: (
-            "- `port`: make no edits and name one full 40-character commit SHA "
-            "that is already merged on the repository's default branch. Code "
-            "independently validates and cherry-picks it, then tests and "
-            "reviews it like a patch."
-        ),
-        CandidateAction.REFUSE: (
-            "- `refuse`: make no intentional edits when the failure is "
-            "infrastructure, already fixed on the working commit, unclear, or "
-            "outside policy."
-        ),
-    }
-    # An existing fix comes first: porting it beats writing a new one.
-    ordered = tuple(
-        action
-        for action in (
-            CandidateAction.PORT,
-            CandidateAction.PATCH,
-            CandidateAction.REFUSE,
-        )
-        if action in allowed
+def _action_prompt(allows_port: bool) -> tuple[str, str, str]:
+    """The actions the agent may choose, as guidance, the JSON values, and the port field's rule.
+
+    Every target allows a patch and a refusal; only some allow a port, which
+    comes first: porting an existing fix beats writing a new one.
+    """
+    port = (
+        "- `port`: make no edits and name one full 40-character commit SHA "
+        "that is already merged on the repository's default branch. Code "
+        "independently validates and cherry-picks it, then tests and "
+        "reviews it like a patch."
     )
+    guidance = [
+        *([port] if allows_port else []),
+        "- `patch`: edit the working tree with a minimal fix. You may add "
+        "a needed test or fixture. Do not commit or push.",
+        "- `refuse`: make no intentional edits when the failure is "
+        "infrastructure, already fixed on the working commit, unclear, or "
+        "outside policy.",
+    ]
     return (
-        "\n".join(guidance[action] for action in ordered),
-        "|".join(action.value for action in ordered),
-        (
-            "full SHA only for port, otherwise empty"
-            if CandidateAction.PORT in allowed
-            else "must be empty"
-        ),
+        "\n".join(guidance),
+        "port|patch|refuse" if allows_port else "patch|refuse",
+        "full SHA only for port, otherwise empty" if allows_port else "must be empty",
     )
 
 
@@ -273,7 +255,6 @@ def _candidate_from_payload(payload: dict[str, Any]) -> FixCandidate:
         "root_cause": _text(payload.get("root_cause"), 2_000),
         "reasoning": _text(payload.get("reasoning"), 3_000),
         "failure_type": _failure_type(payload.get("failure_type")),
-        "confidence": _confidence(payload.get("confidence")),
     }
     if diagnosis["failure_type"] is FailureType.INFRASTRUCTURE:
         return FixCandidate(
@@ -315,15 +296,6 @@ def _failure_type(value: Any) -> FailureType:
         return FailureType(_text(value, 32).lower())
     except ValueError:
         return FailureType.UNKNOWN
-
-
-def _confidence(value: Any) -> float:
-    if isinstance(value, bool):
-        return 0.0
-    try:
-        return max(0.0, min(1.0, float(value)))
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _changed_paths(value: Any) -> tuple[str, ...]:

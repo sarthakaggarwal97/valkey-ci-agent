@@ -69,7 +69,6 @@ else
   as_root useradd --create-home --shell /bin/bash -K UID_MIN="${above}" -K GID_MIN="${above}" ci-fix-agent
 fi
 export CI_FIX_AGENT_USER=ci-fix-agent
-export CLAUDE_CODE_USE_BEDROCK=1
 export CI_AGENT_EVIDENCE_DIR="${RUNNER_TEMP}/ci-fix-out/agent-evidence"
 
 args=()

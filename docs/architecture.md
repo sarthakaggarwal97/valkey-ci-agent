@@ -394,7 +394,7 @@ enablement setting.
 - `scripts/ci_fix/copies.py` - map a failed job to the copied job that hosts its fix, and that job's inputs
 - `scripts/ci_fix/job.sh` - run the fix inside the job that hosts it: the agent's account and checkout
 - `scripts/ci_fix/state.py` - JSON state carried between a fix's jobs
-- `scripts/ci_fix/engine.py` - exact-log checkout, existing-fix search, reproduction, fix/verify/review loop, publication
+- `scripts/ci_fix/engine.py` - exact-log checkout, existing-fix search, reproduction, fix/verify/review loop
 - `scripts/ci_fix/prior_fixes.py` - find merged commits that may already fix the failing tests
 - `scripts/ci_fix/reproduce.py` - build and loop the failing Tcl tests with their CI job's commands, or the closest
 - `scripts/ci_fix/guides/` - per-repository test conventions for the fix agent and its reviewer

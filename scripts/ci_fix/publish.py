@@ -368,7 +368,7 @@ def reconcile_draft_pr(
                 ),
                 head_branch=target.branch,
                 base_branch=target.base_branch or task.failure.base_branch,
-                draft=target.draft,
+                draft=True,
             ),
             retries=2,
             description=f"open draft CI-fix PR for issue #{target.issue_number}",

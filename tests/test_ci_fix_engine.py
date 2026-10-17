@@ -30,14 +30,7 @@ def _approving_review_and_no_tests(monkeypatch):
     monkeypatch.setattr(engine_mod, "review_candidate", lambda *a, **k: (True, "looks right"))
 
 
-class ArtifactClient:
-    def __init__(self, log: str = "exact failed job log") -> None:
-        self.log = log
-        self.calls = []
-
-    def download_job_log(self, repo_full_name: str, job_id: int) -> str:
-        self.calls.append((repo_full_name, job_id))
-        return self.log
+_LOG = "exact failed job log"
 
 
 def _source_repo(tmp_path: Path) -> tuple[Path, str]:
@@ -99,7 +92,6 @@ def _install_clone(monkeypatch, source: Path):
 def test_prepare_fix_binds_exact_job_and_builds_binary_patch(tmp_path, monkeypatch) -> None:
     source, head_sha = _source_repo(tmp_path)
     clone_calls = _install_clone(monkeypatch, source)
-    artifacts = ArtifactClient()
     seen = {}
 
     def agent(task, repo_dir, job_log, **_kwargs):
@@ -118,9 +110,8 @@ def test_prepare_fix_binds_exact_job_and_builds_binary_patch(tmp_path, monkeypat
         )
 
     task = _task(head_sha)
-    candidate = engine_mod.prepare_fix(task, artifacts, agent_func=agent)
+    candidate = engine_mod.prepare_fix(task, _LOG, agent_func=agent)
 
-    assert artifacts.calls == [("owner/repo", 99)]
     assert clone_calls == [("owner/repo", head_sha, 17)]
     assert seen == {"task": task, "job_log": "exact failed job log"}
     assert candidate.action is CandidateAction.PATCH
@@ -135,13 +126,13 @@ def test_prepare_fix_refuses_without_exact_log_or_edits(tmp_path, monkeypatch) -
     _install_clone(monkeypatch, source)
     task = _task(head_sha)
 
-    no_log = engine_mod.prepare_fix(task, ArtifactClient(log=""), agent_func=lambda *args, **kwargs: None)
+    no_log = engine_mod.prepare_fix(task, "", agent_func=lambda *args, **kwargs: None)
     assert no_log.action is CandidateAction.REFUSE
     assert "exact failed-job log is unavailable" in no_log.summary
 
     no_edits = engine_mod.prepare_fix(
         task,
-        ArtifactClient(),
+        _LOG,
         agent_func=lambda *args, **kwargs: FixCandidate(
             action=CandidateAction.PATCH,
             failing_check="tests",
@@ -167,7 +158,7 @@ def test_prepare_fix_rejects_agent_commit(tmp_path, monkeypatch) -> None:
 
     candidate = engine_mod.prepare_fix(
         _task(head_sha),
-        ArtifactClient(),
+        _LOG,
         agent_func=committing_agent,
     )
 
@@ -192,7 +183,7 @@ def test_prepare_fix_rejects_mixed_port_and_edits(tmp_path, monkeypatch) -> None
 
     candidate = engine_mod.prepare_fix(
         _task(head_sha),
-        ArtifactClient(),
+        _LOG,
         agent_func=mixed_agent,
     )
 
@@ -236,7 +227,7 @@ def test_prepare_fix_accepts_clean_full_sha_port_without_validation(tmp_path, mo
 
     candidate = engine_mod.prepare_fix(
         _task(head_sha),
-        ArtifactClient(),
+        _LOG,
         agent_func=_port_agent(commit),
         review_func=lambda candidate, *a, **k: reviewed.append(candidate.patch) or (True, "fixes it"),
     )
@@ -256,7 +247,7 @@ def test_a_port_that_does_not_apply_goes_back_to_the_agent(tmp_path, monkeypatch
     _install_clone(monkeypatch, source)
     agent = _port_agent("b" * 40, commit)
 
-    candidate = engine_mod.prepare_fix(_task(head_sha), ArtifactClient(), agent_func=agent)
+    candidate = engine_mod.prepare_fix(_task(head_sha), _LOG, agent_func=agent)
 
     assert candidate.action is CandidateAction.PORT
     assert candidate.port_commit == commit
@@ -280,7 +271,7 @@ def test_a_port_is_tested_and_the_checkout_restored(tmp_path, monkeypatch) -> No
     agent.trees = []
     monkeypatch.setattr(engine_mod, "_verify", lambda candidate, repo_dir, *a: seen.append(
         (Path(repo_dir) / "value.txt").read_text()) or "it still fails")
-    candidate = engine_mod.prepare_fix(_task(head_sha), ArtifactClient(), agent_func=agent, test_func=test)
+    candidate = engine_mod.prepare_fix(_task(head_sha), _LOG, agent_func=agent, test_func=test)
 
     assert candidate.action is CandidateAction.REFUSE
     # Each round tested the ported content, and each next round started clean.
@@ -310,7 +301,7 @@ def test_prepare_fix_caps_comment_sized_patch(tmp_path, monkeypatch) -> None:
 
     candidate = engine_mod.prepare_fix(
         _task(head_sha, kind=TargetKind.SUGGEST),
-        ArtifactClient(),
+        _LOG,
         agent_func=large_agent,
     )
 
@@ -349,7 +340,7 @@ def test_prepare_fix_rejects_an_action_disabled_by_target_capabilities(
 
     candidate = engine_mod.prepare_fix(
         _task(head_sha),
-        ArtifactClient(),
+        _LOG,
         agent_func=patch_agent,
     )
 
@@ -374,7 +365,7 @@ def test_prepare_fix_refuses_undeclared_incidental_paths(tmp_path, monkeypatch) 
 
     candidate = engine_mod.prepare_fix(
         _task(head_sha),
-        ArtifactClient(),
+        _LOG,
         agent_func=agent,
     )
 
@@ -398,7 +389,7 @@ def test_prepare_fix_bounds_a_large_job_log_but_keeps_its_tail(
 
     candidate = engine_mod.prepare_fix(
         _task(head_sha),
-        ArtifactClient(log="start-" + "x" * 200 + "-final-error"),
+        "start-" + "x" * 200 + "-final-error",
         agent_func=agent,
     )
 
@@ -422,7 +413,7 @@ def test_draft_issue_uses_current_target_sha_with_exact_old_run_evidence(
 
     candidate = engine_mod.prepare_fix(
         task,
-        ArtifactClient(),
+        _LOG,
         agent_func=lambda *args, **kwargs: FixCandidate(
             action=CandidateAction.REFUSE,
             summary="already fixed on the current branch",
@@ -431,36 +422,6 @@ def test_draft_issue_uses_current_target_sha_with_exact_old_run_evidence(
 
     assert candidate.action is CandidateAction.REFUSE
     assert clone_calls == [("owner/repo", current_sha, 17)]
-
-
-def test_publish_hands_a_candidate_to_the_publisher() -> None:
-    task = _task("a" * 40)
-    candidate = FixCandidate(action=CandidateAction.PATCH, patch="diff", changed_paths=("x",))
-    calls = []
-
-    def publisher(gh, published_task, published_candidate, *, git_env):
-        calls.append((gh, published_task, published_candidate, git_env))
-        return FixResult(ResultKind.PUSHED, "pushed", published_task, published_candidate)
-
-    result = engine_mod.publish("github", task, candidate, git_env={"TOKEN": "secret"}, publish_func=publisher)
-
-    assert result.kind is ResultKind.PUSHED
-    assert calls == [("github", task, candidate, {"TOKEN": "secret"})]
-
-
-def test_publish_never_publishes_a_refusal_and_reports_a_publisher_error() -> None:
-    task = _task("a" * 40)
-    refusal = FixCandidate(action=CandidateAction.REFUSE, summary="not safe")
-    never = MagicMock(side_effect=AssertionError("published a refusal"))
-
-    refused = engine_mod.publish(object(), task, refusal, git_env={}, publish_func=never)
-    candidate = FixCandidate(action=CandidateAction.PATCH, patch="diff", changed_paths=("x",))
-    failed = engine_mod.publish(
-        object(), task, candidate, git_env={}, publish_func=MagicMock(side_effect=RuntimeError("push failed")),
-    )
-
-    assert refused.kind is ResultKind.REFUSED and refused.candidate is refusal
-    assert failed.kind is ResultKind.FAILED and "push failed" in failed.summary
 
 
 # --- the feedback loop: test without and with the patch, review, retry -------------
@@ -489,7 +450,7 @@ def _prepare(tmp_path, monkeypatch, agent, *, kind=TargetKind.UPDATE_PR, review=
     source, head_sha = _source_repo(tmp_path)
     _install_clone(monkeypatch, source)
     return engine_mod.prepare_fix(
-        _task(head_sha, kind=kind), ArtifactClient(), agent_func=agent,
+        _task(head_sha, kind=kind), _LOG, agent_func=agent,
         review_func=review or (lambda *a, **k: (True, "fixes the stale value")),
         test_func=test or engine_mod.run_test_command,
     )
@@ -619,7 +580,7 @@ def test_the_failure_is_reproduced_first_and_the_fix_verified_with_the_same_comm
     task = _task(head_sha)
     task = replace(task, failure=replace(task.failure, failed_tests=(FailedTest("value is right", "tests/unit/value.tcl"),)))
     candidate = engine_mod.prepare_fix(
-        task, ArtifactClient(_LOG_WITH_FAILURE), agent_func=recording_agent,
+        task, _LOG_WITH_FAILURE, agent_func=recording_agent,
         test_func=_runs_value_check(runs),
     )
 
@@ -641,7 +602,7 @@ def test_a_fix_that_does_not_stop_the_reproduction_goes_back(tmp_path, monkeypat
     agent = _value_agent("almost", "right", command="")
 
     candidate = engine_mod.prepare_fix(
-        _task(head_sha), ArtifactClient(_LOG_WITH_FAILURE), agent_func=agent,
+        _task(head_sha), _LOG_WITH_FAILURE, agent_func=agent,
         test_func=_runs_value_check([]),
     )
 
@@ -659,7 +620,7 @@ def test_a_failure_that_does_not_reproduce_is_reported_as_unproven(tmp_path, mon
     runs = []
 
     candidate = engine_mod.prepare_fix(
-        _task(head_sha), ArtifactClient(_LOG_WITH_FAILURE),
+        _task(head_sha), _LOG_WITH_FAILURE,
         agent_func=_value_agent("right\nwith a sturdier wait", command=""),
         test_func=_runs_value_check(runs),
     )
@@ -694,7 +655,7 @@ def test_existing_fixes_and_the_test_guide_reach_the_agent_and_the_report(tmp_pa
         failure=replace(task.failure, repo_full_name="valkey-io/valkey", issue_number=12),
         target=replace(task.target, repo_full_name="valkey-io/valkey"),
     )
-    candidate = engine_mod.prepare_fix(task, ArtifactClient(_LOG_WITH_FAILURE), agent_func=agent)
+    candidate = engine_mod.prepare_fix(task, _LOG_WITH_FAILURE, agent_func=agent)
 
     assert searched == {
         "tests": (FailedTest("value is right", "tests/unit/value.tcl"),),
@@ -722,7 +683,7 @@ def test_a_fix_that_skips_the_failing_test_is_sent_back(tmp_path, monkeypatch):
     agent = _value_agent("skip it", "right", command="")
 
     candidate = engine_mod.prepare_fix(
-        _task(head_sha), ArtifactClient(_LOG_WITH_FAILURE), agent_func=agent,
+        _task(head_sha), _LOG_WITH_FAILURE, agent_func=agent,
         test_func=lambda *a: next(calls),
     )
 
@@ -743,7 +704,7 @@ def test_a_harness_error_with_the_fix_is_not_reported_as_the_same_failure(tmp_pa
     agent = _value_agent("broken", "right", command="")
 
     engine_mod.prepare_fix(
-        _task(head_sha), ArtifactClient(_LOG_WITH_FAILURE), agent_func=agent,
+        _task(head_sha), _LOG_WITH_FAILURE, agent_func=agent,
         test_func=lambda *a: next(calls),
     )
 
@@ -763,7 +724,7 @@ def test_switching_from_a_patch_to_a_port_discards_the_patch(tmp_path, monkeypat
         return next(patch_then_port)(*args, **kwargs)
 
     candidate = engine_mod.prepare_fix(
-        _task(head_sha), ArtifactClient(), agent_func=agent,
+        _task(head_sha), _LOG, agent_func=agent,
         review_func=lambda *a, **k: next(verdicts),
     )
 
@@ -793,7 +754,7 @@ def test_the_agent_leaves_time_to_verify_and_review(tmp_path, monkeypatch):
         timeouts.append(timeout)
         return FixCandidate(action=CandidateAction.REFUSE, summary="no")
 
-    engine_mod.prepare_fix(_task(head_sha), ArtifactClient(), agent_func=agent)
+    engine_mod.prepare_fix(_task(head_sha), _LOG, agent_func=agent)
 
     assert timeouts[0] <= engine_mod.PREPARE_BUDGET_S - engine_mod._VERIFY_RESERVE_S
 
@@ -807,7 +768,7 @@ def test_a_failure_with_nothing_to_search_for_does_not_claim_a_search(tmp_path, 
         contexts.append(kwargs["context"])
         return FixCandidate(action=CandidateAction.REFUSE, summary="no")
 
-    candidate = engine_mod.prepare_fix(_task(head_sha), ArtifactClient("Process completed with exit code 2."),
+    candidate = engine_mod.prepare_fix(_task(head_sha), "Process completed with exit code 2.",
                                        agent_func=agent)
 
     assert not contexts[0].prior_fixes_searched
@@ -825,7 +786,7 @@ def test_when_code_cannot_reproduce_the_agents_own_reproduction_proves_the_fix(t
     agent = _value_agent("right\nfixed", command="test \"$(wc -l < value.txt)\" -ge 2")
 
     candidate = engine_mod.prepare_fix(
-        _task(head_sha), ArtifactClient(_LOG_WITH_FAILURE), agent_func=agent,
+        _task(head_sha), _LOG_WITH_FAILURE, agent_func=agent,
         test_func=_runs_value_check([]),
     )
 
@@ -845,7 +806,7 @@ def test_a_port_not_merged_on_the_default_branch_goes_back_before_testing(tmp_pa
     _install_clone(monkeypatch, source)
     agent = _port_agent(unmerged, commit)
 
-    candidate = engine_mod.prepare_fix(_task(head_sha), ArtifactClient(), agent_func=agent)
+    candidate = engine_mod.prepare_fix(_task(head_sha), _LOG, agent_func=agent)
 
     assert candidate.port_commit == commit
     assert "it is not merged into origin/main" in agent.feedback[1]
@@ -862,7 +823,7 @@ def test_a_later_round_whose_agent_fails_keeps_the_earlier_result(tmp_path, monk
             raise RuntimeError("CI-fix agent failed with exit code 1")
         return first(task, repo_dir, job_log, **kwargs)
 
-    candidate = engine_mod.prepare_fix(_task(head_sha), ArtifactClient(), agent_func=agent)
+    candidate = engine_mod.prepare_fix(_task(head_sha), _LOG, agent_func=agent)
 
     assert candidate.action is CandidateAction.REFUSE
     assert candidate.summary.startswith("The agent failed on attempt 2")
@@ -875,7 +836,7 @@ def test_the_review_is_bounded_by_the_deadline(tmp_path, monkeypatch):
     seen = []
 
     engine_mod.prepare_fix(
-        _task(head_sha), ArtifactClient(), agent_func=_value_agent("right"),
+        _task(head_sha), _LOG, agent_func=_value_agent("right"),
         review_func=lambda *a, timeout, **k: seen.append(timeout) or (True, "ok"),
     )
 
@@ -899,7 +860,7 @@ def test_ignored_files_the_agent_left_are_removed_before_verification(tmp_path, 
         seen.append((Path(repo_dir) / "server.o").exists())
         return engine_mod.run_test_command(repo_dir, command, timeout)
 
-    engine_mod.prepare_fix(_task(head_sha), ArtifactClient(), agent_func=agent, test_func=test)
+    engine_mod.prepare_fix(_task(head_sha), _LOG, agent_func=agent, test_func=test)
 
     assert seen and not any(seen)
 
@@ -921,7 +882,7 @@ def test_a_merge_commit_port_is_refused_before_a_round_is_spent_on_it(tmp_path, 
     _install_clone(monkeypatch, source)
     agent = _port_agent(merge, merge, merge)
 
-    candidate = engine_mod.prepare_fix(_task(head_sha), ArtifactClient(), agent_func=agent)
+    candidate = engine_mod.prepare_fix(_task(head_sha), _LOG, agent_func=agent)
 
     assert candidate.action is CandidateAction.REFUSE
     assert "merge commits require an explicit mainline parent" in agent.feedback[1]
@@ -937,7 +898,7 @@ def test_a_detector_issue_reproduces_only_its_own_test(tmp_path, monkeypatch):
     task = _task(head_sha)
     task = replace(task, failure=replace(task.failure, failed_tests=(own,), issue_number=7))
 
-    engine_mod.prepare_fix(task, ArtifactClient(log), agent_func=_value_agent("right", command=""),
+    engine_mod.prepare_fix(task, log, agent_func=_value_agent("right", command=""),
                            test_func=_runs_value_check([]))
 
     assert seen["tests"] == (own,)
@@ -955,7 +916,7 @@ def test_a_verification_that_runs_out_of_time_says_so(tmp_path, monkeypatch):
     ])
     agent = _value_agent("right", "right", command="")
 
-    engine_mod.prepare_fix(_task(head_sha), ArtifactClient(_LOG_WITH_FAILURE), agent_func=agent,
+    engine_mod.prepare_fix(_task(head_sha), _LOG_WITH_FAILURE, agent_func=agent,
                            test_func=lambda *a: next(calls))
 
     assert "did not finish in the time left" in agent.feedback[1]
@@ -1022,7 +983,7 @@ def _prepare_with_others(tmp_path, monkeypatch, others):
     task = replace(task, failure=replace(task.failure, failed_tests=(FailedTest("A", "tests/unit/t.tcl"),),
                                          issue_number=10))
     return engine_mod.prepare_fix(
-        task, ArtifactClient(), agent_func=_fix_both_agent(),
+        task, _LOG, agent_func=_fix_both_agent(),
         review_func=lambda *a, **k: (True, "fixes both"),
         test_func=_only_tests_pass,
     )
@@ -1053,7 +1014,7 @@ def test_an_issue_in_another_file_is_not_considered(tmp_path, monkeypatch):
     )
     task = replace(task, failure=replace(task.failure, failed_tests=(FailedTest("A", "tests/unit/t.tcl"),)))
     candidate = engine_mod.prepare_fix(
-        task, ArtifactClient(), agent_func=_fix_both_agent(),
+        task, _LOG, agent_func=_fix_both_agent(),
         review_func=lambda *a, **k: (True, "ok"), test_func=_only_tests_pass,
     )
     assert (candidate.also_fixes, candidate.also_touches) == ((), ())
@@ -1092,7 +1053,7 @@ def test_in_a_jobs_checkout_only_what_the_agent_left_is_removed_before_verificat
         return engine_mod.run_test_command(repo_dir, command, timeout)
 
     candidate = engine_mod.prepare_fix(
-        _task(head_sha), ArtifactClient(), agent_func=agent, test_func=test, repo_dir=str(job),
+        _task(head_sha), _LOG, agent_func=agent, test_func=test, repo_dir=str(job),
     )
 
     assert candidate.action is CandidateAction.PATCH

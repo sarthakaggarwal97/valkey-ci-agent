@@ -104,8 +104,8 @@ def test_the_fix_job_prepares_from_the_plan_alone_with_the_jobs_own_commands(mon
     monkeypatch.setenv("CI_FIX_RUNTEST", "./runtest --dump-logs")
     seen = {}
 
-    def prepare_fix(task, artifact_client, **kwargs):
-        seen.update(task=task, log=artifact_client.download_job_log("valkey-io/valkey", 22), **kwargs)
+    def prepare_fix(task, job_log, **kwargs):
+        seen.update(task=task, log=job_log, **kwargs)
         return _CANDIDATE
 
     monkeypatch.setattr(run, "prepare_fix", prepare_fix)
@@ -145,7 +145,7 @@ def test_the_candidate_is_published_as_its_target_says(front_door, monkeypatch, 
         seen.update(task=task, candidate=candidate)
         return FixResult(kind=ResultKind.OPENED, summary="opened", task=task)
 
-    monkeypatch.setattr(run, "publish", publish)
+    monkeypatch.setattr(run, "publish_candidate", publish)
 
     assert _publish(tmp_path, tmp_path) == {"action": "opened"}
     assert seen == {"task": _pr_plan().task, "candidate": _CANDIDATE}
@@ -172,3 +172,14 @@ def test_the_cli_fails_for_a_failed_publication(monkeypatch):
     monkeypatch.setattr(run, "publish_and_report", lambda *_args, **_kwargs: {"action": "failed"})
 
     assert run.main(["publish", "--plan", "plan", "--outcome", "outcome"]) == 1
+
+
+def test_a_publication_that_raises_is_reported_as_failed(front_door, monkeypatch, tmp_path):
+    save(tmp_path / run.PLAN_FILE, _pr_plan())
+    save(tmp_path / run.OUTCOME_FILE, FixOutcome(candidate=_CANDIDATE))
+    monkeypatch.setattr(run, "publish_candidate", MagicMock(side_effect=RuntimeError("push failed")))
+
+    _publish(tmp_path, tmp_path)
+
+    (result,) = front_door.reported
+    assert result.kind is ResultKind.FAILED and "push failed" in result.summary

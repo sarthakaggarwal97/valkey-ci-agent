@@ -616,7 +616,6 @@ def prepare_issue(
         expected_sha=base_sha,
         base_branch=branch,
         issue_number=failure.number,
-        draft=True,
     )
     others = _other_open_issues(repo, bot_login, exclude=failure.number, branch=failure.branch)
     recovery_task = FixTask(

@@ -27,10 +27,8 @@ def encode(value: Any) -> Any:
         return {field.name: encode(getattr(value, field.name)) for field in dataclasses.fields(value)}
     if isinstance(value, Enum):
         return value.value
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, tuple):
         return [encode(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): encode(item) for key, item in value.items()}
     return value
 
 
@@ -44,11 +42,6 @@ def decode(kind: Any, data: Any) -> Any:
     if origin is tuple:
         item = get_args(kind)[0]
         return tuple(decode(item, value) for value in data)
-    if origin is list:
-        return [decode(get_args(kind)[0], value) for value in data]
-    if origin is dict:
-        key_kind, value_kind = get_args(kind)
-        return {decode(key_kind, key): decode(value_kind, value) for key, value in data.items()}
     if isinstance(kind, type) and dataclasses.is_dataclass(kind):
         hints = get_type_hints(kind)
         return kind(**{
@@ -57,11 +50,9 @@ def decode(kind: Any, data: Any) -> Any:
         })
     if isinstance(kind, type) and issubclass(kind, Enum):
         return kind(data)
-    if kind in (str, int, float, bool):
-        if not isinstance(data, kind) and not (kind is float and isinstance(data, int)):
+    if kind in (str, int, bool):
+        if not isinstance(data, kind):
             raise TypeError(f"expected {kind.__name__}, got {type(data).__name__}")
-        return data
-    if kind is typing.Any:
         return data
     raise TypeError(f"cannot decode {kind!r}")
 
