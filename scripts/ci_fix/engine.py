@@ -693,7 +693,7 @@ def _checked_candidate(task: FixTask, repo_dir: str, original_head: str, candida
     changed_paths = worktree_changed_paths(repo_dir)
     declared_paths = tuple(sorted(candidate.changed_paths))
     if candidate.action is CandidateAction.REFUSE:
-        return replace(candidate, patch="", changed_paths=(), port_commit="", validation="")
+        return replace(candidate, patch="", changed_paths=(), port_commit="", validation="", test_command="")
 
     capabilities = target_capabilities(task.target.kind)
     if not capabilities.allows(candidate.action):

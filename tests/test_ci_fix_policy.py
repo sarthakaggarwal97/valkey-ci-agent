@@ -7,6 +7,7 @@ from scripts.ci_fix.policy import (
     is_backport_branch,
     target_capabilities,
 )
+from scripts.common.identity import APP_LOGIN
 
 
 def test_every_target_kind_has_capabilities() -> None:
@@ -25,18 +26,17 @@ def test_target_capabilities_capture_current_publication_modes() -> None:
     assert target_capabilities(TargetKind.DRAFT_PR).creates_branch is True
 
 
-def test_bot_branch_ownership_and_backport_policy(monkeypatch) -> None:
-    monkeypatch.setenv("CI_FIX_BOT_AUTHORS", "ci-bot[bot],other-bot[bot]")
+def test_bot_branch_ownership_and_backport_policy() -> None:
 
     assert can_update_branch(
         same_repo=True,
         branch="agent/ci-fix/issue-1",
-        author="ci-bot[bot]",
+        author=f"{APP_LOGIN}[bot]",
     )
     assert not can_update_branch(
         same_repo=False,
         branch="agent/ci-fix/issue-1",
-        author="ci-bot[bot]",
+        author=f"{APP_LOGIN}[bot]",
     )
     assert is_backport_branch("agent/backport/sweep/8.0")
     assert not is_backport_branch("agent/ci-fix/issue-1")

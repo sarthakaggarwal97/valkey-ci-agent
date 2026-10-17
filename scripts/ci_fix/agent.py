@@ -271,23 +271,15 @@ def _candidate_from_payload(payload: dict[str, Any]) -> FixCandidate:
             **diagnosis,
         )
 
+    # The engine keeps only the fields the action uses (engine._checked_candidate).
     return FixCandidate(
         action=action,
         summary=summary or _default_summary(action),
         **diagnosis,
-        changed_paths=(
-            _changed_paths(payload.get("changed_paths"))
-            if action is CandidateAction.PATCH
-            else ()
-        ),
-        port_commit=port_commit if action is CandidateAction.PORT else "",
-        validation=(
-            "" if action in (CandidateAction.PORT, CandidateAction.REFUSE)
-            else _text(payload.get("validation"), 2_000)
-        ),
-        test_command=(
-            _text(payload.get("test_command"), 1_000) if action is CandidateAction.PATCH else ""
-        ),
+        changed_paths=_changed_paths(payload.get("changed_paths")),
+        port_commit=port_commit,
+        validation=_text(payload.get("validation"), 2_000),
+        test_command=_text(payload.get("test_command"), 1_000),
     )
 
 

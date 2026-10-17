@@ -140,7 +140,7 @@ def test_suggestion_uses_confined_profile_and_backport_policy(tmp_path, monkeypa
     assert candidate.action is CandidateAction.REFUSE
 
 
-def test_port_requires_a_full_sha_and_discards_model_validation(tmp_path, monkeypatch) -> None:
+def test_port_requires_a_full_sha(tmp_path, monkeypatch) -> None:
     commit = "ABCDEF12" * 5
     monkeypatch.setattr(
         agent_mod,
@@ -159,7 +159,6 @@ def test_port_requires_a_full_sha_and_discards_model_validation(tmp_path, monkey
 
     assert candidate.action is CandidateAction.PORT
     assert candidate.port_commit == commit.lower()
-    assert candidate.validation == ""
 
     monkeypatch.setattr(
         agent_mod,

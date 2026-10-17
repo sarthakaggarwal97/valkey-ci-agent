@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Literal
 
@@ -90,19 +89,9 @@ def target_capabilities(kind: TargetKind) -> TargetCapabilities:
     return TARGET_CAPABILITIES[kind]
 
 
-def bot_authors() -> frozenset[str]:
-    """GitHub logins whose namespaced PR branches the agent may update."""
-    configured = os.environ.get("CI_FIX_BOT_AUTHORS", "")
-    authors = frozenset(
-        login.strip()
-        for login in configured.split(",")
-        if login.strip()
-    )
-    return authors or frozenset({f"{APP_LOGIN}[bot]"})
-
-
 def is_bot_author(author: str) -> bool:
-    return author in bot_authors()
+    """Whether ``author`` is the App, whose namespaced PR branches the agent may update."""
+    return author == f"{APP_LOGIN}[bot]"
 
 
 def is_writable_branch(branch: str) -> bool:

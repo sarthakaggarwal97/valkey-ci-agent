@@ -414,7 +414,6 @@ code owns commits and pushes.
 | Variable | Default | Purpose |
 |---|---|---|
 | `CI_FIX_AGENT_USER` | set by the workflow | Account the agent and its test commands run as; required inside Actions |
-| `CI_FIX_BOT_AUTHORS` | `valkeyrie-ops[bot]` | Comma-separated PR authors whose `backport/`, `agent/backport/` and `agent/ci-fix/` branches the bot may push to |
 
 ### Detector issue fixes
 
