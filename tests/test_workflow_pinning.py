@@ -367,6 +367,15 @@ def test_the_fix_steps_install_dependencies_before_any_credential_and_run_the_ag
     assert "TOKEN" not in script
 
 
+def test_the_agents_code_is_put_back_for_the_jobs_own_cleanup():
+    """Its setup is a composite action of this checkout: the post phase needs it there."""
+    script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
+    moved = script.index('mv "${GITHUB_WORKSPACE}/.ci-fix-agent" "${agent}"')
+    restored = script.index('trap \'mv -f "${agent}" "${GITHUB_WORKSPACE}/.ci-fix-agent"')
+
+    assert moved < restored < script.index("python -m scripts.ci_fix.run fix")
+
+
 def test_a_container_fix_mode_installs_the_agents_tools_from_the_distribution():
     """setup-python's builds do not run on every distribution, and a container has no sudo."""
     steps = yaml.safe_load(Path(".github/actions/setup-agent/action.yml").read_text(encoding="utf-8"))["runs"]["steps"]

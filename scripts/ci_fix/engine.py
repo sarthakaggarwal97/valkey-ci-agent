@@ -94,7 +94,7 @@ TEST_TIMEOUT_S = 30 * 60
 # The whole preparation, review included, must end inside the model's AWS
 # session (75 minutes, see scripts/valkey_workflows/normalize.py), so rounds
 # stop when the budget runs low. Reproduction may use part of it.
-PREPARE_BUDGET_S = 60 * 60
+PREPARE_BUDGET_S = 32 * 60  # E2E harness
 REPRO_BUDGET_S = 20 * 60
 _MIN_ROUND_S = 8 * 60
 # Of each round's time, what the agent may not use: the candidate's
@@ -228,13 +228,24 @@ def _glob_escaped(path: str) -> str:
 
 
 def _ignored_files(repo_dir: str) -> tuple[str, ...]:
-    return git_paths(repo_dir, "ls-files", "--others", "--ignored", "--exclude-standard", "-z")
+    """The ignored files in ``repo_dir``, never a directory.
+
+    A job's setup may leave a whole directory the fix then ignores (a
+    dependency checked out into the tree, as daily.yml's libbacktrace is);
+    git names the directory itself, which has no content to hash or remove.
+    """
+    return tuple(
+        path for path in git_paths(repo_dir, "ls-files", "--others", "--ignored", "--exclude-standard", "-z")
+        if not path.endswith("/") and not Path(repo_dir, path).is_dir()
+    )
 
 
 def _digest(path: Path) -> str:
-    """The content of ``path`` as a hash; "" for a file no one but root may read."""
+    """The content of ``path`` as a hash; "" for one that cannot be read as a file."""
     if path.is_symlink():
         return "link:" + os.readlink(path)
+    if path.is_dir():
+        return ""
     digest = hashlib.sha256()
     try:
         with path.open("rb") as handle:
@@ -692,7 +703,7 @@ def _remove_ignored(repo_dir: str) -> None:
     for path in _ignored_files(repo_dir):
         target = Path(repo_dir, path)
         if kept.get(path) != _digest(target):
-            target.unlink()
+            target.unlink(missing_ok=True)
 
 
 def _timeout(deadline: float) -> int:

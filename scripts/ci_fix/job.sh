@@ -25,6 +25,10 @@ set -euo pipefail
 
 agent="${RUNNER_TEMP}/ci-fix-agent"
 mv "${GITHUB_WORKSPACE}/.ci-fix-agent" "${agent}"
+# The job's own cleanup runs the post phase of every action it used, and the
+# agent's setup is one of this checkout's own composite actions: put it back
+# where the runner expects to find it, however this script ends.
+trap 'mv -f "${agent}" "${GITHUB_WORKSPACE}/.ci-fix-agent" 2>/dev/null || true' EXIT
 
 # A container job runs as root, and has no sudo.
 as_root() {
