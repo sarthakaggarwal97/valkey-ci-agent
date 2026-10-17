@@ -28,6 +28,7 @@ from github import Auth, Github
 
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import VALKEY_REPO
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.proc import git_output, run_git
 from scripts.release_notes import discover as discover_mod
@@ -37,8 +38,6 @@ from scripts.release_notes import release_cut as cut_mod
 logger = logging.getLogger(__name__)
 
 _VALID_URGENCIES = ("LOW", "MODERATE", "HIGH", "CRITICAL", "SECURITY")
-
-_DEFAULT_REPO = "valkey-io/valkey"
 
 
 def _token() -> str:
@@ -95,7 +94,7 @@ def _resolve_stage(version: str, stage: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--token", default=_token(), help="GitHub token (App installation or PAT)")
-    parser.add_argument("--repo", default=os.environ.get("RELEASE_NOTES_REPO", _DEFAULT_REPO),
+    parser.add_argument("--repo", default=os.environ.get("RELEASE_NOTES_REPO", VALKEY_REPO),
                         help="Target repo, owner/name")
     parser.add_argument("--version", default=os.environ.get("RELEASE_NOTES_VERSION", ""),
                         help="Target version MAJOR.MINOR.PATCH, e.g. 9.1.0")

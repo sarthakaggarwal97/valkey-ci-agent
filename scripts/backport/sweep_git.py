@@ -18,15 +18,13 @@ from scripts.backport.sweep_models import (
 from scripts.backport.utils import pr_numbers_from_commit_messages
 from scripts.common.git_auth import github_https_url
 from scripts.common.github_client import retry_github_call
-from scripts.common.identity import BOT_EMAIL, BOT_NAME
+from scripts.common.identity import BOT_EMAIL, BOT_NAME, SWEEP_BRANCH_PREFIX
 from scripts.common.proc import GitCommandError
 
 logger = logging.getLogger(__name__)
 
 
 RunGit = Callable[..., Any]
-
-BRANCH_PREFIX = "agent/backport/sweep"
 
 
 def safe_tmp_component(value: str) -> str:
@@ -57,7 +55,7 @@ def push_backport_branch(
     push_repo: str,
     prepared_head: str,
     expected_remote_head: str | None,
-    branch_prefix: str = BRANCH_PREFIX,
+    branch_prefix: str = SWEEP_BRANCH_PREFIX,
     run_git: RunGit = run_git_default,
 ) -> None:
     if not branch.startswith(f"{branch_prefix}/"):

@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from scripts.backport.registry import RepoEntry, load_registry
-from scripts.backport.sweep import _BRANCH_PREFIX
 from scripts.backport.sweep_prs import find_existing_pr
 from scripts.ci_fix.comment import render_result
 from scripts.ci_fix.github_runs import (
@@ -45,6 +44,7 @@ from scripts.ci_fix.models import (
 )
 from scripts.ci_fix.policy import is_backport_branch, is_writable_branch
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import SWEEP_BRANCH_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ def _bot_prs_into(
     The deterministic sweep PR comes first, then any other, newest first, so a
     sweep failure is still handled before a fix PR's.
     """
-    sweep_branch = f"{_BRANCH_PREFIX}/{target_branch}"
+    sweep_branch = f"{SWEEP_BRANCH_PREFIX}/{target_branch}"
     sweep = find_existing_pr(gh, repo_entry.repo, repo_entry.effective_push_repo, sweep_branch)
     found = [sweep] if sweep is not None else []
     try:

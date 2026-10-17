@@ -32,8 +32,9 @@ if __package__ in {None, ""}:
 from github import Auth, Github
 
 from scripts.backport.registry import load_registry
-from scripts.backport.sweep import _BRANCH_PREFIX, run_backport_sweep
+from scripts.backport.sweep import run_backport_sweep
 from scripts.backport.sweep_prs import find_existing_pr
+from scripts.common.identity import SWEEP_BRANCH_PREFIX
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import (
     add_poll_loop_args,
@@ -75,7 +76,7 @@ def poll_branch(
     repo_full_name = repo_entry.repo
     push_repo = repo_entry.effective_push_repo
     target_branch = branch_entry.branch
-    backport_branch = f"{_BRANCH_PREFIX}/{target_branch}"
+    backport_branch = f"{SWEEP_BRANCH_PREFIX}/{target_branch}"
 
     gh = Github(auth=Auth.Token(github_token))
     try:

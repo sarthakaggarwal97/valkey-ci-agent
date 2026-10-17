@@ -18,6 +18,7 @@ from scripts.ci_fix.gate import is_authorized
 from scripts.common.git_auth import GitAuth, github_https_url
 from scripts.common.git_clone import shallow_clone_at_sha
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import MAINTAINER_ORG, MAINTAINER_TEAM
 from scripts.common.logging_utils import configure_logging
 from scripts.common.proc import (
     BOT_EMAIL,
@@ -116,7 +117,7 @@ def load_batch(
             auth_cache[login] = (
                 authorize(login)
                 if authorize is not None
-                else is_authorized(gh, "valkey-io", "contributors", login)
+                else is_authorized(gh, MAINTAINER_ORG, MAINTAINER_TEAM, login)
             )
         return auth_cache[login]
 

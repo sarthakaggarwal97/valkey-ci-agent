@@ -31,11 +31,11 @@ from urllib.request import Request, urlopen
 
 import yaml
 
+from scripts.common.identity import VALKEY_REPO
 from scripts.valkey_workflows.normalize import INPUTS, PERMISSIONS, normalize
 
 logger = logging.getLogger(__name__)
 
-REPO = "valkey-io/valkey"
 WORKFLOWS = ("daily", "ci")
 OLDEST_RELEASE = (7, 2)
 WORKFLOW_DIR = Path(".github/workflows")
@@ -72,7 +72,7 @@ def sync(branch_names: list[str], fetch: Fetch, root: Path = Path(".")) -> None:
             if text is None:
                 logger.warning("%s has no %s.yml; no copy is made", branch, workflow)
                 continue
-            copy = normalize(text, origin=f"{REPO}@{sha} ({branch}):.github/workflows/{workflow}.yml")
+            copy = normalize(text, origin=f"{VALKEY_REPO}@{sha} ({branch}):.github/workflows/{workflow}.yml")
             name = copy_name(branch, workflow)
             wanted.add(name)
             _write(root / WORKFLOW_DIR / name, copy.text)
@@ -152,7 +152,7 @@ def github_branch_names(token: str) -> list[str]:
     names: list[str] = []
     page = 1
     while True:
-        batch = json.loads(_get(f"https://api.github.com/repos/{REPO}/branches?per_page=100&page={page}", token))
+        batch = json.loads(_get(f"https://api.github.com/repos/{VALKEY_REPO}/branches?per_page=100&page={page}", token))
         names += [item["name"] for item in batch]
         if len(batch) < 100:
             return names
@@ -161,10 +161,10 @@ def github_branch_names(token: str) -> list[str]:
 
 def github_fetch(token: str) -> Fetch:
     def fetch(branch: str) -> tuple[str, dict[str, str]]:
-        sha = json.loads(_get(f"https://api.github.com/repos/{REPO}/commits/{branch}", token))["sha"]
+        sha = json.loads(_get(f"https://api.github.com/repos/{VALKEY_REPO}/commits/{branch}", token))["sha"]
         files = {}
         for workflow in WORKFLOWS:
-            url = f"https://raw.githubusercontent.com/{REPO}/{sha}/.github/workflows/{workflow}.yml"
+            url = f"https://raw.githubusercontent.com/{VALKEY_REPO}/{sha}/.github/workflows/{workflow}.yml"
             try:
                 files[workflow] = _get(url, "").decode("utf-8")
             except HTTPError as exc:

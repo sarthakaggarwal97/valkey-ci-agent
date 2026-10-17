@@ -57,6 +57,7 @@ from scripts.backport.sweep_validation import (
     validate_branch_with_optional_repair,
 )
 from scripts.common.git_auth import GitAuth, github_https_url
+from scripts.common.identity import BACKPORT_STATUS_FIELD, BACKPORT_STATUS_OPTION, SWEEP_BRANCH_PREFIX
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import (
     annotate,
@@ -75,9 +76,6 @@ _DEFAULT_BRANCH_FIELDS = (
     "Backport Branch", "Target Branch", "Release Branch",
     "Branch", "Version", "Release", "Folder",
 )
-_DEFAULT_STATUS_FIELD = "Status"
-_DEFAULT_STATUS_VALUE = "To be backported"
-_BRANCH_PREFIX = "agent/backport/sweep"
 
 
 def _log_existing_sweep_pr(
@@ -104,8 +102,8 @@ class ProjectBackportDiscovery:
         project_number: int,
         source_repo: str,
         project_owner_type: str = "organization",
-        status_field: str = _DEFAULT_STATUS_FIELD,
-        status_value: str = _DEFAULT_STATUS_VALUE,
+        status_field: str = BACKPORT_STATUS_FIELD,
+        status_value: str = BACKPORT_STATUS_OPTION,
         branch_fields: list[str] | None = None,
         implicit_target_branch: str | None = None,
     ) -> None:
@@ -212,8 +210,8 @@ def run_backport_sweep(
     repo_entry: "RepoEntry",
     branch_entry: "BranchEntry",
     github_token: str,
-    status_field: str = _DEFAULT_STATUS_FIELD,
-    status_value: str = _DEFAULT_STATUS_VALUE,
+    status_field: str = BACKPORT_STATUS_FIELD,
+    status_value: str = BACKPORT_STATUS_OPTION,
     branch_fields: list[str] | None = None,
     test_commands_override: list[str] | None = None,
     discover_only: bool = False,
@@ -242,8 +240,8 @@ def prepare_backport_sweep(
     repo_entry: "RepoEntry",
     branch_entry: "BranchEntry",
     github_token: str,
-    status_field: str = _DEFAULT_STATUS_FIELD,
-    status_value: str = _DEFAULT_STATUS_VALUE,
+    status_field: str = BACKPORT_STATUS_FIELD,
+    status_value: str = BACKPORT_STATUS_OPTION,
     branch_fields: list[str] | None = None,
     test_commands_override: list[str] | None = None,
     discover_only: bool = False,
@@ -431,7 +429,7 @@ def _prepare_branch(
     preserve_repo = False
 
     try:
-        backport_branch = f"{_BRANCH_PREFIX}/{target_branch}"
+        backport_branch = f"{SWEEP_BRANCH_PREFIX}/{target_branch}"
         with GitAuth(
             github_token,
             prefix="backport-sweep-prepare-git-askpass-",
@@ -1176,8 +1174,8 @@ def main() -> None:
     parser.add_argument(
         "--target-token", default="", help="GitHub token (defaults to TARGET_TOKEN)"
     )
-    parser.add_argument("--status-field", default=_DEFAULT_STATUS_FIELD)
-    parser.add_argument("--status-value", default=_DEFAULT_STATUS_VALUE)
+    parser.add_argument("--status-field", default=BACKPORT_STATUS_FIELD)
+    parser.add_argument("--status-value", default=BACKPORT_STATUS_OPTION)
     parser.add_argument("--branch-fields", default=",".join(_DEFAULT_BRANCH_FIELDS))
     parser.add_argument(
         "--test-commands",
@@ -1222,7 +1220,7 @@ def main() -> None:
             repo_full_name=repo_entry.repo,
             push_repo=repo_entry.effective_push_repo,
             target_branch=branch_entry.branch,
-            backport_branch=f"{_BRANCH_PREFIX}/{branch_entry.branch}",
+            backport_branch=f"{SWEEP_BRANCH_PREFIX}/{branch_entry.branch}",
             backport_label=repo_entry.backport_label,
             llm_conflict_label=repo_entry.llm_conflict_label,
         )

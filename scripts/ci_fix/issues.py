@@ -45,6 +45,7 @@ from scripts.ci_fix.models import (
     ResultKind,
     TargetKind,
 )
+from scripts.ci_fix.policy import CI_FIX_BRANCH_PREFIX
 from scripts.ci_fix.publish import reconcile_draft_pr
 from scripts.common.github_client import retry_github_call
 from scripts.common.text_utils import compact_text
@@ -73,8 +74,6 @@ from scripts.test_failure_detector.job_failures import (
 from scripts.test_failure_detector.parse_failures import parse_and_deduplicate
 
 logger = logging.getLogger(__name__)
-
-BRANCH_PREFIX = "agent/ci-fix/"
 
 _DETECTOR_RE = re.compile(
     rf"<!-- {re.escape(MARKER_NAMESPACE)}:(?P<fingerprint>[0-9a-f]+) -->"
@@ -337,7 +336,7 @@ def _other_open_issues(repo: Any, bot_login: str, *, exclude: int, branch: str) 
 def _branch_name(failure: IssueFailure) -> str:
     """Return the one durable branch name for this detector occurrence."""
     return (
-        f"{BRANCH_PREFIX}issue-{failure.number}-{failure.run_id}"
+        f"{CI_FIX_BRANCH_PREFIX}issue-{failure.number}-{failure.run_id}"
     )
 
 

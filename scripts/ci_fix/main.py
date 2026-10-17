@@ -22,14 +22,10 @@ from scripts.ci_fix.gate import (
 )
 from scripts.ci_fix.models import FixPlan, FixResult, FrontDoor, ResultKind
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import MAINTAINER_ORG, MAINTAINER_TEAM, VALKEY_REPO
 from scripts.common.logging_utils import log_outcome
 
 logger = logging.getLogger(__name__)
-
-_AUTH_ORG = os.environ.get("CI_FIX_AUTH_ORG", "valkey-io")
-_AUTH_TEAM = os.environ.get("CI_FIX_AUTH_TEAM", "contributors")
-# ci-fix.yml's App token covers this repository only.
-_SCOPE = "valkey-io/valkey"
 
 
 def plan_request(
@@ -51,8 +47,8 @@ def plan_request(
     actor = os.environ.get("GITHUB_ACTOR", "")
     commenter = str(request.get("commenter") or "") if actor in ("", bot_login) else actor
     comment_id = int(request.get("comment_id") or 0)
-    if repo_full_name != _SCOPE:
-        raise ValueError(f"ci-fix.yml is scoped to {_SCOPE} (got {repo_full_name!r})")
+    if repo_full_name != VALKEY_REPO:
+        raise ValueError(f"ci-fix.yml is scoped to {VALKEY_REPO} (got {repo_full_name!r})")
     if not (pr_number > 0 and commenter):
         raise ValueError("a CI-fix request needs a positive PR number and a commenter")
     hint = str(request.get("hint") or "").strip()
@@ -67,7 +63,7 @@ def plan_request(
         )
     task = build_fix_task(
         gh, command=command, pr_repo_full_name=repo_full_name, pr_number=pr_number,
-        commenter=commenter, org=_AUTH_ORG, auth_team=_AUTH_TEAM,
+        commenter=commenter, org=MAINTAINER_ORG, auth_team=MAINTAINER_TEAM,
     )
     if isinstance(task, GateError):
         kind, body = ResultKind.FAILED, f"CI-fix could not evaluate this request: {task.reason}"

@@ -27,6 +27,7 @@ from github import Auth, Github
 
 from scripts.ci_fix.gate import ParsedCommand, is_authorized, parse_command
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import MAINTAINER_ORG, MAINTAINER_TEAM, VALKEY_REPO
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import env_int, env_seconds, run_poll_loop
 
@@ -347,12 +348,12 @@ def main() -> int:
     configure_logging()
 
     token = os.environ["CI_FIX_POLL_TOKEN"]
-    target_repo = os.environ.get("CI_FIX_POLL_TARGET_REPO", "valkey-io/valkey")
+    target_repo = os.environ.get("CI_FIX_POLL_TARGET_REPO", VALKEY_REPO)
     agent_repo = os.environ.get("CI_FIX_POLL_AGENT_REPO", "valkey-io/valkey-ci-agent")
     workflow = os.environ.get("CI_FIX_POLL_WORKFLOW", "ci-fix.yml")
     ref = os.environ.get("CI_FIX_POLL_REF", "main")
-    org = os.environ.get("CI_FIX_AUTH_ORG", "valkey-io")
-    team_slug = os.environ.get("CI_FIX_AUTH_TEAM", "contributors")
+    org = MAINTAINER_ORG
+    team_slug = MAINTAINER_TEAM
     # The App slug (from the token-mint action) identifies our own claim
     # reaction. The installation token cannot reliably call GET /user, so the
     # bot login is derived from the slug rather than looked up.

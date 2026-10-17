@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import inspect
 import re
+from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts.release_notes import generate, projects, render, triage
 from scripts.release_notes import release_cut as cut_mod
@@ -283,3 +285,26 @@ def test_progression_search_dev_stage_allows_same_version_rc() -> None:
     bumper = projects.SearchVersionH()
     assert bumper.current_release_state(dev_text) == ("1.3.0", "dev")
     cut_mod.validate_release_progression(dev_text, "1.3.0", "rc1", bumper=bumper)
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    ["release-notes-cut.yml", "release-notes-cut-advanced.yml", "release-notes-review.yml"],
+)
+def test_workflow_repo_choices_match_the_profiles(workflow):
+    doc = yaml.safe_load(Path(".github/workflows", workflow).read_text(encoding="utf-8"))
+    on = doc.get("on", doc.get(True))
+    assert tuple(on["workflow_dispatch"]["inputs"]["repo"]["options"]) == projects.REPOSITORY_NAMES
+
+
+def test_review_poll_token_covers_every_profile_repository():
+    doc = yaml.safe_load(Path(".github/workflows/release-notes-review-poll.yml").read_text(encoding="utf-8"))
+    repositories = [
+        step["with"]["repositories"].split()
+        for job in doc["jobs"].values()
+        for step in job.get("steps", [])
+        if "create-github-app-token" in step.get("uses", "")
+    ]
+    assert repositories
+    for names in repositories:
+        assert tuple(name for name in names if name != "valkey-ci-agent") == projects.REPOSITORY_NAMES

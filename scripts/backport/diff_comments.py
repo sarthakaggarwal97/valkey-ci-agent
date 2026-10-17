@@ -18,12 +18,19 @@ from __future__ import annotations
 
 import hashlib
 import html
+import os
 import re
 from dataclasses import dataclass
 from typing import Any
 
 from scripts.backport.models import ResolutionResult
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import BOT_NAME
+
+# Login that authors the AI-diff comments. Defaults to the bot, but the comment
+# author follows the token identity, so a fork run using a personal PAT sets
+# CI_AGENT_DIFF_COMMENT_LOGIN to that user so the ownership gate still matches.
+DIFF_COMMENT_LOGIN = os.environ.get("CI_AGENT_DIFF_COMMENT_LOGIN") or BOT_NAME
 
 _MARKER_PREFIX = "valkey-ci-agent:ai-diff"
 

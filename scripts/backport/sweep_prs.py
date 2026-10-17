@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
 from github.GithubException import GithubException
 
-from scripts.backport.diff_comments import marked_source_pr_urls, reconcile_diff_comments
+from scripts.backport.diff_comments import DIFF_COMMENT_LOGIN, marked_source_pr_urls, reconcile_diff_comments
 from scripts.backport.pr_creator import (
     _LABEL_DEFAULTS,
     build_pull_search_head_ref,
@@ -19,13 +18,8 @@ from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_models import BranchSweepResult, CandidateResult
 from scripts.backport.sweep_reporting import build_pr_body, result_is_on_backport_branch
 from scripts.common.github_client import retry_github_call
-from scripts.common.proc import BOT_NAME
 
 logger = logging.getLogger(__name__)
-
-# See scripts/backport/main.py: the comment author follows the token identity,
-# so a fork run with a personal PAT overrides the ownership-gate login.
-DIFF_COMMENT_LOGIN = os.environ.get("CI_AGENT_DIFF_COMMENT_LOGIN") or BOT_NAME
 
 
 def find_existing_pr(gh: Any, base_repo: str, push_repo: str, branch: str) -> Any | None:

@@ -13,6 +13,7 @@ from typing import Any
 from scripts.ai.runtime import run_agent
 from scripts.common.ai_output import extract_json_object
 from scripts.common.git_clone import shallow_clone_at_sha
+from scripts.common.identity import VALKEY_REPO
 from scripts.common.incidents import compute_fingerprint
 from scripts.common.text_utils import strip_ansi
 from scripts.common.workflow_artifacts import ArtifactClient
@@ -174,7 +175,7 @@ def _invoke_claude(context: FuzzerRunContext, anomalies: list[FuzzerSignal],
     # tree than the one that crashed). Clone the fuzzer at the run's HEAD too.
     if context.tested_valkey_sha:
         valkey_ok = shallow_clone_at_sha(
-            "valkey-io/valkey", workdir / "valkey", context.tested_valkey_sha,
+            VALKEY_REPO, workdir / "valkey", context.tested_valkey_sha,
         )
     else:
         valkey_ok = False

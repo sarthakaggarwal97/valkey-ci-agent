@@ -19,6 +19,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Optional, Sequence
 
 from scripts.common.git_auth import github_https_url
+from scripts.common.identity import RELEASE_CUT_BRANCH_PREFIX
 from scripts.common.logging_utils import log_outcome
 from scripts.common.proc import BOT_EMAIL, BOT_NAME, git_output, run_git
 from scripts.release_notes import contributors as gc
@@ -31,10 +32,6 @@ from scripts.release_notes import verdicts as verdicts_mod
 from scripts.release_notes.code_age import released_pr_numbers
 
 logger = logging.getLogger(__name__)
-
-# The agent creates only throwaway prep branches in this namespace, which PR
-# into the M.m release line. The line is only advanced by merging a PR.
-PREP_BRANCH_PREFIX = "agent/release-cut"
 
 _RC_STAGE_RE = re.compile(r"^rc([1-9]\d*)$")
 # Matches "<Display Name> M.m.p-rcN" headings in the release line changelog, to
@@ -837,7 +834,7 @@ def cut(
     #    Defense-in-depth: verify origin URL hasn't been tampered with before any
     #    authenticated fetch/push (the primary defense is --safe-mode on Claude,
     #    which prevents hooks from modifying the clone).
-    prep_branch = f"{PREP_BRANCH_PREFIX}/{version}-{plan.stage}"
+    prep_branch = f"{RELEASE_CUT_BRANCH_PREFIX}/{version}-{plan.stage}"
     dest_dir = os.path.join(source_clone_dir, ".release-dest")
     run_git(source_clone_dir, "worktree", "add", "--force", "-B", prep_branch, dest_dir,
             pinned_head_sha)
@@ -1135,7 +1132,7 @@ def _commit_push_release_pr(
     run_git(dest_dir, "add", profile.notes_file, profile.bumper.version_file)
     run_git(dest_dir, "commit", "-s", "-m",
             commit_title(version, plan.stage, profile.display_name))
-    if not prep_branch.startswith(f"{PREP_BRANCH_PREFIX}/"):
+    if not prep_branch.startswith(f"{RELEASE_CUT_BRANCH_PREFIX}/"):
         raise RuntimeError(f"Refusing to push to non-namespaced prep branch: {prep_branch!r}")
 
     # If an existing PR is open for this prep branch, convert it to draft before

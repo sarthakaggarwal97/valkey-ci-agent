@@ -360,6 +360,9 @@ _PROFILES: dict[str, ProjectProfile] = {
     )
 }
 
+# The repositories release notes are cut for.
+REPOSITORY_NAMES = tuple(_PROFILES)
+
 
 def profile_for(repo_full_name: str) -> ProjectProfile:
     """Resolve the ProjectProfile for ``owner/name`` (or a bare ``name``).

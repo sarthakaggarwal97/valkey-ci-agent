@@ -11,9 +11,10 @@ import tempfile
 from github import Auth, Github
 
 from scripts.backport.git_commands import run_git as run_git_default
-from scripts.backport.sweep_git import BRANCH_PREFIX, clone_target_branch
+from scripts.backport.sweep_git import clone_target_branch
 from scripts.backport.sweep_prs import find_existing_pr
 from scripts.common.git_auth import GitAuth
+from scripts.common.identity import SWEEP_BRANCH_PREFIX
 from scripts.common.logging_utils import configure_logging, log_outcome
 
 logger = logging.getLogger(__name__)
@@ -24,12 +25,12 @@ def revert_commit(
     push_repo: str | None = None, base_branch: str | None = None,
 ) -> None:
     target_repo = push_repo or repo
-    if not branch.startswith(f"{BRANCH_PREFIX}/"):
+    if not branch.startswith(f"{SWEEP_BRANCH_PREFIX}/"):
         raise ValueError(
             f"Refusing to edit non-namespaced branch: {branch!r}. "
-            f"Agent targets must start with {BRANCH_PREFIX}/."
+            f"Agent targets must start with {SWEEP_BRANCH_PREFIX}/."
         )
-    base_branch = base_branch or branch[len(f"{BRANCH_PREFIX}/"):]
+    base_branch = base_branch or branch[len(f"{SWEEP_BRANCH_PREFIX}/"):]
     logger.info("Reverting %s on %s:%s (base branch %s, PR repo %s)",
                 commit_sha, target_repo, branch, base_branch, repo)
 

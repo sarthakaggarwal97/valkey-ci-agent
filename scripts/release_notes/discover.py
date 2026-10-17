@@ -20,6 +20,7 @@ from typing import Any
 from github.GithubException import GithubException, UnknownObjectException
 
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import SWEEP_BRANCH_PREFIX
 from scripts.common.proc import git_output
 from scripts.release_notes.backport_refs import (
     applied_revert_source_prs_from_body,
@@ -55,11 +56,10 @@ _NUL = "\x00"
 
 # Detects a sweep merge commit so list_range_commits can splice its second-parent
 # cherry-picks back into the walk.
-_SWEEP_MERGE_RE = re.compile(r"agent/backport/sweep")
+_SWEEP_MERGE_RE = re.compile(re.escape(SWEEP_BRANCH_PREFIX))
 # Squash-merged sweep PR title. Its body manifest is trusted only after the
 # associated PR's head branch is verified below.
 _SWEEP_SQUASH_RE = re.compile(r"^\[backport\]\s+Backport sweep for\b", re.IGNORECASE)
-_SWEEP_BRANCH_PREFIX = "agent/backport/sweep/"
 
 # Trailing (#N) in squash/normal merge subjects. Anchored to avoid matching a
 # quoted inner ref (e.g. a reverted title).
@@ -551,7 +551,7 @@ def _trusted_applied_source_prs(
     logger.warning(
         "Ignoring unverified ## Applied table in commit %s; associated PR does "
         "not use %s in the target repository",
-        sha[:12], _SWEEP_BRANCH_PREFIX,
+        sha[:12], f"{SWEEP_BRANCH_PREFIX}/",
     )
     return set(), {}, False
 
@@ -575,7 +575,7 @@ def _is_trusted_sweep_pull(
         and is_merged
         and head_repo == expected_repo
         and base_ref == release_branch
-        and head_ref.startswith(_SWEEP_BRANCH_PREFIX)
+        and head_ref.startswith(f"{SWEEP_BRANCH_PREFIX}/")
         and _SWEEP_SQUASH_RE.search(title)
     )
 

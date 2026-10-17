@@ -18,7 +18,7 @@ from github import Auth, Github
 from github.GithubException import GithubException
 
 from scripts.backport.candidate_apply import apply_candidate
-from scripts.backport.diff_comments import reconcile_diff_comments
+from scripts.backport.diff_comments import DIFF_COMMENT_LOGIN, reconcile_diff_comments
 from scripts.backport.git_commands import head_sha
 from scripts.backport.git_commands import run_git as _run_git
 from scripts.backport.models import (
@@ -45,11 +45,6 @@ from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_outcome
 
 logger = logging.getLogger(__name__)
-
-# Login that authors the AI-diff comments. Defaults to the bot, but the comment
-# author follows the token identity, so a fork run using a personal PAT sets
-# CI_AGENT_DIFF_COMMENT_LOGIN to that user so the ownership gate still matches.
-DIFF_COMMENT_LOGIN = os.environ.get("CI_AGENT_DIFF_COMMENT_LOGIN") or BOT_NAME
 
 
 def build_summary(result: BackportResult) -> str:
@@ -496,8 +491,6 @@ def run_backport(
     except Exception as exc:
         logger.exception("Backport pipeline failed")
         return BackportResult(outcome="error", error_message=str(exc))
-
-
 
 
 def _post_comment(repo: object, pr_number: int, body: str) -> None:

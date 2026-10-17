@@ -37,7 +37,7 @@ from scripts.ci_fix.models import (
 )
 from scripts.ci_fix.policy import can_update_branch, is_backport_branch
 from scripts.common.github_client import retry_github_call
-from scripts.common.identity import APP_LOGIN, BOT_LOGIN
+from scripts.common.identity import APP_LOGIN, BOT_LOGIN, MAINTAINER_ORG, MAINTAINER_TEAM
 
 _COMMAND_RE = re.compile(
     r"^\s*@(?:" + "|".join(re.escape(login) for login in (BOT_LOGIN, APP_LOGIN))
@@ -53,7 +53,6 @@ _GITHUB_HOSTS = frozenset({"github.com", "www.github.com"})
 _MARKDOWN_LINK_RE = re.compile(r"\[[^\]\n]*\]\((?P<url>[^)\s]+)\)")
 _ANGLE_LINK_RE = re.compile(r"<(?P<url>[^>\s]+)>")
 _BARE_LINK_RE = re.compile(r"\S*(?:://|github\.com/)\S*", re.IGNORECASE)
-_DEFAULT_AUTH_TEAM = "contributors"
 
 
 @dataclass(frozen=True)
@@ -172,8 +171,8 @@ def build_fix_task(
     pr_repo_full_name: str,
     pr_number: int,
     commenter: str,
-    org: str = "valkey-io",
-    auth_team: str = _DEFAULT_AUTH_TEAM,
+    org: str = MAINTAINER_ORG,
+    auth_team: str = MAINTAINER_TEAM,
     retries: int = 2,
 ) -> FixTask | GateRejection | GateError:
     """Return a fully bound task or a reason the request is not actionable."""

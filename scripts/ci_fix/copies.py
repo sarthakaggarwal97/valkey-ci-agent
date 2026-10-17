@@ -17,8 +17,8 @@ from pathlib import Path
 from typing import Any
 
 from scripts.ci_fix.models import FailedTest, FixTask, TargetKind
+from scripts.common.identity import VALKEY_REPO
 from scripts.common.valkey_ci import called_job_name
-from scripts.valkey_workflows.sync import REPO
 
 MANIFEST = Path(__file__).resolve().parents[1] / "valkey_workflows" / "manifest.json"
 # Daily and Weekly both run unstable's daily.yml (Weekly against a release
@@ -55,7 +55,7 @@ def copy_for(manifest: dict[str, Any], task: FixTask) -> CopyJob | None:
     so it needs no job; only Valkey's own workflows are copied.
     """
     failure = task.failure
-    if failure.repo_full_name != REPO or task.target.kind is TargetKind.SUGGEST:
+    if failure.repo_full_name != VALKEY_REPO or task.target.kind is TargetKind.SUGGEST:
         return None
     branch, workflow = (
         SCHEDULED_WORKFLOW if failure.scheduled else (failure.base_branch, failure.workflow)

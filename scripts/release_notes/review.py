@@ -13,15 +13,14 @@ from typing import Any
 
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.common.github_client import retry_github_call
-from scripts.common.identity import APP_LOGIN
+from scripts.common.identity import APP_LOGIN, RELEASE_CUT_BRANCH_PREFIX
 from scripts.release_notes import projects
 from scripts.release_notes import release_format as rn
 
-REPOSITORY_NAMES = ("valkey", "valkey-search", "valkey-json", "valkey-bloom")
-REPOSITORIES = tuple(f"valkey-io/{name}" for name in REPOSITORY_NAMES)
+REPOSITORIES = tuple(f"valkey-io/{name}" for name in projects.REPOSITORY_NAMES)
 
 _BRANCH_RE = re.compile(
-    r"^agent/release-cut/"
+    rf"^{re.escape(RELEASE_CUT_BRANCH_PREFIX)}/"
     r"(?P<version>\d+\.\d+\.\d+)-(?P<stage>ga|rc[1-9]\d*)$"
 )
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -143,7 +142,7 @@ def parse_request(
     status_comment_id: str,
 ) -> ReviewRequest:
     repo_name = repo_name.strip()
-    if repo_name not in REPOSITORY_NAMES:
+    if repo_name not in projects.REPOSITORY_NAMES:
         raise ReviewRefused(f"unsupported repository: {repo_name!r}")
     if not re.fullmatch(r"[1-9]\d*", pr_number):
         raise ReviewRefused(f"invalid pull request number: {pr_number!r}")
@@ -179,7 +178,7 @@ def validate_release_pr(pr: Any, repo_full_name: str) -> ReleasePR:
         raise ReviewRefused("release PR has an unexpected head repository or SHA")
     match = _BRANCH_RE.fullmatch(head_branch)
     if match is None:
-        raise ReviewRefused("release PR does not use an agent/release-cut branch")
+        raise ReviewRefused(f"release PR does not use an {RELEASE_CUT_BRANCH_PREFIX} branch")
 
     version = match.group("version")
     stage = match.group("stage")

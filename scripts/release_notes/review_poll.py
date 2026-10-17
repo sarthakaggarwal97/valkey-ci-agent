@@ -13,6 +13,7 @@ from github import Auth, Github
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.ci_fix.gate import is_authorized
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import MAINTAINER_ORG, MAINTAINER_TEAM
 from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import env_seconds, run_poll_loop
 from scripts.release_notes.review import (
@@ -47,8 +48,8 @@ def poll_once(
     bot_login: str,
     dispatch: DispatchFn,
     authorize: Callable[[str], bool] | None = None,
-    org: str = "valkey-io",
-    team_slug: str = "contributors",
+    org: str = MAINTAINER_ORG,
+    team_slug: str = MAINTAINER_TEAM,
 ) -> int:
     """Scan all open PRs and dispatch every complete actionable batch."""
 

@@ -18,18 +18,16 @@ from scripts.backport.registry import _parse_registry
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.sweep_prs import find_existing_pr
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import BACKPORT_STATUS_FIELD, BACKPORT_STATUS_OPTION, VALKEY_REPO
 from scripts.common.logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
 
 _REGISTRY_PATH = "repos.yml"
-_SOURCE_REPO = "valkey-io/valkey"
 _MARKER_NAMESPACE = "valkey-ci-agent:backport-onboarding"
 _PR_MARKER_NAMESPACE = "valkey-ci-agent:backport-onboarding-pr"
 _ISSUE_GENERATED_START = f"<!-- {_MARKER_NAMESPACE}:generated:start -->"
 _ISSUE_GENERATED_END = f"<!-- {_MARKER_NAMESPACE}:generated:end -->"
-_PROJECT_STATUS_FIELD = "Status"
-_PROJECT_STATUS_OPTION = "To be backported"
 _BRANCH_PREFIX = "agent/backport/onboard"
 _FIRST_GA_RE = re.compile(r"^(\d+)\.(\d+)\.0$")
 _COMMIT_AUTHOR = InputGitAuthor(
@@ -187,8 +185,8 @@ def _has_backport_status(
         if not isinstance(field, dict) or field.get("__typename") != "ProjectV2SingleSelectField":
             continue
         options = field.get("options") or []
-        if field.get("name") == _PROJECT_STATUS_FIELD and any(
-            option.get("name") == _PROJECT_STATUS_OPTION
+        if field.get("name") == BACKPORT_STATUS_FIELD and any(
+            option.get("name") == BACKPORT_STATUS_OPTION
             for option in options if isinstance(option, dict)
         ):
             return True
@@ -202,8 +200,8 @@ def _project_discovery_detail(
 ) -> str:
     rule = (
         f"an open {owner} Project whose title or short description contains the exact "
-        f"branch token `{branch}` and whose `{_PROJECT_STATUS_FIELD}` field has a "
-        f"`{_PROJECT_STATUS_OPTION}` option"
+        f"branch token `{branch}` and whose `{BACKPORT_STATUS_FIELD}` field has a "
+        f"`{BACKPORT_STATUS_OPTION}` option"
     )
     if not matches:
         return f"No matching Project was found. Expected {rule}."
@@ -276,7 +274,7 @@ def onboard_first_ga(
     agent_repo: str,
     tag: str,
     issue_author: str,
-    source_repo: str = _SOURCE_REPO,
+    source_repo: str = VALKEY_REPO,
 ) -> OnboardingResult:
     """Create the issue and, only after unique discovery, the registry PR."""
     branch = first_ga_branch(tag)
@@ -730,7 +728,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     manual = (
         f"Valkey {args.tag} remains published. Manually open an issue in {args.agent_repo} "
-        f"and register {_SOURCE_REPO}@{branch} in {_REGISTRY_PATH} after identifying the "
+        f"and register {VALKEY_REPO}@{branch} in {_REGISTRY_PATH} after identifying the "
         "exact Project number."
     )
     if not args.token or not args.issue_author:

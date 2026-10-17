@@ -37,6 +37,8 @@ from typing import Any
 
 import yaml
 
+from scripts.common.identity import VALKEY_REPO
+
 # A job fixes one failure, never runs a full Daily.
 MAX_JOB_MINUTES = 180
 CHECKOUT = "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd"  # v6.0.2
@@ -64,7 +66,7 @@ _INPUT_REF_RE = re.compile(r"\binputs\.([A-Za-z_][\w-]*)")
 
 INPUTS: dict[str, dict[str, Any]] = {
     "job": {"description": "The id of the one job to run", "required": True, "type": "string"},
-    "use_repo": {"description": "Repository to check out", "type": "string", "default": "valkey-io/valkey"},
+    "use_repo": {"description": "Repository to check out", "type": "string", "default": VALKEY_REPO},
     "use_git_ref": {"description": "Branch or commit to check out", "required": True, "type": "string"},
     "fix": {"description": "The name ci-fix-run.yml planned the fix under", "required": True, "type": "string"},
     "fix_matrix": {"description": "The matrix value of the one entry that runs", "type": "string", "default": ""},

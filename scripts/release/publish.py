@@ -11,12 +11,12 @@ from typing import Any, NamedTuple
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import RELEASE_CUT_BRANCH_PREFIX
 from scripts.release.authorize import ensure_authorized
 from scripts.release.checks import require_green_checks
 from scripts.release.models import DerivedRelease, PublishPlan, ReleaseIntent, ReleasePolicy
 from scripts.release.policy import validate_branch
 from scripts.release.versioning import derive_version
-from scripts.release_notes.release_cut import PREP_BRANCH_PREFIX
 from scripts.release_notes.release_format import parse_version
 from scripts.release_notes.version_bump import current_release_state
 
@@ -307,7 +307,7 @@ def _require_merged_preparation_pr(
     stage: str,
     candidate_sha: str,
 ) -> None:
-    prep_branch = f"{PREP_BRANCH_PREFIX}/{version}-{stage}"
+    prep_branch = f"{RELEASE_CUT_BRANCH_PREFIX}/{version}-{stage}"
     pulls = retry_github_call(
         lambda: list(repo.get_commit(candidate_sha).get_pulls()),
         retries=2,

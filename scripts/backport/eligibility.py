@@ -51,6 +51,7 @@ from scripts.backport.utils import pr_numbers_from_commit_messages
 from scripts.common.ai_output import extract_json_object
 from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import VALKEY_REPO
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.proc import git_output
@@ -770,7 +771,7 @@ def _yesterday_utc() -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--registry", default="repos.yml")
-    parser.add_argument("--repo", default="valkey-io/valkey")
+    parser.add_argument("--repo", default=VALKEY_REPO)
     parser.add_argument("--date", default="", help="Last UTC merge date YYYY-MM-DD (default: yesterday)")
     parser.add_argument("--days", type=int, default=3,
                         help="UTC dates to cover, ending --date; overlap catches up missed runs")

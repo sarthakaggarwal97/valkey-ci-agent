@@ -31,6 +31,7 @@ from scripts.backport.utils import (
     source_pr_from_backport_commit_subject,
 )
 from scripts.common.git_auth import GitAuth, github_https_url
+from scripts.common.identity import BACKPORT_STATUS_FIELD, BACKPORT_STATUS_OPTION
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.polling import (
     PollLoopError,
@@ -41,8 +42,6 @@ from scripts.common.polling import (
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_STATUS_FIELD = "Status"
-_DEFAULT_FROM_STATUS = "To be backported"
 _DEFAULT_DONE_STATUS = "Done"
 
 # Depth of the shallow verification clone. A release branch accumulates backports
@@ -213,8 +212,8 @@ def mark_backport_items_done(
     source_repo: str,
     source_pr_numbers: list[int],
     project_owner_type: str = "organization",
-    status_field: str = _DEFAULT_STATUS_FIELD,
-    from_status: str = _DEFAULT_FROM_STATUS,
+    status_field: str = BACKPORT_STATUS_FIELD,
+    from_status: str = BACKPORT_STATUS_OPTION,
     done_status: str = _DEFAULT_DONE_STATUS,
     verified_pr_numbers: set[int],
     project: dict[str, Any] | None = None,
@@ -299,8 +298,8 @@ def reconcile_project_board(
     source_repo: str,
     target_branch: str,
     project_owner_type: str = "organization",
-    status_field: str = _DEFAULT_STATUS_FIELD,
-    from_status: str = _DEFAULT_FROM_STATUS,
+    status_field: str = BACKPORT_STATUS_FIELD,
+    from_status: str = BACKPORT_STATUS_OPTION,
     done_status: str = _DEFAULT_DONE_STATUS,
     token: str = "",
     git_env: dict[str, str] | None = None,
@@ -578,8 +577,8 @@ def main() -> None:
         "configured for the repo.",
     )
     parser.add_argument("--target-token", required=True)
-    parser.add_argument("--status-field", default=_DEFAULT_STATUS_FIELD)
-    parser.add_argument("--from-status", default=_DEFAULT_FROM_STATUS)
+    parser.add_argument("--status-field", default=BACKPORT_STATUS_FIELD)
+    parser.add_argument("--from-status", default=BACKPORT_STATUS_OPTION)
     parser.add_argument("--done-status", default=_DEFAULT_DONE_STATUS)
     parser.add_argument(
         "--dry-run",

@@ -21,13 +21,13 @@ from github import Auth, Github
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
+from scripts.common.identity import RELEASE_CUT_BRANCH_PREFIX, VALKEY_REPO
 from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import add_poll_loop_args, run_poll_loop_from_args
 from scripts.release.checks import CandidateCI, evaluate_candidate_ci
 from scripts.release.models import ReleasePolicy
 from scripts.release.policy import load_policy
 from scripts.release.publish import resolve_tag_commit
-from scripts.release_notes.release_cut import PREP_BRANCH_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -1154,7 +1154,7 @@ def _validate_tracker(tracker: Tracker) -> None:
     expected_tag = tracker.version if tracker.stage == "ga" else f"{tracker.version}-{tracker.stage}"
     if tracker.tag != expected_tag:
         raise ValueError("tracker tag does not match version and stage")
-    if tracker.prep_branch != f"{PREP_BRANCH_PREFIX}/{tracker.version}-{tracker.stage}":
+    if tracker.prep_branch != f"{RELEASE_CUT_BRANCH_PREFIX}/{tracker.version}-{tracker.stage}":
         raise ValueError("tracker preparation branch is not canonical")
     if type(tracker.prepare_run_id) is not int or tracker.prepare_run_id <= 0:
         raise ValueError("tracker prepare run id must be positive")
@@ -1180,7 +1180,7 @@ def main(argv: list[str] | None = None) -> int:
     ensure.add_argument("--prepare-run-id", required=True, type=int)
 
     sync = sub.add_parser("sync")
-    sync.add_argument("--target-repo", default="valkey-io/valkey")
+    sync.add_argument("--target-repo", default=VALKEY_REPO)
     sync.add_argument("--agent-repo", default="valkey-io/valkey-ci-agent")
     sync.add_argument("--automation-repo", default="valkey-io/valkey-release-automation")
     sync.add_argument("--policy", default=str(_ROOT / "release_policy.yml"))
