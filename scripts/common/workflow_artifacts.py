@@ -11,7 +11,6 @@ import logging
 import time
 import zipfile
 import zlib
-from collections import OrderedDict
 from dataclasses import dataclass
 from itertools import islice
 from typing import TYPE_CHECKING, Any
@@ -47,9 +46,6 @@ class ArtifactClient:
         self._gh = github_client
         self._token = token
         self._retries = retries
-        # The last few job logs, newest last: one fix reads the selected job's
-        # log while matching the failure, for its checkout, and to diagnose it.
-        self._job_logs: OrderedDict[tuple[str, int], str] = OrderedDict()
 
     def list_recent_runs(
         self, repo_full_name: str, workflow_file: str,
@@ -109,16 +105,8 @@ class ArtifactClient:
 
     def download_job_log(self, repo_full_name: str, job_id: int) -> str:
         """Return one job's plain-text console log ("" when it has expired)."""
-        key = (repo_full_name, int(job_id))
-        if key in self._job_logs:
-            self._job_logs.move_to_end(key)
-            return self._job_logs[key]
         data = self._download(f"/repos/{repo_full_name}/actions/jobs/{int(job_id)}/logs")
-        log = data[:_MAX_UNCOMPRESSED_BYTES].decode("utf-8", errors="replace")
-        self._job_logs[key] = log
-        while len(self._job_logs) > _CACHED_JOB_LOGS:
-            self._job_logs.popitem(last=False)
-        return log
+        return data[:_MAX_UNCOMPRESSED_BYTES].decode("utf-8", errors="replace")
 
     def _download(self, path: str) -> bytes:
         url = f"https://api.github.com{path}"
@@ -158,7 +146,6 @@ class ArtifactClient:
 # Defends against a runaway log/artifact dump that would exhaust the runner.
 # Real fuzzer artifacts and CI run logs are typically well under this.
 _MAX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
-_CACHED_JOB_LOGS = 2
 
 
 def _extract_zip(blob: bytes, damaged: list[str] | None = None) -> dict[str, bytes]:

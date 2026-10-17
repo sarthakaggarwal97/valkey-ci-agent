@@ -1,4 +1,11 @@
-"""Credential-boundary regression tests for the shared git wrappers."""
+"""Credential-boundary regression tests for the shared git wrappers.
+
+The verification command runs untrusted PR code in the worktree before the
+pipeline calls ``git_output`` (``reset --hard``, ``clean``, ``diff``) to undo
+its changes. That code can plant repo-local git config (a diff/filter driver,
+``core.sshCommand``) which git would later execute. These tests prove the
+parent's credentials are never in scope when that happens.
+"""
 
 import subprocess
 

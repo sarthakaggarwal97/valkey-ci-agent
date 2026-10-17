@@ -45,7 +45,6 @@ def configure_logging(*, verbose: bool = False) -> None:
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, handlers=[handler])
 
 
-
 def _in_actions() -> bool:
     return os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
 

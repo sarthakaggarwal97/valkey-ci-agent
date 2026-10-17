@@ -240,8 +240,8 @@ def build_approved_patch(repo_dir: str, changed_paths: tuple[str, ...]) -> str:
     Includes untracked approved files (staged with ``--intent-to-add`` so they
     appear in the diff) and uses ``--binary`` so the patch reapplies verbatim
     in a clean clone. This is the single source of truth for "the change": the
-    publisher reapplies exactly this patch rather than trusting the agent's
-    working tree.
+    skeptic review inspects this patch, and the push reapplies it - so the
+    review never judges something different from what ships.
 
     Raises ``EmptyPatch`` when there are no approved paths, or when the approved
     paths yield no content, so an empty or vanished edit is refused rather than

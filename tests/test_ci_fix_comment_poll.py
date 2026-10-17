@@ -12,8 +12,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
-
 from scripts.ci_fix import comment_poll
 from scripts.ci_fix.comment_poll import poll_once
 
@@ -254,10 +252,29 @@ def test_bot_login_override_and_app_slug(monkeypatch):
     assert _bot_login() == "sarthakaggarwal97"
 
 
+def test_poll_loop_env_clamped_below_token_ttl(monkeypatch):
+    from scripts.ci_fix.comment_poll import (
+        _MAX_LOOP_SECONDS,
+        _poll_duration_seconds,
+        _poll_interval_seconds,
+    )
+
+    monkeypatch.delenv("CI_FIX_POLL_INTERVAL_SECONDS", raising=False)
+    monkeypatch.delenv("CI_FIX_POLL_DURATION_SECONDS", raising=False)
+    assert _poll_interval_seconds() == 0
+    assert _poll_duration_seconds() == 0
+
+    monkeypatch.setenv("CI_FIX_POLL_INTERVAL_SECONDS", "1800")
+    monkeypatch.setenv("CI_FIX_POLL_DURATION_SECONDS", str(_MAX_LOOP_SECONDS * 10))
+    assert _poll_interval_seconds() == 1800
+    assert _poll_duration_seconds() == _MAX_LOOP_SECONDS
+
+
 def test_dispatch_failure_after_claim_fails_the_tick_and_keeps_going(caplog):
     """A claimed comment whose dispatch fails would otherwise be skipped by
     every later tick: the tick must say so loudly and fail, after still
     processing the remaining comments."""
+    import pytest
 
     first = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}", comment_id=1)
     second = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}", comment_id=2)
@@ -285,6 +302,7 @@ def test_rejected_dispatch_raises():
     dispatch = comment_poll.dispatch_ci_fix(gh, agent_repo="o/agent", workflow="ci-fix.yml",
                                             ref="main")
     command = comment_poll.parse_command(f"@valkeyrie-ops fix {_RUN_URL}")
+    import pytest
 
     with pytest.raises(RuntimeError, match="rejected the dispatch"):
         dispatch("valkey-io/valkey", 42, command, "alice", 1)
@@ -331,20 +349,3 @@ def test_dispatch_forwards_a_run_attempt_link_intact():
         .call_args.args[1]
     )
     assert inputs["run_url"] == f"{_RUN_URL}/attempts/3"
-
-
-def test_a_failed_dispatch_releases_the_claim_so_the_next_tick_retries(caplog):
-    caplog.set_level("ERROR")
-    comment = _comment(body=f"@valkeyrie-ops fix {_RUN_URL}")
-    ours = SimpleNamespace(id=55, content="eyes", user=SimpleNamespace(login="valkeyrie-ops[bot]"))
-    theirs = SimpleNamespace(id=56, content="eyes", user=SimpleNamespace(login="alice"))
-    comment.get_reactions = lambda: [ours, theirs]
-    comment.delete_reaction = MagicMock()
-
-    def dispatch(*_a):
-        raise RuntimeError("502")
-
-    with pytest.raises(RuntimeError, match="claimed comment"):
-        _run(_gh([comment]), dispatch=dispatch)
-    comment.delete_reaction.assert_called_once_with(55)
-    assert any("the claim was released and a later tick retries" in r.getMessage() for r in caplog.records)

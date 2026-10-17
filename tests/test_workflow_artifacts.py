@@ -173,15 +173,3 @@ def test_download_job_log_returns_plain_text(monkeypatch):
     monkeypatch.setattr(client, "_download", lambda path: seen.append(path) or b"[ok]: t (1 ms)\n\xff")
     assert client.download_job_log("o/r", 42) == "[ok]: t (1 ms)\n\ufffd"
     assert seen == ["/repos/o/r/actions/jobs/42/logs"]
-
-
-def test_a_job_log_read_again_is_not_downloaded_again(monkeypatch):
-    client = ArtifactClient(MagicMock(), token="t")
-    downloads = []
-    monkeypatch.setattr(client, "_download", lambda path: downloads.append(path) or b"log")
-
-    for job_id in (1, 1, 2, 3, 1):
-        assert client.download_job_log("r", job_id) == "log"
-
-    # Only the last two logs are kept, so job 1 is fetched again after 2 and 3.
-    assert [path.rsplit("/", 2)[1] for path in downloads] == ["1", "2", "3", "1"]

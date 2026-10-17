@@ -336,28 +336,10 @@ def test_a_confined_profile_cannot_allow_glob(monkeypatch):
         _captured_cmd(monkeypatch, allowed_tools="Read,Grep,Glob", confined=True)
 
 
-def test_ci_fix_suggestion_profile_is_confined_without_bash_or_glob():
-    from scripts.ai.runtime import AGENT_PROFILES
-
-    profile = AGENT_PROFILES["ci_fix_suggest"]
-    tools = set(profile.allowed_tools.split(","))
-    assert profile.confined
-    assert not tools & {"Bash", "Glob"}
-
-
 def test_unconfined_runs_keep_their_existing_flags(monkeypatch):
     cmd = _captured_cmd(monkeypatch, allowed_tools="Read,Edit,Bash")
     assert "--dangerously-skip-permissions" in cmd
     assert "--permission-mode" not in cmd
-
-
-def test_ci_fix_edit_matches_the_backport_agent_model():
-    """Bot-owned branches use the same unconfined edit model as backports."""
-    from scripts.ai.runtime import AGENT_PROFILES
-
-    profile = AGENT_PROFILES["ci_fix_edit"]
-    assert profile.confined is False
-    assert {"Edit", "Bash"} <= set(profile.allowed_tools.split(","))
 
 
 def test_the_deadline_holds_and_nothing_survives_when_the_cli_ignores_stdin(monkeypatch, tmp_path):

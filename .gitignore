@@ -17,6 +17,3 @@ __pycache__/
 .env.*
 !.env.example
 valkey_ci_agent.egg-info/
-
-# A local virtualenv, or a link to one.
-.venv

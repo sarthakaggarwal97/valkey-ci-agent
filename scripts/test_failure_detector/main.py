@@ -246,7 +246,7 @@ def run(
             run_id,
             run_attempt=run_attempt,
             retries=3,
-            )
+        )
     except Exception as exc:  # noqa: BLE001 - incomplete inspection must fail visibly
         detail = " ".join(str(exc).split())[:300] or type(exc).__name__
         log_outcome(
@@ -330,6 +330,9 @@ def run(
         run_id=run_id,
         job_failures=job_failures,
     )
+    emit_job_summary(_build_job_summary(
+        run_id, repo_full_name, len(unique_failures), result, damaged, len(job_failures),
+    ))
     log_outcome(
         logger, logging.ERROR if result.get("errors") or damaged else logging.INFO,
         "Run %d: %d unique failure(s) and %d job failure(s): %d issue(s) created, %d updated, "
@@ -337,10 +340,6 @@ def run(
         run_id, len(unique_failures), len(job_failures), result.get("created", 0), result.get("updated", 0),
         result.get("skipped", 0) + result.get("skipped_closed", 0), result.get("errors", 0),
     )
-
-    emit_job_summary(_build_job_summary(
-        run_id, repo_full_name, len(unique_failures), result, damaged, len(job_failures),
-    ))
 
     # process_failures isolates per-failure errors so one bad failure can't
     # abort the batch, but those failures got no issue created or updated. Exit
