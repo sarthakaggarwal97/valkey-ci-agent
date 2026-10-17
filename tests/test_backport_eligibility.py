@@ -882,3 +882,90 @@ def test_prompt_asks_for_precision():
     prompt = eligibility._PROMPT_TEMPLATE
     assert "when the evidence is thin, answer true" not in prompt.lower()
     assert "confidence" in prompt and "fixes for flaky tests" in prompt.lower()
+
+
+@pytest.mark.parametrize(("value", "expected"), [
+    ("4849,4880", [4849, 4880]), (" #4644 , 4849 ", [4644, 4849]), ("4849 4880", [4849, 4880]),
+])
+def test_parse_pr_numbers(value, expected):
+    assert eligibility.parse_pr_numbers(value) == expected
+
+
+@pytest.mark.parametrize("value", ["", "4849,abc", "0", "4849;rm -rf /"])
+def test_parse_pr_numbers_rejects_anything_else(value):
+    with pytest.raises(ValueError):
+        eligibility.parse_pr_numbers(value)
+
+
+def test_fetch_merged_prs_reports_unusable_numbers():
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class Gql:
+        def execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+            calls.append((query, variables))
+            return {"repository": {
+                "p7": {"number": 7, "mergedAt": "x", "mergeCommit": {"oid": "a"}, "baseRefName": "unstable"},
+                "p8": {"number": 8, "mergedAt": None, "mergeCommit": None, "baseRefName": "unstable"},
+                "p9": {"number": 9, "mergedAt": "x", "mergeCommit": {"oid": "b"}, "baseRefName": "9.0"},
+                "p10": None,
+            }}
+
+    prs, problems = eligibility.fetch_merged_prs(
+        Gql(), repo="org/core", base_branch="unstable", numbers=[10, 9, 8, 7, 7], project_owner="org",
+    )
+    assert [pr.number for pr in prs] == [7]
+    assert problems == [
+        "#8: not a merged pull request",
+        "#9: merged into 9.0, not unstable",
+        "#10: not a merged pull request",
+    ]
+    query, variables = calls[0]
+    assert variables == {"owner": "org", "name": "core"}
+    assert "p7: pullRequest(number: 7) { ...PrFields }" in query and "fragment PrFields" in query
+
+
+def test_run_evaluates_named_prs_instead_of_a_date_window(wired, monkeypatch):
+    by_number = {node["number"]: node for node in wired.nodes}
+    queries: list[str] = []
+
+    class Gql:
+        def __init__(self, token: str) -> None:
+            pass
+
+        def execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+            queries.append(query)
+            assert "search(" not in query
+            return {"repository": {
+                f"p{n}": {**by_number[n], "baseRefName": "unstable"} for n in (101, 104)
+            }}
+
+    monkeypatch.setattr(eligibility, "GitHubGraphQLClient", Gql)
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t", pr_numbers=[104, 101],
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
+    )
+    assert len(queries) == 1
+    assert result["requested_prs"] == [101, 104]
+    # The marker comment still keeps a named PR from being commented on twice.
+    assert result["prs"] == {
+        "101": {"action": "commented", "branches": ["9.1"], "reason": "Fixes f."},
+        "104": {"action": "already-commented"},
+    }
+    assert [number for number, _ in wired.posted] == [101]
+    assert eligibility._summary(result).startswith("## Backport eligibility for org/core, PRs #101, #104")
+
+
+def test_main_passes_named_prs(monkeypatch):
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(eligibility, "load_registry", lambda _: SimpleNamespace(get_repo=lambda _: None))
+    monkeypatch.setattr(eligibility, "emit_job_summary", lambda _: None)
+
+    def fake_run(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"repo": "org/core", "since": "x", "date": "x", "requested_prs": [4849],
+                "dry_run": True, "prs": {}, "errors": []}
+
+    monkeypatch.setattr(eligibility, "run", fake_run)
+    monkeypatch.setattr("sys.argv", ["eligibility", "--prs", "4849", "--target-token", "t", "--dry-run"])
+    eligibility.main()
+    assert seen["pr_numbers"] == [4849] and seen["dry_run"] is True

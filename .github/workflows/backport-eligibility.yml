@@ -22,6 +22,11 @@ on:
         required: false
         type: string
         default: ""
+      prs:
+        description: "Merged PR numbers to evaluate instead of dates, e.g. 4849,4880 (empty = use date/days)"
+        required: false
+        type: string
+        default: ""
       days:
         description: "UTC dates to cover, ending at date"
         required: false
@@ -57,6 +62,7 @@ jobs:
       TARGET_REPO: ${{ inputs.repo || 'valkey-io/valkey' }}
       MERGE_DATE: ${{ inputs.date || '' }}
       MERGE_DAYS: ${{ inputs.days || '3' }}
+      PR_NUMBERS: ${{ inputs.prs || '' }}
       # Scheduled runs only report until vars.BACKPORT_ELIGIBILITY_COMMENTS is
       # "true", set once the backtest (scripts/backport/eligibility_backtest.py)
       # shows the suggestions are precise enough. A manual run follows its input.
@@ -114,6 +120,9 @@ jobs:
           args=(--registry repos.yml --repo "${TARGET_REPO}" --days "${MERGE_DAYS}" --verbose)
           if [[ -n "${MERGE_DATE}" ]]; then
             args+=(--date "${MERGE_DATE}")
+          fi
+          if [[ -n "${PR_NUMBERS}" ]]; then
+            args+=(--prs "${PR_NUMBERS}")
           fi
           if [[ "${DRY_RUN}" == "true" ]]; then
             args+=(--dry-run)

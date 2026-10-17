@@ -87,39 +87,43 @@ _MAX_REASON_CHARS = 400
 _MAX_ISSUE_CHARS = 2000
 _CONFIDENCE = ("high", "medium", "low")
 
+# Everything eligibility decides on, for one pull request.
+_PR_FIELDS = """
+fragment PrFields on PullRequest {
+  number
+  title
+  body
+  url
+  mergedAt
+  baseRefName
+  author { login }
+  mergeCommit { oid }
+  commits(first: 100) {
+    pageInfo { hasNextPage }
+    nodes { commit { oid } }
+  }
+  projectItems(first: 50) {
+    pageInfo { hasNextPage }
+    nodes {
+      project {
+        number
+        owner { ... on Organization { login } ... on User { login } }
+      }
+    }
+  }
+  comments(last: 100) { nodes { body viewerDidAuthor } }
+  closingIssuesReferences(first: 5) { nodes { number title body } }
+}
+"""
+
 _SEARCH_QUERY = """
 query($q: String!, $cursor: String) {
   search(query: $q, type: ISSUE, first: 50, after: $cursor) {
-    nodes {
-      ... on PullRequest {
-        number
-        title
-        body
-        url
-        mergedAt
-        author { login }
-        mergeCommit { oid }
-        commits(first: 100) {
-          pageInfo { hasNextPage }
-          nodes { commit { oid } }
-        }
-        projectItems(first: 50) {
-          pageInfo { hasNextPage }
-          nodes {
-            project {
-              number
-              owner { ... on Organization { login } ... on User { login } }
-            }
-          }
-        }
-        comments(last: 100) { nodes { body viewerDidAuthor } }
-        closingIssuesReferences(first: 5) { nodes { number title body } }
-      }
-    }
+    nodes { ... on PullRequest { ...PrFields } }
     pageInfo { hasNextPage endCursor }
   }
 }
-"""
+""" + _PR_FIELDS
 
 _PROMPT_TEMPLATE = """\
 You are triaging pull requests merged to the development branch of {repo}.
@@ -268,6 +272,50 @@ def discover_merged_prs(
         if not cursor:
             raise RuntimeError("GitHub search pagination omitted endCursor")
     return sorted(prs, key=lambda pr: pr.number)
+
+
+def fetch_merged_prs(
+    gql: GitHubGraphQLClient,
+    *,
+    repo: str,
+    base_branch: str,
+    numbers: Sequence[int],
+    project_owner: str,
+) -> tuple[list[MergedSourcePR], list[str]]:
+    """Return the named PRs, read like :func:`discover_merged_prs` reads a date window.
+
+    Also returns a problem per number that is not a PR merged into
+    *base_branch*: those cannot be judged and are reported instead.
+    """
+    owner, _, name = repo.partition("/")
+    numbers = sorted(set(numbers))
+    fields = "\n".join(f"p{n}: pullRequest(number: {n}) {{ ...PrFields }}" for n in numbers)
+    query = (
+        "query($owner: String!, $name: String!) {\n"
+        f"  repository(owner: $owner, name: $name) {{\n{fields}\n  }}\n}}\n" + _PR_FIELDS
+    )
+    data = gql.execute(query, {"owner": owner, "name": name}) if numbers else {}
+    found = (data or {}).get("repository") or {}
+    prs: list[MergedSourcePR] = []
+    problems: list[str] = []
+    for number in numbers:
+        node = found.get(f"p{number}")
+        if not isinstance(node, dict) or (pr := _pr_from_node(node, project_owner)) is None:
+            problems.append(f"#{number}: not a merged pull request")
+        elif node.get("baseRefName") != base_branch:
+            problems.append(f"#{number}: merged into {node.get('baseRefName')}, not {base_branch}")
+        else:
+            prs.append(pr)
+    return prs, problems
+
+
+def parse_pr_numbers(value: str) -> list[int]:
+    """Parse "4849,4880 4644" into PR numbers; raises ValueError on anything else."""
+    tokens = [t for t in re.split(r"[\s,]+", value.strip()) if t]
+    numbers = [int(t.lstrip("#")) for t in tokens if t.lstrip("#").isdigit()]
+    if len(numbers) != len(tokens) or not numbers or min(numbers) < 1:
+        raise ValueError(f"expected comma-separated PR numbers, got {value!r}")
+    return numbers
 
 
 def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
@@ -752,11 +800,12 @@ def run(
     days: int = 1,
     dry_run: bool = False,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
+    pr_numbers: Sequence[int] = (),
 ) -> dict[str, Any]:
-    """Evaluate every PR merged on the *days* dates ending *date*.
+    """Evaluate every PR merged on the *days* dates ending *date*, or just *pr_numbers*.
 
     Overlapping windows let a later run pick up a day an earlier run missed;
-    the marker comment keeps a PR from being commented on twice.
+    the marker comment keeps a PR from being commented on twice, named or not.
     """
     gh = Github(auth=Auth.Token(token))
     repo = retry_github_call(
@@ -766,12 +815,20 @@ def run(
     branches = sorted((b.branch for b in repo_entry.branches), key=_branch_sort_key, reverse=True)
     projects = {b.branch: b.project_number for b in repo_entry.branches}
 
-    prs = discover_merged_prs(
-        GitHubGraphQLClient(token), repo=repo_entry.repo, base_branch=base_branch,
-        date=date, project_owner=repo_entry.project_owner, days=days,
-    )
-    logger.info("%d PR(s) merged into %s from %s to %s",
-                len(prs), base_branch, _first_date(date, days), date)
+    errors: list[str] = []
+    if pr_numbers:
+        prs, errors = fetch_merged_prs(
+            GitHubGraphQLClient(token), repo=repo_entry.repo, base_branch=base_branch,
+            numbers=pr_numbers, project_owner=repo_entry.project_owner,
+        )
+        logger.info("%d of %d named PR(s) merged into %s", len(prs), len(set(pr_numbers)), base_branch)
+    else:
+        prs = discover_merged_prs(
+            GitHubGraphQLClient(token), repo=repo_entry.repo, base_branch=base_branch,
+            date=date, project_owner=repo_entry.project_owner, days=days,
+        )
+        logger.info("%d PR(s) merged into %s from %s to %s",
+                    len(prs), base_branch, _first_date(date, days), date)
     results: dict[int, dict[str, Any]] = {
         source.number: {"action": "already-commented"}
         for source in prs if source.already_commented
@@ -779,7 +836,6 @@ def run(
     pending = [source for source in prs if not source.already_commented]
 
     candidates: list[Candidate] = []
-    errors: list[str] = []
     with tempfile.TemporaryDirectory(prefix="backport-eligibility-") as tmp, ExitStack() as stack:
         repo_dir = os.path.join(tmp, "repo")
         git_env: Mapping[str, str] | None = None
@@ -830,6 +886,7 @@ def run(
         "repo": repo_entry.repo,
         "since": _first_date(date, days),
         "date": date,
+        "requested_prs": sorted(set(pr_numbers)),
         "dry_run": dry_run,
         "prs": {str(number): results[number] for number in sorted(results)},
         "errors": errors,
@@ -953,6 +1010,8 @@ def _publish(
 
 def _summary(result: dict[str, Any]) -> str:
     span = result["date"] if result["since"] == result["date"] else f"{result['since']} to {result['date']}"
+    if result.get("requested_prs"):
+        span = "PRs " + ", ".join(f"#{n}" for n in result["requested_prs"])
     lines = [f"## Backport eligibility for {result['repo']}, {span}", ""]
     if not result["prs"]:
         return "\n".join(lines + ["No PRs merged."])
@@ -982,6 +1041,8 @@ def main() -> None:
     parser.add_argument("--date", default="", help="Last UTC merge date YYYY-MM-DD (default: yesterday)")
     parser.add_argument("--days", type=int, default=3,
                         help="UTC dates to cover, ending --date; overlap catches up missed runs")
+    parser.add_argument("--prs", default="",
+                        help="Evaluate these merged PRs (e.g. 4849,4880) instead of a date window")
     parser.add_argument("--target-token", default=os.environ.get("TARGET_TOKEN", ""))
     parser.add_argument("--dry-run", action="store_true", help="Report verdicts without commenting")
     parser.add_argument("--verbose", action="store_true")
@@ -997,23 +1058,28 @@ def main() -> None:
         parser.error(f"--date must be YYYY-MM-DD, got {date!r}")
     if args.days < 1:
         parser.error("--days must be at least 1")
+    try:
+        pr_numbers = parse_pr_numbers(args.prs) if args.prs.strip() else []
+    except ValueError as exc:
+        parser.error(f"--prs: {exc}")
     repo_entry = load_registry(args.registry).get_repo(args.repo)
     result = run(repo_entry=repo_entry, date=date, token=args.target_token,
-                 days=args.days, dry_run=args.dry_run)
+                 days=args.days, dry_run=args.dry_run, pr_numbers=pr_numbers)
     print(json.dumps(result, indent=2))
     emit_job_summary(_summary(result))
 
+    scope = ", ".join(f"#{n}" for n in pr_numbers) if pr_numbers else f"merges through {date}"
     eligible = [n for n, e in result["prs"].items() if e["action"] in {"commented", "would-comment"}]
     review = [f"#{n}: {e['detail']}" for n, e in result["prs"].items() if e["action"] == "needs-review"]
     if review:
-        log_outcome(logger, logging.WARNING, "Backport eligibility through %s: %d PR(s) need manual review: %s",
-                    date, len(review), "; ".join(review))
+        log_outcome(logger, logging.WARNING, "Backport eligibility for %s: %d PR(s) need manual review: %s",
+                    scope, len(review), "; ".join(review))
     if result["errors"]:
-        log_outcome(logger, logging.ERROR, "Backport eligibility through %s: %s",
-                    date, "; ".join(result["errors"]))
+        log_outcome(logger, logging.ERROR, "Backport eligibility for %s: %s",
+                    scope, "; ".join(result["errors"]))
         raise SystemExit(1)
-    log_outcome(logger, logging.INFO, "Backport eligibility through %s: %d of %d PR(s) eligible",
-                date, len(eligible), len(result["prs"]))
+    log_outcome(logger, logging.INFO, "Backport eligibility for %s: %d of %d PR(s) eligible",
+                scope, len(eligible), len(result["prs"]))
 
 
 if __name__ == "__main__":
