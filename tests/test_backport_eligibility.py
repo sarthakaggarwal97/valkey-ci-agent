@@ -969,3 +969,20 @@ def test_main_passes_named_prs(monkeypatch):
     monkeypatch.setattr("sys.argv", ["eligibility", "--prs", "4849", "--target-token", "t", "--dry-run"])
     eligibility.main()
     assert seen["pr_numbers"] == [4849] and seen["dry_run"] is True
+
+
+def test_pr_on_the_open_backport_sweep_counts_as_landed(clone, upstream):
+    # #101's fix is cherry-picked to the 9.1 sweep branch, not yet merged to 9.1.
+    repo = upstream["path"]
+    _git(repo, "checkout", "-q", "-b", "agent/backport/sweep/9.1", "9.1")
+    _git(repo, "cherry-pick", upstream["shas"][101])
+    _git(repo, "commit", "-q", "--amend", "-m", "fix feature (#101)")
+    _git(repo, "checkout", "-q", "unstable")
+    dest = Path(clone).parent / "clone-sweep"
+    subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(dest)],
+                   check=True, capture_output=True)
+    history = eligibility.BranchHistory(str(dest))
+    assert history.present("9.1", {101: "2000-01-01T00:00:00Z"}) == {101}
+    assert history.present("9.0", {101: "2000-01-01T00:00:00Z"}) == set()
+    origins = eligibility.trace_origins(str(dest), _pr(101, upstream["shas"][101]), ["9.1"])
+    assert Candidate(_pr(101, upstream["shas"][101]), origins).branches == set()

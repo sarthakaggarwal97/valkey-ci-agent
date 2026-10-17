@@ -61,6 +61,7 @@ from scripts.backport.eligibility_evidence import (
 from scripts.backport.mark_done import branch_pr_index, present_in_index
 from scripts.backport.registry import RepoEntry, load_registry
 from scripts.backport.source_plan import SourceChangeError, prepare_source_change
+from scripts.backport.sweep_git import BRANCH_PREFIX as SWEEP_BRANCH_PREFIX
 from scripts.backport.sweep_git import clone_target_branch
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.backport.utils import pr_numbers_from_commit_messages
@@ -379,9 +380,11 @@ def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
 class BranchHistory:
     """Per-run answers about the release branches, each computed once.
 
-    Every question is asked of ``origin/<branch>``. A git failure raises
-    rather than answering "absent": an unreadable branch must not look like
-    one that lacks the code.
+    Every question is asked of ``origin/<branch>``, together with the open
+    backport sweep for it (``origin/agent/backport/sweep/<branch>``) when
+    there is one: a PR the sweep already carries is on its way to the
+    branch. A git failure raises rather than answering "absent": an
+    unreadable branch must not look like one that lacks the code.
     """
 
     def __init__(self, repo_dir: str) -> None:
@@ -390,9 +393,14 @@ class BranchHistory:
         self._containing: dict[str, frozenset[str]] = {}
 
     def present(self, branch: str, pr_merged_at: dict[int, str]) -> set[int]:
-        """PRs in *pr_merged_at* whose history landed on *branch*."""
+        """PRs in *pr_merged_at* whose history landed on *branch* or its open sweep."""
         if branch not in self._indexes:
-            self._indexes[branch] = branch_pr_index(self._repo_dir, f"origin/{branch}")
+            index = branch_pr_index(self._repo_dir, f"origin/{branch}")
+            sweep = f"{_REMOTE_PREFIX}{_SWEEP_PREFIX}/{branch}"
+            if git_output(self._repo_dir, "for-each-ref", "--format=%(refname)", sweep).strip():
+                for number, when in branch_pr_index(self._repo_dir, sweep).items():
+                    index[number] = max(when, index.get(number, when))
+            self._indexes[branch] = index
         return present_in_index(self._indexes[branch], pr_merged_at)
 
     def containing(self, sha: str) -> frozenset[str]:
@@ -409,6 +417,7 @@ class BranchHistory:
 
 
 _REMOTE_PREFIX = "refs/remotes/origin/"
+_SWEEP_PREFIX = SWEEP_BRANCH_PREFIX
 
 
 def trace_origins(

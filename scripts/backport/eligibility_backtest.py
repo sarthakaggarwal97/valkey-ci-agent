@@ -4,7 +4,8 @@ Replays eligibility, in dry run and blind to existing backports, over the PRs
 merged to the development branch in a past window, then compares the
 high-confidence suggestions with ground truth per release branch:
 
-* the PR's commits landed on the branch (a cherry-pick naming the PR), or
+* the PR's commits landed on the branch or its open backport sweep (a
+  cherry-pick naming the PR), or
 * the PR sits in the branch's backport project (needs a token that can read
   org projects; without one, ground truth is landings only and the report
   says so).
