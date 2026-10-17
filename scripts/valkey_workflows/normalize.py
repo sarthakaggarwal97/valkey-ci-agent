@@ -86,9 +86,9 @@ class Copy:
     jobs: dict[str, list[str]] = field(default_factory=dict)
     # Jobs whose valgrind shards ``valgrind_test`` collapses to one.
     targeted: list[str] = field(default_factory=list)
-    # Job id -> the matrix key ``fix_matrix`` selects ("" for none: no
-    # matrix, or one ``valgrind_test`` collapses to a single entry).
-    fixable: dict[str, str] = field(default_factory=dict)
+    # Job id -> the matrix key ``fix_matrix`` selects, for a job with a
+    # matrix (one ``valgrind_test`` collapses to a single entry needs none).
+    matrix: dict[str, str] = field(default_factory=dict)
 
 
 def normalize(source: str, *, origin: str) -> Copy:
@@ -168,7 +168,7 @@ def _normalize_job(job_id: str, job: dict[str, Any], copy: Copy) -> dict[str, An
     # The job runs up to its tests; the agent takes over there. A test step
     # that also sets up (installs Tcl, builds the test modules) keeps that
     # setup: the agent's own runs need it just as the job's tests do.
-    first_test = next(i for i, step in enumerate(steps) if _suite(_script(step)[1]))
+    first_test = next(i for i, step in enumerate(steps) if _suite(_script(step)))
     steps = steps[:first_test] + [setup for setup in map(_setup_of, steps[first_test:]) if setup is not None]
     when = ""
     if matrix_key:
@@ -176,7 +176,8 @@ def _normalize_job(job_id: str, job: dict[str, Any], copy: Copy) -> dict[str, An
         when = f"matrix.{matrix_key} == inputs.fix_matrix"
         steps = [_gate(step, when) for step in steps]
     job["steps"] = steps + fix_steps(when, env, system_packages=bool(job.get("container")))
-    copy.fixable[job_id] = matrix_key
+    if matrix_key:
+        copy.matrix[job_id] = matrix_key
     return job
 
 
@@ -288,7 +289,7 @@ def _suite_command(steps: list[dict[str, Any]], suite: str, command: str) -> str
     invocation = re.compile(re.escape(command) + r"(?:\s|$)")
     lines = []
     for step in steps:
-        script = _script(step)[1]
+        script = _script(step)
         if _suite(script) != suite or "docker run" in script or _COMPAT_STEP_RE.search(str(step.get("name") or "")):
             continue
         joined = re.sub(r"\\\n\s*", " ", script)
@@ -397,10 +398,7 @@ def _setup_of(step: dict[str, Any]) -> dict[str, Any] | None:
     (``_HOISTABLE_RE``): any other line is the invocation's own shell state,
     which the fresh shell of a step of its own would not see.
     """
-    key, script = _script(step)
-    if not script or not _suite(script):
-        return None
-    lines = script.splitlines()
+    lines = _script(step).splitlines()
     invocation = next((index for index, line in enumerate(lines) if _suite(line)), None)
     if invocation is None:
         return None
@@ -408,27 +406,15 @@ def _setup_of(step: dict[str, Any]) -> dict[str, Any] | None:
     if not setup:
         return None
     name = str(step.get("name") or "").strip()
-    return _with_script({**step, "name": f"{name} setup" if name else "setup"}, key, "\n".join(setup))
+    return {**step, "name": f"{name} setup" if name else "setup", "run": "\n".join(setup)}
 
 
 def _is_main_checkout(step: dict[str, Any]) -> bool:
     return str(step.get("uses", "")).startswith("actions/checkout@") and not (step.get("with") or {}).get("path")
 
 
-def _script(step: dict[str, Any]) -> tuple[str, str]:
-    """Which key holds the step's shell script, and the script."""
-    if "run" in step:
-        return "run", str(step["run"])
-    with_ = step.get("with") or {}
-    if "run" in with_:  # the FreeBSD VM action
-        return "with.run", str(with_["run"])
-    return "", ""
-
-
-def _with_script(step: dict[str, Any], key: str, script: str) -> dict[str, Any]:
-    if key == "run":
-        return {**step, "run": script}
-    return {**step, "with": {**(step.get("with") or {}), "run": script}}
+def _script(step: dict[str, Any]) -> str:
+    return str(step.get("run") or "")
 
 
 def _suite(script: str) -> str:

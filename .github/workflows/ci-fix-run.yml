@@ -239,14 +239,5 @@ jobs:
           CI_FIX_BOT_LOGIN: ${{ steps.target-token.outputs.app-slug }}[bot]
         run: |
           set -euo pipefail
-          python -m scripts.ci_fix.run publish --plan ci-fix-plan --outcome ci-fix-result \
-            | tee ci-fix-result.json
+          python -m scripts.ci_fix.run publish --plan ci-fix-plan --outcome ci-fix-result
 
-      - name: Upload the result
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: ci-fix-published-${{ inputs.key }}-${{ github.run_attempt }}
-          path: ci-fix-result.json
-          if-no-files-found: ignore
-          retention-days: 30

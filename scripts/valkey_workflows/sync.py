@@ -6,8 +6,9 @@ callable (:mod:`scripts.valkey_workflows.normalize`) and written to
 ``.github/workflows/valkey-copy-<branch>-<workflow>.yml``. A router,
 ``valkey-copy-job.yml``, takes the branch and workflow as inputs and calls
 the matching copy, so a caller needs one static ``uses:``. ``manifest.json``
-records each copy's source commit and its jobs' names, which is how a failed
-job's name is mapped back to the copied job that fixes it.
+records, under ``<branch>/<workflow>``, each copy's source commit, its jobs'
+names and matrix keys, which is how a failed job's name is mapped back to the
+copied job that fixes it.
 
 The weekly ``valkey-workflows-sync.yml`` runs this and opens a pull request
 with any change. The pull request names every job that had a copy and lost
@@ -22,7 +23,6 @@ import json
 import logging
 import re
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 from urllib.request import Request, urlopen
@@ -45,14 +45,6 @@ Fetch = Callable[[str], tuple[str, dict[str, str]]]
 """``fetch(branch)`` -> (head commit, {workflow: file text}) for that branch."""
 
 
-@dataclass(frozen=True)
-class Source:
-    branch: str
-    sha: str
-    workflow: str
-    text: str
-
-
 def branches(names: list[str]) -> list[str]:
     """``unstable`` and the release branches Weekly tests, newest first."""
     releases = []
@@ -67,10 +59,9 @@ def copy_name(branch: str, workflow: str) -> str:
     return f"valkey-copy-{branch.replace('.', '-')}-{workflow}.yml"
 
 
-def sync(branch_names: list[str], fetch: Fetch, root: Path = Path(".")) -> list[Path]:
-    """Rewrite every copy, the router and the manifest under ``root``; the files written."""
+def sync(branch_names: list[str], fetch: Fetch, root: Path = Path(".")) -> None:
+    """Rewrite every copy, the router and the manifest under ``root``."""
     manifest: dict[str, dict[str, object]] = {}
-    written: list[Path] = []
     wanted: set[str] = set()
     for branch in branches(branch_names):
         sha, files = fetch(branch)
@@ -82,23 +73,19 @@ def sync(branch_names: list[str], fetch: Fetch, root: Path = Path(".")) -> list[
             copy = normalize(text, origin=f"{REPO}@{sha} ({branch}):.github/workflows/{workflow}.yml")
             name = copy_name(branch, workflow)
             wanted.add(name)
-            written.append(_write(root / WORKFLOW_DIR / name, copy.text))
+            _write(root / WORKFLOW_DIR / name, copy.text)
             manifest[f"{branch}/{workflow}"] = {
-                "branch": branch,
-                "workflow": workflow,
                 "source_sha": sha,
-                "file": name,
                 "jobs": copy.jobs,
+                "matrix": copy.matrix,
                 "targeted": copy.targeted,
-                "fixable": copy.fixable,
             }
     for stale in (root / WORKFLOW_DIR).glob("valkey-copy-*.yml"):
         if stale.name not in wanted and stale.name != ROUTER:
             stale.unlink()
             logger.info("Removed %s: its branch is gone", stale.name)
-    written.append(_write(root / WORKFLOW_DIR / ROUTER, router(manifest)))
-    written.append(_write(root / MANIFEST, json.dumps(manifest, indent=2, sort_keys=True) + "\n"))
-    return written
+    _write(root / WORKFLOW_DIR / ROUTER, router(manifest))
+    _write(root / MANIFEST, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
 
 def router(manifest: dict[str, dict[str, object]]) -> str:
@@ -109,11 +96,12 @@ def router(manifest: dict[str, dict[str, object]]) -> str:
         **INPUTS,
     }
     jobs = {}
-    for key, entry in manifest.items():
+    for key in manifest:
+        branch, source = key.split("/")
         job_id = "copy-" + key.replace("/", "-").replace(".", "-")
         jobs[job_id] = {
-            "if": f"inputs.branch == '{entry['branch']}' && inputs.workflow == '{entry['workflow']}'",
-            "uses": f"./{WORKFLOW_DIR.as_posix()}/{entry['file']}",
+            "if": f"inputs.branch == '{branch}' && inputs.workflow == '{source}'",
+            "uses": f"./{WORKFLOW_DIR.as_posix()}/{copy_name(branch, source)}",
             "with": {name: f"${{{{ inputs.{name} }}}}" for name in INPUTS},
             "secrets": {"AWS_ROLE_ARN": "${{ secrets.AWS_ROLE_ARN }}"},
         }
@@ -140,12 +128,11 @@ def lost_jobs(before: dict[str, Any], after: dict[str, Any]) -> list[str]:
     ]
 
 
-def _write(path: Path, text: str) -> Path:
+def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists() or path.read_text(encoding="utf-8") != text:
         path.write_text(text, encoding="utf-8")
         logger.info("Wrote %s", path)
-    return path
 
 
 # --- GitHub ------------------------------------------------------------------

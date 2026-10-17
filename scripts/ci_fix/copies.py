@@ -72,15 +72,13 @@ def copy_job_for(manifest: dict[str, Any], branch: str, workflow: str, job_name:
     # GitHub appends a matrix job's values to a name that does not use them:
     # ``test-sanitizer-address (gcc)``.
     wanted = (called, _MATRIX_SUFFIX_RE.sub("", called))
-    fixable = entry.get("fixable") or {}
+    matrix = entry.get("matrix") or {}
     for job_id, names in (entry.get("jobs") or {}).items():
-        if job_id not in fixable:
-            continue
         for name in names:
             pattern = _EXPRESSION_RE.sub(".+", re.escape(name))
             if any(re.fullmatch(pattern, candidate) for candidate in wanted):
                 return CopyJob(branch=branch, workflow=workflow, job=job_id,
-                               targeted=job_id in (entry.get("targeted") or ()), matrix_key=fixable[job_id])
+                               targeted=job_id in (entry.get("targeted") or ()), matrix_key=matrix.get(job_id, ""))
     return None
 
 

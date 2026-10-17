@@ -9,17 +9,15 @@ from scripts.common.valkey_ci import Source
 MANIFEST = {
     "9.0/ci": {
         "jobs": {"test-ubuntu-latest": ["test-ubuntu-latest"]},
-        "fixable": {"test-ubuntu-latest": ""},
     },
     "unstable/daily": {
         "jobs": {
             "test-ubuntu-jemalloc": ["test-ubuntu-jemalloc"],
             "test-valgrind-test": ["test-valgrind-test (${{ matrix.shard }})"],
             "test-sanitizer-address": ["test-sanitizer-address"],
-            "test-macos-latest": ["test-macos-latest"],
         },
+        "matrix": {"test-sanitizer-address": "compiler"},
         "targeted": ["test-valgrind-test"],
-        "fixable": {"test-ubuntu-jemalloc": "", "test-valgrind-test": "", "test-sanitizer-address": "compiler"},
     },
 }
 TEST = FailedTest("INCREX BYFLOAT overflow", "tests/unit/type/incr.tcl")
@@ -46,8 +44,7 @@ def test_a_failed_job_maps_to_the_copied_job_that_hosts_its_fix(name, job):
     assert copy is not None and copy.job == job
 
 
-def test_a_job_without_a_fix_mode_or_a_copy_has_none():
-    assert copies.copy_job_for(MANIFEST, *copies.SCHEDULED_WORKFLOW, "test-macos-latest") is None
+def test_a_job_without_a_copy_has_none():
     assert copies.copy_job_for(MANIFEST, *copies.SCHEDULED_WORKFLOW, "test-something-new") is None
     assert copies.copy_job_for(MANIFEST, "9.9", "daily", "test-ubuntu-jemalloc") is None
 
@@ -86,10 +83,3 @@ def test_a_targeted_valgrind_job_collapses_to_one_shard_or_is_not_used():
 
     assert copies.fix_inputs(copy, _task("test-valgrind-test (unit)"), (TEST,))["valgrind_test"] == "unit/type/incr"
     assert copies.fix_inputs(copy, _task("test-valgrind-test (unit)"), ()) is None
-
-
-def test_every_committed_daily_copy_hosts_the_common_ubuntu_jobs():
-    manifest = copies.load_manifest()
-
-    for job in ("test-ubuntu-jemalloc", "test-sanitizer-address", "test-valgrind-test"):
-        assert job in manifest["unstable/daily"]["fixable"], job

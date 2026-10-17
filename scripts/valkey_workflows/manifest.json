@@ -1,11 +1,5 @@
 {
   "7.2/ci": {
-    "branch": "7.2",
-    "file": "valkey-copy-7-2-ci.yml",
-    "fixable": {
-      "test-sanitizer-address": "",
-      "test-ubuntu-latest": ""
-    },
     "jobs": {
       "test-sanitizer-address": [
         "test-sanitizer-address"
@@ -14,34 +8,11 @@
         "test-ubuntu-latest"
       ]
     },
+    "matrix": {},
     "source_sha": "7cfc9af0f44eada4afe41eaca5f85bc26ccb0d2f",
-    "targeted": [],
-    "workflow": "ci"
+    "targeted": []
   },
   "7.2/daily": {
-    "branch": "7.2",
-    "file": "valkey-copy-7-2-daily.yml",
-    "fixable": {
-      "reply-schemas-validator": "",
-      "test-alpine-jemalloc": "",
-      "test-alpine-libc-malloc": "",
-      "test-macos-latest": "",
-      "test-rpm-distros-jemalloc": "name",
-      "test-rpm-distros-tls-module": "name",
-      "test-rpm-distros-tls-module-no-tls": "name",
-      "test-sanitizer-address": "compiler",
-      "test-sanitizer-undefined": "compiler",
-      "test-ubuntu-32bit": "",
-      "test-ubuntu-io-threads": "",
-      "test-ubuntu-jemalloc": "",
-      "test-ubuntu-jemalloc-fortify": "",
-      "test-ubuntu-libc-malloc": "",
-      "test-ubuntu-no-malloc-usable-size": "",
-      "test-ubuntu-tls": "",
-      "test-ubuntu-tls-no-tls": "",
-      "test-valgrind-no-malloc-usable-size-test": "",
-      "test-valgrind-test": ""
-    },
     "jobs": {
       "reply-schemas-validator": [
         "reply-schemas-validator"
@@ -112,18 +83,18 @@
       "test-valgrind-test": [
         "test-valgrind-test"
       ]
+    },
+    "matrix": {
+      "test-rpm-distros-jemalloc": "name",
+      "test-rpm-distros-tls-module": "name",
+      "test-rpm-distros-tls-module-no-tls": "name",
+      "test-sanitizer-address": "compiler",
+      "test-sanitizer-undefined": "compiler"
     },
     "source_sha": "7cfc9af0f44eada4afe41eaca5f85bc26ccb0d2f",
-    "targeted": [],
-    "workflow": "daily"
+    "targeted": []
   },
   "8.0/ci": {
-    "branch": "8.0",
-    "file": "valkey-copy-8-0-ci.yml",
-    "fixable": {
-      "test-sanitizer-address": "",
-      "test-ubuntu-latest": ""
-    },
     "jobs": {
       "test-sanitizer-address": [
         "test-sanitizer-address"
@@ -132,34 +103,11 @@
         "test-ubuntu-latest"
       ]
     },
+    "matrix": {},
     "source_sha": "4bf1df6441949d70b38e748ffe39daaca9f6f89c",
-    "targeted": [],
-    "workflow": "ci"
+    "targeted": []
   },
   "8.0/daily": {
-    "branch": "8.0",
-    "file": "valkey-copy-8-0-daily.yml",
-    "fixable": {
-      "reply-schemas-validator": "",
-      "test-alpine-jemalloc": "",
-      "test-alpine-libc-malloc": "",
-      "test-macos-latest": "",
-      "test-rpm-distros-jemalloc": "name",
-      "test-rpm-distros-tls-module": "name",
-      "test-rpm-distros-tls-module-no-tls": "name",
-      "test-sanitizer-address": "compiler",
-      "test-sanitizer-undefined": "compiler",
-      "test-ubuntu-32bit": "",
-      "test-ubuntu-io-threads": "",
-      "test-ubuntu-jemalloc": "",
-      "test-ubuntu-jemalloc-fortify": "",
-      "test-ubuntu-libc-malloc": "",
-      "test-ubuntu-no-malloc-usable-size": "",
-      "test-ubuntu-tls": "",
-      "test-ubuntu-tls-no-tls": "",
-      "test-valgrind-no-malloc-usable-size-test": "",
-      "test-valgrind-test": ""
-    },
     "jobs": {
       "reply-schemas-validator": [
         "reply-schemas-validator"
@@ -230,18 +178,18 @@
       "test-valgrind-test": [
         "test-valgrind-test"
       ]
+    },
+    "matrix": {
+      "test-rpm-distros-jemalloc": "name",
+      "test-rpm-distros-tls-module": "name",
+      "test-rpm-distros-tls-module-no-tls": "name",
+      "test-sanitizer-address": "compiler",
+      "test-sanitizer-undefined": "compiler"
     },
     "source_sha": "4bf1df6441949d70b38e748ffe39daaca9f6f89c",
-    "targeted": [],
-    "workflow": "daily"
+    "targeted": []
   },
   "8.1/ci": {
-    "branch": "8.1",
-    "file": "valkey-copy-8-1-ci.yml",
-    "fixable": {
-      "test-sanitizer-address": "",
-      "test-ubuntu-latest": ""
-    },
     "jobs": {
       "test-sanitizer-address": [
         "test-sanitizer-address"
@@ -250,39 +198,11 @@
         "test-ubuntu-latest"
       ]
     },
+    "matrix": {},
     "source_sha": "55a542671762eaddff979f78dc6a3d1414ce1d75",
-    "targeted": [],
-    "workflow": "ci"
+    "targeted": []
   },
   "8.1/daily": {
-    "branch": "8.1",
-    "file": "valkey-copy-8-1-daily.yml",
-    "fixable": {
-      "reply-schemas-validator": "",
-      "test-alpine-jemalloc": "",
-      "test-alpine-libc-malloc": "",
-      "test-macos-latest": "",
-      "test-rpm-distros-jemalloc": "name",
-      "test-rpm-distros-tls-module": "name",
-      "test-rpm-distros-tls-module-no-tls": "name",
-      "test-sanitizer-address": "compiler",
-      "test-sanitizer-address-large-memory": "compiler",
-      "test-sanitizer-force-defrag": "",
-      "test-sanitizer-undefined": "compiler",
-      "test-sanitizer-undefined-large-memory": "compiler",
-      "test-ubuntu-32bit": "",
-      "test-ubuntu-arm": "",
-      "test-ubuntu-io-threads": "",
-      "test-ubuntu-jemalloc": "",
-      "test-ubuntu-jemalloc-fortify": "",
-      "test-ubuntu-libc-malloc": "",
-      "test-ubuntu-no-malloc-usable-size": "",
-      "test-ubuntu-tls": "",
-      "test-ubuntu-tls-io-threads": "",
-      "test-ubuntu-tls-no-tls": "",
-      "test-valgrind-no-malloc-usable-size-test": "",
-      "test-valgrind-test": ""
-    },
     "jobs": {
       "reply-schemas-validator": [
         "reply-schemas-validator"
@@ -368,18 +288,20 @@
       "test-valgrind-test": [
         "test-valgrind-test"
       ]
+    },
+    "matrix": {
+      "test-rpm-distros-jemalloc": "name",
+      "test-rpm-distros-tls-module": "name",
+      "test-rpm-distros-tls-module-no-tls": "name",
+      "test-sanitizer-address": "compiler",
+      "test-sanitizer-address-large-memory": "compiler",
+      "test-sanitizer-undefined": "compiler",
+      "test-sanitizer-undefined-large-memory": "compiler"
     },
     "source_sha": "55a542671762eaddff979f78dc6a3d1414ce1d75",
-    "targeted": [],
-    "workflow": "daily"
+    "targeted": []
   },
   "9.0/ci": {
-    "branch": "9.0",
-    "file": "valkey-copy-9-0-ci.yml",
-    "fixable": {
-      "test-sanitizer-address": "",
-      "test-ubuntu-latest": ""
-    },
     "jobs": {
       "test-sanitizer-address": [
         "test-sanitizer-address"
@@ -388,40 +310,11 @@
         "test-ubuntu-latest"
       ]
     },
+    "matrix": {},
     "source_sha": "0f7940d746a25237ed26590a1e8e05cb6ebf9c73",
-    "targeted": [],
-    "workflow": "ci"
+    "targeted": []
   },
   "9.0/daily": {
-    "branch": "9.0",
-    "file": "valkey-copy-9-0-daily.yml",
-    "fixable": {
-      "reply-schemas-validator": "",
-      "test-alpine-jemalloc": "",
-      "test-alpine-libc-malloc": "",
-      "test-macos-latest": "",
-      "test-rpm-distros-jemalloc": "name",
-      "test-rpm-distros-tls-module": "name",
-      "test-rpm-distros-tls-module-no-tls": "name",
-      "test-sanitizer-address": "compiler",
-      "test-sanitizer-address-large-memory": "compiler",
-      "test-sanitizer-force-defrag": "",
-      "test-sanitizer-undefined": "compiler",
-      "test-sanitizer-undefined-large-memory": "compiler",
-      "test-ubuntu-32bit": "",
-      "test-ubuntu-arm": "",
-      "test-ubuntu-io-threads": "",
-      "test-ubuntu-jemalloc": "",
-      "test-ubuntu-jemalloc-fortify": "",
-      "test-ubuntu-libc-malloc": "",
-      "test-ubuntu-lttng": "",
-      "test-ubuntu-no-malloc-usable-size": "",
-      "test-ubuntu-tls": "",
-      "test-ubuntu-tls-io-threads": "",
-      "test-ubuntu-tls-no-tls": "",
-      "test-valgrind-no-malloc-usable-size-test": "",
-      "test-valgrind-test": ""
-    },
     "jobs": {
       "reply-schemas-validator": [
         "reply-schemas-validator"
@@ -510,18 +403,20 @@
       "test-valgrind-test": [
         "test-valgrind-test"
       ]
+    },
+    "matrix": {
+      "test-rpm-distros-jemalloc": "name",
+      "test-rpm-distros-tls-module": "name",
+      "test-rpm-distros-tls-module-no-tls": "name",
+      "test-sanitizer-address": "compiler",
+      "test-sanitizer-address-large-memory": "compiler",
+      "test-sanitizer-undefined": "compiler",
+      "test-sanitizer-undefined-large-memory": "compiler"
     },
     "source_sha": "0f7940d746a25237ed26590a1e8e05cb6ebf9c73",
-    "targeted": [],
-    "workflow": "daily"
+    "targeted": []
   },
   "9.1/ci": {
-    "branch": "9.1",
-    "file": "valkey-copy-9-1-ci.yml",
-    "fixable": {
-      "test-sanitizer-address": "",
-      "test-ubuntu-latest": ""
-    },
     "jobs": {
       "test-sanitizer-address": [
         "test-sanitizer-address"
@@ -530,40 +425,11 @@
         "test-ubuntu-latest"
       ]
     },
+    "matrix": {},
     "source_sha": "664970e15f8f7837baad863cb418b4f2e637e6d7",
-    "targeted": [],
-    "workflow": "ci"
+    "targeted": []
   },
   "9.1/daily": {
-    "branch": "9.1",
-    "file": "valkey-copy-9-1-daily.yml",
-    "fixable": {
-      "reply-schemas-validator": "",
-      "test-alpine-jemalloc": "",
-      "test-alpine-libc-malloc": "",
-      "test-macos-latest": "",
-      "test-rpm-distros-jemalloc": "name",
-      "test-rpm-distros-tls-module": "name",
-      "test-rpm-distros-tls-module-no-tls": "name",
-      "test-sanitizer-address": "compiler",
-      "test-sanitizer-address-large-memory": "compiler",
-      "test-sanitizer-force-defrag": "",
-      "test-sanitizer-undefined": "compiler",
-      "test-sanitizer-undefined-large-memory": "compiler",
-      "test-ubuntu-32bit": "",
-      "test-ubuntu-arm": "",
-      "test-ubuntu-io-threads": "",
-      "test-ubuntu-jemalloc": "",
-      "test-ubuntu-jemalloc-fortify": "",
-      "test-ubuntu-libc-malloc": "",
-      "test-ubuntu-lttng": "",
-      "test-ubuntu-no-malloc-usable-size": "",
-      "test-ubuntu-tls": "",
-      "test-ubuntu-tls-io-threads": "",
-      "test-ubuntu-tls-no-tls": "",
-      "test-valgrind-no-malloc-usable-size-test": "",
-      "test-valgrind-test": ""
-    },
     "jobs": {
       "reply-schemas-validator": [
         "reply-schemas-validator"
@@ -653,18 +519,19 @@
         "test-valgrind-test"
       ]
     },
+    "matrix": {
+      "test-rpm-distros-jemalloc": "name",
+      "test-rpm-distros-tls-module": "name",
+      "test-rpm-distros-tls-module-no-tls": "name",
+      "test-sanitizer-address": "compiler",
+      "test-sanitizer-address-large-memory": "compiler",
+      "test-sanitizer-undefined": "compiler",
+      "test-sanitizer-undefined-large-memory": "compiler"
+    },
     "source_sha": "664970e15f8f7837baad863cb418b4f2e637e6d7",
-    "targeted": [],
-    "workflow": "daily"
+    "targeted": []
   },
   "9.2/ci": {
-    "branch": "9.2",
-    "file": "valkey-copy-9-2-ci.yml",
-    "fixable": {
-      "build-debian-old": "",
-      "test-sanitizer-address": "",
-      "test-ubuntu-latest": ""
-    },
     "jobs": {
       "build-debian-old": [
         "build-debian-old"
@@ -676,40 +543,11 @@
         "test-ubuntu-latest"
       ]
     },
+    "matrix": {},
     "source_sha": "aa5db40ab5bf3548d9cebcd7473b2d345e8285b8",
-    "targeted": [],
-    "workflow": "ci"
+    "targeted": []
   },
   "9.2/daily": {
-    "branch": "9.2",
-    "file": "valkey-copy-9-2-daily.yml",
-    "fixable": {
-      "reply-schemas-validator": "",
-      "test-alpine-jemalloc": "",
-      "test-alpine-libc-malloc": "",
-      "test-macos-latest": "",
-      "test-rpm-distros-jemalloc": "name",
-      "test-rpm-distros-tls-module": "name",
-      "test-rpm-distros-tls-module-no-tls": "name",
-      "test-sanitizer-address": "compiler",
-      "test-sanitizer-address-large-memory": "compiler",
-      "test-sanitizer-force-defrag": "",
-      "test-sanitizer-undefined": "compiler",
-      "test-sanitizer-undefined-large-memory": "compiler",
-      "test-ubuntu-32bit": "",
-      "test-ubuntu-arm": "",
-      "test-ubuntu-io-threads": "",
-      "test-ubuntu-jemalloc": "",
-      "test-ubuntu-jemalloc-fortify": "",
-      "test-ubuntu-libc-malloc": "",
-      "test-ubuntu-lttng": "",
-      "test-ubuntu-no-malloc-usable-size": "",
-      "test-ubuntu-tls": "",
-      "test-ubuntu-tls-io-threads": "",
-      "test-ubuntu-tls-no-tls": "",
-      "test-valgrind-no-malloc-usable-size-test": "",
-      "test-valgrind-test": ""
-    },
     "jobs": {
       "reply-schemas-validator": [
         "reply-schemas-validator"
@@ -799,21 +637,22 @@
         "test-valgrind-test (${{ matrix.shard }})"
       ]
     },
+    "matrix": {
+      "test-rpm-distros-jemalloc": "name",
+      "test-rpm-distros-tls-module": "name",
+      "test-rpm-distros-tls-module-no-tls": "name",
+      "test-sanitizer-address": "compiler",
+      "test-sanitizer-address-large-memory": "compiler",
+      "test-sanitizer-undefined": "compiler",
+      "test-sanitizer-undefined-large-memory": "compiler"
+    },
     "source_sha": "aa5db40ab5bf3548d9cebcd7473b2d345e8285b8",
     "targeted": [
       "test-valgrind-test",
       "test-valgrind-no-malloc-usable-size-test"
-    ],
-    "workflow": "daily"
+    ]
   },
   "unstable/ci": {
-    "branch": "unstable",
-    "file": "valkey-copy-unstable-ci.yml",
-    "fixable": {
-      "build-debian-old": "",
-      "test-sanitizer-address": "",
-      "test-ubuntu-latest": ""
-    },
     "jobs": {
       "build-debian-old": [
         "build-debian-old"
@@ -825,40 +664,11 @@
         "test-ubuntu-latest"
       ]
     },
+    "matrix": {},
     "source_sha": "070440826261994f8133a2914010f16f821e2e09",
-    "targeted": [],
-    "workflow": "ci"
+    "targeted": []
   },
   "unstable/daily": {
-    "branch": "unstable",
-    "file": "valkey-copy-unstable-daily.yml",
-    "fixable": {
-      "reply-schemas-validator": "",
-      "test-alpine-jemalloc": "",
-      "test-alpine-libc-malloc": "",
-      "test-macos-latest": "",
-      "test-rpm-distros-jemalloc": "name",
-      "test-rpm-distros-tls-module": "name",
-      "test-rpm-distros-tls-module-no-tls": "name",
-      "test-sanitizer-address": "compiler",
-      "test-sanitizer-address-large-memory": "compiler",
-      "test-sanitizer-force-defrag": "",
-      "test-sanitizer-undefined": "compiler",
-      "test-sanitizer-undefined-large-memory": "compiler",
-      "test-ubuntu-32bit": "",
-      "test-ubuntu-arm": "",
-      "test-ubuntu-io-threads": "",
-      "test-ubuntu-jemalloc": "",
-      "test-ubuntu-jemalloc-fortify": "",
-      "test-ubuntu-libc-malloc": "",
-      "test-ubuntu-lttng": "",
-      "test-ubuntu-no-malloc-usable-size": "",
-      "test-ubuntu-tls": "",
-      "test-ubuntu-tls-io-threads": "",
-      "test-ubuntu-tls-no-tls": "",
-      "test-valgrind-no-malloc-usable-size-test": "",
-      "test-valgrind-test": ""
-    },
     "jobs": {
       "reply-schemas-validator": [
         "reply-schemas-validator"
@@ -948,11 +758,19 @@
         "test-valgrind-test (${{ matrix.shard }})"
       ]
     },
+    "matrix": {
+      "test-rpm-distros-jemalloc": "name",
+      "test-rpm-distros-tls-module": "name",
+      "test-rpm-distros-tls-module-no-tls": "name",
+      "test-sanitizer-address": "compiler",
+      "test-sanitizer-address-large-memory": "compiler",
+      "test-sanitizer-undefined": "compiler",
+      "test-sanitizer-undefined-large-memory": "compiler"
+    },
     "source_sha": "070440826261994f8133a2914010f16f821e2e09",
     "targeted": [
       "test-valgrind-test",
       "test-valgrind-no-malloc-usable-size-test"
-    ],
-    "workflow": "daily"
+    ]
   }
 }

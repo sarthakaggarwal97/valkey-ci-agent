@@ -115,7 +115,7 @@ def test_the_job_runs_up_to_its_tests_and_then_hands_over_to_the_agent():
     steps = _steps(DAILY, "test-ubuntu-jemalloc")
     fix = [step["name"] for step in normalize_mod.fix_steps("", {})]
 
-    assert copy.fixable == {"test-ubuntu-jemalloc": ""}
+    assert (list(copy.jobs), copy.matrix) == (["test-ubuntu-jemalloc"], {})
     # The tests, and the compatibility steps after them, are the agent's to run.
     assert list(steps)[-len(fix) - 1:] == ["make", *fix]
     assert all("if" not in steps[name] for name in fix[:-1])
@@ -137,7 +137,7 @@ def test_a_matrix_job_prepares_the_fix_in_the_entry_that_failed_only():
     copy = normalize_mod.normalize(_MATRIX, origin="x")
     steps = _steps(_MATRIX, "test-ubuntu-jemalloc")
 
-    assert copy.fixable == {"test-ubuntu-jemalloc": "compiler"}
+    assert copy.matrix == {"test-ubuntu-jemalloc": "compiler"}
     assert steps["make"]["if"] == "matrix.compiler == inputs.fix_matrix"
     assert steps["CI fix: prepare the fix in this job"]["if"] == "matrix.compiler == inputs.fix_matrix"
     # Its environment reaches the rebuilds, which run with a clean one.
@@ -150,7 +150,7 @@ def test_a_container_job_installs_the_agents_tools_and_names_its_commit():
     source = DAILY.replace("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    container: alpine:latest\n")
     steps = _steps(source, "test-ubuntu-jemalloc")
 
-    assert normalize_mod.normalize(source, origin="x").fixable == {"test-ubuntu-jemalloc": ""}
+    assert list(normalize_mod.normalize(source, origin="x").jobs) == ["test-ubuntu-jemalloc"]
     assert steps["CI fix: set up the agent"]["with"]["system-packages"] == "true"
     env = steps["CI fix: prepare the fix in this job"]["env"]
     # Without git in the container, the checkout is an archive of this commit.
@@ -162,7 +162,7 @@ def test_a_macos_job_has_a_fix_mode_on_the_runners_own_tools():
     source = DAILY.replace("    runs-on: ubuntu-latest\n", "    runs-on: macos-latest\n")
     steps = _steps(source, "test-ubuntu-jemalloc")
 
-    assert normalize_mod.normalize(source, origin="x").fixable == {"test-ubuntu-jemalloc": ""}
+    assert list(normalize_mod.normalize(source, origin="x").jobs) == ["test-ubuntu-jemalloc"]
     assert "system-packages" not in steps["CI fix: set up the agent"]["with"]
     assert "CI_FIX_COMMIT" not in steps["CI fix: prepare the fix in this job"]["env"]
 
@@ -181,12 +181,12 @@ def test_a_matrix_named_by_its_entries_selects_the_entry_by_the_failed_jobs_name
     copy = normalize_mod.normalize(_NAMED_MATRIX, origin="x")
     steps = _steps(_NAMED_MATRIX, "test-rpm-distros")
 
-    assert copy.fixable == {"test-rpm-distros": "name"}
+    assert copy.matrix == {"test-rpm-distros": "name"}
     assert copy.jobs == {"test-rpm-distros": ["test-almalinux8", "test-fedoralatest"]}
     # The entry's own conditions still hold.
     assert steps["Install EPEL"]["if"] == "(matrix.install_epel) && matrix.name == inputs.fix_matrix"
     assert steps["CI fix: prepare the fix in this job"]["if"] == "matrix.name == inputs.fix_matrix"
-    manifest = {"unstable/daily": {"jobs": copy.jobs, "fixable": copy.fixable}}
+    manifest = {"unstable/daily": {"jobs": copy.jobs, "matrix": copy.matrix}}
     found = copies_mod.copy_job_for(manifest, "unstable", "daily", "test-fedoralatest")
     assert found is not None and (found.job, found.matrix_key) == ("test-rpm-distros", "name")
 
@@ -198,7 +198,7 @@ def test_a_matrix_named_by_its_entries_selects_the_entry_by_the_failed_jobs_name
 def test_a_job_the_agent_cannot_run_in_is_not_copied(change):
     copy = normalize_mod.normalize(DAILY.replace(*change), origin="x")
 
-    assert copy.jobs == copy.fixable == {}
+    assert copy.jobs == copy.matrix == {}
     assert _load(copy.text)["jobs"] == {}
 
 
@@ -222,7 +222,7 @@ def test_sync_writes_copies_a_router_and_a_manifest_and_drops_stale_copies(tmp_p
     ])
     manifest = json.loads((tmp_path / sync_mod.MANIFEST).read_text())
     assert manifest["9.0/daily"]["source_sha"] == "sha-9.0"
-    assert manifest["9.0/daily"]["fixable"] == {"test-ubuntu-jemalloc": ""}
+    assert list(manifest["9.0/daily"]["jobs"]) == ["test-ubuntu-jemalloc"]
     router = _load((workflows / sync_mod.ROUTER).read_text())
     assert router["jobs"]["copy-9-0-daily"]["uses"] == "./.github/workflows/valkey-copy-9-0-daily.yml"
     assert router["jobs"]["copy-9-0-daily"]["if"] == "inputs.branch == '9.0' && inputs.workflow == 'daily'"
@@ -241,32 +241,37 @@ def test_the_sync_names_every_job_that_lost_its_copy():
 _MANIFEST = json.loads(Path(sync_mod.MANIFEST).read_text(encoding="utf-8"))
 
 
+def _copy(key: str) -> str:
+    return (sync_mod.WORKFLOW_DIR / sync_mod.copy_name(*key.split("/"))).read_text(encoding="utf-8")
+
+
 def test_every_committed_copy_is_callable_only_and_runs_one_named_job():
-    for entry in _MANIFEST.values():
-        text = (sync_mod.WORKFLOW_DIR / entry["file"]).read_text(encoding="utf-8")
+    for key, entry in _MANIFEST.items():
+        text = _copy(key)
         workflow = _load(text)
-        assert list(workflow["on"]) == ["workflow_call"], entry["file"]
-        assert workflow["permissions"] == normalize_mod.PERMISSIONS, entry["file"]
-        assert "github.event" not in text, entry["file"]
-        assert set(workflow["jobs"]) == set(entry["jobs"]), entry["file"]
+        assert list(workflow["on"]) == ["workflow_call"], key
+        assert workflow["permissions"] == normalize_mod.PERMISSIONS, key
+        assert "github.event" not in text, key
+        assert set(workflow["jobs"]) == set(entry["jobs"]), key
         for job_id, job in workflow["jobs"].items():
-            assert job["if"] == f"inputs.job == '{job_id}'", (entry["file"], job_id)
+            assert job["if"] == f"inputs.job == '{job_id}'", (key, job_id)
 
 
 def test_valkeys_container_and_macos_test_jobs_are_copied():
-    fixable = _MANIFEST["unstable/daily"]["fixable"]
+    entry = _MANIFEST["unstable/daily"]
 
-    for job in ("test-alpine-jemalloc", "test-ubuntu-jemalloc-fortify", "test-macos-latest"):
-        assert fixable[job] == "", job
+    for job in ("test-ubuntu-jemalloc", "test-sanitizer-address", "test-valgrind-test", "test-alpine-jemalloc",
+                "test-ubuntu-jemalloc-fortify", "test-macos-latest"):
+        assert job in entry["jobs"], job
     for job in ("test-rpm-distros-jemalloc", "test-rpm-distros-tls-module"):
-        assert fixable[job] == "name", job
+        assert entry["matrix"][job] == "name", job
 
 
 def test_the_router_calls_every_copy_and_no_other():
     router = _load((sync_mod.WORKFLOW_DIR / sync_mod.ROUTER).read_text(encoding="utf-8"))
     called = {job["uses"].rsplit("/", 1)[-1] for job in router["jobs"].values()}
 
-    assert called == {entry["file"] for entry in _MANIFEST.values()}
+    assert called == {sync_mod.copy_name(*key.split("/")) for key in _MANIFEST}
     assert {path.name for path in sync_mod.WORKFLOW_DIR.glob("valkey-copy-*.yml")} == called | {sync_mod.ROUTER}
 
 
@@ -276,7 +281,7 @@ def test_a_test_step_that_also_installs_keeps_that_setup_in_fix_mode():
     names = [step.get("name") or step.get("uses") for step in steps]
     by_name = dict(zip(names, steps))
 
-    assert copy.fixable == {"test-ubuntu-latest": ""}
+    assert list(copy.jobs) == ["test-ubuntu-latest"]
     # The install survives the test step, as a step of its own before the agent's.
     assert "test" not in names
     assert names.index("test setup") < names.index("CI fix: check out the agent")
@@ -350,28 +355,12 @@ def test_a_fixture_build_with_a_comment_is_hoisted_whole():
     assert setup["run"] == "make -C tests/modules 32bit # build them ahead of time"
 
 
-def test_no_fixable_jobs_command_carries_a_comment():
-    """The fix runs build and test as one line; a comment would hide its end."""
-    offenders = []
-    for key, entry in _MANIFEST.items():
-        workflow = _load((sync_mod.WORKFLOW_DIR / entry["file"]).read_text(encoding="utf-8"))
-        for job_id in entry["fixable"]:
-            for step in workflow["jobs"][job_id]["steps"]:
-                env = step.get("env") or {}
-                for name in ("CI_FIX_BUILD", "CI_FIX_RUNTEST", "CI_FIX_RUNTEST_MODULEAPI"):
-                    for line in str(env.get(name) or "").splitlines():
-                        if normalize_mod._without_comment(line) != line.rstrip():
-                            offenders.append(f"{key} {job_id}: {name}: {line}")
-
-    assert offenders == []
-
-
 def test_no_fixable_jobs_test_command_names_a_fixture_fix_mode_skips():
     """``--other-server-path`` points into tests/tmp, which only a skipped step fills."""
     offenders = []
     for key, entry in _MANIFEST.items():
-        workflow = _load((sync_mod.WORKFLOW_DIR / entry["file"]).read_text(encoding="utf-8"))
-        for job_id in entry["fixable"]:
+        workflow = _load(_copy(key))
+        for job_id in entry["jobs"]:
             for step in workflow["jobs"][job_id]["steps"]:
                 env = step.get("env") or {}
                 for name in ("CI_FIX_RUNTEST", "CI_FIX_RUNTEST_MODULEAPI"):
