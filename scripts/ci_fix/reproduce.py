@@ -65,15 +65,15 @@ _RUNTEST_TIMEOUT_S = 600
 # Busy-loop every core around the test command, and stop the loops
 # afterwards whatever the command's exit status. The command runs in a
 # subshell on lines of its own, so nothing in it can skip the cleanup.
-_CONTENTION = """\
-cores="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN)"
-for _ in $(seq "$cores"); do (while :; do :; done) & done
-(
-@COMMAND@
+# One line, like every command a report quotes: a Markdown code span holds no
+# newline, and a maintainer can paste this one as it stands.
+_CONTENTION = (
+    'cores="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN)"; '
+    'for _ in $(seq "$cores"); do (while :; do :; done) & done; '
+    "( @COMMAND@ ); status=$?; "
+    "{ kill $(jobs -p); wait; } 2>/dev/null; "
+    "exit $status"
 )
-status=$?
-{ kill $(jobs -p); wait; } 2>/dev/null
-exit $status"""
 
 
 class ReproStatus(str, Enum):
@@ -328,6 +328,8 @@ def plan_for(
 
 
 _MAKE_LINE_RE = re.compile(r"^(\s*make)(?=\s)(?!.*\s-j)", re.MULTILINE)
+# A line the job's own script continued on the next one.
+_CONTINUATION_RE = re.compile(r"\s*\\\n\s*")
 
 
 def _job_plan(repo_dir: str, job: JobCommands, tests: tuple[FailedTest, ...]) -> ReproPlan | None:
@@ -345,8 +347,12 @@ def _job_plan(repo_dir: str, job: JobCommands, tests: tuple[FailedTest, ...]) ->
         options += ["--clients", "1"]
         notes.append("A planned file uses run_solo, so its loops run one at a time.")
     selection = _selection(repo_dir, tests, notes)
-    # The job's build, in one shell that stops at its first failure, on every core.
-    build = "(\nset -e\n" + _MAKE_LINE_RE.sub(r'\1 -j"$(nproc)"', job.build) + "\n)"
+    # The job's build as one line that stops at its first failure, on every
+    # core. One line because every report quotes the command it ran.
+    build = " && ".join(
+        _MAKE_LINE_RE.sub(r'\1 -j"$(nproc)"', line.strip())
+        for line in _CONTINUATION_RE.sub(" ", job.build).splitlines() if line.strip()
+    )
     command = " ".join([base, *selection, "--loops", LOOPS, *options])
     return ReproPlan(build=build, test=command, valgrind="--valgrind" in base.split(),
                      notes=tuple(notes), tests=tests)

@@ -317,15 +317,31 @@ JOB = JobCommands(
 def test_in_the_job_its_own_build_and_runtest_run_the_failing_test(checkout):
     plan = plan_for(checkout, "test-sanitizer-address (clang)", (TEST,), scheduled=True, job=JOB)
 
+    # One line: every report quotes the command, and a code span holds no newline.
     assert plan.build == (
-        "(\nset -e\nexport CC='clang'\n"
-        "make -j\"$(nproc)\" all-with-unit-tests SANITIZER=address \\\n  USE_LIBBACKTRACE=yes\n)"
+        "export CC='clang' && make -j\"$(nproc)\" all-with-unit-tests SANITIZER=address USE_LIBBACKTRACE=yes"
     )
     assert plan.test.replace(LOOPS, "20") == (
         "./runtest --accurate --verbose --dump-logs --tls --single unit/type/incr "
         "--only 'INCREX BYFLOAT overflow preserves existing TTL' --fastfail --loops 20 --timeout 600"
     )
     assert not plan.valgrind and plan.notes == ()
+
+
+def test_a_jobs_multi_line_build_becomes_one_command(checkout):
+    """A report quotes the command in a code span, which holds no newline."""
+    job = JobCommands(
+        build="apt-get update && apt-get install -y make gcc-13\nupdate-alternatives --install x\nmake CC=gcc",
+        runtest="./runtest --dump-logs",
+    )
+
+    plan = plan_for(checkout, "test-rpm-distros (fedora)", (TEST,), scheduled=True, job=job)
+
+    assert plan.build == (
+        "apt-get update && apt-get install -y make gcc-13 && update-alternatives --install x"
+        " && make -j\"$(nproc)\" CC=gcc"
+    )
+    assert "\n" not in plan.command(3) and "\n" not in plan.command(3, under_load=True)
 
 
 def test_in_the_job_a_module_api_test_runs_through_runtest_moduleapi(checkout):

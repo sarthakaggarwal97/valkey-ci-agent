@@ -228,9 +228,12 @@ def _fix_mode(job: dict[str, Any]) -> tuple[str, dict[str, str]] | None:
     if len(builds) != 1 or not runtest:
         return None
     exports = {**(job.get("env") or {}), **(builds[0].get("env") or {})}
+    # Without its comments: the fix runs these lines as one command
+    # (scripts/ci_fix/reproduce.py), where a comment would hide the rest.
     build = "\n".join([
         *(f"export {key}={_quoted(str(value))}" for key, value in exports.items()),
-        *(line for line in str(builds[0]["run"]).strip().splitlines() if not line.lstrip().startswith("sudo ")),
+        *(stripped for line in str(builds[0]["run"]).strip().splitlines()
+          if not line.lstrip().startswith("sudo ") and (stripped := _without_comment(line))),
     ])
     env = {
         "CI_FIX_BUILD": build,
@@ -241,6 +244,19 @@ def _fix_mode(job: dict[str, Any]) -> tuple[str, dict[str, str]] | None:
         # Without git in the container, the checkout is an archive of this.
         env |= {"CI_FIX_REPOSITORY": "${{ inputs.use_repo }}", "CI_FIX_COMMIT": "${{ inputs.use_git_ref }}"}
     return matrix_key, env
+
+
+def _without_comment(line: str) -> str:
+    """``line`` without a trailing shell comment, or "" when it is only one."""
+    quote = ""
+    for index, char in enumerate(line):
+        if quote:
+            quote = "" if char == quote else quote
+        elif char in "\"'":
+            quote = char
+        elif char == "#":
+            return line[:index].rstrip()
+    return line.rstrip()
 
 
 def _matrix_key(job: dict[str, Any]) -> str | None:
@@ -287,7 +303,7 @@ def _suite_command(steps: list[dict[str, Any]], suite: str, command: str) -> str
                   if invocation.search(line) and not line.lstrip().startswith("#")]
     if len(lines) != 1:
         return ""
-    line = _TEST_ARGS_RE.sub("", lines[0])
+    line = _TEST_ARGS_RE.sub("", _without_comment(lines[0]))
     line = _DROPPED_OPTION_RE.sub("", line)
     line = _SHELL_VARIABLE_RE.sub("", line)
     return " ".join(line.split())

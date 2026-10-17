@@ -356,6 +356,32 @@ def test_no_fixable_job_leaves_its_dependency_install_behind_in_fix_mode():
     assert offenders == []
 
 
+@pytest.mark.parametrize("line, expected", [
+    ("make 32bit # the script below has no argument", "make 32bit"),
+    ("make CFLAGS='-DA#B' X=1", "make CFLAGS='-DA#B' X=1"),
+    ('make CFLAGS="#1" # note', 'make CFLAGS="#1"'),
+    ("# only a comment", ""),
+])
+def test_a_builds_comment_is_dropped_but_a_quoted_hash_is_not(line, expected):
+    assert normalize_mod._without_comment(line) == expected
+
+
+def test_no_fixable_jobs_command_carries_a_comment():
+    """The fix runs build and test as one line; a comment would hide its end."""
+    offenders = []
+    for key, entry in _MANIFEST.items():
+        workflow = _load((sync_mod.WORKFLOW_DIR / entry["file"]).read_text(encoding="utf-8"))
+        for job_id in entry["fixable"]:
+            for step in workflow["jobs"][job_id]["steps"]:
+                env = step.get("env") or {}
+                for name in ("CI_FIX_BUILD", "CI_FIX_RUNTEST", "CI_FIX_RUNTEST_MODULEAPI"):
+                    for line in str(env.get(name) or "").splitlines():
+                        if normalize_mod._without_comment(line) != line.rstrip():
+                            offenders.append(f"{key} {job_id}: {name}: {line}")
+
+    assert offenders == []
+
+
 def test_no_fixable_jobs_test_command_names_a_fixture_fix_mode_skips():
     """``--other-server-path`` points into tests/tmp, which only a skipped step fills."""
     offenders = []

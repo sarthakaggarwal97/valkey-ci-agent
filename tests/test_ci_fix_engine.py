@@ -583,7 +583,9 @@ def _with_plan(monkeypatch, seen=None):
     def plan_for(repo_dir, job_name, tests, *, scheduled, job=None):
         if seen is not None:
             seen.update(job_name=job_name, tests=tests, scheduled=scheduled, job=job)
-        return ReproPlan(build="true", test=f'test "$(head -1 value.txt)" = right # {LOOPS}', tests=tests)
+        # The loop count rides along as an argument, not a comment: under load
+        # the whole command is one line, where a comment would hide its end.
+        return ReproPlan(build="true", test=f'test "$(head -1 value.txt)" = right && : loops={LOOPS}', tests=tests)
 
     monkeypatch.setattr(engine_mod, "plan_for", plan_for)
 
@@ -595,7 +597,7 @@ def _runs_value_check(results):
         report = (
             "[ok]: value is right (1 ms)" if outcome.passed else "[err]: value is right in tests/unit/value.tcl"
         )
-        loops = command.split("# ", 1)[-1].split("\n", 1)[0]
+        loops = command.split("loops=", 1)[-1].split()[0]
         results.append(((Path(repo_dir) / "value.txt").read_text().splitlines()[0], loops))
         return TestRun(outcome.passed, outcome.output, report)
 
