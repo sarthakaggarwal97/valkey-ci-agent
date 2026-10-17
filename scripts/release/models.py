@@ -41,8 +41,6 @@ class ReleasePolicy:
 class PublishPlan:
     branch: str
     tag: str
-    version: str
-    stage: str
     sha: str
     body: str
     prerelease: bool

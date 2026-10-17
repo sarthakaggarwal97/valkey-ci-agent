@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from scripts.backport.matrix import build_matrix
 
 
@@ -47,12 +45,6 @@ def test_build_matrix_emits_one_leg_per_registered_branch(tmp_path) -> None:
     assert matrix["include"][0]["repo_slug"] == "org-core"
     assert matrix["include"][0]["repo_owner"] == "org"
     assert matrix["include"][0]["repo_name"] == "core"
-    assert matrix["include"][0]["project_number"] == 1
-    assert matrix["include"][0]["push_repo"] == "org/core"
-    assert matrix["include"][0]["language"] == "c"
-    assert json.loads(matrix["include"][0]["build_commands_json"]) == ["make test"]
-    assert json.loads(matrix["include"][0]["validation_setup_commands_json"]) == []
-    assert matrix["include"][0]["repair_validation_failures"] is False
 
 
 def test_build_matrix_filters_by_repo_and_project_number(tmp_path) -> None:
@@ -69,15 +61,7 @@ def test_build_matrix_filters_by_repo_and_project_number(tmp_path) -> None:
                 "repo_owner": "org",
                 "repo_name": "core",
                 "repo_slug": "org-core",
-                "project_owner": "org",
-                "project_owner_type": "organization",
-                "project_number": 2,
                 "branch": "2.0",
-                "push_repo": "org/core",
-                "language": "c",
-                "build_commands_json": json.dumps(["make test"]),
-                "validation_setup_commands_json": json.dumps([]),
-                "repair_validation_failures": False,
             }
         ]
     }

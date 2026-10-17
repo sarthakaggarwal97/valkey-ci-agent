@@ -82,13 +82,9 @@ def group_bullets(
     Fixes, Contributors) are refused and logged. Output keys are in
     *categories* order.
     """
-    ordered_categories = categories
     reserved = _reserved_sections()
-    canonical = set(ordered_categories)
-    # Fallback if CATCH_ALL_CATEGORY were edited off-list.
+    canonical = set(categories)
     catch_all = _release_format.CATCH_ALL_CATEGORY
-    if catch_all not in canonical:
-        catch_all = ordered_categories[-1]
     grouped: dict[str, list[str]] = {}
     for bullet in bullets:
         category = _one_line(bullet.category)
@@ -108,7 +104,7 @@ def group_bullets(
 
     # Emit in canonical order.
     ordered: dict[str, list[str]] = {}
-    for name in ordered_categories:
+    for name in categories:
         if grouped.get(name):
             ordered[name] = grouped[name]
     return ordered

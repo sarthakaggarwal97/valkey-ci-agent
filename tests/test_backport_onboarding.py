@@ -227,9 +227,7 @@ def test_registry_edit_is_surgical_and_generates_matrix_entry(tmp_path) -> None:
     path.write_text(updated, encoding="utf-8")
     matrix = build_matrix(str(path))
     assert any(
-        item["repo"] == "valkey-io/valkey"
-        and item["branch"] == "9.2"
-        and item["project_number"] == 23
+        item["repo"] == "valkey-io/valkey" and item["branch"] == "9.2"
         for item in matrix["include"]
     )
 

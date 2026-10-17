@@ -72,12 +72,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_BRANCH_FIELDS = (
-    "Backport Branch", "Target Branch", "Release Branch",
-    "Branch", "Version", "Release", "Folder",
-)
-
-
 def _log_existing_sweep_pr(
     existing_pr: Any,
     target_branch: str,
@@ -101,11 +95,10 @@ class ProjectBackportDiscovery:
         project_owner: str,
         project_number: int,
         source_repo: str,
+        target_branch: str,
         project_owner_type: str = "organization",
         status_field: str = BACKPORT_STATUS_FIELD,
         status_value: str = BACKPORT_STATUS_OPTION,
-        branch_fields: list[str] | None = None,
-        implicit_target_branch: str | None = None,
     ) -> None:
         self._gql = gql
         self._owner = project_owner
@@ -114,21 +107,12 @@ class ProjectBackportDiscovery:
         self._source_repo = source_repo
         self._status_field = status_field
         self._status_value = status_value
-        self._branch_fields = branch_fields or list(_DEFAULT_BRANCH_FIELDS)
-        self._implicit_target = implicit_target_branch
+        self._target_branch = target_branch
 
-    def discover(
-        self,
-        release_branches: list[str],
-    ) -> dict[str, list[ProjectBackportCandidate]]:
-        by_branch: dict[str, list[ProjectBackportCandidate]] = {
-            branch: [] for branch in release_branches
-        }
-        for item in self._iter_items():
-            candidate = self._candidate_from_item(item, release_branches)
-            if candidate:
-                by_branch.setdefault(candidate.target_branch, []).append(candidate)
-        return by_branch
+    def discover(self) -> list[ProjectBackportCandidate]:
+        """The target branch's merged PRs in the backport status."""
+        candidates = (self._candidate_from_item(item) for item in self._iter_items())
+        return [candidate for candidate in candidates if candidate]
 
     def _iter_items(self) -> list[dict[str, Any]]:
         pages = project_pages(
@@ -136,11 +120,7 @@ class ProjectBackportDiscovery:
         )
         return [item for project in pages for item in (project.get("items") or {}).get("nodes") or []]
 
-    def _candidate_from_item(
-        self,
-        item: dict[str, Any],
-        branches: list[str],
-    ) -> ProjectBackportCandidate | None:
+    def _candidate_from_item(self, item: dict[str, Any]) -> ProjectBackportCandidate | None:
         content = item.get("content") or {}
         if content.get("__typename") != "PullRequest" or not content.get("merged"):
             return None
@@ -159,18 +139,6 @@ class ProjectBackportDiscovery:
         if not _field_has_value(fields, self._status_field, self._status_value):
             return None
 
-        if self._implicit_target is not None:
-            target_branch = self._implicit_target
-        else:
-            matched_branch = _matching_release_branch(
-                fields,
-                self._branch_fields,
-                branches,
-            )
-            if not matched_branch:
-                return None
-            target_branch = matched_branch
-
         commits = [
             node.get("commit", {}).get("oid", "")
             for node in (content.get("commits", {}).get("nodes") or [])
@@ -181,7 +149,7 @@ class ProjectBackportDiscovery:
             source_pr_number=int(content["number"]),
             source_pr_title=str(content.get("title") or ""),
             source_pr_url=str(content.get("url") or ""),
-            target_branch=target_branch,
+            target_branch=self._target_branch,
             merge_commit_sha=merge_sha,
             commit_shas=[sha for sha in commits if sha],
             merged_at=str(content.get("mergedAt") or ""),
@@ -198,7 +166,6 @@ def run_backport_sweep(
     github_token: str,
     status_field: str = BACKPORT_STATUS_FIELD,
     status_value: str = BACKPORT_STATUS_OPTION,
-    branch_fields: list[str] | None = None,
     test_commands_override: list[str] | None = None,
     discover_only: bool = False,
     max_candidates: int = 5,
@@ -210,7 +177,6 @@ def run_backport_sweep(
         github_token=github_token,
         status_field=status_field,
         status_value=status_value,
-        branch_fields=branch_fields,
         test_commands_override=test_commands_override,
         discover_only=discover_only,
         max_candidates=max_candidates,
@@ -228,7 +194,6 @@ def prepare_backport_sweep(
     github_token: str,
     status_field: str = BACKPORT_STATUS_FIELD,
     status_value: str = BACKPORT_STATUS_OPTION,
-    branch_fields: list[str] | None = None,
     test_commands_override: list[str] | None = None,
     discover_only: bool = False,
     max_candidates: int = 5,
@@ -263,13 +228,12 @@ def prepare_backport_sweep(
         project_owner=repo_entry.project_owner,
         project_number=branch_entry.project_number,
         source_repo=repo_full_name,
+        target_branch=target_branch,
         project_owner_type=repo_entry.project_owner_type,
         status_field=status_field,
         status_value=status_value,
-        branch_fields=branch_fields,
-        implicit_target_branch=target_branch,
     )
-    candidates = discovery.discover([target_branch]).get(target_branch, [])
+    candidates = discovery.discover()
     candidates.sort(key=lambda candidate: candidate.merged_at or "")
 
     if max_candidates > 0:
@@ -311,7 +275,6 @@ def prepare_backport_sweep(
         validation_setup_commands=validation_setup_commands,
         max_applied=max_candidates,
         language=repo_entry.language,
-        build_commands=list(repo_entry.build_commands) or None,
         validation_rules=validation_rules,
         validation_profile=repo_entry.validation_profile,
         generated_file_rules=list(repo_entry.generated_file_rules),
@@ -322,55 +285,6 @@ def prepare_backport_sweep(
         llm_conflict_label=repo_entry.llm_conflict_label,
         work_root=work_root,
     )
-
-
-def _process_branch(
-    *,
-    gh: Any,
-    repo_full_name: str,
-    github_token: str,
-    target_branch: str,
-    candidates: list[ProjectBackportCandidate],
-    push_repo: str,
-    test_commands: list[str],
-    validation_setup_commands: list[str] | None = None,
-    max_applied: int = 0,
-    language: str = "c",
-    build_commands: list[str] | None = None,
-    validation_rules: list[Any] | None = None,
-    validation_profile: str = "",
-    generated_file_rules: list[Any] | None = None,
-    test_path_patterns: tuple[str, ...] | list[str] | None = None,
-    repair_validation_failures: bool = False,
-    max_conflicting_files: int = 100,
-    backport_label: str = "backport",
-    llm_conflict_label: str = "ai-resolved-conflicts",
-) -> BranchSweepResult:
-    """Compatibility wrapper for existing direct callers and tests."""
-    result, prepared = _prepare_branch(
-        gh=gh,
-        repo_full_name=repo_full_name,
-        github_token=github_token,
-        target_branch=target_branch,
-        candidates=candidates,
-        push_repo=push_repo,
-        test_commands=test_commands,
-        validation_setup_commands=validation_setup_commands,
-        max_applied=max_applied,
-        language=language,
-        build_commands=build_commands,
-        validation_rules=validation_rules,
-        validation_profile=validation_profile,
-        generated_file_rules=generated_file_rules,
-        test_path_patterns=test_path_patterns,
-        repair_validation_failures=repair_validation_failures,
-        max_conflicting_files=max_conflicting_files,
-        backport_label=backport_label,
-        llm_conflict_label=llm_conflict_label,
-    )
-    if prepared is not None:
-        return publish_prepared_sweep(prepared, github_token, gh=gh)
-    return result
 
 
 def _prepare_branch(
@@ -385,7 +299,6 @@ def _prepare_branch(
     validation_setup_commands: list[str] | None = None,
     max_applied: int = 0,
     language: str = "c",
-    build_commands: list[str] | None = None,
     validation_rules: list[Any] | None = None,
     validation_profile: str = "",
     generated_file_rules: list[Any] | None = None,
@@ -582,8 +495,6 @@ def _prepare_branch(
                     repo_full_name,
                     {},
                     language=language,
-                    build_commands=build_commands,
-                    validation_rules=validation_rules,
                     test_path_patterns=test_path_patterns,
                     max_conflicting_files=max_conflicting_files,
                     source_plan=source_plans[candidate.source_pr_number],
@@ -1073,24 +984,6 @@ def _field_has_value(
     )
 
 
-def _matching_release_branch(
-    fields: dict[str, list[str]],
-    branch_fields: list[str],
-    branches: list[str],
-) -> str | None:
-    for field_name in branch_fields:
-        values = fields.get(_normalize(field_name), [])
-        for branch in branches:
-            normalized_branch = _normalize(branch)
-            if any(
-                _normalize(value) == normalized_branch
-                or _normalize(value) == f"backport {normalized_branch}"
-                for value in values
-            ):
-                return branch
-    return None
-
-
 def _print_result(result: BranchSweepResult) -> None:
     print(json.dumps({
         "branch": result.target_branch,
@@ -1162,7 +1055,6 @@ def main() -> None:
     )
     parser.add_argument("--status-field", default=BACKPORT_STATUS_FIELD)
     parser.add_argument("--status-value", default=BACKPORT_STATUS_OPTION)
-    parser.add_argument("--branch-fields", default=",".join(_DEFAULT_BRANCH_FIELDS))
     parser.add_argument(
         "--test-commands",
         default="",
@@ -1229,11 +1121,6 @@ def main() -> None:
         "github_token": github_token,
         "status_field": args.status_field,
         "status_value": args.status_value,
-        "branch_fields": [
-            field.strip()
-            for field in args.branch_fields.split(",")
-            if field.strip()
-        ] or None,
         "test_commands_override": test_commands_override,
         "discover_only": args.discover_only or args.dry_run,
         "max_candidates": args.max_candidates,

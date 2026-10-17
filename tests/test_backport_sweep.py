@@ -36,7 +36,6 @@ from scripts.backport.sweep_git import (
     list_applied_prs_on_branch,
     push_backport_branch,
     safe_tmp_component,
-    sync_target_branch_to_source,
     worktree_changed_paths,
 )
 from scripts.backport.sweep_models import (
@@ -95,6 +94,14 @@ def _source_plan(
         source_commits=tuple(candidate.commit_shas),
         aggregate_patch_id="test-patch",
     )
+
+
+def _process_branch(*, gh, github_token, **kwargs):
+    """Prepare one branch's sweep and publish it, as the two workflow phases do."""
+    result, prepared = backport_sweep._prepare_branch(gh=gh, github_token=github_token, **kwargs)
+    if prepared is not None:
+        return backport_sweep.publish_prepared_sweep(prepared, github_token, gh=gh)
+    return result
 
 
 def test_git_auth_keeps_askpass_outside_clone_destination(tmp_path):
@@ -1996,7 +2003,7 @@ def test_process_branch_applied_cap_ignores_skipped_candidates(monkeypatch):
 
     monkeypatch.setattr(backport_sweep, "apply_candidate", fake_apply)
 
-    result = backport_sweep._process_branch(
+    result = _process_branch(
         gh=MagicMock(),
         repo_full_name="valkey-io/valkey",
         github_token="token",
@@ -2049,7 +2056,7 @@ def test_process_branch_push_failure_reconciles_applied(monkeypatch):
 
     monkeypatch.setattr(backport_sweep, "push_backport_branch", fail_push)
 
-    result = backport_sweep._process_branch(
+    result = _process_branch(
         gh=MagicMock(),
         repo_full_name="valkey-io/valkey",
         github_token="token",
@@ -2148,7 +2155,7 @@ def _green_only_process_branch(
 
     monkeypatch.setattr(backport_sweep, "upsert_pr", fake_upsert)
 
-    result = backport_sweep._process_branch(
+    result = _process_branch(
         gh=MagicMock(),
         repo_full_name="valkey-io/valkey",
         github_token="token",
@@ -3174,34 +3181,6 @@ def test_apply_candidate_preserves_source_author_on_conflict_path(monkeypatch, t
     assert candidate.source_pr_number == 42
 
 
-def test_sync_target_branch_creates_missing_fork_branch():
-    gh = MagicMock()
-    source_repo = MagicMock()
-    fork_repo = MagicMock()
-    source_repo.get_branch.return_value.commit.sha = "abc123def"
-    fork_repo.get_branch.side_effect = GithubException(
-        status=404,
-        data={"message": "Branch not found"},
-        headers={},
-    )
-    gh.get_repo.side_effect = lambda name: {
-        "valkey-io/valkey": source_repo,
-        "ci-bot/valkey": fork_repo,
-    }[name]
-
-    sync_target_branch_to_source(
-        gh,
-        "ci-bot/valkey",
-        "valkey-io/valkey",
-        "8.1",
-    )
-
-    fork_repo.create_git_ref.assert_called_once_with(
-        ref="refs/heads/8.1",
-        sha="abc123def",
-    )
-
-
 def test_graphql_client_retry_exhaustion_raises_clear_error(monkeypatch):
     """After exhausting retries on URLError, the client must raise a
     RuntimeError (not UnboundLocalError from reading `body`)."""
@@ -3874,7 +3853,7 @@ def _make_discovery(items: list[dict], *, source_repo: str = "valkey-io/valkey")
         project_owner="valkey-io",
         project_number=1,
         source_repo=source_repo,
-        implicit_target_branch="9.1",
+        target_branch="9.1",
     )
     # Bypass the GraphQL fetch - return our fake items directly.
     discovery._iter_items = lambda: items  # type: ignore[method-assign]
@@ -3889,24 +3868,24 @@ def test_discovery_filters_out_pr_from_other_repo():
         _project_item(number=3654, repo="valkey-io/valkey"),
         _project_item(number=553, repo="valkey-io/valkey-io.github.io"),
     ]
-    by_branch = _make_discovery(items).discover(["9.1"])
-    nums = [c.source_pr_number for c in by_branch["9.1"]]
+    candidates = _make_discovery(items).discover()
+    nums = [c.source_pr_number for c in candidates]
     assert nums == [3654]
 
 
 def test_discovery_keeps_matching_repo_pr():
     """Sanity check: a PR from the configured repo flows through."""
     items = [_project_item(number=3654, repo="valkey-io/valkey")]
-    by_branch = _make_discovery(items).discover(["9.1"])
-    assert len(by_branch["9.1"]) == 1
-    assert by_branch["9.1"][0].source_pr_number == 3654
+    candidates = _make_discovery(items).discover()
+    assert len(candidates) == 1
+    assert candidates[0].source_pr_number == 3654
 
 
 def test_discovery_marks_truncated_commit_connection_incomplete():
     item = _project_item(number=3654, repo="valkey-io/valkey")
     item["content"]["commits"]["pageInfo"]["hasNextPage"] = True
 
-    candidate = _make_discovery([item]).discover(["9.1"])["9.1"][0]
+    candidate = _make_discovery([item]).discover()[0]
 
     assert candidate.source_commits_complete is False
 
@@ -3915,14 +3894,14 @@ def test_discovery_drops_unmerged_pr_regardless_of_repo():
     """The merged-only filter is applied before the repo filter."""
     item = _project_item(number=999, repo="valkey-io/valkey")
     item["content"]["merged"] = False
-    by_branch = _make_discovery([item]).discover(["9.1"])
-    assert by_branch["9.1"] == []
+    candidates = _make_discovery([item]).discover()
+    assert candidates == []
 
 
 def test_discovery_drops_pr_with_wrong_status_regardless_of_repo():
     item = _project_item(number=42, repo="valkey-io/valkey", status="Done")
-    by_branch = _make_discovery([item]).discover(["9.1"])
-    assert by_branch["9.1"] == []
+    candidates = _make_discovery([item]).discover()
+    assert candidates == []
 
 
 def test_discovery_keeps_pr_when_repository_field_missing():
@@ -3932,8 +3911,8 @@ def test_discovery_keeps_pr_when_repository_field_missing():
     """
     item = _project_item(number=3654, repo="valkey-io/valkey")
     item["content"].pop("repository")
-    by_branch = _make_discovery([item]).discover(["9.1"])
-    assert len(by_branch["9.1"]) == 1
+    candidates = _make_discovery([item]).discover()
+    assert len(candidates) == 1
 
 
 def test_project_items_query_selects_repository_name_with_owner():

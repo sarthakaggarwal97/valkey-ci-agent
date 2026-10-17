@@ -5,8 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from github.GithubException import GithubException
-
 from scripts.backport.diff_comments import DIFF_COMMENT_LOGIN, marked_source_pr_urls, reconcile_diff_comments
 from scripts.backport.pr_creator import (
     apply_labels,
@@ -25,23 +23,6 @@ def find_existing_pr(gh: Any, base_repo: str, push_repo: str, branch: str) -> An
     repo = retry_github_call(lambda: gh.get_repo(base_repo), retries=2, description=f"get {base_repo}")
     pulls = find_pulls_by_head(repo, base_repo=base_repo, push_repo=push_repo, branch=branch)
     return pulls[0] if pulls else None
-
-
-def delete_stale_backport_branch(gh: Any, push_repo: str, branch: str) -> None:
-    repo = retry_github_call(lambda: gh.get_repo(push_repo), retries=2, description=f"get {push_repo}")
-    try:
-        ref = retry_github_call(
-            lambda: repo.get_git_ref(f"heads/{branch}"),
-            retries=1,
-            description=f"check ref {branch}",
-        )
-    except GithubException as exc:
-        if exc.status == 404:
-            return
-        logger.warning("Could not prune stale backport branch %s: %s", branch, exc)
-        return
-    logger.info("Deleting stale backport branch %s on %s (no open PR)", branch, push_repo)
-    retry_github_call(lambda: ref.delete(), retries=2, description=f"delete ref {branch}")
 
 
 def upsert_pr(

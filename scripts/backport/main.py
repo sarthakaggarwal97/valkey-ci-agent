@@ -261,8 +261,6 @@ def run_backport(
                     repo_full_name,
                     git_env,
                     language=language,
-                    build_commands=build_commands,
-                    validation_rules=validation_rules,
                     test_path_patterns=test_path_patterns,
                     max_conflicting_files=config.max_conflicting_files,
                 )
@@ -401,23 +399,10 @@ def run_backport(
                     # Sync the staging fork's target branch from upstream so the
                     # PR doesn't show unrelated commits. This only updates a
                     # *fork's* copy of the release branch — never the upstream
-                    # release branch itself.
-                    if effective_push_repo.split("/", 1)[0] == repo_full_name.split("/", 1)[0]:
-                        raise RuntimeError(
-                            f"Refusing to push to release branch on same-owner repo: "
-                            f"{effective_push_repo} (target_branch={target_branch}). "
-                            f"push_repo must be a different-owner fork."
-                        )
+                    # release branch itself; the push repo is a different-owner
+                    # fork, checked on entry.
                     logger.info("Syncing %s:%s to upstream.", effective_push_repo, target_branch)
                     _run_git(tmp_dir, "push", push_remote, f"{target_branch}:{target_branch}", env=git_env)
-                # Sanity check: the agent only pushes to branches it owns.
-                # branch_name comes from build_branch_name() which always
-                # produces 'backport/<pr>-to-<target>'.
-                if not branch_name.startswith("backport/"):
-                    raise RuntimeError(
-                        f"Refusing to push to non-namespaced branch: {branch_name!r}. "
-                        f"Agent push targets must start with 'backport/'."
-                    )
                 logger.info("Pushing branch %s to %s.", branch_name, effective_push_repo)
                 _run_git(tmp_dir, "push", "--force-with-lease", push_remote, branch_name, env=git_env)
         logger.info("Creating backport PR.")

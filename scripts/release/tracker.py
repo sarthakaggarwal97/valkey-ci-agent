@@ -330,13 +330,6 @@ def _sync_one(
         publish_run is None
         and any_publish_run is not None
         and getattr(any_publish_run, "status", "") != "completed"
-        and getattr(any_publish_run, "head_sha", "") == controller_sha
-    ):
-        publish_run = any_publish_run
-    if (
-        publish_run is None
-        and any_publish_run is not None
-        and getattr(any_publish_run, "status", "") != "completed"
         and getattr(any_publish_run, "head_sha", "") != controller_sha
     ):
         # Only while nothing shipped. After the release exists the run may

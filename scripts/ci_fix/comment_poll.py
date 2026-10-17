@@ -29,7 +29,7 @@ from scripts.ci_fix.gate import ParsedCommand, is_authorized, parse_command
 from scripts.common.github_client import dispatch_workflow, retry_github_call
 from scripts.common.identity import MAINTAINER_ORG, MAINTAINER_TEAM, VALKEY_REPO
 from scripts.common.logging_utils import configure_logging, log_outcome
-from scripts.common.polling import env_int, env_seconds, run_poll_loop
+from scripts.common.polling import env_int, run_poll_loop
 
 logger = logging.getLogger(__name__)
 
@@ -329,11 +329,11 @@ def _bot_login() -> str:
 
 
 def _poll_interval_seconds() -> int:
-    return env_seconds("CI_FIX_POLL_INTERVAL_SECONDS", 0, minimum=0)
+    return env_int("CI_FIX_POLL_INTERVAL_SECONDS", 0, minimum=0)
 
 
 def _poll_duration_seconds() -> int:
-    return env_seconds(
+    return env_int(
         "CI_FIX_POLL_DURATION_SECONDS",
         0,
         minimum=0,

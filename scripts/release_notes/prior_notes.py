@@ -34,10 +34,9 @@ Non-goals, deliberately:
   different handles, and the two wordings naming different environment
   boundaries (see :func:`align_wording`).
 
-This is not :func:`scripts.release_notes.triage.triage`'s dead ``already_noted``
-parameter, which would have *excluded* a PR another line noted. Excluding is
-wrong: a backported change genuinely belongs in each line's notes. The fix is to
-make the entries agree, not to drop them.
+*Excluding* a PR another line noted would be wrong: a backported change
+genuinely belongs in each line's notes. The fix is to make the entries agree,
+not to drop them.
 """
 
 from __future__ import annotations

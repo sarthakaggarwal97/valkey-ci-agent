@@ -62,7 +62,6 @@ class BranchPlan:
 
     stage: str                 # normalized: 'ga' or 'rcN'
     target: str                # branch to PR into, always M.m (e.g. 9.1)
-    base_ref: str              # ref the target is (re)based on
     rc_warning: Optional[str] = None  # set when the requested rc is out of sequence (surfaced in the PR body)
 
 
@@ -71,8 +70,6 @@ class _NotesRange:
     """The exact base/head span the notes were computed over, for the PR body."""
 
     mode: str
-    source_ref: str
-    target_branch: str
     base_ref: str
     base_sha: str
     head_ref: str
@@ -99,15 +96,6 @@ class _NotesMeta:
     notes_range: Optional["_NotesRange"] = None  # resolved base/head refs + SHAs for the range display
 
 
-def _split_version(version: str) -> tuple[int, int, int]:
-    # Delegate to release_format.parse_version (the single authoritative M.m.p
-    # parser + 0-255 bound, also behind version_num/set_version), so the version
-    # validation the cut applies at the input boundary cannot drift from the
-    # validation the format primitives apply when writing version.h. Rejecting a
-    # malformed/too-large version here fails fast, before the wasted clone + AI run.
-    return rn.parse_version(version)
-
-
 def canonical_version(version: str) -> str:
     """Return the canonical ``M.m.p`` form of *version* (strips, drops leading zeros).
 
@@ -119,7 +107,7 @@ def canonical_version(version: str) -> str:
     threading the result everywhere keeps every downstream value aligned with the
     branch the cut targets. Raises :class:`ValueError` on malformed input.
     """
-    major, minor, patch = _split_version(version)
+    major, minor, patch = rn.parse_version(version)
     return f"{major}.{minor}.{patch}"
 
 
@@ -164,7 +152,7 @@ def resolve_branch_plan(
     exist on origin (created by maintainers).
     """
     stage_lc = rn.normalize_stage(stage)
-    major, minor, _patch = _split_version(version)
+    major, minor, _patch = rn.parse_version(version)
     target = f"{major}.{minor}"
 
     if not _remote_branch_exists(repo_dir, target):
@@ -179,7 +167,7 @@ def resolve_branch_plan(
             repo_dir, target, stage_lc, major, minor, _patch, profile=profile
         )
 
-    return BranchPlan(stage_lc, target, target, rc_warning=rc_warning)
+    return BranchPlan(stage_lc, target, rc_warning=rc_warning)
 
 
 def _warn_rc_sequence(
@@ -224,7 +212,7 @@ def _warn_rc_sequence(
 def commit_title(version: str, stage_lc: str, display_name: str) -> str:
     """Match valkey's release commit titles."""
     if stage_lc == "ga":
-        _major, _minor, patch = _split_version(version)
+        _major, _minor, patch = rn.parse_version(version)
         suffix = " GA" if patch == 0 else ""
         return f"Add release notes entry for {display_name} {version}{suffix}"
     return f"Update version to {version}-{stage_lc} and add release notes"
@@ -232,7 +220,7 @@ def commit_title(version: str, stage_lc: str, display_name: str) -> str:
 
 def _release_order(version: str, stage: str) -> tuple[int, int, int, int, int]:
     """Return an ordering key for dev, RC, and GA release states."""
-    major, minor, patch = _split_version(version)
+    major, minor, patch = rn.parse_version(version)
     stage_lc = stage.strip().lower()
     if stage_lc == "dev":
         stage_key = (0, 0)
@@ -271,7 +259,7 @@ def validate_release_progression(
     target_canonical = canonical_version(target_version)
     target_stage_lc = rn.normalize_stage(target_stage)
     if not bumper.records_stage:
-        if _split_version(target_canonical) >= _split_version(current_version):
+        if rn.parse_version(target_canonical) >= rn.parse_version(current_version):
             return
         raise ValueError(
             f"target release {target_canonical}-{target_stage_lc} is older than the "
@@ -446,20 +434,13 @@ def _compare_ref(repo_dir: str, ref: str) -> str:
 
 
 
-def _plan_mode(plan: BranchPlan) -> str:
-    """A short human label for the resolved branch plan."""
-    return plan.stage
-
-
 def _resolve_notes_range(
     repo_dir: str, plan: BranchPlan, *, head_ref: str, regen: Any
 ) -> _NotesRange:
     """Capture the exact base/head refs and SHAs discovery walked, for the body."""
     base_ref = regen.base_tag
     return _NotesRange(
-        mode=_plan_mode(plan),
-        source_ref=plan.target,
-        target_branch=plan.target,
+        mode=plan.stage,
         base_ref=base_ref,
         base_sha=_compare_ref(repo_dir, base_ref),
         head_ref=head_ref,
@@ -777,7 +758,7 @@ def cut(
     )
     source_ref = plan.target
     logger.info(
-        "Plan: stage=%s target=%s base=%s", plan.stage, plan.target, plan.base_ref,
+        "Plan: stage=%s target=%s", plan.stage, plan.target,
     )
 
     # Discovery range: head is always the M.m branch tip, base from tags.
@@ -975,7 +956,7 @@ def _print_dry_run(
 ) -> None:
     regen = notes_meta.regen
     print(f"\n===== release plan ({version} {plan.stage}) =====")
-    print(f"target branch: {plan.target}  base: {plan.base_ref}")
+    print(f"target branch: {plan.target}")
     # Preview the hold decision the real cut would make: a draft PR (held) when any
     # reviewer-facing signal fired and force_ready was not set, else opened ready.
     # Security signals hold even under force_ready (see _should_hold).
@@ -991,7 +972,7 @@ def _print_dry_run(
     else:
         print("PR would open: ready (clean cut)")
     # The resolved discovery range is the actual span the notes were computed over;
-    # plan.base_ref is the branch-model base, which can differ (e.g. nearest-tag
+    # the branch-model base (the target branch) can differ (e.g. nearest-tag
     # fallback). Print the precise base/head refs + SHAs so an over-broad range
     # shows, falling back to the coarse one-liner only if it could not be captured.
     if notes_meta.notes_range is not None:
@@ -1422,14 +1403,11 @@ def _short_sha(sha: str) -> str:
 def _notes_range_lines(rng: "_NotesRange") -> list[str]:
     """Render the resolved range as ``key: value`` lines (shared by body/dry-run).
 
-    Shows the resolved mode, the source and target branches, and both ends of the
-    range as ``ref @ <sha>`` so a reviewer can audit the exact commits the notes
+    Shows the resolved mode and both ends of the range as ``ref @ <sha>`` so a reviewer can audit the exact commits the notes
     were computed over, not just the branch-model names.
     """
     return [
         f"mode: {rng.mode}",
-        f"source_ref: {rng.source_ref}",
-        f"target_branch: {rng.target_branch}",
         f"base: {rng.base_ref} @ {_short_sha(rng.base_sha)}",
         f"head: {rng.head_ref} @ {_short_sha(rng.head_sha)}",
     ]

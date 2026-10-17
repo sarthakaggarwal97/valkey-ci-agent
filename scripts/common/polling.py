@@ -69,24 +69,6 @@ def env_int(
     return value
 
 
-def env_seconds(
-    name: str,
-    default: int,
-    *,
-    minimum: int = 0,
-    maximum: int | None = None,
-    environ: Mapping[str, str] | None = None,
-) -> int:
-    """Parse an environment variable as bounded seconds."""
-    return env_int(
-        name,
-        default,
-        minimum=minimum,
-        maximum=maximum,
-        environ=environ,
-    )
-
-
 def run_poll_loop(
     poll_once: Callable[[], T],
     *,

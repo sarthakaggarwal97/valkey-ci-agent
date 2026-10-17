@@ -50,17 +50,7 @@ def build_matrix(
                 "repo_owner": repo_entry.repo.split("/", 1)[0],
                 "repo_name": repo_entry.repo.split("/", 1)[1],
                 "repo_slug": repo_entry.repo.replace("/", "-"),
-                "project_owner": repo_entry.project_owner,
-                "project_owner_type": repo_entry.project_owner_type,
-                "project_number": branch_entry.project_number,
                 "branch": branch_entry.branch,
-                "push_repo": repo_entry.effective_push_repo,
-                "language": repo_entry.language,
-                "build_commands_json": json.dumps(list(repo_entry.build_commands)),
-                "validation_setup_commands_json": json.dumps(
-                    list(repo_entry.validation_setup_commands)
-                ),
-                "repair_validation_failures": repo_entry.repair_validation_failures,
             })
 
     return {"include": entries}

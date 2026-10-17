@@ -143,8 +143,6 @@ def plan_publication(
     return PublishPlan(
         branch=branch,
         tag=tag,
-        version=version,
-        stage=stage,
         sha=candidate_sha,
         body=body,
         prerelease=stage != "ga",

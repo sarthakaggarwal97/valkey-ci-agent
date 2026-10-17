@@ -311,7 +311,6 @@ def resolve_conflicts_with_claude(
     pr_context: BackportPRContext,
     *,
     language: str = "c",
-    build_commands: list[str] | None = None,  # noqa: ARG001 — kept for API stability
     allowed_paths: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> list[ResolutionResult]:
     """Resolve cherry-pick merge conflicts using Claude Code.

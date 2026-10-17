@@ -164,8 +164,6 @@ def _plan() -> PublishPlan:
     return PublishPlan(
         branch="9.1",
         tag="9.1.2",
-        version="9.1.2",
-        stage="ga",
         sha=SHA,
         body="notes\n",
         prerelease=False,

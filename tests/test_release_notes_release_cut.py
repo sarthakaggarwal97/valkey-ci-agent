@@ -95,18 +95,18 @@ class TestResolveBranchPlan:
     def test_rc1_targets_minor_branch(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
         plan = resolve_branch_plan("/d", version="9.1.0", stage="rc1", profile=projects.VALKEY_PROFILE)
-        assert plan == BranchPlan("rc1", "9.1", "9.1")
+        assert plan == BranchPlan("rc1", "9.1")
 
     def test_rcN_targets_minor_branch(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
         monkeypatch.setattr(rc, "_warn_rc_sequence", lambda *a, **k: None)
         plan = resolve_branch_plan("/d", version="9.1.0", stage="rc2", profile=projects.VALKEY_PROFILE)
-        assert plan == BranchPlan("rc2", "9.1", "9.1")
+        assert plan == BranchPlan("rc2", "9.1")
 
     def test_ga_targets_minor_branch(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
         plan = resolve_branch_plan("/d", version="9.1.0", stage="ga", profile=projects.VALKEY_PROFILE)
-        assert plan == BranchPlan("ga", "9.1", "9.1")
+        assert plan == BranchPlan("ga", "9.1")
 
     def test_uppercase_rc1_normalizes(self, monkeypatch) -> None:
         self._exists(monkeypatch, {"9.1"})
@@ -979,14 +979,12 @@ class TestCutOrchestration:
         return created[0]["body"] if created else None
 
     def test_body_always_shows_resolved_range(self, monkeypatch, clone):
-        # The body must show the precise range: the resolved mode, source/target
-        # branches, and both ends as `ref @ <sha>` so a reviewer can audit the
+        # The body must show the precise range: the resolved mode and both ends as `ref @ <sha>` so a reviewer can audit the
         # exact commits, not just the branch-model names. _setup stubs git_output
         # to a deterministic 40-char SHA, abbreviated to 12 here.
         body = self._cut_body(monkeypatch, clone, line_exists={"9.1": True}, cut_kwargs={})
         assert "computed over the range below" in body
         assert "mode: rc1" in body
-        assert "target_branch: 9.1" in body
         assert "base: 9.0.0 @ aaaaaaaaaaaa" in body
 
 
@@ -1625,14 +1623,9 @@ class TestNotesRange:
     """The precise base/head-ref + SHA range surfaced in the PR body / dry-run."""
 
     _RANGE = rc._NotesRange(
-        mode="rc2", source_ref="9.1",
-        target_branch="9.1", base_ref="9.1.0-rc1",
+        mode="rc2", base_ref="9.1.0-rc1",
         base_sha="a" * 40, head_ref="9.1", head_sha="b" * 40,
     )
-
-    def test_plan_mode_fresh_rc1(self) -> None:
-        plan = BranchPlan("rc1", "9.1", "9.1")
-        assert rc._plan_mode(plan) == "rc1"
 
 
 
@@ -1650,8 +1643,6 @@ class TestNotesRange:
         lines = rc._notes_range_lines(self._RANGE)
         assert lines == [
             "mode: rc2",
-            "source_ref: 9.1",
-            "target_branch: 9.1",
             "base: 9.1.0-rc1 @ aaaaaaaaaaaa",
             "head: 9.1 @ bbbbbbbbbbbb",
         ]
@@ -1687,7 +1678,7 @@ class TestNotesRange:
         sha = git_output(repo, "rev-parse", "HEAD").strip()
 
         from unittest.mock import MagicMock
-        plan = BranchPlan("rc2", "9.1", "9.1")
+        plan = BranchPlan("rc2", "9.1")
         regen = MagicMock(base_tag="unstable")  # a resolvable ref for this fixture repo
         # head_ref is the ref discovery actually walked (the line tip on a
         # continuing cut); here both ends point at the fixture's single commit.
@@ -1695,7 +1686,6 @@ class TestNotesRange:
             repo, plan, head_ref="unstable", regen=regen
         )
         assert rng.mode == "rc2"
-        assert rng.target_branch == "9.1"
         assert rng.base_sha == sha
         assert rng.head_sha == sha
 
@@ -1757,7 +1747,7 @@ class TestDedupAgainstDestination:
     the final RC. These cover the dedup that keeps promotion idempotent anyway.
     """
 
-    _GA_PLAN = BranchPlan("ga", "9.1", "9.1")
+    _GA_PLAN = BranchPlan("ga", "9.1")
 
     @staticmethod
     def _meta(already_credited, noted_bullet_count):
@@ -1981,8 +1971,8 @@ class TestDedupAgainstDestination:
 class TestSecurityOnlyCutNotEmpty:
     """A cut carrying only security_fixes must not be flagged empty or held."""
 
-    _RC_PLAN = BranchPlan("rc1", "9.1", "9.1")
-    _GA_PLAN = BranchPlan("ga", "9.1", "9.1")
+    _RC_PLAN = BranchPlan("rc1", "9.1")
+    _GA_PLAN = BranchPlan("ga", "9.1")
 
     @staticmethod
     def _regen(bullet_count=0, had_prs=False, triage=()):
@@ -2045,7 +2035,7 @@ class TestSecurityOnlyCutNotEmpty:
 class TestNamedCveHold:
     """A PR naming a CVE holds the cut at any urgency short of resolved SECURITY."""
 
-    _PLAN = BranchPlan("ga", "7.2", "7.2")
+    _PLAN = BranchPlan("ga", "7.2")
     _CVE_REASON = "a PR names a CVE (needs SECURITY urgency and a Security Fixes entry)"
 
     @staticmethod
@@ -2310,7 +2300,7 @@ class TestValidateChangelogHistory:
 class TestBodyNamesProfileVersionFile:
     """The PR body must name the file the cut actually bumps (not src/version.h)."""
 
-    _PLAN = BranchPlan("ga", "1.0", "1.0")
+    _PLAN = BranchPlan("ga", "1.0")
     _JSON = projects.profile_for("valkey-json")
 
     def _meta(self, **overrides):
@@ -2448,7 +2438,7 @@ class TestUncategorizedNotes:
     listed for a maintainer to assign.
     """
 
-    _PLAN = BranchPlan("rc1", "9.2", "9.2")
+    _PLAN = BranchPlan("rc1", "9.2")
 
     @staticmethod
     def _meta(uncategorized):
@@ -2480,7 +2470,7 @@ class TestUncategorizedNotes:
 class TestWordingAlignmentSections:
     """The PR body must show every wording carry, decline, and unread line."""
 
-    _PLAN = BranchPlan("ga", "8.1", "8.1")
+    _PLAN = BranchPlan("ga", "8.1")
 
     @staticmethod
     def _regen(**overrides):

@@ -8,7 +8,6 @@ from scripts.common.polling import (
     PollLoopError,
     add_poll_loop_args,
     env_int,
-    env_seconds,
     format_poll_results,
     nonnegative_int,
     run_poll_loop,
@@ -39,10 +38,6 @@ def test_env_int_defaults_and_bounds():
     assert env_int("LOW", 7, minimum=1, environ=env) == 1
     assert env_int("HIGH", 7, maximum=60, environ=env) == 60
     assert env_int("OK", 7, environ=env) == 30
-
-
-def test_env_seconds_uses_same_bounds():
-    assert env_seconds("INTERVAL", 5, minimum=1, maximum=10, environ={"INTERVAL": "30"}) == 10
 
 
 def test_run_poll_loop_single_when_not_configured():

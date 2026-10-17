@@ -15,7 +15,7 @@ from scripts.common.github_client import dispatch_workflow, retry_github_call
 from scripts.common.github_graphql import GitHubGraphQLClient
 from scripts.common.identity import MAINTAINER_ORG, MAINTAINER_TEAM
 from scripts.common.logging_utils import configure_logging
-from scripts.common.polling import env_seconds, run_poll_loop
+from scripts.common.polling import env_int, run_poll_loop
 from scripts.release_notes.review import (
     REPOSITORIES,
     BatchMarker,
@@ -321,12 +321,12 @@ def main() -> int:
             bot_login=bot_login,
             dispatch=dispatch,
         ),
-        interval_seconds=env_seconds(
+        interval_seconds=env_int(
             "RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS",
             0,
             minimum=0,
         ),
-        duration_seconds=env_seconds(
+        duration_seconds=env_int(
             "RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS",
             0,
             minimum=0,

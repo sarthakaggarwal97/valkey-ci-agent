@@ -83,7 +83,7 @@ def _resolve_stage(version: str, stage: str) -> str:
     """
     if stage.strip():
         return rn.normalize_stage(stage)
-    _major, _minor, patch = cut_mod._split_version(version)
+    _major, _minor, patch = rn.parse_version(version)
     if patch > 0:
         return "ga"
     raise ValueError(
@@ -330,7 +330,7 @@ def _run_cut(
         clone_dir = tempfile.mkdtemp(prefix="release-cut-")
         try:
             # Derive the M.m branch from the version (all stages target it).
-            major, minor, _patch = cut_mod._split_version(version)
+            major, minor, _patch = rn.parse_version(version)
             source_ref = f"{major}.{minor}"
             run_git(None, "clone", "--branch", source_ref, github_https_url(repo_full_name),
                     clone_dir, env=git_env)
