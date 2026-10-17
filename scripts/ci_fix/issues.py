@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
 
@@ -142,7 +142,6 @@ def validate_issue(
     issue: Any,
     *,
     bot_login: str,
-    expected: IssueFailure | None = None,
     check_linked_pr: bool = True,
 ) -> tuple[IssueFailure | None, str]:
     """Return the current detector occurrence and any reason not to act."""
@@ -157,11 +156,6 @@ def validate_issue(
         return failure, f"issue #{issue.number} is assigned"
     if check_linked_pr and has_open_linked_pr(issue):
         return failure, f"issue #{issue.number} already has an open linked pull request"
-    if expected is not None and failure != expected:
-        return failure, (
-            f"issue #{issue.number} now points at run {failure.run_id} attempt "
-            f"{failure.run_attempt}, not the occurrence that was analyzed"
-        )
     return failure, ""
 
 
@@ -219,7 +213,6 @@ def _failing_jobs(
         repo_full_name,
         int(run.id),
         run_attempt=failure.run_attempt,
-        require_current=True,
     )
     failed = [
         job
@@ -462,15 +455,6 @@ def _result_dict(
     }
 
 
-@dataclass(frozen=True)
-class PreparedIssue:
-    """A validated detector issue and the fix task it asks for."""
-
-    failure: IssueFailure
-    task: FixTask
-    branch_name: str
-
-
 def plan_request(
     gh: Any,
     artifact_client: ArtifactClient,
@@ -482,41 +466,27 @@ def plan_request(
     """The fix plan for ``request`` (``{"repo": ..., "issue": N}``), or the final result."""
     repo_full_name = str(request.get("repo") or "")
     entry = load_registry(registry).get_repo(repo_full_name)
-    prepared = prepare_issue(
+    return prepare_issue(
         gh, artifact_client, repo_full_name,
         issue_number=int(request.get("issue") or 0), bot_login=bot_login,
         ignored_jobs=entry.ci_followup_ignored_jobs,
     )
-    if not isinstance(prepared, PreparedIssue):
-        return prepared
-    return FixPlan(front_door=FrontDoor.ISSUE, task=prepared.task, issue=prepared.failure)
-
-
-def _prepared(plan: FixPlan) -> PreparedIssue:
-    if plan.issue is None:
-        raise ValueError("an issue fix plan names its issue")
-    return PreparedIssue(failure=plan.issue, task=plan.task, branch_name=plan.task.target.branch)
 
 
 def report_result(gh: Any, plan: FixPlan, result: FixResult, *, bot_login: str) -> dict[str, Any]:  # noqa: ARG001
-    return report(gh, _prepared(plan), result)
-
-
-def get_issue(gh: Any, repo_full_name: str, issue_number: int) -> Any:
-    return retry_github_call(
-        lambda: gh.get_repo(repo_full_name).get_issue(issue_number),
-        retries=2,
-        description=f"get issue #{issue_number}",
-    )
-
-
-def report(gh: Any, prepared: PreparedIssue, result: FixResult) -> dict[str, Any]:
     """Comment the fix's result on its issue, and return it as a result record."""
-    task = prepared.task
+    task, failure = plan.task, plan.issue
+    if failure is None:
+        raise ValueError("an issue fix plan names its issue")
     repo_full_name = task.failure.repo_full_name
+    issue = retry_github_call(
+        lambda: gh.get_repo(repo_full_name).get_issue(failure.number),
+        retries=2,
+        description=f"get issue #{failure.number}",
+    )
     _terminal_comment(
-        get_issue(gh, repo_full_name, prepared.failure.number),
-        prepared.failure,
+        issue,
+        failure,
         repo_full_name=repo_full_name,
         action=result.kind.value,
         summary=result.summary,
@@ -527,11 +497,11 @@ def report(gh: Any, prepared: PreparedIssue, result: FixResult) -> dict[str, Any
     )
     return _result_dict(
         repo_full_name,
-        prepared.failure,
+        failure,
         action=result.kind.value,
         summary=result.summary,
         job_name=task.failure.job_name,
-        branch=prepared.branch_name,
+        branch=task.target.branch,
         pr_number=result.pr_number,
         pr_url=result.pr_url,
     )
@@ -545,7 +515,7 @@ def prepare_issue(
     issue_number: int,
     bot_login: str,
     ignored_jobs: tuple[str, ...] = (),
-) -> PreparedIssue | dict[str, Any]:
+) -> FixPlan | dict[str, Any]:
     """Validate one detector issue and build its fix task, or the final result.
 
     A final result is a skip, a refusal (commented on the issue), or an
@@ -702,4 +672,4 @@ def prepare_issue(
             other_failed_jobs=other_jobs,
         ),
     )
-    return PreparedIssue(failure=failure, task=task, branch_name=branch_name)
+    return FixPlan(front_door=FrontDoor.ISSUE, task=task, issue=failure)

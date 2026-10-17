@@ -23,7 +23,7 @@ from github.GithubException import GithubException
 from scripts.ci_fix.github_runs import (
     FailedJob,
     failed_jobs_for_run,
-    job_priority,
+    most_actionable_failure,
     newest_runs_for_head,
     select_job,
     workflow_file,
@@ -53,7 +53,6 @@ _GITHUB_HOSTS = frozenset({"github.com", "www.github.com"})
 _MARKDOWN_LINK_RE = re.compile(r"\[[^\]\n]*\]\((?P<url>[^)\s]+)\)")
 _ANGLE_LINK_RE = re.compile(r"<(?P<url>[^>\s]+)>")
 _BARE_LINK_RE = re.compile(r"\S*(?:://|github\.com/)\S*", re.IGNORECASE)
-_FAILED_RUN_CONCLUSIONS = frozenset({"failure", "timed_out", "cancelled"})
 _DEFAULT_AUTH_TEAM = "contributors"
 
 
@@ -334,30 +333,5 @@ def _most_actionable_failed_run(
     *,
     retries: int,
 ) -> tuple[Any, FailedJob, list[FailedJob]] | None:
-    current_runs = newest_runs_for_head(
-        gh,
-        repo_full_name,
-        branch=head_branch,
-        head_sha=head_sha,
-        retries=retries,
-    )
-    best: tuple[tuple[int, int, str], Any, FailedJob, list[FailedJob]] | None = None
-    for run in current_runs:
-        if str(getattr(run, "status", "") or "") != "completed":
-            continue
-        if str(getattr(run, "conclusion", "") or "") not in _FAILED_RUN_CONCLUSIONS:
-            continue
-        failed = failed_jobs_for_run(
-            gh,
-            repo_full_name,
-            int(run.id),
-            run_attempt=int(getattr(run, "run_attempt", 1) or 1),
-            retries=retries,
-        )
-        if not failed:
-            continue
-        selected = select_job(failed)
-        key = (job_priority(selected.name), -int(run.id), selected.name.casefold())
-        if best is None or key < best[0]:
-            best = (key, run, selected, failed)
-    return (best[1], best[2], best[3]) if best is not None else None
+    runs = newest_runs_for_head(gh, repo_full_name, branch=head_branch, head_sha=head_sha, retries=retries)
+    return most_actionable_failure(gh, repo_full_name, runs)

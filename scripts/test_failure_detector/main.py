@@ -246,8 +246,7 @@ def run(
             run_id,
             run_attempt=run_attempt,
             retries=3,
-            require_current=True,
-        )
+            )
     except Exception as exc:  # noqa: BLE001 - incomplete inspection must fail visibly
         detail = " ".join(str(exc).split())[:300] or type(exc).__name__
         log_outcome(

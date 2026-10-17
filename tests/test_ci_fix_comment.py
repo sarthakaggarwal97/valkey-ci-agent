@@ -107,17 +107,7 @@ def test_oversized_patch_is_not_partially_posted() -> None:
     assert "x" * 1_000 not in body
 
 
-def test_opened_refused_and_failed_results_are_plainly_reported() -> None:
-    opened = render_result(
-        FixResult(
-            kind=ResultKind.OPENED,
-            summary="opened",
-            task=_task(TargetKind.DRAFT_PR),
-            candidate=_candidate(),
-            pr_number=12,
-            pr_url="https://github.com/o/r/pull/12",
-        )
-    )
+def test_refused_and_failed_results_are_plainly_reported() -> None:
     refused = render_result(
         FixResult(
             kind=ResultKind.REFUSED,
@@ -134,30 +124,9 @@ def test_opened_refused_and_failed_results_are_plainly_reported() -> None:
         )
     )
 
-    assert "Opened draft PR [#12]" in opened
-    assert "human review" in opened
     assert refused.startswith("No fix prepared")
     assert "infrastructure failure" in refused
     assert "stopped with an error: clone failed" in failed
-
-
-def test_port_rendering_names_the_exact_commit() -> None:
-    commit = "9" * 40
-    body = render_result(
-        FixResult(
-            kind=ResultKind.SUGGESTED,
-            summary="suggested",
-            task=_task(),
-            candidate=_candidate(
-                action=CandidateAction.PORT,
-                patch="",
-                changed_paths=(),
-                port_commit=commit,
-            ),
-        )
-    )
-
-    assert f"git cherry-pick -x {commit}" in body
 
 
 def test_what_the_bot_checked_is_listed():

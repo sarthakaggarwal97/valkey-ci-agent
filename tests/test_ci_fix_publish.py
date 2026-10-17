@@ -26,10 +26,6 @@ _HEAD = "a" * 40
 _NEW = "b" * 40
 
 
-def test_every_target_kind_has_a_publisher() -> None:
-    assert set(publish_mod._TARGET_PUBLISHERS) == set(TargetKind)
-
-
 def _candidate(action: CandidateAction = CandidateAction.PATCH) -> FixCandidate:
     return FixCandidate(
         action=action,

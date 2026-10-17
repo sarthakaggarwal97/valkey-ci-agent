@@ -411,7 +411,6 @@ def test_one_exact_job_snapshot_is_reused_for_urls_and_logs(monkeypatch):
         123,
         run_attempt=3,
         retries=3,
-        require_current=True,
     )
     build_urls.assert_called_once_with(snapshot, run_id=123)
     assert inspect_logs.call_args.kwargs["jobs"] is snapshot

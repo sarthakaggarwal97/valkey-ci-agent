@@ -105,24 +105,6 @@ def test_raw_jobs_snapshot_preserves_job_objects():
     assert snapshot[0] is job
 
 
-def test_newer_attempt_does_not_hide_the_requested_snapshot():
-    old = SimpleNamespace(
-        id=44,
-        name="build",
-        conclusion="failure",
-        run_attempt=2,
-    )
-    newer = SimpleNamespace(
-        id=55,
-        name="build",
-        conclusion="success",
-        run_attempt=3,
-    )
-    gh = _gh_with_jobs([old, newer], run_attempt=3)
-
-    assert jobs_for_run_attempt(gh, "o/r", 1, run_attempt=2) == (old,)
-
-
 def test_actionable_failures_stop_when_a_newer_rerun_starts():
     old = SimpleNamespace(
         id=44,
@@ -145,7 +127,7 @@ def test_actionable_failures_stop_when_a_newer_rerun_starts():
 def test_future_attempt_is_rejected_even_when_it_has_no_jobs():
     gh = _gh_with_jobs([], run_attempt=2)
 
-    with pytest.raises(ValueError, match="only reached attempt 2"):
+    with pytest.raises(ValueError, match="currently attempt 2"):
         jobs_for_run_attempt(gh, "o/r", 1, run_attempt=3)
 
 
@@ -181,7 +163,6 @@ def test_failed_jobs_are_a_thin_filter_over_the_raw_snapshot(monkeypatch):
         10,
         run_attempt=4,
         retries=7,
-        require_current=True,
     )
 
 

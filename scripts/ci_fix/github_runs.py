@@ -12,7 +12,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from fnmatch import fnmatch
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from scripts.common.github_client import retry_github_call
 from scripts.common.valkey_ci import called_job_name
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # A cancelled job is usually a fail-fast skip after another job failed, not a
 # real failure; fixing it would be wrong. Only genuine failures are targets.
 FAILED_JOB_CONCLUSIONS = frozenset({"failure", "timed_out"})
+FAILED_RUN_CONCLUSIONS = frozenset({"failure", "timed_out", "cancelled"})
 
 
 @dataclass(frozen=True)
@@ -157,17 +158,14 @@ def jobs_for_run_attempt(
     *,
     run_attempt: int,
     retries: int = 2,
-    require_current: bool = False,
 ) -> tuple[Any, ...]:
-    """Return the raw jobs snapshot from one exact attempt of ``run_id``.
+    """Return the raw jobs snapshot from ``run_id``'s current attempt, ``run_attempt``.
 
-    All attempts are requested and every returned job must identify a valid
-    attempt. This lets a caller finish inspecting attempt N even if attempt
-    N+1 starts meanwhile, without mixing URLs, steps, or conclusions between
-    them. Set ``require_current`` for action-taking callers that must stop when
-    a newer rerun starts; historical detector analysis may leave it false.
-    The immutable tuple is intended to be fetched once and shared by all
-    consumers that inspect this occurrence.
+    Every caller acts on what it reads, so a newer rerun stops it. All
+    attempts are requested and every returned job must identify a valid
+    attempt, so the snapshot never mixes URLs, steps, or conclusions between
+    them. The immutable tuple is intended to be fetched once and shared by
+    all consumers that inspect this occurrence.
     """
     if (
         isinstance(run_attempt, bool)
@@ -182,12 +180,7 @@ def jobs_for_run_attempt(
             getattr(run, "run_attempt", run_attempt),
             description=f"run {run_id}",
         )
-        if observed_attempt < run_attempt:
-            raise ValueError(
-                f"run {run_id} has only reached attempt {observed_attempt}, "
-                f"not requested attempt {run_attempt}"
-            )
-        if require_current and observed_attempt != run_attempt:
+        if observed_attempt != run_attempt:
             raise ValueError(
                 f"run {run_id} is currently attempt {observed_attempt}, "
                 f"not expected attempt {run_attempt}"
@@ -239,7 +232,6 @@ def failed_jobs_for_run(
             run_id,
             run_attempt=run_attempt,
             retries=retries,
-            require_current=True,
         )
     )
 
@@ -289,6 +281,37 @@ def job_priority(name: str) -> int:
     if any(token in lowered for token in ("unit", "integration", "test")):
         return 1
     return 3
+
+
+def most_actionable_failure(
+    gh: Any,
+    repo_full_name: str,
+    runs: Iterable[Any],
+    *,
+    keep: Callable[[Any, FailedJob], bool] = lambda _run, _job: True,
+) -> tuple[Any, FailedJob, list[FailedJob]] | None:
+    """The completed failed run among ``runs``, its failed job most likely to have a fix, and all its failed jobs.
+
+    Only the jobs ``keep`` accepts compete. The best ``job_priority`` wins,
+    then the newest run.
+    """
+    best: tuple[tuple[int, int, str], Any, FailedJob, list[FailedJob]] | None = None
+    for run in runs:
+        if str(getattr(run, "status", "") or "") != "completed":
+            continue
+        if str(getattr(run, "conclusion", "") or "") not in FAILED_RUN_CONCLUSIONS:
+            continue
+        failed = failed_jobs_for_run(
+            gh, repo_full_name, int(run.id), run_attempt=int(getattr(run, "run_attempt", 1) or 1),
+        )
+        candidates = [job for job in failed if keep(run, job)]
+        if not candidates:
+            continue
+        selected = select_job(candidates)
+        key = (job_priority(selected.name), -int(run.id), selected.name.casefold())
+        if best is None or key < best[0]:
+            best = (key, run, selected, failed)
+    return (best[1], best[2], best[3]) if best is not None else None
 
 
 def select_job(jobs: Iterable[FailedJob]) -> FailedJob:

@@ -26,11 +26,9 @@ from scripts.backport.sweep_prs import find_existing_pr
 from scripts.ci_fix.comment import render_result
 from scripts.ci_fix.github_runs import (
     FailedJob,
-    failed_jobs_for_run,
     job_is_ignored,
-    job_priority,
+    most_actionable_failure,
     newest_runs_for_head,
-    select_job,
     workflow_file,
     workflow_identity,
 )
@@ -56,7 +54,6 @@ _MARKER_RE = re.compile(
     r"(?: attempt=(?P<attempt>\d+))? job=(?P<job>\d+)"
     r"(?: key=(?P<key>[0-9a-f]{64}))? -->"
 )
-_FAILED_RUN_CONCLUSIONS = {"failure", "timed_out", "cancelled"}
 _MAX_ATTEMPTS_PER_HEAD = 3
 
 
@@ -68,7 +65,7 @@ class FollowupTarget:
     run: Any
     head_sha: str
     head_branch: str
-    jobs: tuple[FailedJob, ...]
+    job: FailedJob
 
 
 @dataclass(frozen=True)
@@ -159,7 +156,6 @@ def _followup_for_pr(
         pr,
         repo_full_name=repo_entry.repo,
         target_branch=target_branch,
-        head_branch=head_branch,
         bot_login=bot_login,
     )
     if rejection:
@@ -185,47 +181,17 @@ def _followup_for_pr(
     ):
         return None, "current-head-ci-running"
 
-    candidates: list[tuple[int, FollowupTarget]] = []
-    for run in current_runs:
-        conclusion = str(getattr(run, "conclusion", "") or "")
-        if conclusion not in _FAILED_RUN_CONCLUSIONS:
-            continue
-        failed = tuple(
-            job
-            for job in failed_jobs_for_run(
-                gh,
-                repo_entry.repo,
-                int(run.id),
-                run_attempt=int(getattr(run, "run_attempt", 1) or 1),
-            )
-            if job.id
-            and job.id not in handled.job_ids
-            and _job_key(run, job.name) not in handled.job_keys
-            and not job_is_ignored(
-                job.name,
-                repo_entry.ci_followup_ignored_jobs,
-            )
-        )
-        if not failed:
-            continue
-        selected = select_job(failed)
-        candidates.append(
-            (
-                job_priority(selected.name),
-                FollowupTarget(
-                    pr=pr,
-                    run=run,
-                    head_sha=head_sha,
-                    head_branch=head_branch,
-                    jobs=(selected,),
-                ),
-            )
-        )
-
-    if not candidates:
+    picked = most_actionable_failure(
+        gh, repo_entry.repo, current_runs,
+        keep=lambda run, job: bool(job.id)
+        and job.id not in handled.job_ids
+        and _job_key(run, job.name) not in handled.job_keys
+        and not job_is_ignored(job.name, repo_entry.ci_followup_ignored_jobs),
+    )
+    if picked is None:
         return None, "no-unhandled-actionable-failures"
-    candidates.sort(key=lambda item: (item[0], -int(item[1].run.id)))
-    return candidates[0][1], "actionable"
+    run, job, _failed = picked
+    return FollowupTarget(pr=pr, run=run, head_sha=head_sha, head_branch=head_branch, job=job), "actionable"
 
 
 def plan_request(
@@ -253,7 +219,7 @@ def plan_request(
             "reason": reason,
         }
 
-    selected_job = select_job(target.jobs)
+    selected_job = target.job
     run_attempt = int(getattr(target.run, "run_attempt", 1) or 1)
     failure = Failure(
         repo_full_name=repo_entry.repo,
@@ -331,7 +297,6 @@ def _validate_sweep_pr(
     *,
     repo_full_name: str,
     target_branch: str,
-    head_branch: str,
     bot_login: str,
 ) -> str:
     """Return ``""`` only for the expected open, bot-owned sweep PR."""
@@ -339,8 +304,6 @@ def _validate_sweep_pr(
         return "pr-not-open"
     if str(getattr(pr.base, "ref", "") or "") != target_branch:
         return "base-branch-mismatch"
-    if str(getattr(pr.head, "ref", "") or "") != head_branch:
-        return "head-branch-mismatch"
     head_repo = str(
         getattr(getattr(pr.head, "repo", None), "full_name", "") or ""
     )

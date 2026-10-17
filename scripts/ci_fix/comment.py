@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 
 from scripts.ci_fix.models import (
-    CandidateAction,
     FixCandidate,
     FixResult,
     ResultKind,
@@ -37,15 +36,6 @@ def render_result(result: FixResult) -> str:
         body += _candidate_patch(result.candidate)
         body += [
             "_Apply the change on the contributor branch and let normal PR CI verify it._",
-        ]
-        return "\n".join(body)
-
-    if result.kind is ResultKind.OPENED:
-        link = f"[#{result.pr_number}]({result.pr_url})" if result.pr_url else f"#{result.pr_number}"
-        body = [f"Opened draft PR {link}.", ""]
-        body += _context(result)
-        body += [
-            "_The draft stays unmerged until normal PR CI passes and a human reviews it._",
         ]
         return "\n".join(body)
 
@@ -123,13 +113,6 @@ def _candidate_context(candidate: FixCandidate, *, include_reasoning: bool) -> l
 def _candidate_patch(candidate: FixCandidate | None) -> list[str]:
     if candidate is None:
         return []
-    if candidate.action is CandidateAction.PORT:
-        return [
-            "The fix is an upstream commit:",
-            "",
-            _fenced(f"git cherry-pick -x {candidate.port_commit}", lang="sh"),
-            "",
-        ]
     if not candidate.patch:
         return []
     patch_limit = target_capabilities(TargetKind.SUGGEST).patch_limit

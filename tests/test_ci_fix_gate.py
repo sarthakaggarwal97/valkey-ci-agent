@@ -9,6 +9,7 @@ import pytest
 from github.GithubException import GithubException
 
 from scripts.ci_fix import gate as gate_mod
+from scripts.ci_fix import github_runs
 from scripts.ci_fix.gate import (
     GateError,
     GateRejection,
@@ -22,6 +23,12 @@ from scripts.ci_fix.models import FixPolicy, FixTask, TargetKind
 
 _SHA = "a" * 40
 _RUN_URL = "https://github.com/valkey-io/valkey/actions/runs/27559908167"
+
+
+def _patch_failed_jobs(monkeypatch, failed_jobs):
+    """The gate reads a linked run's jobs itself, and the most actionable run's through github_runs."""
+    monkeypatch.setattr(gate_mod, "failed_jobs_for_run", failed_jobs)
+    monkeypatch.setattr(github_runs, "failed_jobs_for_run", failed_jobs)
 
 
 def _membership_gh(state: str = "active") -> MagicMock:
@@ -152,11 +159,7 @@ def _build(
             else [FailedJob("test-ubuntu", "failure", 11)]
         )
 
-    monkeypatch.setattr(
-        gate_mod,
-        "failed_jobs_for_run",
-        jobs_for_run,
-    )
+    _patch_failed_jobs(monkeypatch, jobs_for_run)
     return build_fix_task(
         gh,
         command=command or ParsedCommand("valkey-io", "valkey", 27559908167, ""),
@@ -276,10 +279,7 @@ def test_github_read_failures_remain_retryable(monkeypatch, failure: str) -> Non
     elif failure == "run":
         repo.get_workflow_run.side_effect = RuntimeError("temporary run failure")
     elif failure == "jobs":
-        monkeypatch.setattr(
-            gate_mod,
-            "failed_jobs_for_run",
-            MagicMock(side_effect=RuntimeError("temporary jobs failure")),
+        _patch_failed_jobs(monkeypatch, MagicMock(side_effect=RuntimeError("temporary jobs failure")),
         )
     else:
         command = ParsedCommand("", "", 0, "")
@@ -323,11 +323,7 @@ def test_without_link_selects_most_actionable_current_head_failure(monkeypatch) 
         2: [FailedJob("build-linux", "failure", 20)],
     }
     monkeypatch.setattr(gate_mod, "is_authorized", lambda *args, **kwargs: True)
-    monkeypatch.setattr(
-        gate_mod,
-        "failed_jobs_for_run",
-        lambda _gh, _repo, run_id, **kwargs: jobs[run_id],
-    )
+    _patch_failed_jobs(monkeypatch, lambda _gh, _repo, run_id, **kwargs: jobs[run_id])
 
     result = build_fix_task(
         gh,
@@ -376,7 +372,7 @@ def test_without_link_ignores_failure_superseded_by_success(monkeypatch) -> None
         return_value=[FailedJob("build-linux", "failure", 20)],
     )
     monkeypatch.setattr(gate_mod, "is_authorized", lambda *args, **kwargs: True)
-    monkeypatch.setattr(gate_mod, "failed_jobs_for_run", jobs_for_run)
+    _patch_failed_jobs(monkeypatch, jobs_for_run)
 
     result = build_fix_task(
         gh,
@@ -393,7 +389,6 @@ def test_without_link_ignores_failure_superseded_by_success(monkeypatch) -> None
         "valkey-io/valkey",
         12,
         run_attempt=3,
-        retries=2,
     )
 
 
@@ -423,7 +418,7 @@ def test_without_link_scopes_newest_run_selection_to_pr_branch(monkeypatch) -> N
         return_value=[FailedJob("build-linux", "failure", 20)],
     )
     monkeypatch.setattr(gate_mod, "is_authorized", lambda *args, **kwargs: True)
-    monkeypatch.setattr(gate_mod, "failed_jobs_for_run", jobs_for_run)
+    _patch_failed_jobs(monkeypatch, jobs_for_run)
 
     result = build_fix_task(
         gh,
@@ -444,5 +439,4 @@ def test_without_link_scopes_newest_run_selection_to_pr_branch(monkeypatch) -> N
         "valkey-io/valkey",
         20,
         run_attempt=1,
-        retries=2,
     )

@@ -17,7 +17,9 @@ from scripts.ci_fix.models import (
     CandidateAction,
     FailedTest,
     FixCandidate,
+    FixPlan,
     FixResult,
+    FrontDoor,
     ResultKind,
     TargetKind,
 )
@@ -41,10 +43,10 @@ def run_issue_fix(gh, artifact_client, repo_full_name, *, issue_number, bot_logi
         gh, artifact_client, repo_full_name,
         issue_number=issue_number, bot_login=bot_login, ignored_jobs=ignored_jobs,
     )
-    if not isinstance(prepared, issues_mod.PreparedIssue):
+    if not isinstance(prepared, FixPlan):
         return prepared
     result = _ENGINE["run_fix"](gh, prepared.task, artifact_client, git_env)
-    return issues_mod.report(gh, prepared, result)
+    return issues_mod.report_result(gh, prepared, result, bot_login=bot_login)
 
 
 def _last_key(
@@ -406,7 +408,6 @@ def test_log_only_failure_keeps_exact_job_id(monkeypatch):
     observed_snapshots = []
 
     def load_jobs(*args, **kwargs):
-        assert kwargs["require_current"] is True
         observed_attempts.append(kwargs["run_attempt"])
         return snapshot
 
@@ -821,7 +822,7 @@ def test_only_issues_about_the_same_branch_are_also_fixed_candidates():
 
 # --- the issue's part in the shared run (scripts/ci_fix/run.py) ----------------
 
-def prepared_issue(job_name="test-ubuntu-jemalloc"):
+def issue_plan(job_name="test-ubuntu-jemalloc"):
     from scripts.ci_fix.models import Failure, FixPolicy, FixTarget, FixTask
     from scripts.common.valkey_ci import Source
 
@@ -833,29 +834,14 @@ def prepared_issue(job_name="test-ubuntu-jemalloc"):
                   expected_sha=_BASE, base_branch="unstable", issue_number=7),
         FixPolicy.GENERAL,
     )
-    return issues_mod.PreparedIssue(failure=failure, task=task, branch_name="agent/ci-fix/x")
+    return FixPlan(front_door=FrontDoor.ISSUE, task=task, issue=failure)
 
 
-def test_an_issue_is_planned_with_the_occurrence_it_records(monkeypatch):
-    from scripts.ci_fix.models import FixPlan, FrontDoor
-
+def test_an_issue_is_planned_with_the_registrys_ignored_jobs(monkeypatch):
     seen = {}
-    monkeypatch.setattr(issues_mod, "prepare_issue", lambda *a, **k: seen.update(a=a, k=k) or prepared_issue())
+    monkeypatch.setattr(issues_mod, "prepare_issue", lambda *a, **k: seen.update(a=a, k=k) or issue_plan())
 
     plan = issues_mod.plan_request(MagicMock(), None, {"repo": "valkey-io/valkey", "issue": 7}, bot_login=_BOT)
 
-    assert plan == FixPlan(front_door=FrontDoor.ISSUE, task=prepared_issue().task, issue=prepared_issue().failure)
-    assert seen["k"]["issue_number"] == 7 and seen["k"]["ignored_jobs"]  # the registry's ignored jobs
-
-
-def test_an_issue_plan_reports_on_the_same_issue(monkeypatch):
-    from scripts.ci_fix.models import FixPlan, FrontDoor
-
-    plan = FixPlan(front_door=FrontDoor.ISSUE, task=prepared_issue().task, issue=prepared_issue().failure)
-    reported = []
-    monkeypatch.setattr(issues_mod, "report", lambda _gh, prepared, result: reported.append(prepared) or {})
-    result = FixResult(kind=ResultKind.OPENED, summary="opened", task=plan.task)
-
-    issues_mod.report_result(MagicMock(), plan, result, bot_login=_BOT)
-
-    assert reported == [prepared_issue()]
+    assert plan == issue_plan()
+    assert seen["k"]["issue_number"] == 7 and seen["k"]["ignored_jobs"]

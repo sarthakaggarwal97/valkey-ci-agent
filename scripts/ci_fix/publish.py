@@ -13,7 +13,7 @@ This module never merges a pull request.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, Protocol
+from typing import Any
 
 from github.GithubException import GithubException
 
@@ -47,19 +47,6 @@ class TargetRevalidationFailed(Exception):
     """The target could not be revalidated because GitHub was unavailable."""
 
 
-class TargetPublisher(Protocol):
-    """One target-specific publication adapter."""
-
-    def __call__(
-        self,
-        gh: Any,
-        task: FixTask,
-        candidate: FixCandidate,
-        *,
-        git_env: dict[str, str],
-    ) -> FixResult: ...
-
-
 def publish_candidate(
     gh: Any,
     task: FixTask,
@@ -90,25 +77,14 @@ def publish_candidate(
     ):
         return _refused(task, candidate, "The publication target does not match the analyzed head.")
 
-    publisher = _TARGET_PUBLISHERS.get(target.kind)
-    if publisher is None:
-        return FixResult(
-            kind=ResultKind.FAILED,
-            summary=f"Unsupported publication target {target.kind.value}.",
-            task=task,
-            candidate=candidate,
-        )
-    return publisher(gh, task, candidate, git_env=git_env)
+    if target.kind is TargetKind.SUGGEST:
+        return _publish_suggestion(gh, task, candidate)
+    if target.kind is TargetKind.UPDATE_PR:
+        return _publish_update(gh, task, candidate, git_env=git_env)
+    return _publish_draft(gh, task, candidate, git_env=git_env)
 
 
-def _publish_suggestion(
-    gh: Any,
-    task: FixTask,
-    candidate: FixCandidate,
-    *,
-    git_env: dict[str, str],
-) -> FixResult:
-    del git_env
+def _publish_suggestion(gh: Any, task: FixTask, candidate: FixCandidate) -> FixResult:
     try:
         rejection = _validate_pr_target(gh, task, require_bot=False)
     except TargetRevalidationFailed as exc:
@@ -217,13 +193,6 @@ def _publish_draft(
     )
 
 
-_TARGET_PUBLISHERS: dict[TargetKind, TargetPublisher] = {
-    TargetKind.SUGGEST: _publish_suggestion,
-    TargetKind.UPDATE_PR: _publish_update,
-    TargetKind.DRAFT_PR: _publish_draft,
-}
-
-
 def reconcile_draft_pr(
     gh: Any,
     task: FixTask,
@@ -267,7 +236,7 @@ def reconcile_draft_pr(
             return _refused(task, candidate, rejection)
         return _opened(
             task,
-            candidate if known_commit_sha else None,
+            candidate,
             existing,
             commit_sha=known_commit_sha,
         )
@@ -285,15 +254,9 @@ def reconcile_draft_pr(
                 retries=2,
                 description=f"get {target.repo_full_name}:{target.branch}",
             )
-        except GithubException as exc:
-            if exc.status == 404:
-                return None
-            return _failed(
-                task,
-                candidate,
-                f"The occurrence branch {target.branch} could not be checked: {exc}",
-            )
         except Exception as exc:  # noqa: BLE001 - retry can recover GitHub API failures
+            if isinstance(exc, GithubException) and exc.status == 404:
+                return None
             return _failed(
                 task,
                 candidate,
@@ -317,28 +280,9 @@ def reconcile_draft_pr(
         # The exact PR may have appeared between the first lookup and the
         # issue-timeline check. One final exact lookup resolves that race.
         if "already has an open linked pull request" in rejection:
-            try:
-                existing = find_existing_pr(
-                    gh,
-                    task.failure.repo_full_name,
-                    target.repo_full_name,
-                    target.branch,
-                )
-            except Exception:
-                existing = None
-            if existing is not None:
-                existing_rejection = _validate_existing_draft_pr(
-                    existing,
-                    task,
-                    expected_sha=commit_sha,
-                )
-                if not existing_rejection:
-                    return _opened(
-                        task,
-                        candidate if known_commit_sha else None,
-                        existing,
-                        commit_sha=commit_sha,
-                    )
+            reused = _reuse_draft_pr(gh, task, candidate, commit_sha)
+            if reused is not None:
+                return reused
         return FixResult(
             kind=ResultKind.REFUSED,
             summary=rejection,
@@ -360,11 +304,11 @@ def reconcile_draft_pr(
                 push_repo=target.repo_full_name,
                 title=_draft_title(
                     task,
-                    candidate if known_commit_sha else None,
+                    candidate,
                 ),
                 body=_draft_body(
                     task,
-                    candidate if known_commit_sha else None,
+                    candidate,
                 ),
                 head_branch=target.branch,
                 base_branch=target.base_branch or task.failure.base_branch,
@@ -374,28 +318,9 @@ def reconcile_draft_pr(
             description=f"open draft CI-fix PR for issue #{target.issue_number}",
         )
     except Exception as exc:
-        try:
-            existing = find_existing_pr(
-                gh,
-                task.failure.repo_full_name,
-                target.repo_full_name,
-                target.branch,
-            )
-        except Exception:  # noqa: BLE001 - preserve the original create failure
-            existing = None
-        if existing is not None:
-            rejection = _validate_existing_draft_pr(
-                existing,
-                task,
-                expected_sha=commit_sha,
-            )
-            if not rejection:
-                return _opened(
-                    task,
-                    candidate if known_commit_sha else None,
-                    existing,
-                    commit_sha=commit_sha,
-                )
+        reused = _reuse_draft_pr(gh, task, candidate, commit_sha)
+        if reused is not None:
+            return reused
         return _failed(
             task,
             candidate,
@@ -405,10 +330,22 @@ def reconcile_draft_pr(
         )
     return _opened(
         task,
-        candidate if known_commit_sha else None,
+        candidate,
         existing,
         commit_sha=commit_sha,
     )
+
+
+def _reuse_draft_pr(gh: Any, task: FixTask, candidate: FixCandidate | None, commit_sha: str) -> FixResult | None:
+    """The occurrence's draft PR, opened at ``commit_sha`` by a racing attempt, or None."""
+    target = task.target
+    try:
+        existing = find_existing_pr(gh, task.failure.repo_full_name, target.repo_full_name, target.branch)
+    except Exception:  # noqa: BLE001 - the caller reports its own failure
+        return None
+    if existing is None or _validate_existing_draft_pr(existing, task, expected_sha=commit_sha):
+        return None
+    return _opened(task, candidate, existing, commit_sha=commit_sha)
 
 
 def _validate_pr_target(gh: Any, task: FixTask, *, require_bot: bool) -> str:
