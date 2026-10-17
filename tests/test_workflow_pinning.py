@@ -9,6 +9,7 @@ import yaml
 
 _USE_RE = re.compile(r"uses:\s*([^@\s]+)@([^#\s]+)")
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_STEP_START_RE = re.compile(r"^\s+- name: ")
 _CLAUDE_CODE_INSTALL_RE = re.compile(r"npm install -g @anthropic-ai/claude-code(?:@([^\s]+))?")
 _PIP_INSTALL_RE = r"(?:python -m )?pip install"
 _OLD_REQUIREMENTS_INSTALL_RE = re.compile(rf"{_PIP_INSTALL_RE} (?:-r requirements\.txt|pyyaml)")
@@ -106,19 +107,25 @@ def test_workflows_use_shared_agent_setup_action():
     assert offenders == []
 
 
+def _step_block(lines: list[str], line_no: int) -> list[str]:
+    """The lines after ``lines[line_no - 1]`` up to the next step."""
+    block = []
+    for later in lines[line_no:]:
+        if _STEP_START_RE.match(later):
+            break
+        block.append(later)
+    return block
+
+
 def test_github_app_tokens_request_explicit_permissions():
     offenders = []
     token_action = "uses: actions/create-github-app-token@"
-    for path in _workflow_files():
+    for path in _automation_yaml_files():
         lines = path.read_text(encoding="utf-8").splitlines()
         for line_no, line in enumerate(lines, start=1):
             if token_action not in line:
                 continue
-            block = []
-            for later in lines[line_no:]:
-                if later.startswith("      - name: "):
-                    break
-                block.append(later)
+            block = _step_block(lines, line_no)
             if not any("permission-" in later for later in block):
                 offenders.append(f"{path}:{line_no}: create-github-app-token has no explicit permissions")
 
@@ -129,8 +136,7 @@ def test_push_capable_app_tokens_can_update_workflows():
     """Push tokens need workflows:write for commits touching .github/workflows."""
     required_steps = {
         ".github/workflows/backport.yml": "Generate GitHub App token",
-        ".github/workflows/backport-poll.yml": "Generate publication token",
-        ".github/workflows/backport-sweep.yml": "Generate publication token",
+        ".github/actions/backport-sweep/action.yml": "Generate publication token",
         ".github/workflows/manual-revert-commit.yml": "Generate GitHub App token",
     }
     offenders = []
@@ -140,11 +146,7 @@ def test_push_capable_app_tokens_can_update_workflows():
         for line_no, line in enumerate(lines, start=1):
             if line.strip() != f"- name: {step_name}":
                 continue
-            block = []
-            for later in lines[line_no:]:
-                if later.startswith("      - name: "):
-                    break
-                block.append(later)
+            block = _step_block(lines, line_no)
             if not any("permission-workflows: write" in later for later in block):
                 offenders.append(f"{path}:{line_no}: {step_name} lacks permission-workflows: write")
             break
@@ -155,30 +157,30 @@ def test_push_capable_app_tokens_can_update_workflows():
 
 
 def test_backport_workflows_refresh_credentials_after_validation():
+    action = Path(".github/actions/backport-sweep/action.yml").read_text(encoding="utf-8")
+    assert (
+        action.index("- name: Generate preparation token")
+        < action.index("- name: Prepare backport sweep")
+        < action.index("- name: Generate publication token")
+        < action.index("- name: Publish backport sweep")
+        < action.index("- name: Clean up prepared sweep")
+    )
+    assert "TARGET_TOKEN: ${{ steps.prepare-token.outputs.token }}" in action
+    assert "TARGET_TOKEN: ${{ steps.publish-token.outputs.token }}" in action
+    assert "role-duration-seconds: ${{ inputs.role-duration-seconds }}" in action
+    assert "--target-token" not in action
+
     for filename, job_name in (
         ("backport-sweep.yml", "sweep"),
         ("backport-poll.yml", "poll"),
     ):
         text = (Path(".github/workflows") / filename).read_text(encoding="utf-8")
-        assert (
-            text.index("- name: Generate preparation token")
-            < text.index("- name: Prepare backport sweep")
-            < text.index("- name: Generate publication token")
-            < text.index("- name: Publish backport sweep")
-            < text.index("- name: Clean up prepared sweep")
-        )
-        assert "TARGET_TOKEN: ${{ steps.prepare-token.outputs.token }}" in text
-        assert "TARGET_TOKEN: ${{ steps.publish-token.outputs.token }}" in text
         assert "--target-token" not in text
-
-        workflow = yaml.load(text, Loader=yaml.BaseLoader)
-        job = workflow["jobs"][job_name]
-        aws_step = next(
-            step
-            for step in job["steps"]
-            if step.get("name") == "Configure AWS credentials"
+        job = yaml.load(text, Loader=yaml.BaseLoader)["jobs"][job_name]
+        sweep_step = next(
+            step for step in job["steps"] if step.get("uses") == "./.github/actions/backport-sweep"
         )
-        assert int(aws_step["with"]["role-duration-seconds"]) >= (
+        assert int(sweep_step["with"]["role-duration-seconds"]) >= (
             int(job["timeout-minutes"]) * 60
         )
 
@@ -455,3 +457,50 @@ def test_the_isolation_tests_also_run_as_root_in_a_container():
 
     assert job["container"] and setup["with"]["system-packages"] == "true"
     assert any("pytest" in step.get("run", "") and "tests/test_isolation.py" in step["run"] for step in job["steps"])
+
+
+def _agent_automation_files():
+    """The agent's own workflows and actions; the valkey-copy-* files mirror Valkey's."""
+    return [path for path in _automation_yaml_files() if not path.name.startswith("valkey-copy-")]
+
+
+def test_each_action_is_pinned_to_one_sha():
+    """The agent's workflows, its actions and the copies' injected steps agree on every pin."""
+    pins: dict[str, set[str]] = {}
+    sources = [path.read_text(encoding="utf-8") for path in _agent_automation_files()]
+    sources.append(Path("scripts/valkey_workflows/normalize.py").read_text(encoding="utf-8"))
+    for text in sources:
+        for action, ref in _USE_RE.findall(text):
+            if not action.startswith("./") and _SHA_RE.fullmatch(ref):
+                pins.setdefault(action, set()).add(ref)
+        for action, ref in re.findall(r'= "([\w.-]+/[\w.-]+)@([0-9a-f]{40})"', text):
+            pins.setdefault(action, set()).add(ref)
+
+    assert {action: refs for action, refs in pins.items() if len(refs) > 1} == {}
+
+
+def test_agent_workflows_run_javascript_actions_on_node_24():
+    missing = [
+        path.name
+        for path in _agent_automation_files()
+        if path.parent.name == "workflows"
+        and str((yaml.safe_load(path.read_text(encoding="utf-8")).get("env") or {}).get(
+            "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"
+        )).lower() != "true"
+    ]
+
+    assert missing == []
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["backport-ci-followup.yml", "backport-mark-done-poll.yml", "backport-poll.yml", "backport-sweep.yml"],
+)
+def test_backport_matrices_come_from_the_shared_workflow(filename):
+    workflow = yaml.safe_load((Path(".github/workflows") / filename).read_text(encoding="utf-8"))
+    preflight = workflow["jobs"]["preflight"]
+
+    assert preflight["uses"] == "./.github/workflows/backport-matrix.yml"
+    assert preflight["if"] == "github.repository == 'valkey-io/valkey-ci-agent'"
+    assert preflight["with"]["repo"] == "${{ inputs.repo || '' }}"
+

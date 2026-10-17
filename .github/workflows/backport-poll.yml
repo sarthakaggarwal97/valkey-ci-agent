@@ -35,39 +35,12 @@ jobs:
   preflight:
     name: "Generate matrix"
     if: github.repository == 'valkey-io/valkey-ci-agent'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
     permissions:
       contents: read
-    outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-      has_entries: ${{ steps.matrix.outputs.has_entries }}
-    steps:
-      - name: Check out agent repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Set up agent dependencies
-        uses: ./.github/actions/setup-agent
-
-      - name: Generate matrix from registry
-        id: matrix
-        shell: bash
-        env:
-          REPO_FILTER: ${{ inputs.repo || '' }}
-          PROJECT_FILTER: ${{ inputs.project_number || '' }}
-        run: |
-          set -euo pipefail
-          args=(--registry repos.yml)
-          if [[ -n "${REPO_FILTER}" ]]; then
-            args+=(--repo "${REPO_FILTER}")
-          fi
-          if [[ -n "${PROJECT_FILTER}" ]]; then
-            args+=(--project-number "${PROJECT_FILTER}")
-          fi
-          python -m scripts.backport.matrix "${args[@]}" --output-file "$GITHUB_OUTPUT"
+    uses: ./.github/workflows/backport-matrix.yml
+    with:
+      repo: ${{ inputs.repo || '' }}
+      project_number: ${{ inputs.project_number || '' }}
 
   poll:
     name: "poll/${{ matrix.repo }}/${{ matrix.branch }}"
@@ -105,13 +78,9 @@ jobs:
         with:
           install-claude: "true"
 
-      - name: Configure runtime paths
-        shell: bash
-        run: echo "SWEEP_STATE_FILE=${RUNNER_TEMP}/backport-sweep/state.json" >> "${GITHUB_ENV}"
-
       - name: Generate polling token
         id: poll-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
@@ -168,83 +137,20 @@ jobs:
           echo "needs_sweep=${sweep}" >> "${GITHUB_OUTPUT}"
           echo "had_error=${poll_had_error}" >> "${GITHUB_OUTPUT}"
 
-      - name: Generate preparation token
+      - name: Run backport sweep
         if: steps.poll.outputs.needs_sweep == 'true'
-        id: prepare-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        uses: ./.github/actions/backport-sweep
         with:
+          repo: ${{ matrix.repo }}
+          repo-owner: ${{ matrix.repo_owner }}
+          repo-name: ${{ matrix.repo_name }}
+          branch: ${{ matrix.branch }}
+          max-candidates: ${{ env.MAX_CANDIDATES }}
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ matrix.repo_owner }}
-          repositories: ${{ matrix.repo_name }}
-          permission-contents: read
-          permission-pull-requests: read
-          permission-organization-projects: read
-          permission-metadata: read
-
-      - name: Configure AWS credentials
-        if: steps.poll.outputs.needs_sweep == 'true'
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-role-arn: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: backport-poll-${{ github.run_id }}-${{ matrix.branch }}
-          aws-region: ${{ env.AWS_REGION }}
           role-duration-seconds: 10800
-
-      - name: Prepare backport sweep
-        if: steps.poll.outputs.needs_sweep == 'true'
-        id: prepare
-        shell: bash
-        env:
-          TARGET_TOKEN: ${{ steps.prepare-token.outputs.token }}
-        run: |
-          set -euo pipefail
-          python -m scripts.backport.sweep \
-            --registry repos.yml \
-            --repo "${{ matrix.repo }}" \
-            --branch "${{ matrix.branch }}" \
-            --max-candidates "${MAX_CANDIDATES}" \
-            --prepare-state "${SWEEP_STATE_FILE}" \
-            --verbose | tee backport-sweep-result.json
-          [[ -f "${SWEEP_STATE_FILE}" ]] && publish=true || publish=false
-          echo "needs_publish=${publish}" >> "${GITHUB_OUTPUT}"
-
-      - name: Generate publication token
-        if: steps.prepare.outputs.needs_publish == 'true'
-        id: publish-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ matrix.repo_owner }}
-          repositories: ${{ matrix.repo_name }}
-          permission-contents: write
-          permission-workflows: write
-          permission-pull-requests: write
-          permission-issues: write
-          permission-metadata: read
-
-      - name: Publish backport sweep
-        if: steps.prepare.outputs.needs_publish == 'true'
-        shell: bash
-        env:
-          TARGET_TOKEN: ${{ steps.publish-token.outputs.token }}
-        run: |
-          set -euo pipefail
-          python -m scripts.backport.sweep \
-            --registry repos.yml \
-            --repo "${{ matrix.repo }}" \
-            --branch "${{ matrix.branch }}" \
-            --publish-state "${SWEEP_STATE_FILE}" \
-            --verbose | tee backport-sweep-result.json
-
-      - name: Clean up prepared sweep
-        if: always()
-        shell: bash
-        run: |
-          if [[ "${SWEEP_STATE_FILE:-}" == "${RUNNER_TEMP}/backport-sweep/state.json" ]]; then
-            rm -rf -- "${RUNNER_TEMP}/backport-sweep"
-          fi
 
       - name: Upload result
         if: always()

@@ -27,39 +27,13 @@ jobs:
   preflight:
     name: Generate matrix
     if: github.repository == 'valkey-io/valkey-ci-agent'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
     permissions:
       contents: read
-    outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-      has_entries: ${{ steps.matrix.outputs.has_entries }}
-    steps:
-      - name: Check out agent repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Set up agent dependencies
-        uses: ./.github/actions/setup-agent
-
-      - name: Generate enabled branch matrix
-        id: matrix
-        shell: bash
-        env:
-          REPO_FILTER: ${{ inputs.repo || '' }}
-          PROJECT_FILTER: ${{ inputs.project_number || '' }}
-        run: |
-          set -euo pipefail
-          args=(--registry repos.yml --automatic-ci-followup-only)
-          if [[ -n "${REPO_FILTER}" ]]; then
-            args+=(--repo "${REPO_FILTER}")
-          fi
-          if [[ -n "${PROJECT_FILTER}" ]]; then
-            args+=(--project-number "${PROJECT_FILTER}")
-          fi
-          python -m scripts.backport.matrix "${args[@]}" --output-file "$GITHUB_OUTPUT"
+    uses: ./.github/workflows/backport-matrix.yml
+    with:
+      repo: ${{ inputs.repo || '' }}
+      project_number: ${{ inputs.project_number || '' }}
+      automatic_ci_followup_only: true
 
   follow-up:
     name: "follow-up/${{ matrix.repo }}/${{ matrix.branch }}"

@@ -1,0 +1,134 @@
+name: Run a backport sweep
+description: >-
+  Prepare one branch's backport sweep with a read-only token, then publish
+  what it prepared with a write token minted only after validation.
+
+inputs:
+  repo:
+    description: The target repository, owner/name.
+    required: true
+  repo-owner:
+    description: The target repository's owner.
+    required: true
+  repo-name:
+    description: The target repository's name.
+    required: true
+  branch:
+    description: The release branch to sweep.
+    required: true
+  max-candidates:
+    description: Cap on successfully applied cherry-picks (0 = unlimited).
+    required: true
+  discover-only:
+    description: Discover candidates without cherry-picking or pushing.
+    required: false
+    default: "false"
+  app-id:
+    description: The bot GitHub App's id.
+    required: true
+  private-key:
+    description: The bot GitHub App's private key.
+    required: true
+  aws-role-arn:
+    description: The AWS role that grants Bedrock access.
+    required: true
+  role-session-name:
+    description: The AWS role session name.
+    required: true
+  role-duration-seconds:
+    description: The AWS session duration, at least the job's timeout.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure runtime paths
+      shell: bash
+      run: echo "SWEEP_STATE_FILE=${RUNNER_TEMP}/backport-sweep/state.json" >> "${GITHUB_ENV}"
+
+    - name: Generate preparation token
+      id: prepare-token
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: ${{ inputs.repo-owner }}
+        repositories: ${{ inputs.repo-name }}
+        permission-contents: read
+        permission-pull-requests: read
+        permission-organization-projects: read
+        permission-metadata: read
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        role-session-name: ${{ inputs.role-session-name }}
+        aws-region: ${{ env.AWS_REGION }}
+        role-duration-seconds: ${{ inputs.role-duration-seconds }}
+
+    - name: Prepare backport sweep
+      id: prepare
+      shell: bash
+      env:
+        TARGET_TOKEN: ${{ steps.prepare-token.outputs.token }}
+        REPO: ${{ inputs.repo }}
+        BRANCH: ${{ inputs.branch }}
+        MAX_CANDIDATES: ${{ inputs.max-candidates }}
+        DISCOVER_ONLY: ${{ inputs.discover-only }}
+      run: |
+        set -euo pipefail
+        args=(
+          -m scripts.backport.sweep
+          --registry repos.yml
+          --repo "${REPO}"
+          --branch "${BRANCH}"
+          --max-candidates "${MAX_CANDIDATES}"
+          --prepare-state "${SWEEP_STATE_FILE}"
+          --verbose
+        )
+        if [[ "${DISCOVER_ONLY}" == "true" ]]; then
+          args+=(--discover-only)
+        fi
+        python "${args[@]}" | tee backport-sweep-result.json
+        [[ -f "${SWEEP_STATE_FILE}" ]] && publish=true || publish=false
+        echo "needs_publish=${publish}" >> "${GITHUB_OUTPUT}"
+
+    - name: Generate publication token
+      if: steps.prepare.outputs.needs_publish == 'true'
+      id: publish-token
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: ${{ inputs.repo-owner }}
+        repositories: ${{ inputs.repo-name }}
+        permission-contents: write
+        permission-workflows: write
+        permission-pull-requests: write
+        permission-issues: write
+        permission-metadata: read
+
+    - name: Publish backport sweep
+      if: steps.prepare.outputs.needs_publish == 'true'
+      shell: bash
+      env:
+        TARGET_TOKEN: ${{ steps.publish-token.outputs.token }}
+        REPO: ${{ inputs.repo }}
+        BRANCH: ${{ inputs.branch }}
+      run: |
+        set -euo pipefail
+        python -m scripts.backport.sweep \
+          --registry repos.yml \
+          --repo "${REPO}" \
+          --branch "${BRANCH}" \
+          --publish-state "${SWEEP_STATE_FILE}" \
+          --verbose | tee backport-sweep-result.json
+
+    - name: Clean up prepared sweep
+      if: always()
+      shell: bash
+      run: |
+        if [[ "${SWEEP_STATE_FILE:-}" == "${RUNNER_TEMP}/backport-sweep/state.json" ]]; then
+          rm -rf -- "${RUNNER_TEMP}/backport-sweep"
+        fi

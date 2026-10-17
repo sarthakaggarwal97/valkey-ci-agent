@@ -464,7 +464,11 @@ Workflow setup is centralized in `.github/actions/setup-agent`. Jobs still
 check out the agent repository explicitly, then use that local composite action
 to install the pinned Python toolchain, project dependencies, and optionally
 the pinned Claude Code CLI. The workflow standards tests scan both workflows
-and local action metadata so external actions and Claude installs do not drift.
+and local action metadata so external actions and Claude installs do not drift,
+and each external action is pinned to one SHA everywhere. The scheduled
+backport workflows take their `{repo, branch}` matrix from the reusable
+`backport-matrix.yml`, and the daily sweep and the poller run one sweep through
+`.github/actions/backport-sweep`.
 
 ## Repository Model
 

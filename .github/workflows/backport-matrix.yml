@@ -1,0 +1,75 @@
+name: Backport Matrix
+
+# The {repo, branch} matrix from repos.yml that the scheduled backport
+# workflows fan out over, optionally filtered to one repository or project.
+on:
+  workflow_call:
+    inputs:
+      repo:
+        description: "Filter to this repository (empty = all repos in registry)"
+        required: false
+        type: string
+        default: ""
+      project_number:
+        description: "Filter to this project number (empty = all)"
+        required: false
+        type: string
+        default: ""
+      automatic_ci_followup_only:
+        description: "Include only repositories with automatic_ci_followup enabled"
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      matrix:
+        description: "The matrix, as JSON"
+        value: ${{ jobs.matrix.outputs.matrix }}
+      has_entries:
+        description: "Whether the matrix has any entry"
+        value: ${{ jobs.matrix.outputs.has_entries }}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions: {}
+
+jobs:
+  matrix:
+    name: Generate matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has_entries: ${{ steps.matrix.outputs.has_entries }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate matrix from registry
+        id: matrix
+        shell: bash
+        env:
+          REPO_FILTER: ${{ inputs.repo }}
+          PROJECT_FILTER: ${{ inputs.project_number }}
+          CI_FOLLOWUP_ONLY: ${{ inputs.automatic_ci_followup_only }}
+        run: |
+          set -euo pipefail
+          args=(--registry repos.yml)
+          if [[ "${CI_FOLLOWUP_ONLY}" == "true" ]]; then
+            args+=(--automatic-ci-followup-only)
+          fi
+          if [[ -n "${REPO_FILTER}" ]]; then
+            args+=(--repo "${REPO_FILTER}")
+          fi
+          if [[ -n "${PROJECT_FILTER}" ]]; then
+            args+=(--project-number "${PROJECT_FILTER}")
+          fi
+          python -m scripts.backport.matrix "${args[@]}" --output-file "$GITHUB_OUTPUT"

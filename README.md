@@ -17,6 +17,8 @@ scripts/
   common/      Shared infrastructure (git auth, GitHub client, safety guards)
 .github/actions/setup-agent
               Shared workflow setup for Python deps and optional Claude Code
+.github/actions/backport-sweep
+              The prepare-then-publish sweep steps the daily sweep and poller share
 repos.yml      Central registry of repos, branches, and project boards
 ```
 
