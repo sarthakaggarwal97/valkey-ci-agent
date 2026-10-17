@@ -234,7 +234,8 @@ def backtest(
     cache: dict[str, Any] = {}
     if verdict_cache and os.path.exists(verdict_cache):
         cache = json.loads(Path(verdict_cache).read_text())
-    todo = [c for c in candidates if str(c.source.number) not in cache]
+    # A missing verdict (None) is retried, as the daily run's overlap would.
+    todo = [c for c in candidates if cache.get(str(c.source.number)) is None]
     for start in range(0, len(todo), eligibility._BATCH_SIZE):
         batch = todo[start:start + eligibility._BATCH_SIZE]
         verdicts = eligibility.judge(batch, repo=repo_entry.repo, repo_dir=repo_dir, run_fn=run_fn)
