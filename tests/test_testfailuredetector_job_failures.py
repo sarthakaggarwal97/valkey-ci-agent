@@ -130,7 +130,7 @@ def test_merge_adds_new_environments_to_an_existing_failure():
 def test_job_failure_issue_carries_a_parseable_job_marker():
     failure = JobFailure(job="test-valgrind-test (unit)", url="https://job/1", step="test",
                          summary=("[err]: Valgrind error",))
-    content = issue_renderer.job_renderer_for(failure).render("<!-- marker -->", 1)
+    content = issue_renderer.render_job_issue(failure, "<!-- marker -->", 1)
     assert content.title == "[JOB-FAILURE] test-valgrind-test (unit) in Daily"
     assert content.labels == (issue_renderer.LABEL_NAME,)
     assert issue_renderer.parse_job_marker(content.body) == "test-valgrind-test (unit)"
@@ -183,7 +183,7 @@ def test_a_merged_failure_lists_every_job_on_its_issue():
     failure = JobFailure(job="a (unit)", url="https://job/1", step="test", summary=("[err]: x",),
                          jobs=[JobReference("a (unit)", "https://job/1"),
                                JobReference("b (unit)", "https://job/2")])
-    content = issue_renderer.job_renderer_for(failure).render("<!-- m -->", 1)
+    content = issue_renderer.render_job_issue(failure, "<!-- m -->", 1)
     assert "`a (unit)`: [job log](https://job/1)" in content.body and "`b (unit)`: [job log](https://job/2)" in content.body
     assert "[`b (unit)`](https://job/2)" in content.comment
     assert issue_renderer.parse_job_marker(content.body) == "a (unit)"

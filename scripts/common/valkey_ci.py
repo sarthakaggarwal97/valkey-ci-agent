@@ -138,7 +138,6 @@ class ResultLine:
     """One ``[status]: ...`` line: ``name`` and ``file`` when it names a test."""
 
     status: str
-    data: str
     name: str = ""
     file: str = ""
 
@@ -167,9 +166,9 @@ def parse_result_line(line: str) -> ResultLine | None:
     status, data = match.group("status"), match.group("data").strip()
     if status == "ok":
         passed = _OK_RE.match(data)
-        return ResultLine(status, data, name=passed.group("name") if passed else data)
+        return ResultLine(status, name=passed.group("name") if passed else data)
     test = test_in_file(data)
-    return ResultLine(status, data, *(test or ("", "")))
+    return ResultLine(status, *(test or ("", "")))
 
 
 def failed_tests_in_log(log: str) -> list[tuple[str, str]]:

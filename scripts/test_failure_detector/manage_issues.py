@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import Any, Callable
+from functools import partial
+from typing import Callable
 
 from github import Github
 
@@ -90,14 +91,13 @@ def process_failures(
         return publisher.upsert(
             repo_full_name,
             fingerprint=issue_renderer.job_fingerprint_for(failure),
-            render=issue_renderer.job_renderer_for(failure).render,
+            render=partial(issue_renderer.render_job_issue, failure),
             idempotency_key=idempotency_key,
         )
 
     work: list[tuple[str, Callable[[], tuple[str, str]]]] = [
-        (failure.display_name, _bind(upsert_test, failure)) for failure in failures
-    ] + [
-        (f"job {failure.job}", _bind(upsert_job, failure)) for failure in job_failures or ()
+        *((failure.display_name, partial(upsert_test, failure)) for failure in failures),
+        *((f"job {failure.job}", partial(upsert_job, failure)) for failure in job_failures or ()),
     ]
     for display_name, upsert in work:
         # Isolate each failure: a raised exception (e.g. a GitHub API error that
@@ -137,7 +137,3 @@ def process_failures(
         summary["skipped_closed"], summary["errors"],
     )
     return summary
-
-
-def _bind(func: Callable[[Any], tuple[str, str]], item: Any) -> Callable[[], tuple[str, str]]:
-    return lambda: func(item)

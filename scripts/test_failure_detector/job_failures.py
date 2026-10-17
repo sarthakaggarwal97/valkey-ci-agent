@@ -126,15 +126,12 @@ def find_unrecorded_failures(
             if test is None or status == "exception":
                 unattributed.append(f"[{status}]: {data}")
                 continue
-            key = test
-            failure = tests.setdefault(key, UniqueFailure(
-                test_name=key[0], test_file=key[1], error=f"[{status}]: {data}",
+            failure = tests.setdefault(test, UniqueFailure(
+                test_name=test[0], test_file=test[1], error=f"[{status}]: {data}",
             ))
             if not any(ref.job == name for ref in failure.jobs):
                 failure.jobs.append(JobReference(job=name, url=url))
-        if unattributed:
-            pass
-        elif summary or normalize_job_name(name) in recorded:
+        if not unattributed and (summary or normalize_job_name(name) in recorded):
             # Every line named a test, or the artifact explains the failure.
             continue
         step = _failed_step(job)

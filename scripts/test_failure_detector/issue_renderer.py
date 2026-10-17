@@ -334,48 +334,38 @@ def parse_job_marker(body: str) -> str:
     return unquote(match.group("job")) if match else ""
 
 
-def job_renderer_for(failure: JobFailure) -> "_JobRenderer":
-    return _JobRenderer(failure)
-
-
-class _JobRenderer:
-    """``render`` callback for a job-level failure issue."""
-
-    def __init__(self, failure: JobFailure) -> None:
-        self._failure = failure
-
-    def render(self, marker: str, occurrences: int) -> IssueContent:
-        failure = self._failure
-        summary = "\n".join(failure.summary) or "No failure summary was printed; see the job log."
-        jobs = failure.jobs or [JobReference(job=failure.job, url=failure.url)]
-        links = "\n".join(f"  - `{ref.job}`: [job log]({ref.url})" for ref in jobs)
-        named = ", ".join(f"`{ref.job}`" for ref in jobs)
-        body = "\n".join([
-            marker,
-            f"<!-- {MARKER_NAMESPACE}:occurrences:{occurrences} -->",
-            job_marker(failure.job),
-            "",
-            "**Summary**",
-            "",
-            f"The {_source_label(failure)} CI job{'s' if len(jobs) > 1 else ''} {named} failed without recording a test failure.",
-            "",
-            f"- Failed step: `{failure.step or 'unknown'}`",
-            "- CI link(s):",
-            links,
-            "",
-            "**Failure summary from the job log**",
-            "",
-            "```",
-            summary,
-            "```",
-            "",
-            "---",
-            "*Auto-created by Test Failure Detector*",
-        ])
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        comment = f"Failed again on {today}: " + ", ".join(f"[`{ref.job}`]({ref.url})" for ref in jobs) + "."
-        if failure.summary:
-            comment += "\n\n```\n" + "\n".join(failure.summary) + "\n```"
-        return IssueContent(
-            title=job_title_for(failure), body=body, comment=comment, labels=(LABEL_NAME,),
-        )
+def render_job_issue(failure: JobFailure, marker: str, occurrences: int) -> IssueContent:
+    """The issue for a job-level failure, as the shared publisher's ``render`` callback takes it."""
+    summary = "\n".join(failure.summary) or "No failure summary was printed; see the job log."
+    jobs = failure.jobs or [JobReference(job=failure.job, url=failure.url)]
+    links = "\n".join(f"  - `{ref.job}`: [job log]({ref.url})" for ref in jobs)
+    named = ", ".join(f"`{ref.job}`" for ref in jobs)
+    body = "\n".join([
+        marker,
+        f"<!-- {MARKER_NAMESPACE}:occurrences:{occurrences} -->",
+        job_marker(failure.job),
+        "",
+        "**Summary**",
+        "",
+        f"The {_source_label(failure)} CI job{'s' if len(jobs) > 1 else ''} {named} failed without recording a test failure.",
+        "",
+        f"- Failed step: `{failure.step or 'unknown'}`",
+        "- CI link(s):",
+        links,
+        "",
+        "**Failure summary from the job log**",
+        "",
+        "```",
+        summary,
+        "```",
+        "",
+        "---",
+        "*Auto-created by Test Failure Detector*",
+    ])
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    comment = f"Failed again on {today}: " + ", ".join(f"[`{ref.job}`]({ref.url})" for ref in jobs) + "."
+    if failure.summary:
+        comment += "\n\n```\n" + "\n".join(failure.summary) + "\n```"
+    return IssueContent(
+        title=job_title_for(failure), body=body, comment=comment, labels=(LABEL_NAME,),
+    )

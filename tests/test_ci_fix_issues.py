@@ -109,7 +109,7 @@ def _job_issue_body(
         f"<!-- {issue_renderer.MARKER_NAMESPACE}:"
         f"{issue_renderer.job_fingerprint_for(failure)} -->"
     )
-    body = issue_renderer.job_renderer_for(failure).render(marker, 1).body
+    body = issue_renderer.render_job_issue(failure, marker, 1).body
     return f"{body}\n{_last_key(run_id, run_attempt)}"
 
 
