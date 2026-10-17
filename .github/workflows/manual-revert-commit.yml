@@ -111,7 +111,6 @@ jobs:
             --commit-sha "${COMMIT_SHA}"
             --base-branch "${BASE_BRANCH}"
             --token "${TARGET_TOKEN}"
-            --verbose
           )
           if [[ -n "${PUSH_REPO}" ]]; then
             args+=(--push-repo "${PUSH_REPO}")

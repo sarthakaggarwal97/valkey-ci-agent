@@ -1,9 +1,11 @@
 """Shared logging setup for workflow entry points.
 
-Three things make an Actions log readable: one compact line format, the
-run's outcome surfaced as an annotation at the top of the run page, and
-noisy output (AI streams, build output) folded into collapsible groups so
-the decision lines stay visible.
+Every entry point logs ``<time> <LEVEL> <message>``. The few records an
+operator scans for (a sweep's plan and verdict, each attempted PR) are framed
+by asterisk rules. Client libraries are held at WARNING so their per-request
+chatter never reaches the log, debug detail appears only in a run re-run with
+"Enable debug logging", and the run's outcome is pinned as an annotation at
+the top of the run page.
 """
 
 from __future__ import annotations
@@ -11,38 +13,57 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from collections.abc import Iterator
-from contextlib import contextmanager
-from pathlib import Path
 
 from scripts.common.text_utils import strip_ansi
 
-LOG_FORMAT = "%(asctime)s %(levelname)-7s [%(tag)s] %(message)s"
-LOG_DATE_FORMAT = "%H:%M:%S"
+LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
+LOG_HIGHLIGHT_RULE = "*" * 88
 
 _ANNOTATION = {logging.ERROR: "error", logging.WARNING: "warning"}
-_group_open = False
+
+# Client libraries log every HTTP request at DEBUG. That is never what an
+# operator opens the log for, so they are held at WARNING even in debug runs.
+# PyGithub is held at INFO instead: that is where it reports rate-limit
+# backoffs, the usual reason a run stalls.
+_QUIET_LOGGERS = (
+    "urllib3", "requests", "botocore", "boto3", "s3transfer",
+    "httpx", "httpcore", "anthropic", "asyncio", "filelock",
+)
 
 
-class _TagFormatter(logging.Formatter):
-    """Tag each record with its feature area (``release``, ``backport``)
-    instead of a full dotted module path. Shared helpers under
-    ``scripts/common`` and ``scripts/ai`` are tagged by file (``proc``,
-    ``polling``, ``runtime``), since the area is the caller's.
+class _SkipAnnotated(logging.Filter):
+    """Drop the plain copy of a line that is also printed as an annotation.
+
+    In Actions the ``::notice::`` / ``::warning::`` command itself shows up
+    in the log, highlighted, so printing the same sentence just above it
+    only doubles it.
     """
 
-    def format(self, record: logging.LogRecord) -> str:
-        path = Path(record.pathname)
-        parent = path.parent.name
-        record.tag = path.stem if parent in ("common", "ai") else parent.replace("_", "-")
-        return super().format(record)
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not (getattr(record, "annotated", False) and _in_actions())
+
+
+def _debug_requested(verbose: bool) -> bool:
+    # RUNNER_DEBUG is set when a run is re-run with "Enable debug logging".
+    return verbose or os.environ.get("RUNNER_DEBUG") == "1"
 
 
 def configure_logging(*, verbose: bool = False) -> None:
-    """Configure the one log format every workflow entry point uses."""
+    """Configure the one log format every workflow entry point uses.
+
+    DEBUG records appear with ``verbose`` or in an Actions re-run with debug
+    logging enabled; client-library chatter stays at WARNING regardless.
+    """
     handler = logging.StreamHandler()
-    handler.setFormatter(_TagFormatter(LOG_FORMAT, LOG_DATE_FORMAT))
-    logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, handlers=[handler])
+    handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    handler.addFilter(_SkipAnnotated())
+    logging.basicConfig(
+        level=logging.DEBUG if _debug_requested(verbose) else logging.INFO,
+        handlers=[handler],
+    )
+    for name in _QUIET_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+    logging.getLogger("github").setLevel(logging.INFO)
 
 
 def _in_actions() -> bool:
@@ -73,34 +94,10 @@ def log_outcome(target_logger: logging.Logger, level: int, message: str, *args: 
     # log line is printed raw, so an embedded "\n::warning::" in a value would
     # otherwise reach the runner as a workflow command of its own.
     text = " ".join((message % args if args else message).split())
-    # stacklevel: tag the record with the caller's file, not this helper's.
-    target_logger.log(level, "%s", text, stacklevel=2)
+    # stacklevel: report the caller's location, not this helper's.
+    # In Actions the annotation below is the visible copy (_SkipAnnotated).
+    target_logger.log(level, "%s", text, stacklevel=2, extra={"annotated": True})
     annotate(level, text)
-
-
-@contextmanager
-def log_group(title: str) -> Iterator[None]:
-    """Fold everything logged inside into one collapsible Actions group.
-
-    Actions groups cannot nest, so an inner group is a no-op and its output
-    simply stays inside the outer one.
-    """
-    global _group_open
-    if not _in_actions() or _group_open:
-        yield
-        return
-    sys.stderr.flush()
-    print(f"::group::{_escape_command_data(' '.join(title.split()))}", file=sys.stderr, flush=True)
-    _group_open = True
-    try:
-        yield
-    finally:
-        _group_open = False
-        sys.stderr.flush()
-        print("::endgroup::", file=sys.stderr, flush=True)
-
-
-LOG_HIGHLIGHT_RULE = "*" * 88
 
 
 def compact_log_value(
@@ -122,9 +119,29 @@ def log_highlight(
     target_logger: logging.Logger,
     message: str,
     *args: object,
+    level: int = logging.INFO,
 ) -> None:
-    """Surround one important log record with an easy-to-scan rule."""
-    # stacklevel: tag the records with the caller's file, not this helper's.
-    target_logger.info(LOG_HIGHLIGHT_RULE, stacklevel=2)
-    target_logger.info(message, *args, stacklevel=2)
-    target_logger.info(LOG_HIGHLIGHT_RULE, stacklevel=2)
+    """Frame one important log record with asterisk rules."""
+    # stacklevel: report the caller's location, not this helper's.
+    target_logger.log(level, LOG_HIGHLIGHT_RULE, stacklevel=2)
+    target_logger.log(level, message, *args, stacklevel=2)
+    target_logger.log(level, LOG_HIGHLIGHT_RULE, stacklevel=2)
+
+
+def log_box(
+    target_logger: logging.Logger,
+    title: str,
+    lines: list[str],
+    *,
+    level: int = logging.INFO,
+) -> None:
+    """Log *title* and *lines* between asterisk rules: a run's plan or verdict.
+
+    One record per line, so each carries its own timestamp. Pass untrusted
+    values through :func:`compact_log_value` first.
+    """
+    # stacklevel: report the caller's location, not this helper's.
+    target_logger.log(level, LOG_HIGHLIGHT_RULE, stacklevel=2)
+    for line in (title, *lines):
+        target_logger.log(level, "%s", line, stacklevel=2)
+    target_logger.log(level, LOG_HIGHLIGHT_RULE, stacklevel=2)

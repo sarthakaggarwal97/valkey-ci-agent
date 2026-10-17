@@ -40,7 +40,7 @@ from scripts.ci_fix.verify.macos import MacosVerifier
 from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
 from scripts.common.identity import APP_LOGIN
-from scripts.common.logging_utils import configure_logging
+from scripts.common.logging_utils import compact_log_value, configure_logging, log_outcome
 from scripts.common.polling import env_int
 from scripts.common.workflow_artifacts import ArtifactClient
 
@@ -571,7 +571,15 @@ def main(argv: list[str] | None = None) -> int:
             verify_runs=env_int("CI_FIX_VERIFY_RUNS", DEFAULT_VERIFY_RUNS, minimum=1, maximum=10),
         )
     print(json.dumps(result, indent=2))
-    return 1 if result.get("action") == OutcomeKind.FAILED.value else 0
+    failed = result.get("action") == OutcomeKind.FAILED.value
+    detail = result.get("reason") or result.get("summary") or ""
+    log_outcome(
+        logger, logging.ERROR if failed else logging.INFO,
+        "CI follow-up for %s %s: %s%s%s", args.repo, args.branch, result.get("action"),
+        f" on PR #{result['pr']}" if "pr" in result else "",
+        f": {compact_log_value(detail, limit=300)}" if detail else "",
+    )
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

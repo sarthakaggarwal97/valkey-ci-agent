@@ -130,6 +130,12 @@ python -m scripts.backport.mark_done \
 Drop `--dry-run` to move items from "To be backported" to "Done" once the
 backport has actually landed on the target branch.
 
+`--verbose` adds the agent's DEBUG lines (each git command, PR label calls).
+Workflows do not pass it, so operator logs keep to decisions and outcomes; to
+see the debug detail for a workflow run, re-run it with **Enable debug
+logging**, which the agent picks up from `RUNNER_DEBUG`. HTTP client libraries
+stay at WARNING either way (PyGithub at INFO, for its rate-limit backoffs).
+
 ## GitHub Actions
 
 ### CI

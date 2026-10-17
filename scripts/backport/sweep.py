@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -62,8 +63,8 @@ from scripts.common.logging_utils import (
     annotate,
     compact_log_value,
     configure_logging,
-    log_group,
-    log_highlight,
+    log_box,
+    log_outcome,
 )
 
 if TYPE_CHECKING:
@@ -78,21 +79,6 @@ _DEFAULT_BRANCH_FIELDS = (
 _DEFAULT_STATUS_FIELD = "Status"
 _DEFAULT_STATUS_VALUE = "To be backported"
 _BRANCH_PREFIX = "agent/backport/sweep"
-
-
-def _log_existing_sweep_pr(
-    existing_pr: Any,
-    target_branch: str,
-    backport_branch: str,
-) -> None:
-    log_highlight(
-        logger,
-        "BACKPORT SWEEP PR: resuming PR #%d | %s | target=%s | branch=%s",
-        existing_pr.number,
-        compact_log_value(getattr(existing_pr, "title", "")),
-        target_branch,
-        backport_branch,
-    )
 
 
 class ProjectBackportDiscovery:
@@ -288,17 +274,9 @@ def prepare_backport_sweep(
     candidates = discovery.discover([target_branch]).get(target_branch, [])
     candidates.sort(key=lambda candidate: candidate.merged_at or "")
 
-    if max_candidates > 0:
-        logger.info(
-            "Branch %s: %d candidate(s) found, will apply up to %d successful cherry-pick(s)",
-            target_branch,
-            len(candidates),
-            max_candidates,
-        )
-    else:
-        logger.info("Branch %s: %d candidate(s)", target_branch, len(candidates))
-
+    # The plan box lists the candidates and the cap once the branch is cloned.
     if discover_only:
+        logger.info("Branch %s: %d candidate(s)", target_branch, len(candidates))
         for candidate in candidates:
             logger.info(
                 "  PR #%d: %s (%s)",
@@ -460,12 +438,7 @@ def _prepare_branch(
                         f"Open backport PR #{existing_pr.number} has no remote branch "
                         f"{backport_branch}"
                     )
-                _log_existing_sweep_pr(
-                    existing_pr,
-                    target_branch,
-                    backport_branch,
-                )
-                logger.info("Fetching existing backport sweep branch...")
+                logger.debug("Fetching existing backport sweep branch")
                 _run_git(tmpdir, "fetch", "push_target", backport_branch, env=git_env)
                 _run_git(tmpdir, "checkout", f"push_target/{backport_branch}")
                 _run_git(tmpdir, "checkout", "-B", backport_branch)
@@ -513,23 +486,34 @@ def _prepare_branch(
                 git_env,
             )
 
+        _log_sweep_plan(
+            target_branch=target_branch,
+            backport_branch=backport_branch,
+            push_repo=push_repo,
+            existing_pr=existing_pr,
+            candidates=candidates,
+            already_applied=already_applied,
+            on_target=on_target,
+            plan_errors=plan_errors,
+            max_applied=max_applied,
+        )
+
         # Everything after this point is local; the preparation token and
         # askpass helper no longer exist while repository code is validated.
-        setup_ok, setup_output = run_test_commands(
-            tmpdir,
-            validation_setup_commands or [],
-        )
+        setup_commands = validation_setup_commands or []
+        setup_started = time.monotonic()
+        setup_ok, setup_output = run_test_commands(tmpdir, setup_commands)
+        if setup_ok and setup_commands:
+            logger.info("Validation setup ready: %d command(s) in %.0fs",
+                        len(setup_commands), time.monotonic() - setup_started)
         if not setup_ok:
             logger.warning("Validation setup failed for %s", target_branch)
-            with log_group(f"Validation setup output for {target_branch} (last 4000 chars)"):
-                logger.warning("%s", setup_output[-4000:])
+            logger.warning("Validation setup output (last 4000 chars):\n%s", setup_output[-4000:])
             raise RuntimeError(
                 "validation setup failed: "
                 + (setup_output[:500] or "setup command failed")
             )
 
-        logger.info("Already on %s: %s", backport_branch,
-                    ", ".join(f"#{n}" for n in sorted(already_applied, key=int)) or "nothing yet")
         applied_count = 0
         for index, candidate in enumerate(candidates):
             if max_applied > 0 and applied_count >= max_applied:
@@ -542,7 +526,7 @@ def _prepare_branch(
                 break
 
             if str(candidate.source_pr_number) in already_applied:
-                logger.info(
+                logger.debug(
                     "BACKPORT SKIPPED: PR #%d | %s | already present on %s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
@@ -559,7 +543,7 @@ def _prepare_branch(
                 continue
 
             if candidate.source_pr_number in on_target:
-                logger.info(
+                logger.debug(
                     "BACKPORT SKIPPED: PR #%d | %s | already present on %s",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
@@ -587,23 +571,18 @@ def _prepare_branch(
                 continue
 
             pre_candidate_head = head_sha(tmpdir)
-            # The cherry-pick and any AI conflict resolution are folded; the
-            # one-line BACKPORT result below stays visible.
-            with log_group(f"PR #{candidate.source_pr_number} "
-                           f"({compact_log_value(candidate.source_pr_title, limit=120)}): "
-                           f"apply to {target_branch}"):
-                candidate_result = apply_candidate(
-                    tmpdir,
-                    candidate,
-                    repo_full_name,
-                    {},
-                    language=language,
-                    build_commands=build_commands,
-                    validation_rules=validation_rules,
-                    test_path_patterns=test_path_patterns,
-                    max_conflicting_files=max_conflicting_files,
-                    source_plan=source_plans[candidate.source_pr_number],
-                )
+            candidate_result = apply_candidate(
+                tmpdir,
+                candidate,
+                repo_full_name,
+                {},
+                language=language,
+                build_commands=build_commands,
+                validation_rules=validation_rules,
+                test_path_patterns=test_path_patterns,
+                max_conflicting_files=max_conflicting_files,
+                source_plan=source_plans[candidate.source_pr_number],
+            )
             result.results.append(candidate_result)
 
             if not candidate_result.worktree_restored:
@@ -611,6 +590,17 @@ def _prepare_branch(
                     f"candidate #{candidate.source_pr_number} could not "
                     "restore the worktree; aborting this branch"
                 )
+            if candidate_result.outcome in ("skipped-existing", "skipped-empty"):
+                # Nothing to do and nothing wrong: a plain line, not a warning.
+                logger.info(
+                    "BACKPORT SKIPPED: PR #%d | %s | %s",
+                    candidate.source_pr_number,
+                    compact_log_value(candidate.source_pr_title),
+                    compact_log_value(candidate_result.detail, limit=500)
+                    if candidate_result.detail
+                    else _OUTCOME_WORDS[candidate_result.outcome],
+                )
+                continue
             if candidate_result.outcome != "applied":
                 logger.log(
                     logging.ERROR if candidate_result.outcome == "error" else logging.WARNING,
@@ -623,21 +613,20 @@ def _prepare_branch(
                 )
                 continue
 
-            with log_group(f"PR #{candidate.source_pr_number}: validate {target_branch}"):
-                validation_outcome = validate_branch_with_optional_repair(
-                    tmpdir,
-                    target_branch,
-                    test_commands,
-                    validation_rules or [],
-                    repair=repair_validation_failures,
-                    validation_profile=validation_profile,
-                    generated_file_rules=generated_file_rules,
-                    base_ref=pre_candidate_head,
-                    candidate=candidate,
-                    language=language,
-                    test_path_patterns=test_path_patterns,
-                    run_git=_run_git,
-                )
+            validation_outcome = validate_branch_with_optional_repair(
+                tmpdir,
+                target_branch,
+                test_commands,
+                validation_rules or [],
+                repair=repair_validation_failures,
+                validation_profile=validation_profile,
+                generated_file_rules=generated_file_rules,
+                base_ref=pre_candidate_head,
+                candidate=candidate,
+                language=language,
+                test_path_patterns=test_path_patterns,
+                run_git=_run_git,
+            )
             ok, output = validation_outcome
             if not ok:
                 candidate_result.outcome = "skipped-validation-failed"
@@ -665,8 +654,8 @@ def _prepare_branch(
                     "adds no net change to this branch."
                 )
                 candidate_result.resolved_commit_sha = None
-                logger.warning(
-                    "BACKPORT NOT APPLIED: PR #%d | %s | no net change after "
+                logger.info(
+                    "BACKPORT SKIPPED: PR #%d | %s | no net change after "
                     "validation; removed candidate and continuing",
                     candidate.source_pr_number,
                     compact_log_value(candidate.source_pr_title),
@@ -704,7 +693,23 @@ def _prepare_branch(
             item for item in result.results
             if result_is_on_backport_branch(item)
         ]
-        if committed and branch_has_changes(tmpdir, target_branch):
+        publish = bool(committed) and branch_has_changes(tmpdir, target_branch)
+        if publish:
+            next_step = (f"publish to sweep PR #{existing_pr.number}" if existing_pr is not None
+                         else f"open a new sweep PR on {push_repo}")
+        else:
+            next_step = "nothing to publish: " + (
+                "no candidate was committed" if not committed
+                else f"the branch has no changes against {target_branch}")
+        _log_sweep_verdict(
+            target_branch=target_branch,
+            candidates=candidates,
+            results=result.results,
+            already_applied=already_applied,
+            on_target=on_target,
+            next_step=next_step,
+        )
+        if publish:
             prepared = PreparedBranchSweep(
                 repo_full_name=repo_full_name,
                 push_repo=push_repo,
@@ -721,11 +726,6 @@ def _prepare_branch(
             )
             preserve_repo = True
             return result, prepared
-        logger.info(
-            "Not publishing %s: %s", backport_branch,
-            "no candidate was committed" if not committed
-            else f"the branch has no changes against {target_branch}",
-        )
 
     except Exception as exc:
         logger.exception("Error preparing branch %s", target_branch)
@@ -735,6 +735,94 @@ def _prepare_branch(
             shutil.rmtree(tmpdir, ignore_errors=True)
 
     return result, None
+
+
+def _log_skipped_group(reason: str, skipped: list[ProjectBackportCandidate]) -> None:
+    if skipped:
+        logger.info(
+            "%s, skipping %d PR(s): %s",
+            reason,
+            len(skipped),
+            ", ".join(f"#{c.source_pr_number}" for c in skipped),
+        )
+
+
+def _log_sweep_plan(
+    *,
+    target_branch: str,
+    backport_branch: str,
+    push_repo: str,
+    existing_pr: Any,
+    candidates: list[ProjectBackportCandidate],
+    already_applied: set[str],
+    on_target: set[int],
+    plan_errors: dict[int, CandidateResult],
+    max_applied: int,
+) -> None:
+    """Box the sweep PR, every candidate and what this run will apply."""
+    if existing_pr is not None:
+        pr_line = (f"Sweep PR: #{existing_pr.number} is open on {backport_branch}; "
+                   "new backports are added to it")
+    else:
+        pr_line = f"Sweep PR: none open; a new one is opened on {push_repo} from {backport_branch}"
+    lines = [pr_line, f"Candidates ({len(candidates)}):"]
+    to_apply: list[int] = []
+    for candidate in candidates:
+        number = candidate.source_pr_number
+        if str(number) in already_applied:
+            state = "already on the sweep PR"
+        elif number in on_target:
+            state = f"already in {target_branch}"
+        elif number in plan_errors:
+            state = "cannot be applied: " + compact_log_value(plan_errors[number].detail, limit=160)
+        else:
+            state = "to apply"
+            to_apply.append(number)
+        lines.append(f"  #{number} {compact_log_value(candidate.source_pr_title, limit=100)}: {state}")
+    if to_apply:
+        cap = f" (stopping after {max_applied} applied)" if 0 < max_applied < len(to_apply) else ""
+        lines.append(f"Applying {len(to_apply)} PR(s){cap}: "
+                     + ", ".join(f"#{n}" for n in to_apply))
+    else:
+        lines.append("Applying: nothing new")
+    log_box(logger, f"BACKPORT SWEEP for {target_branch}", lines)
+
+
+def _log_sweep_verdict(
+    *,
+    target_branch: str,
+    candidates: list[ProjectBackportCandidate],
+    results: list[CandidateResult],
+    already_applied: set[str],
+    on_target: set[int],
+    next_step: str,
+) -> None:
+    """Box what happened to every candidate and what the publish step does next."""
+    by_number = {item.source_pr_number: item for item in results}
+    counts: dict[str, int] = defaultdict(int)
+    lines = []
+    for candidate in candidates:
+        number = candidate.source_pr_number
+        item = by_number.get(number)
+        present = str(number) in already_applied or number in on_target
+        if item is None and not present:
+            verdict = word = "deferred to the next sweep"
+        elif item is None or (item.outcome == "skipped-existing" and present):
+            verdict = (f"already in {target_branch}" if number in on_target
+                       else "already on the sweep PR")
+            word = "already present"
+        else:
+            word = verdict = ("skipped" if item.outcome in ("skipped-existing", "skipped-empty")
+                              else _OUTCOME_WORDS.get(item.outcome, item.outcome))
+            if item.outcome == "applied" and item.resolved_by_ai:
+                verdict += " (conflicts resolved by Claude)"
+            elif item.outcome != "applied" and item.detail:
+                verdict += ": " + compact_log_value(item.detail, limit=160)
+        counts[word] += 1
+        lines.append(f"  #{number} {compact_log_value(candidate.source_pr_title, limit=100)}: {verdict}")
+    lines.append(f"Next: {next_step}")
+    summary = ", ".join(f"{n} {word}" for word, n in counts.items())
+    log_box(logger, f"VERDICT for {target_branch}: {summary or 'no candidates'}", lines)
 
 
 def _prepare_source_plans(
@@ -1150,8 +1238,7 @@ def sweep_outcome(result: BranchSweepResult) -> tuple[int, str]:
 
 def _exit_for_result(result: BranchSweepResult) -> None:
     level, text = sweep_outcome(result)
-    logger.log(level, "%s", " ".join(text.split()))
-    annotate(level, text)
+    log_outcome(logger, level, "%s", text)
     if level == logging.ERROR:
         raise SystemExit(1)
 
@@ -1276,10 +1363,8 @@ def main() -> None:
                                f"candidate(s) for {result.target_branch}")
         return
     if args.prepare_state and sweep_outcome(result)[0] != logging.ERROR:
-        # Preparation publishes nothing; the publish step reports the outcome.
-        # Failures still end the run here, as before.
-        logger.info("Prepared %s: %d candidate(s), %d applied locally; publication follows",
-                    result.target_branch, result.candidates_found, result.applied_count)
+        # Preparation publishes nothing; the verdict box says what comes next
+        # and the publish step reports the outcome. Failures still end here.
         return
     _exit_for_result(result)
 

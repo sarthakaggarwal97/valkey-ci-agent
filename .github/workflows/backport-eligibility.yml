@@ -107,14 +107,14 @@ jobs:
           TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           set -euo pipefail
-          args=(--registry repos.yml --repo "${TARGET_REPO}" --days "${MERGE_DAYS}" --verbose)
+          args=(--registry repos.yml --repo "${TARGET_REPO}" --days "${MERGE_DAYS}")
           if [[ -n "${MERGE_DATE}" ]]; then
             args+=(--date "${MERGE_DATE}")
           fi
           if [[ "${DRY_RUN}" == "true" ]]; then
             args+=(--dry-run)
           fi
-          python -m scripts.backport.eligibility "${args[@]}" | tee backport-eligibility-result.json
+          python -m scripts.backport.eligibility "${args[@]}" > backport-eligibility-result.json
 
       - name: Upload result
         if: always()

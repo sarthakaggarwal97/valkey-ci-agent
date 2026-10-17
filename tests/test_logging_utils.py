@@ -1,23 +1,11 @@
-"""Tests for the shared log format, run annotations, and groups."""
+"""Tests for the shared log format, highlights and run annotations."""
 
 from __future__ import annotations
 
 import logging
 
 from scripts.common import logging_utils
-from scripts.common.logging_utils import _TagFormatter, log_group, log_outcome
-
-
-def _record(path: str) -> logging.LogRecord:
-    return logging.LogRecord("x", logging.INFO, path, 1, "hello %s", ("world",), None)
-
-
-def test_records_are_tagged_by_feature_area_not_module_path():
-    fmt = _TagFormatter("[%(tag)s] %(message)s")
-    assert fmt.format(_record("/w/scripts/release/reconcile.py")) == "[release] hello world"
-    assert fmt.format(_record("/w/scripts/ci_fix/main.py")) == "[ci-fix] hello world"
-    # Shared helpers act for their caller, so the file is the useful tag.
-    assert fmt.format(_record("/w/scripts/common/proc.py")) == "[proc] hello world"
+from scripts.common.logging_utils import LOG_HIGHLIGHT_RULE, log_outcome
 
 
 def test_outcome_is_annotated_only_in_actions(monkeypatch, capsys, caplog):
@@ -50,24 +38,6 @@ def test_annotate_escapes_command_data_for_direct_callers(monkeypatch, capsys):
     assert capsys.readouterr().err.splitlines() == ["::error::a%0D%0A::error::forged 100%25"]
 
 
-def test_groups_do_not_nest(monkeypatch, capsys):
-    monkeypatch.setenv("GITHUB_ACTIONS", "true")
-    with log_group("outer"), log_group("inner"):
-        pass
-    assert capsys.readouterr().err.splitlines() == ["::group::outer", "::endgroup::"]
-    assert logging_utils._group_open is False
-
-
-def test_group_closes_when_the_body_raises(monkeypatch, capsys):
-    import pytest
-
-    monkeypatch.setenv("GITHUB_ACTIONS", "true")
-    with pytest.raises(RuntimeError), log_group("work"):
-        raise RuntimeError("boom")
-    assert capsys.readouterr().err.splitlines()[-1] == "::endgroup::"
-    assert logging_utils._group_open is False
-
-
 def test_outcome_log_line_cannot_forge_a_workflow_command(monkeypatch, capsys, caplog):
     """The raw log line is printed before the annotation; it must be one line too."""
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
@@ -81,3 +51,63 @@ def test_outcome_with_a_literal_percent_and_no_args(caplog):
     caplog.set_level(logging.INFO, logger="t.pct")
     log_outcome(logging.getLogger("t.pct"), logging.INFO, "100% done")
     assert caplog.records[-1].getMessage() == "100% done"
+
+
+def test_line_is_time_level_and_message():
+    import re
+
+    record = logging.LogRecord("x", logging.WARNING, "/w/a.py", 1, "PR #%d", (7,), None)
+    line = logging.Formatter(logging_utils.LOG_FORMAT).format(record)
+    assert re.fullmatch(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} WARNING PR #7", line)
+
+
+def test_highlight_frames_the_record_with_rules_at_its_level(caplog):
+    from scripts.common.logging_utils import log_highlight
+
+    caplog.set_level(logging.INFO, logger="t.hl")
+    log_highlight(logging.getLogger("t.hl"), "PR #%d", 7, level=logging.WARNING)
+    assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+        (logging.WARNING, LOG_HIGHLIGHT_RULE),
+        (logging.WARNING, "PR #7"),
+        (logging.WARNING, LOG_HIGHLIGHT_RULE),
+    ]
+
+
+def test_configure_logging_quiets_http_clients_and_honours_runner_debug(monkeypatch):
+    root = logging.getLogger()
+    saved = root.handlers[:], root.level
+    try:
+        root.handlers = []
+        monkeypatch.setenv("RUNNER_DEBUG", "1")
+        logging_utils.configure_logging()
+        assert root.level == logging.DEBUG
+        assert logging.getLogger("urllib3").level == logging.WARNING
+        assert logging.getLogger("github").level == logging.INFO
+
+        root.handlers = []
+        monkeypatch.delenv("RUNNER_DEBUG")
+        logging_utils.configure_logging()
+        assert root.level == logging.INFO
+    finally:
+        root.handlers, level = saved
+        root.setLevel(level)
+
+
+def test_outcome_is_printed_once_in_actions(monkeypatch):
+    from scripts.common.logging_utils import _SkipAnnotated
+
+    record = logging.LogRecord("x", logging.INFO, "/w/a.py", 1, "done", (), None)
+    record.annotated = True
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert _SkipAnnotated().filter(record) is False
+    monkeypatch.delenv("GITHUB_ACTIONS")
+    assert _SkipAnnotated().filter(record) is True
+
+
+def test_box_is_the_title_and_lines_between_rules(caplog):
+    from scripts.common.logging_utils import log_box
+
+    caplog.set_level(logging.INFO, logger="t.box")
+    log_box(logging.getLogger("t.box"), "TITLE 100%", ["a", "b %s"], level=logging.WARNING)
+    assert caplog.messages == [LOG_HIGHLIGHT_RULE, "TITLE 100%", "a", "b %s", LOG_HIGHLIGHT_RULE]
+    assert {r.levelno for r in caplog.records} == {logging.WARNING}

@@ -133,8 +133,7 @@ jobs:
               --repo "${{ matrix.repo }}" \
               --branch "${{ matrix.branch }}" \
               --max-candidates "${MAX_CANDIDATES}" \
-              --dry-run \
-              --verbose
+              --dry-run
           }
 
           poll_once() {
@@ -204,8 +203,7 @@ jobs:
             --repo "${{ matrix.repo }}" \
             --branch "${{ matrix.branch }}" \
             --max-candidates "${MAX_CANDIDATES}" \
-            --prepare-state "${SWEEP_STATE_FILE}" \
-            --verbose | tee backport-sweep-result.json
+            --prepare-state "${SWEEP_STATE_FILE}" > backport-sweep-result.json
           [[ -f "${SWEEP_STATE_FILE}" ]] && publish=true || publish=false
           echo "needs_publish=${publish}" >> "${GITHUB_OUTPUT}"
 
@@ -235,8 +233,7 @@ jobs:
             --registry repos.yml \
             --repo "${{ matrix.repo }}" \
             --branch "${{ matrix.branch }}" \
-            --publish-state "${SWEEP_STATE_FILE}" \
-            --verbose | tee backport-sweep-result.json
+            --publish-state "${SWEEP_STATE_FILE}" > backport-sweep-result.json
 
       - name: Clean up prepared sweep
         if: always()
