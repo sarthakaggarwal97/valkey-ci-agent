@@ -1,18 +1,18 @@
 """Comment-triggered entry point for the CI fix bot.
 
 A maintainer comments ``@valkeyrie-ops fix [<ci-link>] [hint]`` on a
-valkey-io/valkey PR. This scheduled poller finds that comment and dispatches the
-existing ``ci-fix`` workflow, which does the actual diagnose/edit/publish. The
+valkey-io/valkey PR. This poller, run by hand, finds that comment and
+dispatches the ``ci-fix`` workflow, which does the actual diagnose/edit/publish. The
 poller is only the trigger; it owns no fix logic.
 
 Idempotency is a reaction marker on GitHub, not external state. The claim is
 atomic: GitHub's create-reaction returns ``201`` when this call added the
 reaction and ``200`` when it already existed, so only the run that observes
-``201`` dispatches. Two overlapping ticks therefore cannot both fire.
+``201`` dispatches. Two overlapping polls therefore cannot both fire.
 
 Order per comment: parse, reject bots, confirm it is a PR, authorize the
 verified comment author, skip if already marked, claim (atomic), dispatch. Each
-step that cannot proceed skips without claiming, so a later tick can retry.
+step that cannot proceed skips without claiming, so a later poll can retry.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from github import Auth, Github
 from scripts.ci_fix.gate import ParsedCommand, is_authorized, parse_command
 from scripts.common.github_client import retry_github_call
 from scripts.common.logging_utils import configure_logging, log_outcome
-from scripts.common.polling import env_int, env_seconds, run_poll_loop
+from scripts.common.polling import env_int
 
 logger = logging.getLogger(__name__)
 
@@ -39,16 +39,11 @@ _CLAIM_REACTION = "eyes"
 # Manual backfill must not page unbounded history on a typo. A week is well past
 # any realistic outage while keeping the comment listing cheap.
 _MAX_LOOKBACK_MINUTES = 7 * 24 * 60
-# GitHub throttles scheduled workflows on a busy public repo: the cron asks for
-# a tick every few minutes but runs land roughly hourly, and have been seen over
-# two hours apart under load. The lookback must comfortably exceed that real
-# worst-case gap, or a comment posted between two ticks falls out of the window
-# and is never seen. The reaction marker prevents reprocessing, so a generous
-# window only costs a slightly larger comment listing.
+# The lookback must exceed the gap between two polls, or a comment posted
+# between them falls out of the window and is never seen. The reaction marker
+# prevents reprocessing, so a generous window only costs a slightly larger
+# comment listing.
 _DEFAULT_LOOKBACK_MINUTES = 180
-# GitHub App installation tokens are short-lived. Sustained polling is capped
-# below an hour so a job does not keep sleeping past token expiry.
-_MAX_LOOP_SECONDS = 55 * 60
 
 class ClaimedDispatchFailed(Exception):
     """Dispatch failed after this run claimed the comment.
@@ -355,19 +350,6 @@ def _bot_login() -> str:
     return f"{os.environ['CI_FIX_POLL_APP_SLUG']}[bot]"
 
 
-def _poll_interval_seconds() -> int:
-    return env_seconds("CI_FIX_POLL_INTERVAL_SECONDS", 0, minimum=0)
-
-
-def _poll_duration_seconds() -> int:
-    return env_seconds(
-        "CI_FIX_POLL_DURATION_SECONDS",
-        0,
-        minimum=0,
-        maximum=_MAX_LOOP_SECONDS,
-    )
-
-
 def main() -> int:
     configure_logging()
 
@@ -383,13 +365,9 @@ def main() -> int:
     # bot login is derived from the slug rather than looked up.
     bot_login = _bot_login()
 
-    interval = _poll_interval_seconds()
-    duration = _poll_duration_seconds()
     logger.info(
-        "CI fix comment poll on %s: dispatching %s@%s in %s for members of %s/%s "
-        "(bot %s, lookback %dm, %s)",
+        "CI fix comment poll on %s: dispatching %s@%s in %s for members of %s/%s (bot %s, lookback %dm)",
         target_repo, workflow, ref, agent_repo, org, team_slug, bot_login, _lookback_minutes(),
-        f"every {interval}s for {duration}s" if interval and duration else "one pass",
     )
 
     gh = Github(auth=Auth.Token(token))
@@ -399,8 +377,8 @@ def main() -> int:
     dispatch = dispatch_ci_fix(Github(auth=Auth.Token(dispatch_token)), agent_repo=agent_repo,
                                workflow=workflow, ref=ref)
 
-    def _poll() -> int:
-        return poll_once(
+    try:
+        dispatched = poll_once(
             gh,
             target_repo=target_repo,
             org=org,
@@ -410,20 +388,11 @@ def main() -> int:
             dispatch=dispatch,
             claim=claim_via_status,
         )
-
-    try:
-        results = run_poll_loop(
-            _poll,
-            interval_seconds=interval,
-            duration_seconds=duration,
-            logger=logger,
-        )
     except Exception as exc:
         log_outcome(logger, logging.ERROR, "CI fix comment poll failed: %s",
                     " ".join(str(exc).split())[:500])
         raise
-    log_outcome(logger, logging.INFO, "CI fix comment poll: %d fix(es) dispatched across %d "
-                "pass(es)", sum(results), len(results))
+    log_outcome(logger, logging.INFO, "CI fix comment poll: %d fix(es) dispatched", dispatched)
     return 0
 
 

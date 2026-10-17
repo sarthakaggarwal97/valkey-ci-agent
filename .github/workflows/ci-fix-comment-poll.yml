@@ -69,6 +69,4 @@ jobs:
           CI_FIX_POLL_DISPATCH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
           CI_FIX_POLL_APP_SLUG: ${{ steps.token.outputs.app-slug }}
           CI_FIX_POLL_LOOKBACK_MINUTES: ${{ inputs.lookback_minutes || '180' }}
-          CI_FIX_POLL_INTERVAL_SECONDS: "0"
-          CI_FIX_POLL_DURATION_SECONDS: "0"
         run: python -m scripts.ci_fix.comment_poll
