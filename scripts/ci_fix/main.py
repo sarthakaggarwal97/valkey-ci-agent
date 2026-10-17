@@ -78,7 +78,7 @@ def plan_request(
     return _report(gh, repo_full_name, pr_number, comment_id, body, kind, task.reason)
 
 
-def report_result(gh: Any, plan: FixPlan, result: FixResult, *, bot_login: str) -> dict[str, Any]:  # noqa: ARG001
+def report_result(gh: Any, plan: FixPlan, result: FixResult) -> dict[str, Any]:
     failure = plan.task.failure
     return _report(
         gh, failure.repo_full_name, failure.pr_number, plan.comment_id,

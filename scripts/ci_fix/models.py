@@ -123,9 +123,6 @@ class FixTarget:
     base_repo_full_name: str = ""
     branch: str = ""
     expected_sha: str = ""
-    base_branch: str = ""
-    pr_number: int = 0
-    issue_number: int = 0
 
 
 @dataclass(frozen=True)

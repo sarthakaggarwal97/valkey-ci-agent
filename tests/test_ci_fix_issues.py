@@ -38,6 +38,11 @@ _FAILING = "f" * 40
 _ENGINE: dict = {}
 
 
+def _raw(*jobs):
+    """The jobs as GitHub lists them: failed, with their names and ids."""
+    return tuple(SimpleNamespace(name=job.name, id=job.id, conclusion="failure") for job in jobs)
+
+
 def run_issue_fix(gh, artifact_client, repo_full_name, *, issue_number, bot_login, git_env, ignored_jobs=()):
     prepared = issues_mod.prepare_issue(
         gh, artifact_client, repo_full_name,
@@ -46,7 +51,7 @@ def run_issue_fix(gh, artifact_client, repo_full_name, *, issue_number, bot_logi
     if not isinstance(prepared, FixPlan):
         return prepared
     result = _ENGINE["run_fix"](gh, prepared.task, artifact_client, git_env)
-    return issues_mod.report_result(gh, prepared, result, bot_login=bot_login)
+    return issues_mod.report_result(gh, prepared, result)
 
 
 def _last_key(
@@ -182,7 +187,7 @@ def _run(
     issue: SimpleNamespace,
     *,
     jobs: tuple[FailedJob, ...] = (
-        FailedJob("test-ubuntu-jemalloc", "failure", 22),
+        FailedJob("test-ubuntu-jemalloc", 22),
     ),
     run_attempt: int = 1,
     result_kind: ResultKind = ResultKind.OPENED,
@@ -316,8 +321,8 @@ def test_ready_fix_uses_exact_job_and_opens_draft_in_target_repo(
 ):
     issue = _issue(body=_test_issue_body(run_attempt=3))
     jobs = (
-        FailedJob("test-valgrind-test (unit)", "failure", 44),
-        FailedJob("test-ubuntu-jemalloc", "failure", 55),
+        FailedJob("test-valgrind-test (unit)", 44),
+        FailedJob("test-ubuntu-jemalloc", 55),
     )
     result, seen = _run(
         monkeypatch,
@@ -342,7 +347,7 @@ def test_ready_fix_uses_exact_job_and_opens_draft_in_target_repo(
     assert task.target.base_repo_full_name == "o/r"
     assert task.target.branch == "agent/ci-fix/issue-7-100-3"
     assert task.target.expected_sha == _BASE
-    assert task.target.base_branch == "unstable"
+    assert task.failure.base_branch == "unstable"
     assert result["action"] == "opened"
     assert result["pr"] == 55
     assert len(issue.comments) == 1
@@ -351,12 +356,12 @@ def test_ready_fix_uses_exact_job_and_opens_draft_in_target_repo(
 
 
 def test_ignored_artifact_job_is_not_selected(monkeypatch):
-    ignored = FailedJob("notify-about-job-results", "failure", 11)
-    selected = FailedJob("test-ubuntu-jemalloc", "failure", 22)
+    ignored = FailedJob("notify-about-job-results", 11)
+    selected = FailedJob("test-ubuntu-jemalloc", 22)
     monkeypatch.setattr(
         issues_mod,
         "jobs_for_run_attempt",
-        lambda *args, **kwargs: (ignored, selected),
+        lambda *args, **kwargs: _raw(ignored, selected),
     )
     record = {
         "valkey": [
@@ -402,8 +407,8 @@ def test_ignored_artifact_job_is_not_selected(monkeypatch):
 
 
 def test_log_only_failure_keeps_exact_job_id(monkeypatch):
-    selected = FailedJob("test-ubuntu-32bit", "failure", 456)
-    snapshot = (selected,)
+    selected = FailedJob("test-ubuntu-32bit", 456)
+    snapshot = _raw(selected)
     observed_attempts = []
     observed_snapshots = []
 
@@ -573,7 +578,7 @@ def test_job_level_issue_reaches_shared_engine(monkeypatch):
     result, seen = _run(
         monkeypatch,
         issue,
-        jobs=(FailedJob("test-valgrind-test (unit)", "failure", 77),),
+        jobs=(FailedJob("test-valgrind-test (unit)", 77),),
     )
     task = seen[0]
     assert result["action"] == "opened"
@@ -635,7 +640,7 @@ def test_a_weekly_issue_is_fixed_on_the_release_branch_its_job_tested(monkeypatc
     selected = []
     monkeypatch.setattr(
         issues_mod, "_failing_jobs",
-        lambda *args, **kwargs: selected.append(args[-1]) or (FailedJob(_WEEKLY_JOB, "failure", 22),),
+        lambda *args, **kwargs: selected.append(args[-1]) or (FailedJob(_WEEKLY_JOB, 22),),
     )
     seen = []
     monkeypatch.setitem(_ENGINE, "run_fix", lambda _gh, task, *a, **k: seen.append(task) or FixResult(
@@ -653,7 +658,7 @@ def test_a_weekly_issue_is_fixed_on_the_release_branch_its_job_tested(monkeypatc
     assert result["action"] == "opened"
     assert selected == [issues_mod.Source.WEEKLY]
     task = seen[0]
-    assert (task.target.base_branch, task.target.expected_sha) == ("8.1", _RELEASE_BASE)
+    assert (task.failure.base_branch, task.target.expected_sha) == ("8.1", _RELEASE_BASE)
     assert task.failure.head_sha == _RELEASE_TESTED
     assert task.failure.source is issues_mod.Source.WEEKLY and task.failure.scheduled
     assert task.failure.failed_tests == (FailedTest("TTL expiration", "tests/integration/rdb.tcl"),)
@@ -671,7 +676,7 @@ def test_a_daily_issue_passes_its_test_and_source_to_the_engine(monkeypatch):
     task = seen[0]
     assert task.failure.source is issues_mod.Source.DAILY
     assert task.failure.failed_tests == (FailedTest("TTL expiration", "tests/integration/rdb.tcl"),)
-    assert task.target.base_branch == "unstable"
+    assert task.failure.base_branch == "unstable"
 
 
 def _weekly_gh(issue, branches=None):
@@ -691,7 +696,7 @@ def test_a_weekly_branch_left_by_an_earlier_attempt_is_recovered_before_logs_are
     seen = []
 
     def reconcile(_gh, task, **_kwargs):
-        seen.append(task.target.base_branch)
+        seen.append(task.failure.base_branch)
         return FixResult(kind=ResultKind.OPENED, summary="Recovered", task=task, pr_number=55, pr_url="u")
 
     monkeypatch.setattr(issues_mod, "reconcile_draft_pr", reconcile)
@@ -754,7 +759,7 @@ def test_an_issue_from_a_manually_started_run_is_refused_with_why(monkeypatch):
 def test_the_issue_comment_lists_what_the_bot_checked(monkeypatch):
     issue = _issue()
     gh, _repo, _run_ = _gh(issue)
-    monkeypatch.setattr(issues_mod, "_failing_jobs", lambda *a, **k: (FailedJob("test-ubuntu-jemalloc", "failure", 22),))
+    monkeypatch.setattr(issues_mod, "_failing_jobs", lambda *a, **k: (FailedJob("test-ubuntu-jemalloc", 22),))
     checked = "Existing fixes found: `abc123` Deflake (#9) (port candidate)\nDid not reproduce with `./runtest`."
     monkeypatch.setitem(_ENGINE, "run_fix", lambda _gh, task, *a, **k: FixResult(
         kind=ResultKind.REFUSED, summary="no fix", task=task,
@@ -829,9 +834,9 @@ def issue_plan(job_name="test-ubuntu-jemalloc"):
     failure = IssueFailure(number=7, run_id=100, test_name="TTL expiration", test_file="tests/integration/rdb.tcl")
     task = FixTask(
         Failure(repo_full_name="valkey-io/valkey", run_id=100, head_sha=_FAILING, job_id=22, job_name=job_name,
-                issue_number=7, failed_tests=failure.failed_tests, source=Source.DAILY),
+                base_branch="unstable", issue_number=7, failed_tests=failure.failed_tests, source=Source.DAILY),
         FixTarget(kind=TargetKind.DRAFT_PR, repo_full_name="valkey-io/valkey", branch="agent/ci-fix/x",
-                  expected_sha=_BASE, base_branch="unstable", issue_number=7),
+                  expected_sha=_BASE),
         FixPolicy.GENERAL,
     )
     return FixPlan(front_door=FrontDoor.ISSUE, task=task, issue=failure)

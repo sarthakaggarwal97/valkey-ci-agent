@@ -156,7 +156,7 @@ def _build(
         return (
             jobs
             if jobs is not None
-            else [FailedJob("test-ubuntu", "failure", 11)]
+            else [FailedJob("test-ubuntu", 11)]
         )
 
     _patch_failed_jobs(monkeypatch, jobs_for_run)
@@ -211,8 +211,8 @@ def test_exact_failed_job_link_is_preserved(monkeypatch) -> None:
         monkeypatch,
         command=ParsedCommand("valkey-io", "valkey", 27559908167, "hint", 22),
         jobs=[
-            FailedJob("build", "failure", 11),
-            FailedJob("test-sanitizer", "failure", 22),
+            FailedJob("build", 11),
+            FailedJob("test-sanitizer", 22),
         ],
     )
     assert isinstance(result, FixTask)
@@ -319,8 +319,8 @@ def test_without_link_selects_most_actionable_current_head_failure(monkeypatch) 
         ),
     ]
     jobs = {
-        1: [FailedJob("test-sanitizer", "failure", 10)],
-        2: [FailedJob("build-linux", "failure", 20)],
+        1: [FailedJob("test-sanitizer", 10)],
+        2: [FailedJob("build-linux", 20)],
     }
     monkeypatch.setattr(gate_mod, "is_authorized", lambda *args, **kwargs: True)
     _patch_failed_jobs(monkeypatch, lambda _gh, _repo, run_id, **kwargs: jobs[run_id])
@@ -369,7 +369,7 @@ def test_without_link_ignores_failure_superseded_by_success(monkeypatch) -> None
         ),
     ]
     jobs_for_run = MagicMock(
-        return_value=[FailedJob("build-linux", "failure", 20)],
+        return_value=[FailedJob("build-linux", 20)],
     )
     monkeypatch.setattr(gate_mod, "is_authorized", lambda *args, **kwargs: True)
     _patch_failed_jobs(monkeypatch, jobs_for_run)
@@ -415,7 +415,7 @@ def test_without_link_scopes_newest_run_selection_to_pr_branch(monkeypatch) -> N
         ),
     ]
     jobs_for_run = MagicMock(
-        return_value=[FailedJob("build-linux", "failure", 20)],
+        return_value=[FailedJob("build-linux", 20)],
     )
     monkeypatch.setattr(gate_mod, "is_authorized", lambda *args, **kwargs: True)
     _patch_failed_jobs(monkeypatch, jobs_for_run)

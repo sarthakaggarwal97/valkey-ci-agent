@@ -264,7 +264,6 @@ def _failing_jobs(
         job
         for job in failed
         if normalize_job_name(job.name) in names
-        and not job_is_ignored(job.name, ignored_jobs)
     ]
     if not candidates:
         return ()
@@ -407,13 +406,11 @@ def _terminal_comment(
         message = (
             f"No draft PR was opened: {compact_text(summary, 2_000)}"
         )
-    elif action == ResultKind.FAILED.value:
+    else:
         message = (
             "The automatic fix attempt failed: "
             f"{compact_text(summary, 2_000)}"
         )
-    else:
-        message = compact_text(summary, 2_000)
     body = (
         f"{_RESULT_HEADING}{action}.** {message}\n\n"
         f"Source: {source}."
@@ -473,7 +470,7 @@ def plan_request(
     )
 
 
-def report_result(gh: Any, plan: FixPlan, result: FixResult, *, bot_login: str) -> dict[str, Any]:  # noqa: ARG001
+def report_result(gh: Any, plan: FixPlan, result: FixResult) -> dict[str, Any]:
     """Comment the fix's result on its issue, and return it as a result record."""
     task, failure = plan.task, plan.issue
     if failure is None:
@@ -584,8 +581,6 @@ def prepare_issue(
         base_repo_full_name=repo_full_name,
         branch=branch_name,
         expected_sha=base_sha,
-        base_branch=branch,
-        issue_number=failure.number,
     )
     others = _other_open_issues(repo, bot_login, exclude=failure.number, branch=failure.branch)
     recovery_task = FixTask(

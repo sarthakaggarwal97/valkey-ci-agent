@@ -65,8 +65,6 @@ def _task(
         repo_full_name="owner/repo",
         branch="agent/ci-fix/17",
         expected_sha=head_sha,
-        base_branch="main",
-        pr_number=17,
     )
     return FixTask(failure, target, FixPolicy.GENERAL)
 

@@ -311,11 +311,11 @@ def reconcile_draft_pr(
                     candidate,
                 ),
                 head_branch=target.branch,
-                base_branch=target.base_branch or task.failure.base_branch,
+                base_branch=task.failure.base_branch,
                 draft=True,
             ),
             retries=2,
-            description=f"open draft CI-fix PR for issue #{target.issue_number}",
+            description=f"open draft CI-fix PR for issue #{task.failure.issue_number}",
         )
     except Exception as exc:
         reused = _reuse_draft_pr(gh, task, candidate, commit_sha)
@@ -352,23 +352,23 @@ def _validate_pr_target(gh: Any, task: FixTask, *, require_bot: bool) -> str:
     target = task.target
     try:
         pr = retry_github_call(
-            lambda: gh.get_repo(task.failure.repo_full_name).get_pull(target.pr_number),
+            lambda: gh.get_repo(task.failure.repo_full_name).get_pull(task.failure.pr_number),
             retries=2,
-            description=f"revalidate PR #{target.pr_number}",
+            description=f"revalidate PR #{task.failure.pr_number}",
         )
     except Exception as exc:  # noqa: BLE001 - retry can recover GitHub API failures
         raise TargetRevalidationFailed(
-            f"PR #{target.pr_number} could not be revalidated ({exc})"
+            f"PR #{task.failure.pr_number} could not be revalidated ({exc})"
         ) from exc
     if str(getattr(pr, "state", "") or "") != "open":
-        return f"PR #{target.pr_number} is no longer open"
-    if str(getattr(getattr(pr, "base", None), "ref", "") or "") != target.base_branch:
-        return f"PR #{target.pr_number} no longer targets {target.base_branch}"
+        return f"PR #{task.failure.pr_number} is no longer open"
+    if str(getattr(getattr(pr, "base", None), "ref", "") or "") != task.failure.base_branch:
+        return f"PR #{task.failure.pr_number} no longer targets {task.failure.base_branch}"
     head = getattr(pr, "head", None)
     if str(getattr(getattr(head, "repo", None), "full_name", "") or "") != target.repo_full_name:
-        return f"PR #{target.pr_number} no longer comes from {target.repo_full_name}"
+        return f"PR #{task.failure.pr_number} no longer comes from {target.repo_full_name}"
     if str(getattr(head, "ref", "") or "") != target.branch:
-        return f"PR #{target.pr_number} no longer has head branch {target.branch}"
+        return f"PR #{task.failure.pr_number} no longer has head branch {target.branch}"
     current_sha = str(getattr(head, "sha", "") or "")
     if current_sha != target.expected_sha:
         return (
@@ -382,7 +382,7 @@ def _validate_pr_target(gh: Any, task: FixTask, *, require_bot: bool) -> str:
             branch=target.branch,
             author=author,
         ):
-            return f"PR #{target.pr_number} is not owned by the CI agent"
+            return f"PR #{task.failure.pr_number} is not owned by the CI agent"
     return ""
 
 
@@ -393,9 +393,7 @@ def _validate_issue_target(gh: Any, task: FixTask) -> str:
     draft PR is opened from the commit it was prepared on, and its own CI
     runs against the branch as it is then.
     """
-    issue_number = task.target.issue_number or task.failure.issue_number
-    if not issue_number:
-        return "The draft-PR target has no issue number."
+    issue_number = task.failure.issue_number
     try:
         repo = retry_github_call(
             lambda: gh.get_repo(task.failure.repo_full_name),
@@ -432,8 +430,6 @@ def _validate_issue_target(gh: Any, task: FixTask) -> str:
             f"Issue #{issue_number} now points at run {run_id} attempt "
             f"{run_attempt}, not the occurrence that was analyzed."
         )
-    if not (task.target.base_branch or task.failure.base_branch):
-        return "The draft-PR target has no base branch."
     return ""
 
 
@@ -449,8 +445,8 @@ def _validate_existing_draft_pr(
     label = f"PR #{number}" if number else "The existing PR"
     if str(getattr(pull, "state", "open") or "") != "open":
         return f"{label} is no longer open."
-    if str(getattr(getattr(pull, "base", None), "ref", "") or "") != target.base_branch:
-        return f"{label} does not target {target.base_branch}."
+    if str(getattr(getattr(pull, "base", None), "ref", "") or "") != task.failure.base_branch:
+        return f"{label} does not target {task.failure.base_branch}."
     head = getattr(pull, "head", None)
     if str(getattr(getattr(head, "repo", None), "full_name", "") or "") != target.repo_full_name:
         return f"{label} does not come from {target.repo_full_name}."
@@ -475,19 +471,19 @@ def _draft_title(task: FixTask, candidate: FixCandidate | None) -> str:
     failing_check = candidate.failing_check if candidate is not None else ""
     fallback = f"{_source_label(task.failure)} failure"
     # Valkey titles a release-branch PR with its branch, e.g. "[8.1] ...".
-    prefix = f"[{task.target.base_branch}] " if task.failure.source is Source.WEEKLY else ""
+    prefix = f"[{task.failure.base_branch}] " if task.failure.source is Source.WEEKLY else ""
     return fit_subject(f"{prefix}Fix {failing_check or task.failure.job_name or fallback}")
 
 
 def _draft_body(task: FixTask, candidate: FixCandidate | None) -> str:
     failure = task.failure
     lines = []
-    if failure.issue_number and task.target.base_branch and failure.source is Source.WEEKLY:
+    if failure.issue_number and task.failure.base_branch and failure.source is Source.WEEKLY:
         # GitHub closes an issue from a merged PR only on the default branch.
         lines += [
             f"Refs #{failure.issue_number}",
             "",
-            f"This targets the `{task.target.base_branch}` release branch; merging it "
+            f"This targets the `{task.failure.base_branch}` release branch; merging it "
             f"does not close #{failure.issue_number}, so close it after merging.",
             "",
         ]
@@ -550,7 +546,7 @@ def _draft_body(task: FixTask, candidate: FixCandidate | None) -> str:
     else:
         if failure.source is Source.WEEKLY:
             lines += [
-                f"No merged fix to port was found, so this patches `{task.target.base_branch}` "
+                f"No merged fix to port was found, so this patches `{task.failure.base_branch}` "
                 "directly. Valkey fixes tests on `unstable` first: if the test fails there "
                 "too, the fix belongs there and this PR should become its backport.",
                 "",

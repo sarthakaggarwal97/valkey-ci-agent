@@ -37,7 +37,7 @@ def _pr_plan(job_name="test-ubuntu-latest") -> FixPlan:
         Failure(repo_full_name="valkey-io/valkey", run_id=100, head_sha=_HEAD, job_id=22, job_name=job_name,
                 base_branch="unstable", pr_number=42, workflow="ci"),
         FixTarget(kind=TargetKind.UPDATE_PR, repo_full_name="valkey-io/valkey", branch="agent/ci-fix/x",
-                  expected_sha=_HEAD, base_branch="unstable", pr_number=42),
+                  expected_sha=_HEAD),
         FixPolicy.GENERAL,
     )
     return FixPlan(front_door=FrontDoor.PR, task=task, comment_id=7)
@@ -51,7 +51,7 @@ def front_door(monkeypatch):
     def planner(_gh, _artifacts, request, *, bot_login):
         return seen.planned
 
-    def reporter(_gh, plan, result, *, bot_login):
+    def reporter(_gh, plan, result):
         seen.reported.append(result)
         return {"action": result.kind.value}
 
@@ -119,7 +119,7 @@ def test_the_fix_job_prepares_from_the_plan_alone_with_the_jobs_own_commands(mon
 
 def _publish(tmp_path, outcome_dir):
     return run.publish_and_report(
-        MagicMock(), tmp_path, outcome_dir, bot_login=_BOT, git_env={}, run_url="https://run",
+        MagicMock(), tmp_path, outcome_dir, git_env={}, run_url="https://run",
     )
 
 

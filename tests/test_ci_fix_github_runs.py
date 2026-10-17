@@ -156,7 +156,7 @@ def test_failed_jobs_are_a_thin_filter_over_the_raw_snapshot(monkeypatch):
         10,
         run_attempt=4,
         retries=7,
-    ) == [FailedJob("build", "failure", 1)]
+    ) == [FailedJob("build", 1)]
     loader.assert_called_once_with(
         ANY,
         "o/r",

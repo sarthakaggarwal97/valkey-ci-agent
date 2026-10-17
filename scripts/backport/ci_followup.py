@@ -241,8 +241,6 @@ def plan_request(
             base_repo_full_name=repo_entry.repo,
             branch=target.head_branch,
             expected_sha=target.head_sha,
-            base_branch=target_branch,
-            pr_number=int(target.pr.number),
         ),
         # A backport branch's failure is usually a missing upstream change; a
         # pushed CI fix or a draft PR has no upstream counterpart to port.
@@ -254,7 +252,7 @@ def plan_request(
     )
 
 
-def report_result(gh: Any, plan: FixPlan, result: FixResult, *, bot_login: str) -> dict[str, Any]:  # noqa: ARG001
+def report_result(gh: Any, plan: FixPlan, result: FixResult) -> dict[str, Any]:
     """Comment the result on the PR; a terminal one carries the markers that retire the job.
 
     A failed attempt carries none, so the job is retried later.

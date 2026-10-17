@@ -236,7 +236,6 @@ jobs:
         shell: bash
         env:
           TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
-          CI_FIX_BOT_LOGIN: ${{ steps.target-token.outputs.app-slug }}[bot]
         run: |
           set -euo pipefail
           python -m scripts.ci_fix.run publish --plan ci-fix-plan --outcome ci-fix-result

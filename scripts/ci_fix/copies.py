@@ -58,7 +58,7 @@ def copy_for(manifest: dict[str, Any], task: FixTask) -> CopyJob | None:
     if failure.repo_full_name != REPO or task.target.kind is TargetKind.SUGGEST:
         return None
     branch, workflow = (
-        SCHEDULED_WORKFLOW if failure.scheduled else (task.target.base_branch, failure.workflow)
+        SCHEDULED_WORKFLOW if failure.scheduled else (failure.base_branch, failure.workflow)
     )
     return copy_job_for(manifest, branch, workflow, failure.job_name)
 

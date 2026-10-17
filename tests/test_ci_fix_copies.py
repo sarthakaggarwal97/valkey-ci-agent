@@ -26,9 +26,9 @@ TEST = FailedTest("INCREX BYFLOAT overflow", "tests/unit/type/incr.tcl")
 def _task(job_name: str, *, source=Source.DAILY, kind=TargetKind.DRAFT_PR, repo="valkey-io/valkey") -> FixTask:
     failure = Failure(
         repo_full_name=repo, run_id=1, head_sha="f" * 40, job_id=2, job_name=job_name,
-        issue_number=7, source=source, workflow="ci" if source is None else "",
+        base_branch="9.0", issue_number=7, source=source, workflow="ci" if source is None else "",
     )
-    target = FixTarget(kind=kind, repo_full_name=repo, expected_sha="b" * 40, base_branch="9.0")
+    target = FixTarget(kind=kind, repo_full_name=repo, expected_sha="b" * 40)
     return FixTask(failure, target, FixPolicy.GENERAL)
 
 

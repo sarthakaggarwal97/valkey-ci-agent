@@ -259,12 +259,11 @@ def failed_tests(task: FixTask, job_log: str) -> tuple[FailedTest, ...]:
     have issues of their own, and a fix for this one must not wait on them.
     """
     tests = list(task.failure.failed_tests)
-    if tests and task.failure.issue_number:
-        return tuple(test for test in tests if ".." not in Path(test.file).parts)
-    tests += [
-        test for test in (FailedTest.from_report(name, file) for name, file in failed_tests_in_log(job_log))
-        if test not in tests
-    ]
+    if not (tests and task.failure.issue_number):
+        tests += [
+            test for test in (FailedTest.from_report(name, file) for name, file in failed_tests_in_log(job_log))
+            if test not in tests
+        ]
     # A log or issue names the file; one that leaves tests/ is not a test.
     return tuple(test for test in tests if ".." not in Path(test.file).parts)[:_MAX_TESTS]
 
@@ -288,7 +287,8 @@ def _establish(
     described = ""
     if run_test is not None:
         plan = plan_for(repo_dir, tests, scheduled=task.failure.scheduled, job=job)
-    if plan is not None and run_test is not None:
+    if plan is not None:
+        assert run_test is not None  # a plan is only made to be run
         logger.info("Reproducing with: %s", plan.command(1))
         reproduction = reproduce(
             plan,
@@ -873,11 +873,5 @@ def bounded_job_log(job_log: str) -> str:
     if len(job_log) <= MAX_JOB_LOG_CHARS:
         return job_log
     marker = "\n\n[... job log truncated; keeping the final failure output ...]\n\n"
-    head_chars = min(JOB_LOG_HEAD_CHARS, MAX_JOB_LOG_CHARS)
-    tail_chars = max(0, MAX_JOB_LOG_CHARS - head_chars - len(marker))
-    tail = job_log[-tail_chars:] if tail_chars else ""
-    return (
-        job_log[:head_chars]
-        + marker
-        + tail
-    )
+    tail_chars = MAX_JOB_LOG_CHARS - JOB_LOG_HEAD_CHARS - len(marker)
+    return job_log[:JOB_LOG_HEAD_CHARS] + marker + job_log[-tail_chars:]

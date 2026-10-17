@@ -133,7 +133,7 @@ def _select(
     pr = pr or _pr()
     runs = runs if runs is not None else [_run()]
     jobs = jobs if jobs is not None else [
-        FailedJob("unit tests", "failure", id=3),
+        FailedJob("unit tests", id=3),
     ]
     gh = _gh(runs, pr)
     monkeypatch.setattr(
@@ -170,23 +170,23 @@ def test_finds_current_head_failure_and_ignores_configured_jobs(
     target, reason, _gh_client = _select(
         monkeypatch,
         jobs=[
-            FailedJob("DCO", "failure", id=1),
-            FailedJob("Reply schema validator", "failure", id=2),
+            FailedJob("DCO", id=1),
+            FailedJob("Reply schema validator", id=2),
         ],
     )
 
     assert reason == "actionable"
     assert target is not None
-    assert target.job == FailedJob("Reply schema validator", "failure", id=2)
+    assert target.job == FailedJob("Reply schema validator", id=2)
 
 
 def test_selects_only_the_highest_priority_failure(monkeypatch) -> None:
     target, reason, _gh_client = _select(
         monkeypatch,
         jobs=[
-            FailedJob("asan tests", "failure", id=1),
-            FailedJob("clang format", "failure", id=2),
-            FailedJob("reply schema", "failure", id=3),
+            FailedJob("asan tests", id=1),
+            FailedJob("clang format", id=2),
+            FailedJob("reply schema", id=3),
         ],
     )
 
@@ -230,7 +230,7 @@ def test_newer_success_suppresses_old_failure_for_only_that_workflow(
     gh = _gh(runs, pr)
     monkeypatch.setattr(ci_followup, "find_existing_pr", lambda *_args: pr)
     jobs_for_run = MagicMock(
-        return_value=[FailedJob("build", "failure", id=22)],
+        return_value=[FailedJob("build", id=22)],
     )
     monkeypatch.setattr(github_runs, "failed_jobs_for_run", jobs_for_run)
 
@@ -318,7 +318,7 @@ def test_terminal_marker_prevents_retry_of_the_exact_job(
         monkeypatch,
         pr=pr,
         jobs=[
-            FailedJob("Reply schema validator", "failure", id=2),
+            FailedJob("Reply schema validator", id=2),
         ],
     )
 
@@ -337,7 +337,7 @@ def test_logical_marker_deduplicates_twin_event_runs(
         pr=pr,
         runs=[_run(11, workflow_id=100)],
         jobs=[
-            FailedJob("Reply schema validator", "failure", id=22),
+            FailedJob("Reply schema validator", id=22),
         ],
     )
 
@@ -354,7 +354,7 @@ def test_same_job_name_in_another_workflow_remains_actionable(
         monkeypatch,
         pr=pr,
         runs=[_run(11, workflow_id=200)],
-        jobs=[FailedJob("build", "failure", id=22)],
+        jobs=[FailedJob("build", id=22)],
     )
 
     assert reason == "actionable"
@@ -416,7 +416,7 @@ def _target(
         run=_run(run_attempt=run_attempt),
         head_sha=_HEAD,
         head_branch="agent/backport/sweep/9.0",
-        job=job or FailedJob("unit tests", "failure", id=3),
+        job=job or FailedJob("unit tests", id=3),
     )
 
 
@@ -432,7 +432,7 @@ def _plan(monkeypatch, target, reason="actionable"):
 
 
 def test_the_plan_binds_the_exact_job_and_its_markers(monkeypatch) -> None:
-    target = _target(_pr(), job=FailedJob("Reply schema validator", "failure", id=27), run_attempt=4)
+    target = _target(_pr(), job=FailedJob("Reply schema validator", id=27), run_attempt=4)
 
     plan = _plan(monkeypatch, target)
 
@@ -450,8 +450,7 @@ def test_the_plan_binds_the_exact_job_and_its_markers(monkeypatch) -> None:
     assert task.target.repo_full_name == "valkey-io/valkey"
     assert task.target.branch == "agent/backport/sweep/9.0"
     assert task.target.expected_sha == _HEAD
-    assert task.target.base_branch == "9.0"
-    assert task.target.pr_number == 4226
+    assert task.failure.base_branch == "9.0"
     (marker,) = plan.markers
     assert f"head={_HEAD} run=10 attempt=4 job=27" in marker and "key=" in marker
 
@@ -470,9 +469,9 @@ def _report(monkeypatch, kind, **result):
     gh = MagicMock()
     gh.get_repo.return_value.get_pull.return_value = pr
     monkeypatch.setattr(ci_followup, "render_result", lambda result: f"result: {result.summary}")
-    plan = _plan(monkeypatch, _target(pr, job=FailedJob("Reply schema validator", "failure", id=27)))
+    plan = _plan(monkeypatch, _target(pr, job=FailedJob("Reply schema validator", id=27)))
     report = ci_followup.report_result(
-        gh, plan, FixResult(kind=kind, summary="the summary", task=plan.task, **result), bot_login=_BOT,
+        gh, plan, FixResult(kind=kind, summary="the summary", task=plan.task, **result),
     )
     return report, pr
 
@@ -511,7 +510,7 @@ def test_a_bot_fix_prs_red_head_is_followed_up(monkeypatch) -> None:
     runs = [_run(20, head_sha=fix.head.sha, head_branch=fix.head.ref)]
     monkeypatch.setattr(ci_followup, "find_existing_pr", lambda *_args: None)  # no sweep PR
     monkeypatch.setattr(github_runs, "failed_jobs_for_run", lambda *_a, **_k: (
-        FailedJob(name="test-ubuntu", conclusion="failure", id=7),))
+        FailedJob(name="test-ubuntu", id=7),))
     target, reason = ci_followup.find_followup_target(
         _gh(runs, fix, open_prs=[fix]), repo_entry=_entry(), target_branch="9.0", bot_login=_BOT,
     )
@@ -538,7 +537,7 @@ def test_the_sweep_pr_is_followed_up_before_a_fix_pr(monkeypatch) -> None:
     monkeypatch.setattr(ci_followup, "newest_runs_for_head",
                         lambda _gh, _repo, *, branch, head_sha: runs.get(head_sha, []))
     monkeypatch.setattr(github_runs, "failed_jobs_for_run", lambda *_a, **_k: (
-        FailedJob(name="test-ubuntu", conclusion="failure", id=7),))
+        FailedJob(name="test-ubuntu", id=7),))
     target, _reason = ci_followup.find_followup_target(
         _gh([], sweep, open_prs=[fix]), repo_entry=_entry(), target_branch="9.0", bot_login=_BOT,
     )

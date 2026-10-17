@@ -114,7 +114,6 @@ def publish_and_report(
     plan_dir: Path,
     outcome_dir: Path,
     *,
-    bot_login: str,
     git_env: dict[str, str],
     run_url: str,
 ) -> dict[str, Any]:
@@ -136,7 +135,7 @@ def publish_and_report(
             logger.exception("CI-fix publication failed")
             result = FixResult(kind=ResultKind.FAILED, summary=f"The CI-fix attempt failed: {exc}",
                                task=fix_plan.task, candidate=outcome.candidate)
-    return reporter(gh, fix_plan, result, bot_login=bot_login)
+    return reporter(gh, fix_plan, result)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -185,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     with GitAuth(token, prefix="ci-fix-git-askpass-") as auth:
         result = publish_and_report(
-            gh, args.plan, args.outcome, bot_login=bot_login, git_env=auth.env(), run_url=run_url,
+            gh, args.plan, args.outcome, git_env=auth.env(), run_url=run_url,
         )
     print(json.dumps(result, indent=2))
     return 1 if result.get("action") == ResultKind.FAILED.value else 0

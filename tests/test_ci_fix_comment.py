@@ -27,6 +27,8 @@ def _task(kind: TargetKind = TargetKind.SUGGEST) -> FixTask:
             head_sha=_SHA,
             job_id=17,
             job_name="test-ubuntu",
+            base_branch="unstable",
+            pr_number=3,
             description="The zset payload test failed.",
             other_failed_jobs=("lint",),
         ),
@@ -36,8 +38,6 @@ def _task(kind: TargetKind = TargetKind.SUGGEST) -> FixTask:
             base_repo_full_name="o/r",
             branch="agent/ci-fix/x",
             expected_sha=_SHA,
-            base_branch="unstable",
-            pr_number=3,
         ),
         policy=FixPolicy.GENERAL,
     )

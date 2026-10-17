@@ -61,9 +61,6 @@ def _task(kind: TargetKind, *, issue: int = 0) -> FixTask:
                 else "agent/backport/sweep/9.0"
             ),
             expected_sha=_HEAD,
-            base_branch=failure.base_branch,
-            pr_number=0 if issue else 7,
-            issue_number=issue,
         ),
         policy=FixPolicy.GENERAL if issue else FixPolicy.BACKPORT,
     )
@@ -527,8 +524,8 @@ def test_a_weekly_draft_refers_to_its_issue_without_claiming_to_close_it():
     from scripts.common.valkey_ci import Source
 
     def body(source: str, base: str) -> str:
-        failure = Failure("o/r", 1, "a" * 40, 2, "job", issue_number=9, source=source)
-        target = FixTarget(TargetKind.DRAFT_PR, "o/r", branch="agent/ci-fix/x", base_branch=base)
+        failure = Failure("o/r", 1, "a" * 40, 2, "job", base_branch=base, issue_number=9, source=source)
+        target = FixTarget(TargetKind.DRAFT_PR, "o/r", branch="agent/ci-fix/x")
         return publish_mod._draft_body(FixTask(failure, target, FixPolicy.GENERAL), None)
 
     weekly = body(Source.WEEKLY, "8.1")
@@ -541,8 +538,8 @@ def test_a_weekly_draft_is_titled_with_its_release_branch_and_says_where_fixes_g
     from scripts.ci_fix.models import Failure, FixPolicy, FixTarget, FixTask, TargetKind
     from scripts.common.valkey_ci import Source
 
-    failure = Failure("o/r", 1, "a" * 40, 2, "job", issue_number=9, source=Source.WEEKLY)
-    task = FixTask(failure, FixTarget(TargetKind.DRAFT_PR, "o/r", base_branch="8.1"), FixPolicy.GENERAL)
+    failure = Failure("o/r", 1, "a" * 40, 2, "job", base_branch="8.1", issue_number=9, source=Source.WEEKLY)
+    task = FixTask(failure, FixTarget(TargetKind.DRAFT_PR, "o/r"), FixPolicy.GENERAL)
     patch = _candidate()
 
     assert publish_mod._draft_title(task, patch).startswith("[8.1] Fix ")
@@ -557,8 +554,8 @@ def test_a_draft_closes_only_the_extra_issues_whose_tests_were_verified():
     from scripts.ci_fix.models import Failure, FixPolicy, FixTarget, FixTask, TargetKind
     from scripts.common.valkey_ci import Source
 
-    failure = Failure("o/r", 1, "a" * 40, 2, "job", issue_number=9, source=Source.DAILY)
-    target = FixTarget(TargetKind.DRAFT_PR, "o/r", branch="agent/ci-fix/x", base_branch="unstable")
+    failure = Failure("o/r", 1, "a" * 40, 2, "job", base_branch="unstable", issue_number=9, source=Source.DAILY)
+    target = FixTarget(TargetKind.DRAFT_PR, "o/r", branch="agent/ci-fix/x")
     candidate = replace(_candidate(), also_fixes=(10, 11), also_touches=(12,))
 
     body = publish_mod._draft_body(FixTask(failure, target, FixPolicy.GENERAL), candidate)

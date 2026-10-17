@@ -48,9 +48,9 @@ _DEFAULT_LOOKBACK_MINUTES = 180
 class ClaimedDispatchFailed(Exception):
     """Dispatch failed after this run claimed the comment.
 
-    The claim reaction stays (an ambiguous failure may still have started a
-    run, and retrying could double-dispatch), so later ticks skip the comment.
-    Surfacing it fails the poll run instead of losing the command silently.
+    The claim is given back when it can be, so a later poll retries the
+    command. Surfacing it fails the poll run instead of losing the command
+    silently.
     """
 
 

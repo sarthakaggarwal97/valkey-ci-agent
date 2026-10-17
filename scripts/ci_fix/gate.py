@@ -252,13 +252,10 @@ def build_fix_task(
             selected = select_job(failed)
     else:
         try:
-            picked = _most_actionable_failed_run(
-                gh,
-                pr_repo_full_name,
-                head_sha,
-                head_branch,
-                retries=retries,
+            runs = newest_runs_for_head(
+                gh, pr_repo_full_name, branch=head_branch, head_sha=head_sha, retries=retries,
             )
+            picked = most_actionable_failure(gh, pr_repo_full_name, runs)
         except Exception as exc:  # noqa: BLE001
             return GateError(f"Could not inspect CI runs for this PR: {exc}")
         if picked is None:
@@ -296,8 +293,6 @@ def build_fix_task(
         base_repo_full_name=pr_repo_full_name,
         branch=head_branch,
         expected_sha=head_sha,
-        base_branch=base_branch,
-        pr_number=pr_number,
     )
     failure = Failure(
         repo_full_name=pr_repo_full_name,
@@ -323,15 +318,3 @@ def build_fix_task(
         target=target,
         policy=policy,
     )
-
-
-def _most_actionable_failed_run(
-    gh: Any,
-    repo_full_name: str,
-    head_sha: str,
-    head_branch: str,
-    *,
-    retries: int,
-) -> tuple[Any, FailedJob, list[FailedJob]] | None:
-    runs = newest_runs_for_head(gh, repo_full_name, branch=head_branch, head_sha=head_sha, retries=retries)
-    return most_actionable_failure(gh, repo_full_name, runs)

@@ -30,7 +30,6 @@ class FailedJob:
     """One concrete failed GitHub Actions job selected by code."""
 
     name: str
-    conclusion: str
     id: int = 0
 
 
@@ -239,9 +238,7 @@ def failed_jobs_for_run(
 def failed_jobs(jobs: Iterable[Any]) -> list[FailedJob]:
     """Project a raw jobs snapshot down to genuine actionable failures."""
     return [
-        FailedJob(name=str(getattr(j, "name", "") or ""),
-                  conclusion=str(getattr(j, "conclusion", "") or ""),
-                  id=int(getattr(j, "id", 0) or 0))
+        FailedJob(name=str(getattr(j, "name", "") or ""), id=int(getattr(j, "id", 0) or 0))
         for j in jobs
         if str(getattr(j, "conclusion", "") or "") in FAILED_JOB_CONCLUSIONS
     ]

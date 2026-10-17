@@ -28,15 +28,13 @@ _REQUEST = {"repo": "valkey-io/valkey", "pr": 42, "commenter": "alice", "comment
 
 def _task() -> FixTask:
     return FixTask(
-        failure=Failure("valkey-io/valkey", 9, _SHA, 10, "build", pr_number=42),
+        failure=Failure("valkey-io/valkey", 9, _SHA, 10, "build", base_branch="unstable", pr_number=42),
         target=FixTarget(
             kind=TargetKind.UPDATE_PR,
             repo_full_name="valkey-io/valkey",
             base_repo_full_name="valkey-io/valkey",
             branch="agent/ci-fix/x",
             expected_sha=_SHA,
-            base_branch="unstable",
-            pr_number=42,
         ),
         policy=FixPolicy.GENERAL,
     )
@@ -109,7 +107,7 @@ def test_the_result_is_commented_and_reacted_to(wired) -> None:
     plan = FixPlan(front_door=FrontDoor.PR, task=_task(), comment_id=7)
     result = FixResult(kind=ResultKind.PUSHED, summary="pushed", task=_task(), commit_sha="b" * 40)
 
-    report = main_mod.report_result(MagicMock(), plan, result, bot_login=_BOT)
+    report = main_mod.report_result(MagicMock(), plan, result)
 
     assert report["action"] == "pushed"
     assert "Pushed `bbbbbbbbbbbb`" in wired.posted[0][2]
@@ -122,7 +120,7 @@ def test_a_comment_that_cannot_be_posted_fails_the_run_but_still_reacts(wired, m
     result = FixResult(kind=ResultKind.PUSHED, summary="pushed", task=_task(), commit_sha="b" * 40)
 
     with pytest.raises(RuntimeError):
-        main_mod.report_result(MagicMock(), plan, result, bot_login=_BOT)
+        main_mod.report_result(MagicMock(), plan, result)
     assert wired.reacted == [(7, ResultKind.PUSHED)]
 
 

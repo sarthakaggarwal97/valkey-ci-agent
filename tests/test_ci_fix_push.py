@@ -148,8 +148,6 @@ def _target(
         repo_full_name="valkey-io/valkey",
         branch=branch,
         expected_sha=head_sha,
-        base_branch="9.0",
-        pr_number=7,
     )
 
 
