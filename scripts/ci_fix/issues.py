@@ -570,7 +570,10 @@ def prepare_issue(
         branch=branch_name,
         expected_sha=base_sha,
     )
-    others = _other_open_issues(repo, bot_login, exclude=failure.number, branch=failure.branch)
+    # Weekly: the release branch, which a job issue carries only in its job name.
+    others = _other_open_issues(
+        repo, bot_login, exclude=failure.number, branch=branch if source is Source.WEEKLY else "",
+    )
     recovery_task = FixTask(
         failure=Failure(
             repo_full_name=repo_full_name,

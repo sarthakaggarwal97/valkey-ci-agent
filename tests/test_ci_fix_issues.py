@@ -602,6 +602,32 @@ def test_a_weekly_issue_is_fixed_on_the_release_branch_its_job_tested(monkeypatc
     assert "Weekly job" in task.failure.description and "`8.1`" in task.failure.description
 
 
+def test_a_weekly_job_issue_is_checked_against_its_release_branchs_issues_only(monkeypatch):
+    issue = _issue(body=_job_issue_body(job=_WEEKLY_JOB))
+    gh, repo, _run_ = _gh(issue, path=".github/workflows/weekly.yml")
+    repo.get_branch.side_effect = lambda name: SimpleNamespace(commit=SimpleNamespace(sha=_RELEASE_BASE))
+    monkeypatch.setattr(issues_mod, "_failing_jobs", lambda *a, **k: (FailedJob(_WEEKLY_JOB, 22),))
+    branches = []
+    monkeypatch.setattr(
+        issues_mod, "_other_open_issues",
+        lambda *_a, branch, **_k: branches.append(branch) or (),
+    )
+    monkeypatch.setitem(_ENGINE, "run_fix", lambda _gh, task, *a, **k: FixResult(
+        kind=ResultKind.OPENED, summary="opened", task=task, pr_number=55, pr_url="https://pr/55",
+    ))
+    artifacts = MagicMock()
+    artifacts.download_job_log.return_value = (
+        "2026-10-11T06:13:15.9495435Z Syncing repository: o/r\n"
+        "2026-10-11T06:13:17.6919192Z [command]/usr/bin/git log -1 --format=%H\n"
+        f"2026-10-11T06:13:17.6939064Z {_RELEASE_TESTED}\n"
+    )
+
+    run_issue_fix(gh, artifacts, "o/r", issue_number=7, bot_login=_BOT, git_env={})
+
+    # Not "", which would match the Daily issues for unstable.
+    assert branches == ["8.1"]
+
+
 def test_a_weekly_issue_records_its_release_branch():
     parsed = parse_issue(_issue(body=_weekly_issue_body()))
     assert parsed is not None and parsed.branch == "8.1"

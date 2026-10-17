@@ -235,10 +235,7 @@ jobs:
       shell: bash
       env:
         CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        CI_FIX_BUILD: |-
-          apt-get update && apt-get install -y make gcc-13
-          update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
-          make all-with-unit-tests CC=gcc OPT=-O3 SERVER_CFLAGS='-Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3'
+        CI_FIX_BUILD: make all-with-unit-tests CC=gcc OPT=-O3 SERVER_CFLAGS='-Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3'
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
@@ -1331,9 +1328,7 @@ jobs:
       shell: bash
       env:
         CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        CI_FIX_BUILD: |-
-          dnf -y install gcc make procps-ng which /usr/bin/kill /usr/bin/awk
-          make -j SERVER_CFLAGS='-Werror'
+        CI_FIX_BUILD: make -j SERVER_CFLAGS='-Werror'
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
@@ -1432,9 +1427,7 @@ jobs:
       shell: bash
       env:
         CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        CI_FIX_BUILD: |-
-          dnf -y install make gcc openssl-devel openssl procps-ng which /usr/bin/kill /usr/bin/awk
-          make -j BUILD_TLS=module SERVER_CFLAGS='-Werror'
+        CI_FIX_BUILD: make -j BUILD_TLS=module SERVER_CFLAGS='-Werror'
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs --tls-module --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --tls-module --dump-logs
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
@@ -1533,9 +1526,7 @@ jobs:
       shell: bash
       env:
         CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        CI_FIX_BUILD: |-
-          dnf -y install make gcc openssl-devel openssl procps-ng which /usr/bin/kill /usr/bin/awk
-          make -j BUILD_TLS=module SERVER_CFLAGS='-Werror'
+        CI_FIX_BUILD: make -j BUILD_TLS=module SERVER_CFLAGS='-Werror'
         CI_FIX_RUNTEST: ./runtest --accurate --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
@@ -1663,9 +1654,7 @@ jobs:
       shell: bash
       env:
         CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        CI_FIX_BUILD: |-
-          apk add build-base
-          make SERVER_CFLAGS='-Werror'
+        CI_FIX_BUILD: make SERVER_CFLAGS='-Werror'
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
@@ -1733,9 +1722,7 @@ jobs:
       shell: bash
       env:
         CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        CI_FIX_BUILD: |-
-          apk add build-base
-          make SERVER_CFLAGS='-Werror' USE_JEMALLOC=no CFLAGS=-DUSE_MALLOC_USABLE_SIZE
+        CI_FIX_BUILD: make SERVER_CFLAGS='-Werror' USE_JEMALLOC=no CFLAGS=-DUSE_MALLOC_USABLE_SIZE
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}

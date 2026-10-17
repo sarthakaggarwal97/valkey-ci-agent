@@ -146,6 +146,24 @@ def test_a_matrix_job_prepares_the_fix_in_the_entry_that_failed_only():
     )
 
 
+def test_the_fix_rebuilds_without_the_system_setup_the_job_already_did():
+    source = DAILY.replace(
+        "      - name: make\n        run: make\n",
+        "      - name: make\n        run: |\n"
+        "          apt-get update && apt-get install -y make gcc-13\n"
+        "          update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100\n"
+        "          dnf -y install gcc make\n"
+        "          apk add build-base\n"
+        "          sudo apt-get install -y libssl-dev\n"
+        "          make CC=gcc\n",
+        1,
+    )
+    steps = _steps(source, "test-ubuntu-jemalloc")
+
+    # The fix rebuilds as an unprivileged account; these ran as root already.
+    assert steps["CI fix: prepare the fix in this job"]["env"]["CI_FIX_BUILD"] == "make CC=gcc"
+
+
 def test_a_container_job_installs_the_agents_tools_and_names_its_commit():
     source = DAILY.replace("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    container: alpine:latest\n")
     steps = _steps(source, "test-ubuntu-jemalloc")
@@ -368,3 +386,26 @@ def test_no_fixable_jobs_test_command_names_a_fixture_fix_mode_skips():
                         offenders.append(f"{key} {job_id}: {name}")
 
     assert offenders == []
+
+
+@pytest.mark.parametrize(("code", "missing"), [(404, True), (502, False)])
+def test_only_a_missing_workflow_file_drops_its_copy(monkeypatch, code, missing):
+    from urllib.error import HTTPError
+
+    from scripts.valkey_workflows import sync as sync_mod
+
+    def get(url, _token):
+        if "raw.githubusercontent.com" not in url:
+            return b'{"sha": "abc"}'
+        if url.endswith("/daily.yml"):
+            raise HTTPError(url, code, "error", {}, None)
+        return b"name: x\n"
+
+    monkeypatch.setattr(sync_mod, "_get", get)
+    fetch = sync_mod.github_fetch("")
+    if missing:
+        _sha, files = fetch("unstable")
+        assert "daily" not in files and files
+    else:
+        with pytest.raises(HTTPError):
+            fetch("unstable")

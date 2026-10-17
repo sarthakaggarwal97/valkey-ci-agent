@@ -204,10 +204,12 @@ def _fix_mode(job: dict[str, Any]) -> tuple[str, dict[str, str]] | None:
     exports = {**(job.get("env") or {}), **(builds[0].get("env") or {})}
     # Without its comments: the fix runs these lines as one command
     # (scripts/ci_fix/reproduce.py), where a comment would hide the rest.
+    # Without the system setup the job already did as root: the fix rebuilds
+    # as an unprivileged account.
     build = "\n".join([
         *(f"export {key}={_quoted(str(value))}" for key, value in exports.items()),
         *(stripped for line in str(builds[0]["run"]).strip().splitlines()
-          if not line.lstrip().startswith("sudo ") and (stripped := _without_comment(line))),
+          if not _SYSTEM_SETUP_RE.match(line.lstrip()) and (stripped := _without_comment(line))),
     ])
     env = {
         "CI_FIX_BUILD": build,
@@ -218,6 +220,11 @@ def _fix_mode(job: dict[str, Any]) -> tuple[str, dict[str, str]] | None:
         # Without git in the container, the checkout is an archive of this.
         env |= {"CI_FIX_REPOSITORY": "${{ inputs.use_repo }}", "CI_FIX_COMMIT": "${{ inputs.use_git_ref }}"}
     return matrix_key, env
+
+
+# A build line that changes the system: it needs root, and its effect is
+# already in place when the fix starts.
+_SYSTEM_SETUP_RE = re.compile(r"(?:sudo|apt-get|apt|dnf|yum|apk|zypper|update-alternatives)\s")
 
 
 def _without_comment(line: str) -> str:

@@ -21,10 +21,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import re
 import sys
 from pathlib import Path
 from typing import Any, Callable
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import yaml
@@ -165,8 +167,12 @@ def github_fetch(token: str) -> Fetch:
             url = f"https://raw.githubusercontent.com/{REPO}/{sha}/.github/workflows/{workflow}.yml"
             try:
                 files[workflow] = _get(url, "").decode("utf-8")
-            except OSError as exc:
-                logger.warning("Could not fetch %s for %s: %s", workflow, branch, exc)
+            except HTTPError as exc:
+                # Only a missing file drops its copy; any other failure stops
+                # the sync rather than proposing to delete a copy.
+                if exc.code != 404:
+                    raise
+                logger.info("%s has no %s workflow", branch, workflow)
         return sha, files
 
     return fetch
@@ -174,12 +180,13 @@ def github_fetch(token: str) -> Fetch:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--token", default="", help="GitHub token (optional; raises the API rate limit)")
     parser.add_argument("--report", type=Path, help="Write the jobs the sync lost here, as Markdown")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     before = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.exists() else {}
-    sync(github_branch_names(args.token), github_fetch(args.token))
+    # Optional: a token only raises the API rate limit.
+    token = os.environ.get("GITHUB_TOKEN", "")
+    sync(github_branch_names(token), github_fetch(token))
     lost = lost_jobs(before, json.loads(MANIFEST.read_text(encoding="utf-8")))
     for line in lost:
         logger.warning("Lost %s", line.replace("`", ""))

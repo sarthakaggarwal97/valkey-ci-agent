@@ -92,7 +92,7 @@ TEST_TIMEOUT_S = 30 * 60
 # The whole preparation, review included, must end inside the model's AWS
 # session (75 minutes, see scripts/valkey_workflows/normalize.py), so rounds
 # stop when the budget runs low. Reproduction may use part of it.
-PREPARE_BUDGET_S = 32 * 60  # E2E harness
+PREPARE_BUDGET_S = 60 * 60
 REPRO_BUDGET_S = 20 * 60
 _MIN_ROUND_S = 8 * 60
 # Of each round's time, what the agent may not use: the candidate's

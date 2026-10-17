@@ -87,6 +87,14 @@ def _install_clone(monkeypatch, source: Path):
     return calls
 
 
+def test_the_budget_fits_the_aws_session_and_leaves_a_round_after_reproduction() -> None:
+    from scripts.valkey_workflows.normalize import AWS_SESSION_S
+
+    assert engine_mod.PREPARE_BUDGET_S < AWS_SESSION_S
+    after_reproduction = engine_mod.PREPARE_BUDGET_S - engine_mod.REPRO_BUDGET_S
+    assert after_reproduction - engine_mod._VERIFY_RESERVE_S >= engine_mod._MIN_ROUND_S
+
+
 def test_prepare_fix_binds_exact_job_and_builds_binary_patch(tmp_path, monkeypatch) -> None:
     source, head_sha = _source_repo(tmp_path)
     clone_calls = _install_clone(monkeypatch, source)

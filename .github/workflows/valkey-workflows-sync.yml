@@ -38,6 +38,8 @@ jobs:
 
       - name: Rewrite the copies from valkey-io/valkey
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: python -m scripts.valkey_workflows.sync --report "${RUNNER_TEMP}/lost-jobs.md"
 
       - name: Generate pull request token
