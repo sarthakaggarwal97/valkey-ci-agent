@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -293,7 +294,20 @@ class TestParseVerdicts:
         parsed = self._parse([
             {"pr": 1, "backport": True, "branches": ["9.0", "8.0", "9.1"], "reason": " r "},
         ])
-        assert parsed == {1: eligibility.Verdict(True, ("9.1", "9.0"), "r")}
+        assert parsed == {1: eligibility.Verdict(
+            True, ("9.1", "9.0"), "r", "low", (("9.1", ""), ("9.0", "")),
+        )}
+
+    def test_reads_confidence_and_per_branch_reasons(self):
+        parsed = self._parse([
+            {"pr": 1, "backport": True, "confidence": "high", "reason": "r",
+             "branches": [{"branch": "9.0", "why": " has f() "}, {"branch": "8.0", "why": "x"}, 7]},
+        ])
+        assert parsed == {1: eligibility.Verdict(True, ("9.0",), "r", "high", (("9.0", "has f()"),))}
+
+    def test_unknown_confidence_is_low(self):
+        parsed = self._parse([{"pr": 1, "backport": True, "confidence": "certain", "branches": ["9.0"]}])
+        assert parsed is not None and parsed[1].confidence == "low"
 
     def test_positive_verdict_without_an_offered_branch_is_undecided(self):
         assert self._parse([{"pr": 2, "backport": True, "branches": ["9.1"]}]) == {}
@@ -461,14 +475,33 @@ def test_render_comment_names_branches_and_projects(tmp_path):
     assert "[9.0](https://github.com/orgs/org/projects/10)" in body
 
 
+def test_render_comment_makes_no_claim_about_history(tmp_path):
+    body = eligibility.render_comment(_repo_entry(tmp_path), ("9.0",), "Fixes a crash.")
+    assert "introduced before those release branches were cut" not in body
+    assert "confirm the defect exists on each branch" in body
+
+
+def test_render_comment_lists_why_each_branch_is_affected(tmp_path):
+    body = eligibility.render_comment(
+        _repo_entry(tmp_path), ("9.1", "9.0"), "Fixes a crash.",
+        {"9.1": "has dictScan (since 7.0)", "9.0": "same code"},
+    )
+    assert "- `9.1`: has dictScan (since 7.0)" in body
+    assert "- `9.0`: same code" in body
+
+
 def test_render_comment_bounds_the_model_reason(tmp_path):
     body = eligibility.render_comment(
         _repo_entry(tmp_path), ("9.0",), "Pings @maintainers\n\n## Heading " + "x" * 1000,
     )
     reason = body.splitlines()[3]
     assert reason.startswith("> Pings @\u200bmaintainers ## Heading")
-    assert len(reason) <= 402
+    assert len(reason) <= 410
     assert "\n## Heading" not in body
+
+
+def test_render_comment_reason_keeps_parentheses():
+    assert eligibility._inert_reason("Fixes (rare) overflow in f(x).") == "Fixes (rare) overflow in f(x)."
 
 
 def test_render_comment_reason_cannot_carry_markup(tmp_path):
@@ -477,10 +510,10 @@ def test_render_comment_reason_cannot_carry_markup(tmp_path):
         "## [details](https://evil.example/x) ![i](http://e/i.png) <img src=x> `c` www.evil.example",
     )
     quote = body.splitlines()[3]
-    assert quote.startswith("> details")
+    assert quote.startswith("> \\[details\\]")
     reason = quote[2:]
-    for char in "[]()<>!`":
-        assert char not in reason
+    # Every markup character is backslash-escaped, so none opens a construct.
+    assert re.search(r"(?<!\\)[\[\]<>!`]", reason) is None
     assert "://" not in reason and "www." not in reason
 
 
@@ -542,6 +575,9 @@ def wired(monkeypatch, upstream, tmp_path):
 
 
 def _model(verdicts: list[dict[str, Any]], prompts: list[str] | None = None):
+    # Verdicts in these tests are confident unless they say otherwise.
+    verdicts = [{"confidence": "high", **v} for v in verdicts]
+
     def run_fn(prompt: str, **kwargs: Any) -> tuple[str, str, int]:
         assert kwargs["allowed_tools"] == ""
         if prompts is not None:
@@ -773,7 +809,7 @@ def test_run_comments_after_each_batch(wired, monkeypatch):
         calls.append(len(wired.posted))
         if len(calls) == 1:
             return json.dumps({"verdicts": [
-                {"pr": 101, "backport": True, "branches": ["9.0"], "reason": "r"},
+                {"pr": 101, "backport": True, "confidence": "high", "branches": ["9.0"], "reason": "r"},
             ]}), "", 0
         return "", "timeout after 900s", 1
 
@@ -813,3 +849,36 @@ def test_main_warns_on_needs_review_and_fails_only_on_errors(monkeypatch, caplog
         r.levelname == "WARNING" and "1 PR(s) need manual review: #1: could not trace: x" in r.getMessage()
         for r in caplog.records
     )
+
+
+def test_run_comments_only_on_high_confidence(wired):
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "confidence": "medium",
+                        "branches": ["9.1"], "reason": "Maybe fixes f."}]),
+    )
+    assert result["prs"]["101"] == {
+        "action": "not-commented", "confidence": "medium",
+        "branches": ["9.1"], "reason": "Maybe fixes f.",
+    }
+    assert result["errors"] == [] and wired.posted == []
+    assert "| #101 | not-commented (medium confidence) | 9.1 |" in eligibility._summary(result)
+
+
+def test_run_gives_the_model_branch_evidence_and_linked_issues(wired):
+    wired.nodes[0]["closingIssuesReferences"] = {"nodes": [{"number": 9, "title": "f breaks", "body": "b"}]}
+    prompts: list[str] = []
+    eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t", dry_run=True,
+        run_fn=_model([{"pr": 101, "backport": False, "reason": "r"}], prompts),
+    )
+    payload = json.loads(prompts[0].split("## Pull requests (JSON)\n", 1)[1].split("\n## Output", 1)[0])
+    assert payload[0]["linked_issues"] == ["#9 f breaks\nb"]
+    assert payload[0]["branch_evidence"]["9.1"]["modified_files_present"] == ["feat.c"]
+    assert payload[0]["branch_evidence"]["9.1"]["patch_applies_cleanly"] is True
+
+
+def test_prompt_asks_for_precision():
+    prompt = eligibility._PROMPT_TEMPLATE
+    assert "when the evidence is thin, answer true" not in prompt.lower()
+    assert "confidence" in prompt and "fixes for flaky tests" in prompt.lower()

@@ -2,7 +2,8 @@ name: Backport Eligibility
 
 # Once a day, look at every PR merged to the development branch on the last
 # three UTC days and comment on the ones that look eligible for backport,
-# naming the release branches. The overlap re-covers a day a failed or skipped
+# naming the release branches. Scheduled runs are dry runs (verdicts in the
+# job summary only) until vars.BACKPORT_ELIGIBILITY_COMMENTS is "true". The overlap re-covers a day a failed or skipped
 # run missed; the marker comment keeps a PR from being commented on twice. It
 # only suggests: nothing is added to a project.
 
@@ -56,7 +57,10 @@ jobs:
       TARGET_REPO: ${{ inputs.repo || 'valkey-io/valkey' }}
       MERGE_DATE: ${{ inputs.date || '' }}
       MERGE_DAYS: ${{ inputs.days || '3' }}
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+      # Scheduled runs only report until vars.BACKPORT_ELIGIBILITY_COMMENTS is
+      # "true", set once the backtest (scripts/backport/eligibility_backtest.py)
+      # shows the suggestions are precise enough. A manual run follows its input.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run && 'true' || 'false') || (vars.BACKPORT_ELIGIBILITY_COMMENTS == 'true' && 'false' || 'true') }}
     permissions:
       contents: read
       id-token: write
