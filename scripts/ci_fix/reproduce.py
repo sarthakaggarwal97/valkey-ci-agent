@@ -2,17 +2,12 @@
 
 A fix is only evidence of anything if the failure was seen first. For a Tcl
 test, code (not the agent) builds the reproduction command from what the CI
-job ran. Inside the copied job itself (``scripts/ci_fix/job.sh``) that is the
-job's own ``make`` and ``runtest`` commands (:class:`JobCommands`). Anywhere
-else it follows Valkey's own workflows (``.github/workflows/daily.yml``):
-
-- the build flags come from the job name (``test-valgrind-*`` builds with
-  ``make valgrind``, ``test-sanitizer-address`` with ``SANITIZER=address``,
-  ``*-tls`` with ``BUILD_TLS=yes``, ...);
-- ``runtest`` runs only the failing tests (``--single <unit> --only <name>``)
-  many times in one invocation (``--loops N --fastfail``). With several test
-  clients the loop copies run in parallel, which is the load that exposes
-  most timing flakes. Scheduled runs pass ``--accurate``; PR runs do not.
+job ran: inside the copied job itself (``scripts/ci_fix/job.sh``), the job's
+own ``make`` and ``runtest`` commands (:class:`JobCommands`); anywhere else,
+plain ``make`` and ``runtest``. ``runtest`` runs only the failing tests
+(``--single <unit> --only <name>``) many times in one invocation
+(``--loops N --fastfail``). With several test clients the loop copies run in
+parallel, which is the load that exposes most timing flakes.
 
 A flaky failure may not show up in a few loops on an idle runner, so a second
 attempt runs the same loops while every core is busy. A failure that still
@@ -32,7 +27,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from scripts.ci_fix.models import FailedTest
-from scripts.common.valkey_ci import FAILURE_MARKERS, ResultLine, called_job_name, parse_result_line
+from scripts.common.valkey_ci import FAILURE_MARKERS, ResultLine, parse_result_line
 
 # Loops per reproduction attempt, and with the fix applied. Valgrind is ~20x
 # slower and runs one client at a time, as the Daily job does.
@@ -240,113 +235,45 @@ def shows_failure_of(report: str, tests: tuple[FailedTest, ...]) -> bool:
 
 def plan_for(
     repo_dir: str,
-    job_name: str,
     tests: tuple[FailedTest, ...],
     *,
     scheduled: bool,
     job: JobCommands | None = None,
 ) -> ReproPlan | None:
-    """The reproduction plan for ``tests`` in ``job_name``, or None.
+    """The plan that rebuilds and runs ``tests`` the way their CI ``job`` did, or None.
 
     Only tests in the main Tcl suite are planned (sentinel and the legacy
     cluster suite use other harnesses); None when none is, or the checkout
-    has no ``runtest``. With the ``job``'s own commands, they are used as
-    they are; otherwise the build and options are derived from the job name.
+    has no ``runtest``. Without the job's own commands, plain ``make`` and
+    ``runtest`` stand in for them; scheduled runs pass ``--accurate``. The
+    module API tests run through ``runtest-moduleapi``, which builds the test
+    modules; a plan runs one suite, the first test's.
     """
     tests = tuple(test for test in tests if _in_main_suite(test.file))
     if not tests or not (Path(repo_dir) / "runtest").is_file():
         return None
-    if job is not None:
-        return _job_plan(repo_dir, job, tests)
-
-    name = called_job_name(job_name).lower()
-    make_vars: list[str] = []
-    runtest: list[str] = []
     notes: list[str] = []
-    setup: list[str] = []
-    valgrind = "valgrind" in name
-
-    if "no-malloc-usable-size" in name:
-        make_vars += ["MALLOC=libc", "CFLAGS=-DNO_MALLOC_USABLE_SIZE"] if not valgrind else ["CFLAGS=-DNO_MALLOC_USABLE_SIZE"]
-    elif "libc-malloc" in name:
-        make_vars.append("MALLOC=libc")
-    if valgrind:
-        make_target = "valgrind"
-        runtest += ["--valgrind", "--no-latency", "--clients", "1"]
-    else:
-        make_target = ""
-    runtest += ["--timeout", str(_RUNTEST_TIMEOUT_S)]
-    if "sanitizer-address" in name or "force-defrag" in name:
-        make_vars += ["OPT=-O3", "SANITIZER=address"]
-        if "force-defrag" in name:
-            make_vars += ["DEBUG_FORCE_DEFRAG=yes", "USE_JEMALLOC=no"]
-    elif "sanitizer-undefined" in name:
-        make_vars += ["OPT=-O3", "SANITIZER=undefined", "LUA_DEBUG=yes"]
-    if "large-memory" in name:
-        runtest += ["--large-memory", "--tags", "large-memory", "--clients", "1"]
-    if "tls-module" in name:
-        make_vars.append("BUILD_TLS=module")
-        setup.append("./utils/gen-test-certs.sh")
-        if "no-tls" not in name:
-            runtest.append("--tls-module")
-    elif "tls" in name:
-        make_vars.append("BUILD_TLS=yes")
-        setup.append("./utils/gen-test-certs.sh")
-        if "no-tls" not in name:
-            runtest.append("--tls")
-    if "io-threads" in name:
-        runtest.append("--io-threads")
-    if "reply-schemas" in name:
-        make_vars.append("SERVER_CFLAGS=-DLOG_REQ_RES")
-        runtest += ["--log-req-res", "--no-latency", "--force-resp3"]
-    if "32bit" in name:
-        make_target = "32bit"
-    if "macos" in name:
-        runtest += ["--clients", "1", "--no-latency"]
-    for platform in ("macos", "freebsd", "alpine", "almalinux", "centos", "fedora", "rpm-distros", "s390x", "arm"):
-        if platform in name:
-            notes.append(f"The job ran on {platform}; this runner is Ubuntu x86-64, so the closest build is used.")
-            break
-    # Scheduled runs pass --accurate; the io-threads jobs pass it on PRs too.
-    if (scheduled or "io-threads" in name) and "valgrind" not in name:
-        runtest.append("--accurate")
-    if "--clients" not in runtest and any(_runs_solo(repo_dir, test) for test in tests):
-        # Under --loops, runtest runs a run_solo block inline, so with several
-        # clients its copies would run side by side: a race of the bot's own
-        # making, which no fix could pass.
-        runtest += ["--clients", "1"]
-        notes.append("A planned file uses run_solo, so its loops run one at a time.")
-
-    build = " ".join(
-        ["make", "-j\"$(nproc)\"", *([make_target] if make_target else []), *map(shlex.quote, make_vars)]
-    )
-    if setup:
-        build = " && ".join([build, *setup])
-    selection = _selection(repo_dir, tests, notes)
-    command = " ".join(["./runtest", *selection, "--loops", LOOPS, "--dump-logs", *runtest])
-    return ReproPlan(build=build, test=command, valgrind=valgrind, notes=tuple(notes), tests=tests)
-
-
-_MAKE_LINE_RE = re.compile(r"^(\s*make)(?=\s)(?!.*\s-j)", re.MULTILINE)
-# A line the job's own script continued on the next one.
-_CONTINUATION_RE = re.compile(r"\s*\\\n\s*")
-
-
-def _job_plan(repo_dir: str, job: JobCommands, tests: tuple[FailedTest, ...]) -> ReproPlan | None:
-    """The plan that rebuilds and runs ``tests`` with the job's own commands.
-
-    The module API tests run through ``runtest-moduleapi``, which builds the
-    test modules; a plan runs one suite, the first test's.
-    """
+    default = job is None
+    if job is None:
+        accurate = " --accurate" if scheduled else ""
+        job = JobCommands(
+            build="make",
+            runtest=f"./runtest --dump-logs{accurate}",
+            moduleapi=f"./runtest-moduleapi --dump-logs{accurate}",
+        )
     moduleapi = bool(job.moduleapi) and _in_moduleapi(tests[0].file)
     tests = tuple(test for test in tests if _in_moduleapi(test.file) == moduleapi)
     base = job.moduleapi if moduleapi else job.runtest
-    notes: list[str] = []
     options = ["--timeout", str(_RUNTEST_TIMEOUT_S)]
     if "--clients" not in base.split() and any(_runs_solo(repo_dir, test) for test in tests):
+        # Under --loops, runtest runs a run_solo block inline, so with several
+        # clients its copies would run side by side: a race of the bot's own
+        # making, which no fix could pass.
         options += ["--clients", "1"]
         notes.append("A planned file uses run_solo, so its loops run one at a time.")
     selection = _selection(repo_dir, tests, notes)
+    if default:
+        notes.append("No copy of the failed job could host the fix, so plain make and runtest stand in for it.")
     # The job's build as one line that stops at its first failure, on every
     # core. One line because every report quotes the command it ran.
     build = " && ".join(
@@ -356,6 +283,11 @@ def _job_plan(repo_dir: str, job: JobCommands, tests: tuple[FailedTest, ...]) ->
     command = " ".join([base, *selection, "--loops", LOOPS, *options])
     return ReproPlan(build=build, test=command, valgrind="--valgrind" in base.split(),
                      notes=tuple(notes), tests=tests)
+
+
+_MAKE_LINE_RE = re.compile(r"^(\s*make)(?=\s|$)(?!.*\s-j)", re.MULTILINE)
+# A line the job's own script continued on the next one.
+_CONTINUATION_RE = re.compile(r"\s*\\\n\s*")
 
 
 def _selection(repo_dir: str, tests: tuple[FailedTest, ...], notes: list[str]) -> list[str]:

@@ -286,7 +286,7 @@ def _establish(
     """Search for existing fixes and reproduce the failure, before any edit."""
     plan = reproduction = None
     if run_test is not None:
-        plan = plan_for(repo_dir, task.failure.job_name, tests, scheduled=task.failure.scheduled, job=job)
+        plan = plan_for(repo_dir, tests, scheduled=task.failure.scheduled, job=job)
     if plan is not None and run_test is not None:
         logger.info("Reproducing with: %s", plan.command(1))
         reproduction = reproduce(
@@ -531,7 +531,7 @@ def other_issues_fixed(
                 "there was no time left to verify that it fixes it."
             )
             continue
-        plan = plan_for(repo_dir, task.failure.job_name, (issue.test,), scheduled=task.failure.scheduled, job=job)
+        plan = plan_for(repo_dir, (issue.test,), scheduled=task.failure.scheduled, job=job)
         if plan is None:
             touched.append(issue.number)
             checks.append(

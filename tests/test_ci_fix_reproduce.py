@@ -31,52 +31,22 @@ def checkout(tmp_path):
     return str(tmp_path)
 
 
-def test_a_plain_job_builds_once_and_loops_only_the_failing_test(checkout):
-    plan = plan_for(checkout, "test-ubuntu-jemalloc", (TEST,), scheduled=True)
+def test_without_the_jobs_commands_plain_make_and_runtest_loop_only_the_failing_test(checkout):
+    plan = plan_for(checkout, (TEST,), scheduled=True)
 
-    assert plan.build == 'make -j"$(nproc)"'
     assert plan.command(20) == (
-        'make -j"$(nproc)" && ./runtest --single unit/type/incr '
-        "--only 'INCREX BYFLOAT overflow preserves existing TTL' "
-        "--fastfail --loops 20 --dump-logs --timeout 600 --accurate"
+        'make -j"$(nproc)" && ./runtest --dump-logs --accurate --single unit/type/incr '
+        "--only 'INCREX BYFLOAT overflow preserves existing TTL' --fastfail --loops 20 --timeout 600"
     )
-
-
-@pytest.mark.parametrize(("job", "build", "flags"), [
-    ("run-daily-for-release-branches (8.1) / test-valgrind-test (unit)",
-     'make -j"$(nproc)" valgrind', "--valgrind --no-latency --clients 1 --timeout 600"),
-    ("test-valgrind-no-malloc-usable-size-test (unit)",
-     'make -j"$(nproc)" valgrind CFLAGS=-DNO_MALLOC_USABLE_SIZE', "--clients 1 --timeout 600"),
-    ("test-sanitizer-address (clang)", 'make -j"$(nproc)" OPT=-O3 SANITIZER=address', "--accurate"),
-    ("test-sanitizer-undefined (gcc)",
-     'make -j"$(nproc)" OPT=-O3 SANITIZER=undefined LUA_DEBUG=yes', "--accurate"),
-    ("test-ubuntu-tls-io-threads",
-     'make -j"$(nproc)" BUILD_TLS=yes && ./utils/gen-test-certs.sh', "--tls --io-threads --accurate"),
-    ("test-ubuntu-tls-no-tls", 'make -j"$(nproc)" BUILD_TLS=yes && ./utils/gen-test-certs.sh', "--accurate"),
-    ("test-ubuntu-libc-malloc", 'make -j"$(nproc)" MALLOC=libc', "--accurate"),
-])
-def test_the_build_and_flags_follow_the_job_name(checkout, job, build, flags):
-    plan = plan_for(checkout, job, (TEST,), scheduled=True)
-
-    assert plan.build == build
-    assert plan.test.endswith(flags)
-    assert ("--tls" in plan.test) == ("tls" in job and "no-tls" not in job)
-    assert plan.valgrind == ("valgrind" in job)
+    assert "plain make and runtest" in plan.notes[-1]
 
 
 def test_a_pr_run_does_not_use_accurate(checkout):
-    assert "--accurate" not in plan_for(checkout, "test-ubuntu-jemalloc", (TEST,), scheduled=False).test
-
-
-def test_another_platform_uses_the_closest_build_and_says_so(checkout):
-    plan = plan_for(checkout, "test-macos-latest", (TEST,), scheduled=True)
-
-    assert plan.build == 'make -j"$(nproc)"'
-    assert "macos" in plan.notes[0]
+    assert "--accurate" not in plan_for(checkout, (TEST,), scheduled=False).test
 
 
 def test_a_timed_out_client_without_a_test_name_runs_its_whole_file(checkout):
-    plan = plan_for(checkout, "test-ubuntu-jemalloc", (FailedTest("", TEST.file),), scheduled=False)
+    plan = plan_for(checkout, (FailedTest("", TEST.file),), scheduled=False)
 
     assert "--only" not in plan.test and "--single unit/type/incr" in plan.test
     assert "whole files run" in plan.notes[0]
@@ -88,14 +58,14 @@ def test_a_timed_out_client_without_a_test_name_runs_its_whole_file(checkout):
     (FailedTest("x", "tests/unit/../../../../tmp/e.tcl"),),  # leaves the suite
 ])
 def test_only_main_suite_tests_are_planned(checkout, tests):
-    assert plan_for(checkout, "test-ubuntu-jemalloc", tests, scheduled=True) is None
+    assert plan_for(checkout, tests, scheduled=True) is None
 
-    plan = plan_for(checkout, "test-ubuntu-jemalloc", (TEST, *tests), scheduled=True)
+    plan = plan_for(checkout, (TEST, *tests), scheduled=True)
     assert plan.tests == (TEST,) and "sentinel" not in plan.test and "../" not in plan.test
 
 
 def test_there_is_no_plan_without_runtest(tmp_path):
-    assert plan_for(str(tmp_path / "missing"), "test-ubuntu-jemalloc", (TEST,), scheduled=True) is None
+    assert plan_for(str(tmp_path / "missing"), (TEST,), scheduled=True) is None
 
 
 # --- reproduce ---------------------------------------------------------------
@@ -230,9 +200,10 @@ def test_a_pass_that_ran_no_failing_test_is_not_evidence():
 def test_runtest_reports_a_hang_well_inside_the_reproduction_budget(checkout):
     from scripts.ci_fix.engine import REPRO_BUDGET_S
 
-    for job in ("test-ubuntu-jemalloc", "test-valgrind-test (unit)"):
-        test = plan_for(checkout, job, (TEST,), scheduled=True).test
-        watchdog = int(test.split("--timeout ", 1)[1].split()[0])
+    valgrind = JobCommands(build="make valgrind", runtest="./runtest --valgrind --timeout 2400")
+    for job in (None, valgrind):
+        test = plan_for(checkout, (TEST,), scheduled=True, job=job).test
+        watchdog = int(test.rsplit("--timeout ", 1)[1].split()[0])  # runtest takes the last
         assert watchdog < REPRO_BUDGET_S - 5 * 60, job
 
 
@@ -248,7 +219,7 @@ def test_a_renamed_or_sibling_test_is_not_the_failing_test():
 def test_a_branch_without_fastfail_runs_its_loops_to_the_end(checkout):
     (Path(checkout) / "tests" / "test_helper.tcl").write_text("} elseif {$opt eq {--loops}} {\n", encoding="utf-8")
 
-    plan = plan_for(checkout, "test-ubuntu-jemalloc", (TEST,), scheduled=False)
+    plan = plan_for(checkout, (TEST,), scheduled=False)
 
     assert "--fastfail" not in plan.test
     assert "no --fastfail" in " ".join(plan.notes)
@@ -279,7 +250,7 @@ def test_a_flake_seen_only_under_load_is_verified_under_load():
 def test_a_test_name_with_braces_is_quoted_not_formatted(checkout):
     braced = FailedTest("HSET with {tag} key and {loops}", TEST.file)
 
-    command = plan_for(checkout, "test-ubuntu-jemalloc", (braced,), scheduled=False).command(7)
+    command = plan_for(checkout, (braced,), scheduled=False).command(7)
 
     assert "--only 'HSET with {tag} key and {loops}'" in command
     assert "--loops 7" in command
@@ -289,14 +260,10 @@ def test_a_file_with_run_solo_loops_one_client_at_a_time(checkout):
     (Path(checkout) / "tests" / "unit" / "type").mkdir(parents=True)
     (Path(checkout) / TEST.file).write_text('run_solo {defrag} {\n    test "x" {}\n}\n', encoding="utf-8")
 
-    plan = plan_for(checkout, "test-ubuntu-jemalloc", (TEST,), scheduled=False)
+    plan = plan_for(checkout, (TEST,), scheduled=False)
 
     assert plan.test.endswith("--clients 1")
     assert "run_solo" in " ".join(plan.notes)
-
-
-def test_io_threads_jobs_use_accurate_even_on_a_pr(checkout):
-    assert "--accurate" in plan_for(checkout, "test-ubuntu-io-threads", (TEST,), scheduled=False).test
 
 
 def test_valgrind_verification_stays_short_even_after_a_deterministic_failure():
@@ -315,7 +282,7 @@ JOB = JobCommands(
 
 
 def test_in_the_job_its_own_build_and_runtest_run_the_failing_test(checkout):
-    plan = plan_for(checkout, "test-sanitizer-address (clang)", (TEST,), scheduled=True, job=JOB)
+    plan = plan_for(checkout, (TEST,), scheduled=True, job=JOB)
 
     # One line: every report quotes the command, and a code span holds no newline.
     assert plan.build == (
@@ -335,7 +302,7 @@ def test_a_jobs_multi_line_build_becomes_one_command(checkout):
         runtest="./runtest --dump-logs",
     )
 
-    plan = plan_for(checkout, "test-rpm-distros (fedora)", (TEST,), scheduled=True, job=job)
+    plan = plan_for(checkout, (TEST,), scheduled=True, job=job)
 
     assert plan.build == (
         "apt-get update && apt-get install -y make gcc-13 && update-alternatives --install x"
@@ -347,7 +314,7 @@ def test_a_jobs_multi_line_build_becomes_one_command(checkout):
 def test_in_the_job_a_module_api_test_runs_through_runtest_moduleapi(checkout):
     module = FailedTest("blocking", "tests/unit/moduleapi/blockonkeys.tcl")
 
-    plan = plan_for(checkout, "test-ubuntu-jemalloc", (module, TEST), scheduled=True, job=JOB)
+    plan = plan_for(checkout, (module, TEST), scheduled=True, job=JOB)
 
     assert plan.test.startswith("CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --single unit/moduleapi/")
     assert plan.tests == (module,)
@@ -358,7 +325,7 @@ def test_in_a_valgrind_job_its_own_options_are_kept(checkout):
     (Path(checkout) / "tests" / "unit" / "type").mkdir(parents=True)
     (Path(checkout) / TEST.file).write_text("run_solo {x} {}\n", encoding="utf-8")
 
-    plan = plan_for(checkout, "test-valgrind-test (unit)", (TEST,), scheduled=True, job=job)
+    plan = plan_for(checkout, (TEST,), scheduled=True, job=job)
 
     assert plan.valgrind and plan.test.count("--clients") == 1
 

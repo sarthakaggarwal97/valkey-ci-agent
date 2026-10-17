@@ -307,8 +307,8 @@ plan -> fix-in-copy | fix-local -> publish
    agent; they are evidence, not a decision.
 4. **Reproduce** - for a test in Valkey's Tcl suite, code builds the way the
    failed job did (in its copied job, with that job's own `make` and `runtest`
-   commands; elsewhere, from its name: `make valgrind`, `SANITIZER=address`,
-   `BUILD_TLS=yes`, ...) and runs only the failing tests,
+   commands; elsewhere, plain `make` and `runtest`) and runs only the failing
+   tests,
    `./runtest --single <unit> --only '<test>' --loops N --fastfail`, on the
    unfixed code: once (twice if it fails, to tell a frequent flake from a
    deterministic failure), then 20 loops (2 under valgrind), then the same

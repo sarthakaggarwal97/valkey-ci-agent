@@ -580,9 +580,9 @@ _LOG_WITH_FAILURE = (
 
 
 def _with_plan(monkeypatch, seen=None):
-    def plan_for(repo_dir, job_name, tests, *, scheduled, job=None):
+    def plan_for(repo_dir, tests, *, scheduled, job=None):
         if seen is not None:
-            seen.update(job_name=job_name, tests=tests, scheduled=scheduled, job=job)
+            seen.update(tests=tests, scheduled=scheduled, job=job)
         # The loop count rides along as an argument, not a comment: under load
         # the whole command is one line, where a comment would hide its end.
         return ReproPlan(build="true", test=f'test "$(head -1 value.txt)" = right && : loops={LOOPS}', tests=tests)
