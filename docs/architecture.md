@@ -398,7 +398,7 @@ enablement setting.
 - `scripts/ci_fix/prior_fixes.py` - find merged commits that may already fix the failing tests
 - `scripts/ci_fix/reproduce.py` - build and loop the failing Tcl tests with their CI job's commands, or the closest
 - `scripts/ci_fix/guides/` - per-repository test conventions for the fix agent and its reviewer
-- `scripts/valkey_workflows/` - callable per-branch copies of Valkey's `daily.yml`/`ci.yml` with a fix mode (`normalize.py`), their weekly sync, router and job manifest (`sync.py`)
+- `scripts/valkey_workflows/` - per-branch copies of the `daily.yml`/`ci.yml` jobs a fix can run in (`normalize.py`), their weekly sync, router and job manifest (`sync.py`)
 - `scripts/ci_fix/agent.py` - combined diagnosis-and-edit prompt and structured result parser
 - `scripts/ci_fix/publish.py` - target revalidation and publication adapter
 - `scripts/ci_fix/policy.py` - shared target capabilities, bot identities, and writable namespaces

@@ -84,6 +84,7 @@ def test_a_copy_runs_only_the_named_job_from_explicit_inputs():
     assert list(workflow["on"]) == ["workflow_call"]
     assert workflow["permissions"] == {"contents": "read", "id-token": "write"}
     assert list(workflow["on"]["workflow_call"]["secrets"]) == ["AWS_ROLE_ARN"]
+    assert set(workflow["on"]["workflow_call"]["inputs"]) == set(normalize_mod.INPUTS)
     assert "concurrency" not in workflow
     assert list(workflow["jobs"]) == ["test-ubuntu-jemalloc"]  # the aggregator is gone
     job = workflow["jobs"]["test-ubuntu-jemalloc"]
@@ -108,25 +109,16 @@ def test_only_the_main_checkout_takes_the_ref():
     assert steps[0]["if"] is True  # a setup step for dispatched runs always runs
 
 
-def test_test_steps_are_gated_by_suite_and_accurate_is_an_input():
-    steps = _steps(DAILY, "test-ubuntu-jemalloc")
-
-    assert steps["test"]["if"] == "(true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''"
-    assert "${{ inputs.accurate && '--accurate' || '' }}" in steps["test"]["run"]
-    assert steps["backward compatibility tests with OSS Redis 7.0"]["if"] == "(inputs.compat) && inputs.fix == ''"
-
-
-def test_in_fix_mode_the_job_runs_up_to_its_tests_and_hands_over_to_the_agent():
+def test_the_job_runs_up_to_its_tests_and_then_hands_over_to_the_agent():
     copy = normalize_mod.normalize(DAILY, origin="x")
     steps = _steps(DAILY, "test-ubuntu-jemalloc")
-    names = list(steps)
+    fix = [step["name"] for step in normalize_mod.fix_steps("", {})]
 
     assert copy.fixable == {"test-ubuntu-jemalloc": ""}
-    assert "if" not in steps["make"]  # the job's own build runs in fix mode too
-    fix = names[names.index("CI fix: check out the agent"):]
-    assert [step["name"] for step in normalize_mod.fix_steps("x", {})] == fix
-    assert all(steps[name]["if"] == "inputs.fix != ''" for name in fix[:-1])
-    assert steps[fix[-1]]["if"] == "always() && inputs.fix != ''"
+    # The tests, and the compatibility steps after them, are the agent's to run.
+    assert list(steps)[-len(fix) - 1:] == ["make", *fix]
+    assert all("if" not in steps[name] for name in fix[:-1])
+    assert steps[fix[-1]]["if"] == "always()"
     env = steps["CI fix: prepare the fix in this job"]["env"]
     assert env["CI_FIX_BUILD"] == "make"
     # Without the job's own selection; GitHub evaluates the expression.
@@ -145,10 +137,8 @@ def test_a_matrix_job_prepares_the_fix_in_the_entry_that_failed_only():
     steps = _steps(_MATRIX, "test-ubuntu-jemalloc")
 
     assert copy.fixable == {"test-ubuntu-jemalloc": "compiler"}
-    assert steps["make"]["if"] == "inputs.fix == '' || matrix.compiler == inputs.fix_matrix"
-    assert steps["CI fix: prepare the fix in this job"]["if"] == (
-        "inputs.fix != '' && matrix.compiler == inputs.fix_matrix"
-    )
+    assert steps["make"]["if"] == "matrix.compiler == inputs.fix_matrix"
+    assert steps["CI fix: prepare the fix in this job"]["if"] == "matrix.compiler == inputs.fix_matrix"
     # Its environment reaches the rebuilds, which run with a clean one.
     assert steps["CI fix: prepare the fix in this job"]["env"]["CI_FIX_BUILD"] == (
         "export CC='${{ matrix.compiler }}'\nmake"
@@ -192,15 +182,9 @@ def test_a_matrix_named_by_its_entries_selects_the_entry_by_the_failed_jobs_name
 
     assert copy.fixable == {"test-rpm-distros": "name"}
     assert copy.jobs == {"test-rpm-distros": ["test-almalinux8", "test-fedoralatest"]}
-    # The entry's own conditions still hold in fix mode: && binds tighter than ||.
-    assert steps["Install EPEL"]["if"] == (
-        "(matrix.install_epel) && (inputs.fix == '' || matrix.name == inputs.fix_matrix)"
-    )
-    assert steps["test"]["if"].endswith("inputs.fix == '') && "
-                                        "(inputs.fix == '' || matrix.name == inputs.fix_matrix)")
-    assert steps["CI fix: prepare the fix in this job"]["if"] == (
-        "inputs.fix != '' && matrix.name == inputs.fix_matrix"
-    )
+    # The entry's own conditions still hold.
+    assert steps["Install EPEL"]["if"] == "(matrix.install_epel) && matrix.name == inputs.fix_matrix"
+    assert steps["CI fix: prepare the fix in this job"]["if"] == "matrix.name == inputs.fix_matrix"
     manifest = {"unstable/daily": {"jobs": copy.jobs, "fixable": copy.fixable}}
     found = copies_mod.copy_job_for(manifest, "unstable", "daily", "test-fedoralatest")
     assert found is not None and (found.job, found.matrix_key) == ("test-rpm-distros", "name")
@@ -210,22 +194,11 @@ def test_a_matrix_named_by_its_entries_selects_the_entry_by_the_failed_jobs_name
     ("    runs-on: ubuntu-latest\n", "    runs-on: windows-latest\n"),
     ("      - name: make\n        run: make\n", ""),
 ])
-def test_a_job_the_agent_cannot_run_in_has_no_fix_mode(change):
-    source = DAILY.replace(*change)
+def test_a_job_the_agent_cannot_run_in_is_not_copied(change):
+    copy = normalize_mod.normalize(DAILY.replace(*change), origin="x")
 
-    assert normalize_mod.normalize(source, origin="x").fixable == {}
-    assert "CI fix: prepare the fix in this job" not in _steps(source, "test-ubuntu-jemalloc")
-
-
-def test_ci_test_commands_receive_the_test_selection():
-    steps = {step.get("name"): step for step in
-             _load(normalize_mod.normalize(CI, origin="x").text)["jobs"]["test-ubuntu-latest"]["steps"]}
-
-    assert steps["test"]["if"] == "(!contains(inputs.skiptests, 'valkey')) && inputs.fix == ''"
-    # The argument ends the runtest command, after its continuation line.
-    assert steps["test"]["run"].splitlines()[-1].strip() == "--dump-logs ${{ inputs.test_args }}"
-    assert steps["module api test"]["run"].endswith("${{ inputs.test_args }}")
-    assert steps["module api test"]["if"] == "(!contains(inputs.skiptests, 'modules')) && inputs.fix == ''"
+    assert copy.jobs == copy.fixable == {}
+    assert _load(copy.text)["jobs"] == {}
 
 
 def test_the_branches_weekly_tests_are_synced_newest_first():
@@ -254,14 +227,11 @@ def test_sync_writes_copies_a_router_and_a_manifest_and_drops_stale_copies(tmp_p
     assert router["jobs"]["copy-9-0-daily"]["if"] == "inputs.branch == '9.0' && inputs.workflow == 'daily'"
 
 
-def test_the_sync_names_every_job_that_lost_its_copy_or_fix_mode():
-    before = {"unstable/daily": {"jobs": {"a": ["a"], "b": ["b"], "c": ["c"]}, "fixable": {"a": "", "b": ""}}}
-    after = {"unstable/daily": {"jobs": {"a": ["a"], "b": ["b"]}, "fixable": {"a": ""}}}
+def test_the_sync_names_every_job_that_lost_its_copy():
+    before = {"unstable/daily": {"jobs": {"a": ["a"], "b": ["b"]}}, "9.0/daily": {"jobs": {"c": ["c"]}}}
+    after = {"unstable/daily": {"jobs": {"a": ["a"]}}}
 
-    assert sync_mod.lost_jobs(before, after) == [
-        "`unstable/daily` `b`: lost its fix mode",
-        "`unstable/daily` `c`: no longer copied",
-    ]
+    assert sync_mod.lost_jobs(before, after) == ["`9.0/daily` `c`", "`unstable/daily` `b`"]
     assert sync_mod.lost_jobs(after, after) == []
 
 
@@ -282,7 +252,7 @@ def test_every_committed_copy_is_callable_only_and_runs_one_named_job():
             assert job["if"] == f"inputs.job == '{job_id}'", (entry["file"], job_id)
 
 
-def test_valkeys_container_and_macos_test_jobs_have_a_fix_mode():
+def test_valkeys_container_and_macos_test_jobs_are_copied():
     fixable = _MANIFEST["unstable/daily"]["fixable"]
 
     for job in ("test-alpine-jemalloc", "test-ubuntu-jemalloc-fortify", "test-macos-latest"):
@@ -306,18 +276,17 @@ def test_a_test_step_that_also_installs_keeps_that_setup_in_fix_mode():
     by_name = dict(zip(names, steps))
 
     assert copy.fixable == {"test-ubuntu-latest": ""}
-    # The install is a step of its own, which fix mode runs, before the tests.
-    assert names.index("test setup") < names.index("test")
+    # The install survives the test step, as a step of its own before the agent's.
+    assert "test" not in names
+    assert names.index("test setup") < names.index("CI fix: check out the agent")
     assert by_name["test setup"]["run"] == "sudo apt-get install tcl8.6 tclx"
-    assert "inputs.fix" not in str(by_name["test setup"].get("if") or "")
-    assert "apt-get" not in by_name["test"]["run"]
     # The agent runs its own tests: not the job's selection, and not against
     # another server the fix mode never downloads.
     env = by_name["CI fix: prepare the fix in this job"]["env"]
     assert env["CI_FIX_RUNTEST"] == "./runtest --verbose --tags -slow --dump-logs"
 
 
-def test_a_shell_variable_the_test_command_uses_stays_with_it():
+def test_a_shell_variable_the_test_command_uses_is_not_setup():
     source = CI.replace(
         "          sudo apt-get install tcl8.6 tclx\n",
         "          shard=unit\n          sudo apt-get install tcl8.6 tclx\n",
@@ -326,34 +295,7 @@ def test_a_shell_variable_the_test_command_uses_stays_with_it():
              _load(normalize_mod.normalize(source, origin="x").text)["jobs"]["test-ubuntu-latest"]["steps"]}
 
     assert steps["test setup"]["run"] == "sudo apt-get install tcl8.6 tclx"
-    assert steps["test"]["run"].splitlines()[0].strip() == "shard=unit"
-
-
-_INSTALLS = re.compile(r"\b(?:apt-get|yum|dnf) install\b|\bapk add\b|\bbrew install\b|\bpip install\b")
-
-
-def _skipped_in_fix_mode(step: dict) -> bool:
-    """Whether fix mode skips ``step``: its condition requires ``inputs.fix == ''``.
-
-    A matrix job's steps are also conditional on ``inputs.fix``, but as an
-    alternative (run in test mode, or in the entry that prepares the fix), so
-    only the conjunction means skipped.
-    """
-    condition = str(step.get("if") or "")
-    return condition == normalize_mod._NOT_FIX or f"&& {normalize_mod._NOT_FIX}" in condition
-
-
-def test_no_fixable_job_leaves_its_dependency_install_behind_in_fix_mode():
-    """A job the agent fixes in must still install what its own tests need."""
-    offenders = []
-    for key, entry in _MANIFEST.items():
-        workflow = _load((sync_mod.WORKFLOW_DIR / entry["file"]).read_text(encoding="utf-8"))
-        for job_id in entry["fixable"]:
-            for step in workflow["jobs"][job_id]["steps"]:
-                if _skipped_in_fix_mode(step) and _INSTALLS.search(str(step.get("run") or "")):
-                    offenders.append(f"{key} {job_id}: {step.get('name')}")
-
-    assert offenders == []
+    assert "test" not in steps
 
 
 @pytest.mark.parametrize("line, expected", [

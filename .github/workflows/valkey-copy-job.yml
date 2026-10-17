@@ -23,41 +23,25 @@ name: 'Valkey copy: run one job'
         description: Branch or commit to check out
         required: true
         type: string
-      skiptests:
-        description: Test suites to skip (daily.yml's names)
+      fix:
+        description: The name ci-fix-run.yml planned the fix under
+        required: true
         type: string
-        default: ''
-      test_args:
-        description: Extra runtest arguments
+      fix_matrix:
+        description: The matrix value of the one entry that runs
         type: string
         default: ''
       valgrind_test:
-        description: The one test file valgrind jobs run
-        type: string
-        default: ''
-      cluster_test_args:
-        description: Extra sentinel/cluster arguments
+        description: The one test file a targeted valgrind job runs
         type: string
         default: ''
       accurate:
         description: Pass --accurate, as scheduled runs do
         type: boolean
         default: true
-      compat:
-        description: Run the old-Redis compatibility steps
-        type: boolean
-        default: false
-      fix:
-        description: Prepare the fix ci-fix-run.yml planned under this name, instead of testing
-        type: string
-        default: ''
-      fix_matrix:
-        description: The matrix value of the one entry that prepares the fix
-        type: string
-        default: ''
     secrets:
       AWS_ROLE_ARN:
-        description: The role fix mode assumes for the model
+        description: The role assumed for the model
         required: false
 permissions:
   contents: read
@@ -70,14 +54,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-unstable-ci:
@@ -87,14 +67,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-9-2-daily:
@@ -104,14 +80,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-9-2-ci:
@@ -121,14 +93,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-9-1-daily:
@@ -138,14 +106,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-9-1-ci:
@@ -155,14 +119,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-9-0-daily:
@@ -172,14 +132,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-9-0-ci:
@@ -189,14 +145,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-8-1-daily:
@@ -206,14 +158,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-8-1-ci:
@@ -223,14 +171,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-8-0-daily:
@@ -240,14 +184,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-8-0-ci:
@@ -257,14 +197,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-7-2-daily:
@@ -274,14 +210,10 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
   copy-7-2-ci:
@@ -291,13 +223,9 @@ jobs:
       job: ${{ inputs.job }}
       use_repo: ${{ inputs.use_repo }}
       use_git_ref: ${{ inputs.use_git_ref }}
-      skiptests: ${{ inputs.skiptests }}
-      test_args: ${{ inputs.test_args }}
-      valgrind_test: ${{ inputs.valgrind_test }}
-      cluster_test_args: ${{ inputs.cluster_test_args }}
-      accurate: ${{ inputs.accurate }}
-      compat: ${{ inputs.compat }}
       fix: ${{ inputs.fix }}
       fix_matrix: ${{ inputs.fix_matrix }}
+      valgrind_test: ${{ inputs.valgrind_test }}
+      accurate: ${{ inputs.accurate }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

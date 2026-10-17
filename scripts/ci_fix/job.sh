@@ -5,7 +5,7 @@
 # (.ci-fix-agent) by the steps scripts/valkey_workflows/normalize.py's
 # fix_steps() generates:
 #
-# - in a copied Valkey job in fix mode, the workspace is Valkey's own
+# - in a copied Valkey job, the workspace is Valkey's own
 #   checkout, already set up and built by the job's steps. The fix is
 #   prepared there, rebuilt and tested with the job's own commands
 #   (CI_FIX_BUILD, CI_FIX_RUNTEST, CI_FIX_RUNTEST_MODULEAPI). The job runs

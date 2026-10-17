@@ -16,39 +16,23 @@ name: 'Valkey copy: valkey-io/valkey@55a542671762eaddff979f78dc6a3d1414ce1d75 (8
         description: Branch or commit to check out
         required: true
         type: string
-      skiptests:
-        description: Test suites to skip (daily.yml's names)
+      fix:
+        description: The name ci-fix-run.yml planned the fix under
+        required: true
         type: string
-        default: ''
-      test_args:
-        description: Extra runtest arguments
+      fix_matrix:
+        description: The matrix value of the one entry that runs
         type: string
         default: ''
       valgrind_test:
-        description: The one test file valgrind jobs run
-        type: string
-        default: ''
-      cluster_test_args:
-        description: Extra sentinel/cluster arguments
+        description: The one test file a targeted valgrind job runs
         type: string
         default: ''
       accurate:
         description: Pass --accurate, as scheduled runs do
         type: boolean
         default: true
-      compat:
-        description: Run the old-Redis compatibility steps
-        type: boolean
-        default: false
-      fix:
-        description: Prepare the fix ci-fix-run.yml planned under this name, instead of testing
-        type: string
-        default: ''
-      fix_matrix:
-        description: The matrix value of the one entry that prepares the fix
-        type: string
-        default: ''
-      sentinel:
+      cluster_test_args:
         description: Read by the source workflow; empty in a copy
         type: string
         default: ''
@@ -56,9 +40,17 @@ name: 'Valkey copy: valkey-io/valkey@55a542671762eaddff979f78dc6a3d1414ce1d75 (8
         description: Read by the source workflow; empty in a copy
         type: string
         default: ''
+      skiptests:
+        description: Read by the source workflow; empty in a copy
+        type: string
+        default: ''
+      test_args:
+        description: Read by the source workflow; empty in a copy
+        type: string
+        default: ''
     secrets:
       AWS_ROLE_ARN:
-        description: The role fix mode assumes for the model
+        description: The role assumed for the model
         required: false
 permissions:
   contents: read
@@ -86,21 +78,6 @@ jobs:
       run: make all-with-unit-tests SERVER_CFLAGS='-Werror'
     - name: testprep
       run: sudo apt-get install tcl8.6 tclx
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
-    - name: unittest
-      if: (true && !contains(inputs.skiptests, 'unittest')) && inputs.fix == ''
-      run: ./src/valkey-unit-tests --accurate
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -108,19 +85,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -128,7 +102,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -137,9 +110,8 @@ jobs:
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -168,21 +140,6 @@ jobs:
       run: make all-with-unit-tests SERVER_CFLAGS='-Werror'
     - name: testprep
       run: sudo apt-get install tcl8.6 tclx
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
-    - name: unittest
-      if: (true && !contains(inputs.skiptests, 'unittest')) && inputs.fix == ''
-      run: ./src/valkey-unit-tests --accurate
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -190,19 +147,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -210,7 +164,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -219,9 +172,8 @@ jobs:
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -254,21 +206,6 @@ jobs:
         make all-with-unit-tests CC=gcc OPT=-O3 SERVER_CFLAGS='-Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3'
     - name: testprep
       run: apt-get install -y tcl8.6 tclx procps
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
-    - name: unittest
-      if: (true && !contains(inputs.skiptests, 'unittest')) && inputs.fix == ''
-      run: ./src/valkey-unit-tests --accurate
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -276,20 +213,17 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
         system-packages: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -297,7 +231,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -311,9 +244,8 @@ jobs:
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
         CI_FIX_COMMIT: ${{ inputs.use_git_ref }}
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -342,18 +274,6 @@ jobs:
       run: make MALLOC=libc SERVER_CFLAGS='-Werror'
     - name: testprep
       run: sudo apt-get install tcl8.6 tclx
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -361,19 +281,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -381,7 +298,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -390,9 +306,8 @@ jobs:
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -421,18 +336,6 @@ jobs:
       run: make MALLOC=libc CFLAGS=-DNO_MALLOC_USABLE_SIZE SERVER_CFLAGS='-Werror'
     - name: testprep
       run: sudo apt-get install tcl8.6 tclx
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -440,19 +343,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -460,7 +360,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -469,9 +368,8 @@ jobs:
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -502,24 +400,9 @@ jobs:
         make 32bit SERVER_CFLAGS='-Werror'
     - name: testprep
       run: sudo apt-get install tcl8.6 tclx
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
     - name: module api test setup
       if: true && !contains(inputs.skiptests, 'modules')
       run: 'make -C tests/modules 32bit # the script below doesn''t have an argument, we must build manually ahead of time'
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
-    - name: unittest
-      if: (true && !contains(inputs.skiptests, 'unittest')) && inputs.fix == ''
-      run: ./src/valkey-unit-tests --accurate
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -527,19 +410,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -547,7 +427,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -556,9 +435,8 @@ jobs:
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -590,22 +468,6 @@ jobs:
       run: |
         sudo apt-get install tcl8.6 tclx tcl-tls
         ./utils/gen-test-certs.sh
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: |
-        ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs --tls --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: |
-        CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --tls --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: |
-        ./runtest-sentinel --tls ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: |
-        ./runtest-cluster --tls ${{inputs.cluster_test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -613,19 +475,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -633,7 +492,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -642,9 +500,8 @@ jobs:
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs --tls --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --tls --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -676,22 +533,6 @@ jobs:
       run: |
         sudo apt-get install tcl8.6 tclx tcl-tls
         ./utils/gen-test-certs.sh
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: |
-        ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: |
-        CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: |
-        ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: |
-        ./runtest-cluster ${{inputs.cluster_test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -699,19 +540,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -719,7 +557,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -728,9 +565,8 @@ jobs:
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -760,12 +596,6 @@ jobs:
         make SERVER_CFLAGS='-Werror'
     - name: testprep
       run: sudo apt-get install tcl8.6 tclx
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest --io-threads --accurate --verbose --tags network --dump-logs ${{inputs.test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster --io-threads ${{inputs.cluster_test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -773,19 +603,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -793,7 +620,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -802,9 +628,8 @@ jobs:
         CI_FIX_RUNTEST: ./runtest --io-threads --accurate --verbose --tags network --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: ''
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -836,14 +661,6 @@ jobs:
       run: |
         sudo apt-get install tcl8.6 tclx tcl-tls
         ./utils/gen-test-certs.sh
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: |
-        ./runtest --io-threads --tls --accurate --verbose --tags network --dump-logs ${{inputs.test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: |
-        ./runtest-cluster --io-threads --tls ${{inputs.cluster_test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -851,19 +668,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -871,7 +685,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -880,89 +693,14 @@ jobs:
         CI_FIX_RUNTEST: ./runtest --io-threads --tls --accurate --verbose --tags network --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: ''
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-out/
         if-no-files-found: ignore
         retention-days: 30
-  test-ubuntu-reclaim-cache:
-    runs-on: ubuntu-latest
-    if: inputs.job == 'test-ubuntu-reclaim-cache'
-    timeout-minutes: 180
-    steps:
-    - name: prep
-      if: true
-      run: |
-        echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
-        echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
-        echo "skipjobs: ${{inputs.skipjobs}}"
-        echo "skiptests: ${{inputs.skiptests}}"
-        echo "test_args: ${{inputs.test_args}}"
-        echo "cluster_test_args: ${{inputs.cluster_test_args}}"
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        repository: ${{ inputs.use_repo }}
-        ref: ${{ inputs.use_git_ref }}
-    - name: make
-      run: |
-        make SERVER_CFLAGS='-Werror'
-    - name: testprep
-      run: "sudo apt-get install vmtouch\nmkdir /tmp/master \nmkdir /tmp/slave\n"
-    - name: warm up
-      run: |
-        ./src/valkey-server --daemonize yes --logfile /dev/null
-        ./src/valkey-benchmark -n 1 > /dev/null
-        ./src/valkey-cli save | grep OK > /dev/null
-        vmtouch -v ./dump.rdb > /dev/null
-    - name: test
-      run: |
-        echo "test SAVE doesn't increase cache"
-        CACHE0=$(grep -w file /sys/fs/cgroup/memory.stat | awk '{print $2}')
-        echo "$CACHE0"
-        ./src/valkey-server --daemonize yes --logfile /dev/null --dir /tmp/master --port 8080 --repl-diskless-sync no --pidfile /tmp/master/valkey.pid --rdbcompression no --enable-debug-command yes
-        sleep 1 # wait for server startup
-        ./src/valkey-cli -p 8080 debug populate 10000 k 102400
-        ./src/valkey-server --daemonize yes --logfile /dev/null --dir /tmp/slave --port 8081 --repl-diskless-load disabled --rdbcompression no
-        sleep 1 # wait for server startup
-        ./src/valkey-cli -p 8080 save > /dev/null
-        VMOUT=$(vmtouch -v /tmp/master/dump.rdb)
-        echo $VMOUT
-        grep -q " 0%" <<< $VMOUT
-        CACHE=$(grep -w file /sys/fs/cgroup/memory.stat | awk '{print $2}')
-        echo "$CACHE"
-        if [ "$(( $CACHE-$CACHE0 ))" -gt "8000000" ]; then exit 1; fi
-        echo "test replication doesn't increase cache"
-        ./src/valkey-cli -p 8081 REPLICAOF 127.0.0.1 8080 > /dev/null
-        while [ $(./src/valkey-cli -p 8081 info replication | grep "master_link_status:down") ]; do sleep 1; done;
-        sleep 1 # wait for the completion of cache reclaim bio
-        VMOUT=$(vmtouch -v /tmp/master/dump.rdb)
-        echo $VMOUT
-        grep -q " 0%" <<< $VMOUT
-        VMOUT=$(vmtouch -v /tmp/slave/dump.rdb)
-        echo $VMOUT
-        grep -q " 0%" <<< $VMOUT
-        CACHE=$(grep -w file /sys/fs/cgroup/memory.stat | awk '{print $2}')
-        echo "$CACHE"
-        if [ "$(( $CACHE-$CACHE0 ))" -gt "8000000" ]; then exit 1; fi
-
-        echo "test reboot doesn't increase cache"
-        PID=$(cat /tmp/master/valkey.pid)
-        kill -15 $PID
-        while [ -x /proc/${PID} ]; do sleep 1; done
-        ./src/valkey-server --daemonize yes --logfile /dev/null --dir /tmp/master --port 8080
-        sleep 1 # wait for server startup
-        while [ $(./src/valkey-cli -p 8080 info persistence | grep "loading:1") ]; do sleep 1; done;
-        sleep 1 # wait for the completion of cache reclaim bio
-        VMOUT=$(vmtouch -v /tmp/master/dump.rdb)
-        echo $VMOUT
-        grep -q " 0%" <<< $VMOUT
-        CACHE=$(grep -w file /sys/fs/cgroup/memory.stat | awk '{print $2}')
-        echo "$CACHE"
-        if [ "$(( $CACHE-$CACHE0 ))" -gt "8000000" ]; then exit 1; fi
   test-valgrind-test:
     runs-on: ubuntu-latest
     if: inputs.job == 'test-valgrind-test'
@@ -987,9 +725,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install tcl8.6 tclx valgrind -y
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest --valgrind --no-latency --verbose --clients 1 --timeout 2400 --dump-logs ${{inputs.test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -997,19 +732,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -1017,7 +749,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -1026,47 +757,14 @@ jobs:
         CI_FIX_RUNTEST: ./runtest --valgrind --no-latency --verbose --clients 1 --timeout 2400 --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: ''
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-out/
         if-no-files-found: ignore
         retention-days: 30
-  test-valgrind-misc:
-    runs-on: ubuntu-latest
-    if: inputs.job == 'test-valgrind-misc'
-    timeout-minutes: 180
-    steps:
-    - name: prep
-      if: true
-      run: |
-        echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
-        echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
-        echo "skipjobs: ${{inputs.skipjobs}}"
-        echo "skiptests: ${{inputs.skiptests}}"
-        echo "test_args: ${{inputs.test_args}}"
-        echo "cluster_test_args: ${{inputs.cluster_test_args}}"
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        repository: ${{ inputs.use_repo }}
-        ref: ${{ inputs.use_git_ref }}
-    - name: make
-      run: make valgrind all-with-unit-tests SERVER_CFLAGS='-Werror'
-    - name: testprep
-      run: |
-        sudo apt-get update
-        sudo apt-get install tcl8.6 tclx valgrind -y
-    - name: module api test
-      if: true && !contains(inputs.skiptests, 'modules')
-      run: CFLAGS='-Werror' ./runtest-moduleapi --valgrind --no-latency --verbose --clients 1 --timeout 2400 --dump-logs ${{inputs.test_args}}
-    - name: unittest
-      if: true && !contains(inputs.skiptests, 'unittest')
-      run: |
-        valgrind --track-origins=yes --suppressions=./src/valgrind.sup --show-reachable=no --show-possibly-lost=no --leak-check=full --log-file=err.txt ./src/valkey-unit-tests --valgrind
-        if grep -q 0x err.txt; then cat err.txt; exit 1; fi
   test-valgrind-no-malloc-usable-size-test:
     runs-on: ubuntu-latest
     if: inputs.job == 'test-valgrind-no-malloc-usable-size-test'
@@ -1091,9 +789,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install tcl8.6 tclx valgrind -y
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest --valgrind --no-latency --verbose --clients 1 --timeout 2400 --dump-logs ${{inputs.test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -1101,19 +796,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -1121,7 +813,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -1130,47 +821,14 @@ jobs:
         CI_FIX_RUNTEST: ./runtest --valgrind --no-latency --verbose --clients 1 --timeout 2400 --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: ''
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-out/
         if-no-files-found: ignore
         retention-days: 30
-  test-valgrind-no-malloc-usable-size-misc:
-    runs-on: ubuntu-latest
-    if: inputs.job == 'test-valgrind-no-malloc-usable-size-misc'
-    timeout-minutes: 180
-    steps:
-    - name: prep
-      if: true
-      run: |
-        echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
-        echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
-        echo "skipjobs: ${{inputs.skipjobs}}"
-        echo "skiptests: ${{inputs.skiptests}}"
-        echo "test_args: ${{inputs.test_args}}"
-        echo "cluster_test_args: ${{inputs.cluster_test_args}}"
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        repository: ${{ inputs.use_repo }}
-        ref: ${{ inputs.use_git_ref }}
-    - name: make
-      run: make valgrind all-with-unit-tests CFLAGS="-DNO_MALLOC_USABLE_SIZE" SERVER_CFLAGS='-Werror'
-    - name: testprep
-      run: |
-        sudo apt-get update
-        sudo apt-get install tcl8.6 tclx valgrind -y
-    - name: module api test
-      if: true && !contains(inputs.skiptests, 'modules')
-      run: CFLAGS='-Werror' ./runtest-moduleapi --valgrind --no-latency --verbose --clients 1 --timeout 2400 --dump-logs ${{inputs.test_args}}
-    - name: unittest
-      if: true && !contains(inputs.skiptests, 'unittest')
-      run: |
-        valgrind --track-origins=yes --suppressions=./src/valgrind.sup --show-reachable=no --show-possibly-lost=no --leak-check=full --log-file=err.txt ./src/valkey-unit-tests --valgrind
-        if grep -q 0x err.txt; then cat err.txt; exit 1; fi
   test-sanitizer-address:
     runs-on: ubuntu-latest
     if: inputs.job == 'test-sanitizer-address'
@@ -1185,7 +843,7 @@ jobs:
       CC: ${{ matrix.compiler }}
     steps:
     - name: prep
-      if: (true) && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
+      if: (true) && matrix.compiler == inputs.fix_matrix
       run: |
         echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
         echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
@@ -1197,30 +855,15 @@ jobs:
       with:
         repository: ${{ inputs.use_repo }}
         ref: ${{ inputs.use_git_ref }}
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: make
       run: make all-with-unit-tests OPT=-O3 SANITIZER=address SERVER_CFLAGS='-Werror'
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: testprep
       run: |
         sudo apt-get update
         sudo apt-get install tcl8.6 tclx -y
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
-    - name: test
-      if: ((true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./runtest --accurate --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: ((true && !contains(inputs.skiptests, 'modules')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: ((true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: ((true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
-    - name: unittest
-      if: ((true && !contains(inputs.skiptests, 'unittest')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./src/valkey-unit-tests
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -1228,19 +871,19 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -1248,7 +891,7 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -1259,9 +902,9 @@ jobs:
         CI_FIX_RUNTEST: ./runtest --accurate --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: always() && matrix.compiler == inputs.fix_matrix
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -1282,7 +925,7 @@ jobs:
       CC: ${{ matrix.compiler }}
     steps:
     - name: prep
-      if: (true) && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
+      if: (true) && matrix.compiler == inputs.fix_matrix
       run: |
         echo "GITHUB_REPOSITORY=${{inputs.use_repo || inputs.use_repo}}" >> $GITHUB_ENV
         echo "GITHUB_HEAD_REF=${{inputs.use_git_ref || inputs.use_git_ref}}" >> $GITHUB_ENV
@@ -1292,20 +935,20 @@ jobs:
         echo "cluster_test_args: ${{inputs.cluster_test_args}}"
     - name: Log runner memory
       run: free -h
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: ${{ inputs.use_repo }}
         ref: ${{ inputs.use_git_ref }}
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: make
       run: make all-with-unit-tests OPT=-O3 SANITIZER=address SERVER_CFLAGS='-Werror'
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: testprep
       run: |
         sudo apt-get update
         sudo apt-get install tcl8.6 tclx -y
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: Start memory monitor
       run: |
         # Track minimum free memory to detect OOM risk
@@ -1315,26 +958,7 @@ jobs:
           sleep 5
         done) &
         echo $! > /tmp/memmon.pid
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
-    - name: unittest
-      if: ((true && !contains(inputs.skiptests, 'unittest')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./src/valkey-unit-tests --large-memory
-    - name: large memory tests
-      if: ((true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./runtest --accurate --verbose --dump-logs --clients 1 --large-memory --tags large-memory ${{inputs.test_args}}
-    - name: large memory module api tests
-      if: ((true && !contains(inputs.skiptests, 'modules')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --clients 1 --large-memory --tags large-memory ${{inputs.test_args}}
-    - name: Memory usage summary
-      if: ((always()) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: |
-        kill $(cat /tmp/memmon.pid) 2>/dev/null || true
-        echo "=== Memory Summary ==="
-        printf "Total RAM: %.1fGB\n" $(awk '/MemTotal/ {print $2/1024/1024}' /proc/meminfo)
-        if [ -f /tmp/memfree.log ]; then
-          MIN_FREE=$(sort -n /tmp/memfree.log | head -1)
-          printf "Minimum free memory: %.1fGB\n" $(echo "$MIN_FREE/1024/1024" | bc -l)
-        fi
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -1342,19 +966,19 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -1362,7 +986,7 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -1373,9 +997,9 @@ jobs:
         CI_FIX_RUNTEST: ./runtest --accurate --verbose --dump-logs --clients 1 --large-memory --tags large-memory
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --clients 1 --large-memory --tags large-memory
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: always() && matrix.compiler == inputs.fix_matrix
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -1396,7 +1020,7 @@ jobs:
       CC: ${{ matrix.compiler }}
     steps:
     - name: prep
-      if: (true) && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
+      if: (true) && matrix.compiler == inputs.fix_matrix
       run: |
         echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
         echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
@@ -1408,30 +1032,15 @@ jobs:
       with:
         repository: ${{ inputs.use_repo }}
         ref: ${{ inputs.use_git_ref }}
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: make
       run: make all-with-unit-tests OPT=-O3 SANITIZER=undefined SERVER_CFLAGS='-Werror' LUA_DEBUG=yes
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: testprep
       run: |
         sudo apt-get update
         sudo apt-get install tcl8.6 tclx -y
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
-    - name: test
-      if: ((true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./runtest --accurate --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: ((true && !contains(inputs.skiptests, 'modules')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: ((true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: ((true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
-    - name: unittest
-      if: ((true && !contains(inputs.skiptests, 'unittest')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./src/valkey-unit-tests --accurate
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -1439,19 +1048,19 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -1459,7 +1068,7 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -1470,9 +1079,9 @@ jobs:
         CI_FIX_RUNTEST: ./runtest --accurate --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: always() && matrix.compiler == inputs.fix_matrix
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -1493,7 +1102,7 @@ jobs:
       CC: ${{ matrix.compiler }}
     steps:
     - name: prep
-      if: (true) && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
+      if: (true) && matrix.compiler == inputs.fix_matrix
       run: |
         echo "GITHUB_REPOSITORY=${{inputs.use_repo || inputs.use_repo}}" >> $GITHUB_ENV
         echo "GITHUB_HEAD_REF=${{inputs.use_git_ref || inputs.use_git_ref}}" >> $GITHUB_ENV
@@ -1503,20 +1112,20 @@ jobs:
         echo "cluster_test_args: ${{inputs.cluster_test_args}}"
     - name: Log runner memory
       run: free -h
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: ${{ inputs.use_repo }}
         ref: ${{ inputs.use_git_ref }}
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: make
       run: make all-with-unit-tests OPT=-O3 SANITIZER=undefined SERVER_CFLAGS='-Werror' LUA_DEBUG=yes
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: testprep
       run: |
         sudo apt-get update
         sudo apt-get install tcl8.6 tclx -y
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: Start memory monitor
       run: |
         # Track minimum free memory to detect OOM risk
@@ -1526,26 +1135,7 @@ jobs:
           sleep 5
         done) &
         echo $! > /tmp/memmon.pid
-      if: inputs.fix == '' || matrix.compiler == inputs.fix_matrix
-    - name: unittest
-      if: ((true && !contains(inputs.skiptests, 'unittest')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./src/valkey-unit-tests --accurate --large-memory
-    - name: large memory tests
-      if: ((true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: ./runtest --accurate --verbose --dump-logs --clients 1 --large-memory --tags large-memory ${{inputs.test_args}}
-    - name: large memory module api tests
-      if: ((true && !contains(inputs.skiptests, 'modules')) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --clients 1 --large-memory --tags large-memory ${{inputs.test_args}}
-    - name: Memory usage summary
-      if: ((always()) && inputs.fix == '') && (inputs.fix == '' || matrix.compiler == inputs.fix_matrix)
-      run: |
-        kill $(cat /tmp/memmon.pid) 2>/dev/null || true
-        echo "=== Memory Summary ==="
-        printf "Total RAM: %.1fGB\n" $(awk '/MemTotal/ {print $2/1024/1024}' /proc/meminfo)
-        if [ -f /tmp/memfree.log ]; then
-          MIN_FREE=$(sort -n /tmp/memfree.log | head -1)
-          printf "Minimum free memory: %.1fGB\n" $(echo "$MIN_FREE/1024/1024" | bc -l)
-        fi
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -1553,19 +1143,19 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -1573,7 +1163,7 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -1584,9 +1174,9 @@ jobs:
         CI_FIX_RUNTEST: ./runtest --accurate --verbose --dump-logs --clients 1 --large-memory --tags large-memory
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --clients 1 --large-memory --tags large-memory
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: matrix.compiler == inputs.fix_matrix
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != '' && matrix.compiler == inputs.fix_matrix
+      if: always() && matrix.compiler == inputs.fix_matrix
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -1619,21 +1209,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install tcl8.6 tclx -y
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest --accurate --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
-    - name: unittest
-      if: (true && !contains(inputs.skiptests, 'unittest')) && inputs.fix == ''
-      run: ./src/valkey-unit-tests
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -1641,19 +1216,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -1661,7 +1233,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -1670,9 +1241,8 @@ jobs:
         CI_FIX_RUNTEST: ./runtest --accurate --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -1704,7 +1274,7 @@ jobs:
     timeout-minutes: 180
     steps:
     - name: prep
-      if: (true) && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
+      if: (true) && matrix.name == inputs.fix_matrix
       run: |
         echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
         echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
@@ -1716,30 +1286,18 @@ jobs:
       with:
         repository: ${{ inputs.use_repo }}
         ref: ${{ inputs.use_git_ref }}
-      if: inputs.fix == '' || matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: Install EPEL
-      if: (matrix.install_epel) && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
+      if: (matrix.install_epel) && matrix.name == inputs.fix_matrix
       run: dnf -y install epel-release
     - name: make
       run: |
         dnf -y install gcc make procps-ng which /usr/bin/kill /usr/bin/awk
         make -j SERVER_CFLAGS='-Werror'
-      if: inputs.fix == '' || matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: testprep
       run: dnf -y install tcl tcltls
-      if: inputs.fix == '' || matrix.name == inputs.fix_matrix
-    - name: test
-      if: ((true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: ((true && !contains(inputs.skiptests, 'modules')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: ((true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: ((true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -1747,20 +1305,20 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
         system-packages: 'true'
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -1768,7 +1326,7 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -1781,9 +1339,9 @@ jobs:
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
         CI_FIX_COMMIT: ${{ inputs.use_git_ref }}
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: always() && matrix.name == inputs.fix_matrix
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -1815,7 +1373,7 @@ jobs:
     timeout-minutes: 180
     steps:
     - name: prep
-      if: (true) && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
+      if: (true) && matrix.name == inputs.fix_matrix
       run: |
         echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
         echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
@@ -1827,36 +1385,20 @@ jobs:
       with:
         repository: ${{ inputs.use_repo }}
         ref: ${{ inputs.use_git_ref }}
-      if: inputs.fix == '' || matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: Install EPEL
-      if: (matrix.install_epel) && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
+      if: (matrix.install_epel) && matrix.name == inputs.fix_matrix
       run: dnf -y install epel-release
     - name: make
       run: |
         dnf -y install make gcc openssl-devel openssl procps-ng which /usr/bin/kill /usr/bin/awk
         make -j BUILD_TLS=module SERVER_CFLAGS='-Werror'
-      if: inputs.fix == '' || matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: testprep
       run: |
         dnf -y install tcl tcltls
         ./utils/gen-test-certs.sh
-      if: inputs.fix == '' || matrix.name == inputs.fix_matrix
-    - name: test
-      if: ((true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: |
-        ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs --tls-module --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: ((true && !contains(inputs.skiptests, 'modules')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: |
-        CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs --tls-module --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: ((true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: |
-        ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: ((true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: |
-        ./runtest-cluster --tls-module ${{inputs.cluster_test_args}}
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -1864,20 +1406,20 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
         system-packages: 'true'
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -1885,7 +1427,7 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -1898,9 +1440,9 @@ jobs:
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
         CI_FIX_COMMIT: ${{ inputs.use_git_ref }}
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: always() && matrix.name == inputs.fix_matrix
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -1932,7 +1474,7 @@ jobs:
     timeout-minutes: 180
     steps:
     - name: prep
-      if: (true) && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
+      if: (true) && matrix.name == inputs.fix_matrix
       run: |
         echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
         echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
@@ -1944,36 +1486,20 @@ jobs:
       with:
         repository: ${{ inputs.use_repo }}
         ref: ${{ inputs.use_git_ref }}
-      if: inputs.fix == '' || matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: Install EPEL
-      if: (matrix.install_epel) && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
+      if: (matrix.install_epel) && matrix.name == inputs.fix_matrix
       run: dnf -y install epel-release
     - name: make
       run: |
         dnf -y install make gcc openssl-devel openssl procps-ng which /usr/bin/kill /usr/bin/awk
         make -j BUILD_TLS=module SERVER_CFLAGS='-Werror'
-      if: inputs.fix == '' || matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: testprep
       run: |
         dnf -y install tcl tcltls
         ./utils/gen-test-certs.sh
-      if: inputs.fix == '' || matrix.name == inputs.fix_matrix
-    - name: test
-      if: ((true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: |
-        ./runtest --accurate --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: ((true && !contains(inputs.skiptests, 'modules')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: |
-        CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: ((true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: |
-        ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: ((true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == '') && (inputs.fix == '' || matrix.name == inputs.fix_matrix)
-      run: |
-        ./runtest-cluster ${{inputs.cluster_test_args}}
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -1981,20 +1507,20 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
         system-packages: 'true'
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -2002,7 +1528,7 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -2015,9 +1541,9 @@ jobs:
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
         CI_FIX_COMMIT: ${{ inputs.use_git_ref }}
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: matrix.name == inputs.fix_matrix
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != '' && matrix.name == inputs.fix_matrix
+      if: always() && matrix.name == inputs.fix_matrix
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -2044,12 +1570,6 @@ jobs:
         ref: ${{ inputs.use_git_ref }}
     - name: make
       run: make SERVER_CFLAGS='-Werror'
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --clients 1 --no-latency --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --clients 1 --no-latency --dump-logs ${{inputs.test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -2057,19 +1577,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -2077,7 +1594,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -2086,115 +1602,14 @@ jobs:
         CI_FIX_RUNTEST: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --clients 1 --no-latency --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --verbose --clients 1 --no-latency --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-out/
         if-no-files-found: ignore
         retention-days: 30
-  test-macos-latest-sentinel:
-    runs-on: macos-latest
-    if: inputs.job == 'test-macos-latest-sentinel'
-    timeout-minutes: 180
-    steps:
-    - name: prep
-      if: true
-      run: |
-        echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
-        echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
-        echo "skipjobs: ${{inputs.skipjobs}}"
-        echo "skiptests: ${{inputs.skiptests}}"
-        echo "test_args: ${{inputs.test_args}}"
-        echo "cluster_test_args: ${{inputs.cluster_test_args}}"
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        repository: ${{ inputs.use_repo }}
-        ref: ${{ inputs.use_git_ref }}
-    - name: make
-      run: make SERVER_CFLAGS='-Werror'
-    - name: sentinel tests
-      if: true && !contains(inputs.skiptests, 'sentinel')
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-  test-macos-latest-cluster:
-    runs-on: macos-latest
-    if: inputs.job == 'test-macos-latest-cluster'
-    timeout-minutes: 180
-    steps:
-    - name: prep
-      if: true
-      run: |
-        echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
-        echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
-        echo "skipjobs: ${{inputs.skipjobs}}"
-        echo "skiptests: ${{inputs.skiptests}}"
-        echo "test_args: ${{inputs.test_args}}"
-        echo "cluster_test_args: ${{inputs.cluster_test_args}}"
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        repository: ${{ inputs.use_repo }}
-        ref: ${{ inputs.use_git_ref }}
-    - name: make
-      run: make SERVER_CFLAGS='-Werror'
-    - name: cluster tests
-      if: true && !contains(inputs.skiptests, 'cluster')
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
-  build-macos:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-        - macos-14
-    runs-on: ${{ matrix.os }}
-    if: inputs.job == 'build-macos'
-    timeout-minutes: 180
-    steps:
-    - uses: maxim-lobanov/setup-xcode@60606e260d2fc5762a71e64e74b2174e8ea3c8bd
-      with:
-        xcode-version: latest
-    - name: prep
-      if: true
-      run: |
-        echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
-        echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
-        echo "skipjobs: ${{inputs.skipjobs}}"
-        echo "skiptests: ${{inputs.skiptests}}"
-        echo "test_args: ${{inputs.test_args}}"
-        echo "cluster_test_args: ${{inputs.cluster_test_args}}"
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        repository: ${{ inputs.use_repo }}
-        ref: ${{ inputs.use_git_ref }}
-    - name: make
-      run: make SERVER_CFLAGS='-Werror'
-  test-freebsd:
-    runs-on: ubuntu-latest
-    if: inputs.job == 'test-freebsd'
-    timeout-minutes: 180
-    steps:
-    - name: prep
-      if: true
-      run: |
-        echo "GITHUB_REPOSITORY=${{inputs.use_repo}}" >> $GITHUB_ENV
-        echo "GITHUB_HEAD_REF=${{inputs.use_git_ref}}" >> $GITHUB_ENV
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        repository: ${{ inputs.use_repo }}
-        ref: ${{ inputs.use_git_ref }}
-    - name: test
-      uses: cross-platform-actions/action@39a2a80642eca0947594ad03e4355dc3d28c617a
-      with:
-        operating_system: freebsd
-        environment_variables: MAKE
-        version: 13.2
-        shell: bash
-        run: |
-          sudo pkg install -y bash gmake lang/tcl86 lang/tclX
-          gmake
-          ./runtest --single unit/keyspace --single unit/auth --single unit/networking --single unit/protocol ${{ inputs.test_args }}
-      if: '!contains(inputs.skiptests, ''valkey'')'
   test-alpine-jemalloc:
     runs-on: ubuntu-latest
     if: inputs.job == 'test-alpine-jemalloc'
@@ -2219,18 +1634,6 @@ jobs:
         make SERVER_CFLAGS='-Werror'
     - name: testprep
       run: apk add tcl procps tclx
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -2238,20 +1641,17 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
         system-packages: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -2259,7 +1659,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -2272,9 +1671,8 @@ jobs:
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
         CI_FIX_COMMIT: ${{ inputs.use_git_ref }}
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -2306,18 +1704,6 @@ jobs:
         make SERVER_CFLAGS='-Werror' USE_JEMALLOC=no CFLAGS=-DUSE_MALLOC_USABLE_SIZE
     - name: testprep
       run: apk add tcl procps tclx
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest ${{ inputs.accurate && '--accurate' || '' }} --verbose --dump-logs ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: ./runtest-sentinel ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster ${{inputs.cluster_test_args}}
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -2325,20 +1711,17 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
         system-packages: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -2346,7 +1729,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -2359,9 +1741,8 @@ jobs:
         CI_FIX_REPOSITORY: ${{ inputs.use_repo }}
         CI_FIX_COMMIT: ${{ inputs.use_git_ref }}
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}
@@ -2391,26 +1772,6 @@ jobs:
       run: make SERVER_CFLAGS='-Werror -DLOG_REQ_RES'
     - name: testprep
       run: sudo apt-get install tcl8.6 tclx
-    - name: test
-      if: (true && !contains(inputs.skiptests, 'valkey')) && inputs.fix == ''
-      run: ./runtest --log-req-res --no-latency --dont-clean --force-resp3 --tags -slow --verbose --dump-logs  ${{inputs.test_args}}
-    - name: module api test
-      if: (true && !contains(inputs.skiptests, 'modules')) && inputs.fix == ''
-      run: CFLAGS='-Werror' ./runtest-moduleapi --log-req-res --no-latency --dont-clean --force-resp3 --dont-pre-clean --verbose --dump-logs ${{inputs.test_args}}
-    - name: sentinel tests
-      if: (true && !contains(inputs.skiptests, 'sentinel')) && inputs.fix == ''
-      run: ./runtest-sentinel --log-req-res --dont-clean --force-resp3 ${{inputs.cluster_test_args}}
-    - name: cluster tests
-      if: (true && !contains(inputs.skiptests, 'cluster')) && inputs.fix == ''
-      run: ./runtest-cluster --log-req-res --dont-clean --force-resp3 ${{inputs.cluster_test_args}}
-    - name: Install Python dependencies
-      uses: py-actions/py-dependency-install@30aa0023464ed4b5b116bd9fbdab87acf01a484e
-      with:
-        path: ./utils/req-res-validator/requirements.txt
-      if: inputs.fix == ''
-    - name: validator
-      run: ./utils/req-res-log-validator.py --verbose --fail-missing-reply-schemas ${{ (!contains(inputs.skiptests, 'valkey') && !contains(inputs.skiptests, 'module') && !contains(inputs.sentinel, 'valkey') && !contains(inputs.skiptests, 'cluster')) && inputs.test_args == '' && inputs.cluster_test_args == '' && '--fail-commands-not-all-hit' || '' }}
-      if: inputs.fix == ''
     - name: 'CI fix: check out the agent'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
@@ -2418,19 +1779,16 @@ jobs:
         ref: ${{ github.sha }}
         path: .ci-fix-agent
         persist-credentials: false
-      if: inputs.fix != ''
     - name: 'CI fix: set up the agent'
       uses: ./.ci-fix-agent/.github/actions/setup-agent
       with:
         path: .ci-fix-agent
         install-claude: 'true'
-      if: inputs.fix != ''
     - name: 'CI fix: download the plan'
       uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
       with:
         name: ci-fix-plan-${{ inputs.fix }}
         path: ${{ runner.temp }}/ci-fix-plan
-      if: inputs.fix != ''
     - name: 'CI fix: configure AWS credentials'
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
       with:
@@ -2438,7 +1796,6 @@ jobs:
         role-session-name: ci-fix-${{ github.run_id }}
         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
         role-duration-seconds: 4500
-      if: inputs.fix != ''
     - name: 'CI fix: prepare the fix in this job'
       shell: bash
       env:
@@ -2447,9 +1804,8 @@ jobs:
         CI_FIX_RUNTEST: ./runtest --log-req-res --no-latency --dont-clean --force-resp3 --tags -slow --verbose --dump-logs
         CI_FIX_RUNTEST_MODULEAPI: CFLAGS='-Werror' ./runtest-moduleapi --log-req-res --no-latency --dont-clean --force-resp3 --dont-pre-clean --verbose --dump-logs
       run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      if: inputs.fix != ''
     - name: 'CI fix: upload the result'
-      if: always() && inputs.fix != ''
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: ci-fix-result-${{ inputs.fix }}

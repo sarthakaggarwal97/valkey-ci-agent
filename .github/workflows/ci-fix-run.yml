@@ -140,7 +140,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # The same steps a copied job's fix mode runs (normalize.fix_steps).
+    # The same steps a copied job ends with (normalize.fix_steps).
     steps:
       - name: 'CI fix: check out the agent'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

@@ -119,7 +119,7 @@ class ReproPlan:
 class JobCommands:
     """The build and test commands of the CI job the fix is prepared in.
 
-    The copied job's fix mode passes them (``scripts/valkey_workflows/normalize.py``):
+    The copied job passes them (``scripts/valkey_workflows/normalize.py``):
     its ``make`` step, and its ``runtest`` and ``runtest-moduleapi`` lines
     without the job's own test selection.
     """

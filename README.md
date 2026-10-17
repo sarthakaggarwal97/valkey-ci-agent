@@ -275,8 +275,8 @@ plan -> fix-in-copy | fix-local -> publish
 - `plan` binds the request to one exact failed job (step 1 below) and hands
   it, with that job's log, to the next jobs as an artifact.
 - `fix-in-copy` is the failed job itself, from this repository's copy of its
-  workflow ([Valkey workflow copies](#valkey-workflow-copies)), in fix mode:
-  its own setup and build run, and then steps 3 to 6 run in that checkout,
+  workflow ([Valkey workflow copies](#valkey-workflow-copies)): its own
+  setup and build run, and then steps 3 to 6 run in that checkout,
   with the job's own build and test commands. A failure no copy can host (a
   VM job, a job the copies lack, another repository's, or a suggestion,
   which is never run) goes through the same steps on the bot's own Ubuntu
@@ -373,31 +373,28 @@ search and the reproduction, is listed in its comment.
 
 ### Valkey workflow copies
 
-To fix a failure in the environment that failed (its runner, setup, build
-flags and test command), this repository keeps a callable copy of Valkey's
-`daily.yml` and `ci.yml` for `unstable` and every release branch from 7.2 on:
-`.github/workflows/valkey-copy-<branch>-<workflow>.yml`, written by
-`scripts/valkey_workflows/sync.py`. A copy runs exactly one job, named by its
-`job` input, against `use_repo`/`use_git_ref`, with only the chosen tests
-selected (`test_args`, `valgrind_test`, `skiptests`).
+To fix a failure in the environment that failed (its runner, container,
+setup, build flags and test command), this repository keeps a callable copy
+of Valkey's `daily.yml` and `ci.yml` for `unstable` and every release branch
+from 7.2 on: `.github/workflows/valkey-copy-<branch>-<workflow>.yml`, written
+by `scripts/valkey_workflows/sync.py`.
 
-A job the agent can run in (an Ubuntu or macOS runner, or a container on an
-Ubuntu runner, but no VM; one `make` step and one `runtest` command) also has
-a fix mode, chosen by the `fix` input, the name of a fix `ci-fix-run.yml`
-planned. The job runs its own steps up to its tests; then, instead of the
-tests, the CI-fix agent prepares that fix in the job's own checkout
+A copy holds the jobs the agent can run in: an Ubuntu or macOS runner, or a
+container on an Ubuntu runner, but no VM; one `make` step and one `runtest`
+command. It runs exactly one of them, named by its `job` input, against
+`use_repo`/`use_git_ref`: the job's own steps up to its tests, and then,
+instead of the tests, the CI-fix agent prepares the fix `ci-fix-run.yml`
+planned under the name `fix`, in the job's own checkout
 (`scripts/ci_fix/job.sh`), rebuilding with the job's `make` command and
-testing with its `runtest` line. A matrix job runs it in the one entry
+testing with its `runtest` line. A matrix job runs in the one entry
 `fix_matrix` names. The copies receive only `contents: read`, the OIDC token
-and `AWS_ROLE_ARN` that fix mode needs for the model, and no GitHub token
-that can write.
+and `AWS_ROLE_ARN` for the model, and no GitHub token that can write.
 
-`valkey-copy-job.yml` routes a call to the copy for a branch and workflow
-(`valkey-reproduce.yml` runs one job by hand that way), and
-`scripts/valkey_workflows/manifest.json` maps each copy's job names to job ids
-and records which jobs have a fix mode. `valkey-workflows-sync.yml` rewrites
-them every Monday and opens a pull request when Valkey's workflows changed; the
-pull request names every job that lost its copy or its fix mode.
+`valkey-copy-job.yml` routes a call to the copy for a branch and workflow, and
+`scripts/valkey_workflows/manifest.json` maps each copy's job names to job
+ids. `valkey-workflows-sync.yml` rewrites them every Monday and opens a pull
+request when Valkey's workflows changed; the pull request names every job
+that lost its copy.
 
 ### Configuration
 

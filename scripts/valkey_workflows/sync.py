@@ -6,15 +6,13 @@ callable (:mod:`scripts.valkey_workflows.normalize`) and written to
 ``.github/workflows/valkey-copy-<branch>-<workflow>.yml``. A router,
 ``valkey-copy-job.yml``, takes the branch and workflow as inputs and calls
 the matching copy, so a caller needs one static ``uses:``. ``manifest.json``
-records each copy's source commit, job names and the jobs with a fix mode,
-which is how a failed job's name is mapped back to the copied job that fixes
-it.
+records each copy's source commit and its jobs' names, which is how a failed
+job's name is mapped back to the copied job that fixes it.
 
 The weekly ``valkey-workflows-sync.yml`` runs this and opens a pull request
-with any change. The pull request names every job that had a copy, or a fix
-mode, and lost it: a change upstream that the normalizer no longer
-understands would otherwise only show as issues falling back to the bot's
-own runner.
+with any change. The pull request names every job that had a copy and lost
+it: a change upstream that the normalizer no longer understands would
+otherwise only show as fixes falling back to the bot's own runner.
 """
 
 from __future__ import annotations
@@ -31,7 +29,7 @@ from urllib.request import Request, urlopen
 
 import yaml
 
-from scripts.valkey_workflows.normalize import FIX_INPUTS, INPUTS, PERMISSIONS, normalize
+from scripts.valkey_workflows.normalize import INPUTS, PERMISSIONS, normalize
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +107,6 @@ def router(manifest: dict[str, dict[str, object]]) -> str:
         "branch": {"description": "unstable or a release branch", "required": True, "type": "string"},
         "workflow": {"description": "daily or ci", "required": True, "type": "string"},
         **INPUTS,
-        **FIX_INPUTS,
     }
     jobs = {}
     for key, entry in manifest.items():
@@ -117,15 +114,14 @@ def router(manifest: dict[str, dict[str, object]]) -> str:
         jobs[job_id] = {
             "if": f"inputs.branch == '{entry['branch']}' && inputs.workflow == '{entry['workflow']}'",
             "uses": f"./{WORKFLOW_DIR.as_posix()}/{entry['file']}",
-            "with": {name: f"${{{{ inputs.{name} }}}}" for name in (*INPUTS, *FIX_INPUTS)},
+            "with": {name: f"${{{{ inputs.{name} }}}}" for name in INPUTS},
             "secrets": {"AWS_ROLE_ARN": "${{ secrets.AWS_ROLE_ARN }}"},
         }
     workflow = {
         "name": "Valkey copy: run one job",
         "on": {"workflow_call": {
             "inputs": inputs,
-            "secrets": {"AWS_ROLE_ARN": {"description": "The role fix mode assumes for the model",
-                                         "required": False}},
+            "secrets": {"AWS_ROLE_ARN": {"description": "The role assumed for the model", "required": False}},
         }},
         "permissions": PERMISSIONS,
         "jobs": jobs,
@@ -135,16 +131,13 @@ def router(manifest: dict[str, dict[str, object]]) -> str:
 
 
 def lost_jobs(before: dict[str, Any], after: dict[str, Any]) -> list[str]:
-    """The copied jobs ``before`` has and ``after`` lost, or whose fix mode it lost."""
-    lost = []
-    for key, entry in sorted(before.items()):
-        now = after.get(key) or {}
-        for job in sorted(entry.get("jobs") or {}):
-            if job not in (now.get("jobs") or {}):
-                lost.append(f"`{key}` `{job}`: no longer copied")
-            elif job in (entry.get("fixable") or {}) and job not in (now.get("fixable") or {}):
-                lost.append(f"`{key}` `{job}`: lost its fix mode")
-    return lost
+    """The copied jobs ``before`` has and ``after`` lost."""
+    return [
+        f"`{key}` `{job}`"
+        for key, entry in sorted(before.items())
+        for job in sorted(entry.get("jobs") or {})
+        if job not in ((after.get(key) or {}).get("jobs") or {})
+    ]
 
 
 def _write(path: Path, text: str) -> Path:

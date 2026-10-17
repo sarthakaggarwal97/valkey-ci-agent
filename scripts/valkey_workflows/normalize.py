@@ -1,36 +1,32 @@
-"""Turn one of Valkey's workflow files into a copy this repository can call.
+"""Turn one of Valkey's workflow files into a copy that prepares a CI fix.
 
 The CI-fix bot fixes a failure inside the very job that failed: same runner,
-build flags, setup and test command. Valkey's ``daily.yml`` and ``ci.yml``
-cannot be called that way as they are: their jobs choose themselves from the
-triggering event and its dispatch inputs, most branches' ``daily.yml`` has no
-``workflow_call`` trigger, and ``ci.yml`` takes no test arguments. A
-normalized copy keeps every job's ``runs-on``, ``container``, ``strategy`` and
-steps, and changes only this:
+container, setup, build flags and test command. Valkey's ``daily.yml`` and
+``ci.yml`` cannot be called that way as they are: their jobs choose
+themselves from the triggering event and its dispatch inputs, and most
+branches' ``daily.yml`` has no ``workflow_call`` trigger. A copy keeps the
+jobs the fix agent can run in: an Ubuntu or macOS runner, or a container on
+an Ubuntu runner, but no VM; one ``make`` step and one ``runtest`` command.
+Each keeps its ``runs-on``, ``container``, ``strategy`` and steps up to its
+tests, with the setup a test step does before its test command (installing
+Tcl, say), and changes only this:
 
 - it is triggered by ``workflow_call`` alone, with explicit inputs, and every
-  ``github.event.inputs.*`` reference reads those inputs instead;
-- exactly one job runs, the one named by the ``job`` input; the jobs that
-  only aggregate others' results (``needs:``) are dropped;
+  ``github.event.inputs.*`` reference reads those inputs instead; steps
+  meant for a dispatched run always run;
+- exactly one job runs, the one named by the ``job`` input, for no longer
+  than ``MAX_JOB_MINUTES``;
 - the main checkout takes ``use_repo``/``use_git_ref``;
-- every test-suite step is gated by ``skiptests`` and receives ``test_args``
-  (``--single``/``--only``/``--loops``), so only the chosen tests run;
-- whether ``--accurate`` is passed is the ``accurate`` input, not the event,
-  and steps meant for a dispatched run always run;
-- the compatibility steps that test against old Redis servers run only when
-  ``compat`` asks for them, and no job runs longer than ``MAX_JOB_MINUTES``.
+- instead of the tests, the CI-fix agent prepares the fix ``ci-fix-run.yml``
+  planned under the name ``fix``, in the job's checkout, rebuilding and
+  testing with the job's own ``make`` and ``runtest`` commands
+  (``scripts/ci_fix/job.sh``); whether ``--accurate`` is passed is the
+  ``accurate`` input. In a container the agent's own tools come from the
+  distribution's packages. A matrix job runs in the one entry ``fix_matrix``
+  names.
 
-A job the fix agent can run in (an Ubuntu or macOS runner, or a container on
-an Ubuntu runner, but no VM; one ``make`` step and one ``runtest`` command)
-also gets a fix mode, chosen by the ``fix`` input, the name of a fix planned
-by ``ci-fix-run.yml``: the job's own steps run up to its tests, and instead of
-the tests the CI-fix agent prepares that fix in the job's checkout, rebuilding
-and testing with the job's own commands (``scripts/ci_fix/job.sh``). In a container the agent's own tools
-come from the distribution's packages. A matrix job runs the fix in the one
-entry ``fix_matrix`` names.
-
-A copy receives only ``contents: read`` and the OIDC token its fix mode needs
-for the model's AWS credentials, and no other secret.
+A copy receives only ``contents: read`` and the OIDC token for the model's
+AWS credentials, and no other secret.
 """
 
 from __future__ import annotations
@@ -41,13 +37,13 @@ from typing import Any
 
 import yaml
 
-# A job reproduces or fixes one failure, never a full Daily run.
+# A job fixes one failure, never runs a full Daily.
 MAX_JOB_MINUTES = 180
 CHECKOUT = "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd"  # v6.0.2
 DOWNLOAD_ARTIFACT = "actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53"  # v6.0.0
 UPLOAD_ARTIFACT = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"  # v4.6.2
 CONFIGURE_AWS = "aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708"  # v5.1.1
-# Where a fix-mode job checks the agent out, and the artifacts it reads and writes.
+# Where a job checks the agent out, and the artifacts it reads and writes.
 AGENT_DIR = ".ci-fix-agent"
 PLAN_ARTIFACT = "ci-fix-plan"
 RESULT_ARTIFACT = "ci-fix-result"
@@ -56,42 +52,28 @@ RESULT_ARTIFACT = "ci-fix-result"
 AWS_SESSION_S = 75 * 60
 
 _SUITE_COMMANDS = (
-    # (suite as daily.yml's skiptests names it, command that runs it)
+    # (Valkey's name for a test suite, the command that runs it)
     ("modules", re.compile(r"\bruntest-moduleapi\b")),
     ("sentinel", re.compile(r"\bruntest-sentinel\b")),
     ("cluster", re.compile(r"\bruntest-cluster\b")),
     ("unittest", re.compile(r"\bmake test-unit\b|valkey-unit-(?:g)?tests\b")),
     ("valkey", re.compile(r"(?:^|[\s/])runtest(?:\s|$)")),
 )
-# Suites whose runner takes ``test_args``; sentinel and the legacy cluster
-# suite take ``cluster_test_args`` (daily.yml already passes those).
-_TAKES_TEST_ARGS = {"valkey", "modules"}
 _COMPAT_STEP_RE = re.compile(r"(?i)redis oss|compatib")
-_RUNTEST_LINE_RE = re.compile(r"(?:^|[\s/])runtest(?:-moduleapi)?(?:\s|$)")
-_AGGREGATOR_JOBS = {"consolidate-test-failures", "notify-about-job-results"}
 _INPUT_REF_RE = re.compile(r"\binputs\.([A-Za-z_][\w-]*)")
 
 INPUTS: dict[str, dict[str, Any]] = {
     "job": {"description": "The id of the one job to run", "required": True, "type": "string"},
     "use_repo": {"description": "Repository to check out", "type": "string", "default": "valkey-io/valkey"},
     "use_git_ref": {"description": "Branch or commit to check out", "required": True, "type": "string"},
-    "skiptests": {"description": "Test suites to skip (daily.yml's names)", "type": "string", "default": ""},
-    "test_args": {"description": "Extra runtest arguments", "type": "string", "default": ""},
-    "valgrind_test": {"description": "The one test file valgrind jobs run", "type": "string", "default": ""},
-    "cluster_test_args": {"description": "Extra sentinel/cluster arguments", "type": "string", "default": ""},
+    "fix": {"description": "The name ci-fix-run.yml planned the fix under", "required": True, "type": "string"},
+    "fix_matrix": {"description": "The matrix value of the one entry that runs", "type": "string", "default": ""},
+    "valgrind_test": {"description": "The one test file a targeted valgrind job runs", "type": "string",
+                      "default": ""},
     "accurate": {"description": "Pass --accurate, as scheduled runs do", "type": "boolean", "default": True},
-    "compat": {"description": "Run the old-Redis compatibility steps", "type": "boolean", "default": False},
 }
-FIX_INPUTS: dict[str, dict[str, Any]] = {
-    "fix": {"description": "Prepare the fix ci-fix-run.yml planned under this name, instead of testing",
-            "type": "string", "default": ""},
-    "fix_matrix": {"description": "The matrix value of the one entry that prepares the fix",
-                   "type": "string", "default": ""},
-}
-# Fix mode assumes an AWS role for the model with the job's OIDC token.
+# The model's AWS role is assumed with the job's OIDC token.
 PERMISSIONS = {"contents": "read", "id-token": "write"}
-_FIX = "inputs.fix != ''"
-_NOT_FIX = "inputs.fix == ''"
 
 
 @dataclass
@@ -102,11 +84,10 @@ class Copy:
     # Job id -> the display names its runs take: the name as written (it may
     # hold ``${{ matrix.* }}``), or each matrix entry's own ``name``.
     jobs: dict[str, list[str]] = field(default_factory=dict)
-    # Jobs that run one targeted file from ``valgrind_test`` (newer branches'
-    # valgrind jobs); the others take their files in ``test_args``.
+    # Jobs whose valgrind shards ``valgrind_test`` collapses to one.
     targeted: list[str] = field(default_factory=list)
-    # Jobs with a fix mode -> the matrix key ``fix_matrix`` selects ("" for
-    # none: no matrix, or one ``valgrind_test`` collapses to a single entry).
+    # Job id -> the matrix key ``fix_matrix`` selects ("" for none: no
+    # matrix, or one ``valgrind_test`` collapses to a single entry).
     fixable: dict[str, str] = field(default_factory=dict)
 
 
@@ -122,24 +103,24 @@ def normalize(source: str, *, origin: str) -> Copy:
     copy = Copy(text="")
     jobs: dict[str, Any] = {}
     for job_id, job in (workflow.get("jobs") or {}).items():
-        if job_id in _AGGREGATOR_JOBS or job.get("needs"):
-            continue
-        jobs[job_id] = _normalize_job(job_id, job, copy)
+        normalized_job = None if job.get("needs") else _normalize_job(job_id, job, copy)
+        if normalized_job is None:
+            continue  # it aggregates others' results, or the agent cannot run in it
+        jobs[job_id] = normalized_job
         copy.jobs[job_id] = _run_names(job_id, job)
-        if "inputs.valgrind_test" in yaml.safe_dump(jobs[job_id]):
+        if "inputs.valgrind_test" in yaml.safe_dump(normalized_job):
             copy.targeted.append(job_id)
-    # The source may read inputs no copy is given (``skipjobs``, or a name it
-    # never declared): they stay declared, and empty.
+    # The steps kept may read inputs no copy is given (``skipjobs``, or a
+    # name the source never declared): they stay declared, and empty.
     extra = {
         name: {"description": "Read by the source workflow; empty in a copy", "type": "string", "default": ""}
-        for name in sorted(set(_INPUT_REF_RE.findall(text)) - set(INPUTS) - set(FIX_INPUTS))
+        for name in sorted(set(_INPUT_REF_RE.findall(yaml.safe_dump(jobs))) - set(INPUTS))
     }
     normalized = {
         "name": f"Valkey copy: {origin}",
         "on": {"workflow_call": {
-            "inputs": {**INPUTS, **FIX_INPUTS, **extra},
-            "secrets": {"AWS_ROLE_ARN": {"description": "The role fix mode assumes for the model",
-                                         "required": False}},
+            "inputs": {**INPUTS, **extra},
+            "secrets": {"AWS_ROLE_ARN": {"description": "The role assumed for the model", "required": False}},
         }},
         "permissions": PERMISSIONS,
         "jobs": jobs,
@@ -162,7 +143,8 @@ def _run_names(job_id: str, job: dict[str, Any]) -> list[str]:
     return [name]
 
 
-def _normalize_job(job_id: str, job: dict[str, Any], copy: Copy) -> dict[str, Any]:
+def _normalize_job(job_id: str, job: dict[str, Any], copy: Copy) -> dict[str, Any] | None:
+    """The copied job, or None when the agent cannot run in it."""
     job = dict(job)
     job["if"] = f"inputs.job == '{job_id}'"
     job["timeout-minutes"] = min(int(job.get("timeout-minutes") or MAX_JOB_MINUTES), MAX_JOB_MINUTES)
@@ -177,33 +159,24 @@ def _normalize_job(job_id: str, job: dict[str, Any], copy: Copy) -> dict[str, An
                 "repository": "${{ inputs.use_repo }}",
                 "ref": "${{ inputs.use_git_ref }}",
             }
-            steps.append(step)
             checked_out = True
-            continue
-        steps.append(_normalize_step(step))
-    job["steps"] = steps
-    fix = _fix_mode(job) if checked_out else None
-    if fix is not None:
-        matrix_key, env = fix
-        container = bool(job.get("container"))
-        # Fix mode runs the job up to its tests; the agent takes over there.
-        # A test step that also sets up (installs Tcl, builds the test
-        # modules) keeps that setup: the agent's own runs need it just as the
-        # job's tests do, so it is hoisted out before the step is gated off.
-        first_test = next(i for i, step in enumerate(steps) if _suite(_script(step)[1]))
-        gated: list[dict[str, Any]] = []
-        for step in steps[first_test:]:
-            setup, step = _hoisted_setup(step)
-            if setup is not None:
-                gated.append(setup)
-            gated.append(_gate(step, _NOT_FIX))
-        steps = steps[:first_test] + gated
-        selects = f" && matrix.{matrix_key} == inputs.fix_matrix" if matrix_key else ""
-        if matrix_key:
-            # The other matrix entries skip everything, build included.
-            steps = [_gate(step, f"{_NOT_FIX} || matrix.{matrix_key} == inputs.fix_matrix") for step in steps]
-        job["steps"] = steps + fix_steps(_FIX + selects, env, system_packages=container)
-        copy.fixable[job_id] = matrix_key
+        steps.append(step)
+    fix = _fix_mode(job | {"steps": steps}) if checked_out else None
+    if fix is None:
+        return None
+    matrix_key, env = fix
+    # The job runs up to its tests; the agent takes over there. A test step
+    # that also sets up (installs Tcl, builds the test modules) keeps that
+    # setup: the agent's own runs need it just as the job's tests do.
+    first_test = next(i for i, step in enumerate(steps) if _suite(_script(step)[1]))
+    steps = steps[:first_test] + [setup for setup in map(_setup_of, steps[first_test:]) if setup is not None]
+    when = ""
+    if matrix_key:
+        # The other matrix entries skip everything, build included.
+        when = f"matrix.{matrix_key} == inputs.fix_matrix"
+        steps = [_gate(step, when) for step in steps]
+    job["steps"] = steps + fix_steps(when, env, system_packages=bool(job.get("container")))
+    copy.fixable[job_id] = matrix_key
     return job
 
 
@@ -391,29 +364,25 @@ _SETUP_LINE_RE = re.compile(
 )
 
 
-def _hoisted_setup(step: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any]]:
-    """``(setup step, step without it)`` for a test step that also sets up, else ``(None, step)``.
+def _setup_of(step: dict[str, Any]) -> dict[str, Any] | None:
+    """The setup a test step does before its test invocation, as a step of its own, or None.
 
-    Only the plain commands before the test invocation move: a line that
-    assigns a variable, uses one, or opens a control structure belongs to the
-    invocation's own shell and stays with it.
+    Only the plain commands before the invocation count: a line that assigns
+    a variable, uses one, or opens a control structure belongs to the
+    invocation's own shell.
     """
     key, script = _script(step)
     if not script or not _suite(script):
-        return None, step
+        return None
     lines = script.splitlines()
     invocation = next((index for index, line in enumerate(lines) if _suite(line)), None)
     if invocation is None:
-        return None, step
+        return None
     setup = [line for line in lines[:invocation] if _is_setup_line(line)]
     if not setup:
-        return None, step
-    kept = [line for line in lines if line not in setup]
+        return None
     name = str(step.get("name") or "").strip()
-    return (
-        _with_script({**step, "name": f"{name} setup" if name else "setup"}, key, "\n".join(setup)),
-        _with_script(step, key, "\n".join(kept)),
-    )
+    return _with_script({**step, "name": f"{name} setup" if name else "setup"}, key, "\n".join(setup))
 
 
 def _is_setup_line(line: str) -> bool:
@@ -425,21 +394,6 @@ def _is_setup_line(line: str) -> bool:
 
 def _is_main_checkout(step: dict[str, Any]) -> bool:
     return str(step.get("uses", "")).startswith("actions/checkout@") and not (step.get("with") or {}).get("path")
-
-
-def _normalize_step(step: dict[str, Any]) -> dict[str, Any]:
-    name = str(step.get("name") or "")
-    script_key, script = _script(step)
-    if _COMPAT_STEP_RE.search(name):
-        return _gate(step, "inputs.compat")
-    suite = _suite(script) if script else ""
-    if not suite:
-        return step
-    if f"inputs.skiptests, '{suite}'" not in str(step.get("if") or ""):
-        step = _gate(step, f"!contains(inputs.skiptests, '{suite}')")
-    if suite in _TAKES_TEST_ARGS and "inputs.test_args" not in script:
-        step = _with_script(step, script_key, _append_test_args(script))
-    return step
 
 
 def _script(step: dict[str, Any]) -> tuple[str, str]:
@@ -467,8 +421,6 @@ def _suite(script: str) -> str:
 
 def _gate(step: dict[str, Any], condition: str) -> dict[str, Any]:
     existing = step.get("if")
-    if existing not in (None, "") and "||" in condition:
-        condition = f"({condition})"  # && binds tighter
     combined = f"({_bare(existing)}) && {condition}" if existing not in (None, "") else condition
     return {**step, "if": combined}
 
@@ -480,22 +432,6 @@ def _bare(condition: Any) -> str:
     if text.startswith("${{") and text.endswith("}}"):
         text = text[3:-2].strip()
     return text
-
-
-def _append_test_args(script: str) -> str:
-    """``script`` with ``${{ inputs.test_args }}`` ending each runtest command."""
-    lines = script.split("\n")
-    out: list[str] = []
-    in_command = False
-    for line in lines:
-        starts = bool(_RUNTEST_LINE_RE.search(line)) and not line.lstrip().startswith("#")
-        if starts:
-            in_command = True
-        if in_command and not line.rstrip().endswith("\\"):
-            line = f"{line.rstrip()} ${{{{ inputs.test_args }}}}"
-            in_command = False
-        out.append(line)
-    return "\n".join(out)
 
 
 class _Dumper(yaml.SafeDumper):

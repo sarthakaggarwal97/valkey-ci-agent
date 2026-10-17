@@ -1,8 +1,8 @@
 """Find the copied Valkey CI job a fix is prepared in.
 
 This repository keeps callable copies of Valkey's CI workflows
-(``scripts/valkey_workflows``). A copied job with a fix mode runs its own
-setup and build, and then prepares the fix in its own checkout, with its own
+(``scripts/valkey_workflows``) that hold the jobs the agent can run in. A
+copied job runs its own setup and build, and then prepares the fix in its own checkout, with its own
 build and test commands (``scripts/ci_fix/job.sh``). :func:`copy_for` finds
 the copy and job of a fix's failed job through ``manifest.json``;
 :func:`fix_inputs` is what the copy is called with.
@@ -30,7 +30,7 @@ _MATRIX_SUFFIX_RE = re.compile(r" \((?P<value>[^()]*)\)$")
 
 @dataclass(frozen=True)
 class CopyJob:
-    """One job of a branch's copied workflow that has a fix mode."""
+    """One job of a branch's copied workflow."""
 
     branch: str
     workflow: str
@@ -49,7 +49,7 @@ def load_manifest(path: Path = MANIFEST) -> dict[str, Any]:
 
 
 def copy_for(manifest: dict[str, Any], task: FixTask) -> CopyJob | None:
-    """The copied job with a fix mode that hosts ``task``'s fix, or None.
+    """The copied job that hosts ``task``'s fix, or None.
 
     A PR's run used its base branch's workflow. A suggestion is never run,
     so it needs no job; only Valkey's own workflows are copied.
@@ -64,7 +64,7 @@ def copy_for(manifest: dict[str, Any], task: FixTask) -> CopyJob | None:
 
 
 def copy_job_for(manifest: dict[str, Any], branch: str, workflow: str, job_name: str) -> CopyJob | None:
-    """The copied job with a fix mode that runs as ``job_name`` on ``branch``, or None."""
+    """The copied job that runs as ``job_name`` on ``branch``, or None."""
     entry = manifest.get(f"{branch}/{workflow}")
     if not entry:
         return None
