@@ -19,11 +19,10 @@ import textwrap
 from pathlib import Path
 from typing import Callable
 
-from scripts.ci_fix.models import CandidateAction, FixCandidate, FixTarget
+from scripts.ci_fix.models import CandidateAction, FixCandidate, FixTarget, TargetKind
 from scripts.ci_fix.policy import (
     WRITABLE_BRANCH_PREFIXES,
     is_writable_branch,
-    target_capabilities,
 )
 from scripts.common.git_auth import github_https_url
 from scripts.common.git_clone import REPO_RE, is_full_sha
@@ -65,13 +64,7 @@ def push_candidate(
     remote ref not exist. Returns the new commit SHA.
     """
     _validate_target(target)
-    capabilities = target_capabilities(target.kind)
-    if not capabilities.allows(candidate.action):
-        raise PushRefused(
-            f"Refusing to push: {candidate.action.value} is not allowed for "
-            f"a {target.kind.value} target."
-        )
-    create = capabilities.creates_branch
+    create = target.kind is TargetKind.DRAFT_PR
     if candidate.action is CandidateAction.PATCH:
         return _push_patch(
             candidate,
@@ -170,9 +163,9 @@ def _push_port(
 
 
 def _validate_target(target: FixTarget) -> None:
-    capabilities = target_capabilities(target.kind)
-    if not capabilities.allows_push:
-        raise PushRefused(f"Refusing to push to a {target.kind.value} target.")
+    if target.kind is TargetKind.SUGGEST:
+        # A suggestion's branch is the contributor's own; it is never pushed to.
+        raise PushRefused("Refusing to push to a suggestion target.")
     if not REPO_RE.fullmatch(target.repo_full_name):
         raise PushRefused(f"Refusing to push to malformed repo {target.repo_full_name!r}.")
     if target.base_repo_full_name and not REPO_RE.fullmatch(target.base_repo_full_name):

@@ -217,6 +217,21 @@ def _port_agent(*commits):
     return agent
 
 
+def test_prepare_fix_refuses_a_port_without_a_full_sha(tmp_path, monkeypatch) -> None:
+    source, head_sha = _source_repo(tmp_path)
+    _install_clone(monkeypatch, source)
+
+    candidate = engine_mod.prepare_fix(
+        _task(head_sha),
+        _LOG,
+        agent_func=_port_agent("abc123", "abc123", "abc123"),
+        review_func=lambda *a, **k: (True, "unused"),
+    )
+
+    assert candidate.action is CandidateAction.REFUSE
+    assert "not a full commit SHA" in candidate.summary
+
+
 def test_prepare_fix_accepts_clean_full_sha_port_without_validation(tmp_path, monkeypatch) -> None:
     source, head_sha = _source_repo(tmp_path)
     commit = _upstream_commit(source, head_sha)

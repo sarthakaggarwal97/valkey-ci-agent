@@ -140,7 +140,7 @@ def test_suggestion_uses_confined_profile_and_backport_policy(tmp_path, monkeypa
     assert candidate.action is CandidateAction.REFUSE
 
 
-def test_port_requires_a_full_sha(tmp_path, monkeypatch) -> None:
+def test_a_port_commit_is_normalized(tmp_path, monkeypatch) -> None:
     commit = "ABCDEF12" * 5
     monkeypatch.setattr(
         agent_mod,
@@ -159,19 +159,6 @@ def test_port_requires_a_full_sha(tmp_path, monkeypatch) -> None:
 
     assert candidate.action is CandidateAction.PORT
     assert candidate.port_commit == commit.lower()
-
-    monkeypatch.setattr(
-        agent_mod,
-        "run_agent",
-        lambda *args, **kwargs: _result(
-            {"action": "port", "port_commit": "abc123", "validation": "passed"}
-        ),
-    )
-    refused = agent_mod.run_fix_agent(_task(), str(tmp_path), "failure")
-
-    assert refused.action is CandidateAction.REFUSE
-    assert "full upstream commit SHA" in refused.summary
-    assert refused.validation == ""
 
 
 def test_infrastructure_classification_cannot_produce_a_patch(tmp_path, monkeypatch) -> None:

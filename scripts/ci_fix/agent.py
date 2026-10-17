@@ -17,7 +17,6 @@ from scripts.ci_fix.models import (
 )
 from scripts.ci_fix.policy import target_capabilities
 from scripts.common.ai_output import extract_json_object
-from scripts.common.git_clone import is_full_sha
 from scripts.common.text_utils import compact_text
 
 _POLICY = {
@@ -263,21 +262,14 @@ def _candidate_from_payload(payload: dict[str, Any]) -> FixCandidate:
             **diagnosis,
         )
 
-    port_commit = _text(payload.get("port_commit"), 40).lower()
-    if action is CandidateAction.PORT and not is_full_sha(port_commit):
-        return FixCandidate(
-            action=CandidateAction.REFUSE,
-            summary="The agent did not identify a valid full upstream commit SHA to port.",
-            **diagnosis,
-        )
-
-    # The engine keeps only the fields the action uses (engine._checked_candidate).
+    # The engine checks the port SHA and keeps only the fields the action
+    # uses (engine._checked_candidate).
     return FixCandidate(
         action=action,
         summary=summary or _default_summary(action),
         **diagnosis,
         changed_paths=_changed_paths(payload.get("changed_paths")),
-        port_commit=port_commit,
+        port_commit=_text(payload.get("port_commit"), 40).lower(),
         validation=_text(payload.get("validation"), 2_000),
         test_command=_text(payload.get("test_command"), 1_000),
     )

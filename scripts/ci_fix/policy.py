@@ -20,8 +20,6 @@ class TargetCapabilities:
     agent_profile: CiFixAgentProfile
     publication_guidance: str
     allowed_actions: frozenset[CandidateAction]
-    allows_push: bool
-    creates_branch: bool
     patch_limit: int
 
     def allows(self, action: CandidateAction) -> bool:
@@ -43,8 +41,6 @@ TARGET_CAPABILITIES: dict[TargetKind, TargetCapabilities] = {
                 CandidateAction.REFUSE,
             }
         ),
-        allows_push=True,
-        creates_branch=False,
         patch_limit=1_000_000,
     ),
     TargetKind.SUGGEST: TargetCapabilities(
@@ -59,8 +55,6 @@ TARGET_CAPABILITIES: dict[TargetKind, TargetCapabilities] = {
                 CandidateAction.REFUSE,
             }
         ),
-        allows_push=False,
-        creates_branch=False,
         patch_limit=45_000,
     ),
     TargetKind.DRAFT_PR: TargetCapabilities(
@@ -77,8 +71,6 @@ TARGET_CAPABILITIES: dict[TargetKind, TargetCapabilities] = {
                 CandidateAction.REFUSE,
             }
         ),
-        allows_push=True,
-        creates_branch=True,
         patch_limit=1_000_000,
     ),
 }

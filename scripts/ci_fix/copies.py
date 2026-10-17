@@ -41,9 +41,9 @@ class CopyJob:
     matrix_key: str = ""
 
 
-def load_manifest(path: Path = MANIFEST) -> dict[str, Any]:
+def load_manifest() -> dict[str, Any]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(MANIFEST.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 

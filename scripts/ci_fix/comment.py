@@ -65,7 +65,7 @@ def _context(result: FixResult, *, include_reasoning: bool = True) -> list[str]:
     if failure.description:
         lines += [compact_text(failure.description, 2_000), ""]
     if candidate is not None:
-        lines += _candidate_context(candidate, include_reasoning=include_reasoning)
+        lines += candidate_context(candidate, include_reasoning=include_reasoning)
     if failure.other_failed_jobs:
         visible = failure.other_failed_jobs[:_MAX_OTHER_JOBS]
         lines += [
@@ -79,7 +79,8 @@ def _context(result: FixResult, *, include_reasoning: bool = True) -> list[str]:
     return lines
 
 
-def _candidate_context(candidate: FixCandidate, *, include_reasoning: bool) -> list[str]:
+def candidate_context(candidate: FixCandidate, *, include_reasoning: bool) -> list[str]:
+    """The diagnosis and checks of ``candidate``, as a PR comment or draft PR body shows them."""
     lines: list[str] = []
     if candidate.failing_check:
         lines += [

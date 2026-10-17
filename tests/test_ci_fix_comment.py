@@ -130,12 +130,12 @@ def test_refused_and_failed_results_are_plainly_reported() -> None:
 
 
 def test_what_the_bot_checked_is_listed():
-    from scripts.ci_fix.comment import _candidate_context
+    from scripts.ci_fix.comment import candidate_context
     from scripts.ci_fix.models import CandidateAction, FixCandidate
 
     candidate = FixCandidate(action=CandidateAction.PATCH, verification="`make test` failed without the patch "
                              "and passed 2 time(s) with it.\nReview: fixes the cause")
-    lines = _candidate_context(candidate, include_reasoning=True)
+    lines = candidate_context(candidate, include_reasoning=True)
     assert lines[:4] == ["**Checked by the bot:**", "",
                          "- `make test` failed without the patch and passed 2 time(s) with it.",
                          "- Review: fixes the cause"]

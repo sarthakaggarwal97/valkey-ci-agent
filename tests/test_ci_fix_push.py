@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import subprocess
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,6 @@ from scripts.ci_fix.models import (
     FixTarget,
     TargetKind,
 )
-from scripts.ci_fix.policy import target_capabilities
 from scripts.ci_fix.push import PushFailed, PushRefused, commit_message, push_candidate
 
 
@@ -178,27 +176,12 @@ def test_patch_is_committed_to_the_existing_branch_with_an_exact_parent(
     assert "Signed-off-by:" not in _git(remote, "log", "-1", "--format=%B", pushed)
 
 
-def test_push_rechecks_action_capabilities(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    capabilities = target_capabilities(TargetKind.UPDATE_PR)
-    monkeypatch.setattr(
-        push_mod,
-        "target_capabilities",
-        lambda _kind: replace(
-            capabilities,
-            allowed_actions=frozenset(
-                {CandidateAction.PATCH, CandidateAction.REFUSE}
-            ),
-        ),
-    )
-    candidate = FixCandidate(
-        action=CandidateAction.PORT,
-        port_commit="a" * 40,
-    )
+def test_a_suggestion_target_is_never_pushed() -> None:
+    """A suggestion's branch is the contributor's, even when its name looks like the bot's."""
+    target = _target("b" * 40, kind=TargetKind.SUGGEST)
 
-    with pytest.raises(PushRefused, match="port is not allowed"):
-        push_candidate(candidate, _target("b" * 40), git_env={})
+    with pytest.raises(PushRefused, match="suggestion target"):
+        push_candidate(_candidate("diff"), target, git_env={})
 
 
 @pytest.mark.parametrize("path", [".github/workflows/fix.yml", ".github/actions/setup/action.yml"])

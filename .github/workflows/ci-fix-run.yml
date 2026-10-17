@@ -95,7 +95,6 @@ jobs:
         shell: bash
         env:
           TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
-          CI_FIX_BOT_LOGIN: ${{ steps.target-token.outputs.app-slug }}[bot]
           FRONT_DOOR: ${{ inputs.front_door }}
           REQUEST: ${{ inputs.request }}
         run: |

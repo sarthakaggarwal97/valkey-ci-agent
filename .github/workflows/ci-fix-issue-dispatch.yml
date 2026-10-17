@@ -73,7 +73,6 @@ jobs:
         env:
           TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
           GITHUB_TOKEN: ${{ github.token }}
-          CI_FIX_ISSUES_BOT_LOGIN: ${{ steps.target-token.outputs.app-slug }}[bot]
           MAX_RUNS: ${{ inputs.max_runs || vars.CI_FIX_ISSUES_MAX_RUNS || '2' }}
           # A scheduled run has no inputs and dispatches for real.
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}

@@ -15,15 +15,12 @@ def test_every_target_kind_has_capabilities() -> None:
 
 
 def test_target_capabilities_capture_current_publication_modes() -> None:
-    assert target_capabilities(TargetKind.SUGGEST).allows_push is False
     assert not target_capabilities(TargetKind.SUGGEST).allows(
         CandidateAction.PORT
     )
     assert target_capabilities(TargetKind.UPDATE_PR).allows(
         CandidateAction.PORT
     )
-    assert target_capabilities(TargetKind.UPDATE_PR).creates_branch is False
-    assert target_capabilities(TargetKind.DRAFT_PR).creates_branch is True
 
 
 def test_bot_branch_ownership_and_backport_policy() -> None:

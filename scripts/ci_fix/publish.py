@@ -19,6 +19,7 @@ from github.GithubException import GithubException
 
 from scripts.backport.pr_creator import create_pull_from_push_repo
 from scripts.backport.sweep_prs import find_existing_pr
+from scripts.ci_fix.comment import candidate_context
 from scripts.ci_fix.issue_state import has_open_linked_pr, parse_detector_occurrence
 from scripts.ci_fix.models import (
     CandidateAction,
@@ -71,11 +72,6 @@ def publish_candidate(
             f"The {candidate.action.value} action is not supported for "
             f"a {target.kind.value} target.",
         )
-    if (
-        target.kind is not TargetKind.DRAFT_PR
-        and target.expected_sha != task.failure.head_sha
-    ):
-        return _refused(task, candidate, "The publication target does not match the analyzed head.")
 
     if target.kind is TargetKind.SUGGEST:
         return _publish_suggestion(gh, task, candidate)
@@ -208,9 +204,6 @@ def reconcile_draft_pr(
     succeeded before PR creation failed.
     """
     target = task.target
-    if target.kind is not TargetKind.DRAFT_PR:
-        return None
-
     try:
         existing = find_existing_pr(
             gh,
@@ -506,27 +499,10 @@ def _draft_body(task: FixTask, candidate: FixCandidate | None) -> str:
     ]
     if failure.description:
         lines += [compact_text(failure.description, 2_000), ""]
-    if candidate is not None and candidate.root_cause:
-        lines += [
-            f"**Root cause:** {compact_text(candidate.root_cause, 2_000)}",
-            "",
-        ]
-    if candidate is not None and candidate.reasoning:
-        lines += [
-            f"**Change:** {compact_text(candidate.reasoning, 3_000)}",
-            "",
-        ]
     if candidate is not None and candidate.action is CandidateAction.PORT:
         lines += [f"**Upstream fix:** `{candidate.port_commit}`", ""]
-    if candidate is not None and candidate.verification:
-        lines += ["**Checked by the bot:**", ""]
-        lines += [f"- {line}" for line in candidate.verification.splitlines() if line.strip()]
-        lines += [""]
-    if candidate is not None and candidate.validation:
-        lines += [
-            f"**Agent validation notes:** {compact_text(candidate.validation, 2_000)}",
-            "",
-        ]
+    if candidate is not None:
+        lines += candidate_context(candidate, include_reasoning=True)
     lines += [
         "> [!IMPORTANT]",
         "> This draft was prepared automatically. Normal pull-request CI and "

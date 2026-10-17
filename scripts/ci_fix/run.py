@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     if not token:
         parser.error("TARGET_TOKEN is required")
     gh = Github(auth=Auth.Token(token))
-    bot_login = os.environ.get("CI_FIX_BOT_LOGIN", f"{APP_LOGIN}[bot]")
+    bot_login = f"{APP_LOGIN}[bot]"
     if args.command == "plan":
         try:
             request = json.loads(args.request)

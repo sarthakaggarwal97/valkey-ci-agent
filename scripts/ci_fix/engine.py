@@ -435,8 +435,6 @@ def agent_round(
     The caller undoes a port with :func:`restore` once it is done with it.
     """
     candidate = agent_func(task, repo_dir, job_log, feedback=feedback, timeout=timeout, context=context)
-    if not isinstance(candidate, FixCandidate):
-        raise TypeError("CI-fix agent did not return a FixCandidate")
     if attempt > 1 and candidate.action is CandidateAction.PORT:
         # An earlier round's patch is still in the tree; the agent has moved
         # on to porting instead.

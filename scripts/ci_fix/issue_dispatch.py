@@ -123,33 +123,30 @@ def dispatch_issues(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", required=True, help="the repository whose detector issues are fixed")
-    parser.add_argument("--agent-repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
-    parser.add_argument("--ref", default=os.environ.get("GITHUB_REF_NAME", "main"))
     parser.add_argument("--max-runs", type=int, required=True)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     if args.max_runs < 1:
         parser.error("--max-runs must be at least 1")
-    if not args.agent_repo:
-        parser.error("--agent-repo or GITHUB_REPOSITORY is required")
     configure_logging()
 
     # The target token reads the target repository; this repository's own
     # token lists and dispatches its runs.
     target = Github(auth=Auth.Token(os.environ["TARGET_TOKEN"])).get_repo(args.repo)
-    workflow = Github(auth=Auth.Token(os.environ["GITHUB_TOKEN"])).get_repo(args.agent_repo).get_workflow(WORKFLOW)
-    bot_login = os.environ.get("CI_FIX_ISSUES_BOT_LOGIN", f"{APP_LOGIN}[bot]")
+    agent_repo, ref = os.environ["GITHUB_REPOSITORY"], os.environ.get("GITHUB_REF_NAME", "main")
+    workflow = Github(auth=Auth.Token(os.environ["GITHUB_TOKEN"])).get_repo(agent_repo).get_workflow(WORKFLOW)
+    bot_login = f"{APP_LOGIN}[bot]"
 
     def dispatch(issue: int) -> None:
         if args.dry_run:
             return
         dispatched = retry_github_call(
-            lambda: workflow.create_dispatch(args.ref, {"issue": str(issue)}),
+            lambda: workflow.create_dispatch(ref, {"issue": str(issue)}),
             retries=2,
             description=f"dispatch {WORKFLOW} for issue #{issue}",
         )
         if not dispatched:
-            raise RuntimeError(f"{args.agent_repo}/{WORKFLOW}@{args.ref} rejected the dispatch for #{issue}")
+            raise RuntimeError(f"{agent_repo}/{WORKFLOW}@{ref} rejected the dispatch for #{issue}")
 
     decisions = dispatch_issues(
         target, workflow, repo_full_name=args.repo, bot_login=bot_login,
