@@ -19,7 +19,7 @@ import logging
 import re
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any
 
 from github.GithubException import GithubException
 
@@ -34,7 +34,6 @@ from scripts.ci_fix.github_runs import (
 from scripts.ci_fix.issue_state import has_open_linked_pr, parse_detector_occurrence
 from scripts.ci_fix.models import (
     Failure,
-    FixCandidate,
     FixPlan,
     FixPolicy,
     FixResult,
@@ -46,7 +45,7 @@ from scripts.ci_fix.models import (
     ResultKind,
     TargetKind,
 )
-from scripts.ci_fix.publish import publish_candidate, reconcile_draft_pr
+from scripts.ci_fix.publish import reconcile_draft_pr
 from scripts.common.github_client import retry_github_call
 from scripts.common.text_utils import compact_text
 from scripts.common.valkey_ci import (
@@ -499,10 +498,6 @@ def _prepared(plan: FixPlan) -> PreparedIssue:
     return PreparedIssue(failure=plan.issue, task=plan.task, branch_name=plan.task.target.branch)
 
 
-def publisher(plan: FixPlan, *, bot_login: str) -> Callable[..., FixResult]:
-    return publisher_for(_prepared(plan), bot_login=bot_login)
-
-
 def report_result(gh: Any, plan: FixPlan, result: FixResult, *, bot_login: str) -> dict[str, Any]:  # noqa: ARG001
     return report(gh, _prepared(plan), result)
 
@@ -513,35 +508,6 @@ def get_issue(gh: Any, repo_full_name: str, issue_number: int) -> Any:
         retries=2,
         description=f"get issue #{issue_number}",
     )
-
-
-def publisher_for(prepared: PreparedIssue, *, bot_login: str) -> Callable[..., FixResult]:
-    """Publication that first rechecks the issue still asks for this fix."""
-    failure = prepared.failure
-    repo_full_name = prepared.task.failure.repo_full_name
-
-    def checked_publish(
-        publish_gh: Any,
-        publish_task: FixTask,
-        candidate: FixCandidate,
-        *,
-        git_env: dict[str, str],
-    ) -> FixResult:
-        reconciled = reconcile_draft_pr(publish_gh, publish_task)
-        if reconciled is not None:
-            return reconciled
-        latest = get_issue(publish_gh, repo_full_name, failure.number)
-        _current, reason = validate_issue(latest, bot_login=bot_login, expected=failure)
-        if reason:
-            return FixResult(
-                kind=ResultKind.REFUSED,
-                summary=f"Publication stopped: {reason}.",
-                task=publish_task,
-                candidate=candidate,
-            )
-        return publish_candidate(publish_gh, publish_task, candidate, git_env=git_env)
-
-    return checked_publish
 
 
 def report(gh: Any, prepared: PreparedIssue, result: FixResult) -> dict[str, Any]:

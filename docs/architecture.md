@@ -234,8 +234,8 @@ A front door is a planner and a reporter:
   branch (sweep PR, pushed CI fix, or draft fix PR).
 - `ci_fix/issues.py` (`ci-fix-issues.yml`) handles one explicitly selected Test
   Failure Detector issue (Daily, or Weekly on a release branch) and opens a
-  draft PR against the branch that run tested when a candidate is found; it
-  rechecks the issue right before publication.
+  draft PR against the branch that run tested when a candidate is found;
+  publication rechecks the issue right before it pushes.
   `ci_fix/issue_dispatch.py` (`ci-fix-issue-dispatch.yml`) chooses the
   issues: one `ci-fix-issues.yml` run per eligible open Daily issue, with at
   most a configured number of those runs active at once.
@@ -313,9 +313,9 @@ receive GitHub credentials and cannot push. Code reconstructs the candidate in
 a clean clone, writes only `backport/...`, `agent/backport/...`, or
 `agent/ci-fix/...`, and rechecks the destination immediately before an exact
 lease-protected push. Contributor and fork PRs are never changed; they receive
-only a patch suggestion. Each fix workflow uses one repository-scoped App token
-and one OIDC session for the invocation, matching the existing backport
-operating model.
+only a patch suggestion. The plan and publish jobs each generate a
+repository-scoped App token; the fix job, which runs the agent, holds only the
+OIDC session for the model.
 
 Target behavior is data-driven but deliberately not a plugin framework.
 `policy.py` has one exhaustive `TargetKind` capability map covering agent
@@ -389,7 +389,7 @@ enablement setting.
 - `scripts/ci_fix/run.py` - one fix as three jobs (plan, fix, publish) for every front door
 - `scripts/ci_fix/main.py` - authorize and plan one PR request, and report its result
 - `scripts/ci_fix/comment_poll.py` - finds fix commands on PRs and dispatches `ci-fix.yml`
-- `scripts/ci_fix/issues.py` - validate and plan one Daily or Weekly detector issue, recheck it before publication, and report on it
+- `scripts/ci_fix/issues.py` - validate and plan one Daily or Weekly detector issue, and report on it
 - `scripts/ci_fix/issue_dispatch.py` - start one issue fix per eligible open Daily issue, up to a cap
 - `scripts/ci_fix/copies.py` - map a failed job to the copied job that hosts its fix, and that job's inputs
 - `scripts/ci_fix/job.sh` - run the fix inside the job that hosts it: the agent's account and checkout

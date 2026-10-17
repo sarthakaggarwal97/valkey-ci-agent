@@ -43,10 +43,7 @@ def run_issue_fix(gh, artifact_client, repo_full_name, *, issue_number, bot_logi
     )
     if not isinstance(prepared, issues_mod.PreparedIssue):
         return prepared
-    result = _ENGINE["run_fix"](
-        gh, prepared.task, artifact_client, git_env,
-        publish_func=issues_mod.publisher_for(prepared, bot_login=bot_login),
-    )
+    result = _ENGINE["run_fix"](gh, prepared.task, artifact_client, git_env)
     return issues_mod.report(gh, prepared, result)
 
 
@@ -194,7 +191,7 @@ def _run(
 
     def engine(_gh, task, _artifact_client, _git_env, publish_func=None):
         assert issue.comments == []  # no claim is posted before the long agent run
-        seen.append((task, publish_func))
+        seen.append(task)
         return FixResult(
             kind=result_kind,
             summary="Opened draft PR #55 for review and normal CI.",
@@ -327,8 +324,7 @@ def test_ready_fix_uses_exact_job_and_opens_draft_in_target_repo(
         run_attempt=3,
     )
 
-    task, publish_func = seen[0]
-    assert publish_func is not None
+    (task,) = seen
     assert (
         task.failure.run_id,
         task.failure.run_attempt,
@@ -351,59 +347,6 @@ def test_ready_fix_uses_exact_job_and_opens_draft_in_target_repo(
     assert len(issue.comments) == 1
     assert "Normal pull-request CI and human review are authoritative" in issue.comments[0].body
     assert "verified" not in issue.comments[0].body.lower()
-
-
-@pytest.mark.parametrize("change", ["assigned", "linked", "new-occurrence"])
-def test_publication_revalidates_issue_immediately_before_push(
-    monkeypatch,
-    change,
-):
-    issue = _issue()
-    gh, _repo, _run_ = _gh(issue)
-    monkeypatch.setattr(
-        issues_mod,
-        "_failing_jobs",
-        lambda *args, **kwargs: (
-            FailedJob("test-ubuntu-jemalloc", "failure", 22),
-        ),
-    )
-    publisher = MagicMock()
-    monkeypatch.setattr(issues_mod, "publish_candidate", publisher)
-
-    def engine(engine_gh, task, artifact_client, git_env, publish_func=None):
-        if change == "assigned":
-            issue.assignees = [SimpleNamespace(login="alice")]
-        elif change == "linked":
-            issue.timeline.append(_linked_pr_event())
-        else:
-            issue.body = _test_issue_body(run_id=101, run_attempt=1)
-        candidate = FixCandidate(
-            action=CandidateAction.PATCH,
-            summary="fix",
-            patch="diff",
-            changed_paths=("tests/integration/rdb.tcl",),
-        )
-        return publish_func(
-            engine_gh,
-            task,
-            candidate,
-            git_env=git_env,
-        )
-
-    monkeypatch.setitem(_ENGINE, "run_fix", engine)
-    result = run_issue_fix(
-        gh,
-        MagicMock(),
-        "o/r",
-        issue_number=7,
-        bot_login=_BOT,
-        git_env={},
-    )
-
-    assert result["action"] == "refused"
-    assert "Publication stopped" in result["summary"]
-    publisher.assert_not_called()
-    assert len(issue.comments) == 1
 
 
 def test_ignored_artifact_job_is_not_selected(monkeypatch):
@@ -632,7 +575,7 @@ def test_job_level_issue_reaches_shared_engine(monkeypatch):
         issue,
         jobs=(FailedJob("test-valgrind-test (unit)", "failure", 77),),
     )
-    task = seen[0][0]
+    task = seen[0]
     assert result["action"] == "opened"
     assert task.failure.job_id == 77
     assert "without a recorded test failure" in task.failure.description
@@ -725,7 +668,7 @@ def test_a_weekly_issue_records_its_release_branch():
 
 def test_a_daily_issue_passes_its_test_and_source_to_the_engine(monkeypatch):
     result, seen = _run(monkeypatch, _issue())
-    task = seen[0][0]
+    task = seen[0]
     assert task.failure.source is issues_mod.Source.DAILY
     assert task.failure.failed_tests == (FailedTest("TTL expiration", "tests/integration/rdb.tcl"),)
     assert task.target.base_branch == "unstable"
@@ -906,7 +849,7 @@ def test_an_issue_is_planned_with_the_occurrence_it_records(monkeypatch):
     assert seen["k"]["issue_number"] == 7 and seen["k"]["ignored_jobs"]  # the registry's ignored jobs
 
 
-def test_an_issue_plan_rechecks_and_reports_on_the_same_issue(monkeypatch):
+def test_an_issue_plan_reports_on_the_same_issue(monkeypatch):
     from scripts.ci_fix.models import FixPlan, FrontDoor
 
     plan = FixPlan(front_door=FrontDoor.ISSUE, task=prepared_issue().task, issue=prepared_issue().failure)
@@ -917,4 +860,3 @@ def test_an_issue_plan_rechecks_and_reports_on_the_same_issue(monkeypatch):
     issues_mod.report_result(MagicMock(), plan, result, bot_login=_BOT)
 
     assert reported == [prepared_issue()]
-    assert callable(issues_mod.publisher(plan, bot_login=_BOT))

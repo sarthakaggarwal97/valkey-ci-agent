@@ -310,7 +310,7 @@ def reconcile_draft_pr(
     commit_sha = branch_sha
 
     try:
-        rejection = _validate_issue_target(gh, task, check_source_head=False)
+        rejection = _validate_issue_target(gh, task)
     except TargetRevalidationFailed as exc:
         return _failed(task, candidate, str(exc), commit_sha=commit_sha)
     if rejection:
@@ -449,13 +449,13 @@ def _validate_pr_target(gh: Any, task: FixTask, *, require_bot: bool) -> str:
     return ""
 
 
-def _validate_issue_target(
-    gh: Any,
-    task: FixTask,
-    *,
-    check_source_head: bool = True,
-) -> str:
-    """Recheck a detector issue immediately before creating its branch."""
+def _validate_issue_target(gh: Any, task: FixTask) -> str:
+    """Recheck a detector issue immediately before creating its branch.
+
+    The base branch may have moved since the candidate was prepared: the
+    draft PR is opened from the commit it was prepared on, and its own CI
+    runs against the branch as it is then.
+    """
     issue_number = task.target.issue_number or task.failure.issue_number
     if not issue_number:
         return "The draft-PR target has no issue number."
@@ -495,27 +495,8 @@ def _validate_issue_target(
             f"Issue #{issue_number} now points at run {run_id} attempt "
             f"{run_attempt}, not the occurrence that was analyzed."
         )
-    base_branch = task.target.base_branch or task.failure.base_branch
-    if not base_branch:
+    if not (task.target.base_branch or task.failure.base_branch):
         return "The draft-PR target has no base branch."
-    if not check_source_head:
-        return ""
-    try:
-        branch = retry_github_call(
-            lambda: repo.get_branch(base_branch),
-            retries=2,
-            description=f"revalidate {task.failure.repo_full_name}:{base_branch}",
-        )
-    except Exception as exc:  # noqa: BLE001 - retry can recover GitHub API failures
-        raise TargetRevalidationFailed(
-            f"The source branch {base_branch} could not be revalidated ({exc})."
-        ) from exc
-    current_sha = str(getattr(getattr(branch, "commit", None), "sha", "") or "")
-    if current_sha != task.target.expected_sha:
-        return (
-            f"The source branch {base_branch} moved from "
-            f"{task.target.expected_sha[:12]} to {current_sha[:12] or '(missing)'}."
-        )
     return ""
 
 

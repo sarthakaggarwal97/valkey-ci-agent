@@ -51,14 +51,11 @@ def front_door(monkeypatch):
     def planner(_gh, _artifacts, request, *, bot_login):
         return seen.planned
 
-    def publisher(plan, *, bot_login):
-        return "checked publication"
-
     def reporter(_gh, plan, result, *, bot_login):
         seen.reported.append(result)
         return {"action": result.kind.value}
 
-    monkeypatch.setitem(run._FRONT_DOORS, FrontDoor.PR, (planner, publisher, reporter))
+    monkeypatch.setitem(run._FRONT_DOORS, FrontDoor.PR, (planner, reporter))
     return seen
 
 
@@ -139,19 +136,19 @@ def test_a_fix_that_crashed_or_never_finished_is_reported_as_failed(front_door, 
     assert missing.kind is ResultKind.FAILED and "https://run" in missing.summary
 
 
-def test_the_candidate_is_published_through_the_front_doors_publication(front_door, monkeypatch, tmp_path):
+def test_the_candidate_is_published_as_its_target_says(front_door, monkeypatch, tmp_path):
     save(tmp_path / run.PLAN_FILE, _pr_plan())
     save(tmp_path / run.OUTCOME_FILE, FixOutcome(candidate=_CANDIDATE))
     seen = {}
 
-    def publish(_gh, task, candidate, *, git_env, publish_func):
-        seen.update(task=task, candidate=candidate, publish_func=publish_func)
+    def publish(_gh, task, candidate, *, git_env):
+        seen.update(task=task, candidate=candidate)
         return FixResult(kind=ResultKind.OPENED, summary="opened", task=task)
 
     monkeypatch.setattr(run, "publish", publish)
 
     assert _publish(tmp_path, tmp_path) == {"action": "opened"}
-    assert seen == {"task": _pr_plan().task, "candidate": _CANDIDATE, "publish_func": "checked publication"}
+    assert seen == {"task": _pr_plan().task, "candidate": _CANDIDATE}
 
 
 def test_every_front_door_plans_publishes_and_reports():

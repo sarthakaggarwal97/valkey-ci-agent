@@ -11,8 +11,8 @@ request's red head (:mod:`scripts.backport.ci_followup`).
 2. ``fix``: :func:`scripts.ci_fix.engine.prepare_fix`, inside that copied job
    after its own setup and build (``scripts/ci_fix/job.sh``), or on the bot's
    own runner. It holds no GitHub token.
-3. ``publish``: the candidate goes out through the front door's publication
-   and report (a draft PR and an issue comment, or a push or a suggestion and
+3. ``publish``: the candidate is published as its target says, and the
+   front door reports it (a draft PR and an issue comment, or a push or a suggestion and
    a PR comment), also when the fix job failed or never finished.
 
 The plan and the fix's outcome pass between the jobs as JSON
@@ -51,12 +51,12 @@ OUTCOME_FILE = "outcome.json"
 Planner = Callable[..., "FixPlan | dict[str, Any]"]
 Reporter = Callable[..., "dict[str, Any]"]
 
-# Each front door: how it plans a request, how its candidate is published
-# (None: as the target says), and how the result is reported.
-_FRONT_DOORS: dict[FrontDoor, tuple[Planner, Callable[..., Any], Reporter]] = {
-    FrontDoor.ISSUE: (issues.plan_request, issues.publisher, issues.report_result),
-    FrontDoor.PR: (pr_command.plan_request, lambda _plan, **_kwargs: None, pr_command.report_result),
-    FrontDoor.FOLLOW_UP: (ci_followup.plan_request, lambda _plan, **_kwargs: None, ci_followup.report_result),
+# Each front door: how it plans a request, and how the result is reported.
+# The candidate is published as its target says (scripts/ci_fix/publish.py).
+_FRONT_DOORS: dict[FrontDoor, tuple[Planner, Reporter]] = {
+    FrontDoor.ISSUE: (issues.plan_request, issues.report_result),
+    FrontDoor.PR: (pr_command.plan_request, pr_command.report_result),
+    FrontDoor.FOLLOW_UP: (ci_followup.plan_request, ci_followup.report_result),
 }
 
 
@@ -133,16 +133,13 @@ def publish_and_report(
         outcome = load(outcome_dir / OUTCOME_FILE, FixOutcome)
     except FileNotFoundError:
         outcome = FixOutcome(error=f"the fix job ended without a result (see {run_url})")
-    _planner, publisher, reporter = _FRONT_DOORS[fix_plan.front_door]
+    reporter = _FRONT_DOORS[fix_plan.front_door][1]
     if outcome.candidate is None:
         result = FixResult(
             kind=ResultKind.FAILED, summary=f"The CI-fix attempt failed: {outcome.error}", task=fix_plan.task,
         )
     else:
-        result = publish(
-            gh, fix_plan.task, outcome.candidate, git_env=git_env,
-            publish_func=publisher(fix_plan, bot_login=bot_login),
-        )
+        result = publish(gh, fix_plan.task, outcome.candidate, git_env=git_env)
     return reporter(gh, fix_plan, result, bot_login=bot_login)
 
 

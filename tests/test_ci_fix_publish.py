@@ -449,7 +449,7 @@ def test_issue_is_revalidated_before_any_push(
     pushed.assert_not_called()
 
 
-def test_issue_fix_is_refused_if_the_source_branch_moves(
+def test_a_draft_is_opened_even_if_the_base_branch_moved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     task = _task(TargetKind.DRAFT_PR, issue=9)
@@ -461,14 +461,13 @@ def test_issue_fix_is_refused_if_the_source_branch_moves(
         raise GithubException(404, {"message": "Not Found"})
 
     repo.get_branch.side_effect = get_branch
-    pushed = MagicMock()
+    monkeypatch.setattr(publish_mod, "find_existing_pr", lambda *_a, **_k: None)
+    pushed = MagicMock(side_effect=PushFailed("stop after the checks"))
     monkeypatch.setattr(publish_mod, "push_candidate", pushed)
 
-    result = publish_candidate(gh, task, _candidate(), git_env={})
+    publish_candidate(gh, task, _candidate(), git_env={})
 
-    assert result.kind is ResultKind.REFUSED
-    assert "source branch unstable moved" in result.summary
-    pushed.assert_not_called()
+    pushed.assert_called_once()
 
 
 def test_permanent_push_refusal_is_a_refused_result(
