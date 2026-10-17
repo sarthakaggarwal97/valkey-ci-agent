@@ -163,7 +163,7 @@ def download_all_test_failures(
 def job_urls_for_jobs(
     jobs: Iterable[Any],
     *,
-    run_id: int | None = None,
+    run_id: int,
 ) -> dict[str, str]:
     """Return exact and normalized URL aliases from one jobs snapshot."""
     # Materialize once: callers may supply a lazy paginated list, and the
@@ -184,12 +184,5 @@ def job_urls_for_jobs(
         if normalized != job.name and normalized not in job_url_map:
             job_url_map[normalized] = job.html_url
 
-    if run_id is None:
-        logger.info("Found %d job URL mappings", len(job_url_map))
-    else:
-        logger.info(
-            "Found %d job URL mappings for run %d",
-            len(job_url_map),
-            run_id,
-        )
+    logger.info("Found %d job URL mappings for run %d", len(job_url_map), run_id)
     return job_url_map

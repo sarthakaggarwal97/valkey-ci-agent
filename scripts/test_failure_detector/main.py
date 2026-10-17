@@ -14,7 +14,7 @@ from scripts.ci_fix.github_runs import jobs_for_run_attempt
 from scripts.common.github_client import retry_github_call
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_outcome
-from scripts.common.valkey_ci import Source, source_for_run, source_for_workflow
+from scripts.common.valkey_ci import Source, source_for_run
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.test_failure_detector.download import (
     download_all_test_failures,
@@ -110,7 +110,7 @@ def run(
 
     gh = Github(auth=Auth.Token(github_token))
     artifact_client = ArtifactClient(gh, token=github_token)
-    requested = source_for_workflow(workflow)
+    requested = Source(workflow)
     workflow_name = requested.label
 
     # Step 1: Find the workflow run

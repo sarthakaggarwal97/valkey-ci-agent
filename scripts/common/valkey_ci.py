@@ -72,15 +72,6 @@ def source_for_run(run: Any, *, scheduled_only: bool = True) -> Source | None:
     return None
 
 
-def source_for_workflow(workflow: str) -> Source:
-    """Parse ``daily``/``weekly`` (or their ``.yml`` file names)."""
-    name = workflow.strip().lower().removesuffix(".yml")
-    try:
-        return Source(name)
-    except ValueError as exc:
-        raise ValueError(f"unknown scheduled workflow {workflow!r}") from exc
-
-
 def tested_branch(source: Source, run: Any, job_name: str) -> str:
     """The branch a job of ``run`` checked out and tested, or ""."""
     if source is Source.WEEKLY:

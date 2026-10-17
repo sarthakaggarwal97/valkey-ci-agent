@@ -12,7 +12,6 @@ from scripts.common.valkey_ci import (
     failed_tests_in_log,
     parse_result_line,
     source_for_run,
-    source_for_workflow,
 )
 from scripts.common.valkey_ci import (
     tested_branch as branch_tested,
@@ -29,13 +28,6 @@ WEEKLY_JOB = "run-daily-for-release-branches (8.1) / test-valgrind-test (unit)"
 ])
 def test_a_run_is_daily_or_weekly_only_when_scheduled(event, path, expected):
     assert source_for_run(SimpleNamespace(event=event, path=path)) is expected
-
-
-def test_workflow_names_parse():
-    assert source_for_workflow("weekly") is Source.WEEKLY
-    assert source_for_workflow("daily.yml") is Source.DAILY
-    with pytest.raises(ValueError):
-        source_for_workflow("monthly")
 
 
 def test_a_weekly_job_names_its_release_branch():

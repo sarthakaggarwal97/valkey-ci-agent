@@ -316,13 +316,13 @@ class TestJobUrlsForJobs:
         job1 = self._job("test ubuntu (arm64)", "https://example.com/job/1")
         job2 = self._job("test-ubuntu-arm64", "https://example.com/job/2")
 
-        result = job_urls_for_jobs((job1, job2))
+        result = job_urls_for_jobs((job1, job2), run_id=1)
 
         assert result["test-ubuntu-arm64"] == job2.html_url
         assert result["test ubuntu (arm64)"] == job1.html_url
 
     def test_empty_jobs_returns_empty_dict(self) -> None:
-        assert job_urls_for_jobs(()) == {}
+        assert job_urls_for_jobs((), run_id=1) == {}
 
 
 class TestScheduledRunGuards:
