@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from scripts.backport.eligibility_backtest import PrOutcome, report, score
+from datetime import datetime, timezone
+
+from scripts.backport.eligibility import MergedSourcePR
+from scripts.backport.eligibility_backtest import PrOutcome, report, score, triaged_at_run
+from scripts.release_notes.models import MergedPR
 
 
 def _outcomes() -> list[PrOutcome]:
@@ -34,3 +38,16 @@ def test_report_lists_each_false_positive_with_its_reason():
     assert "- #1 `9.0` (fix a): has f" in text
     assert "- #2 9.0 (fix b): not-eligible" in text
     assert "lacks read:project" in text
+
+
+def test_triaged_at_run_sees_only_backports_made_by_the_daily_run():
+    source = MergedSourcePR(
+        pr=MergedPR(number=4880, title="t", author="a", url="u", merge_commit_sha="x"),
+        merged_at="2026-10-10T00:00:00Z",
+    )
+    landings = {
+        "9.1": {4880: datetime(2026, 10, 11, tzinfo=timezone.utc)},  # swept the next day
+        "8.0": {4880: datetime(2026, 11, 30, tzinfo=timezone.utc)},  # much later
+    }
+    assert triaged_at_run(source, ["9.1", "8.0", "7.2"], landings, 3) == ["9.1"]
+    assert triaged_at_run(source, ["8.0", "7.2"], landings, 3) == []

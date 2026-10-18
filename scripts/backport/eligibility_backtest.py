@@ -12,7 +12,12 @@ high-confidence suggestions with ground truth per release branch:
 
 A branch cut after the PR merged carries it by ancestry, and a branch not
 yet GA (no ``<branch>.N`` release tag) takes nearly every change; both are left out
-of both sides for that PR. Reports precision and recall per branch and lists
+of both sides for that PR.
+
+Production never comments on a PR maintainers already took to a GA branch.
+The backtest mirrors that from history: a PR whose commits reached a GA
+branch or its sweep within ``--triage-days`` of merging (the daily run looks
+1-3 days after a merge) is "triaged" and gets no suggestion. Reports precision and recall per branch and lists
 every false positive with the model's reason. Nothing is written to GitHub.
 
 Example:
@@ -41,7 +46,8 @@ if __package__ in {None, ""}:
 
 from scripts.ai.claude_code import run_claude_code
 from scripts.backport import eligibility
-from scripts.backport.eligibility import BranchHistory, Candidate, MergedSourcePR
+from scripts.backport.eligibility import _REMOTE_PREFIX, _SWEEP_PREFIX, BranchHistory, Candidate, MergedSourcePR
+from scripts.backport.mark_done import branch_pr_index
 from scripts.backport.registry import RepoEntry, load_registry
 from scripts.backport.sweep_git import clone_target_branch
 from scripts.backport.sweep_graphql import GitHubGraphQLClient
@@ -135,28 +141,6 @@ def discover(
     return [prs[n] for n in sorted(prs)]
 
 
-def ga_dates(repo_dir: str, branches: Sequence[str]) -> dict[str, datetime]:
-    """When each branch's first release (``<branch>.N``, not an RC) was tagged.
-
-    Pre-GA branches are absent. Before GA a release branch takes nearly every
-    change, features included, so its history says nothing about which
-    changes are backport-worthy. The first release need not be ``.0``
-    (valkey's 7.2 line starts at 7.2.4).
-    """
-    dates: dict[str, datetime] = {}
-    for branch in branches:
-        out = git_output(repo_dir, "for-each-ref", "--format=%(refname:short) %(creatordate:iso-strict)",
-                         f"refs/tags/{branch}.*")
-        released = [
-            datetime.fromisoformat(when.replace("Z", "+00:00"))
-            for name, _, when in (line.partition(" ") for line in out.splitlines())
-            if name[len(branch) + 1:].isdigit()
-        ]
-        if released:
-            dates[branch] = min(released)
-    return dates
-
-
 def ground_truth(
     source: MergedSourcePR,
     branches: Sequence[str],
@@ -182,6 +166,28 @@ def ground_truth(
     return evaluated, truth
 
 
+def first_landings(repo_dir: str, branches: Sequence[str]) -> dict[str, dict[int, datetime]]:
+    """Per branch, when each PR first reached it or its backport sweep."""
+    out: dict[str, dict[int, datetime]] = {}
+    for branch in branches:
+        index = branch_pr_index(repo_dir, f"origin/{branch}", earliest=True)
+        sweep = f"{_REMOTE_PREFIX}{_SWEEP_PREFIX}/{branch}"
+        if git_output(repo_dir, "for-each-ref", "--format=%(refname)", sweep).strip():
+            for number, when in branch_pr_index(repo_dir, sweep, earliest=True).items():
+                index[number] = min(when, index.get(number, when))
+        out[branch] = index
+    return out
+
+
+def triaged_at_run(
+    source: MergedSourcePR, evaluated: Sequence[str], landings: dict[str, dict[int, datetime]], days: int,
+) -> list[str]:
+    """GA branches the PR reached within *days* of merging: what the daily run would see."""
+    merged = datetime.fromisoformat(source.merged_at.replace("Z", "+00:00"))
+    by = merged + timedelta(days=days)
+    return [b for b in evaluated if (when := landings.get(b, {}).get(source.number)) and when <= by]
+
+
 def backtest(
     *,
     repo_entry: RepoEntry,
@@ -192,6 +198,7 @@ def backtest(
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     verdict_cache: str = "",
     post_ga_only: bool = True,
+    triage_days: int = 3,
 ) -> list[PrOutcome]:
     branches = eligibility._existing_branches(
         repo_dir,
@@ -199,7 +206,9 @@ def backtest(
     )
     projects = {b.branch: b.project_number for b in repo_entry.branches}
     history = BranchHistory(repo_dir)
-    ga = ga_dates(repo_dir, branches) if post_ga_only else None
+    ga = eligibility.ga_dates(repo_dir, branches) if post_ga_only else None
+    landings = first_landings(repo_dir, branches) if triage_days >= 0 else {}
+    triaged: dict[int, list[str]] = {}
     outcomes: dict[int, PrOutcome] = {}
     candidates: list[Candidate] = []
     for source in prs:
@@ -215,13 +224,15 @@ def backtest(
         if not evaluated:
             outcome.action = "no-branch-predates-merge"
             continue
+        if triage_days >= 0 and (taken := triaged_at_run(source, evaluated, landings, triage_days)):
+            triaged[source.number] = taken
         try:
             assessed = eligibility.assess(repo_dir, source, evaluated, history=history, skip_landed=False)
         except Exception as exc:  # report, never abort a long backtest
             outcome.action, outcome.reason = "tracing-failed", str(exc)[:200]
             continue
         if isinstance(assessed, dict):
-            outcome.action = assessed["action"]
+            outcome.action = "triaged" if source.number in triaged else assessed["action"]
             outcome.reason = str(assessed.get("detail", ""))
             continue
         outcome.offered = set(assessed.branches)
@@ -244,7 +255,8 @@ def backtest(
             v = verdicts.get(c.source.number)
             cache[str(c.source.number)] = None if v is None else {
                 "backport": v.backport, "branches": list(v.branches), "reason": v.reason,
-                "confidence": v.confidence, "why": dict(v.why),
+                "confidence": v.confidence, "why": dict(v.why), "dropped": list(v.dropped),
+                "sites": [list(site) for site in v.sites],
             }
         if verdict_cache:
             Path(verdict_cache).write_text(json.dumps(cache, indent=2))
@@ -257,9 +269,12 @@ def backtest(
             outcome.action = "no-verdict"
             continue
         outcome.reason, outcome.confidence, outcome.why = v["reason"], v["confidence"], v["why"]
+        if c.source.number in triaged:
+            outcome.action = "triaged"  # what the model adds is information only
+            continue
         if not v["backport"]:
             outcome.action = "not-eligible"
-        elif v["confidence"] != "high":
+        elif v["confidence"] != "high" or not v["branches"]:
             outcome.action = "not-commented"
         else:
             outcome.action = "would-comment"
@@ -330,6 +345,8 @@ def main() -> None:
     parser.add_argument("--no-model", action="store_true", help="Score the history and evidence filter only")
     parser.add_argument("--verdict-cache", default="", help="JSON file reused across runs")
     parser.add_argument("--out", default="", help="Write the outcomes as JSON here")
+    parser.add_argument("--triage-days", type=int, default=3,
+                        help="Days after merge the daily run looks; -1 disables the triage rule")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
     if not args.token:
@@ -349,7 +366,7 @@ def main() -> None:
                        with_projects=args.with_projects)
         outcomes = backtest(repo_entry=repo_entry, repo_dir=repo_dir, prs=prs,
                             with_projects=args.with_projects, use_model=not args.no_model,
-                            verdict_cache=args.verdict_cache)
+                            verdict_cache=args.verdict_cache, triage_days=args.triage_days)
     print(report(outcomes, since=args.since, until=args.until, with_projects=args.with_projects))
     if args.out:
         Path(args.out).write_text(json.dumps([

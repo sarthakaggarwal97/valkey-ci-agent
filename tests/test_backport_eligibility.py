@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -575,8 +576,15 @@ def wired(monkeypatch, upstream, tmp_path):
 
 
 def _model(verdicts: list[dict[str, Any]], prompts: list[str] | None = None):
-    # Verdicts in these tests are confident unless they say otherwise.
-    verdicts = [{"confidence": "high", **v} for v in verdicts]
+    # Verdicts in these tests are confident unless they say otherwise, and
+    # cite a failure site every fixture branch has.
+    verdicts = [
+        {"confidence": "high", **v, "branches": [
+            {"branch": b, "failure_site": {"file": "", "symbol": "int"}} if isinstance(b, str) else b
+            for b in v.get("branches", [])
+        ]}
+        for v in verdicts
+    ]
 
     def run_fn(prompt: str, **kwargs: Any) -> tuple[str, str, int]:
         assert kwargs["allowed_tools"] == ""
@@ -809,7 +817,8 @@ def test_run_comments_after_each_batch(wired, monkeypatch):
         calls.append(len(wired.posted))
         if len(calls) == 1:
             return json.dumps({"verdicts": [
-                {"pr": 101, "backport": True, "confidence": "high", "branches": ["9.0"], "reason": "r"},
+                {"pr": 101, "backport": True, "confidence": "high", "reason": "r",
+                 "branches": [{"branch": "9.0", "failure_site": {"file": "old.c", "symbol": "int a;"}}]},
             ]}), "", 0
         return "", "timeout after 900s", 1
 
@@ -986,3 +995,111 @@ def test_pr_on_the_open_backport_sweep_counts_as_landed(clone, upstream):
     assert history.present("9.0", {101: "2000-01-01T00:00:00Z"}) == set()
     origins = eligibility.trace_origins(str(dest), _pr(101, upstream["shas"][101]), ["9.1"])
     assert Candidate(_pr(101, upstream["shas"][101]), origins).branches == set()
+
+
+def test_parse_reads_failure_sites():
+    parsed = eligibility._parse_verdicts(json.dumps({"verdicts": [
+        {"pr": 1, "backport": True, "confidence": "high", "branches": [
+            {"branch": "9.1", "why": "w", "failure_site": {"file": "src/expire.c", "symbol": "serverAssert(t >= 0)"}},
+            {"branch": "9.0", "failure_site": "not an object"},
+        ]},
+    ]}), {1: {"9.1", "9.0"}})
+    assert parsed is not None
+    assert parsed[1].sites == (("9.1", "src/expire.c", "serverAssert(t >= 0)"),)
+
+
+def _verdict(*sites: tuple[str, str, str]) -> eligibility.Verdict:
+    branches = tuple(dict.fromkeys(b for b, _, _ in sites)) or ("9.1", "9.0")
+    return eligibility.Verdict(True, branches, "r", "high", tuple((b, "") for b in branches), sites)
+
+
+def test_verify_sites_drops_a_branch_without_the_failure_site(clone):
+    # feat.c (and f) reached 9.1 by cherry-pick; 9.0 never had it.
+    verdict = eligibility.verify_sites(clone, _verdict(
+        ("9.1", "feat.c", "int f(void)"), ("9.0", "feat.c", "int f(void)"),
+    ))
+    assert verdict.branches == ("9.1",) and verdict.dropped == ("9.0",)
+    assert verdict.confidence == "high"
+
+
+def test_verify_sites_with_no_site_left_is_never_commented(clone):
+    verdict = eligibility.verify_sites(clone, _verdict(("9.0", "old.c", "serverAssert(t >= 0)")))
+    assert verdict.branches == () and verdict.confidence == "low"
+
+
+def test_verify_sites_unchecked_site_downgrades_to_medium(clone):
+    verdict = eligibility.verify_sites(clone, _verdict(("9.1", "feat.c", ""), ("9.0", "old.c", "int a;")))
+    assert verdict.branches == ("9.1", "9.0") and verdict.confidence == "medium"
+
+
+def test_verify_sites_falls_back_to_the_tree_for_a_moved_file(clone):
+    # The model may name the development branch's path for a file a release
+    # branch keeps elsewhere; the site is then searched for in the whole tree.
+    verdict = eligibility.verify_sites(clone, _verdict(("9.0", "src/renamed.c", "int c;")))
+    assert verdict.branches == ("9.0",)
+
+
+def test_verify_sites_patterns_are_fixed_strings(clone):
+    # A regex or option-looking site matches only itself, literally.
+    for symbol in (".*", "--all-match", "int [a-c];"):
+        assert eligibility.verify_sites(clone, _verdict(("9.0", "", symbol))).branches == ()
+
+
+def test_run_does_not_comment_when_the_failure_site_is_missing(wired):
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "reason": "crash", "branches": [
+            {"branch": "9.1", "failure_site": {"file": "feat.c", "symbol": "serverAssert(t >= 0)"}},
+        ]}]),
+    )
+    assert result["prs"]["101"]["action"] == "not-commented"
+    assert result["prs"]["101"]["failure_site_missing_on"] == ["9.1"]
+    assert wired.posted == []
+
+
+def test_run_pr_maintainers_queued_on_a_ga_branch_is_triaged(wired, monkeypatch):
+    # #4880's shape: queued for every GA branch but one (here 9.0), the model
+    # then suggests the remaining branch (9.1) maintainers deliberately left out.
+    wired.nodes[0]["projectItems"] = {"nodes": [{"project": {"number": 10, "owner": {"login": "org"}}}]}
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(eligibility, "ga_dates", lambda *_: {"9.0": epoch, "9.1": epoch})
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
+    )
+    assert result["prs"]["101"] == {
+        "action": "triaged", "triaged_on": ["9.0"], "would_suggest": ["9.1"], "reason": "Fixes f.",
+    }
+    assert result["errors"] == [] and wired.posted == []
+    assert "maintainers took it to 9.0; Fixes f." in eligibility._summary(result)
+
+
+def test_run_queue_on_a_pre_ga_branch_is_not_triage(wired, monkeypatch):
+    # Every PR lands on a pre-GA branch; that says nothing about backports.
+    wired.nodes[0]["projectItems"] = {"nodes": [{"project": {"number": 10, "owner": {"login": "org"}}}]}
+    monkeypatch.setattr(eligibility, "ga_dates", lambda *_: {})
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
+    )
+    assert result["prs"]["101"]["action"] == "commented"
+
+
+def test_run_pr_landed_on_a_ga_branch_is_triaged(wired, monkeypatch, upstream):
+    # #102 already landed on 9.0; with 9.0 GA that is a maintainer decision.
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(eligibility, "ga_dates", lambda *_: {"9.0": epoch, "9.1": epoch})
+    wired.nodes[1]["projectItems"] = {"nodes": []}
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": False, "reason": "r"},
+                       {"pr": 102, "backport": True, "branches": ["9.1"], "reason": "Fixes old."}]),
+    )
+    assert result["prs"]["102"]["action"] == "triaged"
+    assert result["prs"]["102"]["triaged_on"] == ["9.0"]
+    assert [number for number, _ in wired.posted] == []
+
+
+def test_prompt_asks_for_failure_sites_on_the_named_branches():
+    prompt = eligibility._PROMPT_TEMPLATE
+    assert "failure_site" in prompt and "not on the development branch" in prompt

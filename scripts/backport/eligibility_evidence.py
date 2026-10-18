@@ -204,3 +204,28 @@ def _ordered_unique(items: Iterable[str]) -> list[str]:
             seen.add(item)
             out.append(item)
     return out
+
+
+_MAX_SITE_CHARS = 120
+
+
+def site_present(repo_dir: str, branch_ref: str, path: str, symbol: str) -> bool | None:
+    """Whether *symbol* occurs on *branch_ref*, in *path* when the branch has that file.
+
+    *symbol* is model output read from untrusted PR text, so it is only ever
+    a fixed-string ``git grep`` pattern. Returns None when the site cannot be
+    checked: empty, multi-line, or overlong, or git could not answer.
+    """
+    symbol = symbol.strip()
+    if not symbol or "\n" in symbol or len(symbol) > _MAX_SITE_CHARS:
+        return None
+    paths: list[str] = []
+    try:
+        if path and git_output(repo_dir, "ls-tree", "--name-only", branch_ref, "--", path).strip():
+            paths = [path]  # a renamed or moved file falls back to the whole tree
+        git_output(repo_dir, "grep", "-q", "-I", "-F", "-e", symbol, branch_ref, "--", *paths)
+    except subprocess.CalledProcessError as exc:
+        return False if exc.returncode == 1 else None
+    except subprocess.SubprocessError:
+        return None
+    return True

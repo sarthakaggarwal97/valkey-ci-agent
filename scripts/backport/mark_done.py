@@ -130,12 +130,13 @@ def prs_present_in_history(
     return present_in_index(branch_pr_index(repo_dir, rev), pr_merged_at)
 
 
-def branch_pr_index(repo_dir: str, rev: str) -> dict[int, datetime]:
+def branch_pr_index(repo_dir: str, rev: str, *, earliest: bool = False) -> dict[int, datetime]:
     """Map every PR number ``rev``'s history names to its latest commit time.
 
     A PR is present once any commit naming it was committed at or after the
     PR merged, so the latest such time is all :func:`present_in_index` needs.
     Build this once per branch to answer many PRs from one ``git log``.
+    With *earliest*, map each PR to its earliest commit time instead.
     """
     index: dict[int, datetime] = {}
     for committed_at, message in _branch_commit_records(repo_dir, rev):
@@ -149,7 +150,7 @@ def branch_pr_index(repo_dir: str, rev: str) -> dict[int, datetime]:
         if applied_section:
             matched.update(_pr_numbers_from_table_cells(applied_section))
         for number in matched:
-            if number not in index or committed_at > index[number]:
+            if number not in index or (committed_at < index[number] if earliest else committed_at > index[number]):
                 index[number] = committed_at
     return index
 
