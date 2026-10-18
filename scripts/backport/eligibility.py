@@ -78,7 +78,7 @@ from scripts.common.git_auth import GitAuth
 from scripts.common.github_client import retry_github_call
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_outcome
-from scripts.common.proc import git_output
+from scripts.common.proc import git_output, is_ancestor
 from scripts.release.versioning import parse_release_branch
 from scripts.release_notes.ai_inputs import PRDiffCollector, build_prompt_payload, exact_pr_number
 from scripts.release_notes.code_age import OriginsUnknown, line_origins
@@ -121,7 +121,8 @@ fragment PrFields on PullRequest {
     }
   }
   comments(last: 100) { nodes { body viewerDidAuthor } }
-  closingIssuesReferences(first: 5) { nodes { number title body } }
+  labels(first: 20) { nodes { name } }
+  closingIssuesReferences(first: 5) { nodes { number title body labels(first: 20) { nodes { name } } } }
 }
 """
 
@@ -173,7 +174,9 @@ affected. Answer only from `candidate_branches` that have `branch_evidence`.
   fixes for flaky tests.
 
 When you are unsure whether the PR is a fix, or whether the defect exists on a
-branch, leave that branch out. `confidence` is "high" only when the PR plainly
+branch, leave that branch out. A change labelled as a performance issue, or
+described as a tradeoff (for example throughput under saturation), is a
+maintainer judgment call: at most "medium". `confidence` is "high" only when the PR plainly
 fixes a defect and the evidence shows the defective code on every branch you
 name; otherwise "medium" or "low".
 
@@ -217,6 +220,8 @@ class MergedSourcePR:
     source_commits_complete: bool = True
     # "#<n> <title>\n<body>" for each issue the PR closes, bounded.
     linked_issues: tuple[str, ...] = ()
+    # Labels on the PR and on the issues it closes.
+    labels: tuple[str, ...] = ()
 
     @property
     def number(self) -> int:
@@ -375,11 +380,20 @@ def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
         )
         if oid
     )
+    issue_nodes = [
+        issue for issue in ((node.get("closingIssuesReferences") or {}).get("nodes") or [])
+        if isinstance(issue, dict)
+    ]
     issues = tuple(
         f"#{issue.get('number')} {issue.get('title') or ''}\n{issue.get('body') or ''}"[:_MAX_ISSUE_CHARS]
-        for issue in ((node.get("closingIssuesReferences") or {}).get("nodes") or [])
-        if isinstance(issue, dict)
+        for issue in issue_nodes
     )
+    labels = tuple(dict.fromkeys(
+        label["name"]
+        for holder in (node, *issue_nodes)
+        for label in ((holder.get("labels") or {}).get("nodes") or [])
+        if isinstance(label, dict) and isinstance(label.get("name"), str)
+    ))
     return MergedSourcePR(
         pr=MergedPR(
             number=node["number"],
@@ -396,6 +410,7 @@ def _pr_from_node(node: Any, project_owner: str) -> MergedSourcePR | None:
         source_commits_complete=isinstance(raw_commits_page, dict)
         and not bool((commits_page.get("pageInfo") or {}).get("hasNextPage")),
         linked_issues=issues,
+        labels=labels,
     )
 
 
@@ -724,11 +739,44 @@ def judge(
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     timeout: int = 900,
     branch_refs: Mapping[int, Mapping[str, str]] | None = None,
+    confirm: bool = True,
 ) -> dict[int, Verdict]:
     """Ask Claude, without tools, whether and where each candidate should go.
 
+    A high-confidence verdict must survive the confidence cap and, with
+    *confirm*, a second independent judgment: only the branches both runs
+    mark high stay high, and any disagreement leaves the verdict "medium".
     PRs missing from the result are undecided and must not be commented on.
     """
+    by_number = {c.source.number: c for c in candidates}
+    verdicts = {
+        number: _cap_confidence(by_number[number], verdict)
+        for number, verdict in _judge_once(
+            candidates, repo=repo, repo_dir=repo_dir, run_fn=run_fn,
+            timeout=timeout, branch_refs=branch_refs,
+        ).items()
+    }
+    sure = [by_number[n] for n, v in verdicts.items() if v.backport and v.confidence == "high"]
+    if confirm and sure:
+        logger.info("Confirming %d high-confidence verdict(s) with a second judgment", len(sure))
+        second = _judge_once(sure, repo=repo, repo_dir=repo_dir, run_fn=run_fn,
+                             timeout=timeout, branch_refs=branch_refs)
+        for candidate in sure:
+            number = candidate.source.number
+            verdicts[number] = _agree(verdicts[number], second.get(number))
+    return verdicts
+
+
+def _judge_once(
+    candidates: Sequence[Candidate],
+    *,
+    repo: str,
+    repo_dir: str,
+    run_fn: Callable[..., tuple[str, str, int]],
+    timeout: int,
+    branch_refs: Mapping[int, Mapping[str, str]] | None,
+) -> dict[int, Verdict]:
+    """One judgment of every candidate, with each branch's failure site verified."""
     verdicts: dict[int, Verdict] = {}
     collector = PRDiffCollector(repo_dir, [c.source.pr for c in candidates])
     for start in range(0, len(candidates), _BATCH_SIZE):
@@ -744,6 +792,8 @@ def judge(
             ]
             if candidate.source.linked_issues:
                 entry["linked_issues"] = list(candidate.source.linked_issues)
+            if candidate.source.labels:
+                entry["labels"] = list(candidate.source.labels)
             if candidate.evidence is not None:
                 entry["branch_evidence"] = {
                     e.branch: e.as_payload() for e in candidate.evidence if e.branch in offered
@@ -769,6 +819,39 @@ def judge(
             for number, v in parsed.items()
         })
     return verdicts
+
+
+# A fix sold as a tradeoff, or for performance, is a maintainer judgment call.
+_TRADEOFF_RE = re.compile(r"\btrade[- ]?offs?\b", re.IGNORECASE)
+
+
+def _cap_confidence(candidate: Candidate, verdict: Verdict) -> Verdict:
+    """At most "medium" for performance-labelled or tradeoff PRs: never commented."""
+    if verdict.confidence != "high":
+        return verdict
+    source = candidate.source
+    performance = [label for label in source.labels if "perf" in label.lower()]
+    texts = [source.pr.title, source.pr.body, *source.linked_issues]
+    if performance or any(_TRADEOFF_RE.search(text or "") for text in texts):
+        why = f"labelled {', '.join(performance)}" if performance else "described as a tradeoff"
+        logger.info("#%d is %s; capping confidence at medium", source.number, why)
+        return replace(verdict, confidence="medium")
+    return verdict
+
+
+def _agree(first: Verdict, second: Verdict | None) -> Verdict:
+    """Keep only the branches both judgments mark high; anything else is "medium"."""
+    if second is None or not second.backport or second.confidence != "high":
+        return replace(first, confidence="medium")
+    both = tuple(b for b in first.branches if b in second.branches)
+    if not both:
+        return replace(first, confidence="medium")
+    return replace(
+        first,
+        branches=both,
+        why=tuple(item for item in first.why if item[0] in both),
+        dropped=tuple(dict.fromkeys((*first.dropped, *(b for b in first.branches if b not in both)))),
+    )
 
 
 def _parse_verdicts(
@@ -976,6 +1059,16 @@ def run(
                 results[source.number] = {"action": "undecided"}
                 errors.append(f"#{source.number}: project items unreadable")
                 continue
+            try:
+                early = precheck(repo_dir, source, base_branch, git_env=git_env)
+            except Exception as exc:
+                logger.exception("Could not read #%d", source.number)
+                results[source.number] = {"action": "undecided", "detail": "tracing failed"}
+                errors.append(f"#{source.number}: tracing failed: {exc}")
+                continue
+            if early is not None:
+                results[source.number] = early
+                continue
             queued = {b for b, number in projects.items() if number in source.project_numbers}
             remaining_branches = [b for b in branches if b not in queued]
             try:
@@ -1026,6 +1119,42 @@ def run(
         "prs": {str(number): results[number] for number in sorted(results)},
         "errors": errors,
     }
+
+
+def precheck(
+    repo_dir: str,
+    source: MergedSourcePR,
+    base_branch: str,
+    *,
+    git_env: Mapping[str, str] | None = None,
+) -> dict[str, Any] | None:
+    """Settle a PR before any history query, when that is cheap: or return None.
+
+    * A merge commit the development branch does not carry (the branch was
+      reset past it, and the change may have re-landed under another PR) is
+      "not-on-base": there is nothing on the branch to trace or backport.
+    * A PR changing only tests, test harness, CI, or docs is not eligible.
+
+    The clone holds every commit of the development branch, so a merge
+    commit it cannot read is not on it. A git failure on a readable commit
+    raises.
+    """
+    sha = source.pr.merge_commit_sha
+    on_base = is_ancestor(repo_dir, sha, f"origin/{base_branch}")
+    if on_base is None and _parents(repo_dir, sha) is not None:
+        raise RuntimeError(f"could not tell whether {sha[:12]} is on {base_branch}")
+    if not on_base:
+        return {
+            "action": "not-on-base",
+            "detail": f"merge commit {sha[:12]} is not on {base_branch}; the branch moved past it",
+        }
+    try:
+        base = resolve_change_base(repo_dir, source, git_env=git_env)
+    except SourceChangeError:
+        return None  # assess() reports it for manual review
+    if is_non_product_change(changed_paths(repo_dir, base, sha)):
+        return {"action": "not-eligible", "detail": "changes only tests, test harness, CI, or docs"}
+    return None
 
 
 def assess(

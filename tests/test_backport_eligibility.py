@@ -815,7 +815,7 @@ def test_run_comments_after_each_batch(wired, monkeypatch):
 
     def run_fn(prompt: str, **kwargs: Any) -> tuple[str, str, int]:
         calls.append(len(wired.posted))
-        if len(calls) == 1:
+        if '"number": 101' in prompt:
             return json.dumps({"verdicts": [
                 {"pr": 101, "backport": True, "confidence": "high", "reason": "r",
                  "branches": [{"branch": "9.0", "failure_site": {"file": "old.c", "symbol": "int a;"}}]},
@@ -823,8 +823,8 @@ def test_run_comments_after_each_batch(wired, monkeypatch):
         return "", "timeout after 900s", 1
 
     result = eligibility.run(repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=run_fn)
-    # The second batch is judged only after the first batch's comment is up.
-    assert calls[:2] == [0, 1]
+    # #101 is judged and confirmed, then commented on, before the next batch.
+    assert calls[:3] == [0, 0, 1]
     assert result["prs"]["101"]["action"] == "commented"
     assert result["prs"]["103"] == {"action": "undecided"}
 
@@ -1103,3 +1103,105 @@ def test_run_pr_landed_on_a_ga_branch_is_triaged(wired, monkeypatch, upstream):
 def test_prompt_asks_for_failure_sites_on_the_named_branches():
     prompt = eligibility._PROMPT_TEMPLATE
     assert "failure_site" in prompt and "not on the development branch" in prompt
+
+
+def test_run_merge_commit_not_on_the_development_branch_is_not_on_base(wired, upstream, monkeypatch):
+    # #4850's shape: GitHub says merged, but unstable was reset past the commit.
+    repo = upstream["path"]
+    _git(repo, "checkout", "-q", "-b", "abandoned")
+    orphan = _commit(repo, "old.c", "int a;\nint b;\nint x;\n", "lost change (#106)")
+    _git(repo, "checkout", "-q", "unstable")
+
+    def no_triage(*args: Any, **kwargs: Any) -> list[str]:
+        raise AssertionError("history must not be asked about a commit off the branch")
+
+    monkeypatch.setattr(eligibility, "triaged_branches", no_triage)
+    wired.nodes[:] = [
+        {"number": 106, "mergedAt": "2000-01-01T00:00:00Z", "mergeCommit": {"oid": orphan},
+         "commits": {"nodes": [{"commit": {"oid": orphan}}]}},
+        {"number": 107, "mergedAt": "2000-01-01T00:00:00Z", "mergeCommit": {"oid": "f" * 40},
+         "commits": {"nodes": [{"commit": {"oid": "f" * 40}}]}},
+    ]
+    result = eligibility.run(repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=_model([]))
+    assert result["prs"]["106"]["action"] == "not-on-base"
+    assert result["prs"]["107"]["action"] == "not-on-base"
+    assert result["errors"] == []
+
+
+def test_run_classifies_test_only_prs_before_any_history_query(wired, upstream, monkeypatch):
+    (upstream["path"] / "tests").mkdir()
+    test_only = _commit(upstream["path"], "tests/t.tcl", "test {x} {}\n", "deflake (#108)")
+
+    def no_triage(*args: Any, **kwargs: Any) -> list[str]:
+        raise AssertionError("triage must not run for a test-only PR")
+
+    monkeypatch.setattr(eligibility, "triaged_branches", no_triage)
+    wired.nodes[:] = [{"number": 108, "mergedAt": "2000-01-01T00:00:00Z",
+                       "mergeCommit": {"oid": test_only},
+                       "commits": {"nodes": [{"commit": {"oid": test_only}}]}}]
+    result = eligibility.run(repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=_model([]))
+    assert result["prs"]["108"] == {
+        "action": "not-eligible", "detail": "changes only tests, test harness, CI, or docs",
+    }
+
+
+def test_reads_labels_of_the_pr_and_its_linked_issues():
+    node = TestPrFromNode()._node(
+        labels={"nodes": [{"name": "bug"}]},
+        closingIssuesReferences={"nodes": [
+            {"number": 4764, "title": "t", "body": "b",
+             "labels": {"nodes": [{"name": "bug"}, {"name": "performance"}]}},
+        ]},
+    )
+    pr = eligibility._pr_from_node(node, "org")
+    assert pr is not None and pr.labels == ("bug", "performance")
+
+
+@pytest.mark.parametrize(("labels", "body"), [
+    ({"nodes": [{"name": "performance"}]}, "Fixes a stall."),
+    ({"nodes": []}, "A throughput-under-saturation trade-off: fewer stalls, more latency."),
+])
+def test_run_caps_performance_or_tradeoff_fixes_at_medium(wired, labels, body):
+    wired.nodes[0]["labels"] = labels
+    wired.nodes[0]["body"] = body
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
+    )
+    assert result["prs"]["101"]["action"] == "not-commented"
+    assert result["prs"]["101"]["confidence"] == "medium"
+    assert wired.posted == []
+
+
+def _two_judgments(first: dict[str, Any], second: dict[str, Any]):
+    answers = [first, second]
+
+    def run_fn(prompt: str, **kwargs: Any) -> tuple[str, str, int]:
+        verdict = answers.pop(0) if answers else second
+        return json.dumps({"verdicts": [{
+            "pr": 101, "reason": "r", **verdict,
+            "branches": [{"branch": b, "failure_site": {"file": "", "symbol": "int"}}
+                         for b in verdict.get("branches", [])],
+        }]}), "", 0
+    return run_fn
+
+
+def test_run_comments_only_when_a_second_judgment_agrees(wired):
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_two_judgments({"backport": True, "confidence": "high", "branches": ["9.1"]},
+                              {"backport": True, "confidence": "medium", "branches": ["9.1"]}),
+    )
+    assert result["prs"]["101"]["action"] == "not-commented"
+    assert result["prs"]["101"]["confidence"] == "medium"
+    assert wired.posted == []
+
+
+def test_agreement_keeps_only_branches_both_judgments_mark_high():
+    first = eligibility.Verdict(True, ("9.1", "9.0"), "r", "high", (("9.1", "a"), ("9.0", "b")))
+    second = eligibility.Verdict(True, ("9.1",), "r", "high")
+    agreed = eligibility._agree(first, second)
+    assert agreed.branches == ("9.1",) and agreed.confidence == "high"
+    assert agreed.why == (("9.1", "a"),) and agreed.dropped == ("9.0",)
+    assert eligibility._agree(first, None).confidence == "medium"
+    assert eligibility._agree(first, eligibility.Verdict(True, ("8.0",), "r", "high")).confidence == "medium"

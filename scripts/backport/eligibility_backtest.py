@@ -78,7 +78,8 @@ query($q: String!, $cursor: String) {
         author { login }
         mergeCommit { oid }
         commits(first: 100) { pageInfo { hasNextPage } nodes { commit { oid } } }
-        closingIssuesReferences(first: 5) { nodes { number title body } }
+        labels(first: 20) { nodes { name } }
+        closingIssuesReferences(first: 5) { nodes { number title body labels(first: 20) { nodes { name } } } }
         %s
       }
     }
@@ -233,6 +234,14 @@ def backtest(
     candidates: list[Candidate] = []
     for source in prs:
         try:
+            early = eligibility.precheck(repo_dir, source, "unstable")
+        except Exception as exc:
+            early = {"action": "tracing-failed", "detail": str(exc)[:200]}
+        if early is not None and early["action"] != "not-eligible":
+            outcomes[source.number] = PrOutcome(source.number, source.pr.title, set(), [],
+                                                action=early["action"], reason=early["detail"])
+            continue
+        try:
             evaluated, truth = ground_truth(source, branches, history, projects, with_projects, ga)
         except subprocess.SubprocessError as exc:
             # A merge commit the development branch no longer carries.
@@ -243,6 +252,9 @@ def backtest(
         outcomes[source.number] = outcome
         if not evaluated:
             outcome.action = "no-branch-predates-merge"
+            continue
+        if early is not None:  # test, CI, or docs only: scored, never suggested
+            outcome.action, outcome.reason = early["action"], early["detail"]
             continue
         if triage_days >= 0 and (taken := triaged_at_run(source, evaluated, landings, triage_days)):
             triaged[source.number] = taken
