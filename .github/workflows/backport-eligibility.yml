@@ -8,8 +8,7 @@ name: Backport Eligibility
 # only suggests: nothing is added to a project.
 
 on:
-  schedule:
-    - cron: "30 0 * * *"
+  # E2E harness: manual runs only on the fork.
   workflow_dispatch:
     inputs:
       repo:
@@ -46,7 +45,7 @@ permissions: {}
 jobs:
   eligibility:
     name: "eligibility/${{ inputs.repo || 'valkey-io/valkey' }}"
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent' && github.ref == 'refs/heads/e2e/backport-eligibility'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     concurrency:
@@ -66,7 +65,8 @@ jobs:
       # Scheduled runs only report until vars.BACKPORT_ELIGIBILITY_COMMENTS is
       # "true", set once the backtest (scripts/backport/eligibility_backtest.py)
       # shows the suggestions are precise enough. A manual run follows its input.
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run && 'true' || 'false') || (vars.BACKPORT_ELIGIBILITY_COMMENTS == 'true' && 'false' || 'true') }}
+      # E2E harness: the PAT must never comment on valkey-io, so every run is a dry run.
+      DRY_RUN: "true"
     permissions:
       contents: read
       id-token: write
@@ -92,17 +92,13 @@ jobs:
 
       - name: Generate GitHub App token
         id: generate-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ steps.target.outputs.owner }}
-          repositories: ${{ steps.target.outputs.name }}
-          permission-contents: read
-          # Commenting on a PR needs pull-requests:write; issues:write is not needed.
-          permission-pull-requests: write
-          permission-organization-projects: read
-          permission-metadata: read
+        # E2E harness: the PAT stands in for the App token (read-only use).
+        shell: bash
+        env:
+          PAT: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+        run: |
+          echo "::add-mask::${PAT}"
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
@@ -124,9 +120,8 @@ jobs:
           if [[ -n "${PR_NUMBERS}" ]]; then
             args+=(--prs "${PR_NUMBERS}")
           fi
-          if [[ "${DRY_RUN}" == "true" ]]; then
-            args+=(--dry-run)
-          fi
+          # E2E harness: always a dry run, whatever DRY_RUN says.
+          args+=(--dry-run)
           python -m scripts.backport.eligibility "${args[@]}" | tee backport-eligibility-result.json
 
       - name: Upload result
