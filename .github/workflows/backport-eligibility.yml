@@ -47,7 +47,9 @@ permissions: {}
 jobs:
   eligibility:
     name: "eligibility/${{ inputs.repo || 'valkey-io/valkey' }}"
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: >-
+      github.repository == 'sarthakaggarwal97/valkey-ci-agent' &&
+      github.ref == 'refs/heads/e2e/backport-eligibility-followup'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     concurrency:
@@ -67,7 +69,8 @@ jobs:
       # Scheduled runs only report until vars.BACKPORT_ELIGIBILITY_COMMENTS is
       # "true", set once the would-comment verdicts in the dry-run job
       # summaries have proven reliable. A manual run follows its input.
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run && 'true' || 'false') || (vars.BACKPORT_ELIGIBILITY_COMMENTS == 'true' && 'false' || 'true') }}
+      # E2E harness: never comment.
+      DRY_RUN: "true"
     permissions:
       contents: read
       id-token: write
@@ -83,27 +86,13 @@ jobs:
         with:
           install-claude: "true"
 
-      - name: Resolve target repository
-        id: target
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "owner=${TARGET_REPO%%/*}" >> "${GITHUB_OUTPUT}"
-          echo "name=${TARGET_REPO#*/}" >> "${GITHUB_OUTPUT}"
-
       - name: Generate GitHub App token
         id: generate-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ steps.target.outputs.owner }}
-          repositories: ${{ steps.target.outputs.name }}
-          permission-contents: read
-          # Commenting on a PR needs pull-requests:write; issues:write is not needed.
-          permission-pull-requests: write
-          permission-organization-projects: read
-          permission-metadata: read
+        # E2E harness: the PAT stands in for the App token (read-only use).
+        shell: bash
+        env:
+          PAT: ${{ secrets.VALKEY_GITHUB_TOKEN }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
