@@ -64,15 +64,23 @@ class ArtifactClient:
         repo = self._gh.get_repo(repo_full_name)
 
         def _fetch() -> Any:
-            _, data = repo._requester.requestJsonAndCheck(
-                "GET", f"/repos/{repo_full_name}/actions/runs/{run_id}/artifacts",
-            )
-            return data
+            # Every page: a run with many jobs uploads more artifacts than one
+            # page holds, and the one a caller wants may be on any of them.
+            artifacts: list[Any] = []
+            page = 1
+            while True:
+                _, data = repo._requester.requestJsonAndCheck(
+                    "GET", f"/repos/{repo_full_name}/actions/runs/{run_id}/artifacts",
+                    parameters={"per_page": _ARTIFACTS_PER_PAGE, "page": page},
+                )
+                batch = data.get("artifacts", []) if isinstance(data, dict) else []
+                artifacts += batch
+                if len(batch) < _ARTIFACTS_PER_PAGE:
+                    return {"artifacts": artifacts}
+                page += 1
 
         payload = retry_github_call(_fetch, retries=self._retries,
                                     description=f"list artifacts {run_id}")
-        if not isinstance(payload, dict):
-            return []
         return [
             WorkflowArtifact(
                 artifact_id=a["id"], name=a["name"],
@@ -117,6 +125,11 @@ class ArtifactClient:
             f"/repos/{repo_full_name}/actions/runs/{run_id}/logs"
         ))
 
+    def download_job_log(self, repo_full_name: str, job_id: int) -> str:
+        """Return one job's plain-text console log ("" when it has expired)."""
+        data = self._download(f"/repos/{repo_full_name}/actions/jobs/{int(job_id)}/logs")
+        return data[:_MAX_UNCOMPRESSED_BYTES].decode("utf-8", errors="replace")
+
     def _download(self, path: str) -> bytes:
         url = f"https://api.github.com{path}"
         req = Request(url, headers={
@@ -137,7 +150,8 @@ class ArtifactClient:
                 with urlopen(req, timeout=120) as resp:
                     return resp.read()
             except HTTPError as exc:
-                if exc.code == 404:
+                # GitHub answers 410 Gone for an artifact past its retention.
+                if exc.code in (404, 410):
                     logger.warning("Artifact not found at %s (likely expired)", path)
                     return b""
                 if exc.code in RETRYABLE_HTTP_STATUS and attempt < self._retries:
@@ -155,6 +169,7 @@ class ArtifactClient:
 # Defends against a runaway log/artifact dump that would exhaust the runner.
 # Real fuzzer artifacts and CI run logs are typically well under this.
 _MAX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
+_ARTIFACTS_PER_PAGE = 100
 
 
 def _extract_zip(blob: bytes, damaged: list[str] | None = None) -> dict[str, bytes]:
