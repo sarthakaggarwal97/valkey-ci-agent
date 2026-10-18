@@ -246,6 +246,37 @@ def _exception(test_file, line):
     )
 
 
+def test_an_exception_is_located_past_its_own_text_and_a_long_framework_stack():
+    """Daily job 116176011203: the error's text, then 30 framework frames, then the test file."""
+    log = (
+        "[exception]: Executing test client: missing operator at _@_\n"
+        'in expression "...s -6 role] == "slave" _@_$$\n'
+        '                [s ...".\n'
+        " in wait_for_condition at tests/support/test.tcl:139\n"
+        + " in start_server at tests/support/server.tcl:769\n"
+          " in start_server at tests/support/cluster_util.tcl:292\n" * 15
+        + " in start_cluster at tests/support/cluster_util.tcl:292\n"
+        " in execute_test_file at tests/unit/cluster/faster-failover.tcl:181\n"
+        " in execute_test_file at tests/test_helper.tcl:148\n"
+        "\n"
+        "##[error]Process completed with exit code 1.\n"
+    )
+    _tests, (failure,) = _find([_job(1, "test-ubuntu-jemalloc")], {1: log})
+    assert failure.summary == (
+        "[exception]: Executing test client: missing operator at _@_ at tests/unit/cluster/faster-failover.tcl",
+    )
+
+
+def test_an_exception_without_a_stack_is_not_located_by_a_later_line():
+    log = (
+        "[exception]: Executing test client: I/O error reading reply.\n"
+        "Killing still running Valkey server 12431\n"
+        " in r at tests/unit/type/zset.tcl:1559\n"  # not this exception's: the log moved on
+    )
+    _tests, (failure,) = _find([_job(1, "test-ubuntu-jemalloc")], {1: log})
+    assert failure.summary == ("[exception]: Executing test client: I/O error reading reply.",)
+
+
 def test_an_exception_is_located_by_the_first_test_file_in_its_stack():
     """Seen in Daily run 39082305846: the frames above it are the test framework's own."""
     jobs = [_job(1, "test-ubuntu-32bit"), _job(2, "test-alpine-32bit"), _job(3, "test-ubuntu-jemalloc")]

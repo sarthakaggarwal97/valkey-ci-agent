@@ -40,12 +40,18 @@ logger = logging.getLogger(__name__)
 
 _SUMMARY_RE = re.compile(r"^\*\*\* \[(?P<status>[A-Za-z]+)\]: (?P<data>.+)$")
 # runtest prints an exception on its own and exits before its summary, with
-# the Tcl stack under it (`` in r at tests/unit/type/zset.tcl:1559``). The
-# first frame in a test file, past the test framework's own, says where.
+# the Tcl stack under it (`` in r at tests/unit/type/zset.tcl:1559``), maybe
+# after lines of the error's own text (``in expression "..."``). The first
+# frame in a test file, past the test framework's own, says where.
 _EXCEPTION_RE = re.compile(r"^\[exception\]: (?P<data>.+)$")
 _TCL_FRAME_RE = re.compile(r"^\s*in \S+ at (?P<file>tests/\S+\.tcl):\d+$")
 _TCL_FRAMEWORK_RE = re.compile(r"^tests/(?:support/|helpers/|test_helper\.tcl$)")
-_EXCEPTION_LINES = 60
+# Where the log has moved on without a stack: an Actions annotation, another
+# runtest status line, or runtest's own cleanup.
+_LOG_BOUNDARY_RE = re.compile(
+    r"^(?:##\[|\[(?:ok|err|exception|TIMEOUT|skip|ignore)\]:|\*\*\* |Killing still running)"
+)
+_EXCEPTION_LINES = 200
 # A valgrind or sanitizer report is the server's whole stderr, which runtest
 # prints after the summary line. Its cause is the first error and the frames
 # under it; the first line is only valgrind's banner or a server log line.
@@ -227,14 +233,18 @@ def _failure_summary(artifact_client: ArtifactClient, repo_full_name: str, job: 
 
 def _exception_location(following: list[str]) -> str:
     """The test file the exception's Tcl stack first reaches past the framework, or ""."""
+    in_stack = False
     for line in following:
         frame = _TCL_FRAME_RE.match(line)
-        if frame is None:
-            if line.strip():
-                break  # the stack ended
+        if frame is not None:
+            in_stack = True
+            if not _TCL_FRAMEWORK_RE.match(frame.group("file")):
+                return frame.group("file")
             continue
-        if not _TCL_FRAMEWORK_RE.match(frame.group("file")):
-            return frame.group("file")
+        # Before the stack: the error's own text, skipped. After it, or past
+        # a boundary of the log, there is no frame to find.
+        if in_stack or _LOG_BOUNDARY_RE.match(line):
+            break
     return ""
 
 
