@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import signal
 import subprocess
 import threading
 import time
@@ -148,6 +149,9 @@ def _run_streaming(
             cwd=cwd,
             env=env,
             bufsize=1,
+            # Its own process group, so a timeout also kills what the CLI
+            # spawned (the `claude` launcher execs a separate binary).
+            start_new_session=True,
         )
 
         def _read_stdout() -> None:
@@ -157,28 +161,49 @@ def _run_streaming(
                 stdout_parts.append(line)
                 _log_stream_event(line)
 
+        def _write_stdin() -> None:
+            # A prompt larger than the pipe buffer blocks until the CLI reads
+            # it; writing here keeps the timeout below armed meanwhile.
+            if process.stdin is None:
+                return
+            try:
+                process.stdin.write(prompt)
+                process.stdin.close()
+            except (BrokenPipeError, OSError, ValueError):
+                pass
+
         reader = threading.Thread(target=_read_stdout, daemon=True)
         reader.start()
-        if process.stdin is not None:
-            process.stdin.write(prompt)
-            process.stdin.close()
+        writer = threading.Thread(target=_write_stdin, daemon=True)
+        writer.start()
 
         returncode = process.wait(timeout=timeout)
+        writer.join(timeout=5)
         reader.join(timeout=5)
         stdout = "".join(stdout_parts)
         return stdout, "", returncode
     except subprocess.TimeoutExpired:
         if process is not None:
-            try:
-                process.kill()
-            except ProcessLookupError:
-                pass
+            _kill_process_group(process)
         # Let the reader thread flush buffered output before we read it.
         reader.join(timeout=5)
         stdout = "".join(stdout_parts)
         return stdout, f"timeout after {timeout}s", 1
     except FileNotFoundError:
         return "", "claude not found", 127
+
+
+def _kill_process_group(process: Any) -> None:
+    """Kill *process* and everything it spawned; fall back to the process alone."""
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+        return
+    except (AttributeError, TypeError, ProcessLookupError, PermissionError, OSError):
+        pass
+    try:
+        process.kill()
+    except ProcessLookupError:
+        pass
 
 
 def _build_claude_env(env_allowlist: tuple[str, ...] | None = None) -> dict[str, str]:
