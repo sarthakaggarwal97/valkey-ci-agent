@@ -442,7 +442,7 @@ def test_process_failures_upserts_job_failures_with_their_own_identity():
     publisher = MagicMock()
     publisher.upsert.return_value = ("created", "https://issue/1")
     freebsd = JobFailure(job="test-freebsd", url="https://job/1", step="make")
-    alpine = JobFailure(job="test-alpine", url="https://job/2", step="make")
+    alpine = JobFailure(job="test-alpine", url="https://job/2", step="test")
     with patch.object(manage_issues, "IssueDedupPublisher", return_value=publisher):
         summary = manage_issues.process_failures(
             MagicMock(),

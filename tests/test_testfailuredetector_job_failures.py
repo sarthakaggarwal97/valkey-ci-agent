@@ -173,22 +173,34 @@ def test_matrix_twins_failing_the_same_way_are_one_failure():
     jobs = [_job(1, "test-valgrind-test (unit)"), _job(2, "test-valgrind-no-malloc-usable-size-test (unit)"),
             _job(3, "test-valgrind-test (cluster)")]
     _tests, failures = _find(jobs, {1: leak(35021), 2: leak(34715), 3: leak(22231)})
-    assert [[ref.job for ref in f.jobs] for f in failures] == [
-        ["test-valgrind-test (unit)", "test-valgrind-no-malloc-usable-size-test (unit)"],
-        ["test-valgrind-test (cluster)"],
+    (failure,) = failures
+    assert [ref.job for ref in failure.jobs] == [
+        "test-valgrind-test (unit)", "test-valgrind-no-malloc-usable-size-test (unit)", "test-valgrind-test (cluster)",
     ]
+
+
+def test_failures_without_a_summary_share_one_issue_per_step():
+    """With nothing printed to tell them apart, an issue per job would only be noise."""
+    jobs = [_job(1, "test-freebsd", step="make"), _job(2, "test-s390x", step="make"),
+            _job(3, "test-macos-latest", step="test")]
+    _tests, failures = _find(jobs, {1: "boom\n", 2: "bang\n", 3: "Killed\n"})
+    assert [[ref.job for ref in f.jobs] for f in failures] == [["test-freebsd", "test-s390x"], ["test-macos-latest"]]
     assert len({issue_renderer.job_fingerprint_for(f) for f in failures}) == 2
 
 
-def test_failures_without_a_summary_are_never_merged():
-    _tests, failures = _find([_job(1, "test-freebsd", step="make"), _job(2, "test-s390x", step="make")],
-                             {1: "boom\n", 2: "boom\n"})
-    assert [f.job for f in failures] == ["test-freebsd", "test-s390x"]
-    assert len({issue_renderer.job_fingerprint_for(f) for f in failures}) == 2
+def test_a_failing_unit_test_is_one_failure_for_every_job_that_runs_it():
+    """gtest prints no runtest summary; its jobs share one issue for their step, not one each."""
+    jobs = [_job(n, name, step="unittest") for n, name in enumerate(
+        ("test-ubuntu-jemalloc", "test-sanitizer-address (gcc)", "test-sanitizer-address (clang)"), 1)]
+    log = "[  FAILED  ] SdsTest.Trim (3 ms)\n[  FAILED  ] 1 test, listed below:\n"
+    tests, (failure,) = _find(jobs, {1: log, 2: log, 3: log})
+
+    assert tests == [] and failure.summary == () and failure.step == "unittest"
+    assert len(failure.jobs) == 3
 
 
 @pytest.mark.parametrize("step", ["Install EPEL", "Set up job", "Run actions/checkout@de0f", "Upload test failures",
-                                  "Initialize containers", "testprep"])
+                                  "Initialize containers", "testprep", "Build libbacktrace"])
 def test_a_setup_step_failure_without_a_summary_is_not_reported(step):
     """A mirror or runner outage is not the repository's failure."""
     _tests, failures = _find([_job(1, "test-almalinux9-tls-module-no-tls", step=step)],

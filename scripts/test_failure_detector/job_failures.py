@@ -11,13 +11,17 @@ is read too, since one assertion there does not explain a Valgrind report or a
 timeout in the same job; only its summary-less failure is left out, because
 the recorded assertion accounts for it.
 
-Job-level failures that print the same summary in the same step and matrix
-leg (e.g. a Valgrind leak in ``test-valgrind-test (unit)`` and its
-``test-valgrind-no-malloc-usable-size-test (unit)`` twin) are one failure with
-several jobs, like a test that fails in several environments. A failure that
-printed no summary is kept per job, and one in a setup step (installing
-packages, checking out, uploading results) is not reported at all: it is the
-runner's or a mirror's problem, not the repository's.
+One cause is one issue, however many jobs it fails: job-level failures that
+print the same summary in the same step (e.g. a Valgrind leak in
+``test-valgrind-test (unit)`` and its ``test-valgrind-no-malloc-usable-size-test
+(unit)`` twin) are one failure with several jobs, like a test that fails in
+several environments. Failures that printed no summary at all (a unit test,
+a build break, a crash) are one failure per step they failed in: nothing tells
+them apart, and an issue per job would be noise. Telling them apart needs the
+failure in Valkey's structured output, not more parsing of its logs. One in a
+setup step (installing packages, checking out, uploading results)
+is not reported at all: it is the runner's or a mirror's problem, not the
+repository's.
 """
 
 from __future__ import annotations
@@ -46,7 +50,7 @@ _LEAK_CHECK_RE = re.compile(r"^Check for memory leaks\b")
 # Steps that prepare the runner rather than build or test the repository.
 _SETUP_STEP_RE = re.compile(
     r"^(?:set up job|initialize containers|complete job|stop containers|run actions/|post )"
-    r"|\b(?:install|checkout|cache|upload|prep|testprep)\b",
+    r"|\b(?:install|checkout|cache|upload|prep|testprep|libbacktrace)\b",
     re.IGNORECASE,
 )
 
@@ -68,19 +72,13 @@ class JobFailure:
     def identity(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         """The (namespace, shapes) that make two failures the same one.
 
-        A printed summary identifies the failure within its step and matrix
-        leg; without one there is nothing to compare, so the job name does.
+        A printed summary identifies the failure within its step. Without one
+        there is nothing to compare, so every job that failed in the same step
+        without saying why is one failure: an issue per job would be noise.
         """
         if not self.summary:
-            return ("name", self.job), ()
-        return ("step", self.step, matrix_leg(self.job)), self.summary
-
-
-def matrix_leg(job_name: str) -> str:
-    """``unit`` for ``test-valgrind-test (unit)``; "" for a job without a leg."""
-    if not job_name.endswith(")") or " (" not in job_name:
-        return ""
-    return job_name.rsplit(" (", 1)[1][:-1]
+            return ("unexplained", self.step), ()
+        return ("step", self.step), self.summary
 
 
 def normalize_job_name(name: str) -> str:
@@ -132,11 +130,11 @@ def find_unrecorded_failures(
             if unread is not None:
                 unread.append(name)
             continue
-        unattributed: list[str] = []
+        unattributed: dict[str, None] = {}  # ordered, without repeats
         for status, data in summary:
             test = test_in_file(data)
             if test is None or status == "exception" or _LEAK_CHECK_RE.match(data):
-                unattributed.append(f"[{status}]: {data}")
+                unattributed[f"[{status}]: {data}"] = None
                 continue
             failure = tests.setdefault(test, UniqueFailure(
                 test_name=test[0], test_file=test[1], error=f"[{status}]: {data}",
@@ -150,7 +148,7 @@ def find_unrecorded_failures(
         if not unattributed and _SETUP_STEP_RE.search(step):
             logger.info("Not reporting %s: it failed in setup step %r without a summary", name, step)
             continue
-        found = JobFailure(job=name, url=url, step=step, summary=tuple(unattributed[:_MAX_SUMMARY_LINES]))
+        found = JobFailure(job=name, url=url, step=step, summary=tuple(unattributed)[:_MAX_SUMMARY_LINES])
         namespace, shapes = found.identity()
         same = job_failures.setdefault(compute_fingerprint(namespace=namespace, shapes=shapes), found)
         if not any(ref.job == name for ref in same.jobs):
