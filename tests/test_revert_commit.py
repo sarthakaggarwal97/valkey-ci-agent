@@ -22,8 +22,11 @@ def fork(tmp_path, monkeypatch):
     adds one more commit. github_https_url is redirected to the bare repo so
     revert_commit operates against local git.
     """
-    subprocess.run(["git", "config", "--global", "user.email", "t@t.com"], check=True)
-    subprocess.run(["git", "config", "--global", "user.name", "t"], check=True)
+    # Give git an identity through a throwaway global config so the developer's
+    # real ~/.gitconfig is never read or rewritten.
+    gitconfig = tmp_path / "gitconfig"
+    gitconfig.write_text("[user]\n\temail = t@t.com\n\tname = t\n")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(gitconfig))
 
     bare = tmp_path / "remote.git"
     subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
