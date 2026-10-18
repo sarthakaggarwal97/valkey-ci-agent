@@ -39,6 +39,7 @@ def _build_job_summary(
     damaged: list[str] | None = None,
     num_job_failures: int = 0,
     unread_logs: list[str] | None = None,
+    unexplained: list[str] | None = None,
 ) -> str:
     lines = [
         "## Test Failure Detector",
@@ -80,6 +81,18 @@ def _build_job_summary(
             "",
         ])
         lines.extend(f"- `{_one_line(name)}`" for name in unread_logs)
+        lines.append("")
+    if unexplained:
+        # Nothing these jobs printed identifies what failed, so no issue is
+        # filed for them; they are listed so the failure is still seen.
+        lines.extend([
+            "### Failed jobs with no recorded cause (not filed)",
+            "",
+            f"{len(unexplained)} failed job(s) printed no test failure, exception, or "
+            "valgrind or sanitizer report (a unit test, a build break, a crash, an outage):",
+            "",
+        ])
+        lines.extend(f"- `{_one_line(name)}`" for name in unexplained)
         lines.append("")
     return "\n".join(lines)
 
@@ -259,9 +272,11 @@ def run(
     # Step 5: Failed jobs the artifact does not record (timeouts, valgrind or
     # sanitizer reports, build breaks), read from each job's own log.
     unread: list[str] = []
+    unexplained: list[str] = []
     try:
         log_failures, job_failures = _unrecorded_failures(
             artifact_client, repo_full_name, all_failures, registry_path, jobs=jobs, unread=unread,
+            unexplained=unexplained,
         )
     except Exception as exc:  # noqa: BLE001 - fail visibly instead of reporting a clean run
         detail = " ".join(str(exc).split())[:300] or type(exc).__name__
@@ -289,7 +304,9 @@ def run(
 
     if not unique_failures and not job_failures:
         log_outcome(logger, logging.INFO, "Run %d: no test failures to report", run_id)
-        emit_job_summary(_build_job_summary(run_id, repo_full_name, 0, {}, damaged, unread_logs=unread))
+        emit_job_summary(_build_job_summary(
+            run_id, repo_full_name, 0, {}, damaged, unread_logs=unread, unexplained=unexplained,
+        ))
         return 1 if incomplete else 0
 
     logger.info(
@@ -306,7 +323,7 @@ def run(
             names = ", ".join(ref.job for ref in job.jobs) or job.job
             logger.info("  job %s (%s)", names, "; ".join(job.summary) or job.step)
         emit_job_summary(_build_job_summary(
-            run_id, repo_full_name, len(unique_failures), {}, damaged, len(job_failures), unread,
+            run_id, repo_full_name, len(unique_failures), {}, damaged, len(job_failures), unread, unexplained,
         ))
         log_outcome(logger, logging.INFO, "Dry run: %d unique failure(s) and %d job failure(s) "
                     "in run %d; no issues filed", len(unique_failures), len(job_failures), run_id)
@@ -322,7 +339,7 @@ def run(
         job_failures=job_failures,
     )
     emit_job_summary(_build_job_summary(
-        run_id, repo_full_name, len(unique_failures), result, damaged, len(job_failures), unread,
+        run_id, repo_full_name, len(unique_failures), result, damaged, len(job_failures), unread, unexplained,
     ))
     log_outcome(
         logger, logging.ERROR if result.get("errors") or incomplete else logging.INFO,
@@ -361,6 +378,7 @@ def _unrecorded_failures(
     *,
     jobs: tuple[object, ...],
     unread: list[str] | None = None,
+    unexplained: list[str] | None = None,
 ) -> tuple[list, list[JobFailure]]:
     """Find failed jobs without a recorded test failure.
 
@@ -369,10 +387,13 @@ def _unrecorded_failures(
     """
     try:
         ignored = load_registry(registry_path).get_repo(repo_full_name).ci_followup_ignored_jobs
-    except (OSError, KeyError, ValueError):
+    except (OSError, KeyError, ValueError) as exc:
+        # Without the registry the aggregator jobs are not skipped and may be filed.
+        logger.warning("Could not read the ignored jobs from %s: %s", registry_path, exc)
         ignored = ()
     return find_unrecorded_failures(
         artifact_client, repo_full_name, all_failures, jobs=jobs, ignored_jobs=ignored, unread=unread,
+        unexplained=unexplained,
     )
 
 

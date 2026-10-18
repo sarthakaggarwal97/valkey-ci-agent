@@ -1,27 +1,26 @@
 """Find Daily job failures that the failures artifact does not record.
 
 The ``all-test-failures`` artifact only holds assertion failures. A job also
-fails on a build break, a test timeout, a valgrind or sanitizer report at
-server shutdown, or a crash, and none of those reach the artifact. For every
-failed job this reads the job log's own summary ("The following tests
-failed:" followed by ``*** [status]: ...`` lines): a line naming a test and its
-file becomes an ordinary test failure, so it lands on that test's issue;
-anything else becomes a job-level failure. A job the artifact already records
-is read too, since one assertion there does not explain a Valgrind report or a
-timeout in the same job; only its summary-less failure is left out, because
-the recorded assertion accounts for it.
+fails on a test timeout, a valgrind or sanitizer report at server shutdown,
+the shutdown leak check, or an exception in the test framework, and none of
+those reach the artifact. For every failed job this reads what runtest prints
+about them: its closing summary ("The following tests failed:" followed by
+``*** [status]: ...`` lines), and an ``[exception]: ...`` line, which runtest
+prints on its own before it exits without a summary. A line naming a test and
+its file becomes an ordinary test failure, so it lands on that test's issue;
+anything else becomes a job-level failure, described by its cause: the
+exception, or a valgrind or sanitizer report's first error and frames rather
+than its banner. A job the artifact already records is read too, since one
+assertion there does not explain a Valgrind report or a timeout in the same
+job.
 
-One cause is one issue, however many jobs it fails: job-level failures that
-print the same summary in the same step (e.g. a Valgrind leak in
-``test-valgrind-test (unit)`` and its ``test-valgrind-no-malloc-usable-size-test
-(unit)`` twin) are one failure with several jobs, like a test that fails in
-several environments. Failures that printed no summary at all (a unit test,
-a build break, a crash) are one failure per step they failed in: nothing tells
-them apart, and an issue per job would be noise. Telling them apart needs the
-failure in Valkey's structured output, not more parsing of its logs. One in a
-setup step (installing packages, checking out, uploading results)
-is not reported at all: it is the runner's or a mirror's problem, not the
-repository's.
+One cause is one job-level failure, however many jobs and steps it fails:
+failures are the same when they print the same cause. A failed job that
+printed no cause at all (a unit test, a build break, a crash, a package
+mirror) is not filed: nothing identifies what failed, and grouping such jobs
+by step or job would merge unrelated causes or file an issue per job. Those
+jobs are reported to the caller (``unexplained``) instead. One in a setup step
+(installing packages, checking out, uploading results) is not reported at all.
 """
 
 from __future__ import annotations
@@ -40,6 +39,25 @@ from scripts.test_failure_detector.parse_failures import JobReference, UniqueFai
 logger = logging.getLogger(__name__)
 
 _SUMMARY_RE = re.compile(r"^\*\*\* \[(?P<status>[A-Za-z]+)\]: (?P<data>.+)$")
+# runtest prints an exception on its own and exits before its summary.
+_EXCEPTION_RE = re.compile(r"^\[exception\]: (?P<data>.+)$")
+# A valgrind or sanitizer report is the server's whole stderr, which runtest
+# prints after the summary line. Its cause is the first error and the frames
+# under it; the first line is only valgrind's banner or a server log line.
+_REPORT_RE = re.compile(r"^(?P<kind>Valgrind error|Sanitizer error):")
+_VALGRIND_ERROR_RE = re.compile(
+    r"^==\d+== (?P<error>(?:Invalid|Mismatched|Conditional jump|Use of uninitialised|Syscall param|"
+    r"Source and destination overlap|Argument|Warning:)[^\n]*|[\d,]+ (?:\([^)]*\) )?bytes in [\d,]+ blocks are "
+    r"(?:definitely|possibly) lost)"
+)
+# A leak's stack starts in the allocator (malloc < ztrymalloc_usable_internal
+# < zmalloc_usable); the frames that tell leaks apart are below it.
+_ALLOCATOR_FRAME_RE = re.compile(r"^(?:(?:c|m|re)alloc|operator new.*|z\w*alloc\w*|je_\w+)$")
+_VALGRIND_FRAME_RE = re.compile(r"^==\d+==\s+(?:at|by) 0x[0-9A-Fa-f]+: (?P<function>[^\s(]+)")
+_SANITIZER_ERROR_RE = re.compile(r"(?P<error>ERROR: \w+Sanitizer: [\w-]+|runtime error: .+)")
+_SANITIZER_FRAME_RE = re.compile(r"^\s*#\d+ 0x[0-9a-f]+ in (?P<function>\S+)")
+_REPORT_FRAMES = 3
+_REPORT_LINES = 400
 _MAX_SUMMARY_LINES = 10
 # The leak check runtest runs at each server's shutdown is reported as a test
 # named by that server's pid ("Check for memory leaks (pid 4321)"). Like a
@@ -70,15 +88,12 @@ class JobFailure:
     jobs: list[JobReference] = field(default_factory=list)
 
     def identity(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
-        """The (namespace, shapes) that make two failures the same one.
+        """The (namespace, shapes) that make two failures the same one: their cause.
 
-        A printed summary identifies the failure within its step. Without one
-        there is nothing to compare, so every job that failed in the same step
-        without saying why is one failure: an issue per job would be noise.
+        Neither the job nor the step is part of it, so one cause failing in
+        several jobs, under differently named steps, is one failure.
         """
-        if not self.summary:
-            return ("unexplained", self.step), ()
-        return ("step", self.step), self.summary
+        return ("cause",), self.summary
 
 
 def normalize_job_name(name: str) -> str:
@@ -98,13 +113,15 @@ def find_unrecorded_failures(
     jobs: Iterable[Any],
     ignored_jobs: Iterable[str] = (),
     unread: list[str] | None = None,
+    unexplained: list[str] | None = None,
 ) -> tuple[list[UniqueFailure], list[JobFailure]]:
     """Return failures found only in the logs of ``jobs``.
 
     A failed job whose log cannot be read (expired, or the download failed)
     is left out: nothing is known about how it failed, so filing it would
     make an issue of the download error. Its name is appended to ``unread``,
-    so the caller can report the inspection as incomplete.
+    so the caller can report the inspection as incomplete. A failed job that
+    printed no cause is appended to ``unexplained`` as ``<job> (<step>)``.
 
     ``jobs`` is one exact-attempt snapshot from
     :func:`scripts.common.workflow_jobs.jobs_for_run_attempt`, so every view of
@@ -145,8 +162,11 @@ def find_unrecorded_failures(
             # Every line named a test, or the artifact explains the failure.
             continue
         step = _failed_step(job)
-        if not unattributed and _SETUP_STEP_RE.search(step):
-            logger.info("Not reporting %s: it failed in setup step %r without a summary", name, step)
+        if not unattributed:
+            if _SETUP_STEP_RE.search(step):
+                logger.info("Not reporting %s: it failed in setup step %r without a summary", name, step)
+            elif unexplained is not None:
+                unexplained.append(f"{name} ({step or 'no failed step'})")
             continue
         found = JobFailure(job=name, url=url, step=step, summary=tuple(unattributed)[:_MAX_SUMMARY_LINES])
         namespace, shapes = found.identity()
@@ -166,7 +186,9 @@ def merge_failures(recorded: list[UniqueFailure], extra: list[UniqueFailure]) ->
             recorded.append(failure)
             continue
         for ref in failure.jobs:
-            if not any(r.job == ref.job for r in existing.jobs):
+            # The artifact keys a job as ``test-valgrind-test-unit``, its log
+            # as ``test-valgrind-test (unit)``: the same environment.
+            if not any(normalize_job_name(r.job) == normalize_job_name(ref.job) for r in existing.jobs):
                 existing.jobs.append(ref)
     return recorded
 
@@ -182,12 +204,40 @@ def _failure_summary(artifact_client: ArtifactClient, repo_full_name: str, job: 
         # The download answers an expired log with nothing; a real log is never empty.
         logger.warning("The log of job %s is gone (expired)", getattr(job, "id", "?"))
         return None
+    plain = [strip_log_prefix(raw) for raw in log.splitlines()]
     lines: list[tuple[str, str]] = []
-    for raw in log.splitlines():
-        match = _SUMMARY_RE.match(strip_log_prefix(raw))
-        if match:
-            lines.append((match.group("status"), match.group("data").strip()))
+    for index, line in enumerate(plain):
+        if match := _SUMMARY_RE.match(line):
+            data = match.group("data").strip()
+            if report := _REPORT_RE.match(data):
+                data = _report_cause(report.group("kind"), data, plain[index + 1:index + 1 + _REPORT_LINES])
+            lines.append((match.group("status"), data))
+        elif match := _EXCEPTION_RE.match(line):
+            lines.append(("exception", match.group("data").strip()))
     return lines
+
+
+def _report_cause(kind: str, first: str, following: list[str]) -> str:
+    """``<kind>: <first error> at <frames>`` from the report runtest printed, or ``first``."""
+    report = [first[len(kind) + 1:].strip()]
+    for line in following:
+        if _SUMMARY_RE.match(line):
+            break
+        report.append(line)
+    if kind == "Valgrind error":
+        error_re, frame_re = _VALGRIND_ERROR_RE, _VALGRIND_FRAME_RE
+    else:
+        error_re, frame_re = _SANITIZER_ERROR_RE, _SANITIZER_FRAME_RE
+    for index, line in enumerate(report):
+        error = error_re.search(line)
+        if error is None:
+            continue
+        stack = [frame.group("function") for frame in map(frame_re.match, report[index + 1:index + 30]) if frame]
+        while len(stack) > 1 and _ALLOCATOR_FRAME_RE.search(stack[0]):
+            stack.pop(0)
+        frames = stack[:_REPORT_FRAMES]
+        return f"{kind}: {error.group('error').strip()}" + (f" at {' < '.join(frames)}" if frames else "")
+    return first
 
 
 def _failed_step(job: Any) -> str:

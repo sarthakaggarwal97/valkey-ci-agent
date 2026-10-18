@@ -383,10 +383,12 @@ main.py (daily cron or manual dispatch)
   -> process_failures() creates/updates GitHub issues
 ```
 
-A job also fails on a build break, a timeout, a valgrind or sanitizer report,
-or a crash, which never reach the artifact. Each failed job's log summary
-either names a test (it joins that test's issue) or becomes a job-level
-`[JOB-FAILURE]` issue, one per failure shared by jobs that fail the same way.
+A job also fails on a timeout, a valgrind or sanitizer report, the leak
+check or a framework exception, which never reach the artifact. What runtest
+prints about them either names a test (it joins that test's issue) or becomes
+a job-level `[JOB-FAILURE]` issue titled by its cause, one per cause however
+many jobs it fails. A failed job that printed no cause is not filed; the run
+summary lists it.
 
 ### Entry Points
 

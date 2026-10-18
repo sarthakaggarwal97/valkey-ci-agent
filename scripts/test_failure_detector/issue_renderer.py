@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
-from urllib.parse import quote, unquote
+from urllib.parse import quote
 
 from scripts.common.incidents import compute_fingerprint
 from scripts.common.issue_dedup import IssueContent
@@ -27,9 +27,7 @@ MARKER_NAMESPACE = "valkey-ci-agent:test-failure"
 
 LABEL_NAME = "test-failure"
 
-# Hidden marker naming the job of a job-level failure issue, read back by the
-# CI-fix issue flow. The name is percent-encoded so it cannot end the comment.
-_JOB_MARKER_RE = re.compile(rf"<!-- {re.escape(MARKER_NAMESPACE)}:job:(?P<job>[^\s>]+) -->")
+
 
 
 def fingerprint_for(failure: UniqueFailure) -> str:
@@ -298,17 +296,19 @@ def job_fingerprint_for(failure: JobFailure) -> str:
 
 
 def job_title_for(failure: JobFailure) -> str:
-    return f"[JOB-FAILURE] {failure.job} in Daily"
+    """The failure's cause, which every job it failed shares."""
+    cause = re.sub(r"^\[\w+\]: ", "", failure.summary[0]) if failure.summary else failure.job
+    if len(cause) > _TITLE_CAUSE_CHARS:
+        cause = cause[:_TITLE_CAUSE_CHARS - 1].rstrip() + "…"
+    return f"[JOB-FAILURE] {cause} in Daily"
+
+
+_TITLE_CAUSE_CHARS = 100
 
 
 def job_marker(job: str) -> str:
+    """A hidden marker naming the issue's first job, percent-encoded so it cannot end the comment."""
     return f"<!-- {MARKER_NAMESPACE}:job:{quote(job, safe='')} -->"
-
-
-def parse_job_marker(body: str) -> str:
-    """The job a job-level failure issue tracks, or "" for a test failure issue."""
-    match = _JOB_MARKER_RE.search(body or "")
-    return unquote(match.group("job")) if match else ""
 
 
 def render_job_issue(failure: JobFailure, marker: str, occurrences: int) -> IssueContent:

@@ -97,9 +97,14 @@ def test_a_job_whose_log_cannot_be_read_is_reported_as_unread_not_filed(log):
     assert (tests, jobs, unread) == ([], [], ["test-freebsd"])
 
 
-def test_a_failure_with_no_summary_at_all_is_a_job_failure():
-    _tests, jobs = _find([_job(1, "test-freebsd", step="make")], {1: "error: implicit declaration\n"})
-    assert [(j.job, j.step, j.summary) for j in jobs] == [("test-freebsd", "make", ())]
+def test_a_failure_that_printed_no_cause_is_reported_not_filed():
+    unexplained = []
+    client = MagicMock()
+    client.download_job_log.return_value = "error: implicit declaration\n"
+    tests, jobs = find_unrecorded_failures(
+        client, "valkey-io/valkey", {}, jobs=[_job(1, "test-freebsd", step="make")], unexplained=unexplained,
+    )
+    assert (tests, jobs, unexplained) == ([], [], ["test-freebsd (make)"])
 
 
 def test_successful_and_ignored_jobs_are_skipped():
@@ -141,6 +146,16 @@ def test_normalized_job_names_match_artifact_keys():
     assert normalize_job_name("test-valgrind-test (unit)") == normalize_job_name("test-valgrind-test-unit")
 
 
+def test_the_artifacts_and_the_logs_names_for_one_job_are_one_environment():
+    """Seen in Daily run 38828538707: the artifact keys a job by its normalized name."""
+    recorded = [UniqueFailure("INCREX BYFLOAT", "tests/unit/type/incr.tcl", "e",
+                              [JobReference("test-valgrind-test-integration-type", "u")])]
+    from_log = [UniqueFailure("INCREX BYFLOAT", "tests/unit/type/incr.tcl", "e",
+                              [JobReference("test-valgrind-test (integration-type)", "u")])]
+    (merged,) = merge_failures(recorded, from_log)
+    assert [ref.job for ref in merged.jobs] == ["test-valgrind-test-integration-type"]
+
+
 def test_merge_adds_new_environments_to_an_existing_failure():
     recorded = [UniqueFailure("t", "tests/a.tcl", "e", [JobReference("job-a")])]
     extra = [UniqueFailure("t", "tests/a.tcl", "e2", [JobReference("job-b")]),
@@ -150,19 +165,17 @@ def test_merge_adds_new_environments_to_an_existing_failure():
     assert [(f.test_name, f.test_file) for f in merged] == [("t", "tests/a.tcl"), ("u", "tests/b.tcl")]
 
 
-def test_job_failure_issue_carries_a_parseable_job_marker():
+def test_a_job_failure_issue_is_titled_by_its_cause_and_marks_its_job():
     failure = JobFailure(job="test-valgrind-test (unit)", url="https://job/1", step="test",
-                         summary=("[err]: Valgrind error",))
+                         summary=("[err]: Valgrind error: Invalid read of size 8 at quicklistNext",))
     content = issue_renderer.render_job_issue(failure, "<!-- marker -->", 1)
-    assert content.title == "[JOB-FAILURE] test-valgrind-test (unit) in Daily"
+    assert content.title == "[JOB-FAILURE] Valgrind error: Invalid read of size 8 at quicklistNext in Daily"
     assert content.labels == (issue_renderer.LABEL_NAME,)
-    assert issue_renderer.parse_job_marker(content.body) == "test-valgrind-test (unit)"
-    assert "[err]: Valgrind error" in content.body
-    assert issue_renderer.parse_job_marker("no marker here") == ""
-    # Distinct jobs never share an issue.
-    other = JobFailure(job="test-valgrind-test (cluster)", url="", step="")
+    assert issue_renderer.job_marker("test-valgrind-test (unit)") in content.body
+    assert "Valgrind error: Invalid read" in content.body
+    # Distinct causes never share an issue.
+    other = JobFailure(job="test-valgrind-test (unit)", url="", step="test", summary=("[exception]: boom",))
     assert issue_renderer.job_fingerprint_for(failure) != issue_renderer.job_fingerprint_for(other)
-
 
 
 def test_matrix_twins_failing_the_same_way_are_one_failure():
@@ -179,24 +192,97 @@ def test_matrix_twins_failing_the_same_way_are_one_failure():
     ]
 
 
-def test_failures_without_a_summary_share_one_issue_per_step():
-    """With nothing printed to tell them apart, an issue per job would only be noise."""
-    jobs = [_job(1, "test-freebsd", step="make"), _job(2, "test-s390x", step="make"),
-            _job(3, "test-macos-latest", step="test")]
-    _tests, failures = _find(jobs, {1: "boom\n", 2: "bang\n", 3: "Killed\n"})
-    assert [[ref.job for ref in f.jobs] for f in failures] == [["test-freebsd", "test-s390x"], ["test-macos-latest"]]
-    assert len({issue_renderer.job_fingerprint_for(f) for f in failures}) == 2
+def test_an_exception_is_one_failure_across_jobs_and_differently_named_steps():
+    """Seen in Daily run 39082305846: the 32-bit jobs, with a FreeBSD mirror outage beside them."""
+    exception = (
+        "2026-10-17T03:12:44.1Z [exception]: Executing test client: ERR value is out of range.\n"
+        "2026-10-17T03:12:44.2Z ERR value is out of range\n"
+    )
+    jobs = [_job(1, "test-ubuntu-32bit", step="test"), _job(2, "test-alpine-32bit", step="Run 32-bit Alpine tests"),
+            _job(3, "test-freebsd", step="test")]
+    unexplained = []
+    client = MagicMock()
+    client.download_job_log.side_effect = lambda _repo, job_id: {
+        1: exception, 2: exception, 3: "Error updating repositories!\n",
+    }[job_id]
+    tests, (failure,) = find_unrecorded_failures(client, "valkey-io/valkey", {}, jobs=jobs, unexplained=unexplained)
+
+    assert tests == []
+    assert failure.summary == ("[exception]: Executing test client: ERR value is out of range.",)
+    assert [ref.job for ref in failure.jobs] == ["test-ubuntu-32bit", "test-alpine-32bit"]
+    assert unexplained == ["test-freebsd (test)"]
 
 
-def test_a_failing_unit_test_is_one_failure_for_every_job_that_runs_it():
-    """gtest prints no runtest summary; its jobs share one issue for their step, not one each."""
-    jobs = [_job(n, name, step="unittest") for n, name in enumerate(
-        ("test-ubuntu-jemalloc", "test-sanitizer-address (gcc)", "test-sanitizer-address (clang)"), 1)]
-    log = "[  FAILED  ] SdsTest.Trim (3 ms)\n[  FAILED  ] 1 test, listed below:\n"
-    tests, (failure,) = _find(jobs, {1: log, 2: log, 3: log})
+def test_a_valgrind_report_is_identified_by_its_first_error_and_frames():
+    def report(pid, function):
+        return (
+            f"*** [err]: Valgrind error: =={pid}== Memcheck, a memory error detector\n"
+            f"=={pid}== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.\n"
+            f"=={pid}== Invalid read of size 8\n"
+            f"=={pid}==    at 0x4A1B2C: {function} (quicklist.c:120)\n"
+            f"=={pid}==    by 0x4A2D3E: listTypeNext (t_list.c:88)\n"
+            f"=={pid}==    by 0x4F0011: lrangeGenericCommand (t_list.c:640)\n"
+            f"=={pid}==    by 0x4F0099: call (server.c:3900)\n"
+        )
 
-    assert tests == [] and failure.summary == () and failure.step == "unittest"
-    assert len(failure.jobs) == 3
+    jobs = [_job(1, "test-valgrind-test (unit)"), _job(2, "test-valgrind-no-malloc-usable-size-test (unit)"),
+            _job(3, "test-valgrind-test (integration)")]
+    _tests, failures = _find(jobs, {1: report(101, "quicklistNext"), 2: report(202, "quicklistNext"),
+                                    3: report(303, "quicklistGetIterator")})
+
+    assert [f.summary for f in failures] == [
+        ("[err]: Valgrind error: Invalid read of size 8 at quicklistNext < listTypeNext < lrangeGenericCommand",),
+        ("[err]: Valgrind error: Invalid read of size 8 at quicklistGetIterator < listTypeNext < lrangeGenericCommand",),
+    ]
+    assert [len(f.jobs) for f in failures] == [2, 1]
+
+
+def test_a_leak_is_identified_by_where_it_was_allocated_not_by_the_allocator():
+    """Seen in Daily: the leak's top frames are malloc and zmalloc, the same for every leak."""
+    def leak(pid, size, record, caller):
+        return (
+            f"*** [err]: Valgrind error: =={pid}== Memcheck, a memory error detector\n"
+            f"=={pid}== {size} bytes in 3 blocks are definitely lost in loss record {record} of 1,501\n"
+            f"=={pid}==    at 0x4848899: malloc (vg_replace_malloc.c:381)\n"
+            f"=={pid}==    by 0x2A1B2C: ztrymalloc_usable_internal (zmalloc.c:155)\n"
+            f"=={pid}==    by 0x2A1C3D: zmalloc_usable (zmalloc.c:180)\n"
+            f"=={pid}==    by 0x2B0011: {caller} (module.c:900)\n"
+            f"=={pid}==    by 0x2B0099: moduleLoad (module.c:1200)\n"
+        )
+
+    jobs = [_job(1, "test-valgrind-test (unit)"), _job(2, "test-valgrind-test (misc)")]
+    _tests, failures = _find(jobs, {1: leak(11, "49,170", "1,489", "RM_Alloc"), 2: leak(22, "49,194", "1,471", "RM_Alloc")})
+
+    (failure,) = failures
+    assert failure.summary == (
+        "[err]: Valgrind error: 49,170 bytes in 3 blocks are definitely lost at RM_Alloc < moduleLoad",
+    )
+
+
+def test_a_sanitizer_report_is_identified_by_its_error_not_the_server_log():
+    log = (
+        "*** [err]: Sanitizer error: 4321:M 17 Oct 2026 03:00:01.123 * Server initialized\n"
+        "4321:M 17 Oct 2026 03:00:01.124 * Ready to accept connections tcp\n"
+        "==4321==ERROR: AddressSanitizer: heap-use-after-free on address 0x602000001234 at pc 0x55d1\n"
+        "    #0 0x55d1a2 in dictFind /valkey/src/dict.c:610\n"
+        "    #1 0x55d1b3 in lookupKey /valkey/src/db.c:110\n"
+    )
+    _tests, (failure,) = _find([_job(1, "test-sanitizer-address (gcc)")], {1: log})
+    assert failure.summary == (
+        "[err]: Sanitizer error: ERROR: AddressSanitizer: heap-use-after-free at dictFind < lookupKey",
+    )
+
+
+def test_a_failing_unit_test_is_reported_not_filed():
+    """gtest prints no runtest summary: nothing identifies the cause well enough to file it."""
+    unexplained = []
+    client = MagicMock()
+    client.download_job_log.return_value = "[  FAILED  ] SdsTest.Trim (3 ms)\n"
+    _tests, jobs = find_unrecorded_failures(
+        client, "valkey-io/valkey", {}, jobs=[_job(1, "test-ubuntu-jemalloc", step="unittest")],
+        unexplained=unexplained,
+    )
+    assert jobs == [] and unexplained == ["test-ubuntu-jemalloc (unittest)"]
 
 
 @pytest.mark.parametrize("step", ["Install EPEL", "Set up job", "Run actions/checkout@de0f", "Upload test failures",
@@ -221,7 +307,7 @@ def test_a_merged_failure_lists_every_job_on_its_issue():
     content = issue_renderer.render_job_issue(failure, "<!-- m -->", 1)
     assert "`a (unit)`: [job log](https://job/1)" in content.body and "`b (unit)`: [job log](https://job/2)" in content.body
     assert "[`b (unit)`](https://job/2)" in content.comment
-    assert issue_renderer.parse_job_marker(content.body) == "a (unit)"
+    assert issue_renderer.job_marker("a (unit)") in content.body
 
 
 def test_daily_fingerprints_are_unchanged():

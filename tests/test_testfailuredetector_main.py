@@ -351,8 +351,9 @@ class TestUnrecordedJobFailures:
         mock_download.return_value = None
         job = JobFailure(job="test-alpine-jemalloc", url="https://job/2", step="test")
 
-        def find(*_args, unread, **_kwargs):
+        def find(*_args, unread, unexplained, **_kwargs):
             unread.append("test-freebsd")
+            unexplained.append("test-macos-latest (unittest)")
             return [], [job]
 
         mock_find.side_effect = find
@@ -365,6 +366,8 @@ class TestUnrecordedJobFailures:
         assert mock_process.call_args.kwargs["job_failures"] == [job]
         summary = mock_emit.call_args.args[0]
         assert "### Unread job logs" in summary and "- `test-freebsd`" in summary
+        assert "### Failed jobs with no recorded cause (not filed)" in summary
+        assert "- `test-macos-latest (unittest)`" in summary
 
     @patch("scripts.test_failure_detector.main.find_unrecorded_failures")
     @patch("scripts.test_failure_detector.main.jobs_for_run_attempt")
@@ -441,8 +444,8 @@ def test_process_failures_upserts_job_failures_with_their_own_identity():
 
     publisher = MagicMock()
     publisher.upsert.return_value = ("created", "https://issue/1")
-    freebsd = JobFailure(job="test-freebsd", url="https://job/1", step="make")
-    alpine = JobFailure(job="test-alpine", url="https://job/2", step="test")
+    freebsd = JobFailure(job="test-freebsd", url="https://job/1", step="test", summary=("[exception]: boom",))
+    alpine = JobFailure(job="test-alpine", url="https://job/2", step="test", summary=("[err]: Valgrind error: x",))
     with patch.object(manage_issues, "IssueDedupPublisher", return_value=publisher):
         summary = manage_issues.process_failures(
             MagicMock(),
@@ -460,4 +463,4 @@ def test_process_failures_upserts_job_failures_with_their_own_identity():
     assert kwargs["idempotency_key"] == "9"
     # Job issues are found by their marker only, never adopted by title.
     assert "title_fallback" not in kwargs
-    assert kwargs["render"]("<!-- m -->", 1).title == "[JOB-FAILURE] test-freebsd in Daily"
+    assert kwargs["render"]("<!-- m -->", 1).title == "[JOB-FAILURE] boom in Daily"
