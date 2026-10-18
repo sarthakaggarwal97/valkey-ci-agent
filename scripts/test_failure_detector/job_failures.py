@@ -99,8 +99,14 @@ def find_unrecorded_failures(
     *,
     jobs: Iterable[Any],
     ignored_jobs: Iterable[str] = (),
+    unread: list[str] | None = None,
 ) -> tuple[list[UniqueFailure], list[JobFailure]]:
     """Return failures found only in the logs of ``jobs``.
+
+    A failed job whose log cannot be read (expired, or the download failed)
+    is left out: nothing is known about how it failed, so filing it would
+    make an issue of the download error. Its name is appended to ``unread``,
+    so the caller can report the inspection as incomplete.
 
     ``jobs`` is one exact-attempt snapshot from
     :func:`scripts.common.workflow_jobs.jobs_for_run_attempt`, so every view of
@@ -122,6 +128,10 @@ def find_unrecorded_failures(
             continue
         url = str(getattr(job, "html_url", "") or "")
         summary = _failure_summary(artifact_client, repo_full_name, job)
+        if summary is None:
+            if unread is not None:
+                unread.append(name)
+            continue
         unattributed: list[str] = []
         for status, data in summary:
             test = test_in_file(data)
@@ -163,12 +173,17 @@ def merge_failures(recorded: list[UniqueFailure], extra: list[UniqueFailure]) ->
     return recorded
 
 
-def _failure_summary(artifact_client: ArtifactClient, repo_full_name: str, job: Any) -> list[tuple[str, str]]:
+def _failure_summary(artifact_client: ArtifactClient, repo_full_name: str, job: Any) -> list[tuple[str, str]] | None:
+    """The job log's runtest summary lines, or None when the log cannot be read."""
     try:
         log = artifact_client.download_job_log(repo_full_name, int(job.id))
-    except Exception as exc:  # noqa: BLE001 - a missing log degrades to a job-level failure
+    except Exception as exc:  # noqa: BLE001 - reported to the caller as an unread log
         logger.warning("Could not download the log of job %s: %s", getattr(job, "id", "?"), exc)
-        return []
+        return None
+    if not log.strip():
+        # The download answers an expired log with nothing; a real log is never empty.
+        logger.warning("The log of job %s is gone (expired)", getattr(job, "id", "?"))
+        return None
     lines: list[tuple[str, str]] = []
     for raw in log.splitlines():
         match = _SUMMARY_RE.match(strip_log_prefix(raw))

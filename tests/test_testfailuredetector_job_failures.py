@@ -83,6 +83,20 @@ def test_a_leak_check_is_a_job_failure_whatever_its_pid():
     assert issue_renderer.job_fingerprint_for(first) == issue_renderer.job_fingerprint_for(second)
 
 
+@pytest.mark.parametrize("log", [RuntimeError("502 Bad Gateway"), ""])
+def test_a_job_whose_log_cannot_be_read_is_reported_as_unread_not_filed(log):
+    """A download error or an expired log says nothing about how the job failed."""
+    client = MagicMock()
+    client.download_job_log.side_effect = log if isinstance(log, Exception) else (lambda *_a: log)
+    unread = []
+
+    tests, jobs = find_unrecorded_failures(
+        client, "valkey-io/valkey", {}, jobs=[_job(1, "test-freebsd", step="make")], unread=unread,
+    )
+
+    assert (tests, jobs, unread) == ([], [], ["test-freebsd"])
+
+
 def test_a_failure_with_no_summary_at_all_is_a_job_failure():
     _tests, jobs = _find([_job(1, "test-freebsd", step="make")], {1: "error: implicit declaration\n"})
     assert [(j.job, j.step, j.summary) for j in jobs] == [("test-freebsd", "make", ())]

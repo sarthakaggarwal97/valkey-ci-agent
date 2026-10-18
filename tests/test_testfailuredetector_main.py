@@ -336,6 +336,36 @@ class TestUnrecordedJobFailures:
         assert mock_process.call_args.kwargs["job_failures"] == [job]
         assert "| Job failures without a test record | 1 |" in mock_emit.call_args.args[0]
 
+    @patch("scripts.test_failure_detector.main.process_failures")
+    @patch("scripts.test_failure_detector.main.find_unrecorded_failures")
+    @patch("scripts.test_failure_detector.main.jobs_for_run_attempt")
+    @patch("scripts.test_failure_detector.main.emit_job_summary")
+    @patch("scripts.test_failure_detector.main.download_all_test_failures")
+    @patch("scripts.test_failure_detector.main.ArtifactClient")
+    @patch("scripts.test_failure_detector.main.Github")
+    def test_unread_job_logs_are_reported_and_the_run_is_not_a_pass(
+        self, _gh, _client, mock_download, mock_emit, _urls, mock_find, mock_process,
+    ) -> None:
+        from scripts.test_failure_detector.job_failures import JobFailure
+
+        mock_download.return_value = None
+        job = JobFailure(job="test-alpine-jemalloc", url="https://job/2", step="test")
+
+        def find(*_args, unread, **_kwargs):
+            unread.append("test-freebsd")
+            return [], [job]
+
+        mock_find.side_effect = find
+        mock_process.return_value = {"created": 1}
+
+        rc = detector_main.run(github_token="t", repo_full_name="valkey-io/valkey", run_id=5)
+
+        # What could be read is still filed; the unread job is not.
+        assert rc == 1
+        assert mock_process.call_args.kwargs["job_failures"] == [job]
+        summary = mock_emit.call_args.args[0]
+        assert "### Unread job logs" in summary and "- `test-freebsd`" in summary
+
     @patch("scripts.test_failure_detector.main.find_unrecorded_failures")
     @patch("scripts.test_failure_detector.main.jobs_for_run_attempt")
     @patch("scripts.test_failure_detector.main.emit_job_summary")

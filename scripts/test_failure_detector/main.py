@@ -38,6 +38,7 @@ def _build_job_summary(
     result: dict[str, int],
     damaged: list[str] | None = None,
     num_job_failures: int = 0,
+    unread_logs: list[str] | None = None,
 ) -> str:
     lines = [
         "## Test Failure Detector",
@@ -68,6 +69,17 @@ def _build_job_summary(
             "",
         ])
         lines.extend(f"- `{_one_line(entry)}`" for entry in damaged)
+        lines.append("")
+    if unread_logs:
+        # These jobs failed, but how is unknown: no issue was filed for them.
+        lines.extend([
+            "### Unread job logs",
+            "",
+            f"The logs of {len(unread_logs)} failed job(s) could not be read, so "
+            "any failure only their logs show was not analyzed:",
+            "",
+        ])
+        lines.extend(f"- `{_one_line(name)}`" for name in unread_logs)
         lines.append("")
     return "\n".join(lines)
 
@@ -246,9 +258,10 @@ def run(
 
     # Step 5: Failed jobs the artifact does not record (timeouts, valgrind or
     # sanitizer reports, build breaks), read from each job's own log.
+    unread: list[str] = []
     try:
         log_failures, job_failures = _unrecorded_failures(
-            artifact_client, repo_full_name, all_failures, registry_path, jobs=jobs,
+            artifact_client, repo_full_name, all_failures, registry_path, jobs=jobs, unread=unread,
         )
     except Exception as exc:  # noqa: BLE001 - fail visibly instead of reporting a clean run
         detail = " ".join(str(exc).split())[:300] or type(exc).__name__
@@ -266,11 +279,18 @@ def run(
         )
         return 1
     unique_failures = merge_failures(unique_failures, log_failures)
+    if unread:
+        logger.error(
+            "Run %d: the logs of %d failed job(s) could not be read; nothing is filed for them: %s",
+            run_id, len(unread), ", ".join(unread),
+        )
+    # Whatever could not be read was never analyzed, so the run is not a full pass.
+    incomplete = bool(damaged or unread)
 
     if not unique_failures and not job_failures:
         log_outcome(logger, logging.INFO, "Run %d: no test failures to report", run_id)
-        emit_job_summary(_build_job_summary(run_id, repo_full_name, 0, {}, damaged))
-        return 1 if damaged else 0
+        emit_job_summary(_build_job_summary(run_id, repo_full_name, 0, {}, damaged, unread_logs=unread))
+        return 1 if incomplete else 0
 
     logger.info(
         "Found %d unique failure(s) and %d job failure(s) without a test record",
@@ -286,11 +306,11 @@ def run(
             names = ", ".join(ref.job for ref in job.jobs) or job.job
             logger.info("  job %s (%s)", names, "; ".join(job.summary) or job.step)
         emit_job_summary(_build_job_summary(
-            run_id, repo_full_name, len(unique_failures), {}, damaged, len(job_failures),
+            run_id, repo_full_name, len(unique_failures), {}, damaged, len(job_failures), unread,
         ))
         log_outcome(logger, logging.INFO, "Dry run: %d unique failure(s) and %d job failure(s) "
                     "in run %d; no issues filed", len(unique_failures), len(job_failures), run_id)
-        return 1 if damaged else 0
+        return 1 if incomplete else 0
 
     # Step 6: Create or update issues
     logger.info("Processing issues on %s...", repo_full_name)
@@ -302,10 +322,10 @@ def run(
         job_failures=job_failures,
     )
     emit_job_summary(_build_job_summary(
-        run_id, repo_full_name, len(unique_failures), result, damaged, len(job_failures),
+        run_id, repo_full_name, len(unique_failures), result, damaged, len(job_failures), unread,
     ))
     log_outcome(
-        logger, logging.ERROR if result.get("errors") or damaged else logging.INFO,
+        logger, logging.ERROR if result.get("errors") or incomplete else logging.INFO,
         "Run %d: %d unique failure(s) and %d job failure(s): %d issue(s) created, %d updated, "
         "%d skipped, %d error(s)",
         run_id, len(unique_failures), len(job_failures), result.get("created", 0), result.get("updated", 0),
@@ -329,6 +349,8 @@ def run(
             run_id, len(damaged),
         )
         return 1
+    if unread:
+        return 1
     return 0
 
 def _unrecorded_failures(
@@ -338,6 +360,7 @@ def _unrecorded_failures(
     registry_path: str,
     *,
     jobs: tuple[object, ...],
+    unread: list[str] | None = None,
 ) -> tuple[list, list[JobFailure]]:
     """Find failed jobs without a recorded test failure.
 
@@ -349,7 +372,7 @@ def _unrecorded_failures(
     except (OSError, KeyError, ValueError):
         ignored = ()
     return find_unrecorded_failures(
-        artifact_client, repo_full_name, all_failures, jobs=jobs, ignored_jobs=ignored,
+        artifact_client, repo_full_name, all_failures, jobs=jobs, ignored_jobs=ignored, unread=unread,
     )
 
 
