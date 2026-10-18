@@ -14,6 +14,10 @@ A branch cut after the PR merged carries it by ancestry, and a branch not
 yet GA (no ``<branch>.N`` release tag) takes nearly every change; both are left out
 of both sides for that PR.
 
+Per-branch evidence and failure sites are read from each branch as it was
+when the PR merged, as the daily run would have seen it; today's tip may
+already carry the fix.
+
 Production never comments on a PR maintainers already took to a GA branch.
 The backtest mirrors that from history: a PR whose commits reached a GA
 branch or its sweep within ``--triage-days`` of merging (the daily run looks
@@ -166,6 +170,21 @@ def ground_truth(
     return evaluated, truth
 
 
+def branch_refs_at(repo_dir: str, branches: Sequence[str], when: str) -> dict[str, str]:
+    """Each branch as it was at *when*: what the daily run read after the merge.
+
+    Today's tip may already carry the fix, which would hide the very code a
+    suggestion has to point at.
+    """
+    refs = {}
+    for branch in branches:
+        sha = git_output(repo_dir, "rev-list", "-1", "--first-parent", f"--before={when}",
+                         f"origin/{branch}").strip()
+        if sha:
+            refs[branch] = sha
+    return refs
+
+
 def first_landings(repo_dir: str, branches: Sequence[str]) -> dict[str, dict[int, datetime]]:
     """Per branch, when each PR first reached it or its backport sweep."""
     out: dict[str, dict[int, datetime]] = {}
@@ -209,6 +228,7 @@ def backtest(
     ga = eligibility.ga_dates(repo_dir, branches) if post_ga_only else None
     landings = first_landings(repo_dir, branches) if triage_days >= 0 else {}
     triaged: dict[int, list[str]] = {}
+    refs: dict[int, dict[str, str]] = {}
     outcomes: dict[int, PrOutcome] = {}
     candidates: list[Candidate] = []
     for source in prs:
@@ -227,7 +247,9 @@ def backtest(
         if triage_days >= 0 and (taken := triaged_at_run(source, evaluated, landings, triage_days)):
             triaged[source.number] = taken
         try:
-            assessed = eligibility.assess(repo_dir, source, evaluated, history=history, skip_landed=False)
+            refs[source.number] = branch_refs_at(repo_dir, evaluated, source.merged_at)
+            assessed = eligibility.assess(repo_dir, source, evaluated, history=history, skip_landed=False,
+                                          branch_refs=refs[source.number])
         except Exception as exc:  # report, never abort a long backtest
             outcome.action, outcome.reason = "tracing-failed", str(exc)[:200]
             continue
@@ -250,7 +272,8 @@ def backtest(
     todo = [c for c in candidates if cache.get(str(c.source.number)) is None]
     for start in range(0, len(todo), eligibility._BATCH_SIZE):
         batch = todo[start:start + eligibility._BATCH_SIZE]
-        verdicts = eligibility.judge(batch, repo=repo_entry.repo, repo_dir=repo_dir, run_fn=run_fn)
+        verdicts = eligibility.judge(batch, repo=repo_entry.repo, repo_dir=repo_dir, run_fn=run_fn,
+                                     branch_refs=refs)
         for c in batch:
             v = verdicts.get(c.source.number)
             cache[str(c.source.number)] = None if v is None else {

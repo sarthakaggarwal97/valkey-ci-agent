@@ -723,6 +723,7 @@ def judge(
     repo_dir: str,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     timeout: int = 900,
+    branch_refs: Mapping[int, Mapping[str, str]] | None = None,
 ) -> dict[int, Verdict]:
     """Ask Claude, without tools, whether and where each candidate should go.
 
@@ -763,7 +764,10 @@ def judge(
                 len(batch), code, stderr[:200],
             )
             continue
-        verdicts.update({number: verify_sites(repo_dir, v) for number, v in parsed.items()})
+        verdicts.update({
+            number: verify_sites(repo_dir, v, (branch_refs or {}).get(number))
+            for number, v in parsed.items()
+        })
     return verdicts
 
 
@@ -819,13 +823,14 @@ def _parse_verdicts(
     return verdicts
 
 
-def verify_sites(repo_dir: str, verdict: Verdict) -> Verdict:
+def verify_sites(repo_dir: str, verdict: Verdict, refs: Mapping[str, str] | None = None) -> Verdict:
     """Keep only the branches whose cited failure site exists on them.
 
     A branch whose site is missing is dropped. A branch whose site cannot be
     checked (none given, or unreadable) is kept, but the verdict is then at
     most "medium" and is not commented on. A positive verdict left with no
-    branch is reported, never commented.
+    branch is reported, never commented. *refs* maps a branch to the
+    revision to check (a backtest asks the branch as it was at the merge).
     """
     if not verdict.backport:
         return verdict
@@ -835,7 +840,8 @@ def verify_sites(repo_dir: str, verdict: Verdict) -> Verdict:
     unchecked = False
     for branch in verdict.branches:
         path, symbol = sites.get(branch, ("", ""))
-        found = site_present(repo_dir, f"{_REMOTE_PREFIX}{branch}", path, symbol)
+        ref = (refs or {}).get(branch) or f"{_REMOTE_PREFIX}{branch}"
+        found = site_present(repo_dir, ref, path, symbol)
         if found is False:
             logger.info("Dropping %s: failure site %r (%s) is not on it", branch, symbol, path or "any file")
             dropped.append(branch)
@@ -1030,12 +1036,15 @@ def assess(
     history: BranchHistory,
     git_env: Mapping[str, str] | None = None,
     skip_landed: bool = True,
+    branch_refs: Mapping[str, str] | None = None,
 ) -> Candidate | dict[str, Any]:
     """Return the PR as a candidate for the model, or its result when history settles it.
 
     History bounds the branches; per-branch evidence then drops a branch that
     carries none of what the PR is about. A PR changing only tests, harness,
-    CI, or docs is never a candidate. A git failure raises.
+    CI, or docs is never a candidate. A git failure raises. *branch_refs*
+    maps a branch to the revision its evidence is read from (default: the
+    branch tip; a backtest uses the branch as it was when the PR merged).
     """
     sha = source.pr.merge_commit_sha
     try:
@@ -1064,7 +1073,8 @@ def assess(
         repo_dir, base, sha, [source.pr.title, source.pr.body, *source.linked_issues],
     )
     evidence = tuple(
-        branch_evidence(repo_dir, f"{_REMOTE_PREFIX}{b}", b, base=base, sha=sha, identifiers=identifiers)
+        branch_evidence(repo_dir, (branch_refs or {}).get(b) or f"{_REMOTE_PREFIX}{b}", b,
+                        base=base, sha=sha, identifiers=identifiers)
         for b in traced
     )
     candidate = replace(candidate, evidence=evidence)
