@@ -72,6 +72,17 @@ def test_a_failure_without_a_test_becomes_a_job_failure():
                                jobs=[JobReference("test-valgrind-test (unit)", "https://job/1")])]
 
 
+def test_a_leak_check_is_a_job_failure_whatever_its_pid():
+    """runtest names its shutdown leak check by pid; as a test it would get a new issue every run."""
+    def leak(pid):
+        log = f"*** [err]: Check for memory leaks (pid {pid}) in tests/unit/type/list.tcl\n"
+        return _find([_job(1, "test-sanitizer-address (gcc)")], {1: log})
+
+    (tests, (first,)), (_tests, (second,)) = leak(4321), leak(98765)
+    assert tests == []
+    assert issue_renderer.job_fingerprint_for(first) == issue_renderer.job_fingerprint_for(second)
+
+
 def test_a_failure_with_no_summary_at_all_is_a_job_failure():
     _tests, jobs = _find([_job(1, "test-freebsd", step="make")], {1: "error: implicit declaration\n"})
     assert [(j.job, j.step, j.summary) for j in jobs] == [("test-freebsd", "make", ())]

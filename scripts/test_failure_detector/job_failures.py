@@ -37,6 +37,12 @@ logger = logging.getLogger(__name__)
 
 _SUMMARY_RE = re.compile(r"^\*\*\* \[(?P<status>[A-Za-z]+)\]: (?P<data>.+)$")
 _MAX_SUMMARY_LINES = 10
+# The leak check runtest runs at each server's shutdown is reported as a test
+# named by that server's pid ("Check for memory leaks (pid 4321)"). Like a
+# valgrind report it is not a test's own failure, and runtest's artifact
+# leaves it out too, so it is a job-level failure: as a test it would get a
+# new issue for every pid.
+_LEAK_CHECK_RE = re.compile(r"^Check for memory leaks\b")
 # Steps that prepare the runner rather than build or test the repository.
 _SETUP_STEP_RE = re.compile(
     r"^(?:set up job|initialize containers|complete job|stop containers|run actions/|post )"
@@ -119,7 +125,7 @@ def find_unrecorded_failures(
         unattributed: list[str] = []
         for status, data in summary:
             test = test_in_file(data)
-            if test is None or status == "exception":
+            if test is None or status == "exception" or _LEAK_CHECK_RE.match(data):
                 unattributed.append(f"[{status}]: {data}")
                 continue
             failure = tests.setdefault(test, UniqueFailure(
