@@ -213,6 +213,54 @@ def test_an_exception_is_one_failure_across_jobs_and_differently_named_steps():
     assert unexplained == ["test-freebsd (test)"]
 
 
+def test_each_cause_a_job_prints_is_its_own_failure():
+    """A job's two causes are two issues, so one of them failing alone later updates its own."""
+    both = (
+        "*** [err]: Sanitizer error: ==1==ERROR: AddressSanitizer: heap-use-after-free on address 0x1\n"
+        "    #0 0x55 in dictFind /valkey/src/dict.c:610\n"
+        "*** [err]: Valgrind error: ==2== Memcheck, a memory error detector\n"
+        "==2== Invalid read of size 8\n"
+        "==2==    at 0x4A: quicklistNext (quicklist.c:120)\n"
+    )
+    later = "*** [err]: Valgrind error: ==7== Memcheck, a memory error detector\n==7== Invalid read of size 8\n" \
+            "==7==    at 0x4B: quicklistNext (quicklist.c:121)\n"
+    _tests, first = _find([_job(1, "test-valgrind-test (unit)")], {1: both})
+    _tests, (alone,) = _find([_job(2, "test-valgrind-test (unit)")], {2: later})
+
+    assert [f.summary for f in first] == [
+        ("[err]: Sanitizer error: ERROR: AddressSanitizer: heap-use-after-free at dictFind",),
+        ("[err]: Valgrind error: Invalid read of size 8 at quicklistNext",),
+    ]
+    assert issue_renderer.job_fingerprint_for(alone) == issue_renderer.job_fingerprint_for(first[1])
+
+
+def _exception(test_file, line):
+    return (
+        "[exception]: Executing test client: ERR value is out of range.\n"
+        " in valkey::__dispatch__ at tests/support/valkey.tcl:116\n"
+        " in r at tests/test_helper.tcl:196\n"
+        f" in r at {test_file}:{line}\n"
+        " in test at tests/support/test.tcl:262\n"
+        "\n"
+        "Killing still running Valkey server 12431\n"
+    )
+
+
+def test_an_exception_is_located_by_the_first_test_file_in_its_stack():
+    """Seen in Daily run 39082305846: the frames above it are the test framework's own."""
+    jobs = [_job(1, "test-ubuntu-32bit"), _job(2, "test-alpine-32bit"), _job(3, "test-ubuntu-jemalloc")]
+    _tests, failures = _find(jobs, {1: _exception("tests/unit/type/zset.tcl", 1559),
+                                    2: _exception("tests/unit/type/zset.tcl", 1562),
+                                    3: _exception("tests/unit/type/incr.tcl", 88)})
+
+    assert [(f.summary, [ref.job for ref in f.jobs]) for f in failures] == [
+        (("[exception]: Executing test client: ERR value is out of range. at tests/unit/type/zset.tcl",),
+         ["test-ubuntu-32bit", "test-alpine-32bit"]),
+        (("[exception]: Executing test client: ERR value is out of range. at tests/unit/type/incr.tcl",),
+         ["test-ubuntu-jemalloc"]),
+    ]
+
+
 def test_a_valgrind_report_is_identified_by_its_first_error_and_frames():
     def report(pid, function):
         return (

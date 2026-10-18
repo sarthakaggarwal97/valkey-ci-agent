@@ -39,8 +39,13 @@ from scripts.test_failure_detector.parse_failures import JobReference, UniqueFai
 logger = logging.getLogger(__name__)
 
 _SUMMARY_RE = re.compile(r"^\*\*\* \[(?P<status>[A-Za-z]+)\]: (?P<data>.+)$")
-# runtest prints an exception on its own and exits before its summary.
+# runtest prints an exception on its own and exits before its summary, with
+# the Tcl stack under it (`` in r at tests/unit/type/zset.tcl:1559``). The
+# first frame in a test file, past the test framework's own, says where.
 _EXCEPTION_RE = re.compile(r"^\[exception\]: (?P<data>.+)$")
+_TCL_FRAME_RE = re.compile(r"^\s*in \S+ at (?P<file>tests/\S+\.tcl):\d+$")
+_TCL_FRAMEWORK_RE = re.compile(r"^tests/(?:support/|helpers/|test_helper\.tcl$)")
+_EXCEPTION_LINES = 60
 # A valgrind or sanitizer report is the server's whole stderr, which runtest
 # prints after the summary line. Its cause is the first error and the frames
 # under it; the first line is only valgrind's banner or a server log line.
@@ -58,7 +63,6 @@ _SANITIZER_ERROR_RE = re.compile(r"(?P<error>ERROR: \w+Sanitizer: [\w-]+|runtime
 _SANITIZER_FRAME_RE = re.compile(r"^\s*#\d+ 0x[0-9a-f]+ in (?P<function>\S+)")
 _REPORT_FRAMES = 3
 _REPORT_LINES = 400
-_MAX_SUMMARY_LINES = 10
 # The leak check runtest runs at each server's shutdown is reported as a test
 # named by that server's pid ("Check for memory leaks (pid 4321)"). Like a
 # valgrind report it is not a test's own failure, and runtest's artifact
@@ -147,32 +151,35 @@ def find_unrecorded_failures(
             if unread is not None:
                 unread.append(name)
             continue
-        unattributed: dict[str, None] = {}  # ordered, without repeats
+        causes: dict[str, None] = {}  # ordered, without repeats
         for status, data in summary:
             test = test_in_file(data)
             if test is None or status == "exception" or _LEAK_CHECK_RE.match(data):
-                unattributed[f"[{status}]: {data}"] = None
+                causes[f"[{status}]: {data}"] = None
                 continue
             failure = tests.setdefault(test, UniqueFailure(
                 test_name=test[0], test_file=test[1], error=f"[{status}]: {data}",
             ))
             if not any(ref.job == name for ref in failure.jobs):
                 failure.jobs.append(JobReference(job=name, url=url))
-        if not unattributed and (summary or normalize_job_name(name) in recorded):
+        if not causes and (summary or normalize_job_name(name) in recorded):
             # Every line named a test, or the artifact explains the failure.
             continue
         step = _failed_step(job)
-        if not unattributed:
+        if not causes:
             if _SETUP_STEP_RE.search(step):
                 logger.info("Not reporting %s: it failed in setup step %r without a summary", name, step)
             elif unexplained is not None:
                 unexplained.append(f"{name} ({step or 'no failed step'})")
             continue
-        found = JobFailure(job=name, url=url, step=step, summary=tuple(unattributed)[:_MAX_SUMMARY_LINES])
-        namespace, shapes = found.identity()
-        same = job_failures.setdefault(compute_fingerprint(namespace=namespace, shapes=shapes), found)
-        if not any(ref.job == name for ref in same.jobs):
-            same.jobs.append(JobReference(job=name, url=url))
+        # One failure per cause: a job that printed two causes is in two
+        # issues, so each cause keeps its issue when it later fails alone.
+        for cause in causes:
+            found = JobFailure(job=name, url=url, step=step, summary=(cause,))
+            namespace, shapes = found.identity()
+            same = job_failures.setdefault(compute_fingerprint(namespace=namespace, shapes=shapes), found)
+            if not any(ref.job == name for ref in same.jobs):
+                same.jobs.append(JobReference(job=name, url=url))
     return list(tests.values()), list(job_failures.values())
 
 
@@ -213,8 +220,22 @@ def _failure_summary(artifact_client: ArtifactClient, repo_full_name: str, job: 
                 data = _report_cause(report.group("kind"), data, plain[index + 1:index + 1 + _REPORT_LINES])
             lines.append((match.group("status"), data))
         elif match := _EXCEPTION_RE.match(line):
-            lines.append(("exception", match.group("data").strip()))
+            where = _exception_location(plain[index + 1:index + 1 + _EXCEPTION_LINES])
+            lines.append(("exception", match.group("data").strip() + (f" at {where}" if where else "")))
     return lines
+
+
+def _exception_location(following: list[str]) -> str:
+    """The test file the exception's Tcl stack first reaches past the framework, or ""."""
+    for line in following:
+        frame = _TCL_FRAME_RE.match(line)
+        if frame is None:
+            if line.strip():
+                break  # the stack ended
+            continue
+        if not _TCL_FRAMEWORK_RE.match(frame.group("file")):
+            return frame.group("file")
+    return ""
 
 
 def _report_cause(kind: str, first: str, following: list[str]) -> str:

@@ -384,13 +384,13 @@ def _unrecorded_failures(
 
     The registry's ``ci_followup_ignored_jobs`` names the informational jobs
     (failure aggregators, coverage) that fail only because another job did.
+    Without it those jobs would be filed, so a registry that cannot be read
+    stops the inspection, which the caller reports as incomplete.
     """
     try:
         ignored = load_registry(registry_path).get_repo(repo_full_name).ci_followup_ignored_jobs
     except (OSError, KeyError, ValueError) as exc:
-        # Without the registry the aggregator jobs are not skipped and may be filed.
-        logger.warning("Could not read the ignored jobs from %s: %s", registry_path, exc)
-        ignored = ()
+        raise RuntimeError(f"cannot read the ignored jobs from {registry_path}: {exc}") from exc
     return find_unrecorded_failures(
         artifact_client, repo_full_name, all_failures, jobs=jobs, ignored_jobs=ignored, unread=unread,
         unexplained=unexplained,

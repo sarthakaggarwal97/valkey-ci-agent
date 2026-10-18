@@ -390,6 +390,23 @@ class TestUnrecordedJobFailures:
         assert "jobs API down" in mock_emit.call_args.args[0]
 
 
+@patch("scripts.test_failure_detector.main.process_failures")
+@patch("scripts.test_failure_detector.main.jobs_for_run_attempt", return_value=())
+@patch("scripts.test_failure_detector.main.emit_job_summary")
+@patch("scripts.test_failure_detector.main.download_all_test_failures", return_value=b"{}")
+@patch("scripts.test_failure_detector.main.ArtifactClient")
+@patch("scripts.test_failure_detector.main.Github")
+def test_an_unreadable_registry_files_nothing(_gh, _client, _download, mock_emit, _jobs, mock_process, tmp_path):
+    """Without the ignored jobs, the aggregator and coverage jobs would be filed."""
+    rc = detector_main.run(github_token="t", repo_full_name="valkey-io/valkey", run_id=5,
+                           registry_path=str(tmp_path / "missing.yml"))
+
+    assert rc == 1
+    mock_process.assert_not_called()
+    summary = mock_emit.call_args.args[0]
+    assert "Incomplete CI inspection" in summary and "cannot read the ignored jobs" in summary
+
+
 def test_one_exact_job_snapshot_is_reused_for_urls_and_logs(monkeypatch):
     source_run = SimpleNamespace(run_attempt=3)
     gh = MagicMock()
