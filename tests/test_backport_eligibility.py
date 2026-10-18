@@ -827,8 +827,8 @@ def test_run_comments_after_each_batch(wired, monkeypatch):
         return "", "timeout after 900s", 1
 
     result = eligibility.run(repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=run_fn)
-    # #101 is judged and confirmed, then commented on, before the next batch.
-    assert calls[:3] == [0, 0, 1]
+    # #101 is judged, then commented on, before the next batch.
+    assert calls[:2] == [0, 1]
     assert result["prs"]["101"]["action"] == "commented"
     assert result["prs"]["103"] == {"action": "undecided"}
 
@@ -1234,35 +1234,3 @@ def test_run_caps_performance_or_tradeoff_fixes_at_medium(wired, labels, body):
     assert wired.posted == []
 
 
-def _two_judgments(first: dict[str, Any], second: dict[str, Any]):
-    answers = [first, second]
-
-    def run_fn(prompt: str, **kwargs: Any) -> tuple[str, str, int]:
-        verdict = answers.pop(0) if answers else second
-        return json.dumps({"verdicts": [{
-            "pr": 101, "reason": "r", **verdict,
-            "branches": [{"branch": b, "failure_site": {"file": "", "symbol": "int"}}
-                         for b in verdict.get("branches", [])],
-        }]}), "", 0
-    return run_fn
-
-
-def test_run_comments_only_when_a_second_judgment_agrees(wired):
-    result = eligibility.run(
-        repo_entry=wired.entry, date="2026-10-12", token="t",
-        run_fn=_two_judgments({"backport": True, "confidence": "high", "branches": ["9.1"]},
-                              {"backport": True, "confidence": "medium", "branches": ["9.1"]}),
-    )
-    assert result["prs"]["101"]["action"] == "not-commented"
-    assert result["prs"]["101"]["confidence"] == "medium"
-    assert wired.posted == []
-
-
-def test_agreement_keeps_only_branches_both_judgments_mark_high():
-    first = eligibility.Verdict(True, ("9.1", "9.0"), "r", "high", (("9.1", "a"), ("9.0", "b")))
-    second = eligibility.Verdict(True, ("9.1",), "r", "high")
-    agreed = eligibility._agree(first, second)
-    assert agreed.branches == ("9.1",) and agreed.confidence == "high"
-    assert agreed.why == (("9.1", "a"),) and agreed.dropped == ("9.0",)
-    assert eligibility._agree(first, None).confidence == "medium"
-    assert eligibility._agree(first, eligibility.Verdict(True, ("8.0",), "r", "high")).confidence == "medium"

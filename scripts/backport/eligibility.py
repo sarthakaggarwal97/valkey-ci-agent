@@ -757,30 +757,19 @@ def judge(
     repo_dir: str,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     timeout: int = 900,
-    confirm: bool = True,
 ) -> dict[int, Verdict]:
     """Ask Claude, without tools, whether and where each candidate should go.
 
-    A high-confidence verdict must survive the confidence cap and, with
-    *confirm*, a second independent judgment: only the branches both runs
-    mark high stay high, and any disagreement leaves the verdict "medium".
-    PRs missing from the result are undecided and must not be commented on.
+    A high-confidence verdict must also survive the confidence cap. PRs
+    missing from the result are undecided and must not be commented on.
     """
     by_number = {c.source.number: c for c in candidates}
-    verdicts = {
+    return {
         number: _cap_confidence(by_number[number], verdict)
         for number, verdict in _judge_once(
             candidates, repo=repo, repo_dir=repo_dir, run_fn=run_fn, timeout=timeout,
         ).items()
     }
-    sure = [by_number[n] for n, v in verdicts.items() if v.backport and v.confidence == "high"]
-    if confirm and sure:
-        logger.info("Confirming %d high-confidence verdict(s) with a second judgment", len(sure))
-        second = _judge_once(sure, repo=repo, repo_dir=repo_dir, run_fn=run_fn, timeout=timeout)
-        for candidate in sure:
-            number = candidate.source.number
-            verdicts[number] = _agree(verdicts[number], second.get(number))
-    return verdicts
 
 
 def _judge_once(
@@ -849,21 +838,6 @@ def _cap_confidence(candidate: Candidate, verdict: Verdict) -> Verdict:
         logger.info("#%d is %s; capping confidence at medium", source.number, why)
         return replace(verdict, confidence="medium")
     return verdict
-
-
-def _agree(first: Verdict, second: Verdict | None) -> Verdict:
-    """Keep only the branches both judgments mark high; anything else is "medium"."""
-    if second is None or not second.backport or second.confidence != "high":
-        return replace(first, confidence="medium")
-    both = tuple(b for b in first.branches if b in second.branches)
-    if not both:
-        return replace(first, confidence="medium")
-    return replace(
-        first,
-        branches=both,
-        why=tuple(item for item in first.why if item[0] in both),
-        dropped=tuple(dict.fromkeys((*first.dropped, *(b for b in first.branches if b not in both)))),
-    )
 
 
 def _parse_verdicts(
