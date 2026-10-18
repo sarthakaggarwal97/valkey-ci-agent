@@ -172,6 +172,8 @@ def test_a_job_failure_issue_is_titled_by_its_cause_and_marks_its_job():
     assert content.title == "[JOB-FAILURE] Valgrind error: Invalid read of size 8 at quicklistNext in Daily"
     assert content.labels == (issue_renderer.LABEL_NAME,)
     assert issue_renderer.job_marker("test-valgrind-test (unit)") in content.body
+    assert issue_renderer.parse_job_marker(content.body) == "test-valgrind-test (unit)"
+    assert issue_renderer.parse_job_marker("no marker here") == ""
     assert "Valgrind error: Invalid read" in content.body
     # Distinct causes never share an issue.
     other = JobFailure(job="test-valgrind-test (unit)", url="", step="test", summary=("[exception]: boom",))
