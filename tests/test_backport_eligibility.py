@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -18,6 +20,7 @@ from scripts.backport.eligibility import (
     MergedSourcePR,
 )
 from scripts.backport.registry import load_registry
+from scripts.backport.source_plan import prepare_source_change
 from scripts.release_notes import code_age
 from scripts.release_notes.models import MergedPR
 
@@ -234,6 +237,53 @@ class TestTraceOrigins:
             ("introduce two (#2)", ("9.0",)),
         }
 
+    def _squash_after_syncing_the_base(self, tmp_path: Path, subject: str) -> tuple[str, MergedSourcePR]:
+        """#4644's shape: the PR branch merges the base in, then the base moves
+        over a line the PR also changes before the PR is squashed."""
+        repo = tmp_path / "upstream"
+        repo.mkdir()
+        _git(repo, "init", "-q", "-b", "unstable")
+        _git(repo, "config", "user.email", "t@example.com")
+        _git(repo, "config", "user.name", "T")
+        _commit(repo, "old.c", "a\nb\nc\nd\ne\n", "base (#1)")
+        _git(repo, "branch", "9.0")
+        _git(repo, "checkout", "-q", "-b", "source")
+        first = _commit(repo, "old.c", "A\nb\nc\nd\ne\n", "fix a")
+        _git(repo, "checkout", "-q", "unstable")
+        _commit(repo, "other.c", "x\n", "unrelated (#2)")
+        _git(repo, "checkout", "-q", "source")
+        _git(repo, "merge", "-q", "--no-edit", "unstable")
+        sync = _git(repo, "rev-parse", "HEAD")
+        second = _commit(repo, "old.c", "A\nb\nc\nd\nE\n", "fix e")
+        _git(repo, "checkout", "-q", "unstable")
+        _commit(repo, "old.c", "A\nb\nc\nd\ne\n", "same fix to a (#3)")
+        _git(repo, "merge", "-q", "--squash", "source")
+        _git(repo, "commit", "-q", "-m", subject)
+        squash = _git(repo, "rev-parse", "HEAD")
+        clone = tmp_path / "clone"
+        subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(clone)],
+                       check=True, capture_output=True)
+        source = MergedSourcePR(
+            pr=MergedPR(number=10, title="t", author="a", url="u", merge_commit_sha=squash),
+            merged_at="2000-01-01T00:00:00Z",
+            source_commit_shas=(first, sync, second),
+        )
+        # The apply path's exact patch check rejects this squash.
+        with pytest.raises(eligibility.SourceChangeError):
+            prepare_source_change(str(clone), 10, squash, source.source_commit_shas)
+        return str(clone), source
+
+    def test_squash_of_a_branch_that_merged_the_base_is_traced(self, tmp_path):
+        clone, source = self._squash_after_syncing_the_base(tmp_path, "fix a and e (#10)")
+        origins = eligibility.trace_origins(clone, source, ["9.0"])
+        assert [(o.subject, o.branches) for o in origins] == [("base (#1)", ("9.0",))]
+
+    def test_one_parent_merge_sha_that_is_neither_squash_nor_rebase_is_undecided(self, tmp_path):
+        # Without GitHub's "(#10)" squash subject, nothing shows the SHA is the whole change.
+        clone, source = self._squash_after_syncing_the_base(tmp_path, "fix a and e")
+        with pytest.raises(eligibility.SourceChangeError):
+            eligibility.trace_origins(clone, source, ["9.0"])
+
 
 class TestParseVerdicts:
     def _parse(self, verdicts: Any) -> Any:
@@ -245,7 +295,20 @@ class TestParseVerdicts:
         parsed = self._parse([
             {"pr": 1, "backport": True, "branches": ["9.0", "8.0", "9.1"], "reason": " r "},
         ])
-        assert parsed == {1: eligibility.Verdict(True, ("9.1", "9.0"), "r")}
+        assert parsed == {1: eligibility.Verdict(
+            True, ("9.1", "9.0"), "r", "low", (("9.1", ""), ("9.0", "")),
+        )}
+
+    def test_reads_confidence_and_per_branch_reasons(self):
+        parsed = self._parse([
+            {"pr": 1, "backport": True, "confidence": "high", "reason": "r",
+             "branches": [{"branch": "9.0", "why": " has f() "}, {"branch": "8.0", "why": "x"}, 7]},
+        ])
+        assert parsed == {1: eligibility.Verdict(True, ("9.0",), "r", "high", (("9.0", "has f()"),))}
+
+    def test_unknown_confidence_is_low(self):
+        parsed = self._parse([{"pr": 1, "backport": True, "confidence": "certain", "branches": ["9.0"]}])
+        assert parsed is not None and parsed[1].confidence == "low"
 
     def test_positive_verdict_without_an_offered_branch_is_undecided(self):
         assert self._parse([{"pr": 2, "backport": True, "branches": ["9.1"]}]) == {}
@@ -413,14 +476,33 @@ def test_render_comment_names_branches_and_projects(tmp_path):
     assert "[9.0](https://github.com/orgs/org/projects/10)" in body
 
 
+def test_render_comment_makes_no_claim_about_history(tmp_path):
+    body = eligibility.render_comment(_repo_entry(tmp_path), ("9.0",), "Fixes a crash.")
+    assert "introduced before those release branches were cut" not in body
+    assert "confirm the defect exists on each branch" in body
+
+
+def test_render_comment_lists_why_each_branch_is_affected(tmp_path):
+    body = eligibility.render_comment(
+        _repo_entry(tmp_path), ("9.1", "9.0"), "Fixes a crash.",
+        {"9.1": "has dictScan (since 7.0)", "9.0": "same code"},
+    )
+    assert "- `9.1`: has dictScan (since 7.0)" in body
+    assert "- `9.0`: same code" in body
+
+
 def test_render_comment_bounds_the_model_reason(tmp_path):
     body = eligibility.render_comment(
         _repo_entry(tmp_path), ("9.0",), "Pings @maintainers\n\n## Heading " + "x" * 1000,
     )
     reason = body.splitlines()[3]
     assert reason.startswith("> Pings @\u200bmaintainers ## Heading")
-    assert len(reason) <= 402
+    assert len(reason) <= 410
     assert "\n## Heading" not in body
+
+
+def test_render_comment_reason_keeps_parentheses():
+    assert eligibility._inert_reason("Fixes (rare) overflow in f(x).") == "Fixes (rare) overflow in f(x)."
 
 
 def test_render_comment_reason_cannot_carry_markup(tmp_path):
@@ -429,10 +511,10 @@ def test_render_comment_reason_cannot_carry_markup(tmp_path):
         "## [details](https://evil.example/x) ![i](http://e/i.png) <img src=x> `c` www.evil.example",
     )
     quote = body.splitlines()[3]
-    assert quote.startswith("> details")
+    assert quote.startswith("> \\[details\\]")
     reason = quote[2:]
-    for char in "[]()<>!`":
-        assert char not in reason
+    # Every markup character is backslash-escaped, so none opens a construct.
+    assert re.search(r"(?<!\\)[\[\]<>!`]", reason) is None
     assert "://" not in reason and "www." not in reason
 
 
@@ -490,10 +572,24 @@ def wired(monkeypatch, upstream, tmp_path):
                        check=True)
 
     monkeypatch.setattr(eligibility, "clone_target_branch", clone)
+    # Every branch is GA, but went GA after these PRs merged, so landing on
+    # one is not a maintainer's triage decision.
+    after = datetime(2001, 1, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(eligibility, "ga_dates", lambda _, branches: {b: after for b in branches})
     return SimpleNamespace(entry=_repo_entry(tmp_path), posted=posted, cloned=cloned, nodes=nodes)
 
 
 def _model(verdicts: list[dict[str, Any]], prompts: list[str] | None = None):
+    # Verdicts in these tests are confident unless they say otherwise, and
+    # cite a failure site every fixture branch has.
+    verdicts = [
+        {"confidence": "high", **v, "branches": [
+            {"branch": b, "failure_site": {"file": "", "symbol": "int"}} if isinstance(b, str) else b
+            for b in v.get("branches", [])
+        ]}
+        for v in verdicts
+    ]
+
     def run_fn(prompt: str, **kwargs: Any) -> tuple[str, str, int]:
         assert kwargs["allowed_tools"] == ""
         if prompts is not None:
@@ -595,24 +691,24 @@ def test_run_skips_history_when_every_branch_is_already_queued(wired, monkeypatc
     }
 
 
-def test_run_source_change_failure_is_contained_to_that_pr(wired, monkeypatch):
-    real_trace_origins = eligibility.trace_origins
+def test_run_source_change_failure_needs_review_without_failing(wired, monkeypatch):
+    real_resolve = eligibility.resolve_change_base
 
-    def trace(repo_dir, source, branches, **kwargs):
+    def resolve(repo_dir, source, **kwargs):
         if source.number == 101:
             raise eligibility.SourceChangeError("unreadable merge history")
-        return real_trace_origins(repo_dir, source, branches, **kwargs)
+        return real_resolve(repo_dir, source, **kwargs)
 
-    monkeypatch.setattr(eligibility, "trace_origins", trace)
+    monkeypatch.setattr(eligibility, "resolve_change_base", resolve)
     result = eligibility.run(
         repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=_model([]),
     )
 
     assert result["prs"]["101"] == {
-        "action": "undecided",
-        "detail": "complete merged change needs manual eligibility review",
+        "action": "needs-review",
+        "detail": "complete merged change unknown: unreadable merge history",
     }
-    assert result["errors"] == ["#101: unreadable merge history"]
+    assert result["errors"] == []
 
 
 def test_run_origin_cap_preserves_evidence_for_every_branch(wired, monkeypatch):
@@ -637,13 +733,15 @@ def test_parse_git_timestamp_accepts_utc_z_on_python_39():
     )
 
 
-def test_multi_commit_rebase_is_undecided_instead_of_partially_traced(tmp_path):
+def _rebase_merged(tmp_path: Path, reword_tip: bool = False) -> tuple[str, MergedSourcePR]:
+    """A two-commit PR replayed onto an advanced main, one commit at a time."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "config", "user.email", "t@example.com")
     _git(repo, "config", "user.name", "T")
     _commit(repo, "value.txt", "base\n", "base")
+    _git(repo, "branch", "9.0")
     _git(repo, "checkout", "-q", "-b", "source")
     first = _commit(repo, "value.txt", "first\n", "first source commit")
     second = _commit(repo, "other.txt", "second\n", "second source commit")
@@ -651,17 +749,33 @@ def test_multi_commit_rebase_is_undecided_instead_of_partially_traced(tmp_path):
     _commit(repo, "main.txt", "advance\n", "advance main")
     _git(repo, "checkout", "-q", "source")
     _git(repo, "rebase", "-q", "main")
+    if reword_tip:
+        _git(repo, "commit", "-q", "--amend", "-m", "reworded on merge")
     rebased_tip = _git(repo, "rev-parse", "HEAD")
     assert rebased_tip != second
-
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(clone)],
+                   check=True, capture_output=True)
     source = MergedSourcePR(
         pr=MergedPR(number=10, title="t", author="a", url="u",
                     merge_commit_sha=rebased_tip),
         merged_at="2026-01-01T00:00:00Z",
         source_commit_shas=(first, second),
     )
+    return str(clone), source
+
+
+def test_multi_commit_rebase_traces_the_whole_series(tmp_path):
+    # The merge SHA alone only adds other.txt; the series also rewrites value.txt.
+    clone, source = _rebase_merged(tmp_path)
+    origins = eligibility.trace_origins(clone, source, ["9.0"])
+    assert [(o.subject, o.branches) for o in origins] == [("base", ("9.0",))]
+
+
+def test_rebase_that_does_not_match_the_pr_commits_is_undecided(tmp_path):
+    clone, source = _rebase_merged(tmp_path, reword_tip=True)
     with pytest.raises(eligibility.SourceChangeError, match="rebase-merged"):
-        eligibility.trace_origins(str(repo), source, ["9.0"])
+        eligibility.trace_origins(clone, source, ["9.0"])
 
 
 def test_run_any_tracing_failure_is_contained_to_that_pr(wired, monkeypatch):
@@ -682,7 +796,7 @@ def test_run_any_tracing_failure_is_contained_to_that_pr(wired, monkeypatch):
     assert [number for number, _ in wired.posted] == [101]
 
 
-def test_run_untraceable_pr_is_undecided(wired, monkeypatch):
+def test_run_untraceable_pr_needs_review_without_failing(wired, monkeypatch):
     def trace(repo_dir, source, branches, **kwargs):
         raise eligibility.OriginsUnknown("touches more than 40 files")
 
@@ -691,9 +805,9 @@ def test_run_untraceable_pr_is_undecided(wired, monkeypatch):
         repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=_model([]),
     )
     assert result["prs"]["101"] == {
-        "action": "undecided", "detail": "could not trace: touches more than 40 files",
+        "action": "needs-review", "detail": "could not trace: touches more than 40 files",
     }
-    assert "#101: could not trace: touches more than 40 files" in result["errors"]
+    assert result["errors"] == []
 
 
 def test_run_comments_after_each_batch(wired, monkeypatch):
@@ -705,14 +819,15 @@ def test_run_comments_after_each_batch(wired, monkeypatch):
 
     def run_fn(prompt: str, **kwargs: Any) -> tuple[str, str, int]:
         calls.append(len(wired.posted))
-        if len(calls) == 1:
+        if '"number": 101' in prompt:
             return json.dumps({"verdicts": [
-                {"pr": 101, "backport": True, "branches": ["9.0"], "reason": "r"},
+                {"pr": 101, "backport": True, "confidence": "high", "reason": "r",
+                 "branches": [{"branch": "9.0", "failure_site": {"file": "old.c", "symbol": "int a;"}}]},
             ]}), "", 0
         return "", "timeout after 900s", 1
 
     result = eligibility.run(repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=run_fn)
-    # The second batch is judged only after the first batch's comment is up.
+    # #101 is judged, then commented on, before the next batch.
     assert calls[:2] == [0, 1]
     assert result["prs"]["101"]["action"] == "commented"
     assert result["prs"]["103"] == {"action": "undecided"}
@@ -726,3 +841,396 @@ def test_run_ignores_a_registered_branch_that_does_not_exist(wired, upstream):
     )
     assert result["errors"] == []
     assert result["prs"]["101"]["action"] == "commented"
+
+
+@pytest.mark.parametrize(("errors", "exits"), [([], False), (["#2: no verdict"], True)])
+def test_main_warns_on_needs_review_and_fails_only_on_errors(monkeypatch, caplog, errors, exits):
+    monkeypatch.setattr(eligibility, "load_registry", lambda _: SimpleNamespace(get_repo=lambda _: None))
+    monkeypatch.setattr(eligibility, "emit_job_summary", lambda _: None)
+    monkeypatch.setattr(eligibility, "run", lambda **_: {
+        "repo": "org/core", "since": "2026-10-12", "date": "2026-10-12", "dry_run": False,
+        "prs": {"1": {"action": "needs-review", "detail": "could not trace: x"}},
+        "errors": errors,
+    })
+    monkeypatch.setattr("sys.argv", ["eligibility", "--date", "2026-10-12", "--target-token", "t"])
+    if exits:
+        with pytest.raises(SystemExit):
+            eligibility.main()
+    else:
+        eligibility.main()
+    assert any(
+        r.levelname == "WARNING" and "1 PR(s) need manual review: #1: could not trace: x" in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_run_comments_only_on_high_confidence(wired):
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "confidence": "medium",
+                        "branches": ["9.1"], "reason": "Maybe fixes f."}]),
+    )
+    assert result["prs"]["101"] == {
+        "action": "not-commented", "confidence": "medium",
+        "branches": ["9.1"], "reason": "Maybe fixes f.",
+    }
+    assert result["errors"] == [] and wired.posted == []
+    assert "| #101 | not-commented (medium confidence) | 9.1 |" in eligibility._summary(result)
+
+
+def test_run_gives_the_model_branch_evidence_and_linked_issues(wired):
+    wired.nodes[0]["closingIssuesReferences"] = {"nodes": [{"number": 9, "title": "f breaks", "body": "b"}]}
+    prompts: list[str] = []
+    eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t", dry_run=True,
+        run_fn=_model([{"pr": 101, "backport": False, "reason": "r"}], prompts),
+    )
+    payload = json.loads(prompts[0].split("## Pull requests (JSON)\n", 1)[1].split("\n## Output", 1)[0])
+    assert payload[0]["linked_issues"] == ["#9 f breaks\nb"]
+    assert payload[0]["branch_evidence"]["9.1"]["modified_files_present"] == ["feat.c"]
+    assert payload[0]["branch_evidence"]["9.1"]["patch_applies_cleanly"] is True
+
+
+def test_prompt_asks_for_precision():
+    prompt = eligibility._PROMPT_TEMPLATE
+    assert "when the evidence is thin, answer true" not in prompt.lower()
+    assert "confidence" in prompt and "fixes for flaky tests" in prompt.lower()
+
+
+@pytest.mark.parametrize(("value", "expected"), [
+    ("4849,4880", [4849, 4880]), (" #4644 , 4849 ", [4644, 4849]), ("4849 4880", [4849, 4880]),
+])
+def test_parse_pr_numbers(value, expected):
+    assert eligibility.parse_pr_numbers(value) == expected
+
+
+@pytest.mark.parametrize("value", ["", "4849,abc", "0", "4849;rm -rf /"])
+def test_parse_pr_numbers_rejects_anything_else(value):
+    with pytest.raises(ValueError):
+        eligibility.parse_pr_numbers(value)
+
+
+def test_fetch_merged_prs_reports_a_number_that_is_not_a_pr():
+    # GitHub fails the whole query for one number that is not a pull request.
+    class Gql:
+        def execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+            if "p99999999:" in query:
+                raise RuntimeError(
+                    "GraphQL errors: Could not resolve to a PullRequest with the number of 99999999."
+                )
+            return {"repository": {
+                "p7": {"number": 7, "mergedAt": "x", "mergeCommit": {"oid": "a"}, "baseRefName": "unstable"},
+            }}
+
+    prs, problems = eligibility.fetch_merged_prs(
+        Gql(), repo="org/core", base_branch="unstable", numbers=[7, 99999999], project_owner="org",
+    )
+    assert [pr.number for pr in prs] == [7]
+    assert problems == ["#99999999: not a merged pull request"]
+
+
+def test_fetch_merged_prs_other_graphql_errors_still_raise():
+    class Gql:
+        def execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+            raise RuntimeError("GraphQL errors: rate limited")
+
+    with pytest.raises(RuntimeError, match="rate limited"):
+        eligibility.fetch_merged_prs(
+            Gql(), repo="org/core", base_branch="unstable", numbers=[7], project_owner="org",
+        )
+
+
+def test_fetch_merged_prs_reports_unusable_numbers():
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class Gql:
+        def execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+            calls.append((query, variables))
+            return {"repository": {
+                "p7": {"number": 7, "mergedAt": "x", "mergeCommit": {"oid": "a"}, "baseRefName": "unstable"},
+                "p8": {"number": 8, "mergedAt": None, "mergeCommit": None, "baseRefName": "unstable"},
+                "p9": {"number": 9, "mergedAt": "x", "mergeCommit": {"oid": "b"}, "baseRefName": "9.0"},
+                "p10": None,
+            }}
+
+    prs, problems = eligibility.fetch_merged_prs(
+        Gql(), repo="org/core", base_branch="unstable", numbers=[10, 9, 8, 7, 7], project_owner="org",
+    )
+    assert [pr.number for pr in prs] == [7]
+    assert problems == [
+        "#8: not a merged pull request",
+        "#9: merged into 9.0, not unstable",
+        "#10: not a merged pull request",
+    ]
+    query, variables = calls[0]
+    assert variables == {"owner": "org", "name": "core"}
+    assert "p7: pullRequest(number: 7) { ...PrFields }" in query and "fragment PrFields" in query
+
+
+def test_run_evaluates_named_prs_instead_of_a_date_window(wired, monkeypatch):
+    by_number = {node["number"]: node for node in wired.nodes}
+    queries: list[str] = []
+
+    class Gql:
+        def __init__(self, token: str) -> None:
+            pass
+
+        def execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+            queries.append(query)
+            assert "search(" not in query
+            return {"repository": {
+                f"p{n}": {**by_number[n], "baseRefName": "unstable"} for n in (101, 104)
+            }}
+
+    monkeypatch.setattr(eligibility, "GitHubGraphQLClient", Gql)
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t", pr_numbers=[104, 101],
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
+    )
+    assert len(queries) == 1
+    assert result["requested_prs"] == [101, 104]
+    # The marker comment still keeps a named PR from being commented on twice.
+    assert result["prs"] == {
+        "101": {"action": "commented", "branches": ["9.1"], "reason": "Fixes f."},
+        "104": {"action": "already-commented"},
+    }
+    assert [number for number, _ in wired.posted] == [101]
+    assert eligibility._summary(result).startswith("## Backport eligibility for org/core, PRs #101, #104")
+
+
+def test_main_passes_named_prs(monkeypatch):
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(eligibility, "load_registry", lambda _: SimpleNamespace(get_repo=lambda _: None))
+    monkeypatch.setattr(eligibility, "emit_job_summary", lambda _: None)
+
+    def fake_run(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"repo": "org/core", "since": "x", "date": "x", "requested_prs": [4849],
+                "dry_run": True, "prs": {}, "errors": []}
+
+    monkeypatch.setattr(eligibility, "run", fake_run)
+    monkeypatch.setattr("sys.argv", ["eligibility", "--prs", "4849", "--target-token", "t", "--dry-run"])
+    eligibility.main()
+    assert seen["pr_numbers"] == [4849] and seen["dry_run"] is True
+
+
+def test_pr_on_the_open_backport_sweep_counts_as_landed(clone, upstream):
+    # #101's fix is cherry-picked to the 9.1 sweep branch, not yet merged to 9.1.
+    repo = upstream["path"]
+    _git(repo, "checkout", "-q", "-b", "agent/backport/sweep/9.1", "9.1")
+    _git(repo, "cherry-pick", upstream["shas"][101])
+    _git(repo, "commit", "-q", "--amend", "-m", "fix feature (#101)")
+    _git(repo, "checkout", "-q", "unstable")
+    dest = Path(clone).parent / "clone-sweep"
+    subprocess.run(["git", "clone", "-q", "--no-checkout", str(repo), str(dest)],
+                   check=True, capture_output=True)
+    history = eligibility.BranchHistory(str(dest))
+    assert history.present("9.1", {101: "2000-01-01T00:00:00Z"}) == {101}
+    assert history.present("9.0", {101: "2000-01-01T00:00:00Z"}) == set()
+    origins = eligibility.trace_origins(str(dest), _pr(101, upstream["shas"][101]), ["9.1"])
+    assert Candidate(_pr(101, upstream["shas"][101]), origins).branches == set()
+
+
+def test_parse_reads_failure_sites():
+    parsed = eligibility._parse_verdicts(json.dumps({"verdicts": [
+        {"pr": 1, "backport": True, "confidence": "high", "branches": [
+            {"branch": "9.1", "why": "w", "failure_site": {"file": "src/expire.c", "symbol": "serverAssert(t >= 0)"}},
+            {"branch": "9.0", "failure_site": "not an object"},
+        ]},
+    ]}), {1: {"9.1", "9.0"}})
+    assert parsed is not None
+    assert parsed[1].sites == (("9.1", "src/expire.c", "serverAssert(t >= 0)"),)
+
+
+def _verdict(*sites: tuple[str, str, str]) -> eligibility.Verdict:
+    branches = tuple(dict.fromkeys(b for b, _, _ in sites)) or ("9.1", "9.0")
+    return eligibility.Verdict(True, branches, "r", "high", tuple((b, "") for b in branches), sites)
+
+
+def test_verify_sites_drops_a_branch_without_the_failure_site(clone):
+    # feat.c (and f) reached 9.1 by cherry-pick; 9.0 never had it.
+    verdict = eligibility.verify_sites(clone, _verdict(
+        ("9.1", "feat.c", "int f(void)"), ("9.0", "feat.c", "int f(void)"),
+    ))
+    assert verdict.branches == ("9.1",) and verdict.dropped == ("9.0",)
+    assert verdict.confidence == "high"
+
+
+def test_verify_sites_with_no_site_left_is_never_commented(clone):
+    verdict = eligibility.verify_sites(clone, _verdict(("9.0", "old.c", "serverAssert(t >= 0)")))
+    assert verdict.branches == () and verdict.confidence == "low"
+
+
+def test_verify_sites_unchecked_site_downgrades_to_medium(clone):
+    verdict = eligibility.verify_sites(clone, _verdict(("9.1", "feat.c", ""), ("9.0", "old.c", "int a;")))
+    assert verdict.branches == ("9.1", "9.0") and verdict.confidence == "medium"
+
+
+def test_verify_sites_falls_back_to_the_tree_for_a_moved_file(clone):
+    # The model may name the development branch's path for a file a release
+    # branch keeps elsewhere; the site is then searched for in the whole tree.
+    verdict = eligibility.verify_sites(clone, _verdict(("9.0", "src/renamed.c", "int c;")))
+    assert verdict.branches == ("9.0",)
+
+
+def test_verify_sites_ignores_whitespace(clone):
+    # 7.2 predates the clang-format reformat, so a site quoted from current
+    # code is spaced differently there; it is still the same code.
+    for path in ("feat.c", ""):
+        verdict = eligibility.verify_sites(clone, _verdict(("9.1", path, "int f( void ){return 0;}")))
+        assert verdict.branches == ("9.1",), path
+    assert eligibility.verify_sites(clone, _verdict(("9.1", "feat.c", "int f(int)"))).branches == ()
+
+
+def test_verify_sites_patterns_are_fixed_strings(clone):
+    # A regex or option-looking site matches only itself, literally.
+    for symbol in (".*", "--all-match", "int [a-c];"):
+        assert eligibility.verify_sites(clone, _verdict(("9.0", "", symbol))).branches == ()
+
+
+def test_run_does_not_comment_when_the_failure_site_is_missing(wired):
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "reason": "crash", "branches": [
+            {"branch": "9.1", "failure_site": {"file": "feat.c", "symbol": "serverAssert(t >= 0)"}},
+        ]}]),
+    )
+    assert result["prs"]["101"]["action"] == "not-commented"
+    assert result["prs"]["101"]["failure_site_missing_on"] == ["9.1"]
+    assert wired.posted == []
+
+
+def test_run_pr_maintainers_queued_on_a_ga_branch_is_triaged(wired, monkeypatch):
+    # #4880's shape: queued for every GA branch but one (here 9.0). The branch
+    # maintainers left out (9.1) is their decision too, so the PR is settled
+    # before the model and never sent to it.
+    wired.nodes[0]["projectItems"] = {"nodes": [{"project": {"number": 10, "owner": {"login": "org"}}}]}
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(eligibility, "ga_dates", lambda *_: {"9.0": epoch, "9.1": epoch})
+    prompts: list[str] = []
+    model = _model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}])
+
+    def run_fn(prompt, **kwargs):
+        prompts.append(prompt)
+        return model(prompt, **kwargs)
+
+    result = eligibility.run(repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=run_fn)
+    assert result["prs"]["101"] == {"action": "triaged", "triaged_on": ["9.0"]}
+    assert result["errors"] == [] and wired.posted == []
+    assert not any('"number": 101' in prompt for prompt in prompts)
+    assert "maintainers took it to 9.0" in eligibility._summary(result)
+
+
+def test_run_queue_on_a_pre_ga_branch_is_not_triage(wired, monkeypatch):
+    # Every PR lands on a pre-GA branch (here 9.0); that says nothing about
+    # backports, so the GA branch 9.1 is still suggested.
+    wired.nodes[0]["projectItems"] = {"nodes": [{"project": {"number": 10, "owner": {"login": "org"}}}]}
+    monkeypatch.setattr(eligibility, "ga_dates", lambda *_: {"9.1": datetime(2001, 1, 1, tzinfo=timezone.utc)})
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
+    )
+    assert result["prs"]["101"]["action"] == "commented"
+
+
+def test_run_never_suggests_a_pre_ga_branch(wired, monkeypatch):
+    # #4890's shape: 9.2 has only an RC, and its sweep takes every change.
+    monkeypatch.setattr(eligibility, "ga_dates", lambda *_: {})
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
+    )
+    assert result["prs"]["101"] == {
+        "action": "not-eligible", "detail": "no release branch still needs the change",
+    }
+    assert wired.posted == []
+
+
+def test_run_pr_landed_on_a_ga_branch_is_triaged(wired, monkeypatch, upstream):
+    # #102 already landed on 9.0; with 9.0 GA that is a maintainer decision.
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(eligibility, "ga_dates", lambda *_: {"9.0": epoch, "9.1": epoch})
+    wired.nodes[1]["projectItems"] = {"nodes": []}
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": False, "reason": "r"},
+                       {"pr": 102, "backport": True, "branches": ["9.1"], "reason": "Fixes old."}]),
+    )
+    assert result["prs"]["102"]["action"] == "triaged"
+    assert result["prs"]["102"]["triaged_on"] == ["9.0"]
+    assert [number for number, _ in wired.posted] == []
+
+
+def test_prompt_asks_for_failure_sites_on_the_named_branches():
+    prompt = eligibility._PROMPT_TEMPLATE
+    assert "failure_site" in prompt and "not on the development branch" in prompt
+
+
+def test_run_merge_commit_not_on_the_development_branch_is_not_on_base(wired, upstream, monkeypatch):
+    # #4850's shape: GitHub says merged, but unstable was reset past the commit.
+    repo = upstream["path"]
+    _git(repo, "checkout", "-q", "-b", "abandoned")
+    orphan = _commit(repo, "old.c", "int a;\nint b;\nint x;\n", "lost change (#106)")
+    _git(repo, "checkout", "-q", "unstable")
+
+    def no_triage(*args: Any, **kwargs: Any) -> list[str]:
+        raise AssertionError("history must not be asked about a commit off the branch")
+
+    monkeypatch.setattr(eligibility, "triaged_branches", no_triage)
+    wired.nodes[:] = [
+        {"number": 106, "mergedAt": "2000-01-01T00:00:00Z", "mergeCommit": {"oid": orphan},
+         "commits": {"nodes": [{"commit": {"oid": orphan}}]}},
+        {"number": 107, "mergedAt": "2000-01-01T00:00:00Z", "mergeCommit": {"oid": "f" * 40},
+         "commits": {"nodes": [{"commit": {"oid": "f" * 40}}]}},
+    ]
+    result = eligibility.run(repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=_model([]))
+    assert result["prs"]["106"]["action"] == "not-on-base"
+    assert result["prs"]["107"]["action"] == "not-on-base"
+    assert result["errors"] == []
+
+
+def test_run_classifies_test_only_prs_before_any_history_query(wired, upstream, monkeypatch):
+    (upstream["path"] / "tests").mkdir()
+    test_only = _commit(upstream["path"], "tests/t.tcl", "test {x} {}\n", "deflake (#108)")
+
+    def no_triage(*args: Any, **kwargs: Any) -> list[str]:
+        raise AssertionError("triage must not run for a test-only PR")
+
+    monkeypatch.setattr(eligibility, "triaged_branches", no_triage)
+    wired.nodes[:] = [{"number": 108, "mergedAt": "2000-01-01T00:00:00Z",
+                       "mergeCommit": {"oid": test_only},
+                       "commits": {"nodes": [{"commit": {"oid": test_only}}]}}]
+    result = eligibility.run(repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=_model([]))
+    assert result["prs"]["108"] == {
+        "action": "not-eligible", "detail": "changes only tests, test harness, CI, or docs",
+    }
+
+
+def test_reads_labels_of_the_pr_and_its_linked_issues():
+    node = TestPrFromNode()._node(
+        labels={"nodes": [{"name": "bug"}]},
+        closingIssuesReferences={"nodes": [
+            {"number": 4764, "title": "t", "body": "b",
+             "labels": {"nodes": [{"name": "bug"}, {"name": "performance"}]}},
+        ]},
+    )
+    pr = eligibility._pr_from_node(node, "org")
+    assert pr is not None and pr.labels == ("bug", "performance")
+
+
+@pytest.mark.parametrize(("labels", "body"), [
+    ({"nodes": [{"name": "performance"}]}, "Fixes a stall."),
+    ({"nodes": []}, "A throughput-under-saturation trade-off: fewer stalls, more latency."),
+])
+def test_run_caps_performance_or_tradeoff_fixes_at_medium(wired, labels, body):
+    wired.nodes[0]["labels"] = labels
+    wired.nodes[0]["body"] = body
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
+    )
+    assert result["prs"]["101"]["action"] == "not-commented"
+    assert result["prs"]["101"]["confidence"] == "medium"
+    assert wired.posted == []
+
+

@@ -105,10 +105,18 @@ def modified_line_origins(repo_dir: str, sha: str) -> Optional[set[str]]:
         return None
 
 
-def line_origins(repo_dir: str, sha: str, *, anchor_insertions: bool = False) -> set[str]:
+def line_origins(
+    repo_dir: str,
+    sha: str,
+    *,
+    base: Optional[str] = None,
+    anchor_insertions: bool = False,
+) -> set[str]:
     """Return the commits that introduced the pre-image lines *sha* touches.
 
     Diffs the commit against its first parent and blames that same pre-image.
+    With *base*, the change is instead the range ``base..sha`` (a rebased
+    series of commits read as one change), diffed and blamed at *base*.
     Using an explicit first-parent diff makes a two-parent GitHub merge commit
     behave like its pull-request patch instead of Git's combined-diff format.
     Blame honours the parent's ``.git-blame-ignore-revs``, so a mass reformat
@@ -126,7 +134,7 @@ def line_origins(repo_dir: str, sha: str, *, anchor_insertions: bool = False) ->
     if not sha:
         raise OriginsUnknown("no commit")
     try:
-        parent = git_output(repo_dir, "rev-parse", f"{sha}^1").strip()
+        parent = git_output(repo_dir, "rev-parse", base or f"{sha}^1").strip()
         diff = git_output(
             repo_dir,
             "diff",

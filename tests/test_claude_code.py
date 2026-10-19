@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import logging
 import subprocess
+import time
 
 from scripts.ai import claude_code
 
@@ -259,3 +260,18 @@ def test_run_claude_code_reports_missing_cli(monkeypatch):
     monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
 
     assert claude_code.run_claude_code("prompt") == ("", "claude not found", 127)
+
+
+def test_timeout_fires_even_when_the_cli_never_reads_its_prompt(monkeypatch):
+    # A prompt larger than the pipe buffer, to a process that never reads
+    # stdin and spawns a child: the call must still time out and kill both.
+    real_popen = subprocess.Popen
+
+    def fake_popen(cmd, **kwargs):
+        return real_popen(["sh", "-c", "sleep 30 & sleep 30"], **kwargs)
+
+    monkeypatch.setattr(claude_code.subprocess, "Popen", fake_popen)
+    started = time.monotonic()
+    stdout, stderr, rc = claude_code.run_claude_code("x" * 1_000_000, timeout=2)
+    assert stderr == "timeout after 2s" and rc == 1
+    assert time.monotonic() - started < 20
