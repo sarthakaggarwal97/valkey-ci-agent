@@ -500,12 +500,29 @@ def test_a_terminal_result_is_posted_with_the_marker_that_retires_the_job(monkey
     assert "<!-- valkey-ci-agent:auto-ci-followup" in body and " outcome=pushed -->" in body
 
 
-def test_a_failed_result_is_posted_without_a_marker_so_the_job_is_retried(monkeypatch) -> None:
+def test_a_failed_result_is_posted_with_a_failed_marker(monkeypatch) -> None:
     report, pr = _report(monkeypatch, ResultKind.FAILED)
 
     assert report["action"] == "failed"
     (body,) = pr.posted
-    assert "<!-- valkey-ci-agent:auto-ci-followup" not in body
+    assert "<!-- valkey-ci-agent:auto-ci-followup" in body and " outcome=failed -->" in body
+
+
+def test_a_job_that_keeps_failing_is_retried_a_bounded_number_of_times(monkeypatch) -> None:
+    """A failure says nothing about the job, so it is tried again, but not every hour forever."""
+    once = (_marker(run=10, job=3, outcome="failed"),)
+    target, reason, _gh = _select(monkeypatch, pr=_pr(comments=once))
+    assert reason == "actionable" and target is not None and target.job.id == 3
+
+    twice = once + (_marker(run=11, job=3, outcome="failed"),)
+    target, reason, _gh = _select(monkeypatch, pr=_pr(comments=twice))
+    assert target is None and reason == "no-unhandled-actionable-failures"
+
+
+def test_failed_attempts_count_against_the_heads_budget(monkeypatch) -> None:
+    failed = tuple(_marker(run=index, job=index, outcome="failed") for index in range(50, 53))
+    _target, reason, _gh = _select(monkeypatch, pr=_pr(comments=failed))
+    assert reason == "attempt-budget-exhausted"
 
 
 # --- a pushed fix or a draft PR also has CI nobody else watches --------------------

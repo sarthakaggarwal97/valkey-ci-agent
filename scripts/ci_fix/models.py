@@ -42,6 +42,12 @@ class ResultKind(str, Enum):
     FAILED = "failed"
 
 
+# A failed attempt (an agent crash, the time running out) says nothing about
+# the failure, so it is tried again, this many times in all, before every
+# front door that retries on its own gives up on it.
+MAX_FAILED_ATTEMPTS = 2
+
+
 class FailureType(str, Enum):
     """How the agent classified the observed failure."""
 

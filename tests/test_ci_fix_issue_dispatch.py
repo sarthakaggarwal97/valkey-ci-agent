@@ -19,11 +19,11 @@ def _detector_issue(number, **kwargs):
     return issue
 
 
-def _reported(issue, run_id):
+def _reported(issue, run_id, action="refused"):
     failure = issues.parse_issue(issue)
     issues._terminal_comment(  # the comment the issue fix posts on finishing
         issue, replace(failure, run_id=run_id),
-        repo_full_name="o/r", action="refused", summary="did not reproduce",
+        repo_full_name="o/r", action=action, summary="did not reproduce",
     )
     issue.comments[-1].user = SimpleNamespace(login=_BOT)
 
@@ -83,7 +83,7 @@ def test_issues_that_need_no_run_are_skipped_with_their_reason():
     assert skipped == {
         6: "issue #6 is assigned",
         5: "issue #5 already has an open linked pull request",
-        4: "the bot already reported an attempt for run 100",
+        4: "the bot is done with run 100",
     }  # #3 is not a detector issue at all
 
 
@@ -94,3 +94,39 @@ def test_a_newer_occurrence_than_the_one_reported_gets_another_run():
     dispatched, _skipped = _dispatch([issue], _workflow())
 
     assert dispatched == [7]
+
+
+def _done(issue):
+    return issues.fix_reported(issue, issues.parse_issue(issue), repo_full_name="o/r", bot_login=_BOT)
+
+
+def test_a_failed_attempt_is_tried_again_once_and_a_result_ends_it():
+    issue = _detector_issue(4, body=_test_issue_body(run_id=100))
+    assert not _done(issue)
+
+    _reported(issue, 100, action="failed")  # an agent crash, the time running out
+    assert not _done(issue)
+    _reported(issue, 100, action="failed")
+    assert _done(issue)
+
+    opened = _detector_issue(5, body=_test_issue_body(run_id=100))
+    _reported(opened, 100, action="opened")
+    assert _done(opened)
+
+
+def test_another_occurrences_result_does_not_count_for_this_one():
+    issue = _detector_issue(4, body=_test_issue_body(run_id=200))
+    _reported(issue, 100, action="opened")  # an earlier occurrence's draft
+
+    assert not _done(issue)
+
+
+def test_a_result_recorded_before_the_marker_still_counts():
+    issue = _detector_issue(4, body=_test_issue_body(run_id=100))
+    issue.comments.append(SimpleNamespace(
+        user=SimpleNamespace(login=_BOT),
+        body="**Automatic CI fix \u2014 failed.** The automatic fix attempt failed: boom\n\n"
+             "Source: [run 100](https://github.com/o/r/actions/runs/100).",
+    ))
+
+    assert _done(issue)

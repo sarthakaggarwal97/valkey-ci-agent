@@ -19,7 +19,7 @@ from github.GithubException import GithubException
 
 from scripts.backport.pr_creator import create_pull_from_push_repo
 from scripts.backport.sweep_prs import find_existing_pr
-from scripts.ci_fix.comment import candidate_context
+from scripts.ci_fix.comment import candidate_context, prose
 from scripts.ci_fix.issue_state import has_open_linked_pr, parse_detector_occurrence
 from scripts.ci_fix.models import (
     CandidateAction,
@@ -40,7 +40,6 @@ from scripts.ci_fix.push import (
 )
 from scripts.common.git_clone import is_full_sha
 from scripts.common.github_client import retry_github_call
-from scripts.common.text_utils import compact_text
 
 
 class TargetRevalidationFailed(Exception):
@@ -473,46 +472,36 @@ def _draft_body(task: FixTask, candidate: FixCandidate | None) -> str:
         # its own test; the ones that were not are only mentioned.
         closes = [failure.issue_number, *(candidate.also_fixes if candidate else ())]
         lines += [" ".join(f"Fixes #{number}" for number in closes), ""]
-        if candidate and candidate.also_touches:
-            # In code, unlinked: an open PR GitHub links to an issue keeps it
-            # from a fix of its own, and this one has not shown it fixes them.
-            touched = ", ".join(f"`#{number}`" for number in candidate.also_touches)
-            lines += [
-                f"This also changes the tests of issues {touched}, without showing that it fixes "
-                "them; see what the bot checked below.",
-                "",
-            ]
-    lines += [
-        f"The [{_source_label(failure)} failure]({failure.run_url}) was in `{failure.job_name}`.",
-        "",
-    ]
-    if failure.description:
-        lines += [compact_text(failure.description, 2_000), ""]
+    description = prose(failure.description, 2_000) if failure.description else (
+        f"`{failure.job_name}` failed in a {_source_label(failure)} run."
+    )
+    lines += [f"{description} [See the run]({failure.run_url}).", ""]
+    if candidate and candidate.also_touches:
+        # In code, unlinked: an open PR GitHub links to an issue keeps it
+        # from a fix of its own, and this one has not shown it fixes them.
+        touched = ", ".join(f"`#{number}`" for number in candidate.also_touches)
+        one = len(candidate.also_touches) == 1
+        lines += [
+            f"It also changes the {'test of issue' if one else 'tests of issues'} {touched}, "
+            f"without showing that it fixes {'it' if one else 'them'}.",
+            "",
+        ]
     if candidate is not None and candidate.action is CandidateAction.PORT:
         lines += [f"**Upstream fix:** `{candidate.port_commit}`", ""]
     if candidate is not None:
         lines += candidate_context(candidate, include_reasoning=True)
-    lines += [
-        "> [!IMPORTANT]",
-        "> This draft was prepared automatically. Normal pull-request CI and "
-        "human review are authoritative; the bot never merges it.",
-        "",
-    ]
     if candidate is None:
-        lines += [
-            "This branch was prepared by an earlier automatic attempt. Review "
-            "its commit and the normal pull-request CI results before merge.",
-        ]
+        sign_off = "An earlier attempt prepared this branch: review its commit before merging."
     elif candidate.action is CandidateAction.PORT:
-        lines += [
-            "The cherry-pick preserves the upstream commit message. The target "
-            "repository's normal DCO check remains authoritative.",
-        ]
+        sign_off = "The cherry-pick keeps the upstream commit message and its sign-off."
     else:
-        lines += [
-            "The bot-authored commit intentionally has no DCO sign-off. A maintainer "
-            "who takes over the change must review and sign it off before merge.",
-        ]
+        sign_off = "Its commit has no DCO sign-off: whoever takes the change over signs it off."
+    lines += [
+        "---",
+        "",
+        f"<sub>Prepared by the CI-fix bot, which never merges. This PR's CI and a maintainer's "
+        f"review decide. {sign_off}</sub>",
+    ]
     return "\n".join(lines)
 
 
