@@ -152,6 +152,38 @@ def test_squash_ignores_adjacent_target_update_context(tmp_path: Path) -> None:
     assert _git(repo, "merge-base", squash_sha, second) == base
 
 
+def test_squash_ignores_split_hunks_after_target_update(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    base = _commit(repo, "tests.tcl", "start\nold alpha\nold beta\nend\n", "base")
+
+    _git(repo, "checkout", "-q", "-b", "source")
+    first = _commit(
+        repo, "tests.tcl", "start\nnew alpha\nold beta\nend\n", "update alpha"
+    )
+    second = _commit(
+        repo, "tests.tcl", "start\nnew alpha\nnew beta\nend\n", "update beta"
+    )
+
+    _git(repo, "checkout", "-q", "main")
+    _commit(
+        repo, "tests.tcl", "start\nold alpha\ntarget-only line\nold beta\nend\n", "advance target"
+    )
+    squash_sha = _commit(
+        repo, "tests.tcl", "start\nnew alpha\ntarget-only line\nnew beta\nend\n", "squash source"
+    )
+
+    plan = plan_source_change(str(repo), squash_sha, [first, second])
+
+    assert plan.strategy == "squash"
+    assert plan.commits == (squash_sha,)
+    assert plan.source_commits == (first, second)
+    assert _git(repo, "merge-base", squash_sha, second) == base
+
+
 def test_multi_commit_rebase_merge_is_refused(
     history: tuple[Path, str, str, str],
 ) -> None:

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from typing import Literal, Mapping, Sequence
 
@@ -143,12 +145,9 @@ def plan_source_change(
     is a real merge commit for "merge", an aggregate commit for "squash", and
     only the final rewritten commit for a multi-commit "rebase and merge".
 
-    For a one-parent merge SHA and multiple source commits, compare exact
-    patch identities. A matching aggregate is a squash commit; a non-match
-    means the pull request was rebase-merged and the merge SHA is NOT the
-    complete change — replaying a rebased series is not supported, so this
-    fails closed and the pull request must be backported manually.
-    Disconnected or unreadable histories fail closed too.
+    For a one-parent merge SHA and multiple source commits, require either an
+    exact patch identity or proof that its patch recreates the PR-head tree.
+    Incomplete rebase merges and unreadable histories still fail closed.
     """
 
     source_commits = tuple(sha for sha in commit_shas if sha)
@@ -221,7 +220,16 @@ def plan_source_change(
         source_base,
         source_commits[-1],
     )
-    if source_patch_id and source_patch_id == merge_patch_id:
+    if source_patch_id and (
+        source_patch_id == merge_patch_id
+        or _patch_recreates_tree(
+            repo_dir,
+            merge_parents[0],
+            merge_commit_sha,
+            source_base,
+            source_commits[-1],
+        )
+    ):
         return SourceChangePlan(
             strategy="squash",
             commits=(merge_commit_sha,),
@@ -301,6 +309,33 @@ def _exact_patch_id(repo_dir: str, base: str, tip: str) -> str:
         )
     fields = result.stdout.decode("ascii", errors="replace").strip().split()
     return fields[0] if fields else ""
+
+
+def _patch_recreates_tree(
+    repo_dir: str, patch_base: str, patch_tip: str, target_base: str, expected_tip: str,
+) -> bool:
+    """Prove completeness when base changes alter Git's hunk decomposition."""
+    patch = _git_bytes(
+        repo_dir, "diff", "--binary", "--full-index", "--no-ext-diff",
+        "--unified=0", patch_base, patch_tip,
+    )
+    with tempfile.TemporaryDirectory(prefix="backport-source-plan-") as temp_dir:
+        env = dict(os.environ, GIT_INDEX_FILE=os.path.join(temp_dir, "index"))
+        _git(repo_dir, "read-tree", target_base, env=env)
+        applied = subprocess.run(
+            ["git", "apply", "--cached", "--unidiff-zero", "--whitespace=nowarn"],
+            cwd=repo_dir,
+            input=patch.stdout,
+            capture_output=True,
+            check=False,
+            env=env,
+        )
+        if applied.returncode != 0:
+            return False
+        actual_tree = _git(repo_dir, "write-tree", env=env).stdout.strip()
+
+    expected_tree = _git(repo_dir, "rev-parse", f"{expected_tip}^{{tree}}")
+    return actual_tree == expected_tree.stdout.strip()
 
 
 def _git(
