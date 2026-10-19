@@ -303,4 +303,3 @@ def test_every_type_a_fix_job_decodes_resolves_on_the_oldest_python_the_job_may_
                         offenders.append(f"{kind.__name__}.{ast.unparse(item.target)}")
     assert {models.Failure, ci_job.JobSpec, reproduce.JobCommands} <= seen
     assert offenders == []
-

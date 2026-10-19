@@ -7,9 +7,10 @@ which runs like every other (:mod:`scripts.ci_fix.run`).
 
 The engine owns diagnosis, editing, and publication. The target PR's normal CI
 remains the final verifier, matching the existing backport workflow model. A
-terminal result comment carries a hidden marker so the same logical job is not
-retried on the same head. Failed attempts carry no marker: transient agent or
-API failures are eligible for a later retry.
+result comment carries a hidden marker with its outcome, so the same logical
+job is not retried on the same head once it has a result. A failed attempt (an
+agent crash, the time running out) is retried, up to ``MAX_FAILED_ATTEMPTS``
+in all.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,6 +34,7 @@ from scripts.ci_fix.github_runs import (
     workflow_identity,
 )
 from scripts.ci_fix.models import (
+    MAX_FAILED_ATTEMPTS,
     Failure,
     FixPlan,
     FixPolicy,
@@ -253,19 +256,18 @@ def plan_request(
 
 
 def report_result(gh: Any, plan: FixPlan, result: FixResult) -> dict[str, Any]:
-    """Comment the result on the PR; a terminal one carries the markers that retire the job.
+    """Comment the result on the PR, with the markers that record its outcome.
 
-    A failed attempt carries none, so the job is retried later.
+    The outcome tells a refusal, which retires the job but changed nothing,
+    and a failure, which is retried a bounded number of times, from an
+    attempt that counts against the head's budget.
     """
     failure = plan.task.failure
     what = "backport" if is_backport_branch(plan.task.target.branch) else "pull request"
-    body = f"Automatic follow-up for the current {what} head.\n\n" + render_result(result)
-    if result.kind is not ResultKind.FAILED:
-        # The outcome tells a refusal, which retires the job but changed
-        # nothing, from an attempt that counts against the head's budget.
-        body += "\n\n" + "\n".join(
-            marker.removesuffix(" -->") + f" outcome={result.kind.value} -->" for marker in plan.markers
-        )
+    body = f"Automatic follow-up on this {what}'s CI.\n\n" + render_result(result)
+    body += "\n\n" + "\n".join(
+        marker.removesuffix(" -->") + f" outcome={result.kind.value} -->" for marker in plan.markers
+    )
     retry_github_call(
         lambda: gh.get_repo(failure.repo_full_name).get_pull(failure.pr_number).create_issue_comment(body),
         retries=3,
@@ -327,13 +329,16 @@ def _handled_failures(
     head_sha: str,
     bot_login: str,
 ) -> _HandledFailures:
-    """Return terminal attempts and handled jobs for ``head_sha`` only.
+    """Return the attempts and handled jobs for ``head_sha`` only.
 
     A refusal changed nothing on the branch: it retires its job, but is not
-    one of the head's attempts.
+    one of the head's attempts. A failure is one, and retires its job only
+    after ``MAX_FAILED_ATTEMPTS`` of them, since it says nothing about the job.
     """
     job_ids: set[int] = set()
     job_keys: set[str] = set()
+    failed_ids: Counter[int] = Counter()
+    failed_keys: Counter[str] = Counter()
     attempt_count = 0
     comments = retry_github_call(
         lambda: list(pr.get_issue_comments()),
@@ -356,9 +361,17 @@ def _handled_failures(
         if any(match.group("outcome") != ResultKind.REFUSED.value for match in matches):
             attempt_count += 1
         for match in matches:
-            job_ids.add(int(match.group("job")))
-            if match.group("key"):
-                job_keys.add(match.group("key"))
+            job, key = int(match.group("job")), match.group("key")
+            if match.group("outcome") == ResultKind.FAILED.value:
+                failed_ids[job] += 1
+                if key:
+                    failed_keys[key] += 1
+                continue
+            job_ids.add(job)
+            if key:
+                job_keys.add(key)
+    job_ids.update(job for job, count in failed_ids.items() if count >= MAX_FAILED_ATTEMPTS)
+    job_keys.update(key for key, count in failed_keys.items() if count >= MAX_FAILED_ATTEMPTS)
     return _HandledFailures(
         job_ids=frozenset(job_ids),
         job_keys=frozenset(job_keys),

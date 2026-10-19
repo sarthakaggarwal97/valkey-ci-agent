@@ -182,9 +182,23 @@ def test_current_head_loader_filters_locally_and_collapses_old_runs():
 def test_a_whole_suite_schema_validator_is_not_ranked_as_a_build_break():
     from scripts.ci_fix.github_runs import job_priority
 
-    assert job_priority("reply-schemas-linter") == 0   # a lint: deterministic
-    assert job_priority("build-macos-latest") == 0
+    assert job_priority("reply-schemas-linter") == 1   # a lint
+    assert job_priority("build-macos-latest") == 1
     assert job_priority("reply-schemas-validator") > job_priority("build-macos-latest")
+
+
+def test_a_test_job_is_tried_before_the_lint_and_build_jobs_of_the_same_run():
+    """A lint or build failure's fix is often in the CI definition, which the bot never
+    changes, while a test failure is reproduced and verified: the fork's follow-up spent
+    two rounds on format-yaml and build-debian-old before it reached the test."""
+    from scripts.ci_fix.github_runs import FailedJob, job_priority, select_job
+
+    jobs = [FailedJob(name=name, id=index) for index, name in enumerate(
+        ("format-yaml", "build-debian-old", "test-sanitizer-address", "test-ubuntu-latest"), 1)]
+
+    assert select_job(jobs).name == "test-ubuntu-latest"
+    assert job_priority("test-ubuntu-latest") < job_priority("format-yaml") < job_priority("test-sanitizer-address")
+    assert job_priority("test-valgrind-test (unit)") == 2  # a valgrind job is not a plain test job
 
 
 def test_newest_runs_are_collapsed_by_workflow_and_exact_attempt():

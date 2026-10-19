@@ -316,7 +316,7 @@ def test_ready_fix_uses_exact_job_and_opens_draft_in_target_repo(
     assert result["action"] == "opened"
     assert result["pr"] == 55
     assert len(issue.comments) == 1
-    assert "Normal pull-request CI and human review are authoritative" in issue.comments[0].body
+    assert "with a fix. Its CI and a maintainer's review decide whether it merges." in issue.comments[0].body
     assert "verified" not in issue.comments[0].body.lower()
 
 
@@ -444,8 +444,43 @@ def test_no_matching_job_records_one_terminal_refusal(monkeypatch):
     assert result["action"] == "refused"
     assert "no failed job" in result["summary"]
     assert len(issue.comments) == 1
-    assert "No draft PR was opened" in issue.comments[0].body
+    assert issue.comments[0].body.startswith("No fix was opened. No failed job in run 100")
     engine.assert_not_called()
+
+
+def test_a_crash_while_planning_is_recorded_as_a_failed_attempt(monkeypatch):
+    """Unrecorded, the issue would be dispatched again every hour."""
+    issue = _issue()
+    gh, _repo, _run_ = _gh(issue)
+
+    def unreadable(*_args, **_kwargs):
+        raise RuntimeError("the log of test-valgrind could not be read")
+
+    monkeypatch.setattr(issues_mod, "_failing_jobs", unreadable)
+
+    result = issues_mod.prepare_issue(gh, MagicMock(), "o/r", issue_number=7, bot_login=_BOT)
+
+    assert result["action"] == "failed"
+    assert "could not be read" in result["summary"]
+    (comment,) = issue.comments
+    assert "outcome=failed" in comment.body
+
+
+def test_an_unread_log_is_not_taken_for_no_matching_job(monkeypatch):
+    run_ = SimpleNamespace(id=100, run_attempt=1)
+    job = SimpleNamespace(name="test-valgrind", conclusion="failure", id=5, html_url="")
+    monkeypatch.setattr(issues_mod, "jobs_for_run_attempt", lambda *_a, **_k: [job])
+    monkeypatch.setattr(issues_mod, "download_all_test_failures", lambda *_a, **_k: "")
+
+    def unread(_client, _repo, _recorded, *, jobs, ignored_jobs, unread):
+        unread.append("test-valgrind")
+        return [], []
+
+    monkeypatch.setattr(issues_mod, "find_unrecorded_failures", unread)
+    failure = SimpleNamespace(job_name="", test_name="t", test_file="tests/unit/a.tcl", fingerprint="")
+
+    with pytest.raises(RuntimeError, match="test-valgrind could not be read"):
+        issues_mod._failing_jobs(MagicMock(), MagicMock(), "o/r", run_, failure, ())
 
 
 def test_orphan_branch_is_reconciled_before_job_artifacts_are_read(monkeypatch):
@@ -575,7 +610,7 @@ def test_the_issue_comment_lists_what_the_bot_checked(monkeypatch):
     run_issue_fix(gh, MagicMock(), "o/r", issue_number=7, bot_login=_BOT, git_env={})
 
     body = issue.comments[-1].body
-    assert "**Checked by the bot:**" in body
+    assert "**What the bot checked**" in body
     assert "- Existing fixes found: `abc123`" in body and "- Did not reproduce" in body
 
 

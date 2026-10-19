@@ -7,8 +7,9 @@ that are worth an attempt. An issue is skipped while:
 - a ci-fix-issues run for it is queued or in progress (each run is named
   after its issue, see ``RUN_NAME``),
 - it is assigned or an open pull request links it (``validate_issue``),
-- the bot already reported an attempt for the occurrence it records
-  (``fix_reported``): a newer occurrence makes it eligible again.
+- the bot already reported a fix or a refusal for the occurrence it records,
+  or two attempts that failed (``fix_reported``): a newer occurrence makes it
+  eligible again.
 
 At most ``max_runs`` ci-fix-issues runs are active at once, counting the ones
 already running. One run still handles exactly one issue.
@@ -82,7 +83,7 @@ def _skip_reason(
     if rejection:
         return rejection
     if fix_reported(issue, failure, repo_full_name=repo_full_name, bot_login=bot_login):
-        return f"the bot already reported an attempt for run {failure.run_id}"
+        return f"the bot is done with run {failure.run_id}"
     return ""
 
 

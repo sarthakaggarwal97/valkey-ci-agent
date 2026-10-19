@@ -175,27 +175,27 @@ def failed_jobs(jobs: Iterable[Any]) -> list[FailedJob]:
 
 
 def job_priority(name: str) -> int:
-    """Rank a failed job by how deterministic its failure usually is.
+    """Rank a failed job by how likely the bot is to fix it and show the fix works.
 
-    A formatting or build break has one obvious fix, a test failure needs
-    diagnosis, and a sanitizer or valgrind failure is the most likely to be
-    flaky or to need a judgement call. Unrecognised names sort last.
+    A test failure comes first: code reproduces it, and verifies the fix with
+    it. A formatting, lint or build job comes next. Its fix is often in the
+    CI definition or the toolchain, which the bot never changes, and a build
+    break in the code also fails every test job, whose log shows it. A
+    sanitizer or valgrind failure is the most likely to be flaky or to need a
+    judgement call. Unrecognised names sort last.
     """
     lowered = name.lower()
+    if any(token in lowered for token in ("asan", "ubsan", "tsan", "sanitizer", "valgrind")):
+        return 2
     if any(
         token in lowered
         # Not "schema": Daily's reply-schemas-validator runs the whole test
         # suite; the reply-schemas-linter is already matched by "lint".
         for token in ("format", "lint", "generated", "build", "compile")
     ):
-        return 0
-    if any(
-        token in lowered
-        for token in ("asan", "ubsan", "tsan", "sanitizer", "valgrind")
-    ):
-        return 2
-    if any(token in lowered for token in ("unit", "integration", "test")):
         return 1
+    if any(token in lowered for token in ("unit", "integration", "test")):
+        return 0
     return 3
 
 
@@ -231,7 +231,7 @@ def most_actionable_failure(
 
 
 def select_job(jobs: Iterable[FailedJob]) -> FailedJob:
-    """Choose one failure: the most deterministic tier, then the lowest job id."""
+    """Choose one failure: the tier most likely fixed and verified, then the lowest job id."""
     return min(
         jobs,
         key=lambda job: (job_priority(job.name), int(job.id), job.name.lower()),

@@ -24,6 +24,7 @@ from typing import Any
 from github.GithubException import GithubException
 
 from scripts.backport.registry import load_registry
+from scripts.ci_fix.comment import check_items, sentence
 from scripts.ci_fix.github_runs import (
     FailedJob,
     failed_jobs,
@@ -31,6 +32,7 @@ from scripts.ci_fix.github_runs import (
 )
 from scripts.ci_fix.issue_state import has_open_linked_pr, parse_detector_occurrence
 from scripts.ci_fix.models import (
+    MAX_FAILED_ATTEMPTS,
     Failure,
     FixPlan,
     FixPolicy,
@@ -45,7 +47,6 @@ from scripts.ci_fix.models import (
 )
 from scripts.ci_fix.publish import reconcile_draft_pr
 from scripts.common.github_client import retry_github_call
-from scripts.common.text_utils import compact_text
 from scripts.common.valkey_ci import Source, source_for_run
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.common.workflow_jobs import job_is_ignored, jobs_for_run_attempt
@@ -210,8 +211,9 @@ def _failing_jobs(
         recorded = {}
     recorded = recorded if isinstance(recorded, dict) else {}
 
+    unread: list[str] = []
     from_logs, job_failures = find_unrecorded_failures(
-        artifact_client, repo_full_name, recorded, jobs=raw_jobs, ignored_jobs=ignored_jobs,
+        artifact_client, repo_full_name, recorded, jobs=raw_jobs, ignored_jobs=ignored_jobs, unread=unread,
     )
     tests = merge_failures(parse_and_deduplicate(recorded, {}), from_logs)
     if failure.job_name:
@@ -234,6 +236,10 @@ def _failing_jobs(
         for job in failed
         if normalize_job_name(job.name) in names
     ]
+    if not candidates and unread:
+        # The failure may be in a log that could not be read: that says
+        # nothing about the issue, so the attempt failed rather than refused.
+        raise RuntimeError(f"the log of {', '.join(sorted(unread))} could not be read")
     if not candidates:
         return ()
     first = select_job(candidates)
@@ -245,17 +251,25 @@ def _failing_jobs(
 
 
 def _refuse(issue: Any, failure: IssueFailure, repo_full_name: str, summary: str) -> dict[str, Any]:
+    return _final(issue, failure, repo_full_name, ResultKind.REFUSED, summary)
+
+
+def _fail(issue: Any, failure: IssueFailure, repo_full_name: str, summary: str) -> dict[str, Any]:
+    return _final(issue, failure, repo_full_name, ResultKind.FAILED, summary)
+
+
+def _final(issue: Any, failure: IssueFailure, repo_full_name: str, kind: ResultKind, summary: str) -> dict[str, Any]:
     _terminal_comment(
         issue,
         failure,
         repo_full_name=repo_full_name,
-        action=ResultKind.REFUSED.value,
+        action=kind.value,
         summary=summary,
     )
     return _result_dict(
         repo_full_name,
         failure,
-        action=ResultKind.REFUSED.value,
+        action=kind.value,
         summary=summary,
     )
 
@@ -306,33 +320,46 @@ def _branch_name(failure: IssueFailure) -> str:
     )
 
 
-_RESULT_HEADING = "**Automatic CI fix — "
+# How the bot recorded a result before the marker below: a heading, then a
+# Source line naming the run. Read, never written, so earlier attempts count.
+_LEGACY_RESULT_HEADING = "**Automatic CI fix \u2014 "
+_RESULT_MARKER = "<!-- valkey-ci-agent:ci-fix-result run={run} outcome={outcome} -->"
+_RESULT_MARKER_RE = re.compile(r"<!-- valkey-ci-agent:ci-fix-result run=(?P<run>\d+) outcome=(?P<outcome>[a-z]+) -->")
 
-
-def _source_link(repo_full_name: str, failure: IssueFailure) -> str:
+def _run_link(repo_full_name: str, failure: IssueFailure) -> str:
     """The Markdown link to the run that recorded ``failure``."""
     run_url = f"https://github.com/{repo_full_name}/actions/runs/{failure.run_id}"
     return f"[run {failure.run_id}]({run_url})"
 
 
 def fix_reported(issue: Any, failure: IssueFailure, *, repo_full_name: str, bot_login: str) -> bool:
-    """Whether the bot already reported a fix attempt for ``failure``'s occurrence.
+    """Whether the bot is done with ``failure``'s occurrence.
 
-    The detector records a newer occurrence in the issue when the test fails
-    again, which makes the issue worth another attempt.
+    It is once it reported a fix or a refusal for it, or after
+    ``MAX_FAILED_ATTEMPTS`` attempts that failed. The detector records a newer
+    occurrence in the issue when the test fails again, which makes the issue
+    worth another attempt.
     """
-    source = f"Source: {_source_link(repo_full_name, failure)}"
     comments = retry_github_call(
         lambda: list(issue.get_comments()),
         retries=2,
         description=f"read issue #{issue.number} comments",
     )
-    return any(
-        str(getattr(getattr(comment, "user", None), "login", "") or "") == bot_login
-        and str(getattr(comment, "body", "") or "").startswith(_RESULT_HEADING)
-        and source in str(getattr(comment, "body", "") or "")
-        for comment in comments
-    )
+    legacy_source = f"Source: {_run_link(repo_full_name, failure)}"
+    failed = 0
+    for comment in comments:
+        if str(getattr(getattr(comment, "user", None), "login", "") or "") != bot_login:
+            continue
+        body = str(getattr(comment, "body", "") or "")
+        if body.startswith(_LEGACY_RESULT_HEADING) and legacy_source in body:
+            return True
+        for match in _RESULT_MARKER_RE.finditer(body):
+            if int(match.group("run")) != failure.run_id:
+                continue
+            if match.group("outcome") != ResultKind.FAILED.value:
+                return True
+            failed += 1
+    return failed >= MAX_FAILED_ATTEMPTS
 
 
 def _terminal_comment(
@@ -347,38 +374,30 @@ def _terminal_comment(
     pr_url: str = "",
     checked: str = "",
 ) -> None:
-    source = _source_link(repo_full_name, failure)
+    source = f"From {_run_link(repo_full_name, failure)}"
     if job_name:
         source += f", job `{job_name}`"
     if action == ResultKind.OPENED.value:
         link = f"[#{pr_number}]({pr_url})" if pr_url else f"#{pr_number}"
-        message = (
-            f"Opened draft PR {link}. Normal pull-request CI and human review "
-            "are authoritative."
-        )
+        message = f"Opened draft PR {link} with a fix. Its CI and a maintainer's review decide whether it merges."
     elif action == ResultKind.REFUSED.value:
-        message = (
-            f"No draft PR was opened: {compact_text(summary, 2_000)}"
-        )
+        message = f"No fix was opened. {sentence(summary)}"
     else:
-        message = (
-            "The automatic fix attempt failed: "
-            f"{compact_text(summary, 2_000)}"
-        )
-    body = (
-        f"{_RESULT_HEADING}{action}.** {message}\n\n"
-        f"Source: {source}."
-    )
-    lines = [line for line in checked.splitlines() if line.strip()]
-    if lines:
-        # The existing-fix search and the reproduction, for whoever picks
-        # the issue up next.
-        body += "\n\n**Checked by the bot:**\n\n" + "\n".join(f"- {compact_text(line, 1_000)}" for line in lines)
+        message = f"The fix attempt stopped with an error: {sentence(summary)}"
+    body = f"{message}\n\n{source}."
+    checks = check_items(checked)
+    if checks and action == ResultKind.OPENED.value:
+        # The draft PR shows them too; here they are for whoever looks at the issue.
+        body += "\n\n<details><summary>What the bot checked</summary>\n\n" + "\n".join(checks) + "\n\n</details>"
+    elif checks:
+        body += "\n\n**What the bot checked**\n\n" + "\n".join(checks)
+    body += "\n\n" + _RESULT_MARKER.format(run=failure.run_id, outcome=action)
     retry_github_call(
         lambda: issue.create_comment(body),
         retries=2,
         description=f"record CI-fix result on issue #{issue.number}",
     )
+
 
 
 def _result_dict(
@@ -496,7 +515,26 @@ def prepare_issue(
             "action": "skipped",
             "reason": rejection,
         }
+    # A crash from here on is a failed attempt, recorded on the issue: left
+    # unrecorded, the issue would be dispatched again every hour.
+    try:
+        return _plan_occurrence(gh, artifact_client, repo_full_name, repo, issue, failure, ignored_jobs, bot_login)
+    except Exception as exc:  # noqa: BLE001 - every attempt gets a recorded result
+        logger.exception("Planning a fix for issue #%s failed", issue_number)
+        return _fail(issue, failure, repo_full_name, f"The CI-fix attempt failed while planning: {exc}")
 
+
+def _plan_occurrence(
+    gh: Any,
+    artifact_client: ArtifactClient,
+    repo_full_name: str,
+    repo: Any,
+    issue: Any,
+    failure: IssueFailure,
+    ignored_jobs: tuple[str, ...],
+    bot_login: str,
+) -> FixPlan | dict[str, Any]:
+    """The fix plan for a validated issue's occurrence, or the final result."""
     run = retry_github_call(
         lambda: repo.get_workflow_run(failure.run_id),
         retries=2,
@@ -575,7 +613,7 @@ def prepare_issue(
     if has_open_linked_pr(issue):
         return {
             "repo": repo_full_name,
-            "issue": issue_number,
+            "issue": failure.number,
             "action": "skipped",
             "reason": f"issue #{issue.number} already has an open linked pull request",
         }
