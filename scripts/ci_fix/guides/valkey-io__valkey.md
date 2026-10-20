@@ -95,3 +95,10 @@ several clients (the default) loop copies run in parallel, and a `run_solo`
 block runs inline, so loop a file with `run_solo` with `--clients 1`. Add `--accurate`
 for what scheduled CI runs, `--valgrind --clients 1` after `make valgrind`,
 `--tls` after `make BUILD_TLS=yes && ./utils/gen-test-certs.sh`.
+
+A C unit test (`src/unit/test_*.cpp`) is a Google Test, not a Tcl test:
+
+```sh
+make -j"$(nproc)" all-with-unit-tests
+./src/unit/valkey-unit-gtests --gtest_filter='Suite.Test' --gtest_repeat=20
+```
