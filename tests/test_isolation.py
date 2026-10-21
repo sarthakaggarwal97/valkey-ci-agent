@@ -80,17 +80,32 @@ def checkout():
     subprocess.run([*isolation._root(), "rm", "-rf", str(work)], check=False)
 
 
+@pytest.fixture
+def credentialed():
+    """A process of the workflow user whose environment holds a secret, as the job's does.
+
+    ``/proc/<pid>/environ`` shows the environment a process started with, so
+    a secret set in this process after it started would never appear there,
+    and a broken isolation would go unnoticed.
+    """
+    holder = subprocess.Popen(["sleep", "60"], env={**os.environ, "TARGET_TOKEN": "ghs_secret"})
+    environ = f"/proc/{holder.pid}/environ"
+    assert b"ghs_secret" in Path(environ).read_bytes()  # the workflow user can read it
+    yield environ
+    holder.kill()
+    holder.wait()
+
+
 @needs_user
-def test_a_test_command_cannot_read_the_parent_environment_or_change_git(checkout, monkeypatch):
+def test_a_test_command_cannot_read_the_parent_environment_or_change_git(checkout, monkeypatch, credentialed):
     monkeypatch.setenv(isolation.USER_ENV, _USER)
-    monkeypatch.setenv("TARGET_TOKEN", "ghs_secret")
     head = (checkout / ".git" / "HEAD").read_text()
     run = engine.run_test_command(
         str(checkout),
-        f"cat /proc/{os.getpid()}/environ 2>&1 | tr '\\0' '\\n' | grep -c ghs_secret; "
+        f"n=$(tr '\\0' '\\n' < {credentialed} 2>/dev/null | grep -c ghs_secret); echo \"seen=${{n:-0}}\"; "
         "echo evil > .git/HEAD; echo left > /tmp/ci-fix-isolation-marker; echo ok > made; id -un",
     )
-    assert "ghs_secret" not in run.output and _USER in run.output
+    assert "seen=0" in run.output and _USER in run.output
     assert (checkout / ".git" / "HEAD").read_text() == head
     assert not Path("/tmp/ci-fix-isolation-marker").exists()
     assert (checkout / "made").stat().st_uid == os.getuid()  # handed back
@@ -106,19 +121,18 @@ def test_nothing_the_command_started_outlives_it(checkout, monkeypatch):
 
 
 @needs_user
-def test_the_claude_cli_runs_as_the_account(checkout, monkeypatch, tmp_path):
+def test_the_claude_cli_runs_as_the_account(checkout, monkeypatch, tmp_path, credentialed):
     """The real CLI path, with a fake ``claude`` that reports who it is and what it can read."""
     bin_dir = Path(tempfile.mkdtemp(prefix="ci-fix-bin-", dir="/tmp"))
     bin_dir.chmod(0o755)
     fake = bin_dir / "claude"
     fake.write_text(
         "#!/bin/bash\ncat >/dev/null\n"
-        f"seen=$(tr '\\0' '\\n' < /proc/{os.getpid()}/environ 2>/dev/null | grep -c ghs_secret)\n"
+        f"seen=$(tr '\\0' '\\n' < {credentialed} 2>/dev/null | grep -c ghs_secret)\n"
         'echo "{\\"type\\":\\"result\\",\\"result\\":\\"user=$(id -un) seen=${seen:-0}\\"}"\n'
     )
     fake.chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
-    monkeypatch.setenv("TARGET_TOKEN", "ghs_secret")
     stdout, _stderr, rc = claude_code.run_claude_code("p", cwd=str(checkout), run_as=_USER, timeout=60)
     shutil.rmtree(bin_dir, ignore_errors=True)
     assert rc == 0
@@ -146,6 +160,41 @@ def test_a_replaced_git_directory_is_never_handed_back(monkeypatch):
         with isolation.handed_to("agent", repo):
             (repo / ".git").rename(repo / ".git.old")
             shutil.copytree(repo / ".git.old", repo / ".git")
+    shutil.rmtree(work)
+
+
+def test_a_replaced_git_directory_and_every_nested_one_are_removed(monkeypatch):
+    """The job's cleanup runs git in the workspace as the workflow user: no config the account wrote may be there."""
+    def as_root(*argv):
+        if argv[0] in ("find", "rm"):  # the removals for real; the test's own files need no chown
+            subprocess.run(argv, check=True)
+
+    monkeypatch.setattr(isolation, "_as_root", as_root)
+    me = isolation.pwd.getpwuid(os.getuid())
+    monkeypatch.setattr(isolation.pwd, "getpwnam", lambda user: me)
+    monkeypatch.setattr(isolation, "kill_all", lambda user: None)
+    monkeypatch.setattr(isolation, "_remove_files_of", lambda user: None)
+    work = Path(tempfile.mkdtemp(prefix="ci-fix-test-", dir="/tmp"))
+    work.chmod(0o711)
+    repo = work / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.setattr(isolation.tempfile, "mkdtemp", lambda **_kw: str(work / "home"))
+
+    with isolation.handed_to("agent", repo):
+        # A dependency the job checked out, and a repository the agent made.
+        subprocess.run(["git", "init", "-q", str(repo / "libbacktrace")], check=True)
+        (repo / "libbacktrace" / "x.c").write_text("int x;\n")
+        (repo / "deep" / "planted").mkdir(parents=True)
+        (repo / "deep" / "planted" / ".git").write_text("gitdir: /tmp/elsewhere\n")  # a gitlink
+    assert (repo / ".git").is_dir() and (repo / "libbacktrace" / "x.c").exists()
+    assert not (repo / "libbacktrace" / ".git").exists() and not (repo / "deep" / "planted" / ".git").exists()
+
+    with pytest.raises(OSError, match="replaced"):
+        with isolation.handed_to("agent", repo):
+            (repo / ".git").rename(repo / ".git.old")
+            shutil.copytree(repo / ".git.old", repo / ".git")
+    assert not (repo / ".git").exists()  # the impostor is gone, not handed back
     shutil.rmtree(work)
 
 

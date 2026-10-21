@@ -46,6 +46,18 @@ restore_agent() {
 mv -- "${home}" "${agent}"
 trap 'restore_agent || echo "::warning::could not put the CI-fix agent back for the job cleanup"' EXIT
 
+# The job's own cleanup (each action's post step) runs git in the workspace
+# as the workflow user, with its tokens. Whatever the agent's account could
+# write into a repository's config there must not run then: no fsmonitor,
+# no hooks. Written to GITHUB_ENV, so those later steps inherit it.
+{
+  echo "GIT_CONFIG_COUNT=2"
+  echo "GIT_CONFIG_KEY_0=core.fsmonitor"
+  echo "GIT_CONFIG_VALUE_0=false"
+  echo "GIT_CONFIG_KEY_1=core.hooksPath"
+  echo "GIT_CONFIG_VALUE_1=/dev/null"
+} >> "${GITHUB_ENV}"
+
 # The agent and its commands run as this account, which cannot read the
 # job's credentials (scripts/common/isolation.py).
 if [[ "$(uname -s)" == Darwin ]]; then

@@ -237,6 +237,31 @@ def test_an_issue_fix_published_as_a_comment_pushes_nothing(monkeypatch: pytest.
     assert result.candidate == _candidate()
 
 
+@pytest.mark.parametrize(("issue", "why"), [
+    (_issue(state="closed"), "no longer open"),
+    (_issue(assignees=[SimpleNamespace(login="alice")]), "now assigned"),
+    (_issue(body="<!-- valkey-ci-agent:test-failure:last-key:101 -->"), "now points at run 101"),
+])
+def test_a_comment_is_not_posted_on_an_issue_that_changed_during_the_fix(issue, why) -> None:
+    task = _task(TargetKind.DRAFT_PR, issue=9)
+    gh, _repo = _gh(issue=issue)
+
+    result = publish_candidate(gh, task, _candidate(), git_env={}, issue_publication=IssuePublication.COMMENT)
+
+    assert result.kind is ResultKind.REFUSED and why in result.summary
+
+
+def test_a_patch_too_large_for_a_comment_is_refused_and_says_so() -> None:
+    task = _task(TargetKind.DRAFT_PR, issue=9)
+    gh, _repo = _gh()
+    big = replace(_candidate(), patch="+" * 50_000)
+
+    result = publish_candidate(gh, task, big, git_env={}, issue_publication=IssuePublication.COMMENT)
+
+    assert result.kind is ResultKind.REFUSED
+    assert "50,000-character patch" in result.summary and "CI_FIX_ISSUES_PUBLISH=draft-pr" in result.summary
+
+
 def test_ready_issue_fix_opens_a_draft_pr(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

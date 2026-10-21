@@ -82,13 +82,34 @@ def publish_candidate(
     if target.kind is TargetKind.UPDATE_PR:
         return _publish_update(gh, task, candidate, git_env=git_env)
     if issue_publication is IssuePublication.COMMENT:
-        return FixResult(
-            kind=ResultKind.SUGGESTED,
-            summary="Prepared a patch, to post on the issue.",
-            task=task,
-            candidate=candidate,
-        )
+        return _publish_issue_comment(gh, task, candidate)
     return _publish_draft(gh, task, candidate, git_env=git_env)
+
+
+def _publish_issue_comment(gh: Any, task: FixTask, candidate: FixCandidate) -> FixResult:
+    """The fix as a patch for the issue's comment: nothing pushed, the issue rechecked first."""
+    try:
+        rejection = _validate_issue_target(gh, task)
+    except TargetRevalidationFailed as exc:
+        return _failed(task, candidate, str(exc))
+    if rejection:
+        return _refused(task, candidate, f"Not posting the patch: {rejection}")
+    limit = target_capabilities(TargetKind.SUGGEST).patch_limit
+    if len(candidate.patch) > limit:
+        # The candidate was prepared under the draft PR's limit; a comment
+        # holds less. Said plainly, rather than a comment without its patch.
+        return _refused(
+            task,
+            candidate,
+            f"The fix is a {len(candidate.patch):,}-character patch, more than a comment holds "
+            f"({limit:,}); it was not posted. Set CI_FIX_ISSUES_PUBLISH=draft-pr for a fix this size.",
+        )
+    return FixResult(
+        kind=ResultKind.SUGGESTED,
+        summary="Prepared a patch, to post on the issue.",
+        task=task,
+        candidate=candidate,
+    )
 
 
 def _publish_suggestion(gh: Any, task: FixTask, candidate: FixCandidate) -> FixResult:

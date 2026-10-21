@@ -85,12 +85,28 @@ def handed_to(user: str, root: Path, readable: tuple[Path, ...] = ()) -> Iterato
         # ``user``, and the sweep below cannot delete any of it.
         _as_root("chown", "-R", "-h", "-P", "--", runner, str(root))
         _remove_files_of(user)
+        # Any other repository inside the checkout (a dependency the job
+        # checked out into it) was ``user``'s: its config can name a
+        # fsmonitor or a hook that the job's own cleanup, run as the
+        # workflow user with its tokens, would execute. None is needed any
+        # more, so none is handed back.
+        _remove_nested_git_dirs(root)
         # ``user`` owned the checkout's directory, so it could have renamed
         # .git and left one of its own: the chown above would hand that to
         # the workflow user, whose next git command would run any filter or
-        # merge driver it configures. Only the original .git is trusted.
+        # merge driver it configures. Only the original .git is trusted; an
+        # impostor is removed before anything can read it.
         if git_identity is not None and _identity(git_dir) != git_identity:
+            _as_root("rm", "-rf", "--", str(git_dir))
             raise OSError(f"{user} replaced {git_dir}; the checkout can no longer be trusted")
+
+
+def _remove_nested_git_dirs(root: Path) -> None:
+    """Delete every ``.git`` (directory or gitlink file) under ``root`` but its own."""
+    _as_root(
+        "find", str(root), "-mindepth", "2", "-name", ".git", "-prune",
+        "-exec", "rm", "-rf", "{}", "+",  # paths under ``root``: none starts with a dash
+    )
 
 
 def _identity(path: Path) -> tuple[int, int] | None:

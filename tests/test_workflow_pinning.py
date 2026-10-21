@@ -409,6 +409,14 @@ def test_the_job_setup_and_dependencies_run_before_any_credential_and_the_agent_
     assert "TOKEN" not in script
 
 
+def test_the_jobs_cleanup_runs_git_without_fsmonitor_or_hooks():
+    """The post steps run git in a workspace the agent's account wrote to, as the workflow user."""
+    script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
+    block = script[script.index("GIT_CONFIG_COUNT=2"):script.index('>> "${GITHUB_ENV}"')]
+    assert "GIT_CONFIG_KEY_0=core.fsmonitor" in block and "GIT_CONFIG_VALUE_0=false" in block
+    assert "GIT_CONFIG_KEY_1=core.hooksPath" in block and "GIT_CONFIG_VALUE_1=/dev/null" in block
+
+
 def _restore_agent(workspace: Path, temp: Path) -> subprocess.CompletedProcess[str]:
     """Run job.sh's own ``restore_agent`` (and ``as_root``) against ``workspace``."""
     script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")

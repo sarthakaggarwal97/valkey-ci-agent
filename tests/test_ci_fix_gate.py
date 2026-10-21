@@ -181,6 +181,24 @@ def _build(
     )
 
 
+def test_an_unauthorized_commenter_is_refused_before_anything_is_read(monkeypatch) -> None:
+    gh = MagicMock()
+    gh.get_repo.side_effect = AssertionError("nothing is read for an unauthorized commenter")
+    monkeypatch.setattr(gate_mod, "is_authorized", lambda *args, **kwargs: False)
+    _patch_failed_jobs(monkeypatch, lambda *a, **k: pytest.fail("no run or job is read"))
+
+    result = build_fix_task(
+        gh,
+        command=ParsedCommand("valkey-io", "valkey", 27559908167, ""),
+        pr_repo_full_name="valkey-io/valkey",
+        pr_number=42,
+        commenter="mallory",
+    )
+
+    assert isinstance(result, GateRejection)
+    assert result.reason == "@mallory is not an active member of valkey-io/contributors; refusing."
+
+
 def test_bot_backport_branch_uses_backport_update_policy(monkeypatch) -> None:
     result = _build(monkeypatch)
     assert isinstance(result, FixTask)
