@@ -159,7 +159,7 @@ def prepare_fix(
         deadline = time.monotonic() + PREPARE_BUDGET_S
         runs_tests = task.target.kind is not TargetKind.SUGGEST
         run_test = test_func or run_test_command
-        tests = failed_tests(task, job_log)
+        tests = locate_unit_tests(repo_dir, failed_tests(task, job_log))
         context, plan, reproduction = _establish(
             task, repo_dir, tests, paths_in_log(repo_dir, job_log),
             run_test if runs_tests else None,
@@ -271,6 +271,23 @@ def failed_tests(task: FixTask, job_log: str) -> tuple[FailedTest, ...]:
         ]
     # A log or issue names the file; one that leaves tests/ is not a test.
     return tuple(test for test in tests if ".." not in Path(test.file).parts)[:_MAX_TESTS]
+
+
+def locate_unit_tests(repo_dir: str, tests: tuple[FailedTest, ...]) -> tuple[FailedTest, ...]:
+    """``tests`` with each C unit test's file as its path in the checkout.
+
+    A log or issue names the file by base name alone (``test_crc64.cpp``);
+    the search for an existing fix and the agent need ``src/unit/test_crc64.cpp``.
+    """
+    src = Path(repo_dir, "src")
+    located = []
+    for test in tests:
+        if test.is_unit_test and "/" not in test.file and src.is_dir():
+            found = sorted(path for path in src.rglob(test.file) if path.is_file())
+            if found:
+                test = FailedTest(test.name, found[0].relative_to(repo_dir).as_posix())
+        located.append(test)
+    return tuple(located)
 
 
 def _establish(

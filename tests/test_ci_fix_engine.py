@@ -39,6 +39,17 @@ def _approving_review_and_no_tests(monkeypatch):
 _LOG = "exact failed job log"
 
 
+def test_a_c_unit_tests_file_is_located_in_the_checkout(tmp_path):
+    (tmp_path / "src" / "unit").mkdir(parents=True)
+    (tmp_path / "src" / "unit" / "test_crc64.cpp").write_text("", encoding="utf-8")
+    tests = (FailedTest("Crc64Test.TestCrc64", "test_crc64.cpp"), FailedTest("x", "tests/unit/expire.tcl"),
+             FailedTest("Gone.Test", "test_gone.cpp"))
+
+    assert engine_mod.locate_unit_tests(str(tmp_path), tests) == (
+        FailedTest("Crc64Test.TestCrc64", "src/unit/test_crc64.cpp"), tests[1], tests[2],
+    )
+
+
 def _source_repo(tmp_path: Path) -> tuple[Path, str]:
     repo = tmp_path / "source"
     repo.mkdir()
@@ -809,7 +820,7 @@ def test_existing_fixes_and_the_test_guide_reach_the_agent_and_the_report(tmp_pa
     }
     context = contexts[0]
     assert "Deflake value test (#9)" in context.prior_fixes and context.prior_fixes_detail == "full detail"
-    assert "wait_for_condition" in context.guide
+    assert "tests/README.md" in context.guide  # points the agent at the checkout's own docs
     assert candidate.action is CandidateAction.REFUSE
     assert "Existing fixes found" in candidate.verification
 

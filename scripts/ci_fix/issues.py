@@ -74,6 +74,9 @@ _DETECTOR_RE = re.compile(
 )
 _TEST_NAME_RE = re.compile(r"^- Test name: `(?P<value>.+)`\s*$", re.MULTILINE)
 _TEST_FILE_RE = re.compile(r"^- Test file: `(?P<value>.+)`\s*$", re.MULTILINE)
+# A job-level issue for a failed C unit test names it in its failure summary
+# (scripts/test_failure_detector/job_failures.py).
+_UNIT_TEST_RE = re.compile(r"^\[err\]: Unit test (?P<name>\S+) failed in (?P<file>\S+)$", re.MULTILINE)
 
 
 def parse_issue(issue: Any) -> IssueFailure | None:
@@ -89,9 +92,12 @@ def parse_issue(issue: Any) -> IssueFailure | None:
     fingerprint = detector.group("fingerprint")
     job = parse_job_marker(body)
     if job:
+        unit_test = _UNIT_TEST_RE.search(body)
         return IssueFailure(
             number=number,
             run_id=run_id,
+            test_name=unit_test.group("name") if unit_test else "",
+            test_file=unit_test.group("file") if unit_test else "",
             job_name=job,
             fingerprint=fingerprint,
         )

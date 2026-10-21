@@ -21,6 +21,7 @@ from scripts.ci_fix.reproduce import (
 )
 
 TEST = FailedTest("INCREX BYFLOAT overflow preserves existing TTL", "tests/unit/type/incr.tcl")
+UNIT_TEST = FailedTest("Crc64Test.TestCrc64", "src/unit/test_crc64.cpp")
 
 
 @pytest.fixture
@@ -62,6 +63,43 @@ def test_only_main_suite_tests_are_planned(checkout, tests):
 
     plan = plan_for(checkout, (TEST, *tests), scheduled=True)
     assert plan.tests == (TEST,) and "sentinel" not in plan.test and "../" not in plan.test
+
+
+def test_a_c_unit_test_is_repeated_by_name_with_the_jobs_build(checkout):
+    (Path(checkout) / "src" / "unit").mkdir(parents=True)
+    job = JobCommands(build="make all-with-unit-tests SERVER_CFLAGS='-Werror'", runtest="./runtest --dump-logs")
+
+    plan = plan_for(checkout, (UNIT_TEST, TEST), scheduled=True, job=job)
+
+    assert plan.command(20) == (
+        "make -j\"$(nproc)\" all-with-unit-tests SERVER_CFLAGS='-Werror' && "
+        "./src/unit/valkey-unit-gtests --gtest_filter=Crc64Test.TestCrc64 --gtest_repeat=20"
+    )
+    assert plan.tests == (UNIT_TEST,) and plan.notes == () and not plan.valgrind
+    # The gtest lines are what its runs report.
+    assert plan.failed(TestRun(passed=False, output="", report="[  FAILED  ] Crc64Test.TestCrc64 (0 ms)"))
+    assert plan.ran(TestRun(passed=True, output="", report="[       OK ] Crc64Test.TestCrc64 (0 ms)"))
+    assert not plan.ran(TestRun(passed=True, output="", report="[       OK ] Other.Test (0 ms)"))
+
+
+def test_a_build_without_the_unit_tests_gets_their_target_and_no_src_unit_means_no_plan(checkout):
+    assert plan_for(checkout, (UNIT_TEST,), scheduled=True) is None  # no src/unit: an older harness
+    (Path(checkout) / "src" / "unit").mkdir(parents=True)
+
+    plan = plan_for(checkout, (UNIT_TEST,), scheduled=False, job=JobCommands(build="make", runtest="./runtest"))
+
+    assert plan.build == 'make -j"$(nproc)" && make -j"$(nproc)" all-with-unit-tests'
+    assert "does not build the unit tests" in plan.notes[0]
+    assert plan_for(checkout, (UNIT_TEST,), scheduled=False).build == 'make -j"$(nproc)" all-with-unit-tests'
+
+
+def test_a_jobs_shorter_runtest_watchdog_is_kept_and_a_longer_one_is_not(checkout):
+    """runtest takes the last --timeout; a hang must still be reported inside the reproduction budget."""
+    shorter = JobCommands(build="make", runtest="./runtest --timeout 300 --dump-logs")
+    longer = JobCommands(build="make valgrind", runtest="./runtest --valgrind --clients 1 --timeout 2400 --dump-logs")
+
+    assert plan_for(checkout, (TEST,), scheduled=True, job=shorter).test.endswith("--timeout 300")
+    assert plan_for(checkout, (TEST,), scheduled=True, job=longer).test.endswith("--timeout 600")
 
 
 def test_there_is_no_plan_without_runtest(tmp_path):

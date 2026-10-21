@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from scripts.common.incidents import compute_fingerprint
-from scripts.common.valkey_ci import strip_log_prefix, test_in_file
+from scripts.common.valkey_ci import gtest_failure, gtest_file_of, strip_log_prefix, test_in_file
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.common.workflow_jobs import FAILED_JOB_CONCLUSIONS, job_is_ignored
 from scripts.test_failure_detector.parse_failures import JobReference, UniqueFailure
@@ -75,13 +75,6 @@ _REPORT_LINES = 400
 # leaves it out too, so it is a job-level failure: as a test it would get a
 # new issue for every pid.
 _LEAK_CHECK_RE = re.compile(r"^Check for memory leaks\b")
-# A C unit test (Google Test, ``make test-unit``) prints its own result, not
-# runtest's: ``[  FAILED  ] Suite.Test (0 ms)`` once it ends, after the
-# ``file:line: Failure`` of each failed assertion. The list gtest prints
-# at the end repeats the name without a time, and is not a second failure.
-_GTEST_RUN_RE = re.compile(r"^\[ RUN      \] (?P<test>\S+)$")
-_GTEST_FAILED_RE = re.compile(r"^\[  FAILED  \] (?P<test>[^,\s]+)(?:, where .*)? \(\d+ ms\)$")
-_GTEST_LOCATION_RE = re.compile(r"^(?P<file>[\w./-]+\.(?:c|cc|cpp|h|hpp)):\d+: Failure$")
 # Steps that prepare the runner rather than build or test the repository.
 _SETUP_STEP_RE = re.compile(
     r"^(?:set up job|initialize containers|complete job|stop containers|run actions/|post )"
@@ -235,8 +228,8 @@ def _failure_summary(artifact_client: ArtifactClient, repo_full_name: str, job: 
         elif match := _EXCEPTION_RE.match(line):
             where = _exception_location(plain[index + 1:index + 1 + _EXCEPTION_LINES])
             lines.append(("exception", match.group("data").strip() + (f" at {where}" if where else "")))
-        elif match := _GTEST_FAILED_RE.match(line):
-            lines.append(("err", _gtest_cause(match.group("test"), plain[:index])))
+        elif (unit_test := gtest_failure(line)) is not None:
+            lines.append(("err", _gtest_cause(unit_test, plain[:index])))
     return lines
 
 
@@ -244,16 +237,10 @@ def _gtest_cause(test: str, before: list[str]) -> str:
     """The cause of C unit test ``test``'s failure: its name and the file it failed in.
 
     The file of its first failed assertion, by base name and without its
-    line: a fix elsewhere in the file moves the line, and the compiler saw
-    the path differently in another job's build, so either would make the
-    same failure look like a new one.
+    line (scripts/common/valkey_ci.py): the issue stays the same when the
+    assertion moves, or another job's build prints the path differently.
     """
-    file = ""
-    for line in reversed(before):
-        if (run := _GTEST_RUN_RE.match(line)) and run.group("test") == test:
-            break
-        if location := _GTEST_LOCATION_RE.match(line):
-            file = location.group("file").rsplit("/", 1)[-1]
+    file = gtest_file_of(test, before)
     return f"Unit test {test} failed in {file}" if file else f"Unit test {test} failed"
 
 
