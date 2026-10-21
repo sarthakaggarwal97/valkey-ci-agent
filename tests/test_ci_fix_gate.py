@@ -95,6 +95,8 @@ def _gh(
             2,
             "",
         ),
+        (f"@valkeyrie-ops fix {_RUN_URL}/job/77.", 27559908167, 77, 0, ""),
+        (f"@valkeyrie-ops fix {_RUN_URL}, please", 27559908167, 0, 0, "please"),
         ("@valkeyrie-ops fix investigate valgrind", 0, 0, 0, "investigate valgrind"),
     ],
 )

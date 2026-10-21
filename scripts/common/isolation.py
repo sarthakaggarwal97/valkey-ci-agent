@@ -1,7 +1,7 @@
 """Run untrusted commands as a separate, unprivileged account.
 
 A process running as the workflow user can read the credentialed parent's
-``/proc/<pid>/environ`` (the GitHub write token is there), rewrite files the
+``/proc/<pid>/environ`` (the job's credentials are there), rewrite files the
 publish step later trusts, or leave a process behind. When ``CI_FIX_AGENT_USER``
 names an unprivileged account (the workflows create one), a command runs as
 that account over a checkout handed to it for the command, with a fresh home
@@ -35,7 +35,7 @@ USER_ENV = "CI_FIX_AGENT_USER"
 # (on macOS, also its own under /var/folders) and its own home.
 _WRITABLE_ROOTS = (
     ("/private/tmp", "/private/var/tmp", "/private/var/folders") if sys.platform == "darwin"
-    else ("/tmp", "/var/tmp", "/dev/shm")
+    else ("/tmp", "/var/tmp", "/dev/shm", "/run/lock", "/var/crash")
 )
 
 
@@ -43,7 +43,7 @@ def isolated_user() -> str:
     """The account to run untrusted commands as, or "" to run them directly.
 
     Inside GitHub Actions the account is required: running a command that can
-    reach the job's write token is never the fallback.
+    reach the job's credentials is never the fallback.
     """
     user = os.environ.get(USER_ENV, "").strip()
     if not user and os.environ.get("GITHUB_ACTIONS", "").lower() == "true":

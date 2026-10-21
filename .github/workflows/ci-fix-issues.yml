@@ -34,4 +34,7 @@ jobs:
       front_door: issue
       request: ${{ format('{{"repo":"valkey-io/valkey","issue":{0}}}', inputs.issue) }}
       key: issue-${{ inputs.issue }}
-    secrets: inherit
+    secrets:
+      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

@@ -86,10 +86,12 @@ jobs:
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: ${{ inputs.target_owner }}
           repositories: ${{ inputs.target_repo }}
+          # The plan reads the PR, the run, its log and the workflow file,
+          # and answers on the PR or the issue: it writes nothing else.
           permission-members: read
           permission-actions: read
-          permission-contents: write
-          permission-pull-requests: write
+          permission-contents: read
+          permission-pull-requests: read
           permission-issues: write
           permission-metadata: read
 

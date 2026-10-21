@@ -51,7 +51,8 @@ class AgentProfile:
     # use the same unconfined edit model as the backport agents.
     confined: bool = False
     # Run as CI_FIX_AGENT_USER (see scripts/common/isolation.py): for a
-    # profile with Bash in a checkout whose job holds a GitHub write token.
+    # profile with Bash in an untrusted checkout, which must not reach the
+    # job's environment.
     isolated: bool = False
 
 

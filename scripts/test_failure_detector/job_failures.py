@@ -77,7 +77,7 @@ _REPORT_LINES = 400
 _LEAK_CHECK_RE = re.compile(r"^Check for memory leaks\b")
 # A C unit test (Google Test, ``make test-unit``) prints its own result, not
 # runtest's: ``[  FAILED  ] Suite.Test (0 ms)`` once it ends, after the
-# ``file:line: Failure`` of its first failed assertion. The list gtest prints
+# ``file:line: Failure`` of each failed assertion. The list gtest prints
 # at the end repeats the name without a time, and is not a second failure.
 _GTEST_RUN_RE = re.compile(r"^\[ RUN      \] (?P<test>\S+)$")
 _GTEST_FAILED_RE = re.compile(r"^\[  FAILED  \] (?P<test>[^,\s]+)(?:, where .*)? \(\d+ ms\)$")
@@ -243,15 +243,18 @@ def _failure_summary(artifact_client: ArtifactClient, repo_full_name: str, job: 
 def _gtest_cause(test: str, before: list[str]) -> str:
     """The cause of C unit test ``test``'s failure: its name and the file it failed in.
 
-    The file, not its line: a fix elsewhere in the file moves the line, and
-    the same failure would then look like a new one.
+    The file of its first failed assertion, by base name and without its
+    line: a fix elsewhere in the file moves the line, and the compiler saw
+    the path differently in another job's build, so either would make the
+    same failure look like a new one.
     """
+    file = ""
     for line in reversed(before):
         if (run := _GTEST_RUN_RE.match(line)) and run.group("test") == test:
             break
         if location := _GTEST_LOCATION_RE.match(line):
-            return f"Unit test {test} failed in {location.group('file')}"
-    return f"Unit test {test} failed"
+            file = location.group("file").rsplit("/", 1)[-1]
+    return f"Unit test {test} failed in {file}" if file else f"Unit test {test} failed"
 
 
 def _exception_location(following: list[str]) -> str:

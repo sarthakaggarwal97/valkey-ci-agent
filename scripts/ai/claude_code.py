@@ -134,7 +134,7 @@ def run_claude_code(
         if run_as:
             # The checkout is untrusted and Bash can run anything in it: run
             # the CLI as an account that cannot read this process's
-            # environment, where the job's GitHub token lives.
+            # environment, where the job's credentials live.
             if not cwd:
                 raise ValueError("an isolated run needs a working directory")
             with handed_to(run_as, Path(cwd), readable=tuple(Path(d) for d in extra_dirs)) as home:

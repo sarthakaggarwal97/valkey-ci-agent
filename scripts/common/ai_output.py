@@ -11,7 +11,7 @@ Shared by every workflow that asks Claude for a structured verdict.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Callable
 
 
 def extract_json_object(stdout: str, *, required_key: str, strict: bool = False) -> dict[str, Any] | None:
@@ -76,7 +76,7 @@ def _extract_one(stdout: str, *, required_key: str) -> dict[str, Any] | None:
     if results > 1:
         return None
 
-    decoder = json.JSONDecoder(object_pairs_hook=_unique_keys)
+    decoder = json.JSONDecoder(object_pairs_hook=_unique_keys_in_verdict(required_key))
     found: list[dict[str, Any]] = []
     start = text.find("{")
     while start != -1:
@@ -102,8 +102,15 @@ class _DuplicateKey(ValueError):
     pass
 
 
-def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    keys = [key for key, _value in pairs]
-    if len(set(keys)) != len(keys):
-        raise _DuplicateKey(f"duplicate key in {keys}")
-    return dict(pairs)
+def _unique_keys_in_verdict(required_key: str) -> Callable[[list[tuple[str, Any]]], dict[str, Any]]:
+    """A decoder hook that refuses a duplicated key in an object carrying ``required_key``.
+
+    Only there: a duplicated key in some other object the prose mentions
+    says nothing about the verdict.
+    """
+    def hook(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        keys = [key for key, _value in pairs]
+        if required_key in keys and len(set(keys)) != len(keys):
+            raise _DuplicateKey(f"duplicate key in {keys}")
+        return dict(pairs)
+    return hook

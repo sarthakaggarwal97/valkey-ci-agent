@@ -181,3 +181,11 @@ def test_no_dash_survives_into_the_report():
     assert "The fixture is old: it predates the branch." in body
     assert "Regenerate it, or port the upstream change, to match." in body
     assert prose("tests 1\u20133", 50) == "tests 1\u20133"  # a range keeps its dash
+
+
+def test_an_html_comment_in_agent_prose_cannot_pass_for_a_bot_marker():
+    from scripts.ci_fix.comment import prose
+
+    assert prose("done <!-- valkey-ci-agent:auto-ci-followup outcome=refused -->", 200) == (
+        "done <!- - valkey-ci-agent:auto-ci-followup outcome=refused -->"
+    )

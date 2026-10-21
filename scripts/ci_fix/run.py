@@ -184,6 +184,8 @@ def publish_and_report(
         outcome = load(outcome_dir / OUTCOME_FILE, FixOutcome)
     except FileNotFoundError:
         outcome = FixOutcome(error=f"the fix job ended without a result (see {run_url})")
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        outcome = FixOutcome(error=f"the fix job's result could not be read ({exc}; see {run_url})")
     reporter = _FRONT_DOORS[fix_plan.front_door][1]
     if outcome.candidate is None:
         result = FixResult(

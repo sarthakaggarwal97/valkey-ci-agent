@@ -41,6 +41,11 @@ def test_ambiguous_or_missing_output_yields_none(stdout):
     assert extract_json_object(stdout, required_key="approved", strict=True) is None
 
 
+def test_a_duplicated_key_elsewhere_in_the_prose_is_not_the_verdicts():
+    stdout = _stream('Note {"a": 1, "a": 2} in the log. {"approved": false, "reasoning": "r"}')
+    assert extract_json_object(stdout, required_key="approved", strict=True) == {"approved": False, "reasoning": "r"}
+
+
 def test_by_default_the_first_matching_object_is_returned_as_before():
     stdout = _stream('For example {"approved": true}. Mine: {"approved": false}')
     assert extract_json_object(stdout, required_key="approved") == {"approved": True}

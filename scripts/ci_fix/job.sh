@@ -88,11 +88,26 @@ if [[ -n "${CI_FIX_IN_JOB:-}" && ! -d "${repo}/.git" ]]; then
 fi
 if [[ -d "${repo}/.git" ]]; then
   # The account must reach the checkout, git must not send the job's token,
-  # and the search for an existing fix needs the history.
+  # and the search for an existing fix needs the history. The account alone
+  # gets to pass through the checkout's parents: ``o+x`` on the runner's home
+  # would open every world-readable file under it, the runner's own included.
+  if [[ "$(uname -s)" != Darwin ]] && ! command -v setfacl >/dev/null; then
+    if command -v apt-get >/dev/null; then
+      as_root apt-get install -y -q --no-install-recommends acl >/dev/null
+    elif command -v dnf >/dev/null; then
+      as_root dnf -y -q install acl
+    elif command -v apk >/dev/null; then
+      as_root apk add --no-cache acl
+    fi
+  fi
   dir="${repo}"
   while [[ "${dir}" != / ]]; do
     dir="$(dirname "${dir}")"
-    as_root chmod o+x "${dir}"
+    if [[ "$(uname -s)" == Darwin ]]; then
+      as_root chmod +a "ci-fix-agent allow search" "${dir}"
+    else
+      as_root setfacl -m "u:ci-fix-agent:--x" "${dir}"
+    fi
   done
   git -C "${repo}" config --local --unset-all http.https://github.com/.extraheader || true
   # actions/checkout v6 keeps the token in a file it includes instead.

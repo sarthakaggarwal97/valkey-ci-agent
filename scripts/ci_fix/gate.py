@@ -91,7 +91,9 @@ def parse_command(body: str) -> ParsedCommand | None:
     links: list[str] = []
 
     def take(found: re.Match[str]) -> str:
-        links.append(found.group("url") if "url" in found.groupdict() else found.group(0))
+        link = found.group("url") if "url" in found.groupdict() else found.group(0)
+        # A bare link ends a sentence like any word: ``... /runs/1.``
+        links.append(link.rstrip(".,;:!?)"))
         return " "
 
     rest = match.group("rest")

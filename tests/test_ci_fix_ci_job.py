@@ -192,7 +192,8 @@ _MATRIX = DAILY.replace(
 def test_a_matrix_entry_is_chosen_by_the_name_github_gives_it():
     spec = _resolve(_MATRIX, "test-ubuntu-jemalloc (clang)")
 
-    assert (spec.env, spec.timeout_minutes) == ({"CC": "clang"}, 30)
+    # The fix needs its own time, however short the job's tests were.
+    assert (spec.env, spec.timeout_minutes) == ({"CC": "clang"}, ci_job.MIN_JOB_MINUTES)
     # Its environment reaches the rebuilds, which run with a clean one.
     assert spec.commands.build == "export CC='clang'\nmake"
     with pytest.raises(Unsupported):
@@ -352,6 +353,28 @@ def test_the_fix_rebuilds_without_the_system_setup_the_job_already_did():
     # The fix rebuilds as an unprivileged account; these ran as root already.
     assert spec.commands.build == "make CC=gcc"
     assert "apk add build-base" in spec.steps[-1].run  # the job's own setup runs them
+
+
+def test_a_dropped_install_takes_its_continuation_lines_with_it():
+    source = DAILY.replace(
+        "      - name: make\n        run: make\n",
+        "      - name: make\n        run: |\n"
+        "          sudo apt-get install -y \\\n"
+        "            pkg-config libssl-dev\n"
+        "          make BUILD_TLS=yes \\\n"
+        "            SERVER_CFLAGS='-Werror'\n",
+        1,
+    )
+
+    spec = _resolve(source, "test-ubuntu-jemalloc")
+
+    assert spec.commands.build == "make BUILD_TLS=yes SERVER_CFLAGS='-Werror'"
+
+
+def test_a_strategy_that_is_not_a_mapping_is_unsupported_not_a_crash():
+    with pytest.raises(Unsupported):
+        _resolve(DAILY.replace("    timeout-minutes: 1440\n", "    timeout-minutes: 1440\n    strategy: 3\n", 1),
+                 "test-ubuntu-jemalloc")
 
 
 def test_a_shell_variable_the_test_command_uses_is_not_setup():

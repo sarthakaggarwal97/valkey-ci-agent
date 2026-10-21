@@ -26,8 +26,8 @@ _POLICY = {
         "branch. Do not change product behavior."
     ),
     FixPolicy.GENERAL: (
-        "Fix the root cause with the smallest coherent source, test, build, or "
-        "workflow change. Do not hide a product defect or weaken a test."
+        "Fix the root cause with the smallest coherent source, test or build "
+        "change; never a workflow change. Do not hide a product defect or weaken a test."
     ),
 }
 

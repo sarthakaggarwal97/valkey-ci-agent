@@ -10,19 +10,19 @@
 # - Python 3.9 or later, in a virtual environment put first on PATH;
 # - Node, for Claude Code;
 # - what the agent's own account needs (scripts/common/isolation.py):
-#   useradd, runuser, pkill and ps, and find.
+#   useradd, runuser, pkill and ps, find, and setfacl.
 set -eu
 
 if command -v apk >/dev/null 2>&1; then
   # Claude Code on musl uses the system's ripgrep, and libstdc++.
-  apk add --no-cache bash git python3 nodejs npm shadow runuser procps findutils \
+  apk add --no-cache bash git python3 nodejs npm shadow runuser procps findutils acl \
     libgcc libstdc++ ripgrep
   python=python3
 elif command -v dnf >/dev/null 2>&1; then
   # Enterprise Linux's default Node is older than Claude Code supports;
   # Fedora has no module streams, and a current Node.
   dnf -y -q module enable nodejs:20 >/dev/null 2>&1 || true
-  dnf -y -q install bash git python3 nodejs npm shadow-utils util-linux procps-ng findutils
+  dnf -y -q install bash git python3 nodejs npm shadow-utils util-linux procps-ng findutils acl
   python=python3
   if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))'; then
     dnf -y -q install python3.11  # AlmaLinux 8's python3 is 3.6
@@ -31,7 +31,7 @@ elif command -v dnf >/dev/null 2>&1; then
 elif command -v apt-get >/dev/null 2>&1; then
   apt-get update -q
   DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
-    bash git ca-certificates python3 python3-venv nodejs npm passwd util-linux procps findutils
+    bash git ca-certificates python3 python3-venv nodejs npm passwd util-linux procps findutils acl
   python=python3
 else
   echo "::error::No apk, dnf or apt-get to install the agent's tools with"
