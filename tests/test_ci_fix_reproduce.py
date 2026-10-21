@@ -80,6 +80,28 @@ def test_a_c_unit_test_is_repeated_by_name_with_the_jobs_build(checkout):
     assert plan.failed(TestRun(passed=False, output="", report="[  FAILED  ] Crc64Test.TestCrc64 (0 ms)"))
     assert plan.ran(TestRun(passed=True, output="", report="[       OK ] Crc64Test.TestCrc64 (0 ms)"))
     assert not plan.ran(TestRun(passed=True, output="", report="[       OK ] Other.Test (0 ms)"))
+    # Several unit tests: one filter.
+    two = plan_for(checkout, (UNIT_TEST, FailedTest("Sizes/HashtableTest.Grow/2", "test_hashtable.cpp")), scheduled=True)
+    assert "--gtest_filter=Crc64Test.TestCrc64:Sizes/HashtableTest.Grow/2 " in two.test
+
+
+def test_a_gtest_runs_output_is_read_the_way_runtests_is(checkout):
+    """What run_test_command keeps of the output (failure_report) is what the plan judges."""
+    (Path(checkout) / "src" / "unit").mkdir(parents=True)
+    plan = plan_for(checkout, (UNIT_TEST,), scheduled=True)
+    failing = (
+        "[==========] Running 1 test from 1 test suite.\n[ RUN      ] Crc64Test.TestCrc64\n"
+        "src/unit/test_crc64.cpp:29: Failure\nExpected equality of these values:\n"
+        "[  FAILED  ] Crc64Test.TestCrc64 (0 ms)\n[  FAILED  ] 1 test, listed below:\n"
+        "[  FAILED  ] Crc64Test.TestCrc64\n 1 FAILED TEST\n"
+    )
+    passing = "[ RUN      ] Crc64Test.TestCrc64\n[       OK ] Crc64Test.TestCrc64 (1 ms)\n[  PASSED  ] 1 test.\n"
+    unrelated = "[ RUN      ] Other.Test\n[       OK ] Other.Test (1 ms)\n"
+
+    assert plan.failed(TestRun(passed=False, output=failing, report=failure_report(failing)))
+    assert plan.ran(TestRun(passed=True, output=passing, report=failure_report(passing)))
+    assert not plan.ran(TestRun(passed=True, output=unrelated, report=failure_report(unrelated)))
+    assert not plan.failed(TestRun(passed=False, output="make: *** No rule", report=failure_report("make: *** No rule")))
 
 
 def test_a_build_without_the_unit_tests_gets_their_target_and_no_src_unit_means_no_plan(checkout):

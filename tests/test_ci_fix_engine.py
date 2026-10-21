@@ -730,6 +730,47 @@ def test_the_failure_is_reproduced_first_and_the_fix_verified_with_the_same_comm
     assert "the reproduction passed 10 loop(s)" in candidate.verification
 
 
+def test_a_detector_issue_for_a_c_unit_test_is_reproduced_with_gtest_and_the_fix_verified(tmp_path, monkeypatch):
+    """The whole path: the issue's test, located in the checkout, repeated by name with the real planner."""
+    source, head_sha = _source_repo(tmp_path)
+    (source / "src" / "unit").mkdir(parents=True)
+    (source / "src" / "unit" / "test_crc64.cpp").write_text("TEST(Crc64Test, TestCrc64) {}\n", encoding="utf-8")
+    git(source, "add", "src")
+    git(source, "commit", "-m", "unit test")
+    head_sha = git(source, "rev-parse", "HEAD")
+    _install_clone(monkeypatch, source)
+    runs, contexts = [], []
+
+    def gtest_runner(repo_dir, command, timeout):
+        """A unit-test binary whose verdict is value.txt's content."""
+        assert command.endswith("--gtest_repeat=1") or "--gtest_repeat=" in command
+        assert "./src/unit/valkey-unit-gtests --gtest_filter=Crc64Test.TestCrc64" in command
+        value = (Path(repo_dir) / "value.txt").read_text().splitlines()[0]
+        runs.append((value, command.rsplit("--gtest_repeat=", 1)[1]))
+        if value == "right":
+            return TestRun(True, "", "[       OK ] Crc64Test.TestCrc64 (1 ms)")
+        return TestRun(False, "", "src/unit/test_crc64.cpp:29: Failure\n[  FAILED  ] Crc64Test.TestCrc64 (0 ms)")
+
+    agent = _value_agent("right", command="")
+
+    def recording_agent(*args, **kwargs):
+        contexts.append(kwargs["context"])
+        return agent(*args, **kwargs)
+
+    task = _task(head_sha, kind=TargetKind.DRAFT_PR)
+    task = replace(task, failure=replace(
+        task.failure, issue_number=7, pr_number=0,
+        failed_tests=(FailedTest("Crc64Test.TestCrc64", "test_crc64.cpp"),),
+    ))
+    candidate = engine_mod.prepare_fix(task, _LOG, agent_func=recording_agent, test_func=gtest_runner)
+
+    assert candidate.action is CandidateAction.PATCH
+    assert runs == [("before", "1"), ("before", "1"), ("right", "10")]
+    assert contexts[0].reproduction.startswith("Reproduced on every run with `make")
+    assert "--gtest_filter=Crc64Test.TestCrc64 --gtest_repeat=1`" in contexts[0].reproduction
+    assert "the reproduction passed 10 loop(s)" in candidate.verification
+
+
 def test_a_flake_that_failed_both_plain_runs_is_still_verified_as_a_flake(tmp_path, monkeypatch):
     from scripts.ci_fix.models import FailureType
 
