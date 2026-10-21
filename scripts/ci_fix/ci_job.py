@@ -29,8 +29,11 @@ from typing import Any, Callable, Optional
 
 import yaml
 
-# A job fixes one failure, never runs a full Daily.
+# A job fixes one failure, never runs a full Daily; and however short the
+# job's own tests, the fix needs its setup and build plus the engine's budget
+# (scripts/ci_fix/engine.py PREPARE_BUDGET_S).
 MAX_JOB_MINUTES = 180
+MIN_JOB_MINUTES = 90
 _DEFAULT_JOB_MINUTES = 360  # GitHub's
 
 
@@ -147,7 +150,10 @@ def resolve(source: str, job_name: str, *, scheduled: bool, repository: str, sha
 
 def _matrix_entries(job: dict[str, Any], context: dict[str, Any]) -> list[dict[str, Any]]:
     """Every matrix entry of ``job``: one ``{}`` without a matrix."""
-    matrix = (job.get("strategy") or {}).get("matrix")
+    strategy = job.get("strategy")
+    if strategy is not None and not isinstance(strategy, dict):
+        raise Unsupported("the strategy is not a mapping")
+    matrix = (strategy or {}).get("matrix")
     if matrix is None:
         return [{}]
     if not isinstance(matrix, dict):
@@ -267,7 +273,7 @@ def _spec(job_id: str, name: str, job: dict[str, Any], context: dict[str, Any]) 
         name=name,
         runs_on=runs_on,
         container=container,
-        timeout_minutes=min(int(minutes), MAX_JOB_MINUTES),
+        timeout_minutes=min(max(int(minutes), MIN_JOB_MINUTES), MAX_JOB_MINUTES),
         env=env,
         steps=tuple(setup),
         checkout=checkout,
@@ -368,11 +374,13 @@ def _build_command(exports: dict[str, str], script: str) -> str:
     Without its comments: the fix runs these lines as one command
     (scripts/ci_fix/reproduce.py), where a comment would hide the rest.
     Without the system setup the job already did as root: the fix rebuilds
-    as an unprivileged account.
+    as an unprivileged account. A line continued with a backslash is one
+    line, so that a dropped install does not leave its packages as a command.
     """
+    joined = re.sub(r"\s*\\\n\s*", " ", script.strip())
     return "\n".join([
         *(f"export {key}={_quoted(item)}" for key, item in exports.items()),
-        *(stripped for line in script.strip().splitlines()
+        *(stripped for line in joined.splitlines()
           if not _SYSTEM_SETUP_RE.match(line.lstrip()) and (stripped := _without_comment(line))),
     ])
 

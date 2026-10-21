@@ -145,10 +145,11 @@ def prose(text: str, limit: int) -> str:
     """``text`` as one line of at most ``limit`` characters, without dashes.
 
     An aside set off by two dashes takes commas; a single dash, which joins
-    a clause to what explains it, takes a colon.
+    a clause to what explains it, takes a colon. The agent wrote the text:
+    an HTML comment in it must not read as one of the bot's own markers.
     """
     text = _DASH_PAIR_RE.sub(r", \1, ", compact_text(text, limit))
-    return _DASH_RE.sub(": ", text)
+    return _DASH_RE.sub(": ", text).replace("<!--", "<!- -")
 
 
 def _plural(text: str) -> str:

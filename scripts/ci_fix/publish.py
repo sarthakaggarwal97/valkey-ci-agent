@@ -274,9 +274,13 @@ def reconcile_draft_pr(
             reused = _reuse_draft_pr(gh, task, candidate, commit_sha)
             if reused is not None:
                 return reused
+        # The branch is pushed and stays: say so, so that it is not lost.
         return FixResult(
             kind=ResultKind.REFUSED,
-            summary=rejection,
+            summary=(
+                f"{rejection} The fix is on {target.repo_full_name}:{target.branch} "
+                f"({commit_sha[:12]}) without a pull request."
+            ),
             task=task,
             candidate=candidate,
             commit_sha=commit_sha,

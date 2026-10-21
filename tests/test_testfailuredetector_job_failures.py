@@ -441,6 +441,22 @@ def test_a_c_unit_tests_issue_does_not_change_when_its_assertion_moves():
     assert issue_renderer.job_fingerprint_for(before[0]) == issue_renderer.job_fingerprint_for(after[0])
 
 
+def test_a_c_unit_tests_issue_does_not_change_with_the_build_dirs_path_or_a_later_assertion():
+    """gtest prints the file as the compiler saw it: a CMake or container build gives a path."""
+    pathed = _GTEST.replace("test_crc64.cpp:29:", "/__w/valkey/valkey/src/unit/test_crc64.cpp:29:")
+    later = _GTEST.replace(
+        "[calcula]: CRC64 '123456789'\n",
+        "[calcula]: CRC64 '123456789'\n2026-10-19T20:57:53.8182000Z test_helpers.h:12: Failure\n",
+    )
+    _, plain = _find([_job(1, "test-ubuntu-jemalloc", step="unittest")], {1: _GTEST})
+    _, with_path = _find([_job(1, "test-ubuntu-jemalloc", step="unittest")], {1: pathed})
+    _, with_later = _find([_job(1, "test-ubuntu-jemalloc", step="unittest")], {1: later})
+
+    assert with_path[0].summary == with_later[0].summary == plain[0].summary == (
+        "[err]: Unit test Crc64Test.TestCrc64 failed in test_crc64.cpp",
+    )
+
+
 def test_each_failed_c_unit_test_is_its_own_failure_and_a_parameterized_one_keeps_its_name():
     log = (
         "[ RUN      ] Crc64Test.TestCrc64\n"

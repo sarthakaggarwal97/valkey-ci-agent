@@ -305,7 +305,11 @@ def test_every_fix_front_door_runs_the_shared_fix():
         job = yaml.safe_load((Path(".github/workflows") / filename).read_text(encoding="utf-8"))["jobs"][job_id]
         assert job["uses"] == f"./{_RUN.as_posix()}", filename
         assert job["permissions"] == {"contents": "read", "id-token": "write"}, filename
-        assert job["secrets"] == "inherit", filename
+        # Exactly what the run declares, not every secret of the repository.
+        assert job["secrets"] == {
+            name: f"${{{{ secrets.{name} }}}}"
+            for name in ("VALKEYRIE_BOT_APP_ID", "VALKEYRIE_BOT_PRIVATE_KEY", "AWS_ROLE_ARN")
+        }, filename
         doors.add(job["with"]["front_door"])
     assert doors == {door.value for door in FrontDoor}
 
@@ -318,11 +322,14 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
         tokens = [step for step in steps if "actions/create-github-app-token@" in step.get("uses", "")]
         assert len(tokens) == 1 and tokens[0]["id"] == "target-token", job_id
         permissions = {k: v for k, v in tokens[0]["with"].items() if k.startswith("permission-")}
+        # The plan only reads and answers (a comment, a reaction); publish pushes and opens PRs.
+        plan = job_id == "plan"
         assert permissions == {
-            "permission-actions": "read", "permission-contents": "write", "permission-pull-requests": "write",
-            "permission-issues": "write", "permission-metadata": "read",
+            "permission-actions": "read", "permission-issues": "write", "permission-metadata": "read",
+            "permission-contents": "read" if plan else "write",
+            "permission-pull-requests": "read" if plan else "write",
             # The PR command's gate checks team membership.
-            **({"permission-members": "read"} if job_id == "plan" else {}),
+            **({"permission-members": "read"} if plan else {}),
         }, job_id
         assert not any("configure-aws-credentials@" in step.get("uses", "") for step in steps), job_id
         assert "\n".join(step.get("run", "") for step in steps).count(command) == 1, job_id
@@ -482,6 +489,7 @@ def test_the_isolation_tests_also_run_as_root_in_a_container():
     setup = next(step for step in job["steps"] if step.get("uses") == "./.github/actions/setup-agent")
 
     assert job["container"] and setup["with"]["system-packages"] == "true"
+    assert job["container"] != "alpine:latest"  # pinned, so the test does not drift with Alpine
     assert any("pytest" in step.get("run", "") and "tests/test_isolation.py" in step["run"] for step in job["steps"])
 
 

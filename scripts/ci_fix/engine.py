@@ -118,11 +118,12 @@ _REPO_DOCS = (
 )
 
 AgentFunc = Callable[..., FixCandidate]
+
+
 class ReviewFunc(Protocol):
     def __call__(
         self, candidate: FixCandidate, repo_dir: str, job_log: str, *, context: FixContext, timeout: int,
     ) -> tuple[bool, str]: ...
-
 
 
 TestFunc = Callable[[str, str, int], TestRun]

@@ -223,6 +223,17 @@ def test_a_fix_that_crashed_or_never_finished_is_reported_as_failed(front_door, 
     assert missing.kind is ResultKind.FAILED and "https://run" in missing.summary
 
 
+def test_a_result_that_cannot_be_read_is_reported_as_failed(front_door, tmp_path):
+    save(tmp_path / run.PLAN_FILE, _pr_plan())
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / run.OUTCOME_FILE).write_text('{"candidate": {"not": "a candidate"', encoding="utf-8")
+
+    _publish(tmp_path, tmp_path / "out")
+
+    (unreadable,) = front_door.reported
+    assert unreadable.kind is ResultKind.FAILED and "could not be read" in unreadable.summary
+
+
 def test_the_candidate_is_published_as_its_target_says(front_door, monkeypatch, tmp_path):
     save(tmp_path / run.PLAN_FILE, _pr_plan())
     save(tmp_path / run.OUTCOME_FILE, FixOutcome(candidate=_CANDIDATE))

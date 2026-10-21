@@ -60,4 +60,7 @@ jobs:
       # (scripts/ci_fix/main.py).
       request: ${{ toJSON(inputs) }}
       key: pr-${{ inputs.pr }}
-    secrets: inherit
+    secrets:
+      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
