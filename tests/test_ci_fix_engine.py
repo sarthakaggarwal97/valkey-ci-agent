@@ -26,8 +26,14 @@ from tests.git_helpers import git
 
 @pytest.fixture(autouse=True)
 def _approving_review_and_no_tests(monkeypatch):
-    """The real review and test runner start agents and processes; these tests are about the rest."""
+    """The real review and test runner start agents and processes; these tests are about the rest.
+
+    Their test commands are the tests' own scripts, run directly: inside
+    Actions the engine would otherwise insist on the isolated account, which
+    tests/test_isolation.py drives on purpose.
+    """
     monkeypatch.setattr(engine_mod, "review_candidate", lambda *a, **k: (True, "looks right"))
+    monkeypatch.setattr(engine_mod, "isolated_user", lambda: "")
 
 
 _LOG = "exact failed job log"
