@@ -1,77 +1,34 @@
 # Fixing a failing Valkey test
 
-Distilled from Valkey's own guidance (`tests/README.md`,
-`.github/instructions/integration-tests.instructions.md`, `AGENTS.md`,
-`DEVELOPMENT_GUIDE.md`) and from how maintainers have deflaked tests.
-Read the files that exist in your checkout; they win over this summary.
+Valkey documents its own tests. Read, in your checkout, whichever of these
+exist before you change a test; they are the authority on helpers, tags and
+conventions, and they match the branch you are on:
+
+- `tests/README.md`
+- `.github/instructions/integration-tests.instructions.md`
+- `AGENTS.md`, `DEVELOPMENT_GUIDE.md`, `CONTRIBUTING.md`
+- `tests/support/util.tcl`, `tests/support/test.tcl` and
+  `tests/test_helper.tcl` for what a `wait_for_*` or `verify_*` helper
+  actually does, and whether this branch has it: helpers and runtest options
+  differ between release lines, so use only what this branch's `tests/`
+  defines.
+
+What follows is the bot's own policy, not a summary of those files.
 
 ## First decide what failed
 
 - Product bug: the server misbehaved. Fix `src/`, not the test. Never make a
   test pass by weakening what it checks.
 - Test bug: the test assumes a timing, an ordering, or a state the server does
-  not guarantee. Fix the test.
+  not guarantee. Fix the test, with the polling helpers the repository's docs
+  describe rather than a fixed `after N`.
 - Harness or environment: a port clash, an out-of-disk runner, a missing tool.
   Refuse; that is not a code fix.
 
 A test that fails once in many runs is still a bug. Find the race in the log
 (`--dump-logs` prints each server's log after a failure) before editing.
-
-## How Valkey tests wait
-
-Never wait with a fixed `after N` and then assert. Poll for the condition:
-
-```tcl
-wait_for_condition 50 100 {
-    [s master_link_status] eq {up}
-} else {
-    fail "replica did not connect"
-}
-```
-
-Helpers to use instead of hand-written loops (`tests/support/util.tcl`,
-`tests/support/test.tcl`, `tests/test_helper.tcl`,
-`tests/support/cluster_util.tcl`):
-
-- replication: `wait_for_sync`, `wait_replica_online`, `wait_for_ofs_sync`,
-  `wait_replica_acked_ofs`, `verify_replica_online`
-- server state: `wait_done_loading`, `wait_lazyfree_done`,
-  `wait_for_blocked_client`, `wait_for_blocked_clients_count`,
-  `wait_for_watched_clients_count`
-- logs: `wait_for_log_messages`, `verify_log_message`, `count_log_message`
-- processes: `pause_process`, `resume_process`, `wait_process_paused`
-- cluster: `wait_for_cluster_propagation`, `wait_for_cluster_state`,
-  `wait_for_cluster_size`
-- replication stream: `attach_to_replication_stream`,
-  `assert_replication_stream`, `close_replication_stream`
-- `run_solo` for a test that cannot share the machine with others
-
-Helpers and runtest options differ between branches: Valkey 7.2 has no
-`wait_for_watched_clients_count`, `wait_replica_acked_ofs`,
-`wait_process_paused`, or `--fastfail`. On a release branch, use only what
-that branch's `tests/` defines.
-
-Valgrind and sanitizer builds are many times slower. Scale retries rather
-than hard-coding them: `[expr {$::valgrind ? 12000 : 2400}]`.
-
-## Common deflake patterns that maintainers accepted
-
-- Replace `after N` + `assert` with `wait_for_condition` on the real signal.
-- Wrap a one-shot `assert` or `count_log_message` that races the server in
-  `wait_for_condition`.
-- Give a slow path more retries or a larger delay, especially under valgrind.
-- Remove the race with configuration: e.g. `repl-timeout`,
-  `cluster-replica-validity-factor 0`, client-output-buffer limits, or a
-  `debug` knob that makes the order deterministic.
-- Assert what the server guarantees, not an incidental exact value (an exact
-  slowlog length, an exact key count after eviction).
-- Drain deferred clients' replies, or use `CLIENT REPLY OFF`, so a reply
-  cannot arrive late.
-- Skip a test only where it cannot work, with a tag: `valgrind:skip`,
-  `tls:skip`, `external:skip`, `cluster:skip`, `needs:debug`, `needs:repl`,
-  `needs:save`. A tag is not a fix for a race. `large-memory`, `network`,
-  `needs:other-server` and `compatible-redis` select whole files and are only
-  allowed at a file's top level; adding one to a test is an error.
+Valgrind and sanitizer builds are many times slower; scale a wait with
+`$::valgrind` rather than hard-coding a longer one everywhere.
 
 ## Scope
 
@@ -79,11 +36,13 @@ than hard-coding them: `[expr {$::valgrind ? 12000 : 2400}]`.
   same change.
 - Do not reorder or rename tests; other tests in a file may depend on state
   that earlier ones leave behind.
-- New cluster tests belong in `tests/unit/cluster/`, not the legacy
-  `tests/cluster/` framework.
+- A tag that skips a test is not a fix for a race.
 - Do not change `.github/`.
 
 ## Running a test
+
+The reproduction section of your briefing names the exact command the bot
+used, with the job's own build; prefer it. In general:
 
 ```sh
 make -j"$(nproc)"
@@ -92,13 +51,17 @@ make -j"$(nproc)"
 
 `--only` is an exact name match (a leading `/` makes it a regexp). With
 several clients (the default) loop copies run in parallel, and a `run_solo`
-block runs inline, so loop a file with `run_solo` with `--clients 1`. Add `--accurate`
-for what scheduled CI runs, `--valgrind --clients 1` after `make valgrind`,
-`--tls` after `make BUILD_TLS=yes && ./utils/gen-test-certs.sh`.
+block runs inline, so loop a file with `run_solo` with `--clients 1`. Add
+`--accurate` for what scheduled CI runs, `--valgrind --clients 1` after
+`make valgrind`, `--tls` after `make BUILD_TLS=yes && ./utils/gen-test-certs.sh`.
 
-A C unit test (`src/unit/test_*.cpp`) is a Google Test, not a Tcl test:
+A C unit test is a Google Test in `src/unit/test_*.cpp`, not a Tcl test:
 
 ```sh
 make -j"$(nproc)" all-with-unit-tests
 ./src/unit/valkey-unit-gtests --gtest_filter='Suite.Test' --gtest_repeat=20
 ```
+
+Release branches before the Google Test harness run their unit tests through
+`./src/valkey-unit-tests` (its `--help` lists how to select one); older ones
+through `./src/valkey-server test <name>`.
