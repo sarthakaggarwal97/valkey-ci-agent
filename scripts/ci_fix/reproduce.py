@@ -1,13 +1,15 @@
-"""Reproduce a failing Valkey Tcl test before anyone tries to fix it.
+"""Reproduce a failing Valkey test before anyone tries to fix it.
 
-A fix is only evidence of anything if the failure was seen first. For a Tcl
-test, code (not the agent) builds the reproduction command from what the CI
-job ran: inside the failed job itself (``scripts/ci_fix/job.sh``), the job's
-own ``make`` and ``runtest`` commands (:class:`JobCommands`); anywhere else,
-plain ``make`` and ``runtest``. ``runtest`` runs only the failing tests
+A fix is only evidence of anything if the failure was seen first. Code (not
+the agent) builds the reproduction command from what the CI job ran: inside
+the failed job itself (``scripts/ci_fix/job.sh``), the job's own ``make`` and
+``runtest`` commands (:class:`JobCommands`); anywhere else, plain ``make`` and
+``runtest``. For a Tcl test, ``runtest`` runs only the failing tests
 (``--single <unit> --only <name>``) many times in one invocation
 (``--loops N --fastfail``). With several test clients the loop copies run in
-parallel, which is the load that exposes most timing flakes.
+parallel, which is the load that exposes most timing flakes. For a C unit
+test (Google Test), the unit-test binary runs only the failing tests
+(``--gtest_filter``) as many times (``--gtest_repeat``).
 
 A flaky failure may not show up in a few loops on an idle runner, so a second
 attempt runs the same loops while every core is busy. A failure that still
@@ -29,6 +31,10 @@ from scripts.ci_fix.ci_job import JobCommands
 from scripts.ci_fix.models import FailedTest
 from scripts.common.valkey_ci import FAILURE_MARKERS, FILE_TIMEOUT_TEST_NAME, ResultLine, parse_result_line
 
+# Valkey's Google Test binary, and the make target that builds it with the server.
+UNIT_TEST_BINARY = "./src/unit/valkey-unit-gtests"
+UNIT_TEST_BUILD = "make all-with-unit-tests"
+
 # Loops per reproduction attempt, and with the fix applied. Valgrind is ~20x
 # slower and runs one client at a time, as the Daily job does.
 REPRO_LOOPS = 20
@@ -47,7 +53,7 @@ _MIN_ATTEMPT_S = 3 * 60
 # the Tcl stack frames that name the test an exception happened in. ``[ok]``
 # lines say which tests ran at all.
 _FAILURE_LINE_RE = re.compile("|".join(map(re.escape, FAILURE_MARKERS)) + r"|\btest [\"{]")
-_OK_LINE = "[ok]:"
+_OK_LINE_RE = re.compile(r"\[ok\]:|\[       OK \]")
 _TEST_FRAME_RE = re.compile(r"\btest [\"{]")
 _MAX_FAILURE_LINES = 200
 _MAX_OK_LINES = 2_000
@@ -162,7 +168,7 @@ def failure_report(output: str) -> str:
     for line in output.splitlines():
         if _FAILURE_LINE_RE.search(line):
             failures.append(line.strip())
-        elif _OK_LINE in line:
+        elif _OK_LINE_RE.search(line):
             passed.append(line.strip())
     return "\n".join(failures[:_MAX_FAILURE_LINES] + passed[:_MAX_OK_LINES])
 
@@ -227,14 +233,18 @@ def plan_for(
 ) -> ReproPlan | None:
     """The plan that rebuilds and runs ``tests`` the way their CI ``job`` did, or None.
 
-    Only tests in the main Tcl suite are planned (sentinel and the legacy
-    cluster suite use other harnesses); None when none is, or the checkout
-    has no ``runtest``. Without the job's own commands, plain ``make`` and
-    ``runtest`` stand in for them; scheduled runs pass ``--accurate``. The
-    module API tests run through ``runtest-moduleapi``, which builds the test
-    modules; a plan runs one suite, the first test's.
+    Tests in the main Tcl suite (sentinel and the legacy cluster suite use
+    other harnesses) and C unit tests are planned; None when none is, or the
+    checkout has no ``runtest``. Without the job's own commands, plain
+    ``make`` and ``runtest`` stand in for them; scheduled runs pass
+    ``--accurate``. The module API tests run through ``runtest-moduleapi``,
+    which builds the test modules; a plan runs one suite, the first test's.
     """
-    tests = tuple(test for test in tests if _in_main_suite(test.file))
+    unit_tests = tuple(test for test in tests if test.is_unit_test)
+    tcl_tests = tuple(test for test in tests if _in_main_suite(test.file))
+    if unit_tests and (not tcl_tests or tests[0].is_unit_test):
+        return _unit_test_plan(repo_dir, unit_tests, job=job)
+    tests = tcl_tests
     if not tests or not (Path(repo_dir) / "runtest").is_file():
         return None
     notes: list[str] = []
@@ -249,7 +259,10 @@ def plan_for(
     moduleapi = bool(job.moduleapi) and _in_moduleapi(tests[0].file)
     tests = tuple(test for test in tests if _in_moduleapi(test.file) == moduleapi)
     base = job.moduleapi if moduleapi else job.runtest
-    options = ["--timeout", str(_RUNTEST_TIMEOUT_S)]
+    # runtest keeps the last --timeout. The job's own watchdog (Daily's
+    # valgrind jobs pass 2400) is kept when it is shorter; a longer one would
+    # let a hang outlive the reproduction budget unreported.
+    options = ["--timeout", str(min(_job_timeout(base) or _RUNTEST_TIMEOUT_S, _RUNTEST_TIMEOUT_S))]
     if "--clients" not in base.split() and any(_runs_solo(repo_dir, test) for test in tests):
         # Under --loops, runtest runs a run_solo block inline, so with several
         # clients its copies would run side by side: a race of the bot's own
@@ -259,15 +272,41 @@ def plan_for(
     selection = _selection(repo_dir, tests, notes)
     if default:
         notes.append("The failed job could not host the fix, so plain make and runtest stand in for it.")
-    # The job's build as one line that stops at its first failure, on every
-    # core. One line because every report quotes the command it ran.
-    build = " && ".join(
-        _MAKE_LINE_RE.sub(r'\1 -j"$(nproc)"', line.strip())
-        for line in _CONTINUATION_RE.sub(" ", job.build).splitlines() if line.strip()
-    )
     command = " ".join([base, *selection, "--loops", LOOPS, *options])
-    return ReproPlan(build=build, test=command, valgrind="--valgrind" in base.split(),
+    return ReproPlan(build=_one_line_build(job.build), test=command, valgrind="--valgrind" in base.split(),
                      notes=tuple(notes), tests=tests)
+
+
+def _one_line_build(build: str) -> str:
+    """The job's build as one line that stops at its first failure, on every core.
+
+    One line because every report quotes the command it ran.
+    """
+    return " && ".join(
+        _MAKE_LINE_RE.sub(r'\1 -j"$(nproc)"', line.strip())
+        for line in _CONTINUATION_RE.sub(" ", build).splitlines() if line.strip()
+    )
+
+
+def _unit_test_plan(repo_dir: str, tests: tuple[FailedTest, ...], *, job: JobCommands | None) -> ReproPlan | None:
+    """The plan that builds the unit-test binary like the job and repeats only ``tests``.
+
+    None without ``src/unit`` in the checkout (a branch before Google Test,
+    whose own harness runs the whole suite). The job's build must produce the
+    binary: one that does not gets ``make all-with-unit-tests`` after it.
+    """
+    if not (Path(repo_dir) / "src" / "unit").is_dir():
+        return None
+    notes: list[str] = []
+    build = job.build if job is not None else UNIT_TEST_BUILD
+    if "unit-tests" not in build:
+        build = f"{build}\n{UNIT_TEST_BUILD}"
+        notes.append("The job's build does not build the unit tests, so `make all-with-unit-tests` runs after it.")
+    if job is None:
+        notes.append("The failed job could not host the fix, so a plain build stands in for it.")
+    names = ":".join(test.name for test in tests)
+    command = f"{UNIT_TEST_BINARY} --gtest_filter={shlex.quote(names)} --gtest_repeat={LOOPS}"
+    return ReproPlan(build=_one_line_build(build), test=command, notes=tuple(notes), tests=tests)
 
 
 _MAKE_LINE_RE = re.compile(r"^(\s*make)(?=\s|$)(?!.*\s-j)", re.MULTILINE)
@@ -347,6 +386,15 @@ def reproduce(
         attempts.append(f"passed {label}")
     return Reproduction(ReproStatus.NOT_REPRODUCED, command=plan.command(plan.repro_loops),
                         attempts=tuple(attempts))
+
+
+def _job_timeout(command: str) -> int:
+    """The ``--timeout`` seconds a runtest command passes, or 0."""
+    words = command.split()
+    for index, word in enumerate(words[:-1]):
+        if word == "--timeout" and words[index + 1].isdigit():
+            return int(words[index + 1])
+    return 0
 
 
 def _wrong_argument(output: str) -> str:

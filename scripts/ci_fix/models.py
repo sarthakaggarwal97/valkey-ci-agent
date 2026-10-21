@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from scripts.common.valkey_ci import FILE_TIMEOUT_TEST_NAME, Source
+from scripts.common.valkey_ci import FILE_TIMEOUT_TEST_NAME, Source, is_unit_test_file
 
 
 class FixPolicy(str, Enum):
@@ -72,10 +72,12 @@ class FailureType(str, Enum):
 
 @dataclass(frozen=True)
 class FailedTest:
-    """One failing Tcl test: its name and ``tests/...tcl`` file.
+    """One failing test: its name and file.
 
-    ``name`` is "" when a test client timed out outside any test: then only
-    the file is known, and the whole file is what failed.
+    A Tcl test's ``tests/...tcl`` file, or a C unit test's (``Suite.Test`` in
+    ``src/unit/test_x.cpp``; by base name alone until the checkout locates
+    it). ``name`` is "" when a test client timed out outside any test: then
+    only the file is known, and the whole file is what failed.
     """
 
     name: str
@@ -89,6 +91,11 @@ class FailedTest:
     @property
     def whole_file(self) -> bool:
         return not self.name
+
+    @property
+    def is_unit_test(self) -> bool:
+        """A C unit test (Google Test), run by name, not through runtest."""
+        return is_unit_test_file(self.file)
 
     @property
     def unit(self) -> str:
@@ -240,6 +247,8 @@ class IssueFailure:
         return (FailedTest.from_report(self.test_name, self.test_file),)
 
     def describe(self, job: str, source: Source) -> str:
+        if self.job_name and self.test_name:
+            return f"C unit test `{self.test_name}` (`{self.test_file}`) failed in {source.label} job `{job}`."
         if self.job_name:
             return f"The {source.label} job `{job}` failed without a recorded test failure."
         if self.test_name == FILE_TIMEOUT_TEST_NAME:

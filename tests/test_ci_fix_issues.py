@@ -233,6 +233,23 @@ def test_job_failure_issue_preserves_its_detector_identity():
     assert parsed.fingerprint == issue_renderer.job_fingerprint_for(failure)
 
 
+def test_a_c_unit_tests_job_issue_names_its_test_for_the_engine():
+    failure = JobFailure(
+        job="test-ubuntu-jemalloc", url="https://job", step="unittest",
+        summary=("[err]: Unit test Crc64Test.TestCrc64 failed in test_crc64.cpp",),
+    )
+    marker = f"<!-- {issue_renderer.MARKER_NAMESPACE}:{issue_renderer.job_fingerprint_for(failure)} -->"
+    body = issue_renderer.render_job_issue(failure, marker, 1).body + f"\n{_last_key(100)}"
+
+    parsed = parse_issue(_issue(body=body))
+
+    assert (parsed.job_name, parsed.test_name, parsed.test_file) == (
+        "test-ubuntu-jemalloc", "Crc64Test.TestCrc64", "test_crc64.cpp",
+    )
+    assert parsed.failed_tests[0].is_unit_test
+    assert parsed.describe("test-ubuntu-jemalloc", issues_mod.Source.DAILY).startswith("C unit test `Crc64Test.TestCrc64`")
+
+
 def test_non_detector_body_is_not_parsed():
     assert parse_issue(_issue(body="Please fix this test")) is None
     body = _test_issue_body().replace(_last_key(100), "")

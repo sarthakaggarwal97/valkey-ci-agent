@@ -1,9 +1,13 @@
 """What the bots know about Valkey's CI: its scheduled workflow and the
-result lines its Tcl test runner prints.
+result lines its test runners print.
 
 ``runtest`` prints ``[ok]: <name> (<ms> ms)`` for a passing test and
 ``[err]: <name> in tests/<file>.tcl`` (or ``[TIMEOUT]``) for a failing one,
-again prefixed ``*** `` in its closing summary.
+again prefixed ``*** `` in its closing summary. A C unit test (Google Test,
+``make test-unit``, ``src/unit/*.cpp``) prints ``[       OK ] Suite.Test (<ms>
+ms)`` or ``[  FAILED  ] Suite.Test (<ms> ms)`` once it ends, after the
+``file:line: Failure`` of each failed assertion; the list gtest prints at the
+end repeats a failed name without a time.
 """
 
 from __future__ import annotations
@@ -55,8 +59,48 @@ _OK_RE = re.compile(r"^(?P<name>.+) \(\d+ ms\)$")
 # by this stable name for its file instead.
 _CLIENT_STATE_RE = re.compile(r"^(?:pid:\d+|port \d+|ASSIGNED: .*|SLEEPING\b.*)$")
 FILE_TIMEOUT_TEST_NAME = "test client timed out"
-# What a failing runtest run prints; a build break or a missing Tcl does not.
-FAILURE_MARKERS = ("[err]:", "[TIMEOUT]:", "[exception]:", "Valgrind error", "Sanitizer error")
+# What a failing runtest or gtest run prints; a build break or a missing Tcl does not.
+FAILURE_MARKERS = ("[err]:", "[TIMEOUT]:", "[exception]:", "Valgrind error", "Sanitizer error", "[  FAILED  ]")
+
+# --- Google Test result lines -------------------------------------------------
+
+_GTEST_RUN_RE = re.compile(r"^\[ RUN      \] (?P<test>\S+)$")
+_GTEST_OK_RE = re.compile(r"^\[       OK \] (?P<test>[^,\s]+)(?:, where .*)? \(\d+ ms\)$")
+_GTEST_FAILED_RE = re.compile(r"^\[  FAILED  \] (?P<test>[^,\s]+)(?:, where .*)? \(\d+ ms\)$")
+_GTEST_LOCATION_RE = re.compile(r"^(?P<file>[\w./-]+\.(?:c|cc|cpp|h|hpp)):\d+: Failure$")
+UNIT_TEST_FILE_SUFFIXES = (".c", ".cc", ".cpp", ".h", ".hpp")
+
+
+def is_unit_test_file(file: str) -> bool:
+    """Whether ``file`` names a C unit test's source, not a Tcl test."""
+    return file.endswith(UNIT_TEST_FILE_SUFFIXES)
+
+
+def gtest_failure(line: str) -> str | None:
+    """The test a ``[  FAILED  ] Suite.Test (N ms)`` line reports, or None.
+
+    Not the closing list, which repeats the name without a time.
+    """
+    match = _GTEST_FAILED_RE.match(strip_log_prefix(line))
+    return match.group("test") if match else None
+
+
+def gtest_file_of(test: str, before: list[str]) -> str:
+    """The base name of the file ``test``'s first failed assertion is in, or "".
+
+    ``before`` holds the (prefix-stripped) log lines up to the test's
+    ``[  FAILED  ]`` line. The base name, not the path, and no line: a fix
+    elsewhere in the file moves the line, and the compiler saw the path
+    differently in another job's build, so either would make the same failure
+    look like a new one.
+    """
+    file = ""
+    for line in reversed(before):
+        if (run := _GTEST_RUN_RE.match(line)) and run.group("test") == test:
+            break
+        if location := _GTEST_LOCATION_RE.match(line):
+            file = location.group("file").rsplit("/", 1)[-1]
+    return file
 
 
 @dataclass(frozen=True)
@@ -85,8 +129,16 @@ def test_in_file(data: str) -> tuple[str, str] | None:
 
 
 def parse_result_line(line: str) -> ResultLine | None:
-    """The runtest result a (possibly timestamped) log line reports, or None."""
-    match = _RESULT_LINE_RE.search(strip_log_prefix(line))
+    """The runtest or gtest result a (possibly timestamped) log line reports, or None.
+
+    A gtest line names no file: the test's identity is its ``Suite.Test`` name.
+    """
+    plain = strip_log_prefix(line)
+    if passed := _GTEST_OK_RE.match(plain):
+        return ResultLine("ok", name=passed.group("test"))
+    if failed := _GTEST_FAILED_RE.match(plain):
+        return ResultLine("err", name=failed.group("test"))
+    match = _RESULT_LINE_RE.search(plain)
     if match is None:
         return None
     status, data = match.group("status"), match.group("data").strip()
@@ -98,12 +150,21 @@ def parse_result_line(line: str) -> ResultLine | None:
 
 
 def failed_tests_in_log(log: str) -> list[tuple[str, str]]:
-    """``(test name, tests/... file)`` for each test a log shows failing, in order."""
+    """``(test name, file)`` for each test a log shows failing, in order.
+
+    A Tcl test's ``tests/...tcl`` file; a C unit test's file by base name (as
+    its first failed assertion printed it), or "" when none did.
+    """
     found: list[tuple[str, str]] = []
-    for line in (log or "").splitlines():
-        result = parse_result_line(line)
-        if result is None or result.status not in ("err", "TIMEOUT") or not result.file:
-            continue
-        if (result.name, result.file) not in found:
-            found.append((result.name, result.file))
+    plain = [strip_log_prefix(raw) for raw in (log or "").splitlines()]
+    for index, line in enumerate(plain):
+        if (unit_test := gtest_failure(line)) is not None:
+            entry = (unit_test, gtest_file_of(unit_test, plain[:index]))
+        else:
+            result = parse_result_line(line)
+            if result is None or result.status not in ("err", "TIMEOUT") or not result.file:
+                continue
+            entry = (result.name, result.file)
+        if entry not in found:
+            found.append(entry)
     return found

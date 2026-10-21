@@ -6,6 +6,7 @@ import pytest
 
 from scripts.common.valkey_ci import (
     FILE_TIMEOUT_TEST_NAME,
+    ResultLine,
     Source,
     failed_tests_in_log,
     parse_result_line,
@@ -21,6 +22,25 @@ from scripts.common.valkey_ci import (
 ])
 def test_a_run_is_daily_only_when_scheduled(event, path, expected):
     assert source_for_run(SimpleNamespace(event=event, path=path)) is expected
+
+
+def test_a_failed_c_unit_test_is_read_from_the_log_by_name_and_file():
+    log = (
+        "2026-10-19T20:57:53.81Z [ RUN      ] Crc64Test.TestCrc64\n"
+        "2026-10-19T20:57:53.81Z /__w/valkey/valkey/src/unit/test_crc64.cpp:29: Failure\n"
+        "2026-10-19T20:57:53.81Z Expected equality of these values:\n"
+        "2026-10-19T20:57:53.81Z test_helpers.h:12: Failure\n"
+        "2026-10-19T20:57:53.81Z [  FAILED  ] Crc64Test.TestCrc64 (0 ms)\n"
+        "2026-10-19T20:57:53.81Z [ RUN      ] Sizes/HashtableTest.Grow/2\n"
+        "2026-10-19T20:57:53.81Z [       OK ] Sizes/HashtableTest.Grow/2 (12 ms)\n"
+        "2026-10-19T20:57:53.81Z [  FAILED  ] Crc64Test.TestCrc64\n"  # the closing list, not a second failure
+        "2026-10-19T20:57:53.81Z [err]: TTL in tests/unit/expire.tcl\n"
+    )
+
+    assert failed_tests_in_log(log) == [("Crc64Test.TestCrc64", "test_crc64.cpp"), ("TTL", "tests/unit/expire.tcl")]
+    assert parse_result_line("[       OK ] Sizes/HashtableTest.Grow/2 (12 ms)") == ResultLine("ok", "Sizes/HashtableTest.Grow/2")
+    assert parse_result_line("[  FAILED  ] Crc64Test.TestCrc64 (0 ms)") == ResultLine("err", "Crc64Test.TestCrc64")
+    assert parse_result_line("[  FAILED  ] Crc64Test.TestCrc64") is None
 
 
 def test_failed_tests_are_read_from_a_job_log_once_each():
