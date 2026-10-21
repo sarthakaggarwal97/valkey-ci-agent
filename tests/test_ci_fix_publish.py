@@ -15,6 +15,7 @@ from scripts.ci_fix.models import (
     FixPolicy,
     FixTarget,
     FixTask,
+    IssuePublication,
     ResultKind,
     TargetKind,
 )
@@ -222,6 +223,18 @@ def test_bot_named_branch_in_a_fork_is_never_updated(
 
     assert result.kind is ResultKind.REFUSED
     assert "not owned by the CI agent" in result.summary
+
+
+def test_an_issue_fix_published_as_a_comment_pushes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    task = _task(TargetKind.DRAFT_PR, issue=9)
+    gh, _repo = _gh()
+    monkeypatch.setattr(publish_mod, "push_candidate", lambda *_a, **_k: pytest.fail("nothing is pushed"))
+    monkeypatch.setattr(publish_mod, "find_existing_pr", lambda *_a, **_k: pytest.fail("no PR is looked for"))
+
+    result = publish_candidate(gh, task, _candidate(), git_env={}, issue_publication=IssuePublication.COMMENT)
+
+    assert (result.kind, result.commit_sha, result.pr_number) == (ResultKind.SUGGESTED, "", 0)
+    assert result.candidate == _candidate()
 
 
 def test_ready_issue_fix_opens_a_draft_pr(

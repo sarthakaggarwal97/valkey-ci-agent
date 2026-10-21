@@ -370,6 +370,9 @@ jobs:
         shell: bash
         env:
           TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
+          # A detector issue's fix: a patch commented on the issue (the
+          # default), or 'draft-pr' (scripts/ci_fix/models.py IssuePublication).
+          CI_FIX_ISSUES_PUBLISH: ${{ vars.CI_FIX_ISSUES_PUBLISH }}
         run: |
           set -euo pipefail
           python -m scripts.ci_fix.run publish --plan ci-fix-plan --outcome ci-fix-result

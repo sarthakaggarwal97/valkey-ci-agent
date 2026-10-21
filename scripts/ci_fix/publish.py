@@ -27,6 +27,7 @@ from scripts.ci_fix.models import (
     FixCandidate,
     FixResult,
     FixTask,
+    IssuePublication,
     ResultKind,
     TargetKind,
 )
@@ -52,8 +53,13 @@ def publish_candidate(
     candidate: FixCandidate,
     *,
     git_env: dict[str, str],
+    issue_publication: IssuePublication = IssuePublication.DRAFT_PR,
 ) -> FixResult:
-    """Publish ``candidate`` according to ``task.target``."""
+    """Publish ``candidate`` according to ``task.target``.
+
+    ``issue_publication`` applies to a detector issue's fix: as a draft PR,
+    or as a patch posted on the issue, which pushes nothing.
+    """
     if candidate.action is CandidateAction.REFUSE:
         return FixResult(
             kind=ResultKind.REFUSED,
@@ -75,6 +81,13 @@ def publish_candidate(
         return _publish_suggestion(gh, task, candidate)
     if target.kind is TargetKind.UPDATE_PR:
         return _publish_update(gh, task, candidate, git_env=git_env)
+    if issue_publication is IssuePublication.COMMENT:
+        return FixResult(
+            kind=ResultKind.SUGGESTED,
+            summary="Prepared a patch, to post on the issue.",
+            task=task,
+            candidate=candidate,
+        )
     return _publish_draft(gh, task, candidate, git_env=git_env)
 
 

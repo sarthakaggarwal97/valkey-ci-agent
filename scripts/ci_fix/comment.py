@@ -39,7 +39,7 @@ def render_result(result: FixResult) -> str:
             "",
         ]
         body += _context(result)
-        body += _candidate_patch(result.candidate)
+        body += candidate_patch(result.candidate)
         body += [_footer("If it looks right, apply it on this branch and let the PR's CI check it.")]
         return "\n".join(body)
 
@@ -167,7 +167,8 @@ def _footer(text: str) -> str:
     return f"<sub>{text}</sub>"
 
 
-def _candidate_patch(candidate: FixCandidate | None) -> list[str]:
+def candidate_patch(candidate: FixCandidate | None) -> list[str]:
+    """The candidate's patch as a fenced block, when there is one that fits a comment."""
     if candidate is None:
         return []
     if not candidate.patch:

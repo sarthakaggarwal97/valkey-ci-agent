@@ -36,7 +36,16 @@ from scripts.ci_fix import issues
 from scripts.ci_fix import main as pr_command
 from scripts.ci_fix.ci_job import JobSpec, Unsupported, resolve, setup_script, workflow_source
 from scripts.ci_fix.engine import prepare_fix
-from scripts.ci_fix.models import FixOutcome, FixPlan, FixResult, FixTask, FrontDoor, ResultKind, TargetKind
+from scripts.ci_fix.models import (
+    FixOutcome,
+    FixPlan,
+    FixResult,
+    FixTask,
+    FrontDoor,
+    IssuePublication,
+    ResultKind,
+    TargetKind,
+)
 from scripts.ci_fix.publish import publish_candidate
 from scripts.ci_fix.state import load, save
 from scripts.common.git_auth import GitAuth
@@ -49,6 +58,9 @@ PLAN_FILE = "plan.json"
 JOB_FILE = "job.json"
 SETUP_FILE = "setup.sh"
 OUTCOME_FILE = "outcome.json"
+# How a detector issue's fix is published (models.IssuePublication): a
+# repository variable, so that the draft PRs can be turned on without a change.
+ISSUE_PUBLICATION_ENV = "CI_FIX_ISSUES_PUBLISH"
 
 Planner = Callable[..., "FixPlan | dict[str, Any]"]
 Reporter = Callable[..., "dict[str, Any]"]
@@ -193,12 +205,27 @@ def publish_and_report(
         )
     else:
         try:
-            result = publish_candidate(gh, fix_plan.task, outcome.candidate, git_env=git_env)
+            # Only an issue's fix reads the variable: a bad value cannot stop a PR's.
+            mode = (issue_publication() if fix_plan.task.target.kind is TargetKind.DRAFT_PR
+                    else IssuePublication.DRAFT_PR)
+            result = publish_candidate(gh, fix_plan.task, outcome.candidate, git_env=git_env, issue_publication=mode)
         except Exception as exc:  # noqa: BLE001 - every request gets a reported result
             logger.exception("CI-fix publication failed")
             result = FixResult(kind=ResultKind.FAILED, summary=f"The CI-fix attempt failed: {exc}",
                                task=fix_plan.task, candidate=outcome.candidate)
     return reporter(gh, fix_plan, result)
+
+
+def issue_publication() -> IssuePublication:
+    """How a detector issue's fix is published, from the environment; a comment unless told otherwise."""
+    value = os.environ.get(ISSUE_PUBLICATION_ENV, "").strip().lower()
+    if not value:
+        return IssuePublication.COMMENT
+    try:
+        return IssuePublication(value)
+    except ValueError:
+        choices = ", ".join(mode.value for mode in IssuePublication)
+        raise ValueError(f"{ISSUE_PUBLICATION_ENV} must be one of {choices}, not {value!r}") from None
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -333,6 +333,9 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
         }, job_id
         assert not any("configure-aws-credentials@" in step.get("uses", "") for step in steps), job_id
         assert "\n".join(step.get("run", "") for step in steps).count(command) == 1, job_id
+        if job_id == "publish":
+            publish_step = next(step for step in steps if command in step.get("run", ""))
+            assert publish_step["env"]["CI_FIX_ISSUES_PUBLISH"] == "${{ vars.CI_FIX_ISSUES_PUBLISH }}"
         assert jobs[job_id]["permissions"] == {"contents": "read"}, job_id
         assert jobs[job_id]["runs-on"] == "ubuntu-24.04", job_id
     assert _RUN.read_text(encoding="utf-8").count("actions/create-github-app-token@") == 2
