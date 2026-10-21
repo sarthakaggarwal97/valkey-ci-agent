@@ -23,6 +23,7 @@ from scripts.ci_fix.models import (
     FixTarget,
     FixTask,
     FrontDoor,
+    IssuePublication,
     ResultKind,
     TargetKind,
 )
@@ -234,12 +235,62 @@ def test_a_result_that_cannot_be_read_is_reported_as_failed(front_door, tmp_path
     assert unreadable.kind is ResultKind.FAILED and "could not be read" in unreadable.summary
 
 
+def _issue_plan() -> FixPlan:
+    """A detector issue's plan: the same task, published as a draft PR or a comment."""
+    plan = _pr_plan()
+    return replace(plan, task=replace(plan.task, target=replace(plan.task.target, kind=TargetKind.DRAFT_PR)))
+
+
+@pytest.mark.parametrize(("value", "mode"), [
+    ("", IssuePublication.COMMENT), ("comment", IssuePublication.COMMENT), ("draft-pr", IssuePublication.DRAFT_PR),
+])
+def test_how_an_issue_fix_is_published_is_the_repository_variables_choice(
+    front_door, monkeypatch, tmp_path, value, mode,
+):
+    save(tmp_path / run.PLAN_FILE, _issue_plan())
+    save(tmp_path / run.OUTCOME_FILE, FixOutcome(candidate=_CANDIDATE))
+    monkeypatch.setenv(run.ISSUE_PUBLICATION_ENV, value)
+    seen = {}
+
+    def publish(_gh, task, candidate, *, git_env, issue_publication):
+        seen["mode"] = issue_publication
+        return FixResult(kind=ResultKind.SUGGESTED, summary="s", task=task)
+
+    monkeypatch.setattr(run, "publish_candidate", publish)
+
+    assert _publish(tmp_path, tmp_path) == {"action": "suggested"}
+    assert seen["mode"] is mode
+
+
+def test_an_unknown_publication_mode_is_a_reported_failure_not_a_guess(front_door, monkeypatch, tmp_path):
+    save(tmp_path / run.PLAN_FILE, _issue_plan())
+    save(tmp_path / run.OUTCOME_FILE, FixOutcome(candidate=_CANDIDATE))
+    monkeypatch.setenv(run.ISSUE_PUBLICATION_ENV, "pr")
+    monkeypatch.setattr(run, "publish_candidate", lambda *a, **k: pytest.fail("nothing is published"))
+
+    _publish(tmp_path, tmp_path)
+
+    (failed,) = front_door.reported
+    assert failed.kind is ResultKind.FAILED and "CI_FIX_ISSUES_PUBLISH must be one of comment, draft-pr" in failed.summary
+
+
+def test_a_prs_fix_does_not_read_the_issue_publication_variable(front_door, monkeypatch, tmp_path):
+    save(tmp_path / run.PLAN_FILE, _pr_plan())
+    save(tmp_path / run.OUTCOME_FILE, FixOutcome(candidate=_CANDIDATE))
+    monkeypatch.setenv(run.ISSUE_PUBLICATION_ENV, "pr")  # wrong, and irrelevant to a PR
+    monkeypatch.setattr(run, "publish_candidate", lambda _gh, task, *a, **k: FixResult(
+        kind=ResultKind.PUSHED, summary="p", task=task,
+    ))
+
+    assert _publish(tmp_path, tmp_path) == {"action": "pushed"}
+
+
 def test_the_candidate_is_published_as_its_target_says(front_door, monkeypatch, tmp_path):
     save(tmp_path / run.PLAN_FILE, _pr_plan())
     save(tmp_path / run.OUTCOME_FILE, FixOutcome(candidate=_CANDIDATE))
     seen = {}
 
-    def publish(_gh, task, candidate, *, git_env):
+    def publish(_gh, task, candidate, *, git_env, issue_publication):
         seen.update(task=task, candidate=candidate)
         return FixResult(kind=ResultKind.OPENED, summary="opened", task=task)
 

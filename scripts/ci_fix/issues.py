@@ -19,12 +19,12 @@ import logging
 import re
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from github.GithubException import GithubException
 
 from scripts.backport.registry import load_registry
-from scripts.ci_fix.comment import check_items, sentence
+from scripts.ci_fix.comment import candidate_context, candidate_patch, check_items, sentence
 from scripts.ci_fix.github_runs import (
     FailedJob,
     failed_jobs,
@@ -34,6 +34,7 @@ from scripts.ci_fix.issue_state import has_open_linked_pr, parse_detector_occurr
 from scripts.ci_fix.models import (
     MAX_FAILED_ATTEMPTS,
     Failure,
+    FixCandidate,
     FixPlan,
     FixPolicy,
     FixResult,
@@ -373,10 +374,14 @@ def _terminal_comment(
     pr_number: int = 0,
     pr_url: str = "",
     checked: str = "",
+    candidate: Optional[FixCandidate] = None,
 ) -> None:
     source = f"From {_run_link(repo_full_name, failure)}"
     if job_name:
         source += f", job `{job_name}`"
+    if action == ResultKind.SUGGESTED.value:
+        _suggestion_comment(issue, failure, source=source, candidate=candidate)
+        return
     if action == ResultKind.OPENED.value:
         link = f"[#{pr_number}]({pr_url})" if pr_url else f"#{pr_number}"
         message = f"Opened draft PR {link} with a fix. Its CI and a maintainer's review decide whether it merges."
@@ -398,6 +403,28 @@ def _terminal_comment(
         description=f"record CI-fix result on issue #{issue.number}",
     )
 
+
+
+def _suggestion_comment(issue: Any, failure: IssueFailure, *, source: str, candidate: Optional[FixCandidate]) -> None:
+    """The fix as a patch on the issue: nothing pushed, no PR, a maintainer applies it."""
+    where = "in that job" if "job `" in source else "for that run"
+    lines = [
+        f"A tentative fix, prepared and checked {where}. Nothing was pushed and no PR was opened: "
+        "a maintainer applies it, or not.",
+        "",
+    ]
+    if candidate is not None:
+        lines += candidate_context(candidate, include_reasoning=True, include_failing_check=True)
+        if candidate.port_commit:
+            lines += [f"It ports `{candidate.port_commit[:12]}`.", ""]
+        lines += candidate_patch(candidate)
+    lines += [f"{source}.", "", _RESULT_MARKER.format(run=failure.run_id, outcome=ResultKind.SUGGESTED.value)]
+    body = "\n".join(lines)
+    retry_github_call(
+        lambda: issue.create_comment(body),
+        retries=2,
+        description=f"post the CI-fix patch on issue #{issue.number}",
+    )
 
 
 def _result_dict(
@@ -463,6 +490,7 @@ def report_result(gh: Any, plan: FixPlan, result: FixResult) -> dict[str, Any]:
         pr_number=result.pr_number,
         pr_url=result.pr_url,
         checked=result.candidate.verification if result.candidate else "",
+        candidate=result.candidate,
     )
     return _result_dict(
         repo_full_name,

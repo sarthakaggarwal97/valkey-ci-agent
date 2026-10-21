@@ -24,6 +24,19 @@ class TargetKind(str, Enum):
     DRAFT_PR = "draft-pr"
 
 
+class IssuePublication(str, Enum):
+    """How a fix for a detector issue is published.
+
+    ``comment`` posts the verified patch on the issue for a maintainer to
+    apply; ``draft-pr`` pushes a branch and opens a draft PR. The
+    ``CI_FIX_ISSUES_PUBLISH`` repository variable chooses; comment is the
+    default while the bot earns its PRs.
+    """
+
+    COMMENT = "comment"
+    DRAFT_PR = "draft-pr"
+
+
 class CandidateAction(str, Enum):
     """The concrete action proposed by the fix agent."""
 

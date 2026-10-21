@@ -597,6 +597,35 @@ def test_an_issue_from_a_manually_started_run_is_refused_with_why(monkeypatch):
     assert "Daily run triggered by workflow_dispatch" in result["summary"]
 
 
+def test_a_fix_published_as_a_comment_is_the_patch_on_the_issue_and_closes_the_occurrence(monkeypatch):
+    issue = _issue()
+    gh, _repo, _run_ = _gh(issue)
+    monkeypatch.setattr(issues_mod, "_failing_jobs", lambda *a, **k: (FailedJob("test-ubuntu-jemalloc", 22),))
+    candidate = FixCandidate(
+        action=CandidateAction.PATCH, patch="--- a/tests/x.tcl\n+++ b/tests/x.tcl\n@@ -1 +1 @@\n-a\n+b",
+        root_cause="The wait is too short.", reasoning="Wait for the replica.",
+        verification="Reproduced: 3 of 20 loops failed without the patch, 0 of 20 with it.",
+    )
+    monkeypatch.setitem(_ENGINE, "run_fix", lambda _gh, task, *a, **k: FixResult(
+        kind=ResultKind.SUGGESTED, summary="Prepared a patch, to post on the issue.", task=task, candidate=candidate,
+    ))
+
+    result = run_issue_fix(gh, MagicMock(), "o/r", issue_number=7, bot_login=_BOT, git_env={})
+
+    (comment,) = issue.comments
+    assert comment.body.startswith("A tentative fix, prepared and checked in that job. Nothing was pushed and no PR")
+    assert "**Root cause:** The wait is too short." in comment.body
+    assert "**The fix:** Wait for the replica." in comment.body
+    assert "- Reproduced: 3 of 20 loops failed" in comment.body
+    assert "```diff\n--- a/tests/x.tcl" in comment.body
+    assert comment.body.rstrip().endswith("<!-- valkey-ci-agent:ci-fix-result run=100 outcome=suggested -->")
+    assert (result["action"], result["pr"]) == ("suggested", 0)
+    # The occurrence is handled: the dispatcher does not start it again.
+    comment.user = SimpleNamespace(login=_BOT)
+    issue.get_comments = lambda: list(issue.comments)
+    assert issues_mod.fix_reported(issue, issues_mod.parse_issue(issue), repo_full_name="o/r", bot_login=_BOT)
+
+
 def test_the_issue_comment_lists_what_the_bot_checked(monkeypatch):
     issue = _issue()
     gh, _repo, _run_ = _gh(issue)
