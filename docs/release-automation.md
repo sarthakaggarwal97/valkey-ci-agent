@@ -28,11 +28,12 @@ what to do next if something fails.
 
 **Preparing.** Prepare Release first checks that you are a member of
 `valkey-io/valkey-committers` or `valkey-io/valkey-release`. It works out the
-next version from the release branch and its tags, refuses if the branch has
-no commits since the previous release (merge the pending backports first),
-opens the tracking issue, and runs the [release notes cut](release-notes.md),
-which opens the notes PR. If you only want to see which version it would
-prepare, run it with `dry_run`.
+next version from the release branch and its tags, refuses a patch or a
+further release candidate when the branch has no commits since the previous
+one (merge the pending backports first; promoting the last candidate to GA
+unchanged is fine), opens the tracking issue, and runs the
+[release notes cut](release-notes.md), which opens the notes PR. If you only
+want to see which version it would prepare, run it with `dry_run`.
 
 **Waiting for the merge.** A watcher runs every hour and checks every five
 minutes for most of that hour. It updates the tracking issue from what it

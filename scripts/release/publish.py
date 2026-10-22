@@ -61,12 +61,15 @@ def _require_commits_since_previous_release(
 ) -> None:
     """Refuse to prepare a release whose branch has not moved since the last one.
 
-    A line with nothing new since its previous tag (its backport sweep still
-    open, say) would otherwise get a notes PR with an empty dated section and a
-    version bump, and the mistake would only show up as a held PR an hour
-    later. The first release candidate of a line is exempt: its range starts
-    on another line.
+    A patch line with nothing new since its previous tag (its backport sweep
+    still open, say) would otherwise get a notes PR with an empty dated
+    section and a version bump, and the mistake would only show up as a held
+    PR an hour later. Two releases are exempt: the first release candidate of
+    a line, whose range starts on another line, and the final X.Y.0 release,
+    which normally promotes the last release candidate unchanged.
     """
+    if release.stage == "ga" and parse_version(release.version)[2] == 0:
+        return
     previous = _previous_release_tag(release.version, release.stage, set(tags))
     if previous is None:
         return

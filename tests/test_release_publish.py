@@ -390,6 +390,21 @@ def test_prepare_rc1_has_no_same_line_baseline_to_compare(monkeypatch: pytest.Mo
     repo.compare.assert_not_called()
 
 
+def test_prepare_promotes_an_unchanged_final_rc_to_ga(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The GA of a line is normally the last release candidate with only the
+    # version bump on top; zero commits since the rc is the expected shape.
+    repo = _repo()
+    repo.get_tags.return_value = [SimpleNamespace(name="9.2.0-rc2"), SimpleNamespace(name="9.2.0-rc1")]
+    repo.compare.return_value = SimpleNamespace(total_commits=0)
+    policy = ReleasePolicy(**{**POLICY.__dict__, "branches": ("9.2",)})
+    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *_args, **_kwargs: None)
+    from scripts.release.models import ReleaseIntent
+
+    release = publish_mod.prepare_release(_gh(repo), policy, branch="9.2", intent=ReleaseIntent("ga"), actor="alice")
+    assert release.tag == "9.2.0"
+    repo.compare.assert_not_called()
+
+
 def test_prepare_rc2_compares_with_rc1(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _repo()
     repo.get_tags.return_value = [SimpleNamespace(name="9.2.0-rc1")]
