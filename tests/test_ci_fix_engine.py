@@ -1346,3 +1346,33 @@ def test_a_test_whose_name_is_built_at_run_time_counts_as_touched_by_any_change_
     (tmp_path / "tests" / "unit" / "t.tcl").write_text(after)
 
     assert engine_mod._changes_test(str(tmp_path), _changed(source, after), FailedTest("incr operation", "tests/unit/t.tcl"))
+
+
+def test_a_test_command_that_rewrites_the_patched_file_does_not_get_its_patch_published(tmp_path, monkeypatch):
+    """The tree is the candidate: a command that edits it during verification changes the candidate."""
+    source, head_sha = _source_repo(tmp_path)
+    _install_clone(monkeypatch, source)
+    feedback_seen = []
+
+    def agent(task, repo_dir, job_log, feedback="", **_kwargs):  # noqa: ARG001
+        feedback_seen.append(feedback)
+        (Path(repo_dir) / "value.txt").write_text("bad\n", encoding="utf-8")
+        return FixCandidate(
+            action=CandidateAction.PATCH, failing_check="value", root_cause="wrong value",
+            reasoning="set it", changed_paths=("value.txt",), test_command="check",
+        )
+
+    def test(repo_dir, command, timeout):  # noqa: ARG001
+        value = Path(repo_dir) / "value.txt"
+        if value.read_text() == "before\n":
+            return TestRun(passed=False, output="[err]: value in tests/unit/value.tcl")
+        value.write_text("right\n", encoding="utf-8")  # the command "fixes" the file itself
+        return TestRun(passed=True, output="ok")
+
+    candidate = engine_mod.prepare_fix(
+        _task(head_sha), _LOG, agent_func=agent, review_func=lambda *a, **k: (True, "ok"), test_func=test,
+    )
+
+    assert candidate.action is CandidateAction.REFUSE
+    assert "changed tracked files while the candidate was being verified" in candidate.summary
+    assert all(engine_mod._TREE_CHANGED in text for text in feedback_seen[1:])

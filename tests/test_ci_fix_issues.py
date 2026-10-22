@@ -120,6 +120,7 @@ def _issue(
         created_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
     )
     issue.get_timeline = lambda: list(issue.timeline)
+    issue.get_comments = lambda: list(issue.comments)
 
     def create_comment(body: str) -> SimpleNamespace:
         comment = SimpleNamespace(body=body, id=900 + len(issue.comments))
@@ -727,3 +728,18 @@ def test_an_issue_is_planned_with_the_registrys_ignored_jobs(monkeypatch):
 
     assert plan == issue_plan()
     assert seen["k"]["issue_number"] == 7 and seen["k"]["ignored_jobs"]
+
+
+def test_an_occurrence_the_bot_already_reported_is_skipped_when_the_run_starts():
+    """A duplicate dispatch (a retried request whose first try went through) must not try it again."""
+    issue = _issue()
+    issue.comments.append(SimpleNamespace(
+        user=SimpleNamespace(login=_BOT),
+        body="A tentative fix.\n\n<!-- valkey-ci-agent:ci-fix-result run=100 outcome=suggested -->",
+    ))
+    gh, _repo, _run_ = _gh(issue)
+
+    result = issues_mod.prepare_issue(gh, MagicMock(), "o/r", issue_number=7, bot_login=_BOT)
+
+    assert result == {"repo": "o/r", "issue": 7, "action": "skipped", "reason": "the bot is done with run 100"}
+    assert len(issue.comments) == 1
