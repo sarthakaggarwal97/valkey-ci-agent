@@ -376,14 +376,12 @@ jobs:
       - name: Start the review watcher for the PR
         if: ${{ !inputs.dry_run && steps.cut.outputs.pr_number != '' }}
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ inputs.repo }}
-          PR: ${{ steps.cut.outputs.pr_number }}
+          RELEASE_NOTES_REVIEW_TOKEN: ${{ github.token }}
+          RELEASE_NOTES_REVIEW_REPO: ${{ inputs.repo }}
+          RELEASE_NOTES_REVIEW_PR: ${{ steps.cut.outputs.pr_number }}
         run: |
-          set -euo pipefail
-          gh workflow run release-notes-review-watch.yml -R "$GITHUB_REPOSITORY" \
-            --ref "$GITHUB_REF_NAME" -f "repo=$REPO" -f "pr=$PR"
-          echo "Started the review watcher for $REPO#$PR"
+          python3 -m scripts.release_notes.review_poll \
+            --repo "$RELEASE_NOTES_REVIEW_REPO" --pr "$RELEASE_NOTES_REVIEW_PR" --start
 
       - name: Upload triage verdicts
         if: always()

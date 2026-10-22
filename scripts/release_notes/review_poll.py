@@ -1,12 +1,14 @@
 """Poll automated release PRs and dispatch one batch per PR.
 
 Run with ``--repo`` and ``--pr`` it watches one release PR (the per-PR watcher
-workflow); without them it scans every open PR of every supported repository.
+workflow), and with ``--start`` or ``--stop`` it starts or cancels that PR's
+watcher; without them it scans every open PR of every supported repository.
 """
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import logging
 import os
 from collections.abc import Callable
@@ -42,6 +44,13 @@ logger = logging.getLogger(__name__)
 _MAX_LOOP_SECONDS = 55 * 60
 _ADDRESSING_LEASE = timedelta(minutes=90)
 DispatchFn = Callable[[ReleasePR, int], None]
+
+AGENT_REPO = "valkey-io/valkey-ci-agent"
+REVIEW_WORKFLOW = "release-notes-review.yml"
+WATCH_WORKFLOW = "release-notes-review-watch.yml"
+# A run waiting on the watcher's per-PR concurrency group, or for a runner.
+_WAITING = frozenset({"queued", "pending", "waiting", "requested"})
+_LIVE = _WAITING | {"in_progress"}
 
 
 def _authorizer(
@@ -334,71 +343,170 @@ def _needs_reconciliation(
     return False
 
 
+def watch_run_title(repo_name: str, number: int) -> str:
+    """The watcher workflow's run-name for one PR; the workflow must render the same."""
+    return f"Watch {repo_name}#{number} reviews"
+
+
+def _dispatch_workflow(
+    gh: Github,
+    *,
+    agent_repo: str,
+    workflow: str,
+    ref: str,
+    inputs: dict[str, str],
+    description: str,
+) -> None:
+    target = retry_github_call(
+        lambda: gh.get_repo(agent_repo).get_workflow(workflow),
+        retries=3,
+        description=f"get workflow {workflow}",
+    )
+    retry_github_call(
+        lambda: target.create_dispatch(ref, inputs),
+        retries=3,
+        description=description,
+    )
+
+
 def dispatch_release_review(
     gh: Github,
     *,
-    agent_repo: str = "valkey-io/valkey-ci-agent",
-    workflow: str = "release-notes-review.yml",
+    agent_repo: str = AGENT_REPO,
+    workflow: str = REVIEW_WORKFLOW,
     ref: str = "main",
 ) -> DispatchFn:
     def dispatch(release: ReleasePR, status_comment_id: int) -> None:
-        target = retry_github_call(
-            lambda: gh.get_repo(agent_repo).get_workflow(workflow),
-            retries=3,
-            description=f"get workflow {workflow}",
-        )
-        retry_github_call(
-            lambda: target.create_dispatch(
-                ref,
-                {
-                    "repo": release.repo_full_name.rsplit("/", 1)[-1],
-                    "pr": str(release.number),
-                    "head_sha": release.head_sha,
-                    "status_comment_id": str(status_comment_id),
-                },
-            ),
-            retries=3,
+        _dispatch_workflow(
+            gh,
+            agent_repo=agent_repo,
+            workflow=workflow,
+            ref=ref,
+            inputs={
+                "repo": release.repo_full_name.rsplit("/", 1)[-1],
+                "pr": str(release.number),
+                "head_sha": release.head_sha,
+                "status_comment_id": str(status_comment_id),
+            },
             description=f"dispatch release review for {release.repo_full_name}#{release.number}",
         )
 
     return dispatch
 
 
-def _write_outputs(values: dict[str, str]) -> None:
-    path = os.environ.get("GITHUB_OUTPUT", "")
-    if not path:
-        return
-    with open(path, "a", encoding="utf-8") as output:
-        for key, value in values.items():
-            if "\n" in value or "\r" in value:
-                raise ValueError(f"multiline workflow output refused for {key}")
-            output.write(f"{key}={value}\n")
+def live_watcher_runs(
+    gh: Github, repo_name: str, number: int, *, agent_repo: str = AGENT_REPO
+) -> list[Any]:
+    """Every waiting or running watcher run for this PR, newest first."""
+    workflow = retry_github_call(
+        lambda: gh.get_repo(agent_repo).get_workflow(WATCH_WORKFLOW),
+        retries=3,
+        description=f"get workflow {WATCH_WORKFLOW}",
+    )
+    runs = retry_github_call(
+        lambda: list(itertools.islice(workflow.get_runs(), 200)),
+        retries=3,
+        description="list watcher runs",
+    )
+    title = watch_run_title(repo_name, number)
+    return [
+        run
+        for run in runs
+        if (getattr(run, "display_title", "") or "") == title
+        and getattr(run, "status", "") in _LIVE
+    ]
+
+
+def ensure_watcher(
+    gh: Github,
+    repo_name: str,
+    number: int,
+    *,
+    successor: bool,
+    agent_repo: str = AGENT_REPO,
+    ref: str = "main",
+) -> bool:
+    """Start a watcher for this PR unless one is already lined up; True when started.
+
+    The cut calls this with ``successor=False`` after opening the PR: a
+    watcher that is running or waiting (a re-cut) is enough. A running
+    watcher calls it with ``successor=True`` to queue the next hour's run:
+    that run waits on the per-PR concurrency group and takes over the moment
+    this one ends, so the hour boundary has no gap, and only a run already
+    waiting makes it redundant.
+    """
+    live = live_watcher_runs(gh, repo_name, number, agent_repo=agent_repo)
+    blocking = [run for run in live if not successor or getattr(run, "status", "") in _WAITING]
+    if blocking:
+        logger.info(
+            "A watcher for %s#%d is already %s (run %s); not starting another",
+            repo_name, number, getattr(blocking[0], "status", "?"), getattr(blocking[0], "id", "?"),
+        )
+        return False
+    _dispatch_workflow(
+        gh,
+        agent_repo=agent_repo,
+        workflow=WATCH_WORKFLOW,
+        ref=ref,
+        inputs={"repo": repo_name, "pr": str(number)},
+        description=f"start the review watcher for {repo_name}#{number}",
+    )
+    logger.info("Started the review watcher for %s#%d", repo_name, number)
+    return True
+
+
+def stop_watcher(gh: Github, repo_name: str, number: int, *, agent_repo: str = AGENT_REPO) -> int:
+    """Cancel every waiting or running watcher run for this PR; return how many."""
+    live = live_watcher_runs(gh, repo_name, number, agent_repo=agent_repo)
+    for run in live:
+        retry_github_call(
+            run.cancel,
+            retries=3,
+            description=f"cancel watcher run {getattr(run, 'id', '?')}",
+        )
+        logger.info("Cancelled watcher run %s for %s#%d", getattr(run, "id", "?"), repo_name, number)
+    if not live:
+        logger.info("No watcher is running for %s#%d", repo_name, number)
+    return len(live)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=os.environ.get("RELEASE_NOTES_REVIEW_REPO", ""),
-                        help="Watch one repository's release PR (name or owner/name); needs --pr")
-    parser.add_argument("--pr", type=int, default=0, help="Number of the release PR to watch")
+                        help="Repository of the release PR (name or owner/name); needs --pr")
+    parser.add_argument("--pr", type=int, default=0, help="Number of the release PR")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--start", action="store_true",
+                      help="Start the PR's watcher workflow unless one is live, then exit")
+    mode.add_argument("--stop", action="store_true",
+                      help="Cancel the PR's watcher workflow runs, then exit")
     args = parser.parse_args(argv)
 
     configure_logging()
     token = os.environ["RELEASE_NOTES_REVIEW_TOKEN"]
     gh = Github(auth=Auth.Token(token))
-    gql = GitHubGraphQLClient(token)
-    bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
-    dispatch = dispatch_release_review(gh)
     interval = env_seconds("RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS", 0, minimum=0)
     duration = env_seconds(
         "RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS", 0, minimum=0, maximum=_MAX_LOOP_SECONDS
     )
 
-    if args.repo or args.pr:
+    if args.repo or args.pr or args.start or args.stop:
         if not (args.repo and args.pr > 0):
             parser.error("--repo and --pr go together")
         repo_full_name = args.repo if "/" in args.repo else f"valkey-io/{args.repo}"
         if repo_full_name not in REPOSITORIES:
             parser.error(f"unsupported repository: {args.repo}")
+        repo_name = repo_full_name.rsplit("/", 1)[-1]
+        if args.start:
+            ensure_watcher(gh, repo_name, args.pr, successor=False)
+            return 0
+        if args.stop:
+            stop_watcher(gh, repo_name, args.pr)
+            return 0
+
+        gql = GitHubGraphQLClient(token)
+        bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
+        dispatch = dispatch_release_review(gh)
         state = {"open": True}
 
         def watch_once() -> int:
@@ -414,6 +522,9 @@ def main(argv: list[str] | None = None) -> int:
         # logging the same refusal every five minutes for an hour.
         results = [watch_once()]
         if state["open"] and interval > 0 and duration > 0:
+            # Queue the next hour's run now: it waits on the per-PR
+            # concurrency group and takes over the moment this run ends.
+            ensure_watcher(gh, repo_name, args.pr, successor=True)
             results += run_poll_loop(
                 watch_once,
                 interval_seconds=interval,
@@ -421,21 +532,22 @@ def main(argv: list[str] | None = None) -> int:
                 until=lambda _dispatched: not state["open"],
                 logger=logger,
             )
-        _write_outputs({"continue": "true" if state["open"] else "false"})
         logger.info(
             "%s#%d: dispatched %d release-review batch(es) across %d pass(es); %s",
             repo_full_name, args.pr, sum(results), len(results),
-            "still open, the watch continues" if state["open"] else "closed, the watch ends",
+            "still open, the next watcher takes over" if state["open"] else "closed, the watch ends",
         )
         return 0
 
+    gql = GitHubGraphQLClient(token)
+    bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
     results = run_poll_loop(
         lambda: poll_once(
             gh,
             gql,
             repositories=REPOSITORIES,
             bot_login=bot_login,
-            dispatch=dispatch,
+            dispatch=dispatch_release_review(gh),
         ),
         interval_seconds=interval,
         duration_seconds=duration,

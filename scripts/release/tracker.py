@@ -21,6 +21,7 @@ from github import Auth, Github
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
+from scripts.common.job_summary import write_outputs
 from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import add_poll_loop_args, run_poll_loop_from_args
 from scripts.release.checks import CandidateCI, evaluate_candidate_ci
@@ -1160,17 +1161,6 @@ def _validate_tracker(tracker: Tracker) -> None:
         raise ValueError("tracker prepare run id must be positive")
 
 
-def _write_outputs(values: dict[str, str]) -> None:
-    path = os.environ.get("GITHUB_OUTPUT", "")
-    if not path:
-        return
-    with open(path, "a", encoding="utf-8") as output:
-        for key, value in values.items():
-            if "\n" in value or "\r" in value:
-                raise ValueError(f"multiline workflow output refused for {key}")
-            output.write(f"{key}={value}\n")
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1207,7 +1197,7 @@ def main(argv: list[str] | None = None) -> int:
             prepare_run_id=args.prepare_run_id,
         )
         issue = ensure_tracker(target_gh, tracker, agent_repo=args.agent_repo)
-        _write_outputs({"issue_number": str(issue.number), "issue_url": issue.html_url})
+        write_outputs({"issue_number": str(issue.number), "issue_url": issue.html_url})
         print(issue.html_url)
         return 0
 

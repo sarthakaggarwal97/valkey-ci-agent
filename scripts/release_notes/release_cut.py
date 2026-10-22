@@ -19,6 +19,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Optional, Sequence
 
 from scripts.common.git_auth import github_https_url
+from scripts.common.job_summary import write_outputs
 from scripts.common.logging_utils import log_outcome
 from scripts.common.proc import BOT_EMAIL, BOT_NAME, git_output, run_git
 from scripts.release_notes import contributors as gc
@@ -985,13 +986,9 @@ def cut(
 
 def _write_pr_outputs(release_url: str) -> None:
     """Hand the PR's number and URL to the workflow, which starts its review watcher."""
-    path = os.environ.get("GITHUB_OUTPUT", "")
     match = re.search(r"/pull/(\d+)/?$", release_url or "")
-    if not path or match is None:
-        return
-    with open(path, "a", encoding="utf-8") as output:
-        output.write(f"pr_number={match.group(1)}\n")
-        output.write(f"pr_url={release_url}\n")
+    if match is not None:
+        write_outputs({"pr_number": match.group(1), "pr_url": release_url})
 
 
 def _print_dry_run(

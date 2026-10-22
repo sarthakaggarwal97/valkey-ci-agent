@@ -3,6 +3,7 @@ from pathlib import Path
 import yaml
 
 from scripts.ai.runtime import AGENT_PROFILES
+from scripts.release_notes.review_poll import watch_run_title
 
 _WATCH = Path(".github/workflows/release-notes-review-watch.yml")
 _CUT = Path(".github/workflows/release-notes-cut.yml")
@@ -32,15 +33,20 @@ def test_one_watcher_per_release_pr_replaces_the_hourly_scan() -> None:
     job = workflow["jobs"]["watch"]
     token = _step(workflow, "watch", "Generate App token")
     run = _step(workflow, "watch", "Watch and dispatch")
-    again = _step(workflow, "watch", "Keep watching")
 
+    # review_poll.watch_run_title() finds this PR's runs by this exact title.
+    assert workflow["run-name"] == (
+        "${{ inputs.stop && 'Stop watching' || 'Watch' }} ${{ inputs.repo }}#${{ inputs.pr }} reviews"
+    )
+    assert watch_run_title("valkey", 42) == "Watch valkey#42 reviews"
     assert "!inputs.stop" in job["if"]
     assert job["timeout-minutes"] == "65"
     assert job["concurrency"]["group"] == (
         "release-notes-review-watch-${{ inputs.repo }}-${{ inputs.pr }}"
     )
     assert job["concurrency"]["cancel-in-progress"] == "false"
-    assert job["permissions"] == {"contents": "read", "actions": "write"}
+    # The App token queues the next hour's run; the job's own token stays read-only.
+    assert job["permissions"] == {"contents": "read"}
     assert token["with"]["repositories"].splitlines() == ["${{ inputs.repo }}", "valkey-ci-agent"]
     assert {
         key: value
@@ -55,9 +61,11 @@ def test_one_watcher_per_release_pr_replaces_the_hourly_scan() -> None:
     # Always a sustained watch, including when started by hand to resume one.
     assert run["env"]["RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS"] == "300"
     assert run["env"]["RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS"] == "3300"
-    assert "--repo" in run["run"] and "--pr" in run["run"]
-    assert again["if"] == "${{ steps.watch.outputs.continue == 'true' }}"
-    assert "gh workflow run release-notes-review-watch.yml" in again["run"]
+    command = run["run"].replace("\\\n", " ").split()
+    assert command[:3] == ["python3", "-m", "scripts.release_notes.review_poll"]
+    assert "--repo" in command and "--pr" in command
+    assert not {"--start", "--stop"} & set(command)
+    assert [step["name"] for step in job["steps"]][-1] == "Watch and dispatch"
 
 
 def test_stop_cancels_only_that_prs_watcher() -> None:
@@ -65,10 +73,10 @@ def test_stop_cancels_only_that_prs_watcher() -> None:
     job = workflow["jobs"]["stop"]
     cancel = _step(workflow, "stop", "Cancel every live watcher run for this PR")
     assert job["if"].startswith("inputs.stop")
-    assert job["permissions"] == {"actions": "write"}
+    assert job["permissions"] == {"contents": "read", "actions": "write"}
     assert "concurrency" not in job  # a stop must not queue behind the watcher it stops
-    assert cancel["env"]["TITLE"] == "Watch ${{ inputs.repo }}#${{ inputs.pr }} reviews"
-    assert "gh run cancel" in cancel["run"]
+    assert cancel["env"]["RELEASE_NOTES_REVIEW_TOKEN"] == "${{ github.token }}"
+    assert cancel["run"].split()[-1] == "--stop"
 
 
 def test_cut_starts_the_watcher_for_the_pr_it_opens() -> None:
@@ -81,8 +89,9 @@ def test_cut_starts_the_watcher_for_the_pr_it_opens() -> None:
     assert job["permissions"]["actions"] == "write"
     assert _step(workflow, "cut", "Cut release notes")["id"] == "cut"
     assert start["if"] == "${{ !inputs.dry_run && steps.cut.outputs.pr_number != '' }}"
-    assert start["env"]["PR"] == "${{ steps.cut.outputs.pr_number }}"
-    assert "gh workflow run release-notes-review-watch.yml" in start["run"]
+    assert start["env"]["RELEASE_NOTES_REVIEW_PR"] == "${{ steps.cut.outputs.pr_number }}"
+    assert start["env"]["RELEASE_NOTES_REVIEW_TOKEN"] == "${{ github.token }}"
+    assert start["run"].split()[-1] == "--start"
 
 
 def test_handler_has_only_pr_identity_inputs_and_scoped_write_token() -> None:

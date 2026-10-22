@@ -19,8 +19,11 @@ from scripts.release_notes.review import (
 )
 from scripts.release_notes.review_poll import (
     dispatch_release_review,
+    ensure_watcher,
+    live_watcher_runs,
     poll_once,
     poll_pr,
+    stop_watcher,
 )
 from scripts.release_notes.review_poll import (
     main as poll_main,
@@ -382,38 +385,127 @@ def test_watcher_refuses_a_pr_that_is_not_a_release_pr(monkeypatch: pytest.Monke
         _watch(monkeypatch, pr, (), MagicMock())
 
 
-def test_watch_main_reports_whether_to_keep_watching(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
+def _run(run_id: int, status: str, title: str = "Watch valkey#42 reviews") -> MagicMock:
+    run = MagicMock()
+    run.id = run_id
+    run.status = status
+    run.display_title = title
+    return run
+
+
+def _agent(runs: list[MagicMock]) -> tuple[MagicMock, MagicMock]:
+    """A Github whose agent repository has the watcher workflow with *runs*."""
+    workflow = MagicMock()
+    workflow.get_runs.return_value = runs
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow.return_value = workflow
+    return gh, workflow
+
+
+def test_live_watcher_runs_match_this_prs_title_and_live_states() -> None:
+    gh, _ = _agent([
+        _run(1, "in_progress"),
+        _run(2, "pending"),
+        _run(3, "completed"),
+        _run(4, "in_progress", title="Watch valkey#43 reviews"),
+        _run(5, "queued", title="Stop watching valkey#42 reviews"),
+    ])
+    assert [run.id for run in live_watcher_runs(gh, "valkey", 42)] == [1, 2]
+
+
+def test_cut_start_skips_a_watcher_that_is_running_or_waiting() -> None:
+    gh, workflow = _agent([_run(1, "in_progress")])
+    assert ensure_watcher(gh, "valkey", 42, successor=False) is False
+    workflow.create_dispatch.assert_not_called()
+
+    gh, workflow = _agent([_run(3, "completed")])
+    assert ensure_watcher(gh, "valkey", 42, successor=False) is True
+    workflow.create_dispatch.assert_called_once_with("main", {"repo": "valkey", "pr": "42"})
+
+
+def test_running_watcher_queues_exactly_one_successor() -> None:
+    # The run itself is in progress; that must not stop it queueing the next
+    # hour, but a run already waiting on the concurrency group must.
+    gh, workflow = _agent([_run(1, "in_progress")])
+    assert ensure_watcher(gh, "valkey", 42, successor=True) is True
+    workflow.create_dispatch.assert_called_once()
+
+    gh, workflow = _agent([_run(1, "in_progress"), _run(2, "pending")])
+    assert ensure_watcher(gh, "valkey", 42, successor=True) is False
+    workflow.create_dispatch.assert_not_called()
+
+
+def test_stop_cancels_every_live_run_for_the_pr_only() -> None:
+    mine = [_run(1, "in_progress"), _run(2, "pending")]
+    other = _run(4, "in_progress", title="Watch valkey#43 reviews")
+    gh, _ = _agent([*mine, _run(3, "completed"), other])
+    assert stop_watcher(gh, "valkey", 42) == 2
+    for run in mine:
+        run.cancel.assert_called_once()
+    other.cancel.assert_not_called()
+
+
+def _watch_main(monkeypatch: pytest.MonkeyPatch, *, still_open: bool) -> tuple[list, MagicMock]:
     calls: list[tuple[str, int]] = []
 
     def fake_poll_pr(_gh, _gql, *, repo_full_name, number, **_kwargs):
         calls.append((repo_full_name, number))
-        return 0, False
+        return 0, still_open
 
+    successor = MagicMock(return_value=True)
     monkeypatch.setattr("scripts.release_notes.review_poll.poll_pr", fake_poll_pr)
+    monkeypatch.setattr("scripts.release_notes.review_poll.ensure_watcher", successor)
+    monkeypatch.setattr("scripts.release_notes.review_poll.run_poll_loop", lambda once, **_kw: [once()])
     monkeypatch.setattr("scripts.release_notes.review_poll.Github", lambda **_kwargs: MagicMock())
     monkeypatch.setattr("scripts.release_notes.review_poll.GitHubGraphQLClient", lambda _token: MagicMock())
     monkeypatch.setattr("scripts.release_notes.review_poll.dispatch_release_review", lambda _gh: MagicMock())
-    output = tmp_path / "out"
-    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     monkeypatch.setenv("RELEASE_NOTES_REVIEW_TOKEN", "t")
     monkeypatch.setenv("RELEASE_NOTES_REVIEW_APP_SLUG", "valkeyrie-ops")
     monkeypatch.setenv("RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS", "300")
     monkeypatch.setenv("RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS", "3300")
-
     assert poll_main(["--repo", "valkey", "--pr", "42"]) == 0
-    # A closed PR ends the watch on the first pass: no sustained loop, no restart.
+    return calls, successor
+
+
+def test_watch_main_queues_the_next_hour_then_keeps_polling(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls, successor = _watch_main(monkeypatch, still_open=True)
+    # First pass up front (fail fast), successor queued, then the sustained loop.
+    assert calls == [("valkey-io/valkey", 42)] * 2
+    successor.assert_called_once()
+    assert successor.call_args.kwargs == {"successor": True}
+
+
+def test_watch_main_ends_without_a_successor_when_the_pr_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls, successor = _watch_main(monkeypatch, still_open=False)
     assert calls == [("valkey-io/valkey", 42)]
-    assert output.read_text() == "continue=false\n"
+    successor.assert_not_called()
+
+
+def test_start_and_stop_modes_touch_only_the_watcher(monkeypatch: pytest.MonkeyPatch) -> None:
+    started = MagicMock(return_value=True)
+    stopped = MagicMock(return_value=1)
+    polled = MagicMock()
+    monkeypatch.setattr("scripts.release_notes.review_poll.ensure_watcher", started)
+    monkeypatch.setattr("scripts.release_notes.review_poll.stop_watcher", stopped)
+    monkeypatch.setattr("scripts.release_notes.review_poll.poll_pr", polled)
+    monkeypatch.setattr("scripts.release_notes.review_poll.Github", lambda **_kwargs: MagicMock())
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_TOKEN", "t")
+    monkeypatch.delenv("RELEASE_NOTES_REVIEW_APP_SLUG", raising=False)  # not needed to start or stop
+
+    assert poll_main(["--repo", "valkey", "--pr", "42", "--start"]) == 0
+    assert started.call_args.args[1:] == ("valkey", 42)
+    assert started.call_args.kwargs == {"successor": False}
+    assert poll_main(["--repo", "valkey-io/valkey-json", "--pr", "7", "--stop"]) == 0
+    assert stopped.call_args.args[1:] == ("valkey-json", 7)
+    polled.assert_not_called()
 
 
 def test_watch_main_rejects_half_an_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RELEASE_NOTES_REVIEW_TOKEN", "t")
-    monkeypatch.setenv("RELEASE_NOTES_REVIEW_APP_SLUG", "valkeyrie-ops")
     monkeypatch.setattr("scripts.release_notes.review_poll.Github", lambda **_kwargs: MagicMock())
-    monkeypatch.setattr("scripts.release_notes.review_poll.GitHubGraphQLClient", lambda _token: MagicMock())
     with pytest.raises(SystemExit):
         poll_main(["--pr", "42"])
     with pytest.raises(SystemExit):
         poll_main(["--repo", "not-a-valkey-repo", "--pr", "42"])
+    with pytest.raises(SystemExit):
+        poll_main(["--repo", "valkey", "--pr", "42", "--start", "--stop"])
