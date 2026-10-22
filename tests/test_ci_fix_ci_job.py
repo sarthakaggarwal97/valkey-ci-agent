@@ -287,6 +287,23 @@ def test_what_follows_the_tests_does_not_matter():
     assert _resolve(source, "test-ubuntu-jemalloc").commands.build == "make"
 
 
+def test_a_script_between_the_tests_that_is_not_a_test_is_unsupported():
+    """It is setup the fix would not replay (the compatibility tests' own is skipped with them)."""
+    source = DAILY.replace("      - name: backward compatibility tests with OSS Redis 7.0\n",
+                           "      - name: install tclx\n        run: sudo apt-get install tclx\n"
+                           "      - name: backward compatibility tests with OSS Redis 7.0\n")
+
+    with pytest.raises(Unsupported, match="runs between the job's tests"):
+        _resolve(source, "test-ubuntu-jemalloc")
+
+
+def test_a_shell_expansion_is_dropped_with_the_option_it_is_the_value_of():
+    source = DAILY.replace(" --dump-logs ${{github.event.inputs.test_args}}\n",
+                           ' --clients $(nproc) --dump-logs "${extra[@]}"\n')
+
+    assert _resolve(source, "test-ubuntu-jemalloc").commands.runtest == "./runtest --accurate --dump-logs"
+
+
 def test_a_step_shell_and_env_are_kept_and_rendered():
     source = DAILY.replace(
         "      - name: make\n",
@@ -476,10 +493,10 @@ def test_the_setup_runs_each_step_from_the_workspace_with_what_earlier_steps_exp
     assert result.stdout.splitlines() == [
         "one=1|line 1", f"line 2|job env|it's a step|{tmp_path / 'workspace'}", "tool ran", "STEP=unset",
     ]
-    # The workflow's later steps see them too.
-    assert "FROM_FIRST=one=1" in (tmp_path / "github_env").read_text()
-    assert "MULTI<<EOF\nline 1\nline 2\nEOF" in (tmp_path / "github_env").read_text()
-    assert (tmp_path / "github_path").read_text() == f"{tmp_path / 'bin'}\n"
+    # The workflow's own later steps, which hold credentials, never do: the
+    # job's build ran as the workflow user, and could have prepended a path.
+    assert not (tmp_path / "github_env").exists()
+    assert not (tmp_path / "github_path").exists()
 
 
 def test_the_setup_stops_at_the_first_failing_step_and_names_it(tmp_path):

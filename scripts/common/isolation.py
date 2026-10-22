@@ -62,7 +62,7 @@ def handed_to(user: str, root: Path, readable: tuple[Path, ...] = ()) -> Iterato
     root = root.resolve()
     for path in (root, *(directory.resolve() for directory in readable)):
         for parent in path.parents:
-            if not parent.stat().st_mode & stat.S_IXOTH:
+            if not _traversable(user, parent):
                 raise OSError(f"{user} cannot reach {path}: {parent} is not traversable")
     for directory in readable:
         # ``--`` before the mode: macOS's chmod reads its first operand as
@@ -99,6 +99,24 @@ def handed_to(user: str, root: Path, readable: tuple[Path, ...] = ()) -> Iterato
         if git_identity is not None and _identity(git_dir) != git_identity:
             _as_root("rm", "-rf", "--", str(git_dir))
             raise OSError(f"{user} replaced {git_dir}; the checkout can no longer be trusted")
+
+
+def _traversable(user: str, directory: Path) -> bool:
+    """Whether ``user`` can pass through ``directory``.
+
+    By its mode, or else by an ACL (job.sh grants the account one on the
+    runner's home, which is not ``o+x``), which only a test as the account
+    itself sees. A test that cannot run as ``user`` is a directory it cannot
+    pass through.
+    """
+    if directory.stat().st_mode & stat.S_IXOTH:
+        return True
+    test = [_program("test"), "-x", str(directory)]
+    if sys.platform == "darwin":
+        argv = [_program("sudo"), "-n", "-u", user, "--", *test]
+    else:
+        argv = [*_root(), _program("runuser"), "-u", user, "--", *test]
+    return subprocess.run(argv, capture_output=True, check=False).returncode == 0
 
 
 def _remove_nested_git_dirs(root: Path) -> None:

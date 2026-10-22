@@ -393,6 +393,11 @@ def _fix_loop(
 
         checks = list(established)
         reviewed = replace(candidate, patch=outcome.applied)
+        # What the tree holds now is what the candidate is: the build and the
+        # test commands run as the account that owns the tree, and could
+        # rewrite the tracked files they run on. Only this exact change is
+        # accepted; a changed tree is a changed candidate, and goes back.
+        checked_tree = tree_patch(repo_dir)
         fixes: tuple[int, ...] = ()
         touches: tuple[int, ...] = ()
         try:
@@ -414,6 +419,9 @@ def _fix_loop(
                 # While the change is still in the tree: a port's cherry-pick
                 # is undone below, and its patch is the one it applied.
                 fixes, touches = other_issues_fixed(task, reviewed, repo_dir, run_test, deadline, checks, job=job)
+            if not failed and tree_patch(repo_dir) != checked_tree:
+                failed = _TREE_CHANGED
+                logger.info("CI-fix round %d: the tree changed during verification", attempt)
         finally:
             if candidate.action is CandidateAction.PORT:
                 restore(repo_dir)
@@ -486,6 +494,22 @@ def agent_round(
 
 _KEPT_TREE = "The working tree still holds your previous edits; revise them."
 _RESET_TREE = "The working tree was reset to the working commit; it holds no earlier edits."
+_TREE_CHANGED = (
+    "The build or your test command changed tracked files while the candidate was being "
+    "verified, so the tree no longer matches the patch that was checked. A test command "
+    "must not edit the repository: make the fix itself, and give a command that only runs it."
+)
+
+
+def tree_patch(repo_dir: str) -> str:
+    """The exact patch of every change in ``repo_dir``'s working tree; "" when it is clean."""
+    paths = worktree_changed_paths(repo_dir, strict=True)
+    if not paths:
+        return ""
+    try:
+        return build_approved_patch(repo_dir, paths, strict=True)
+    except EmptyPatch:
+        return ""
 
 
 def _noun(candidate: FixCandidate) -> str:

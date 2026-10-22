@@ -549,6 +549,16 @@ def prepare_issue(
             "action": "skipped",
             "reason": rejection,
         }
+    # Rechecked here, not only when the run was dispatched: a dispatch whose
+    # response was lost is retried, and its twin must not try the occurrence
+    # again, nor post a second patch.
+    if fix_reported(issue, failure, repo_full_name=repo_full_name, bot_login=bot_login):
+        return {
+            "repo": repo_full_name,
+            "issue": issue_number,
+            "action": "skipped",
+            "reason": f"the bot is done with run {failure.run_id}",
+        }
     # A crash from here on is a failed attempt, recorded on the issue: left
     # unrecorded, the issue would be dispatched again every hour.
     try:
