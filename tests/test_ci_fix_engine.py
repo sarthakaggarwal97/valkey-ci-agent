@@ -734,8 +734,11 @@ def test_a_detector_issue_for_a_c_unit_test_is_reproduced_with_gtest_and_the_fix
     """The whole path: the issue's test, located in the checkout, repeated by name with the real planner."""
     source, head_sha = _source_repo(tmp_path)
     (source / "src" / "unit").mkdir(parents=True)
+    (source / "src" / "unit" / "Makefile").write_text("test-unit:\n", encoding="utf-8")
     (source / "src" / "unit" / "test_crc64.cpp").write_text("TEST(Crc64Test, TestCrc64) {}\n", encoding="utf-8")
-    git(source, "add", "src")
+    (source / "deps" / "gtest-parallel").mkdir(parents=True)
+    (source / "deps" / "gtest-parallel" / "gtest_parallel.py").write_text("", encoding="utf-8")
+    git(source, "add", "src", "deps")
     git(source, "commit", "-m", "unit test")
     head_sha = git(source, "rev-parse", "HEAD")
     _install_clone(monkeypatch, source)
@@ -743,12 +746,12 @@ def test_a_detector_issue_for_a_c_unit_test_is_reproduced_with_gtest_and_the_fix
 
     def gtest_runner(repo_dir, command, timeout):
         """A unit-test binary whose verdict is value.txt's content."""
-        assert command.endswith("--gtest_repeat=1") or "--gtest_repeat=" in command
-        assert "./src/unit/valkey-unit-gtests --gtest_filter=Crc64Test.TestCrc64" in command
+        assert "gtest_parallel.py ./valkey-unit-gtests --timeout_per_test 300 --repeat=" in command
+        assert "--gtest_filter=Crc64Test.TestCrc64)" in command  # a PR's run: no --accurate
         value = (Path(repo_dir) / "value.txt").read_text().splitlines()[0]
-        runs.append((value, command.rsplit("--gtest_repeat=", 1)[1]))
+        runs.append((value, command.split("--repeat=", 1)[1].split()[0]))
         if value == "right":
-            return TestRun(True, "", "[       OK ] Crc64Test.TestCrc64 (1 ms)")
+            return TestRun(True, "", "[1/1] Crc64Test.TestCrc64 (1 ms)")
         return TestRun(False, "", "src/unit/test_crc64.cpp:29: Failure\n[  FAILED  ] Crc64Test.TestCrc64 (0 ms)")
 
     agent = _value_agent("right", command="")
@@ -767,7 +770,7 @@ def test_a_detector_issue_for_a_c_unit_test_is_reproduced_with_gtest_and_the_fix
     assert candidate.action is CandidateAction.PATCH
     assert runs == [("before", "1"), ("before", "1"), ("right", "10")]
     assert contexts[0].reproduction.startswith("Reproduced on every run with `make")
-    assert "--gtest_filter=Crc64Test.TestCrc64 --gtest_repeat=1`" in contexts[0].reproduction
+    assert "--repeat=1 --gtest_filter=Crc64Test.TestCrc64)`" in contexts[0].reproduction
     assert "the reproduction passed 10 loop(s)" in candidate.verification
 
 

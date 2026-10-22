@@ -67,6 +67,11 @@ def test_failed_tests_are_read_from_a_job_log_once_each():
      ("err", "INCREX overflow [curr_val, 0]", "tests/unit/type/incr.tcl")),
     ("*** [TIMEOUT]: slow test in tests/unit/a.tcl", ("TIMEOUT", "slow test", "tests/unit/a.tcl")),
     ("[exception]: Executing test client: broken pipe", ("exception", "", "")),
+    # gtest-parallel, as make test-unit runs the C unit tests: one line per test process.
+    ("[3/20] Crc64Test.TestCrc64 (12 ms)", ("ok", "Crc64Test.TestCrc64", "")),
+    ("[4/20] Crc64Test.TestCrc64 returned with exit code 1 (12 ms)", ("err", "Crc64Test.TestCrc64", "")),
+    ("[5/20] Crc64Test.TestCrc64 killed by signal SIGSEGV (12 ms)", ("err", "Crc64Test.TestCrc64", "")),
+    ("[  TIMEOUT ] Crc64Test.TestCrc64 timed out after 300 s", ("TIMEOUT", "Crc64Test.TestCrc64", "")),
 ])
 def test_runtest_result_lines_parse(line, expected):
     result = parse_result_line(line)

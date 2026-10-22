@@ -45,13 +45,16 @@ class Unsupported(ValueError):
 class JobCommands:
     """The build and test commands of the CI job the fix is prepared in.
 
-    Its ``make`` step, and its ``runtest`` and ``runtest-moduleapi`` lines
-    without the job's own test selection.
+    Its ``make`` step, its ``runtest`` and ``runtest-moduleapi`` lines
+    without the job's own test selection, and its ``make test-unit`` line.
     """
 
     build: str
     runtest: str
     moduleapi: str = ""
+    # Its ``make test-unit`` line, with the job's own test arguments
+    # (``accurate=1``) and make variables; "" when it runs none.
+    unittest: str = ""
 
 
 @dataclass(frozen=True)
@@ -256,7 +259,9 @@ def _spec(job_id: str, name: str, job: dict[str, Any], context: dict[str, Any]) 
     # keeps that setup: the agent's own runs need it just as the job's tests do.
     # Any other script between the tests is setup the fix would not replay,
     # unless it is for the compatibility tests, which the fix never runs.
-    for step in steps[first_test:]:
+    # What follows the last test (a memory summary, an upload) is not.
+    last_test = max(index for index, step in enumerate(steps) if _suite(_script(step)))
+    for step in steps[first_test:last_test + 1]:
         if "run" not in step or not condition(step.get("if", True), context):
             continue
         hoisted = _setup_of(step)
@@ -287,6 +292,7 @@ def _spec(job_id: str, name: str, job: dict[str, Any], context: dict[str, Any]) 
             build=_build_command({**env, **make.env}, make.run),
             runtest=runtest,
             moduleapi=_suite_command(tests, "modules", "./runtest-moduleapi"),
+            unittest=_suite_command(tests, "unittest", "make test-unit"),
         ),
     )
 
@@ -359,7 +365,8 @@ _SUITE_COMMANDS = (
     ("modules", re.compile(r"\bruntest-moduleapi\b")),
     ("sentinel", re.compile(r"\bruntest-sentinel\b")),
     ("cluster", re.compile(r"\bruntest-cluster\b")),
-    ("unittest", re.compile(r"\bmake test-unit\b|valkey-unit-(?:g)?tests\b")),
+    # Google Test, the older C harness, and 7.2's ``valkey-server test``.
+    ("unittest", re.compile(r"\bmake test-unit\b|valkey-unit-(?:g)?tests\b|valkey-server test\b")),
     ("valkey", re.compile(r"(?:^|[\s/])runtest(?:\s|$)")),
 )
 _COMPAT_STEP_RE = re.compile(r"(?i)redis oss|compatib")

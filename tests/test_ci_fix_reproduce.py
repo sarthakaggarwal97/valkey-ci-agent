@@ -19,6 +19,7 @@ from scripts.ci_fix.reproduce import (
     reproduce,
     shows_failure_of,
 )
+from scripts.common.text_utils import strip_ansi
 
 TEST = FailedTest("INCREX BYFLOAT overflow preserves existing TTL", "tests/unit/type/incr.tcl")
 UNIT_TEST = FailedTest("Crc64Test.TestCrc64", "src/unit/test_crc64.cpp")
@@ -65,54 +66,90 @@ def test_only_main_suite_tests_are_planned(checkout, tests):
     assert plan.tests == (TEST,) and "sentinel" not in plan.test and "../" not in plan.test
 
 
-def test_a_c_unit_test_is_repeated_by_name_with_the_jobs_build(checkout):
+def _gtest_checkout(checkout, *, parallel=True):
     (Path(checkout) / "src" / "unit").mkdir(parents=True)
-    job = JobCommands(build="make all-with-unit-tests SERVER_CFLAGS='-Werror'", runtest="./runtest --dump-logs")
+    (Path(checkout) / "src" / "unit" / "Makefile").write_text("test-unit:\n", encoding="utf-8")
+    if parallel:
+        (Path(checkout) / "deps" / "gtest-parallel").mkdir(parents=True)
+        (Path(checkout) / "deps" / "gtest-parallel" / "gtest_parallel.py").write_text("", encoding="utf-8")
+
+
+def test_a_c_unit_test_is_repeated_by_name_the_way_the_job_ran_it(checkout):
+    """Through gtest-parallel, one process per test, with the job's own test arguments."""
+    _gtest_checkout(checkout)
+    job = JobCommands(build="make all-with-unit-tests SERVER_CFLAGS='-Werror'", runtest="./runtest --dump-logs",
+                      unittest="make test-unit accurate=1")
 
     plan = plan_for(checkout, (UNIT_TEST, TEST), scheduled=True, job=job)
 
     assert plan.command(20) == (
         "make -j\"$(nproc)\" all-with-unit-tests SERVER_CFLAGS='-Werror' && "
-        "./src/unit/valkey-unit-gtests --gtest_filter=Crc64Test.TestCrc64 --gtest_repeat=20"
+        '{ test -x ./src/unit/valkey-unit-gtests || make -j"$(nproc)" all-with-unit-tests; } && '
+        "(cd src/unit && python3 ../../deps/gtest-parallel/gtest_parallel.py ./valkey-unit-gtests "
+        "--timeout_per_test 300 --repeat=20 --gtest_filter=Crc64Test.TestCrc64 -- --accurate)"
     )
     assert plan.tests == (UNIT_TEST,) and plan.notes == () and not plan.valgrind
-    # The gtest lines are what its runs report.
+    # gtest-parallel's own lines, and the binary's for a failed test, are what its runs report.
     assert plan.failed(TestRun(passed=False, output="", report="[  FAILED  ] Crc64Test.TestCrc64 (0 ms)"))
-    assert plan.ran(TestRun(passed=True, output="", report="[       OK ] Crc64Test.TestCrc64 (0 ms)"))
-    assert not plan.ran(TestRun(passed=True, output="", report="[       OK ] Other.Test (0 ms)"))
+    assert plan.failed(TestRun(passed=False, output="", report="[1/20] Crc64Test.TestCrc64 killed by signal SIGSEGV (3 ms)"))
+    assert plan.ran(TestRun(passed=True, output="", report="[20/20] Crc64Test.TestCrc64 (1 ms)"))
+    assert not plan.ran(TestRun(passed=True, output="", report="[1/1] Other.Test (0 ms)"))
     # Several unit tests: one filter.
     two = plan_for(checkout, (UNIT_TEST, FailedTest("Sizes/HashtableTest.Grow/2", "test_hashtable.cpp")), scheduled=True)
     assert "--gtest_filter=Crc64Test.TestCrc64:Sizes/HashtableTest.Grow/2 " in two.test
 
 
+def test_the_jobs_unit_test_arguments_and_make_variables_are_kept_apart(checkout):
+    """A large-memory test skips itself without --large-memory; a 32-bit gtest needs the job's libraries."""
+    _gtest_checkout(checkout)
+    job = JobCommands(
+        build="make 32bit SERVER_CFLAGS='-Werror'", runtest="./runtest",
+        unittest='make test-unit large_memory=1 seed=7 GTEST_LIBS="/usr/lib32/libgtest.a /usr/lib32/libgmock.a"',
+    )
+
+    plan = plan_for(checkout, (UNIT_TEST,), scheduled=True, job=job)
+
+    # The job's build names no unit tests, but makes them: nothing is rebuilt as 64-bit.
+    assert plan.build == (
+        "make -j\"$(nproc)\" 32bit SERVER_CFLAGS='-Werror' && { test -x ./src/unit/valkey-unit-gtests || "
+        "make -j\"$(nproc)\" all-with-unit-tests 'GTEST_LIBS=/usr/lib32/libgtest.a /usr/lib32/libgmock.a'; }"
+    )
+    assert plan.test.endswith("-- --large-memory --seed 7)")
+    without = plan_for(checkout, (UNIT_TEST,), scheduled=True, job=JobCommands(build="make", runtest="./runtest"))
+    assert "--" not in without.test.split("--gtest_filter")[1] and "was not found" in without.notes[0]
+
+
 def test_a_gtest_runs_output_is_read_the_way_runtests_is(checkout):
     """What run_test_command keeps of the output (failure_report) is what the plan judges."""
-    (Path(checkout) / "src" / "unit").mkdir(parents=True)
+    _gtest_checkout(checkout)
     plan = plan_for(checkout, (UNIT_TEST,), scheduled=True)
     failing = (
         "[==========] Running 1 test from 1 test suite.\n[ RUN      ] Crc64Test.TestCrc64\n"
         "src/unit/test_crc64.cpp:29: Failure\nExpected equality of these values:\n"
         "[  FAILED  ] Crc64Test.TestCrc64 (0 ms)\n[  FAILED  ] 1 test, listed below:\n"
         "[  FAILED  ] Crc64Test.TestCrc64\n 1 FAILED TEST\n"
+        "[1/1] Crc64Test.TestCrc64 returned with exit code 1 (2 ms)\nFAILED TESTS (1/1):\n       2 ms: Crc64Test.TestCrc64\n"
     )
-    passing = "[ RUN      ] Crc64Test.TestCrc64\n[       OK ] Crc64Test.TestCrc64 (1 ms)\n[  PASSED  ] 1 test.\n"
+    passing = "[1/2] Other.Test (3 ms)\n[2/2] Crc64Test.TestCrc64 (1 ms)\n"
+    hung = "\x1b[31m[  TIMEOUT ]\x1b[0m Crc64Test.TestCrc64 timed out after 300 s\n"
     unrelated = "[ RUN      ] Other.Test\n[       OK ] Other.Test (1 ms)\n"
 
     assert plan.failed(TestRun(passed=False, output=failing, report=failure_report(failing)))
     assert plan.ran(TestRun(passed=True, output=passing, report=failure_report(passing)))
+    assert plan.failed(TestRun(passed=False, output=hung, report=failure_report(strip_ansi(hung))))
     assert not plan.ran(TestRun(passed=True, output=unrelated, report=failure_report(unrelated)))
     assert not plan.failed(TestRun(passed=False, output="make: *** No rule", report=failure_report("make: *** No rule")))
 
 
-def test_a_build_without_the_unit_tests_gets_their_target_and_no_src_unit_means_no_plan(checkout):
-    assert plan_for(checkout, (UNIT_TEST,), scheduled=True) is None  # no src/unit: an older harness
-    (Path(checkout) / "src" / "unit").mkdir(parents=True)
+def test_without_gtest_parallel_the_binary_repeats_in_one_process_and_no_gtest_means_no_plan(checkout):
+    assert plan_for(checkout, (UNIT_TEST,), scheduled=True) is None  # no src/unit/Makefile: an older harness
+    _gtest_checkout(checkout, parallel=False)
 
     plan = plan_for(checkout, (UNIT_TEST,), scheduled=False, job=JobCommands(build="make", runtest="./runtest"))
 
-    assert plan.build == 'make -j"$(nproc)" && make -j"$(nproc)" all-with-unit-tests'
-    assert "does not build the unit tests" in plan.notes[0]
-    assert plan_for(checkout, (UNIT_TEST,), scheduled=False).build == 'make -j"$(nproc)" all-with-unit-tests'
+    assert plan.build == 'make -j"$(nproc)" && { test -x ./src/unit/valkey-unit-gtests || make -j"$(nproc)" all-with-unit-tests; }'
+    assert plan.test == "./src/unit/valkey-unit-gtests --gtest_filter=Crc64Test.TestCrc64 --gtest_repeat=\0loops\0"
+    assert any("no gtest-parallel" in note for note in plan.notes)
 
 
 def test_a_jobs_shorter_runtest_watchdog_is_kept_and_a_longer_one_is_not(checkout):
@@ -120,8 +157,12 @@ def test_a_jobs_shorter_runtest_watchdog_is_kept_and_a_longer_one_is_not(checkou
     shorter = JobCommands(build="make", runtest="./runtest --timeout 300 --dump-logs")
     longer = JobCommands(build="make valgrind", runtest="./runtest --valgrind --clients 1 --timeout 2400 --dump-logs")
 
-    assert plan_for(checkout, (TEST,), scheduled=True, job=shorter).test.endswith("--timeout 300")
-    assert plan_for(checkout, (TEST,), scheduled=True, job=longer).test.endswith("--timeout 600")
+    kept, lowered = plan_for(checkout, (TEST,), scheduled=True, job=shorter), plan_for(checkout, (TEST,), scheduled=True, job=longer)
+    assert kept.test.endswith("--timeout 300") and kept.notes == ()
+    assert lowered.test.endswith("--timeout 600")
+    # So that a [TIMEOUT] at 600s is not read as the failure the job saw.
+    assert lowered.notes == ("The job's --timeout 2400 was lowered to 600s for the reproduction: "
+                             "a test that times out at 600s may be slow here, not hung.",)
 
 
 def test_there_is_no_plan_without_runtest(tmp_path):
