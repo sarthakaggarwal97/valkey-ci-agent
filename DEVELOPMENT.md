@@ -1,269 +1,121 @@
-# Development Guide
+# Working on valkey-ci-agent
 
-This guide covers local setup, local validation, and the GitHub Actions workflows
-used to test and run `valkey-ci-agent`. The workflow examples focus on the
-backport subsystem; the ci-fix, fuzzer-monitor, and test-failure-detector
-subsystems follow the same local setup and validation steps.
+This guide is for changing the agent itself: setting up a local environment,
+running the tests, and adding a new workflow. To learn what each workflow
+does and how to run it, start from the [README](README.md).
 
-For how the system is designed (the layers, per-workflow flows, and shared
-infrastructure), see [docs/architecture.md](docs/architecture.md).
+## What you need
 
-## Prerequisites
-
-- Python 3.9 or later. CI runs a 3.9 and 3.11 matrix, so 3.11 is the closest
-  match for the lint, coverage, and type-check jobs.
-- GitHub CLI (`gh`) for dispatching workflows.
-- A GitHub token for local API-backed runs.
-- AWS credentials with Bedrock access when running workflows that invoke Claude
-  Code through Bedrock.
-- Claude Code CLI 2.1.170 or later when running AI-backed flows locally. The
-  workflows pin 2.1.175 because the default model is Fable 5:
+- Python 3.9 or later. CI tests 3.9 and 3.11, and lint and type checks run on
+  3.11, so 3.11 is the safest choice locally.
+- The GitHub CLI, `gh`, to start workflows.
+- A GitHub token, for anything that talks to the GitHub API.
+- AWS credentials with access to Bedrock, for anything that calls Claude.
+- Claude Code CLI 2.1.170 or later, for anything that calls Claude. The
+  workflows use 2.1.175:
 
 ```bash
 npm install -g @anthropic-ai/claude-code@2.1.175
 ```
 
-## Local Environment
+## Getting set up
 
-Create a local environment file from the template:
-
-```bash
-cp .env.example .env.local
-```
-
-Fill in the values you need, then source it before API-backed runs:
-
-```bash
-set -a
-source .env.local
-set +a
-```
-
-For local development, prefer `AWS_PROFILE` plus `AWS_REGION`. In GitHub
-Actions, AWS access is configured with OIDC and the `AWS_ROLE_ARN` secret.
-
-## Install Dependencies
-
-Install the package and development tools in editable mode:
+Install the agent and its development tools:
 
 ```bash
 python -m pip install -e ".[dev]"
 ```
 
-This pulls in the runtime dependencies declared in `pyproject.toml` plus the
-test and lint tooling. For a runtime-only install, use `python -m pip install .`.
+If you want to run anything that talks to GitHub or AWS, copy the
+environment template, fill in what you need, and load it into your shell:
 
-## Test Locally
+```bash
+cp .env.example .env.local
+```
 
-Run the unit test suite:
+```bash
+set -a; source .env.local; set +a
+```
+
+Locally, it's easiest to use an `AWS_PROFILE` and `AWS_REGION`. In GitHub
+Actions the workflows get AWS credentials through OIDC instead; see
+[docs/setup.md](docs/setup.md).
+
+## Running the tests
 
 ```bash
 python -m pytest
 ```
 
-Run the same validation commands used by CI:
+Before you push, run the same checks CI does:
 
 ```bash
 ruff check scripts/ tests/
-pytest -v
-pytest --cov=scripts --cov-report=term-missing --cov-report=xml --cov-fail-under=60 -v
+pytest --cov=scripts --cov-report=term-missing --cov-fail-under=60
 mypy scripts/
 ```
 
-CI splits these across its matrix: `pytest -v` runs on 3.9, while ruff, the
-coverage run, and mypy run on 3.11.
+Some tests only run when there is a real `ci-fix-agent` account and Claude
+Code is installed, and skip otherwise. CI sets both up on its Python 3.11
+job, and runs the isolation tests a second time as root inside an Alpine
+container, so those tests always run there.
 
-## Commit Requirements
+Tests live in `tests/`, with one file per module. The tests for
+`scripts/ci_fix/engine.py`, for example, are in `tests/test_ci_fix_engine.py`.
+Shared git helpers are in `tests/git_helpers.py` and test data is under
+`tests/fixtures/`.
 
-All commits require DCO sign-off:
+## Commits
+
+Every commit needs a DCO sign-off:
 
 ```bash
 git commit -s
 ```
 
-To check registry matrix generation without running a workflow:
+## Trying a workflow
+
+Each workflow's page ends with the commands to run it, both as a GitHub
+workflow and, where it's useful, on your own machine:
+[Backports](docs/backport.md#running-things-by-hand),
+[Fixing CI failures](docs/ci-fix.md#running-it-by-hand),
+[Test Failure Detector](docs/test-failure-detector.md#running-it-by-hand),
+[Fuzzer monitor](docs/fuzzer-monitor.md#running-it-by-hand),
+[Release notes](docs/release-notes.md#cutting-a-release) and
+[CVE scan](docs/cve-scan.md#running-it-by-hand).
+
+Be careful with anything that can push or open a PR. Most commands have a
+`--dry-run` or `--discover-only` flag, and most workflows default to a dry run
+when you start them by hand. When you do run something for real, make sure
+the repository and token are the ones you mean.
+
+## Changing repos.yml
+
+[The registry page](docs/registry.md) explains every setting. After a change,
+check that the file still loads:
 
 ```bash
 python -m scripts.backport.matrix --registry repos.yml
-python -m scripts.backport.matrix --registry repos.yml --repo valkey-io/valkey
-python -m scripts.backport.matrix --registry repos.yml --repo valkey-io/valkey --project-number 14
 ```
 
-To test backport sweep discovery locally without cherry-picking or pushing:
+## Adding a workflow
 
-```bash
-python -m scripts.backport.sweep \
-  --registry repos.yml \
-  --repo valkey-io/valkey \
-  --branch 9.0 \
-  --target-token "$GITHUB_TOKEN" \
-  --discover-only \
-  --verbose
-```
+New workflows follow the same pattern as the existing ones, described in
+[Architecture](docs/architecture.md#the-shape-of-a-workflow).
 
-The single-PR backport command is write-capable when it reaches the push and PR
-creation stages. Use it only with an intended target repository and token:
-
-```bash
-BACKPORT_GITHUB_TOKEN="$GITHUB_TOKEN" python -m scripts.backport.main \
-  --registry repos.yml \
-  --repo valkey-io/valkey \
-  --pr-number 3601 \
-  --target-branch 9.0 \
-  --verbose
-```
-
-To reconcile a project board against branch reality without mutating it, run the
-mark-done step in dry-run mode. Omit `--target-branch` to reconcile every branch
-configured for the repo:
-
-```bash
-python -m scripts.backport.mark_done \
-  --registry repos.yml \
-  --repo valkey-io/valkey \
-  --target-branch 9.0 \
-  --target-token "$GITHUB_TOKEN" \
-  --dry-run \
-  --verbose
-```
-
-Drop `--dry-run` to move items from "To be backported" to "Done" once the
-backport has actually landed on the target branch.
-
-## GitHub Actions
-
-### CI
-
-`.github/workflows/ci.yml` runs on pushes and pull requests to `main`, across a
-Python 3.9 and 3.11 matrix. It installs dev dependencies through the
-`setup-agent` action (equivalent to `python -m pip install -e ".[dev]"`) and
-runs, depending on the Python version:
-
-```bash
-ruff check scripts/ tests/
-pytest -v
-pytest --cov=scripts --cov-report=term-missing --cov-report=xml --cov-fail-under=60 -v
-mypy scripts/
-```
-
-The coverage run and the lint/type checks run on 3.11; the plain `pytest -v` run
-covers 3.9.
-
-### Required Secrets and Variables
-
-Operational workflows require these values in the `valkey-ci-agent` repository:
-
-| Type | Name | Purpose |
-|------|------|---------|
-| Secret | `AWS_ROLE_ARN` | OIDC role ARN with Bedrock `InvokeModel` permission |
-| Secret | `VALKEYRIE_BOT_APP_ID` | Valkeyrie GitHub App ID |
-| Secret | `VALKEYRIE_BOT_PRIVATE_KEY` | Valkeyrie GitHub App private key |
-| Variable | `AWS_REGION` | AWS region, for example `us-east-1` |
-
-Claude Code defaults to Fable 5 through the `us.anthropic.claude-fable-5`
-Bedrock inference profile. The AWS account must have access to that profile and
-must use Bedrock `provider_data_share` data retention; Fable 5 is not available
-under zero data retention. Set `CI_AGENT_CLAUDE_MODEL=opus` to temporarily fall
-back to the pinned Opus 4.8 profile.
-
-The workflows mint a short-lived GitHub App installation token for repository
-reads, branch pushes, PR creation, status comments, and project-board queries.
-
-### Manual Backport
-
-Run a single-PR backport with `workflow_dispatch`:
-
-```bash
-gh workflow run manual-backport.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field pr_url=https://github.com/valkey-io/valkey/pull/3601 \
-  --field target_branch=9.0
-```
-
-### Backport Sweep
-
-The scheduled sweep runs daily at 09:00 UTC. To run it manually in discovery
-mode, leave `dry_run` enabled:
-
-```bash
-gh workflow run backport-sweep.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field repo=valkey-io/valkey \
-  --field project_number=14 \
-  --field dry_run=true
-```
-
-To allow cherry-picks, pushes, and PR updates, dispatch the same workflow with
-`dry_run=false` after confirming the target repository and registry entry are
-correct.
-
-Both backport workflows upload result JSON and `agent-evidence` artifacts when
-available.
-
-### Mark Merged Backports Done
-
-`.github/workflows/backport-mark-done-poll.yml` runs hourly (cron `30 * * * *`)
-and reconciles each project board against branch reality, moving items to "Done"
-once the backport has actually landed on the target branch. It is self-healing:
-it reconciles the whole board every run, so it picks up backports applied by the
-sweep, by an earlier run, or by a manual cherry-pick.
-
-Dispatch it manually, optionally filtering to a single repo or project. This
-workflow always reconciles the live board; to preview changes first, use the
-local `scripts.backport.mark_done` command with `--dry-run` shown above.
-
-```bash
-gh workflow run backport-mark-done-poll.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field repo=valkey-io/valkey
-```
-
-### Backport Eligibility
-
-`.github/workflows/backport-eligibility.yml` runs daily (cron `30 0 * * *`) over
-the PRs merged to the development branch on the last three UTC days and comments
-on the ones that look eligible for backport. The overlap means a failed or
-skipped run is caught up by the next one; PRs already commented on are skipped.
-Manual dispatch defaults to `dry_run=true`, which reports verdicts in the job
-summary and result artifact without commenting.
-
-A failed run lists the undecided PRs in its job summary. To re-cover an older
-window after fixing the cause, dispatch with `dry_run=false`, the last date,
-and the number of days:
-
-```bash
-gh workflow run backport-eligibility.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field date=2026-09-16 \
-  --field days=7 \
-  --field dry_run=true
-```
-
-Locally, with Bedrock credentials:
-
-```bash
-TARGET_TOKEN=$(gh auth token) python -m scripts.backport.eligibility \
-  --repo valkey-io/valkey --date 2026-09-16 --days 1 --dry-run
-```
-
-## Registry Changes
-
-`repos.yml` is the source of truth for onboarded repositories, release branches,
-project boards, labels, and validation commands. Use `examples/repos.yml` as a
-reference for multi-repository configuration.
-
-Registry-configured `build_commands` run before pushing a generated backport
-branch. A non-zero exit blocks the push. Repositories with no `build_commands`
-configured rely on their upstream CI for validation.
-
-Use `validation_rules` for static path-to-command mappings and a supported
-`validation_profile` when checks must be derived from exact changed files.
-`generated_file_rules` must list every tracked output a generator may edit;
-the validator runs the generator twice and fails if it touches anything else
-or does not converge. `automatic_ci_followup` is opt-in per repository. The
-CI follow-up and the Test Failure Detector's job-level check skip the jobs in
-`ci_followup_ignored_jobs`, which should include the informational GitHub Actions jobs
-the bot must never try to repair -- for Valkey core, the `daily.yml` result
-aggregators and the coverage upload. Patterns match Actions job names only;
-checks published by other GitHub Apps, such as DCO and Codecov, cannot be
-follow-up candidates in the first place.
+1. Add a package under `scripts/` with a `main.py`. Keep the part that
+   receives and checks a request, the part that does the work, and the part
+   that publishes the result separate.
+2. Use what's already in `scripts/common/` for git credentials, cloning,
+   GitHub API retries, artifacts, issues and polling.
+3. If the workflow calls Claude, add a profile in `scripts/ai/runtime.py` with
+   as few tools as the task allows, and keep the prompt in your package.
+   Never give Claude a GitHub token.
+4. Add the workflow file under `.github/workflows/`. Check out this
+   repository and use `.github/actions/setup-agent`. Pin every external action
+   to a commit and ask only for the permissions the job needs; the tests will
+   tell you if you don't.
+5. Write only to the bot's own branches, check the destination again right
+   before pushing, and leave merging to people.
+6. Add tests, a page under `docs/` written like the others, and a paragraph in
+   the README.
