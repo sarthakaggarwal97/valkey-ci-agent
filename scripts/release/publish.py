@@ -51,7 +51,35 @@ def prepare_release(
         retries=2,
         description="list release tags",
     )
-    return derive_version(branch, intent, tags)
+    release = derive_version(branch, intent, tags)
+    _require_commits_since_previous_release(repo, branch, release, tags)
+    return release
+
+
+def _require_commits_since_previous_release(
+    repo: Any, branch: str, release: DerivedRelease, tags: list[str]
+) -> None:
+    """Refuse to prepare a release whose branch has not moved since the last one.
+
+    A line with nothing new since its previous tag (its backport sweep still
+    open, say) would otherwise get a notes PR with an empty dated section and a
+    version bump, and the mistake would only show up as a held PR an hour
+    later. The first release candidate of a line is exempt: its range starts
+    on another line.
+    """
+    previous = _previous_release_tag(release.version, release.stage, set(tags))
+    if previous is None:
+        return
+    comparison = retry_github_call(
+        lambda: repo.compare(previous, branch),
+        retries=2,
+        description=f"compare {previous}...{branch}",
+    )
+    if getattr(comparison, "total_commits", None) == 0:
+        raise ReleaseError(
+            f"{branch} has no commits since {previous}, so there is nothing to release as "
+            f"{release.tag}; merge the pending backports first, then rerun Prepare Release"
+        )
 
 
 def plan_publication(
@@ -357,25 +385,35 @@ def _extract_release_section(notes: str, tag: str) -> str | None:
     return notes[match.start() : end].rstrip() + "\n"
 
 
+def _previous_release_tag(version: str, stage: str, tags: set[str]) -> str | None:
+    """The tag on the same line that the release follows, or None for an rc1.
+
+    rcN follows rc(N-1); a patch follows the previous patch; an X.Y.0 final
+    follows its last release candidate.
+    """
+    rc = re.fullmatch(r"rc([1-9]\d*)", stage)
+    if rc:
+        if int(rc.group(1)) == 1:
+            return None
+        candidate = f"{version}-rc{int(rc.group(1)) - 1}"
+        return candidate if candidate in tags else None
+    if stage != "ga":
+        return None
+    major, minor, patch = parse_version(version)
+    if patch > 0:
+        candidate = f"{major}.{minor}.{patch - 1}"
+        return candidate if candidate in tags else None
+    rcs = [
+        int(match.group(1))
+        for item in tags
+        if (match := re.fullmatch(rf"{re.escape(version)}-rc([1-9]\d*)", item))
+    ]
+    return f"{version}-rc{max(rcs)}" if rcs else None
+
+
 def _changelog_footer(repo: Any, repo_name: str, tag: str, version: str, stage: str) -> str:
     tags = {item.name for item in retry_github_call(lambda: repo.get_tags(), retries=2, description="list tags")}
-    previous: str | None = None
-    rc = re.fullmatch(r"rc([1-9]\d*)", stage)
-    if rc and int(rc.group(1)) > 1:
-        candidate = f"{version}-rc{int(rc.group(1)) - 1}"
-        previous = candidate if candidate in tags else None
-    elif stage == "ga":
-        major, minor, patch = parse_version(version)
-        if patch > 0 and f"{major}.{minor}.{patch - 1}" in tags:
-            previous = f"{major}.{minor}.{patch - 1}"
-        elif patch == 0:
-            rcs = [
-                int(match.group(1))
-                for item in tags
-                if (match := re.fullmatch(rf"{re.escape(version)}-rc([1-9]\d*)", item))
-            ]
-            if rcs:
-                previous = f"{version}-rc{max(rcs)}"
+    previous = _previous_release_tag(version, stage, tags)
     return f"\n**Full Changelog**: https://github.com/{repo_name}/compare/{previous}...{tag}\n" if previous else ""
 
 

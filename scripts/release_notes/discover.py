@@ -894,11 +894,15 @@ def _pull_changed_files(pull: Any) -> tuple[str, ...]:
         return ()
 
 
-def _build_merged_pr(pull: Any, number: int, merge_commit_sha: str) -> MergedPR:
-    """Build a MergedPR from pull using the given number and merge_commit_sha.
+def _build_merged_pr(
+    pull: Any, number: int, merge_commit_sha: str, *, line_commit_sha: str = ""
+) -> MergedPR:
+    """Build a MergedPR from pull using the given number and commits.
 
     number is the authoritative identity (possibly remapped from a backport).
-    merge_commit_sha is this line's commit, not the source's original merge.
+    merge_commit_sha is the commit whose diff describes the change (see
+    :class:`MergedPR`); line_commit_sha is the range commit on this release
+    line and defaults to merge_commit_sha when the two are the same commit.
     """
     author = ""
     if pull.user is not None and pull.user.login:
@@ -911,6 +915,7 @@ def _build_merged_pr(pull: Any, number: int, merge_commit_sha: str) -> MergedPR:
         body=_clean_pr_body(pull.body),
         labels=tuple(label.name for label in pull.labels),
         merge_commit_sha=merge_commit_sha,
+        line_commit_sha=line_commit_sha or merge_commit_sha,
         changed_files=_pull_changed_files(pull),
     )
 
@@ -959,7 +964,7 @@ def hydrate_prs(
                     for source_number, source_pull in source_pulls:
                         if source_number not in final:
                             final[source_number] = _build_merged_pr(
-                                source_pull, source_number, sha
+                                source_pull, source_number, sha, line_commit_sha=sha
                             )
                     continue
             source = _recover_source_pr(repo, pull)
@@ -991,10 +996,17 @@ def hydrate_prs(
         if target_number in final:
             continue  # dedup: first-seen wins
         if target_number == number:
+            # The PR's own merge commit carries its exact diff. For a cherry-pick
+            # whose subject names the source PR, that is the merge on unstable,
+            # so the range commit is kept separately as line_commit_sha: the
+            # code-age blame must run on THIS line's commit, or every line last
+            # touched by a later unstable refactor would read as "unreleased".
             merge_sha = target_pull.merge_commit_sha or sha
         else:
             merge_sha = sha
-        final[target_number] = _build_merged_pr(target_pull, target_number, merge_sha)
+        final[target_number] = _build_merged_pr(
+            target_pull, target_number, merge_sha, line_commit_sha=sha
+        )
         # Still a backport after recovery: flag for maintainer review.
         if _is_backport_pull(target_pull):
             logger.warning(

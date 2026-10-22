@@ -2076,9 +2076,16 @@ class TestNamedCveHold:
         reasons = rc._hold_reasons(self._PLAN, self._meta("HIGH", None, self._cve_impact()))
         assert self._CVE_REASON in reasons
 
-    def test_hold_survives_force_ready(self) -> None:
+    def test_force_ready_opens_ready_but_shouts_about_the_cve(self) -> None:
+        # Prepare Release always sets force_ready, so a CVE must not quietly
+        # park the release as a draft; the banner names it first instead.
         reasons = rc._hold_reasons(self._PLAN, self._meta("HIGH", None, self._cve_impact()))
-        assert rc._should_hold(reasons, force_ready=True)
+        assert not rc._should_hold(reasons, force_ready=True)
+        banner = rc._hold_banner(reasons, force_ready=True)
+        assert banner.startswith("> [!CAUTION]")
+        assert "unresolved security item" in banner
+        assert self._CVE_REASON in banner
+        assert "Held as a draft" not in banner
 
     def test_released_by_security_urgency_with_fixes(self) -> None:
         reasons = rc._hold_reasons(self._PLAN, self._meta(
@@ -2720,3 +2727,22 @@ class TestAlignPriorWordingThreading:
         # the profile would index nothing and silently carry no wording.
         captured = self._forwarded(monkeypatch, clone)
         assert captured["profile"] is projects.VALKEY_PROFILE
+
+
+class TestPrOutputs:
+    def test_hands_the_pr_identity_to_the_workflow(self, monkeypatch, tmp_path) -> None:
+        output = tmp_path / "out"
+        monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+        rc._write_pr_outputs("https://github.com/valkey-io/valkey/pull/4717")
+        assert output.read_text() == (
+            "pr_number=4717\npr_url=https://github.com/valkey-io/valkey/pull/4717\n"
+        )
+
+    def test_writes_nothing_for_a_non_pr_url_or_outside_actions(self, monkeypatch, tmp_path) -> None:
+        output = tmp_path / "out"
+        monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+        rc._write_pr_outputs("https://github.com/valkey-io/valkey/compare/x")
+        assert not output.exists()
+        monkeypatch.delenv("GITHUB_OUTPUT")
+        rc._write_pr_outputs("https://github.com/valkey-io/valkey/pull/1")
+        assert not output.exists()

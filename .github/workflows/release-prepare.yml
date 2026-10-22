@@ -18,6 +18,16 @@ on:
         required: true
         type: choice
         options: [LOW, MODERATE, HIGH, CRITICAL, SECURITY]
+      security_fixes:
+        description: "Security Fixes entries, separated by ;; (needed when a PR names a CVE)"
+        required: false
+        type: string
+        default: ""
+      date:
+        description: "Release date YYYY-MM-DD; empty dates the notes today (UTC)"
+        required: false
+        type: string
+        default: ""
       dry_run:
         description: "Derive and display the release without opening a PR"
         required: false
@@ -109,7 +119,13 @@ jobs:
       version: ${{ needs.derive.outputs.version }}
       stage: ${{ needs.derive.outputs.stage }}
       urgency: ${{ inputs.urgency }}
+      security_fixes: ${{ inputs.security_fixes }}
+      date: ${{ inputs.date }}
       release_owner: ${{ needs.derive.outputs.actor }}
+      # A release opened by Prepare is never held as a draft: the flagged
+      # items lead the PR body for the reviewer instead, and the tracker
+      # tells the release owner to review them before merging.
+      force_ready: true
       dry_run: false
 
   tracker:

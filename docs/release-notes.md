@@ -157,13 +157,21 @@ the version file. It then commits to its branch, checks one last time that
 the release branch hasn't moved since it started, pushes, and opens or updates
 the PR.
 
-## When the PR opens as a draft
+## When the PR needs attention
 
-If anything needs a maintainer's attention before release, the PR opens as a
-draft so it can't be merged by accident. The top of the description lists
-what needs attention, with a section for each item. You can fix the issue and
-re-run the cut, decide it's fine and click **Ready for review**, or use the
-advanced workflow's `force_ready` to open the PR as ready anyway.
+If anything needs a maintainer's attention before release, the top of the PR
+description says so, with a section for each item. A PR opened by **Prepare
+Release** is always opened ready for review, so a release never waits on a
+draft nobody noticed; the banner at the top lists what to check, and a
+security item (a PR that names a CVE, or `SECURITY` urgency without Security
+Fixes entries) gets a CAUTION banner that must be settled before the merge.
+Give Prepare Release the `security_fixes` entries (separated by `;;`) and the
+`urgency` to clear it, or edit the notes through review comments.
+
+A PR opened by **Cut Release Notes** or its Advanced version is instead held
+as a draft so it can't be merged by accident. You can fix the issue and re-run
+the cut, decide it's fine and click **Ready for review**, or use the advanced
+workflow's `force_ready` to open the PR as ready anyway.
 
 The PR is held as a draft when:
 
@@ -194,9 +202,10 @@ released all stop the run immediately with an error.
 
 To change the notes, leave an inline comment on the `00-RELEASENOTES` change
 in the release PR, the same way you would review any PR. You don't need a
-command. The agent checks every five minutes, so your comment is usually
-picked up within a few minutes, plus however long GitHub Actions takes to
-start the job.
+command. Every release PR has its own watcher, **Watch Release PR Reviews**,
+which the cut starts the moment it opens the PR. It checks that one PR every
+five minutes, starts itself again every hour, and ends on its own once the PR
+is merged or closed. The Actions tab shows one run per PR, named after it.
 
 It collects every unresolved comment on the current notes from members of
 `valkey-io/contributors`, posts "Addressing N release-note review comments."
@@ -209,6 +218,21 @@ If something fails, the PR says so and the next check tries again. Editing a
 comment counts as a new request. If a job dies halfway through, it will be
 retried after 90 minutes at most. If the push went through but the replies
 didn't, the next check finishes the replies without editing again.
+
+To stop watching a PR, or to start watching one again (the watcher was
+stopped, or its run was lost), run the workflow by hand:
+
+```bash
+# Stop applying review comments on valkey PR 4717
+gh workflow run release-notes-review-watch.yml --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey --field pr=4717 --field stop=true
+```
+
+```bash
+# Start (or resume) watching valkey PR 4717
+gh workflow run release-notes-review-watch.yml --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey --field pr=4717
+```
 
 ## Per-repository details
 
@@ -253,8 +277,8 @@ release lines, reading only branches already in the clone. `render.py`,
 `release_format.py`, `version_bump.py` and `contributors.py` update the files,
 and `publish.py` opens or updates the PR. `projects.py` describes each
 repository, and `security.py` reads published advisories, which Claude never
-writes. The review comment flow is in `review_poll.py`, `review.py` and
-`review_handler.py`.
+writes. The review comment flow is in `review_poll.py` (the per-PR watcher),
+`review.py` and `review_handler.py`.
 
 When Claude decides what to include and writes the notes, it has no tools at
 all. Everything it needs about each PR is put directly into the prompt.

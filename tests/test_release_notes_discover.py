@@ -1191,6 +1191,10 @@ class TestHydratePrs:
         assert len(prs) == 1
         assert prs[0].number == 10
         assert prs[0].author == "octocat"
+        # The PR's own merge carries the diff; the range commit stays available
+        # for blame on this line (a cherry-pick names its source by number).
+        assert prs[0].merge_commit_sha == "deadbeef"
+        assert prs[0].line_commit_sha == "sha"
         assert prs[0].body == "Fixes a crash when the thing overflows."
         assert prs[0].labels == ("release-notes",)
         assert unresolved_backports == []
@@ -1210,6 +1214,7 @@ class TestHydratePrs:
         assert prs[0].author == ""
         assert prs[0].body == ""  # None body coerces to ""
         assert prs[0].merge_commit_sha == "sha5"  # falls back to the commit sha
+        assert prs[0].line_commit_sha == "sha5"
 
     def test_pr_404_is_surfaced_not_dropped(self) -> None:
         # A 404 (an issue, a moved/deleted PR, or a (#N) from another repo) does
@@ -1325,6 +1330,7 @@ class TestHydratePrsBackportRecovery:
         # merge_commit_sha is the backport's range commit on THIS line, not the
         # source's merge on unstable (which is where source.merge_commit_sha points).
         assert prs[0].merge_commit_sha == "shaBackport"
+        assert prs[0].line_commit_sha == "shaBackport"
         backport.get_commits.assert_not_called()
         assert unresolved_backports == []  # source recovered -> nothing to flag
 

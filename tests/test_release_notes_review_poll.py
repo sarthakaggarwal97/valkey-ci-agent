@@ -8,6 +8,7 @@ import pytest
 
 from scripts.release_notes.review import (
     ReviewComment,
+    ReviewRefused,
     ReviewThread,
     SelectedReview,
     parse_status,
@@ -19,6 +20,10 @@ from scripts.release_notes.review import (
 from scripts.release_notes.review_poll import (
     dispatch_release_review,
     poll_once,
+    poll_pr,
+)
+from scripts.release_notes.review_poll import (
+    main as poll_main,
 )
 
 _BOT = "valkeyrie-ops[bot]"
@@ -321,3 +326,94 @@ def test_dispatcher_passes_only_pr_identity() -> None:
             "status_comment_id": "99",
         },
     )
+
+
+def _github_pr(pr: SimpleNamespace) -> MagicMock:
+    gh = MagicMock()
+    gh.get_repo.return_value = SimpleNamespace(get_pull=lambda number: pr)
+    return gh
+
+
+def _watch(
+    monkeypatch: pytest.MonkeyPatch,
+    pr: SimpleNamespace,
+    threads: tuple[ReviewThread, ...],
+    dispatch: MagicMock,
+) -> tuple[int, bool]:
+    monkeypatch.setattr(
+        "scripts.release_notes.review_poll.list_review_threads",
+        lambda *_args: threads,
+    )
+    return poll_pr(
+        _github_pr(pr),
+        MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        number=42,
+        bot_login=_BOT,
+        dispatch=dispatch,
+        authorize=lambda login: login in {"alice", "bob"},
+    )
+
+
+def test_watcher_dispatches_for_its_one_pr(monkeypatch: pytest.MonkeyPatch) -> None:
+    dispatch = MagicMock()
+    pr = _pr()
+    dispatched, still_open = _watch(monkeypatch, pr, (_thread("thread-one", 1),), dispatch)
+    assert (dispatched, still_open) == (1, True)
+    dispatch.assert_called_once()
+    assert dispatch.call_args.args[0].number == 42
+
+
+def test_watcher_ends_when_the_pr_is_merged_or_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    dispatch = MagicMock()
+    pr = _pr()
+    pr.state = "closed"
+    dispatched, still_open = _watch(monkeypatch, pr, (_thread("thread-one", 1),), dispatch)
+    assert (dispatched, still_open) == (0, False)
+    dispatch.assert_not_called()
+
+
+def test_watcher_refuses_a_pr_that_is_not_a_release_pr(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pointed at the wrong PR, the watcher must fail where someone sees it,
+    # not poll quietly for an hour.
+    pr = _pr()
+    pr.head.ref = "feature/not-a-release"
+    with pytest.raises(ReviewRefused):
+        _watch(monkeypatch, pr, (), MagicMock())
+
+
+def test_watch_main_reports_whether_to_keep_watching(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    calls: list[tuple[str, int]] = []
+
+    def fake_poll_pr(_gh, _gql, *, repo_full_name, number, **_kwargs):
+        calls.append((repo_full_name, number))
+        return 0, False
+
+    monkeypatch.setattr("scripts.release_notes.review_poll.poll_pr", fake_poll_pr)
+    monkeypatch.setattr("scripts.release_notes.review_poll.Github", lambda **_kwargs: MagicMock())
+    monkeypatch.setattr("scripts.release_notes.review_poll.GitHubGraphQLClient", lambda _token: MagicMock())
+    monkeypatch.setattr("scripts.release_notes.review_poll.dispatch_release_review", lambda _gh: MagicMock())
+    output = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_TOKEN", "t")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_APP_SLUG", "valkeyrie-ops")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS", "300")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS", "3300")
+
+    assert poll_main(["--repo", "valkey", "--pr", "42"]) == 0
+    # A closed PR ends the watch on the first pass: no sustained loop, no restart.
+    assert calls == [("valkey-io/valkey", 42)]
+    assert output.read_text() == "continue=false\n"
+
+
+def test_watch_main_rejects_half_an_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_TOKEN", "t")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_APP_SLUG", "valkeyrie-ops")
+    monkeypatch.setattr("scripts.release_notes.review_poll.Github", lambda **_kwargs: MagicMock())
+    monkeypatch.setattr("scripts.release_notes.review_poll.GitHubGraphQLClient", lambda _token: MagicMock())
+    with pytest.raises(SystemExit):
+        poll_main(["--pr", "42"])
+    with pytest.raises(SystemExit):
+        poll_main(["--repo", "not-a-valkey-repo", "--pr", "42"])

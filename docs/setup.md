@@ -80,7 +80,7 @@ securing releases, including the tag ruleset.
 | CI Fix Issue Dispatch | every hour at :23, once switched on | [Fixing CI failures](ci-fix.md#fixing-detector-issues) |
 | Test Failure Detector | every day at 23:00 | [Test Failure Detector](test-failure-detector.md) |
 | Monitor Valkey Fuzzer Runs | every four hours at :41 | [Fuzzer monitor](fuzzer-monitor.md) |
-| Release Notes Review Poll | every hour, checking every five minutes | [Release notes](release-notes.md#applying-review-comments) |
+| Watch Release PR Reviews | one per release PR, started by the cut; checks every five minutes and restarts itself hourly until the PR closes | [Release notes](release-notes.md#applying-review-comments) |
 | Refresh Release Progress | every hour, checking every five minutes | [Release automation](release-automation.md) |
 | CVE Scan | Mondays at 06:00 | [CVE scan](cve-scan.md) |
 
@@ -93,7 +93,9 @@ workflows call.
 The workflows that check every few minutes do it inside one long-running
 job, because GitHub's scheduler often starts jobs late. The job stays alive
 for 55 minutes, which also keeps it inside the lifetime of its one-hour
-token. When you start one of them by hand, it checks once and stops.
+token. When you start one of the scheduled ones by hand, it checks once and
+stops. The review watcher is different: it always watches for the full 55
+minutes and then starts itself again, so starting it by hand resumes a watch.
 
 ## How every job is set up
 

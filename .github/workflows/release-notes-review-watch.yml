@@ -1,0 +1,154 @@
+name: Watch Release PR Reviews
+run-name: "${{ inputs.stop && 'Stop watching' || 'Watch' }} ${{ inputs.repo }}#${{ inputs.pr }} reviews"
+
+# One watcher per release PR. The cut starts it when it opens the PR; it
+# checks that one PR every five minutes for 55 minutes (the App token's
+# lifetime), then starts itself again, and ends on its own once the PR is
+# merged or closed. Start it by hand to resume a lost watch, or with
+# `stop: true` to cancel the running watcher for that PR.
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Repository of the release PR (valkey-io org)"
+        required: true
+        type: choice
+        default: valkey
+        options:
+          - valkey
+          - valkey-search
+          - valkey-json
+          - valkey-bloom
+      pr:
+        description: "Release pull request number"
+        required: true
+        type: string
+      stop:
+        description: "Stop watching this PR instead of starting"
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  stop:
+    name: Stop the watcher
+    if: >-
+      inputs.stop &&
+      github.repository == 'valkey-io/valkey-ci-agent' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Validate the PR number
+        env:
+          PR: ${{ inputs.pr }}
+        run: |
+          [[ "$PR" =~ ^[1-9][0-9]*$ ]] || { echo "pr must be a positive integer" >&2; exit 1; }
+
+      - name: Cancel every live watcher run for this PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "Watch ${{ inputs.repo }}#${{ inputs.pr }} reviews"
+        run: |
+          set -euo pipefail
+          ids=$(gh run list -R "$GITHUB_REPOSITORY" --workflow release-notes-review-watch.yml \
+            --limit 100 --json databaseId,displayTitle,status \
+            --jq '.[] | select(.displayTitle == $ENV.TITLE and (.status == "in_progress" or .status == "queued" or .status == "pending" or .status == "waiting" or .status == "requested")) | .databaseId')
+          if [[ -z "$ids" ]]; then
+            echo "No watcher is running for $TITLE"
+            exit 0
+          fi
+          for id in $ids; do
+            echo "Cancelling run $id"
+            gh run cancel -R "$GITHUB_REPOSITORY" "$id"
+          done
+
+  watch:
+    name: Watch release-note review comments
+    if: >-
+      !inputs.stop &&
+      github.repository == 'valkey-io/valkey-ci-agent' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    concurrency:
+      group: release-notes-review-watch-${{ inputs.repo }}-${{ inputs.pr }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      # Starting the next hour's watcher for the same PR.
+      actions: write
+    steps:
+      - name: Validate the PR number
+        env:
+          PR: ${{ inputs.pr }}
+        run: |
+          [[ "$PR" =~ ^[1-9][0-9]*$ ]] || { echo "pr must be a positive integer" >&2; exit 1; }
+
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Generate App token
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: |
+            ${{ inputs.repo }}
+            valkey-ci-agent
+          # actions:write dispatches Address Release Note Reviews, which
+          # accepts only the App as its sender.
+          permission-actions: write
+          permission-members: read
+          permission-pull-requests: write
+          permission-metadata: read
+
+      - name: Watch and dispatch
+        id: watch
+        env:
+          RELEASE_NOTES_REVIEW_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_NOTES_REVIEW_APP_SLUG: ${{ steps.token.outputs.app-slug }}
+          RELEASE_NOTES_REVIEW_REPO: ${{ inputs.repo }}
+          RELEASE_NOTES_REVIEW_PR: ${{ inputs.pr }}
+          RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS: "300"
+          RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS: "3300"
+        run: |
+          python3 -m scripts.release_notes.review_poll \
+            --repo "$RELEASE_NOTES_REVIEW_REPO" --pr "$RELEASE_NOTES_REVIEW_PR"
+
+      - name: Keep watching
+        if: ${{ steps.watch.outputs.continue == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ inputs.repo }}
+          PR: ${{ inputs.pr }}
+          TITLE: "Watch ${{ inputs.repo }}#${{ inputs.pr }} reviews"
+        run: |
+          set -euo pipefail
+          # A watcher someone started by hand, or one the cut started after a
+          # re-run, may already be waiting on the concurrency group.
+          waiting=$(gh run list -R "$GITHUB_REPOSITORY" --workflow release-notes-review-watch.yml \
+            --limit 100 --json databaseId,displayTitle,status \
+            --jq '[.[] | select(.displayTitle == $ENV.TITLE and (.status == "queued" or .status == "pending" or .status == "waiting" or .status == "requested"))] | length')
+          if [[ "$waiting" != "0" ]]; then
+            echo "A watcher for $TITLE is already waiting; not starting another"
+            exit 0
+          fi
+          gh workflow run release-notes-review-watch.yml -R "$GITHUB_REPOSITORY" \
+            --ref "$GITHUB_REF_NAME" -f "repo=$REPO" -f "pr=$PR"
+          echo "Started the next watcher for $TITLE"

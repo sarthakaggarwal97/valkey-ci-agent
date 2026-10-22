@@ -345,3 +345,58 @@ def test_failed_create_logs_the_tag_and_what_recovery_saw(
     assert f"Created tag 9.1.2 at {SHA}" in messages
     assert any("Creating release 9.1.2 raised" in m for m in messages)
     assert any("No release 9.1.2 exists after the failed create" in m for m in messages)
+
+
+def _prepare(monkeypatch: pytest.MonkeyPatch, repo, *, branch: str = "9.1", intent: str = "patch"):
+    from scripts.release.models import ReleaseIntent
+
+    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *_args, **_kwargs: None)
+    return publish_mod.prepare_release(
+        _gh(repo), POLICY, branch=branch, intent=ReleaseIntent(intent), actor="alice"
+    )
+
+
+def test_prepare_derives_the_next_patch_when_the_line_moved(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo()
+    repo.get_tags.return_value = [SimpleNamespace(name="9.1.2"), SimpleNamespace(name="9.1.1")]
+    repo.compare.return_value = SimpleNamespace(total_commits=3)
+    release = _prepare(monkeypatch, repo)
+    assert release.tag == "9.1.3"
+    repo.compare.assert_called_once_with("9.1.2", "9.1")
+
+
+def test_prepare_refuses_a_line_with_nothing_since_its_last_release(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 8.0 and 8.1 had zero commits since 8.0.11 / 8.1.10 while their backport
+    # sweeps were still open: the notes PR would have been an empty section
+    # plus a version bump. Refuse up front with the fix in the message.
+    repo = _repo()
+    repo.get_tags.return_value = [SimpleNamespace(name="9.1.2")]
+    repo.compare.return_value = SimpleNamespace(total_commits=0)
+    with pytest.raises(publish_mod.ReleaseError, match="no commits since 9.1.2.*merge the pending backports"):
+        _prepare(monkeypatch, repo)
+
+
+def test_prepare_rc1_has_no_same_line_baseline_to_compare(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo()
+    repo.get_tags.return_value = [SimpleNamespace(name="9.1.2")]
+    policy = ReleasePolicy(**{**POLICY.__dict__, "branches": ("9.2",)})
+    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *_args, **_kwargs: None)
+    from scripts.release.models import ReleaseIntent
+
+    release = publish_mod.prepare_release(
+        _gh(repo), policy, branch="9.2", intent=ReleaseIntent("rc"), actor="alice"
+    )
+    assert release.tag == "9.2.0-rc1"
+    repo.compare.assert_not_called()
+
+
+def test_prepare_rc2_compares_with_rc1(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo()
+    repo.get_tags.return_value = [SimpleNamespace(name="9.2.0-rc1")]
+    repo.compare.return_value = SimpleNamespace(total_commits=0)
+    policy = ReleasePolicy(**{**POLICY.__dict__, "branches": ("9.2",)})
+    monkeypatch.setattr(publish_mod, "ensure_authorized", lambda *_args, **_kwargs: None)
+    from scripts.release.models import ReleaseIntent
+
+    with pytest.raises(publish_mod.ReleaseError, match="no commits since 9.2.0-rc1"):
+        publish_mod.prepare_release(_gh(repo), policy, branch="9.2", intent=ReleaseIntent("rc"), actor="alice")

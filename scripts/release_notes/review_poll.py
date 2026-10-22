@@ -1,7 +1,12 @@
-"""Poll automated release PRs and dispatch one batch per PR."""
+"""Poll automated release PRs and dispatch one batch per PR.
+
+Run with ``--repo`` and ``--pr`` it watches one release PR (the per-PR watcher
+workflow); without them it scans every open PR of every supported repository.
+"""
 
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 from collections.abc import Callable
@@ -39,6 +44,70 @@ _ADDRESSING_LEASE = timedelta(minutes=90)
 DispatchFn = Callable[[ReleasePR, int], None]
 
 
+def _authorizer(
+    gh: Github,
+    authorize: Callable[[str], bool] | None,
+    org: str,
+    team_slug: str,
+) -> Callable[[str], bool]:
+    auth_cache: dict[str, bool] = {}
+
+    def authorized(login: str) -> bool:
+        if login not in auth_cache:
+            auth_cache[login] = (
+                authorize(login)
+                if authorize is not None
+                else is_authorized(gh, org, team_slug, login)
+            )
+        return auth_cache[login]
+
+    return authorized
+
+
+def poll_pr(
+    gh: Github,
+    gql: GitHubGraphQLClient,
+    *,
+    repo_full_name: str,
+    number: int,
+    bot_login: str,
+    dispatch: DispatchFn,
+    authorize: Callable[[str], bool] | None = None,
+    org: str = "valkey-io",
+    team_slug: str = "contributors",
+) -> tuple[int, bool]:
+    """Process one release PR; return (batches dispatched, PR still open).
+
+    A closed or merged PR ends the watch (``False``). Any other reason the PR
+    is not a release PR raises :class:`ReviewRefused`, because a watcher
+    pointed at the wrong PR should fail where someone sees it rather than
+    poll for an hour.
+    """
+    repo = retry_github_call(
+        lambda: gh.get_repo(repo_full_name),
+        retries=3,
+        description=f"get release-review repository {repo_full_name}",
+    )
+    pr = retry_github_call(
+        lambda: repo.get_pull(number),
+        retries=3,
+        description=f"get {repo_full_name}#{number}",
+    )
+    if str(getattr(pr, "state", "")).lower() != "open":
+        logger.info("%s#%s is %s; the watch ends", repo_full_name, number, getattr(pr, "state", "?"))
+        return 0, False
+    release = validate_release_pr(pr, repo_full_name)
+    dispatched = _process_pr(
+        pr,
+        release,
+        gql,
+        bot_login=bot_login,
+        authorized=_authorizer(gh, authorize, org, team_slug),
+        dispatch=dispatch,
+    )
+    return (1 if dispatched else 0), True
+
+
 def poll_once(
     gh: Github,
     gql: GitHubGraphQLClient,
@@ -52,17 +121,7 @@ def poll_once(
 ) -> int:
     """Scan all open PRs and dispatch every complete actionable batch."""
 
-    auth_cache: dict[str, bool] = {}
-
-    def authorized(login: str) -> bool:
-        if login not in auth_cache:
-            auth_cache[login] = (
-                authorize(login)
-                if authorize is not None
-                else is_authorized(gh, org, team_slug, login)
-            )
-        return auth_cache[login]
-
+    authorized = _authorizer(gh, authorize, org, team_slug)
     dispatched = 0
     for repo_full_name in repositories:
         try:
@@ -305,13 +364,70 @@ def dispatch_release_review(
     return dispatch
 
 
-def main() -> int:
+def _write_outputs(values: dict[str, str]) -> None:
+    path = os.environ.get("GITHUB_OUTPUT", "")
+    if not path:
+        return
+    with open(path, "a", encoding="utf-8") as output:
+        for key, value in values.items():
+            if "\n" in value or "\r" in value:
+                raise ValueError(f"multiline workflow output refused for {key}")
+            output.write(f"{key}={value}\n")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", default=os.environ.get("RELEASE_NOTES_REVIEW_REPO", ""),
+                        help="Watch one repository's release PR (name or owner/name); needs --pr")
+    parser.add_argument("--pr", type=int, default=0, help="Number of the release PR to watch")
+    args = parser.parse_args(argv)
+
     configure_logging()
     token = os.environ["RELEASE_NOTES_REVIEW_TOKEN"]
     gh = Github(auth=Auth.Token(token))
     gql = GitHubGraphQLClient(token)
     bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
     dispatch = dispatch_release_review(gh)
+    interval = env_seconds("RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS", 0, minimum=0)
+    duration = env_seconds(
+        "RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS", 0, minimum=0, maximum=_MAX_LOOP_SECONDS
+    )
+
+    if args.repo or args.pr:
+        if not (args.repo and args.pr > 0):
+            parser.error("--repo and --pr go together")
+        repo_full_name = args.repo if "/" in args.repo else f"valkey-io/{args.repo}"
+        if repo_full_name not in REPOSITORIES:
+            parser.error(f"unsupported repository: {args.repo}")
+        state = {"open": True}
+
+        def watch_once() -> int:
+            dispatched, still_open = poll_pr(
+                gh, gql, repo_full_name=repo_full_name, number=args.pr,
+                bot_login=bot_login, dispatch=dispatch,
+            )
+            state["open"] = still_open
+            return dispatched
+
+        # The first pass runs outside the loop so a watcher pointed at a PR
+        # that is not a release PR fails here, with the reason, instead of
+        # logging the same refusal every five minutes for an hour.
+        results = [watch_once()]
+        if state["open"] and interval > 0 and duration > 0:
+            results += run_poll_loop(
+                watch_once,
+                interval_seconds=interval,
+                duration_seconds=duration,
+                until=lambda _dispatched: not state["open"],
+                logger=logger,
+            )
+        _write_outputs({"continue": "true" if state["open"] else "false"})
+        logger.info(
+            "%s#%d: dispatched %d release-review batch(es) across %d pass(es); %s",
+            repo_full_name, args.pr, sum(results), len(results),
+            "still open, the watch continues" if state["open"] else "closed, the watch ends",
+        )
+        return 0
 
     results = run_poll_loop(
         lambda: poll_once(
@@ -321,17 +437,8 @@ def main() -> int:
             bot_login=bot_login,
             dispatch=dispatch,
         ),
-        interval_seconds=env_seconds(
-            "RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS",
-            0,
-            minimum=0,
-        ),
-        duration_seconds=env_seconds(
-            "RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS",
-            0,
-            minimum=0,
-            maximum=_MAX_LOOP_SECONDS,
-        ),
+        interval_seconds=interval,
+        duration_seconds=duration,
         logger=logger,
     )
     logger.info(

@@ -760,9 +760,9 @@ def cut(
     :func:`_hold_reasons`) opens its release PR as a draft, which GitHub
     refuses to merge, holding the release line until a maintainer resolves what was
     flagged and marks it ready. Set *force_ready* to open the PR ready for review
-    regardless (the banner records that the flags were overridden), except for
-    security signals, which are human-owned and hold the PR as a draft even under
-    *force_ready* (see :func:`_should_hold`). A clean cut always opens ready.
+    regardless: the banner records that the flags were overridden, and a security
+    signal gets the loudest banner so a reviewer settles it before merging (see
+    :func:`_should_hold`). A clean cut always opens ready.
 
     By default a bullet whose source PR another release line already published a
     note for takes that line's published wording verbatim, so one backported
@@ -976,10 +976,22 @@ def cut(
             release_owner=release_owner,
         )
         log_outcome(logger, logging.INFO, "Release notes PR for %s: %s", version, release_url)
+        _write_pr_outputs(release_url)
 
         return 0
     finally:
         run_git(source_clone_dir, "worktree", "remove", "--force", dest_dir)
+
+
+def _write_pr_outputs(release_url: str) -> None:
+    """Hand the PR's number and URL to the workflow, which starts its review watcher."""
+    path = os.environ.get("GITHUB_OUTPUT", "")
+    match = re.search(r"/pull/(\d+)/?$", release_url or "")
+    if not path or match is None:
+        return
+    with open(path, "a", encoding="utf-8") as output:
+        output.write(f"pr_number={match.group(1)}\n")
+        output.write(f"pr_url={release_url}\n")
 
 
 def _print_dry_run(
@@ -992,14 +1004,14 @@ def _print_dry_run(
     print(f"target branch: {plan.target}  base: {plan.base_ref}")
     # Preview the hold decision the real cut would make: a draft PR (held) when any
     # reviewer-facing signal fired and force_ready was not set, else opened ready.
-    # Security signals hold even under force_ready (see _should_hold).
+    # Security signals are called out separately (see _hold_banner).
     hold_reasons = _hold_reasons(plan, notes_meta)
     security_holds = _security_hold_reasons(hold_reasons)
     if hold_reasons and not force_ready:
         print(f"PR would open: DRAFT (held) - {len(hold_reasons)} item(s): {'; '.join(hold_reasons)}")
     elif security_holds:
-        print(f"PR would open: DRAFT (held) - force_ready cannot override "
-              f"{len(security_holds)} security item(s): {'; '.join(security_holds)}")
+        print(f"PR would open: ready (force_ready) with {len(security_holds)} unresolved "
+              f"security item(s) a reviewer must settle: {'; '.join(security_holds)}")
     elif hold_reasons:
         print(f"PR would open: ready (force_ready overrides {len(hold_reasons)} flagged item(s))")
     else:
@@ -1126,7 +1138,7 @@ def _commit_push_release_pr(
 
     When those signals name anything a maintainer should address first (see
     :func:`_hold_reasons`), the PR is opened as a draft to hold the merge,
-    unless *force_ready* overrides that. The same reasons lead the body as a
+    unless *force_ready* overrides that (every reason). The same reasons lead the body as a
     banner. On re-dispatch, the draft state is reconciled to this cut's decision,
     so clearing the flagged items and re-cutting flips a held PR ready on its own.
     """
@@ -1295,9 +1307,11 @@ def _hold_reasons(plan: BranchPlan, notes_meta: "_NotesMeta") -> list[str]:
 
 
 # Hold reasons that name a security signal. Security classification is
-# human-owned: these survive ``force_ready``, so no dispatch input can open a
-# cut ready while a security question is unresolved. Labels must match
-# _hold_reasons verbatim.
+# human-owned: ``force_ready`` still opens the PR ready (a release run by
+# Prepare Release must never wait on a draft nobody notices), but these get a
+# CAUTION banner rather than a NOTE, because a CVE fix shipping as a plain
+# bullet is exactly the mistake a reviewer must not click past. Labels must
+# match _hold_reasons verbatim.
 _SECURITY_HOLD_REASONS = frozenset({
     "release impact may require higher urgency or security treatment",
     "a PR names a CVE (needs SECURITY urgency and a Security Fixes entry)",
@@ -1308,21 +1322,17 @@ _SECURITY_HOLD_REASONS = frozenset({
 
 
 def _security_hold_reasons(reasons: Sequence[str]) -> list[str]:
-    """The subset of *reasons* that ``force_ready`` must not override."""
+    """The subset of *reasons* the banner must shout about under ``force_ready``."""
     return [r for r in reasons if r in _SECURITY_HOLD_REASONS]
 
 
 def _should_hold(reasons: Sequence[str], force_ready: bool) -> bool:
     """Whether the release PR opens as a draft.
 
-    Any reason holds by default; ``force_ready`` overrides all of them except
-    security signals, which only resolving the signal (and re-cutting) clears.
+    Any reason holds by default; ``force_ready`` overrides all of them. The
+    reasons still lead the body, and a security one gets the CAUTION banner.
     """
-    if not reasons:
-        return False
-    if not force_ready:
-        return True
-    return bool(_security_hold_reasons(reasons))
+    return bool(reasons) and not force_ready
 
 
 def _hold_banner(reasons: Sequence[str], force_ready: bool) -> str:
@@ -1331,10 +1341,10 @@ def _hold_banner(reasons: Sequence[str], force_ready: bool) -> str:
     Returns "" on a clean cut (no reasons). When reasons exist, the banner tells a
     reviewer either that the PR was held as a draft (the default) or that it was
     opened ready despite the flags because the cut was dispatched with
-    ``force_ready``. Security signals are exempt from ``force_ready`` (see
-    :func:`_should_hold`): when one fired, the banner records that the PR stayed a
-    draft and why. Either way it lists the flagged items so the decision is
-    visible without scrolling the sections below.
+    ``force_ready``. When a security signal fired under ``force_ready`` the
+    banner is a CAUTION naming it first, because the PR can be merged as it
+    stands. Either way it lists the flagged items so the decision is visible
+    without scrolling the sections below.
     """
     if not reasons:
         return ""
@@ -1344,12 +1354,14 @@ def _hold_banner(reasons: Sequence[str], force_ready: bool) -> str:
     security_holds = _security_hold_reasons(reasons)
     if force_ready and security_holds:
         sec_items = "; ".join(security_holds)
+        count = len(security_holds)
         return (
-            "> [!WARNING]\n"
-            f"> **Held as a draft despite `force_ready`.** Security classification is "
-            f"human-owned, so `force_ready` cannot override: {sec_items}. Resolve the "
-            f"security {'item' if len(security_holds) == 1 else 'items'} and re-cut to "
-            f"open ready. All {n} flagged {plural}: {items}.\n\n"
+            "> [!CAUTION]\n"
+            f"> **Opened ready with {count} unresolved security "
+            f"{'item' if count == 1 else 'items'}** (`force_ready` was set): {sec_items}. "
+            "Security classification is human-owned: settle the urgency and the "
+            "Security Fixes entries (re-run the cut with them, or edit through review "
+            f"comments) before merging. All {n} flagged {plural}: {items}.\n\n"
         )
     if force_ready:
         return (
