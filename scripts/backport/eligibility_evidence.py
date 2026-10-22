@@ -207,6 +207,9 @@ def _ordered_unique(items: Iterable[str]) -> list[str]:
 
 
 _MAX_SITE_CHARS = 120
+# A site shorter than this, or with no identifier, matches nearly any tree
+# ("}", "0", "->"), so it proves nothing about a branch.
+_MIN_SITE_CHARS = 4
 # Files compared whitespace-insensitively when the site is searched tree-wide.
 _MAX_SITE_FILES = 20
 _SITE_WORD_RE = re.compile(r"[A-Za-z_]\w{2,}")
@@ -219,11 +222,16 @@ def site_present(repo_dir: str, branch_ref: str, path: str, symbol: str) -> bool
     so 7.2 spells ``strchr(c->querybuf + c->qb_pos, '\\n')`` without spaces.
     *symbol* is model output read from untrusted PR text, so it is only ever
     a fixed-string ``git grep`` pattern or a plain substring. Returns None
-    when the site cannot be checked: empty, multi-line, or overlong, or git
-    could not answer.
+    when the site cannot be checked: empty, too short to mean anything,
+    without an identifier, multi-line, or overlong, or git could not answer.
     """
     symbol = symbol.strip()
-    if not symbol or "\n" in symbol or len(symbol) > _MAX_SITE_CHARS:
+    if (
+        "\n" in symbol
+        or len(symbol) > _MAX_SITE_CHARS
+        or len("".join(symbol.split())) < _MIN_SITE_CHARS
+        or not _SITE_WORD_RE.search(symbol)
+    ):
         return None
     paths: list[str] = []
     try:

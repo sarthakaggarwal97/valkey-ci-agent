@@ -127,9 +127,12 @@ first.
 
 Deciding what to backport is still a maintainer's call, but it is easy to miss
 a fix. Every day at 00:30 UTC the agent looks at the PRs merged to `unstable`
-over the last three days and comments on the ones that look like backport
-candidates. The three-day window means a day that fails is covered by the
-next run, and a PR that already has a comment is skipped.
+over the last seven days and comments on the ones that look like backport
+candidates. The seven-day window means days that fail, or that GitHub skips,
+are covered by a later run. Each PR is judged only once: a run reads the
+results earlier runs saved and reuses their decision when the PR's merge
+commit and the released branches are unchanged. A PR that already has a
+comment is skipped, and so is one whose comment a maintainer deleted.
 
 To make the suggestion, the agent first works out which release branches
 contain the code the PR changes. It runs `git blame` on the lines the PR
@@ -142,9 +145,15 @@ that line, and a PR that only adds new files is never suggested at all.
 Claude then reads the diff and the list of candidate branches and decides
 whether the change is worth backporting, and to which of those branches. It
 can narrow the list but never add to it. The agent posts one comment per PR
-naming the branches and their boards. If it can't reach a decision about a PR,
-it posts nothing for that PR and marks the run as failed, so the next day's
-run tries again.
+naming the branches and their boards, and only when Claude is highly
+confident. PRs that change only tests, CI, or docs are never suggested. If it
+can't reach a decision about a PR, it posts nothing for that PR and marks the
+run as failed, so the next day's run tries again.
+
+Each comment it posts, and each PR that needs a maintainer to look by hand,
+also appears as an annotation on the workflow run. The run's job summary
+lists every PR with its outcome, including the lower-confidence suggestions
+that were not commented.
 
 ## Running things by hand
 
@@ -189,8 +198,9 @@ gh workflow run backport-ci-followup.yml --repo valkey-io/valkey-ci-agent \
 ```
 
 To look at backport suggestions for an earlier window, give the last day and
-how many days to cover. With `dry_run=true` the verdicts go to the job summary
-and no comments are posted:
+how many days to cover. A manual run is a dry run unless you set
+`dry_run=false`: the verdicts go to the job summary and no comments are
+posted. PRs named with `prs` are always judged afresh:
 
 ```bash
 gh workflow run backport-eligibility.yml --repo valkey-io/valkey-ci-agent \

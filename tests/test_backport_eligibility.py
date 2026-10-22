@@ -145,7 +145,7 @@ class TestTraceOrigins:
         assert eligibility.trace_origins(clone, _pr(103, upstream["shas"][103]), ["9.1"]) == ()
 
     def test_too_large_to_blame_is_unknown(self, clone, upstream, monkeypatch):
-        monkeypatch.setattr(code_age, "_MAX_FILES", 0)
+        monkeypatch.setattr(eligibility, "_MAX_TRACED_FILES", 0)
         with pytest.raises(eligibility.OriginsUnknown):
             eligibility.trace_origins(clone, _pr(101, upstream["shas"][101]), ["9.1"])
 
@@ -584,7 +584,7 @@ def _model(verdicts: list[dict[str, Any]], prompts: list[str] | None = None):
     # cite a failure site every fixture branch has.
     verdicts = [
         {"confidence": "high", **v, "branches": [
-            {"branch": b, "failure_site": {"file": "", "symbol": "int"}} if isinstance(b, str) else b
+            {"branch": b, "failure_site": {"file": "", "symbol": "int a;"}} if isinstance(b, str) else b
             for b in v.get("branches", [])
         ]}
         for v in verdicts
@@ -1082,9 +1082,16 @@ def test_verify_sites_ignores_whitespace(clone):
     assert eligibility.verify_sites(clone, _verdict(("9.1", "feat.c", "int f(int)"))).branches == ()
 
 
+@pytest.mark.parametrize("symbol", ["}", "0", "->", "int", "  ;  ", "a b", ".*"])
+def test_verify_sites_a_trivial_site_proves_nothing(clone, symbol):
+    # A site that matches nearly any tree is unchecked: kept, but never commented.
+    verdict = eligibility.verify_sites(clone, _verdict(("9.0", "old.c", symbol)))
+    assert verdict.branches == ("9.0",) and verdict.confidence == "medium"
+
+
 def test_verify_sites_patterns_are_fixed_strings(clone):
     # A regex or option-looking site matches only itself, literally.
-    for symbol in (".*", "--all-match", "int [a-c];"):
+    for symbol in ("--all-match", "int [a-c];"):
         assert eligibility.verify_sites(clone, _verdict(("9.0", "", symbol))).branches == ()
 
 
@@ -1234,3 +1241,191 @@ def test_run_caps_performance_or_tradeoff_fixes_at_medium(wired, labels, body):
     assert wired.posted == []
 
 
+
+
+# -- Judging each PR once -------------------------------------------------
+
+
+def _prior_file(tmp_path: Path, result: dict[str, Any], name: str = "r.json") -> Path:
+    path = tmp_path / name
+    path.write_text(json.dumps(result))
+    return path
+
+
+def _first_run(wired, tmp_path: Path, *, dry_run: bool, verdict: dict[str, Any]) -> Path:
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t", dry_run=dry_run,
+        run_fn=_model([verdict]),
+    )
+    assert result["version"] == eligibility.RESULT_VERSION
+    assert result["released_branches"] == ["9.1", "9.0"]
+    return _prior_file(tmp_path, result)
+
+
+def _never_called(prompt: str, **kwargs: Any) -> tuple[str, str, int]:
+    raise AssertionError("the model was asked again")
+
+
+def test_run_does_not_judge_a_pr_an_earlier_run_settled(wired, tmp_path):
+    path = _first_run(wired, tmp_path, dry_run=False, verdict={
+        "pr": 101, "backport": True, "confidence": "medium", "branches": ["9.1"], "reason": "maybe",
+    })
+    prior = eligibility.load_prior_results([path], "org/core")
+    result = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-13", token="t", run_fn=_never_called, prior=prior,
+    )
+    entry = result["prs"]["101"]
+    assert entry["action"] == "not-commented" and entry["confidence"] == "medium"
+    assert entry["judged_on"] == json.loads(path.read_text())["judged_at"][:10]
+    assert result["errors"] == [] and wired.posted == []
+    # The copy is itself reusable by the run after.
+    again = eligibility.load_prior_results([_prior_file(tmp_path, result, "s.json")], "org/core")
+    assert again[101].result["action"] == "not-commented"
+
+
+def test_run_judges_again_when_the_merge_commit_changed(wired, tmp_path):
+    path = _first_run(wired, tmp_path, dry_run=False, verdict={
+        "pr": 101, "backport": False, "reason": "Refactor."})
+    data = json.loads(path.read_text())
+    data["merge_shas"]["101"] = "0" * 40
+    prior = eligibility.load_prior_results([_prior_file(tmp_path, data)], "org/core")
+    prompts: list[str] = []
+    eligibility.run(
+        repo_entry=wired.entry, date="2026-10-13", token="t", prior=prior,
+        run_fn=_model([{"pr": 101, "backport": False, "reason": "r"}], prompts),
+    )
+    assert len(prompts) == 1
+
+
+def test_run_judges_again_when_the_released_branches_changed(wired, tmp_path):
+    path = _first_run(wired, tmp_path, dry_run=False, verdict={
+        "pr": 101, "backport": False, "reason": "Refactor."})
+    data = json.loads(path.read_text())
+    data["released_branches"] = ["9.0"]
+    prior = eligibility.load_prior_results([_prior_file(tmp_path, data)], "org/core")
+    prompts: list[str] = []
+    eligibility.run(
+        repo_entry=wired.entry, date="2026-10-13", token="t", prior=prior,
+        run_fn=_model([{"pr": 101, "backport": False, "reason": "r"}], prompts),
+    )
+    assert len(prompts) == 1
+
+
+def test_a_dry_run_suggestion_is_commented_by_the_next_live_run(wired, tmp_path):
+    path = _first_run(wired, tmp_path, dry_run=True, verdict={
+        "pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."})
+    prior = eligibility.load_prior_results([path], "org/core")
+    # Another dry run reuses it.
+    dry = eligibility.run(repo_entry=wired.entry, date="2026-10-13", token="t", dry_run=True,
+                          run_fn=_never_called, prior=prior)
+    assert dry["prs"]["101"]["action"] == "would-comment"
+    # A live run judges it again, and comments.
+    live = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-13", token="t", prior=prior,
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
+    )
+    assert live["prs"]["101"]["action"] == "commented"
+    assert [number for number, _ in wired.posted] == [101]
+
+
+def test_run_judges_an_undecided_pr_again(wired, tmp_path):
+    first = eligibility.run(repo_entry=wired.entry, date="2026-10-12", token="t", run_fn=_model([]))
+    assert first["prs"]["101"]["action"] == "undecided"
+    prior = eligibility.load_prior_results([_prior_file(tmp_path, first)], "org/core")
+    prompts: list[str] = []
+    eligibility.run(
+        repo_entry=wired.entry, date="2026-10-13", token="t", prior=prior,
+        run_fn=_model([{"pr": 101, "backport": False, "reason": "r"}], prompts),
+    )
+    assert len(prompts) == 1
+
+
+def test_named_prs_are_judged_afresh(wired, tmp_path, monkeypatch):
+    path = _first_run(wired, tmp_path, dry_run=False, verdict={
+        "pr": 101, "backport": False, "reason": "Refactor."})
+    prior = eligibility.load_prior_results([path], "org/core")
+    monkeypatch.setattr(eligibility, "fetch_merged_prs", lambda *_, **__: (
+        [eligibility._pr_from_node(wired.nodes[0], "org")], []))
+    prompts: list[str] = []
+    eligibility.run(
+        repo_entry=wired.entry, date="2026-10-13", token="t", prior=prior, pr_numbers=[101],
+        run_fn=_model([{"pr": 101, "backport": False, "reason": "r"}], prompts),
+    )
+    assert len(prompts) == 1
+
+
+def test_load_prior_results_skips_other_versions_repos_and_garbage(tmp_path):
+    good = {"version": eligibility.RESULT_VERSION, "repo": "org/core", "judged_at": "2026-10-12T01:00:00+00:00",
+            "dry_run": False, "released_branches": ["9.1"],
+            "prs": {"7": {"action": "not-eligible"}}, "merge_shas": {"7": "a" * 40}}
+    newer = {**good, "judged_at": "2026-10-13T01:00:00+00:00", "prs": {"7": {"action": "triaged"}}}
+    paths = [
+        _prior_file(tmp_path, newer, "newer.json"),
+        _prior_file(tmp_path, good, "good.json"),
+        _prior_file(tmp_path, {**good, "version": None, "prs": {"8": {"action": "not-eligible"}}}, "old.json"),
+        _prior_file(tmp_path, {**good, "repo": "org/other", "prs": {"9": {"action": "x"}}}, "other.json"),
+    ]
+    (tmp_path / "broken.json").write_text("{not json")
+    prior = eligibility.load_prior_results([*paths, tmp_path / "broken.json"], "org/core")
+    assert set(prior) == {7}
+    assert prior[7].result["action"] == "triaged" and prior[7].judged_on == "2026-10-13"
+
+
+def test_annotations_escape_untrusted_text_and_skip_reused_prs():
+    lines = eligibility.workflow_annotations({"prs": {
+        "1": {"action": "commented", "branches": ["9.1"], "reason": "50% crash\n::error::x"},
+        "2": {"action": "needs-review", "detail": "could not trace"},
+        "3": {"action": "not-eligible", "detail": "refactor"},
+        "4": {"action": "commented", "branches": ["9.0"], "reason": "r", "judged_on": "2026-10-12"},
+    }})
+    assert lines == [
+        "::notice title=Backport suggested for #1::commented for 9.1: 50%25 crash%0A::error::x",
+        "::warning title=Backport eligibility #2::needs-review: could not trace",
+    ]
+
+
+def test_main_writes_output_and_reads_prior_results(monkeypatch, tmp_path, capsys):
+    prior_dir = tmp_path / "prior" / "123"
+    prior_dir.mkdir(parents=True)
+    (prior_dir / "backport-eligibility-result.json").write_text(json.dumps({
+        "version": eligibility.RESULT_VERSION, "repo": "valkey-io/valkey",
+        "judged_at": "2026-10-12T01:00:00+00:00", "prs": {"5": {"action": "not-eligible"}},
+        "merge_shas": {"5": "b" * 40},
+    }))
+    seen: dict[str, Any] = {}
+
+    def fake_run(**kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"repo": "valkey-io/valkey", "since": "2026-10-06", "date": "2026-10-12",
+                "dry_run": False, "prs": {"6": {"action": "commented", "branches": ["9.1"], "reason": "r"}},
+                "errors": []}
+
+    monkeypatch.setattr(eligibility, "load_registry", lambda _: SimpleNamespace(get_repo=lambda _: None))
+    monkeypatch.setattr(eligibility, "emit_job_summary", lambda _: None)
+    monkeypatch.setattr(eligibility, "run", fake_run)
+    out = tmp_path / "result.json"
+    monkeypatch.setattr("sys.argv", ["eligibility", "--date", "2026-10-12", "--target-token", "t",
+                                     "--prior-results", str(tmp_path / "prior"), "--output", str(out)])
+    eligibility.main()
+    assert set(seen["prior"]) == {5} and seen["days"] == 7
+    assert json.loads(out.read_text())["prs"]["6"]["action"] == "commented"
+    assert "::notice title=Backport suggested for #6::commented for 9.1: r" in capsys.readouterr().out
+
+
+def test_a_deleted_comment_is_not_posted_again(wired, tmp_path):
+    first = eligibility.run(
+        repo_entry=wired.entry, date="2026-10-12", token="t",
+        run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
+    )
+    assert first["prs"]["101"]["action"] == "commented"
+    # The next run sees the marker; then a maintainer deletes the comment.
+    wired.nodes[0]["comments"] = {"nodes": [{"body": COMMENT_MARKER, "viewerDidAuthor": True}]}
+    second = eligibility.run(repo_entry=wired.entry, date="2026-10-13", token="t", run_fn=_never_called)
+    assert second["prs"]["101"] == {"action": "already-commented"}
+    del wired.nodes[0]["comments"]
+    prior = eligibility.load_prior_results(
+        [_prior_file(tmp_path, first, "1.json"), _prior_file(tmp_path, second, "2.json")], "org/core")
+    third = eligibility.run(repo_entry=wired.entry, date="2026-10-14", token="t",
+                            run_fn=_never_called, prior=prior)
+    assert third["prs"]["101"]["action"] == "commented" and "judged_on" in third["prs"]["101"]
+    assert [number for number, _ in wired.posted] == [101]
