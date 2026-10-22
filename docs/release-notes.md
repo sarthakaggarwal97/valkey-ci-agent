@@ -206,9 +206,16 @@ command. Every release PR has its own watcher, **Watch Release PR Reviews**,
 which the cut starts the moment it opens the PR. Each run holds one runner
 for 55 minutes and checks that one PR every five minutes from inside it, so
 GitHub's scheduler is never on the critical path. As soon as a run starts it
-queues the next hour's run, which takes over the moment the current one ends.
-The watch ends on its own once the PR is merged or closed. The Actions tab
-shows one run per PR, named after it.
+queues the next hour's run, which takes over the moment the current one ends,
+so a failure in one run cannot break the chain. The watch ends on its own
+once the PR is merged or closed. The Actions tab shows one run per PR, named
+after it.
+
+Two things bound this. A chain stops queueing itself once its PR is three
+days old, so a forgotten PR does not hold a runner around the clock; start
+the watcher by hand to keep going. And **Restart Release PR Watchers** runs
+every six hours and starts a watcher for any open release PR younger than
+that which has none, so a watcher whose run was lost comes back on its own.
 
 It collects every unresolved comment on the current notes from members of
 `valkey-io/contributors`, posts "Addressing N release-note review comments."

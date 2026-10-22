@@ -79,6 +79,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # The cut starts the PR's review watcher in this repository.
+      actions: write
     uses: ./.github/workflows/release-notes-cut.yml
     with:
       repo: ${{ inputs.repo }}

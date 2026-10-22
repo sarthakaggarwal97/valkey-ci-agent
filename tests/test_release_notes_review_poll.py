@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from scripts.common.polling import PollLoopError
 from scripts.release_notes.review import (
     ReviewComment,
     ReviewRefused,
@@ -18,11 +19,13 @@ from scripts.release_notes.review import (
     validate_release_pr,
 )
 from scripts.release_notes.review_poll import (
+    chain_allowed,
     dispatch_release_review,
     ensure_watcher,
     live_watcher_runs,
     poll_once,
     poll_pr,
+    restart_missing_watchers,
     stop_watcher,
 )
 from scripts.release_notes.review_poll import (
@@ -445,17 +448,48 @@ def test_stop_cancels_every_live_run_for_the_pr_only() -> None:
     other.cancel.assert_not_called()
 
 
-def _watch_main(monkeypatch: pytest.MonkeyPatch, *, still_open: bool) -> tuple[list, MagicMock]:
+def _watch_main(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    still_open: bool,
+    created_at: datetime | None = None,
+    first_pass_fails: bool = False,
+    argv: list[str] | None = None,
+) -> tuple[list, MagicMock]:
     calls: list[tuple[str, int]] = []
+    pr = SimpleNamespace(created_at=created_at or datetime.now(timezone.utc))
+
+    def fake_load(_gh, repo_full_name, number):
+        return (pr, MagicMock()) if still_open else None
 
     def fake_poll_pr(_gh, _gql, *, repo_full_name, number, **_kwargs):
         calls.append((repo_full_name, number))
+        if first_pass_fails and len(calls) == 1:
+            raise RuntimeError("GitHub hiccup")
         return 0, still_open
 
+    def fake_loop(once, *, until=None, **_kwargs):
+        # Two passes, like the real loop: a failed pass is swallowed and
+        # reported at the end, and `until` ends the loop early.
+        results = []
+        failed = False
+        for _ in range(2):
+            try:
+                results.append(once())
+            except Exception:  # noqa: BLE001 - mirrors run_poll_loop
+                failed = True
+                continue
+            if until is not None and until(results[-1]):
+                break
+        if failed:
+            raise PollLoopError(results=results, last_error=RuntimeError("GitHub hiccup"))
+        return results
+
     successor = MagicMock(return_value=True)
+    monkeypatch.setattr("scripts.release_notes.review_poll.load_release_pr", fake_load)
     monkeypatch.setattr("scripts.release_notes.review_poll.poll_pr", fake_poll_pr)
     monkeypatch.setattr("scripts.release_notes.review_poll.ensure_watcher", successor)
-    monkeypatch.setattr("scripts.release_notes.review_poll.run_poll_loop", lambda once, **_kw: [once()])
+    monkeypatch.setattr("scripts.release_notes.review_poll.run_poll_loop", fake_loop)
     monkeypatch.setattr("scripts.release_notes.review_poll.Github", lambda **_kwargs: MagicMock())
     monkeypatch.setattr("scripts.release_notes.review_poll.GitHubGraphQLClient", lambda _token: MagicMock())
     monkeypatch.setattr("scripts.release_notes.review_poll.dispatch_release_review", lambda _gh: MagicMock())
@@ -463,22 +497,112 @@ def _watch_main(monkeypatch: pytest.MonkeyPatch, *, still_open: bool) -> tuple[l
     monkeypatch.setenv("RELEASE_NOTES_REVIEW_APP_SLUG", "valkeyrie-ops")
     monkeypatch.setenv("RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS", "300")
     monkeypatch.setenv("RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS", "3300")
-    assert poll_main(["--repo", "valkey", "--pr", "42"]) == 0
+    if first_pass_fails:
+        with pytest.raises(PollLoopError):
+            poll_main(argv or ["--repo", "valkey", "--pr", "42"])
+    else:
+        assert poll_main(argv or ["--repo", "valkey", "--pr", "42"]) == 0
     return calls, successor
 
 
-def test_watch_main_queues_the_next_hour_then_keeps_polling(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_watch_main_queues_the_next_hour_before_polling(monkeypatch: pytest.MonkeyPatch) -> None:
     calls, successor = _watch_main(monkeypatch, still_open=True)
-    # First pass up front (fail fast), successor queued, then the sustained loop.
     assert calls == [("valkey-io/valkey", 42)] * 2
     successor.assert_called_once()
     assert successor.call_args.kwargs == {"successor": True}
 
 
+def test_watch_main_queues_the_next_hour_even_when_a_pass_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A transient API error must not break the chain silently: the successor
+    # is queued as soon as the PR is confirmed open, before any pass runs.
+    calls, successor = _watch_main(monkeypatch, still_open=True, first_pass_fails=True)
+    assert len(calls) == 2
+    successor.assert_called_once()
+
+
 def test_watch_main_ends_without_a_successor_when_the_pr_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     calls, successor = _watch_main(monkeypatch, still_open=False)
-    assert calls == [("valkey-io/valkey", 42)]
+    assert calls == []
     successor.assert_not_called()
+
+
+def test_watch_main_stops_queueing_once_the_pr_is_old(monkeypatch: pytest.MonkeyPatch) -> None:
+    old = datetime.now(timezone.utc) - timedelta(hours=73)
+    calls, successor = _watch_main(monkeypatch, still_open=True, created_at=old)
+    assert calls  # this hour still runs
+    successor.assert_not_called()
+    calls, successor = _watch_main(
+        monkeypatch, still_open=True, created_at=old,
+        argv=["--repo", "valkey", "--pr", "42", "--max-age-hours", "100"],
+    )
+    successor.assert_called_once()
+
+
+def test_watch_main_fails_fast_on_a_pr_that_is_not_a_release_pr(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(_gh, _repo, _number):
+        raise ReviewRefused("release PR does not use an agent/release-cut branch")
+
+    successor = MagicMock()
+    monkeypatch.setattr("scripts.release_notes.review_poll.load_release_pr", refuse)
+    monkeypatch.setattr("scripts.release_notes.review_poll.ensure_watcher", successor)
+    monkeypatch.setattr("scripts.release_notes.review_poll.Github", lambda **_kwargs: MagicMock())
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_TOKEN", "t")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS", "300")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS", "3300")
+    assert poll_main(["--repo", "valkey", "--pr", "42"]) == 1
+    successor.assert_not_called()
+
+
+def test_chain_age_is_measured_from_the_pr_creation() -> None:
+    now = datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)
+    young = SimpleNamespace(created_at=now - timedelta(hours=71))
+    old = SimpleNamespace(created_at=now - timedelta(hours=73))
+    naive = SimpleNamespace(created_at=(now - timedelta(hours=1)).replace(tzinfo=None))
+    assert chain_allowed(young, max_age_hours=72, now=now)
+    assert not chain_allowed(old, max_age_hours=72, now=now)
+    assert chain_allowed(naive, max_age_hours=72, now=now)
+    assert chain_allowed(SimpleNamespace(), max_age_hours=72, now=now)  # unknown age: keep watching
+
+
+def test_restart_starts_watchers_only_for_unwatched_young_release_prs(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = datetime.now(timezone.utc)
+    watched = _pr()
+    watched.number = 41
+    watched.created_at = now
+    unwatched = _pr()
+    unwatched.number = 42
+    unwatched.created_at = now
+    old = _pr()
+    old.number = 43
+    old.created_at = now - timedelta(hours=80)
+    not_a_release = _pr()
+    not_a_release.number = 44
+    not_a_release.created_at = now
+    not_a_release.head.ref = "feature/not-a-release"
+
+    gh = MagicMock()
+    gh.get_repo.return_value = SimpleNamespace(get_pulls=lambda **_kw: [watched, unwatched, old, not_a_release])
+    started: list[tuple[str, int]] = []
+
+    def fake_ensure(_gh, repo_name, number, *, successor, agent_repo):
+        assert successor is False
+        started.append((repo_name, number))
+        return number != 41  # 41 already has a watcher
+
+    monkeypatch.setattr("scripts.release_notes.review_poll.ensure_watcher", fake_ensure)
+    assert restart_missing_watchers(gh, repositories=("valkey-io/valkey",)) == 1
+    assert started == [("valkey", 41), ("valkey", 42)]
+
+
+def test_restart_mode_takes_no_pr(monkeypatch: pytest.MonkeyPatch) -> None:
+    restarted = MagicMock(return_value=0)
+    monkeypatch.setattr("scripts.release_notes.review_poll.restart_missing_watchers", restarted)
+    monkeypatch.setattr("scripts.release_notes.review_poll.Github", lambda **_kwargs: MagicMock())
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_TOKEN", "t")
+    assert poll_main(["--restart-missing"]) == 0
+    assert restarted.call_args.kwargs == {"max_age_hours": 72}
+    with pytest.raises(SystemExit):
+        poll_main(["--restart-missing", "--repo", "valkey", "--pr", "1"])
 
 
 def test_start_and_stop_modes_touch_only_the_watcher(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -113,6 +113,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # The cut starts the PR's review watcher in this repository.
+      actions: write
     uses: ./.github/workflows/release-notes-cut.yml
     secrets: inherit
     with:
@@ -123,8 +125,8 @@ jobs:
       date: ${{ inputs.date }}
       release_owner: ${{ needs.derive.outputs.actor }}
       # A release opened by Prepare is never held as a draft: the flagged
-      # items lead the PR body for the reviewer instead, and the tracker
-      # tells the release owner to review them before merging.
+      # items lead the PR body instead, and the tracking issue's next step
+      # points the release owner at them before the merge.
       force_ready: true
       dry_run: false
 

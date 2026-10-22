@@ -28,7 +28,11 @@ from scripts.release.checks import CandidateCI, evaluate_candidate_ci
 from scripts.release.models import ReleasePolicy
 from scripts.release.policy import load_policy
 from scripts.release.publish import resolve_tag_commit
-from scripts.release_notes.release_cut import PREP_BRANCH_PREFIX
+from scripts.release_notes.release_cut import (
+    PREP_BRANCH_PREFIX,
+    READY_DESPITE_FLAGS,
+    READY_WITH_SECURITY_ITEMS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -466,9 +470,19 @@ def _render_status(
             next_action = notes_action
             summary = "notes PR held"
         else:
-            notes_status = _status_badge("Ready for review", "0969da")
-            notes_action = "Review and merge the PR."
-            current = "The release-notes PR is ready for review."
+            flagged = _flagged_items(pr)
+            if flagged == "security":
+                notes_status = _status_badge("Security items open", "cf222e")
+                notes_action = "Settle the security items at the top of the PR, then merge."
+                current = "The release-notes PR is ready, but its description names unresolved security items."
+            elif flagged == "flagged":
+                notes_status = _status_badge("Ready, items flagged", "9a6700")
+                notes_action = "Confirm the flagged items at the top of the PR, then merge."
+                current = "The release-notes PR is ready; its description lists items to confirm."
+            else:
+                notes_status = _status_badge("Ready for review", "0969da")
+                notes_action = "Review and merge the PR."
+                current = "The release-notes PR is ready for review."
             next_action = notes_action
             summary = "waiting for notes PR merge"
 
@@ -886,6 +900,21 @@ def _presentation_state(
         and getattr(prepare_run, "conclusion", None) != "success"
     )
     return 1, prepare_failed
+
+def _flagged_items(pr: Any) -> str:
+    """Which banner the cut put at the top of a PR it opened ready.
+
+    "security" for unresolved security items, "flagged" for other items a
+    maintainer should confirm, "" for a clean cut. Presentation only: the
+    PR body is bot-written, and nothing here authorizes anything.
+    """
+    body = getattr(pr, "body", "") or ""
+    if READY_WITH_SECURITY_ITEMS in body:
+        return "security"
+    if READY_DESPITE_FLAGS in body:
+        return "flagged"
+    return ""
+
 
 def _find_prep_pr(repo: Any, tracker: Tracker) -> Any | None:
     pulls = retry_github_call(

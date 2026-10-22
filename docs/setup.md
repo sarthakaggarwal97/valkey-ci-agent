@@ -80,7 +80,8 @@ securing releases, including the tag ruleset.
 | CI Fix Issue Dispatch | every hour at :23, once switched on | [Fixing CI failures](ci-fix.md#fixing-detector-issues) |
 | Test Failure Detector | every day at 23:00 | [Test Failure Detector](test-failure-detector.md) |
 | Monitor Valkey Fuzzer Runs | every four hours at :41 | [Fuzzer monitor](fuzzer-monitor.md) |
-| Watch Release PR Reviews | one per release PR, started by the cut; holds a runner for 55 minutes checking every five minutes, with the next hour's run queued, until the PR closes | [Release notes](release-notes.md#applying-review-comments) |
+| Watch Release PR Reviews | one per release PR, started by the cut; holds a runner for 55 minutes checking every five minutes, with the next hour's run queued, until the PR closes or is three days old | [Release notes](release-notes.md#applying-review-comments) |
+| Restart Release PR Watchers | every six hours at :23 | [Release notes](release-notes.md#applying-review-comments) |
 | Refresh Release Progress | every hour, checking every five minutes | [Release automation](release-automation.md) |
 | CVE Scan | Mondays at 06:00 | [CVE scan](cve-scan.md) |
 

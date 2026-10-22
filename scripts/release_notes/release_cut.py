@@ -1151,8 +1151,9 @@ def _commit_push_release_pr(
     # force-pushing. This prevents a window where the PR has new content but
     # retains its old body and ready-for-merge state (which could auto-merge if
     # branch protection allows it). The PR is marked ready only after BOTH the
-    # branch push and the body update succeed. force_ready cannot override a
-    # security-signal hold (see _should_hold).
+    # branch push and the body update succeed. force_ready opens the PR ready
+    # whatever fired (see _should_hold); a security signal then leads the body
+    # as a CAUTION banner.
     hold = _should_hold(_hold_reasons(plan, notes_meta), force_ready)
     title = commit_title(version, plan.stage, profile.display_name)
     body = _build_pr_body(plan, version, notes_meta, force_ready=force_ready,
@@ -1318,6 +1319,13 @@ _SECURITY_HOLD_REASONS = frozenset({
 })
 
 
+# How the banner at the top of a PR opened ready begins. The release tracker
+# looks for these in the PR body to tell the release owner what to check
+# before merging.
+READY_WITH_SECURITY_ITEMS = "**Opened ready with"
+READY_DESPITE_FLAGS = "**Opened ready despite"
+
+
 def _security_hold_reasons(reasons: Sequence[str]) -> list[str]:
     """The subset of *reasons* the banner must shout about under ``force_ready``."""
     return [r for r in reasons if r in _SECURITY_HOLD_REASONS]
@@ -1354,7 +1362,7 @@ def _hold_banner(reasons: Sequence[str], force_ready: bool) -> str:
         count = len(security_holds)
         return (
             "> [!CAUTION]\n"
-            f"> **Opened ready with {count} unresolved security "
+            f"> {READY_WITH_SECURITY_ITEMS} {count} unresolved security "
             f"{'item' if count == 1 else 'items'}** (`force_ready` was set): {sec_items}. "
             "Security classification is human-owned: settle the urgency and the "
             "Security Fixes entries (re-run the cut with them, or edit through review "
@@ -1363,7 +1371,7 @@ def _hold_banner(reasons: Sequence[str], force_ready: bool) -> str:
     if force_ready:
         return (
             "> [!NOTE]\n"
-            f"> **Opened ready despite {n} flagged {plural}** (`force_ready` was set): "
+            f"> {READY_DESPITE_FLAGS} {n} flagged {plural}** (`force_ready` was set): "
             f"{items}. Review the sections below and confirm before merging.\n\n"
         )
     return (

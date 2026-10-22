@@ -115,6 +115,10 @@ once:
 - **Expect hours, not minutes.** Qualification and production together run
   hundreds of jobs per release; the production run also waits for Docker Hub
   before it triggers the Bundle.
+- **Release PRs that were already open** when a new version of this
+  automation landed have no review watcher yet. Start one by hand for each
+  (see [Release notes](release-notes.md#applying-review-comments)), or wait
+  for the six-hourly restart to do it.
 
 ## Setting it up securely
 

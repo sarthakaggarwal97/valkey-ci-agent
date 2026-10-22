@@ -240,6 +240,57 @@ def test_prepare_failure_is_visible_with_a_direct_next_action() -> None:
     assert "—" not in body
 
 
+def _ready_pr(body: str):
+    return SimpleNamespace(
+        number=7, html_url="https://example/pull/7", merged=False, state="open", draft=False, body=body,
+    )
+
+
+def _notes_row(pr) -> tuple[str, str]:
+    body, summary = tracker_mod._render_status(
+        TRACKER,
+        prepare_run=_run(),
+        pr=pr,
+        branch_head=SHA,
+        candidate_sha="",
+        candidate_ci=None,
+        publish_run=None,
+        release=None,
+        production_run=None,
+        agent_repo="valkey-io/valkey-ci-agent",
+        dispatched=False,
+    )
+    return body, summary
+
+
+def test_ready_pr_with_security_items_points_the_owner_at_them() -> None:
+    # Prepare opens every PR ready; the cut's CAUTION banner is the only
+    # guard on a CVE, so the tracker's next step must repeat it.
+    body, summary = _notes_row(_ready_pr(
+        "> [!CAUTION]\n> **Opened ready with 1 unresolved security item** (`force_ready` was set): "
+        "a PR names a CVE (needs SECURITY urgency and a Security Fixes entry).\n\nCuts **9.1.2**"
+    ))
+    assert summary == "waiting for notes PR merge"
+    assert "Settle the security items at the top of the PR, then merge." in body
+    assert "img.shields.io/badge/-Security%20items%20open-cf222e" in body
+    assert "> [!NOTE]\n> **The release-notes PR is ready, but its description names unresolved security items.**" in body
+
+
+def test_ready_pr_with_flagged_items_asks_for_confirmation() -> None:
+    body, _ = _notes_row(_ready_pr(
+        "> [!NOTE]\n> **Opened ready despite 2 flagged items** (`force_ready` was set): "
+        "notes flagged low-confidence; AI triaged PRs without release-notes.\n\nCuts **9.1.2**"
+    ))
+    assert "Confirm the flagged items at the top of the PR, then merge." in body
+    assert "items%20flagged-9a6700" in body
+
+
+def test_clean_ready_pr_just_asks_for_review_and_merge() -> None:
+    body, _ = _notes_row(_ready_pr("Cuts **9.1.2** onto release line `9.1`."))
+    assert "Review and merge the PR." in body
+    assert "flagged" not in body.lower()
+
+
 def test_downstream_follow_up_links_cover_ga_outputs_without_new_api_access() -> None:
     body, summary = tracker_mod._render_status(
         TRACKER,

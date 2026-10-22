@@ -2,7 +2,9 @@
 
 Run with ``--repo`` and ``--pr`` it watches one release PR (the per-PR watcher
 workflow), and with ``--start`` or ``--stop`` it starts or cancels that PR's
-watcher; without them it scans every open PR of every supported repository.
+watcher. ``--restart-missing`` starts a watcher for every open release PR
+that has none. Without any of these it scans every open PR of every
+supported repository once.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from scripts.backport.sweep_graphql import GitHubGraphQLClient
 from scripts.ci_fix.gate import is_authorized
 from scripts.common.github_client import retry_github_call
 from scripts.common.logging_utils import configure_logging
-from scripts.common.polling import env_seconds, run_poll_loop
+from scripts.common.polling import env_int, env_seconds, run_poll_loop
 from scripts.release_notes.review import (
     REPOSITORIES,
     BatchMarker,
@@ -48,6 +50,10 @@ DispatchFn = Callable[[ReleasePR, int], None]
 AGENT_REPO = "valkey-io/valkey-ci-agent"
 REVIEW_WORKFLOW = "release-notes-review.yml"
 WATCH_WORKFLOW = "release-notes-review-watch.yml"
+# A watcher chain stops queueing itself once its PR is this old. Release PRs
+# live hours to a couple of days; this bounds the runner a forgotten one
+# would otherwise hold around the clock. Start the watcher by hand to go on.
+DEFAULT_MAX_AGE_HOURS = 72
 # A run waiting on the watcher's per-PR concurrency group, or for a runner.
 _WAITING = frozenset({"queued", "pending", "waiting", "requested"})
 _LIVE = _WAITING | {"in_progress"}
@@ -73,24 +79,12 @@ def _authorizer(
     return authorized
 
 
-def poll_pr(
-    gh: Github,
-    gql: GitHubGraphQLClient,
-    *,
-    repo_full_name: str,
-    number: int,
-    bot_login: str,
-    dispatch: DispatchFn,
-    authorize: Callable[[str], bool] | None = None,
-    org: str = "valkey-io",
-    team_slug: str = "contributors",
-) -> tuple[int, bool]:
-    """Process one release PR; return (batches dispatched, PR still open).
+def load_release_pr(gh: Github, repo_full_name: str, number: int) -> tuple[Any, ReleasePR] | None:
+    """The PR and its validated identity, or None once it is merged or closed.
 
-    A closed or merged PR ends the watch (``False``). Any other reason the PR
-    is not a release PR raises :class:`ReviewRefused`, because a watcher
-    pointed at the wrong PR should fail where someone sees it rather than
-    poll for an hour.
+    Any other reason the PR is not a release PR raises :class:`ReviewRefused`,
+    because a watcher pointed at the wrong PR should fail where someone sees
+    it rather than poll for an hour.
     """
     repo = retry_github_call(
         lambda: gh.get_repo(repo_full_name),
@@ -104,8 +98,27 @@ def poll_pr(
     )
     if str(getattr(pr, "state", "")).lower() != "open":
         logger.info("%s#%s is %s; the watch ends", repo_full_name, number, getattr(pr, "state", "?"))
+        return None
+    return pr, validate_release_pr(pr, repo_full_name)
+
+
+def poll_pr(
+    gh: Github,
+    gql: GitHubGraphQLClient,
+    *,
+    repo_full_name: str,
+    number: int,
+    bot_login: str,
+    dispatch: DispatchFn,
+    authorize: Callable[[str], bool] | None = None,
+    org: str = "valkey-io",
+    team_slug: str = "contributors",
+) -> tuple[int, bool]:
+    """Process one release PR; return (batches dispatched, PR still open)."""
+    loaded = load_release_pr(gh, repo_full_name, number)
+    if loaded is None:
         return 0, False
-    release = validate_release_pr(pr, repo_full_name)
+    pr, release = loaded
     dispatched = _process_pr(
         pr,
         release,
@@ -132,6 +145,30 @@ def poll_once(
 
     authorized = _authorizer(gh, authorize, org, team_slug)
     dispatched = 0
+    for repo_full_name, pr, release in _open_release_prs(gh, repositories):
+        try:
+            if _process_pr(
+                pr,
+                release,
+                gql,
+                bot_login=bot_login,
+                authorized=authorized,
+                dispatch=dispatch,
+            ):
+                dispatched += 1
+        except Exception as exc:  # noqa: BLE001 - continue with sibling PRs
+            logger.warning(
+                "Could not process %s#%s: %s",
+                repo_full_name,
+                getattr(pr, "number", "?"),
+                exc,
+            )
+    return dispatched
+
+
+def _open_release_prs(gh: Github, repositories: tuple[str, ...]) -> list[tuple[str, Any, ReleasePR]]:
+    """Every open release PR across *repositories*; an unreadable repository is skipped."""
+    found: list[tuple[str, Any, ReleasePR]] = []
     for repo_full_name in repositories:
         try:
             repo = retry_github_call(
@@ -147,34 +184,14 @@ def poll_once(
         except Exception as exc:  # noqa: BLE001 - continue with sibling repos
             logger.warning("Could not scan %s: %s", repo_full_name, exc)
             continue
-
         for pr in pulls:
             try:
-                release = validate_release_pr(pr, repo_full_name)
-                if _process_pr(
-                    pr,
-                    release,
-                    gql,
-                    bot_login=bot_login,
-                    authorized=authorized,
-                    dispatch=dispatch,
-                ):
-                    dispatched += 1
+                found.append((repo_full_name, pr, validate_release_pr(pr, repo_full_name)))
             except ReviewRefused as exc:
-                logger.info(
-                    "Skipping %s#%s: %s",
-                    repo_full_name,
-                    getattr(pr, "number", "?"),
-                    exc,
-                )
+                logger.info("Skipping %s#%s: %s", repo_full_name, getattr(pr, "number", "?"), exc)
             except Exception as exc:  # noqa: BLE001 - continue with sibling PRs
-                logger.warning(
-                    "Could not process %s#%s: %s",
-                    repo_full_name,
-                    getattr(pr, "number", "?"),
-                    exc,
-                )
-    return dispatched
+                logger.warning("Could not read %s#%s: %s", repo_full_name, getattr(pr, "number", "?"), exc)
+    return found
 
 
 def _process_pr(
@@ -348,6 +365,17 @@ def watch_run_title(repo_name: str, number: int) -> str:
     return f"Watch {repo_name}#{number} reviews"
 
 
+def chain_allowed(pr: Any, *, max_age_hours: int, now: datetime | None = None) -> bool:
+    """Whether a watcher for *pr* may still queue its next hour (see DEFAULT_MAX_AGE_HOURS)."""
+    created = getattr(pr, "created_at", None)
+    if not isinstance(created, datetime):
+        return True
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(timezone.utc)
+    return current - created <= timedelta(hours=max_age_hours)
+
+
 def _dispatch_workflow(
     gh: Github,
     *,
@@ -428,12 +456,12 @@ def ensure_watcher(
 ) -> bool:
     """Start a watcher for this PR unless one is already lined up; True when started.
 
-    The cut calls this with ``successor=False`` after opening the PR: a
-    watcher that is running or waiting (a re-cut) is enough. A running
-    watcher calls it with ``successor=True`` to queue the next hour's run:
-    that run waits on the per-PR concurrency group and takes over the moment
-    this one ends, so the hour boundary has no gap, and only a run already
-    waiting makes it redundant.
+    The cut and the scheduled restart call this with ``successor=False``: a
+    watcher that is running or waiting is enough. A running watcher calls it
+    with ``successor=True`` to queue the next hour's run: that run waits on
+    the per-PR concurrency group and takes over the moment this one ends, so
+    the hour boundary has no gap, and only a run already waiting makes it
+    redundant.
     """
     live = live_watcher_runs(gh, repo_name, number, agent_repo=agent_repo)
     blocking = [run for run in live if not successor or getattr(run, "status", "") in _WAITING]
@@ -470,16 +498,55 @@ def stop_watcher(gh: Github, repo_name: str, number: int, *, agent_repo: str = A
     return len(live)
 
 
+def restart_missing_watchers(
+    gh: Github,
+    *,
+    repositories: tuple[str, ...] = REPOSITORIES,
+    max_age_hours: int = DEFAULT_MAX_AGE_HOURS,
+    agent_repo: str = AGENT_REPO,
+) -> int:
+    """Start a watcher for every open release PR that has none; return how many.
+
+    The safety net under the per-PR chains: a chain that broke on an API
+    error, or a PR that was already open when the watcher workflow landed,
+    gets its watcher back on the next pass. A PR past the chain age is left
+    alone, like a chain that reached it; start its watcher by hand.
+    """
+    started = 0
+    for repo_full_name, pr, release in _open_release_prs(gh, repositories):
+        if not chain_allowed(pr, max_age_hours=max_age_hours):
+            logger.info(
+                "%s#%d is older than %d hours; not starting a watcher (start one by hand if needed)",
+                repo_full_name, release.number, max_age_hours,
+            )
+            continue
+        try:
+            if ensure_watcher(
+                gh, repo_full_name.rsplit("/", 1)[-1], release.number,
+                successor=False, agent_repo=agent_repo,
+            ):
+                started += 1
+        except Exception as exc:  # noqa: BLE001 - continue with sibling PRs
+            logger.warning("Could not start a watcher for %s#%d: %s", repo_full_name, release.number, exc)
+    logger.info("Started %d watcher(s) for release PRs that had none", started)
+    return started
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=os.environ.get("RELEASE_NOTES_REVIEW_REPO", ""),
                         help="Repository of the release PR (name or owner/name); needs --pr")
     parser.add_argument("--pr", type=int, default=0, help="Number of the release PR")
+    parser.add_argument("--max-age-hours", type=int,
+                        default=env_int("RELEASE_NOTES_REVIEW_MAX_AGE_HOURS", DEFAULT_MAX_AGE_HOURS, minimum=1),
+                        help="Stop queueing a PR's next hour, and stop restarting it, once the PR is this old")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--start", action="store_true",
                       help="Start the PR's watcher workflow unless one is live, then exit")
     mode.add_argument("--stop", action="store_true",
                       help="Cancel the PR's watcher workflow runs, then exit")
+    mode.add_argument("--restart-missing", action="store_true",
+                      help="Start a watcher for every open release PR that has none, then exit")
     args = parser.parse_args(argv)
 
     configure_logging()
@@ -489,6 +556,12 @@ def main(argv: list[str] | None = None) -> int:
     duration = env_seconds(
         "RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS", 0, minimum=0, maximum=_MAX_LOOP_SECONDS
     )
+
+    if args.restart_missing:
+        if args.repo or args.pr:
+            parser.error("--restart-missing covers every repository; drop --repo and --pr")
+        restart_missing_watchers(gh, max_age_hours=args.max_age_hours)
+        return 0
 
     if args.repo or args.pr or args.start or args.stop:
         if not (args.repo and args.pr > 0):
@@ -504,6 +577,29 @@ def main(argv: list[str] | None = None) -> int:
             stop_watcher(gh, repo_name, args.pr)
             return 0
 
+        # Confirm the PR is an open release PR before anything else, so a
+        # watcher pointed at the wrong PR fails here with the reason.
+        try:
+            loaded = load_release_pr(gh, repo_full_name, args.pr)
+        except ReviewRefused as exc:
+            logger.error("%s#%d cannot be watched: %s", repo_full_name, args.pr, exc)
+            return 1
+        if loaded is None:
+            return 0
+        sustained = interval > 0 and duration > 0
+        if sustained:
+            # Queue the next hour's run before this one does any work: it
+            # waits on the per-PR concurrency group and takes over the moment
+            # this run ends, and a failure in this run cannot break the chain.
+            if chain_allowed(loaded[0], max_age_hours=args.max_age_hours):
+                ensure_watcher(gh, repo_name, args.pr, successor=True)
+            else:
+                logger.warning(
+                    "%s#%d is older than %d hours; the next hour is not queued. "
+                    "Start the watcher by hand to keep watching.",
+                    repo_full_name, args.pr, args.max_age_hours,
+                )
+
         gql = GitHubGraphQLClient(token)
         bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
         dispatch = dispatch_release_review(gh)
@@ -517,21 +613,17 @@ def main(argv: list[str] | None = None) -> int:
             state["open"] = still_open
             return dispatched
 
-        # The first pass runs outside the loop so a watcher pointed at a PR
-        # that is not a release PR fails here, with the reason, instead of
-        # logging the same refusal every five minutes for an hour.
-        results = [watch_once()]
-        if state["open"] and interval > 0 and duration > 0:
-            # Queue the next hour's run now: it waits on the per-PR
-            # concurrency group and takes over the moment this run ends.
-            ensure_watcher(gh, repo_name, args.pr, successor=True)
-            results += run_poll_loop(
+        results = (
+            run_poll_loop(
                 watch_once,
                 interval_seconds=interval,
                 duration_seconds=duration,
                 until=lambda _dispatched: not state["open"],
                 logger=logger,
             )
+            if sustained
+            else [watch_once()]
+        )
         logger.info(
             "%s#%d: dispatched %d release-review batch(es) across %d pass(es); %s",
             repo_full_name, args.pr, sum(results), len(results),

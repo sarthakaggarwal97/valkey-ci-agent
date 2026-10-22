@@ -6,7 +6,12 @@ from scripts.ai.runtime import AGENT_PROFILES
 from scripts.release_notes.review_poll import watch_run_title
 
 _WATCH = Path(".github/workflows/release-notes-review-watch.yml")
+_RESTART = Path(".github/workflows/release-notes-review-restart.yml")
 _CUT = Path(".github/workflows/release-notes-cut.yml")
+_CUT_CALLERS = (
+    Path(".github/workflows/release-prepare.yml"),
+    Path(".github/workflows/release-notes-cut-advanced.yml"),
+)
 _HANDLER = Path(".github/workflows/release-notes-review.yml")
 
 
@@ -20,6 +25,36 @@ def _step(workflow: dict, job: str, name: str) -> dict:
         for step in workflow["jobs"][job]["steps"]
         if step.get("name") == name
     )
+
+
+def test_every_caller_of_the_cut_grants_the_watcher_start() -> None:
+    # A reusable workflow cannot request more than its caller grants; the cut
+    # asks for actions:write to start the watcher, so both callers must too.
+    for path in _CUT_CALLERS:
+        workflow = _workflow(path)
+        caller = next(job for job in workflow["jobs"].values() if job.get("uses", "").endswith("release-notes-cut.yml"))
+        assert caller["permissions"]["actions"] == "write", path
+
+
+def test_missing_watchers_are_restarted_on_a_schedule() -> None:
+    workflow = _workflow(_RESTART)
+    job = workflow["jobs"]["restart"]
+    token = _step(workflow, "restart", "Generate App token")
+    run = _step(workflow, "restart", "Start a watcher for every unwatched release PR")
+
+    assert workflow["on"]["schedule"] == [{"cron": "23 */6 * * *"}]
+    assert job["permissions"] == {"contents": "read"}
+    assert token["with"]["repositories"].splitlines() == [
+        "valkey", "valkey-search", "valkey-json", "valkey-bloom", "valkey-ci-agent",
+    ]
+    assert {
+        key: value for key, value in token["with"].items() if key.startswith("permission-")
+    } == {
+        "permission-actions": "write",
+        "permission-pull-requests": "read",
+        "permission-metadata": "read",
+    }
+    assert run["run"].split()[-1] == "--restart-missing"
 
 
 def test_one_watcher_per_release_pr_replaces_the_hourly_scan() -> None:
