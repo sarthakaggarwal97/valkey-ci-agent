@@ -1,98 +1,131 @@
 # valkey-ci-agent
 
-Automation for the Valkey project's backports, CI failures, releases and
-container images. Deterministic Python does everything that must be exact:
-git, the GitHub API, validation, publication. Claude Code, run through AWS
-Bedrock, is called only for the parts that need code understanding, such as
-resolving a cherry-pick conflict, diagnosing a failing test, or wording a
-release note. Every change the agent makes lands on a bot-owned branch and
-goes through the target repository's normal CI and human review. The bot
-never merges.
+valkey-ci-agent is the automation behind a lot of the Valkey project's routine
+maintenance. It backports fixes to release branches, chases down failing CI
+jobs, files issues when the nightly tests or the fuzzer find something, cuts
+releases and writes their notes, and keeps the published container images free
+of known vulnerabilities.
 
-## Workflows
+Most of that work is ordinary engineering done in Python: calling the GitHub
+API, running git, building and testing. For the handful of steps that need
+someone to actually read code, such as resolving a cherry-pick conflict,
+working out why a test fails, or describing a change in a release note, the
+agent asks Claude, running through AWS Bedrock. Whatever Claude produces is
+checked by code before it goes anywhere.
 
-| Workflow | Runs | What it does | Docs |
-|---|---|---|---|
-| **Backport** | daily sweep, hourly poll | Cherry-picks PRs marked "To be backported" onto each release branch, resolves conflicts with AI, validates the result, and keeps one rolling PR per branch | [docs/backport.md](docs/backport.md) |
-| **Backport eligibility** | daily | Comments on newly merged PRs that look worth backporting, naming the release branches that carry the changed code | [docs/backport.md](docs/backport.md#eligibility) |
-| **CI fix** | on request, hourly follow-up | Fixes one failed CI job: reproduces it, has Claude diagnose and patch it inside the failed job's own environment, verifies and reviews the patch, then pushes it to a bot PR or posts it as a suggestion | [docs/ci-fix.md](docs/ci-fix.md) |
-| **Test Failure Detector** | daily | Reads Daily CI's failures and opens or updates one issue per failing test | [docs/test-failure-detector.md](docs/test-failure-detector.md) |
-| **Fuzzer monitor** | every 4 hours | Triages scheduled fuzzer runs and files an issue when a run looks like a real bug | [docs/fuzzer-monitor.md](docs/fuzzer-monitor.md) |
-| **Release notes** | on demand | Cuts a release for Valkey or a module: generates the notes, bumps the version, opens the release PR, and applies maintainers' review comments to it | [docs/release-notes.md](docs/release-notes.md) |
-| **Release automation** | on demand | Takes a release from "prepare" to a published tag with two human approvals and a tracking issue | [docs/release-automation.md](docs/release-automation.md) |
-| **CVE scan** | weekly | Scans the container images, rebuilds each candidate to prove the fix, and dispatches a targeted rebuild | [docs/cve-scan.md](docs/cve-scan.md) |
+Nothing the agent does takes effect on its own. Every change it proposes shows
+up as a pull request or a comment, runs through the target repository's normal
+CI, and waits for a maintainer. The bot never merges anything.
 
-Planned: a PR reviewer with a skeptic pass, and flaky-test detection across
-Daily runs.
+## What it does
+
+**Backports.** When a fix on `unstable` should also go to a release line, a
+maintainer adds it to that branch's project board. Every day the agent
+cherry-picks what is waiting there, resolves conflicts, builds and tests the
+result, and keeps one pull request per release branch open for review. It
+also comments on newly merged PRs that look like they should be backported.
+See [Backports](docs/backport.md).
+
+**Fixing CI failures.** A maintainer can comment `@valkeyrie-ops fix` on a PR
+with a failing job. The bot reproduces the failure, asks Claude for a fix,
+reruns the failing test to make sure the fix works, has a second Claude session
+review it, and then pushes it or posts it as a suggested patch. It does the
+same on its own when one of its backport PRs goes red. See
+[Fixing CI failures](docs/ci-fix.md).
+
+**Tracking test failures.** Every night, once Valkey's Daily CI has finished,
+the Test Failure Detector opens or updates one issue per failing test, so
+broken and flaky tests are tracked instead of forgotten. See
+[Test Failure Detector](docs/test-failure-detector.md).
+
+**Watching the fuzzer.** Every four hours the agent looks at the latest
+valkey-fuzzer run and decides whether a failure is a real bug or the expected
+noise of a chaos test. Real bugs get an issue. See
+[Fuzzer monitor](docs/fuzzer-monitor.md).
+
+**Releases.** A maintainer can cut a release of Valkey or one of its modules
+with one dispatch. The agent gathers every change since the last release,
+writes the notes, bumps the version and opens a release PR, and it applies the
+inline comments maintainers leave on that PR. For Valkey itself, release
+automation then carries the merged PR through to a tagged, published release,
+with two human approvals on the way. See [Release notes](docs/release-notes.md)
+and [Release automation](docs/release-automation.md).
+
+**Container vulnerabilities.** Once a week the agent scans the published
+Valkey container images for known CVEs. When a rebuild would fix one, it builds
+the image itself and scans it to prove the fix before asking valkey-container
+to rebuild and publish. See [CVE scan](docs/cve-scan.md).
+
+Two more are planned: a PR reviewer with a second, skeptical pass, and
+detection of flaky tests across Daily runs.
 
 ## Using it
 
-Most of the time nothing needs to be done: the scheduled workflows run on
-their own and open PRs or issues for maintainers. The manual entry points:
+Most of the time you don't need to do anything. The scheduled workflows run on
+their own and open PRs or issues when there is something to look at. When you
+do want something:
 
-- **Ask for a CI fix** on a `valkey-io/valkey` PR by starting a comment with
-  `@valkeyrie-ops fix`, optionally with a run or job link and a hint. Members
-  of `valkey-io/contributors` only.
-- **Cut a release** with Prepare Release from this repository's Actions tab,
-  or run the notes cutter alone with Cut Release Notes.
-- **Backport one PR** with Manual Backport.
-- **Re-run anything** with `gh workflow run`; every scheduled workflow can be
-  dispatched by hand, and most default to a dry run. Each doc's "Running it"
-  section has the commands.
+- To get a failing job on a `valkey-io/valkey` PR fixed, start a comment with
+  `@valkeyrie-ops fix`. You need to be a member of `valkey-io/contributors`.
+- To cut a release, run **Prepare Release** from this repository's Actions
+  tab. To generate only the notes, run **Cut Release Notes**.
+- To backport one PR right away, run **Manual Backport**.
+- Every scheduled workflow can also be started by hand with `gh workflow run`,
+  and most of them do a harmless dry run unless you say otherwise. Each page
+  under `docs/` ends with the commands for its workflows.
 
-Where everything runs and when: [docs/setup.md](docs/setup.md). Which
-repositories and branches are covered: [docs/registry.md](docs/registry.md)
-(`repos.yml`).
+## Why it is safe to leave running
 
-## How it stays safe
+The agent only ever writes to its own branches: `backport/...`,
+`agent/backport/...`, `agent/ci-fix/...` and `agent/release-cut/...`. It opens
+pull requests from those branches and leaves the merge to a maintainer. It
+never pushes to a release branch and never rewrites a backport branch that has
+already been published.
 
-- **Bot-owned branches only.** The agent writes `backport/...`,
-  `agent/backport/...`, `agent/ci-fix/...` and `agent/release-cut/...`
-  branches and opens PRs. It never pushes a release line directly, never
-  rewrites a published sweep branch, and never merges.
-- **The model holds no GitHub token.** Claude Code gets only the model's AWS
-  credentials; code owns every commit and push. The CI fix agent also runs as
-  a separate account that cannot read the workflow's environment.
-- **Validate before publishing.** Registry build and test commands run before
-  any push and a failure blocks it. A CI fix is reproduced, re-run with the
-  patch, and reviewed by a second read-only session before it is pushed. A
-  CVE rebuild is dispatched only after the fixed image was built and scanned.
-- **Fail closed.** An unreadable registry files nothing; a held release PR
-  opens as a draft; an unverified fix is reported as unproven.
-- **Short-lived, scoped credentials.** Each job mints a GitHub App token for
-  the repositories and permissions it needs; jobs that run the model hold no
-  GitHub token at all.
+Claude never holds a GitHub token. It gets the AWS credentials it needs to
+reach the model and nothing else, and every commit and push is made by code
+after checking what Claude changed. The CI fix bot goes further and runs Claude
+and the tests it starts as a separate system account that cannot see the
+workflow's secrets.
 
-The full design is in [docs/architecture.md](docs/architecture.md).
+Changes are tested before they are published. Backports are built and tested
+before they are pushed, and a failure keeps them out. A CI fix has to make the
+failing test pass and survive an independent review. A container rebuild is
+requested only after the fixed image has been built and scanned. When the
+agent can't be sure of something, it holds back: an unreadable configuration
+files nothing, a release PR with open questions opens as a draft, and a fix
+that couldn't be proven says so.
 
-## Repository layout
+Each job gets a GitHub token that lasts an hour and only covers the
+repositories and permissions that job needs. [Architecture](docs/architecture.md)
+covers the design in more depth.
+
+## Finding your way around
 
 ```text
 scripts/
-  backport/               Backport sweep, poll, eligibility, CI follow-up
-  ci_fix/                 CI fix engine and front doors
-  test_failure_detector/  Daily CI failures -> issues
-  fuzzer/                 Fuzzer run triage -> issues
-  release_notes/          Release-notes cut and review handling
+  backport/               Backports, backport suggestions, CI follow-up
+  ci_fix/                 The CI fix bot
+  test_failure_detector/  Daily CI failures to issues
+  fuzzer/                 Fuzzer run triage
+  release_notes/          Release notes and review comments on release PRs
   release/                Release preparation and publication
-  cve_scan/               Container CVE scan and verified rebuild
-  ai/                     Claude Code orchestration and agent profiles
-  common/                 Shared git, GitHub, artifact, isolation and polling code
-.github/workflows/        The workflows
-.github/actions/setup-agent
-                          Shared setup: Python, dependencies, Claude Code CLI
-docs/                     One document per workflow, plus setup and design
-repos.yml                 Registry of repositories, release branches and boards
+  cve_scan/               Container CVE scan and verified rebuilds
+  ai/                     Running Claude Code, and what each session may do
+  common/                 Shared git, GitHub, artifact and isolation code
+.github/workflows/        The workflows themselves
+docs/                     One page per workflow, plus setup and design
+repos.yml                 The repositories and release branches the agent covers
 tests/                    One test module per source module
 ```
 
-## Documentation
+The docs are:
 
-- [docs/setup.md](docs/setup.md) - secrets, App permissions, environments, schedules
-- [docs/registry.md](docs/registry.md) - `repos.yml` reference
-- [docs/architecture.md](docs/architecture.md) - design, AI layer, shared infrastructure
-- [DEVELOPMENT.md](DEVELOPMENT.md) - local setup, tests, adding a workflow
-- One document per workflow under [docs/](docs/)
+- [Setup and operations](docs/setup.md): secrets, GitHub App permissions,
+  environments, and when every workflow runs.
+- [The registry](docs/registry.md): how `repos.yml` describes a repository.
+- [Architecture](docs/architecture.md): how the pieces fit together.
+- [DEVELOPMENT.md](DEVELOPMENT.md): working on the agent itself.
 
 ## License
 

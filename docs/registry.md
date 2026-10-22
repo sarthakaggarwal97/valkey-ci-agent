@@ -1,38 +1,37 @@
-# The registry (`repos.yml`)
+# The registry: repos.yml
 
-`repos.yml` at the repository root is the single source of truth for which
-repositories the backport workflows act on, their release branches and project
-boards, and how a backport candidate is validated. The Test Failure Detector
-and the CI fix engine read `ci_followup_ignored_jobs` from it too.
-[`examples/repos.yml`](../examples/repos.yml) shows a multi-module setup.
+`repos.yml`, at the root of this repository, lists the repositories the
+backport workflows look after: their release branches, the project board for
+each branch, and how a backport is built and tested. The CI fix bot and the
+Test Failure Detector also read it to learn which CI jobs to ignore.
 
-## Example
+To add a repository or a release branch, edit `repos.yml` and open a PR.
+[`examples/repos.yml`](../examples/repos.yml) shows a setup with several
+modules.
+
+## An example
 
 ```yaml
 repos:
   - repo: valkey-io/valkey
     project_owner: valkey-io
     project_owner_type: organization
-    language: c                            # named in the conflict-resolution prompt
-    validation_setup_commands:             # optional; run once per clone
+    language: c
+    validation_setup_commands:
       - "./ci/setup-backport-validation.sh"
-    build_commands:                        # run before any push; empty = rely on upstream CI
+    build_commands:
       - "make -j$(nproc)"
-    validation_profile: valkey-core        # optional diff-aware checks
-    validation_rules:                      # optional path -> commands
+    validation_profile: valkey-core
+    validation_rules:
       - paths: ["src/rdb.c"]
         commands: ["./runtest --single unit/dump --clients 1"]
-    generated_file_rules:                  # optional deterministic regeneration
+    generated_file_rules:
       - paths: ["src/unit/*.c"]
         command: "python3 utils/generate-unit-test-header.py"
         outputs: ["src/unit/test_files.h"]
-    test_path_patterns: ["tests/*.tcl"]    # optional; which paths count as tests
-    repair_validation_failures: false      # one AI repair attempt on a validation failure
-    automatic_ci_followup: false           # hand failed CI on bot-owned PRs to the CI fix engine
-    ci_followup_ignored_jobs: ["*dco*"]    # informational Actions jobs, never fixed or filed
-    backport_label: backport
-    llm_conflict_label: ai-resolved-conflicts
-    max_conflicting_files: 100
+    repair_validation_failures: true
+    automatic_ci_followup: true
+    ci_followup_ignored_jobs: ["*dco*", "code-coverage*"]
     branches:
       - branch: "8.1"
         project_number: 14
@@ -40,56 +39,83 @@ repos:
         project_number: 18
 ```
 
-## Keys
+## The basics
 
-| Key | Required | Default | Meaning |
-|---|---|---|---|
-| `repo` | yes | | `owner/name` of the upstream repository |
-| `project_owner` | yes | | Owner of the GitHub Project v2 boards |
-| `project_owner_type` | no | `organization` | `organization` or `user` |
-| `language` | yes | | Named in the conflict-resolution prompt |
-| `branches` | yes | | One entry per release branch: `branch` and the board's `project_number` |
-| `push_repo` | no | unset | A different-owner fork to push to; same-owner values are rejected |
-| `validation_setup_commands` | no | `[]` | Run once per clone before validation |
-| `build_commands` | no | `[]` | Run before every push; a non-zero exit blocks it |
-| `validation_rules` | no | `[]` | `{paths, commands}`: commands to run when a candidate touches matching paths |
-| `validation_profile` | no | `""` | A named profile that derives checks from the exact changed files; `valkey-core` is the one that exists |
-| `generated_file_rules` | no | `[]` | `{paths, command, outputs}`: regenerate declared outputs when matching paths change |
-| `test_path_patterns` | no | `tests/*.tcl`, `src/unit/test_*.c`, `.cc`, `.cpp` | Globs for paths that count as tests, for the repair and test-adaptation rules |
-| `repair_validation_failures` | no | `false` | Let Claude Code make one edit-only repair attempt before a failing candidate is dropped |
-| `automatic_ci_followup` | no | `false` | Inspect CI on open bot-owned PRs into each branch |
-| `ci_followup_ignored_jobs` | no | `[]` | Actions job-name patterns the follow-up and the detector skip |
-| `backport_label` | no | `backport` | Label on backport PRs |
-| `llm_conflict_label` | no | `ai-resolved-conflicts` | Label added when a conflict was AI-resolved |
-| `max_conflicting_files` | no | `100` | A candidate with more conflicting files is dropped |
+Every entry needs a `repo` (such as `valkey-io/valkey`), a `project_owner`
+for its project boards, a `language`, and a list of `branches`. Each branch
+names a release branch and the number of the GitHub Project board where
+maintainers queue backports for it. `project_owner_type` is `organization`
+unless the boards belong to a user. The `language` is mentioned to Claude
+when it resolves conflicts.
 
-## Semantics
+The agent pushes its branches to the repository itself and opens pull
+requests there. If you really need it to push to a fork owned by someone else,
+set `push_repo` to that fork; the agent will keep the fork's release branch in
+step with upstream before it cherry-picks. A fork with the same owner isn't
+allowed, to stop staging copies from becoming the normal way of working.
 
-**Repository model.** Agent branches are pushed to `repo` under the
-`agent/backport/...` namespace and PRs are opened there. `push_repo` is an
-escape hatch for a real different-owner fork; when set, the agent
-fast-forwards that fork's release branch to match upstream before
-cherry-picking. Same-owner values are rejected so staging repositories do not
-become the normal model.
+## How backports are checked
 
-**Validation** runs in the order setup, build, rules, profile, generated
-files, against each candidate's own diff. How the sweep uses the result, the
-`valkey-core` profile's checks, and the repair and test-adaptation passes are
-described in [backport.md](backport.md#keeping-the-sweep-branch-green).
-`generated_file_rules` must list every tracked output a generator may edit;
-the validator runs the generator twice and fails if it touches anything else
-or does not converge.
+These settings decide what happens after each cherry-pick. They run in the
+order they're listed here.
 
-**CI follow-up.** `automatic_ci_followup` is opt-in per repository. The
-follow-up, the detector-issue front door and the Test Failure Detector's
-job-level check all skip jobs matching `ci_followup_ignored_jobs`, which
-should name the informational Actions jobs the bot must never try to repair:
-for Valkey core, the `daily.yml` result aggregators and the coverage upload.
-Patterns match Actions job names only. Checks published by other GitHub Apps
-(DCO, Codecov) are never workflow jobs, so they cannot be candidates in the
-first place; the `*dco*` patterns stay as a cheap guard in case one is ever
-reimplemented as a job.
+`validation_setup_commands` run once, after the repository is cloned. Use
+them to install tools or generate test certificates.
 
-**Onboarding a new release line.** Add a `branches` entry with the new
-branch's project number. For Valkey core, [release automation](release-automation.md)
-opens an onboarding issue and a registry PR for every `X.Y.0` release.
+`build_commands` run before anything is pushed. If one fails, the push is
+blocked. A repository with no build commands relies entirely on its own CI.
+
+`validation_rules` run extra commands when a backport touches certain paths.
+Each rule has a list of `paths` and the `commands` to run.
+
+`validation_profile` names a built-in profile that chooses checks from
+exactly what a backport changed. Today there is one, `valkey-core`, described
+in [Backports](backport.md#what-gets-checked-before-a-backport-is-kept).
+
+`generated_file_rules` keep generated files up to date. When a backport
+changes one of the `paths`, the agent runs the `command` twice, checks the
+result is the same both times, and adds the changes to the backport commit.
+The command may only change the files listed in `outputs`. If it changes
+anything else, or gives a different result the second time, the backport is
+stopped.
+
+`repair_validation_failures`, off by default, gives Claude one chance to
+repair a backport that failed its checks, and lets it port a test that the
+older branch can't run. `test_path_patterns` tells it which files are tests,
+so it knows not to delete them. The default covers Valkey's layout:
+`tests/*.tcl` and `src/unit/test_*.c`, `.cc` and `.cpp`.
+
+## Following up on CI
+
+`automatic_ci_followup`, off by default, turns on the hourly
+[CI follow-up](backport.md#when-a-backport-prs-own-ci-fails), which sends
+failed jobs on the bot's own PRs to the CI fix bot.
+
+`ci_followup_ignored_jobs` is a list of job name patterns that the CI
+follow-up, the CI fix bot and the Test Failure Detector all skip. List the
+jobs that only report on other jobs, which would otherwise look like failures
+the bot should fix. For Valkey these are Daily CI's two result aggregators and
+the coverage upload. The patterns only match GitHub Actions jobs. Checks from
+other GitHub Apps, such as DCO and Codecov, are never considered in the first
+place, so patterns for them are only a precaution.
+
+## Smaller settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `backport_label` | `backport` | The label put on backport PRs. |
+| `llm_conflict_label` | `ai-resolved-conflicts` | The label added when Claude resolved a conflict. |
+| `max_conflicting_files` | `100` | A backport that conflicts in more files than this is skipped. |
+
+## Adding a release branch
+
+Add the branch and its project board number to `branches`. For Valkey,
+[release automation](release-automation.md) opens an issue and a PR to do
+this whenever a new minor or major version is released.
+
+After editing `repos.yml`, you can check that it loads and see which
+branches the sweep would cover:
+
+```bash
+python -m scripts.backport.matrix --registry repos.yml
+```

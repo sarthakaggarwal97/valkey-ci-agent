@@ -1,387 +1,293 @@
-# CI fix
+# Fixing CI failures
 
-Fixes one failed CI job per run. The bot binds the request to one exact
-failed job, reproduces the failure, lets one Claude Code session diagnose and
-edit, verifies and reviews the candidate in a loop, and then publishes it the
-way backports are published: a commit on a bot-owned branch, with the target
-PR's normal CI and a human review deciding whether it merges. The bot never
-merges.
+The CI fix bot takes one failed CI job, works out why it failed, and proposes
+a fix. It treats its own fixes with suspicion. Before anyone sees a fix, the
+bot reruns the failing test with the fix applied and asks a second,
+independent Claude session to review it. Even then the fix is only a
+proposal: it arrives as a commit on a pull request, where CI runs as usual, or
+as a patch in a comment, and a maintainer decides what happens next. The bot
+never merges.
 
-Where it can, the fix is prepared inside the very CI job that failed, on that
-job's runner, after that job's own setup and build, with that job's own test
-command.
+## Asking for a fix
 
-## Front doors
-
-Three front doors build the same request; a fourth is a manual dispatch.
-
-| Front door | Workflow | Runs | Publishes to |
-|---|---|---|---|
-| Maintainer command on a PR | `ci-fix-comment-poll.yml` -> `ci-fix.yml` | poll hourly, or by hand | The PR: a commit on a bot-owned branch, or a patch comment on a contributor or fork PR |
-| Bot-owned PR whose CI went red | `backport-ci-followup.yml` | hourly | The PR, with a commit |
-| Test Failure Detector issue | `ci-fix-issue-dispatch.yml` -> `ci-fix-issues.yml` | dispatcher hourly (inert until enabled), or by hand | The issue, as a patch comment, or a draft PR |
-| Manual request for a PR | `ci-fix.yml` | by hand | As for a maintainer command |
-
-**Maintainer command.** An active member of `valkey-io/contributors` puts this
-at the start of a comment on a `valkey-io/valkey` PR:
+On any `valkey-io/valkey` pull request, members of `valkey-io/contributors`
+can ask for a fix by starting a comment with:
 
 ```text
-@valkeyrie-ops fix [<run-or-job-url>] [hint]
+@valkeyrie-ops fix
 ```
 
-(`@valkeyrie-bot fix` is accepted too.) The poller only authorizes, claims the
-comment with a reaction, and dispatches `ci-fix.yml`. A run or job link selects
-that exact failure. Without one, the gate picks the most actionable completed
-failure on the PR's current head: a plain test job first, then a lint or build
-job (whose fix is often in CI definitions the bot never changes), then a
-sanitizer or valgrind job.
-
-**Bot-owned PR CI.** For each repository with `automatic_ci_followup`, the
-follow-up selects one unhandled failed Actions job on the current head of an
-open bot-owned PR: the sweep PR, a CI fix it pushed, or a draft fix PR it
-opened. Selection rules are in [backport.md](backport.md#automatic-ci-follow-up).
-
-**Detector issue.** See [Detector issue fixes](#detector-issue-fixes).
-
-Only a same-repository, bot-authored PR under `backport/...`,
-`agent/backport/...` or `agent/ci-fix/...` is writable. Every contributor or
-fork PR is a suggestion-only target: it receives a concrete patch in a comment
-and its branch is never changed.
-
-## The pipeline
-
-Every front door runs the fix as three jobs of `ci-fix-run.yml`
-(`scripts/ci_fix/run.py`):
+You can point it at a particular run or job, and add a hint in your own
+words:
 
 ```text
-plan -> fix-in-job | fix-in-container | fix-local -> publish
+@valkeyrie-ops fix https://github.com/valkey-io/valkey/actions/runs/123/job/456 the timeout looks too tight on slow runners
 ```
 
-- **plan** binds the request to one exact failed job, resolves that job from
-  its workflow file at the commit the fix is prepared on (see
-  [The failed job](#the-failed-job)), and hands it, with the job's log, to the
-  next job as an artifact.
-- **fix-in-job** is the failed job itself, on its runner (`fix-in-container`
-  when it ran in a container). The job's own setup and build run, then the
-  fix is prepared in that checkout with the job's own build and test commands.
-  A failure its job cannot host (a VM job, a step or expression the resolver
-  does not follow, or a suggestion, which is never run) goes through the same
-  steps on the bot's own Ubuntu runner (`fix-local`). None of these jobs holds
-  a GitHub token.
-- **publish** pushes, comments or opens the draft PR, and reports the result
-  where the request came from, also when the fix job failed or never finished.
+Without a link, the bot picks the failure on the PR's latest commit that it is
+most likely to be able to fix. It prefers ordinary test jobs, then lint and
+build jobs, whose fix often belongs in the CI configuration the bot won't
+touch, and leaves sanitizer and valgrind jobs for last. `@valkeyrie-bot fix`
+works as well.
 
-## How it works
+The bot looks for new requests every hour. When it picks yours up, it reacts
+to your comment, and it replies on the PR when it is done.
 
-1. **Bind one task.** The front door records the repository, run attempt,
-   exact failed job ID and name, tested SHA, and publication target. A PR
-   request requires the run to match the PR's current head.
-2. **Load exact evidence.** Code takes one immutable job snapshot for the
-   selected run attempt, downloads that job's log (not an aggregate run log),
-   and checks out the commit the candidate will be prepared on: the failed
-   job's own checkout, or a clone.
-3. **Look for an existing fix.** Before anything is edited, code searches the
-   checkout's history (every branch is there) for merged commits that name the
-   failing test, change its file or a source file the log names (as a compile
-   error does), or reference its issue. On a release branch a match on the
-   default branch is a port candidate unless it was already cherry-picked; on
-   the default branch a match after the failing run means the failure may
-   already be fixed. Candidates and their diffs go to the agent as evidence,
-   not as a decision.
-4. **Reproduce.** For a test in Valkey's Tcl suite or a C unit test, code
-   builds the way the failed job did and runs only the failing tests on the
-   unfixed code:
+What you get back depends on whose PR it is. On a contributor's PR, or a PR
+from a fork, the bot never pushes anything. It posts the fix as a patch in a
+comment, and the author can apply it or not. On the bot's own PRs, meaning
+backport PRs and the PRs it opened to fix something, it pushes the fix as a
+new commit.
 
-   ```text
-   ./runtest --single <unit> --only '<test>' --loops N --fastfail
-   ./src/unit/valkey-unit-gtests --gtest_filter='Suite.Test' --gtest_repeat=N
-   ```
+## Other ways a fix starts
 
-   Once (twice if it fails, to tell a frequent flake from a deterministic
-   failure), then 20 loops (2 under valgrind), then the same loops with every
-   core busy. A file that uses `run_solo` loops with one test client. A run
-   counts only if the output shows that test failing, or a valgrind or
-   sanitizer report; a build break or harness exception does not. Branches
-   whose `runtest` lacks `--fastfail` (7.2) run every loop to the end.
-5. **Diagnose and edit.** One Claude Code session, told what steps 3 and 4
-   found and given Valkey's test conventions
-   ([`scripts/ci_fix/guides/valkey-io__valkey.md`](../scripts/ci_fix/guides/valkey-io__valkey.md)
-   plus the checkout's own `tests/README.md` and contributor docs), chooses
-   one structured action: port a merged fix (preferred when one fits), make a
-   minimal patch, or refuse. It may edit its disposable checkout but cannot
-   commit or push.
-6. **Package the candidate.** Code rejects agent-created commits, undeclared
-   or mismatched changed paths, incomplete diagnoses, malformed port SHAs, and
-   oversized suggestions. A port is independently checked to be merged on the
-   default branch and absent from the target head.
-7. **Verify and review** (bot PRs and detector issues only; see below).
-8. **Publish.** For a bot PR, code reapplies the patch or cherry-picks the port
-   in a clean clone and pushes with an exact-head `--force-with-lease`. For a
-   contributor or fork PR, it posts the patch without touching the branch. For
-   a detector issue, it posts the patch on the issue or opens a draft PR. The
-   comment lists what the bot checked, including the existing-fix search and
-   the reproduction.
+The bot also starts without being asked in two situations.
 
-### The verification loop
+When one of the bot's own backport PRs fails CI, the backport workflow's
+hourly CI follow-up hands one failed job at a time to this bot. That is
+described in [Backports](backport.md#when-a-backport-prs-own-ci-fails).
 
-Before a patch or port for a bot PR or a detector issue is published, it goes
-through up to three rounds within a 60-minute budget (reproduction may use 20):
+When the [Test Failure Detector](test-failure-detector.md) files an issue for
+a test that failed in Daily CI, the bot can try to fix that too. A maintainer
+can start this for one issue by hand, and an hourly dispatcher can start it
+for every eligible issue once it is switched on. See
+[Fixing detector issues](#fixing-detector-issues).
 
-1. A port must be merged on the default branch and is cherry-picked into the
-   checkout. One that conflicts goes back to the agent, which may adapt it as
-   a patch.
-2. With the candidate applied, the reproduction runs again, looped and under
-   load if that is how it reproduced: 10 times for a failure seen on both
-   plain runs, 40 for an intermittent one or one the agent judged flaky (4
-   either way under valgrind). When code's reproduction never failed, or there
-   was none, the agent's own test command, if it gives one, must fail without
-   the patch (tried up to twice, or ten times for a flaky failure) and pass
-   with it as many times.
-3. A separate read-only review session, given the same conventions and the
-   reproduction result, must approve. Each round leaves 10 minutes for this
-   step and the previous one.
-4. A failed check or a rejection goes back to the agent with the test output
-   or the review's reasoning, and the round repeats.
+## What the bot does with a failure
 
-A failure that did not reproduce can still be fixed from the log, but the
-report says the fix is unproven. A candidate that does not pass within the
-rounds is refused. A mistake in what the agent hands back (an undeclared path,
-a short SHA) goes back to it like a failing test. Running out of time, or a
-crash of the agent or its review, is a failed attempt rather than a refusal:
-the follow-up and a detector issue each get a second attempt for the same job
-or occurrence. A suggestion for a contributor or fork PR is reviewed but never
-run.
+**It pins down exactly what failed.** The bot records the run, the attempt,
+the job and the commit that failed. For a PR, the failure has to be on the
+PR's latest commit, because a fix for an older commit would be fixing code
+that is no longer there.
 
-### Isolation
+**It recreates the job where it can.** The fix is prepared inside a copy of
+the job that failed: the same runner or container, the same setup steps, the
+same build flags and the same test command. Many failures only happen on one
+platform or with one build configuration, so this matters. When the job can't
+be recreated faithfully, for example because it runs in a VM or one of its
+steps depends on a secret, the bot works on a plain Ubuntu runner with a
+default build instead. [How the failed job is recreated](#how-the-failed-job-is-recreated)
+has the details.
 
-- The fix job holds no GitHub token; the `plan` and `publish` jobs each mint a
-  short-lived, repository-scoped App token for their reads and writes. Claude
-  Code never receives GitHub credentials; code owns commits and pushes.
-- Every CI-fix agent (edit, review, suggestion) and every build and test
-  command runs as a separate `ci-fix-agent` account
-  (`scripts/common/isolation.py`) that cannot read the workflow user's
-  environment. The agent is started with only the model's AWS session
-  credentials, and build and test commands with none.
-- That account owns the checkout while it runs. Code refuses to continue if
-  `.git` was replaced (a planted config's filter or merge driver would
-  otherwise run as the workflow user), and before verifying removes every
-  ignored file the job's own setup did not leave as it is, so a planted
-  binary cannot stand in for the build.
-- Only the exact change that was checked is accepted. If the build or the
-  agent's test command changed tracked files during verification, the tree
-  is a different candidate and goes back to the agent.
-- Valkey's build and test dependencies (Tcl, `tcl-tls`, valgrind, OpenSSL)
-  are installed before any credential exists.
-- A change under `.github/` is never pushed, and the tokens carry no
-  `workflows` scope.
+**It looks for a fix that already exists.** Before writing anything, the bot
+searches the git history for merged commits that mention the failing test,
+change its file or a source file the error points at, or reference its issue.
+On a release branch, the answer is often a fix that already landed on
+`unstable` and was never backported, and porting it is better than writing a
+new one. On `unstable`, a matching commit newer than the failure suggests the
+problem may already be fixed.
 
-## The failed job
+**It tries to reproduce the failure.** For Tcl tests and C unit tests, the
+bot builds the code the way the job did and runs only the failing test. It
+runs it once, then in a loop of 20, then in the same loop with every CPU core
+kept busy, because a lot of flaky tests only fail under load. A run only
+counts as a reproduction if that test actually fails, or valgrind or a
+sanitizer reports an error. A broken build or a crash in the test harness
+doesn't count.
 
-To fix a failure in the environment that failed, `scripts/ci_fix/ci_job.py`
-reads the failed run's workflow file (`daily.yml` for a scheduled failure, the
-PR run's own workflow otherwise) at the commit the fix is prepared on (a PR's
-head, or the branch tip for a detector issue) and finds the job instance whose
-name is the failed job's; a matrix entry is told by the name GitHub gives it.
-The `${{ }}` expressions the job needs are evaluated as GitHub would for that
-run, with empty dispatch inputs.
+**Claude diagnoses and edits.** Claude gets the job's log, whatever the
+history search found, the result of the reproduction, and Valkey's testing
+conventions: the bot's own guide in `scripts/ci_fix/guides/valkey-io__valkey.md`
+plus the repository's `tests/README.md` and contributor docs. It then does one
+of three things: ports an existing fix (preferred when one fits), writes a
+small patch, or declines. Declining is a legitimate answer, since some
+failures need a person. Claude works in a scratch copy of the code. It can
+edit files there but cannot commit or push.
 
-The agent can run in a job on an Ubuntu or macOS runner, or in a container on
-an Ubuntu runner, but not in a VM, with one `make` step and one `runtest`
-command, and setup steps that are scripts or checkouts. The fix job checks out
-the commit the fix is prepared on and the job's one other repository
-(`libbacktrace`), then replays the job's setup steps up to its tests, as
-GitHub runs them, from the plan's `setup.sh`. Instead of the tests, the agent
-then prepares the fix in that checkout (`scripts/ci_fix/job.sh`), rebuilding
-with the job's `make` command and testing with its `runtest` line.
+**Code checks what Claude handed back.** The bot rejects anything that doesn't
+add up: a commit Claude made itself, files changed that Claude didn't
+declare, a diagnosis with parts missing, a port that isn't a real merged
+commit or is already on the branch, or a suggested patch that is too large.
 
-A step, matrix or expression the resolver does not follow exactly (a secret,
-another step's output, an action other than a checkout, a script between the
-tests) means the job cannot host the fix, which is prepared on the bot's
-runner instead. The fix job receives only `contents: read`, the OIDC token and
-`AWS_ROLE_ARN` for the model.
+## How the fix is tested
 
-## Detector issue fixes
+A fix for a bot PR or a detector issue has to pass a feedback loop before it
+is published. The loop runs at most three rounds and has an hour in total,
+of which reproducing the failure may take up to twenty minutes.
 
-`ci-fix-issues.yml` takes one `issue=<N>` per dispatch. The front door
-requires an open, unassigned, detector-authored issue with no open linked PR,
-parses its latest run marker, verifies that it names a scheduled `daily.yml`
-run, checks that the bot has not already reported on that occurrence (so a
-dispatch retried after a lost response cannot post a second patch), and
-resolves the recorded failure to one exact failed job. The candidate
-is prepared on the current tip of the branch that run tested (`unstable`),
-with the tested SHA and exact job log kept as evidence. Only that issue's test
-is reproduced and verified; other tests the same job failed have issues of
-their own.
+In each round, a port is first cherry-picked into the code. If it conflicts,
+Claude can adapt it into a patch instead. Then the failing test is run again
+with the fix applied, in a loop, and under load if that is how it failed
+before: 10 times if it failed on every plain run, 40 times if it only failed
+sometimes or Claude judged it flaky, and 4 times under valgrind. If the bot
+never managed to reproduce the failure, Claude can supply its own test command
+instead, and that command has to fail without the fix and pass with it.
 
-`ci-fix-issue-dispatch.yml` picks the issues. Each tick it reads the newest
-open detector issues in `valkey-io/valkey` and dispatches a run for each one
-that has none queued or running, is unassigned, has no open linked PR, and
-has, for the occurrence it records, no bot fix or refusal and fewer than two
-failed attempts (a newer occurrence makes it eligible again). At most
-`CI_FIX_ISSUES_MAX_RUNS` (default 2) issue runs are active at once. Its hourly
-schedule does nothing until `CI_FIX_ISSUES_AUTO_DISPATCH` is `true`; manual
-dispatches default to a dry run that only lists what it would start.
+Finally a second Claude session, which can read the code but not change it,
+reviews the fix with the same conventions and test results in front of it,
+and has to approve. If the tests fail or the reviewer objects, the output or
+the reviewer's reasoning goes back to Claude, which revises its fix for the
+next round. If the build or Claude's test command changes any tracked file
+while the fix is being tested, the fix that was tested is no longer the fix
+in the tree, so that also goes back for another round.
 
-How a found candidate is published is `CI_FIX_ISSUES_PUBLISH`'s choice:
+A fix that doesn't pass within three rounds is declined. A failure the bot
+could never reproduce can still be fixed from the log, but the bot says
+clearly that the fix is unproven. If the bot runs out of time or crashes,
+that isn't treated as declining: the CI follow-up and detector issues get one
+more attempt at the same failure.
 
-- `comment` (default): the verified patch is posted on the issue with the root
-  cause, the fix and what the bot checked. Nothing is pushed and no PR is
-  opened; a maintainer applies the patch, or not. The occurrence counts as
-  handled, so the issue is not tried again until the test fails anew.
-- `draft-pr`: code creates a unique `agent/ci-fix/issue-<issue>-<run>` branch
-  and opens a draft PR against the tested branch containing `Fixes #<issue>`.
-  One test file often holds several open failures, so when the patch changes
-  the test file of another open detector issue, that issue's own test is
-  reproduced and verified separately: it must fail without the patch and pass
-  with it before the PR says `Fixes` it. An issue whose test the patch changed
-  without that being shown is named in the body with no `Fixes` line.
-  `publish` rechecks the issue right before opening the PR.
+Patches suggested on contributor PRs are reviewed but not run.
 
-The PR front doors are unaffected: a maintainer's command and a bot-owned PR's
-follow-up still update the PR, or suggest a patch on it.
+## Fixing detector issues
 
-## Running it
+When the Test Failure Detector files an issue, the bot can attempt a fix. You
+can start it for one issue with the **CI Fix Issues** workflow. An hourly
+dispatcher can also start it for every open detector issue that is eligible,
+but it does nothing until the repository variable
+`CI_FIX_ISSUES_AUTO_DISPATCH` is set to `true`.
 
-**Fix a failure on a PR by hand** (the dispatching user is authorized like a
-commenter, so must be an active member of `valkey-io/contributors`; `repo`
-must be `valkey-io/valkey`; leave `run_url` empty to pick the most actionable
-failure on the current head):
+An issue is eligible when it is open, unassigned and has no open PR linked to
+it, and when the bot hasn't already posted a fix, declined, or failed twice
+for the failure it currently records. A newer failure makes the issue
+eligible again. At most two of these fixes run at once, which
+`CI_FIX_ISSUES_MAX_RUNS` can change. Right before starting, the bot checks
+again that it hasn't already reported on that failure, so a dispatch that is
+retried can never post a second patch.
+
+The fix is prepared on the current tip of the branch that Daily CI tested,
+normally `unstable`, using the original log and commit as evidence. Only the
+issue's own test is reproduced and checked. Other tests that failed in the
+same job have issues of their own.
+
+By default the bot posts the tested patch on the issue, together with the root
+cause and what it checked. Nothing is pushed and no PR is opened. A maintainer
+can apply the patch or ignore it, and the issue isn't tried again until the
+test fails again.
+
+If `CI_FIX_ISSUES_PUBLISH` is set to `draft-pr`, the bot instead pushes a
+branch named `agent/ci-fix/issue-<issue>-<run>` and opens a draft PR that says
+`Fixes #<issue>`. One test file often has several open issues, so if the patch
+touches the test of another open detector issue, the bot runs that issue's
+test as well. It only adds `Fixes` for that issue if the test fails without
+the patch and passes with it. Otherwise the issue is mentioned in the PR
+without closing it.
+
+## How the failed job is recreated
+
+To run the fix in the environment that failed, the bot reads the workflow
+file that ran the failed job. That is `daily.yml` for a nightly failure, or
+the PR's own workflow otherwise, read at the commit the fix will be made on.
+It finds the job whose name matches the one that failed, including the
+specific matrix entry, and evaluates the `${{ }}` expressions it needs the way
+GitHub would have for that run.
+
+The fix job then checks out the code and the job's one other repository
+(`libbacktrace`), and replays the job's setup steps exactly as GitHub ran
+them. Where the job would have run its tests, the bot prepares the fix
+instead, rebuilding with the job's own `make` command and testing with its own
+`runtest` line.
+
+This works for jobs on Ubuntu or macOS runners, and for jobs in a container
+on an Ubuntu runner. It needs a job with one `make` step, one `runtest`
+command, and setup steps that are scripts or checkouts. If the job has
+anything the bot can't follow exactly, such as a secret, a step that uses
+another step's output, an action other than a checkout, or a setup script
+between its test steps, the fix runs on the bot's own Ubuntu runner instead.
+
+## Keeping the bot contained
+
+The job that runs Claude has no GitHub token at all. It can read the code and
+reach the model, and that is it. Separate jobs before and after it hold
+short-lived tokens for reading the failure and for publishing the result.
+
+Claude, and every build and test command the bot runs, run as a separate
+system account, `ci-fix-agent`. That account cannot read the workflow's
+environment. Claude is started with only the AWS credentials it needs for the
+model, and build and test commands get no credentials at all. Valkey's build
+and test dependencies are installed before any credentials exist.
+
+That account owns the code while it works, so the bot is careful when it takes
+the code back. It stops if `.git` was replaced, because a planted git
+configuration could otherwise run commands as the workflow user. Before
+testing a fix, it deletes ignored files that the job's own setup didn't
+create, so a prebuilt binary can't stand in for the real build.
+
+The bot never pushes a change under `.github/`, and its tokens couldn't push
+one anyway. The PR's own CI and a maintainer's review always have the final
+say. The bot's comment lists everything it checked, including the history
+search and the reproduction.
+
+## Running it by hand
+
+To ask for a fix on a PR, dispatch **CI Fix Bot**. You are checked the same
+way a commenter would be, so you need to be a member of
+`valkey-io/contributors`, and `repo` must be `valkey-io/valkey`. Leave
+`run_url` empty to let the bot choose the failure.
 
 ```bash
-gh workflow run ci-fix.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field repo=valkey-io/valkey \
-  --field pr=1234 \
+gh workflow run ci-fix.yml --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey --field pr=1234 \
   --field run_url=https://github.com/valkey-io/valkey/actions/runs/123456789/job/987654321
 ```
 
-**Scan for commands now** instead of waiting for the hourly poll:
+To pick up fix comments now instead of waiting for the hourly check:
 
 ```bash
-gh workflow run ci-fix-comment-poll.yml \
-  --repo valkey-io/valkey-ci-agent \
+gh workflow run ci-fix-comment-poll.yml --repo valkey-io/valkey-ci-agent \
   --field lookback_minutes=180
 ```
 
-**Fix one detector issue:**
+To try to fix one detector issue:
 
 ```bash
-gh workflow run ci-fix-issues.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field issue=1234
+gh workflow run ci-fix-issues.yml --repo valkey-io/valkey-ci-agent --field issue=1234
 ```
 
-**See which issues the dispatcher would start**, without starting any:
+To see which issues the dispatcher would start fixes for, without starting
+any:
 
 ```bash
-gh workflow run ci-fix-issue-dispatch.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field dry_run=true
+gh workflow run ci-fix-issue-dispatch.yml --repo valkey-io/valkey-ci-agent --field dry_run=true
 ```
-
-The backport follow-up front door is dispatched as in
-[backport.md](backport.md#running-it).
 
 ## Configuration
 
-The fix workflows reuse the shared secrets and OIDC role
-([setup.md](setup.md)). `ci-fix.yml` and `ci-fix-issues.yml` run only when
-dispatched; `ci-fix-comment-poll.yml` and `backport-ci-followup.yml` are
-hourly; `ci-fix-issue-dispatch.yml` is hourly but inert until enabled.
+The bot uses the shared secrets described in [setup.md](setup.md). Its
+behaviour can be adjusted with these repository variables:
 
-| Variable | Default | Purpose |
+| Variable | Default | What it does |
 |---|---|---|
-| `CI_FIX_AGENT_USER` | `ci-fix-agent`, set by `scripts/ci_fix/job.sh` | Account the agent and its test commands run as; required inside Actions |
-| `CI_FIX_ISSUES_AUTO_DISPATCH` (repository variable) | unset | `true` lets the issue dispatcher's schedule start fixes |
-| `CI_FIX_ISSUES_MAX_RUNS` (repository variable) | `2` | Issue fixes active at once |
-| `CI_FIX_ISSUES_PUBLISH` (repository variable) | `comment` | `comment` posts the patch on the issue; `draft-pr` pushes a branch and opens a draft PR |
-| `CI_AGENT_CLAUDE_MODEL` (repository variable) | unset | Model override for the agents, for example `opus` |
+| `CI_FIX_ISSUES_AUTO_DISPATCH` | unset | Set to `true` to let the hourly dispatcher start fixes for detector issues. |
+| `CI_FIX_ISSUES_MAX_RUNS` | `2` | How many detector issue fixes can run at once. |
+| `CI_FIX_ISSUES_PUBLISH` | `comment` | `comment` posts the patch on the issue; `draft-pr` opens a draft PR. |
+| `CI_AGENT_CLAUDE_MODEL` | unset | Use a different model, for example `opus`. |
 
-Per-repository: `automatic_ci_followup` and `ci_followup_ignored_jobs` in
-[`repos.yml`](registry.md). `ci-fix.yml` and its poller are scoped to
-`valkey-io/valkey`; the engine is mostly repository-agnostic (job resolution
-and reproduction follow Valkey's `make` and `runtest` conventions), but
-onboarding another repository needs its own token and trigger configuration.
-Detector issue handling has no registry setting.
+`CI_FIX_AGENT_USER` names the separate account, and is set to `ci-fix-agent`
+by the workflow. Which jobs the bot ignores, and whether it follows up on
+backport PRs, is set per repository in [`repos.yml`](registry.md).
 
-## Internals
+Comment requests are currently limited to `valkey-io/valkey`. Most of the
+engine doesn't care which repository it works on, but recreating a job and
+reproducing a failure follow Valkey's `make` and `runtest` conventions, and
+another repository would need its own tokens and triggers.
 
-Three front doors construct the same typed `FixTask`; `policy.py` holds one
-exhaustive `TargetKind` capability map (agent profile, patch limit, port
-support, push permission, branch creation) and `publish.py` branches on it to
-one of three small handlers. Adding a target means a capability record and a
-handler. The front doors share state-reading primitives:
-`github_runs.jobs_for_run_attempt()` returns one immutable job snapshot for an
-exact rerun attempt; `github_runs.newest_runs_for_head()` owns branch/SHA
-filtering and superseded-run collapse; `issue_state.py` owns detector
-occurrence parsing and linked-PR inspection. The plan, the resolved job and
-the fix's outcome pass between jobs as JSON (`state.py`).
+## Where the code lives
 
-```text
-front-door gate
-  -> FixTask
-       Failure:   repo, run id + attempt, exact failed job id + name, tested SHA
-       FixTarget: update bot PR | suggest on contributor PR | fix a detector issue
-       FixPolicy: backport | general
+Every fix runs as the same three jobs in `ci-fix-run.yml`, driven by
+`scripts/ci_fix/run.py`: a plan job that pins down the failure and works out
+how to recreate the job, a fix job, and a publish job. The fix job is called
+`fix-in-job` when it recreates the failed job, `fix-in-container` when that
+job ran in a container, and `fix-local` when it falls back to the bot's own
+runner. The jobs pass their state to each other as JSON (`state.py`).
 
-plan
-  -> workflow_artifacts.download_job_log(exact job id)
-  -> ci_job.resolve(the failed job, from its workflow file) -> setup.sh
+Each way of starting a fix has a small front door that checks the request and
+turns it into the same `FixTask`: `main.py` for PR requests,
+`comment_poll.py` for picking up comments, `issues.py` and
+`issue_dispatch.py` for detector issues, and `scripts/backport/ci_followup.py`
+for backport PRs. `gate.py` parses commands and checks that the requester is
+allowed. `github_runs.py` and `issue_state.py` read the state of runs and
+issues.
 
-engine.prepare_fix
-  -> the job's own checkout, set up and built by setup.sh; or, for fix-local,
-     shallow_clone_at_sha(expected publication commit) with full blobless history
-  -> failing tests = front door's (detector issue) + the log's [err] lines
-  -> prior_fixes.find_prior_fixes(checkout, tests, tested SHA, issue)
-  -> reproduce.plan_for(job name, tests) + reproduce(unfixed checkout)
-       once, looped, looped under load; reproduced | not | unrunnable
-  -> loop, at most MAX_ROUNDS (3):
-       agent.run_fix_agent(task, checkout, job log, feedback, FixContext)
-         FixContext = existing fixes + reproduction + repo test guide
-         one result: port | patch | refuse
-       code checks unchanged HEAD, exact declared paths, complete diagnosis,
-       patch size, and full port SHA
-       a port is cherry-picked (--no-commit) into the checkout
-       verify: the reproduction looped with the candidate, or the agent's
-       own test command failing without it and passing with it
-       agent.review_candidate(candidate, FixContext)
-       failure -> feedback to the next round; a port is undone either way
+`ci_job.py` reads the workflow file and writes the script that replays a
+job's setup, and `job.sh` runs the fix inside that job. `engine.py` runs the
+fix itself. It calls `prior_fixes.py` to search the history, `reproduce.py`
+to reproduce the failure, and `agent.py` for the Claude sessions that fix and
+review. `publish.py` and `push.py` check the destination again and publish.
+`comment.py` writes the bot's reply. `policy.py` lists what each kind of
+target allows, and `models.py` has the shared data types.
 
-publish.publish_candidate
-  -> suggestion:      revalidate the open PR and post the concrete patch
-  -> existing bot PR: revalidate ownership, branch and exact head; apply the
-                      patch or cherry-pick the port in a clean clone; push one
-                      descendant with an exact force-with-lease
-  -> detector issue:  revalidate the occurrence and source-branch head; post
-                      the patch, or create agent/ci-fix/... and open a draft PR
-  -> render the terminal result; never merge
-```
-
-Budgets: `PREPARE_BUDGET_S` (60 minutes), `REPRO_BUDGET_S` (20 minutes),
-`MAX_ROUNDS` (3), `TEST_RUNS` (2), `FLAKY_TEST_RUNS` (10). Agent profiles:
-`ci_fix_edit` (has Bash), `ci_fix_review` (read-only), `ci_fix_suggest`
-(no Bash or Glob); see [architecture.md](architecture.md#ai-layer).
-
-Entry points:
-
-- `scripts/ci_fix/run.py` - one fix as three jobs (plan, fix, publish) for every front door
-- `scripts/ci_fix/main.py` - authorize and plan one PR request, and report its result
-- `scripts/ci_fix/comment_poll.py` - find fix commands on PRs and dispatch `ci-fix.yml`
-- `scripts/ci_fix/issues.py` - validate and plan one detector issue, and report on it
-- `scripts/ci_fix/issue_dispatch.py` - start one issue fix per eligible open Daily issue, up to a cap
-- `scripts/ci_fix/ci_job.py` - resolve the failed job from its workflow file (matrix entry, expressions, setup steps, build and test commands) and write the script that replays its setup
-- `scripts/ci_fix/job.sh` - run the fix inside the job that hosts it: the agent's account and checkout
-- `scripts/ci_fix/state.py` - JSON state carried between a fix's jobs
-- `scripts/ci_fix/engine.py` - exact-log checkout, existing-fix search, reproduction, fix/verify/review loop
-- `scripts/ci_fix/prior_fixes.py` - find merged commits that may already fix the failing tests
-- `scripts/ci_fix/reproduce.py` - build and loop the failing Tcl tests, or repeat the failing C unit tests, with their job's commands or the closest
-- `scripts/ci_fix/guides/` - per-repository test conventions for the fix agent and its reviewer
-- `scripts/ci_fix/agent.py` - diagnosis-and-edit prompt, review prompt, and structured result parser
-- `scripts/ci_fix/publish.py` - target revalidation and publication
-- `scripts/ci_fix/push.py` - clean-clone patch/port commit and namespace-restricted push
-- `scripts/ci_fix/policy.py` - target capabilities, bot identities, and writable namespaces
-- `scripts/ci_fix/gate.py` - command parsing, fail-closed team auth, SHA-bound run gating
-- `scripts/ci_fix/github_runs.py` - exact-attempt job snapshots and current-head run selection
-- `scripts/ci_fix/issue_state.py` - detector occurrence and linked-PR state readers
-- `scripts/ci_fix/comment.py` - render a pushed fix, suggestion, refusal, or failure
-- `scripts/ci_fix/models.py` - `Failure`, `FixTarget`, `FixTask`, `FixCandidate`, and `FixResult`
+The limits mentioned on this page are constants in `engine.py`:
+`PREPARE_BUDGET_S` (an hour), `REPRO_BUDGET_S` (twenty minutes),
+`MAX_ROUNDS` (three), and `TEST_RUNS` and `FLAKY_TEST_RUNS` (two and ten
+tries for Claude's own test command).

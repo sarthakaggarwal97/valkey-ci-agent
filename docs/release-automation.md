@@ -1,152 +1,141 @@
 # Release automation
 
-Takes a Valkey core release from "prepare" to a published GitHub release with
-two human approvals and no durable controller. The identities that bind the
-pipeline are the preparation PR and the exact release-branch commit.
+Release automation takes a Valkey release from "let's prepare 9.1.1" to a
+tagged, published GitHub release. Maintainers make four decisions along the
+way, and the automation handles everything between them. It keeps no state
+of its own: at every step it looks at what is actually true on GitHub, such
+as which PR merged, which commit is at the head of the branch, and which runs
+passed, and acts on that.
 
-| Workflow | File | Runs | Purpose |
-|---|---|---|---|
-| Prepare Release | `release-prepare.yml` | by hand | Authorize, derive the version, open the tracking issue, cut the notes PR |
-| Refresh Release Progress | `release-progress.yml` | hourly (then every 5 minutes for 55) | Derive status from live state; dispatch publication once the notes PR merges |
-| Publish Release | `release-publish.yml` | dispatched by the watcher, or by hand | Validate, qualify, approve, tag, publish |
+## What a maintainer does
 
-## The maintainer's path
+1. Run **Prepare Release** from this repository's Actions tab. Give it the
+   release line (such as `9.1`), the kind of release (`rc`, `ga` or `patch`),
+   and the urgency.
+2. Review and merge the release notes PR it opens.
+3. Approve the `release` environment when publication asks for it.
+4. Approve the `release-publish` environment in `valkey-release-automation`.
 
-1. Dispatch **Prepare Release** from this repository's Actions tab with the
-   release line (`9.1`), the kind (`rc`, `ga`, `patch`) and the urgency.
-2. Review and merge the `agent/release-cut/...` notes PR.
-3. Approve the `release` environment.
-4. Approve `release-publish` in `valkey-release-automation`.
+The agent opens a tracking issue called `Release <tag>` as soon as you start.
+That issue always shows where the release is, links the current run, and says
+what to do next if something fails.
 
-Everything between those decisions advances automatically. The
-`Release <tag>` tracking issue is the one place to find the current run,
-failure and next action.
+## What happens in between
 
-## How it works
+**Preparing.** Prepare Release first checks that you are a member of
+`valkey-io/valkey-committers` or `valkey-io/valkey-release`. It works out the
+next version from the release branch and its tags, opens the tracking issue,
+and runs the [release notes cut](release-notes.md), which opens the notes PR.
+If you only want to see which version it would prepare, run it with
+`dry_run`.
 
-```text
-Prepare Release (dispatched by a maintainer)
-  -> authorize the dispatcher live against valkey-committers or valkey-release
-  -> derive the version from the branch and existing tags
-  -> create or update the non-authoritative "Release <tag>" tracking issue
-  -> invoke the release-notes cutter: open or refresh agent/release-cut/<version>-<stage>
-  -> maintainer review and merge
+**Waiting for the merge.** A watcher runs every hour and checks every five
+minutes for most of that hour. It updates the tracking issue from what it
+sees. Once the notes PR has merged, and the merge commit is still the latest
+commit on the release branch, it starts **Publish Release** for that exact
+commit, once.
 
-Refresh Release Progress (one hourly runner; five-minute polls for 55 minutes)
-  -> derive status from live PR, branch, workflow and release state
-  -> if the canonical notes PR merged and its merge SHA is still branch HEAD:
-       dispatch Publish Release <branch, merge SHA> once
-  -> update the tracking issue with failure and next action
+**Publishing.** Publish Release checks the commit again: it has to be the
+latest commit on the branch and the merge commit of the notes PR. It checks
+that `version.h` and the release notes agree with the release, that the tag
+doesn't already exist, whether the release should be marked as the latest one,
+and what the branch's CI says about that commit. It then
+asks `valkey-release-automation` to qualify the release, and waits for that to
+pass. Only then does it ask for approval in the protected `release`
+environment.
 
-Publish Release <branch, candidate SHA>
-  -> require candidate == the canonical notes PR's merge commit
-  -> require candidate == current branch head
-  -> validate version.h, the notes section, tag availability; report ci.yml status
-  -> call valkey-release-automation's secretless qualification workflow synchronously
-  -> protected `release` environment approval
-  -> re-authorize the recorded approver live; recompute and compare the plan digest
-  -> atomically create the tag at the candidate SHA; publish the GitHub release
-  -> the release event starts production automation in valkey-release-automation
-       -> archives, RPM/DEB, hashes, container, docs, website, Try Valkey
-       -> wait for the public container images, then update Bundle
-       -> draft Helm bump for GA; a maintainer makes it ready once its image is public
-  -> for X.Y.0, open the bounded backport-registry onboarding issue and PR
-```
+After approval it repeats every check, makes sure the person who approved is
+still on one of the two teams, and confirms that nothing about the planned
+release has changed since it was approved. Then it creates the tag on that
+exact commit and publishes the GitHub release.
 
-**Prepare Release** authorizes the dispatching maintainer against
-`valkey-io/valkey-committers` or `valkey-io/valkey-release`, derives the next
-version from the line and tags, opens one tracking issue, and invokes the
-[release-notes cutter](release-notes.md). Real preparation is the default; a
-dry run only displays the derived release.
+**Production.** Publishing the release starts the production workflow in
+`valkey-release-automation`, which asks for its own `release-publish`
+approval before it uploads anything public. It builds and publishes the
+archives, RPM and DEB packages, hashes, container images, documentation,
+website, Try Valkey and the Bundle. For a GA release it also opens a Helm
+chart update as a draft, which a maintainer marks ready once the matching
+container image is public. The tracking issue links to each of these.
 
-**Refresh Release Progress** derives status from live workflow, PR, branch and
-release state; it holds no state of its own. The issue displays progress and
-the next action; its bot-owned status comment carries the tracker identity.
-The editable issue body and checkboxes cannot authorize a transition, select a
-SHA, or skip a gate. The runner stays alive for 55 minutes, polling every five
-minutes, to bridge delays in GitHub's scheduled-workflow queue while staying
-under the App token's one-hour lifetime.
+For a new minor or major release (`X.Y.0`), the agent also opens an issue and
+a PR to add the new release line to the backport registry.
 
-**Publish Release** requires the exact SHA to be both branch HEAD and the
-canonical notes PR's merge commit. It verifies `version.h`, the notes section,
-advisory `ci.yml` status on that SHA, tag availability and the latest-release
-decision, then calls the synchronous `valkey-release-automation`
-qualification workflow and waits for that exact call to pass before entering
-the protected `release` environment. After approval it repeats every
-validation, checks the approver is still a live team member, requires the
-approved plan digest to match, atomically creates the tag, and publishes the
-release. Production then runs in `valkey-release-automation`, which resolves
-the published tag to its commit and requires any supplied SHA to match. The
-Helm PR stays draft until the public container image exists; that small human
-ordering check replaces a long-lived post-release polling loop. Once
-production starts, the dashboard shows links for every downstream target
-(hashes, container, documentation, website, Helm, Bundle); the production run
-remains the completion authority.
+## When something goes wrong
 
-If the release branch moves after the merge, automatic publication stops and
-the dashboard asks for a fresh preparation PR. If a build or qualification
-fails, the dashboard links the failed run and gives the next action. The
-watcher does not repair failures or infer success from issue text. A moved
-branch, failed check or failed qualification is recovered by fixing the
-repository state and rerunning the appropriate workflow.
+The watcher never tries to fix anything, and it never decides something
+succeeded because of what the issue says. If the release branch moves after
+the notes PR merged, automatic publication stops and the issue asks for a new
+notes PR. If a build or the qualification fails, the issue links the failed
+run and says what to do next. You fix the problem in the repository and run
+the right workflow again.
 
-### Aborting a release
+The tracking issue is for people to read. Its status comment, which only the
+bot writes, is what the automation relies on. Editing the issue body or
+ticking its checkboxes can't approve a release, choose a commit, or skip a
+check.
 
-Close the tracking issue. The progress workflow scans only open trackers, so
-closing it stops reconciliation and any new publication dispatch. To stop all
-release reconciliation during an incident, disable **Refresh Release
-Progress** in `valkey-ci-agent`; re-enable it after every abandoned tracker
-is closed. There is no abort command.
+### Abandoning a release
 
-## Security setup
+Close the tracking issue. The watcher only looks at open issues, so closing it
+stops everything for that release, including any new publication.
 
-- Restrict the manual workflows with the GitHub Actions actor policy so only
-  release maintainers can run them. The live team check stays as defense in
-  depth.
-- **Environments.** `release-control` must allow only the exact default
-  branch; the control App is available only through it and is not a tag
-  ruleset bypass actor. `release` must allow only the default branch, require
-  a reviewer, prevent self-review, and disallow admin bypass; the publication
-  job mints its token there. `valkey-release-automation` keeps its own
-  `release-publish` production approval. GitHub environments need only one of
-  their configured reviewers, so the two approvals are the separate
-  `release` and `release-publish` gates, not two names on one environment.
-- **One App today.** Control and publication run as one App (the Valkeyrie
-  Bot) using the shared `VALKEYRIE_BOT_APP_ID` and
-  `VALKEYRIE_BOT_PRIVATE_KEY` secrets. To split the roles without code
-  changes, create a dedicated publication App, store its id and key as
-  environment-scoped secrets of the same names inside `release` (environment
-  secrets shadow repository secrets), and re-point the ruleset bypass to it.
-- **App permissions.** The full matrix is in [setup.md](setup.md#github-app-permissions).
-  The App named as the tag-ruleset bypass needs `administration:read`,
-  `actions:read`, `checks:read`, `contents:write`, `metadata:read` and
-  `pull-requests:read`, plus organization `members:read`, on `valkey`.
-- **Tag ruleset.** The workflow verifies the release-tag ruleset is ACTIVE and
-  IMMUTABLE (restricts creation, update and deletion) before publishing,
-  which needs only `administration:read`. The bypass list is deliberately not
-  enumerated: GitHub reveals `bypass_actors` only to tokens that could edit
-  the ruleset, so checking it would force `administration:write` onto an
-  unattended credential, and the drift it would catch comes from the same
-  admin role that can delete the ruleset outright. Keep the bypass list to
-  exactly the publication App by admin review.
-- **Qualification** is a secretless synchronous reusable-workflow call, so it
-  needs no cross-repository Actions-write token. Deploy
-  `valkey-release-automation` first: its `qualify-release.yml` must expose
-  `workflow_call`, and this repository's Actions policy must allow
-  first-party reusable workflows from `valkey-io`.
+If you need to stop all release activity while you look into a problem,
+disable the **Refresh Release Progress** workflow in this repository. Close
+every abandoned tracking issue before you enable it again.
 
-Releases start from this repository's own Actions UI, so there is no relay
-workflow, no forwarded-identity input, and no cross-repository Actions-write
-grant.
+## Setting it up securely
 
-## Internals
+Only release maintainers should be able to run the release workflows. Set the
+repository's GitHub Actions policy so that only they can, and the team check
+inside the workflow will act as a second layer.
 
-- `scripts/release/main.py` - CLI used by preparation and publication
-- `scripts/release/authorize.py` - live team authorization
-- `scripts/release/versioning.py` - derive the next version from branch and tags
-- `scripts/release/tracker.py` - the tracking issue and its status comment
-- `scripts/release/checks.py` - version, notes, tag and CI validation
-- `scripts/release/publish.py` - plan, plan digest, prepare and publish
-- `scripts/release/policy.py` - authorized teams and release policy (`release_policy.yml`)
-- `scripts/release/models.py` - `ReleaseIntent` and friends
-- `scripts/backport/onboarding.py` - the first-GA backport onboarding issue and registry PR
+Three environments guard the credentials:
+
+- `release-control` holds the token the agent uses to prepare and track
+  releases. It must only allow the default branch.
+- `release` holds the token used to create the tag and publish. It must only
+  allow the default branch, require a reviewer, stop people approving their
+  own runs, and not let admins bypass it.
+- `release-publish`, in `valkey-release-automation`, guards the production
+  uploads.
+
+A GitHub environment only needs one of its listed reviewers to approve, so
+the two approvals come from two separate environments, not from two names on
+one.
+
+Release tags are protected by a tag ruleset. Before publishing, the workflow
+checks that the ruleset is active and stops anyone from creating, changing or
+deleting release tags. The publication App must be the only actor allowed to
+bypass it. The workflow can't check that list itself, because GitHub only
+shows it to tokens that could also edit the ruleset, and an unattended
+workflow shouldn't hold that power. An admin needs to keep that list correct.
+
+Today one GitHub App, the Valkeyrie Bot, does both preparation and
+publication, using the `VALKEYRIE_BOT_APP_ID` and `VALKEYRIE_BOT_PRIVATE_KEY`
+secrets. To give publication its own App, create it, store its ID and key as
+secrets with the same names inside the `release` environment (environment
+secrets take precedence over repository secrets), and make it the ruleset's
+bypass actor instead. No code needs to change.
+
+The permissions each repository needs are listed in
+[setup.md](setup.md#github-app-permissions). On `valkey`, the publication App
+needs to read administration, actions, checks and pull requests, write
+contents, and read organization members.
+
+Qualification is a reusable workflow in `valkey-release-automation` that the
+publish job calls directly and waits for. It needs no secrets and no
+permission to start workflows in another repository. For that to work,
+`valkey-release-automation` has to be deployed first, with its
+`qualify-release.yml` callable as a reusable workflow, and this repository's
+Actions policy has to allow reusable workflows from `valkey-io`.
+
+## Where the code lives
+
+`scripts/release/main.py` is the command-line entry point used by the
+workflows. `authorize.py` checks team membership, `versioning.py` works out
+the next version, `tracker.py` keeps the tracking issue up to date,
+`checks.py` validates the release, and `publish.py` builds the release plan
+and publishes it. `policy.py` reads `release_policy.yml`, which lists the
+teams allowed to release, the release branches, and the CI checks the
+tracking issue reports on. Adding a new release line to the backport registry
+is handled by `scripts/backport/onboarding.py`.

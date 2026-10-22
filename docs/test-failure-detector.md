@@ -1,117 +1,105 @@
 # Test Failure Detector
 
-Reads the latest Daily CI run on `valkey-io/valkey`, finds every failing test,
-and opens or updates one GitHub issue per failure. A fix for an issue it opens
-can be prepared by the [CI fix](ci-fix.md#detector-issue-fixes) engine.
+Valkey runs a large Daily CI workflow every night, across many platforms and
+build configurations. When a test fails there, someone has to notice, and
+the same flaky test failing on three nights in a row should be one problem,
+not three. The Test Failure Detector reads each night's results and keeps one
+GitHub issue per failing test on `valkey-io/valkey`, adding to it every time
+the test fails again.
 
-| Workflow | File | Runs |
-|---|---|---|
-| Test Failure Detector | `test-failure-detector-sweep.yml` | daily 23:00 UTC, or by hand |
+Once an issue exists, the [CI fix bot](ci-fix.md#fixing-detector-issues) can
+try to fix it.
 
-Valkey's Daily CI starts at 00:00 UTC and usually finishes within 4 to 7
-hours (of 411 completed runs, 6 exceeded 7 hours; the longest took 10h 02m),
-so the 23:00 UTC sweep sees the current day's run. A missed run can be swept
-by hand with its run ID for as long as its artifacts persist (30 days).
+## When it runs
 
-## How it works
+Daily CI starts at midnight UTC and usually finishes within four to seven
+hours. Of more than four hundred runs, only six took longer than seven hours,
+and the longest took ten. The detector runs at 23:00 UTC, which gives the run
+plenty of time to finish. If a night is ever missed, you can run the detector
+by hand for any run whose artifacts are still around, which is 30 days.
 
-```text
-main.py
-  -> get_latest_daily_run() or use the provided run_id
-  -> jobs_for_run_attempt(): one jobs snapshot of the run's current attempt
-  -> download_all_test_failures() from the run's artifacts
-  -> job_urls_for_jobs() for CI links
-  -> parse_and_deduplicate() groups by {test_name, test_file}
-  -> find_unrecorded_failures() adds what only the failed jobs' logs show
-  -> process_failures() creates/updates GitHub issues
-```
+## What it does
 
-1. **Find the run.** The most recent completed, non-cancelled, non-skipped
-   Daily run on the target branch (`unstable` by default), or the run ID given
-   on dispatch.
-2. **Download the artifact.** `ArtifactClient` fetches `all-test-failures`,
-   handling the auth-header-stripping redirect to Azure blob storage, transient
-   retries, and expired (404) artifacts.
-3. **Build CI links.** Job metadata gives each failure a link, with normalized
-   name variants for fuzzy matching against artifact names.
-4. **Parse and deduplicate.** The nested JSON (`{job -> suite -> [failures]}`)
-   is grouped by a `{test_name}::{test_file}` fingerprint, so a test failing
-   in several jobs becomes one `UniqueFailure` with several job references.
-5. **Read failed jobs the artifact does not record.** A job also fails on a
-   test timeout, a valgrind or sanitizer report, the shutdown leak check, an
-   exception in the test framework, or a failed C unit test (Google Test);
-   none of those reach the artifact. For each failed job the detector reads
-   what runtest prints: its closing summary ("The following tests failed:")
-   and an `[exception]:` line.
-   - A line naming a test and its file joins that test's issue.
-   - Anything else becomes a job-level issue titled by its cause,
-     `[JOB-FAILURE] <cause> in Daily`: the exception with the test file its
-     stack points at, or a valgrind or sanitizer report's first error and
-     frames. One cause is one issue however many jobs and steps it fails; a
-     job that printed two causes is in both.
-   - A failed C unit test is filed by name and file:
-     `[JOB-FAILURE] Unit test Suite.Test failed in test_x.cpp in Daily`.
-   - A failed job that printed no cause (a build break, a crash, a mirror
-     outage) is not filed, since nothing identifies what failed; the run's
-     summary lists it.
-   - The registry's `ci_followup_ignored_jobs` (the result aggregators) and
-     setup-step failures are not reported.
-   - A failed job whose log cannot be read is listed under *Unread job logs*
-     in the summary and fails the run. If the registry cannot be read, nothing
-     is filed and the run fails, since the jobs it says to ignore would be
-     filed.
-6. **Create or update issues.** `IssueDedupPublisher` upserts one issue per
-   fingerprint, matched on a hidden body marker
-   (`<!-- valkey-ci-agent:test-failure:<hex-hash> -->`, hashed from the test
-   name and file) rather than the title. Each failure ends in one of:
-   - **created** - no matching issue: opens one titled
-     `[TEST-FAILURE] {test_name} in {test_file}` with the `test-failure`
-     label, error trace, CI links, and environment list.
-   - **updated** - a match exists: merges new failing environments into the
-     body and bumps the occurrence counter, with a recurrence comment.
-   - **skipped** - the run ID matches the `last-key` marker already on the
-     issue, so re-sweeping one run does not inflate the count or duplicate the
-     comment.
-   - **skipped-recently-closed** - no open issue matches, but one with the
-     same marker (or exact title, for issues from the older fingerprint
-     scheme) was closed within the past day, so the failure was likely just
-     fixed. This check is opt-in on the shared publisher and enabled only
-     here, so the fuzzer monitor never suppresses a recurring incident.
+The detector finds the most recent finished Daily run on `unstable` (or the
+run you name) and downloads its `all-test-failures` artifact. That artifact
+lists every failing Tcl test by job and suite. The detector groups the
+failures by test name and file, so a test that failed in five jobs becomes
+one failure with five links to CI.
 
-A job summary with the metrics (failures detected, issues created and
-updated) is emitted on every exit path.
+Some failures never make it into that artifact: a test that timed out, a
+valgrind or sanitizer report, the leak check at shutdown, an exception in the
+test framework itself, or a failed C unit test. So the detector also reads the
+log of every failed job, looking at the summary `runtest` prints at the end
+and at any `[exception]:` line.
 
-## Running it
+- If the log names a test and its file, the failure joins that test's issue.
+- A failed C unit test gets an issue named after it, such as
+  `[JOB-FAILURE] Unit test Suite.Test failed in test_x.cpp in Daily`.
+- Anything else gets an issue named after its cause, such as
+  `[JOB-FAILURE] <cause> in Daily`. For an exception, the cause names the test
+  file the stack trace points at. For valgrind or a sanitizer, it is the first
+  error and the frames under it. One cause gets one issue, however many jobs
+  it broke.
+- A job that failed without saying why, such as a broken build, a crash, or a
+  package mirror being down, isn't filed, because there is nothing to tell one
+  such failure from another. The run summary lists it instead.
+
+Jobs that only report on other jobs are skipped, using the
+`ci_followup_ignored_jobs` list in [`repos.yml`](registry.md), and so are
+failures in setup steps. If the detector can't read a failed job's log, it
+lists the job under "Unread job logs" in its summary and marks the run as
+failed. If it can't read `repos.yml`, it files nothing at all and fails,
+because it would no longer know which jobs to ignore.
+
+## How issues are kept up to date
+
+Each issue carries a hidden marker built from the test's name and file, and
+the detector matches on that marker rather than the title. For every failure,
+one of four things happens:
+
+- If there is no issue yet, the detector opens one titled
+  `[TEST-FAILURE] <test> in <file>`, labelled `test-failure`, with the error,
+  links to the failing jobs, and the environments it failed in.
+- If an issue is already open, the detector adds any new environments and a
+  comment noting that it failed again, and bumps the count.
+- If the issue already records this exact run, nothing happens. Running the
+  detector twice on the same night doesn't double-count.
+- If there's no open issue but a matching one was closed within the last day,
+  the detector doesn't open a new one, because the failure has most likely
+  just been fixed and the fix hasn't reached that night's run yet.
+
+At the end of every run, including runs that stop early, the detector writes a
+summary to the workflow run with how many failures it found and how many
+issues it opened and updated.
+
+## Running it by hand
 
 ```bash
-gh workflow run test-failure-detector-sweep.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field repo=valkey-io/valkey \
-  --field run_id=12345678 \
-  --field dry_run=true
+gh workflow run test-failure-detector-sweep.yml --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey --field run_id=12345678 --field dry_run=true
 ```
 
-- `repo` - repository to scan (default `valkey-io/valkey`)
-- `run_id` - a specific run (empty = the latest Daily run)
-- `dry_run` - parse and report only; create or update nothing
+`repo` defaults to `valkey-io/valkey`. Leave `run_id` empty to use the latest
+Daily run. With `dry_run=true`, the detector reports what it found without
+opening or changing any issue.
 
 ## Configuration
 
-The workflow mints a GitHub App installation token from the shared App
-secrets ([setup.md](setup.md)) with `actions:read` (artifacts and logs) and
-`issues:write` on `valkey-io/valkey`.
+The detector uses the shared GitHub App described in [setup.md](setup.md). It
+needs to read Actions artifacts and logs and write issues on
+`valkey-io/valkey`.
 
-## Internals
+## Where the code lives
 
-The detector is a thin pipeline over shared building blocks in
-`scripts/common/`: `ArtifactClient` (artifact download), `workflow_jobs` (one
-exact-attempt jobs snapshot, shared with the CI fix engine), `valkey_ci`
-(runtest result lines, also shared), and `IssueDedupPublisher` (issue upsert,
-shared with the fuzzer monitor).
+`scripts/test_failure_detector/main.py` runs the steps above in order.
+`download.py` finds the run and downloads the artifact, `parse_failures.py`
+reads and groups the failures, `job_failures.py` reads the logs of failed jobs,
+and `manage_issues.py` and `issue_renderer.py` open and update the issues.
 
-- `scripts/test_failure_detector/main.py` - CLI entry point and pipeline orchestration
-- `scripts/test_failure_detector/download.py` - run discovery and artifact download
-- `scripts/test_failure_detector/parse_failures.py` - JSON parsing and deduplication
-- `scripts/test_failure_detector/job_failures.py` - failed jobs the artifact does not record, from their logs
-- `scripts/test_failure_detector/manage_issues.py` - orchestration over the shared dedup publisher
-- `scripts/test_failure_detector/issue_renderer.py` - title, body, recurrence comment, and label
+Most of the heavy lifting is shared with other workflows through
+`scripts/common/`. Artifact downloads use `workflow_artifacts.py`, which deals
+with GitHub's redirects, retries and expired artifacts. Issue matching and
+updating use `issue_dedup.py`, which the fuzzer monitor uses too; only the
+detector turns on the check for recently closed issues. Reading a run's jobs
+(`workflow_jobs.py`) and parsing `runtest` output (`valkey_ci.py`) are shared
+with the CI fix bot.

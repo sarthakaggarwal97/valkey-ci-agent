@@ -1,80 +1,70 @@
 # Fuzzer monitor
 
-Watches scheduled `valkey-io/valkey-fuzzer` runs, analyzes their artifacts,
-and files an issue on `valkey-fuzzer` for runs that look like a real bug
-rather than chaos-expected noise. It never writes to source in either
-repository; its only side effect is creating or updating issues.
+[valkey-fuzzer](https://github.com/valkey-io/valkey-fuzzer) runs Valkey
+clusters through randomized workloads and deliberate chaos: killing nodes,
+forcing failovers, cutting replication links. Some of what it reports is the
+expected result of that chaos, and some of it is a real bug. Reading every
+run by hand to tell them apart doesn't scale, so the fuzzer monitor does a
+first pass and files an issue on `valkey-io/valkey-fuzzer` when a run looks
+like a real problem.
 
-| Workflow | File | Runs |
-|---|---|---|
-| Monitor Valkey Fuzzer Runs | `monitor-fuzzer.yml` | every 4 hours, or by hand |
+The monitor only ever creates and updates issues. It never changes code in
+either repository.
 
 ## How it works
 
-1. **Find the run.** The latest scheduled fuzzer run.
-2. **Deterministic scan.** Pattern-match crash, sanitizer, failover and RDB
-   signals in the artifact JSON and node logs, ignoring chaos-expected noise
-   (CLUSTERDOWN, replication link loss).
-3. **Claude Code analysis.** Drop the artifacts in a tempdir, shallow-clone
-   `valkey-io/valkey` at the tested commit and `valkey-io/valkey-fuzzer` at the
-   run's HEAD, and ask Claude, with read-only `Read,Grep,Glob` tools, to
-   correlate the failure with source and decide whether it is a real bug. The
-   clones let it grep for assertion text or crash handlers in `valkey/src/` to
-   tell a known-benign assert from a new crash.
-   - If a clone fails, the prompt tells Claude not to cite source line numbers
-     and the analysis falls back to the artifacts alone.
-   - If Claude itself fails, the deterministic findings stand and the verdict
-     is labelled `needs-human-triage` rather than "normal".
-   - A run with no artifact bundle is reported as an error, not triaged from
-     raw logs.
-4. **File or update an issue.** Anomalous runs upsert an issue on
-   `valkey-io/valkey-fuzzer`, deduplicated by a stable fingerprint over the
-   root cause and anomaly shape.
-5. **Audit.** Per-run JSON results and Claude's evidence are uploaded as
-   workflow artifacts.
+Every four hours, the monitor takes the latest scheduled fuzzer run and
+downloads its artifacts.
 
-The Claude subprocess runs under the `fuzzer_analysis_readonly` profile: no
-editing, no shell, no network beyond the Bedrock call.
+It starts with a quick scan for the signs of real trouble: crashes, sanitizer
+reports, failed failovers and RDB errors in the run's results and node logs.
+It ignores things the chaos is expected to cause, such as `CLUSTERDOWN` or a
+lost replication link.
 
-## Running it
+Then Claude takes a closer look. The monitor puts the artifacts in a
+temporary directory next to a copy of Valkey at the commit that was tested
+and a copy of the fuzzer at the run's commit. Claude can read and search
+those files but can't change anything, run commands or reach the network. With
+the source in front of it, Claude can look up an assertion message or a crash
+handler and tell a known, harmless assertion apart from a new crash. It
+returns a verdict on whether the run shows a real bug.
+
+When something goes wrong along the way, the monitor errs on the side of
+asking a human. If it can't fetch the source, Claude works from the artifacts
+alone and is told not to cite line numbers. If Claude itself fails, the
+quick scan's findings stand and the run is marked `needs-human-triage` rather
+than reported as normal. A run that produced no artifacts is reported as an
+error.
+
+Runs that look like a real problem get an issue on `valkey-fuzzer`. Each
+issue is identified by a fingerprint of the root cause and the shape of the
+failure, so the same problem showing up in later runs updates the existing
+issue instead of opening a new one. The monitor uploads its results and
+Claude's evidence as artifacts on every run.
+
+## Running it by hand
 
 ```bash
-# Live, against the latest scheduled fuzzer run (the default)
+# Check the latest scheduled fuzzer run, for real
 gh workflow run monitor-fuzzer.yml --repo valkey-io/valkey-ci-agent
 
-# Probe without invoking Claude or filing issues
-gh workflow run monitor-fuzzer.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field dry_run=true
+# Try it without calling Claude or filing anything
+gh workflow run monitor-fuzzer.yml --repo valkey-io/valkey-ci-agent --field dry_run=true
 ```
 
-Scheduled runs always run live.
+Scheduled runs always run for real.
 
 ## Configuration
 
-Reuses the shared secrets and OIDC role ([setup.md](setup.md)). The
-Valkeyrie GitHub App needs `actions:read`, `contents:read` and `issues:write`
-on `valkey-io/valkey-fuzzer`; the workflow mints a token scoped to that
-repository only.
+The monitor uses the shared secrets described in [setup.md](setup.md). The
+GitHub App needs to read Actions and contents and write issues on
+`valkey-io/valkey-fuzzer`, and the workflow asks for a token limited to that
+one repository.
 
-## Internals
+## Where the code lives
 
-```text
-fuzzer/main.py
-  -> common.workflow_artifacts.ArtifactClient.list_recent_runs(...)
-  -> FuzzerRunAnalyzer.analyze(run)
-       common.workflow_artifacts -> download the artifact bundle
-       analyzer._scan_logs()     -> deterministic regex pass
-       analyzer._invoke_claude() -> artifacts in a tempdir; common.git_clone
-                                    shallow-clones valkey + valkey-fuzzer at
-                                    the tested SHAs; Claude under the
-                                    fuzzer_analysis_readonly profile; JSON verdict
-       common.incidents.compute_fingerprint() -> stable hash over the anomaly shapes
-  -> common.issue_dedup.IssueDedupPublisher.upsert(...)
-       fuzzer.issue_renderer.render_for(analysis) -> title/body/comment
-```
-
-- `scripts/fuzzer/main.py` - CLI entry point
-- `scripts/fuzzer/analyzer.py` - orchestration, deterministic scan, Claude Code integration
-- `scripts/fuzzer/issue_renderer.py` - title, body and comment rendering
-- `scripts/fuzzer/models.py` - typed dataclasses for the analysis pipeline
+`scripts/fuzzer/main.py` is the entry point. `analyzer.py` does the work:
+the quick scan, cloning the source, and calling Claude with the read-only
+`fuzzer_analysis_readonly` profile. `issue_renderer.py` writes the issue, and
+`models.py` holds the data types. Downloading artifacts, cloning, the
+fingerprint and issue updates all come from `scripts/common/`.

@@ -1,327 +1,269 @@
-# Backport
+# Backports
 
-Cherry-picks merged PRs onto release branches, resolves conflicts with Claude
-Code, validates the result, and opens one rolling PR per release branch for a
-maintainer to merge. Works for any repository in [`repos.yml`](registry.md):
-Valkey core, the modules (bloom, search, json), or anything else that tracks
-backports on a per-branch GitHub Project board.
+Valkey maintains several release lines at once, and most bug fixes that land
+on `unstable` need to reach some of them too. Doing that by hand means
+cherry-picking, fixing conflicts, rebuilding and retesting, once per branch
+for every fix. The backport workflows do that work, and leave maintainers with
+the parts that need judgement: deciding what should be backported, and
+reviewing the result.
 
-## Workflows
+These workflows cover every repository listed in [`repos.yml`](registry.md):
+Valkey itself, its modules, and anything else that tracks backports on a
+GitHub Project board per release branch.
 
-| Workflow | File | Runs | Purpose |
-|---|---|---|---|
-| Backport Sweep | `backport-sweep.yml` | daily 09:00 UTC, or by hand | Top up every branch's sweep PR with validated cherry-picks |
-| Backport Poll | `backport-poll.yml` | hourly | Re-run the sweep for a branch as soon as its sweep PR has merged |
-| Backport Mark Done Poll | `backport-mark-done-poll.yml` | hourly (:30) | Move project-board items to "Done" once the backport landed |
-| Backport CI Follow-up | `backport-ci-followup.yml` | hourly (:20) | Hand one failed CI job on a bot-owned PR to the [CI fix](ci-fix.md) engine |
-| Backport Eligibility | `backport-eligibility.yml` | daily 00:30 UTC | Comment on newly merged PRs that look worth backporting |
-| Manual Backport | `manual-backport.yml` | by hand | Backport one PR to one branch |
-| Manual Revert Commit | `manual-revert-commit.yml` | by hand | Revert one commit on a sweep branch |
-| Backport PR | `backport.yml` | `workflow_call` | The reusable single-PR job behind Manual Backport |
+## How a fix gets backported
 
-The bot writes only `backport/...` and `agent/backport/...` branches, never a
-release branch, and never force-pushes a published sweep branch.
+It starts with a maintainer. Each release branch has a GitHub Project board.
+When a merged PR should be backported, a maintainer adds it to that branch's
+board with the status "To be backported". That status is the only thing the
+agent acts on.
 
-## The sweep
+Every day at 09:00 UTC the sweep goes through each repository and release
+branch in `repos.yml`. For each branch it reads the board and cherry-picks the
+waiting PRs, one at a time, onto a branch named `agent/backport/sweep/<branch>`.
+PRs that were squash-merged or merged with a merge commit are both handled;
+PRs that were rebase-merged are not, because there is no single commit to
+pick. When a cherry-pick conflicts, Claude reads both sides of the conflict
+and resolves it in place. A pick that conflicts in more files than the
+repository allows (100 by default) is skipped.
 
-1. **Fan out.** The preflight job reads `repos.yml` and starts one matrix leg
-   per `{repo, branch}`.
-2. **Discover.** Each leg queries the branch's GitHub Project v2 board for PRs
-   with status "To be backported".
-3. **Cherry-pick.** Each candidate is cherry-picked onto the sweep branch
-   `agent/backport/sweep/<branch>`. Merge and squash merges are resolved to
-   their source commits; rebase merges are rejected.
-4. **Resolve conflicts.** When a cherry-pick conflicts, Claude Code reads both
-   sides and resolves the conflict in place (profile
-   `conflict_resolve_edit_only`). A candidate touching more than
-   `max_conflicting_files` is dropped.
-5. **Validate.** The registry's build and validation commands run against the
-   candidate's own diff. A failure removes that candidate from the branch.
-6. **Open or update the PR.** The branch is pushed and a PR with a summary table
-   is opened or updated. Candidates that were skipped or failed validation are
-   listed in the PR's "Needs attention" section, not committed.
-7. **Follow up on CI.** For repositories with `automatic_ci_followup`, a
-   failed Actions job on the PR's current head goes to the CI fix engine
-   (see [Automatic CI follow-up](#automatic-ci-follow-up)).
-8. **Mark done.** Once the backport has landed on the release branch, the
-   source PR's board status moves from "To be backported" to "Done".
+After each cherry-pick, the agent builds and tests the branch with the
+commands configured for that repository. A backport that breaks the build or
+a test is taken off the branch again, so one bad backport never holds up the
+ones behind it. The sweep keeps at most two new backports per run, which keeps
+each pull request small enough to review properly.
 
-Each scheduled run keeps up to two validated cherry-picks
-(`--max-candidates 2`). Backport commits carry a DCO sign-off; conflict
-resolutions carry the `llm_conflict_label` label on the PR.
+The agent then pushes the branch and opens a pull request into the release
+branch, or updates the one that is already open. The PR description lists
+what was applied and has a "Needs attention" section explaining anything that
+was skipped or failed. When Claude resolved a conflict, the PR gets the
+`ai-resolved-conflicts` label so reviewers know to look closely. Backport
+commits carry a DCO sign-off.
 
-### Keeping the sweep branch green
+Once a maintainer merges the PR, the work is done. Within the hour, another
+job notices that the commits are now on the release branch and moves their
+cards on the project board from "To be backported" to "Done". It checks the
+whole board every time, so it also catches backports that someone
+cherry-picked by hand.
 
-A candidate is kept only if the whole branch still validates after it is
-applied. A failing candidate is reset off the branch, so one bad commit never
-blocks the ones after it.
+## Keeping the next pull request coming
 
-Validation, in order:
+If the sweep only ran once a day, a branch would sit idle from the moment its
+backport PR merged until the next morning. To avoid that, a poller runs every
+hour, and again half an hour later, and asks a simple question for each
+branch: is there an open sweep PR? If there is, a human is still reviewing it
+and the poller leaves the branch alone. If there isn't, it runs the sweep
+straight away and opens a new one.
 
-- `validation_setup_commands` run once per clone.
-- `build_commands` run before any push; a non-zero exit blocks the push.
-  Repositories with none rely on their upstream CI.
-- `validation_rules` map changed paths to commands.
-- A `validation_profile` derives checks from the exact changed files. The
-  `valkey-core` profile runs `git diff --check` over the candidate range,
-  branch-native `clang-format-18` over only the candidate's line ranges and
-  the suffixes that release's workflow enforces, the directly changed Tcl
-  tests in their required modes (TLS included), C/C++ unit tests,
-  branch-compatible checks for cluster, sentinel, module or test-harness
-  changes, and reply-schema validation for changed tests that do not opt out.
-  It follows the target branch's own C/C++ unit-test discovery convention, so
-  a clean cross-harness cherry-pick cannot pass while its new test file is
-  ignored.
-- `generated_file_rules` run their generator twice to prove convergence. A
-  generator may edit only its declared tracked outputs; an allowed update is
-  amended into the candidate commit, anything else fails closed.
+That open PR is the only state the system keeps. The sweep, the poller and
+the CI follow-up described below all share one lock per branch, so they never
+work on the same branch at once.
 
-Two AI-assisted recoveries exist, both opt-in through
-`repair_validation_failures`:
+## What gets checked before a backport is kept
 
-- **Repair.** Claude Code gets one edit-only attempt, scoped to the backport
-  diff, to fix a failing cherry-pick before it is dropped. The repair may not
-  delete changed tests (`test_path_patterns` says which paths are tests).
-- **Test adaptation.** A test file the target branch cannot build or run is
-  never silently discarded. A separate sandboxed pass must port its intent into
-  an existing branch-native test and revalidate the full candidate, or the
-  candidate fails closed. Added files that belong only to the unsupported
-  harness are given as context and removed in the same validated commit;
-  independently mapped tests stay unchanged.
+Each repository decides how its backports are validated, in `repos.yml`. The
+checks run in this order: one-time setup commands, the build, any commands
+tied to the paths the backport changed, a validation profile, and generated
+files.
 
-## Poll
+For Valkey, the `valkey-core` profile does most of the work. It looks at
+exactly what the backport changed and runs the checks that apply to it:
+whitespace, `clang-format` using the release branch's own rules, the Tcl tests
+that changed (in TLS mode too, where those tests require it), the C and C++
+unit tests, the cluster, sentinel and module suites when those areas changed,
+and reply-schema validation for changed tests. It also makes sure that a new
+unit test file is actually picked up by that branch's test runner, because
+older branches discover unit tests differently and a test that silently
+doesn't run would look like a pass.
 
-The daily sweep tops a rolling PR up and then waits for the next day, so a
-merged sweep PR would sit empty until then. `backport-poll.yml` closes that
-gap: it runs hourly, polls immediately and once more 30 minutes later inside
-the same runner, and for each `{repo, branch}` runs the sweep only when no
-sweep PR is open for that branch.
+Some files in Valkey are generated, such as the unit test header. When a
+backport touches what they are generated from, the agent runs the generator,
+checks that running it a second time gives the same result, and folds the
+output into the backport commit. If a generator changes any file it isn't
+declared to change, the backport is stopped.
 
-```text
-poller.py
-  -> reads repos.yml and fans out one job per {repo, branch}
-  -> find_existing_pr(...) -> open sweep PR for this branch?
-       yes -> skip; a human is reviewing it
-       no  -> run_backport_sweep(...) opens a fresh PR
-```
+## When a backport fails its checks
 
-The open-PR check is the whole state model: a merge closes the sweep PR, the
-next poll tops the board back up, and the new PR locks the branch until it too
-merges. Poll, daily sweep and CI follow-up share the
-`backport-branch-mutation-{repo}-{branch}` concurrency group with the maximum
-pending queue, so they never race for one branch and a later scheduled writer
-cannot replace one already waiting. Manual dispatches are one-shot.
+A repository can opt in to two kinds of help with
+`repair_validation_failures`.
 
-## Mark done
+The first is a repair. Claude gets one attempt to fix a backport that failed
+validation. It may only edit the files the backport touched, and it is not
+allowed to delete tests to make the failure go away.
 
-`backport-mark-done-poll.yml` reconciles every project board against branch
-reality each hour and moves items to "Done" once the backport is actually on
-the target branch. It is self-healing: it picks up backports applied by the
-sweep, by an earlier run, or by a manual cherry-pick.
+The second is for tests that can't run on an older branch at all. Sometimes a
+fix comes with a new test written for a test harness that the release branch
+doesn't have. Rather than quietly dropping the test, Claude ports what the
+test checks into an existing test that the branch does support, and the whole
+backport is validated again. If that can't be done, the backport fails
+instead of going in without its test.
 
-## Eligibility
+## When a backport PR's own CI fails
 
-`backport-eligibility.yml` looks at every PR merged to the development branch
-in the last three UTC days (so a missed day is covered by the next run) and
-comments on the ones that look eligible, naming the release branches that
-carry the changed code. It only suggests; putting a PR on a board stays a
-maintainer decision. PRs already commented on are skipped.
+Validation catches most problems, but the PR's CI runs more jobs on more
+platforms. For repositories with `automatic_ci_followup` turned on, which
+today is Valkey itself, the agent watches its own open PRs into each release
+branch. That means the sweep PR, and also any PR the CI fix bot opened or
+pushed a fix to.
 
-```text
-eligibility.py
-  -> GraphQL search: PRs merged into the default branch in that window
-  -> skip PRs that already carry the eligibility marker comment
-  -> git blame the lines each PR modifies or deletes, and the lines on
-     either side of what it only inserts, at its parent, looking through
-     .git-blame-ignore-revs
-       PR that only adds files -> not eligible
-  -> per registered branch, a commit that introduced those lines is
-     an ancestor, or its PR was backported there -> candidate branch
-       drop branches the PR already landed on or is queued on
-  -> Claude (no tools) sees the diff and which branches carry each
-     introducing commit; answers backport yes/no and a subset of the
-     candidate branches
-  -> one marker comment per eligible PR naming the branches and projects
-```
+Every hour it waits until all the CI runs on a PR's latest commit have
+finished, then picks one failed job it hasn't tried yet and hands it to the
+[CI fix bot](ci-fix.md). The fix is pushed as a new commit on top, and the
+PR's CI runs again. The bot never rewrites the branch and doesn't add a DCO
+sign-off to these commits, so a maintainer certifies the change when they
+merge it.
 
-History bounds the branches and the model can only narrow them, so a fix to a
-feature that arrived after a release line forked is never offered to that
-line. Whatever history cannot answer (a PR too large to blame, an unreadable
-branch, a git failure) and a missing or unparseable verdict post nothing for
-that PR and fail the run; the other PRs are still judged, and comments go out
-after each model batch. A failed run lists the undecided PRs in its job summary.
+A few rules keep this from going in circles. The agent makes at most three
+attempts on any one commit. A job it tried and failed to fix gets one more
+try; a job it declined to fix is left for a human. Jobs that only report on
+other jobs, such as Daily CI's result aggregators and the coverage upload, are
+listed in `ci_followup_ignored_jobs` and never touched. Checks that come from
+other GitHub Apps, like DCO and Codecov, aren't workflow jobs and are never
+considered. Because a backport usually fails when it depends on an earlier
+change the release branch doesn't have, the fixer is told to look for that
+first.
 
-## Automatic CI follow-up
+## Suggesting backports
 
-`backport-ci-followup.yml` covers what the poller leaves alone: an open
-bot-owned PR whose own CI has gone red. For each registered branch of a
-repository with `automatic_ci_followup: true`, it looks at App-owned open PRs
-whose head this engine writes: the `agent/backport/sweep/<branch>` PR first,
-then any `backport/`, `agent/backport/` or `agent/ci-fix/` head into that
-branch, so a pushed CI fix and a draft fix PR also get another round.
+Deciding what to backport is still a maintainer's call, but it is easy to miss
+a fix. Every day at 00:30 UTC the agent looks at the PRs merged to `unstable`
+over the last three days and comments on the ones that look like backport
+candidates. The three-day window means a day that fails is covered by the
+next run, and a PR that already has a comment is skipped.
 
-```text
-ci_followup.py
-  -> find the open bot-owned PRs into <target> whose head branch this engine writes
-  -> require App ownership and exact repo/base/branch/current 40-character SHA
-  -> wait until all workflow runs for that head are complete
-  -> consider Actions jobs only; checks owned by other Apps (DCO, Codecov) are never visible
-  -> discard the informational jobs named in ci_followup_ignored_jobs
-  -> skip logical jobs already recorded in hidden result-comment markers
-     (twin push and pull_request runs for one head count once)
-  -> stop after three attempts on the current head
-  -> plan one FixTask for the exact prioritized failed job
-  -> run it like every other fix (ci_fix/run.py, ci-fix-run.yml)
-       backport policy for a backport head, general policy otherwise
-       descendant-only commit plus exact-head lease; no rewrite, no DCO sign-off
-  -> post the outcome marker; a failed attempt is tried once more, else wait for a new head
-```
+To make the suggestion, the agent first works out which release branches
+contain the code the PR changes. It runs `git blame` on the lines the PR
+modifies or deletes, and on the lines next to anything it only adds, to find
+the commits that wrote them. A release branch is a candidate only if it has
+those commits, either directly or because they were backported there. A fix
+to a feature that arrived after a release line was cut is never suggested for
+that line, and a PR that only adds new files is never suggested at all.
 
-A refusal retires its job without counting as an attempt. The automated
-caller replaces the human-team gate with a machine gate that requires the
-exact bot-owned PR, branch and SHA; a moved head cannot be pushed because the
-shared push path independently requires the remote head to equal the failed
-SHA. The pushed commit starts the PR's normal CI, which with human review
-stays authoritative. The fix itself is documented in [ci-fix.md](ci-fix.md).
+Claude then reads the diff and the list of candidate branches and decides
+whether the change is worth backporting, and to which of those branches. It
+can narrow the list but never add to it. The agent posts one comment per PR
+naming the branches and their boards. If it can't reach a decision about a PR,
+it posts nothing for that PR and marks the run as failed, so the next day's
+run tries again.
 
-## Running it
+## Running things by hand
 
-All dispatches target `valkey-io/valkey-ci-agent`.
+All of these run against `valkey-io/valkey-ci-agent`.
 
-**Sweep one project in discovery mode** (leave `dry_run` on; set it to
-`false` to cherry-pick, push and update the PR):
+To run the sweep for one board without changing anything, leave `dry_run` on.
+Set it to `false` when you want it to cherry-pick, push and update the PR.
 
 ```bash
-gh workflow run backport-sweep.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field repo=valkey-io/valkey \
-  --field project_number=14 \
-  --field dry_run=true
+gh workflow run backport-sweep.yml --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey --field project_number=14 --field dry_run=true
 ```
 
-**Backport one PR by hand:**
+To backport a single PR to a single branch:
 
 ```bash
-gh workflow run manual-backport.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field pr_url=https://github.com/valkey-io/valkey/pull/3601 \
-  --field target_branch=9.0
+gh workflow run manual-backport.yml --repo valkey-io/valkey-ci-agent \
+  --field pr_url=https://github.com/valkey-io/valkey/pull/3601 --field target_branch=9.0
 ```
 
-**Revert one commit on a sweep branch** (the branch must start with
-`agent/backport/sweep/`):
+To revert one commit on a sweep branch, for example a backport you don't want
+in the PR:
 
 ```bash
-gh workflow run manual-revert-commit.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field repo=valkey-io/valkey \
-  --field branch=agent/backport/sweep/9.0 \
-  --field commit_sha=<sha>
+gh workflow run manual-revert-commit.yml --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey --field branch=agent/backport/sweep/9.0 --field commit_sha=<sha>
 ```
 
-**Reconcile the boards now** (always live; preview with the local command
-below):
+To update the project boards now rather than waiting for the hourly run (this
+always changes the live boards):
 
 ```bash
-gh workflow run backport-mark-done-poll.yml \
-  --repo valkey-io/valkey-ci-agent \
+gh workflow run backport-mark-done-poll.yml --repo valkey-io/valkey-ci-agent \
   --field repo=valkey-io/valkey
 ```
 
-**Run the CI follow-up now:**
+To run the CI follow-up now:
 
 ```bash
-gh workflow run backport-ci-followup.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field repo=valkey-io/valkey \
-  --field project_number=14
+gh workflow run backport-ci-followup.yml --repo valkey-io/valkey-ci-agent \
+  --field repo=valkey-io/valkey --field project_number=14
 ```
 
-**Re-cover an eligibility window** (manual dispatch defaults to `dry_run=true`,
-which reports verdicts in the job summary without commenting):
+To look at backport suggestions for an earlier window, give the last day and
+how many days to cover. With `dry_run=true` the verdicts go to the job summary
+and no comments are posted:
 
 ```bash
-gh workflow run backport-eligibility.yml \
-  --repo valkey-io/valkey-ci-agent \
-  --field date=2026-09-16 \
-  --field days=7 \
-  --field dry_run=true
+gh workflow run backport-eligibility.yml --repo valkey-io/valkey-ci-agent \
+  --field date=2026-09-16 --field days=7 --field dry_run=true
 ```
 
-Both backport workflows upload result JSON and `agent-evidence` artifacts when
-available.
+The sweep and single-PR workflows upload their results and Claude's evidence
+as workflow artifacts.
 
-### Locally
+### On your own machine
 
-Check matrix generation:
+These are useful when you are changing the backport code. See
+[DEVELOPMENT.md](../DEVELOPMENT.md) for setup.
+
+See which branches the sweep would cover:
 
 ```bash
 python -m scripts.backport.matrix --registry repos.yml --repo valkey-io/valkey
 ```
 
-Discover a branch's candidates without cherry-picking or pushing:
+See what the sweep would pick up for a branch, without cherry-picking or
+pushing anything:
 
 ```bash
-python -m scripts.backport.sweep \
-  --registry repos.yml --repo valkey-io/valkey --branch 9.0 \
-  --target-token "$GITHUB_TOKEN" --discover-only --verbose
+python -m scripts.backport.sweep --registry repos.yml --repo valkey-io/valkey \
+  --branch 9.0 --target-token "$GITHUB_TOKEN" --discover-only --verbose
 ```
 
-Preview the mark-done reconciliation (drop `--dry-run` to apply; omit
-`--target-branch` for every branch of the repo):
+Preview which board cards would move to "Done". Drop `--dry-run` to move
+them, or `--target-branch` to cover every branch:
 
 ```bash
-python -m scripts.backport.mark_done \
-  --registry repos.yml --repo valkey-io/valkey --target-branch 9.0 \
-  --target-token "$GITHUB_TOKEN" --dry-run --verbose
+python -m scripts.backport.mark_done --registry repos.yml --repo valkey-io/valkey \
+  --target-branch 9.0 --target-token "$GITHUB_TOKEN" --dry-run --verbose
 ```
 
-Judge one day's merged PRs for eligibility (needs Bedrock credentials):
+Ask for backport suggestions for one day. This calls Claude, so it needs
+Bedrock credentials:
 
 ```bash
 TARGET_TOKEN=$(gh auth token) python -m scripts.backport.eligibility \
   --repo valkey-io/valkey --date 2026-09-16 --days 1 --dry-run
 ```
 
-The single-PR command is write-capable once it reaches push and PR creation.
-Use it only with an intended target repository and token:
+The single-PR backport will push and open a PR if it gets that far, so only
+point it at a repository and token you intend to write to:
 
 ```bash
 BACKPORT_GITHUB_TOKEN="$GITHUB_TOKEN" python -m scripts.backport.main \
-  --registry repos.yml --repo valkey-io/valkey \
-  --pr-number 3601 --target-branch 9.0 --verbose
+  --registry repos.yml --repo valkey-io/valkey --pr-number 3601 --target-branch 9.0 --verbose
 ```
 
 ## Configuration
 
-Everything per repository lives in [`repos.yml`](registry.md). The workflows
-use the shared secrets and OIDC role in [setup.md](setup.md).
+Everything that differs between repositories, from build commands to the
+release branches and their boards, lives in [`repos.yml`](registry.md). The
+secrets and permissions the workflows need are in [setup.md](setup.md).
 
-## Internals
+## Where the code lives
 
-```text
-sweep.py (daily cron or manual dispatch)
-  -> reads repos.yml and fans out one job per {repo, branch}
-  -> discovers PRs from each branch's GitHub Project board
-  -> for each registered release branch:
-      source_plan.py     -> resolves merge/squash sources; rejects rebase merges
-      candidate_apply.py -> applies one candidate and resolves conflicts with Claude Code
-      sweep_validation.py-> build, rules, profile, generated files; repair and adaptation
-      pr_creator.py      -> opens/updates the PR on the upstream repo
-```
+The sweep starts in `scripts/backport/sweep.py`, which reads the registry and
+works through each branch. For each PR, `source_plan.py` works out which
+commits to pick, `candidate_apply.py` applies them and calls Claude on
+conflicts, the `sweep_validation.py` module runs the checks along with the
+repair and test-adaptation passes, and `pr_creator.py` opens or updates the
+pull request. The remaining `sweep_*.py` modules handle git, the GitHub API
+and the PR description.
 
-Entry points:
-
-- `scripts/backport/sweep.py` - daily sweep across registered repos and branches
-- `scripts/backport/poller.py` - hourly poll that sweeps a branch only when no sweep PR is open
-- `scripts/backport/mark_done.py` - board reconciliation
-- `scripts/backport/ci_followup.py` - current-head CI follow-up for open bot-owned PRs (plan and report)
-- `scripts/backport/eligibility.py`, `eligibility_evidence.py` - eligibility comments and the blame evidence behind them
-- `scripts/backport/main.py` - single-PR backport (manual dispatch)
-- `scripts/backport/revert_commit.py` - revert one commit on a sweep branch
-- `scripts/backport/onboarding.py` - open the registry issue and PR for a new GA line (called by [release automation](release-automation.md))
-- `scripts/backport/matrix.py` - GitHub Actions matrix generation from `repos.yml`
-- `scripts/backport/registry.py` - typed registry loader and validation
-- `scripts/backport/conflict_resolver.py` - the conflict-resolution prompt and result handling
-- `scripts/backport/missing_test_adaptation.py` - test adaptation for unsupported harnesses
-- `scripts/backport/sweep_*.py` - typed sweep results, git workspace operations, GitHub PR operations, GraphQL access, validation command execution, and Markdown reporting
+The other workflows each have their own entry point: `poller.py` for the
+hourly poll, `mark_done.py` for the boards, `ci_followup.py` for the CI
+follow-up, `eligibility.py` and `eligibility_evidence.py` for suggestions,
+`main.py` for a single-PR backport, and `revert_commit.py` for reverts.
+`registry.py` loads and validates `repos.yml`, and `matrix.py` turns it into
+the workflow's job matrix. `onboarding.py` adds a new release line to the
+registry after its first GA release, and is called from
+[release automation](release-automation.md).

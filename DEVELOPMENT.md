@@ -1,33 +1,33 @@
-# Development
+# Working on valkey-ci-agent
 
-Local setup, tests, and how to change the agent. For what the workflows do
-and how to run them, see the [docs](docs/) and [README](README.md).
+This guide is for changing the agent itself: setting up a local environment,
+running the tests, and adding a new workflow. To learn what each workflow
+does and how to run it, start from the [README](README.md).
 
-## Prerequisites
+## What you need
 
-- Python 3.9 or later. CI runs 3.9 and 3.11; 3.11 is what the lint, coverage
-  and type-check jobs use.
-- GitHub CLI (`gh`) to dispatch workflows.
-- A GitHub token for API-backed local runs.
-- AWS credentials with Bedrock access for anything that calls Claude Code.
-- Claude Code CLI 2.1.170 or later for AI-backed flows locally (the workflows
-  pin 2.1.175):
+- Python 3.9 or later. CI tests 3.9 and 3.11, and lint and type checks run on
+  3.11, so 3.11 is the safest choice locally.
+- The GitHub CLI, `gh`, to start workflows.
+- A GitHub token, for anything that talks to the GitHub API.
+- AWS credentials with access to Bedrock, for anything that calls Claude.
+- Claude Code CLI 2.1.170 or later, for anything that calls Claude. The
+  workflows use 2.1.175:
 
 ```bash
 npm install -g @anthropic-ai/claude-code@2.1.175
 ```
 
-## Setup
+## Getting set up
+
+Install the agent and its development tools:
 
 ```bash
 python -m pip install -e ".[dev]"
 ```
 
-This installs the runtime dependencies from `pyproject.toml` plus the test
-and lint tooling. `python -m pip install .` is the runtime-only install.
-
-For API-backed runs, copy the environment template, fill in what you need,
-and source it:
+If you want to run anything that talks to GitHub or AWS, copy the
+environment template, fill in what you need, and load it into your shell:
 
 ```bash
 cp .env.example .env.local
@@ -37,69 +37,62 @@ cp .env.example .env.local
 set -a; source .env.local; set +a
 ```
 
-Prefer `AWS_PROFILE` plus `AWS_REGION` locally. In GitHub Actions, AWS access
-is OIDC through the `AWS_ROLE_ARN` secret ([docs/setup.md](docs/setup.md)).
+Locally, it's easiest to use an `AWS_PROFILE` and `AWS_REGION`. In GitHub
+Actions the workflows get AWS credentials through OIDC instead; see
+[docs/setup.md](docs/setup.md).
 
-## Tests and checks
+## Running the tests
 
 ```bash
 python -m pytest
 ```
 
-What CI runs:
+Before you push, run the same checks CI does:
 
 ```bash
 ruff check scripts/ tests/
-pytest -v
-pytest --cov=scripts --cov-report=term-missing --cov-report=xml --cov-fail-under=60 -v
+pytest --cov=scripts --cov-report=term-missing --cov-fail-under=60
 mypy scripts/
 ```
 
-`ci.yml` runs on pushes and PRs to `main`. `pytest -v` runs on 3.9; ruff,
-the coverage run and mypy run on 3.11. The 3.11 leg also installs the pinned
-Claude Code CLI, creates a `ci-fix-agent` account and sets
-`CI_FIX_TEST_AGENT_USER` and `REQUIRE_CLAUDE_CLI`, so the isolation and
-confinement tests run for real; a separate `isolation-as-root` job runs
-`tests/test_isolation.py` as root in an Alpine container. Without that
-account and CLI those tests skip locally.
+Some tests only run when there is a real `ci-fix-agent` account and Claude
+Code is installed, and skip otherwise. CI sets both up on its Python 3.11
+job, and runs the isolation tests a second time as root inside an Alpine
+container, so those tests always run there.
 
-Tests live in `tests/`, one file per module (`tests/test_ci_fix_engine.py`
-for `scripts/ci_fix/engine.py`), with shared git helpers in
-`tests/git_helpers.py` and fixtures under `tests/fixtures/`.
+Tests live in `tests/`, with one file per module. The tests for
+`scripts/ci_fix/engine.py`, for example, are in `tests/test_ci_fix_engine.py`.
+Shared git helpers are in `tests/git_helpers.py` and test data is under
+`tests/fixtures/`.
 
 ## Commits
 
-All commits need a DCO sign-off:
+Every commit needs a DCO sign-off:
 
 ```bash
 git commit -s
 ```
 
-## Running pieces locally
+## Trying a workflow
 
-Each workflow doc has a "Running it" section with the `gh workflow run`
-dispatches and the local commands for that family:
+Each workflow's page ends with the commands to run it, both as a GitHub
+workflow and, where it's useful, on your own machine:
+[Backports](docs/backport.md#running-things-by-hand),
+[Fixing CI failures](docs/ci-fix.md#running-it-by-hand),
+[Test Failure Detector](docs/test-failure-detector.md#running-it-by-hand),
+[Fuzzer monitor](docs/fuzzer-monitor.md#running-it-by-hand),
+[Release notes](docs/release-notes.md#cutting-a-release) and
+[CVE scan](docs/cve-scan.md#running-it-by-hand).
 
-- [Backport](docs/backport.md#running-it): matrix generation, sweep
-  discovery, mark-done preview, eligibility, single-PR backport
-- [CI fix](docs/ci-fix.md#running-it)
-- [Test Failure Detector](docs/test-failure-detector.md#running-it)
-- [Fuzzer monitor](docs/fuzzer-monitor.md#running-it)
-- [Release notes](docs/release-notes.md#recipes)
-- [CVE scan](docs/cve-scan.md#running-it)
+Be careful with anything that can push or open a PR. Most commands have a
+`--dry-run` or `--discover-only` flag, and most workflows default to a dry run
+when you start them by hand. When you do run something for real, make sure
+the repository and token are the ones you mean.
 
-Commands that reach a push or PR creation are write-capable. Run them only
-against an intended target repository and token; most have a `--dry-run` or
-`--discover-only` flag, and manual workflow dispatches default to a dry run
-where one exists.
+## Changing repos.yml
 
-## Changing the registry
-
-`repos.yml` is the source of truth for onboarded repositories, release
-branches, project boards, labels and validation commands. The keys and their
-semantics are in [docs/registry.md](docs/registry.md);
-`examples/repos.yml` is a multi-repository reference. Check matrix generation
-after an edit:
+[The registry page](docs/registry.md) explains every setting. After a change,
+check that the file still loads:
 
 ```bash
 python -m scripts.backport.matrix --registry repos.yml
@@ -107,21 +100,22 @@ python -m scripts.backport.matrix --registry repos.yml
 
 ## Adding a workflow
 
-1. Add a sibling package under `scripts/` with a `main.py` entry point. Keep
-   the front door (authorize, bind to exact evidence, produce a typed task),
-   the engine, and the publisher separate; see
-   [docs/architecture.md](docs/architecture.md#the-shape-of-a-workflow).
-2. Reuse `scripts/common/` for git auth, clones, GitHub API retries,
-   artifacts, issue dedup and polling rather than reimplementing them.
-3. If it calls the model, add an agent profile in `scripts/ai/` with the
-   narrowest tool set that works, and write the prompt in the new package.
-   Never pass a GitHub token to the subprocess.
-4. Add a workflow under `.github/workflows/` that checks out this repository
-   and uses `.github/actions/setup-agent`. Pin every external action by SHA
-   and request only the permissions the job needs; the workflow-standards
-   tests enforce both.
-5. Write only inside the bot's branch namespaces, revalidate the destination
-   right before pushing, and leave merging to humans.
-6. Add tests, a `docs/<workflow>.md` following the existing layout (what it
-   does, workflows table, how it works, running it, configuration,
-   internals), and a row in the README's workflow table.
+New workflows follow the same pattern as the existing ones, described in
+[Architecture](docs/architecture.md#the-shape-of-a-workflow).
+
+1. Add a package under `scripts/` with a `main.py`. Keep the part that
+   receives and checks a request, the part that does the work, and the part
+   that publishes the result separate.
+2. Use what's already in `scripts/common/` for git credentials, cloning,
+   GitHub API retries, artifacts, issues and polling.
+3. If the workflow calls Claude, add a profile in `scripts/ai/runtime.py` with
+   as few tools as the task allows, and keep the prompt in your package.
+   Never give Claude a GitHub token.
+4. Add the workflow file under `.github/workflows/`. Check out this
+   repository and use `.github/actions/setup-agent`. Pin every external action
+   to a commit and ask only for the permissions the job needs; the tests will
+   tell you if you don't.
+5. Write only to the bot's own branches, check the destination again right
+   before pushing, and leave merging to people.
+6. Add tests, a page under `docs/` written like the others, and a paragraph in
+   the README.

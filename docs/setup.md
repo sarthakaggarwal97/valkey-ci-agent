@@ -1,99 +1,105 @@
 # Setup and operations
 
-What the agent needs to run in GitHub Actions on `valkey-io/valkey-ci-agent`,
-and when each workflow runs.
+This page covers what the agent needs in order to run in GitHub Actions on
+`valkey-io/valkey-ci-agent`: its secrets and variables, the GitHub App and
+its permissions, the protected environments, and when each workflow runs.
 
 ## Secrets and variables
 
-| Type | Name | Purpose |
-|---|---|---|
-| Secret | `AWS_ROLE_ARN` | OIDC role ARN with Bedrock `InvokeModel` permission |
-| Secret | `VALKEYRIE_BOT_APP_ID` | Valkeyrie Bot GitHub App ID |
-| Secret | `VALKEYRIE_BOT_PRIVATE_KEY` | Valkeyrie Bot GitHub App private key |
-| Variable | `AWS_REGION` | AWS region, for example `us-east-1` |
-| Variable | `CI_AGENT_CLAUDE_MODEL` | Optional model override for the agents, for example `opus` |
-| Variable | `CI_FIX_ISSUES_AUTO_DISPATCH` | `true` lets the detector-issue dispatcher's schedule start fixes |
-| Variable | `CI_FIX_ISSUES_MAX_RUNS` | Detector-issue fixes active at once (default 2) |
-| Variable | `CI_FIX_ISSUES_PUBLISH` | `comment` (default) posts a detector issue's fix on the issue; `draft-pr` opens a draft PR |
+The agent needs three secrets:
 
-Every workflow authenticates to GitHub by minting a short-lived App
-installation token scoped to the repositories and permissions that job needs.
-AWS access uses OIDC and `AWS_ROLE_ARN`; no long-lived cloud credential is
-stored.
+| Secret | What it is |
+|---|---|
+| `AWS_ROLE_ARN` | The AWS role the workflows assume through OIDC to call Claude on Bedrock. It needs permission to invoke the model. |
+| `VALKEYRIE_BOT_APP_ID` | The ID of the Valkeyrie Bot GitHub App. |
+| `VALKEYRIE_BOT_PRIVATE_KEY` | The App's private key. |
 
-### Model
+No long-lived credentials are stored. Each job exchanges the App's key for a
+GitHub token that lasts an hour and only covers what that job needs, and
+exchanges a GitHub OIDC token for short-lived AWS credentials.
 
-Claude Code defaults to Fable 5 through the `us.anthropic.claude-fable-5`
-Bedrock inference profile. The AWS account must have access to that profile
-and must use Bedrock `provider_data_share` data retention; Fable 5 is not
-available under zero data retention. Set `CI_AGENT_CLAUDE_MODEL=opus` to fall
-back to the pinned Opus 4.8 profile. The workflows pin Claude Code CLI 2.1.175.
+These repository variables adjust its behaviour:
+
+| Variable | What it does |
+|---|---|
+| `AWS_REGION` | The AWS region to use, for example `us-east-1`. |
+| `CI_AGENT_CLAUDE_MODEL` | Use a different model, for example `opus`. Unset means the default. |
+| `CI_FIX_ISSUES_AUTO_DISPATCH` | Set to `true` to let the CI fix bot start on detector issues by itself. |
+| `CI_FIX_ISSUES_MAX_RUNS` | How many detector issue fixes can run at once. Defaults to 2. |
+| `CI_FIX_ISSUES_PUBLISH` | How a detector issue's fix is shared: `comment` (the default) or `draft-pr`. |
+
+### The model
+
+By default the agent uses Claude Fable 5 through the
+`us.anthropic.claude-fable-5` Bedrock inference profile. The AWS account needs
+access to that profile, and its Bedrock data retention must be set to
+`provider_data_share`, because Fable 5 isn't available with zero data
+retention. If you need to, set `CI_AGENT_CLAUDE_MODEL=opus` to fall back to
+Claude Opus 4.8. The workflows install Claude Code CLI version 2.1.175.
 
 ## GitHub App permissions
 
-One App, the Valkeyrie Bot, serves every workflow today. Grant it only what
-the workflows request:
+One App, the Valkeyrie Bot, is used by every workflow. Give it only the
+permissions below.
 
-| Installation target | Permissions | Used by |
+| Installed on | Permissions | Needed for |
 |---|---|---|
-| `valkey` | `administration:read`, `actions:read`, `checks:read`, `contents:write`, `issues:write`, `metadata:read`, `pull-requests:write` | backport, CI fix, detector, release notes, release automation |
-| `valkey-search`, `valkey-json`, `valkey-bloom` | `contents:write`, `metadata:read`, `pull-requests:write` | backport, release notes |
-| any repository using advisory-backed cuts | `repository-advisories:read` | release notes (advanced) |
-| `valkey-fuzzer` | `actions:read`, `contents:read`, `issues:write` | fuzzer monitor |
-| `valkey-container` | `actions:write`, `contents:read`, `metadata:read` | CVE scan rebuild dispatch |
-| `valkey-ci-agent` | `contents:write`, `issues:write`, `metadata:read`, `pull-requests:write` | release automation (tracking issue, onboarding PR) |
-| `valkey-release-automation` | `actions:read`, `contents:read`, `metadata:read` | release automation |
-| organization | `members:read` (release and CI-fix authorization); `organization-projects:read` (board discovery, eligibility, first-GA onboarding) and `organization-projects:write` (mark done) | backport, CI fix, release automation |
+| `valkey` | read administration, actions and checks; write contents, issues and pull requests; read metadata | backports, CI fixes, the detector, release notes and release automation |
+| `valkey-search`, `valkey-json`, `valkey-bloom` | write contents and pull requests; read metadata | backports and release notes |
+| repositories whose releases list security advisories | read repository advisories | release notes, when reading advisories |
+| `valkey-fuzzer` | read actions and contents; write issues | the fuzzer monitor |
+| `valkey-container` | write actions; read contents and metadata | starting CVE rebuilds |
+| `valkey-ci-agent` | write contents, issues and pull requests; read metadata | release tracking issues and registry PRs |
+| `valkey-release-automation` | read actions, contents and metadata | release automation |
+| the organization | read members; read and write organization projects | checking who may ask for fixes and releases, and reading and updating backport boards |
 
-The release-notes installation must include every repository that can be
-selected, or token creation fails for that repository.
+The release notes workflow can only release repositories the App is installed
+on, so make sure all four are included.
 
 ## Environments
 
-| Environment | Rule | Purpose |
+| Environment | How to configure it | What it protects |
 |---|---|---|
-| `release-control` | default branch only | Where the release control App token is minted |
-| `release` | default branch only; required reviewer; no self-review; no admin bypass | Publication approval; the publication job mints its token here |
-| `cve-rebuild-dispatch` | deployment branch `main` only | Credential boundary for the CVE rebuild dispatch (not an approval gate) |
+| `release-control` | Only the default branch can deploy. | The token release automation uses to prepare and track releases. |
+| `release` | Only the default branch can deploy. Require a reviewer, prevent self-review, and don't allow admins to bypass. | Creating the release tag and publishing the release. |
+| `cve-rebuild-dispatch` | Only `main` can deploy. No reviewers needed. | The token that can start a container rebuild. |
 
-Release-specific hardening (tag ruleset, actor policy, splitting the App) is
-in [release-automation.md](release-automation.md#security-setup).
+[Release automation](release-automation.md#setting-it-up-securely) has more on
+securing releases, including the tag ruleset.
 
-## Schedules
+## When things run
 
-| Workflow | Schedule (UTC) | Doc |
+| Workflow | When (UTC) | More |
 |---|---|---|
-| Backport Sweep | daily 09:00 | [backport](backport.md) |
-| Backport Poll | hourly :00 (polls again at +30 min) | [backport](backport.md#poll) |
-| Backport CI Follow-up | hourly :20 | [backport](backport.md#automatic-ci-follow-up) |
-| Backport Mark Done Poll | hourly :30 | [backport](backport.md#mark-done) |
-| Backport Eligibility | daily 00:30 | [backport](backport.md#eligibility) |
-| CI Fix Comment Poll | hourly :00 | [ci-fix](ci-fix.md) |
-| CI Fix Issue Dispatch | hourly :23 (inert until `CI_FIX_ISSUES_AUTO_DISPATCH=true`) | [ci-fix](ci-fix.md#detector-issue-fixes) |
-| Test Failure Detector | daily 23:00 | [test-failure-detector](test-failure-detector.md) |
-| Monitor Valkey Fuzzer Runs | every 4 hours at :41 | [fuzzer-monitor](fuzzer-monitor.md) |
-| Release Notes Review Poll | hourly :00 (then every 5 min for 55) | [release-notes](release-notes.md#review-comments-on-a-release-pr) |
-| Refresh Release Progress | hourly :00 (then every 5 min for 55) | [release-automation](release-automation.md) |
-| CVE Scan | Mondays 06:00 | [cve-scan](cve-scan.md) |
+| Backport Sweep | every day at 09:00 | [Backports](backport.md) |
+| Backport Poll | every hour, and again half an hour later | [Backports](backport.md#keeping-the-next-pull-request-coming) |
+| Backport CI Follow-up | every hour at :20 | [Backports](backport.md#when-a-backport-prs-own-ci-fails) |
+| Backport Mark Done Poll | every hour at :30 | [Backports](backport.md#how-a-fix-gets-backported) |
+| Backport Eligibility | every day at 00:30 | [Backports](backport.md#suggesting-backports) |
+| CI Fix Comment Poll | every hour | [Fixing CI failures](ci-fix.md#asking-for-a-fix) |
+| CI Fix Issue Dispatch | every hour at :23, once switched on | [Fixing CI failures](ci-fix.md#fixing-detector-issues) |
+| Test Failure Detector | every day at 23:00 | [Test Failure Detector](test-failure-detector.md) |
+| Monitor Valkey Fuzzer Runs | every four hours at :41 | [Fuzzer monitor](fuzzer-monitor.md) |
+| Release Notes Review Poll | every hour, checking every five minutes | [Release notes](release-notes.md#applying-review-comments) |
+| Refresh Release Progress | every hour, checking every five minutes | [Release automation](release-automation.md) |
+| CVE Scan | Mondays at 06:00 | [CVE scan](cve-scan.md) |
 
-Dispatch-only: Manual Backport, Manual Revert Commit, CI Fix Bot (`ci-fix.yml`),
-CI Fix Issues, Cut Release Notes (and Advanced), Address Release Note Reviews,
-Prepare Release, Publish Release. Reusable (`workflow_call`): Backport PR
-(`backport.yml`), CI Fix Run (`ci-fix-run.yml`).
+These only run when started, by a person or by another workflow: Manual
+Backport, Manual Revert Commit, CI Fix Bot, CI Fix Issues, Cut Release Notes
+and its Advanced version, Address Release Note Reviews, Prepare Release and
+Publish Release. Backport PR and CI Fix Run are reusable workflows that other
+workflows call.
 
-Pollers that run inside one runner for most of an hour (`backport-poll`,
-`release-notes-review-poll`, `release-progress`) use the shared
-`scripts/common/polling.py` loop, which bridges delays in GitHub's
-scheduled-workflow queue while staying below the App token's one-hour
-lifetime. Manual dispatches of those workflows are one-shot.
+The workflows that check every few minutes do it inside one long-running
+job, because GitHub's scheduler often starts jobs late. The job stays alive
+for 55 minutes, which also keeps it inside the lifetime of its one-hour
+token. When you start one of them by hand, it checks once and stops.
 
-## Shared workflow setup
+## How every job is set up
 
-Every job checks out the agent repository and runs the local composite action
-`.github/actions/setup-agent`, which installs the pinned Python toolchain,
-the project's dependencies (`runtime` or `dev`), and optionally the pinned
-Claude Code CLI. Its `path` input names the checkout when it is not the
-workspace, and `system-packages` installs Python, Node and the agent
-account's tools from the distribution instead, for a job that runs in a
-container. The workflow-standards tests scan workflows and the action so
-external actions and Claude installs do not drift.
+Every job checks out this repository and runs the shared setup action in
+`.github/actions/setup-agent`. It installs Python and the agent's
+dependencies, and Claude Code when the job needs it. Jobs that run inside a
+container can ask it to install everything from the container's own packages
+instead. Tests in this repository check that every workflow pins its external
+actions and installs Claude Code the same way.
