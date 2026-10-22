@@ -198,6 +198,37 @@ def test_a_replaced_git_directory_and_every_nested_one_are_removed(monkeypatch):
     shutil.rmtree(work)
 
 
+def test_a_hard_link_in_the_checkout_is_refused_going_in_and_removed_coming_back(monkeypatch):
+    """``chown -P`` stops at a symbolic link but reaches through a hard one; macOS lets the account make them."""
+    def as_root(*argv):
+        if argv[0] in ("find", "rm"):
+            subprocess.run(argv, check=True)
+
+    monkeypatch.setattr(isolation, "_as_root", as_root)
+    me = isolation.pwd.getpwuid(os.getuid())
+    monkeypatch.setattr(isolation.pwd, "getpwnam", lambda user: me)
+    monkeypatch.setattr(isolation, "kill_all", lambda user: None)
+    monkeypatch.setattr(isolation, "_remove_files_of", lambda user: None)
+    work = Path(tempfile.mkdtemp(prefix="ci-fix-test-", dir="/tmp"))
+    work.chmod(0o711)
+    repo = work / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.setattr(isolation.tempfile, "mkdtemp", lambda **_kw: str(work / "home"))
+    outside = work / "runner-owned"
+    outside.write_text("secret\n")
+
+    with isolation.handed_to("agent", repo):
+        os.link(outside, repo / "linked")  # what the account could do on macOS
+    assert not (repo / "linked").exists() and outside.read_text() == "secret\n"
+
+    os.link(outside, repo / "linked")
+    with pytest.raises(OSError, match="hard links"):
+        with isolation.handed_to("agent", repo):
+            pass
+    shutil.rmtree(work)
+
+
 def test_every_root_command_ends_its_options_before_its_first_operand(monkeypatch):
     """macOS's chmod and chown take the first operand for the mode or owner,
     so a ``--`` after it is read as a file that does not exist."""

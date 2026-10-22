@@ -297,6 +297,32 @@ def test_a_script_between_the_tests_that_is_not_a_test_is_unsupported():
         _resolve(source, "test-ubuntu-jemalloc")
 
 
+def test_a_script_after_the_last_test_does_not_matter():
+    """Daily's large-memory jobs print a memory summary after their tests; it is not setup."""
+    source = DAILY.replace("      - name: Upload test failures\n",
+                           "      - name: Memory usage summary\n        if: always()\n        run: free -h\n"
+                           "      - name: Upload test failures\n")
+
+    assert _resolve(source, "test-ubuntu-jemalloc").commands.build == "make"
+
+
+def test_the_legacy_unit_tests_are_a_test_step_and_the_make_test_unit_line_is_kept():
+    """8.0 runs ``./src/valkey-server test all`` between its test steps; unstable runs ``make test-unit``."""
+    source = DAILY.replace(
+        "      - name: backward compatibility tests with OSS Redis 7.0\n",
+        "      - name: legacy unit tests\n        run: ./src/valkey-server test all --accurate\n"
+        "      - name: unittest\n        run: |\n          if [ -f ./src/unit/valkey-unit-gtests ]; then\n"
+        "            make test-unit accurate=1 ${{github.event.inputs.test_args}}\n"
+        "          elif [ -f ./src/valkey-unit-tests ]; then\n            ./src/valkey-unit-tests --accurate\n          fi\n"
+        "      - name: backward compatibility tests with OSS Redis 7.0\n",
+    )
+
+    spec = _resolve(source, "test-ubuntu-jemalloc")
+
+    assert spec.commands.unittest == "make test-unit accurate=1"
+    assert spec.commands.runtest == "./runtest --accurate --dump-logs"
+
+
 def test_a_shell_expansion_is_dropped_with_the_option_it_is_the_value_of():
     source = DAILY.replace(" --dump-logs ${{github.event.inputs.test_args}}\n",
                            ' --clients $(nproc) --dump-logs "${extra[@]}"\n')
@@ -574,6 +600,7 @@ def test_valkeys_ubuntu_job_resolves():
     assert spec.commands.build == "make all-with-unit-tests SERVER_CFLAGS='-Werror' USE_LIBBACKTRACE=yes"
     assert spec.commands.runtest == "./runtest --accurate --verbose --dump-logs"
     assert spec.commands.moduleapi == "CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs"
+    assert spec.commands.unittest == "make test-unit accurate=1"
 
 
 def test_valkeys_sanitizer_entry_resolves_with_its_compiler():
@@ -616,6 +643,34 @@ def test_valkeys_pull_request_job_resolves():
 def test_valkeys_freebsd_job_runs_in_a_vm_and_falls_back():
     with pytest.raises(Unsupported, match="VM"):
         _resolve(_DAILY, "test-freebsd")
+
+
+def _every_job_name(source: str) -> list[str]:
+    """The display name of every job instance ``source`` defines."""
+    import yaml
+
+    names = []
+    for job_id, job in yaml.safe_load(source)["jobs"].items():
+        context = {"github": ci_job._Known({"event_name": "schedule", "repository": "valkey-io/valkey", "job": job_id,
+                                            "ref": "refs/heads/unstable", "sha": SHA, "event": ci_job._Known({"inputs": {}})}),
+                   "inputs": {}}
+        for entry in ci_job._matrix_entries(job, context):
+            names.append(ci_job._display_name(job_id, job, entry, context))
+    return names
+
+
+def test_every_valkey_job_resolves_as_expected():
+    """Each job of the fixtures, and why the ones a fix job cannot host cannot be: a change here is a change in coverage."""
+    expected = {"test-freebsd": "the job runs its tests in a VM"}
+    outcomes = {}
+    for source, scheduled in ((_DAILY, True), (_CI, False)):
+        for name in _every_job_name(source):
+            try:
+                _resolve(source, name, scheduled=scheduled)
+            except Unsupported as exc:
+                outcomes[name] = str(exc)
+
+    assert outcomes == expected
 
 
 def test_every_resolved_valkey_job_has_a_setup_script(tmp_path):

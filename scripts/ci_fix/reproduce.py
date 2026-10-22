@@ -31,9 +31,14 @@ from scripts.ci_fix.ci_job import JobCommands
 from scripts.ci_fix.models import FailedTest
 from scripts.common.valkey_ci import FAILURE_MARKERS, FILE_TIMEOUT_TEST_NAME, ResultLine, parse_result_line
 
-# Valkey's Google Test binary, and the make target that builds it with the server.
+# Valkey's Google Test binary, the make target that builds it with the server,
+# and the runner ``make test-unit`` starts it through: one process per test,
+# as the job ran them.
 UNIT_TEST_BINARY = "./src/unit/valkey-unit-gtests"
 UNIT_TEST_BUILD = "make all-with-unit-tests"
+UNIT_TEST_RUNNER = "deps/gtest-parallel/gtest_parallel.py"
+# ``make test-unit``'s own per-test watchdog (src/unit/Makefile).
+_UNIT_TEST_TIMEOUT_S = 300
 
 # Loops per reproduction attempt, and with the fix applied. Valgrind is ~20x
 # slower and runs one client at a time, as the Daily job does.
@@ -52,8 +57,13 @@ _MIN_ATTEMPT_S = 3 * 60
 # The lines of a run's output that say what failed: the failure lines, and
 # the Tcl stack frames that name the test an exception happened in. ``[ok]``
 # lines say which tests ran at all.
-_FAILURE_LINE_RE = re.compile("|".join(map(re.escape, FAILURE_MARKERS)) + r"|\btest [\"{]")
-_OK_LINE_RE = re.compile(r"\[ok\]:|\[       OK \]")
+_FAILURE_LINE_RE = re.compile(
+    "|".join(map(re.escape, FAILURE_MARKERS)) + r"|\btest [\"{]"
+    # gtest-parallel's line for a test that crashed or hung, which has no [  FAILED  ] line of its own.
+    + r"|^\[\d+/\d+\] \S+ (?:returned with exit code|killed by signal|aborted after)"
+)
+# gtest-parallel prints ``[3/20] Suite.Test (12 ms)`` for each test that passed.
+_OK_LINE_RE = re.compile(r"\[ok\]:|\[       OK \]|^\[\d+/\d+\] \S+ \(\d+ ms\)$")
 _TEST_FRAME_RE = re.compile(r"\btest [\"{]")
 _MAX_FAILURE_LINES = 200
 _MAX_OK_LINES = 2_000
@@ -243,7 +253,7 @@ def plan_for(
     unit_tests = tuple(test for test in tests if test.is_unit_test)
     tcl_tests = tuple(test for test in tests if _in_main_suite(test.file))
     if unit_tests and (not tcl_tests or tests[0].is_unit_test):
-        return _unit_test_plan(repo_dir, unit_tests, job=job)
+        return _unit_test_plan(repo_dir, unit_tests, scheduled=scheduled, job=job)
     tests = tcl_tests
     if not tests or not (Path(repo_dir) / "runtest").is_file():
         return None
@@ -259,10 +269,18 @@ def plan_for(
     moduleapi = bool(job.moduleapi) and _in_moduleapi(tests[0].file)
     tests = tuple(test for test in tests if _in_moduleapi(test.file) == moduleapi)
     base = job.moduleapi if moduleapi else job.runtest
-    # runtest keeps the last --timeout. The job's own watchdog (Daily's
-    # valgrind jobs pass 2400) is kept when it is shorter; a longer one would
-    # let a hang outlive the reproduction budget unreported.
-    options = ["--timeout", str(min(_job_timeout(base) or _RUNTEST_TIMEOUT_S, _RUNTEST_TIMEOUT_S))]
+    # runtest keeps the last --timeout. The job's own watchdog is kept when
+    # it is under 600s; a longer one (Daily's valgrind jobs pass 2400) would
+    # let a hang outlive the reproduction budget unreported, so it is
+    # lowered, and the notes say so: a [TIMEOUT] at 600s may then be the
+    # reproduction's own limit, not the failure.
+    job_timeout = _job_timeout(base)
+    options = ["--timeout", str(min(job_timeout or _RUNTEST_TIMEOUT_S, _RUNTEST_TIMEOUT_S))]
+    if job_timeout > _RUNTEST_TIMEOUT_S:
+        notes.append(
+            f"The job's --timeout {job_timeout} was lowered to {_RUNTEST_TIMEOUT_S}s for the reproduction: "
+            f"a test that times out at {_RUNTEST_TIMEOUT_S}s may be slow here, not hung."
+        )
     if "--clients" not in base.split() and any(_runs_solo(repo_dir, test) for test in tests):
         # Under --loops, runtest runs a run_solo block inline, so with several
         # clients its copies would run side by side: a race of the bot's own
@@ -288,25 +306,72 @@ def _one_line_build(build: str) -> str:
     )
 
 
-def _unit_test_plan(repo_dir: str, tests: tuple[FailedTest, ...], *, job: JobCommands | None) -> ReproPlan | None:
-    """The plan that builds the unit-test binary like the job and repeats only ``tests``.
+def _unit_test_plan(
+    repo_dir: str, tests: tuple[FailedTest, ...], *, scheduled: bool, job: JobCommands | None,
+) -> ReproPlan | None:
+    """The plan that builds the unit-test binary like the job and repeats only ``tests`` as it ran them.
 
-    None without ``src/unit`` in the checkout (a branch before Google Test,
-    whose own harness runs the whole suite). The job's build must produce the
-    binary: one that does not gets ``make all-with-unit-tests`` after it.
+    None without ``src/unit/Makefile`` in the checkout (a branch before Google
+    Test, whose own harness runs the whole suite). The job's build should
+    produce the binary (``make 32bit`` does, under another name); one that
+    did not gets ``make all-with-unit-tests`` after it, with the make
+    variables the job's ``make test-unit`` passed. The tests run through the
+    job's runner, one process each, with the job's own test arguments
+    (``accurate=1`` is ``--accurate``): without them a large-memory test
+    skips itself, and an accurate-only case runs at its small size.
     """
-    if not (Path(repo_dir) / "src" / "unit").is_dir():
+    if not (Path(repo_dir) / "src" / "unit" / "Makefile").is_file():
         return None
     notes: list[str] = []
     build = job.build if job is not None else UNIT_TEST_BUILD
-    if "unit-tests" not in build:
-        build = f"{build}\n{UNIT_TEST_BUILD}"
-        notes.append("The job's build does not build the unit tests, so `make all-with-unit-tests` runs after it.")
+    test_args, make_vars = _unit_test_invocation(job.unittest if job is not None else "")
     if job is None:
+        # Daily runs ``make test-unit accurate=1``, as the Tcl suite gets --accurate.
+        test_args = ["--accurate"] if scheduled else []
         notes.append("The failed job could not host the fix, so a plain build stands in for it.")
+    if job is not None and not job.unittest:
+        notes.append("The job's unit-test step was not found, so the tests run without its arguments.")
+    fallback = " ".join([UNIT_TEST_BUILD, *make_vars])
+    build = f"{_one_line_build(build)} && {{ test -x {UNIT_TEST_BINARY} || {_one_line_build(fallback)}; }}"
     names = ":".join(test.name for test in tests)
-    command = f"{UNIT_TEST_BINARY} --gtest_filter={shlex.quote(names)} --gtest_repeat={LOOPS}"
-    return ReproPlan(build=_one_line_build(build), test=command, notes=tuple(notes), tests=tests)
+    if (Path(repo_dir) / UNIT_TEST_RUNNER).is_file():
+        command = " ".join([
+            f"(cd src/unit && python3 ../../{UNIT_TEST_RUNNER} ./valkey-unit-gtests",
+            f"--timeout_per_test {_UNIT_TEST_TIMEOUT_S} --repeat={LOOPS} --gtest_filter={shlex.quote(names)}",
+            *(["--", *test_args] if test_args else []),
+        ]) + ")"
+    else:
+        notes.append("This branch has no gtest-parallel, so the repeats run in one process.")
+        command = " ".join([f"{UNIT_TEST_BINARY} --gtest_filter={shlex.quote(names)} --gtest_repeat={LOOPS}", *test_args])
+    return ReproPlan(build=build, test=command, notes=tuple(notes), tests=tests)
+
+
+# ``make test-unit``'s variables that become the binary's arguments
+# (src/unit/Makefile TEST_ARGS); any other NAME=value is a make variable.
+_UNIT_TEST_FLAGS = {"accurate": "--accurate", "large_memory": "--large-memory", "valgrind": "--valgrind"}
+
+
+def _unit_test_invocation(line: str) -> tuple[list[str], list[str]]:
+    """The test arguments and the make variables of a job's ``make test-unit`` line."""
+    try:
+        words = shlex.split(line)
+    except ValueError:
+        words = line.split()
+    test_args: list[str] = []
+    make_vars: list[str] = []
+    for word in words:
+        name, equals, value = word.partition("=")
+        if not equals:
+            continue
+        if name in _UNIT_TEST_FLAGS:
+            if value:
+                test_args.append(_UNIT_TEST_FLAGS[name])
+        elif name == "seed":
+            if value:
+                test_args += ["--seed", shlex.quote(value)]
+        else:
+            make_vars.append(shlex.quote(word))
+    return test_args, make_vars
 
 
 _MAKE_LINE_RE = re.compile(r"^(\s*make)(?=\s|$)(?!.*\s-j)", re.MULTILINE)

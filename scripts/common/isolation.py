@@ -73,6 +73,11 @@ def handed_to(user: str, root: Path, readable: tuple[Path, ...] = ()) -> Iterato
     home = tempfile.mkdtemp(prefix="ci-fix-home-", dir=root.parent)
     git_dir = root / ".git"
     git_identity = _identity(git_dir)
+    # ``-P`` does not help against a hard link: the chown would reach the
+    # file it names, wherever that is. A checkout has none; one is refused.
+    linked = _hard_links(root)
+    if linked:
+        raise OSError(f"{root} holds hard links, which the chown would follow: {', '.join(linked[:5])}")
     _as_root("chown", "-R", "-h", "-P", "--", f"{account.pw_uid}:{account.pw_gid}", str(root), home)
     if git_identity is not None:
         _as_root("chown", "-R", "-h", "-P", "--", runner, str(git_dir))
@@ -81,6 +86,12 @@ def handed_to(user: str, root: Path, readable: tuple[Path, ...] = ()) -> Iterato
     finally:
         kill_all(user)
         _as_root("rm", "-rf", "--", home)
+        # Where hard links are not protected (macOS), ``user`` could have
+        # linked a file of the runner's, or root's, into the checkout: the
+        # chown below would hand that file to the workflow user, and the
+        # next session's to ``user``. The links go first, as root, so the
+        # chown never reaches past the checkout.
+        _remove_hard_links(root)
         # Take the checkout back first: then nothing in it belongs to
         # ``user``, and the sweep below cannot delete any of it.
         _as_root("chown", "-R", "-h", "-P", "--", runner, str(root))
@@ -117,6 +128,28 @@ def _traversable(user: str, directory: Path) -> bool:
     else:
         argv = [*_root(), _program("runuser"), "-u", user, "--", *test]
     return subprocess.run(argv, capture_output=True, check=False).returncode == 0
+
+
+# Every file under ``root`` with more than one link, ``.git`` aside, which the
+# workflow user keeps and git never hard-links.
+def _hard_link_find(root: Path) -> list[str]:
+    git_dir = str(root / ".git")
+    return [
+        "find", str(root), "-xdev", "-mindepth", "1",
+        "!", "-path", git_dir, "!", "-path", f"{git_dir}/*", "!", "-type", "d", "-links", "+1",
+    ]
+
+
+def _hard_links(root: Path) -> list[str]:
+    """The hard links under ``root``, read as the workflow user, who holds the checkout between sessions."""
+    result = subprocess.run([*_hard_link_find(root), "-print"], capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise OSError(f"find in {root} failed: {result.stderr.strip()}")
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def _remove_hard_links(root: Path) -> None:
+    _as_root(*_hard_link_find(root), "-delete")
 
 
 def _remove_nested_git_dirs(root: Path) -> None:

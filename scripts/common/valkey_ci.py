@@ -60,13 +60,23 @@ _OK_RE = re.compile(r"^(?P<name>.+) \(\d+ ms\)$")
 _CLIENT_STATE_RE = re.compile(r"^(?:pid:\d+|port \d+|ASSIGNED: .*|SLEEPING\b.*)$")
 FILE_TIMEOUT_TEST_NAME = "test client timed out"
 # What a failing runtest or gtest run prints; a build break or a missing Tcl does not.
-FAILURE_MARKERS = ("[err]:", "[TIMEOUT]:", "[exception]:", "Valgrind error", "Sanitizer error", "[  FAILED  ]")
+FAILURE_MARKERS = (
+    "[err]:", "[TIMEOUT]:", "[exception]:", "Valgrind error", "Sanitizer error", "[  FAILED  ]",
+    "[  TIMEOUT ]",  # gtest-parallel's, for a test killed by its per-test watchdog
+)
 
 # --- Google Test result lines -------------------------------------------------
 
 _GTEST_RUN_RE = re.compile(r"^\[ RUN      \] (?P<test>\S+)$")
 _GTEST_OK_RE = re.compile(r"^\[       OK \] (?P<test>[^,\s]+)(?:, where .*)? \(\d+ ms\)$")
 _GTEST_FAILED_RE = re.compile(r"^\[  FAILED  \] (?P<test>[^,\s]+)(?:, where .*)? \(\d+ ms\)$")
+# gtest-parallel (``make test-unit``) runs each test in its own process and
+# prints one line per test: its name and time when it passed, else how it
+# ended (``returned with exit code 1``, ``killed by signal SIGSEGV``,
+# ``aborted after``), or ``[  TIMEOUT ]`` when its watchdog killed it.
+_GTEST_PARALLEL_RE = re.compile(r"^\[\d+/\d+\] (?P<test>\S+) (?P<rest>.+)$")
+_GTEST_PARALLEL_OK_RE = re.compile(r"^\(\d+ ms\)$")
+_GTEST_PARALLEL_TIMEOUT_RE = re.compile(r"^\[  TIMEOUT \] (?P<test>\S+) timed out after \d+ s$")
 _GTEST_LOCATION_RE = re.compile(r"^(?P<file>[\w./-]+\.(?:c|cc|cpp|h|hpp)):\d+: Failure$")
 UNIT_TEST_FILE_SUFFIXES = (".c", ".cc", ".cpp", ".h", ".hpp")
 
@@ -138,6 +148,11 @@ def parse_result_line(line: str) -> ResultLine | None:
         return ResultLine("ok", name=passed.group("test"))
     if failed := _GTEST_FAILED_RE.match(plain):
         return ResultLine("err", name=failed.group("test"))
+    if parallel := _GTEST_PARALLEL_RE.match(plain):
+        status = "ok" if _GTEST_PARALLEL_OK_RE.match(parallel.group("rest")) else "err"
+        return ResultLine(status, name=parallel.group("test"))
+    if timed_out := _GTEST_PARALLEL_TIMEOUT_RE.match(plain):
+        return ResultLine("TIMEOUT", name=timed_out.group("test"))
     match = _RESULT_LINE_RE.search(plain)
     if match is None:
         return None
