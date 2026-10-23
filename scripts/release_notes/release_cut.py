@@ -310,12 +310,15 @@ def _fetch_remote_branch_tip(
 ) -> str:
     """Fetch *branch* into its tracking ref and return the exact remote tip."""
     tracking_ref = f"refs/remotes/origin/{branch}"
+    # CONTENT CHECK: stand the open sweep PR's head in for the merged sweep.
+    sweep = os.environ.get("CONTENT_CHECK_SWEEP_PR", "")
+    source = f"+refs/pull/{sweep}/head" if sweep else f"+refs/heads/{branch}"
     run_git(
         repo_dir,
         "fetch",
         "--quiet",
         "origin",
-        f"+refs/heads/{branch}:{tracking_ref}",
+        f"{source}:{tracking_ref}",
         env=git_env,
     )
     return git_output(
