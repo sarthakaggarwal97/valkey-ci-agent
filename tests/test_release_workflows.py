@@ -15,6 +15,19 @@ def test_prepare_opens_dashboard_and_notes_pr_in_parallel() -> None:
     assert list(workflow["jobs"]) == ["derive", "cut-notes", "tracker"]
     assert "initiator" not in inputs
     assert workflow["jobs"]["cut-notes"]["with"]["release_owner"] == "${{ needs.derive.outputs.actor }}"
+    # A release never waits on a draft nobody notices; flagged items lead the body.
+    assert workflow["jobs"]["cut-notes"]["with"]["force_ready"] == "true"
+    assert workflow["jobs"]["cut-notes"]["with"]["security_fixes"] == "${{ inputs.security_fixes }}"
+    assert workflow["jobs"]["cut-notes"]["with"]["date"] == "${{ inputs.date }}"
+    assert inputs["security_fixes"]["required"] == "false"
+    assert inputs["date"]["required"] == "false"
+    # The called cut starts the PR's review watcher, and a reusable workflow
+    # cannot request more than its caller grants.
+    assert workflow["jobs"]["cut-notes"]["permissions"] == {
+        "contents": "read",
+        "id-token": "write",
+        "actions": "write",
+    }
     assert workflow["jobs"]["derive"]["if"] == "github.repository == 'valkey-io/valkey-ci-agent'"
     assert "${{ github.triggering_actor }}" in str(workflow["jobs"]["derive"])
     assert workflow["jobs"]["derive"]["environment"] == "release-control"

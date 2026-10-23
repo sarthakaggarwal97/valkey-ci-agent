@@ -53,6 +53,13 @@ on:
         type: boolean
         default: true
   workflow_call:
+    outputs:
+      pr_number:
+        description: "Number of the release PR the cut opened or updated; empty on a dry run"
+        value: ${{ jobs.cut.outputs.pr_number }}
+      pr_url:
+        description: "URL of that release PR"
+        value: ${{ jobs.cut.outputs.pr_url }}
     inputs:
       repo:
         description: "Target repository name in the valkey-io org (valkey, valkey-search, valkey-json, valkey-bloom)"
@@ -132,6 +139,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      pr_number: ${{ steps.cut.outputs.pr_number }}
+      pr_url: ${{ steps.cut.outputs.pr_url }}
     concurrency:
       # Serialize every stage of a target version per repository. This also makes
       # an inferred patch GA, an explicit ga, and case variants share one lock.
@@ -227,6 +237,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Cut release notes
+        id: cut
         shell: bash
         env:
           # Exactly one token step ran (gated by security_from_advisories); the
@@ -367,3 +378,38 @@ jobs:
           # legitimately writes nothing.
           if-no-files-found: ignore
           retention-days: 90
+
+  # Every release PR gets its own watcher, which applies the inline review
+  # comments maintainers leave on it (see docs/release-notes.md). Its own job:
+  # the token that can start workflows here must not sit in the job that runs
+  # Claude over contributor-written PR text. The cut has already opened the
+  # PR, so a start that fails is not a failed cut; Restart Release PR Watchers
+  # picks up any PR left without a watcher.
+  watch:
+    name: Start the review watcher
+    needs: cut
+    if: ${{ !inputs.dry_run && needs.cut.outputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Start the review watcher for the PR
+        env:
+          RELEASE_NOTES_REVIEW_TOKEN: ${{ github.token }}
+          RELEASE_NOTES_REVIEW_REPO: ${{ inputs.repo }}
+          RELEASE_NOTES_REVIEW_PR: ${{ needs.cut.outputs.pr_number }}
+        run: |
+          python3 -m scripts.release_notes.review_poll \
+            --repo "$RELEASE_NOTES_REVIEW_REPO" --pr "$RELEASE_NOTES_REVIEW_PR" --start

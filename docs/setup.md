@@ -49,7 +49,7 @@ permissions below.
 | repositories whose releases list security advisories | read repository advisories | release notes, when reading advisories |
 | `valkey-fuzzer` | read actions and contents; write issues | the fuzzer monitor |
 | `valkey-container` | write actions; read contents and metadata | starting CVE rebuilds |
-| `valkey-ci-agent` | write contents, issues and pull requests; read metadata | release tracking issues and registry PRs |
+| `valkey-ci-agent` | write actions, contents, issues and pull requests; read metadata | release tracking issues, registry PRs, and starting the release PR review watchers and their edits |
 | `valkey-release-automation` | read actions, contents and metadata | release automation |
 | the organization | read members; read and write organization projects | checking who may ask for fixes and releases, and reading and updating backport boards |
 
@@ -80,7 +80,8 @@ securing releases, including the tag ruleset.
 | CI Fix Issue Dispatch | every hour at :23, once switched on | [Fixing CI failures](ci-fix.md#fixing-detector-issues) |
 | Test Failure Detector | every day at 23:00 | [Test Failure Detector](test-failure-detector.md) |
 | Monitor Valkey Fuzzer Runs | every four hours at :41 | [Fuzzer monitor](fuzzer-monitor.md) |
-| Release Notes Review Poll | every hour, checking every five minutes | [Release notes](release-notes.md#applying-review-comments) |
+| Watch Release PR Reviews | one per release PR, started by the cut; holds a runner for 55 minutes checking every five minutes, with the next hour's run queued, until the PR closes or is three days old | [Release notes](release-notes.md#applying-review-comments) |
+| Restart Release PR Watchers | every six hours at :23 | [Release notes](release-notes.md#applying-review-comments) |
 | Refresh Release Progress | every hour, checking every five minutes | [Release automation](release-automation.md) |
 | CVE Scan | Mondays at 06:00 | [CVE scan](cve-scan.md) |
 
@@ -93,7 +94,9 @@ workflows call.
 The workflows that check every few minutes do it inside one long-running
 job, because GitHub's scheduler often starts jobs late. The job stays alive
 for 55 minutes, which also keeps it inside the lifetime of its one-hour
-token. When you start one of them by hand, it checks once and stops.
+token. When you start one of the scheduled ones by hand, it checks once and
+stops. The review watcher is different: it always watches for the full 55
+minutes and then starts itself again, so starting it by hand resumes a watch.
 
 ## How every job is set up
 

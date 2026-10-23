@@ -95,6 +95,7 @@ def run_poll_loop(
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
     logger: logging.Logger | None = None,
+    until: Callable[[T], bool] | None = None,
 ) -> list[T]:
     """Run ``poll_once`` once, or repeatedly on a fixed in-process cadence.
 
@@ -102,6 +103,8 @@ def run_poll_loop(
     behavior. In loop mode, the first poll starts immediately and later polls
     target ``start + N * interval`` until the deadline. If a poll takes longer
     than an interval, missed starts are skipped instead of burst-catching up.
+    ``until`` ends the loop early once a pass's result satisfies it, for a
+    poller whose subject can go away (a PR that merged) before the deadline.
     """
     if interval_seconds <= 0 or duration_seconds <= 0:
         return [poll_once()]
@@ -136,6 +139,10 @@ def run_poll_loop(
                 logger.info(
                     "Poll pass %d finished in %.0fs", iteration, time.monotonic() - iteration_started,
                 )
+            if until is not None and until(results[-1]):
+                if logger is not None:
+                    logger.info("Poll pass %d reached the stop condition; polling ends", iteration)
+                break
         except Exception as exc:  # noqa: BLE001 - keep sustained polling alive
             failures += 1
             last_error = exc

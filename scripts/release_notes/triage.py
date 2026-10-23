@@ -437,8 +437,12 @@ def triage(
                 # risk shape. Fixes to new features living in old files stay
                 # in the notes for maintainer review, with the verdicts
                 # artifact as the audit trail.
+                # Blame the commit on THIS release line (line_commit_sha), never
+                # the source PR's merge on unstable: only the line's own
+                # pre-image can be compared with the line's previous release.
                 unreleased_reason = ""
-                if oracle.usable and oracle.modifies_only_unreleased_code(pr.merge_commit_sha) is True:
+                blamed = pr.line_commit_sha or pr.merge_commit_sha
+                if oracle.usable and oracle.modifies_only_unreleased_code(blamed) is True:
                     unreleased_reason = "fixes code first introduced in this release; never shipped broken"
                 if unreleased_reason:
                     decision = TriageDecision(

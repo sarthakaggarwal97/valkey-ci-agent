@@ -21,13 +21,18 @@ from github import Auth, Github
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
+from scripts.common.job_summary import write_outputs
 from scripts.common.logging_utils import configure_logging
 from scripts.common.polling import add_poll_loop_args, run_poll_loop_from_args
 from scripts.release.checks import CandidateCI, evaluate_candidate_ci
 from scripts.release.models import ReleasePolicy
 from scripts.release.policy import load_policy
 from scripts.release.publish import resolve_tag_commit
-from scripts.release_notes.release_cut import PREP_BRANCH_PREFIX
+from scripts.release_notes.release_cut import (
+    PREP_BRANCH_PREFIX,
+    READY_DESPITE_FLAGS,
+    READY_WITH_SECURITY_ITEMS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -465,9 +470,19 @@ def _render_status(
             next_action = notes_action
             summary = "notes PR held"
         else:
-            notes_status = _status_badge("Ready for review", "0969da")
-            notes_action = "Review and merge the PR."
-            current = "The release-notes PR is ready for review."
+            flagged = _flagged_items(pr)
+            if flagged == "security":
+                notes_status = _status_badge("Security items open", "cf222e")
+                notes_action = "Settle the security items at the top of the PR, then merge."
+                current = "The release-notes PR is ready, but its description names unresolved security items."
+            elif flagged == "flagged":
+                notes_status = _status_badge("Ready, items flagged", "9a6700")
+                notes_action = "Confirm the flagged items at the top of the PR, then merge."
+                current = "The release-notes PR is ready; its description lists items to confirm."
+            else:
+                notes_status = _status_badge("Ready for review", "0969da")
+                notes_action = "Review and merge the PR."
+                current = "The release-notes PR is ready for review."
             next_action = notes_action
             summary = "waiting for notes PR merge"
 
@@ -886,6 +901,21 @@ def _presentation_state(
     )
     return 1, prepare_failed
 
+def _flagged_items(pr: Any) -> str:
+    """Which banner the cut put at the top of a PR it opened ready.
+
+    "security" for unresolved security items, "flagged" for other items a
+    maintainer should confirm, "" for a clean cut. Presentation only: the
+    PR body is bot-written, and nothing here authorizes anything.
+    """
+    body = getattr(pr, "body", "") or ""
+    if READY_WITH_SECURITY_ITEMS in body:
+        return "security"
+    if READY_DESPITE_FLAGS in body:
+        return "flagged"
+    return ""
+
+
 def _find_prep_pr(repo: Any, tracker: Tracker) -> Any | None:
     pulls = retry_github_call(
         lambda: list(
@@ -1160,17 +1190,6 @@ def _validate_tracker(tracker: Tracker) -> None:
         raise ValueError("tracker prepare run id must be positive")
 
 
-def _write_outputs(values: dict[str, str]) -> None:
-    path = os.environ.get("GITHUB_OUTPUT", "")
-    if not path:
-        return
-    with open(path, "a", encoding="utf-8") as output:
-        for key, value in values.items():
-            if "\n" in value or "\r" in value:
-                raise ValueError(f"multiline workflow output refused for {key}")
-            output.write(f"{key}={value}\n")
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1207,7 +1226,7 @@ def main(argv: list[str] | None = None) -> int:
             prepare_run_id=args.prepare_run_id,
         )
         issue = ensure_tracker(target_gh, tracker, agent_repo=args.agent_repo)
-        _write_outputs({"issue_number": str(issue.number), "issue_url": issue.html_url})
+        write_outputs({"issue_number": str(issue.number), "issue_url": issue.html_url})
         print(issue.html_url)
         return 0
 

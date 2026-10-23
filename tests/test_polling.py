@@ -230,3 +230,20 @@ def test_run_poll_loop_logs_iteration_completion_and_totals(caplog):
     messages = [r.getMessage() for r in caplog.records]
     assert any(m.startswith("Poll pass 1 finished in") for m in messages)
     assert any("3 pass(es), 1 failed" in m for m in messages)
+
+
+def test_run_poll_loop_stops_early_when_until_is_met():
+    # A watcher whose subject goes away (the PR merged) must not keep polling
+    # until the deadline.
+    times = iter([0.0, 0.0, 10.0, 10.0, 20.0, 20.0, 30.0, 30.0, 40.0, 40.0, 50.0, 50.0])
+    produced = iter([1, 2, 3, 4])
+    slept: list[float] = []
+    results = run_poll_loop(
+        lambda: next(produced),
+        interval_seconds=10,
+        duration_seconds=1000,
+        clock=lambda: next(times),
+        sleep=slept.append,
+        until=lambda result: result == 2,
+    )
+    assert results == [1, 2]

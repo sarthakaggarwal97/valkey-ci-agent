@@ -363,6 +363,33 @@ class TestUnreleasedCodeExclusion:
 
 
 
+    def test_blames_the_release_lines_commit_not_the_unstable_merge(self, monkeypatch) -> None:
+        # A sweep cherry-pick whose subject names the source PR records the
+        # source's merge on unstable as merge_commit_sha (its exact diff) and
+        # the cherry-pick as line_commit_sha. Blamed on unstable, a fix to code
+        # refactored there after the branch point reads as "unreleased" and
+        # was silently dropped from the notes (the 7.2.15 CVE fix). The oracle
+        # must see the line's own commit.
+        self._oracle(monkeypatch, {"f" * 40: True, "1" * 40: False})
+        run = _fake_run({"verdicts": [
+            {"pr": 12, "include": True, "reason": "fixes a crash", "uncertain": False},
+        ]})
+        pr = MergedPR(number=12, title="PR 12", author="alice", url="https://x/12",
+                      merge_commit_sha="f" * 40, line_commit_sha="1" * 40)
+        result = triage([pr], repo_dir="/tmp", base_ref="7.2.14", run_fn=run)
+        assert [d.pr_number for d in result.included] == [12]
+        assert not result.excluded
+
+    def test_falls_back_to_merge_commit_without_a_line_commit(self, monkeypatch) -> None:
+        self._oracle(monkeypatch, {"a" * 40: True})
+        run = _fake_run({"verdicts": [
+            {"pr": 13, "include": True, "reason": "fixes a crash", "uncertain": False},
+        ]})
+        pr = MergedPR(number=13, title="PR 13", author="alice", url="https://x/13",
+                      merge_commit_sha="a" * 40)
+        result = triage([pr], repo_dir="/tmp", base_ref="9.1.2", run_fn=run)
+        assert [d.pr_number for d in result.excluded] == [13]
+
     def test_baseline_shipped_pr_is_never_marked_unreleased(self, monkeypatch) -> None:
         # A cherry-pick into the release branch has a different SHA, which
         # defeats the blame oracle's ancestry test; the shipped-PR set from

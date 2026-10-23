@@ -11,8 +11,12 @@ passed, and acts on that.
 
 1. Run **Prepare Release** from this repository's Actions tab. Give it the
    release line (such as `9.1`), the kind of release (`rc`, `ga` or `patch`),
-   and the urgency.
-2. Review and merge the release notes PR it opens.
+   and the urgency. When a fix in the release names a CVE, also give it the
+   Security Fixes entries (separated by `;;`); the release date is today in
+   UTC unless you set one.
+2. Review and merge the release notes PR it opens. It opens ready for review,
+   with everything that needs a decision listed at the top. Leave inline
+   comments on the notes to have the agent edit them.
 3. Approve the `release` environment when publication asks for it.
 4. Approve the `release-publish` environment in `valkey-release-automation`.
 
@@ -24,10 +28,12 @@ what to do next if something fails.
 
 **Preparing.** Prepare Release first checks that you are a member of
 `valkey-io/valkey-committers` or `valkey-io/valkey-release`. It works out the
-next version from the release branch and its tags, opens the tracking issue,
-and runs the [release notes cut](release-notes.md), which opens the notes PR.
-If you only want to see which version it would prepare, run it with
-`dry_run`.
+next version from the release branch and its tags, refuses a patch or a
+further release candidate when the branch has no commits since the previous
+one (merge the pending backports first; promoting the last candidate to GA
+unchanged is fine), opens the tracking issue, and runs the
+[release notes cut](release-notes.md), which opens the notes PR. If you only
+want to see which version it would prepare, run it with `dry_run`.
 
 **Waiting for the merge.** A watcher runs every hour and checks every five
 minutes for most of that hour. It updates the tracking issue from what it
@@ -82,6 +88,37 @@ stops everything for that release, including any new publication.
 If you need to stop all release activity while you look into a problem,
 disable the **Refresh Release Progress** workflow in this repository. Close
 every abandoned tracking issue before you enable it again.
+
+## Release day
+
+The automation handles each release on its own, but a few things are worth
+settling before you start, especially when several release lines go out at
+once:
+
+- **Merge the backport sweeps first.** The notes PR has to be the last merge
+  on the release branch: anything merged after it invalidates the candidate,
+  and the tracker will ask for a new Prepare Release. Merging into the branch
+  while the cut is running fails the cut.
+- **Freeze `main` in this repository and in `valkey-release-automation`**
+  until the last release is published. Publication refuses to run if this
+  repository's `main` moved after the Publish run started, and the watcher
+  then cancels and re-qualifies; production refuses in the same way when the
+  automation repository moved.
+- **Approve production runs one at a time.** Wait for the previous run's
+  "Publish to S3" job to finish before approving the next `release-publish`
+  request. The package publish and the hashes update are serialized through
+  shared resources that are not safe under several concurrent runs.
+- **Rehearse what has not run before.** Qualification can be run by hand in
+  `valkey-release-automation` against the previous tag of each line; it
+  publishes nothing. **Cut Release Notes** defaults to a dry run and shows
+  what each line's notes would contain.
+- **Expect hours, not minutes.** Qualification and production together run
+  hundreds of jobs per release; the production run also waits for Docker Hub
+  before it triggers the Bundle.
+- **Release PRs that were already open** when a new version of this
+  automation landed have no review watcher yet. Start one by hand for each
+  (see [Release notes](release-notes.md#applying-review-comments)), or wait
+  for the six-hourly restart to do it.
 
 ## Setting it up securely
 

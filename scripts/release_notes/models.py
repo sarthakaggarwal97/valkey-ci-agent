@@ -37,10 +37,16 @@ class MergedPR:
     """One PR discovered in the release range (factual fields only).
 
     For backports resolved to their original, number/title/author/body/labels come
-    from the original PR while merge_commit_sha stays the range (backport) commit.
-    ``changed_files`` are the source PR's own changed paths (from the PR files
-    API), so a sweep-squashed PR keeps its exact file set rather than the
-    combined range diff. Empty when the lookup failed.
+    from the original PR. ``merge_commit_sha`` is the commit whose diff describes
+    the change for the AI: the PR's own merge commit when the range commit was
+    traced to a PR by number (for a cherry-pick that is the source's merge on
+    ``unstable``), otherwise the range commit. ``line_commit_sha`` is always the
+    commit the range walk found on THIS release line (a cherry-pick, a sweep
+    merge, or the PR's own merge), which is the only commit whose pre-image can
+    be blamed against this line's previous release. ``changed_files`` are the
+    source PR's own changed paths (from the PR files API), so a sweep-squashed PR
+    keeps its exact file set rather than the combined range diff. Empty when the
+    lookup failed.
     """
 
     number: int
@@ -50,6 +56,7 @@ class MergedPR:
     body: str = ""
     labels: tuple[str, ...] = ()
     merge_commit_sha: str = ""
+    line_commit_sha: str = ""
     disposition: PRDisposition = PRDisposition.CANDIDATE
     changed_files: tuple[str, ...] = ()
 
