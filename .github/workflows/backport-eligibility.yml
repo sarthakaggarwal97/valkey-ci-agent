@@ -1,12 +1,12 @@
 name: Backport Eligibility
 
 # Once a day, look at every PR merged to the development branch on the last
-# three UTC days and comment on the ones that look eligible for backport,
-# naming the release branches. Scheduled runs are dry runs (verdicts in the
-# job summary only) until vars.BACKPORT_ELIGIBILITY_COMMENTS is "true". The
-# overlap re-covers a day a failed or skipped run missed; the marker comment
-# keeps a PR from being commented on twice. It only suggests: nothing is added
-# to a project.
+# seven UTC days and comment on the ones that look eligible for backport,
+# naming the release branches. The overlap re-covers days a failed or skipped
+# run missed (GitHub drops scheduled runs now and then). Each PR is judged
+# once: the result files of earlier runs settle the PRs they already decided,
+# and the marker comment keeps a PR from being commented on twice. It only
+# suggests: nothing is added to a project.
 
 on:
   schedule:
@@ -32,9 +32,9 @@ on:
         description: "UTC dates to cover, ending at date"
         required: false
         type: string
-        default: "3"
+        default: "7"
       dry_run:
-        description: "Report verdicts without commenting"
+        description: "Report verdicts without commenting (scheduled runs always comment)"
         required: false
         type: boolean
         default: true
@@ -62,13 +62,15 @@ jobs:
       CLAUDE_CODE_USE_BEDROCK: "1"
       TARGET_REPO: ${{ inputs.repo || 'valkey-io/valkey' }}
       MERGE_DATE: ${{ inputs.date || '' }}
-      MERGE_DAYS: ${{ inputs.days || '3' }}
+      MERGE_DAYS: ${{ inputs.days || '7' }}
       PR_NUMBERS: ${{ inputs.prs || '' }}
-      # Scheduled runs only report until vars.BACKPORT_ELIGIBILITY_COMMENTS is
-      # "true", set once the would-comment verdicts in the dry-run job
-      # summaries have proven reliable. A manual run follows its input.
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run && 'true' || 'false') || (vars.BACKPORT_ELIGIBILITY_COMMENTS == 'true' && 'false' || 'true') }}
+      # Scheduled runs comment. A manual run follows its input, which
+      # defaults to a dry run so a backfill over old dates posts nothing.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run && 'true' || 'false') || 'false' }}
     permissions:
+      # actions: read lists this workflow's earlier runs and downloads their
+      # result files.
+      actions: read
       contents: read
       id-token: write
     steps:
@@ -112,13 +114,34 @@ jobs:
           role-session-name: backport-eligibility-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Download earlier results
+        # Best effort: a result that cannot be read only means its PRs are
+        # judged again; the marker comment still prevents a second comment.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          mkdir -p prior-results
+          runs=$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow backport-eligibility.yml \
+            --status completed --limit 30 --json databaseId --jq '.[].databaseId') || runs=""
+          found=0
+          for id in ${runs}; do
+            if gh run download "${id}" --repo "${GITHUB_REPOSITORY}" \
+                --name "backport-eligibility-result-${id}" --dir "prior-results/${id}" >/dev/null 2>&1; then
+              found=$((found + 1))
+            fi
+          done
+          echo "Downloaded ${found} earlier result file(s)"
+
       - name: Evaluate merged PRs
         shell: bash
         env:
           TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           set -euo pipefail
-          args=(--registry repos.yml --repo "${TARGET_REPO}" --days "${MERGE_DAYS}" --verbose)
+          args=(--registry repos.yml --repo "${TARGET_REPO}" --days "${MERGE_DAYS}" --verbose
+                --prior-results prior-results --output backport-eligibility-result.json)
           if [[ -n "${MERGE_DATE}" ]]; then
             args+=(--date "${MERGE_DATE}")
           fi
@@ -128,7 +151,7 @@ jobs:
           if [[ "${DRY_RUN}" == "true" ]]; then
             args+=(--dry-run)
           fi
-          python -m scripts.backport.eligibility "${args[@]}" | tee backport-eligibility-result.json
+          python -m scripts.backport.eligibility "${args[@]}"
 
       - name: Upload result
         if: always()

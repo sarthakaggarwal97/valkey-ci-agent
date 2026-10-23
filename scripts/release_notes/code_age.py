@@ -111,6 +111,7 @@ def line_origins(
     *,
     base: Optional[str] = None,
     anchor_insertions: bool = False,
+    max_files: int = _MAX_FILES,
 ) -> set[str]:
     """Return the commits that introduced the pre-image lines *sha* touches.
 
@@ -128,8 +129,8 @@ def line_origins(
 
     Returns an empty set when the commit touches no pre-existing line (for
     example, it only adds files). Raises ``OriginsUnknown`` when the answer is
-    unknown: an unreadable commit, one touching more than ``_MAX_FILES``
-    files, or a range blame cannot read.
+    unknown: an unreadable commit, one touching more than *max_files* files
+    (``_MAX_FILES`` by default), or a range blame cannot read.
     """
     if not sha:
         raise OriginsUnknown("no commit")
@@ -159,8 +160,8 @@ def line_origins(
         if file_match:
             current_file = file_match.group(1)
             files.add(current_file)
-            if len(files) > _MAX_FILES:
-                raise OriginsUnknown(f"touches more than {_MAX_FILES} files")
+            if len(files) > max_files:
+                raise OriginsUnknown(f"touches more than {max_files} files")
             continue
         hunk = _HUNK_RE.match(line)
         if hunk and current_file:

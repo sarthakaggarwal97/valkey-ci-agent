@@ -1,7 +1,11 @@
 """Flag PRs merged to the development branch that look eligible for backport.
 
-Runs once a day over the PRs merged on the last few UTC dates, so a day a
-failed or skipped run missed is picked up by the next one. A PR is eligible
+Runs once a day over the PRs merged on the last week of UTC dates, so days
+a failed or skipped run missed are picked up by a later one. Each PR is
+judged once: a run reads the results earlier runs left behind and copies a
+settled verdict for the same merge commit and the same released branches
+instead of asking the model again, so a borderline PR does not get several
+tries at "high". A PR is eligible
 for a registered release branch when both hold:
 
 * the code it changes exists on that branch: a commit that introduced a line
@@ -52,7 +56,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -90,7 +94,20 @@ from scripts.release_notes.publish import escape_cell
 logger = logging.getLogger(__name__)
 
 COMMENT_MARKER = "<!-- valkey-ci-agent:backport-eligibility -->"
+# Bumped whenever a change would judge a PR differently: earlier results are
+# then ignored and every PR in the window is judged again.
+RESULT_VERSION = 1
+# Outcomes a later run reuses for the same merge commit. "would-comment" is
+# settled only for another dry run: a live run judges it again and comments.
+# "undecided", "error", and "already-commented" are never reused.
+_SETTLED = frozenset({
+    "commented", "not-commented", "not-eligible", "not-on-base", "triaged", "needs-review",
+})
 _BATCH_SIZE = 20
+# Blame cap for eligibility. A large mechanical PR (a spelling sweep) is
+# cheap to trace and the model dismisses it; failing to trace it would ask a
+# maintainer to review it by hand instead.
+_MAX_TRACED_FILES = 250
 # Newest introducing commits shown to the model per PR; older ones are the
 # long tail of a file's history and say little about where a bug arrived.
 _MAX_ORIGINS = 40
@@ -550,7 +567,10 @@ def trace_origins(
     history = history or BranchHistory(repo_dir)
     if base is None:
         base = _change_base(repo_dir, source, git_env=git_env)
-    shas = line_origins(repo_dir, source.pr.merge_commit_sha, base=base, anchor_insertions=True)
+    shas = line_origins(
+        repo_dir, source.pr.merge_commit_sha, base=base, anchor_insertions=True,
+        max_files=_MAX_TRACED_FILES,
+    )
     if not shas:
         return ()
     records = _commit_records(repo_dir, shas)
@@ -983,6 +1003,68 @@ def _branch_sort_key(branch: str) -> tuple[int, ...]:
         return ()
 
 
+@dataclass(frozen=True)
+class PriorResult:
+    """One PR's outcome from an earlier run, as that run recorded it."""
+
+    merge_sha: str
+    released: tuple[str, ...]
+    judged_on: str
+    dry_run: bool
+    result: Mapping[str, Any]
+
+
+def load_prior_results(paths: Iterable[Path], repo: str) -> dict[int, PriorResult]:
+    """Read earlier runs' result files; the newest outcome per PR wins.
+
+    A file from another repository, an older ``RESULT_VERSION``, or one that
+    does not parse is skipped, so its PRs are judged again. "already-commented"
+    says nothing new and would hide the run that commented, so a maintainer
+    who deletes the comment would get it again; it is skipped too.
+    """
+    runs: list[dict[str, Any]] = []
+    for path in paths:
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            logger.warning("Ignoring earlier result %s: %s", path, exc)
+            continue
+        if (
+            isinstance(data, dict)
+            and data.get("version") == RESULT_VERSION
+            and data.get("repo") == repo
+            and isinstance(data.get("judged_at"), str)
+            and isinstance(data.get("prs"), dict)
+            and isinstance(data.get("merge_shas"), dict)
+        ):
+            runs.append(data)
+    prior: dict[int, PriorResult] = {}
+    for data in sorted(runs, key=lambda d: d["judged_at"]):
+        released = tuple(data.get("released_branches") or ())
+        for key, entry in data["prs"].items():
+            sha = data["merge_shas"].get(key)
+            if not (isinstance(entry, dict) and isinstance(sha, str) and str(key).isdigit()):
+                continue
+            if entry.get("action") == "already-commented":
+                continue
+            prior[int(key)] = PriorResult(
+                merge_sha=sha,
+                released=released,
+                judged_on=str(entry.get("judged_on") or data["judged_at"][:10]),
+                dry_run=bool(data.get("dry_run")),
+                result=entry,
+            )
+    return prior
+
+
+def _reusable(prior: PriorResult | None, sha: str, released: Sequence[str], dry_run: bool) -> bool:
+    """Whether *prior* settles this PR without judging it again."""
+    if prior is None or prior.merge_sha != sha or tuple(prior.released) != tuple(released):
+        return False
+    action = prior.result.get("action")
+    return action in _SETTLED or (action == "would-comment" and dry_run)
+
+
 def run(
     *,
     repo_entry: RepoEntry,
@@ -992,12 +1074,18 @@ def run(
     dry_run: bool = False,
     run_fn: Callable[..., tuple[str, str, int]] = run_claude_code,
     pr_numbers: Sequence[int] = (),
+    prior: Mapping[int, PriorResult] | None = None,
 ) -> dict[str, Any]:
     """Evaluate every PR merged on the *days* dates ending *date*, or just *pr_numbers*.
 
-    Overlapping windows let a later run pick up a day an earlier run missed;
-    the marker comment keeps a PR from being commented on twice, named or not.
+    Overlapping windows let a later run pick up a day an earlier run missed.
+    *prior* (from :func:`load_prior_results`) settles a PR already judged at
+    the same merge commit, and the marker comment keeps a PR from being
+    commented on twice, named or not.
     """
+    judged_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    # PRs named by hand are judged afresh: that is why someone named them.
+    prior = {} if pr_numbers else (prior or {})
     gh = Github(auth=Auth.Token(token))
     repo = retry_github_call(
         lambda: gh.get_repo(repo_entry.repo), retries=3, description="repository lookup",
@@ -1025,6 +1113,7 @@ def run(
         for source in prs if source.already_commented
     }
     pending = [source for source in prs if not source.already_commented]
+    merge_shas = {source.number: source.pr.merge_commit_sha for source in prs}
 
     candidates: list[Candidate] = []
     with tempfile.TemporaryDirectory(prefix="backport-eligibility-") as tmp, ExitStack() as stack:
@@ -1043,7 +1132,18 @@ def run(
         for branch in branches:
             if branch not in ga and pending:
                 logger.info("%s has no GA release yet; not offering it", branch)
+        to_judge = []
         for source in pending:
+            earlier = prior.get(source.number)
+            if _reusable(earlier, source.pr.merge_commit_sha, released, dry_run):
+                assert earlier is not None
+                results[source.number] = {**earlier.result, "judged_on": earlier.judged_on}
+            else:
+                to_judge.append(source)
+        if len(to_judge) < len(pending):
+            logger.info("%d PR(s) already judged by an earlier run; judging %d",
+                        len(pending) - len(to_judge), len(to_judge))
+        for source in to_judge:
             if source.project_numbers is None:
                 results[source.number] = {"action": "undecided"}
                 errors.append(f"#{source.number}: project items unreadable")
@@ -1102,12 +1202,16 @@ def run(
                      dry_run=dry_run, results=results, errors=errors)
 
     return {
+        "version": RESULT_VERSION,
         "repo": repo_entry.repo,
+        "judged_at": judged_at,
         "since": _first_date(date, days),
         "date": date,
         "requested_prs": sorted(set(pr_numbers)),
         "dry_run": dry_run,
+        "released_branches": released,
         "prs": {str(number): results[number] for number in sorted(results)},
+        "merge_shas": {str(number): merge_shas[number] for number in sorted(results)},
         "errors": errors,
     }
 
@@ -1278,6 +1382,8 @@ def _summary(result: dict[str, Any]) -> str:
             detail = f"maintainers took it to {', '.join(entry['triaged_on'])}"
         if entry.get("failure_site_missing_on"):
             detail = f"{detail} (failure site missing on {', '.join(entry['failure_site_missing_on'])})"
+        if entry.get("judged_on"):
+            detail = f"{detail} (judged {entry['judged_on']})".strip()
         detail = escape_cell(detail)
         branches = ", ".join(entry.get("branches", []))
         action = entry["action"]
@@ -1285,6 +1391,32 @@ def _summary(result: dict[str, Any]) -> str:
             action = f"{action} ({entry['confidence']} confidence)"
         lines.append(f"| #{number} | {action} | {branches} | {detail} |")
     return "\n".join(lines)
+
+
+def _annotation_text(text: str) -> str:
+    """Escape *text* for a workflow command: it is model output over untrusted PR text."""
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def workflow_annotations(result: Mapping[str, Any]) -> list[str]:
+    """Workflow-command lines that put each comment and each problem on the run page.
+
+    PRs settled by an earlier run are left out: that run already showed them.
+    """
+    lines = []
+    for number, entry in result["prs"].items():
+        if entry.get("judged_on"):
+            continue
+        action = entry["action"]
+        branches = ", ".join(entry.get("branches", []))
+        reason = str(entry.get("reason") or entry.get("detail") or "")
+        if action in {"commented", "would-comment"}:
+            lines.append(f"::notice title=Backport suggested for #{number}::"
+                         + _annotation_text(f"{action} for {branches}: {reason}"))
+        elif action in {"needs-review", "undecided", "error"}:
+            lines.append(f"::warning title=Backport eligibility #{number}::"
+                         + _annotation_text(f"{action}: {reason}"))
+    return lines
 
 
 def _first_date(date: str, days: int) -> str:
@@ -1300,12 +1432,15 @@ def main() -> None:
     parser.add_argument("--registry", default="repos.yml")
     parser.add_argument("--repo", default="valkey-io/valkey")
     parser.add_argument("--date", default="", help="Last UTC merge date YYYY-MM-DD (default: yesterday)")
-    parser.add_argument("--days", type=int, default=3,
+    parser.add_argument("--days", type=int, default=7,
                         help="UTC dates to cover, ending --date; overlap catches up missed runs")
     parser.add_argument("--prs", default="",
                         help="Evaluate these merged PRs (e.g. 4849,4880) instead of a date window")
     parser.add_argument("--target-token", default=os.environ.get("TARGET_TOKEN", ""))
     parser.add_argument("--dry-run", action="store_true", help="Report verdicts without commenting")
+    parser.add_argument("--prior-results", default="",
+                        help="Directory of earlier runs' result files; PRs they settled are not judged again")
+    parser.add_argument("--output", default="", help="Also write the result JSON to this file")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
     if not args.target_token:
@@ -1324,9 +1459,19 @@ def main() -> None:
     except ValueError as exc:
         parser.error(f"--prs: {exc}")
     repo_entry = load_registry(args.registry).get_repo(args.repo)
+    prior: dict[int, PriorResult] = {}
+    if args.prior_results:
+        files = sorted(Path(args.prior_results).rglob("*.json"))
+        prior = load_prior_results(files, args.repo)
+        logger.info("Read %d earlier verdict(s) from %d result file(s)", len(prior), len(files))
     result = run(repo_entry=repo_entry, date=date, token=args.target_token,
-                 days=args.days, dry_run=args.dry_run, pr_numbers=pr_numbers)
-    print(json.dumps(result, indent=2))
+                 days=args.days, dry_run=args.dry_run, pr_numbers=pr_numbers, prior=prior)
+    text = json.dumps(result, indent=2)
+    if args.output:
+        Path(args.output).write_text(text + "\n", encoding="utf-8")
+    print(text)
+    for line in workflow_annotations(result):
+        print(line)
     emit_job_summary(_summary(result))
 
     scope = ", ".join(f"#{n}" for n in pr_numbers) if pr_numbers else f"merges through {date}"
