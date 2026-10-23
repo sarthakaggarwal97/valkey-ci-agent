@@ -49,7 +49,7 @@ permissions below.
 | repositories whose releases list security advisories | read repository advisories | release notes, when reading advisories |
 | `valkey-fuzzer` | read actions and contents; write issues | the fuzzer monitor |
 | `valkey-container` | write actions; read contents and metadata | starting CVE rebuilds |
-| `valkey-ci-agent` | write contents, issues and pull requests; read metadata | release tracking issues and registry PRs |
+| `valkey-ci-agent` | write actions, contents, issues and pull requests; read metadata | release tracking issues, registry PRs, and starting the release PR review watchers and their edits |
 | `valkey-release-automation` | read actions, contents and metadata | release automation |
 | the organization | read members; read and write organization projects | checking who may ask for fixes and releases, and reading and updating backport boards |
 

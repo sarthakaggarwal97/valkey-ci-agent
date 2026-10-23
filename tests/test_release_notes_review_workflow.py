@@ -39,21 +39,14 @@ def test_every_caller_of_the_cut_grants_the_watcher_start() -> None:
 def test_missing_watchers_are_restarted_on_a_schedule() -> None:
     workflow = _workflow(_RESTART)
     job = workflow["jobs"]["restart"]
-    token = _step(workflow, "restart", "Generate App token")
     run = _step(workflow, "restart", "Start a watcher for every unwatched release PR")
 
     assert workflow["on"]["schedule"] == [{"cron": "23 */6 * * *"}]
-    assert job["permissions"] == {"contents": "read"}
-    assert token["with"]["repositories"].splitlines() == [
-        "valkey", "valkey-search", "valkey-json", "valkey-bloom", "valkey-ci-agent",
-    ]
-    assert {
-        key: value for key, value in token["with"].items() if key.startswith("permission-")
-    } == {
-        "permission-actions": "write",
-        "permission-pull-requests": "read",
-        "permission-metadata": "read",
-    }
+    # Reads public PRs and dispatches at home: the repository's own token,
+    # no App token at all.
+    assert job["permissions"] == {"contents": "read", "actions": "write"}
+    assert not any("create-github-app-token" in step.get("uses", "") for step in job["steps"])
+    assert run["env"]["RELEASE_NOTES_REVIEW_TOKEN"] == "${{ github.token }}"
     assert run["run"].split()[-1] == "--restart-missing"
 
 
@@ -66,7 +59,8 @@ def test_one_watcher_per_release_pr_replaces_the_hourly_scan() -> None:
     assert inputs["stop"]["default"] == "false"
 
     job = workflow["jobs"]["watch"]
-    token = _step(workflow, "watch", "Generate App token")
+    token = _step(workflow, "watch", "Generate target token")
+    agent_token = _step(workflow, "watch", "Generate dispatch token")
     run = _step(workflow, "watch", "Watch and dispatch")
 
     # review_poll.watch_run_title() finds this PR's runs by this exact title.
@@ -80,19 +74,31 @@ def test_one_watcher_per_release_pr_replaces_the_hourly_scan() -> None:
         "release-notes-review-watch-${{ inputs.repo }}-${{ inputs.pr }}"
     )
     assert job["concurrency"]["cancel-in-progress"] == "false"
-    # The App token queues the next hour's run; the job's own token stays read-only.
+    # The job's own token stays read-only. Two App tokens split the work:
+    # the target one can post on the release PR but not touch workflows
+    # there; the dispatch one can start workflows here but not touch PRs.
     assert job["permissions"] == {"contents": "read"}
-    assert token["with"]["repositories"].splitlines() == ["${{ inputs.repo }}", "valkey-ci-agent"]
+    assert token["with"]["repositories"] == "${{ inputs.repo }}"
     assert {
         key: value
         for key, value in token["with"].items()
         if key.startswith("permission-")
     } == {
-        "permission-actions": "write",
         "permission-members": "read",
         "permission-pull-requests": "write",
         "permission-metadata": "read",
     }
+    assert agent_token["with"]["repositories"] == "valkey-ci-agent"
+    assert {
+        key: value
+        for key, value in agent_token["with"].items()
+        if key.startswith("permission-")
+    } == {
+        "permission-actions": "write",
+        "permission-metadata": "read",
+    }
+    assert run["env"]["RELEASE_NOTES_REVIEW_TOKEN"] == "${{ steps.token.outputs.token }}"
+    assert run["env"]["RELEASE_NOTES_REVIEW_AGENT_TOKEN"] == "${{ steps.agent-token.outputs.token }}"
     # Always a sustained watch, including when started by hand to resume one.
     assert run["env"]["RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS"] == "300"
     assert run["env"]["RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS"] == "3300"
@@ -117,14 +123,22 @@ def test_stop_cancels_only_that_prs_watcher() -> None:
 def test_cut_starts_the_watcher_for_the_pr_it_opens() -> None:
     workflow = _workflow(_CUT)
     outputs = workflow["on"]["workflow_call"]["outputs"]
-    job = workflow["jobs"]["cut"]
-    start = _step(workflow, "cut", "Start the review watcher for the PR")
+    cut = workflow["jobs"]["cut"]
+    watch = workflow["jobs"]["watch"]
+    start = _step(workflow, "watch", "Start the review watcher for the PR")
     assert list(outputs) == ["pr_number", "pr_url"]
-    assert job["outputs"]["pr_number"] == "${{ steps.cut.outputs.pr_number }}"
-    assert job["permissions"]["actions"] == "write"
+    assert cut["outputs"]["pr_number"] == "${{ steps.cut.outputs.pr_number }}"
     assert _step(workflow, "cut", "Cut release notes")["id"] == "cut"
-    assert start["if"] == "${{ !inputs.dry_run && steps.cut.outputs.pr_number != '' }}"
-    assert start["env"]["RELEASE_NOTES_REVIEW_PR"] == "${{ steps.cut.outputs.pr_number }}"
+    # The job that runs Claude keeps no token that could start or cancel
+    # workflows; the start is its own job, and a failed start is not a
+    # failed cut (the scheduled restart covers it).
+    assert cut["permissions"] == {"contents": "read", "id-token": "write"}
+    assert "environment" not in watch
+    assert watch["needs"] == "cut"
+    assert watch["continue-on-error"] == "true"
+    assert watch["permissions"] == {"contents": "read", "actions": "write"}
+    assert watch["if"] == "${{ !inputs.dry_run && needs.cut.outputs.pr_number != '' }}"
+    assert start["env"]["RELEASE_NOTES_REVIEW_PR"] == "${{ needs.cut.outputs.pr_number }}"
     assert start["env"]["RELEASE_NOTES_REVIEW_TOKEN"] == "${{ github.token }}"
     assert start["run"].split()[-1] == "--start"
 

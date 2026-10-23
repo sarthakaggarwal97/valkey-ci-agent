@@ -92,27 +92,38 @@ jobs:
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
 
-      - name: Generate App token
+      # Two tokens, each as narrow as its half of the work: one reads the
+      # release PR and posts its status comments, the other starts workflows
+      # here (Address Release Note Reviews accepts only the App as its sender,
+      # and the next hour's watcher). Neither can touch workflows in the
+      # target repository or pull requests in this one.
+      - name: Generate target token
         id: token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
           owner: valkey-io
-          repositories: |
-            ${{ inputs.repo }}
-            valkey-ci-agent
-          # actions:write on this repository dispatches Address Release Note
-          # Reviews, which accepts only the App as its sender, and queues the
-          # next hour's watcher.
-          permission-actions: write
+          repositories: ${{ inputs.repo }}
           permission-members: read
           permission-pull-requests: write
+          permission-metadata: read
+
+      - name: Generate dispatch token
+        id: agent-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: valkey-ci-agent
+          permission-actions: write
           permission-metadata: read
 
       - name: Watch and dispatch
         env:
           RELEASE_NOTES_REVIEW_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_NOTES_REVIEW_AGENT_TOKEN: ${{ steps.agent-token.outputs.token }}
           RELEASE_NOTES_REVIEW_APP_SLUG: ${{ steps.token.outputs.app-slug }}
           RELEASE_NOTES_REVIEW_REPO: ${{ inputs.repo }}
           RELEASE_NOTES_REVIEW_PR: ${{ inputs.pr }}

@@ -377,7 +377,7 @@ def chain_allowed(pr: Any, *, max_age_hours: int, now: datetime | None = None) -
 
 
 def _dispatch_workflow(
-    gh: Github,
+    agent_gh: Github,
     *,
     agent_repo: str,
     workflow: str,
@@ -385,8 +385,9 @@ def _dispatch_workflow(
     inputs: dict[str, str],
     description: str,
 ) -> None:
+    """Start *workflow* in the agent repository with *agent_gh*, a client that may only do that."""
     target = retry_github_call(
-        lambda: gh.get_repo(agent_repo).get_workflow(workflow),
+        lambda: agent_gh.get_repo(agent_repo).get_workflow(workflow),
         retries=3,
         description=f"get workflow {workflow}",
     )
@@ -398,7 +399,7 @@ def _dispatch_workflow(
 
 
 def dispatch_release_review(
-    gh: Github,
+    agent_gh: Github,
     *,
     agent_repo: str = AGENT_REPO,
     workflow: str = REVIEW_WORKFLOW,
@@ -406,7 +407,7 @@ def dispatch_release_review(
 ) -> DispatchFn:
     def dispatch(release: ReleasePR, status_comment_id: int) -> None:
         _dispatch_workflow(
-            gh,
+            agent_gh,
             agent_repo=agent_repo,
             workflow=workflow,
             ref=ref,
@@ -423,11 +424,11 @@ def dispatch_release_review(
 
 
 def live_watcher_runs(
-    gh: Github, repo_name: str, number: int, *, agent_repo: str = AGENT_REPO
+    agent_gh: Github, repo_name: str, number: int, *, agent_repo: str = AGENT_REPO
 ) -> list[Any]:
     """Every waiting or running watcher run for this PR, newest first."""
     workflow = retry_github_call(
-        lambda: gh.get_repo(agent_repo).get_workflow(WATCH_WORKFLOW),
+        lambda: agent_gh.get_repo(agent_repo).get_workflow(WATCH_WORKFLOW),
         retries=3,
         description=f"get workflow {WATCH_WORKFLOW}",
     )
@@ -446,7 +447,7 @@ def live_watcher_runs(
 
 
 def ensure_watcher(
-    gh: Github,
+    agent_gh: Github,
     repo_name: str,
     number: int,
     *,
@@ -456,14 +457,15 @@ def ensure_watcher(
 ) -> bool:
     """Start a watcher for this PR unless one is already lined up; True when started.
 
-    The cut and the scheduled restart call this with ``successor=False``: a
-    watcher that is running or waiting is enough. A running watcher calls it
-    with ``successor=True`` to queue the next hour's run: that run waits on
-    the per-PR concurrency group and takes over the moment this one ends, so
-    the hour boundary has no gap, and only a run already waiting makes it
+    *agent_gh* needs only ``actions: write`` on the agent repository. The cut
+    and the scheduled restart call this with ``successor=False``: a watcher
+    that is running or waiting is enough. A running watcher calls it with
+    ``successor=True`` to queue the next hour's run: that run waits on the
+    per-PR concurrency group and takes over the moment this one ends, so the
+    hour boundary has no gap, and only a run already waiting makes it
     redundant.
     """
-    live = live_watcher_runs(gh, repo_name, number, agent_repo=agent_repo)
+    live = live_watcher_runs(agent_gh, repo_name, number, agent_repo=agent_repo)
     blocking = [run for run in live if not successor or getattr(run, "status", "") in _WAITING]
     if blocking:
         logger.info(
@@ -472,7 +474,7 @@ def ensure_watcher(
         )
         return False
     _dispatch_workflow(
-        gh,
+        agent_gh,
         agent_repo=agent_repo,
         workflow=WATCH_WORKFLOW,
         ref=ref,
@@ -483,9 +485,9 @@ def ensure_watcher(
     return True
 
 
-def stop_watcher(gh: Github, repo_name: str, number: int, *, agent_repo: str = AGENT_REPO) -> int:
+def stop_watcher(agent_gh: Github, repo_name: str, number: int, *, agent_repo: str = AGENT_REPO) -> int:
     """Cancel every waiting or running watcher run for this PR; return how many."""
-    live = live_watcher_runs(gh, repo_name, number, agent_repo=agent_repo)
+    live = live_watcher_runs(agent_gh, repo_name, number, agent_repo=agent_repo)
     for run in live:
         retry_github_call(
             run.cancel,
@@ -501,6 +503,7 @@ def stop_watcher(gh: Github, repo_name: str, number: int, *, agent_repo: str = A
 def restart_missing_watchers(
     gh: Github,
     *,
+    agent_gh: Github | None = None,
     repositories: tuple[str, ...] = REPOSITORIES,
     max_age_hours: int = DEFAULT_MAX_AGE_HOURS,
     agent_repo: str = AGENT_REPO,
@@ -510,8 +513,10 @@ def restart_missing_watchers(
     The safety net under the per-PR chains: a chain that broke on an API
     error, or a PR that was already open when the watcher workflow landed,
     gets its watcher back on the next pass. A PR past the chain age is left
-    alone, like a chain that reached it; start its watcher by hand.
+    alone, like a chain that reached it; start its watcher by hand. *gh*
+    only reads public PRs; *agent_gh* (default *gh*) starts the workflow.
     """
+    agent_gh = agent_gh or gh
     started = 0
     for repo_full_name, pr, release in _open_release_prs(gh, repositories):
         if not chain_allowed(pr, max_age_hours=max_age_hours):
@@ -522,7 +527,7 @@ def restart_missing_watchers(
             continue
         try:
             if ensure_watcher(
-                gh, repo_full_name.rsplit("/", 1)[-1], release.number,
+                agent_gh, repo_full_name.rsplit("/", 1)[-1], release.number,
                 successor=False, agent_repo=agent_repo,
             ):
                 started += 1
@@ -550,8 +555,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     configure_logging()
+    # Two credentials: RELEASE_NOTES_REVIEW_TOKEN reads the release PR and
+    # posts on it; RELEASE_NOTES_REVIEW_AGENT_TOKEN may only start and cancel
+    # workflows in the agent repository. One token serves both roles when the
+    # second is unset (the start, stop and restart jobs use the repository's
+    # own token, which reads public PRs and dispatches at home).
     token = os.environ["RELEASE_NOTES_REVIEW_TOKEN"]
     gh = Github(auth=Auth.Token(token))
+    agent_token = os.environ.get("RELEASE_NOTES_REVIEW_AGENT_TOKEN", "") or token
+    agent_gh = gh if agent_token == token else Github(auth=Auth.Token(agent_token))
     interval = env_seconds("RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS", 0, minimum=0)
     duration = env_seconds(
         "RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS", 0, minimum=0, maximum=_MAX_LOOP_SECONDS
@@ -560,7 +572,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.restart_missing:
         if args.repo or args.pr:
             parser.error("--restart-missing covers every repository; drop --repo and --pr")
-        restart_missing_watchers(gh, max_age_hours=args.max_age_hours)
+        restart_missing_watchers(gh, agent_gh=agent_gh, max_age_hours=args.max_age_hours)
         return 0
 
     if args.repo or args.pr or args.start or args.stop:
@@ -571,10 +583,10 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(f"unsupported repository: {args.repo}")
         repo_name = repo_full_name.rsplit("/", 1)[-1]
         if args.start:
-            ensure_watcher(gh, repo_name, args.pr, successor=False)
+            ensure_watcher(agent_gh, repo_name, args.pr, successor=False)
             return 0
         if args.stop:
-            stop_watcher(gh, repo_name, args.pr)
+            stop_watcher(agent_gh, repo_name, args.pr)
             return 0
 
         # Confirm the PR is an open release PR before anything else, so a
@@ -592,7 +604,7 @@ def main(argv: list[str] | None = None) -> int:
             # waits on the per-PR concurrency group and takes over the moment
             # this run ends, and a failure in this run cannot break the chain.
             if chain_allowed(loaded[0], max_age_hours=args.max_age_hours):
-                ensure_watcher(gh, repo_name, args.pr, successor=True)
+                ensure_watcher(agent_gh, repo_name, args.pr, successor=True)
             else:
                 logger.warning(
                     "%s#%d is older than %d hours; the next hour is not queued. "
@@ -602,7 +614,7 @@ def main(argv: list[str] | None = None) -> int:
 
         gql = GitHubGraphQLClient(token)
         bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
-        dispatch = dispatch_release_review(gh)
+        dispatch = dispatch_release_review(agent_gh)
         state = {"open": True}
 
         def watch_once() -> int:
@@ -639,7 +651,7 @@ def main(argv: list[str] | None = None) -> int:
             gql,
             repositories=REPOSITORIES,
             bot_login=bot_login,
-            dispatch=dispatch_release_review(gh),
+            dispatch=dispatch_release_review(agent_gh),
         ),
         interval_seconds=interval,
         duration_seconds=duration,

@@ -600,7 +600,7 @@ def test_restart_mode_takes_no_pr(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("scripts.release_notes.review_poll.Github", lambda **_kwargs: MagicMock())
     monkeypatch.setenv("RELEASE_NOTES_REVIEW_TOKEN", "t")
     assert poll_main(["--restart-missing"]) == 0
-    assert restarted.call_args.kwargs == {"max_age_hours": 72}
+    assert restarted.call_args.kwargs["max_age_hours"] == 72
     with pytest.raises(SystemExit):
         poll_main(["--restart-missing", "--repo", "valkey", "--pr", "1"])
 
@@ -622,6 +622,41 @@ def test_start_and_stop_modes_touch_only_the_watcher(monkeypatch: pytest.MonkeyP
     assert poll_main(["--repo", "valkey-io/valkey-json", "--pr", "7", "--stop"]) == 0
     assert stopped.call_args.args[1:] == ("valkey-json", 7)
     polled.assert_not_called()
+
+
+def test_watch_main_dispatches_with_the_agent_token_and_reads_with_the_target_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clients: dict[str, MagicMock] = {}
+
+    def fake_github(*, auth):
+        clients[auth.token] = MagicMock(name=auth.token)
+        return clients[auth.token]
+
+    pr = SimpleNamespace(created_at=datetime.now(timezone.utc))
+    loads: list[MagicMock] = []
+    successors: list[MagicMock] = []
+    dispatchers: list[MagicMock] = []
+    monkeypatch.setattr("scripts.release_notes.review_poll.Github", fake_github)
+    monkeypatch.setattr("scripts.release_notes.review_poll.Auth.Token", lambda token: SimpleNamespace(token=token))
+    monkeypatch.setattr("scripts.release_notes.review_poll.load_release_pr",
+                        lambda gh, _repo, _n: loads.append(gh) or (pr, MagicMock()))
+    monkeypatch.setattr("scripts.release_notes.review_poll.ensure_watcher",
+                        lambda gh, _r, _n, **_kw: successors.append(gh) or True)
+    monkeypatch.setattr("scripts.release_notes.review_poll.dispatch_release_review",
+                        lambda gh: dispatchers.append(gh) or MagicMock())
+    monkeypatch.setattr("scripts.release_notes.review_poll.poll_pr", lambda *_a, **_kw: (0, False))
+    monkeypatch.setattr("scripts.release_notes.review_poll.GitHubGraphQLClient", lambda _token: MagicMock())
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_TOKEN", "target-token")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_AGENT_TOKEN", "agent-token")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_APP_SLUG", "valkeyrie-ops")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_POLL_INTERVAL_SECONDS", "300")
+    monkeypatch.setenv("RELEASE_NOTES_REVIEW_POLL_DURATION_SECONDS", "3300")
+
+    assert poll_main(["--repo", "valkey", "--pr", "42"]) == 0
+    assert loads == [clients["target-token"]]
+    assert successors == [clients["agent-token"]]
+    assert dispatchers == [clients["agent-token"]]
 
 
 def test_watch_main_rejects_half_an_identity(monkeypatch: pytest.MonkeyPatch) -> None:
