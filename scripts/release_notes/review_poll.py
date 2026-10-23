@@ -47,7 +47,7 @@ _MAX_LOOP_SECONDS = 55 * 60
 _ADDRESSING_LEASE = timedelta(minutes=90)
 DispatchFn = Callable[[ReleasePR, int], None]
 
-AGENT_REPO = "valkey-io/valkey-ci-agent"
+AGENT_REPO = "sarthakaggarwal97/valkey-ci-agent"
 REVIEW_WORKFLOW = "release-notes-review.yml"
 WATCH_WORKFLOW = "release-notes-review-watch.yml"
 # A watcher chain stops queueing itself once its PR is this old. Release PRs
@@ -578,7 +578,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.repo or args.pr or args.start or args.stop:
         if not (args.repo and args.pr > 0):
             parser.error("--repo and --pr go together")
-        repo_full_name = args.repo if "/" in args.repo else f"valkey-io/{args.repo}"
+        repo_full_name = args.repo if "/" in args.repo else f"sarthakaggarwal97/{args.repo}"
         if repo_full_name not in REPOSITORIES:
             parser.error(f"unsupported repository: {args.repo}")
         repo_name = repo_full_name.rsplit("/", 1)[-1]
@@ -613,7 +613,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
         gql = GitHubGraphQLClient(token)
-        bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
+        bot_login = os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']  # REHEARSAL: PAT user, no [bot]
         dispatch = dispatch_release_review(agent_gh)
         state = {"open": True}
 
@@ -644,7 +644,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     gql = GitHubGraphQLClient(token)
-    bot_login = f"{os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']}[bot]"
+    bot_login = os.environ['RELEASE_NOTES_REVIEW_APP_SLUG']  # REHEARSAL: PAT user, no [bot]
     results = run_poll_loop(
         lambda: poll_once(
             gh,

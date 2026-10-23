@@ -58,6 +58,12 @@ def ensure_authorized(gh: Any, policy: ReleasePolicy, actor: str) -> None:
     if not actor:
         raise NotAuthorizedError("no acting user supplied")
 
+    # REHEARSAL: a personal account has no teams; only the fork owner may act.
+    if policy.repo == "sarthakaggarwal97/valkey":
+        if actor.casefold() != "sarthakaggarwal97":
+            raise NotAuthorizedError(f"@{actor} is not the rehearsal fork owner")
+        return
+
     lookup_failures: list[str] = []
     for team_full in policy.authorized_teams:
         org_name, team_slug = team_full.split("/", 1)

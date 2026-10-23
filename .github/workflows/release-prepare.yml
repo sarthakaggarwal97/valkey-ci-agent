@@ -46,7 +46,7 @@ jobs:
     # The dispatching maintainer is authorized directly: prepare verifies the
     # triggering actor against the policy's authorized teams live, so there is no
     # forwarded-identity input to spoof and no relay workflow to trust.
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release-control
@@ -67,15 +67,15 @@ jobs:
 
       - name: Create read-only control token
         id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-contents: read
-          permission-members: read
-          permission-metadata: read
+        # REHEARSAL: the PAT stands in for the App token. Production requests:
+        #   owner: valkey-io; repositories: valkey; permission-contents: read; permission-members: read; permission-metadata: read
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::owner: valkey-io; repositories: valkey; permission-contents: read; permission-members: read; permission-metadata: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+          echo "app-slug=sarthakaggarwal97" >> "$GITHUB_OUTPUT"
 
       - name: Derive release identity
         id: release
@@ -151,14 +151,15 @@ jobs:
 
       - name: Create dashboard token
         id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-issues: write
-          permission-metadata: read
+        # REHEARSAL: the PAT stands in for the App token. Production requests:
+        #   owner: valkey-io; repositories: valkey; permission-issues: write; permission-metadata: read
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::owner: valkey-io; repositories: valkey; permission-issues: write; permission-metadata: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+          echo "app-slug=sarthakaggarwal97" >> "$GITHUB_OUTPUT"
 
       - name: Create or refresh release dashboard
         id: tracker
@@ -170,7 +171,7 @@ jobs:
           TAG: ${{ needs.derive.outputs.tag }}
         run: |
           python -m scripts.release.tracker ensure \
-            --repo valkey-io/valkey --branch "$BRANCH" \
+            --repo sarthakaggarwal97/valkey --branch "$BRANCH" \
             --version "$VERSION" --stage "$STAGE" --tag "$TAG" \
             --prep-branch "agent/release-cut/${VERSION}-${STAGE}" \
             --prepare-run-id "$GITHUB_RUN_ID" --agent-repo "$GITHUB_REPOSITORY"

@@ -18,7 +18,7 @@ jobs:
   restart:
     name: Start watchers for unwatched release PRs
     if: >-
-      github.repository == 'valkey-io/valkey-ci-agent' &&
+      github.repository == 'sarthakaggarwal97/valkey-ci-agent' &&
       github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10

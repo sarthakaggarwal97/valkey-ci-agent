@@ -1159,7 +1159,7 @@ def _repo(gh: Any, name: str) -> Any:
 
 def _is_bot_owned(issue: Any) -> bool:
     login = (getattr(getattr(issue, "user", None), "login", "") or "").casefold()
-    return login.endswith("[bot]")
+    return login.endswith("[bot]") or login == "sarthakaggarwal97"  # REHEARSAL
 
 
 def _validate_tracker(tracker: Tracker) -> None:
@@ -1199,9 +1199,9 @@ def main(argv: list[str] | None = None) -> int:
     ensure.add_argument("--prepare-run-id", required=True, type=int)
 
     sync = sub.add_parser("sync")
-    sync.add_argument("--target-repo", default="valkey-io/valkey")
-    sync.add_argument("--agent-repo", default="valkey-io/valkey-ci-agent")
-    sync.add_argument("--automation-repo", default="valkey-io/valkey-release-automation")
+    sync.add_argument("--target-repo", default="sarthakaggarwal97/valkey")
+    sync.add_argument("--agent-repo", default="sarthakaggarwal97/valkey-ci-agent")
+    sync.add_argument("--automation-repo", default="sarthakaggarwal97/valkey-release-automation")
     sync.add_argument("--policy", default=str(_ROOT / "release_policy.yml"))
     sync.add_argument("--no-dispatch", action="store_true")
     add_poll_loop_args(sync)

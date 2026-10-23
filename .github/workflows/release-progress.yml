@@ -20,7 +20,7 @@ concurrency:
 jobs:
   sync:
     name: Refresh dashboards and continue merged releases
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 70
     environment: release-control
@@ -34,30 +34,29 @@ jobs:
 
       - name: Create Valkey dashboard token
         id: target-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          permission-contents: read
-          permission-issues: write
-          permission-metadata: read
-          permission-pull-requests: read
+        # REHEARSAL: the PAT stands in for the App token. Production requests:
+        #   owner: valkey-io; repositories: valkey; permission-contents: read; permission-issues: write; permission-metadata: read; permission-pull-requests: read
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::owner: valkey-io; repositories: valkey; permission-contents: read; permission-issues: write; permission-metadata: read; permission-pull-requests: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+          echo "app-slug=sarthakaggarwal97" >> "$GITHUB_OUTPUT"
 
       # Keep issues:write out of the automation repository token. This token
       # can only observe the production workflow run used by the dashboard.
       - name: Create production status token
         id: automation-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey-release-automation
-          permission-actions: read
-          permission-contents: read
-          permission-metadata: read
+        # REHEARSAL: the PAT stands in for the App token. Production requests:
+        #   owner: valkey-io; repositories: valkey-release-automation; permission-actions: read; permission-contents: read; permission-metadata: read
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::owner: valkey-io; repositories: valkey-release-automation; permission-actions: read; permission-contents: read; permission-metadata: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+          echo "app-slug=sarthakaggarwal97" >> "$GITHUB_OUTPUT"
 
       - name: Refresh progress
         env:

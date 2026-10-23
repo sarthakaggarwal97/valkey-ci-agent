@@ -22,7 +22,7 @@ concurrency:
 jobs:
   validate:
     name: Validate candidate and render plan
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release-control
@@ -52,23 +52,15 @@ jobs:
 
       - name: Create validation token
         id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          # read suffices: the ruleset check verifies immutability (active
-          # ruleset restricting create/update/delete). The bypass list is
-          # repository-admin configuration and is deliberately not enumerated;
-          # doing so required administration:write, because GitHub returns
-          # bypass_actors only to tokens that could edit the ruleset.
-          permission-administration: read
-          permission-actions: read
-          permission-checks: read
-          permission-contents: read
-          permission-metadata: read
-          permission-pull-requests: read
+        # REHEARSAL: the PAT stands in for the App token. Production requests:
+        #   owner: valkey-io; repositories: valkey; permission-administration: read; permission-actions: read; permission-checks: read; permission-contents: read; permission-metadata: read; permission-pull-requests: read
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::owner: valkey-io; repositories: valkey; permission-administration: read; permission-actions: read; permission-checks: read; permission-contents: read; permission-metadata: read; permission-pull-requests: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+          echo "app-slug=sarthakaggarwal97" >> "$GITHUB_OUTPUT"
 
       - name: Validate and plan
         id: plan
@@ -108,7 +100,7 @@ jobs:
     # in the Valkey organization. Unlike third-party actions, this is a
     # first-party release component that must evolve with production; it is
     # secretless and candidate-code jobs receive contents:read only.
-    uses: valkey-io/valkey-release-automation/.github/workflows/qualify-release.yml@main
+    uses: sarthakaggarwal97/valkey-release-automation/.github/workflows/qualify-release.yml@main
     with:
       version: ${{ needs.validate.outputs.version }}
       source_sha: ${{ needs.validate.outputs.sha }}
@@ -200,24 +192,15 @@ jobs:
 
       - name: Create publication token
         id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          # read suffices: the ruleset check verifies immutability (active
-          # ruleset restricting create/update/delete). The bypass list is
-          # repository-admin configuration and is deliberately not enumerated;
-          # doing so required administration:write, because GitHub returns
-          # bypass_actors only to tokens that could edit the ruleset.
-          permission-administration: read
-          permission-actions: read
-          permission-checks: read
-          permission-contents: write
-          permission-members: read
-          permission-metadata: read
-          permission-pull-requests: read
+        # REHEARSAL: the PAT stands in for the App token. Production requests:
+        #   owner: valkey-io; repositories: valkey; permission-administration: read; permission-actions: read; permission-checks: read; permission-contents: write; permission-members: read; permission-metadata: read; permission-pull-requests: read
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::owner: valkey-io; repositories: valkey; permission-administration: read; permission-actions: read; permission-checks: read; permission-contents: write; permission-members: read; permission-metadata: read; permission-pull-requests: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+          echo "app-slug=sarthakaggarwal97" >> "$GITHUB_OUTPUT"
 
       - name: Revalidate and publish
         env:
@@ -259,17 +242,15 @@ jobs:
       - name: Create bounded onboarding token
         id: token
         continue-on-error: true
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey-ci-agent
-          permission-contents: write
-          permission-issues: write
-          permission-pull-requests: write
-          permission-metadata: read
-          permission-organization-projects: read
+        # REHEARSAL: the PAT stands in for the App token. Production requests:
+        #   owner: valkey-io; repositories: valkey-ci-agent; permission-contents: write; permission-issues: write; permission-pull-requests: write; permission-metadata: read; permission-organization-projects: read
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::owner: valkey-io; repositories: valkey-ci-agent; permission-contents: write; permission-issues: write; permission-pull-requests: write; permission-metadata: read; permission-organization-projects: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+          echo "app-slug=sarthakaggarwal97" >> "$GITHUB_OUTPUT"
 
       - name: Open onboarding issue and registry PR
         continue-on-error: true
