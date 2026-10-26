@@ -160,8 +160,8 @@ copies don't become the usual way of working. See [the registry](registry.md).
 
 ## How the safety measures are tested
 
-The test suite runs on Python 3.9 and 3.11. On 3.11, CI also installs Claude
-Code and creates a real `ci-fix-agent` account, so the tests for the separate
+The test suite runs on Python 3.11. CI also installs Claude Code and creates a
+real `ci-fix-agent` account, so the tests for the separate
 account and for limiting Claude's tools
 (`tests/test_isolation.py` and `tests/test_claude_code_confinement.py`) run
 for real instead of being skipped. Another job runs the isolation tests as
