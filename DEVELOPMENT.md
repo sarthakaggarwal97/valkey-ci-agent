@@ -81,6 +81,7 @@ workflow and, where it's useful, on your own machine:
 [Fixing CI failures](docs/ci-fix.md#running-it-by-hand),
 [Test Failure Detector](docs/test-failure-detector.md#running-it-by-hand),
 [Fuzzer monitor](docs/fuzzer-monitor.md#running-it-by-hand),
+[Fuzzer proposals](docs/fuzzer-proposals.md#running-it-by-hand),
 [Release notes](docs/release-notes.md#cutting-a-release) and
 [CVE scan](docs/cve-scan.md#running-it-by-hand).
 

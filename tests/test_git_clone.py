@@ -96,6 +96,42 @@ def test_sha_path_runs_clone_fetch_checkout(tmp_path):
     assert len(calls) == 2
 
 
+def test_pull_head_ref_is_fetched_before_checkout(tmp_path):
+    """A fork PR's head commit is only reachable through refs/pull/<n>/head."""
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+
+        class _R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        return _R()
+
+    with patch("scripts.common.git_clone.subprocess.run", side_effect=fake_run):
+        ok = shallow_clone_at_sha(
+            "owner/name", tmp_path / "dest", sha="deadbeef1234567", fetch_ref="refs/pull/42/head",
+        )
+    assert ok is True
+    assert "clone" in calls[0]
+    assert "fetch" in calls[1]
+    assert calls[1][-1] == "+refs/pull/42/head:refs/pull/42/head"
+    assert "checkout" in calls[2]
+
+
+@pytest.mark.parametrize("ref,sha", [
+    ("refs/heads/main", "deadbeef1234567"),
+    ("--upload-pack=evil", "deadbeef1234567"),
+    ("refs/pull/0/head", "deadbeef1234567"),
+    ("refs/pull/42/head", None),
+])
+def test_rejects_unexpected_fetch_ref(tmp_path, ref, sha):
+    with patch("scripts.common.git_clone.subprocess.run") as run:
+        assert not shallow_clone_at_sha("owner/name", tmp_path / "x", sha=sha, fetch_ref=ref)
+    run.assert_not_called()
+
+
 def test_clone_failure_returns_false(tmp_path):
     """A non-zero exit from git clone is logged and reported as failure."""
     def fake_run(args, **kwargs):

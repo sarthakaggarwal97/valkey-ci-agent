@@ -11,7 +11,7 @@ works out exactly what to act on, down to a specific CI job and commit. Code
 checks everything Claude hands back, and code makes every commit and push.
 Claude is brought in only where reading and understanding code is the actual
 task: resolving conflicts, diagnosing failures, writing release notes,
-triaging fuzzer runs, and judging whether a fix should be backported. The CVE
+triaging fuzzer runs, proposing fuzzer scenarios, and judging whether a fix should be backported. The CVE
 scan doesn't use Claude at all.
 
 **Propose, don't merge.** Every change the agent makes goes on one of its own
@@ -42,7 +42,7 @@ scripts/
   backport/              Backports, suggestions, CI follow-up, onboarding release lines
   ci_fix/                The CI fix bot
   test_failure_detector/ Daily CI failures to issues
-  fuzzer/                Fuzzer run triage
+  fuzzer/                Fuzzer run triage and scenario proposals
   release_notes/         Release notes and review comments on release PRs
   release/               Release preparation, tracking and publication
   cve_scan/              Container CVE scan, verification and rebuilds
@@ -89,6 +89,7 @@ cut and release automation are built the same way.
 | Fixing CI failures | [ci-fix.md](ci-fix.md) | `scripts/ci_fix/run.py` |
 | Test Failure Detector | [test-failure-detector.md](test-failure-detector.md) | `scripts/test_failure_detector/main.py` |
 | Fuzzer monitor | [fuzzer-monitor.md](fuzzer-monitor.md) | `scripts/fuzzer/main.py` |
+| Fuzzer proposals | [fuzzer-proposals.md](fuzzer-proposals.md) | `scripts/fuzzer/propose.py` |
 | Release notes | [release-notes.md](release-notes.md) | `scripts/release_notes/main.py` |
 | Release automation | [release-automation.md](release-automation.md) | `scripts/release/main.py` |
 | CVE scan | [cve-scan.md](cve-scan.md) | `scripts/cve_scan/sweep.py` |
@@ -111,6 +112,7 @@ hard it should think. Each task gets the narrowest set of tools that works:
 | `validation_repair_edit_only` | Read, search and edit | Repairing a backport that failed its checks |
 | `test_adaptation_edit_only` | Read, search and edit | Porting a test an older branch can't run |
 | `fuzzer_analysis_readonly` | Read and search | Triaging fuzzer runs |
+| `fuzzer_proposal_readonly` | Read and search; no commands, file writes or web | Proposing fuzzer scenarios for a Valkey change |
 | `ci_fix_edit` | Read, search, edit, create files and run commands, as a separate account; never commit or push | Fixing CI failures on the bot's own PRs |
 | `ci_fix_review` | Read and search, as a separate account | Reviewing a proposed CI fix |
 | `ci_fix_suggest` | Read, search, edit and create files, but not run commands | Suggesting fixes on contributors' PRs |

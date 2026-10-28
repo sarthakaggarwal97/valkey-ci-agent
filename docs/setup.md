@@ -47,7 +47,7 @@ permissions below.
 | `valkey` | read administration, actions and checks; write contents, issues and pull requests; read metadata | backports, CI fixes, the detector, release notes and release automation |
 | `valkey-search`, `valkey-json`, `valkey-bloom` | write contents and pull requests; read metadata | backports and release notes |
 | repositories whose releases list security advisories | read repository advisories | release notes, when reading advisories |
-| `valkey-fuzzer` | read actions and contents; write issues | the fuzzer monitor |
+| `valkey-fuzzer` | read contents; write issues; write actions, to start proposed campaigns | the fuzzer monitor and fuzzer proposals |
 | `valkey-container` | write actions; read contents and metadata | starting CVE rebuilds |
 | `valkey-ci-agent` | write actions, contents, issues and pull requests; read metadata | release tracking issues, registry PRs, and starting the release PR review watchers and their edits |
 | `valkey-release-automation` | read actions, contents and metadata | release automation |
@@ -87,8 +87,8 @@ securing releases, including the tag ruleset.
 
 These only run when started, by a person or by another workflow: Manual
 Backport, Manual Revert Commit, CI Fix Bot, CI Fix Issues, Cut Release Notes
-and its Advanced version, Address Release Note Reviews, Prepare Release and
-Publish Release. Backport PR and CI Fix Run are reusable workflows that other
+and its Advanced version, Address Release Note Reviews, Prepare Release,
+Publish Release and Propose Fuzzer Scenarios. Backport PR and CI Fix Run are reusable workflows that other
 workflows call.
 
 The workflows that check every few minutes do it inside one long-running

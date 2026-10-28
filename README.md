@@ -43,6 +43,13 @@ valkey-fuzzer run and decides whether a failure is a real bug or the expected
 noise of a chaos test. Real bugs get an issue. See
 [Fuzzer monitor](docs/fuzzer-monitor.md).
 
+**Proposing fuzzer scenarios.** Given a Valkey PR, the agent asks Claude to
+read the change and write valkey-fuzzer scenarios aimed at what it could
+break. Each scenario is checked by `valkey-fuzzer validate`, a failed one gets
+one repair attempt, and only the ones that validate are kept. They can also
+be run as a campaign in valkey-fuzzer. See
+[Fuzzer proposals](docs/fuzzer-proposals.md).
+
 **Releases.** A maintainer can cut a release of Valkey or one of its modules
 with one dispatch. The agent gathers every change since the last release,
 writes the notes, bumps the version and opens a release PR, and it applies the
@@ -107,7 +114,7 @@ scripts/
   backport/               Backports, backport suggestions, CI follow-up
   ci_fix/                 The CI fix bot
   test_failure_detector/  Daily CI failures to issues
-  fuzzer/                 Fuzzer run triage
+  fuzzer/                 Fuzzer run triage and scenario proposals
   release_notes/          Release notes and review comments on release PRs
   release/                Release preparation and publication
   cve_scan/               Container CVE scan and verified rebuilds

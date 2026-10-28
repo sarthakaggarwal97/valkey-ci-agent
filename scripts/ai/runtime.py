@@ -24,6 +24,7 @@ AgentProfileName = Literal[
     "test_adaptation_edit_only",
     "validation_repair_edit_only",
     "fuzzer_analysis_readonly",
+    "fuzzer_proposal_readonly",
     "ci_fix_diagnose_readonly",
     "release_notes_review_edit_only",
 ]
@@ -100,6 +101,19 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
         max_turns=200,
         writes_allowed=False,
         output_schema="text",
+    ),
+    # Proposes fuzzer scenarios for a Valkey change. Claude reads the diff, the
+    # Valkey and fuzzer checkouts and the catalog, and answers in text; code
+    # writes and validates every scenario. No shell, no file writes, no web.
+    "fuzzer_proposal_readonly": AgentProfile(
+        name="fuzzer_proposal_readonly",
+        allowed_tools="Read,Grep,Glob",
+        timeout=1800,
+        effort="high",
+        max_turns=200,
+        writes_allowed=False,
+        output_schema="text",
+        disallowed_tools="Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch",
     ),
     "ci_fix_diagnose_readonly": AgentProfile(
         name="ci_fix_diagnose_readonly",

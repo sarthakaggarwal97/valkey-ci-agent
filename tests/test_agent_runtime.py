@@ -77,6 +77,27 @@ def test_fuzzer_profile_is_readonly() -> None:
     assert "Read" in profile.allowed_tools
 
 
+def test_fuzzer_proposal_profile_is_readonly_without_shell_or_network(monkeypatch) -> None:
+    profile = agent_runtime.AGENT_PROFILES["fuzzer_proposal_readonly"]
+    assert profile.writes_allowed is False
+    assert profile.allowed_tools == "Read,Grep,Glob"
+    denied = set(profile.disallowed_tools.split(","))
+    assert {"Bash", "Write", "Edit", "MultiEdit", "WebFetch", "WebSearch"} <= denied
+    assert "GITHUB_TOKEN" not in profile.env_allowlist
+
+    calls = {}
+
+    def fake_run_claude_code(prompt, **kwargs):
+        calls.update(kwargs)
+        return "", "", 0
+
+    monkeypatch.setattr(agent_runtime, "run_claude_code", fake_run_claude_code)
+    agent_runtime.run_agent("fuzzer_proposal_readonly", "propose", cwd="/tmp/x")
+    assert calls["allowed_tools"] == "Read,Grep,Glob"
+    assert calls["disallowed_tools"] == profile.disallowed_tools
+    assert not any(name.startswith(("GITHUB", "GH_")) or name == "TARGET_TOKEN" for name in calls["env_allowlist"])
+
+
 def test_release_notes_review_profile_is_edit_only() -> None:
     edit = agent_runtime.AGENT_PROFILES["release_notes_review_edit_only"]
 

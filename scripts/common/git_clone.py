@@ -20,12 +20,15 @@ logger = logging.getLogger(__name__)
 
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
 REPO_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+PULL_HEAD_REF_RE = re.compile(r"^refs/pull/[1-9][0-9]*/head$")
 
 _CLONE_TIMEOUT_S = 120
 _CHECKOUT_TIMEOUT_S = 30
 
 
-def shallow_clone_at_sha(repo: str, dest: Path, sha: str | None = None) -> bool:
+def shallow_clone_at_sha(
+    repo: str, dest: Path, sha: str | None = None, *, fetch_ref: str | None = None,
+) -> bool:
     """Clone ``repo`` (e.g. ``"valkey-io/valkey"``) into ``dest``.
 
     If ``sha`` is provided, blobless-clones the full history and checks out
@@ -37,14 +40,21 @@ def shallow_clone_at_sha(repo: str, dest: Path, sha: str | None = None) -> bool:
     warning level - callers are expected to keep going (e.g. tell their
     AI subprocess that source is unavailable) rather than abort.
 
+    ``fetch_ref``, a pull request's ``refs/pull/<n>/head``, is fetched
+    before the checkout, for a commit that lives only on a fork's branch.
+
     Inputs are validated to defend against argument injection into git:
-    ``repo`` must match ``owner/name``, ``sha`` must match a hex commit hash.
+    ``repo`` must match ``owner/name``, ``sha`` must match a hex commit hash,
+    and ``fetch_ref`` must name a pull request head.
     """
     if not REPO_RE.fullmatch(repo):
         logger.warning("Refusing to clone unrecognized repo identifier: %r", repo)
         return False
     if sha is not None and not SHA_RE.fullmatch(sha):
         logger.warning("Refusing to clone %s at non-SHA value: %r", repo, sha)
+        return False
+    if fetch_ref is not None and (sha is None or not PULL_HEAD_REF_RE.fullmatch(fetch_ref)):
+        logger.warning("Refusing to fetch %r from %s", fetch_ref, repo)
         return False
 
     url = f"https://github.com/{repo}.git"
@@ -64,6 +74,11 @@ def shallow_clone_at_sha(repo: str, dest: Path, sha: str | None = None) -> bool:
     if not _run(
         ["git", "clone", "--filter=blob:none", url, str(dest)],
         timeout=_CLONE_TIMEOUT_S, desc=f"clone {repo}",
+    ):
+        return False
+    if fetch_ref is not None and not _run(
+        ["git", "fetch", "--filter=blob:none", "origin", f"+{fetch_ref}:{fetch_ref}"],
+        cwd=dest, timeout=_CLONE_TIMEOUT_S, desc=f"fetch {fetch_ref} from {repo}",
     ):
         return False
     return _run(
