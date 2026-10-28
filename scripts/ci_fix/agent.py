@@ -23,7 +23,9 @@ _POLICY = {
     FixPolicy.BACKPORT: (
         "This is a backport branch. Port an already-merged upstream fix, or "
         "make the smallest mechanical adaptation needed on the release "
-        "branch. Do not change product behavior."
+        "branch. Do not change product behavior. A change under .github/ is "
+        "allowed only when the CI definition itself is the cause, such as an "
+        "upstream CI fix the release branch lacks."
     ),
     FixPolicy.GENERAL: (
         "Fix the root cause with the smallest coherent source, test or build "

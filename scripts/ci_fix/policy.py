@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from scripts.ci_fix.models import CandidateAction, TargetKind
+from scripts.ci_fix.models import CandidateAction, FixPolicy, FixTask, TargetKind
 from scripts.common.identity import APP_LOGIN
 
 WRITABLE_BRANCH_PREFIXES = ("backport/", "agent/backport/", "agent/ci-fix/")
@@ -92,6 +92,22 @@ def is_writable_branch(branch: str) -> bool:
 
 def is_backport_branch(branch: str) -> bool:
     return branch.startswith(BACKPORT_BRANCH_PREFIXES)
+
+
+def allows_ci_changes(task: FixTask) -> bool:
+    """Whether ``task``'s fix may change ``.github/``.
+
+    Only on a bot-owned backport branch: a release branch often fails because
+    it lacks an upstream CI change, and the bot owns the branch it pushes to.
+    Everywhere else a workflow change runs with the repository's privileges
+    once pushed, so a person applies it.
+    """
+    target = task.target
+    return (
+        task.policy is FixPolicy.BACKPORT
+        and target.kind is TargetKind.UPDATE_PR
+        and is_backport_branch(target.branch)
+    )
 
 
 def can_update_branch(*, same_repo: bool, branch: str, author: str) -> bool:

@@ -200,6 +200,23 @@ def test_a_ci_definition_change_is_never_pushed(
     assert _git(remote, "rev-parse", "agent/backport/sweep/9.0").strip() == head_sha
 
 
+@pytest.mark.parametrize("path", [".github/workflows/fix.yml", ".github/actions/setup/action.yml"])
+def test_a_ci_definition_change_is_pushed_when_the_policy_allows_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+) -> None:
+    """A bot-owned backport branch may take a CI change (policy.allows_ci_changes)."""
+    remote, head_sha, _port_sha = _remote(tmp_path)
+    patch = _patch_for(tmp_path, head_sha, remote, path)
+    monkeypatch.setattr(push_mod, "github_https_url", lambda _repo: str(remote))
+
+    commit = push_candidate(_candidate(patch, path), _target(head_sha), git_env={}, allow_ci_changes=True)
+
+    assert _git(remote, "rev-parse", "agent/backport/sweep/9.0").strip() == commit != head_sha
+    assert _git(remote, "diff", "--name-only", head_sha, commit).split() == [path]
+
+
 def test_new_draft_target_requires_the_branch_not_to_exist(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -37,7 +37,7 @@ Valgrind and sanitizer builds are many times slower; scale a wait with
 - Do not reorder or rename tests; other tests in a file may depend on state
   that earlier ones leave behind.
 - A tag that skips a test is not a fix for a race.
-- Do not change `.github/`.
+- Do not change `.github/` unless your policy says a CI change is allowed.
 
 ## Running a test
 

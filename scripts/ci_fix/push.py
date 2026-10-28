@@ -56,12 +56,15 @@ def push_candidate(
     *,
     git_env: dict[str, str],
     pre_push_check: PrePushCheck | None = None,
+    allow_ci_changes: bool = False,
 ) -> str:
     """Commit ``candidate`` on ``target.expected_sha`` and push it.
 
     ``UPDATE_PR`` requires the remote branch to still point at
     ``expected_sha``. ``DRAFT_PR`` creates a new branch and requires that the
-    remote ref not exist. Returns the new commit SHA.
+    remote ref not exist. A change under ``.github/`` is refused unless
+    ``allow_ci_changes`` (``policy.allows_ci_changes``). Returns the new
+    commit SHA.
     """
     _validate_target(target)
     create = target.kind is TargetKind.DRAFT_PR
@@ -72,6 +75,7 @@ def push_candidate(
             git_env=git_env,
             pre_push_check=pre_push_check,
             create=create,
+            allow_ci_changes=allow_ci_changes,
         )
     if candidate.action is CandidateAction.PORT:
         return _push_port(
@@ -80,6 +84,7 @@ def push_candidate(
             git_env=git_env,
             pre_push_check=pre_push_check,
             create=create,
+            allow_ci_changes=allow_ci_changes,
         )
     raise PushRefused("Refusing to push: the agent did not prepare a fix.")
 
@@ -91,6 +96,7 @@ def _push_patch(
     git_env: dict[str, str],
     pre_push_check: PrePushCheck | None,
     create: bool,
+    allow_ci_changes: bool,
 ) -> str:
     if not candidate.changed_paths:
         raise PushRefused("Refusing to push: the candidate has no changed paths.")
@@ -118,6 +124,7 @@ def _push_patch(
                 git_env=git_env,
                 pre_push_check=pre_push_check,
                 create=create,
+                allow_ci_changes=allow_ci_changes,
             )
             return git_output(str(repo_dir), "rev-parse", "HEAD").strip()
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
@@ -131,6 +138,7 @@ def _push_port(
     git_env: dict[str, str],
     pre_push_check: PrePushCheck | None,
     create: bool,
+    allow_ci_changes: bool,
 ) -> str:
     commit = candidate.port_commit.strip()
     if not is_full_sha(commit):
@@ -156,6 +164,7 @@ def _push_port(
                 git_env=git_env,
                 pre_push_check=pre_push_check,
                 create=create,
+                allow_ci_changes=allow_ci_changes,
             )
             return git_output(str(repo_dir), "rev-parse", "HEAD").strip()
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
@@ -233,21 +242,23 @@ def _push(
     git_env: dict[str, str],
     pre_push_check: PrePushCheck | None,
     create: bool,
+    allow_ci_changes: bool,
 ) -> None:
     if not _is_ancestor(str(repo_dir), target.expected_sha, "HEAD"):
         raise PushRefused(
             "Refusing to push: the generated commit does not descend from the expected head."
         )
     # A workflow or action change runs with the repository's own privileges
-    # once pushed, so a person applies it, never the bot. This also covers a
-    # ported upstream commit, and is why the push token has no workflows scope.
+    # once pushed, so a person applies it, not the bot: this also covers a
+    # ported upstream commit. A bot-owned backport branch is the exception
+    # (policy.allows_ci_changes), and only its push token has workflows:write.
     ci_paths = [
         path for path in git_paths(
             str(repo_dir), "diff", "--no-renames", "--name-only", "-z", target.expected_sha, "HEAD",
         )
         if path.startswith(".github/")
     ]
-    if ci_paths:
+    if ci_paths and not allow_ci_changes:
         raise PushRefused(
             f"Refusing to push: the fix changes {', '.join(ci_paths)}; a maintainer must "
             "apply CI definition changes."

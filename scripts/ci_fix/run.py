@@ -46,6 +46,7 @@ from scripts.ci_fix.models import (
     ResultKind,
     TargetKind,
 )
+from scripts.ci_fix.policy import allows_ci_changes
 from scripts.ci_fix.publish import publish_candidate
 from scripts.ci_fix.state import load, save
 from scripts.common.git_auth import GitAuth
@@ -116,8 +117,10 @@ def _plan_job(gh: Any, artifact_client: Any, planned: FixPlan, out: Path) -> dic
     fix_plan = replace(planned, job_log=job_log)
     save(out / PLAN_FILE, fix_plan)
     spec = job_for(gh, fix_plan.task)
+    # Publish asks for workflows:write only when the push may change .github/.
+    ci_changes = "true" if allows_ci_changes(fix_plan.task) else ""
     if spec is None:
-        return {"mode": "local"}
+        return {"mode": "local", "ci_changes": ci_changes}
     save(out / JOB_FILE, spec)
     (out / SETUP_FILE).write_text(setup_script(spec), encoding="utf-8")
     checkout = spec.checkout
@@ -132,6 +135,7 @@ def _plan_job(gh: Any, artifact_client: Any, planned: FixPlan, out: Path) -> dic
         "extra_repository": checkout.repository if checkout else "",
         "extra_ref": checkout.ref if checkout else "",
         "extra_path": checkout.path if checkout else "",
+        "ci_changes": ci_changes,
     }
 
 

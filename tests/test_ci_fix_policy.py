@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from scripts.ci_fix.models import CandidateAction, TargetKind
+import pytest
+
+from scripts.ci_fix.models import CandidateAction, Failure, FixPolicy, FixTarget, FixTask, TargetKind
 from scripts.ci_fix.policy import (
     TARGET_CAPABILITIES,
+    allows_ci_changes,
     can_update_branch,
     is_backport_branch,
     target_capabilities,
@@ -37,3 +40,23 @@ def test_bot_branch_ownership_and_backport_policy() -> None:
     )
     assert is_backport_branch("agent/backport/sweep/8.0")
     assert not is_backport_branch("agent/ci-fix/issue-1")
+
+
+@pytest.mark.parametrize(("policy", "kind", "branch", "allowed"), [
+    (FixPolicy.BACKPORT, TargetKind.UPDATE_PR, "agent/backport/sweep/9.0", True),
+    (FixPolicy.BACKPORT, TargetKind.UPDATE_PR, "backport/1234-to-9.0", True),
+    # A CI-fix branch, a draft PR for an issue, and a contributor's PR never take one.
+    (FixPolicy.GENERAL, TargetKind.UPDATE_PR, "agent/ci-fix/x", False),
+    (FixPolicy.BACKPORT, TargetKind.UPDATE_PR, "agent/ci-fix/x", False),
+    (FixPolicy.GENERAL, TargetKind.DRAFT_PR, "agent/ci-fix/issue-1-2", False),
+    (FixPolicy.BACKPORT, TargetKind.SUGGEST, "agent/backport/sweep/9.0", False),
+])
+def test_only_a_bot_owned_backport_branch_takes_a_ci_change(
+    policy: FixPolicy, kind: TargetKind, branch: str, allowed: bool,
+) -> None:
+    task = FixTask(
+        Failure(repo_full_name="valkey-io/valkey", run_id=1, head_sha="b" * 40, job_id=2, job_name="j"),
+        FixTarget(kind=kind, repo_full_name="valkey-io/valkey", branch=branch, expected_sha="b" * 40),
+        policy,
+    )
+    assert allows_ci_changes(task) is allowed

@@ -203,8 +203,10 @@ configuration could otherwise run commands as the workflow user. Before
 testing a fix, it deletes ignored files that the job's own setup didn't
 create, so a prebuilt binary can't stand in for the real build.
 
-The bot never pushes a change under `.github/`, and its tokens couldn't push
-one anyway. The PR's own CI and a maintainer's review always have the final
+The bot pushes a change under `.github/` only to a backport branch it owns,
+where a release branch often needs an upstream CI fix; only that push gets a
+token with `workflows: write`. Anywhere else it refuses, and its tokens
+couldn't push one anyway. The PR's own CI and a maintainer's review always have the final
 say. The bot's comment lists everything it checked, including the history
 search and the reproduction.
 

@@ -93,7 +93,7 @@ def test_a_failure_its_job_can_host_is_fixed_in_that_job(front_door, workflows, 
         "mode": "job", "job": "test-ubuntu-latest", "runs_on": "ubuntu-latest", "container": "",
         "timeout_minutes": "180", "use_repo": "valkey-io/valkey", "use_git_ref": _HEAD,
         "extra_repository": "ianlancetaylor/libbacktrace", "extra_ref": "b9e40069c0b47a722286b94eb5231f7f05c08713",
-        "extra_path": "libbacktrace",
+        "extra_path": "libbacktrace", "ci_changes": "",
     }
     # The PR's run used the workflow at its head.
     assert workflows == [("valkey-io/valkey", "ci", _HEAD)]
@@ -133,7 +133,7 @@ def test_an_issue_fix_replays_the_job_from_the_tip_it_checks_out(front_door, wor
 def test_a_failure_its_job_cannot_host_is_fixed_on_the_bots_runner(front_door, workflows, tmp_path):
     front_door.planned = _pr_plan("test-no-workflow-has-this-job")
 
-    assert _plan(tmp_path, front_door.planned) == {"mode": "local"}
+    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": ""}
     assert (tmp_path / run.PLAN_FILE).exists()
     assert not (tmp_path / run.JOB_FILE).exists()
 
@@ -146,7 +146,23 @@ def test_a_workflow_that_cannot_be_read_falls_back_to_the_bots_runner(front_door
 
     monkeypatch.setattr(run, "workflow_source", unreadable)
 
-    assert _plan(tmp_path, front_door.planned) == {"mode": "local"}
+    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": ""}
+
+
+@pytest.mark.parametrize(("branch", "policy", "kind", "expected"), [
+    ("agent/backport/sweep/9.0", FixPolicy.BACKPORT, TargetKind.UPDATE_PR, "true"),
+    ("agent/ci-fix/x", FixPolicy.GENERAL, TargetKind.UPDATE_PR, ""),
+    ("agent/backport/sweep/9.0", FixPolicy.GENERAL, TargetKind.UPDATE_PR, ""),
+    ("agent/backport/sweep/9.0", FixPolicy.BACKPORT, TargetKind.SUGGEST, ""),
+])
+def test_only_a_bot_owned_backport_branch_asks_publish_for_workflows(
+    front_door, workflows, tmp_path, branch, policy, kind, expected,
+):
+    plan = _pr_plan()
+    target = replace(plan.task.target, branch=branch, kind=kind)
+    front_door.planned = replace(plan, task=replace(plan.task, target=target, policy=policy))
+
+    assert _plan(tmp_path, front_door.planned)["ci_changes"] == expected
 
 
 def test_a_suggestion_is_never_run_in_a_job(front_door, workflows, tmp_path):
@@ -154,7 +170,7 @@ def test_a_suggestion_is_never_run_in_a_job(front_door, workflows, tmp_path):
     front_door.planned = replace(plan, task=replace(plan.task, target=replace(plan.task.target,
                                                                              kind=TargetKind.SUGGEST)))
 
-    assert _plan(tmp_path, front_door.planned) == {"mode": "local"}
+    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": ""}
     assert workflows == []
 
 

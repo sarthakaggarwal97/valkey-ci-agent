@@ -168,8 +168,8 @@ def test_bot_pr_is_revalidated_immediately_before_push(
     gh, _repo = _gh()
     seen = {}
 
-    def push(candidate, target, *, git_env, pre_push_check):
-        seen.update(candidate=candidate, target=target, git_env=git_env)
+    def push(candidate, target, *, git_env, pre_push_check, allow_ci_changes):
+        seen.update(candidate=candidate, target=target, git_env=git_env, allow_ci_changes=allow_ci_changes)
         assert pre_push_check() == ""
         return _NEW
 
@@ -179,6 +179,24 @@ def test_bot_pr_is_revalidated_immediately_before_push(
     assert result.kind is ResultKind.PUSHED
     assert result.commit_sha == _NEW
     assert seen["target"] is task.target
+    # The bot's own backport branch may take a CI change.
+    assert seen["allow_ci_changes"] is True
+
+
+def test_a_bot_ci_fix_branch_never_takes_a_ci_change(monkeypatch: pytest.MonkeyPatch) -> None:
+    task = _task(TargetKind.UPDATE_PR)
+    task = replace(task, target=replace(task.target, branch="agent/ci-fix/x"), policy=FixPolicy.GENERAL)
+    gh, _repo = _gh(pr=_pr())
+    seen = {}
+
+    def push(*_args, allow_ci_changes, **_kwargs):
+        seen["allow_ci_changes"] = allow_ci_changes
+        return _NEW
+
+    monkeypatch.setattr(publish_mod, "push_candidate", push)
+    publish_candidate(gh, task, _candidate(), git_env={})
+
+    assert seen["allow_ci_changes"] is False
 
 
 def test_non_bot_pr_is_never_updated(monkeypatch: pytest.MonkeyPatch) -> None:

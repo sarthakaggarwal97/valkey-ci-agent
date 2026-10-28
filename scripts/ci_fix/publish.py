@@ -31,7 +31,7 @@ from scripts.ci_fix.models import (
     ResultKind,
     TargetKind,
 )
-from scripts.ci_fix.policy import can_update_branch, target_capabilities
+from scripts.ci_fix.policy import allows_ci_changes, can_update_branch, target_capabilities
 from scripts.ci_fix.push import (
     PushFailed,
     PushRefused,
@@ -143,6 +143,7 @@ def _publish_update(
             task.target,
             git_env=git_env,
             pre_push_check=check,
+            allow_ci_changes=allows_ci_changes(task),
         )
     except PushRefused as exc:
         return _refused(task, candidate, str(exc))

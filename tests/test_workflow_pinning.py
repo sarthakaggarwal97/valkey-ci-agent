@@ -320,10 +320,10 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
                             ("publish", "python -m scripts.ci_fix.run publish")):
         steps = jobs[job_id]["steps"]
         tokens = [step for step in steps if "actions/create-github-app-token@" in step.get("uses", "")]
-        assert len(tokens) == 1 and tokens[0]["id"] == "target-token", job_id
+        plan = job_id == "plan"
+        assert [token["id"] for token in tokens] == (["target-token"] if plan else ["target-token", "ci-token"])
         permissions = {k: v for k, v in tokens[0]["with"].items() if k.startswith("permission-")}
         # The plan only reads and answers (a comment, a reaction); publish pushes and opens PRs.
-        plan = job_id == "plan"
         assert permissions == {
             "permission-actions": "read", "permission-issues": "write", "permission-metadata": "read",
             "permission-contents": "read" if plan else "write",
@@ -331,14 +331,29 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
             # The PR command's gate checks team membership.
             **({"permission-members": "read"} if plan else {}),
         }, job_id
+        if not plan:
+            # Publish mints exactly one of its two tokens: workflows:write only
+            # for a push that may change .github/ (policy.allows_ci_changes).
+            plain, ci = tokens
+            assert plain["if"] == "needs.plan.outputs.ci_changes != 'true'"
+            assert ci["if"] == "needs.plan.outputs.ci_changes == 'true'"
+            ci_permissions = {k: v for k, v in ci["with"].items() if k.startswith("permission-")}
+            assert ci_permissions == {**permissions, "permission-workflows": "write"}
+            assert {k: v for k, v in ci["with"].items() if not k.startswith("permission-")} == {
+                k: v for k, v in plain["with"].items() if not k.startswith("permission-")
+            }
         assert not any("configure-aws-credentials@" in step.get("uses", "") for step in steps), job_id
         assert "\n".join(step.get("run", "") for step in steps).count(command) == 1, job_id
         if job_id == "publish":
             publish_step = next(step for step in steps if command in step.get("run", ""))
             assert publish_step["env"]["CI_FIX_ISSUES_PUBLISH"] == "${{ vars.CI_FIX_ISSUES_PUBLISH }}"
+            assert publish_step["env"]["TARGET_TOKEN"] == (
+                "${{ steps.ci-token.outputs.token || steps.target-token.outputs.token }}"
+            )
         assert jobs[job_id]["permissions"] == {"contents": "read"}, job_id
         assert jobs[job_id]["runs-on"] == "ubuntu-24.04", job_id
-    assert _RUN.read_text(encoding="utf-8").count("actions/create-github-app-token@") == 2
+    assert _RUN.read_text(encoding="utf-8").count("actions/create-github-app-token@") == 3
+    assert jobs["plan"]["outputs"]["ci_changes"] == "${{ steps.plan.outputs.ci_changes }}"
 
 
 _FIX_JOBS = ("fix-in-job", "fix-in-container", "fix-local")
