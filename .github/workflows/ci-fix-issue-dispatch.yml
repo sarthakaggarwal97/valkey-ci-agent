@@ -5,8 +5,9 @@ name: CI Fix Issue Dispatch
 # (scripts/ci_fix/issue_dispatch.py). It only reads valkey-io/valkey; each
 # dispatched run handles one issue as before.
 #
-# The schedule does nothing until the CI_FIX_ISSUES_AUTO_DISPATCH repository
-# variable is "true", so the rollout stays manual until it is switched on.
+# The schedule runs unless the CI_FIX_ISSUES_AUTO_DISPATCH repository variable
+# is "false". An issue's fix is posted on the issue unless CI_FIX_ISSUES_PUBLISH
+# asks for a draft PR, so nothing is pushed by default.
 on:
   schedule:
     - cron: "23 * * * *"
@@ -33,7 +34,7 @@ jobs:
     name: "Dispatch detector issue fixes"
     if: >-
       github.repository == 'valkey-io/valkey-ci-agent'
-      && (github.event_name == 'workflow_dispatch' || vars.CI_FIX_ISSUES_AUTO_DISPATCH == 'true')
+      && (github.event_name == 'workflow_dispatch' || vars.CI_FIX_ISSUES_AUTO_DISPATCH != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:

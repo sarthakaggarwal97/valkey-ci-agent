@@ -265,11 +265,11 @@ def test_the_fix_runs_start_only_from_their_front_doors():
         assert set(workflow["on"]) == triggers, filename
 
 
-def test_the_issue_dispatcher_schedule_waits_for_its_switch_and_never_writes_valkey():
+def test_the_issue_dispatcher_schedule_runs_until_switched_off_and_never_writes_valkey():
     workflow = yaml.load(Path(".github/workflows/ci-fix-issue-dispatch.yml").read_text(encoding="utf-8"),
                          Loader=yaml.BaseLoader)
     job = workflow["jobs"]["dispatch"]
-    assert "vars.CI_FIX_ISSUES_AUTO_DISPATCH == 'true'" in job["if"]
+    assert "vars.CI_FIX_ISSUES_AUTO_DISPATCH != 'false'" in job["if"]
     assert "github.event_name == 'workflow_dispatch'" in job["if"]
     steps = {step.get("name"): step for step in job["steps"]}
     token = steps["Generate target repository token"]["with"]

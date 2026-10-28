@@ -133,9 +133,9 @@ Patches suggested on contributor PRs are reviewed but not run.
 
 When the Test Failure Detector files an issue, the bot can attempt a fix. You
 can start it for one issue with the **CI Fix Issues** workflow. An hourly
-dispatcher can also start it for every open detector issue that is eligible,
-but it does nothing until the repository variable
-`CI_FIX_ISSUES_AUTO_DISPATCH` is set to `true`.
+dispatcher also starts it for every open detector issue that is eligible.
+Setting the repository variable `CI_FIX_ISSUES_AUTO_DISPATCH` to `false`
+turns the dispatcher off.
 
 An issue is eligible when it is open, unassigned and has no open PR linked to
 it, and when the bot hasn't already posted a fix, declined, or failed twice
@@ -248,7 +248,7 @@ behaviour can be adjusted with these repository variables:
 
 | Variable | Default | What it does |
 |---|---|---|
-| `CI_FIX_ISSUES_AUTO_DISPATCH` | unset | Set to `true` to let the hourly dispatcher start fixes for detector issues. |
+| `CI_FIX_ISSUES_AUTO_DISPATCH` | unset | Set to `false` to stop the hourly dispatcher from starting fixes for detector issues. |
 | `CI_FIX_ISSUES_MAX_RUNS` | `2` | How many detector issue fixes can run at once. |
 | `CI_FIX_ISSUES_PUBLISH` | `comment` | `comment` posts the patch on the issue; `draft-pr` opens a draft PR. |
 | `CI_AGENT_CLAUDE_MODEL` | unset | Use a different model, for example `opus`. |
