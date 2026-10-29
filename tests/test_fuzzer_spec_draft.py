@@ -1,6 +1,7 @@
 """Tests for AI-drafted TLA+ spec bundles."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -648,6 +649,101 @@ def test_batch_inputs_carry_a_passing_drafts_scenarios(tmp_path, fuzzer_dir, fak
     assert inputs["valkey_ref"] == "refs/pull/123/head" and inputs["valkey_sha"] == HEAD
 
 
+def test_batch_inputs_name_a_translated_scenario_as_the_pr_batch_allows(
+    tmp_path, fuzzer_dir, fake_fuzzer, jar,
+):
+    """spec translate keeps ':' in a scenario ID; the PR batch's names may not hold it."""
+    _, result, out = _draft(StubRunner(_bundle(REGISTER)), tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    item = result["scenarios"][0]
+    path = out / item["file"]
+    path.write_text(path.read_text().replace(item["scenario_id"], "spec-register:ack-before-save"))
+    item.update(scenario_id="spec-register:ack-before-save", sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+    (out / "spec-draft.json").write_text(json.dumps(result))
+    scenarios = json.loads(batch_inputs(out)["scenarios"])
+    assert list(scenarios) == ["spec-register-ack-before-save"]
+    assert "scenario_id: spec-register:ack-before-save" in scenarios["spec-register-ack-before-save"]
+
+
+def test_scenarios_record_whether_their_experiment_is_installed():
+    scenarios = [{"experiment": "valkey.cluster-chaos"}, {"experiment": "toy.register"}, {"experiment": "x.local"}]
+    spec_mod._mark_installed(scenarios, {"experiments": [
+        {"id": "valkey.cluster-chaos", "plugin": "valkey"}, {"id": "x.local", "plugin": None, "directory": "/d"},
+    ]})
+    assert [s["installed"] for s in scenarios] == [True, False, False]
+
+
+def _own_experiment(tmp_path, fuzzer_dir, fake_fuzzer, jar):
+    """A passing draft whose scenario runs the bundle's own toy.register, which is not installed."""
+    _, result, out = _draft(StubRunner(_bundle(REGISTER)), tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    assert [(s["experiment"], s["installed"]) for s in result["scenarios"]] == [("toy.register", True)]
+    assert result["bundle"]["protocol"] == "register"
+    assert set(result["bundle"]["files"]) == set(REGISTER)
+    # The stand-in fuzzer lists toy.register as installed; here the bundle brings it.
+    own = out / "bundle" / "register" / "experiments" / "toy.register.yaml"
+    own.parent.mkdir(parents=True, exist_ok=True)
+    own.write_text(TOY_EXPERIMENT)
+    result["bundle"]["files"]["experiments/toy.register.yaml"] = hashlib.sha256(own.read_bytes()).hexdigest()
+    result["scenarios"][0]["installed"] = False
+    (out / "spec-draft.json").write_text(json.dumps(result))
+    return result, out
+
+
+TOY_EXPERIMENT = "id: toy.register\ncomponents: []\n"
+
+
+def test_a_draft_running_its_own_experiment_is_sent_with_its_bundle(tmp_path, fuzzer_dir, fake_fuzzer, jar):
+    result, out = _own_experiment(tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    inputs = batch_inputs(out)
+    assert json.loads(inputs["spec_bundles"]) == {
+        "register": {**REGISTER, "experiments/toy.register.yaml": TOY_EXPERIMENT},
+    }
+    assert list(json.loads(inputs["scenarios"])) == ["spec-register-ack-before-save"]
+    # An installed experiment's scenarios need no bundle.
+    result["scenarios"][0]["installed"] = True
+    (out / "spec-draft.json").write_text(json.dumps(result))
+    assert "spec_bundles" not in batch_inputs(out)
+
+
+def test_a_bundle_changed_after_the_draft_passed_is_not_sent(tmp_path, fuzzer_dir, fake_fuzzer, jar):
+    _, out = _own_experiment(tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    model = out / "bundle" / "register" / "model.tla"
+    model.write_text(model.read_text() + "\n")
+    with pytest.raises(ValueError, match="bundle/register/model.tla changed since the draft passed"):
+        batch_inputs(out)
+
+
+@pytest.mark.parametrize("bundle,message", [
+    (None, "records no bundle"),
+    ({"protocol": "Register", "files": {"claims.yaml": "x"}}, "records no bundle"),
+    ({"protocol": "register", "files": {}}, "records no bundle"),
+    ({"protocol": "register", "files": {"../../spec-draft.json": "x"}}, "bundle file outside"),
+    ({"protocol": "register", "files": {"notes.md": "x"}}, "bundle file outside"),
+])
+def test_a_bundle_record_that_cannot_be_trusted_is_refused(bundle, message, tmp_path, fuzzer_dir, fake_fuzzer, jar):
+    result, out = _own_experiment(tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    result["bundle"] = bundle
+    (out / "spec-draft.json").write_text(json.dumps(result))
+    with pytest.raises(ValueError, match=message):
+        batch_inputs(out)
+
+
+def test_a_scenario_of_an_experiment_the_batch_cannot_load_is_never_dispatched(
+    tmp_path, fuzzer_dir, fake_fuzzer, jar, monkeypatch,
+):
+    """Neither installed nor in the bundle, such as one from --experiment-dir."""
+    result, out = _own_experiment(tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    result["scenarios"][0]["experiment"] = "local.only"
+    (out / "spec-draft.json").write_text(json.dumps(result))
+    with pytest.raises(ValueError, match=r"loads only installed experiments and those of the bundles it is sent.*"
+                                         r"spec-register-ack-before-save \(local.only\)"):
+        batch_inputs(out)
+    dispatched = MagicMock()
+    monkeypatch.setattr(spec_mod, "dispatch_batch", dispatched)
+    monkeypatch.setenv("TARGET_TOKEN", "t")
+    assert spec_mod.main(["dispatch", "--out", str(out)]) == 1
+    dispatched.assert_not_called()
+
+
 def test_batch_inputs_refuse_a_scenario_changed_after_validation(tmp_path, fuzzer_dir, fake_fuzzer, jar):
     _, result, out = _draft(StubRunner(_bundle(REGISTER)), tmp_path, fuzzer_dir, fake_fuzzer, jar)
     path = out / result["scenarios"][0]["file"]
@@ -671,6 +767,8 @@ def _block_remote_calls(monkeypatch) -> None:
     def refuse(*_a, **_kw):
         raise AssertionError("a dry run made a remote call")
 
+    # Imported before sockets are refused: importing it builds a socket class.
+    import github
     monkeypatch.setattr(socket, "socket", refuse)
     monkeypatch.setattr(socket, "create_connection", refuse)
     monkeypatch.setattr(propose_mod, "urlopen", refuse)
@@ -678,7 +776,6 @@ def _block_remote_calls(monkeypatch) -> None:
     monkeypatch.setattr(spec_mod, "run_agent", refuse)
     monkeypatch.setattr(spec_mod, "fetch_change", refuse)
     monkeypatch.setattr(spec_mod, "dispatch_batch", refuse)
-    import github
     monkeypatch.setattr(github, "Github", refuse)
     monkeypatch.delenv("TARGET_TOKEN", raising=False)
 
@@ -757,8 +854,8 @@ def _real_draft(runner, tmp_path):
     out = tmp_path / "out"
     work = tmp_path / "work"
     work.mkdir()
-    run = draft_spec(_change(), workdir=work, out_dir=out, catalog=CATALOG, fuzzer_dir=fuzzer_dir,
-                     tools=tools, runner=runner)
+    run = draft_spec(_change(), workdir=work, out_dir=out, catalog=propose_mod.load_catalog(_E2E["VALKEY_FUZZER_BIN"]),
+                     fuzzer_dir=fuzzer_dir, tools=tools, runner=runner)
     return run, json.loads((out / "spec-draft.json").read_text()), out
 
 
@@ -777,7 +874,17 @@ def test_e2e_the_fuzzers_register_bundle_passes(tmp_path):
     assert "spec-register-ack-before-save" in ids and len(ids) >= 2
     assert json.loads((out / "validate.json").read_text())["ok"] is True
     assert result["counterexamples"][0]["actions"][-1] == "Crash"
-    assert batch_inputs(out) is not None
+    # Its scenarios run the register's own experiment, so the bundle goes with them.
+    assert {(s["experiment"], s["installed"]) for s in result["scenarios"]} == {("toy.register", False)}
+    inputs = batch_inputs(out)
+    bundles = json.loads(inputs["spec_bundles"])
+    assert list(bundles) == ["register"] and "experiments/toy.register.yaml" in bundles["register"]
+    # The real fuzzer-pr-batch.yml takes them, bundle checks included.
+    from tests.test_fuzzer_pr_batch import _workflow_check
+
+    checked = _workflow_check(inputs, tmp_path / "pr-batch")
+    assert checked.returncode == 0, checked.stderr
+    assert (tmp_path / "pr-batch" / "spec" / "register" / "experiments" / "toy.register.yaml").is_file()
 
 
 @e2e

@@ -60,7 +60,14 @@ from scripts.common.git_clone import REPO_RE
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_group, log_outcome
 from scripts.common.proc import PROCESS_BASICS, filter_env
-from scripts.fuzzer.pr_batch import FUZZER_REPO, PR_BATCH_WORKFLOW, batch_dispatch_inputs, dispatch_batch
+from scripts.fuzzer.pr_batch import (
+    FUZZER_REPO,
+    PR_BATCH_WORKFLOW,
+    batch_dispatch_inputs,
+    batch_names,
+    bundle_path_allowed,
+    dispatch_batch,
+)
 from scripts.fuzzer.propose import (
     VALKEY_REPO,
     Change,
@@ -577,6 +584,7 @@ def run_gates(attempt: Attempt, tools: SpecTools) -> None:
         attempt.scenarios.append({
             "control": path.parent.name,
             "scenario_id": str(doc.get("scenario_id")),
+            "experiment": str((doc.get("experiment") or {}).get("id")),
             "file": name,
             "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         })
@@ -759,6 +767,20 @@ class DraftRun:
         return self.attempts[-1] if self.attempts else None
 
 
+def _mark_installed(scenarios: list[dict[str, Any]], catalog: dict[str, list[Any]]) -> None:
+    """Whether each scenario's experiment is installed; otherwise the PR batch needs its bundle.
+
+    An experiment the draft brought in experiments/, or one from
+    --experiment-dir, is not in the installed catalog.
+    """
+    installed = {
+        str(entry["id"]) for entry in catalog.get("experiments") or []
+        if isinstance(entry, dict) and entry.get("id") and not entry.get("directory")
+    }
+    for item in scenarios:
+        item["installed"] = item.get("experiment") in installed
+
+
 def draft_spec(
     change: Change, *, workdir: Path, out_dir: Path, catalog: dict[str, list[Any]],
     fuzzer_dir: Path, tools: SpecTools, runner: Runner | None = None,
@@ -828,6 +850,7 @@ def draft_spec(
             run.verdict = "passed"
             run.reason = ""
             logger.info("The draft passed every gate in round %d", round_number)
+            _mark_installed(attempt.scenarios, catalog)
             _publish(run, out_dir)
             return run
         assert failure_gate is not None
@@ -916,11 +939,17 @@ def _publish(run: DraftRun, out_dir: Path) -> dict[str, Any]:
         "reason": run.reason,
         "approval": "draft: never a required check until a maintainer approves its claims",
         "rounds": run.rounds,
-        "claims": None, "notes": {}, "gates": [], "counterexamples": [], "scenarios": [],
+        "claims": None, "notes": {}, "gates": [], "counterexamples": [], "scenarios": [], "bundle": None,
     }
     if final is not None:
         # bundle/<protocol>/, so bundle/ can go on VALKEY_FUZZER_SPEC_PATH as is.
         _copy(final.directory / final.name, out_dir / "bundle" / final.name)
+        published = out_dir / "bundle" / final.name
+        # The draft's own files with their SHA-256s, which dispatch sends in spec_bundles.
+        result["bundle"] = {"protocol": final.name, "files": {
+            name: hashlib.sha256((published / name).read_bytes()).hexdigest()
+            for name in sorted(final.files) if (published / name).is_file()
+        }}
         _copy(final.directory / "assurance.json", out_dir / "assurance.json")
         result["claims"] = _claims_summary(final.files)
         result["notes"] = final.notes
@@ -1016,14 +1045,74 @@ def render_summary(result: dict[str, Any]) -> str:
 # --- Dispatch ---------------------------------------------------------------------
 
 
+def _published_bundle(out_dir: Path, result: dict[str, Any]) -> tuple[str, dict[str, str]]:
+    """The bundle a passing draft published, as {path in the bundle: text}, checked against its SHA-256s."""
+    recorded = result.get("bundle") or {}
+    protocol, files = recorded.get("protocol"), recorded.get("files")
+    if not isinstance(protocol, str) or not _PROTOCOL_RE.fullmatch(protocol) or not isinstance(files, dict) \
+            or not files:
+        raise ValueError(f"{RESULT_FILE} records no bundle for the draft that passed")
+    root = (out_dir / "bundle" / protocol).resolve()
+    bundle: dict[str, str] = {}
+    for name, digest in files.items():
+        path = (root / str(name)).resolve()
+        if not bundle_path_allowed(str(name)) or root not in path.parents or not path.is_file():
+            raise ValueError(f"bundle file outside {root}: {name}")
+        data = path.read_bytes()
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise ValueError(f"bundle/{protocol}/{name} changed since the draft passed")
+        bundle[str(name)] = data.decode("utf-8")
+    return protocol, bundle
+
+
+def _bundle_experiments(bundle: dict[str, str]) -> set[str]:
+    """The IDs of the data-only experiments a bundle brings in experiments/."""
+    ids = set()
+    for name, text in bundle.items():
+        if name.startswith("experiments/"):
+            doc = yaml.safe_load(text)
+            if isinstance(doc, dict) and doc.get("id"):
+                ids.add(str(doc["id"]))
+    return ids
+
+
 def batch_inputs(out_dir: Path) -> dict[str, str] | None:
-    """The PR batch inputs for a draft that passed every gate; None for any other outcome."""
+    """The PR batch inputs for a draft that passed every gate; None for any other outcome.
+
+    The PR batch runs the scenarios with the installed experiments and with
+    the spec bundles it is sent. A draft whose scenarios run its own
+    experiments/<id>.yaml goes with its bundle in spec_bundles, under its
+    protocol name: the batch finds the bundle there and loads the
+    experiment. A scenario of an experiment neither installed nor in the
+    bundle (one from --experiment-dir) cannot run there, and the draft is
+    refused.
+    """
     result = json.loads((out_dir / RESULT_FILE).read_text(encoding="utf-8"))
     if result.get("verdict") != "passed":
         return None
+    items = result.get("scenarios") or []
+    if not items:
+        return None
+    protocol, bundle = _published_bundle(out_dir, result)
+    own = _bundle_experiments(bundle)
+    needs_bundle = False
+    missing = []
+    for item in items:
+        if item.get("installed") is True:
+            continue
+        if item.get("experiment") in own:
+            needs_bundle = True
+        else:
+            missing.append(item)
+    if missing:
+        uses = ", ".join(f"{item.get('scenario_id')} ({item.get('experiment')})" for item in missing)
+        raise ValueError(
+            "the PR batch loads only installed experiments and those of the bundles it is sent, and these "
+            f"scenarios need another: {uses}; run them with valkey-fuzzer run --experiment-dir"
+        )
     scenario_dir = (out_dir / "scenarios").resolve()
     scenarios: dict[str, str] = {}
-    for item in result.get("scenarios") or []:
+    for item in items:
         path = (out_dir / str(item["file"])).resolve()
         if scenario_dir not in path.parents or not path.is_file():
             raise ValueError(f"scenario file outside {scenario_dir}: {item['file']}")
@@ -1036,9 +1125,12 @@ def batch_inputs(out_dir: Path) -> dict[str, str] | None:
         if error is not None or doc.get("scenario_id") != item["scenario_id"]:
             raise ValueError(f"{item['file']} is not the scenario that validated: {error or 'renamed'}")
         scenarios[str(item["scenario_id"])] = text
-    if not scenarios:
-        return None
-    return batch_dispatch_inputs(result["change"], scenarios)
+    # A translated scenario's ID may hold characters the PR batch's names may not.
+    names = batch_names(list(scenarios))
+    return batch_dispatch_inputs(
+        result["change"], {names[i]: text for i, text in scenarios.items()},
+        {protocol: bundle} if needs_bundle else None,
+    )
 
 
 # --- Command line -----------------------------------------------------------------

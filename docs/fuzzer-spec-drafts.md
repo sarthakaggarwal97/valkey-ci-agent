@@ -125,10 +125,33 @@ With `dispatch_batch` on, the agent also starts the `fuzzer-pr-batch.yml`
 workflow in valkey-fuzzer with the scenarios of a draft that passed every
 gate, the same way [Fuzzer proposals](fuzzer-proposals.md#running-them-as-a-pr-batch)
 do. Before it does, it reads each file back and checks its SHA-256 against
-the one recorded when it validated. A rejected draft, or one with no protocol
+the one recorded when it validated. The PR batch's inputs and checks are
+the same as for proposals; each scenario is named by its ID, and an ID that
+`spec translate` gave characters the workflow's names can't hold, such as
+`:`, has them replaced with `-` (the scenario's own `scenario_id` is
+unchanged).
+
+`spec-draft.json` records each scenario's experiment and whether the
+fuzzer has it installed, and the published bundle's files with their
+SHA-256s. When a scenario runs the draft's own `experiments/<id>.yaml`, the
+bundle goes with the scenarios in `spec_bundles`, under its protocol name,
+after each file is checked against its SHA-256: the PR batch writes it where
+`VALKEY_FUZZER_SPEC_PATH` finds it and loads its `experiments/`. The
+workflow's checks of `spec_bundles` are refused before dispatch too: at most
+60,000 characters, a lowercase name of letters, digits and `-`,
+`claims.yaml`, `model.tla` and `mapping.yaml`, and only `<name>.cfg`,
+`negative-controls/<name>.cfg` or `.tla` and `experiments/<name>.yaml`
+besides. A scenario whose experiment is neither installed nor in the bundle,
+such as one from `--experiment-dir`, can't run there, and the draft is
+refused with the scenarios named. A rejected draft, or one with no protocol
 change, dispatches nothing. The dispatch uses its own token, made after
-Claude has finished, that can start workflows on valkey-fuzzer and do nothing
-else. A dry run never dispatches.
+Claude has finished, that can start workflows on valkey-fuzzer and do
+nothing else. A dry run never dispatches.
+
+The PR batch uploads its batch folder as `fuzzer-batch-<run id>`, read with
+`python -m scripts.fuzzer.pr_batch` exactly as for
+[proposals](fuzzer-proposals.md#running-them-as-a-pr-batch): the scenario
+`<name>` ran as the job `scenario-<name>`.
 
 ## Running it by hand
 
