@@ -9,9 +9,10 @@ A scenario that fails gets one repair round with the error; one that still
 fails is dropped. Only validated scenarios reach the output directory, which
 the workflow uploads as an artifact.
 
-``dispatch`` optionally hands the validated scenarios to a campaign workflow
-in valkey-fuzzer. It is a separate command, run with its own token, and off
-unless asked for.
+``dispatch`` optionally hands the validated scenarios to valkey-fuzzer's PR
+batch workflow, with exactly the inputs it takes (see
+:mod:`scripts.fuzzer.pr_batch`, which also reads the batch it uploads). It
+is a separate command, run with its own token, and off unless asked for.
 """
 
 from __future__ import annotations
@@ -44,12 +45,11 @@ from scripts.common.git_clone import REPO_RE, SHA_RE, shallow_clone_at_sha
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_group, log_outcome
 from scripts.common.proc import PROCESS_BASICS, filter_env
+from scripts.fuzzer.pr_batch import FUZZER_REPO, PR_BATCH_WORKFLOW, batch_dispatch_inputs, dispatch_batch
 
 logger = logging.getLogger(__name__)
 
 VALKEY_REPO = "valkey-io/valkey"
-FUZZER_REPO = "valkey-io/valkey-fuzzer"
-CAMPAIGN_WORKFLOW = "fuzzer-campaign.yml"
 
 MAX_COUNT = 10
 # A diff larger than this is cut; Claude still has the full tree in valkey/.
@@ -57,8 +57,6 @@ _MAX_DIFF_BYTES = 600_000
 _MAX_SCENARIO_CHARS = 20_000
 _MAX_RATIONALE_CHARS = 600
 _MAX_ERROR_CHARS = 1_500
-# GitHub limits all of a dispatch's inputs together to 65,535 characters.
-_MAX_DISPATCH_CHARS = 60_000
 _VALIDATE_TIMEOUT_S = 120
 _LIST_TIMEOUT_S = 120
 _CLAUDE_MAX_ATTEMPTS = 2
@@ -591,8 +589,8 @@ def render_summary(result: dict[str, Any]) -> str:
 # --- Dispatch ----------------------------------------------------------------
 
 
-def campaign_inputs(out_dir: Path) -> dict[str, str] | None:
-    """The campaign workflow's inputs, from the validated scenarios on disk."""
+def batch_inputs(out_dir: Path) -> dict[str, str] | None:
+    """The PR batch workflow's inputs, from the validated scenarios on disk."""
     result = json.loads((out_dir / "proposals.json").read_text(encoding="utf-8"))
     change = result["change"]
     scenarios: dict[str, str] = {}
@@ -608,28 +606,7 @@ def campaign_inputs(out_dir: Path) -> dict[str, str] | None:
         scenarios[str(item["scenario_id"])] = text
     if not scenarios:
         return None
-    head_sha = str(change["head_sha"])
-    if not SHA_RE.fullmatch(head_sha) or not REPO_RE.fullmatch(str(change["repo"])):
-        raise ValueError("proposals.json names a malformed repository or commit")
-    pr_number = change.get("pr_number")
-    inputs = {
-        "scenarios": json.dumps(scenarios, separators=(",", ":")),
-        "valkey_repository": str(change["repo"]),
-        "valkey_ref": f"refs/pull/{int(pr_number)}/head" if pr_number else head_sha,
-        "valkey_sha": head_sha,
-    }
-    size = sum(len(value) for value in inputs.values())
-    if size > _MAX_DISPATCH_CHARS:
-        raise ValueError(f"the campaign inputs are {size} characters, over GitHub's limit")
-    return inputs
-
-
-def dispatch_campaign(
-    gh: Any, inputs: dict[str, str], *, fuzzer_repo: str, workflow: str, ref: str,
-) -> None:
-    target = gh.get_repo(fuzzer_repo).get_workflow(workflow)
-    if not target.create_dispatch(ref, inputs):
-        raise RuntimeError(f"GitHub refused to dispatch {workflow} on {fuzzer_repo}")
+    return batch_dispatch_inputs(change, scenarios)
 
 
 # --- Command line ------------------------------------------------------------
@@ -691,7 +668,7 @@ def _run_propose(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
 def _run_dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if not REPO_RE.fullmatch(args.fuzzer_repo):
         parser.error(f"not an owner/name repository: {args.fuzzer_repo!r}")
-    inputs = campaign_inputs(Path(args.out))
+    inputs = batch_inputs(Path(args.out))
     if inputs is None:
         log_outcome(logger, logging.INFO, "No validated scenarios; nothing to dispatch")
         return 0
@@ -704,9 +681,11 @@ def _run_dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
     from github import Auth, Github
 
     gh = Github(auth=Auth.Token(_token(args, parser)))
-    dispatch_campaign(gh, inputs, fuzzer_repo=args.fuzzer_repo, workflow=args.workflow, ref=args.ref)
+    dispatch_batch(gh, inputs, fuzzer_repo=args.fuzzer_repo, workflow=args.workflow, ref=args.ref)
     log_outcome(logger, logging.INFO,
-                f"Dispatched {args.workflow} on {args.fuzzer_repo} with {count} scenario(s)")
+                f"Dispatched {args.workflow} on {args.fuzzer_repo} with {count} scenario(s); "
+                f"its runs are at https://github.com/{args.fuzzer_repo}/actions/workflows/{args.workflow}, "
+                "and `python -m scripts.fuzzer.pr_batch --run-id <run id>` reads one's results")
     return 0
 
 
@@ -727,10 +706,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dry-run", action="store_true",
                    help="Check the request and the fuzzer install; fetch nothing and call no one")
 
-    d = sub.add_parser("dispatch", help="Run validated scenarios as a valkey-fuzzer campaign")
+    d = sub.add_parser("dispatch", help="Run validated scenarios as a valkey-fuzzer PR batch")
     d.add_argument("--out", default="fuzzer-proposals", help="the propose command's output directory")
     d.add_argument("--fuzzer-repo", default=FUZZER_REPO)
-    d.add_argument("--workflow", default=CAMPAIGN_WORKFLOW)
+    d.add_argument("--workflow", default=PR_BATCH_WORKFLOW)
     d.add_argument("--ref", default="main", help="the fuzzer branch to run the workflow from")
     d.add_argument("--target-token", default=None, help="GitHub token (falls back to TARGET_TOKEN)")
     d.add_argument("--dry-run", action="store_true", help="Show what would be dispatched")

@@ -26,10 +26,10 @@ def test_dispatch_only_and_dry_run_by_default() -> None:
     on = _workflow()["on"]
     assert list(on) == ["workflow_dispatch"]
     inputs = on["workflow_dispatch"]["inputs"]
-    assert list(inputs) == ["pr_number", "count", "dry_run", "dispatch_campaign"]
+    assert list(inputs) == ["pr_number", "count", "dry_run", "dispatch_batch"]
     assert inputs["pr_number"]["required"] == "true"
     assert inputs["dry_run"]["default"] == "true"
-    assert inputs["dispatch_campaign"]["default"] == "false"
+    assert inputs["dispatch_batch"]["default"] == "false"
 
 
 def test_job_permissions_are_minimal() -> None:
@@ -58,10 +58,10 @@ def test_dispatch_token_is_separate_and_only_when_dispatching() -> None:
     assert with_["repositories"] == "valkey-fuzzer"
     permissions = {key: value for key, value in with_.items() if key.startswith("permission-")}
     assert permissions == {"permission-actions": "write", "permission-metadata": "read"}
-    # A dry run never dispatches, whatever dispatch_campaign says.
+    # A dry run never dispatches, whatever dispatch_batch says.
     env = _workflow()["jobs"]["propose"]["env"]
-    assert env["DISPATCH"] == "${{ !inputs.dry_run && inputs.dispatch_campaign && 'true' || 'false' }}"
-    assert _step("Dispatch the campaign")["if"] == "env.DISPATCH == 'true'"
+    assert env["DISPATCH"] == "${{ !inputs.dry_run && inputs.dispatch_batch && 'true' || 'false' }}"
+    assert _step("Dispatch the PR batch")["if"] == "env.DISPATCH == 'true'"
 
 
 def test_claude_step_never_sees_the_dispatch_token() -> None:
@@ -69,7 +69,7 @@ def test_claude_step_never_sees_the_dispatch_token() -> None:
     assert names.index("Propose scenarios") < names.index("Generate dispatch token")
     propose = _step("Propose scenarios")
     assert propose["env"]["TARGET_TOKEN"] == "${{ steps.read-token.outputs.token }}"
-    assert _step("Dispatch the campaign")["env"]["TARGET_TOKEN"] == "${{ steps.dispatch-token.outputs.token }}"
+    assert _step("Dispatch the PR batch")["env"]["TARGET_TOKEN"] == "${{ steps.dispatch-token.outputs.token }}"
 
 
 def test_inputs_reach_shell_through_env_and_are_checked_first() -> None:

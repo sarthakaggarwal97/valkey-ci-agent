@@ -21,8 +21,8 @@ on:
         required: false
         default: true
         type: boolean
-      dispatch_campaign:
-        description: "Also run the validated scenarios as a campaign in valkey-fuzzer (ignored on a dry run)."
+      dispatch_batch:
+        description: "Also run the validated scenarios as a PR batch in valkey-fuzzer (ignored on a dry run)."
         required: false
         default: false
         type: boolean
@@ -49,7 +49,7 @@ jobs:
       PR_NUMBER: ${{ inputs.pr_number }}
       COUNT: ${{ inputs.count }}
       DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
-      DISPATCH: ${{ !inputs.dry_run && inputs.dispatch_campaign && 'true' || 'false' }}
+      DISPATCH: ${{ !inputs.dry_run && inputs.dispatch_batch && 'true' || 'false' }}
     steps:
       - name: Check inputs
         shell: bash
@@ -144,7 +144,7 @@ jobs:
           permission-actions: write
           permission-metadata: read
 
-      - name: Dispatch the campaign
+      - name: Dispatch the PR batch
         if: env.DISPATCH == 'true'
         shell: bash
         env:

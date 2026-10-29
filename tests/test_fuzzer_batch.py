@@ -53,7 +53,7 @@ def test_a_run_that_left_no_report_fails_closed_but_keeps_its_error():
     assert "UnknownExperimentError" in unknown.error_text
 
 
-def test_a_campaign_artifact_is_the_folder_itself():
+def test_a_pr_batch_artifact_is_the_folder_itself():
     batch = read_batch(batch_files(prefix=""))
     assert batch.problem is None and batch.prefix == ""
     assert batch.run(CRASH).report is not None

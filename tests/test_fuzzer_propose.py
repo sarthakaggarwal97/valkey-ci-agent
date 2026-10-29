@@ -18,9 +18,9 @@ from scripts.ai.runtime import AgentRunResult
 from scripts.fuzzer.propose import (
     Change,
     ChangeRequest,
-    campaign_inputs,
+    batch_inputs,
     check_scenario,
-    dispatch_campaign,
+    dispatch_batch,
     fetch_change,
     fuzzer_validator,
     load_catalog,
@@ -410,14 +410,15 @@ def block_remote_calls(monkeypatch):
 
 
 def _block(monkeypatch, refuse) -> None:
+    # Imported before sockets are refused: importing it builds a socket class.
+    import github
     monkeypatch.setattr(socket, "socket", refuse)
     monkeypatch.setattr(socket, "create_connection", refuse)
     monkeypatch.setattr(propose_mod, "urlopen", refuse)
     monkeypatch.setattr(propose_mod, "shallow_clone_at_sha", refuse)
     monkeypatch.setattr(propose_mod, "run_agent", refuse)
     monkeypatch.setattr(propose_mod, "fetch_change", refuse)
-    monkeypatch.setattr(propose_mod, "dispatch_campaign", refuse)
-    import github
+    monkeypatch.setattr(propose_mod, "dispatch_batch", refuse)
     monkeypatch.setattr(github, "Github", refuse)
     monkeypatch.delenv("TARGET_TOKEN", raising=False)
 
@@ -489,9 +490,9 @@ def _proposed(tmp_path, fuzzer_dir, *scenarios):
     return _propose(runner, tmp_path, fuzzer_dir)
 
 
-def test_campaign_inputs_carry_the_validated_scenarios(tmp_path, fuzzer_dir):
+def test_batch_inputs_carry_the_validated_scenarios(tmp_path, fuzzer_dir):
     _, result, out = _proposed(tmp_path, fuzzer_dir, GOOD, OTHER_GOOD)
-    inputs = campaign_inputs(out)
+    inputs = batch_inputs(out)
     scenarios = json.loads(inputs["scenarios"])
     assert sorted(scenarios) == sorted(s["scenario_id"] for s in result["scenarios"])
     assert inputs["valkey_ref"] == "refs/pull/123/head"
@@ -499,53 +500,61 @@ def test_campaign_inputs_carry_the_validated_scenarios(tmp_path, fuzzer_dir):
     assert inputs["valkey_repository"] == "valkey-io/valkey"
 
 
-def test_campaign_inputs_for_a_range_use_the_commit(tmp_path, fuzzer_dir):
+def test_batch_inputs_for_a_range_use_the_commit(tmp_path, fuzzer_dir):
     runner = StubRunner(_answer([{"rationale": "r", "scenario": GOOD}]))
     _, _, out = _propose(runner, tmp_path, fuzzer_dir, change=_change(pr_number=None, fetch_ref=None))
-    assert campaign_inputs(out)["valkey_ref"] == HEAD
+    assert batch_inputs(out)["valkey_ref"] == HEAD
 
 
-def test_campaign_inputs_refuse_a_scenario_changed_after_validation(tmp_path, fuzzer_dir):
+def test_batch_inputs_refuse_a_scenario_changed_after_validation(tmp_path, fuzzer_dir):
     _, result, out = _proposed(tmp_path, fuzzer_dir, GOOD)
     path = out / result["scenarios"][0]["file"]
     path.write_text(path.read_text().replace("seed: 7", "seed: 99"))
     with pytest.raises(ValueError, match="changed since it was validated"):
-        campaign_inputs(out)
+        batch_inputs(out)
 
 
-def test_campaign_inputs_refuse_a_file_outside_the_scenarios(tmp_path, fuzzer_dir):
+def test_batch_inputs_refuse_a_file_outside_the_scenarios(tmp_path, fuzzer_dir):
     _, result, out = _proposed(tmp_path, fuzzer_dir, GOOD)
     data = json.loads((out / "proposals.json").read_text())
     data["scenarios"][0]["file"] = "../../etc/passwd"
     (out / "proposals.json").write_text(json.dumps(data))
     with pytest.raises(ValueError, match="outside"):
-        campaign_inputs(out)
+        batch_inputs(out)
 
 
-def test_campaign_inputs_none_when_nothing_validated(tmp_path, fuzzer_dir):
+def test_batch_inputs_none_when_nothing_validated(tmp_path, fuzzer_dir):
     runner = StubRunner(_answer([{"rationale": "r", "scenario": BAD}]), _answer([]))
     _, _, out = _propose(runner, tmp_path, fuzzer_dir)
-    assert campaign_inputs(out) is None
+    assert batch_inputs(out) is None
 
 
-def test_dispatch_campaign_dispatches_the_workflow():
+def test_dispatch_batch_dispatches_the_workflow():
+    inputs = {"scenarios": json.dumps({"ai-1": GOOD}), "valkey_repository": "valkey-io/valkey",
+              "valkey_ref": "refs/pull/1/head", "valkey_sha": HEAD}
     gh = MagicMock()
     workflow = gh.get_repo.return_value.get_workflow.return_value
     workflow.create_dispatch.return_value = True
-    dispatch_campaign(gh, {"scenarios": "{}"}, fuzzer_repo="valkey-io/valkey-fuzzer",
-                      workflow="fuzzer-campaign.yml", ref="main")
+    dispatch_batch(gh, inputs, fuzzer_repo="valkey-io/valkey-fuzzer",
+                      workflow="fuzzer-pr-batch.yml", ref="main")
     gh.get_repo.assert_called_with("valkey-io/valkey-fuzzer")
-    gh.get_repo.return_value.get_workflow.assert_called_with("fuzzer-campaign.yml")
-    workflow.create_dispatch.assert_called_with("main", {"scenarios": "{}"})
+    gh.get_repo.return_value.get_workflow.assert_called_with("fuzzer-pr-batch.yml")
+    workflow.create_dispatch.assert_called_with("main", inputs)
     workflow.create_dispatch.return_value = False
     with pytest.raises(RuntimeError, match="refused"):
-        dispatch_campaign(gh, {}, fuzzer_repo="valkey-io/valkey-fuzzer", workflow="w.yml", ref="main")
+        dispatch_batch(gh, inputs, fuzzer_repo="valkey-io/valkey-fuzzer", workflow="w.yml", ref="main")
+    # Inputs the PR batch would refuse are never sent.
+    workflow.create_dispatch.reset_mock()
+    with pytest.raises(ValueError, match="takes scenarios"):
+        dispatch_batch(gh, {"scenarios": "{}"}, fuzzer_repo="valkey-io/valkey-fuzzer",
+                          workflow="fuzzer-pr-batch.yml", ref="main")
+    workflow.create_dispatch.assert_not_called()
 
 
 def test_dispatch_for_real_needs_a_token_and_dispatches(monkeypatch, tmp_path, fuzzer_dir):
     _, _, out = _proposed(tmp_path, fuzzer_dir, GOOD)
     sent = {}
-    monkeypatch.setattr(propose_mod, "dispatch_campaign", lambda gh, inputs, **kw: sent.update(inputs=inputs, **kw))
+    monkeypatch.setattr(propose_mod, "dispatch_batch", lambda gh, inputs, **kw: sent.update(inputs=inputs, **kw))
     import github
     monkeypatch.setattr(github, "Github", MagicMock())
     monkeypatch.delenv("TARGET_TOKEN", raising=False)
@@ -554,5 +563,5 @@ def test_dispatch_for_real_needs_a_token_and_dispatches(monkeypatch, tmp_path, f
     monkeypatch.setenv("TARGET_TOKEN", "t")
     assert propose_mod.main(["dispatch", "--out", str(out)]) == 0
     assert sent["fuzzer_repo"] == "valkey-io/valkey-fuzzer"
-    assert sent["workflow"] == "fuzzer-campaign.yml"
+    assert sent["workflow"] == "fuzzer-pr-batch.yml"
     assert len(json.loads(sent["inputs"]["scenarios"])) == 1

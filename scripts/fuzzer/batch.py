@@ -9,7 +9,7 @@ re-run verdicts (``signatures``), the bug zoo's verdicts (``zoo``) and what
 the sweeps removed after the runs (``leaks``).
 
 The fuzzer monitor reads the scheduled workflow's artifact, which holds the
-folder under ``batch/``; the campaign artifact is the folder itself. Both go
+folder under ``batch/``; the PR batch artifact is the folder itself. Both go
 through :func:`read_batch`, which fails closed: a summary that is missing or
 not shaped like one sets ``BatchFolder.problem``, and a run whose report is
 missing or not a run report sets that run's ``report_problem``.
@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import posixpath
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 # Outcomes a run report, a run or a batch can carry.
@@ -309,3 +310,19 @@ def read_batch(files: dict[str, bytes], prefix: str = "") -> BatchFolder:
     batch.leaks = [item for item in data.get("leaks") or [] if isinstance(item, dict)]
     return batch
 
+
+def read_batch_dir(root: Path) -> BatchFolder:
+    """Read a batch folder on disk: ``root`` holds summary.json.
+
+    Only what :func:`read_batch` reads is loaded, not the runs' component
+    artifacts.
+    """
+    if not (root / SUMMARY_FILE).is_file():
+        return BatchFolder(prefix="", problem=f"{root} holds no {SUMMARY_FILE}")
+    files = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and not path.is_symlink()
+        and (path.name in (SUMMARY_FILE, "report.json", "scenario.yaml", "error.json") or path.parent.name == "logs")
+    }
+    return read_batch(files)

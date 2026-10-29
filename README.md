@@ -47,7 +47,7 @@ noise of a chaos test. Real bugs get an issue. See
 read the change and write valkey-fuzzer scenarios aimed at what it could
 break. Each scenario is checked by `valkey-fuzzer validate`, a failed one gets
 one repair attempt, and only the ones that validate are kept. They can also
-be run as a campaign in valkey-fuzzer. See
+be run as a PR batch in valkey-fuzzer. See
 [Fuzzer proposals](docs/fuzzer-proposals.md).
 
 **Releases.** A maintainer can cut a release of Valkey or one of its modules
