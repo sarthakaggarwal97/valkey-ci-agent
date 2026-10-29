@@ -11,12 +11,15 @@ Code writes the bundle and runs the gates in order, stopping at the first
 that fails:
 
 ``answer``     the reply holds a bundle in the block format
-``draft``      only bundle paths, the required files, ``status: draft`` with
-               no ``approved_by``, and only standard TLA+ modules
-``spec_check`` ``valkey-fuzzer spec check``: every gate of the assurance
-               report passes, negative controls included, so a property that
-               cannot fail (``Inv == TRUE``) is rejected
+``draft``      the required files, and ``status: draft`` with no
+               ``approved_by``
+``spec_check`` ``valkey-fuzzer spec check --timeout``: every gate of the
+               assurance report passes. ``parsed`` allows only standard TLA+
+               modules; ``negative_controls`` rejects a property that cannot
+               fail (``Inv == TRUE``); ``experiment`` compiles each control's
+               scenarios and checks every mapped fault's component
 ``translate``  ``valkey-fuzzer spec translate --control`` for every control
+               the experiment gate translated
 ``validate``   ``valkey-fuzzer validate`` on every translated scenario
 
 A failing draft gets at most two repair rounds, each a fresh Claude session
@@ -39,7 +42,6 @@ import logging
 import os
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -81,14 +83,18 @@ SUMMARY_FILE = "summary.md"
 GATES = ("answer", "draft", "spec_check", "translate", "validate")
 # The assurance report's gates that must all be present and pass.
 REQUIRED_ASSURANCE_GATES = (
-    "bundle", "parsed", "claims_checked", "model_checked", "negative_controls", "mapping_complete",
+    "bundle", "parsed", "claims_checked", "model_checked", "negative_controls", "experiment",
+    "mapping_complete",
 )
-# Modules a drafted model may EXTEND or INSTANCE, besides its own.
-STANDARD_MODULES = frozenset({"Naturals", "Integers", "Reals", "Sequences", "FiniteSets", "Bags", "TLC"})
+# The search path on which a bundle's own experiments find it by protocol name.
+SPEC_PATH_ENV = "VALKEY_FUZZER_SPEC_PATH"
 
+# The fuzzer's --timeout for spec check and spec translate; it stops SANY and
+# TLC itself. The process timeout is only a backstop for a hung fuzzer.
 _CHECK_TIMEOUT_S = 1800
 _TRANSLATE_TIMEOUT_S = 900
 _VALIDATE_TIMEOUT_S = 300
+_BACKSTOP_S = 300
 _CLAUDE_MAX_ATTEMPTS = 2
 
 _MAX_ANSWER_CHARS = 600_000
@@ -101,15 +107,13 @@ _TAIL_LINES = 30
 
 _BUNDLE_PATH_RE = re.compile(
     r"^(?:claims\.yaml|mapping\.yaml|model\.tla|[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.cfg"
-    r"|negative-controls/[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.(?:cfg|tla))$"
+    r"|negative-controls/[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.(?:cfg|tla)"
+    r"|experiments/[a-z0-9][a-z0-9._-]{0,63}\.yaml)$"
 )
 _PROTOCOL_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 _HEADER_RE = re.compile(r"^<<<(NO-PROTOCOL-CHANGE|NOTES|FILE ([^\s<>]+))>>>\s*$")
 _END_LINE = "<<<END>>>"
-_EXTENDS_RE = re.compile(r"\bEXTENDS\b((?:\s*\w+\s*,)*\s*\w+)")
-_INSTANCE_RE = re.compile(r"\bINSTANCE\s+(\w+)")
-_TIMED_OUT_RE = re.compile(r"did not finish within")
 
 Runner = Callable[[str, Path], AgentRunResult]
 
@@ -195,8 +199,8 @@ def parse_answer(stdout: str) -> Answer:
 def _add_file(answer: Answer, path: str, content: str) -> None:
     if not _BUNDLE_PATH_RE.fullmatch(path):
         raise AnswerError(
-            f"{path!r} is not a bundle path; use claims.yaml, mapping.yaml, model.tla, <name>.cfg "
-            "or negative-controls/<name>.cfg|.tla"
+            f"{path!r} is not a bundle path; use claims.yaml, mapping.yaml, model.tla, <name>.cfg, "
+            "negative-controls/<name>.cfg|.tla or experiments/<id>.yaml"
         )
     if path in answer.files:
         raise AnswerError(f"{path} appears twice")
@@ -212,23 +216,13 @@ def _add_file(answer: Answer, path: str, content: str) -> None:
 # --- The draft gate ---------------------------------------------------------------
 
 
-def _strip_tla_comments(text: str) -> str:
-    text = re.sub(r"\(\*.*?\*\)", " ", text, flags=re.DOTALL)
-    return re.sub(r"\\\*[^\n]*", " ", text)
-
-
-def module_references(text: str) -> set[str]:
-    """The modules a TLA+ module EXTENDS or INSTANCEs."""
-    body = _strip_tla_comments(text)
-    names: set[str] = set()
-    for match in _EXTENDS_RE.finditer(body):
-        names.update(name.strip() for name in match.group(1).split(",") if name.strip())
-    names.update(_INSTANCE_RE.findall(body))
-    return names
-
-
 def check_draft(files: dict[str, str]) -> str | None:
-    """What code requires of a draft before the fuzzer sees it, or None."""
+    """What code requires of a draft before the fuzzer sees it, or None.
+
+    Only what the fuzzer can't know: the required files, and that the claims
+    are a draft. The fuzzer's gates check everything else, the modules a
+    model may use included.
+    """
     missing = [name for name in ("claims.yaml", "model.tla", "mapping.yaml") if name not in files]
     if missing:
         return f"the bundle has no {', '.join(missing)}"
@@ -249,17 +243,17 @@ def check_draft(files: dict[str, str]) -> str | None:
         return "claims.yaml status must be draft: only a maintainer approves claims"
     if "approved_by" in claims:
         return "claims.yaml must not set approved_by: only a maintainer approves claims"
-    own = {"model"} | {Path(name).stem for name in files if name.startswith("negative-controls/") and name.endswith(".tla")}
-    for name, text in sorted(files.items()):
-        if not name.endswith(".tla"):
-            continue
-        unknown = sorted(module_references(text) - STANDARD_MODULES - own)
-        if unknown:
-            return (
-                f"{name} uses modules {', '.join(unknown)}; a draft may use only the standard modules "
-                f"({', '.join(sorted(STANDARD_MODULES))}) and its own"
-            )
     return None
+
+
+def draft_protocol(files: dict[str, str]) -> str | None:
+    """The draft's protocol name, when claims.yaml gives a usable one."""
+    try:
+        claims = yaml.safe_load(files.get("claims.yaml", ""))
+    except yaml.YAMLError:
+        return None
+    protocol = claims.get("protocol") if isinstance(claims, dict) else None
+    return protocol if isinstance(protocol, str) and _PROTOCOL_RE.fullmatch(protocol) else None
 
 
 # --- The fuzzer's spec tools ------------------------------------------------------
@@ -309,7 +303,8 @@ def _describe_gate(name: str, entry: Any) -> list[str]:
     if name == "parsed":
         for module, info in (entry.get("modules") or {}).items():
             if isinstance(info, dict) and info.get("status") != "pass":
-                lines.append(f"parsed: SANY rejected {module}:\n{_tail(info.get('output'))}")
+                detail = info.get("error") or f"SANY rejected it:\n{_tail(info.get('output'))}"
+                lines.append(f"parsed: {module}: {detail}")
     elif name == "claims_checked":
         lines += [f"claims_checked: {problem}" for problem in entry.get("problems") or []]
     elif name == "model_checked":
@@ -324,6 +319,10 @@ def _describe_gate(name: str, entry: Any) -> list[str]:
                     f"negative_controls: {control} (must violate {info.get('violates')}): "
                     f"{info.get('error') or 'failed'}"
                 )
+    elif name == "experiment":
+        for control, info in (entry.get("controls") or {}).items():
+            if isinstance(info, dict) and info.get("status") == "fail":
+                lines.append(f"experiment: {control}: {info.get('error') or 'failed'}")
     elif name == "mapping_complete":
         for key in ("unmapped_actions", "unknown_actions"):
             if entry.get(key):
@@ -331,6 +330,12 @@ def _describe_gate(name: str, entry: Any) -> list[str]:
     if not lines:
         lines.append(f"{name}: {json.dumps(entry, sort_keys=True)[:800]}")
     return lines
+
+
+def _timed_out(entry: Any) -> bool:
+    if isinstance(entry, dict):
+        return entry.get("timed_out") is True or any(_timed_out(value) for value in entry.values())
+    return False
 
 
 def assurance_problems(report: Any) -> list[str]:
@@ -341,6 +346,10 @@ def assurance_problems(report: Any) -> list[str]:
     if not isinstance(gates, dict):
         return ["the assurance report has no gates"]
     problems: list[str] = []
+    if report.get("error"):
+        problems.append(str(report["error"]))
+    if _timed_out(gates):
+        problems.append("TLC ran out of time; make the bounds smaller so it finishes in minutes")
     for name, entry in gates.items():
         if not isinstance(entry, dict) or entry.get("status") != "pass":
             problems += _describe_gate(str(name), entry)
@@ -356,31 +365,15 @@ def assurance_problems(report: Any) -> list[str]:
     return problems
 
 
-def _run_killing_group(command: list[str], *, cwd: Path, timeout_s: int, env: dict[str, str]) -> ToolRun:
-    """Run ``command``; on timeout kill its whole process group (TLC runs in a child JVM)."""
-    process = subprocess.Popen(
-        command, cwd=str(cwd), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, start_new_session=True,
-    )
-    try:
-        stdout, stderr = process.communicate(timeout=timeout_s)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        stdout, stderr = process.communicate()
-        return ToolRun(None, stdout or "", stderr or "")
-    return ToolRun(process.returncode, stdout, stderr)
-
-
 class SpecTools:
     """``valkey-fuzzer spec check``, ``spec translate`` and ``validate``, as gates.
 
-    Each runs in an attempt directory that holds ``bundle/``, with relative
-    paths, so the reports and scenarios name ``bundle`` rather than a
-    temporary path. The fuzzer gets only the process basics and JAVA_HOME of
-    the environment: never a token or cloud credential.
+    Each runs in an attempt directory that holds the draft as
+    ``<protocol>/``. When the draft brings its own ``experiments/``, the
+    attempt directory goes on ``VALKEY_FUZZER_SPEC_PATH``, so the
+    experiments' components find the bundle by its protocol name. The fuzzer's
+    ``--timeout`` bounds SANY and TLC. The fuzzer gets only the process basics
+    and JAVA_HOME of the environment: never a token or cloud credential.
     """
 
     def __init__(
@@ -395,26 +388,30 @@ class SpecTools:
         self.translate_timeout_s = translate_timeout_s
         self.validate_timeout_s = validate_timeout_s
 
-    def _experiment_args(self) -> list[str]:
-        return [arg for d in self.experiment_dirs for arg in ("--experiment-dir", d)]
+    def _experiment_args(self, *extra: Path) -> list[str]:
+        dirs = [*self.experiment_dirs, *(str(d.resolve()) for d in extra)]
+        return [arg for d in dirs for arg in ("--experiment-dir", d)]
 
-    def _run(self, args: list[str], *, cwd: Path, timeout_s: int) -> ToolRun:
-        return _run_killing_group(
-            [self.fuzzer_bin, *args], cwd=cwd, timeout_s=timeout_s,
-            env=filter_env((*PROCESS_BASICS, "JAVA_HOME")),
-        )
+    def _run(self, args: list[str], *, cwd: Path, timeout_s: int, bundle: str | None = None) -> ToolRun:
+        env = filter_env((*PROCESS_BASICS, "JAVA_HOME"))
+        if bundle is not None and (cwd / bundle / "experiments").is_dir():
+            env[SPEC_PATH_ENV] = str(cwd.resolve())
+        try:
+            result = subprocess.run(
+                [self.fuzzer_bin, *args], cwd=str(cwd), env=env, capture_output=True, text=True,
+                timeout=timeout_s + _BACKSTOP_S,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise HarnessError(f"valkey-fuzzer {' '.join(args[:2])} ignored its own --timeout") from exc
+        return ToolRun(result.returncode, result.stdout, result.stderr)
 
-    def check(self, attempt: Path) -> tuple[GateResult, dict[str, Any] | None]:
+    def check(self, attempt: Path, bundle: str) -> tuple[GateResult, dict[str, Any] | None]:
         report_path = attempt / "assurance.json"
         run = self._run(
-            ["spec", "check", "bundle", "--tla2tools", self.tla2tools, "--output", report_path.name],
-            cwd=attempt, timeout_s=self.check_timeout_s,
+            ["spec", "check", bundle, "--tla2tools", self.tla2tools, "--timeout", str(self.check_timeout_s),
+             "--output", report_path.name, *self._experiment_args()],
+            cwd=attempt, timeout_s=self.check_timeout_s, bundle=bundle,
         )
-        if run.returncode is None:
-            return GateResult("spec_check", False, (
-                f"spec check did not finish within {self.check_timeout_s}s; make the bounds smaller "
-                "so TLC finishes in minutes"
-            )), None
         report: dict[str, Any] | None = None
         if report_path.is_file():
             try:
@@ -422,26 +419,19 @@ class SpecTools:
             except ValueError:
                 report = None
         if run.returncode not in (0, 1):
-            if _TIMED_OUT_RE.search(run.tail()):
-                return GateResult("spec_check", False, _trim(
-                    f"TLC did not finish; make the bounds smaller:\n{run.tail()}"
-                )), report
             raise HarnessError(f"valkey-fuzzer spec check exited {run.returncode}: {run.tail(10)}")
         problems = assurance_problems(report)
         if run.returncode != 0 and not problems:
             problems = [f"spec check failed:\n{run.tail()}"]
         return GateResult("spec_check", not problems, _trim("\n".join(problems))), report
 
-    def translate(self, attempt: Path, control: str) -> GateResult:
+    def translate(self, attempt: Path, bundle: str, control: str) -> GateResult:
         out = Path("scenarios") / control
         run = self._run(
-            ["spec", "translate", "bundle", "--control", control, "--out", str(out),
-             "--tla2tools", self.tla2tools, *self._experiment_args()],
-            cwd=attempt, timeout_s=self.translate_timeout_s,
+            ["spec", "translate", bundle, "--control", control, "--out", str(out),
+             "--tla2tools", self.tla2tools, "--timeout", str(self.translate_timeout_s), *self._experiment_args()],
+            cwd=attempt, timeout_s=self.translate_timeout_s, bundle=bundle,
         )
-        if run.returncode is None:
-            return GateResult("translate", False, f"spec translate --control {control} did not finish "
-                                                  f"within {self.translate_timeout_s}s")
         if run.returncode != 0:
             return GateResult("translate", False, _trim(
                 f"spec translate --control {control} exited {run.returncode}:\n{run.tail()}"
@@ -450,7 +440,7 @@ class SpecTools:
             return GateResult("translate", False, f"spec translate --control {control} wrote no scenario")
         return GateResult("translate", True)
 
-    def validate(self, attempt: Path, files: list[str]) -> GateResult:
+    def validate(self, attempt: Path, bundle: str, files: list[str]) -> GateResult:
         problems: list[str] = []
         for name in files:
             try:
@@ -463,11 +453,13 @@ class SpecTools:
                 problems.append(f"{name}: {error}")
         if problems:
             return GateResult("validate", False, _trim("\n".join(problems)))
-        run = self._run(
-            ["validate", *files, "--format", "json", *self._experiment_args()],
-            cwd=attempt, timeout_s=self.validate_timeout_s,
-        )
-        if run.returncode is None:
+        own = attempt / bundle / "experiments"
+        try:
+            run = self._run(
+                ["validate", *files, "--format", "json", *self._experiment_args(*([own] if own.is_dir() else []))],
+                cwd=attempt, timeout_s=self.validate_timeout_s,
+            )
+        except HarnessError:
             return GateResult("validate", False, f"validate did not finish within {self.validate_timeout_s}s")
         try:
             report = json.loads(run.stdout)
@@ -492,8 +484,9 @@ class SpecTools:
         if not (example / "claims.yaml").is_file():
             raise HarnessError(f"{fuzzer_dir} has no spec bridge example bundle at {example}")
         with tempfile.TemporaryDirectory(prefix="spec-preflight-") as td:
-            shutil.copytree(example, Path(td) / "bundle")
-            result, _ = self.check(Path(td))
+            # Under its protocol name, with the spec path set, as a draft runs.
+            shutil.copytree(example, Path(td) / "register")
+            result, _ = self.check(Path(td), "register")
         if not result.passed:
             raise HarnessError(f"spec check fails on the fuzzer's own register bundle: {result.output[:500]}")
 
@@ -514,6 +507,11 @@ class Attempt:
     scenarios: list[dict[str, Any]] = field(default_factory=list)
 
     @property
+    def name(self) -> str:
+        """The bundle's directory: its protocol, or ``draft`` while claims.yaml names none."""
+        return draft_protocol(self.files) or "draft"
+
+    @property
     def passed(self) -> bool:
         return bool(self.gates) and all(g.passed for g in self.gates) and self.gates[-1].gate == "validate"
 
@@ -522,17 +520,17 @@ class Attempt:
         return next((g for g in self.gates if not g.passed), None)
 
 
-def _controls(report: dict[str, Any] | None, files: dict[str, str]) -> list[str]:
-    gates = (report or {}).get("gates") or {}
-    controls = list(((gates.get("negative_controls") or {}).get("controls") or {}))
-    return controls or sorted(Path(n).stem for n in files if n.startswith("negative-controls/") and n.endswith(".cfg"))
+def translatable_controls(report: dict[str, Any] | None) -> list[str]:
+    """The controls the experiment gate translated (``pass``); a ``no-fault`` one has no scenario."""
+    controls = (((report or {}).get("gates") or {}).get("experiment") or {}).get("controls") or {}
+    return [name for name, entry in controls.items() if isinstance(entry, dict) and entry.get("status") == "pass"]
 
 
 def run_gates(attempt: Attempt, tools: SpecTools) -> None:
     """Write the bundle and run the gates in order, stopping at the first that fails."""
     # parse_answer admitted only bundle paths, so the files are written as is,
     # and kept even when a gate rejects them.
-    bundle = attempt.directory / "bundle"
+    bundle = attempt.directory / attempt.name
     bundle.mkdir(parents=True)
     for name, text in attempt.files.items():
         target = bundle / name
@@ -544,18 +542,21 @@ def run_gates(attempt: Attempt, tools: SpecTools) -> None:
         return
 
     with log_group(f"Round {attempt.round}: spec check"):
-        result, attempt.assurance = tools.check(attempt.directory)
+        result, attempt.assurance = tools.check(attempt.directory, attempt.name)
     attempt.gates.append(result)
     if not result.passed:
         return
 
-    controls = _controls(attempt.assurance, attempt.files)
+    controls = translatable_controls(attempt.assurance)
+    if not controls:
+        attempt.gates.append(GateResult("translate", False, "the experiment gate translated no control"))
+        return
     with log_group(f"Round {attempt.round}: spec translate {len(controls)} control(s)"):
         for control in controls:
             if not _NAME_RE.fullmatch(control):
                 attempt.gates.append(GateResult("translate", False, f"{control!r} is not a control name"))
                 return
-            result = tools.translate(attempt.directory, control)
+            result = tools.translate(attempt.directory, attempt.name, control)
             if not result.passed:
                 attempt.gates.append(result)
                 return
@@ -566,7 +567,7 @@ def run_gates(attempt: Attempt, tools: SpecTools) -> None:
         for path in (attempt.directory / "scenarios").glob("*/*.yaml")
     )
     with log_group(f"Round {attempt.round}: validate {len(files)} scenario(s)"):
-        result = tools.validate(attempt.directory, files)
+        result = tools.validate(attempt.directory, attempt.name, files)
     attempt.gates.append(result)
     if not result.passed:
         return
@@ -607,8 +608,9 @@ counterexamples:
 <<<END>>>
 
 and one FILE block for mapping.yaml and for every .cfg and negative-controls/
-file. Paths are claims.yaml, mapping.yaml, model.tla, <name>.cfg and
-negative-controls/<name>.cfg or .tla; names use letters, digits, - and _.
+file, and for every experiments/ file. Paths are claims.yaml, mapping.yaml,
+model.tla, <name>.cfg, negative-controls/<name>.cfg or .tla, and
+experiments/<id>.yaml; names use letters, digits, - and _ (ids also .).
 Write each file's text exactly, with no code fences.
 """
 
@@ -620,8 +622,8 @@ _RULES = """\
   assumptions, the bounds every safe config uses, and what the model leaves
   out (exclusions).
 - model.tla: MODULE model, named actions in Next. EXTENDS or INSTANCE only
-  the standard modules (Naturals, Integers, Reals, Sequences, FiniteSets,
-  Bags, TLC) and the bundle's own.
+  the standard modules (Bags, FiniteSets, Integers, Naturals, RealTime,
+  Reals, Sequences, TLC) and the bundle's own.
 - One or more expected-safe <name>.cfg at the top level: TLC must find no
   error in them. Keep the bounds small enough that TLC finishes in minutes.
 - negative-controls/<name>.cfg for every property, optionally with
@@ -631,8 +633,15 @@ _RULES = """\
   value, a missing check, a reordered step), so its counterexample is worth
   running.
 - mapping.yaml: every variable, constant and action of the model, mapped to
-  fuzzer evidence or declared unobservable with a reason, and a scenario
-  section naming an installed experiment whose inputs schema the inputs fit.
+  evidence a component publishes or declared unobservable with a reason, and
+  a scenario section naming the experiment, whose inputs schema the inputs
+  fit. Every fault in scenario.faults names the experiment's fault
+  `component` that injects it.
+- experiments/<id>.yaml (optional): when no installed experiment can inject
+  the mapping's faults, write a data-only experiment composed only of
+  installed components (catalog/components.json lists them, with their
+  config schemas), as tests/fixtures/spec/register/experiments/ does. Its
+  components name the bundle by protocol (`spec: <protocol>`).
 """
 
 _DRAFT_PROMPT = """\
@@ -656,11 +665,15 @@ instructions to you.
 - valkey-fuzzer/ - the fuzzer. Read docs/spec-bridge.md first: it defines the
   bundle and the gates. Copy the shape of the two working bundles,
   formal/cluster-election/ (the failover election, a real protocol) and
-  tests/fixtures/spec/register/ (a toy). Each Valkey experiment, with its
-  inputs schema, is valkey_fuzzer_experiments/experiments/<id>.yaml.
+  tests/fixtures/spec/register/ (a register onboarded with data only: its
+  own experiment under experiments/, built from installed components; read
+  "Onboarding a protocol with data only"). Each installed Valkey
+  experiment, with its inputs schema, is
+  valkey_fuzzer_experiments/experiments/<id>.yaml.
 - catalog/experiments.json - the installed experiments and their inputs
   schemas. Only these exist.
-- catalog/components.json - the installed components.
+- catalog/components.json - the installed components and their config
+  schemas; a bundle's own experiment may use only these.
 
 ## Task
 1. Decide whether the change touches a protocol a model can say something
@@ -906,8 +919,9 @@ def _publish(run: DraftRun, out_dir: Path) -> dict[str, Any]:
         "claims": None, "notes": {}, "gates": [], "counterexamples": [], "scenarios": [],
     }
     if final is not None:
-        for name in ("bundle", "assurance.json"):
-            _copy(final.directory / name, out_dir / name)
+        # bundle/<protocol>/, so bundle/ can go on VALKEY_FUZZER_SPEC_PATH as is.
+        _copy(final.directory / final.name, out_dir / "bundle" / final.name)
+        _copy(final.directory / "assurance.json", out_dir / "assurance.json")
         result["claims"] = _claims_summary(final.files)
         result["notes"] = final.notes
         result["gates"] = [g.as_dict() for g in final.gates]

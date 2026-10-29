@@ -54,6 +54,10 @@ Otherwise it answers with the bundle's files as text:
 - one or more expected-safe `.cfg` files;
 - `mapping.yaml`;
 - `negative-controls/`, at least one per property;
+- optionally `experiments/<id>.yaml`: when no installed experiment can inject
+  the faults the mapping names, a data-only experiment composed only of
+  installed components, as the fuzzer's register bundle has (see the spec
+  bridge's "Onboarding a protocol with data only");
 - a note on why the change is worth a model and what each counterexample
   means for Valkey.
 
@@ -64,11 +68,17 @@ stops the attempt.
 
 | Gate | Passes when |
 |---|---|
-| `answer` | The reply holds a bundle in the expected format, with only bundle paths (`claims.yaml`, `mapping.yaml`, `model.tla`, `<name>.cfg`, `negative-controls/<name>.cfg` or `.tla`). |
-| `draft` | The bundle has the required files, `claims.yaml` says `status: draft` with no `approved_by`, and the models use only the standard TLA+ modules and their own. |
-| `spec_check` | `valkey-fuzzer spec check --output assurance.json` passes every gate of its report: the bundle parses, SANY accepts every module, every claim is checked by a safe config, TLC finds no error in any safe config, every negative control violates its property, and the mapping is complete. |
-| `translate` | `valkey-fuzzer spec translate --control` writes scenarios for every negative control. |
-| `validate` | `valkey-fuzzer validate` accepts every translated scenario, and none sets the build, the provider or the data directories. |
+| `answer` | The reply holds a bundle in the expected format, with only bundle paths (`claims.yaml`, `mapping.yaml`, `model.tla`, `<name>.cfg`, `negative-controls/<name>.cfg` or `.tla`, `experiments/<id>.yaml`). |
+| `draft` | The bundle has the required files, and `claims.yaml` says `status: draft` with no `approved_by`. |
+| `spec_check` | `valkey-fuzzer spec check --timeout 1800 --output assurance.json` passes every gate of its report: the bundle parses, its modules use only the standard TLA+ modules, SANY accepts them, every claim is checked by a safe config, TLC finds no error in any safe config, every negative control violates its property, each control's counterexample compiles into scenarios whose mapped faults are fault components of the experiment, and the mapping is complete. |
+| `translate` | `valkey-fuzzer spec translate --control` writes scenarios for every control the `experiment` gate translated. A `no-fault` control, whose counterexample has no mapped fault, has none. |
+| `validate` | `valkey-fuzzer validate`, with `--experiment-dir` for the bundle's own `experiments/`, accepts every translated scenario, and none sets the build, the provider or the data directories. |
+
+The agent checks only what the fuzzer can't know, that the claims are a
+draft; everything else is the fuzzer's own gates. Each draft is written to
+`<attempt>/<protocol>/`. When it has `experiments/`, the attempt directory
+goes on `VALKEY_FUZZER_SPEC_PATH`, so the experiment's components find the
+bundle by its protocol name.
 
 The negative-control gate is what keeps a claim honest. A property that cannot
 fail, such as `Inv == TRUE`, passes every safe config; its negative control
@@ -78,8 +88,9 @@ A draft that fails a gate goes back to Claude, in a new session, with the
 gate's output and the failed bundle. It gets at most two of these repair
 rounds. A draft that still fails is kept as rejected, with the reason; its
 scenarios are never written, so it can never be dispatched. A model too big
-for TLC to finish in 30 minutes fails `spec_check` and is sent back to shrink
-its bounds. A broken fuzzer, Java or jar fails the job instead, since that is
+for TLC to finish in 30 minutes is stopped by the fuzzer's `--timeout`, fails
+`spec_check` (the report marks the run `timed_out`), and is sent back to
+shrink its bounds. A broken fuzzer, Java or jar fails the job instead, since that is
 not the draft's fault.
 
 ## What you get
@@ -90,18 +101,21 @@ The run uploads `fuzzer-spec-draft-<run id>`:
 |---|---|
 | `summary.md` | For maintainers: the verdict, the claims, assumptions, exclusions and bounds, what each counterexample means, and every round's gate results. It is also the job summary. |
 | `spec-draft.json` | The PR and its commits, the verdict (`passed`, `rejected` or `no_protocol_change`) and reason, every round, the final gates, the counterexamples, and each scenario with its file and SHA-256. |
-| `bundle/` | The final draft, passed or rejected. |
+| `bundle/<protocol>/` | The final draft, passed or rejected. Put `bundle/` on `VALKEY_FUZZER_SPEC_PATH` to run the fuzzer's spec tools on it by name. |
 | `assurance.json` | The fuzzer's `spec check` report on it. |
 | `scenarios/<control>/` | Only for a draft that passed: the scenarios `spec translate` wrote, and its `translation.json`. |
 | `validate.json` | Only for a draft that passed: the fuzzer's `validate` report. |
 
-To run a scenario yourself, build Valkey at the PR's head and run:
+To run a scenario yourself, build Valkey at the PR's head and run (the
+`--experiment-dir` only when the bundle brings its own experiment):
 
 ```bash
-valkey-fuzzer run scenarios/<control>/spec-<protocol>-<control>.yaml --valkey-binary /path/to/valkey-server
+export VALKEY_FUZZER_SPEC_PATH="$PWD/bundle"
+valkey-fuzzer run scenarios/<control>/spec-<protocol>-<control>.yaml \
+  --experiment-dir bundle/<protocol>/experiments --valkey-binary /path/to/valkey-server
 ```
 
-To adopt a draft, copy `bundle/` to `formal/<protocol>/` in valkey-fuzzer,
+To adopt a draft, copy `bundle/<protocol>/` to `formal/<protocol>/` in valkey-fuzzer,
 review it there, and approve it as described in the spec bridge's
 [Writing a bundle](https://github.com/valkey-io/valkey-fuzzer/blob/main/docs/spec-bridge.md#writing-a-bundle).
 
@@ -150,9 +164,8 @@ python -m scripts.fuzzer.spec_draft draft --range 9.0.0..unstable \
 python -m scripts.fuzzer.spec_draft dispatch --out fuzzer-spec-draft --dry-run
 ```
 
-`--experiment-dir DIR` also loads the data-only experiments in `DIR` when
-translating and validating, for a bundle whose scenarios run an experiment
-that isn't installed.
+`--experiment-dir DIR` also loads the data-only experiments in `DIR` in
+every gate. A bundle's own `experiments/` needs no flag.
 
 The end-to-end tests run the real fuzzer and TLC, with a stub in place of
 Claude that answers with the fuzzer's register bundle and with a vacuous

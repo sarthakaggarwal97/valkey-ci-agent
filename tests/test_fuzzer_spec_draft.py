@@ -25,8 +25,8 @@ from scripts.fuzzer.spec_draft import (
     batch_inputs,
     check_draft,
     draft_spec,
-    module_references,
     parse_answer,
+    translatable_controls,
 )
 
 HEAD = "a" * 40
@@ -107,7 +107,7 @@ REGISTER = {
           inputs:
             sync: {constant: SyncBeforeAck, map: {"TRUE": true, "FALSE": false}}
           faults:
-            - {action: Crash, after: acked, occurrence_input: crash_after_ack}
+            - {action: Crash, after: acked, component: crash, occurrence_input: crash_after_ack}
           variants:
             occurrence_shift: [1]
             inputs:
@@ -174,6 +174,23 @@ REGISTER = {
         INVARIANT AckedDurable
         CHECK_DEADLOCK FALSE
     """),
+}
+# The data-only experiment a bundle may bring, as the fuzzer's register does.
+OWN_EXPERIMENT = textwrap.dedent("""\
+    id: toy.own
+    deployment:
+      modes: [standalone]
+    inputs:
+      type: object
+      properties:
+        appendonly: {type: string, enum: ["yes", "no"], default: "yes"}
+    components:
+      - {use: valkey.fault.process-signal, id: crash, config: {when_event: writes.seeded, signal: SIGKILL}}
+""")
+ONBOARDED = {
+    **REGISTER,
+    "mapping.yaml": REGISTER["mapping.yaml"].replace("experiment: toy.register", "experiment: toy.own"),
+    "experiments/toy.own.yaml": OWN_EXPERIMENT,
 }
 NOTES = {"rationale": "The change reorders the save and the acknowledgement.",
          "counterexamples": {"ack-before-save": "A write acknowledged before its save is lost by a crash."}}
@@ -247,9 +264,13 @@ def fake_fuzzer(tmp_path) -> str:
     return str(script)
 
 
-def _calls(fake_fuzzer: str) -> list[list[str]]:
+def _log(fake_fuzzer: str) -> list[dict]:
     log = Path(fake_fuzzer).with_name("calls.log")
     return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+def _calls(fake_fuzzer: str) -> list[list[str]]:
+    return [entry["argv"] for entry in _log(fake_fuzzer)]
 
 
 @pytest.fixture
@@ -266,7 +287,7 @@ def fuzzer_dir(tmp_path) -> Path:
     (d / "docs" / "spec-bridge.md").write_text("# Spec bridge\n")
     (d / "docs" / "scenarios-and-experiments.md").write_text("# Scenarios\n")
     example = d / "tests" / "fixtures" / "spec" / "register"
-    for name, text in REGISTER.items():
+    for name, text in ONBOARDED.items():
         (example / name).parent.mkdir(parents=True, exist_ok=True)
         (example / name).write_text(text)
     return d
@@ -357,21 +378,20 @@ def test_check_draft_accepts_the_register_bundle():
     (lambda f: {**f, "claims.yaml": f["claims.yaml"] + "approved_by: someone\n"}, "approved_by"),
     (lambda f: {**f, "claims.yaml": f["claims.yaml"].replace("protocol: register", "protocol: ../x")},
      "protocol must be"),
-    (lambda f: {**f, "model.tla": f["model.tla"].replace("EXTENDS Naturals", "EXTENDS Naturals, IOUtils")},
-     "IOUtils"),
-    (lambda f: {**f, "negative-controls/ack-before-save.tla":
-                "---- MODULE ack-before-save ----\nINSTANCE Json\n====\n"}, "Json"),
 ])
 def test_check_draft_rejects(change, error):
     assert error in (check_draft(change(REGISTER)) or "")
 
 
-def test_module_references_ignore_comments_and_allow_own_modules():
-    text = "(* EXTENDS IOUtils *)\n\\* INSTANCE Json\nEXTENDS Naturals,\n  Sequences\nM == INSTANCE model\n"
-    assert module_references(text) == {"Naturals", "Sequences", "model"}
-    files = {**REGISTER, "negative-controls/ack-before-save.tla":
-             "---- MODULE ack-before-save ----\nEXTENDS model, TLC\n====\n"}
+def test_check_draft_leaves_the_modules_to_the_fuzzer():
+    files = {**REGISTER, "model.tla": REGISTER["model.tla"].replace("EXTENDS Naturals", "EXTENDS Naturals, IOUtils")}
     assert check_draft(files) is None
+
+
+def test_parse_answer_accepts_a_bundles_own_experiment():
+    assert parse_answer(_bundle_text(ONBOARDED)).files["experiments/toy.own.yaml"] == OWN_EXPERIMENT
+    with pytest.raises(AnswerError, match="not a bundle path"):
+        parse_answer("<<<FILE experiments/x/y.yaml>>>\nid: y\n<<<END>>>\n")
 
 
 # --- Assurance reports ------------------------------------------------------------
@@ -417,7 +437,7 @@ def test_a_good_draft_passes_every_gate(tmp_path, fuzzer_dir, fake_fuzzer, jar):
     assert len(runner.prompts) == 1
     assert [g["gate"] for g in result["gates"]] == list(spec_mod.GATES)
     assert all(g["passed"] for g in result["gates"])
-    assert (out / "bundle" / "model.tla").read_text() == REGISTER["model.tla"]
+    assert (out / "bundle" / "register" / "model.tla").read_text() == REGISTER["model.tla"]
     assert (out / "assurance.json").is_file() and (out / "validate.json").is_file()
     [scenario] = result["scenarios"]
     assert scenario["file"] == "scenarios/ack-before-save/spec-register-ack-before-save.yaml"
@@ -429,9 +449,14 @@ def test_a_good_draft_passes_every_gate(tmp_path, fuzzer_dir, fake_fuzzer, jar):
     assert "AckedDurable" in summary and "Partial writes." in summary
     assert "| SyncBeforeAck = true |" in summary
     # The gates ran in the attempt directory with relative paths and in order.
-    commands = [c[:2] for c in _calls(fake_fuzzer)]
-    assert commands == [["spec", "check"], ["spec", "translate"], ["validate", "scenarios/ack-before-save/"
-                                                                    "spec-register-ack-before-save.yaml"]]
+    calls = _log(fake_fuzzer)
+    assert [c["argv"][:3] for c in calls] == [
+        ["spec", "check", "register"], ["spec", "translate", "register"],
+        ["validate", "scenarios/ack-before-save/spec-register-ack-before-save.yaml", "--format"]]
+    # The fuzzer's own --timeout bounds TLC; no bundle experiments, so no spec path.
+    assert calls[0]["argv"][calls[0]["argv"].index("--timeout") + 1] == "1800"
+    assert "--timeout" in calls[1]["argv"]
+    assert all(c["spec_path"] is None for c in calls) and "--experiment-dir" not in calls[2]["argv"]
 
 
 def test_a_vacuous_claim_is_rejected_by_the_negative_control_gate(tmp_path, fuzzer_dir, fake_fuzzer, jar):
@@ -447,7 +472,7 @@ def test_a_vacuous_claim_is_rejected_by_the_negative_control_gate(tmp_path, fuzz
     assert all("vacuous" in p and "failed the spec_check gate" in p for p in runner.prompts[1:])
     assert runner.drafts[1]["model.tla"] == _vacuous(REGISTER)["model.tla"]
     # Kept as rejected: the bundle and its report, but no scenario.
-    assert (out / "bundle" / "model.tla").is_file() and (out / "assurance.json").is_file()
+    assert (out / "bundle" / "register" / "model.tla").is_file() and (out / "assurance.json").is_file()
     assert not (out / "scenarios").exists() and result["scenarios"] == []
     assert batch_inputs(out) is None
     assert "Rejected" in (out / "summary.md").read_text()
@@ -459,10 +484,10 @@ def test_a_syntax_error_is_repaired_once_and_then_passes(tmp_path, fuzzer_dir, f
     assert result["verdict"] == "passed"
     assert [r["failed_gate"] for r in result["rounds"]] == ["spec_check", None]
     assert [r["session"] for r in result["rounds"]] == ["draft", "repair"]
-    assert "parsed: SANY rejected model.tla" in runner.prompts[1]
+    assert "parsed: model.tla: SANY rejected it" in runner.prompts[1]
     assert "***Parse Error***" in runner.prompts[1]
     assert "(acked <= mem" in runner.drafts[1]["model.tla"]
-    assert (out / "bundle" / "model.tla").read_text() == REGISTER["model.tla"]
+    assert (out / "bundle" / "register" / "model.tla").read_text() == REGISTER["model.tla"]
 
 
 def test_a_draft_that_never_passes_is_rejected_and_never_dispatched(
@@ -538,7 +563,60 @@ def test_a_model_too_big_for_tlc_times_out_as_a_gate_failure(tmp_path, fuzzer_di
     runner = StubRunner(_bundle(slow), _bundle(REGISTER))
     _, result, _ = _draft(runner, tmp_path, fuzzer_dir, fake_fuzzer, jar, check_timeout_s=1)
     assert result["rounds"][0]["failed_gate"] == "spec_check"
-    assert "did not finish within 1s" in result["rounds"][0]["output"]
+    output = result["rounds"][0]["output"]
+    # Read from the report: its error, and the run marked timed_out.
+    assert "spec check stopped: the 1s time limit ran out" in output
+    assert "make the bounds smaller" in output
+    assert "model_checked: model.cfg: TLC was stopped after 1s" in output
+    assert result["verdict"] == "passed"
+    argv = _calls(fake_fuzzer)[0]
+    assert argv[argv.index("--timeout") + 1] == "1"
+
+
+def test_a_bundles_own_experiment_is_found_by_protocol_and_validated(tmp_path, fuzzer_dir, fake_fuzzer, jar):
+    run, result, out = _draft(StubRunner(_bundle(ONBOARDED)), tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    assert result["verdict"] == "passed", result["rounds"]
+    attempt = tmp_path / "work" / "attempts" / "round-0"
+    check, translate, validate = _log(fake_fuzzer)
+    assert check["spec_path"] == translate["spec_path"] == str(attempt.resolve())
+    argv = validate["argv"]
+    assert argv[argv.index("--experiment-dir") + 1] == str((attempt / "register" / "experiments").resolve())
+    assert (out / "bundle" / "register" / "experiments" / "toy.own.yaml").read_text() == OWN_EXPERIMENT
+
+
+def test_a_no_fault_control_is_not_translated(tmp_path, fuzzer_dir, fake_fuzzer, jar):
+    files = {
+        **REGISTER,
+        "claims.yaml": REGISTER["claims.yaml"].replace("targets:", textwrap.dedent("""\
+              - name: AckAheadOfDisk
+                kind: invariant
+                statement: A write is on disk before it is acknowledged.
+                holds_when: {SyncBeforeAck: true}
+                negative_controls: [nofault-ack]
+                conform: true
+            targets:""")),
+        "negative-controls/nofault-ack.cfg": REGISTER["negative-controls/ack-before-save.cfg"],
+    }
+    _, result, _ = _draft(StubRunner(_bundle(files)), tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    assert result["verdict"] == "passed", result["rounds"]
+    translated = [c[c.index("--control") + 1] for c in _calls(fake_fuzzer) if c[:2] == ["spec", "translate"]]
+    assert translated == ["ack-before-save"]
+    assert [s["control"] for s in result["scenarios"]] == ["ack-before-save"]
+
+
+def test_translatable_controls_are_those_the_experiment_gate_passed():
+    report = {"gates": {"experiment": {"controls": {
+        "a": {"status": "pass"}, "b": {"status": "no-fault"}, "c": {"status": "fail"}}}}}
+    assert translatable_controls(report) == ["a"]
+    assert translatable_controls(None) == []
+
+
+def test_the_fuzzers_module_check_is_what_rejects_a_module(tmp_path, fuzzer_dir, fake_fuzzer, jar):
+    io = {**REGISTER, "model.tla": REGISTER["model.tla"].replace("EXTENDS Naturals", "EXTENDS Naturals, IOUtils")}
+    runner = StubRunner(_bundle(io), _bundle(REGISTER))
+    _, result, _ = _draft(runner, tmp_path, fuzzer_dir, fake_fuzzer, jar)
+    assert result["rounds"][0]["failed_gate"] == "spec_check"
+    assert "parsed: model.tla: uses modules IOUtils" in runner.prompts[1]
     assert result["verdict"] == "passed"
 
 
@@ -550,10 +628,13 @@ def test_the_fuzzer_gets_no_credentials(tmp_path, fuzzer_dir, jar, monkeypatch):
     script.chmod(script.stat().st_mode | stat.S_IEXEC)
     for name in ("TARGET_TOKEN", "GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
         monkeypatch.setenv(name, "secret")
-    (tmp_path / "attempt").mkdir()
-    SpecTools(str(script), str(jar)).check(tmp_path / "attempt")
+    monkeypatch.setenv("VALKEY_FUZZER_SPEC_PATH", "/somewhere/else")
+    (tmp_path / "attempt" / "register" / "experiments").mkdir(parents=True)
+    SpecTools(str(script), str(jar)).check(tmp_path / "attempt", "register")
     env = json.loads(seen.read_text())
     assert not {"TARGET_TOKEN", "GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"} & set(env)
+    # The spec path is the attempt's, never the caller's.
+    assert env["VALKEY_FUZZER_SPEC_PATH"] == str((tmp_path / "attempt").resolve())
 
 
 # --- Dispatch ---------------------------------------------------------------------
@@ -611,8 +692,11 @@ def test_draft_dry_run_makes_no_remote_calls(monkeypatch, fake_fuzzer, fuzzer_di
     assert rc == 0
     assert not (tmp_path / "out").exists()
     # The dry run still checked the tools locally, on the fuzzer's own register bundle.
-    assert [c[:2] for c in _calls(fake_fuzzer)] == [["list", "experiments"], ["list", "components"],
-                                                    ["spec", "check"]]
+    calls = _log(fake_fuzzer)
+    assert [c["argv"][:3] for c in calls] == [["list", "experiments", "--format"], ["list", "components", "--format"],
+                                             ["spec", "check", "register"]]
+    # Copied under its protocol name with the spec path set, so its experiment gate passes.
+    assert calls[2]["spec_path"] is not None
 
 
 def test_draft_dry_run_fails_when_the_tools_do_not_work(monkeypatch, fake_fuzzer, fuzzer_dir, tmp_path):
@@ -667,8 +751,8 @@ def _real_bundle() -> dict[str, str]:
 
 def _real_draft(runner, tmp_path):
     fuzzer_dir = Path(_E2E["VALKEY_FUZZER_DIR"])
-    tools = SpecTools(_E2E["VALKEY_FUZZER_BIN"], _E2E["TLA2TOOLS_JAR"],
-                      experiment_dirs=(str(fuzzer_dir / "tests" / "fixtures" / "spec" / "experiments"),))
+    # The register brings its own experiment; nothing else is loaded.
+    tools = SpecTools(_E2E["VALKEY_FUZZER_BIN"], _E2E["TLA2TOOLS_JAR"])
     tools.preflight(fuzzer_dir)
     out = tmp_path / "out"
     work = tmp_path / "work"
@@ -687,6 +771,8 @@ def test_e2e_the_fuzzers_register_bundle_passes(tmp_path):
     assert assurance["status"] == "pass"
     assert assurance["gates"]["negative_controls"]["controls"]["ack-before-save"]["violated"] == "AckedDurable"
     assert assurance["gates"]["approved_claim"]["claims_status"] == "draft"
+    assert assurance["gates"]["experiment"]["controls"]["ack-before-save"]["faults"] == {"Crash": "crash"}
+    assert (out / "bundle" / "register" / "experiments" / "toy.register.yaml").is_file()
     ids = sorted(s["scenario_id"] for s in result["scenarios"])
     assert "spec-register-ack-before-save" in ids and len(ids) >= 2
     assert json.loads((out / "validate.json").read_text())["ok"] is True
