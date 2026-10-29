@@ -97,6 +97,35 @@ def test_a_job_whose_log_cannot_be_read_is_reported_as_unread_not_filed(log):
     assert (tests, jobs, unread) == ([], [], ["test-freebsd"])
 
 
+@pytest.mark.parametrize(
+    ("log", "expected_unread", "expected_expired"),
+    [
+        (RuntimeError("502 Bad Gateway"), ["test-freebsd"], []),
+        ("", [], ["test-freebsd"]),
+    ],
+)
+def test_an_unavailable_log_distinguishes_retryable_downloads_from_expiration(
+    log, expected_unread, expected_expired,
+):
+    client = MagicMock()
+    client.download_job_log.side_effect = log if isinstance(log, Exception) else (lambda *_a: log)
+    unread: list[str] = []
+    expired: list[str] = []
+
+    tests, jobs = find_unrecorded_failures(
+        client,
+        "valkey-io/valkey",
+        {},
+        jobs=[_job(1, "test-freebsd", step="make")],
+        unread=unread,
+        expired=expired,
+    )
+
+    assert (tests, jobs) == ([], [])
+    assert unread == expected_unread
+    assert expired == expected_expired
+
+
 def test_a_failure_that_printed_no_cause_is_reported_not_filed():
     unexplained = []
     client = MagicMock()

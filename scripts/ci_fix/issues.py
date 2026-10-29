@@ -24,7 +24,14 @@ from typing import Any, Optional
 from github.GithubException import GithubException
 
 from scripts.backport.registry import load_registry
-from scripts.ci_fix.comment import candidate_context, candidate_patch, check_items, sentence
+from scripts.ci_fix.comment import (
+    candidate_context,
+    candidate_patch,
+    check_items,
+    inline_code,
+    prose,
+    sentence,
+)
 from scripts.ci_fix.github_runs import (
     FailedJob,
     failed_jobs,
@@ -68,6 +75,11 @@ from scripts.test_failure_detector.parse_failures import parse_and_deduplicate
 logger = logging.getLogger(__name__)
 
 BRANCH_PREFIX = "agent/ci-fix/"
+
+
+class SourceLogsExpired(Exception):
+    """The run no longer has enough durable evidence to bind an exact failed job."""
+
 
 _DETECTOR_RE = re.compile(
     rf"<!-- {re.escape(MARKER_NAMESPACE)}:(?P<fingerprint>[0-9a-f]+) -->"
@@ -219,8 +231,15 @@ def _failing_jobs(
     recorded = recorded if isinstance(recorded, dict) else {}
 
     unread: list[str] = []
+    expired: list[str] = []
     from_logs, job_failures = find_unrecorded_failures(
-        artifact_client, repo_full_name, recorded, jobs=raw_jobs, ignored_jobs=ignored_jobs, unread=unread,
+        artifact_client,
+        repo_full_name,
+        recorded,
+        jobs=raw_jobs,
+        ignored_jobs=ignored_jobs,
+        unread=unread,
+        expired=expired,
     )
     tests = merge_failures(parse_and_deduplicate(recorded, {}), from_logs)
     if failure.job_name:
@@ -247,6 +266,11 @@ def _failing_jobs(
         # The failure may be in a log that could not be read: that says
         # nothing about the issue, so the attempt failed rather than refused.
         raise RuntimeError(f"the log of {', '.join(sorted(unread))} could not be read")
+    if not candidates and expired:
+        raise SourceLogsExpired(
+            f"the source job logs for run {run.id} have expired, so the recorded "
+            "failure can no longer be bound safely to an exact failed job"
+        )
     if not candidates:
         return ()
     first = select_job(candidates)
@@ -384,7 +408,7 @@ def _terminal_comment(
 ) -> None:
     source = f"From {_run_link(repo_full_name, failure)}"
     if job_name:
-        source += f", job `{job_name}`"
+        source += f", job {inline_code(prose(job_name, 300))}"
     if action == ResultKind.SUGGESTED.value:
         _suggestion_comment(issue, failure, source=source, candidate=candidate)
         return
@@ -610,6 +634,7 @@ def _plan_occurrence(
         base_repo_full_name=repo_full_name,
         branch=branch_name,
         expected_sha=base_sha,
+        execution_trusted=True,
     )
     others = _other_open_issues(repo, bot_login, exclude=failure.number)
     recovery_task = FixTask(
@@ -631,8 +656,9 @@ def _plan_occurrence(
         other_issues=others,
     )
 
-    # Recover a branch left by an earlier attempt before touching artifacts or
-    # job logs, which may have expired by the time a retry runs.
+    # Recognize an already-open exact bot PR before touching artifacts or job
+    # logs, which may have expired by the time a retry runs. The reconciler
+    # never opens a PR from an unproven orphan branch.
     reconciled = reconcile_draft_pr(gh, recovery_task)
     if reconciled is not None:
         _terminal_comment(
@@ -662,7 +688,10 @@ def _plan_occurrence(
             "reason": f"issue #{issue.number} already has an open linked pull request",
         }
 
-    jobs = _failing_jobs(gh, artifact_client, repo_full_name, run, failure, ignored_jobs)
+    try:
+        jobs = _failing_jobs(gh, artifact_client, repo_full_name, run, failure, ignored_jobs)
+    except SourceLogsExpired as exc:
+        return _refuse(issue, failure, repo_full_name, str(exc))
     if not jobs:
         return _refuse(issue, failure, repo_full_name, (
             f"no failed job in run {failure.run_id} matches the failure recorded by this issue"

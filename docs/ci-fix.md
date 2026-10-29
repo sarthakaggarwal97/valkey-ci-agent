@@ -1,12 +1,14 @@
 # Fixing CI failures
 
 The CI fix bot takes one failed CI job, works out why it failed, and proposes
-a fix. It treats its own fixes with suspicion. Before anyone sees a fix, the
-bot reruns the failing test with the fix applied and asks a second,
-independent Claude session to review it. Even then the fix is only a
-proposal: it arrives as a commit on a pull request, where CI runs as usual, or
-as a patch in a comment, and a maintainer decides what happens next. The bot
-never merges.
+a fix. It treats its own fixes with suspicion. For a fix it may publish, code
+first reproduces the failure, reruns that reproduction with the fix applied,
+and asks a second, independent Claude session to review it. Contributor-PR
+suggestions are not executed by the bot; they are reviewed. Even then the fix
+is only a proposal. A model-authored patch arrives in a comment for a
+maintainer to apply. Only an exact fix already merged on the trusted default
+branch may be ported as a commit on a bot-owned pull request. The bot never
+merges.
 
 ## Asking for a fix
 
@@ -26,18 +28,19 @@ words:
 
 Without a link, the bot picks the failure on the PR's latest commit that it is
 most likely to be able to fix. It prefers ordinary test jobs, then lint and
-build jobs, whose fix often belongs in the CI configuration the bot won't
-touch, and leaves sanitizer and valgrind jobs for last. `@valkeyrie-bot fix`
-works as well.
+build jobs for a contributor-only suggestion. For a branch it may update, it
+tries sanitizer and valgrind test jobs before lint or build-only jobs, because
+only a focused test failure can pass the code-owned reproduction gate. A
+linked job is still honored exactly. `@valkeyrie-bot fix` works as well.
 
 The bot looks for new requests every hour. When it picks yours up, it reacts
 to your comment, and it replies on the PR when it is done.
 
-What you get back depends on whose PR it is. On a contributor's PR, or a PR
-from a fork, the bot never pushes anything. It posts the fix as a patch in a
-comment, and the author can apply it or not. On the bot's own PRs, meaning
-backport PRs and the PRs it opened to fix something, it pushes the fix as a
-new commit.
+Model-authored patches are never pushed, including on the bot's own PRs:
+normal target-repository CI would execute the patch before a person reviewed
+it. The bot posts those fixes as patches in comments. On a bot-owned PR it may
+instead push an exact commit that code proved is already merged on the trusted
+default branch.
 
 ## Other ways a fix starts
 
@@ -60,17 +63,13 @@ the job and the commit that failed. For a PR, the failure has to be on the
 PR's latest commit, because a fix for an older commit would be fixing code
 that is no longer there.
 
-**It recreates the job where it can.** The fix is prepared inside a copy of
-the job that failed: the same runner or container, the same setup steps, the
-same build flags and the same test command. Many failures only happen on one
-platform or with one build configuration, so this matters. When the job can't
-be recreated faithfully, for example because it runs in a VM or one of its
-steps depends on a secret, the bot works on a plain Ubuntu runner with a
-default build instead. If that fallback completes and passes once, in a loop,
-and under load without reproducing the failure, the bot reports that evidence
-and stops without asking Claude to edit for an environment it could not
-recreate. A timed-out, failed or skipped fallback attempt is incomplete, so
-Claude can still diagnose it from the log.
+**It recreates the job where it can.** Supported Ubuntu and macOS host jobs
+run on the same runner with their own build flags and test command. Trusted
+bot code installs a fixed dependency set, and the target workflow's remaining
+setup runs without credentials as a disposable account. Many failures only
+happen on one platform or with one build configuration, so this matters.
+Containers and setup outside that code-owned profile run on a plain Ubuntu
+runner with a default build instead.
 [How the failed job is recreated](#how-the-failed-job-is-recreated) has the
 details.
 
@@ -85,10 +84,21 @@ problem may already be fixed.
 **It tries to reproduce the failure.** For Tcl tests and C unit tests, the
 bot builds the code the way the job did and runs only the failing test. It
 runs it once, then in a loop of 20, then in the same loop with every CPU core
-kept busy, because a lot of flaky tests only fail under load. A run only
-counts as a reproduction if that test actually fails, or valgrind or a
-sanitizer reports an error. A broken build or a crash in the test harness
-doesn't count.
+kept busy, because a lot of flaky tests only fail under load. Code admits an
+executable fix only when that focused command shows the named test failing.
+It deliberately does not infer reproduction from a whole job, a generic
+nonzero exit, or text that merely resembles the original log.
+
+Before any executable fix, code must establish that baseline itself. If no
+focused command can be planned, the command cannot run, every probe passes,
+or the probes end without observing the named failure, the bot records the
+evidence and stops before launching the edit agent. A broken build, a missing
+tool, or a crash in the test harness does not count. The baseline command must
+also leave the tracked and non-ignored checkout state exactly as it found it;
+if it changes that state, the bot restores the original state and stops before
+any edit. The job's setup must start from that same clean tracked state, so a
+setup-generated source change can never be mistaken for part of the agent's
+patch. Ignored build output is deliberately allowed.
 
 **Claude diagnoses and edits.** Claude gets the job's log, whatever the
 history search found, the result of the reproduction, and Valkey's testing
@@ -111,32 +121,36 @@ is published. The loop runs at most three rounds and has an hour in total,
 of which reproducing the failure may take up to twenty minutes.
 
 In each round, a port is first cherry-picked into the code. If it conflicts,
-Claude can adapt it into a patch instead. Then the failing test is run again
-with the fix applied, in a loop, and under load if that is how it failed
-before: 10 times if it failed on every plain run, 40 times if it only failed
-sometimes or Claude judged it flaky, and 4 times under valgrind. If the bot
-never managed to reproduce the failure, Claude can supply its own test command
-instead, and that command has to fail without the fix and pass with it.
+Claude can adapt it into a patch instead. Then the same code-owned baseline
+is run again with the fix applied. Focused tests run in a loop, and under
+load if that is how they failed before: 10 times if the test failed on every
+plain run, 40 times if it only failed sometimes or Claude judged it flaky,
+and 4 times under valgrind.
 
 Finally a second Claude session, which can read the code but not change it,
 reviews the fix with the same conventions and test results in front of it,
-and has to approve. If the tests fail or the reviewer objects, the output or
-the reviewer's reasoning goes back to Claude, which revises its fix for the
-next round. If the build or Claude's test command changes any tracked file
-while the fix is being tested, the fix that was tested is no longer the fix
-in the tree, so that also goes back for another round.
+and has to approve. The reviewer derives its judgment from the log, patch,
+code and code-owned reproduction rather than trusting the edit agent's
+diagnosis. If the tests fail or the reviewer objects, the output or the
+reviewer's reasoning goes back to Claude, which revises its fix for the next
+round. If the code-owned build or reproduction command changes any
+tracked file while the fix is being tested, the fix that was tested is no
+longer the fix in the tree, so that also goes back for another round.
 
-A fix that doesn't pass within three rounds is declined. In the exact failed
-job, a failure the bot could never reproduce can still be fixed from the log,
-but the bot says clearly that the fix is unproven. When the exact job cannot
-host the fix and its plain-Ubuntu fallback runs successfully but never
-reproduces the failure across all three attempts, the fix agent is not
-launched. If any attempt does not finish, or there is not enough time to run
-it, diagnosis continues normally. If the bot runs out of time or crashes,
-that isn't treated as declining: the CI follow-up and detector issues get one
-more attempt at the same failure.
+A fix that doesn't pass within three rounds is declined. Exact-job and
+plain-Ubuntu fallback paths use the same admission rule: only a failure that
+code reproduced may reach the edit agent. Missing, unrunnable, incomplete and
+passing reproduction attempts end with a clean refusal. If the bot runs out
+of time or crashes after a failure was reproduced, that isn't treated as
+declining: the CI follow-up and detector issues get one more attempt at the
+same failure.
 
-Patches suggested on contributor PRs are reviewed but not run.
+Patches suggested on contributor PRs are reviewed but not run, so they are
+the only targets that do not require an executable reproduction. The bot does
+not accept or publish model-authored commands, summaries, diagnoses or review
+prose as maintainer guidance. Comments contain the patch plus code-owned
+status and verification evidence; automatically pushed commits are exact
+ports of already-merged upstream changes.
 
 ## Fixing detector issues
 
@@ -159,18 +173,17 @@ normally `unstable`, using the original log and commit as evidence. Only the
 issue's own test is reproduced and checked. Other tests that failed in the
 same job have issues of their own.
 
-By default the bot posts the tested patch on the issue, together with the root
-cause and what it checked. Nothing is pushed and no PR is opened. A maintainer
-can apply the patch or ignore it, and the issue isn't tried again until the
-test fails again.
+By default the bot posts the tested patch on the issue together with what code
+checked. Nothing is pushed and no PR is opened. A maintainer can apply the
+patch or ignore it, and the issue isn't tried again until the test fails again.
 
-If `CI_FIX_ISSUES_PUBLISH` is set to `draft-pr`, the bot instead pushes a
-branch named `agent/ci-fix/issue-<issue>-<run>` and opens a draft PR that says
-`Fixes #<issue>`. One test file often has several open issues, so if the patch
-touches the test of another open detector issue, the bot runs that issue's
-test as well. It only adds `Fixes` for that issue if the test fails without
-the patch and passes with it. Otherwise the issue is mentioned in the PR
-without closing it.
+If the candidate is an exact fix already merged on the trusted default
+branch, `CI_FIX_ISSUES_PUBLISH=draft-pr` lets the bot port that commit to a
+branch named `agent/ci-fix/issue-<issue>-<run>` and open a draft PR that says
+`Fixes #<issue>`. Model-authored patches remain issue comments regardless of
+this setting. One test file often has several open issues, so if a candidate
+touches another issue's test, the bot verifies that test separately before
+claiming the candidate fixes it.
 
 ## How the failed job is recreated
 
@@ -181,43 +194,74 @@ It finds the job whose name matches the one that failed, including the
 specific matrix entry, and evaluates the `${{ }}` expressions it needs the way
 GitHub would have for that run.
 
-The fix job then checks out the code and the job's one other repository
-(`libbacktrace`), and replays the job's setup steps exactly as GitHub ran
-them. Where the job would have run its tests, the bot prepares the fix
-instead, rebuilding with the job's own `make` command and testing with its own
-`runtest` line.
+The fix job checks out the code and, when declared, its pinned
+`libbacktrace` repository. It accepts only Ubuntu and macOS host setup covered
+by a code-owned profile. On Ubuntu, trusted bot code installs a fixed superset
+of Valkey build and test packages with fixed `apt-get` arguments. Canonical
+workflow lines that install only those packages are then omitted. The one
+pinned `libbacktrace` install is rewritten from a system install to a private
+prefix inside that checkout. The extracted `make` step is never replayed as
+setup; the reproduction engine owns every main Valkey build. Remaining
+admitted setup runs as a disposable account with a private home, temporary
+directory and GitHub command files, and without the workflow's credentials or
+OIDC request variables. For an admitted host job, a setup step written after
+`make` is moved earlier only when it is a canonical Ubuntu package action that
+trusted bootstrap completely replaces; anything else falls back rather than
+assuming it is independent of build output.
 
-This works for jobs on Ubuntu or macOS runners, and for jobs in a container
-on an Ubuntu runner. It needs a job with one `make` step, one `runtest`
-command, and setup steps that are scripts or checkouts. If the job has
-anything the bot can't follow exactly, such as a secret, a step that uses
-another step's output, an action other than a checkout, or a setup script
-between its test steps, the fix runs on the bot's own Ubuntu runner instead.
+Where the job would have run its tests, the bot prepares the fix instead,
+rebuilding with the job's own `make` command and testing with its own
+`runtest` line. The exact-SHA checkout's `.git` directory remains runner-owned
+and its inode is verified across target setup, so the disposable setup account
+cannot replace or modify Git metadata. Before reproduction, the engine also
+rejects any tracked setup change. Every untrusted phase uses that one checkout
+below the operating system's physical `/tmp` directory. The runner workspace
+remains trusted action state and is never handed to a disposable account.
+
+The host profile needs one `make` step, one focused `runtest` or C-unit-test
+command, and setup made only of scripts and checkouts. A container, VM,
+secret, unsupported action or expression, unknown privileged command, or
+noncanonical package install sends the fix to the bot's own Ubuntu runner.
+The same code-owned reproduction gate applies there, so fallback never means
+that an unreproduced failure reaches the edit agent.
 
 ## Keeping the bot contained
 
-The job that runs Claude has no GitHub token at all. It can read the code and
-reach the model, and that is it. Separate jobs before and after it hold
-short-lived tokens for reading the failure and for publishing the result.
+No target-repository token is passed to target setup, Claude, build or test
+processes. Separate jobs before and after the fix hold short-lived App tokens
+for reading the failure and publishing the result.
 
-Claude, and every build and test command the bot runs, run as a separate
-system account, `ci-fix-agent`. That account cannot read the workflow's
-environment. Claude is started with only the AWS credentials it needs for the
-model, and build and test commands get no credentials at all. Valkey's build
-and test dependencies are installed before any credentials exist.
+In exact-job mode, target setup first runs as a disposable `ci-fix-setup`
+account. It can own the checkout but cannot read the plan, trusted agent
+checkout, real runner temp, GitHub command files, OIDC request variables or
+later AWS credentials. Every process of that account must stop before the tree
+is reclaimed; otherwise the job fails closed and the trusted agent is not
+handed back. Its numeric identity stays reserved and quiescent, without
+ownership of the checkout, until final cleanup. A protected marker binds each
+fixed account name to the exact numeric user and group created by this run, so
+fallback cleanup never kills or deletes an unrelated pre-existing identity.
 
-That account owns the code while it works, so the bot is careful when it takes
-the code back. It stops if `.git` was replaced, because a planted git
-configuration could otherwise run commands as the workflow user. Before
-testing a fix, it deletes ignored files that the job's own setup didn't
-create, so a prebuilt binary can't stand in for the real build.
+Build and test commands run as `ci-fix-command`, while Claude runs as
+`ci-fix-agent`. Neither can read the workflow's environment. Claude is started
+with only the AWS credentials it needs for the model, and the command account
+gets no credentials at all. Local mode uses those two accounts; exact-job mode
+also has the setup account. Every identity present must be distinct, and every
+process under each identity must stop before the checkout is reclaimed or the
+accounts are removed. Valkey's build and test dependencies are installed
+before any credentials exist.
 
-The bot pushes a change under `.github/` only to a backport branch it owns,
-where a release branch often needs an upstream CI fix; only that push gets a
-token with `workflows: write`. Anywhere else it refuses, and its tokens
-couldn't push one anyway. The PR's own CI and a maintainer's review always have the final
-say. The bot's comment lists everything it checked, including the history
-search and the reproduction.
+Each untrusted account owns the code only while it works, so the bot is careful when it takes
+the code back. Fresh, runner-owned `.git` metadata stays non-writable to the
+account, and replacement is detected before the checkout is trusted again.
+Before testing a fix, the bot deletes ignored files that the job's own setup
+didn't create, so a prebuilt binary can't stand in for the real build.
+
+The bot never pushes a model-authored patch, under `.github/` or anywhere
+else. A backport branch may receive an exact `.github/` commit that code
+proved is already merged on the trusted default branch; only that port path
+gets a token with `workflows: write`. An unproven orphan issue branch is never
+turned into a pull request. The bot's comment lists everything it checked,
+including the history search and the reproduction.
 
 ## Running it by hand
 
@@ -261,11 +305,12 @@ behaviour can be adjusted with these repository variables:
 |---|---|---|
 | `CI_FIX_ISSUES_AUTO_DISPATCH` | unset | Set to `false` to stop the hourly dispatcher from starting fixes for detector issues. |
 | `CI_FIX_ISSUES_MAX_RUNS` | `2` | How many detector issue fixes can run at once. |
-| `CI_FIX_ISSUES_PUBLISH` | `comment` | `comment` posts the patch on the issue; `draft-pr` opens a draft PR. |
+| `CI_FIX_ISSUES_PUBLISH` | `comment` | For an already-merged upstream port, `comment` proposes it on the issue and `draft-pr` opens a draft PR. Model-authored patches always remain comments. |
 | `CI_AGENT_CLAUDE_MODEL` | unset | Use a different model, for example `opus`. |
 
-`CI_FIX_AGENT_USER` names the separate account, and is set to `ci-fix-agent`
-by the workflow. Which jobs the bot ignores, and whether it follows up on
+`CI_FIX_AGENT_USER` and `CI_FIX_COMMAND_USER` are internal isolation settings;
+trusted `job.sh` sets them to the distinct model and command accounts before
+the engine starts. Which jobs the bot ignores, and whether it follows up on
 backport PRs, is set per repository in [`repos.yml`](registry.md).
 
 Comment requests are currently limited to `valkey-io/valkey`. Most of the
@@ -275,12 +320,12 @@ another repository would need its own tokens and triggers.
 
 ## Where the code lives
 
-Every fix runs as the same three jobs in `ci-fix-run.yml`, driven by
+Every fix runs as the same three stages in `ci-fix-run.yml`, driven by
 `scripts/ci_fix/run.py`: a plan job that pins down the failure and works out
-how to recreate the job, a fix job, and a publish job. The fix job is called
-`fix-in-job` when it recreates the failed job, `fix-in-container` when that
-job ran in a container, and `fix-local` when it falls back to the bot's own
-runner. The jobs pass their state to each other as JSON (`state.py`).
+how to recreate it, either `fix-in-job` or `fix-local`, and a publish job.
+`fix-in-job` uses a supported host runner profile; `fix-local` is the
+fail-closed fallback for containers and every setup the profile does not
+recognize. The jobs pass their state to each other as JSON (`state.py`).
 
 Each way of starting a fix has a small front door that checks the request and
 turns it into the same `FixTask`: `main.py` for PR requests,
@@ -300,5 +345,5 @@ target allows, and `models.py` has the shared data types.
 
 The limits mentioned on this page are constants in `engine.py`:
 `PREPARE_BUDGET_S` (an hour), `REPRO_BUDGET_S` (twenty minutes),
-`MAX_ROUNDS` (three), and `TEST_RUNS` and `FLAKY_TEST_RUNS` (two and ten
-tries for Claude's own test command).
+`MAX_ROUNDS` (three), and the deterministic, flaky, and valgrind loop counts
+owned by each `ReproPlan` in `reproduce.py`.

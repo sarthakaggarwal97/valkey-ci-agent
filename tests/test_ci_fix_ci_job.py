@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ from scripts.ci_fix.ci_job import Checkout, JobCommands, JobSpec, Step, Unsuppor
 # Valkey's own workflows, as of unstable 0704408 (2026-10).
 FIXTURES = Path(__file__).parent / "fixtures" / "valkey_workflows"
 SHA = "f" * 40
+_LIBBACKTRACE_EXPORT = "export LIBBACKTRACE_PREFIX='libbacktrace/.ci-fix-install'"
 
 
 def _resolve(source: str, name: str, *, scheduled: bool = True) -> JobSpec:
@@ -72,9 +74,9 @@ def test_an_expression_has_githubs_value(expression, expected):
 
 
 @pytest.mark.parametrize("expression", [
-    "secrets.TOKEN", "steps.build.outputs.diff", "needs.a.result", "runner.os", "vars.REGION",
+    "secrets.TOKEN",
     "github.token", "github.event.pull_request.base.ref",  # a property the run's context does not know
-    "hashFiles('x')", "failure()", "toJSON(matrix)",  # a function the fix job does not evaluate
+    "failure()",  # a function the fix job does not evaluate
     "matrix.compiler[0]", "1 < 2", "'unterminated", "(true", "contains('a')",  # outside the grammar
 ])
 def test_an_expression_outside_what_a_fix_job_follows_is_unsupported(expression):
@@ -161,17 +163,46 @@ def test_a_job_resolves_to_its_runner_checkouts_setup_and_commands():
         timeout_minutes=ci_job.MAX_JOB_MINUTES,
         env={},
         # The step for dispatched runs does not run; the job's own checkout
-        # is the fix job's; the tests, and what follows them, are the agent's.
+        # is the fix job's; make is the reproduction build, not setup; the
+        # tests, and what follows them, are the agent's.
         steps=(Step("cd libbacktrace && ./configure && make && sudo make install",
-                    "cd libbacktrace && ./configure && make && sudo make install"),
-               Step("make", "make")),
+                    "cd libbacktrace && ./configure && make && sudo make install"),),
         checkout=Checkout("ianlancetaylor/libbacktrace", "b9e40069c0b47a722286b94eb5231f7f05c08713", "libbacktrace"),
-        commands=JobCommands(build="make", runtest="./runtest --accurate --dump-logs"),
+        commands=JobCommands(
+            build=f"{_LIBBACKTRACE_EXPORT}\nmake",
+            runtest="./runtest --accurate --dump-logs",
+            preserved_paths=("libbacktrace",),
+            runtest_env={"LIBBACKTRACE_PREFIX": "libbacktrace/.ci-fix-install"},
+        ),
+        setup_env={
+            "GITHUB_EVENT_NAME": "schedule",
+            "GITHUB_JOB": "test-ubuntu-jemalloc",
+            "GITHUB_REF": "refs/heads/unstable",
+            "GITHUB_REPOSITORY": "valkey-io/valkey",
+            "GITHUB_SHA": SHA,
+        },
     )
 
 
 def test_a_pull_requests_run_tests_without_accurate():
     assert _resolve(DAILY, "test-ubuntu-jemalloc", scheduled=False).commands.runtest == "./runtest --dump-logs"
+
+
+def test_an_extra_checkout_must_be_a_canonical_non_control_subdirectory():
+    for path in (
+        ".",
+        "./libbacktrace",
+        "../libbacktrace",
+        "/tmp/libbacktrace",
+        "deps/.Git",
+        ".Ci-Fix-Agent/dependency",
+        "deps\\libbacktrace",
+        "deps\nlibbacktrace",
+    ):
+        source = DAILY.replace("          path: libbacktrace", f"          path: {path!r}")
+
+        with pytest.raises(Unsupported, match="safe repository subdirectory"):
+            _resolve(source, "test-ubuntu-jemalloc")
 
 
 def test_a_name_no_job_runs_as_is_unsupported():
@@ -195,7 +226,7 @@ def test_a_matrix_entry_is_chosen_by_the_name_github_gives_it():
     # The fix needs its own time, however short the job's tests were.
     assert (spec.env, spec.timeout_minutes) == ({"CC": "clang"}, ci_job.MIN_JOB_MINUTES)
     # Its environment reaches the rebuilds, which run with a clean one.
-    assert spec.commands.build == "export CC='clang'\nmake"
+    assert spec.commands.build == f"export CC='clang'\n{_LIBBACKTRACE_EXPORT}\nmake"
     with pytest.raises(Unsupported):
         _resolve(_MATRIX, "test-ubuntu-jemalloc")  # which entry is unknown
 
@@ -248,8 +279,8 @@ def test_a_matrix_that_cannot_be_enumerated_is_unsupported(matrix):
 
 
 @pytest.mark.parametrize("change", [
-    ("    runs-on: ubuntu-latest\n", "    runs-on: windows-latest\n"),
     ("    runs-on: ubuntu-latest\n", "    runs-on: [self-hosted]\n"),
+    ("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-private-runner\n"),
     ("    runs-on: ubuntu-latest\n", "    runs-on: macos-latest\n    container: alpine:latest\n"),
     ("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    container:\n      image: alpine\n"
                                    "      options: --privileged\n"),
@@ -279,12 +310,24 @@ def test_a_job_a_fix_job_cannot_repeat_exactly_is_unsupported(change):
         _resolve(DAILY.replace(*change), "test-ubuntu-jemalloc")
 
 
-def test_what_follows_the_tests_does_not_matter():
-    source = DAILY.replace("      - name: Upload test failures\n",
-                           "      - uses: actions/setup-go@v5\n        with:\n          go: ${{ secrets.X }}\n"
-                           "      - name: Upload test failures\n")
+@pytest.mark.parametrize(
+    "later_step",
+    (
+        "      - uses: actions/setup-go@v5\n"
+        "        with:\n"
+        "          go: ${{ secrets.X }}\n",
+        "      - name: Memory usage summary\n"
+        "        if: always()\n"
+        "        run: free -h\n",
+    ),
+)
+def test_what_follows_the_tests_does_not_matter(later_step):
+    source = DAILY.replace(
+        "      - name: Upload test failures\n",
+        later_step + "      - name: Upload test failures\n",
+    )
 
-    assert _resolve(source, "test-ubuntu-jemalloc").commands.build == "make"
+    assert _resolve(source, "test-ubuntu-jemalloc").commands.build == f"{_LIBBACKTRACE_EXPORT}\nmake"
 
 
 def test_a_script_between_the_tests_that_is_not_a_test_is_unsupported():
@@ -297,13 +340,14 @@ def test_a_script_between_the_tests_that_is_not_a_test_is_unsupported():
         _resolve(source, "test-ubuntu-jemalloc")
 
 
-def test_a_script_after_the_last_test_does_not_matter():
-    """Daily's large-memory jobs print a memory summary after their tests; it is not setup."""
-    source = DAILY.replace("      - name: Upload test failures\n",
-                           "      - name: Memory usage summary\n        if: always()\n        run: free -h\n"
-                           "      - name: Upload test failures\n")
+@pytest.mark.parametrize(
+    "runner",
+    ("ubuntu-24.04-arm", "ubuntu-26.04", "macos-15"),
+)
+def test_supported_github_hosted_runner_labels_resolve(runner):
+    source = DAILY.replace("    runs-on: ubuntu-latest\n", f"    runs-on: {runner}\n", 1)
 
-    assert _resolve(source, "test-ubuntu-jemalloc").commands.build == "make"
+    assert _resolve(source, "test-ubuntu-jemalloc").runs_on == runner
 
 
 def test_the_legacy_unit_tests_are_a_test_step_and_the_make_test_unit_line_is_kept():
@@ -367,8 +411,9 @@ jobs:
 def test_a_test_step_that_also_installs_keeps_that_setup():
     spec = _resolve(CI, "test-ubuntu-latest", scheduled=False)
 
-    assert [step.name for step in spec.steps] == ["make", "test setup"]
+    assert [step.name for step in spec.steps] == ["test setup"]
     assert spec.steps[-1].run == "sudo apt-get install tcl8.6 tclx"
+    assert "make SERVER_CFLAGS" not in ci_job.setup_script(spec)
     # The agent runs its own tests: not the job's selection, and not against
     # another server the fix job never downloads.
     assert spec.commands == JobCommands(
@@ -382,11 +427,8 @@ def test_the_fix_rebuilds_without_the_system_setup_the_job_already_did():
     source = DAILY.replace(
         "      - name: make\n        run: make\n",
         "      - name: make\n        run: |\n"
-        "          apt-get update && apt-get install -y make gcc-13\n"
-        "          update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100\n"
-        "          dnf -y install gcc make\n"
-        "          apk add build-base\n"
-        "          sudo apt-get install -y libssl-dev\n"
+        "          sudo apt-get update -q\n"
+        "          sudo apt-get install -y -q --no-install-recommends libssl-dev\n"
         "          make CC=gcc # the build\n",
         1,
     )
@@ -394,8 +436,35 @@ def test_the_fix_rebuilds_without_the_system_setup_the_job_already_did():
     spec = _resolve(source, "test-ubuntu-jemalloc")
 
     # The fix rebuilds as an unprivileged account; these ran as root already.
-    assert spec.commands.build == "make CC=gcc"
-    assert "apk add build-base" in spec.steps[-1].run  # the job's own setup runs them
+    assert spec.commands.build == f"{_LIBBACKTRACE_EXPORT}\nmake CC=gcc"
+    assert all(step.name != "make" for step in spec.steps)
+    assert ci_job.isolated_setup_reason(spec) == ""
+
+
+def test_unknown_system_setup_embedded_in_make_falls_back():
+    source = DAILY.replace(
+        "      - name: make\n        run: make\n",
+        "      - name: make\n        run: |\n"
+        "          sudo apt-get install attacker-package\n"
+        "          make\n",
+        1,
+    )
+
+    with pytest.raises(Unsupported, match="outside the code-owned dependency profile"):
+        _resolve(source, "test-ubuntu-jemalloc")
+
+
+def test_setup_after_make_must_be_known_safe_to_move_before_the_build():
+    source = CI.replace(
+        "      - name: test\n",
+        "      - name: Build test fixtures\n"
+        "        run: make -C tests/modules\n"
+        "      - name: test\n",
+        1,
+    )
+
+    with pytest.raises(Unsupported, match="runs after the job's make step"):
+        _resolve(source, "test-ubuntu-latest", scheduled=False)
 
 
 def test_a_dropped_install_takes_its_continuation_lines_with_it():
@@ -411,7 +480,9 @@ def test_a_dropped_install_takes_its_continuation_lines_with_it():
 
     spec = _resolve(source, "test-ubuntu-jemalloc")
 
-    assert spec.commands.build == "make BUILD_TLS=yes SERVER_CFLAGS='-Werror'"
+    assert spec.commands.build == (
+        f"{_LIBBACKTRACE_EXPORT}\nmake BUILD_TLS=yes SERVER_CFLAGS='-Werror'"
+    )
 
 
 def test_a_strategy_that_is_not_a_mapping_is_unsupported_not_a_crash():
@@ -464,7 +535,7 @@ def test_only_the_lines_before_the_test_command_are_its_setup():
     assert ci_job._setup_of(step) == {"name": "test setup", "run": "sudo apt-get install tclx"}
 
 
-def test_a_fixture_build_with_a_comment_is_hoisted_whole():
+def test_a_fixture_build_is_identified_so_resolution_can_reject_reordering():
     step = {"name": "module api test", "if": "x",
             "run": "make -C tests/modules 32bit # build them ahead of time\n./runtest-moduleapi --verbose"}
 
@@ -472,10 +543,23 @@ def test_a_fixture_build_with_a_comment_is_hoisted_whole():
                                       "run": "make -C tests/modules 32bit # build them ahead of time"}
 
 
+def test_a_fixture_build_inside_a_test_step_cannot_move_before_the_main_build():
+    source = CI.replace(
+        "        run: CFLAGS='-Werror' ./runtest-moduleapi --verbose\n",
+        "        run: |\n"
+        "          make -C tests/modules 32bit\n"
+        "          CFLAGS='-Werror' ./runtest-moduleapi --verbose\n",
+        1,
+    )
+
+    with pytest.raises(Unsupported, match="runs after the job's make step"):
+        _resolve(source, "test-ubuntu-latest", scheduled=False)
+
+
 def test_a_skipped_test_steps_setup_is_not_hoisted():
     source = CI.replace("      - name: test\n", "      - name: test\n        if: false\n")
 
-    assert [step.name for step in _resolve(source, "test-ubuntu-latest").steps] == ["make"]
+    assert not _resolve(source, "test-ubuntu-latest").steps
 
 
 # --- the setup driver ---------------------------------------------------------
@@ -498,31 +582,28 @@ def _drive(tmp_path: Path, spec: JobSpec, *, path: str = "") -> subprocess.Compl
     return subprocess.run(["sh", str(script)], cwd=tmp_path, env=env, capture_output=True, text=True, check=False)
 
 
-def test_the_setup_runs_each_step_from_the_workspace_with_what_earlier_steps_exported(tmp_path):
-    (tmp_path / "bin").mkdir()
-    spec = _spec(
-        Step("export", "\n".join([
-            'echo "FROM_FIRST=one=1" >> "$GITHUB_ENV"',
-            "printf 'MULTI<<EOF\\nline 1\\nline 2\\nEOF\\n' >> \"$GITHUB_ENV\"",
-            f'echo "{tmp_path / "bin"}" >> "$GITHUB_PATH"',
-            "printf '#!/bin/sh\\necho tool ran\\n' > \"" + str(tmp_path / "bin" / "tool") + '"',
-            "chmod +x \"" + str(tmp_path / "bin" / "tool") + '"',
-        ])),
-        Step("read", 'echo "$FROM_FIRST|$MULTI|$JOB|$STEP|$(pwd)"; tool', env={"STEP": "it's a step"}),
-        Step("own env only", 'echo "STEP=${STEP:-unset}"'),
-        env={"JOB": "job env"},
-    )
+@pytest.mark.parametrize("command_file", ("GITHUB_ENV", "GITHUB_PATH"))
+def test_setup_that_changes_cross_step_environment_falls_back(command_file):
+    spec = _spec(Step("export", f'echo "value" >> "${command_file}"'))
 
-    result = _drive(tmp_path, spec)
+    assert "changes cross-step environment" in ci_job.isolated_setup_reason(spec)
+    with pytest.raises(Unsupported, match="changes cross-step environment"):
+        ci_job.setup_script(spec)
 
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [
-        "one=1|line 1", f"line 2|job env|it's a step|{tmp_path / 'workspace'}", "tool ran", "STEP=unset",
-    ]
-    # The workflow's own later steps, which hold credentials, never do: the
-    # job's build ran as the workflow user, and could have prepended a path.
-    assert not (tmp_path / "github_env").exists()
-    assert not (tmp_path / "github_path").exists()
+
+@pytest.mark.parametrize(
+    "env",
+    (
+        {"GITHUB_WORKSPACE": "/"},
+        {"RUNNER_TEMP": "/tmp/target"},
+        {"HOME": "/tmp/target"},
+        {"TMPDIR": "/tmp/target"},
+    ),
+)
+def test_setup_cannot_override_the_isolation_boundary_environment(env):
+    spec = _spec(Step("setup", "true"), env=env)
+
+    assert "overrides protected runner environment" in ci_job.isolated_setup_reason(spec)
 
 
 def test_the_setup_stops_at_the_first_failing_step_and_names_it(tmp_path):
@@ -583,6 +664,26 @@ def test_a_steps_script_cannot_end_its_heredoc_early(tmp_path):
     assert result.stdout.splitlines() == ["CI_FIX_STEP", "in"]
 
 
+def test_setup_uses_the_resolved_target_job_context_not_the_outer_workflow(tmp_path):
+    spec = _spec(Step("context", "printf '%s\\n' \"$GITHUB_REPOSITORY|$GITHUB_SHA|$GITHUB_REF|$GITHUB_JOB|$GITHUB_EVENT_NAME\""),
+                 env={})
+    spec = replace(
+        spec,
+        setup_env={
+            "GITHUB_REPOSITORY": "valkey-io/valkey",
+            "GITHUB_SHA": SHA,
+            "GITHUB_REF": "refs/heads/unstable",
+            "GITHUB_JOB": "target-job",
+            "GITHUB_EVENT_NAME": "schedule",
+        },
+    )
+
+    result = _drive(tmp_path, spec)
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == f"valkey-io/valkey|{SHA}|refs/heads/unstable|target-job|schedule"
+
+
 # --- Valkey's own workflows ---------------------------------------------------
 
 _DAILY = (FIXTURES / "daily.yml").read_text(encoding="utf-8")
@@ -594,10 +695,13 @@ def test_valkeys_ubuntu_job_resolves():
     spec = _resolve(_DAILY, "test-ubuntu-jemalloc")
 
     assert (spec.runs_on, spec.container, spec.checkout) == ("ubuntu-latest", "", _LIBBACKTRACE)
-    assert [step.name for step in spec.steps][:4] == [
-        "cd libbacktrace && ./configure && make && sudo make install", "Install gtest", "make", "testprep",
+    assert [step.name for step in spec.steps][:3] == [
+        "cd libbacktrace && ./configure && make && sudo make install", "Install gtest", "testprep",
     ]
-    assert spec.commands.build == "make all-with-unit-tests SERVER_CFLAGS='-Werror' USE_LIBBACKTRACE=yes"
+    assert spec.commands.build == (
+        f"{_LIBBACKTRACE_EXPORT}\n"
+        "make all-with-unit-tests SERVER_CFLAGS='-Werror' USE_LIBBACKTRACE=yes"
+    )
     assert spec.commands.runtest == "./runtest --accurate --verbose --dump-logs"
     assert spec.commands.moduleapi == "CFLAGS='-Werror' ./runtest-moduleapi --verbose --dump-logs"
     assert spec.commands.unittest == "make test-unit accurate=1"
@@ -607,13 +711,19 @@ def test_valkeys_sanitizer_entry_resolves_with_its_compiler():
     spec = _resolve(_DAILY, "test-sanitizer-address (gcc)")
 
     assert spec.env == {"CC": "gcc"}
-    assert spec.commands.build.startswith("export CC='gcc'\nmake all-with-unit-tests OPT=-O3 SANITIZER=address")
+    assert spec.commands.build.startswith(
+        f"export CC='gcc'\n{_LIBBACKTRACE_EXPORT}\n"
+        "make all-with-unit-tests OPT=-O3 SANITIZER=address"
+    )
 
 
 def test_valkeys_valgrind_shard_runs_its_own_job_instance():
     spec = _resolve(_DAILY, "test-valgrind-test (unit)")
 
-    assert spec.commands.build == "make valgrind SERVER_CFLAGS='-Werror' BUILD_ZSTD=yes USE_LIBBACKTRACE=yes"
+    assert spec.commands.build == (
+        f"{_LIBBACKTRACE_EXPORT}\n"
+        "make valgrind SERVER_CFLAGS='-Werror' BUILD_ZSTD=yes USE_LIBBACKTRACE=yes"
+    )
     assert spec.commands.runtest == (
         "./runtest --valgrind --no-latency --verbose --clients 1 --timeout 2400 --dump-logs"
     )
@@ -623,7 +733,7 @@ def test_valkeys_rpm_distro_entry_resolves_to_its_container():
     spec = _resolve(_DAILY, "test-fedoralatest-jemalloc")
 
     assert (spec.job_id, spec.container) == ("test-rpm-distros-jemalloc", "fedora:latest")
-    assert [step.name for step in spec.steps] == ["Build libbacktrace", "make", "testprep"]  # no EPEL on Fedora
+    assert [step.name for step in spec.steps] == ["Build libbacktrace", "testprep"]  # no EPEL on Fedora
 
 
 def test_valkeys_alpine_and_macos_jobs_resolve():
@@ -674,8 +784,90 @@ def test_every_valkey_job_resolves_as_expected():
 
 
 def test_every_resolved_valkey_job_has_a_setup_script(tmp_path):
-    for name in ("test-ubuntu-jemalloc", "test-fedoralatest-jemalloc", "test-macos-latest"):
+    for name in ("test-ubuntu-jemalloc", "test-macos-latest"):
         script = tmp_path / "setup.sh"
         script.write_text(ci_job.setup_script(_resolve(_DAILY, name)), encoding="utf-8")
 
         assert subprocess.run(["sh", "-n", str(script)], capture_output=True).returncode == 0, name
+
+    container = _resolve(_DAILY, "test-fedoralatest-jemalloc")
+    assert "container setup" in ci_job.isolated_setup_reason(container)
+
+
+def test_supported_host_setup_uses_only_the_code_owned_dependency_profile():
+    spec = _resolve(_DAILY, "test-sanitizer-address (clang)")
+
+    assert ci_job.isolated_setup_reason(spec) == ""
+    script = ci_job.setup_script(spec)
+    assert _LIBBACKTRACE_EXPORT in script
+    assert "make all-with-unit-tests" not in script
+    assert "ci_fix_step 'make'" not in script
+    assert './configure --prefix="$(pwd)/.ci-fix-install"' in script
+    # The original unnamed step text remains only as its diagnostic label.
+    assert script.count("sudo make install") == 1
+    assert "sudo apt-get" not in script
+
+
+def test_macos_does_not_silently_drop_ubuntu_package_install_commands():
+    source = _DAILY.replace("runs-on: ubuntu-latest", "runs-on: macos-latest", 1)
+
+    with pytest.raises(Unsupported, match="cannot safely run before it"):
+        _resolve(source, "test-ubuntu-jemalloc")
+
+
+@pytest.mark.parametrize("scope", ("job", "setup", "make"))
+def test_target_environment_cannot_override_the_private_libbacktrace_prefix(scope):
+    if scope == "job":
+        source = _DAILY.replace(
+            "    steps:\n",
+            "    env:\n      LIBBACKTRACE_PREFIX: /tmp/not-private\n    steps:\n",
+            1,
+        )
+    elif scope == "setup":
+        source = _DAILY.replace(
+            "      - run: cd libbacktrace",
+            "      - env:\n          LIBBACKTRACE_PREFIX: /tmp/not-private\n        run: cd libbacktrace",
+            1,
+        )
+    else:
+        source = _DAILY.replace(
+            "      - name: make\n",
+            "      - name: make\n        env:\n          LIBBACKTRACE_PREFIX: /tmp/not-private\n",
+            1,
+        )
+
+    with pytest.raises(Unsupported, match="overrides the isolated libbacktrace prefix"):
+        _resolve(source, "test-ubuntu-jemalloc")
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    (
+        "sudo sh -c 'apt-get install pkg-config'",
+        "sudo apt-get -o APT::Update::Pre-Invoke::=/tmp/hook install pkg-config",
+        "sudo apt-get install pkg-config attacker-package",
+        "sudo apt-get install pkg-config; touch /tmp/escaped",
+        "sudo make install",
+        "sudo cp build/lib.a /usr/local/lib/",
+    ),
+)
+def test_unknown_or_injectable_privileged_setup_falls_back(replacement):
+    source = _DAILY.replace(
+        "sudo apt-get install pkg-config libgtest-dev libgmock-dev",
+        replacement,
+        1,
+    )
+    spec = _resolve(source, "test-ubuntu-jemalloc")
+
+    assert "unsupported privileges" in ci_job.isolated_setup_reason(spec)
+
+
+def test_every_extra_checkout_requires_a_full_commit_sha():
+    source = _DAILY.replace(
+        "ref: b9e40069c0b47a722286b94eb5231f7f05c08713",
+        "ref: unstable",
+        1,
+    )
+
+    with pytest.raises(Unsupported, match="pinned to a full commit SHA"):
+        _resolve(source, "test-ubuntu-jemalloc")

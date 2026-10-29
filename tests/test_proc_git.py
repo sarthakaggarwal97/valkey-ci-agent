@@ -7,10 +7,18 @@ its changes. That code can plant repo-local git config (a diff/filter driver,
 parent's credentials are never in scope when that happens.
 """
 
+import os
 import subprocess
 
+import pytest
+
 from scripts.common import proc
-from scripts.common.proc import git_output, run_git
+from scripts.common.proc import (
+    build_approved_patch,
+    git_output,
+    run_git,
+    worktree_changed_paths,
+)
 
 
 def _captured_env(monkeypatch):
@@ -73,8 +81,6 @@ def test_build_approved_patch_treats_paths_literally(tmp_path):
     expand to all tracked changes, leaking an unapproved edit into the patch
     that gets reviewed and pushed.
     """
-    from scripts.common.proc import build_approved_patch
-
     repo = tmp_path / "repo"
     repo.mkdir()
     run_git(str(repo), "init", "-q")
@@ -98,8 +104,6 @@ def test_build_approved_patch_treats_paths_literally(tmp_path):
 
 
 def test_git_failure_message_carries_stderr_and_subcommand(tmp_path):
-    import pytest
-
     with pytest.raises(subprocess.CalledProcessError) as raised:
         git_output(str(tmp_path), "rev-parse", "--verify", "no-such-ref")
     message = str(raised.value)
@@ -138,10 +142,6 @@ def test_is_ancestor_separates_no_from_unknown(tmp_path):
 
 
 # --- repo- and user-controlled git config must never execute -------------------------
-
-import os  # noqa: E402
-
-from scripts.common.proc import build_approved_patch, worktree_changed_paths  # noqa: E402
 
 
 def _repo_with_change(tmp_path):
@@ -211,27 +211,18 @@ def test_user_global_config_is_ignored(tmp_path, monkeypatch):
     assert not marker.exists()
 
 
-def test_a_non_utf8_path_survives_discovery_patching_and_the_staged_check(tmp_path):
-    """A path may be any bytes; it must come back from git exactly as written."""
-    import os
-    import subprocess
-
-    import pytest
-
-    from scripts.ci_fix.push import _apply_patch, _staged_paths
-    from scripts.common.proc import build_approved_patch, worktree_changed_paths
-
+def test_a_non_utf8_path_survives_discovery_and_patch_building(tmp_path):
+    """A path may be any bytes; discovery and review must preserve those bytes."""
     def git(cwd, *args):
         subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=cwd, check=True,
                        capture_output=True)
 
-    work, clean = tmp_path / "work", tmp_path / "clean"
-    for repo in (work, clean):
-        repo.mkdir()
-        git(repo, "init", "-q")
-        (repo / "seed").write_text("x\n")
-        git(repo, "add", "seed")
-        git(repo, "commit", "-qm", "seed")
+    work = tmp_path / "work"
+    work.mkdir()
+    git(work, "init", "-q")
+    (work / "seed").write_text("x\n")
+    git(work, "add", "seed")
+    git(work, "commit", "-qm", "seed")
     raw = os.fsencode(str(work)) + b"/caf\xe9.tcl"
     try:
         with open(raw, "wb") as handle:
@@ -241,5 +232,4 @@ def test_a_non_utf8_path_survives_discovery_patching_and_the_staged_check(tmp_pa
     changed = worktree_changed_paths(str(work), strict=True)
     assert [os.fsencode(path) for path in changed] == [b"caf\xe9.tcl"]
     patch = build_approved_patch(str(work), changed, strict=True)
-    _apply_patch(str(clean), patch)
-    assert _staged_paths(str(clean)) == changed
+    assert b"caf\xe9.tcl" in patch.encode("utf-8", errors="surrogateescape")

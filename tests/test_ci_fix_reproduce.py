@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from scripts.ci_fix import reproduce as reproduce_mod
 from scripts.ci_fix.models import FailedTest
 from scripts.ci_fix.reproduce import (
     LOOPS,
@@ -23,6 +25,7 @@ from scripts.common.text_utils import strip_ansi
 
 TEST = FailedTest("INCREX BYFLOAT overflow preserves existing TTL", "tests/unit/type/incr.tcl")
 UNIT_TEST = FailedTest("Crc64Test.TestCrc64", "src/unit/test_crc64.cpp")
+_CORE_COUNT = "$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN)"
 
 
 @pytest.fixture
@@ -37,10 +40,17 @@ def test_without_the_jobs_commands_plain_make_and_runtest_loop_only_the_failing_
     plan = plan_for(checkout, (TEST,), scheduled=True)
 
     assert plan.command(20) == (
-        'make -j"$(nproc)" && ./runtest --dump-logs --accurate --single unit/type/incr '
+        f'make -j"{_CORE_COUNT}" && ./runtest --dump-logs --accurate --single unit/type/incr '
         "--only 'INCREX BYFLOAT overflow preserves existing TTL' --fastfail --loops 20 --timeout 600"
     )
     assert "plain make and runtest" in plan.notes[-1]
+
+
+def test_parallel_builds_use_a_core_count_probe_available_on_linux_and_macos(checkout):
+    plan = plan_for(checkout, (TEST,), scheduled=True)
+
+    assert "nproc 2>/dev/null || getconf _NPROCESSORS_ONLN" in plan.build
+    assert 'make -j"$(nproc)"' not in plan.build
 
 
 def test_a_pr_run_does_not_use_accurate(checkout):
@@ -83,8 +93,8 @@ def test_a_c_unit_test_is_repeated_by_name_the_way_the_job_ran_it(checkout):
     plan = plan_for(checkout, (UNIT_TEST, TEST), scheduled=True, job=job)
 
     assert plan.command(20) == (
-        "make -j\"$(nproc)\" all-with-unit-tests SERVER_CFLAGS='-Werror' && "
-        '{ test -x ./src/unit/valkey-unit-gtests || make -j"$(nproc)" all-with-unit-tests; } && '
+        f"make -j\"{_CORE_COUNT}\" all-with-unit-tests SERVER_CFLAGS='-Werror' && "
+        f'{{ test -x ./src/unit/valkey-unit-gtests || make -j"{_CORE_COUNT}" all-with-unit-tests; }} && '
         "(cd src/unit && python3 ../../deps/gtest-parallel/gtest_parallel.py ./valkey-unit-gtests "
         "--timeout_per_test 300 --repeat=20 --gtest_filter=Crc64Test.TestCrc64 -- --accurate)"
     )
@@ -111,8 +121,10 @@ def test_the_jobs_unit_test_arguments_and_make_variables_are_kept_apart(checkout
 
     # The job's build names no unit tests, but makes them: nothing is rebuilt as 64-bit.
     assert plan.build == (
-        "make -j\"$(nproc)\" 32bit SERVER_CFLAGS='-Werror' && { test -x ./src/unit/valkey-unit-gtests || "
-        "make -j\"$(nproc)\" all-with-unit-tests 'GTEST_LIBS=/usr/lib32/libgtest.a /usr/lib32/libgmock.a'; }"
+        f"make -j\"{_CORE_COUNT}\" 32bit SERVER_CFLAGS='-Werror' && "
+        "{ test -x ./src/unit/valkey-unit-gtests || "
+        f"make -j\"{_CORE_COUNT}\" all-with-unit-tests "
+        "'GTEST_LIBS=/usr/lib32/libgtest.a /usr/lib32/libgmock.a'; }"
     )
     assert plan.test.endswith("-- --large-memory --seed 7)")
     without = plan_for(checkout, (UNIT_TEST,), scheduled=True, job=JobCommands(build="make", runtest="./runtest"))
@@ -147,7 +159,10 @@ def test_without_gtest_parallel_the_binary_repeats_in_one_process_and_no_gtest_m
 
     plan = plan_for(checkout, (UNIT_TEST,), scheduled=False, job=JobCommands(build="make", runtest="./runtest"))
 
-    assert plan.build == 'make -j"$(nproc)" && { test -x ./src/unit/valkey-unit-gtests || make -j"$(nproc)" all-with-unit-tests; }'
+    assert plan.build == (
+        f'make -j"{_CORE_COUNT}" && '
+        f'{{ test -x ./src/unit/valkey-unit-gtests || make -j"{_CORE_COUNT}" all-with-unit-tests; }}'
+    )
     assert plan.test == "./src/unit/valkey-unit-gtests --gtest_filter=Crc64Test.TestCrc64 --gtest_repeat=\0loops\0"
     assert any("no gtest-parallel" in note for note in plan.notes)
 
@@ -175,14 +190,17 @@ PLAN = ReproPlan(build="make", test=f"./runtest --loops {LOOPS}", tests=(TEST,))
 PASS = TestRun(passed=True, output="all passed", report=f"[ok]: {TEST.name} (5 ms)")
 FAIL = TestRun(passed=False, output="", report=f"[err]: {TEST.name} in {TEST.file}")
 BROKEN = TestRun(passed=False, output="tclsh: command not found")
+BUILT = TestRun(passed=True, output="built")
 
 
-def _runner(*results):
+def _runner(*results, build=BUILT):
     calls = []
     queue = iter(results)
 
     def run(command, timeout):
         calls.append(command)
+        if command == PLAN.build:
+            return build
         return next(queue)
 
     run.calls = calls
@@ -198,7 +216,7 @@ def test_a_failure_on_two_plain_runs_is_deterministic():
     result = reproduce(PLAN, run, deadline=_deadline())
 
     assert result.status is ReproStatus.REPRODUCED and result.deterministic
-    assert run.calls == ["make && ./runtest --loops 1"] * 2
+    assert run.calls == ["make", "./runtest --loops 1"] * 2
     assert PLAN.verify_loops(result.deterministic) == 10
 
 
@@ -214,7 +232,7 @@ def test_a_flaky_failure_reproduces_under_loops():
     result = reproduce(PLAN, run, deadline=_deadline())
 
     assert result.status is ReproStatus.REPRODUCED and not result.deterministic
-    assert run.calls[1] == f"make && ./runtest --loops {REPRO_LOOPS}"
+    assert run.calls[-1] == f"./runtest --loops {REPRO_LOOPS}"
     assert f"failed within {REPRO_LOOPS} loops" in result.describe()
     assert "intermittently" in result.describe()
 
@@ -224,7 +242,8 @@ def test_a_timing_flake_reproduces_with_every_core_busy():
     result = reproduce(PLAN, run, deadline=_deadline())
 
     assert result.reproduced
-    assert "while :; do :; done" in run.calls[2] and run.calls[1] in run.calls[2]
+    assert "while :; do :; done" in run.calls[-1]
+    assert f"./runtest --loops {REPRO_LOOPS}" in run.calls[-1]
     assert "with every core busy" in result.describe()
 
 
@@ -237,10 +256,29 @@ def test_a_failure_that_never_shows_is_not_reproduced():
 
 
 def test_a_build_break_is_not_a_reproduction():
-    result = reproduce(PLAN, _runner(BROKEN), deadline=_deadline())
+    result = reproduce(PLAN, _runner(build=BROKEN), deadline=_deadline())
 
     assert result.status is ReproStatus.UNRUNNABLE
     assert "tclsh" in result.output
+
+
+def test_a_sanitizer_looking_build_break_in_a_loop_is_not_a_reproduction():
+    build_results = iter((
+        BUILT,
+        TestRun(False, "compiler failed", report="Sanitizer error: compiler failed"),
+        BUILT,
+    ))
+    test_results = iter((PASS, PASS))
+
+    def run(command, _timeout):
+        return next(build_results) if command == PLAN.build else next(test_results)
+
+    result = reproduce(PLAN, run, deadline=_deadline())
+
+    assert result.status is ReproStatus.NOT_REPRODUCED
+    assert not result.all_attempts_passed
+    assert f"{REPRO_LOOPS} loops did not finish" in result.describe()
+    assert "failed within" not in result.describe()
 
 
 def test_looped_attempts_stop_at_the_deadline():
@@ -249,7 +287,34 @@ def test_looped_attempts_stop_at_the_deadline():
 
     assert result.status is ReproStatus.NOT_REPRODUCED
     assert not result.all_attempts_passed
-    assert len(run.calls) == 1 and "no time left" in result.describe()
+    assert run.calls == ["make", "./runtest --loops 1"]
+    assert "no time left" in result.describe()
+
+
+def test_the_first_probe_does_not_start_after_its_deadline(monkeypatch):
+    monkeypatch.setattr(reproduce_mod, "time", SimpleNamespace(monotonic=lambda: 100.0))
+    run = _runner(PASS)
+
+    result = reproduce(PLAN, run, deadline=100.0)
+
+    assert result.status is ReproStatus.NOT_REPRODUCED
+    assert "no time left for the first run" in result.describe()
+    assert run.calls == []
+
+
+def test_a_reproduced_first_probe_does_not_start_confirmation_after_the_deadline(
+    monkeypatch,
+):
+    clock = iter((100.0, 100.0, 101.0))
+    monkeypatch.setattr(reproduce_mod, "time", SimpleNamespace(monotonic=lambda: next(clock)))
+    run = _runner(FAIL)
+
+    result = reproduce(PLAN, run, deadline=101.0)
+
+    assert result.reproduced
+    assert not result.deterministic
+    assert "no time left for a confirming second run" in result.describe()
+    assert run.calls == ["make", "./runtest --loops 1"]
 
 
 def test_a_loop_that_does_not_finish_is_an_incomplete_nonreproduction():
@@ -404,7 +469,8 @@ def test_in_the_job_its_own_build_and_runtest_run_the_failing_test(checkout):
 
     # One line: every report quotes the command, and a code span holds no newline.
     assert plan.build == (
-        "export CC='clang' && make -j\"$(nproc)\" all-with-unit-tests SANITIZER=address USE_LIBBACKTRACE=yes"
+        f"export CC='clang' && make -j\"{_CORE_COUNT}\" "
+        "all-with-unit-tests SANITIZER=address USE_LIBBACKTRACE=yes"
     )
     assert plan.test.replace(LOOPS, "20") == (
         "./runtest --accurate --verbose --dump-logs --tls --single unit/type/incr "
@@ -424,7 +490,7 @@ def test_a_jobs_multi_line_build_becomes_one_command(checkout):
 
     assert plan.build == (
         "apt-get update && apt-get install -y make gcc-13 && update-alternatives --install x"
-        " && make -j\"$(nproc)\" CC=gcc"
+        f" && make -j\"{_CORE_COUNT}\" CC=gcc"
     )
     assert "\n" not in plan.command(3) and "\n" not in plan.command(3, under_load=True)
 

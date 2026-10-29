@@ -11,9 +11,12 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
+import unicodedata
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import BinaryIO
 
 from scripts.common.text_utils import strip_ansi
 
@@ -22,6 +25,43 @@ LOG_DATE_FORMAT = "%H:%M:%S"
 
 _ANNOTATION = {logging.ERROR: "error", logging.WARNING: "warning"}
 _group_open = False
+_UNTRUSTED_OUTPUT_LIMIT = 1 << 20
+
+
+def _physical_lines(text: str | bytes) -> list[str]:
+    """Render untrusted output as terminal-safe physical lines.
+
+    GitHub's legacy workflow commands are recognized at physical line
+    boundaries. Normalize every kind of carriage-return boundary, strip ANSI
+    controls that could obscure the rendered prefix, and make the remaining
+    C0 controls visible rather than sending them to the runner.
+    """
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", errors="replace")
+    normalized = strip_ansi(text).replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.split("\n")
+    if lines and not lines[-1]:
+        lines.pop()
+    return [
+        "".join(
+            character
+            if (
+                character == "\t"
+                or (
+                    ord(character) >= 0x20
+                    and ord(character) != 0x7F
+                    and unicodedata.category(character) not in {"Cc", "Cf", "Cs", "Zl", "Zp"}
+                )
+            )
+            else (
+                f"\\x{ord(character):02x}"
+                if ord(character) <= 0xFF
+                else f"\\u{ord(character):04x}"
+            )
+            for character in line
+        )
+        for line in lines
+    ]
 
 
 class _TagFormatter(logging.Formatter):
@@ -35,7 +75,15 @@ class _TagFormatter(logging.Formatter):
         path = Path(record.pathname)
         parent = path.parent.name
         record.tag = path.stem if parent in ("common", "ai") else parent.replace("_", "-")
-        return super().format(record)
+        lines = _physical_lines(super().format(record))
+        if not lines:
+            return ""
+        # The configured format gives the first line a timestamp/tag. Prefix
+        # it too when a caller constructs this formatter with a message-only
+        # format, and always prefix continuation lines. No untrusted physical
+        # line can consequently begin with ``::``.
+        first = f"| {lines[0]}" if lines[0].startswith("::") else lines[0]
+        return "\n".join((first, *(f"| {line}" for line in lines[1:])))
 
 
 def configure_logging(*, verbose: bool = False) -> None:
@@ -43,6 +91,61 @@ def configure_logging(*, verbose: bool = False) -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(_TagFormatter(LOG_FORMAT, LOG_DATE_FORMAT))
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, handlers=[handler])
+
+
+def emit_untrusted_output(text: str | bytes, *, label: str) -> None:
+    """Write captured child output without exposing workflow-command syntax."""
+    prefix = f"[{' '.join(label.split()) or 'output'}] "
+    for line in _physical_lines(text):
+        # The fixed prefix is part of every physical write. Replacing the
+        # command delimiter as well keeps copied/rendered output visibly inert.
+        print(f"{prefix}{line.replace('::', ': :')}", file=sys.stderr, flush=True)
+
+
+@contextmanager
+def capture_untrusted_output(
+    *,
+    label: str,
+    limit: int = _UNTRUSTED_OUTPUT_LIMIT,
+) -> Iterator[BinaryIO]:
+    """Yield a pipe sink whose output is drained, bounded, and made inert.
+
+    The reader keeps draining after ``limit`` so an untrusted child cannot
+    block on a full pipe or make the trusted parent retain unbounded output.
+    Callers must end all descendant processes before leaving this context, so
+    every inherited copy of the write descriptor is closed.
+    """
+    read_fd, write_fd = os.pipe()
+    reader = os.fdopen(read_fd, "rb", buffering=0)
+    writer = os.fdopen(write_fd, "wb", buffering=0)
+    total = 0
+
+    def drain() -> None:
+        nonlocal total
+        while chunk := reader.read(8192):
+            before = total
+            total += len(chunk)
+            if before < limit:
+                emit_untrusted_output(chunk[: max(0, limit - before)], label=label)
+
+    thread = threading.Thread(target=drain, name="untrusted-output-drain", daemon=True)
+    thread.start()
+    try:
+        yield writer
+    finally:
+        writer.close()
+        thread.join(timeout=30)
+        if thread.is_alive():
+            reader.close()
+            raise RuntimeError("the captured child output pipe did not close")
+        reader.close()
+        if total > limit:
+            print(
+                f"[{' '.join(label.split()) or 'output'}] "
+                f"output truncated after {limit} bytes",
+                file=sys.stderr,
+                flush=True,
+            )
 
 
 def _in_actions() -> bool:

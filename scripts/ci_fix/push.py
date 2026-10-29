@@ -1,10 +1,12 @@
-"""Commit and push a CI-fix candidate to a bot-owned branch.
+"""Port a merged upstream CI fix to a bot-owned branch.
 
 The CI-fix agent follows the same publishing model as the backport agent:
 
 * the agent may edit a disposable checkout, but it never commits or pushes;
-* code reapplies the resulting patch (or cherry-picks a merged upstream fix)
-  in a clean clone;
+* model-authored patches are review-only and are never pushed, because the
+  target repository's CI would execute them before a person reviewed them;
+* code may cherry-pick an exact fix already merged on the trusted default
+  branch in a clean clone;
 * only the bot namespaces are writable; and
 * an exact ``--force-with-lease`` prevents overwriting a branch that moved.
 
@@ -15,7 +17,6 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
-import textwrap
 from pathlib import Path
 from typing import Callable
 
@@ -58,24 +59,22 @@ def push_candidate(
     pre_push_check: PrePushCheck | None = None,
     allow_ci_changes: bool = False,
 ) -> str:
-    """Commit ``candidate`` on ``target.expected_sha`` and push it.
+    """Port ``candidate`` onto ``target.expected_sha`` and push it.
 
     ``UPDATE_PR`` requires the remote branch to still point at
     ``expected_sha``. ``DRAFT_PR`` creates a new branch and requires that the
-    remote ref not exist. A change under ``.github/`` is refused unless
-    ``allow_ci_changes`` (``policy.allows_ci_changes``). Returns the new
-    commit SHA.
+    remote ref not exist. A merged upstream port that changes ``.github/`` is
+    refused unless ``allow_ci_changes`` (``policy.allows_ci_changes``).
+    Model-authored patches are always refused at this final publication
+    boundary. Returns the new commit SHA.
     """
     _validate_target(target)
     create = target.kind is TargetKind.DRAFT_PR
     if candidate.action is CandidateAction.PATCH:
-        return _push_patch(
-            candidate,
-            target,
-            git_env=git_env,
-            pre_push_check=pre_push_check,
-            create=create,
-            allow_ci_changes=allow_ci_changes,
+        raise PushRefused(
+            "Refusing to push: model-authored patches are review-only. "
+            "Only an exact commit already merged on the trusted default "
+            "branch may be pushed automatically."
         )
     if candidate.action is CandidateAction.PORT:
         return _push_port(
@@ -87,48 +86,6 @@ def push_candidate(
             allow_ci_changes=allow_ci_changes,
         )
     raise PushRefused("Refusing to push: the agent did not prepare a fix.")
-
-
-def _push_patch(
-    candidate: FixCandidate,
-    target: FixTarget,
-    *,
-    git_env: dict[str, str],
-    pre_push_check: PrePushCheck | None,
-    create: bool,
-    allow_ci_changes: bool,
-) -> str:
-    if not candidate.changed_paths:
-        raise PushRefused("Refusing to push: the candidate has no changed paths.")
-    if not candidate.patch.strip():
-        raise PushRefused("Refusing to push: the candidate patch is empty.")
-
-    with tempfile.TemporaryDirectory(prefix="ci-fix-push-") as tempdir:
-        repo_dir = Path(tempdir) / "repo"
-        _clone(target.base_repo_full_name or target.repo_full_name, repo_dir)
-        try:
-            run_git(str(repo_dir), "checkout", "--detach", target.expected_sha)
-            _apply_patch(str(repo_dir), candidate.patch)
-            staged = _staged_paths(str(repo_dir))
-            expected = tuple(sorted(candidate.changed_paths))
-            if staged != expected:
-                raise PushRefused(
-                    "Refusing to push: the patch staged unexpected paths "
-                    f"{staged!r} (expected {expected!r})."
-                )
-            _set_identity(repo_dir)
-            run_git(str(repo_dir), "commit", "-m", commit_message(candidate))
-            _push(
-                repo_dir,
-                target,
-                git_env=git_env,
-                pre_push_check=pre_push_check,
-                create=create,
-                allow_ci_changes=allow_ci_changes,
-            )
-            return git_output(str(repo_dir), "rev-parse", "HEAD").strip()
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
-            raise PushFailed(f"CI-fix Git operation failed: {exc}") from exc
 
 
 def _push_port(
@@ -212,17 +169,6 @@ def _set_identity(repo_dir: Path) -> None:
     run_git(str(repo_dir), "config", "user.email", BOT_EMAIL)
 
 
-def _apply_patch(repo_dir: str, patch: str) -> None:
-    run_git(
-        repo_dir,
-        "apply",
-        "--index",
-        "--whitespace=nowarn",
-        "-",
-        input=patch,
-    )
-
-
 def _staged_paths(repo_dir: str) -> tuple[str, ...]:
     return tuple(sorted(git_paths(
         repo_dir,
@@ -249,9 +195,9 @@ def _push(
             "Refusing to push: the generated commit does not descend from the expected head."
         )
     # A workflow or action change runs with the repository's own privileges
-    # once pushed, so a person applies it, not the bot: this also covers a
-    # ported upstream commit. A bot-owned backport branch is the exception
-    # (policy.allows_ci_changes), and only its push token has workflows:write.
+    # once pushed. The only automatic exception is an exact commit already
+    # merged on the trusted default branch, ported to a bot-owned backport
+    # branch (policy.allows_ci_changes).
     ci_paths = [
         path for path in git_paths(
             str(repo_dir), "diff", "--no-renames", "--name-only", "-z", target.expected_sha, "HEAD",
@@ -428,20 +374,9 @@ def _is_stale_lease(exc: subprocess.CalledProcessError) -> bool:
 
 
 def commit_message(candidate: FixCandidate) -> str:
-    """Return a concise bot-authored commit message for an authored patch."""
-    subject = fit_subject(f"Fix {candidate.failing_check or 'CI failure'}")
-    paragraphs = [candidate.root_cause.strip(), candidate.reasoning.strip()]
-    body = "\n\n".join(
-        textwrap.fill(
-            paragraph,
-            width=72,
-            break_long_words=False,
-            break_on_hyphens=False,
-        )
-        for paragraph in paragraphs
-        if paragraph
-    )
-    return f"{subject}\n\n{body}\n" if body else subject
+    """Return a code-owned commit message; model-authored prose is never committed."""
+    del candidate
+    return "Fix CI failure"
 
 
 def fit_subject(subject: str) -> str:

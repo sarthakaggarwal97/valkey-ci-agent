@@ -30,9 +30,9 @@ TARGET_CAPABILITIES: dict[TargetKind, TargetCapabilities] = {
     TargetKind.UPDATE_PR: TargetCapabilities(
         agent_profile="ci_fix_edit",
         publication_guidance=(
-            "A successful candidate will be committed to the existing "
-            "bot-owned PR branch. Its normal repository CI and a human review "
-            "decide whether it merges."
+            "A model-authored patch will be posted for maintainer review and "
+            "will not be pushed. An exact fix already merged on the trusted "
+            "default branch may be ported to the existing bot-owned PR branch."
         ),
         allowed_actions=frozenset(
             {
@@ -60,9 +60,9 @@ TARGET_CAPABILITIES: dict[TargetKind, TargetCapabilities] = {
     TargetKind.DRAFT_PR: TargetCapabilities(
         agent_profile="ci_fix_edit",
         publication_guidance=(
-            "A successful candidate will be committed to a new bot-owned "
-            "branch and opened as a draft PR. Its normal repository CI and a "
-            "human review decide whether it merges."
+            "A model-authored patch will be posted on the issue for maintainer "
+            "review and will not be pushed. An exact fix already merged on the "
+            "trusted default branch may be ported to a new bot-owned draft PR."
         ),
         allowed_actions=frozenset(
             {
@@ -95,17 +95,18 @@ def is_backport_branch(branch: str) -> bool:
 
 
 def allows_ci_changes(task: FixTask) -> bool:
-    """Whether ``task``'s fix may change ``.github/``.
+    """Whether ``task`` may port a merged upstream ``.github/`` change.
 
-    Only on a bot-owned backport branch: a release branch often fails because
-    it lacks an upstream CI change, and the bot owns the branch it pushes to.
-    Everywhere else a workflow change runs with the repository's privileges
-    once pushed, so a person applies it.
+    This never authorizes a model-authored patch. Only an exact commit already
+    merged on the trusted default branch may use the capability, and only on a
+    bot-owned backport branch: a release branch often lacks that upstream CI
+    change. Everywhere else a person applies workflow changes.
     """
     target = task.target
     return (
         task.policy is FixPolicy.BACKPORT
         and target.kind is TargetKind.UPDATE_PR
+        and target.execution_trusted
         and is_backport_branch(target.branch)
     )
 

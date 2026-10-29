@@ -5,7 +5,13 @@ from __future__ import annotations
 import logging
 
 from scripts.common import logging_utils
-from scripts.common.logging_utils import _TagFormatter, log_group, log_outcome
+from scripts.common.logging_utils import (
+    _TagFormatter,
+    capture_untrusted_output,
+    emit_untrusted_output,
+    log_group,
+    log_outcome,
+)
 
 
 def _record(path: str) -> logging.LogRecord:
@@ -18,6 +24,52 @@ def test_records_are_tagged_by_feature_area_not_module_path():
     assert fmt.format(_record("/w/scripts/ci_fix/main.py")) == "[ci-fix] hello world"
     # Shared helpers act for their caller, so the file is the useful tag.
     assert fmt.format(_record("/w/scripts/common/proc.py")) == "[proc] hello world"
+
+
+def test_every_physical_log_line_is_prefixed_and_terminal_safe():
+    record = logging.LogRecord(
+        "x",
+        logging.INFO,
+        "/w/scripts/ci_fix/engine.py",
+        1,
+        "::notice::first\r\n::stop-commands::TOKEN\n\x1b[2K::add-mask::secret\x00\u202e",
+        (),
+        None,
+    )
+
+    rendered = _TagFormatter("%(message)s").format(record)
+
+    assert rendered.splitlines() == [
+        "| ::notice::first",
+        "| ::stop-commands::TOKEN",
+        r"| \x1b[2K::add-mask::secret\x00\u202e",
+    ]
+    assert all(not line.startswith("::") for line in rendered.splitlines())
+
+
+def test_captured_child_output_cannot_emit_a_workflow_command(capsys):
+    emit_untrusted_output(
+        b"ordinary\n::add-mask::secret\r::stop-commands::TOKEN\x00\n",
+        label="target setup",
+    )
+
+    lines = capsys.readouterr().err.splitlines()
+    assert lines == [
+        "[target setup] ordinary",
+        "[target setup] : :add-mask: :secret",
+        r"[target setup] : :stop-commands: :TOKEN\x00",
+    ]
+    assert all("::" not in line and not line.startswith("::") for line in lines)
+
+
+def test_untrusted_output_capture_is_bounded_but_keeps_draining(capsys):
+    with capture_untrusted_output(label="child", limit=12) as output:
+        output.write(b"::error::forged\n" + b"x" * 100_000)
+
+    rendered = capsys.readouterr().err
+    assert "::" not in rendered
+    assert len(rendered) < 1_000
+    assert "output truncated after 12 bytes" in rendered
 
 
 def test_outcome_is_annotated_only_in_actions(monkeypatch, capsys, caplog):

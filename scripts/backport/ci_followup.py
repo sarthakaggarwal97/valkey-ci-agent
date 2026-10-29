@@ -244,6 +244,7 @@ def plan_request(
             base_repo_full_name=repo_entry.repo,
             branch=target.head_branch,
             expected_sha=target.head_sha,
+            execution_trusted=True,
         ),
         # A backport branch's failure is usually a missing upstream change; a
         # pushed CI fix or a draft PR has no upstream counterpart to port.

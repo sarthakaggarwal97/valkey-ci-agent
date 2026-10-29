@@ -194,7 +194,7 @@ def test_selects_only_the_highest_priority_failure(monkeypatch) -> None:
 
     assert reason == "actionable"
     assert target is not None
-    assert target.job.id == 2
+    assert target.job.id == 1
 
 
 def test_waits_until_every_current_head_run_finishes(monkeypatch) -> None:
@@ -463,6 +463,7 @@ def test_the_plan_binds_the_exact_job_and_its_markers(monkeypatch) -> None:
     assert task.target.repo_full_name == "valkey-io/valkey"
     assert task.target.branch == "agent/backport/sweep/9.0"
     assert task.target.expected_sha == _HEAD
+    assert task.target.execution_trusted is True
     assert task.failure.base_branch == "9.0"
     (marker,) = plan.markers
     assert f"head={_HEAD} run=10 attempt=4 job=27" in marker and "key=" in marker

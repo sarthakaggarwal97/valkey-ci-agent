@@ -9,11 +9,14 @@ request's red head (:mod:`scripts.backport.ci_followup`).
    job (a :class:`FixPlan`); this module resolves that job from the workflow
    that ran it, if it can host the fix (:mod:`scripts.ci_fix.ci_job`).
 2. ``fix``: :func:`scripts.ci_fix.engine.prepare_fix`, inside that job after
-   its own setup and build (``scripts/ci_fix/job.sh``), or on the bot's own
-   runner. It holds no GitHub token.
-3. ``publish``: the candidate is published as its target says, and the
-   front door reports it (a draft PR and an issue comment, or a push or a suggestion and
-   a PR comment), also when the fix job failed or never finished.
+   its credential-free non-build setup was replayed
+   (``scripts/ci_fix/job.sh``), or on the bot's own runner without target
+   setup. Its code-owned reproduction performs the extracted Valkey build. It
+   holds no GitHub token.
+3. ``publish``: a model-authored patch is reported for maintainer review,
+   while an exact fix already merged upstream may be ported to a bot-owned
+   branch. The front door reports the result, also when the fix job failed or
+   never finished.
 
 The plan, the resolved job and the fix's outcome pass between the jobs as
 JSON (:mod:`scripts.ci_fix.state`).
@@ -34,9 +37,17 @@ from github import Auth, Github, GithubException
 from scripts.backport import ci_followup
 from scripts.ci_fix import issues
 from scripts.ci_fix import main as pr_command
-from scripts.ci_fix.ci_job import JobSpec, Unsupported, resolve, setup_script, workflow_source
+from scripts.ci_fix.ci_job import (
+    JobSpec,
+    Unsupported,
+    isolated_setup_reason,
+    resolve,
+    setup_script,
+    workflow_source,
+)
 from scripts.ci_fix.engine import prepare_fix
 from scripts.ci_fix.models import (
+    CandidateAction,
     FixOutcome,
     FixPlan,
     FixResult,
@@ -50,7 +61,9 @@ from scripts.ci_fix.policy import allows_ci_changes
 from scripts.ci_fix.publish import publish_candidate
 from scripts.ci_fix.state import load, save
 from scripts.common.git_auth import GitAuth
+from scripts.common.git_clone import is_full_sha
 from scripts.common.identity import APP_LOGIN
+from scripts.common.logging_utils import configure_logging
 from scripts.common.workflow_artifacts import ArtifactClient
 
 logger = logging.getLogger(__name__)
@@ -86,11 +99,11 @@ def plan(
 ) -> dict[str, str]:
     """Plan one request; the workflow's outputs.
 
-    ``mode`` is ``job`` (the failed job hosts the fix: its runner, container,
-    timeout and checkouts follow, and its spec and setup script are written
-    next to the plan), ``local`` (it cannot), or ``done`` (the front door's
-    result was final: a skip, or a refusal it already reported, with its
-    ``action``).
+    ``mode`` is ``job`` (a supported host job hosts the fix: its runner,
+    timeout and pinned checkouts follow, and its spec and non-build setup
+    script are written next to the plan), ``local`` (it cannot), or ``done``
+    (the front door's result was final: a skip, or a refusal it already
+    reported, with its ``action``).
     """
     planner, reporter = _FRONT_DOORS[front_door]
     planned = planner(gh, artifact_client, request, bot_login=bot_login)
@@ -99,12 +112,14 @@ def plan(
         return {"mode": "done", "action": str(planned.get("action") or "")}
     try:
         return _plan_job(gh, artifact_client, planned, out)
-    except Exception as exc:  # noqa: BLE001 - a planned request always gets a reported result
+    except Exception:  # noqa: BLE001 - a planned request always gets a reported result
         logger.exception("Planning the fix failed")
         # The publish job does not run without a plan: report here, so the
         # front door records the failed attempt instead of saying nothing.
         result = FixResult(
-            kind=ResultKind.FAILED, summary=f"The CI-fix attempt failed while planning: {exc}", task=planned.task,
+            kind=ResultKind.FAILED,
+            summary="The CI-fix attempt failed while planning the job.",
+            task=planned.task,
         )
         print(json.dumps(reporter(gh, planned, result), indent=2))
         return {"mode": "done", "action": ResultKind.FAILED.value}
@@ -147,13 +162,18 @@ def checked_out(task: FixTask) -> str:
 def job_for(gh: Any, task: FixTask) -> JobSpec | None:
     """The failed job, from its workflow file at the checked-out commit, or None when it cannot host the fix.
 
-    The setup replays in that tree, so it is that tree's workflow: a detector
-    issue's fix is prepared on the branch tip, not the older commit the
-    scheduled run tested. A suggestion is never run, so it needs no job.
+    The admitted non-build setup replays in that tree, so it is that tree's
+    workflow: a detector issue's fix is prepared on the branch tip, not the
+    older commit the scheduled run tested. A suggestion is never run, so it
+    needs no job.
     """
     failure = task.failure
     workflow = failure.source.value if failure.source else failure.workflow
-    if task.target.kind is TargetKind.SUGGEST or not workflow:
+    if (
+        task.target.kind is TargetKind.SUGGEST
+        or not task.target.execution_trusted
+        or not workflow
+    ):
         return None
     if failure.scheduled or not failure.pr_number:
         ref = f"refs/heads/{failure.base_branch}"
@@ -162,8 +182,17 @@ def job_for(gh: Any, task: FixTask) -> JobSpec | None:
     try:
         sha = checked_out(task)
         source = workflow_source(gh, failure.repo_full_name, workflow, sha)
-        return resolve(source, failure.job_name, scheduled=failure.scheduled,
-                       repository=failure.repo_full_name, sha=sha, ref=ref)
+        spec = resolve(
+            source,
+            failure.job_name,
+            scheduled=failure.scheduled,
+            repository=failure.repo_full_name,
+            sha=sha,
+            ref=ref,
+        )
+        if reason := isolated_setup_reason(spec):
+            raise Unsupported(reason)
+        return spec
     except (Unsupported, GithubException) as exc:
         logger.info("%s cannot host the fix, which is prepared on the bot's runner: %s", failure.job_name, exc)
         return None
@@ -179,9 +208,9 @@ def fix(plan_dir: Path, out: Path, *, repo_dir: str = "") -> FixOutcome:
         job = load(plan_dir / JOB_FILE, JobSpec).commands if (plan_dir / JOB_FILE).exists() else None
         candidate = prepare_fix(fix_plan.task, fix_plan.job_log, repo_dir=repo_dir, job=job)
         outcome = FixOutcome(candidate=candidate)
-    except Exception as exc:  # noqa: BLE001 - the publish job reports every outcome
+    except Exception:  # noqa: BLE001 - the publish job reports every outcome
         logger.exception("CI-fix failed")
-        outcome = FixOutcome(error=str(exc) or type(exc).__name__)
+        outcome = FixOutcome(error="the fix process failed; see the workflow run for details")
     save(out / OUTCOME_FILE, outcome)
     return outcome
 
@@ -200,8 +229,9 @@ def publish_and_report(
         outcome = load(outcome_dir / OUTCOME_FILE, FixOutcome)
     except FileNotFoundError:
         outcome = FixOutcome(error=f"the fix job ended without a result (see {run_url})")
-    except (OSError, ValueError, TypeError, KeyError) as exc:
-        outcome = FixOutcome(error=f"the fix job's result could not be read ({exc}; see {run_url})")
+    except (OSError, ValueError, TypeError, KeyError):
+        logger.exception("The fix job's result could not be read")
+        outcome = FixOutcome(error=f"the fix job's result could not be read (see {run_url})")
     reporter = _FRONT_DOORS[fix_plan.front_door][1]
     if outcome.candidate is None:
         result = FixResult(
@@ -213,10 +243,14 @@ def publish_and_report(
             mode = (issue_publication() if fix_plan.task.target.kind is TargetKind.DRAFT_PR
                     else IssuePublication.DRAFT_PR)
             result = publish_candidate(gh, fix_plan.task, outcome.candidate, git_env=git_env, issue_publication=mode)
-        except Exception as exc:  # noqa: BLE001 - every request gets a reported result
+        except Exception:  # noqa: BLE001 - every request gets a reported result
             logger.exception("CI-fix publication failed")
-            result = FixResult(kind=ResultKind.FAILED, summary=f"The CI-fix attempt failed: {exc}",
-                               task=fix_plan.task, candidate=outcome.candidate)
+            result = FixResult(
+                kind=ResultKind.FAILED,
+                summary="The CI-fix attempt failed while publishing; see the workflow run for details.",
+                task=fix_plan.task,
+                candidate=outcome.candidate,
+            )
     return reporter(gh, fix_plan, result)
 
 
@@ -230,6 +264,28 @@ def issue_publication() -> IssuePublication:
     except ValueError:
         choices = ", ".join(mode.value for mode in IssuePublication)
         raise ValueError(f"{ISSUE_PUBLICATION_ENV} must be one of {choices}, not {value!r}") from None
+
+
+def workflow_token_required(plan_dir: Path, outcome_dir: Path) -> bool:
+    """Whether publication may need ``workflows:write``.
+
+    The plan describes what the target would permit, not what the fix job
+    actually produced. Elevate only for a code-owned upstream port on a target
+    whose policy permits CI changes. A missing, malformed, refused, or
+    model-authored result uses the ordinary publication token.
+    """
+    try:
+        fix_plan = load(plan_dir / PLAN_FILE, FixPlan)
+        outcome = load(outcome_dir / OUTCOME_FILE, FixOutcome)
+    except (FileNotFoundError, OSError, ValueError, TypeError, KeyError):
+        return False
+    candidate = outcome.candidate
+    return bool(
+        candidate is not None
+        and candidate.action is CandidateAction.PORT
+        and is_full_sha(candidate.port_commit)
+        and allows_ci_changes(fix_plan.task)
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -246,12 +302,23 @@ def main(argv: list[str] | None = None) -> int:
     publish_ = commands.add_parser("publish", help="publish the fix and report it")
     publish_.add_argument("--plan", required=True, type=Path)
     publish_.add_argument("--outcome", required=True, type=Path)
+    scope_ = commands.add_parser(
+        "publication-scope",
+        help="select the least-privileged publication token; needs no GitHub token",
+    )
+    scope_.add_argument("--plan", required=True, type=Path)
+    scope_.add_argument("--outcome", required=True, type=Path)
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
     if args.command == "fix":
         outcome = fix(args.plan, args.out, repo_dir=args.repo_dir)
         return 0 if outcome.candidate is not None else 1
+    if args.command == "publication-scope":
+        _write_outputs({
+            "workflows": "true" if workflow_token_required(args.plan, args.outcome) else "",
+        })
+        return 0
 
     token = os.environ.get("TARGET_TOKEN", "")
     if not token:

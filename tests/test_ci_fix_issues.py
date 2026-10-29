@@ -251,6 +251,21 @@ def test_a_c_unit_tests_job_issue_names_its_test_for_the_engine():
     assert parsed.describe("test-ubuntu-jemalloc", issues_mod.Source.DAILY).startswith("C unit test `Crc64Test.TestCrc64`")
 
 
+def test_issue_failure_description_cannot_break_out_of_inline_code():
+    malicious = "test` @valkey-io/security [click](https://example.invalid) <details>"
+    description = IssueFailure(
+        7,
+        100,
+        malicious,
+        malicious,
+        malicious,
+    ).describe(malicious, issues_mod.Source.DAILY)
+
+    assert f"``{malicious}``" in description
+    assert description.count("``") == 6
+    assert "` @valkey-io/security" not in description.replace(f"``{malicious}``", "")
+
+
 def test_non_detector_body_is_not_parsed():
     assert parse_issue(_issue(body="Please fix this test")) is None
     body = _test_issue_body().replace(_last_key(100), "")
@@ -330,6 +345,7 @@ def test_ready_fix_uses_exact_job_and_opens_draft_in_target_repo(
     assert task.target.base_repo_full_name == "o/r"
     assert task.target.branch == "agent/ci-fix/issue-7-100"
     assert task.target.expected_sha == _BASE
+    assert task.target.execution_trusted is True
     assert task.failure.base_branch == "unstable"
     assert result["action"] == "opened"
     assert result["pr"] == 55
@@ -484,24 +500,134 @@ def test_a_crash_while_planning_is_recorded_as_a_failed_attempt(monkeypatch):
     assert "outcome=failed" in comment.body
 
 
-def test_an_unread_log_is_not_taken_for_no_matching_job(monkeypatch):
-    run_ = SimpleNamespace(id=100, run_attempt=1)
+def test_expired_logs_are_a_terminal_refusal_not_a_failed_attempt(monkeypatch):
+    issue = _issue()
+    gh, _repo, _run = _gh(issue)
     job = SimpleNamespace(name="test-valgrind", conclusion="failure", id=5, html_url="")
     monkeypatch.setattr(issues_mod, "jobs_for_run_attempt", lambda *_a, **_k: [job])
     monkeypatch.setattr(issues_mod, "download_all_test_failures", lambda *_a, **_k: "")
 
-    def unread(_client, _repo, _recorded, *, jobs, ignored_jobs, unread):
-        unread.append("test-valgrind")
+    def expired(_client, _repo_name, _recorded, *, jobs, ignored_jobs, unread, expired):
+        expired.append("test-valgrind")
         return [], []
 
-    monkeypatch.setattr(issues_mod, "find_unrecorded_failures", unread)
-    failure = SimpleNamespace(job_name="", test_name="t", test_file="tests/unit/a.tcl", fingerprint="")
+    monkeypatch.setattr(issues_mod, "find_unrecorded_failures", expired)
 
-    with pytest.raises(RuntimeError, match="test-valgrind could not be read"):
-        issues_mod._failing_jobs(MagicMock(), MagicMock(), "o/r", run_, failure, ())
+    result = issues_mod.prepare_issue(gh, MagicMock(), "o/r", issue_number=7, bot_login=_BOT)
+
+    assert result["action"] == "refused"
+    assert "source job logs for run 100 have expired" in result["summary"]
+    assert "bound safely to an exact failed job" in result["summary"]
+    (comment,) = issue.comments
+    assert "outcome=refused" in comment.body
 
 
-def test_orphan_branch_is_reconciled_before_job_artifacts_are_read(monkeypatch):
+@pytest.mark.parametrize("readable_match", (False, True), ids=("unread-wins", "match-wins"))
+def test_readable_and_unread_logs_take_precedence_over_unrelated_expired_logs(
+    monkeypatch,
+    readable_match,
+):
+    run_ = SimpleNamespace(id=100, run_attempt=1)
+    selected = SimpleNamespace(name="test-ubuntu-32bit", conclusion="failure", id=5, html_url="")
+    expired_job = SimpleNamespace(name="test-valgrind", conclusion="failure", id=6, html_url="")
+    monkeypatch.setattr(
+        issues_mod,
+        "jobs_for_run_attempt",
+        lambda *_a, **_k: [selected, expired_job],
+    )
+    monkeypatch.setattr(issues_mod, "download_all_test_failures", lambda *_a, **_k: "")
+    found = UniqueFailure(
+        "Throttling tears down",
+        "tests/integration/throttle-repl.tcl",
+        "[TIMEOUT]",
+        [JobReference(selected.name)],
+    )
+
+    def unavailable(_client, _repo, _recorded, *, jobs, ignored_jobs, unread, expired):
+        expired.append(expired_job.name)
+        if readable_match:
+            return [found], []
+        unread.append(selected.name)
+        return [], []
+
+    monkeypatch.setattr(issues_mod, "find_unrecorded_failures", unavailable)
+    failure = IssueFailure(
+        7,
+        100,
+        "Throttling tears down",
+        "tests/integration/throttle-repl.tcl",
+    )
+
+    if not readable_match:
+        with pytest.raises(RuntimeError, match="test-ubuntu-32bit could not be read"):
+            issues_mod._failing_jobs(MagicMock(), MagicMock(), "o/r", run_, failure, ())
+    else:
+        result = issues_mod._failing_jobs(
+            MagicMock(), MagicMock(), "o/r", run_, failure, (),
+        )
+        assert [(job.name, job.id) for job in result] == [(selected.name, selected.id)]
+
+
+@pytest.mark.parametrize(
+    ("job_name", "artifact_job_name"),
+    (
+        ("test-ubuntu-32bit", "test-ubuntu-32bit"),
+        ("test-valgrind-test (unit)", "test-valgrind-test-unit"),
+    ),
+)
+def test_a_matching_failure_artifact_proceeds_when_its_job_log_expired(
+    monkeypatch,
+    job_name,
+    artifact_job_name,
+):
+    selected = FailedJob(job_name, 5)
+    monkeypatch.setattr(
+        issues_mod,
+        "jobs_for_run_attempt",
+        lambda *_a, **_k: _raw(selected),
+    )
+    artifact = {
+        artifact_job_name: {
+            "valkey": [
+                {
+                    "test_name": "Throttling tears down",
+                    "test_file": "tests/integration/throttle-repl.tcl",
+                    "error": "[TIMEOUT]",
+                },
+            ],
+        },
+    }
+    monkeypatch.setattr(
+        issues_mod,
+        "download_all_test_failures",
+        lambda *_a, **_k: json.dumps(artifact).encode(),
+    )
+
+    def expired(_client, _repo, _recorded, *, jobs, ignored_jobs, unread, expired):
+        expired.append(selected.name)
+        return [], []
+
+    monkeypatch.setattr(issues_mod, "find_unrecorded_failures", expired)
+    failure = IssueFailure(
+        7,
+        100,
+        "Throttling tears down",
+        "tests/integration/throttle-repl.tcl",
+    )
+
+    result = issues_mod._failing_jobs(
+        MagicMock(),
+        MagicMock(),
+        "o/r",
+        SimpleNamespace(id=100, run_attempt=1),
+        failure,
+        (),
+    )
+
+    assert result == (selected,)
+
+
+def test_existing_occurrence_pr_is_recognized_before_job_artifacts_are_read(monkeypatch):
     issue = _issue()
     gh, _repo, _run_ = _gh(issue)
     jobs = MagicMock(side_effect=AssertionError("job artifacts should not be read"))
@@ -632,8 +758,8 @@ def test_a_fix_published_as_a_comment_is_the_patch_on_the_issue_and_closes_the_o
 
     (comment,) = issue.comments
     assert comment.body.startswith("A tentative fix, prepared and checked in that job. Nothing was pushed and no PR")
-    assert "**Root cause:** The wait is too short." in comment.body
-    assert "**The fix:** Wait for the replica." in comment.body
+    assert "The wait is too short." not in comment.body
+    assert "Wait for the replica." not in comment.body
     assert "- Reproduced: 3 of 20 loops failed" in comment.body
     assert "```diff\n--- a/tests/x.tcl" in comment.body
     assert comment.body.rstrip().endswith("<!-- valkey-ci-agent:ci-fix-result run=100 outcome=suggested -->")
@@ -658,7 +784,7 @@ def test_the_issue_comment_lists_what_the_bot_checked(monkeypatch):
 
     body = issue.comments[-1].body
     assert "**What the bot checked**" in body
-    assert "- Existing fixes found: `abc123`" in body and "- Did not reproduce" in body
+    assert "- Existing fixes found: \\`abc123\\`" in body and "- Did not reproduce" in body
 
 
 # --- other open detector issues the same patch might fix --------------------------
@@ -714,7 +840,7 @@ def issue_plan(job_name="test-ubuntu-jemalloc"):
         Failure(repo_full_name="valkey-io/valkey", run_id=100, head_sha=_FAILING, job_id=22, job_name=job_name,
                 base_branch="unstable", issue_number=7, failed_tests=failure.failed_tests, source=Source.DAILY),
         FixTarget(kind=TargetKind.DRAFT_PR, repo_full_name="valkey-io/valkey", branch="agent/ci-fix/x",
-                  expected_sha=_BASE),
+                  expected_sha=_BASE, execution_trusted=True),
         FixPolicy.GENERAL,
     )
     return FixPlan(front_door=FrontDoor.ISSUE, task=task, issue=failure)

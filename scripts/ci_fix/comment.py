@@ -4,25 +4,17 @@ from __future__ import annotations
 
 import re
 
-from scripts.ci_fix.models import (
-    FailureType,
-    FixCandidate,
-    FixResult,
-    ResultKind,
-    TargetKind,
-)
+from scripts.ci_fix.models import CandidateAction, FixCandidate, FixResult, ResultKind, TargetKind
 from scripts.ci_fix.policy import target_capabilities
 from scripts.common.text_utils import compact_text
 
 _MAX_OTHER_JOBS = 10
-# A command longer than this goes on its own lines, below the check it backs.
-_INLINE_COMMAND_CHARS = 80
 
 
 def render_result(result: FixResult) -> str:
     """Return the maintainer-facing report for one fix attempt."""
     failure = result.task.failure
-    job = f"`{prose(failure.job_name, 300)}`" if failure.job_name else "the failed job"
+    job = inline_code(prose(failure.job_name, 300)) if failure.job_name else "the failed job"
     if failure.run_url:
         job += f" ([run]({failure.run_url}))"
 
@@ -61,7 +53,7 @@ def _context(result: FixResult, *, include_reasoning: bool = True) -> list[str]:
         lines += [
             "Other jobs also failed in that run:",
             "",
-            *[f"- `{prose(name, 300)}`" for name in visible],
+            *[f"- {inline_code(prose(name, 300))}" for name in visible],
         ]
         hidden = len(failure.other_failed_jobs) - len(visible)
         if hidden:
@@ -73,64 +65,22 @@ def _context(result: FixResult, *, include_reasoning: bool = True) -> list[str]:
 def candidate_context(
     candidate: FixCandidate, *, include_reasoning: bool, include_failing_check: bool = False,
 ) -> list[str]:
-    """The diagnosis and checks of ``candidate``, as a PR comment or draft PR body shows them."""
+    """Code-owned checks of ``candidate``, as a PR comment or draft PR body shows them."""
+    del include_reasoning, include_failing_check
     lines: list[str] = []
-    if include_failing_check and candidate.failing_check:
-        lines += [f"**What failed:** {prose(candidate.failing_check, 300)}", ""]
-    if candidate.root_cause:
-        cause = prose(candidate.root_cause, 2_000)
-        if candidate.failure_type is FailureType.FLAKY:
-            cause = f"{sentence(cause)} The failure is flaky."
-        lines += [f"**Root cause:** {cause}", ""]
-    if include_reasoning and candidate.reasoning:
-        lines += [f"**The fix:** {prose(candidate.reasoning, 3_000)}", ""]
     checks = check_items(candidate.verification)
     if checks:
         lines += ["**What the bot checked**", "", *checks, ""]
-    if candidate.validation:
-        lines += [
-            "<details><summary>The agent's own notes</summary>",
-            "",
-            prose(candidate.validation, 2_000),
-            "",
-            "</details>",
-            "",
-        ]
     return lines
 
 
 def check_items(verification: str) -> list[str]:
-    """``verification``'s lines as a Markdown list, each long command in a block of its own."""
-    items: list[str] = []
-    for line in verification.splitlines():
-        if line.strip():
-            items += _check_item(line)
-    return items
-
-
-_CODE_RE = re.compile(r"`([^`\n]+)`")
-
-
-def _check_item(line: str) -> list[str]:
-    text = _plural(prose(line, 5_000))
-    command = next((match for match in _CODE_RE.finditer(text)
-                    if len(match.group(1)) > _INLINE_COMMAND_CHARS), None)
-    if command is None:
-        return [f"- {text}"]
-    before, after = text[:command.start()], text[command.end():]
-    if not before.strip():
-        text = "This command" + after
-    elif before.rstrip().endswith(","):
-        text = before + "this command" + after
-    else:
-        text = re.sub(r"\s*(?:\bwith|:)\s*$", "", before) + after
-    # The command follows the sentence it backs; any later sentence, the block.
-    first, _, rest = text.partition(". ")
-    block = _fenced(command.group(1), lang="sh", indent="  ").splitlines()
-    item = [f"- {first.rstrip().rstrip('.:')}:", "", *block]
-    if rest.strip():
-        item += ["", f"  {rest.strip()}"]
-    return item
+    """``verification``'s code-owned lines as inert Markdown list items."""
+    return [
+        f"- {_markdown_plain(_plural(prose(line, 5_000)))}"
+        for line in verification.splitlines()
+        if line.strip()
+    ]
 
 
 # An em dash, or an en dash set off by spaces (not one in a range, ``1–3``).
@@ -158,7 +108,7 @@ def _plural(text: str) -> str:
 
 def sentence(text: str) -> str:
     """``text`` as one sentence: capitalized, and ended."""
-    text = prose(text, 2_000)
+    text = _markdown_plain(prose(text, 2_000))
     text = text[:1].upper() + text[1:]
     return text if text.endswith((".", "!", "?")) else f"{text}."
 
@@ -168,9 +118,14 @@ def _footer(text: str) -> str:
 
 
 def candidate_patch(candidate: FixCandidate | None) -> list[str]:
-    """The candidate's patch as a fenced block, when there is one that fits a comment."""
+    """The candidate change as inert review material that fits a comment."""
     if candidate is None:
         return []
+    if candidate.action is CandidateAction.PORT and candidate.port_commit:
+        return [
+            f"Proposed upstream port: {inline_code(candidate.port_commit)}",
+            "",
+        ]
     if not candidate.patch:
         return []
     patch_limit = target_capabilities(TargetKind.SUGGEST).patch_limit
@@ -192,3 +147,17 @@ def _fenced(body: str, *, lang: str = "", indent: str = "") -> str:
     longest = max((len(match) for match in re.findall(r"`+", body)), default=0)
     fence = "`" * max(3, longest + 1)
     return "\n".join(f"{indent}{line}" for line in (f"{fence}{lang}", *body.splitlines(), fence))
+
+
+def inline_code(body: str) -> str:
+    """Inline-code untrusted text with a delimiter it cannot terminate."""
+    longest = max((len(match) for match in re.findall(r"`+", body)), default=0)
+    fence = "`" * max(1, longest + 1)
+    padded = f" {body} " if body.startswith((" ", "`")) or body.endswith((" ", "`")) else body
+    return f"{fence}{padded}{fence}"
+
+
+def _markdown_plain(body: str) -> str:
+    """Neutralize links, formatting, HTML and mentions in prose."""
+    body = body.replace("\\", "\\\\").replace("@", "@\u200b")
+    return re.sub(r"([`*_\[\]<>])", r"\\\1", body)

@@ -205,6 +205,7 @@ def test_bot_backport_branch_uses_backport_update_policy(monkeypatch) -> None:
     assert result.target.kind is TargetKind.UPDATE_PR
     assert result.target.base_repo_full_name == "valkey-io/valkey"
     assert result.target.expected_sha == _SHA
+    assert result.target.execution_trusted is True
     assert result.failure.job_id == 11
     assert result.failure.run_attempt == 2
     assert result.policy is FixPolicy.BACKPORT
@@ -233,6 +234,7 @@ def test_contributor_or_unowned_branch_gets_suggestion(
     result = _build(monkeypatch, gh=gh)
     assert isinstance(result, FixTask)
     assert result.target.kind is TargetKind.SUGGEST
+    assert result.target.execution_trusted is False
     assert result.policy is FixPolicy.GENERAL
 
 
@@ -364,7 +366,7 @@ def test_without_link_selects_most_actionable_current_head_failure(monkeypatch) 
     )
 
     assert isinstance(result, FixTask)
-    assert (result.failure.run_id, result.failure.job_name) == (2, "build-linux")
+    assert (result.failure.run_id, result.failure.job_name) == (1, "test-sanitizer")
 
 
 def test_without_link_ignores_failure_superseded_by_success(monkeypatch) -> None:

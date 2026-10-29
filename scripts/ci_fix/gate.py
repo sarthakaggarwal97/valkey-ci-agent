@@ -243,6 +243,12 @@ def build_fix_task(
     if not all((head_sha, head_branch, head_repo, base_branch)):
         return GateRejection("Could not determine the PR head and base; refusing.")
 
+    same_repo = head_repo == pr_repo_full_name
+    bot_owned = can_update_branch(
+        same_repo=same_repo,
+        branch=head_branch,
+        author=author,
+    )
     selected: FailedJob
     if command.run_id:
         try:
@@ -276,13 +282,18 @@ def build_fix_task(
                 )
             selected = matched
         else:
-            selected = select_job(failed)
+            selected = select_job(failed, executable=bot_owned)
     else:
         try:
             runs = newest_runs_for_head(
                 gh, pr_repo_full_name, branch=head_branch, head_sha=head_sha, retries=retries,
             )
-            picked = most_actionable_failure(gh, pr_repo_full_name, runs)
+            picked = most_actionable_failure(
+                gh,
+                pr_repo_full_name,
+                runs,
+                executable=bot_owned,
+            )
         except Exception as exc:  # noqa: BLE001
             return GateError(f"Could not inspect CI runs for this PR: {exc}")
         if picked is None:
@@ -307,12 +318,6 @@ def build_fix_task(
             f"The run tested branch {run_branch}, not the current PR branch {head_branch}."
         )
 
-    same_repo = head_repo == pr_repo_full_name
-    bot_owned = can_update_branch(
-        same_repo=same_repo,
-        branch=head_branch,
-        author=author,
-    )
     target_kind = TargetKind.UPDATE_PR if bot_owned else TargetKind.SUGGEST
     target = FixTarget(
         kind=target_kind,
@@ -320,6 +325,7 @@ def build_fix_task(
         base_repo_full_name=pr_repo_full_name,
         branch=head_branch,
         expected_sha=head_sha,
+        execution_trusted=bot_owned,
     )
     failure = Failure(
         repo_full_name=pr_repo_full_name,

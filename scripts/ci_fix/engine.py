@@ -1,18 +1,19 @@
 """Prepare one CI fix.
 
 Preparation runs in this order, every step on one checkout: a disposable
-clone, or the checkout of the failed CI job the fix is prepared in, after
-that job's own setup and build (``scripts/ci_fix/job.sh``):
+clone, or the checkout of the failed CI job after its credential-free setup
+was replayed (``scripts/ci_fix/job.sh``). The job build is part of the
+code-owned reproduction and runs under a separate command identity:
 
 1. **Find existing fixes**: search history for a merged change that names the
    failing test, changes its file, or references its issue
    (:mod:`scripts.ci_fix.prior_fixes`).
 2. **Reproduce**: run the failing test on the unfixed code the way its CI job
    did, looped, then under load (:mod:`scripts.ci_fix.reproduce`).
-3. **Fix**: when every reproduction probe in an approximation of an
-   unsupported job passes, stop without editing. Otherwise one agent session,
-   told what steps 1 and 2 found and the repository's test conventions,
-   ports an existing fix or writes a patch.
+3. **Fix**: every executable target may edit only after code reproduced the
+   failure. A missing, unrunnable, incomplete, or passing reproduction stops
+   cleanly. Otherwise one agent session, told what steps 1 and 2 found and the
+   repository's test conventions, ports an existing fix or writes a patch.
 4. **Verify and review**: the candidate (a port is cherry-picked into the
    checkout first) must pass the reproduction many times, and a separate
    read-only review must approve it. Otherwise the result goes back to the
@@ -27,6 +28,7 @@ import logging
 import os
 import re
 import signal
+import stat
 import subprocess
 import tempfile
 import time
@@ -46,6 +48,7 @@ from scripts.ci_fix.models import (
     FixTask,
     TargetKind,
 )
+from scripts.ci_fix.paths import is_checkout_subdirectory
 from scripts.ci_fix.policy import target_capabilities
 from scripts.ci_fix.prior_fixes import (
     find_prior_fixes,
@@ -62,12 +65,10 @@ from scripts.ci_fix.reproduce import (
     TestRun,
     failure_report,
     plan_for,
-    ran_tests,
     reproduce,
-    shows_failure_of,
 )
 from scripts.common.git_clone import is_full_sha, shallow_clone_at_sha
-from scripts.common.isolation import as_user, handed_to, isolated_user, kill_all
+from scripts.common.isolation import as_user, handed_to, isolated_command_user, kill_all
 from scripts.common.proc import (
     PROCESS_BASICS,
     EmptyPatch,
@@ -89,10 +90,6 @@ JOB_LOG_HEAD_CHARS = 40_000
 # A candidate that fails its test or its review goes back to the agent with
 # the result, this many times in all.
 MAX_ROUNDS = 3
-# How many times the agent's own test command must pass with the patch, when
-# code has no reproduction of its own: once is luck for a flaky failure.
-TEST_RUNS = 2
-FLAKY_TEST_RUNS = 10
 TEST_TIMEOUT_S = 30 * 60
 # The model's AWS session (ci-fix-run.yml's role-duration-seconds). The whole
 # preparation, review included, must end inside it, so rounds stop when the
@@ -104,6 +101,9 @@ _MIN_ROUND_S = 8 * 60
 # Of each round's time, what the agent may not use: the candidate's
 # verification (looped tests, possibly under valgrind) and review come after it.
 _VERIFY_RESERVE_S = 10 * 60
+# Verification may not consume this final portion: an independent review is
+# mandatory for every candidate, including a suggestion whose code is not run.
+_REVIEW_RESERVE_S = 5 * 60
 _TEST_OUTPUT_CHARS = 6_000
 # At most this many of a job's failing tests are searched for and reproduced.
 _MAX_TESTS = 3
@@ -150,6 +150,14 @@ def prepare_fix(
     built and tested with that ``job``'s commands; otherwise in a clone.
     """
     failure = task.failure
+    if (
+        task.target.kind is not TargetKind.SUGGEST
+        and not task.target.execution_trusted
+    ):
+        return _refusal(
+            "The target was not validated as an organization or bot-owned "
+            "checkout, so no repository command or edit was attempted."
+        )
     if failure.job_id <= 0:
         return _refusal("The failed job has no valid job id.")
 
@@ -157,36 +165,106 @@ def prepare_fix(
         return _refusal("The exact failed-job log is unavailable; no fix was prepared.")
     job_log = bounded_job_log(job_log)
 
-    with checkout(task, repo_dir) as (repo_dir, original_head):
-        deadline = time.monotonic() + PREPARE_BUDGET_S
+    deadline = time.monotonic() + PREPARE_BUDGET_S
+    with checkout(
+        task,
+        repo_dir,
+        preserved_paths=job.preserved_paths if job is not None else (),
+        deadline=deadline,
+    ) as (repo_dir, original_head):
+        _operation_timeout(deadline, "baseline preparation")
         runs_tests = task.target.kind is not TargetKind.SUGGEST
         run_test = test_func or run_test_command
         tests = locate_unit_tests(repo_dir, failed_tests(task, job_log))
-        context, plan, reproduction = _establish(
-            task, repo_dir, tests, paths_in_log(repo_dir, job_log),
-            run_test if runs_tests else None,
-            repro_deadline=min(deadline, time.monotonic() + REPRO_BUDGET_S), job=job,
-        )
-        if (
-            job is None
-            and reproduction is not None
-            and reproduction.status is ReproStatus.NOT_REPRODUCED
-            and reproduction.all_attempts_passed
-        ):
+        baseline_tree = _tree_state(repo_dir)
+        if baseline_tree.paths:
             return _refusal(
-                "The failed job could not host the fix, and every fallback reproduction "
-                "probe passed without reproducing the failure. No edit was attempted.",
+                "The job's setup left tracked or non-ignored checkout changes. "
+                "CI-fix cannot distinguish those changes from an agent patch, "
+                "so it stopped before reproduction or editing.",
+            )
+        try:
+            context, plan, reproduction = _establish(
+                task, repo_dir, tests, paths_in_log(repo_dir, job_log),
+                run_test if runs_tests else None,
+                repro_deadline=min(deadline, time.monotonic() + REPRO_BUDGET_S),
+                job=job,
+            )
+        except BaseException:
+            if _tree_state(repo_dir) != baseline_tree:
+                _restore_tree_state(repo_dir, baseline_tree)
+            raise
+        if _tree_state(repo_dir) != baseline_tree:
+            _restore_tree_state(repo_dir, baseline_tree)
+            return _refusal(
+                "The code-owned baseline preparation changed tracked or "
+                "non-ignored checkout state, so it did not provide a stable "
+                "unfixed tree. The original tracked and non-ignored state was "
+                "restored and no edit was attempted.",
                 verification="\n".join(_established_checks(context, reproduction)),
             )
-        return _fix_loop(
-            task, repo_dir, original_head, job_log, context, plan, reproduction,
-            agent_func=agent_func, review=review_func or review_candidate,
-            run_test=run_test if runs_tests else None, deadline=deadline, job=job, tests=tests,
-        )
+        if runs_tests:
+            refusal = _reproduction_refusal(context, plan, reproduction)
+            if refusal is not None:
+                return refusal
+        try:
+            candidate = _fix_loop(
+                task, repo_dir, original_head, job_log, context, plan, reproduction,
+                agent_func=agent_func, review=review_func or review_candidate,
+                run_test=run_test if runs_tests else None, deadline=deadline, job=job,
+            )
+        except BaseException:
+            if _tree_state(repo_dir) != baseline_tree:
+                _restore_tree_state(repo_dir, baseline_tree)
+            raise
+        if candidate.action is CandidateAction.REFUSE and _tree_state(repo_dir) != baseline_tree:
+            _restore_tree_state(repo_dir, baseline_tree)
+        return candidate
+
+
+def _reproduction_refusal(
+    context: FixContext,
+    plan: ReproPlan | None,
+    reproduction: Reproduction | None,
+) -> FixCandidate | None:
+    """Fail closed unless code reproduced the failure before the edit agent.
+
+    An edit is justified only when a code-built command actually saw the
+    reported failure. Checking positively for that complete state also keeps
+    future reproduction outcomes fail-closed.
+    """
+    if (
+        plan is not None
+        and reproduction is not None
+        and reproduction.reproduced
+    ):
+        return None
+
+    if plan is None:
+        reason = "no reproduction command could be planned from the failed-job log"
+    elif reproduction is None:
+        reason = "the planned reproduction command was not run"
+    elif reproduction.status is ReproStatus.UNRUNNABLE:
+        reason = "the reproduction command could not run on this runner"
+    elif reproduction.all_attempts_passed:
+        reason = "every reproduction probe passed without reproducing the failure"
+    else:
+        reason = "the reproduction stopped without reproducing the failure"
+
+    return _refusal(
+        f"The reported failure was not reproduced by code: {reason}. No edit was attempted.",
+        verification="\n".join(_established_checks(context, reproduction)),
+    )
 
 
 @contextmanager
-def checkout(task: FixTask, repo_dir: str = "") -> Iterator[tuple[str, str]]:
+def checkout(
+    task: FixTask,
+    repo_dir: str = "",
+    *,
+    preserved_paths: tuple[str, ...] = (),
+    deadline: float | None = None,
+) -> Iterator[tuple[str, str]]:
     """The checkout at the commit the candidate is prepared on: (path, HEAD).
 
     ``repo_dir`` is an existing one (the failed CI job's); otherwise a
@@ -198,7 +276,7 @@ def checkout(task: FixTask, repo_dir: str = "") -> Iterator[tuple[str, str]]:
         head = git_output(repo_dir, "rev-parse", "HEAD").strip()
         if head.lower() != checkout_sha.lower():
             raise RuntimeError(f"the job checked out {head[:12]} instead of {checkout_sha[:12]}")
-        _keep_existing(repo_dir)
+        _keep_existing(repo_dir, preserved_paths, deadline=deadline)
         yield repo_dir, head
         return
     with tempfile.TemporaryDirectory(prefix="ci-fix-") as workdir:
@@ -218,27 +296,61 @@ def checkout(task: FixTask, repo_dir: str = "") -> Iterator[tuple[str, str]]:
 # (build output, generated test certificates) by content hash. Kept in .git,
 # which the agent's account never owns.
 _KEPT_FILES = "ci-fix-kept.json"
+_MAX_KEPT_FILE_BYTES = 256 * 1024 * 1024
+_MAX_KEPT_BYTES = 512 * 1024 * 1024
+_MAX_KEPT_FILES = 20_000
 
 
-def _keep_existing(repo_dir: str) -> None:
+def _keep_existing(
+    repo_dir: str,
+    preserved_paths: tuple[str, ...] = (),
+    *,
+    deadline: float | None = None,
+) -> None:
     """Treat what the job's setup left in ``repo_dir`` as the job's, not the fix's.
 
-    Untracked files (a dependency checked out into the tree) are ignored from
-    now on, so they are not part of the patch; the ignored files are recorded,
-    so verification removes only what changed after the job's setup.
+    Only code-owned dependency checkout paths from the resolved workflow are
+    ignored from now on, so they are not part of the patch. Any other
+    non-ignored setup-created path remains visible to the clean-baseline gate.
+    Existing ignored files are recorded, so verification removes only what
+    changed after the job's setup.
     """
-    untracked = git_paths(repo_dir, "ls-files", "--others", "--exclude-standard", "--directory", "-z")
-    if untracked:
+    preserved = tuple(path for path in preserved_paths if _safe_preserved_path(path))
+    if len(preserved) != len(preserved_paths):
+        raise ValueError("the resolved job contains an unsafe dependency checkout path")
+    if preserved:
         exclude = Path(repo_dir, ".git", "info", "exclude")
         exclude.parent.mkdir(exist_ok=True)
         with exclude.open("a", encoding="utf-8", errors="surrogateescape") as out:
-            out.write("".join("/" + _glob_escaped(path) + "\n" for path in untracked))
-    kept = {path: _digest(Path(repo_dir, path)) for path in _ignored_files(repo_dir)}
+            out.write("".join("/" + _glob_escaped(path.rstrip("/")) + "/\n" for path in preserved))
+    kept: dict[str, str] = {}
+    total_bytes = 0
+    ignored = _ignored_files(repo_dir)
+    if len(ignored) > _MAX_KEPT_FILES:
+        raise RuntimeError(
+            "the job setup left too many ignored files to inspect safely"
+        )
+    for path in ignored:
+        _check_deadline(deadline, "the job setup baseline")
+        target = Path(repo_dir, path)
+        try:
+            metadata = target.lstat()
+        except FileNotFoundError:
+            continue
+        if stat.S_ISREG(metadata.st_mode):
+            total_bytes += metadata.st_size
+            if total_bytes > _MAX_KEPT_BYTES:
+                raise RuntimeError("the job setup left too much ignored output to inspect safely")
+        kept[path] = _digest(target, deadline=deadline)
     Path(repo_dir, ".git", _KEPT_FILES).write_text(json.dumps(kept), encoding="utf-8", errors="surrogateescape")
 
 
 def _glob_escaped(path: str) -> str:
     return "".join("\\" + char if char in "*?[\\!#" else char for char in path)
+
+
+def _safe_preserved_path(path: str) -> bool:
+    return is_checkout_subdirectory(path)
 
 
 def _ignored_files(repo_dir: str) -> tuple[str, ...]:
@@ -250,23 +362,52 @@ def _ignored_files(repo_dir: str) -> tuple[str, ...]:
     """
     return tuple(
         path for path in git_paths(repo_dir, "ls-files", "--others", "--ignored", "--exclude-standard", "-z")
-        if not path.endswith("/") and not Path(repo_dir, path).is_dir()
+        if not path.endswith("/")
+        and (
+            Path(repo_dir, path).is_symlink()
+            or not Path(repo_dir, path).is_dir()
+        )
     )
 
 
-def _digest(path: Path) -> str:
-    """The content of ``path`` as a hash; "" for one that cannot be read as a file."""
-    if path.is_symlink():
-        return "link:" + os.readlink(path)
-    if path.is_dir():
-        return ""
-    digest = hashlib.sha256()
+def _check_deadline(deadline: float | None, operation: str) -> None:
+    """Fail a bounded in-process scan as soon as its overall budget expires."""
+    if deadline is not None and time.monotonic() >= deadline:
+        raise _DeadlineExpired(f"No time left to finish {operation}.")
+
+
+def _digest(path: Path, *, deadline: float | None = None) -> str:
+    """The content of a regular file or link, without blocking on special files."""
     try:
-        with path.open("rb") as handle:
-            for block in iter(lambda: handle.read(1 << 20), b""):
-                digest.update(block)
-    except PermissionError:
+        metadata = path.lstat()
+    except FileNotFoundError:
         return ""
+    if stat.S_ISLNK(metadata.st_mode):
+        return "link:" + os.readlink(path)
+    if not stat.S_ISREG(metadata.st_mode):
+        raise RuntimeError(f"ignored checkout path {path} is not a regular file or symlink")
+    if metadata.st_size > _MAX_KEPT_FILE_BYTES:
+        raise RuntimeError(f"ignored checkout path {path} is too large to inspect safely")
+    digest = hashlib.sha256()
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise RuntimeError(f"ignored checkout path {path} could not be opened safely") from exc
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or (opened.st_dev, opened.st_ino) != (metadata.st_dev, metadata.st_ino)
+            or opened.st_size > _MAX_KEPT_FILE_BYTES
+        ):
+            raise RuntimeError(f"ignored checkout path {path} changed while it was inspected")
+        while block := os.read(descriptor, 1 << 20):
+            _check_deadline(deadline, "the job setup baseline")
+            digest.update(block)
+    finally:
+        os.close(descriptor)
     return digest.hexdigest()
 
 
@@ -318,7 +459,8 @@ def _establish(
     What both found, and the repository's test guide, is what the agent is
     told before it starts.
     """
-    plan = reproduction = None
+    plan: ReproPlan | None = None
+    reproduction: Reproduction | None = None
     described = ""
     if run_test is not None:
         plan = plan_for(repo_dir, tests, scheduled=task.failure.scheduled, job=job)
@@ -334,7 +476,7 @@ def _establish(
         described = " ".join([reproduction.describe(), *plan.notes])
     found = find_prior_fixes(
         repo_dir, tests, tested_sha=task.failure.head_sha, issue_number=task.failure.issue_number,
-        paths=paths,
+        paths=paths, deadline=repro_deadline,
     )
     fixes = found or ()
     if fixes:
@@ -342,11 +484,10 @@ def _establish(
     guide = guide_for(task.failure.repo_full_name)
     context = FixContext(
         prior_fixes=summarize_prior_fixes(fixes),
-        prior_fixes_detail=render_prior_fixes(repo_dir, fixes),
+        prior_fixes_detail=render_prior_fixes(repo_dir, fixes, deadline=repro_deadline),
         prior_fixes_searched=found is not None,
         reproduction=described,
         reproduction_output=reproduction.output if reproduction else "",
-        verified_by_code=reproduction is not None and reproduction.status is not ReproStatus.UNRUNNABLE,
         guide=guide,
         guide_paths=tuple(path for path in _REPO_DOCS if guide and (Path(repo_dir) / path).is_file()),
     )
@@ -375,33 +516,45 @@ def _fix_loop(
     run_test: TestFunc | None,
     deadline: float,
     job: JobCommands | None = None,
-    tests: tuple[FailedTest, ...] = (),
 ) -> FixCandidate:
     established = _established_checks(context, reproduction)
     feedback = ""
-    last = "no attempt was made"
     for attempt in range(1, MAX_ROUNDS + 1):
-        remaining = int(deadline - time.monotonic())
         # Running out of time, or an agent crash, says nothing about the
         # failure: it is a failed attempt, which may be retried, not a refusal.
-        if attempt > 1 and remaining < _MIN_ROUND_S:
-            raise RuntimeError(f"Ran out of time after {attempt - 1} attempt(s). Last: {last}")
-        agent_timeout = remaining - _VERIFY_RESERVE_S if run_test is not None else remaining
+        reserve = _VERIFY_RESERVE_S if run_test is not None else _REVIEW_RESERVE_S
+        try:
+            agent_timeout = _operation_timeout(
+                deadline,
+                "the edit agent",
+                reserve=reserve,
+                minimum=_MIN_ROUND_S,
+            )
+        except _DeadlineExpired as exc:
+            raise RuntimeError(
+                f"The CI-fix attempt ran out of time after {attempt - 1} completed round(s)."
+            ) from exc
         try:
             outcome = agent_round(
                 task, repo_dir, original_head, job_log, context, feedback,
-                attempt=attempt, timeout=max(60, agent_timeout), agent_func=agent_func,
+                attempt=attempt,
+                timeout=agent_timeout,
+                deadline=deadline,
+                agent_func=agent_func,
             )
+        except _DeadlineExpired:
+            raise
         except Exception as exc:
-            if attempt == 1:
-                raise
-            raise RuntimeError(f"The agent failed on attempt {attempt}: {exc}. Last: {last}") from exc
+            logger.exception("The edit agent failed on attempt %d", attempt)
+            raise RuntimeError(f"The edit agent failed on attempt {attempt}.") from exc
         candidate = outcome.candidate
         if candidate.action is CandidateAction.REFUSE:
-            return replace(candidate, verification="\n".join(established))
+            return _public_agent_candidate(
+                replace(candidate, verification="\n".join(established))
+            )
         if outcome.feedback:
-            feedback = last = outcome.feedback
-            logger.info("CI-fix round %d: %s", attempt, last)
+            feedback = outcome.feedback
+            logger.info("CI-fix round %d: %s", attempt, feedback)
             continue
 
         checks = list(established)
@@ -410,45 +563,65 @@ def _fix_loop(
         # test commands run as the account that owns the tree, and could
         # rewrite the tracked files they run on. Only this exact change is
         # accepted; a changed tree is a changed candidate, and goes back.
-        checked_tree = tree_patch(repo_dir)
+        checked_tree = _tree_state(repo_dir)
         fixes: tuple[int, ...] = ()
         touches: tuple[int, ...] = ()
+        failed = ""
+        stage = "candidate verification"
         try:
-            failed = ""
             if run_test is not None:
-                failed = _verify(reviewed, repo_dir, plan, reproduction, run_test, deadline, checks, tests)
+                failed = _verify(reviewed, repo_dir, plan, reproduction, run_test, deadline, checks)
             if not failed:
+                stage = "independent review"
                 approved, reasoning = review(
-                    reviewed, repo_dir, job_log, context=context, timeout=_timeout(deadline),
+                    reviewed,
+                    repo_dir,
+                    job_log,
+                    context=context,
+                    timeout=_operation_timeout(deadline, "the independent review"),
                 )
                 if not approved:
                     failed = f"A reviewer rejected the {_noun(candidate)}: {reasoning}"
                     logger.info("CI-fix round %d: review rejected the %s", attempt, _noun(candidate))
                 else:
-                    checks.append(f"Review: {reasoning}" if reasoning else f"Review approved the {_noun(candidate)}.")
+                    checks.append(f"Independent review approved the {_noun(candidate)}.")
             if not failed:
                 if attempt > 1:
                     checks.append(f"Accepted on attempt {attempt} of {MAX_ROUNDS}.")
                 # While the change is still in the tree: a port's cherry-pick
                 # is undone below, and its patch is the one it applied.
+                stage = "related-issue verification"
                 fixes, touches = other_issues_fixed(task, reviewed, repo_dir, run_test, deadline, checks, job=job)
-            if not failed and tree_patch(repo_dir) != checked_tree:
-                failed = _TREE_CHANGED
-                logger.info("CI-fix round %d: the tree changed during verification", attempt)
+        except _DeadlineExpired:
+            raise
+        except Exception as exc:
+            logger.exception("%s failed on attempt %d", stage.capitalize(), attempt)
+            raise RuntimeError(f"The {stage} failed on attempt {attempt}.") from exc
         finally:
+            changed_during_checks = _tree_state(repo_dir) != checked_tree
+            if changed_during_checks:
+                if not failed:
+                    failed = _TREE_CHANGED
+                logger.info("CI-fix round %d: the tree changed during verification", attempt)
+                if candidate.action is CandidateAction.PATCH:
+                    _restore_tree_state(repo_dir, checked_tree)
             if candidate.action is CandidateAction.PORT:
-                restore(repo_dir)
+                restore(repo_dir, original_head)
         if failed:
-            last = failed
             tree = _RESET_TREE if candidate.action is CandidateAction.PORT else _KEPT_TREE
             feedback = f"{failed}\n\n{tree}"
             logger.info("CI-fix round %d: %s", attempt, failed.splitlines()[0])
             continue
-        return replace(
-            candidate, verification="\n".join(checks), also_fixes=fixes, also_touches=touches,
+        return _public_agent_candidate(
+            replace(
+                candidate,
+                verification="\n".join(checks),
+                also_fixes=fixes,
+                also_touches=touches,
+            )
         )
     return _refusal(
-        f"No candidate passed its test and review in {MAX_ROUNDS} attempts. Last: {last}",
+        f"No candidate passed its tests and independent review in {MAX_ROUNDS} attempts.",
         verification="\n".join(established),
     )
 
@@ -475,6 +648,7 @@ def agent_round(
     *,
     attempt: int,
     timeout: int,
+    deadline: float | None = None,
     agent_func: AgentFunc = run_fix_agent,
 ) -> RoundOutcome:
     """Run the agent once and apply what it chose to the working tree.
@@ -482,61 +656,130 @@ def agent_round(
     A patch is the agent's own edits; a port is cherry-picked into the tree.
     The caller undoes a port with :func:`restore` once it is done with it.
     """
-    candidate = agent_func(task, repo_dir, job_log, feedback=feedback, timeout=timeout, context=context)
-    if attempt > 1 and candidate.action is CandidateAction.PORT:
-        # An earlier round's patch is still in the tree; the agent has moved
-        # on to porting instead.
-        restore(repo_dir)
+    before_agent = _tree_state(repo_dir)
     try:
-        candidate = _checked_candidate(task, repo_dir, original_head, candidate)
-    except _Rejected as exc:
-        tree = _KEPT_TREE if worktree_changed_paths(repo_dir, strict=True) else _RESET_TREE
-        return RoundOutcome(candidate, feedback=f"{exc}\n\n{tree}")
-    if candidate.action is CandidateAction.REFUSE:
-        return RoundOutcome(candidate)
-    if candidate.action is CandidateAction.PORT:
+        candidate = agent_func(
+            task, repo_dir, job_log, feedback=feedback, timeout=timeout, context=context
+        )
+        agent_refused = candidate.action is CandidateAction.REFUSE
+        if deadline is not None:
+            _operation_timeout(deadline, "candidate application")
+        if attempt > 1 and candidate.action is CandidateAction.PORT:
+            # An earlier round's patch is still in the tree; the agent has
+            # moved on to porting instead.
+            restore(repo_dir)
         try:
-            return RoundOutcome(candidate, applied=_apply_port(repo_dir, candidate.port_commit))
-        except PortNotApplied as exc:
-            return RoundOutcome(candidate, feedback=(
-                f"{exc} Adapt it as a `patch` if it is the right fix, or choose another action."
-                f"\n\n{_RESET_TREE}"
-            ))
-    return RoundOutcome(candidate, applied=candidate.patch)
+            candidate = _checked_candidate(task, repo_dir, original_head, candidate)
+        except _Rejected as exc:
+            tree = _KEPT_TREE if worktree_changed_paths(repo_dir, strict=True) else _RESET_TREE
+            return RoundOutcome(candidate, feedback=f"{exc}\n\n{tree}")
+        if candidate.action is CandidateAction.REFUSE:
+            if _tree_state(repo_dir) != before_agent:
+                _restore_tree_state(repo_dir, before_agent)
+            if agent_refused:
+                candidate = replace(
+                    candidate,
+                    summary="The edit agent declined to prepare a safe fix.",
+                )
+            return RoundOutcome(candidate)
+        if candidate.action is CandidateAction.PORT:
+            try:
+                return RoundOutcome(candidate, applied=_apply_port(repo_dir, candidate.port_commit))
+            except PortNotApplied as exc:
+                return RoundOutcome(candidate, feedback=(
+                    f"{exc} Adapt it as a `patch` if it is the right fix, or choose another action."
+                    f"\n\n{_RESET_TREE}"
+                ))
+        return RoundOutcome(candidate, applied=candidate.patch)
+    except BaseException:
+        if _tree_state(repo_dir) != before_agent:
+            _restore_tree_state(repo_dir, before_agent)
+        raise
 
 
 _KEPT_TREE = "The working tree still holds your previous edits; revise them."
 _RESET_TREE = "The working tree was reset to the working commit; it holds no earlier edits."
 _TREE_CHANGED = (
-    "The build or your test command changed tracked files while the candidate was being "
-    "verified, so the tree no longer matches the patch that was checked. A test command "
-    "must not edit the repository: make the fix itself, and give a command that only runs it."
+    "The reproduction command changed tracked files while the candidate was being "
+    "verified, so the tree no longer matches the patch that was checked. Reproduction "
+    "commands must only test the change; the fix itself must come from the patch."
 )
+
+
+@dataclass(frozen=True)
+class _TreeState:
+    """The checkout identity and every non-ignored working-tree change."""
+
+    head: str
+    paths: tuple[str, ...]
+    patch: str
+
+
+def _tree_state(repo_dir: str) -> _TreeState:
+    paths = worktree_changed_paths(repo_dir, strict=True)
+    patch = ""
+    if paths:
+        try:
+            patch = build_approved_patch(repo_dir, paths, strict=True)
+        except EmptyPatch:
+            # An empty untracked file has no diff text, but its path still
+            # belongs to the state and makes a later comparison detect it.
+            pass
+    return _TreeState(
+        head=git_output(repo_dir, "rev-parse", "HEAD").strip(),
+        paths=paths,
+        patch=patch,
+    )
 
 
 def tree_patch(repo_dir: str) -> str:
     """The exact patch of every change in ``repo_dir``'s working tree; "" when it is clean."""
-    paths = worktree_changed_paths(repo_dir, strict=True)
-    if not paths:
-        return ""
-    try:
-        return build_approved_patch(repo_dir, paths, strict=True)
-    except EmptyPatch:
-        return ""
+    return _tree_state(repo_dir).patch
 
 
 def _noun(candidate: FixCandidate) -> str:
     return "port" if candidate.action is CandidateAction.PORT else "patch"
 
 
+def _public_agent_candidate(candidate: FixCandidate) -> FixCandidate:
+    """Strip model-authored prose before a candidate crosses into publication."""
+    if candidate.action is CandidateAction.PORT:
+        summary = "Prepared and verified an upstream port."
+    elif candidate.action is CandidateAction.PATCH:
+        summary = "Prepared and verified a candidate patch."
+    else:
+        summary = candidate.summary
+    return replace(
+        candidate,
+        summary=summary,
+        failing_check="",
+        root_cause="",
+        reasoning="",
+        validation="",
+        test_command="",
+    )
+
+
 def _established_checks(context: FixContext, reproduction: Reproduction | None) -> list[str]:
     checks = []
     if context.prior_fixes:
-        checks.append("Existing fixes found: " + "; ".join(context.prior_fixes.splitlines()))
+        checks.append("At least one merged change that may address the failure was found.")
     elif context.prior_fixes_searched:
         checks.append("No merged change that looks like a fix was found.")
-    if context.reproduction:
-        checks.append(context.reproduction)
+    if reproduction is not None:
+        if reproduction.reproduced:
+            if reproduction.deterministic:
+                checks.append("Code reproduced the named failure on both focused confirmation runs.")
+            elif reproduction.under_load:
+                checks.append("Code reproduced the named failure during focused repeated tests under CPU load.")
+            else:
+                checks.append("Code reproduced the named failure during focused test execution.")
+        elif reproduction.status is ReproStatus.UNRUNNABLE:
+            checks.append("Code could not run the focused reproduction on this runner.")
+        elif reproduction.all_attempts_passed:
+            checks.append("Every focused reproduction probe completed without the named failure.")
+        else:
+            checks.append("The focused reproduction did not establish the named failure.")
     return checks
 
 
@@ -567,23 +810,29 @@ def other_issues_fixed(
         # In code: GitHub links a bare #N, and a linked open PR keeps that
         # issue from a fix of its own (issue_state.has_open_linked_pr), which
         # a PR that has not shown it fixes the issue must not do.
-        name, ref = f"`{issue.test.name or issue.test.file}`", f"`#{issue.number}`"
-        if run_test is None or time.monotonic() > deadline:
+        ref = f"`#{issue.number}`"
+        if run_test is None or time.monotonic() >= deadline:
             touched.append(issue.number)
-            checks.append(f"The patch changes {name}, issue {ref}'s test; "
+            checks.append(f"The patch changes issue {ref}'s test; "
                           "there was no time left to verify that it fixes it.")
             continue
         plan = plan_for(repo_dir, (issue.test,), scheduled=task.failure.scheduled, job=job)
         if plan is None:
             touched.append(issue.number)
-            checks.append(f"The patch changes {name}, issue {ref}'s test, which cannot be run on this runner.")
+            checks.append(f"The patch changes issue {ref}'s test, which cannot be run on this runner.")
             continue
-        shown = _patch_fixes(plan, candidate, repo_dir, run_test, deadline)
+        try:
+            shown = _patch_fixes(plan, candidate, repo_dir, run_test, deadline)
+        except _DeadlineExpired:
+            touched.append(issue.number)
+            checks.append(f"The patch changes issue {ref}'s test; "
+                          "there was no time left to verify that it fixes it.")
+            continue
         (fixed if shown else touched).append(issue.number)
         checks.append(
-            f"Also fixes issue #{issue.number}: {name} failed without the patch and passed with it."
+            f"Also fixes issue #{issue.number}: its focused test failed without the patch and passed with it."
             if shown else
-            f"The patch changes {name}, issue {ref}'s test, but it was not shown to fix it."
+            f"The patch changes issue {ref}'s test, but it was not shown to fix it."
         )
     return tuple(fixed), tuple(touched)
 
@@ -655,14 +904,21 @@ def _patch_fixes(
 ) -> bool:
     """Whether ``plan``'s test fails without ``candidate``'s patch and passes with it."""
     def run(command: str) -> TestRun:
-        return run_test(repo_dir, command, _timeout(deadline))
+        return run_test(
+            repo_dir,
+            command,
+            _test_timeout(deadline, "another issue's verification"),
+        )
 
     with _without_patch(repo_dir, candidate.patch):
         without = reproduce(plan, lambda command, _timeout_s: run(command), deadline=deadline)
     if not without.reproduced:
         return False
     loops = plan.verify_loops(without.deterministic)
-    with_patch = run(plan.command(loops, under_load=without.under_load))
+    built = run(plan.build)
+    if not built.passed:
+        return False
+    with_patch = run(plan.test_command(loops, under_load=without.under_load))
     return with_patch.passed and plan.ran(with_patch)
 
 
@@ -674,27 +930,18 @@ def _verify(
     run_test: TestFunc,
     deadline: float,
     checks: list[str],
-    tests: tuple[FailedTest, ...] = (),
 ) -> str:
     """Run the candidate's tests; "" when they hold, else feedback for the agent.
 
-    The agent's commands could leave ignored files the patch does not show (a
-    prebuilt server binary that keeps ``make`` from rebuilding), so those go
-    first: the build and tests run from source.
+    The agent could leave ignored files the patch does not show (a prebuilt
+    server binary that keeps ``make`` from rebuilding), so those go first:
+    the code-owned reproduction builds and tests from source.
     """
+    if plan is None or reproduction is None or not reproduction.reproduced:
+        raise AssertionError("executable candidate verification requires a reproduced code-owned plan")
     _remove_ignored(repo_dir)
-    if plan is not None and reproduction is not None and reproduction.status is not ReproStatus.UNRUNNABLE:
-        flaky = candidate.failure_type is FailureType.FLAKY
-        failed = _verify_with_plan(plan, reproduction, repo_dir, run_test, deadline, checks, flaky=flaky)
-        if failed or reproduction.reproduced or not candidate.test_command:
-            return failed
-        # Code's reproduction never failed; the agent's own command may show
-        # the failure, and so whether the fix works.
-        return _test_feedback(candidate, repo_dir, run_test, deadline, checks, tests)
-    if candidate.test_command:
-        return _test_feedback(candidate, repo_dir, run_test, deadline, checks, tests)
-    checks.append("No test command could run this check on the bot's runner.")
-    return ""
+    flaky = candidate.failure_type is FailureType.FLAKY
+    return _verify_with_plan(plan, reproduction, repo_dir, run_test, deadline, checks, flaky=flaky)
 
 
 def _verify_with_plan(
@@ -711,7 +958,31 @@ def _verify_with_plan(
     # the failure flaky, the fix must pass a flake's full loops.
     loops = plan.verify_loops(reproduction.deterministic and not flaky)
     command = plan.command(loops, under_load=reproduction.under_load)
-    result = run_test(repo_dir, command, _timeout(deadline))
+    built = run_test(
+        repo_dir,
+        plan.build,
+        _test_timeout(
+            deadline,
+            "candidate build",
+            reserve=_REVIEW_RESERVE_S,
+        ),
+    )
+    if not built.passed:
+        if built.timed_out:
+            raise RuntimeError(f"`{plan.build}` did not finish in the time left ({built.output}).")
+        return (
+            f"With your change, the reproduction build could not complete: `{plan.build}`.\n\n"
+            f"Its output:\n{built.output}"
+        )
+    result = run_test(
+        repo_dir,
+        plan.test_command(loops, under_load=reproduction.under_load),
+        _test_timeout(
+            deadline,
+            "candidate verification",
+            reserve=_REVIEW_RESERVE_S,
+        ),
+    )
     if result.passed and not plan.ran(result):
         return (
             f"With your change, `{command}` passed without running the failing test. "
@@ -719,13 +990,7 @@ def _verify_with_plan(
             f"Its output:\n{result.output}"
         )
     if result.passed:
-        if reproduction.reproduced:
-            checks.append(f"With the fix, the reproduction passed {loops} loop(s): `{command}`.")
-        else:
-            checks.append(
-                f"With the fix, `{command}` passed {loops} loop(s), but the failure never "
-                "reproduced without it, so this does not show the fix works."
-            )
+        checks.append(f"With the fix, the focused reproduction passed {loops} loop(s).")
         return ""
     if plan.failed(result):
         return (
@@ -772,13 +1037,22 @@ class PortNotApplied(Exception):
     """A port that cannot be cherry-picked onto the working commit."""
 
 
-def restore(repo_dir: str) -> None:
+def restore(repo_dir: str, head: str = "HEAD") -> None:
     """Undo a cherry-pick into the working tree, keeping ignored build output."""
-    for args in (("cherry-pick", "--quit"), ("reset", "--hard", "--quiet", "HEAD"), ("clean", "-fdq")):
+    for args in (("cherry-pick", "--quit"), ("reset", "--hard", "--quiet", head), ("clean", "-fdq")):
         try:
             run_git(repo_dir, *args)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
             logger.warning("Could not run git %s after a port", " ".join(args))
+
+
+def _restore_tree_state(repo_dir: str, state: _TreeState) -> None:
+    """Restore a checkout snapshot after a test or baseline probe changed it."""
+    restore(repo_dir, state.head)
+    if state.patch:
+        run_git(repo_dir, "apply", "--whitespace=nowarn", "-", input=state.patch)
+    if _tree_state(repo_dir) != state:
+        raise RuntimeError("could not restore the checkout after a test command changed it")
 
 
 @contextmanager
@@ -804,8 +1078,32 @@ def _remove_ignored(repo_dir: str) -> None:
             target.unlink(missing_ok=True)
 
 
-def _timeout(deadline: float) -> int:
-    return max(60, min(TEST_TIMEOUT_S, int(deadline - time.monotonic())))
+class _DeadlineExpired(RuntimeError):
+    """A mandatory operation did not have enough budget left to start."""
+
+
+def _operation_timeout(
+    deadline: float,
+    operation: str,
+    *,
+    reserve: int = 0,
+    minimum: int = 1,
+    cap: int | None = None,
+) -> int:
+    """Return a bounded operation budget, or fail before starting it."""
+    available = int(deadline - time.monotonic()) - reserve
+    if available < minimum:
+        raise _DeadlineExpired(f"No time left to start {operation}.")
+    return min(available, cap) if cap is not None else available
+
+
+def _test_timeout(deadline: float, operation: str, *, reserve: int = 0) -> int:
+    return _operation_timeout(
+        deadline,
+        operation,
+        reserve=reserve,
+        cap=TEST_TIMEOUT_S,
+    )
 
 
 def _checked_candidate(task: FixTask, repo_dir: str, original_head: str, candidate: FixCandidate) -> FixCandidate:
@@ -871,75 +1169,50 @@ def _checked_candidate(task: FixTask, repo_dir: str, original_head: str, candida
         patch=patch,
         changed_paths=changed_paths,
         port_commit="",
+        validation="",
+        test_command="",
     )
-
-
-def _test_feedback(
-    candidate: FixCandidate, repo_dir: str, run_test: TestFunc, deadline: float, checks: list[str],
-    tests: tuple[FailedTest, ...] = (),
-) -> str:
-    """Run the agent's test without and with its patch; "" when both hold.
-
-    Otherwise returns what went wrong, for the agent's next round. On success
-    ``checks`` gains a line for the maintainer report. A run killed for time
-    shows nothing either way; when the command fails one of the job's
-    ``tests`` without the patch, it must run them with it, not just exit 0.
-    """
-    command = candidate.test_command
-    runs = FLAKY_TEST_RUNS if candidate.failure_type is FailureType.FLAKY else TEST_RUNS
-    # Without the patch, the test must fail: one that passes does not
-    # exercise the failure, and a pass with the patch would mean nothing. A
-    # flaky failure may need several runs to show.
-    baseline_runs = 0
-    with _without_patch(repo_dir, candidate.patch):
-        for baseline_runs in range(1, runs + 1):
-            baseline = run_test(repo_dir, command, _timeout(deadline))
-            if not baseline.passed:
-                break
-    if baseline.timed_out:
-        return (
-            f"`{command}` did not finish in the time left without your change ({baseline.output}), "
-            "so it shows nothing. Give a test command that fails quickly on the unpatched code."
-        )
-    if baseline.passed:
-        return (
-            f"`{command}` passes {runs} time(s) without your change, so it does not reproduce "
-            "the failure. Give a test command that fails on the unpatched code the way the job did.\n\n"
-            f"Its output without your change:\n{baseline.output}"
-        )
-    named = tests if shows_failure_of(baseline.report, tests) else ()
-    for run in range(1, runs + 1):
-        result = run_test(repo_dir, command, _timeout(deadline))
-        if not result.passed:
-            return (
-                f"With your change, `{command}` failed on run {run} of {runs}; "
-                "it must pass every time.\n\n"
-                f"Its output:\n{result.output}"
-            )
-        if named and not ran_tests(result.report, named):
-            return (
-                f"With your change, `{command}` passed without running the failing test. "
-                "Do not rename, skip, or tag out the test: fix why it fails.\n\n"
-                f"Its output:\n{result.output}"
-            )
-    checks.append(
-        f"`{command}` failed without the patch (on run {baseline_runs}) and passed {runs} time(s) with it."
-    )
-    return ""
 
 
 def run_test_command(repo_dir: str, command: str, timeout: int = TEST_TIMEOUT_S) -> TestRun:
     """Run ``command`` in ``repo_dir`` as the isolated account."""
-    env = filter_env(PROCESS_BASICS)
+    repo = str(Path(repo_dir).resolve(strict=True))
+    env = filter_env(
+        (
+            *PROCESS_BASICS,
+            "CI",
+            "GITHUB_ACTIONS",
+            "RUNNER_ARCH",
+            "RUNNER_OS",
+            "RUNNER_TEMP",
+        )
+    )
+    env["GITHUB_WORKSPACE"] = repo
     argv = ["bash", "-c", command]
-    user = isolated_user()
+    user = isolated_command_user()
     started = time.monotonic()
     try:
         if user:
             with handed_to(user, Path(repo_dir)) as home:
-                result = _run_in_own_group(as_user(user, env, argv, home=home), repo_dir, None, timeout, user=user)
+                private = Path(home)
+                isolated_env = {
+                    **env,
+                    "RUNNER_TEMP": home,
+                    "GITHUB_ENV": str(private / "github-env"),
+                    "GITHUB_PATH": str(private / "github-path"),
+                    "GITHUB_OUTPUT": str(private / "github-output"),
+                    "GITHUB_STATE": str(private / "github-state"),
+                }
+                invocation = as_user(user, isolated_env, argv, home=home)
+                result = _run_in_own_group(
+                    list(invocation.argv),
+                    repo,
+                    invocation.env,
+                    timeout,
+                    user=user,
+                )
         else:
-            result = _run_in_own_group(argv, repo_dir, env, timeout)
+            result = _run_in_own_group(argv, repo, env, timeout)
     except subprocess.TimeoutExpired:
         return TestRun(passed=False, output=f"timed out after {timeout}s", timed_out=True)
     output = strip_ansi((result.stdout + result.stderr).decode("utf-8", errors="replace"))

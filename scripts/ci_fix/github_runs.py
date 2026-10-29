@@ -174,30 +174,28 @@ def failed_jobs(jobs: Iterable[Any]) -> list[FailedJob]:
     ]
 
 
-def job_priority(name: str) -> int:
+def job_priority(name: str, *, executable: bool = True) -> int:
     """Rank a failed job by how likely the bot is to fix it and show the fix works.
 
     A test failure comes first: code reproduces it, and verifies the fix with
-    it. A formatting, lint or build job comes next. Its fix is often in the
-    CI definition or the toolchain, which the bot changes only on a backport
-    branch it owns, and a build break in the code also fails every test job,
-    whose log shows it. A
-    sanitizer or valgrind failure is the most likely to be flaky or to need a
-    judgement call. Unrecognised names sort last.
+    it. For an executable target, sanitizer and valgrind test jobs come next;
+    formatting, lint, and build-only jobs sort last because no focused
+    code-owned reproduction can admit an edit. A suggestion cannot execute
+    contributor code, so it retains the broader diagnosis-first ordering.
     """
     lowered = name.lower()
     if any(token in lowered for token in ("asan", "ubsan", "tsan", "sanitizer", "valgrind")):
-        return 2
+        return 1 if executable else 2
     if any(
         token in lowered
         # Not "schema": Daily's reply-schemas-validator runs the whole test
         # suite; the reply-schemas-linter is already matched by "lint".
         for token in ("format", "lint", "generated", "build", "compile")
     ):
-        return 1
+        return 3 if executable else 1
     if any(token in lowered for token in ("unit", "integration", "test")):
         return 0
-    return 3
+    return 2 if executable else 3
 
 
 def most_actionable_failure(
@@ -206,6 +204,7 @@ def most_actionable_failure(
     runs: Iterable[Any],
     *,
     keep: Callable[[Any, FailedJob], bool] = lambda _run, _job: True,
+    executable: bool = True,
 ) -> tuple[Any, FailedJob, list[FailedJob]] | None:
     """The completed failed run among ``runs``, its failed job most likely to have a fix, and all its failed jobs.
 
@@ -224,16 +223,24 @@ def most_actionable_failure(
         candidates = [job for job in failed if keep(run, job)]
         if not candidates:
             continue
-        selected = select_job(candidates)
-        key = (job_priority(selected.name), -int(run.id), selected.name.casefold())
+        selected = select_job(candidates, executable=executable)
+        key = (
+            job_priority(selected.name, executable=executable),
+            -int(run.id),
+            selected.name.casefold(),
+        )
         if best is None or key < best[0]:
             best = (key, run, selected, failed)
     return (best[1], best[2], best[3]) if best is not None else None
 
 
-def select_job(jobs: Iterable[FailedJob]) -> FailedJob:
+def select_job(jobs: Iterable[FailedJob], *, executable: bool = True) -> FailedJob:
     """Choose one failure: the tier most likely fixed and verified, then the lowest job id."""
     return min(
         jobs,
-        key=lambda job: (job_priority(job.name), int(job.id), job.name.lower()),
+        key=lambda job: (
+            job_priority(job.name, executable=executable),
+            int(job.id),
+            job.name.lower(),
+        ),
     )

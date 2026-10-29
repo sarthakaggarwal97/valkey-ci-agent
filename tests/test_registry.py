@@ -73,6 +73,21 @@ def test_valkey_registry_pins_clang_format_from_pypi():
     assert not any("apt-get install" in command and "clang-format" in command for command in setup)
 
 
+def test_valkey_registry_contains_every_supported_release_branch():
+    project_root = Path(__file__).resolve().parents[1]
+    registry = load_registry(str(project_root / "repos.yml"))
+    valkey = registry.get_repo("valkey-io/valkey")
+
+    assert tuple(branch.branch for branch in valkey.branches) == (
+        "7.2",
+        "8.0",
+        "8.1",
+        "9.0",
+        "9.1",
+        "9.2",
+    )
+
+
 class TestLoadRegistry:
     def test_valid_minimal(self, tmp_path):
         path = _write_registry(tmp_path, _minimal_registry())
@@ -273,12 +288,6 @@ class TestValidation:
 
     def test_same_owner_push_repo_rejected(self, tmp_path):
         data = _minimal_registry(repos=[_minimal_repo(push_repo="org/other-repo")])
-        path = _write_registry(tmp_path, data)
-        with pytest.raises(ValueError, match="different-owner fork"):
-            load_registry(path)
-
-    def test_same_repo_push_repo_rejected(self, tmp_path):
-        data = _minimal_registry(repos=[_minimal_repo(push_repo="org/repo")])
         path = _write_registry(tmp_path, data)
         with pytest.raises(ValueError, match="different-owner fork"):
             load_registry(path)

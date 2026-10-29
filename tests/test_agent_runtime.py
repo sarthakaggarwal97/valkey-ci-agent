@@ -39,6 +39,21 @@ def test_run_agent_applies_profile_and_writes_hashed_evidence(tmp_path, monkeypa
     assert "secret stdout" not in evidence_files[0].read_text(encoding="utf-8")
 
 
+def test_a_caller_may_shorten_but_never_extend_a_profile_timeout(monkeypatch) -> None:
+    observed = []
+    monkeypatch.setattr(
+        agent_runtime,
+        "run_claude_code",
+        lambda *_args, **kwargs: observed.append(kwargs["timeout"]) or ("", "", 0),
+    )
+    profile = agent_runtime.AGENT_PROFILES["ci_fix_edit"]
+
+    agent_runtime.run_agent("ci_fix_edit", "short", timeout=60)
+    agent_runtime.run_agent("ci_fix_edit", "long", timeout=profile.timeout + 600)
+
+    assert observed == [60, profile.timeout]
+
+
 def test_run_agent_writes_default_github_actions_evidence(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
@@ -82,8 +97,9 @@ def test_ci_fix_profiles_match_their_publication_targets() -> None:
     suggest = agent_runtime.AGENT_PROFILES["ci_fix_suggest"]
 
     assert edit.writes_allowed is True
-    assert edit.confined is False
-    assert "Bash" in edit.allowed_tools
+    assert edit.confined is True
+    assert edit.allowed_tools == "Read,Edit,MultiEdit,Write,Grep"
+    assert edit.disallowed_tools == "Bash,Glob"
     assert suggest.writes_allowed is True
     assert suggest.confined is True
     assert suggest.disallowed_tools == "Bash,Glob"

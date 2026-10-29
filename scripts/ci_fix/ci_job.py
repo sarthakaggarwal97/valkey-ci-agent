@@ -1,22 +1,18 @@
-"""Find the CI job a fix is prepared in, in the workflow that ran it.
+"""Resolve and safely replay the failed CI job around one focused fix.
 
-The CI-fix bot fixes a failure inside the very job that failed: same runner,
-container, setup, build flags and test command. :func:`resolve` reads that
-job from the workflow file at the failed commit, as GitHub ran it: the matrix
-entry is the one whose display name is the failed job's, and every
-``${{ }}`` expression the job needs is evaluated in the failed run's context
-(:func:`evaluate`). The result, a :class:`JobSpec`, is what ``ci-fix-run.yml``
-runs the fix in: the job's runner and container, its two checkouts, its setup
-steps up to its tests (:func:`setup_script` replays them), and its own build
-and test commands (:class:`JobCommands`).
+:func:`resolve` reads the job from the workflow file at the failed commit.
+The matrix entry is selected by its displayed job name, and the expressions
+needed by the job are evaluated in the failed run's context. The resulting
+:class:`JobSpec` records the runner, checkouts, setup up to the tests, and the
+job's own build and test commands.
 
-The agent can run in a job on an Ubuntu or macOS runner, or in a container on
-an Ubuntu runner, but not in a VM; it needs one ``make`` step and one
-``runtest`` command, which its rebuilds and test runs repeat. Anything this
-module does not follow exactly (a step of another kind, an expression that
-reads secrets or another step's outputs, a matrix it cannot enumerate) raises
-:class:`Unsupported`: then no job can host the fix, which is prepared on the
-bot's own runner instead. A job is never run in a way GitHub would not run it.
+Only Ubuntu and macOS host jobs covered by the code-owned dependency profile
+run on their original runner. Trusted workflow code installs a fixed package
+set; :func:`setup_script` removes only those canonical install commands,
+rewrites the pinned libbacktrace install to an unprivileged local prefix, and
+leaves the remaining setup for a disposable account. Containers, VMs,
+unknown privilege, secrets, unsupported actions or expressions, and jobs
+without a focused Valkey test command fall back to the bot's own runner.
 """
 
 from __future__ import annotations
@@ -24,17 +20,38 @@ from __future__ import annotations
 import json
 import math
 import re
+import shlex
 from dataclasses import astuple, dataclass, field
 from typing import Any, Callable, Optional
 
 import yaml
 
+from scripts.ci_fix.paths import checkout_subdirectory
+
 # A job fixes one failure, never runs a full Daily; and however short the
 # job's own tests, the fix needs its setup and build plus the engine's budget
 # (scripts/ci_fix/engine.py PREPARE_BUDGET_S).
 MAX_JOB_MINUTES = 180
-MIN_JOB_MINUTES = 90
+# The engine owns 60 minutes after credentials are configured. Exact jobs
+# additionally need bounded dependency bootstrap and target setup before that,
+# plus checkout, preflight, cleanup, and artifact-upload headroom.
+MIN_JOB_MINUTES = 120
 _DEFAULT_JOB_MINUTES = 360  # GitHub's
+_HOST_RUNNERS = frozenset({
+    "ubuntu-latest",
+    "ubuntu-22.04",
+    "ubuntu-24.04",
+    "ubuntu-24.04-arm",
+    "ubuntu-26.04",
+    "ubuntu-26.04-arm",
+    "macos-latest",
+    "macos-13",
+    "macos-14",
+    "macos-15",
+    "macos-15-intel",
+    "macos-26",
+    "macos-26-intel",
+})
 
 
 class Unsupported(ValueError):
@@ -55,6 +72,17 @@ class JobCommands:
     # Its ``make test-unit`` line, with the job's own test arguments
     # (``accurate=1``) and make variables; "" when it runs none.
     unittest: str = ""
+    # A dependency checkout the workflow placed inside the main checkout.
+    # This code-owned path may remain untracked after setup; arbitrary
+    # setup-created untracked paths are not silently reclassified as build
+    # output by the engine.
+    preserved_paths: tuple[str, ...] = ()
+    # Workflow/job environment plus the selected test step's environment.
+    # Build and focused test run in separate shells, so each suite carries
+    # the environment GitHub gave that step.
+    runtest_env: dict[str, str] = field(default_factory=dict)
+    moduleapi_env: dict[str, str] = field(default_factory=dict)
+    unittest_env: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -89,6 +117,10 @@ class JobSpec:
     steps: tuple[Step, ...]
     checkout: Optional[Checkout]
     commands: JobCommands
+    # The resolved failed job's identity, not the outer ci-agent workflow's.
+    # Kept separate from target-controlled ``env`` so setup admission can
+    # reject attempts to override these values.
+    setup_env: dict[str, str] = field(default_factory=dict)
 
 
 def workflow_source(gh: Any, repository: str, workflow: str, ref: str) -> str:
@@ -212,8 +244,10 @@ def _spec(job_id: str, name: str, job: dict[str, Any], context: dict[str, Any]) 
     if unknown:
         raise Unsupported(f"the job sets {', '.join(sorted(unknown))}")
     runs_on = value(job.get("runs-on"), context)
-    if not isinstance(runs_on, str) or not runs_on.startswith(("ubuntu", "macos")):
-        raise Unsupported(f"the job runs on {runs_on!r}, not an Ubuntu or macOS runner")
+    if not isinstance(runs_on, str) or runs_on not in _HOST_RUNNERS:
+        raise Unsupported(
+            f"the job runs on {runs_on!r}, not a supported GitHub-hosted runner"
+        )
     container = _container(job.get("container"), context)
     if container and not runs_on.startswith("ubuntu"):
         raise Unsupported("the job's container is not on an Ubuntu runner")
@@ -235,47 +269,122 @@ def _spec(job_id: str, name: str, job: dict[str, Any], context: dict[str, Any]) 
     if len(builds) != 1:
         raise Unsupported(f"the job has {len(builds)} make steps")
 
+    build_step = builds[0]
+    build_index = steps.index(build_step)
     setup: list[Step] = []
     checkouts: list[Checkout] = []
     main_checkouts = 0
-    for step in steps[:first_test]:
+    build_runs = False
+    for index, step in enumerate(steps[:first_test]):
         if not condition(step.get("if", True), context):
+            continue
+        if index == build_index:
+            build_runs = True
             continue
         if str(step.get("uses", "")).startswith("actions/checkout@"):
             checkout = _checkout(step, context)
+            if index > build_index and not container:
+                raise Unsupported(
+                    f"the checkout step {_label(step)!r} runs after the job's make step "
+                    "and cannot safely run before it"
+                )
             if checkout is None:
                 main_checkouts += 1  # the fix job checks the commit out itself
             else:
                 checkouts.append(checkout)
         elif "run" in step:
-            setup.append(_step(step, context))
+            setup_step = _step(step, context)
+            if (
+                index > build_index
+                and not _can_move_setup_before_build(
+                    setup_step,
+                    runs_on=runs_on,
+                    container=container,
+                )
+            ):
+                raise Unsupported(
+                    f"the setup step {setup_step.name!r} runs after the job's make step "
+                    "and cannot safely run before it"
+                )
+            setup.append(setup_step)
         else:
             raise Unsupported(f"the setup step {_label(step)!r} is neither a script nor a checkout")
     if main_checkouts != 1 or len(checkouts) > 1:
         raise Unsupported(f"the job has {main_checkouts} main and {len(checkouts)} other checkouts")
-    if builds[0] not in steps[:first_test] or not any(item.name == "make" for item in setup):
+    if build_index >= first_test or not build_runs:
         raise Unsupported("the job's make step does not run before its tests")
-    # A test step that also sets up (installs Tcl, builds the test modules)
-    # keeps that setup: the agent's own runs need it just as the job's tests do.
-    # Any other script between the tests is setup the fix would not replay,
-    # unless it is for the compatibility tests, which the fix never runs.
-    # What follows the last test (a memory summary, an upload) is not.
+    # A test step that also sets up identifies that setup separately. Only a
+    # canonical package action can move ahead of the reproduction build;
+    # fixture builds or unknown commands fail closed below. Any other script
+    # between the tests is setup the fix would not replay, unless it is for
+    # compatibility tests, which the fix never runs. What follows the last
+    # test (a memory summary, an upload) is not.
     last_test = max(index for index, step in enumerate(steps) if _suite(_script(step)))
     for step in steps[first_test:last_test + 1]:
         if "run" not in step or not condition(step.get("if", True), context):
             continue
         hoisted = _setup_of(step)
         if hoisted is not None:
-            setup.append(_step(hoisted, context))
+            setup_step = _step(hoisted, context)
+            if not _can_move_setup_before_build(
+                setup_step,
+                runs_on=runs_on,
+                container=container,
+            ):
+                raise Unsupported(
+                    f"the setup step {setup_step.name!r} runs after the job's make step "
+                    "and cannot safely run before it"
+                )
+            setup.append(setup_step)
         elif not _suite(_script(step)) and not _COMPAT_STEP_RE.search(_label(step)):
             raise Unsupported(f"the step {_label(step)!r} runs between the job's tests")
 
-    tests = [(str(step.get("name") or ""), _rendered_run(step, context)) for step in steps if _suite(_script(step))]
+    checkout = checkouts[0] if checkouts else None
+    dependency_env: dict[str, str] = {}
+    if checkout is not None and _uses_isolated_libbacktrace(checkout, tuple(setup)):
+        prefix = f"{checkout.path}/.ci-fix-install"
+        scopes = (
+            env,
+            *(step.env for step in (*setup, _step(build_step, context))),
+            *(_env(step.get("env"), context) for step in steps if _suite(_script(step))),
+        )
+        if any(
+            "LIBBACKTRACE_PREFIX" in scope
+            and scope["LIBBACKTRACE_PREFIX"] != prefix
+            for scope in scopes
+        ):
+            raise Unsupported("the job overrides the isolated libbacktrace prefix")
+        if any(
+            re.search(r"\bLIBBACKTRACE_PREFIX\s*=", _without_comment(line))
+            for step in (
+                *setup,
+                _step(build_step, context),
+                *(_step(step, context) for step in steps if _suite(_script(step))),
+            )
+            for line in step.run.splitlines()
+        ):
+            raise Unsupported("the job script overrides the isolated libbacktrace prefix")
+        dependency_env["LIBBACKTRACE_PREFIX"] = prefix
+
+    tests = [
+        (
+            str(step.get("name") or ""),
+            _rendered_run(step, context),
+            _env(step.get("env"), context),
+        )
+        for step in steps
+        if _suite(_script(step))
+    ]
     runtest = _suite_command(tests, "valkey", "./runtest")
     if not runtest:
         raise Unsupported("the job has no single runtest command")
-    make = _step(builds[0], context)
-    checkout = checkouts[0] if checkouts else None
+    make = _step(build_step, context)
+    if reason := _unsupported_build_setup(
+        make,
+        runs_on=runs_on,
+        container=container,
+    ):
+        raise Unsupported(reason)
     # The fix job reads these as workflow outputs, one line each.
     if any("\n" in text for text in (name, runs_on, container, *(astuple(checkout) if checkout else ()))):
         raise Unsupported("the job's name, runner, container or checkout spans lines")
@@ -289,11 +398,22 @@ def _spec(job_id: str, name: str, job: dict[str, Any], context: dict[str, Any]) 
         steps=tuple(setup),
         checkout=checkout,
         commands=JobCommands(
-            build=_build_command({**env, **make.env}, make.run),
+            build=_build_command({**env, **make.env, **dependency_env}, make.run),
             runtest=runtest,
             moduleapi=_suite_command(tests, "modules", "./runtest-moduleapi"),
             unittest=_suite_command(tests, "unittest", "make test-unit"),
+            preserved_paths=(checkout.path,) if checkout else (),
+            runtest_env=_suite_env(tests, "valkey", {**env, **dependency_env}),
+            moduleapi_env=_suite_env(tests, "modules", {**env, **dependency_env}),
+            unittest_env=_suite_env(tests, "unittest", {**env, **dependency_env}),
         ),
+        setup_env={
+            "GITHUB_EVENT_NAME": _string(context["github"]["event_name"]),
+            "GITHUB_JOB": _string(context["github"]["job"]),
+            "GITHUB_REF": _string(context["github"]["ref"]),
+            "GITHUB_REPOSITORY": _string(context["github"]["repository"]),
+            "GITHUB_SHA": _string(context["github"]["sha"]),
+        },
     )
 
 
@@ -331,11 +451,27 @@ def _checkout(step: dict[str, Any], context: dict[str, Any]) -> Checkout | None:
         raise Unsupported(f"the checkout {_label(step)!r} sets {', '.join(sorted(unknown | set(with_)))}")
     if not with_.get("path"):
         return None
+    path = _checkout_path(_string(value(with_["path"], context)))
+    repository = _string(value(with_.get("repository", "${{ github.repository }}"), context))
+    ref = _string(value(with_.get("ref", ""), context))
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        raise Unsupported(f"the extra checkout repository {repository!r} is not an owner/repository name")
+    if not re.fullmatch(r"[0-9A-Fa-f]{40}", ref):
+        raise Unsupported("the extra checkout is not pinned to a full commit SHA")
     return Checkout(
-        repository=_string(value(with_.get("repository", "${{ github.repository }}"), context)),
-        ref=_string(value(with_.get("ref", ""), context)),
-        path=_string(value(with_["path"], context)),
+        repository=repository,
+        ref=ref,
+        path=path,
     )
+
+
+def _checkout_path(value: str) -> str:
+    """A canonical descendant that cannot collide with CI-fix control data."""
+    try:
+        checkout_subdirectory(value)
+    except ValueError:
+        raise Unsupported(f"the checkout path {value!r} is not a safe repository subdirectory")
+    return value
 
 
 def _step(step: dict[str, Any], context: dict[str, Any]) -> Step:
@@ -370,9 +506,42 @@ _SUITE_COMMANDS = (
     ("valkey", re.compile(r"(?:^|[\s/])runtest(?:\s|$)")),
 )
 _COMPAT_STEP_RE = re.compile(r"(?i)redis oss|compatib")
-# A build line that changes the system: it needs root, and its effect is
-# already in place when the fix starts.
+# A build line that changes the system: admitted lines are supplied by trusted
+# bootstrap and removed from the extracted unprivileged build.
 _SYSTEM_SETUP_RE = re.compile(r"(?:sudo|apt-get|apt|dnf|yum|apk|zypper|update-alternatives)\s")
+# Host setup runs without the workflow account, OIDC variables, or sudo. The
+# trusted workflow installs this fixed Ubuntu superset before replay. Only an
+# exact install whose packages are a subset may be omitted from target setup.
+_BOOTSTRAP_APT_PACKAGES = frozenset({
+    "build-essential",
+    "pkg-config",
+    "libssl-dev",
+    "libzstd-dev",
+    "libgtest-dev",
+    "libgmock-dev",
+    "tcl8.6",
+    "tclx",
+    "tcl-tls",
+    "valgrind",
+})
+_APT_OPTIONS = frozenset({"-y", "-q", "--no-install-recommends"})
+_LIBBACKTRACE_REPOSITORY = "ianlancetaylor/libbacktrace"
+_PRIVILEGED_SETUP_RE = re.compile(
+    r"""(?ix)
+    (?:^|[;&|()]\s*)
+    (?:
+        sudo|doas|pkexec|su
+      | apt(?:-get)?|dnf|yum|apk|zypper|update-alternatives
+      | brew\s+(?:install|upgrade|services)
+      | (?:pip|pip3|python(?:3(?:\.\d+)?)?\s+-m\s+pip)\s+install
+      | npm\s+install\s+(?:--global|-g)
+      | systemctl|service|mount|umount|chown
+      | docker|podman|nsenter
+    )\b
+    """
+)
+_PERSISTENT_ENV_RE = re.compile(r"\bGITHUB_(?:ENV|PATH)\b")
+_PROTECTED_SETUP_ENV = frozenset({"HOME", "TMP", "TMPDIR", "USER", "LOGNAME"})
 # Options of the job's own test selection and fixtures: the fix runs its own
 # tests, and a path to another server the fix job never downloads.
 _DROPPED_OPTION_RE = re.compile(
@@ -391,9 +560,10 @@ def _build_command(exports: dict[str, str], script: str) -> str:
 
     Without its comments: the fix runs these lines as one command
     (scripts/ci_fix/reproduce.py), where a comment would hide the rest.
-    Without the system setup the job already did as root: the fix rebuilds
-    as an unprivileged account. A line continued with a backslash is one
-    line, so that a dropped install does not leave its packages as a command.
+    Without admitted system setup that trusted bootstrap already supplied:
+    the fix rebuilds as an unprivileged account. A line continued with a
+    backslash is one line, so that a dropped install does not leave its
+    packages as a command.
     """
     joined = re.sub(r"\s*\\\n\s*", " ", script.strip())
     return "\n".join([
@@ -403,14 +573,14 @@ def _build_command(exports: dict[str, str], script: str) -> str:
     ])
 
 
-def _suite_command(tests: list[tuple[str, str]], suite: str, command: str) -> str:
+def _suite_command(tests: list[tuple[str, str, dict[str, str]]], suite: str, command: str) -> str:
     """The job's one ``command`` line for ``suite``, without the per-run test selection, or "".
 
-    ``tests`` are the job's test steps, as (name, script).
+    ``tests`` are the job's test steps, as (name, script, environment).
     """
     invocation = re.compile(re.escape(command) + r"(?:\s|$)")
     lines = []
-    for name, script in tests:
+    for name, script, _env_ in tests:
         if _suite(script) != suite or "docker run" in script or _COMPAT_STEP_RE.search(name):
             continue
         joined = re.sub(r"\\\n\s*", " ", script)
@@ -425,6 +595,22 @@ def _suite_command(tests: list[tuple[str, str]], suite: str, command: str) -> st
         elif words and _VALUE_OPTION_RE.fullmatch(words[-1]):
             words.pop()
     return " ".join(words)
+
+
+def _suite_env(
+    tests: list[tuple[str, str, dict[str, str]]],
+    suite: str,
+    base: dict[str, str],
+) -> dict[str, str]:
+    """The environment of the one selected step for ``suite``."""
+    matches = [
+        step_env
+        for name, script, step_env in tests
+        if _suite(script) == suite
+        and "docker run" not in script
+        and not _COMPAT_STEP_RE.search(name)
+    ]
+    return {**base, **matches[0]} if len(matches) == 1 else {}
 
 
 def _without_comment(line: str) -> str:
@@ -460,10 +646,199 @@ def _without_comment(line: str) -> str:
     return line.rstrip()
 
 
-# The only commands a test step's setup may hoist: they install something or
-# build test fixtures, which a later step's fresh shell sees just the same.
-# Anything else (``export``, ``cd``, an assignment, a control structure) is
-# the invocation's own shell state and stays with it.
+def _bootstrap_apt_line(line: str) -> bool:
+    """Whether every ``&&`` segment is a fixed, already-satisfied apt action."""
+    segments = [segment.strip() for segment in line.split("&&")]
+    if not segments or any(not segment for segment in segments):
+        return False
+    for segment in segments:
+        try:
+            words = shlex.split(segment, posix=True)
+        except ValueError:
+            return False
+        if words[:1] != ["sudo"]:
+            return False
+        words = words[1:]
+        if words[:1] == ["-n"]:
+            words = words[1:]
+        if not words or words[0] not in {"apt", "apt-get"}:
+            return False
+        command = words[1:]
+        if not command:
+            return False
+        if command[0] == "update":
+            if any(word not in _APT_OPTIONS for word in command[1:]):
+                return False
+            continue
+        if command[0] != "install":
+            return False
+        packages = [word for word in command[1:] if word not in _APT_OPTIONS]
+        if not packages or any(word.startswith("-") for word in packages):
+            return False
+        if not set(packages) <= _BOOTSTRAP_APT_PACKAGES:
+            return False
+    return True
+
+
+def _script_lines(script: str) -> tuple[str, ...]:
+    """The substantive commands in ``script``, with continuations joined."""
+    joined = re.sub(r"\s*\\\n\s*", " ", script)
+    return tuple(
+        stripped
+        for line in joined.splitlines()
+        if (stripped := _without_comment(line).strip())
+    )
+
+
+def _can_move_setup_before_build(
+    step: Step,
+    *,
+    runs_on: str,
+    container: str,
+) -> bool:
+    """Whether a post-build setup step is known not to consume build output.
+
+    Exact host setup is replayed before the code-owned reproduction build.
+    The only post-build workflow commands that can move there are canonical
+    Ubuntu package installs: trusted bootstrap already performed them, so
+    setup replay omits them entirely. An unknown command may read or execute
+    build output, and therefore makes the exact-job path fall back.
+
+    Container jobs already fall back before setup replay, so preserving their
+    resolved metadata here cannot make an unknown step executable.
+    """
+    if container:
+        return True
+    lines = _script_lines(step.run)
+    return not lines or (
+        runs_on.startswith("ubuntu")
+        and all(_bootstrap_apt_line(line) for line in lines)
+    )
+
+
+def _unsupported_build_setup(
+    step: Step,
+    *,
+    runs_on: str,
+    container: str,
+) -> str:
+    """Why privileged setup embedded in the extracted build is unsupported."""
+    if container:
+        return ""
+    for line in _script_lines(step.run):
+        if not (
+            _SYSTEM_SETUP_RE.search(line)
+            or _PRIVILEGED_SETUP_RE.search(line)
+        ):
+            continue
+        if runs_on.startswith("ubuntu") and _bootstrap_apt_line(line):
+            continue
+        return (
+            f"the job's make step {step.name!r} requires setup outside "
+            "the code-owned dependency profile"
+        )
+    return ""
+
+
+def _isolated_libbacktrace_line(line: str, checkout: Checkout | None) -> str | None:
+    """Rewrite the one pinned dependency install into its user-owned prefix."""
+    if (
+        checkout is None
+        or checkout.repository != _LIBBACKTRACE_REPOSITORY
+        or not re.fullmatch(r"[0-9A-Fa-f]{40}", checkout.ref)
+    ):
+        return None
+    parts = [part.strip() for part in line.split("&&")]
+    if len(parts) != 4:
+        return None
+    try:
+        words = [shlex.split(part, posix=True) for part in parts]
+    except ValueError:
+        return None
+    if (
+        words[0] != ["cd", checkout.path]
+        or words[1] != ["./configure"]
+        or words[2] != ["make"]
+        or words[3] not in (["sudo", "make", "install"], ["sudo", "-n", "make", "install"])
+    ):
+        return None
+    return (
+        f"cd {_quoted(checkout.path)} && "
+        './configure --prefix="$(pwd)/.ci-fix-install" && make && make install'
+    )
+
+
+def _uses_isolated_libbacktrace(checkout: Checkout | None, steps: tuple[Step, ...]) -> bool:
+    return any(
+        _isolated_libbacktrace_line(_without_comment(line).strip(), checkout) is not None
+        for step in steps
+        for line in step.run.splitlines()
+    )
+
+
+def _isolated_setup_steps(spec: JobSpec) -> tuple[Step, ...]:
+    """Sanitize setup for the disposable account, or reject unsupported privilege."""
+    if spec.container:
+        raise Unsupported(
+            "container setup is not yet covered by a code-owned dependency profile"
+        )
+    if spec.checkout is not None and not _uses_isolated_libbacktrace(spec.checkout, spec.steps):
+        raise Unsupported("the extra checkout is not covered by a code-owned dependency profile")
+    protected = [
+        name
+        for env in (spec.env, *(step.env for step in spec.steps))
+        for name in env
+        if (
+            name in _PROTECTED_SETUP_ENV
+            or name.startswith("GITHUB_")
+            or name.startswith("RUNNER_")
+        )
+    ]
+    if protected:
+        raise Unsupported(
+            "the setup overrides protected runner environment "
+            + ", ".join(sorted(set(protected)))
+        )
+    sanitized: list[Step] = []
+    for step in spec.steps:
+        lines: list[str] = []
+        for line in step.run.splitlines():
+            stripped = _without_comment(line).strip()
+            if _PERSISTENT_ENV_RE.search(stripped):
+                raise Unsupported(
+                    f"the setup step {step.name!r} changes cross-step environment"
+                )
+            if spec.runs_on.startswith("ubuntu") and stripped and _bootstrap_apt_line(stripped):
+                continue
+            replacement = _isolated_libbacktrace_line(stripped, spec.checkout)
+            lines.append(replacement if replacement is not None else line)
+        run = "\n".join(lines).strip()
+        if not run:
+            continue
+        if any(
+            _PRIVILEGED_SETUP_RE.search(stripped)
+            for line in run.splitlines()
+            if (stripped := _without_comment(line).strip())
+        ):
+            raise Unsupported(f"the setup step {step.name!r} requires unsupported privileges")
+        sanitized.append(Step(step.name, run, step.shell, step.env))
+    return tuple(sanitized)
+
+
+def isolated_setup_reason(spec: JobSpec) -> str:
+    """Why ``spec`` cannot run under the code-owned setup profile."""
+    try:
+        _isolated_setup_steps(spec)
+    except Unsupported as exc:
+        return str(exc)
+    return ""
+
+
+# The only commands identifiable as setup before a test invocation. Resolution
+# separately rejects a fixture build because exact-job setup runs before the
+# main build; canonical package installs are the only identified commands it
+# can safely move there. Anything else (``export``, ``cd``, an assignment, a
+# control structure) is the invocation's own shell state and stays with it.
 _HOISTABLE_RE = re.compile(
     r"^(?:sudo\s+)?(?:"
     r"apt-get\s+(?:update|install)\b|apt\s+install\b|(?:yum|dnf)\s+(?:-y\s+)?install\b"
@@ -566,10 +941,13 @@ ci_fix_step() {
   shift 3
   : > "${ci_fix_steps}/env"
   : > "${ci_fix_steps}/path"
+  : > "${ci_fix_steps}/output"
+  : > "${ci_fix_steps}/state"
   (
     cd "${GITHUB_WORKSPACE}" || exit 1
     for ci_fix_assignment in "$@"; do export "${ci_fix_assignment}"; done
     export GITHUB_ENV="${ci_fix_steps}/env" GITHUB_PATH="${ci_fix_steps}/path"
+    export GITHUB_OUTPUT="${ci_fix_steps}/output" GITHUB_STATE="${ci_fix_steps}/state"
     exec ${ci_fix_shell} "${ci_fix_script}"
   )
   ci_fix_status=$?
@@ -594,7 +972,13 @@ def setup_script(spec: JobSpec) -> str:
     """
     lines = [_DRIVER.replace("@TITLE@", f"The setup steps of {spec.name}.").rstrip("\n"), ""]
     lines += [f"export {name}={_quoted(item)}" for name, item in spec.env.items()]
-    for index, step in enumerate(spec.steps, 1):
+    lines += [f"export {name}={_quoted(item)}" for name, item in spec.setup_env.items()]
+    if spec.checkout is not None and _uses_isolated_libbacktrace(spec.checkout, spec.steps):
+        lines.append(
+            "export LIBBACKTRACE_PREFIX="
+            + _quoted(f"{spec.checkout.path}/.ci-fix-install")
+        )
+    for index, step in enumerate(_isolated_setup_steps(spec), 1):
         delimiter = _delimiter(step.run)
         lines += [
             "",

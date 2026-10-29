@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
 from scripts.common.valkey_ci import FILE_TIMEOUT_TEST_NAME, Source, is_unit_test_file
+
+
+def _inline_code(value: str) -> str:
+    """Render an untrusted identifier as Markdown code it cannot terminate."""
+    longest = max((len(match) for match in re.findall(r"`+", value)), default=0)
+    fence = "`" * max(1, longest + 1)
+    padded = f" {value} " if value.startswith((" ", "`")) or value.endswith((" ", "`")) else value
+    return f"{fence}{padded}{fence}"
 
 
 class FixPolicy(str, Enum):
@@ -27,10 +36,11 @@ class TargetKind(str, Enum):
 class IssuePublication(str, Enum):
     """How a fix for a detector issue is published.
 
-    ``comment`` posts the verified patch on the issue for a maintainer to
-    apply; ``draft-pr`` pushes a branch and opens a draft PR. The
-    ``CI_FIX_ISSUES_PUBLISH`` repository variable chooses; comment is the
-    default while the bot earns its PRs.
+    A model-authored patch is always posted on the issue for a maintainer to
+    apply. For an exact fix already merged on the trusted default branch,
+    ``comment`` proposes the upstream port without pushing and ``draft-pr``
+    ports it to a branch and opens a draft PR. The
+    ``CI_FIX_ISSUES_PUBLISH`` repository variable chooses the port behavior.
     """
 
     COMMENT = "comment"
@@ -149,6 +159,11 @@ class FixTarget:
     base_repo_full_name: str = ""
     branch: str = ""
     expected_sha: str = ""
+    # Set only by a front door that proved this checkout is an organization
+    # branch or a validated bot-owned branch. Only such a target may execute
+    # its workflow setup, build, or tests; contributor/fork targets remain
+    # commandless suggestions even if a future caller chooses another kind.
+    execution_trusted: bool = False
 
 
 @dataclass(frozen=True)
@@ -184,9 +199,11 @@ class FixCandidate:
     patch: str = ""
     changed_paths: tuple[str, ...] = ()
     port_commit: str = ""
+    # Reserved for backward-compatible deserialization. Model-authored
+    # validation claims are not accepted, reviewed, or published.
     validation: str = ""
-    # A focused command, run from the checkout root, that runs the failing
-    # test or check. Code runs it before and after the patch.
+    # Reserved for backward-compatible deserialization. Model-authored shell
+    # commands are not accepted, executed, reviewed, or published.
     test_command: str = ""
     # What code established about the candidate (local test runs and the
     # review), for the maintainer report. Never written by the agent.
@@ -206,11 +223,9 @@ class FixContext:
     prior_fixes: str = ""
     prior_fixes_detail: str = ""
     prior_fixes_searched: bool = False
-    # Whether and how the failure reproduced on the unfixed code, and whether
-    # code verifies a candidate with that reproduction command.
+    # Whether and how the failure reproduced on the unfixed code.
     reproduction: str = ""
     reproduction_output: str = ""
-    verified_by_code: bool = False
     # The repository's test conventions, and its own docs in the checkout.
     guide: str = ""
     guide_paths: tuple[str, ...] = ()
@@ -248,17 +263,22 @@ class IssueFailure:
 
     def describe(self, job: str, source: Source) -> str:
         if self.job_name and self.test_name:
-            return f"C unit test `{self.test_name}` (`{self.test_file}`) failed in {source.label} job `{job}`."
+            return (
+                f"C unit test {_inline_code(self.test_name)} ({_inline_code(self.test_file)}) "
+                f"failed in {source.label} job {_inline_code(job)}."
+            )
         if self.job_name:
-            return f"The {source.label} job `{job}` failed without a recorded test failure."
+            return (
+                f"The {source.label} job {_inline_code(job)} failed without a recorded test failure."
+            )
         if self.test_name == FILE_TIMEOUT_TEST_NAME:
             return (
-                f"A test client running `{self.test_file}` timed out without "
-                f"reporting a test name in {source.label} job `{job}`."
+                f"A test client running {_inline_code(self.test_file)} timed out without "
+                f"reporting a test name in {source.label} job {_inline_code(job)}."
             )
         return (
-            f"`{self.test_name}` in `{self.test_file}` failed in {source.label} job "
-            f"`{job}`."
+            f"{_inline_code(self.test_name)} in {_inline_code(self.test_file)} failed in "
+            f"{source.label} job {_inline_code(job)}."
         )
 
 

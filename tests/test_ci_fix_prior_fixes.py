@@ -119,6 +119,12 @@ def test_the_search_degrades_to_nothing_outside_a_repository(tmp_path):
     assert find_prior_fixes(str(tmp_path), ()) is None
 
 
+def test_an_expired_search_budget_degrades_to_no_history_evidence(tmp_path):
+    _upstream, clone, _fork_point = _clone_like_the_engine(tmp_path)
+
+    assert find_prior_fixes(str(clone), (TEST,), deadline=0) is None
+
+
 def test_a_generic_subject_on_the_release_branch_is_not_taken_for_the_port(tmp_path):
     upstream, clone, _ = _clone_like_the_engine(tmp_path)
     git(upstream, "checkout", "-q", "9.0")

@@ -222,6 +222,53 @@ def test_valkey_profile_only_formats_suffixes_enforced_by_release_ci(
     assert formatting == ["clang-format --dry-run --Werror -- src/server.c"]
 
 
+def test_valkey_profile_recognizes_legacy_and_pinned_cpp_format_workflows(
+    tmp_path,
+) -> None:
+    """9.1/9.2 use clang-format-18 while the new workflow pins 18.1.8."""
+    workflow_bodies = {
+        "legacy": """\
+run: |
+  sudo apt-get install clang-format-18 -y
+  clang-format-18 -i **/*.c **/*.h **/*.cpp **/*.hpp
+""",
+        "pinned": """\
+run: |
+  python3 -m venv "$RUNNER_TEMP/clang-format"
+  "$RUNNER_TEMP/clang-format/bin/pip" install clang-format==18.1.8
+  echo "$RUNNER_TEMP/clang-format/bin" >> "$GITHUB_PATH"
+  clang-format --version
+  clang-format -i **/*.c **/*.h **/*.cpp **/*.hpp
+""",
+    }
+
+    for layout, workflow_body in workflow_bodies.items():
+        repo = tmp_path / layout
+        for path in ("src/.clang-format", "src/server.c", "src/unit/test.cpp"):
+            destination = repo / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text("source\n", encoding="utf-8")
+        workflow = repo / ".github/workflows/clang-format.yml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text(workflow_body, encoding="utf-8")
+
+        commands = select_validation_commands(
+            [],
+            [],
+            ["src/server.c", "src/unit/test.cpp"],
+            validation_profile="valkey-core",
+            repo_dir=str(repo),
+        )
+
+        formatting = [
+            command for command in commands if command.startswith("clang-format")
+        ]
+        assert formatting == [
+            "clang-format --dry-run --Werror -- src/server.c",
+            "clang-format --dry-run --Werror -- src/unit/test.cpp",
+        ]
+
+
 def test_valkey_profile_only_formats_candidate_line_ranges(tmp_path) -> None:
     subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)

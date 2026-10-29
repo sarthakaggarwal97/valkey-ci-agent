@@ -138,8 +138,9 @@ def run_claude_code(
             if not cwd:
                 raise ValueError("an isolated run needs a working directory")
             with handed_to(run_as, Path(cwd), readable=tuple(Path(d) for d in extra_dirs)) as home:
+                invocation = as_user(run_as, env, cmd, home=home)
                 stdout, stderr, returncode = _run_streaming(
-                    as_user(run_as, env, cmd, home=home), prompt, cwd=cwd, env={}, timeout=timeout,
+                    list(invocation.argv), prompt, cwd=cwd, env=invocation.env, timeout=timeout,
                     run_as=run_as,
                 )
         else:

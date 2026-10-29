@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -287,7 +288,7 @@ def test_ci_fix_issue_runs_are_named_for_the_dispatcher():
     assert RUN_NAME.match(workflow["run-name"].replace("${{ inputs.issue }}", "123"))
 
 
-# --- ci-fix-run.yml: every fix is plan -> fix-in-job | fix-in-container | fix-local -> publish
+# --- ci-fix-run.yml: every fix is plan -> fix-in-job | fix-local -> publish
 
 _RUN = Path(".github/workflows/ci-fix-run.yml")
 
@@ -333,10 +334,16 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
         }, job_id
         if not plan:
             # Publish mints exactly one of its two tokens: workflows:write only
-            # for a push that may change .github/ (policy.allows_ci_changes).
+            # for a validated upstream port that may change .github/.
             plain, ci = tokens
-            assert plain["if"] == "needs.plan.outputs.ci_changes != 'true'"
-            assert ci["if"] == "needs.plan.outputs.ci_changes == 'true'"
+            assert plain["if"] == (
+                "needs.plan.outputs.ci_changes != 'true' || "
+                "steps.publication-scope.outputs.workflows != 'true'"
+            )
+            assert ci["if"] == (
+                "needs.plan.outputs.ci_changes == 'true' && "
+                "steps.publication-scope.outputs.workflows == 'true'"
+            )
             ci_permissions = {k: v for k, v in ci["with"].items() if k.startswith("permission-")}
             assert ci_permissions == {**permissions, "permission-workflows": "write"}
             assert {k: v for k, v in ci["with"].items() if not k.startswith("permission-")} == {
@@ -345,6 +352,13 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
         assert not any("configure-aws-credentials@" in step.get("uses", "") for step in steps), job_id
         assert "\n".join(step.get("run", "") for step in steps).count(command) == 1, job_id
         if job_id == "publish":
+            scope_step = next(
+                step
+                for step in steps
+                if "python -m scripts.ci_fix.run publication-scope" in step.get("run", "")
+            )
+            assert scope_step["id"] == "publication-scope"
+            assert "TARGET_TOKEN" not in scope_step.get("env", {})
             publish_step = next(step for step in steps if command in step.get("run", ""))
             assert publish_step["env"]["CI_FIX_ISSUES_PUBLISH"] == "${{ vars.CI_FIX_ISSUES_PUBLISH }}"
             assert publish_step["env"]["TARGET_TOKEN"] == (
@@ -356,201 +370,189 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
     assert jobs["plan"]["outputs"]["ci_changes"] == "${{ steps.plan.outputs.ci_changes }}"
 
 
-_FIX_JOBS = ("fix-in-job", "fix-in-container", "fix-local")
+_FIX_JOBS = ("fix-in-job", "fix-local")
 _CI_FIX_STEPS = "CI fix: check out the agent"
 
 
-def _ci_fix_steps(job):
-    """The CI-fix steps a fix job ends with, and the plan's download."""
-    steps = job["steps"]
-    first = next(index for index, step in enumerate(steps) if step.get("name") == _CI_FIX_STEPS)
-    download = next(step for step in steps if step.get("name") == "CI fix: download the plan")
-    return [download, *steps[first:]]
+def _named_step(job, name):
+    return next(step for step in job["steps"] if step.get("name") == name)
 
 
 def test_the_fix_runs_in_the_failed_job_or_on_the_bots_runner():
-    from scripts.ci_fix import run
     from scripts.ci_fix.engine import AWS_SESSION_S
 
     jobs = _run_jobs()
-    in_job, in_container, local = (jobs[job_id] for job_id in _FIX_JOBS)
+    assert "fix-in-container" not in jobs
+    assert all(not jobs[job_id].get("container") for job_id in _FIX_JOBS)
+    in_job, local = (jobs[job_id] for job_id in _FIX_JOBS)
     assert "needs.plan.outputs.container == ''" in in_job["if"] and "container" not in in_job
-    assert "needs.plan.outputs.container != ''" in in_container["if"]
-    assert in_container["container"] == "${{ needs.plan.outputs.container }}"
-    # Without git in the container, job.sh makes the checkout an archive of the commit.
-    assert in_container["env"]["CI_FIX_REPOSITORY"] == "${{ needs.plan.outputs.use_repo }}"
-    assert in_container["env"]["CI_FIX_COMMIT"] == "${{ needs.plan.outputs.use_git_ref }}"
-    for job in (in_job, in_container):
-        assert job["runs-on"] == "${{ needs.plan.outputs.runs_on }}"
-        assert job["timeout-minutes"] == "${{ fromJSON(needs.plan.outputs.timeout_minutes) }}"
-        assert job["env"]["CI_FIX_IN_JOB"] == "1"
-        main, extra, download, setup = job["steps"][:4]
-        assert main["with"]["repository"] == "${{ needs.plan.outputs.use_repo }}"
-        assert main["with"]["ref"] == "${{ needs.plan.outputs.use_git_ref }}"
-        assert extra["if"] == "needs.plan.outputs.extra_repository != ''"
-        assert extra["with"]["path"] == "${{ needs.plan.outputs.extra_path }}"
-        assert download["name"] == "CI fix: download the plan"
-        assert setup["run"] == f'sh "${{RUNNER_TEMP}}/ci-fix-plan/{run.SETUP_FILE}"' and setup["shell"] == "sh"
+    assert "env" not in in_job
+    assert in_job["runs-on"] == "${{ needs.plan.outputs.runs_on }}"
+    assert in_job["timeout-minutes"] == "${{ fromJSON(needs.plan.outputs.timeout_minutes) }}"
+    download = _named_step(in_job, "CI fix: download the plan")
+    assert download["name"] == "CI fix: download the plan"
+    create = _named_step(in_job, "CI fix: create the isolated checkout")
+    assert "cd .ci-fix-agent" in create["run"]
+    assert "-m scripts.ci_fix.prepare_job_workspace" in create["run"]
+    assert 'create --plan "${RUNNER_TEMP}/ci-fix-plan"' in create["run"]
+    assert '--state-file "${RUNNER_TEMP}/ci-fix-sandbox-state"' in create["run"]
+    assert "actions/checkout@" not in create["run"]
+    assert "actions/checkout@" not in str(in_job["steps"][:1])
+    assert "Check out the commit to fix" not in {
+        step.get("name") for step in in_job["steps"]
+    }
+    assert "Check out the job's other repository" not in {
+        step.get("name") for step in in_job["steps"]
+    }
+    replay = _named_step(in_job, "CI fix: run the job setup without credentials")
+    assert replay["run"] == "bash .ci-fix-agent/scripts/ci_fix/replay-job-setup.sh"
+    seal = _named_step(in_job, "CI fix: seal the checkout before credentials")
+    assert "env" not in seal
+    run_fix = _named_step(in_job, "CI fix: prepare the fix in this job")
+    assert not {"CI_FIX_IN_JOB", "CI_FIX_REPOSITORY", "CI_FIX_COMMIT"} & set(
+        run_fix["env"]
+    )
+    assert run_fix["run"] == 'bash "${RUNNER_TEMP}/ci-fix-control/job.sh" run'
     assert "CI_FIX_IN_JOB" not in str(local)
+    assert _named_step(local, "CI fix: create the isolated checkout")["run"] == create["run"]
     assert local["runs-on"] == "ubuntu-24.04"
-    assert local["timeout-minutes"] * 60 == AWS_SESSION_S
+    assert local["timeout-minutes"] * 60 > AWS_SESSION_S
     for job_id in _FIX_JOBS:
         assert jobs[job_id]["permissions"] == {"contents": "read", "id-token": "write"}, job_id
     assert jobs["publish"]["needs"] == ["plan", *_FIX_JOBS]
 
 
-def test_every_fix_job_ends_with_the_same_ci_fix_steps():
+def test_every_fix_job_seals_before_credentials_and_cleans_up_afterward():
     from scripts.ci_fix.engine import AWS_SESSION_S
 
     jobs = _run_jobs()
-    shared = {job_id: _ci_fix_steps(jobs[job_id]) for job_id in _FIX_JOBS}
-    # In a container, the agent's tools come from the distribution's packages.
-    setup = next(step for step in shared["fix-in-container"] if step["name"] == "CI fix: set up the agent")
-    assert setup["with"].pop("system-packages") == "true"
-    assert shared["fix-in-job"] == shared["fix-in-container"] == shared["fix-local"]
-    aws = next(step for step in shared["fix-local"] if "configure-aws-credentials@" in step.get("uses", ""))
-    assert aws["with"]["role-duration-seconds"] == AWS_SESSION_S
+    for job_id in _FIX_JOBS:
+        job = jobs[job_id]
+        names = [step.get("name") for step in job["steps"]]
+        seal = names.index("CI fix: seal the checkout before credentials")
+        aws = names.index("CI fix: configure AWS credentials")
+        run_fix = names.index("CI fix: prepare the fix in this job")
+        cleanup = names.index("CI fix: clean up the isolated account")
+        upload = names.index("CI fix: upload the result")
+        assert seal < aws < run_fix < cleanup < upload, job_id
+        assert job["steps"][aws]["with"]["role-duration-seconds"] == AWS_SESSION_S
+        assert job["steps"][cleanup]["if"] == "always()"
+        assert job["steps"][upload]["if"] == "always()"
 
 
 def test_the_job_setup_and_dependencies_run_before_any_credential_and_the_agent_apart():
-    for job_id in _FIX_JOBS:
-        names = [step.get("name") for step in _run_jobs()[job_id]["steps"]]
-        before = "Install Valkey build and test dependencies" if job_id == "fix-local" else "Run the job's own setup and build"
-        assert names.index(before) < names.index("CI fix: configure AWS credentials"), job_id
-        # The job's setup runs before the agent's code is there to change.
-        assert names.index(before) < names.index(_CI_FIX_STEPS), job_id
-    script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
-    assert script.index("CI_FIX_AGENT_USER=") < script.index("python -m scripts.ci_fix.run fix")
-    assert "TOKEN" not in script
+    jobs = _run_jobs()
+    names = [step.get("name") for step in jobs["fix-in-job"]["steps"]]
+    download = names.index("CI fix: download the plan")
+    checkout = names.index(_CI_FIX_STEPS)
+    setup_agent = names.index("CI fix: set up the agent")
+    create = names.index("CI fix: create the isolated checkout")
+    bootstrap = names.index("CI fix: install code-owned target dependencies")
+    replay = names.index("CI fix: run the job setup without credentials")
+    seal = names.index("CI fix: seal the checkout before credentials")
+    aws = names.index("CI fix: configure AWS credentials")
+    assert (
+        download
+        < checkout
+        < setup_agent
+        < create
+        < bootstrap
+        < replay
+        < seal
+        < aws
+    )
+    local_names = [step.get("name") for step in jobs["fix-local"]["steps"]]
+    assert (
+        local_names.index("CI fix: create the isolated checkout")
+        < local_names.index("CI fix: install code-owned target dependencies")
+        < local_names.index("CI fix: seal the checkout before credentials")
+        < local_names.index("CI fix: configure AWS credentials")
+    )
+    assert {
+        _named_step(jobs[job_id], "CI fix: install code-owned target dependencies")["run"]
+        for job_id in _FIX_JOBS
+    } == {"bash .ci-fix-agent/scripts/ci_fix/bootstrap-job.sh"}
 
 
-@pytest.mark.parametrize(("system", "prefix"), [
-    ("Darwin", "chmod +a ci-fix-agent allow search"),
-    ("Linux", "setfacl -m u:ci-fix-agent:--x"),
-])
-def test_the_fix_account_gets_search_access_to_checkout_parents_but_not_root(system, prefix):
-    script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
-    block = script[
-        script.index('  dir="$(dirname "${repo}")"'):
-        script.index('  git -C "${repo}" config')
-    ]
-    program = "\n".join([
-        "set -euo pipefail",
-        f"uname() {{ echo {system}; }}",
-        "as_root() { printf '%s\\n' \"$*\"; }",
-        'repo="/Users/runner/work/valkey-ci-agent/valkey-ci-agent"',
-        block,
-    ])
+def test_runner_control_state_is_sealed_before_disposable_accounts():
+    for path, account_creation in (
+        (
+            "scripts/ci_fix/replay-job-setup.sh",
+            'account_command create --state-file "${account_state}" --user "${SETUP_USER}"',
+        ),
+        ("scripts/ci_fix/job.sh", 'create_account "${COMMAND_USER}"'),
+    ):
+        script = Path(path).read_text(encoding="utf-8")
+        assert '"${python_bin}" -m scripts.ci_fix.accounts "$@"' in script
+        assert 'account_command create --state-file "${account_state}"' in script
+        resolved = script.index('runner_temp="$(cd -- "${RUNNER_TEMP}" && pwd -P)"')
+        root_refusal = script.index('"${runner_temp}" == /')
+        private = script.index('as_root chmod go-rwx "${runner_temp}"')
+        account = script.index(account_creation)
+
+        assert resolved < root_refusal < private < account
+
+
+def test_code_owned_bootstrap_is_hermetic_and_bounded():
+    script = Path("scripts/ci_fix/bootstrap-job.sh").read_text(encoding="utf-8")
+
+    assert "/usr/bin/env -i" in script
+    assert script.count("/usr/bin/timeout --kill-after=5s 300s") == 2
+    assert "GITHUB_" not in script and "needs.plan.outputs" not in script
+
+
+def test_setup_scripts_do_not_grant_runner_parent_search_permissions():
+    scripts = "\n".join(
+        Path(path).read_text(encoding="utf-8")
+        for path in (
+            "scripts/ci_fix/job.sh",
+            "scripts/ci_fix/replay-job-setup.sh",
+            "scripts/ci_fix/bootstrap-job.sh",
+        )
+    )
+    assert not re.search(r"\bsetfacl\b[^\n]*(?:-m\b|--modify\b)", scripts)
+    assert not re.search(r"\bchmod\b[^\n]*\+a\b", scripts)
+
+
+@pytest.mark.parametrize("nested", (False, True))
+def test_target_setup_refuses_redirected_runner_temp_before_chmod(
+    tmp_path,
+    nested,
+):
+    workspace = tmp_path / "runner-work" / "repository" / "repository"
+    workspace.mkdir(parents=True)
+    redirected = tmp_path / "root-link"
+    redirected.symlink_to("/", target_is_directory=True)
+    runner_temp = redirected / "tmp" if nested else redirected
 
     result = subprocess.run(
-        ["bash", "-c", program],
+        ["bash", "scripts/ci_fix/replay-job-setup.sh"],
+        env={
+            **os.environ,
+            "GITHUB_WORKSPACE": str(workspace),
+            "RUNNER_TEMP": str(runner_temp),
+        },
         capture_output=True,
         text=True,
         check=False,
     )
 
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [
-        f"{prefix} /Users/runner/work/valkey-ci-agent",
-        f"{prefix} /Users/runner/work",
-        f"{prefix} /Users/runner",
-        f"{prefix} /Users",
-    ]
-
-
-def test_the_jobs_cleanup_runs_git_without_fsmonitor_or_hooks():
-    """The post steps run git in a workspace the agent's account wrote to, as the workflow user."""
-    script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
-    block = script[script.index("GIT_CONFIG_COUNT=2"):script.index('>> "${GITHUB_ENV}"')]
-    assert "GIT_CONFIG_KEY_0=core.fsmonitor" in block and "GIT_CONFIG_VALUE_0=false" in block
-    assert "GIT_CONFIG_KEY_1=core.hooksPath" in block and "GIT_CONFIG_VALUE_1=/dev/null" in block
-
-
-def _restore_agent(workspace: Path, temp: Path) -> subprocess.CompletedProcess[str]:
-    """Run job.sh's own ``restore_agent`` (and ``as_root``) against ``workspace``."""
-    script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
-    functions = "".join(
-        re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", script, re.MULTILINE | re.DOTALL).group(0)
-        for name in ("as_root", "restore_agent")
-    )
-    program = (
-        'set -euo pipefail\nsudo() { "$@"; }\n' + functions
-        + f'agent={temp / "ci-fix-agent"}\nhome={workspace / ".ci-fix-agent"}\nrestore_agent\n'
-    )
-    return subprocess.run(["bash", "-c", program], capture_output=True, text=True, check=False)
-
-
-def _agent_code(root: Path) -> Path:
-    action = root / ".github" / "actions" / "setup-agent" / "action.yml"
-    action.parent.mkdir(parents=True)
-    action.write_text("name: the real agent setup\n")
-    return action
-
-
-def test_the_agents_code_is_put_back_for_the_jobs_own_cleanup():
-    """Its setup is a composite action of this checkout: the post phase reads it from there."""
-    script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
-
-    moved = script.index('mv -- "${home}" "${agent}"')
-    assert moved < script.index("trap 'restore_agent") < script.index("python -m scripts.ci_fix.run fix")
-
-
-@pytest.mark.parametrize("planted", ["directory", "link"])
-def test_what_the_agent_left_at_the_agents_path_is_never_what_the_cleanup_reads(tmp_path, planted):
-    workspace, temp, outside = tmp_path / "workspace", tmp_path / "temp", tmp_path / "outside"
-    workspace.mkdir()
-    _agent_code(temp / "ci-fix-agent")
-    home = workspace / ".ci-fix-agent"
-    if planted == "directory":
-        # The account owns the workspace: it can make the path a directory of
-        # its own, which a plain move would move the real code into.
-        (_agent_code(home)).write_text("name: the agent's own action\n")
-    else:
-        _agent_code(outside).write_text("name: the agent's own action\n")
-        home.symlink_to(outside)
-
-    result = _restore_agent(workspace, temp)
-
-    assert result.returncode == 0, result.stderr
-    assert not home.is_symlink()
-    assert (home / ".github/actions/setup-agent/action.yml").read_text() == "name: the real agent setup\n"
-    assert not (home / "ci-fix-agent").exists()
-    if planted == "link":
-        # The link went; what it pointed at was not followed.
-        assert (outside / ".github/actions/setup-agent/action.yml").exists()
-
-
-def test_the_agents_code_is_put_back_where_nothing_was_left(tmp_path):
-    workspace, temp = tmp_path / "workspace", tmp_path / "temp"
-    workspace.mkdir()
-    _agent_code(temp / "ci-fix-agent")
-
-    assert _restore_agent(workspace, temp).returncode == 0
-    assert (workspace / ".ci-fix-agent/.github/actions/setup-agent/action.yml").is_file()
-    assert not (temp / "ci-fix-agent").exists()
-
-
-def test_a_container_fix_mode_installs_the_agents_tools_from_the_distribution():
-    """setup-python's builds do not run on every distribution, and a container has no sudo."""
-    steps = yaml.safe_load(Path(".github/actions/setup-agent/action.yml").read_text(encoding="utf-8"))["runs"]["steps"]
-    # The first step: the others need bash, which the container may lack.
-    assert steps[0]["name"] == "Install Python and Node from the system's packages"
-    assert steps[0]["shell"] == "sh" and steps[0]["if"] == "${{ inputs['system-packages'] == 'true' }}"
-    assert steps[1]["uses"].startswith("actions/setup-python@")
-    assert steps[1]["if"] == "${{ inputs['system-packages'] != 'true' }}"
-    for job_id, job in _run_jobs().items():
-        for step in job.get("steps") or []:
-            if step.get("name") == "CI fix: set up the agent":
-                assert (step["with"].get("system-packages") == "true") == bool(job.get("container")), job_id
+    assert result.returncode != 0
+    assert "runner temp directory is not a safe physical directory" in result.stdout
 
 
 def test_the_isolation_tests_also_run_as_root_in_a_container():
     job = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]["isolation-as-root"]
     setup = next(step for step in job["steps"] if step.get("uses") == "./.github/actions/setup-agent")
+    steps = yaml.safe_load(Path(".github/actions/setup-agent/action.yml").read_text(encoding="utf-8"))["runs"]["steps"]
 
     assert job["container"] and setup["with"]["system-packages"] == "true"
     assert job["container"] != "alpine:latest"  # pinned, so the test does not drift with Alpine
     assert any("pytest" in step.get("run", "") and "tests/test_isolation.py" in step["run"] for step in job["steps"])
+    assert steps[0]["name"] == "Install Python and Node from the system's packages"
+    assert steps[0]["shell"] == "sh" and steps[0]["if"] == "${{ inputs['system-packages'] == 'true' }}"
+    assert steps[1]["uses"].startswith("actions/setup-python@")
+    assert steps[1]["if"] == "${{ inputs['system-packages'] != 'true' }}"
 
 
 def test_a_rerun_of_a_fix_replaces_its_artifacts():
@@ -559,5 +561,5 @@ def test_a_rerun_of_a_fix_replaces_its_artifacts():
         step for job in _run_jobs().values() for step in job.get("steps") or []
         if "actions/upload-artifact@" in step.get("uses", "")
     ]
-    assert len(uploads) == 4
+    assert len(uploads) == 3
     assert all(step["with"].get("overwrite") is True for step in uploads)

@@ -4,18 +4,18 @@ name: CI Fix Run
 # (ci-fix-issues.yml), a maintainer's command on a PR (ci-fix.yml), or a
 # bot-owned PR's red head (backport-ci-followup.yml).
 #
-#   plan -> fix-in-job | fix-in-container | fix-local -> publish
+#   plan -> fix-in-job | fix-local -> publish
 #
 # plan binds the request to one exact failed job, and resolves that job from
 # its workflow file at the failed commit (scripts/ci_fix/run.py,
-# scripts/ci_fix/ci_job.py). The fix is prepared inside that very job: on its
-# runner, in its container if it has one (fix-in-container), after its own
-# checkouts, setup and build (the plan's setup.sh). Then, instead of its tests,
-# the agent reproduces the failure, fixes it and verifies the fix with the
-# job's own build and test commands (scripts/ci_fix/job.sh). A job that cannot
-# host the fix is replaced by the same steps on the bot's own runner
-# (fix-local). The fix jobs hold no GitHub token; plan and publish do the
-# GitHub work, each with its own App token.
+# scripts/ci_fix/ci_job.py). Supported Ubuntu and macOS host jobs run on their
+# own runner. Trusted code installs a fixed dependency set, then the target
+# workflow's sanitized setup runs as a disposable, uncredentialed account.
+# The agent reproduces the failure, fixes it and verifies the fix with the
+# job's own build and test commands (scripts/ci_fix/job.sh). Containers and
+# setup outside the code-owned profile fall back to the bot's runner
+# (fix-local). No target-repository token is passed to setup or model
+# processes; plan and publish do the GitHub work with separate App tokens.
 on:
   workflow_call:
     inputs:
@@ -117,9 +117,8 @@ jobs:
           # A re-run of this run replaces it: an artifact name is unique per run.
           overwrite: true
 
-  # The failed job, on its own runner. A job with a container runs in
-  # fix-in-container instead: an empty container value does not reliably
-  # mean none.
+  # A supported failed host job, on its own runner. Container jobs and host
+  # setup outside the code-owned profile are planned as fix-local.
   fix-in-job:
     name: "Fix in ${{ needs.plan.outputs.job }}"
     needs: plan
@@ -129,32 +128,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    env:
-      CI_FIX_IN_JOB: "1"
     steps:
-      - name: Check out the commit to fix
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ needs.plan.outputs.use_repo }}
-          ref: ${{ needs.plan.outputs.use_git_ref }}
-          persist-credentials: false
-      - name: Check out the job's other repository
-        if: needs.plan.outputs.extra_repository != ''
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ needs.plan.outputs.extra_repository }}
-          ref: ${{ needs.plan.outputs.extra_ref }}
-          path: ${{ needs.plan.outputs.extra_path }}
-          persist-credentials: false
       - name: 'CI fix: download the plan'
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: ci-fix-plan-${{ inputs.key }}
           path: ${{ runner.temp }}/ci-fix-plan
-      - name: Run the job's own setup and build
-        shell: sh
-        run: sh "${RUNNER_TEMP}/ci-fix-plan/setup.sh"
-      # The CI-fix steps every fix job ends with.
       - name: 'CI fix: check out the agent'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -167,6 +146,22 @@ jobs:
         with:
           path: .ci-fix-agent
           install-claude: 'true'
+      - name: 'CI fix: create the isolated checkout'
+        shell: bash
+        run: |
+          cd .ci-fix-agent
+          python -m scripts.ci_fix.prepare_job_workspace \
+            create --plan "${RUNNER_TEMP}/ci-fix-plan" \
+            --state-file "${RUNNER_TEMP}/ci-fix-sandbox-state"
+      - name: 'CI fix: install code-owned target dependencies'
+        shell: bash
+        run: bash .ci-fix-agent/scripts/ci_fix/bootstrap-job.sh
+      - name: 'CI fix: run the job setup without credentials'
+        shell: bash
+        run: bash .ci-fix-agent/scripts/ci_fix/replay-job-setup.sh
+      - name: 'CI fix: seal the checkout before credentials'
+        shell: bash
+        run: bash .ci-fix-agent/scripts/ci_fix/job.sh prepare
       - name: 'CI fix: configure AWS credentials'
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
@@ -177,84 +172,27 @@ jobs:
       - name: 'CI fix: prepare the fix in this job'
         shell: bash
         env:
+          # Reassert every security-sensitive value after the target setup.
           CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        run: bash .ci-fix-agent/scripts/ci_fix/job.sh
-      - name: 'CI fix: upload the result'
+          BASH_ENV: ""
+          ENV: ""
+          PYTHONPATH: ""
+          PYTHONHOME: ""
+          NODE_OPTIONS: ""
+          LD_PRELOAD: ""
+          LD_LIBRARY_PATH: ""
+          DYLD_INSERT_LIBRARIES: ""
+          DYLD_LIBRARY_PATH: ""
+        run: bash "${RUNNER_TEMP}/ci-fix-control/job.sh" run
+      - name: 'CI fix: clean up the isolated account'
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: ci-fix-result-${{ inputs.key }}
-          path: ${{ runner.temp }}/ci-fix-out/
-          if-no-files-found: ignore
-          retention-days: 30
-          overwrite: true
-
-  # The failed job in its container on its runner, as root; the agent's own
-  # tools come from the distribution's packages.
-  fix-in-container:
-    name: "Fix in ${{ needs.plan.outputs.job }}"
-    needs: plan
-    if: needs.plan.outputs.mode == 'job' && needs.plan.outputs.container != ''
-    runs-on: ${{ needs.plan.outputs.runs_on }}
-    container: ${{ needs.plan.outputs.container }}
-    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout_minutes) }}
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      CI_FIX_IN_JOB: "1"
-      # Without git in the container, the checkout is an archive of this.
-      CI_FIX_REPOSITORY: ${{ needs.plan.outputs.use_repo }}
-      CI_FIX_COMMIT: ${{ needs.plan.outputs.use_git_ref }}
-    steps:
-      - name: Check out the commit to fix
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ needs.plan.outputs.use_repo }}
-          ref: ${{ needs.plan.outputs.use_git_ref }}
-          persist-credentials: false
-      - name: Check out the job's other repository
-        if: needs.plan.outputs.extra_repository != ''
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ needs.plan.outputs.extra_repository }}
-          ref: ${{ needs.plan.outputs.extra_ref }}
-          path: ${{ needs.plan.outputs.extra_path }}
-          persist-credentials: false
-      - name: 'CI fix: download the plan'
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
-        with:
-          name: ci-fix-plan-${{ inputs.key }}
-          path: ${{ runner.temp }}/ci-fix-plan
-      - name: Run the job's own setup and build
-        shell: sh
-        run: sh "${RUNNER_TEMP}/ci-fix-plan/setup.sh"
-      # The CI-fix steps every fix job ends with.
-      - name: 'CI fix: check out the agent'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ github.repository }}
-          ref: ${{ github.sha }}
-          path: .ci-fix-agent
-          persist-credentials: false
-      - name: 'CI fix: set up the agent'
-        uses: ./.ci-fix-agent/.github/actions/setup-agent
-        with:
-          path: .ci-fix-agent
-          install-claude: 'true'
-          system-packages: 'true'
-      - name: 'CI fix: configure AWS credentials'
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: ci-fix-${{ github.run_id }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-duration-seconds: 4500
-      - name: 'CI fix: prepare the fix in this job'
         shell: bash
-        env:
-          CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        run: bash .ci-fix-agent/scripts/ci_fix/job.sh
+        run: |
+          if [[ -x "${RUNNER_TEMP}/ci-fix-control/job.sh" ]]; then
+            bash "${RUNNER_TEMP}/ci-fix-control/job.sh" cleanup
+          elif [[ -x .ci-fix-agent/scripts/ci_fix/job.sh ]]; then
+            bash .ci-fix-agent/scripts/ci_fix/job.sh cleanup
+          fi
       - name: 'CI fix: upload the result'
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -270,7 +208,9 @@ jobs:
     needs: plan
     if: needs.plan.outputs.mode == 'local'
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    # Includes dependency install and preflight before the 75-minute model
+    # credential session begins, plus cleanup and result upload afterwards.
+    timeout-minutes: 90
     permissions:
       contents: read
       id-token: write
@@ -280,13 +220,6 @@ jobs:
         with:
           name: ci-fix-plan-${{ inputs.key }}
           path: ${{ runner.temp }}/ci-fix-plan
-      - name: Install Valkey build and test dependencies
-        shell: bash
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends \
-            build-essential pkg-config libssl-dev tcl8.6 tclx tcl-tls valgrind
-      # The CI-fix steps every fix job ends with.
       - name: 'CI fix: check out the agent'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -299,6 +232,19 @@ jobs:
         with:
           path: .ci-fix-agent
           install-claude: 'true'
+      - name: 'CI fix: create the isolated checkout'
+        shell: bash
+        run: |
+          cd .ci-fix-agent
+          python -m scripts.ci_fix.prepare_job_workspace \
+            create --plan "${RUNNER_TEMP}/ci-fix-plan" \
+            --state-file "${RUNNER_TEMP}/ci-fix-sandbox-state"
+      - name: 'CI fix: install code-owned target dependencies'
+        shell: bash
+        run: bash .ci-fix-agent/scripts/ci_fix/bootstrap-job.sh
+      - name: 'CI fix: seal the checkout before credentials'
+        shell: bash
+        run: bash .ci-fix-agent/scripts/ci_fix/job.sh prepare
       - name: 'CI fix: configure AWS credentials'
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
@@ -310,7 +256,25 @@ jobs:
         shell: bash
         env:
           CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        run: bash .ci-fix-agent/scripts/ci_fix/job.sh
+          BASH_ENV: ""
+          ENV: ""
+          PYTHONPATH: ""
+          PYTHONHOME: ""
+          NODE_OPTIONS: ""
+          LD_PRELOAD: ""
+          LD_LIBRARY_PATH: ""
+          DYLD_INSERT_LIBRARIES: ""
+          DYLD_LIBRARY_PATH: ""
+        run: bash "${RUNNER_TEMP}/ci-fix-control/job.sh" run
+      - name: 'CI fix: clean up the isolated account'
+        if: always()
+        shell: bash
+        run: |
+          if [[ -x "${RUNNER_TEMP}/ci-fix-control/job.sh" ]]; then
+            bash "${RUNNER_TEMP}/ci-fix-control/job.sh" cleanup
+          elif [[ -x .ci-fix-agent/scripts/ci_fix/job.sh ]]; then
+            bash .ci-fix-agent/scripts/ci_fix/job.sh cleanup
+          fi
       - name: 'CI fix: upload the result'
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -323,7 +287,7 @@ jobs:
 
   publish:
     name: "Publish the fix (${{ inputs.key }})"
-    needs: [plan, fix-in-job, fix-in-container, fix-local]
+    needs: [plan, fix-in-job, fix-local]
     if: always() && needs.plan.result == 'success' && (needs.plan.outputs.mode == 'job' || needs.plan.outputs.mode == 'local')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -353,9 +317,16 @@ jobs:
           name: ci-fix-result-${{ inputs.key }}
           path: ci-fix-result
 
+      - name: Select the publication token scope
+        id: publication-scope
+        shell: bash
+        run: |
+          python -m scripts.ci_fix.run publication-scope \
+            --plan ci-fix-plan --outcome ci-fix-result
+
       - name: Generate target repository token
         id: target-token
-        if: needs.plan.outputs.ci_changes != 'true'
+        if: needs.plan.outputs.ci_changes != 'true' || steps.publication-scope.outputs.workflows != 'true'
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
@@ -368,12 +339,13 @@ jobs:
           permission-issues: write
           permission-metadata: read
 
-      # A bot-owned backport branch may take a CI change, often an upstream
-      # one the release branch lacks (scripts/ci_fix/policy.py
-      # allows_ci_changes): only its token can push under .github/workflows.
+      # Only an exact CI change already merged on the trusted default branch
+      # may be ported to a bot-owned backport branch
+      # (scripts/ci_fix/policy.py allows_ci_changes). Model-authored patches
+      # are comment-only; only this validated port path gets workflows:write.
       - name: Generate target repository token with workflows
         id: ci-token
-        if: needs.plan.outputs.ci_changes == 'true'
+        if: needs.plan.outputs.ci_changes == 'true' && steps.publication-scope.outputs.workflows == 'true'
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}

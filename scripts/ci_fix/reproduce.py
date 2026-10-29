@@ -13,8 +13,10 @@ test (Google Test), the unit-test binary runs only the failing tests
 
 A flaky failure may not show up in a few loops on an idle runner, so a second
 attempt runs the same loops while every core is busy. A failure that still
-does not reproduce is reported as such: the fix can still be prepared from
-the log, but it cannot be shown to fix anything, and the report says so.
+does not reproduce is reported as such. For an executable target, a missing
+or unrunnable plan, an incomplete attempt, and a completed nonreproduction
+all stop before the edit agent: code must observe the original failure before
+it permits a change.
 """
 
 from __future__ import annotations
@@ -78,8 +80,9 @@ _RUNTEST_TIMEOUT_S = 600
 # subshell on lines of its own, so nothing in it can skip the cleanup.
 # One line, like every command a report quotes: a Markdown code span holds no
 # newline, and a maintainer can paste this one as it stands.
+_CORE_COUNT = "nproc 2>/dev/null || getconf _NPROCESSORS_ONLN"
 _CONTENTION = (
-    'cores="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN)"; '
+    f'cores="$({_CORE_COUNT})"; '
     'for _ in $(seq "$cores"); do (while :; do :; done) & done; '
     "( @COMMAND@ ); status=$?; "
     "{ kill $(jobs -p); wait; } 2>/dev/null; "
@@ -104,10 +107,14 @@ class ReproPlan:
     notes: tuple[str, ...] = ()
     tests: tuple[FailedTest, ...] = ()
 
-    def command(self, loops: int, *, under_load: bool = False) -> str:
-        """The build and test command; ``under_load`` busies every core around it."""
-        command = f"{self.build} && {self.test.replace(LOOPS, str(loops))}"
+    def test_command(self, loops: int, *, under_load: bool = False) -> str:
+        """Only the focused test command, optionally under code-owned load."""
+        command = self.test.replace(LOOPS, str(loops))
         return _CONTENTION.replace("@COMMAND@", command) if under_load else command
+
+    def command(self, loops: int, *, under_load: bool = False) -> str:
+        """The build and test command as displayed in code-owned evidence."""
+        return f"{self.build} && {self.test_command(loops, under_load=under_load)}"
 
     @property
     def repro_loops(self) -> int:
@@ -159,7 +166,7 @@ class Reproduction:
         if self.status is ReproStatus.NOT_REPRODUCED:
             return f"Did not reproduce with `{self.command}` ({'; '.join(self.attempts)})."
         reason = f" ({self.reason})" if self.reason else ""
-        return f"Could not run the test on this runner: `{self.command}`{reason}."
+        return f"Could not run the reproduction command on this runner: `{self.command}`{reason}."
 
 
 @dataclass(frozen=True)
@@ -218,7 +225,8 @@ def shows_failure_of(report: str, tests: tuple[FailedTest, ...]) -> bool:
 
     A server that cannot start, or a test client that loses its connection,
     raises an ``[exception]`` outside any test: that is the harness failing,
-    not a reproduction. A valgrind or sanitizer report is the failure itself.
+    not a reproduction. The caller passes only focused-test output here, not
+    build output, so a valgrind or sanitizer report is test-phase evidence.
     """
     for line in report.splitlines():
         if "Valgrind error" in line or "Sanitizer error" in line:
@@ -295,7 +303,9 @@ def plan_for(
     if default:
         notes.append("The failed job could not host the fix, so plain make and runtest stand in for it.")
     command = " ".join([base, *selection, "--loops", LOOPS, *options])
-    return ReproPlan(build=_one_line_build(job.build), test=command, valgrind="--valgrind" in base.split(),
+    test_env = job.moduleapi_env if moduleapi else job.runtest_env
+    return ReproPlan(build=_one_line_build(job.build), test=_with_env(test_env, command),
+                     valgrind="--valgrind" in base.split(),
                      notes=tuple(notes), tests=tests)
 
 
@@ -305,9 +315,18 @@ def _one_line_build(build: str) -> str:
     One line because every report quotes the command it ran.
     """
     return " && ".join(
-        _MAKE_LINE_RE.sub(r'\1 -j"$(nproc)"', line.strip())
+        _MAKE_LINE_RE.sub(
+            lambda match: f'{match.group(1)} -j"$({_CORE_COUNT})"',
+            line.strip(),
+        )
         for line in _CONTINUATION_RE.sub(" ", build).splitlines() if line.strip()
     )
+
+
+def _with_env(env: dict[str, str], command: str) -> str:
+    """Run ``command`` with the resolved job step's environment."""
+    exports = [f"export {name}={shlex.quote(value)}" for name, value in env.items()]
+    return " && ".join([*exports, command])
 
 
 def _unit_test_plan(
@@ -347,7 +366,13 @@ def _unit_test_plan(
     else:
         notes.append("This branch has no gtest-parallel, so the repeats run in one process.")
         command = " ".join([f"{UNIT_TEST_BINARY} --gtest_filter={shlex.quote(names)} --gtest_repeat={LOOPS}", *test_args])
-    return ReproPlan(build=build, test=command, notes=tuple(notes), tests=tests)
+    test_env = job.unittest_env if job is not None else {}
+    return ReproPlan(
+        build=build,
+        test=_with_env(test_env, command),
+        notes=tuple(notes),
+        tests=tests,
+    )
 
 
 # ``make test-unit``'s variables that become the binary's arguments
@@ -413,19 +438,45 @@ def reproduce(
 ) -> Reproduction:
     """Run ``plan`` on the unfixed code: once, then looped, then under load.
 
-    ``run(command, timeout)`` runs one command. Attempts stop at ``deadline``
-    (a ``time.monotonic()`` value); the build in the first run is the slow part.
+    ``run(command, timeout)`` runs one command. Each attempt runs the build and
+    focused test separately, so a sanitizer-looking build failure cannot be
+    mistaken for the planned test failing. Attempts stop at ``deadline`` (a
+    ``time.monotonic()`` value).
     """
     attempts: list[str] = []
     plain = plan.command(1)
-    first = run(plain, _remaining(deadline))
+    stage, first = _run_attempt(plan, run, 1, deadline=deadline)
+    if first is None:
+        return Reproduction(
+            ReproStatus.NOT_REPRODUCED,
+            command=plain,
+            attempts=("no time left for the first run",),
+        )
+    if stage == "build":
+        return Reproduction(
+            ReproStatus.UNRUNNABLE,
+            command=plain,
+            output=first.output,
+            reason="the reproduction build failed",
+        )
     if plan.failed(first):
         # One failure may be a frequent flake; a second plain run tells.
-        second = run(plain, _remaining(deadline))
-        both = plan.failed(second)
+        second_stage, second = _run_attempt(plan, run, 1, deadline=deadline)
+        if second is None:
+            return Reproduction(
+                ReproStatus.REPRODUCED,
+                command=plain,
+                output=first.output,
+                attempts=("failed on the first run; no time left for a confirming second run",),
+            )
+        both = second_stage == "test" and plan.failed(second)
         return Reproduction(
             ReproStatus.REPRODUCED, command=plain, output=first.output, deterministic=both,
-            attempts=("failed on both of two runs",) if both else ("failed on the first run, passed on the second",),
+            attempts=(
+                ("failed on both of two runs",)
+                if both
+                else ("failed on the first run; the confirming run did not reproduce",)
+            ),
         )
     if not first.passed:
         return Reproduction(ReproStatus.UNRUNNABLE, command=plain, output=first.output,
@@ -445,19 +496,55 @@ def reproduce(
             all_attempts_passed = False
             break
         command = plan.command(plan.repro_loops, under_load=under_load)
-        result = run(command, _remaining(deadline))
+        stage, result = _run_attempt(
+            plan,
+            run,
+            plan.repro_loops,
+            under_load=under_load,
+            deadline=deadline,
+        )
+        if result is None:
+            attempts.append(f"no time left for {label}")
+            all_attempts_passed = False
+            break
+        if stage == "build":
+            # A build break cannot be evidence that the focused test failed.
+            attempts.append(f"{label} did not finish: {result.output.strip()[-200:]}")
+            all_attempts_passed = False
+            continue
         if plan.failed(result):
             attempts.append(f"failed within {label}")
             return Reproduction(ReproStatus.REPRODUCED, command=command, output=result.output,
                                 attempts=tuple(attempts), under_load=under_load)
         if not result.passed:
-            # A timeout or a crash of the harness, not a test failure.
+            # A timeout or a crash of the test harness, not a test failure.
             attempts.append(f"{label} did not finish: {result.output.strip()[-200:]}")
             all_attempts_passed = False
             continue
         attempts.append(f"passed {label}")
     return Reproduction(ReproStatus.NOT_REPRODUCED, command=plan.command(plan.repro_loops),
                         attempts=tuple(attempts), all_attempts_passed=all_attempts_passed)
+
+
+def _run_attempt(
+    plan: ReproPlan,
+    run: Callable[[str, int], TestRun],
+    loops: int,
+    *,
+    deadline: float,
+    under_load: bool = False,
+) -> tuple[str, TestRun | None]:
+    """Run one build, then its focused test; return the phase and its result."""
+    remaining = _remaining(deadline)
+    if remaining <= 0:
+        return "build", None
+    built = run(plan.build, remaining)
+    if not built.passed:
+        return "build", built
+    remaining = _remaining(deadline)
+    if remaining <= 0:
+        return "test", None
+    return "test", run(plan.test_command(loops, under_load=under_load), remaining)
 
 
 def _job_timeout(command: str) -> int:
@@ -478,7 +565,7 @@ def _wrong_argument(output: str) -> str:
 
 
 def _remaining(deadline: float) -> int:
-    return max(1, int(deadline - time.monotonic()))
+    return max(0, int(deadline - time.monotonic()))
 
 
 def _runs_solo(repo_dir: str, test: FailedTest) -> bool:

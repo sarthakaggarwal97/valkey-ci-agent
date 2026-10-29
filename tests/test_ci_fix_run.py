@@ -41,7 +41,7 @@ def _pr_plan(job_name="test-ubuntu-latest") -> FixPlan:
         Failure(repo_full_name="valkey-io/valkey", run_id=100, head_sha=_HEAD, job_id=22, job_name=job_name,
                 base_branch="unstable", pr_number=42, workflow="ci"),
         FixTarget(kind=TargetKind.UPDATE_PR, repo_full_name="valkey-io/valkey", branch="agent/ci-fix/x",
-                  expected_sha=_HEAD),
+                  expected_sha=_HEAD, execution_trusted=True),
         FixPolicy.GENERAL,
     )
     return FixPlan(front_door=FrontDoor.PR, task=task, comment_id=7)
@@ -84,7 +84,12 @@ def _plan(tmp_path, planned):
     return run.plan(MagicMock(), artifacts, FrontDoor.PR, {}, bot_login=_BOT, out=tmp_path)
 
 
-def test_a_failure_its_job_can_host_is_fixed_in_that_job(front_door, workflows, tmp_path):
+def test_a_failure_its_job_can_host_is_fixed_in_that_job(
+    front_door,
+    workflows,
+    monkeypatch,
+    tmp_path,
+):
     front_door.planned = _pr_plan()
 
     outputs = _plan(tmp_path, front_door.planned)
@@ -106,7 +111,12 @@ def test_a_failure_its_job_can_host_is_fixed_in_that_job(front_door, workflows, 
     assert (tmp_path / run.SETUP_FILE).read_text(encoding="utf-8") == setup_script(spec)
 
 
-def test_a_scheduled_failure_is_resolved_from_its_scheduled_workflow(front_door, workflows, tmp_path):
+def test_a_scheduled_failure_is_resolved_from_its_scheduled_workflow(
+    front_door,
+    workflows,
+    monkeypatch,
+    tmp_path,
+):
     plan = _pr_plan("test-sanitizer-address (clang)")
     failure = replace(plan.task.failure, source=Source.DAILY, pr_number=0, workflow="")
     front_door.planned = replace(plan, task=replace(plan.task, failure=failure))
@@ -116,7 +126,12 @@ def test_a_scheduled_failure_is_resolved_from_its_scheduled_workflow(front_door,
     assert load(tmp_path / run.JOB_FILE, JobSpec).env == {"CC": "clang"}
 
 
-def test_an_issue_fix_replays_the_job_from_the_tip_it_checks_out(front_door, workflows, tmp_path):
+def test_an_issue_fix_replays_the_job_from_the_tip_it_checks_out(
+    front_door,
+    workflows,
+    monkeypatch,
+    tmp_path,
+):
     """The scheduled run tested an older commit; its setup must match the tree it runs in."""
     tip = "c" * 40
     plan = _pr_plan("test-sanitizer-address (clang)")
@@ -138,6 +153,44 @@ def test_a_failure_its_job_cannot_host_is_fixed_on_the_bots_runner(front_door, w
     assert not (tmp_path / run.JOB_FILE).exists()
 
 
+def test_a_container_job_falls_back_instead_of_running_target_setup_as_root(
+    front_door,
+    workflows,
+    tmp_path,
+):
+    plan = _pr_plan("test-fedoralatest-jemalloc")
+    failure = replace(
+        plan.task.failure,
+        source=Source.DAILY,
+        pr_number=0,
+        workflow="",
+    )
+    front_door.planned = replace(plan, task=replace(plan.task, failure=failure))
+
+    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": ""}
+    assert workflows == [("valkey-io/valkey", "daily", _HEAD)]
+    assert not (tmp_path / run.JOB_FILE).exists()
+
+
+def test_an_untrusted_executable_target_cannot_host_a_job(
+    front_door,
+    workflows,
+    tmp_path,
+):
+    plan = _pr_plan()
+    front_door.planned = replace(
+        plan,
+        task=replace(
+            plan.task,
+            target=replace(plan.task.target, execution_trusted=False),
+        ),
+    )
+
+    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": ""}
+    assert workflows == []
+    assert not (tmp_path / run.JOB_FILE).exists()
+
+
 def test_a_workflow_that_cannot_be_read_falls_back_to_the_bots_runner(front_door, monkeypatch, tmp_path):
     front_door.planned = _pr_plan()
 
@@ -149,20 +202,60 @@ def test_a_workflow_that_cannot_be_read_falls_back_to_the_bots_runner(front_door
     assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": ""}
 
 
-@pytest.mark.parametrize(("branch", "policy", "kind", "expected"), [
-    ("agent/backport/sweep/9.0", FixPolicy.BACKPORT, TargetKind.UPDATE_PR, "true"),
-    ("agent/ci-fix/x", FixPolicy.GENERAL, TargetKind.UPDATE_PR, ""),
-    ("agent/backport/sweep/9.0", FixPolicy.GENERAL, TargetKind.UPDATE_PR, ""),
-    ("agent/backport/sweep/9.0", FixPolicy.BACKPORT, TargetKind.SUGGEST, ""),
-])
-def test_only_a_bot_owned_backport_branch_asks_publish_for_workflows(
-    front_door, workflows, tmp_path, branch, policy, kind, expected,
+def test_a_bot_owned_backport_plan_exposes_its_ci_change_capability(
+    front_door,
+    workflows,
+    tmp_path,
 ):
     plan = _pr_plan()
-    target = replace(plan.task.target, branch=branch, kind=kind)
-    front_door.planned = replace(plan, task=replace(plan.task, target=target, policy=policy))
+    target = replace(plan.task.target, branch="agent/backport/sweep/9.0")
+    front_door.planned = replace(
+        plan,
+        task=replace(plan.task, target=target, policy=FixPolicy.BACKPORT),
+    )
 
-    assert _plan(tmp_path, front_door.planned)["ci_changes"] == expected
+    assert _plan(tmp_path, front_door.planned)["ci_changes"] == "true"
+
+
+def test_only_a_validated_upstream_port_requires_the_workflow_token(tmp_path):
+    plan = _pr_plan()
+    backport = replace(
+        plan,
+        task=replace(
+            plan.task,
+            target=replace(plan.task.target, branch="agent/backport/sweep/9.0"),
+            policy=FixPolicy.BACKPORT,
+        ),
+    )
+    save(tmp_path / run.PLAN_FILE, backport)
+
+    for candidate, expected in (
+        (FixCandidate(action=CandidateAction.PORT, port_commit="c" * 40), True),
+        (FixCandidate(action=CandidateAction.PORT, port_commit="not-a-sha"), False),
+        (_CANDIDATE, False),
+        (FixCandidate(action=CandidateAction.REFUSE, summary="not safe"), False),
+        (None, False),
+    ):
+        save(tmp_path / run.OUTCOME_FILE, FixOutcome(candidate=candidate))
+        assert run.workflow_token_required(tmp_path, tmp_path) is expected
+
+
+def test_workflow_token_selection_fails_closed_for_missing_or_malformed_state(tmp_path):
+    assert not run.workflow_token_required(tmp_path, tmp_path)
+
+    save(tmp_path / run.PLAN_FILE, _pr_plan())
+    (tmp_path / run.OUTCOME_FILE).write_text("{not json", encoding="utf-8")
+    assert not run.workflow_token_required(tmp_path, tmp_path)
+
+
+def test_a_port_on_a_target_without_ci_change_permission_uses_the_plain_token(tmp_path):
+    save(tmp_path / run.PLAN_FILE, _pr_plan())
+    save(
+        tmp_path / run.OUTCOME_FILE,
+        FixOutcome(candidate=FixCandidate(action=CandidateAction.PORT, port_commit="c" * 40)),
+    )
+
+    assert not run.workflow_token_required(tmp_path, tmp_path)
 
 
 def test_a_suggestion_is_never_run_in_a_job(front_door, workflows, tmp_path):
@@ -186,7 +279,9 @@ def test_a_crash_after_the_plan_is_reported_as_a_failed_attempt(front_door, tmp_
 
     assert outputs == {"mode": "done", "action": "failed"}
     (result,) = front_door.reported
-    assert result.kind is ResultKind.FAILED and "the log download kept failing" in result.summary
+    assert result.kind is ResultKind.FAILED
+    assert result.summary == "The CI-fix attempt failed while planning the job."
+    assert "the log download kept failing" not in result.summary
 
 
 @pytest.mark.parametrize(("final", "outputs"), [
@@ -236,7 +331,9 @@ def test_a_fix_that_crashed_or_never_finished_is_reported_as_failed(front_door, 
     _publish(tmp_path, tmp_path / "nothing")
 
     crashed, missing = front_door.reported
-    assert crashed.kind is ResultKind.FAILED and "agent died" in crashed.summary
+    assert crashed.kind is ResultKind.FAILED
+    assert "fix process failed" in crashed.summary
+    assert "agent died" not in crashed.summary
     assert missing.kind is ResultKind.FAILED and "https://run" in missing.summary
 
 
@@ -287,7 +384,9 @@ def test_an_unknown_publication_mode_is_a_reported_failure_not_a_guess(front_doo
     _publish(tmp_path, tmp_path)
 
     (failed,) = front_door.reported
-    assert failed.kind is ResultKind.FAILED and "CI_FIX_ISSUES_PUBLISH must be one of comment, draft-pr" in failed.summary
+    assert failed.kind is ResultKind.FAILED
+    assert "failed while publishing" in failed.summary
+    assert "CI_FIX_ISSUES_PUBLISH" not in failed.summary
 
 
 def test_a_prs_fix_does_not_read_the_issue_publication_variable(front_door, monkeypatch, tmp_path):
@@ -347,7 +446,9 @@ def test_a_publication_that_raises_is_reported_as_failed(front_door, monkeypatch
     _publish(tmp_path, tmp_path)
 
     (result,) = front_door.reported
-    assert result.kind is ResultKind.FAILED and "push failed" in result.summary
+    assert result.kind is ResultKind.FAILED
+    assert "failed while publishing" in result.summary
+    assert "push failed" not in result.summary
 
 
 def test_every_type_a_fix_job_decodes_resolves_on_the_oldest_python_the_job_may_have():

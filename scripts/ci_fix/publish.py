@@ -1,10 +1,11 @@
-"""Publish a prepared CI-fix candidate.
+"""Publish or report a prepared CI-fix candidate.
 
-Publication is intentionally ordinary:
+The publication boundary distinguishes provenance:
 
-* update a bot-owned PR branch;
-* suggest a patch on a contributor PR; or
-* create a draft fix PR for a detector issue.
+* a model-authored patch is posted for a maintainer to apply and is never
+  pushed into a repository whose CI would execute it before human review;
+* an exact commit already merged on the trusted default branch may be ported
+  to a bot-owned PR branch or a new draft fix PR.
 
 The target repository's normal pull-request CI is the verification authority.
 This module never merges a pull request.
@@ -15,11 +16,9 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from github.GithubException import GithubException
-
 from scripts.backport.pr_creator import create_pull_from_push_repo
 from scripts.backport.sweep_prs import find_existing_pr
-from scripts.ci_fix.comment import candidate_context, prose
+from scripts.ci_fix.comment import candidate_context, inline_code, prose
 from scripts.ci_fix.issue_state import has_open_linked_pr, parse_detector_occurrence
 from scripts.ci_fix.models import (
     CandidateAction,
@@ -31,7 +30,12 @@ from scripts.ci_fix.models import (
     ResultKind,
     TargetKind,
 )
-from scripts.ci_fix.policy import allows_ci_changes, can_update_branch, target_capabilities
+from scripts.ci_fix.policy import (
+    allows_ci_changes,
+    can_update_branch,
+    is_bot_author,
+    target_capabilities,
+)
 from scripts.ci_fix.push import (
     PushFailed,
     PushRefused,
@@ -57,13 +61,14 @@ def publish_candidate(
 ) -> FixResult:
     """Publish ``candidate`` according to ``task.target``.
 
-    ``issue_publication`` applies to a detector issue's fix: as a draft PR,
-    or as a patch posted on the issue, which pushes nothing.
+    ``issue_publication`` applies to a detector issue's merged upstream port:
+    as a draft PR, or as a suggestion on the issue. Model-authored patches
+    are always suggestions and push nothing.
     """
     if candidate.action is CandidateAction.REFUSE:
         return FixResult(
             kind=ResultKind.REFUSED,
-            summary=candidate.summary or candidate.reasoning or "No safe fix was found.",
+            summary=candidate.summary or "No safe fix was prepared.",
             task=task,
             candidate=candidate,
         )
@@ -80,7 +85,11 @@ def publish_candidate(
     if target.kind is TargetKind.SUGGEST:
         return _publish_suggestion(gh, task, candidate)
     if target.kind is TargetKind.UPDATE_PR:
+        if candidate.action is CandidateAction.PATCH:
+            return _publish_suggestion(gh, task, candidate, require_bot=True)
         return _publish_update(gh, task, candidate, git_env=git_env)
+    if candidate.action is CandidateAction.PATCH:
+        return _publish_issue_comment(gh, task, candidate)
     if issue_publication is IssuePublication.COMMENT:
         return _publish_issue_comment(gh, task, candidate)
     return _publish_draft(gh, task, candidate, git_env=git_env)
@@ -95,14 +104,12 @@ def _publish_issue_comment(gh: Any, task: FixTask, candidate: FixCandidate) -> F
     if rejection:
         return _refused(task, candidate, f"Not posting the patch: {rejection}")
     limit = target_capabilities(TargetKind.SUGGEST).patch_limit
-    if len(candidate.patch) > limit:
-        # The candidate was prepared under the draft PR's limit; a comment
-        # holds less. Said plainly, rather than a comment without its patch.
+    if candidate.action is CandidateAction.PATCH and len(candidate.patch) > limit:
         return _refused(
             task,
             candidate,
             f"The fix is a {len(candidate.patch):,}-character patch, more than a comment holds "
-            f"({limit:,}); it was not posted. Set CI_FIX_ISSUES_PUBLISH=draft-pr for a fix this size.",
+            f"({limit:,}); it was not published automatically.",
         )
     return FixResult(
         kind=ResultKind.SUGGESTED,
@@ -112,16 +119,30 @@ def _publish_issue_comment(gh: Any, task: FixTask, candidate: FixCandidate) -> F
     )
 
 
-def _publish_suggestion(gh: Any, task: FixTask, candidate: FixCandidate) -> FixResult:
+def _publish_suggestion(
+    gh: Any,
+    task: FixTask,
+    candidate: FixCandidate,
+    *,
+    require_bot: bool = False,
+) -> FixResult:
     try:
-        rejection = _validate_pr_target(gh, task, require_bot=False)
+        rejection = _validate_pr_target(gh, task, require_bot=require_bot)
     except TargetRevalidationFailed as exc:
         return _failed(task, candidate, str(exc))
     if rejection:
         return _refused(task, candidate, f"Not posting the suggestion: {rejection}.")
+    limit = target_capabilities(TargetKind.SUGGEST).patch_limit
+    if len(candidate.patch) > limit:
+        return _refused(
+            task,
+            candidate,
+            f"The fix is a {len(candidate.patch):,}-character patch, more than a comment holds "
+            f"({limit:,}); it was not published automatically.",
+        )
     return FixResult(
         kind=ResultKind.SUGGESTED,
-        summary="Prepared a patch for the PR author.",
+        summary="Prepared a reviewed patch for a maintainer to apply.",
         task=task,
         candidate=candidate,
     )
@@ -152,9 +173,9 @@ def _publish_update(
     return FixResult(
         kind=ResultKind.PUSHED,
         summary=(
-            f"Ported an upstream fix for {candidate.failing_check or task.failure.job_name}."
+            f"Ported an upstream fix for {task.failure.job_name or 'the CI failure'}."
             if candidate.action is CandidateAction.PORT
-            else f"Pushed a fix for {candidate.failing_check or task.failure.job_name}."
+            else f"Pushed a fix for {task.failure.job_name or 'the CI failure'}."
         ),
         task=task,
         candidate=candidate,
@@ -169,10 +190,8 @@ def _publish_draft(
     *,
     git_env: dict[str, str],
 ) -> FixResult:
-    # A deterministic occurrence branch may be left behind when a prior push
-    # succeeded but PR creation failed. Its code is from that earlier attempt,
-    # so recover it with generic metadata rather than describing it with this
-    # run's newly generated candidate.
+    # Recognizing an already-open exact bot PR is read-only. The reconciler
+    # categorically refuses to open a PR from an unproven orphan branch.
     reconciled = reconcile_draft_pr(gh, task)
     if reconciled is not None:
         return reconciled
@@ -194,11 +213,9 @@ def _publish_draft(
             pre_push_check=check_issue,
         )
     except PushStale as exc:
-        # A concurrent or ambiguous prior push may have created the
-        # deterministic occurrence branch after the first lookup.
-        reconciled = reconcile_draft_pr(gh, task)
-        if reconciled is not None:
-            return reconciled
+        # An unproven orphan branch might contain an older model-authored
+        # patch. Never turn it into a PR: only the exact port this attempt
+        # just pushed may cross the publication boundary.
         return _refused(task, candidate, str(exc))
     except PushRefused as exc:
         return _refused(task, candidate, str(exc))
@@ -229,12 +246,12 @@ def reconcile_draft_pr(
     candidate: FixCandidate | None = None,
     known_commit_sha: str = "",
 ) -> FixResult | None:
-    """Finish or reuse publication for one deterministic detector branch.
+    """Finish or recognize publication for one deterministic detector branch.
 
-    ``None`` means the occurrence branch does not exist yet. An existing PR is
-    returned unchanged; an existing branch without a PR is turned into the
-    missing draft PR. This makes a retry complete an attempt whose branch push
-    succeeded before PR creation failed.
+    An existing exact PR may be recognized without mutating it. A missing PR
+    is opened only when ``known_commit_sha`` is the exact trusted port returned
+    by this attempt's successful push and the remote branch still points at
+    that SHA. An unproven orphan branch is never turned into a PR.
     """
     target = task.target
     try:
@@ -267,36 +284,41 @@ def reconcile_draft_pr(
             commit_sha=known_commit_sha,
         )
 
-    branch_sha = known_commit_sha
-    if not branch_sha:
-        try:
-            push_repo = retry_github_call(
-                lambda: gh.get_repo(target.repo_full_name),
-                retries=2,
-                description=f"get {target.repo_full_name}",
-            )
-            branch = retry_github_call(
-                lambda: push_repo.get_branch(target.branch),
-                retries=2,
-                description=f"get {target.repo_full_name}:{target.branch}",
-            )
-        except Exception as exc:  # noqa: BLE001 - retry can recover GitHub API failures
-            if isinstance(exc, GithubException) and exc.status == 404:
-                return None
-            return _failed(
-                task,
-                candidate,
-                f"The occurrence branch {target.branch} could not be checked: {exc}",
-            )
-
-        branch_sha = str(getattr(getattr(branch, "commit", None), "sha", "") or "")
-        if not is_full_sha(branch_sha):
-            return _failed(
-                task,
-                candidate,
-                f"The occurrence branch {target.branch} has no valid commit SHA.",
-            )
-    commit_sha = branch_sha
+    if not known_commit_sha:
+        return None
+    if not is_full_sha(known_commit_sha):
+        return _failed(
+            task,
+            candidate,
+            "The trusted port has no valid commit SHA.",
+        )
+    try:
+        push_repo = retry_github_call(
+            lambda: gh.get_repo(target.repo_full_name),
+            retries=2,
+            description=f"get {target.repo_full_name}",
+        )
+        branch = retry_github_call(
+            lambda: push_repo.get_branch(target.branch),
+            retries=2,
+            description=f"get {target.repo_full_name}:{target.branch}",
+        )
+    except Exception as exc:  # noqa: BLE001 - retry can recover GitHub API failures
+        return _failed(
+            task,
+            candidate,
+            f"The pushed occurrence branch {target.branch} could not be checked: {exc}",
+            commit_sha=known_commit_sha,
+        )
+    branch_sha = str(getattr(getattr(branch, "commit", None), "sha", "") or "")
+    if branch_sha != known_commit_sha:
+        return _refused(
+            task,
+            candidate,
+            f"The occurrence branch moved from the trusted port "
+            f"{known_commit_sha[:12]} to {branch_sha[:12] or '(missing)'}.",
+        )
+    commit_sha = known_commit_sha
 
     try:
         rejection = _validate_issue_target(gh, task)
@@ -474,6 +496,9 @@ def _validate_existing_draft_pr(
     label = f"PR #{number}" if number else "The existing PR"
     if str(getattr(pull, "state", "open") or "") != "open":
         return f"{label} is no longer open."
+    author = str(getattr(getattr(pull, "user", None), "login", "") or "")
+    if not is_bot_author(author):
+        return f"{label} was not opened by the CI agent."
     if str(getattr(getattr(pull, "base", None), "ref", "") or "") != task.failure.base_branch:
         return f"{label} does not target {task.failure.base_branch}."
     head = getattr(pull, "head", None)
@@ -497,9 +522,8 @@ def _source_label(failure: Failure) -> str:
 
 
 def _draft_title(task: FixTask, candidate: FixCandidate | None) -> str:
-    failing_check = candidate.failing_check if candidate is not None else ""
-    fallback = f"{_source_label(task.failure)} failure"
-    return fit_subject(f"Fix {failing_check or task.failure.job_name or fallback}")
+    del candidate
+    return fit_subject(f"Fix {_source_label(task.failure)} CI failure")
 
 
 def _draft_body(task: FixTask, candidate: FixCandidate | None) -> str:
@@ -511,9 +535,9 @@ def _draft_body(task: FixTask, candidate: FixCandidate | None) -> str:
         # its own test; the ones that were not are only mentioned.
         closes = [failure.issue_number, *(candidate.also_fixes if candidate else ())]
         lines += [" ".join(f"Fixes #{number}" for number in closes), ""]
-    description = prose(failure.description, 2_000) if failure.description else (
-        f"`{failure.job_name}` failed in a {_source_label(failure)} run."
-    )
+    description = f"The {_source_label(failure)} run reported a failure"
+    if failure.job_name:
+        description += f" in job {inline_code(prose(failure.job_name, 300))}"
     lines += [f"{description} [See the run]({failure.run_url}).", ""]
     if candidate and candidate.also_touches:
         # In code, unlinked: an open PR GitHub links to an issue keeps it

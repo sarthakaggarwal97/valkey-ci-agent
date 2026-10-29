@@ -10,12 +10,12 @@
 # - Python 3.9 or later, in a virtual environment put first on PATH;
 # - Node, for Claude Code;
 # - what the agent's own account needs (scripts/common/isolation.py):
-#   useradd, runuser, pkill and ps, find, and setfacl.
+#   useradd, runuser, setpriv, ps and kill, find, and the ACL scrubber.
 set -eu
 
 if command -v apk >/dev/null 2>&1; then
   # Claude Code on musl uses the system's ripgrep, and libstdc++.
-  apk add --no-cache bash git python3 nodejs npm shadow runuser procps findutils acl \
+  apk add --no-cache bash git python3 nodejs npm shadow runuser setpriv procps findutils acl \
     libgcc libstdc++ ripgrep
   python=python3
 elif command -v dnf >/dev/null 2>&1; then

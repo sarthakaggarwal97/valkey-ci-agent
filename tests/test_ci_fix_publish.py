@@ -62,6 +62,7 @@ def _task(kind: TargetKind, *, issue: int = 0) -> FixTask:
                 else "agent/backport/sweep/9.0"
             ),
             expected_sha=_HEAD,
+            execution_trusted=kind is not TargetKind.SUGGEST,
         ),
         policy=FixPolicy.GENERAL if issue else FixPolicy.BACKPORT,
     )
@@ -91,6 +92,7 @@ def _draft_pr(*, head_sha: str = _NEW) -> SimpleNamespace:
         number=44,
         state="open",
         html_url="https://example/pr/44",
+        user=SimpleNamespace(login=f"{APP_LOGIN}[bot]"),
         base=SimpleNamespace(ref="unstable"),
         head=SimpleNamespace(
             sha=head_sha,
@@ -174,7 +176,12 @@ def test_bot_pr_is_revalidated_immediately_before_push(
         return _NEW
 
     monkeypatch.setattr(publish_mod, "push_candidate", push)
-    result = publish_candidate(gh, task, _candidate(), git_env={"AUTH": "yes"})
+    result = publish_candidate(
+        gh,
+        task,
+        _candidate(CandidateAction.PORT),
+        git_env={"AUTH": "yes"},
+    )
 
     assert result.kind is ResultKind.PUSHED
     assert result.commit_sha == _NEW
@@ -194,7 +201,7 @@ def test_a_bot_ci_fix_branch_never_takes_a_ci_change(monkeypatch: pytest.MonkeyP
         return _NEW
 
     monkeypatch.setattr(publish_mod, "push_candidate", push)
-    publish_candidate(gh, task, _candidate(), git_env={})
+    publish_candidate(gh, task, _candidate(CandidateAction.PORT), git_env={})
 
     assert seen["allow_ci_changes"] is False
 
@@ -213,6 +220,21 @@ def test_non_bot_pr_is_never_updated(monkeypatch: pytest.MonkeyPatch) -> None:
     result = publish_candidate(gh, task, _candidate(), git_env={})
 
     assert result.kind is ResultKind.REFUSED
+
+
+def test_model_patch_on_bot_pr_is_suggested_without_pushing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task = _task(TargetKind.UPDATE_PR)
+    gh, _repo = _gh()
+    pushed = MagicMock()
+    monkeypatch.setattr(publish_mod, "push_candidate", pushed)
+
+    result = publish_candidate(gh, task, _candidate(), git_env={})
+
+    assert result.kind is ResultKind.SUGGESTED
+    assert result.candidate == _candidate()
+    pushed.assert_not_called()
 
 
 def test_bot_named_branch_in_a_fork_is_never_updated(
@@ -277,14 +299,18 @@ def test_a_patch_too_large_for_a_comment_is_refused_and_says_so() -> None:
     result = publish_candidate(gh, task, big, git_env={}, issue_publication=IssuePublication.COMMENT)
 
     assert result.kind is ResultKind.REFUSED
-    assert "50,000-character patch" in result.summary and "CI_FIX_ISSUES_PUBLISH=draft-pr" in result.summary
+    assert "50,000-character patch" in result.summary
+    assert "not published automatically" in result.summary
 
 
 def test_ready_issue_fix_opens_a_draft_pr(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     task = _task(TargetKind.DRAFT_PR, issue=9)
-    gh, _repo = _gh()
+    gh, repo = _gh()
+    repo.get_branch.side_effect = lambda name: SimpleNamespace(
+        commit=SimpleNamespace(sha=_HEAD if name == "unstable" else _NEW)
+    )
     monkeypatch.setattr(
         publish_mod,
         "push_candidate",
@@ -297,7 +323,12 @@ def test_ready_issue_fix_opens_a_draft_pr(
     create = MagicMock(return_value=created)
     monkeypatch.setattr(publish_mod, "create_pull_from_push_repo", create)
 
-    result = publish_candidate(gh, task, _candidate(), git_env={})
+    result = publish_candidate(
+        gh,
+        task,
+        _candidate(CandidateAction.PORT),
+        git_env={},
+    )
 
     assert result.kind is ResultKind.OPENED
     assert (result.pr_number, result.commit_sha) == (44, _NEW)
@@ -319,7 +350,12 @@ def test_existing_issue_fix_pr_is_reused(
     create = MagicMock()
     monkeypatch.setattr(publish_mod, "create_pull_from_push_repo", create)
 
-    result = publish_candidate(gh, task, _candidate(), git_env={})
+    result = publish_candidate(
+        gh,
+        task,
+        _candidate(CandidateAction.PORT),
+        git_env={},
+    )
 
     assert result.kind is ResultKind.OPENED
     assert result.pr_number == 44
@@ -327,7 +363,7 @@ def test_existing_issue_fix_pr_is_reused(
     create.assert_not_called()
 
 
-def test_existing_occurrence_branch_is_turned_into_the_missing_pr(
+def test_unproven_occurrence_branch_is_not_turned_into_a_pr(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     task = _task(TargetKind.DRAFT_PR, issue=9)
@@ -339,21 +375,26 @@ def test_existing_occurrence_branch_is_turned_into_the_missing_pr(
 
     repo.get_branch.side_effect = get_branch
     monkeypatch.setattr(publish_mod, "find_existing_pr", lambda *_a, **_k: None)
-    push = MagicMock()
+    push = MagicMock(side_effect=PushStale("target branch changed"))
     monkeypatch.setattr(publish_mod, "push_candidate", push)
     created = SimpleNamespace(number=44, html_url="https://example/pr/44")
     create = MagicMock(return_value=created)
     monkeypatch.setattr(publish_mod, "create_pull_from_push_repo", create)
 
-    result = publish_candidate(gh, task, _candidate(), git_env={})
+    result = publish_candidate(
+        gh,
+        task,
+        _candidate(CandidateAction.PORT),
+        git_env={},
+    )
 
-    assert result.kind is ResultKind.OPENED
-    assert result.commit_sha == _NEW
-    push.assert_not_called()
-    assert "An earlier attempt prepared this branch" in create.call_args.kwargs["body"]
+    assert result.kind is ResultKind.REFUSED
+    assert "target branch changed" in result.summary
+    push.assert_called_once()
+    create.assert_not_called()
 
 
-def test_existing_occurrence_branch_can_be_recovered_after_source_moves(
+def test_unproven_occurrence_branch_is_not_recovered_after_source_moves(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     task = _task(TargetKind.DRAFT_PR, issue=9)
@@ -365,18 +406,24 @@ def test_existing_occurrence_branch_can_be_recovered_after_source_moves(
 
     repo.get_branch.side_effect = get_branch
     monkeypatch.setattr(publish_mod, "find_existing_pr", lambda *_a, **_k: None)
-    monkeypatch.setattr(publish_mod, "push_candidate", MagicMock())
-    create = MagicMock(return_value=_draft_pr())
+    push = MagicMock(side_effect=PushStale("target branch changed"))
+    monkeypatch.setattr(publish_mod, "push_candidate", push)
+    create = MagicMock()
     monkeypatch.setattr(publish_mod, "create_pull_from_push_repo", create)
 
-    result = publish_candidate(gh, task, _candidate(), git_env={})
+    result = publish_candidate(
+        gh,
+        task,
+        _candidate(CandidateAction.PORT),
+        git_env={},
+    )
 
-    assert result.kind is ResultKind.OPENED
-    assert result.commit_sha == _NEW
-    assert "An earlier attempt prepared this branch" in create.call_args.kwargs["body"]
+    assert result.kind is ResultKind.REFUSED
+    push.assert_called_once()
+    create.assert_not_called()
 
 
-def test_create_lease_race_reconciles_the_occurrence_branch(
+def test_create_lease_race_does_not_open_an_unproven_occurrence_branch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     task = _task(TargetKind.DRAFT_PR, issue=9)
@@ -403,15 +450,20 @@ def test_create_lease_race_reconciles_the_occurrence_branch(
     create = MagicMock(return_value=_draft_pr())
     monkeypatch.setattr(publish_mod, "create_pull_from_push_repo", create)
 
-    result = publish_candidate(gh, task, _candidate(), git_env={})
+    result = publish_candidate(
+        gh,
+        task,
+        _candidate(CandidateAction.PORT),
+        git_env={},
+    )
 
-    assert result.kind is ResultKind.OPENED
-    assert result.commit_sha == _NEW
+    assert result.kind is ResultKind.REFUSED
+    assert "target branch changed" in result.summary
     assert push.call_count == 1
-    assert "An earlier attempt prepared this branch" in create.call_args.kwargs["body"]
+    create.assert_not_called()
 
 
-def test_retry_finishes_pr_creation_without_pushing_a_duplicate_branch(
+def test_retry_does_not_open_a_branch_left_after_pr_creation_failed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     task = _task(TargetKind.DRAFT_PR, issue=9)
@@ -432,6 +484,8 @@ def test_retry_finishes_pr_creation_without_pushing_a_duplicate_branch(
 
     def pushed(*_args, **_kwargs):
         nonlocal branch_exists
+        if branch_exists:
+            raise PushStale("target branch changed")
         branch_exists = True
         return _NEW
 
@@ -441,14 +495,16 @@ def test_retry_finishes_pr_creation_without_pushing_a_duplicate_branch(
     create = MagicMock(side_effect=[RuntimeError("GitHub unavailable"), created])
     monkeypatch.setattr(publish_mod, "create_pull_from_push_repo", create)
 
-    first = publish_candidate(gh, task, _candidate(), git_env={})
-    second = publish_candidate(gh, task, _candidate(), git_env={})
+    port = _candidate(CandidateAction.PORT)
+    first = publish_candidate(gh, task, port, git_env={})
+    second = publish_candidate(gh, task, port, git_env={})
 
     assert first.kind is ResultKind.FAILED
     assert "branch" in first.summary
-    assert second.kind is ResultKind.OPENED
-    assert (second.pr_number, second.commit_sha) == (44, _NEW)
-    assert push.call_count == 1
+    assert second.kind is ResultKind.REFUSED
+    assert "target branch changed" in second.summary
+    assert push.call_count == 2
+    assert create.call_count == 1
 
 
 def test_wrong_base_existing_occurrence_pr_is_not_reused(
@@ -462,7 +518,12 @@ def test_wrong_base_existing_occurrence_pr_is_not_reused(
     push = MagicMock()
     monkeypatch.setattr(publish_mod, "push_candidate", push)
 
-    result = publish_candidate(gh, task, _candidate(), git_env={})
+    result = publish_candidate(
+        gh,
+        task,
+        _candidate(CandidateAction.PORT),
+        git_env={},
+    )
 
     assert result.kind is ResultKind.REFUSED
     assert "does not target unstable" in result.summary
@@ -514,7 +575,12 @@ def test_a_draft_is_opened_even_if_the_base_branch_moved(
     pushed = MagicMock(side_effect=PushFailed("stop after the checks"))
     monkeypatch.setattr(publish_mod, "push_candidate", pushed)
 
-    publish_candidate(gh, task, _candidate(), git_env={})
+    publish_candidate(
+        gh,
+        task,
+        _candidate(CandidateAction.PORT),
+        git_env={},
+    )
 
     pushed.assert_called_once()
 
@@ -530,7 +596,12 @@ def test_permanent_push_refusal_is_a_refused_result(
         MagicMock(side_effect=PushRefused("lease failed")),
     )
 
-    result = publish_candidate(gh, task, _candidate(), git_env={})
+    result = publish_candidate(
+        gh,
+        task,
+        _candidate(CandidateAction.PORT),
+        git_env={},
+    )
 
     assert result.kind is ResultKind.REFUSED
     assert result.summary == "lease failed"
@@ -547,7 +618,12 @@ def test_operational_push_failure_is_a_failed_result(
         MagicMock(side_effect=PushFailed("network unavailable")),
     )
 
-    result = publish_candidate(gh, task, _candidate(), git_env={})
+    result = publish_candidate(
+        gh,
+        task,
+        _candidate(CandidateAction.PORT),
+        git_env={},
+    )
 
     assert result.kind is ResultKind.FAILED
     assert result.summary == "network unavailable"
@@ -583,6 +659,37 @@ def test_a_daily_draft_closes_its_issue():
     target = FixTarget(TargetKind.DRAFT_PR, "o/r", branch="agent/ci-fix/x")
     body = publish_mod._draft_body(FixTask(failure, target, FixPolicy.GENERAL), None)
     assert body.startswith("Fixes #9\n\n") and "[See the run](https://github.com/o/r/actions/runs/1)" in body
+
+
+def test_draft_metadata_does_not_publish_untrusted_markdown():
+    from scripts.ci_fix.models import Failure, FixPolicy, FixTarget, FixTask, TargetKind
+    from scripts.common.valkey_ci import Source
+
+    malicious = "job` @valkey-io/security [click](https://example.invalid) <details>"
+    failure = Failure(
+        "o/r",
+        1,
+        "a" * 40,
+        2,
+        malicious,
+        base_branch="unstable",
+        issue_number=9,
+        source=Source.DAILY,
+        description=malicious,
+    )
+    task = FixTask(
+        failure,
+        FixTarget(TargetKind.DRAFT_PR, "o/r", branch="agent/ci-fix/x"),
+        FixPolicy.GENERAL,
+    )
+
+    title = publish_mod._draft_title(task, None)
+    body = publish_mod._draft_body(task, None)
+
+    assert title == "Fix Daily CI failure"
+    assert malicious not in title
+    assert f"``{malicious}``" in body
+    assert malicious not in body.replace(f"``{malicious}``", "")
 
 
 def test_a_draft_closes_only_the_extra_issues_whose_tests_were_verified():

@@ -1,138 +1,296 @@
 #!/usr/bin/env bash
-# Prepare one planned fix inside the job that hosts it.
+# Prepare, run, and clean one CI fix in its isolated stable checkout.
 #
-# Run by ci-fix-run.yml from the workspace the agent repository was checked
-# out into (.ci-fix-agent):
-#
-# - in the failed CI job (fix-in-job, fix-in-container: CI_FIX_IN_JOB=1),
-#   the workspace is that job's checkout, already set up and built by the
-#   job's own steps (scripts/ci_fix/ci_job.py). The fix is prepared there,
-#   rebuilt and tested with the job's own commands, from the plan. The job
-#   runs on an Ubuntu or macOS runner, or as root in a container, where a
-#   checkout without git in it is an archive of CI_FIX_COMMIT;
-# - in fix-local, for a failure its job cannot host, the workspace holds
-#   nothing else, and the fix is prepared on a fresh clone with the bot's own
-#   approximation of the job.
-#
-# The steps before this one installed the agent and its dependencies
-# (.github/actions/setup-agent) and the model's AWS credentials.
-#
-# The agent's code moves out of the workspace first: the agent's account owns
-# the checkout while it works, and must not be able to change the code that
-# judges and exports its work.
+# Trusted workflow code creates the checkout directly below physical /tmp (or
+# /private/tmp on macOS) before credentials exist. Target setup, test commands,
+# and model processes reuse that one pathname. The runner's GITHUB_WORKSPACE
+# contains only the trusted agent/action checkout and is never handed to a
+# disposable identity, so parent-directory ACL changes are unnecessary.
 set -euo pipefail
 
-# A container job runs as root, and has no sudo.
+unset BASH_ENV ENV PYTHONPATH PYTHONHOME NODE_OPTIONS
+unset LD_PRELOAD LD_LIBRARY_PATH DYLD_INSERT_LIBRARIES DYLD_LIBRARY_PATH
+
+SETUP_USER=ci-fix-setup
+COMMAND_USER=ci-fix-command
+AGENT_USER=ci-fix-agent
+
 as_root() {
-  if (( EUID == 0 )); then "$@"; else sudo "$@"; fi
+  if (( EUID == 0 )); then "$@"; else /usr/bin/sudo -n "$@"; fi
 }
 
-agent="${RUNNER_TEMP}/ci-fix-agent"
-home="${GITHUB_WORKSPACE}/.ci-fix-agent"
-
-# The job's own cleanup runs the post phase of every action it used, and the
-# agent's setup is one of this checkout's own composite actions: the runner
-# reads it from ${home} again then. In the failed job the agent's account owns
-# the workspace while it works, so whatever is at ${home} by now may be the
-# account's: it goes first (a link is removed, never followed), or a move
-# would land the real code inside it and the runner would read the account's
-# action instead.
-restore_agent() {
-  [[ -d "${agent}" ]] || return 0
-  as_root rm -rf -- "${home}"
-  mv -- "${agent}" "${home}"
+fail() {
+  echo "::error::$1"
+  exit 1
 }
 
-mv -- "${home}" "${agent}"
-trap 'restore_agent || echo "::warning::could not put the CI-fix agent back for the job cleanup"' EXIT
-
-# The job's own cleanup (each action's post step) runs git in the workspace
-# as the workflow user, with its tokens. Whatever the agent's account could
-# write into a repository's config there must not run then: no fsmonitor,
-# no hooks. Written to GITHUB_ENV, so those later steps inherit it.
-{
-  echo "GIT_CONFIG_COUNT=2"
-  echo "GIT_CONFIG_KEY_0=core.fsmonitor"
-  echo "GIT_CONFIG_VALUE_0=false"
-  echo "GIT_CONFIG_KEY_1=core.hooksPath"
-  echo "GIT_CONFIG_VALUE_1=/dev/null"
-} >> "${GITHUB_ENV}"
-
-# The agent and its commands run as this account, which cannot read the
-# job's credentials (scripts/common/isolation.py).
-if [[ "$(uname -s)" == Darwin ]]; then
-  # macOS has no useradd: the account gets a group of its own, not staff,
-  # which can read the runner's files.
-  id=$(( $( (dscl . -list /Users UniqueID; dscl . -list /Groups PrimaryGroupID) \
-    | awk '{print $2}' | sort -n | tail -1) + 1 ))
-  sudo dscl . -create /Groups/ci-fix-agent PrimaryGroupID "${id}"
-  sudo dscl . -create /Users/ci-fix-agent
-  sudo dscl . -create /Users/ci-fix-agent UniqueID "${id}"
-  sudo dscl . -create /Users/ci-fix-agent PrimaryGroupID "${id}"
-  sudo dscl . -create /Users/ci-fix-agent UserShell /bin/bash
-  sudo dscl . -create /Users/ci-fix-agent NFSHomeDirectory /Users/ci-fix-agent
-  sudo mkdir -p /Users/ci-fix-agent
-  sudo chown "${id}:${id}" /Users/ci-fix-agent
-else
-  # Above the runner's own account, which in a container is just a number
-  # that owns the workspace and the runner's files there.
-  above=$(( $(stat -c %u "${RUNNER_TEMP}") + 1 ))
-  as_root useradd --create-home --shell /bin/bash -K UID_MIN="${above}" -K GID_MIN="${above}" ci-fix-agent
-fi
-export CI_FIX_AGENT_USER=ci-fix-agent
-export CI_AGENT_EVIDENCE_DIR="${RUNNER_TEMP}/ci-fix-out/agent-evidence"
-
-args=()
-repo="${GITHUB_WORKSPACE}"
-if [[ -n "${CI_FIX_IN_JOB:-}" ]] && (( EUID == 0 )); then
-  # The runner made the workspace as its own account; git trusts only a
-  # checkout the account running it owns.
-  chown 0:0 "${repo}"
-fi
-if [[ -n "${CI_FIX_IN_JOB:-}" && ! -d "${repo}/.git" ]]; then
-  # Without git in its container, the job checked its commit out as an
-  # archive: make it the shallow clone a checkout with git would have made,
-  # keeping the files the job built.
-  git init -q "${repo}"
-  git -C "${repo}" remote add origin "https://github.com/${CI_FIX_REPOSITORY}"
-  git -C "${repo}" fetch -q --depth=1 origin "${CI_FIX_COMMIT}"
-  git -C "${repo}" reset -q FETCH_HEAD
-fi
-if [[ -d "${repo}/.git" ]]; then
-  # The account must reach the checkout, git must not send the job's token,
-  # and the search for an existing fix needs the history. The account alone
-  # gets to pass through the checkout's parents: ``o+x`` on the runner's home
-  # would open every world-readable file under it, the runner's own included.
-  if [[ "$(uname -s)" != Darwin ]] && ! command -v setfacl >/dev/null; then
-    if command -v apt-get >/dev/null; then
-      as_root apt-get install -y -q --no-install-recommends acl >/dev/null
-    elif command -v dnf >/dev/null; then
-      as_root dnf -y -q install acl
-    elif command -v apk >/dev/null; then
-      as_root apk add --no-cache acl
-    fi
+paths() {
+  runner_temp="$(cd -- "${RUNNER_TEMP}" && pwd -P)"
+  if [[ "${RUNNER_TEMP}" != /* || -L "${RUNNER_TEMP}" \
+        || "${runner_temp}" == / || "${runner_temp}" != "${RUNNER_TEMP}" ]]; then
+    fail "The runner temp directory is not a safe physical directory"
   fi
-  dir="$(dirname "${repo}")"
-  while [[ "${dir}" != / ]]; do
-    if [[ "$(uname -s)" == Darwin ]]; then
-      as_root chmod +a "ci-fix-agent allow search" "${dir}"
+
+  plan_name="${runner_temp}/ci-fix-plan"
+  plan="$(cd -- "${plan_name}" && pwd -P)"
+  if [[ "${plan}" != "${plan_name}" || ! -f "${plan}/plan.json" || -L "${plan}/plan.json" ]]; then
+    fail "The authoritative CI-fix plan is missing or redirected"
+  fi
+
+  workspace_state="${runner_temp}/ci-fix-sandbox-state"
+  account_state="${runner_temp}/ci-fix-accounts-state"
+  if [[ ! -f "${workspace_state}" || -L "${workspace_state}" ]]; then
+    fail "The trusted CI-fix sandbox state is missing or redirected"
+  fi
+  exec 3< "${workspace_state}"
+  IFS= read -r workspace_header <&3 || fail "The CI-fix sandbox state is incomplete"
+  IFS= read -r repo <&3 || fail "The CI-fix sandbox state is incomplete"
+  IFS= read -r workspace_repository <&3 || fail "The CI-fix sandbox state is incomplete"
+  IFS= read -r workspace_commit <&3 || fail "The CI-fix sandbox state is incomplete"
+  IFS= read -r workspace_mode <&3 || fail "The CI-fix sandbox state is incomplete"
+  IFS= read -r workspace_pull_number <&3 || fail "The CI-fix sandbox state is incomplete"
+  IFS= read -r workspace_anchor_device <&3 || fail "The CI-fix sandbox state is incomplete"
+  IFS= read -r workspace_anchor_inode <&3 || fail "The CI-fix sandbox state is incomplete"
+  if IFS= read -r _unexpected <&3; then
+    fail "The CI-fix sandbox state has unexpected data"
+  fi
+  exec 3<&-
+
+  temp_root="$(cd -- /tmp && pwd -P)"
+  repo_physical="$(cd -- "${repo}" && pwd -P)"
+  anchor="${repo%/*}"
+  anchor_physical="$(cd -- "${anchor}" && pwd -P)"
+  if [[ "${workspace_header}" != ci-fix-sandbox-v2 \
+        || ! "${workspace_repository}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ \
+        || ! "${workspace_commit}" =~ ^[0-9A-Fa-f]{40}$ \
+        || ! "${workspace_pull_number}" =~ ^(0|[1-9][0-9]*)$ \
+        || ! "${workspace_anchor_device}" =~ ^[0-9]+$ \
+        || ! "${workspace_anchor_inode}" =~ ^[1-9][0-9]*$ \
+        || ( "${workspace_mode}" != job && "${workspace_mode}" != local ) \
+        || ( "${temp_root}" != /tmp && "${temp_root}" != /private/tmp ) \
+        || "${repo}" != "${repo_physical}" || -L "${repo}" \
+        || "${repo##*/}" != repo \
+        || "${anchor}" != "${anchor_physical}" || -L "${anchor}" \
+        || "${anchor%/*}" != "${temp_root}" \
+        || "${anchor##*/}" != valkey-ci-fix-* ]]; then
+    fail "The trusted CI-fix sandbox state is invalid"
+  fi
+
+  agent_name="${GITHUB_WORKSPACE}/.ci-fix-agent"
+  if [[ ! -d "${agent_name}" || -L "${agent_name}" ]]; then
+    fail "The trusted CI-fix agent checkout is missing or redirected"
+  fi
+  agent="$(cd -- "${agent_name}" && pwd -P)"
+  out="${runner_temp}/ci-fix-out"
+  control="${runner_temp}/ci-fix-control"
+  state="${control}/ready"
+}
+
+create_account() {
+  account_command create --state-file "${account_state}" --user "$1"
+}
+
+account_command() {
+  (
+    cd "${agent}"
+    "${python_bin}" -m scripts.ci_fix.accounts "$@"
+  )
+}
+
+cleanup_paths() {
+  local agent_name
+  runner_temp="$(cd -- "${RUNNER_TEMP}" && pwd -P)"
+  if [[ "${RUNNER_TEMP}" != /* || -L "${RUNNER_TEMP}" \
+        || "${runner_temp}" == / || "${runner_temp}" != "${RUNNER_TEMP}" ]]; then
+    echo "::error::The runner temp directory is not a safe physical directory"
+    return 1
+  fi
+  workspace_state="${runner_temp}/ci-fix-sandbox-state"
+  account_state="${runner_temp}/ci-fix-accounts-state"
+  control="${runner_temp}/ci-fix-control"
+  agent_name="${GITHUB_WORKSPACE}/.ci-fix-agent"
+  if [[ ! -d "${agent_name}" || -L "${agent_name}" ]]; then
+    echo "::error::The trusted CI-fix agent checkout is missing or redirected"
+    return 1
+  fi
+  agent="$(cd -- "${agent_name}" && pwd -P)"
+  python_bin="$(command -v python)"
+  if [[ "${python_bin}" != /* || "${python_bin}" == "${runner_temp}/"* ]]; then
+    echo "::error::A trusted Python is unavailable for mount-safe sandbox cleanup"
+    return 1
+  fi
+}
+
+remove_accounts() {
+  if [[ ! -e "${account_state}" && ! -L "${account_state}" ]]; then
+    if [[ -e "${workspace_state}" || -L "${workspace_state}" ]]; then
+      echo "::error::The CI-fix account ownership state is missing"
+      return 1
+    fi
+    return 0
+  fi
+  if [[ ! -f "${account_state}" || -L "${account_state}" ]]; then
+    echo "::error::The CI-fix account ownership state is redirected"
+    return 1
+  fi
+  (
+    cd "${agent}"
+    as_root "${python_bin}" -m scripts.ci_fix.accounts \
+      cleanup --state-file "${account_state}"
+  )
+}
+
+remove_workspace() {
+  [[ -e "${workspace_state}" || -L "${workspace_state}" ]] || return 0
+  if [[ ! -f "${workspace_state}" || -L "${workspace_state}" ]]; then
+    echo "::error::The trusted CI-fix sandbox state is missing or redirected"
+    return 1
+  fi
+  (
+    cd "${agent}"
+    as_root "${python_bin}" -m scripts.ci_fix.prepare_job_workspace \
+      cleanup --state-file "${workspace_state}"
+  )
+}
+
+prepare() {
+  paths
+  as_root chmod go-rwx "${runner_temp}"
+  as_root chmod -R go-rwx "${plan}"
+  python_bin="$(command -v python)"
+  if [[ "${python_bin}" != /* || "${python_bin}" == "${repo}/"* ]]; then
+    fail "The trusted CI-fix Python did not resolve outside the target checkout"
+  fi
+  case "${repo}${runner_temp}${plan}${out}${agent}${python_bin}" in
+    *$'\n'*) fail "CI-fix control paths may not contain a newline" ;;
+  esac
+  if [[ "$(uname -s)" == Linux && "$(command -v setfacl || true)" != /* ]]; then
+    fail "The trusted ACL scrubber is unavailable"
+  fi
+
+  if [[ "${workspace_mode}" == job ]]; then
+    if ! id "${SETUP_USER}" >/dev/null 2>&1; then
+      fail "The isolated setup account was not preserved for preflight"
+    fi
+    account_command quiesce --state-file "${account_state}" --user "${SETUP_USER}"
+  fi
+
+  as_root rm -rf -- "${out}" "${control}"
+  mkdir -m 700 "${out}" "${control}"
+  install -m 700 "$0" "${control}/job.sh"
+
+  prepared=""
+  rollback() {
+    local status=$?
+    if [[ -z "${prepared}" ]]; then
+      if remove_accounts; then
+        remove_workspace || status=1
+      else
+        status=1
+      fi
+      as_root rm -rf -- "${out}" "${control}"
+    fi
+    exit "${status}"
+  }
+  trap rollback EXIT
+
+  create_account "${COMMAND_USER}"
+  create_account "${AGENT_USER}"
+  setup_uid="$(id -u "${SETUP_USER}" 2>/dev/null || true)"
+  command_uid="$(id -u "${COMMAND_USER}")"
+  agent_uid="$(id -u "${AGENT_USER}")"
+  if [[ "${command_uid}" == "${agent_uid}" \
+        || ( -n "${setup_uid}" && ( "${setup_uid}" == "${command_uid}" \
+                                    || "${setup_uid}" == "${agent_uid}" ) ) ]]; then
+    fail "CI-fix isolation accounts did not receive distinct identities"
+  fi
+
+  {
+    printf '%s\n' "${repo}"
+    printf '%s\n' "${runner_temp}"
+    printf '%s\n' "${plan}"
+    printf '%s\n' "${out}"
+    printf '%s\n' "${agent}"
+    printf '%s\n' "${python_bin}"
+    printf '%s\n' "${workspace_mode}"
+    printf '%s\n' "${setup_uid}"
+    printf '%s\n' "${command_uid}"
+    printf '%s\n' "${agent_uid}"
+  } > "${state}"
+  chmod 600 "${state}"
+  prepared=1
+  trap - EXIT
+}
+
+read_state() {
+  if [[ ! -f "${state}" || -L "${state}" ]]; then
+    fail "The credential-free CI-fix preflight did not complete"
+  fi
+  exec 3< "${state}"
+  IFS= read -r state_repo <&3
+  IFS= read -r state_temp <&3
+  IFS= read -r state_plan <&3
+  IFS= read -r state_out <&3
+  IFS= read -r state_agent <&3
+  IFS= read -r python_bin <&3
+  IFS= read -r state_mode <&3
+  IFS= read -r state_setup_uid <&3
+  IFS= read -r state_command_uid <&3
+  IFS= read -r state_agent_uid <&3
+  if IFS= read -r _unexpected <&3; then
+    fail "The sealed CI-fix preflight state has unexpected data"
+  fi
+  exec 3<&-
+  if [[ "${state_repo}" != "${repo}" || "${state_temp}" != "${runner_temp}" \
+        || "${state_plan}" != "${plan}" || "${state_out}" != "${out}" \
+        || "${state_agent}" != "${agent}" \
+        || "${state_mode}" != "${workspace_mode}" \
+        || "${state_setup_uid}" != "$(id -u "${SETUP_USER}" 2>/dev/null || true)" \
+        || "${state_command_uid}" != "$(id -u "${COMMAND_USER}" 2>/dev/null || true)" \
+        || "${state_agent_uid}" != "$(id -u "${AGENT_USER}" 2>/dev/null || true)" \
+        || "${state_command_uid}" == "${state_agent_uid}" \
+        || ( -n "${state_setup_uid}" && ( "${state_setup_uid}" == "${state_command_uid}" \
+                                          || "${state_setup_uid}" == "${state_agent_uid}" ) ) \
+        || ! -x "${python_bin}" || ! -d "${agent}" || -L "${agent}" \
+        || ! -d "${out}" || -L "${out}" ]]; then
+    fail "The sealed CI-fix preflight state no longer matches this job"
+  fi
+}
+
+run_fix() {
+  paths
+  read_state
+  export CI_FIX_AGENT_USER="${AGENT_USER}"
+  export CI_FIX_COMMAND_USER="${COMMAND_USER}"
+  export CI_AGENT_EVIDENCE_DIR="${out}/agent-evidence"
+  cd "${agent}"
+  "${python_bin}" -m scripts.ci_fix.run fix \
+    --plan "${plan}" --out "${out}" --repo-dir "${repo}"
+}
+
+cleanup() {
+  local status=0
+  if cleanup_paths; then
+    if remove_accounts; then
+      remove_workspace || status=1
     else
-      as_root setfacl -m "u:ci-fix-agent:--x" "${dir}"
+      status=1
     fi
-    dir="$(dirname "${dir}")"
-  done
-  git -C "${repo}" config --local --unset-all http.https://github.com/.extraheader || true
-  # actions/checkout v6 keeps the token in a file it includes instead.
-  for key in $(git -C "${repo}" config --local --name-only --get-regexp '^includeif\.' || true); do
-    git -C "${repo}" config --local --unset-all "${key}"
-  done
-  if [[ -f "${repo}/.git/shallow" ]]; then
-    git -C "${repo}" fetch -q --unshallow --filter=blob:none origin
+  else
+    status=1
   fi
-  git -C "${repo}" remote set-head origin --auto >/dev/null
-  args+=(--repo-dir "${repo}")
-fi
+  if [[ -n "${control:-}" && -d "${control}" && ! -L "${control}" ]]; then
+    as_root rm -rf -- "${control}" || status=1
+  fi
+  return "${status}"
+}
 
-cd "${agent}"
-python -m scripts.ci_fix.run fix \
-  --plan "${RUNNER_TEMP}/ci-fix-plan" --out "${RUNNER_TEMP}/ci-fix-out" "${args[@]}"
+case "${1:-}" in
+  prepare) prepare ;;
+  run) run_fix ;;
+  cleanup) cleanup ;;
+  *)
+    echo "usage: $0 prepare|run|cleanup" >&2
+    exit 2
+    ;;
+esac

@@ -20,16 +20,21 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from scripts.ci_fix.models import FailedTest
 from scripts.common.git_clone import is_full_sha
-from scripts.common.proc import default_branch_ref, git_output, is_ancestor
+from scripts.common.proc import git_output
 
 logger = logging.getLogger(__name__)
 
 MAX_CANDIDATES = 5
+# Bound the commits whose metadata and target-branch equivalents are
+# inspected after broad ``git log`` matches. Without this cap, one common
+# path or test prefix can turn into hundreds of serial Git commands.
+MAX_INSPECTED_CANDIDATES = 50
 # Diffs shown to the agent, and how much of each.
 MAX_DIFFS = 3
 _DIFF_CHARS = 8_000
@@ -48,6 +53,11 @@ _CHANGES_FILE = 2
 _NAMES_TEST_START = 2
 _MIN_SCORE = 3
 _FIX_WORDS_RE = re.compile(r"\b(?:flak\w*|deflake\w*|fix\w*|race|timing|timeout|unstable test)\b", re.IGNORECASE)
+_GIT_TIMEOUT_S = 5 * 60
+
+
+class _SearchDeadline(RuntimeError):
+    """The overall CI-fix budget expired during a bounded history search."""
 
 
 @dataclass(frozen=True)
@@ -70,6 +80,7 @@ def find_prior_fixes(
     tested_sha: str = "",
     issue_number: int = 0,
     paths: tuple[str, ...] = (),
+    deadline: float | None = None,
 ) -> tuple[PriorFix, ...] | None:
     """Best candidates, strongest first; None when no search could run.
 
@@ -79,8 +90,20 @@ def find_prior_fixes(
     if not tests and not issue_number and not paths:
         return None
     try:
-        return _find(repo_dir, tests, tested_sha=tested_sha, issue_number=issue_number, paths=paths)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+        return _find(
+            repo_dir,
+            tests,
+            tested_sha=tested_sha,
+            issue_number=issue_number,
+            paths=paths,
+            deadline=deadline,
+        )
+    except (
+        _SearchDeadline,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        OSError,
+    ) as exc:
         logger.warning("Searching for an existing fix failed: %s", exc)
         return None
 
@@ -92,13 +115,18 @@ def _find(
     tested_sha: str,
     issue_number: int,
     paths: tuple[str, ...],
+    deadline: float | None,
 ) -> tuple[PriorFix, ...] | None:
-    head = git_output(repo_dir, "rev-parse", "HEAD").strip()
+    head = _git_output(repo_dir, "rev-parse", "HEAD", deadline=deadline).strip()
     ranges: list[tuple[str, bool]] = []
-    if is_full_sha(tested_sha) and tested_sha.lower() != head.lower() and is_ancestor(repo_dir, tested_sha, head) is True:
+    if (
+        is_full_sha(tested_sha)
+        and tested_sha.lower() != head.lower()
+        and _is_ancestor(repo_dir, tested_sha, head, deadline=deadline)
+    ):
         # Landed between the failing run and the commit being fixed.
         ranges.append((f"{tested_sha}..{head}", True))
-    default_ref = default_branch_ref(repo_dir)
+    default_ref = _default_branch_ref(repo_dir, deadline=deadline)
     if default_ref:
         # On the default branch but not here: what a port would bring.
         ranges.append((f"{head}..{default_ref}", False))
@@ -107,12 +135,30 @@ def _find(
 
     found: dict[str, PriorFix] = {}
     for revision_range, on_target in ranges:
-        for sha, reasons in _matches(repo_dir, revision_range, tests, issue_number, paths).items():
-            subject, date = _subject_and_date(repo_dir, sha)
+        matches = _matches(
+            repo_dir,
+            revision_range,
+            tests,
+            issue_number,
+            paths,
+            deadline=deadline,
+        )
+        ranked_matches = sorted(
+            matches.items(),
+            key=lambda item: sum(weight for weight, _text in item[1]),
+            reverse=True,
+        )[:MAX_INSPECTED_CANDIDATES]
+        for sha, reasons in ranked_matches:
+            _check_deadline(deadline)
+            subject, date = _subject_and_date(repo_dir, sha, deadline=deadline)
             score = sum(weight for weight, _text in reasons) + (1 if _FIX_WORDS_RE.search(subject) else 0)
             if score < _MIN_SCORE:
                 continue
-            ported_as = "" if on_target else _ported_as(repo_dir, sha, subject, head)
+            ported_as = (
+                ""
+                if on_target
+                else _ported_as(repo_dir, sha, subject, head, deadline=deadline)
+            )
             found.setdefault(sha, PriorFix(
                 sha=sha, subject=subject, date=date, reasons=tuple(sorted(text for _weight, text in reasons)),
                 score=score, on_target=on_target or bool(ported_as), ported_as=ported_as,
@@ -129,6 +175,8 @@ def _matches(
     tests: tuple[FailedTest, ...],
     issue_number: int,
     paths: tuple[str, ...],
+    *,
+    deadline: float | None,
 ) -> dict[str, set[tuple[int, str]]]:
     """Each matching commit's ``(weight, reason)`` pairs."""
     reasons: dict[str, set[tuple[int, str]]] = {}
@@ -139,21 +187,46 @@ def _matches(
 
     files = dict.fromkeys([test.file for test in tests if test.file] + list(paths))
     for path in files:
-        add(_log(repo_dir, revision_range, "--", path), _CHANGES_FILE, f"changes `{path}`")
+        add(
+            _log(repo_dir, revision_range, "--", path, deadline=deadline),
+            _CHANGES_FILE,
+            f"changes `{path}`",
+        )
     for test in tests:
         name = test.name.strip()
         if len(name) < _MIN_NAME_CHARS:
             continue
-        whole = _log(repo_dir, revision_range, "--fixed-strings", f"--grep={name}")
+        whole = _log(
+            repo_dir,
+            revision_range,
+            "--fixed-strings",
+            f"--grep={name}",
+            deadline=deadline,
+        )
         add(whole, _NAMES_TEST, f"names the test `{name}`")
         prefix = _wrapped_prefix(name)
         if prefix:
-            started = _log(repo_dir, revision_range, "--fixed-strings", f"--grep={prefix}")
+            started = _log(
+                repo_dir,
+                revision_range,
+                "--fixed-strings",
+                f"--grep={prefix}",
+                deadline=deadline,
+            )
             add([sha for sha in started if sha not in whole], _NAMES_TEST_START,
                 f"names the start of the test, `{prefix}`")
     if issue_number > 0:
-        add(_log(repo_dir, revision_range, "--extended-regexp", f"--grep=#{issue_number}([^0-9]|$)"),
-            _REFERENCES_ISSUE, f"references #{issue_number}")
+        add(
+            _log(
+                repo_dir,
+                revision_range,
+                "--extended-regexp",
+                f"--grep=#{issue_number}([^0-9]|$)",
+                deadline=deadline,
+            ),
+            _REFERENCES_ISSUE,
+            f"references #{issue_number}",
+        )
     return reasons
 
 
@@ -211,24 +284,48 @@ def _inside(repo_dir: str, path: str) -> bool:
     return target.is_file() and not target.is_symlink()
 
 
-def _log(repo_dir: str, revision_range: str, *args: str) -> list[str]:
+def _log(
+    repo_dir: str,
+    revision_range: str,
+    *args: str,
+    deadline: float | None,
+) -> list[str]:
     pathspec: tuple[str, ...] = ()
     if "--" in args:
         split = args.index("--")
         args, pathspec = args[:split], args[split:]
-    output = git_output(
+    output = _git_output(
         repo_dir, "log", "--no-merges", "--format=%H", f"--max-count={_LOG_LIMIT}",
-        *args, revision_range, *pathspec,
+        *args, revision_range, *pathspec, deadline=deadline,
     )
     return [line.strip() for line in output.splitlines() if is_full_sha(line.strip())]
 
 
-def _subject_and_date(repo_dir: str, sha: str) -> tuple[str, str]:
-    subject, _, date = git_output(repo_dir, "show", "-s", "--format=%s%x00%cs", sha).strip().partition("\x00")
+def _subject_and_date(
+    repo_dir: str,
+    sha: str,
+    *,
+    deadline: float | None,
+) -> tuple[str, str]:
+    subject, _, date = _git_output(
+        repo_dir,
+        "show",
+        "-s",
+        "--format=%s%x00%cs",
+        sha,
+        deadline=deadline,
+    ).strip().partition("\x00")
     return subject, date
 
 
-def _ported_as(repo_dir: str, sha: str, subject: str, head: str) -> str:
+def _ported_as(
+    repo_dir: str,
+    sha: str,
+    subject: str,
+    head: str,
+    *,
+    deadline: float | None,
+) -> str:
     """The commit on ``head`` that already carries ``sha``'s change, or "".
 
     A ``cherry-pick -x`` trailer names the commit. Otherwise an identical
@@ -239,7 +336,15 @@ def _ported_as(repo_dir: str, sha: str, subject: str, head: str) -> str:
     if _PR_SUBJECT_RE.search(subject):
         searches.append(("--fixed-strings", f"--grep={subject}"))
     for args in searches:
-        output = git_output(repo_dir, "log", "--format=%H%x00%s", "--max-count=20", *args, head)
+        output = _git_output(
+            repo_dir,
+            "log",
+            "--format=%H%x00%s",
+            "--max-count=20",
+            *args,
+            head,
+            deadline=deadline,
+        )
         for line in output.splitlines():
             commit, _, found_subject = line.partition("\x00")
             if args[1].startswith("--grep=cherry") or found_subject == subject:
@@ -247,7 +352,12 @@ def _ported_as(repo_dir: str, sha: str, subject: str, head: str) -> str:
     return ""
 
 
-def render_prior_fixes(repo_dir: str, fixes: tuple[PriorFix, ...]) -> str:
+def render_prior_fixes(
+    repo_dir: str,
+    fixes: tuple[PriorFix, ...],
+    *,
+    deadline: float | None = None,
+) -> str:
     """Markdown for the agent: every candidate, and the diffs of the best ones."""
     if not fixes:
         return ""
@@ -274,8 +384,22 @@ def render_prior_fixes(repo_dir: str, fixes: tuple[PriorFix, ...]) -> str:
             continue
         shown += 1
         try:
-            diff = git_output(repo_dir, "show", "--no-ext-diff", "--no-textconv", "--stat", "--patch", fix.sha)
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+            diff = _git_output(
+                repo_dir,
+                "show",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--stat",
+                "--patch",
+                fix.sha,
+                deadline=deadline,
+            )
+        except (
+            _SearchDeadline,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            OSError,
+        ) as exc:
             diff = f"(could not show the commit: {exc})"
         if len(diff) > _DIFF_CHARS:
             diff = diff[:_DIFF_CHARS] + "\n[... diff truncated ...]"
@@ -294,3 +418,62 @@ def summarize_prior_fixes(fixes: tuple[PriorFix, ...]) -> str:
         )
         lines.append(f"`{fix.sha[:12]}` {fix.subject} ({state})")
     return "\n".join(lines)
+
+
+def _check_deadline(deadline: float | None) -> None:
+    if deadline is not None and time.monotonic() >= deadline:
+        raise _SearchDeadline("the CI-fix deadline expired")
+
+
+def _timeout(deadline: float | None) -> int:
+    if deadline is None:
+        return _GIT_TIMEOUT_S
+    remaining = int(deadline - time.monotonic())
+    if remaining < 1:
+        raise _SearchDeadline("the CI-fix deadline expired")
+    return min(remaining, _GIT_TIMEOUT_S)
+
+
+def _git_output(
+    repo_dir: str,
+    *args: str,
+    deadline: float | None,
+) -> str:
+    return git_output(repo_dir, *args, timeout=_timeout(deadline))
+
+
+def _is_ancestor(
+    repo_dir: str,
+    ancestor: str,
+    descendant: str,
+    *,
+    deadline: float | None,
+) -> bool:
+    try:
+        _git_output(
+            repo_dir,
+            "merge-base",
+            "--is-ancestor",
+            ancestor,
+            descendant,
+            deadline=deadline,
+        )
+    except subprocess.CalledProcessError as exc:
+        if exc.returncode == 1:
+            return False
+        raise
+    return True
+
+
+def _default_branch_ref(repo_dir: str, *, deadline: float | None) -> str:
+    try:
+        ref = _git_output(
+            repo_dir,
+            "symbolic-ref",
+            "--short",
+            "refs/remotes/origin/HEAD",
+            deadline=deadline,
+        ).strip()
+    except subprocess.CalledProcessError:
+        return ""
+    return ref if ref.startswith("origin/") else ""
