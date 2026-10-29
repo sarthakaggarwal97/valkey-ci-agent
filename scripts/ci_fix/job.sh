@@ -112,14 +112,14 @@ if [[ -d "${repo}/.git" ]]; then
       as_root apk add --no-cache acl
     fi
   fi
-  dir="${repo}"
+  dir="$(dirname "${repo}")"
   while [[ "${dir}" != / ]]; do
-    dir="$(dirname "${dir}")"
     if [[ "$(uname -s)" == Darwin ]]; then
       as_root chmod +a "ci-fix-agent allow search" "${dir}"
     else
       as_root setfacl -m "u:ci-fix-agent:--x" "${dir}"
     fi
+    dir="$(dirname "${dir}")"
   done
   git -C "${repo}" config --local --unset-all http.https://github.com/.extraheader || true
   # actions/checkout v6 keeps the token in a file it includes instead.
