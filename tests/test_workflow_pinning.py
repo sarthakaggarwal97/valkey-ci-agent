@@ -424,6 +424,40 @@ def test_the_job_setup_and_dependencies_run_before_any_credential_and_the_agent_
     assert "TOKEN" not in script
 
 
+@pytest.mark.parametrize(("system", "prefix"), [
+    ("Darwin", "chmod +a ci-fix-agent allow search"),
+    ("Linux", "setfacl -m u:ci-fix-agent:--x"),
+])
+def test_the_fix_account_gets_search_access_to_checkout_parents_but_not_root(system, prefix):
+    script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
+    block = script[
+        script.index('  dir="$(dirname "${repo}")"'):
+        script.index('  git -C "${repo}" config')
+    ]
+    program = "\n".join([
+        "set -euo pipefail",
+        f"uname() {{ echo {system}; }}",
+        "as_root() { printf '%s\\n' \"$*\"; }",
+        'repo="/Users/runner/work/valkey-ci-agent/valkey-ci-agent"',
+        block,
+    ])
+
+    result = subprocess.run(
+        ["bash", "-c", program],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        f"{prefix} /Users/runner/work/valkey-ci-agent",
+        f"{prefix} /Users/runner/work",
+        f"{prefix} /Users/runner",
+        f"{prefix} /Users",
+    ]
+
+
 def test_the_jobs_cleanup_runs_git_without_fsmonitor_or_hooks():
     """The post steps run git in a workspace the agent's account wrote to, as the workflow user."""
     script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
