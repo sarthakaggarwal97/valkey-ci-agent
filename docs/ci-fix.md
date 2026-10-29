@@ -66,8 +66,13 @@ same build flags and the same test command. Many failures only happen on one
 platform or with one build configuration, so this matters. When the job can't
 be recreated faithfully, for example because it runs in a VM or one of its
 steps depends on a secret, the bot works on a plain Ubuntu runner with a
-default build instead. [How the failed job is recreated](#how-the-failed-job-is-recreated)
-has the details.
+default build instead. If that fallback completes and passes once, in a loop,
+and under load without reproducing the failure, the bot reports that evidence
+and stops without asking Claude to edit for an environment it could not
+recreate. A timed-out, failed or skipped fallback attempt is incomplete, so
+Claude can still diagnose it from the log.
+[How the failed job is recreated](#how-the-failed-job-is-recreated) has the
+details.
 
 **It looks for a fix that already exists.** Before writing anything, the bot
 searches the git history for merged commits that mention the failing test,
@@ -121,9 +126,13 @@ next round. If the build or Claude's test command changes any tracked file
 while the fix is being tested, the fix that was tested is no longer the fix
 in the tree, so that also goes back for another round.
 
-A fix that doesn't pass within three rounds is declined. A failure the bot
-could never reproduce can still be fixed from the log, but the bot says
-clearly that the fix is unproven. If the bot runs out of time or crashes,
+A fix that doesn't pass within three rounds is declined. In the exact failed
+job, a failure the bot could never reproduce can still be fixed from the log,
+but the bot says clearly that the fix is unproven. When the exact job cannot
+host the fix and its plain-Ubuntu fallback runs successfully but never
+reproduces the failure across all three attempts, the fix agent is not
+launched. If any attempt does not finish, or there is not enough time to run
+it, diagnosis continues normally. If the bot runs out of time or crashes,
 that isn't treated as declining: the CI follow-up and detector issues get one
 more attempt at the same failure.
 

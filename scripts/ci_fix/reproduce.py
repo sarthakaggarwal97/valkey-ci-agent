@@ -137,6 +137,10 @@ class Reproduction:
     command: str = ""
     output: str = ""
     attempts: tuple[str, ...] = ()
+    # The one-shot, looped and under-load attempts all completed and passed.
+    # False for a reproduction that stopped early or whose harness timed out
+    # or failed without showing the planned test failure.
+    all_attempts_passed: bool = False
     # Why an unrunnable command could not run, when code knows.
     reason: str = ""
     # The failure showed up on both of two plain runs, before any loop.
@@ -430,6 +434,7 @@ def reproduce(
         return Reproduction(ReproStatus.UNRUNNABLE, command=plain, output=first.output,
                             reason="runtest passed without running the failing test")
     attempts.append("passed once")
+    all_attempts_passed = True
 
     for label, under_load in (
         (f"{plan.repro_loops} loops", False),
@@ -437,6 +442,7 @@ def reproduce(
     ):
         if _remaining(deadline) < _MIN_ATTEMPT_S:
             attempts.append(f"no time left for {label}")
+            all_attempts_passed = False
             break
         command = plan.command(plan.repro_loops, under_load=under_load)
         result = run(command, _remaining(deadline))
@@ -447,10 +453,11 @@ def reproduce(
         if not result.passed:
             # A timeout or a crash of the harness, not a test failure.
             attempts.append(f"{label} did not finish: {result.output.strip()[-200:]}")
+            all_attempts_passed = False
             continue
         attempts.append(f"passed {label}")
     return Reproduction(ReproStatus.NOT_REPRODUCED, command=plan.command(plan.repro_loops),
-                        attempts=tuple(attempts))
+                        attempts=tuple(attempts), all_attempts_passed=all_attempts_passed)
 
 
 def _job_timeout(command: str) -> int:

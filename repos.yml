@@ -8,7 +8,10 @@ repos:
       # skips its whole body without it.
       # src/unit/Makefile resolves both gtest and gmock through pkg-config before
       # any C++ unit test can compile.
-      - "sudo apt-get update && sudo apt-get install -y clang-format-18 libssl-dev libgtest-dev libgmock-dev tcl8.6 tclx tcl-tls"
+      - "sudo apt-get update && sudo apt-get install -y libssl-dev libgtest-dev libgmock-dev tcl8.6 tclx tcl-tls"
+      # Match upstream's exact formatter release instead of whichever build
+      # the runner's distribution happens to package.
+      - "python3 -m pip install clang-format==18.1.8"
       - "python3 -m pip install -r utils/req-res-validator/requirements.txt"
       # Certificates for the valkey-core profile's TLS checks. Runs once per
       # branch and writes only to the gitignored tests/tls/.

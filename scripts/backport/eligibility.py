@@ -3,10 +3,10 @@
 Runs once a day over the PRs merged on the last week of UTC dates, so days
 a failed or skipped run missed are picked up by a later one. Each PR is
 judged once: a run reads the results earlier runs left behind and copies a
-settled verdict for the same merge commit and the same released branches
-instead of asking the model again, so a borderline PR does not get several
-tries at "high". A PR is eligible
-for a registered release branch when both hold:
+settled verdict for the same merge commit and the same registered release
+branches instead of asking the model again, so a borderline PR does not get
+several tries at "high". A PR is eligible for a registered release branch
+when both hold:
 
 * the code it changes exists on that branch: a commit that introduced a line
   the PR modifies, deletes, or inserts next to (git blame at the PR's parent,
@@ -27,13 +27,13 @@ suggested. Precision matters more than recall: lower-confidence suggestions
 go to the job summary only.
 
 Two more checks keep suggestions to what maintainers would act on. A PR
-maintainers already took to a GA release branch (queued in its backport
-project, on its sweep, or landed) is "triaged": they decided where it goes,
-so it is settled before the model and never commented on. And each suggested
-branch must carry the code that produces the failure there, as the model
-cites it; a branch whose cited failure site is missing is dropped. A branch
-with no GA release yet takes nearly every change through its sweep, so it is
-never suggested.
+maintainers already took to a branch that was GA when the PR merged (queued
+in its backport project, on its sweep, or landed) is "triaged": they decided
+where it goes, so it is settled before the model and never commented on.
+Pre-GA branch activity does not settle the PR for other branches, but every
+registered release branch is still considered for a suggestion. And each
+suggested branch must carry the code that produces the failure there, as the
+model cites it; a branch whose cited failure site is missing is dropped.
 Branches the PR already landed on, or whose backport project already holds
 the PR, are never candidates. Each eligible PR gets one marker comment naming
 its branches. Nothing is added to a project: that remains a maintainer
@@ -96,7 +96,7 @@ logger = logging.getLogger(__name__)
 COMMENT_MARKER = "<!-- valkey-ci-agent:backport-eligibility -->"
 # Bumped whenever a change would judge a PR differently: earlier results are
 # then ignored and every PR in the window is judged again.
-RESULT_VERSION = 1
+RESULT_VERSION = 2
 # Outcomes a later run reuses for the same merge commit. "would-comment" is
 # settled only for another dry run: a live run judges it again and comments.
 # "undecided", "error", and "already-commented" are never reused.
@@ -156,7 +156,7 @@ query($q: String!, $cursor: String) {
 
 _PROMPT_TEMPLATE = """\
 You are triaging pull requests merged to the development branch of {repo}.
-For each PR, decide whether maintainers should backport it to the maintained
+For each PR, decide whether maintainers should backport it to the registered
 release branches, and to which of them. A maintainer reads every suggestion
 you make, so a wrong suggestion costs their time: suggest a branch only when
 you are confident the defect the PR fixes exists on that branch.
@@ -496,10 +496,10 @@ class BranchHistory:
 def ga_dates(repo_dir: str, branches: Sequence[str]) -> dict[str, datetime]:
     """When each branch's first release (``<branch>.N``, not an RC) was tagged.
 
-    Pre-GA branches are absent. Before GA a release branch takes nearly every
-    change, features included, so its history says nothing about which
-    changes are backport-worthy. The first release need not be ``.0``
-    (valkey's 7.2 line starts at 7.2.4).
+    Pre-GA branches are absent. This distinction is only for deciding whether
+    activity on a branch represents maintainer triage; pre-GA branches are
+    still eligible for backport suggestions. The first release need not be
+    ``.0`` (valkey's 7.2 line starts at 7.2.4).
     """
     dates: dict[str, datetime] = {}
     for branch in branches:
@@ -1126,16 +1126,11 @@ def run(
             branches = _existing_branches(repo_dir, branches)
         history = BranchHistory(repo_dir)
         ga = ga_dates(repo_dir, branches) if pending else {}
-        # A branch not yet GA takes nearly every change through its sweep, so
-        # suggesting a backport to it is noise.
-        released = [b for b in branches if b in ga]
-        for branch in branches:
-            if branch not in ga and pending:
-                logger.info("%s has no GA release yet; not offering it", branch)
+        release_branches = list(branches)
         to_judge = []
         for source in pending:
             earlier = prior.get(source.number)
-            if _reusable(earlier, source.pr.merge_commit_sha, released, dry_run):
+            if _reusable(earlier, source.pr.merge_commit_sha, release_branches, dry_run):
                 assert earlier is not None
                 results[source.number] = {**earlier.result, "judged_on": earlier.judged_on}
             else:
@@ -1159,7 +1154,7 @@ def run(
                 results[source.number] = early
                 continue
             queued = {b for b, number in projects.items() if number in source.project_numbers}
-            remaining_branches = [b for b in released if b not in queued]
+            remaining_branches = [b for b in release_branches if b not in queued]
             try:
                 taken = triaged_branches(source, branches, queued=queued, history=history, ga=ga)
             except Exception as exc:
@@ -1209,7 +1204,7 @@ def run(
         "date": date,
         "requested_prs": sorted(set(pr_numbers)),
         "dry_run": dry_run,
-        "released_branches": released,
+        "released_branches": release_branches,
         "prs": {str(number): results[number] for number in sorted(results)},
         "merge_shas": {str(number): merge_shas[number] for number in sorted(results)},
         "errors": errors,

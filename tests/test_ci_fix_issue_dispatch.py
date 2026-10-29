@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from types import SimpleNamespace
 
+from github.PaginatedList import PaginatedList
+
 from scripts.ci_fix import issue_dispatch, issues
 from tests.test_ci_fix_issues import (
     _BOT,
@@ -40,6 +42,19 @@ def _dispatch(listed, workflow, *, max_runs=3):
         repo_full_name="o/r", bot_login=_BOT, max_runs=max_runs, dispatch=dispatched.append,
     )
     return dispatched, {d.issue: d.reason for d in decisions if d.action == "skipped"}
+
+
+def test_empty_lazy_run_collection_does_not_crash():
+    class EmptyRequester:
+        per_page = 30
+
+        def requestJsonAndCheck(self, *_args, **_kwargs):
+            return {}, []
+
+    runs = PaginatedList(SimpleNamespace, EmptyRequester(), firstUrl="/actions/workflows/1/runs")
+    workflow = SimpleNamespace(get_runs=lambda: runs)
+
+    assert issue_dispatch.active_runs(workflow) == []
 
 
 def test_eligible_issues_are_dispatched_newest_first_until_the_cap_counts_running_ones():

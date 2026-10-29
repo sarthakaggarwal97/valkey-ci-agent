@@ -93,6 +93,10 @@ _FORMATTED_PREFIX = "src/"
 _DIFF_HUNK_RE = re.compile(
     r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@"
 )
+_CLANG_FORMAT_INVOCATION_RE = re.compile(
+    r"^[ \t]*(?:run:[ \t]*)?clang-format(?:-18)?[ \t]+-i(?P<args>[^\n]*)$",
+    re.MULTILINE,
+)
 
 
 def _valkey_fast_validation_commands(
@@ -129,7 +133,7 @@ def _valkey_fast_validation_commands(
                 )
             )
             commands.append(
-                f"clang-format-18 --dry-run --Werror{range_args} -- {quote(path)}"
+                f"clang-format --dry-run --Werror{range_args} -- {quote(path)}"
             )
     return tuple(commands)
 
@@ -194,13 +198,13 @@ def _valkey_clang_format_suffixes(repo_dir: str) -> tuple[str, ...]:
             body = workflow.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        if "clang-format-18" not in body:
-            continue
-        suffixes.update(
-            suffix
-            for suffix in _C_FAMILY_SUFFIXES
-            if f"**/*{suffix}" in body
-        )
+        for invocation in _CLANG_FORMAT_INVOCATION_RE.finditer(body):
+            args = invocation.group("args")
+            suffixes.update(
+                suffix
+                for suffix in _C_FAMILY_SUFFIXES
+                if f"**/*{suffix}" in args
+            )
     return tuple(
         suffix for suffix in _C_FAMILY_SUFFIXES if suffix in suffixes
     )
