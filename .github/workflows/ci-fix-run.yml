@@ -151,10 +151,6 @@ jobs:
         with:
           name: ci-fix-plan-${{ inputs.key }}
           path: ${{ runner.temp }}/ci-fix-plan
-      - name: Run the job's own setup and build
-        shell: sh
-        run: sh "${RUNNER_TEMP}/ci-fix-plan/setup.sh"
-      # The CI-fix steps every fix job ends with.
       - name: 'CI fix: check out the agent'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -167,6 +163,12 @@ jobs:
         with:
           path: .ci-fix-agent
           install-claude: 'true'
+      - name: 'CI fix: stage the isolated checkout'
+        shell: bash
+        run: bash .ci-fix-agent/scripts/ci_fix/job.sh stage
+      - name: Run the job's own setup and build
+        shell: bash
+        run: bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" setup
       - name: 'CI fix: configure AWS credentials'
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
@@ -178,7 +180,16 @@ jobs:
         shell: bash
         env:
           CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        run: bash .ci-fix-agent/scripts/ci_fix/job.sh
+        run: bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" run
+      - name: 'CI fix: clean up the isolated checkout'
+        if: always()
+        shell: bash
+        run: |
+          if [[ -x "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" ]]; then
+            bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" cleanup
+          elif [[ -x .ci-fix-agent/scripts/ci_fix/job.sh ]]; then
+            bash .ci-fix-agent/scripts/ci_fix/job.sh cleanup
+          fi
       - name: 'CI fix: upload the result'
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -226,10 +237,6 @@ jobs:
         with:
           name: ci-fix-plan-${{ inputs.key }}
           path: ${{ runner.temp }}/ci-fix-plan
-      - name: Run the job's own setup and build
-        shell: sh
-        run: sh "${RUNNER_TEMP}/ci-fix-plan/setup.sh"
-      # The CI-fix steps every fix job ends with.
       - name: 'CI fix: check out the agent'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -243,6 +250,12 @@ jobs:
           path: .ci-fix-agent
           install-claude: 'true'
           system-packages: 'true'
+      - name: 'CI fix: stage the isolated checkout'
+        shell: bash
+        run: bash .ci-fix-agent/scripts/ci_fix/job.sh stage
+      - name: Run the job's own setup and build
+        shell: bash
+        run: bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" setup
       - name: 'CI fix: configure AWS credentials'
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
@@ -254,7 +267,16 @@ jobs:
         shell: bash
         env:
           CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        run: bash .ci-fix-agent/scripts/ci_fix/job.sh
+        run: bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" run
+      - name: 'CI fix: clean up the isolated checkout'
+        if: always()
+        shell: bash
+        run: |
+          if [[ -x "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" ]]; then
+            bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" cleanup
+          elif [[ -x .ci-fix-agent/scripts/ci_fix/job.sh ]]; then
+            bash .ci-fix-agent/scripts/ci_fix/job.sh cleanup
+          fi
       - name: 'CI fix: upload the result'
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -299,6 +321,9 @@ jobs:
         with:
           path: .ci-fix-agent
           install-claude: 'true'
+      - name: 'CI fix: stage the isolated checkout'
+        shell: bash
+        run: bash .ci-fix-agent/scripts/ci_fix/job.sh stage
       - name: 'CI fix: configure AWS credentials'
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
@@ -310,7 +335,16 @@ jobs:
         shell: bash
         env:
           CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
-        run: bash .ci-fix-agent/scripts/ci_fix/job.sh
+        run: bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" run
+      - name: 'CI fix: clean up the isolated checkout'
+        if: always()
+        shell: bash
+        run: |
+          if [[ -x "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" ]]; then
+            bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" cleanup
+          elif [[ -x .ci-fix-agent/scripts/ci_fix/job.sh ]]; then
+            bash .ci-fix-agent/scripts/ci_fix/job.sh cleanup
+          fi
       - name: 'CI fix: upload the result'
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

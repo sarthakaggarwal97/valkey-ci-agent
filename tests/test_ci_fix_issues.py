@@ -484,13 +484,29 @@ def test_a_crash_while_planning_is_recorded_as_a_failed_attempt(monkeypatch):
     assert "outcome=failed" in comment.body
 
 
+def test_expired_source_logs_are_a_terminal_refusal(monkeypatch):
+    issue = _issue()
+    gh, _repo, _run_ = _gh(issue)
+    monkeypatch.setattr(
+        issues_mod,
+        "_failing_jobs",
+        MagicMock(side_effect=issues_mod.SourceLogsExpired("source job logs expired")),
+    )
+
+    result = issues_mod.prepare_issue(gh, MagicMock(), "o/r", issue_number=7, bot_login=_BOT)
+
+    assert result["action"] == "refused"
+    assert "source job logs expired" in result["summary"]
+    assert "outcome=refused" in issue.comments[0].body
+
+
 def test_an_unread_log_is_not_taken_for_no_matching_job(monkeypatch):
     run_ = SimpleNamespace(id=100, run_attempt=1)
     job = SimpleNamespace(name="test-valgrind", conclusion="failure", id=5, html_url="")
     monkeypatch.setattr(issues_mod, "jobs_for_run_attempt", lambda *_a, **_k: [job])
     monkeypatch.setattr(issues_mod, "download_all_test_failures", lambda *_a, **_k: "")
 
-    def unread(_client, _repo, _recorded, *, jobs, ignored_jobs, unread):
+    def unread(_client, _repo, _recorded, *, jobs, ignored_jobs, unread, expired):
         unread.append("test-valgrind")
         return [], []
 

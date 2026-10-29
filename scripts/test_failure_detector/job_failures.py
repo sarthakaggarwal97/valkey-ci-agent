@@ -123,6 +123,7 @@ def find_unrecorded_failures(
     jobs: Iterable[Any],
     ignored_jobs: Iterable[str] = (),
     unread: list[str] | None = None,
+    expired: list[str] | None = None,
     unexplained: list[str] | None = None,
 ) -> tuple[list[UniqueFailure], list[JobFailure]]:
     """Return failures found only in the logs of ``jobs``.
@@ -152,9 +153,11 @@ def find_unrecorded_failures(
         if job_is_ignored(name, patterns):
             continue
         url = str(getattr(job, "html_url", "") or "")
-        summary = _failure_summary(artifact_client, repo_full_name, job)
+        summary, log_expired = _failure_summary(artifact_client, repo_full_name, job)
         if summary is None:
-            if unread is not None:
+            if log_expired and expired is not None:
+                expired.append(name)
+            elif unread is not None:
                 unread.append(name)
             continue
         causes: dict[str, None] = {}  # ordered, without repeats
@@ -206,17 +209,21 @@ def merge_failures(recorded: list[UniqueFailure], extra: list[UniqueFailure]) ->
     return recorded
 
 
-def _failure_summary(artifact_client: ArtifactClient, repo_full_name: str, job: Any) -> list[tuple[str, str]] | None:
-    """The job log's runtest summary lines, or None when the log cannot be read."""
+def _failure_summary(
+    artifact_client: ArtifactClient,
+    repo_full_name: str,
+    job: Any,
+) -> tuple[list[tuple[str, str]] | None, bool]:
+    """The job-log summary and whether an unavailable log has expired."""
     try:
         log = artifact_client.download_job_log(repo_full_name, int(job.id))
     except Exception as exc:  # noqa: BLE001 - reported to the caller as an unread log
         logger.warning("Could not download the log of job %s: %s", getattr(job, "id", "?"), exc)
-        return None
+        return None, False
     if not log.strip():
         # The download answers an expired log with nothing; a real log is never empty.
         logger.warning("The log of job %s is gone (expired)", getattr(job, "id", "?"))
-        return None
+        return None, True
     plain = [strip_log_prefix(raw) for raw in log.splitlines()]
     lines: list[tuple[str, str]] = []
     for index, line in enumerate(plain):
@@ -230,7 +237,7 @@ def _failure_summary(artifact_client: ArtifactClient, repo_full_name: str, job: 
             lines.append(("exception", match.group("data").strip() + (f" at {where}" if where else "")))
         elif (unit_test := gtest_failure(line)) is not None:
             lines.append(("err", _gtest_cause(unit_test, plain[:index])))
-    return lines
+    return lines, False
 
 
 def _gtest_cause(test: str, before: list[str]) -> str:

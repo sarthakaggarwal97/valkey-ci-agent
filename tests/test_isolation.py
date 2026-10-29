@@ -42,12 +42,22 @@ def test_the_command_runs_with_its_own_home_and_git_allowed(monkeypatch):
     monkeypatch.setattr(isolation.sys, "platform", "linux")
     monkeypatch.setattr(isolation.os, "geteuid", lambda: 1001)
     monkeypatch.setattr(isolation.shutil, "which", lambda name: name)
-    argv = isolation.as_user("v", {"PATH": "/usr/bin", "HOME": "/home/runner"}, ["bash", "-c", "make"],
-                             home="/w/ci-fix-home-1")
-    assert argv[:8] == ["sudo", "-n", "runuser", "-u", "v", "--", "env", "-i"]
-    for expected in ("HOME=/w/ci-fix-home-1", "TMPDIR=/w/ci-fix-home-1", "GIT_CONFIG_VALUE_0=*"):
-        assert expected in argv
-    assert "HOME=/home/runner" not in argv
+    invocation = isolation.as_user(
+        "v",
+        {"PATH": "/usr/bin", "HOME": "/home/runner", "AWS_SESSION_TOKEN": "secret"},
+        ["bash", "-c", "make"],
+        home="/w/ci-fix-home-1",
+    )
+    assert invocation.argv[:9] == (
+        "sudo", "-n", "-E", "runuser", "--preserve-environment", "-u", "v", "--", "setpriv",
+    )
+    assert invocation.argv[-4:] == ("env", "bash", "-c", "make")
+    assert invocation.env["HOME"] == "/w/ci-fix-home-1"
+    assert invocation.env["TMPDIR"] == "/w/ci-fix-home-1"
+    assert invocation.env["GIT_CONFIG_VALUE_0"] == "*"
+    assert invocation.env["AWS_SESSION_TOKEN"] == "secret"
+    assert "HOME=/home/runner" not in invocation.argv
+    assert "secret" not in invocation.argv
 
 
 def test_root_switches_account_without_sudo_and_macos_through_sudo(monkeypatch):
@@ -55,16 +65,16 @@ def test_root_switches_account_without_sudo_and_macos_through_sudo(monkeypatch):
     monkeypatch.setattr(isolation.os, "geteuid", lambda: 0)
     monkeypatch.setattr(isolation.sys, "platform", "linux")
     monkeypatch.setattr(isolation.shutil, "which", lambda name: f"/usr/sbin/{name}")
-    assert isolation.as_user("v", {}, ["make"], home="/h")[:5] == [
-        "/usr/sbin/runuser", "-u", "v", "--", "/usr/sbin/env",
-    ]
+    linux = isolation.as_user("v", {}, ["make"], home="/h")
+    assert linux.argv[:6] == (
+        "/usr/sbin/runuser", "--preserve-environment", "-u", "v", "--", "/usr/sbin/setpriv",
+    )
     monkeypatch.setattr(isolation.os, "geteuid", lambda: 501)
     monkeypatch.setattr(isolation.sys, "platform", "darwin")
-    # By full path: the Claude CLI is started with an empty environment, and
-    # macOS's sudo then finds no ``env`` on PATH.
-    assert isolation.as_user("v", {}, ["make"], home="/h")[:6] == [
-        "/usr/sbin/sudo", "-n", "-u", "v", "--", "/usr/sbin/env",
-    ]
+    macos = isolation.as_user("v", {}, ["make"], home="/h")
+    assert macos.argv[:7] == (
+        "/usr/sbin/sudo", "-n", "-E", "-u", "v", "--", "/usr/sbin/env",
+    )
 
 
 @pytest.fixture

@@ -27,6 +27,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 USER_ENV = "CI_FIX_AGENT_USER"
@@ -37,6 +38,14 @@ _WRITABLE_ROOTS = (
     ("/private/tmp", "/private/var/tmp", "/private/var/folders") if sys.platform == "darwin"
     else ("/tmp", "/var/tmp", "/dev/shm", "/run/lock", "/var/crash")
 )
+
+
+@dataclass(frozen=True)
+class IsolatedInvocation:
+    """A user-switch command and its already-scrubbed environment."""
+
+    argv: tuple[str, ...]
+    env: dict[str, str]
 
 
 def isolated_user() -> str:
@@ -115,10 +124,9 @@ def handed_to(user: str, root: Path, readable: tuple[Path, ...] = ()) -> Iterato
 def _traversable(user: str, directory: Path) -> bool:
     """Whether ``user`` can pass through ``directory``.
 
-    By its mode, or else by an ACL (job.sh grants the account one on the
-    runner's home, which is not ``o+x``), which only a test as the account
-    itself sees. A test that cannot run as ``user`` is a directory it cannot
-    pass through.
+    A test as the account itself covers both ordinary mode bits and any
+    platform-specific access rules. A test that cannot run as ``user`` is a
+    directory it cannot pass through.
     """
     if directory.stat().st_mode & stat.S_IXOTH:
         return True
@@ -169,21 +177,44 @@ def _identity(path: Path) -> tuple[int, int] | None:
     return (info.st_dev, info.st_ino) if stat.S_ISDIR(info.st_mode) else (-1, -1)
 
 
-def as_user(user: str, env: dict[str, str], argv: list[str], *, home: str) -> list[str]:
-    """``argv`` run as ``user`` with ``env``, in ``home`` as its home and temp directory."""
+def as_user(user: str, env: dict[str, str], argv: list[str], *, home: str) -> IsolatedInvocation:
+    """Describe ``argv`` running as ``user`` with a scrubbed environment.
+
+    Environment values stay in the child environment rather than the
+    privileged launcher command line, where credentials would be visible to
+    every process on the runner.
+    """
+    if not argv:
+        raise ValueError("an isolated invocation needs a command")
     scrubbed = {
         **env, "HOME": home, "TMPDIR": home, "TMP": home, "USER": user, "LOGNAME": user,
         # The worktree is the account's but .git is not; let git read it.
         "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "safe.directory", "GIT_CONFIG_VALUE_0": "*",
     }
-    # Every program by its full path: the command may be started with an
-    # empty environment, and macOS's sudo then finds nothing on PATH.
-    command = [_program("env"), "-i", *(f"{key}={value}" for key, value in scrubbed.items()), *argv]
+    command = [_program("env"), *argv]
     if sys.platform == "darwin":
-        return [_program("sudo"), "-n", "-u", user, "--", *command]
+        return IsolatedInvocation(
+            (_program("sudo"), "-n", "-E", "-u", user, "--", *command),
+            scrubbed,
+        )
     # runuser, not ``sudo -u``: it needs only root, which a runner's sudo
-    # grants. It is often in an sbin directory.
-    return [*_root(), _program("runuser"), "-u", user, "--", *command]
+    # grants. setpriv prevents a setuid helper from restoring privileges.
+    root = () if os.geteuid() == 0 else (_program("sudo"), "-n", "-E")
+    return IsolatedInvocation(
+        (
+            *root,
+            _program("runuser"),
+            "--preserve-environment",
+            "-u",
+            user,
+            "--",
+            _program("setpriv"),
+            "--no-new-privs",
+            "--",
+            *command,
+        ),
+        scrubbed,
+    )
 
 
 def _program(name: str) -> str:
