@@ -48,7 +48,14 @@ def test_valkey_profile_runs_changed_tests_format_and_subsystem_checks(tmp_path)
     workflow = tmp_path / ".github/workflows/clang-format.yml"
     workflow.parent.mkdir(parents=True)
     workflow.write_text(
-        "run: clang-format-18 -i **/*.c **/*.h\n",
+        """\
+run: |
+  python3 -m venv "$RUNNER_TEMP/clang-format"
+  "$RUNNER_TEMP/clang-format/bin/pip" install clang-format==18.1.8
+  echo "$RUNNER_TEMP/clang-format/bin" >> "$GITHUB_PATH"
+  clang-format --version
+  clang-format -i **/*.c **/*.h
+""",
         encoding="utf-8",
     )
     for path in (
@@ -73,7 +80,7 @@ def test_valkey_profile_runs_changed_tests_format_and_subsystem_checks(tmp_path)
     )
 
     assert commands[0] == "git diff --check"
-    assert "clang-format-18 --dry-run --Werror -- src/rdb.c" in commands
+    assert "clang-format --dry-run --Werror -- src/rdb.c" in commands
     assert "make -j4 BUILD_TLS=yes" in commands
     assert "rdb-smoke" in commands
     assert "./runtest --single integration/corrupt-dump --clients 1" in commands
@@ -113,8 +120,39 @@ def test_valkey_profile_only_clang_formats_paths_upstream_formats(tmp_path) -> N
         repo_dir=str(tmp_path),
     )
 
-    formatting = [command for command in commands if command.startswith("clang-format-18")]
-    assert formatting == ["clang-format-18 --dry-run --Werror -- src/rdb.c"]
+    formatting = [command for command in commands if command.startswith("clang-format")]
+    assert formatting == ["clang-format --dry-run --Werror -- src/rdb.c"]
+
+
+def test_valkey_profile_does_not_treat_formatter_setup_as_a_format_job(
+    tmp_path,
+) -> None:
+    """Setup, comments and echoed examples do not say which suffixes CI formats."""
+    for path in ("src/.clang-format", "src/server.c"):
+        destination = tmp_path / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("source\n", encoding="utf-8")
+    workflow = tmp_path / ".github/workflows/clang-format.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        """\
+# clang-format -i **/*.c **/*.h
+run: echo 'clang-format -i **/*.c **/*.h'
+other: python3 -m pip install clang-format -i https://packages.example.invalid/simple
+run: python3 -m pip install clang-format==18.1.8
+""",
+        encoding="utf-8",
+    )
+
+    commands = select_validation_commands(
+        [],
+        [],
+        ["src/server.c"],
+        validation_profile="valkey-core",
+        repo_dir=str(tmp_path),
+    )
+
+    assert not any(command.startswith("clang-format") for command in commands)
 
 
 def test_valkey_profile_skips_clang_format_when_release_has_no_style(tmp_path) -> None:
@@ -131,7 +169,7 @@ def test_valkey_profile_skips_clang_format_when_release_has_no_style(tmp_path) -
         repo_dir=str(tmp_path),
     )
 
-    assert not any(command.startswith("clang-format-18") for command in commands)
+    assert not any(command.startswith("clang-format") for command in commands)
 
 
 def test_valkey_profile_skips_clang_format_when_release_has_style_but_no_ci(
@@ -154,7 +192,7 @@ def test_valkey_profile_skips_clang_format_when_release_has_style_but_no_ci(
         repo_dir=str(tmp_path),
     )
 
-    assert not any(command.startswith("clang-format-18") for command in commands)
+    assert not any(command.startswith("clang-format") for command in commands)
 
 
 def test_valkey_profile_only_formats_suffixes_enforced_by_release_ci(
@@ -180,8 +218,8 @@ def test_valkey_profile_only_formats_suffixes_enforced_by_release_ci(
         repo_dir=str(tmp_path),
     )
 
-    formatting = [command for command in commands if command.startswith("clang-format-18")]
-    assert formatting == ["clang-format-18 --dry-run --Werror -- src/server.c"]
+    formatting = [command for command in commands if command.startswith("clang-format")]
+    assert formatting == ["clang-format --dry-run --Werror -- src/server.c"]
 
 
 def test_valkey_profile_only_formats_candidate_line_ranges(tmp_path) -> None:
@@ -238,8 +276,8 @@ def test_valkey_profile_only_formats_candidate_line_ranges(tmp_path) -> None:
         base_ref="base",
     )
 
-    formatting = [command for command in commands if command.startswith("clang-format-18")]
-    assert formatting == ["clang-format-18 --dry-run --Werror --lines=2:2 -- src/server.c"]
+    formatting = [command for command in commands if command.startswith("clang-format")]
+    assert formatting == ["clang-format --dry-run --Werror --lines=2:2 -- src/server.c"]
 
 
 def test_valkey_profile_runs_tls_test_in_tls_mode_for_both_validation_legs(

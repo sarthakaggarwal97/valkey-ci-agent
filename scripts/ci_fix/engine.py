@@ -9,8 +9,10 @@ that job's own setup and build (``scripts/ci_fix/job.sh``):
    (:mod:`scripts.ci_fix.prior_fixes`).
 2. **Reproduce**: run the failing test on the unfixed code the way its CI job
    did, looped, then under load (:mod:`scripts.ci_fix.reproduce`).
-3. **Fix**: one agent session, told what steps 1 and 2 found and the
-   repository's test conventions, ports an existing fix or writes a patch.
+3. **Fix**: when every reproduction probe in an approximation of an
+   unsupported job passes, stop without editing. Otherwise one agent session,
+   told what steps 1 and 2 found and the repository's test conventions,
+   ports an existing fix or writes a patch.
 4. **Verify and review**: the candidate (a port is cherry-picked into the
    checkout first) must pass the reproduction many times, and a separate
    read-only review must approve it. Otherwise the result goes back to the
@@ -165,6 +167,17 @@ def prepare_fix(
             run_test if runs_tests else None,
             repro_deadline=min(deadline, time.monotonic() + REPRO_BUDGET_S), job=job,
         )
+        if (
+            job is None
+            and reproduction is not None
+            and reproduction.status is ReproStatus.NOT_REPRODUCED
+            and reproduction.all_attempts_passed
+        ):
+            return _refusal(
+                "The failed job could not host the fix, and every fallback reproduction "
+                "probe passed without reproducing the failure. No edit was attempted.",
+                verification="\n".join(_established_checks(context, reproduction)),
+            )
         return _fix_loop(
             task, repo_dir, original_head, job_log, context, plan, reproduction,
             agent_func=agent_func, review=review_func or review_candidate,

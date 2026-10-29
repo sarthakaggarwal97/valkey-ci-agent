@@ -131,8 +131,8 @@ over the last seven days and comments on the ones that look like backport
 candidates. The seven-day window means days that fail, or that GitHub skips,
 are covered by a later run. Each PR is judged only once: a run reads the
 results earlier runs saved and reuses their decision when the PR's merge
-commit and the released branches are unchanged. A PR that already has a
-comment is skipped, and so is one whose comment a maintainer deleted.
+commit and the registered release branches are unchanged. A PR that already
+has a comment is skipped, and so is one whose comment a maintainer deleted.
 
 To make the suggestion, the agent first works out which release branches
 contain the code the PR changes. It runs `git blame` on the lines the PR
@@ -140,7 +140,9 @@ modifies or deletes, and on the lines next to anything it only adds, to find
 the commits that wrote them. A release branch is a candidate only if it has
 those commits, either directly or because they were backported there. A fix
 to a feature that arrived after a release line was cut is never suggested for
-that line, and a PR that only adds new files is never suggested at all.
+that line, and a PR that only adds new files is never suggested at all. Every
+registered release branch is considered, including a branch that currently
+has only release-candidate tags and has not reached GA.
 
 Claude then reads the diff and the list of candidate branches and decides
 whether the change is worth backporting, and to which of those branches. It

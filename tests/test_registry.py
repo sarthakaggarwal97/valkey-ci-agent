@@ -63,6 +63,16 @@ def test_valkey_registry_installs_dependencies_for_cpp_unit_validation():
     assert "libgmock-dev" in setup
 
 
+def test_valkey_registry_pins_clang_format_from_pypi():
+    project_root = Path(__file__).resolve().parents[1]
+    registry = load_registry(str(project_root / "repos.yml"))
+    valkey = next(entry for entry in registry.repos if entry.repo == "valkey-io/valkey")
+    setup = valkey.validation_setup_commands
+
+    assert "python3 -m pip install clang-format==18.1.8" in setup
+    assert not any("apt-get install" in command and "clang-format" in command for command in setup)
+
+
 class TestLoadRegistry:
     def test_valid_minimal(self, tmp_path):
         path = _write_registry(tmp_path, _minimal_registry())

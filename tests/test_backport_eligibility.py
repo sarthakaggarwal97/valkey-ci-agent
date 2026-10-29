@@ -840,6 +840,7 @@ def test_run_ignores_a_registered_branch_that_does_not_exist(wired, upstream):
         run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "r"}]),
     )
     assert result["errors"] == []
+    assert result["released_branches"] == ["9.1"]
     assert result["prs"]["101"]["action"] == "commented"
 
 
@@ -1140,17 +1141,19 @@ def test_run_queue_on_a_pre_ga_branch_is_not_triage(wired, monkeypatch):
     assert result["prs"]["101"]["action"] == "commented"
 
 
-def test_run_never_suggests_a_pre_ga_branch(wired, monkeypatch):
-    # #4890's shape: 9.2 has only an RC, and its sweep takes every change.
+def test_run_suggests_a_pre_ga_branch(wired, monkeypatch):
+    # A registered branch with only an RC is still a release branch that can
+    # miss a fix merged to the development branch after it was cut.
     monkeypatch.setattr(eligibility, "ga_dates", lambda *_: {})
     result = eligibility.run(
         repo_entry=wired.entry, date="2026-10-12", token="t",
         run_fn=_model([{"pr": 101, "backport": True, "branches": ["9.1"], "reason": "Fixes f."}]),
     )
+    assert result["released_branches"] == ["9.1", "9.0"]
     assert result["prs"]["101"] == {
-        "action": "not-eligible", "detail": "no release branch still needs the change",
+        "action": "commented", "branches": ["9.1"], "reason": "Fixes f.",
     }
-    assert wired.posted == []
+    assert [number for number, _ in wired.posted] == [101]
 
 
 def test_run_pr_landed_on_a_ga_branch_is_triaged(wired, monkeypatch, upstream):

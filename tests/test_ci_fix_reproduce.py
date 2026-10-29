@@ -232,6 +232,7 @@ def test_a_failure_that_never_shows_is_not_reproduced():
     result = reproduce(PLAN, _runner(PASS, PASS, PASS), deadline=_deadline())
 
     assert result.status is ReproStatus.NOT_REPRODUCED
+    assert result.all_attempts_passed
     assert result.describe().startswith("Did not reproduce")
 
 
@@ -247,9 +248,17 @@ def test_looped_attempts_stop_at_the_deadline():
     result = reproduce(PLAN, run, deadline=_deadline(60))
 
     assert result.status is ReproStatus.NOT_REPRODUCED
+    assert not result.all_attempts_passed
     assert len(run.calls) == 1 and "no time left" in result.describe()
 
 
+def test_a_loop_that_does_not_finish_is_an_incomplete_nonreproduction():
+    timed_out = TestRun(False, "timed out after 60s", timed_out=True)
+    result = reproduce(PLAN, _runner(PASS, timed_out, PASS), deadline=_deadline())
+
+    assert result.status is ReproStatus.NOT_REPRODUCED
+    assert not result.all_attempts_passed
+    assert "20 loops did not finish" in result.describe()
 
 
 HARNESS_EXCEPTION = """\

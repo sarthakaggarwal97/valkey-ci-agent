@@ -24,6 +24,7 @@ import os
 import re
 import sys
 from dataclasses import asdict, dataclass
+from itertools import islice
 from pathlib import Path
 from typing import Any, Callable
 
@@ -60,7 +61,7 @@ class Decision:
 def active_runs(workflow: Any) -> list[int]:
     """The issue of each queued or running ci-fix-issues run (0 when unnamed)."""
     runs = retry_github_call(
-        lambda: list(workflow.get_runs()[:_RECENT_RUNS]),
+        lambda: list(islice(workflow.get_runs(), _RECENT_RUNS)),
         retries=2,
         description=f"list {WORKFLOW} runs",
     )
