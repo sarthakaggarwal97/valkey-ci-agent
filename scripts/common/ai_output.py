@@ -14,13 +14,8 @@ import json
 from typing import Any
 
 
-def extract_json_object(stdout: str, *, required_key: str) -> dict[str, Any] | None:
-    """Return the first ``{...}`` object containing ``required_key``, or None.
-
-    Prefers the last stream-json ``result`` event's text, then scans for a
-    JSON object carrying ``required_key`` so we ignore unrelated braces in
-    surrounding prose.
-    """
+def result_text(stdout: str) -> str:
+    """The model's final text: the last stream-json ``result`` event, else the raw output."""
     text = stdout
     for line in stdout.strip().splitlines():
         try:
@@ -31,7 +26,17 @@ def extract_json_object(stdout: str, *, required_key: str) -> dict[str, Any] | N
             result = event.get("result")
             if isinstance(result, str):
                 text = result
+    return text
 
+
+def extract_json_object(stdout: str, *, required_key: str) -> dict[str, Any] | None:
+    """Return the first ``{...}`` object containing ``required_key``, or None.
+
+    Prefers the last stream-json ``result`` event's text, then scans for a
+    JSON object carrying ``required_key`` so we ignore unrelated braces in
+    surrounding prose.
+    """
+    text = result_text(stdout)
     decoder = json.JSONDecoder()
     start = text.find("{")
     while start != -1:

@@ -241,6 +241,39 @@ def fuzzer_validator(fuzzer_bin: str) -> Validator:
 # --- Checking what Claude wrote ----------------------------------------------
 
 
+def scenario_shape_error(doc: Any) -> str | None:
+    """Why ``doc`` is not a scenario a proposal may hand the runner, or None.
+
+    Only seed, experiment and deployment (plus a scenario_id); never the
+    build, provider or data directories. The spec drafts check the scenarios
+    they translate with this too.
+    """
+    if not isinstance(doc, dict):
+        return "the scenario is not a YAML mapping"
+    extra = sorted(str(key) for key in doc if key not in _SCENARIO_KEYS)
+    if extra:
+        return (
+            f"the scenario sets {', '.join(extra)}; a proposal may set only "
+            "seed, experiment and deployment"
+        )
+    seed = doc.get("seed")
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        return "seed must be an integer"
+    experiment = doc.get("experiment")
+    if not isinstance(experiment, dict) or not isinstance(experiment.get("id"), str):
+        return "experiment must be a mapping with an id"
+    deployment = doc.get("deployment")
+    if not isinstance(deployment, dict):
+        return "deployment must be a mapping"
+    forbidden = sorted(str(key) for key in deployment if key in _FORBIDDEN_DEPLOYMENT_KEYS)
+    if forbidden:
+        return (
+            f"deployment sets {', '.join(forbidden)}; the runner chooses the "
+            "build, provider and data directories"
+        )
+    return None
+
+
 def check_scenario(text: Any) -> tuple[dict[str, Any] | None, str | None]:
     """Parse and check one proposed scenario before the fuzzer sees it."""
     if not isinstance(text, str) or not text.strip():
@@ -251,29 +284,9 @@ def check_scenario(text: Any) -> tuple[dict[str, Any] | None, str | None]:
         doc = yaml.safe_load(text)
     except yaml.YAMLError as exc:
         return None, f"the scenario is not valid YAML: {str(exc)[:300]}"
-    if not isinstance(doc, dict):
-        return None, "the scenario is not a YAML mapping"
-    extra = sorted(str(key) for key in doc if key not in _SCENARIO_KEYS)
-    if extra:
-        return None, (
-            f"the scenario sets {', '.join(extra)}; a proposal may set only "
-            "seed, experiment and deployment"
-        )
-    seed = doc.get("seed")
-    if not isinstance(seed, int) or isinstance(seed, bool):
-        return None, "seed must be an integer"
-    experiment = doc.get("experiment")
-    if not isinstance(experiment, dict) or not isinstance(experiment.get("id"), str):
-        return None, "experiment must be a mapping with an id"
-    deployment = doc.get("deployment")
-    if not isinstance(deployment, dict):
-        return None, "deployment must be a mapping"
-    forbidden = sorted(str(key) for key in deployment if key in _FORBIDDEN_DEPLOYMENT_KEYS)
-    if forbidden:
-        return None, (
-            f"deployment sets {', '.join(forbidden)}; the runner chooses the "
-            "build, provider and data directories"
-        )
+    error = scenario_shape_error(doc)
+    if error is not None:
+        return None, error
     doc = dict(doc)
     doc.pop("scenario_id", None)
     digest = hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).hexdigest()
@@ -448,7 +461,7 @@ def _ask_claude(runner: Runner, prompt: str, workdir: Path) -> list[Any]:
     raise last_error or RuntimeError("_CLAUDE_MAX_ATTEMPTS must be >= 1")
 
 
-def _source_note(change: Change, valkey_ok: bool) -> str:
+def describe_sources(change: Change, valkey_ok: bool) -> str:
     lines = ["- change.diff, change.json - the change."]
     if valkey_ok:
         lines.append(f"- valkey/ - Valkey at {change.head_sha}, with the change applied.")
@@ -457,7 +470,7 @@ def _source_note(change: Change, valkey_ok: bool) -> str:
     return "\n".join(lines)
 
 
-def _prepare_workspace(
+def prepare_workspace(
     workdir: Path, change: Change, *, fuzzer_dir: Path, catalog: dict[str, list[Any]],
 ) -> bool:
     """Lay out what Claude reads. Returns whether the Valkey checkout worked."""
@@ -484,8 +497,8 @@ def propose(
 ) -> ProposalRun:
     """Ask Claude for scenarios, then keep only those that validate."""
     runner = runner or _default_runner
-    valkey_ok = _prepare_workspace(workdir, change, fuzzer_dir=fuzzer_dir, catalog=catalog)
-    source_note = _source_note(change, valkey_ok)
+    valkey_ok = prepare_workspace(workdir, change, fuzzer_dir=fuzzer_dir, catalog=catalog)
+    source_note = describe_sources(change, valkey_ok)
     change_line = f"{change.describe()}: {change.title}" if change.title else change.describe()
     candidates = workdir / "candidates"
     candidates.mkdir()

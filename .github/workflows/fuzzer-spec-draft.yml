@@ -1,0 +1,186 @@
+name: Draft Fuzzer Spec
+
+# Claude reads a valkey-io/valkey PR and drafts a TLA+ spec bundle for the
+# protocol it changes. The fuzzer's own tools judge the draft: `spec check`
+# (SANY, TLC, negative controls, mapping), `spec translate` and `validate`.
+# A draft that fails gets at most two repair rounds; then it is kept as
+# rejected. A draft never gates a merge: only a maintainer-approved bundle
+# can, through `spec check --require-approved` in valkey-fuzzer.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "valkey-io/valkey pull request number"
+        required: true
+        type: string
+      dry_run:
+        description: "Check the inputs, the fuzzer and the TLA+ tools without fetching the PR or calling Claude."
+        required: false
+        default: true
+        type: boolean
+      dispatch_batch:
+        description: "Also run a passing draft's scenarios as a PR batch in valkey-fuzzer (ignored on a dry run)."
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # The same tla2tools.jar as valkey-fuzzer's TLA+ Model Check workflow
+  # (TLC 2.19). Update the version and the SHA-256 of the release asset together.
+  TLA_TOOLS_VERSION: v1.7.4
+  TLA_TOOLS_SHA256: 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: fuzzer-spec-draft-${{ inputs.pr_number }}
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_EVIDENCE_DIR: agent-evidence
+      PR_NUMBER: ${{ inputs.pr_number }}
+      DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+      DISPATCH: ${{ !inputs.dry_run && inputs.dispatch_batch && 'true' || 'false' }}
+    steps:
+      - name: Check inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::pr_number must be a pull request number, got '${PR_NUMBER}'"
+            exit 1
+          fi
+
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          install-claude: "true"
+
+      - name: Check out valkey-fuzzer
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: valkey-io/valkey-fuzzer
+          ref: main
+          path: valkey-fuzzer
+          persist-credentials: false
+          fetch-depth: 1
+
+      # Its own virtual environment, so the fuzzer's dependencies never mix
+      # with the agent's.
+      - name: Install valkey-fuzzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "${RUNNER_TEMP}/fuzzer-venv"
+          "${RUNNER_TEMP}/fuzzer-venv/bin/python" -m pip install --quiet "${GITHUB_WORKSPACE}/valkey-fuzzer"
+          echo "FUZZER_BIN=${RUNNER_TEMP}/fuzzer-venv/bin/valkey-fuzzer" >> "${GITHUB_ENV}"
+
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download tla2tools.jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/tla2tools.jar" \
+            "https://github.com/tlaplus/tlaplus/releases/download/${TLA_TOOLS_VERSION}/tla2tools.jar"
+          echo "${TLA_TOOLS_SHA256}  ${RUNNER_TEMP}/tla2tools.jar" | sha256sum -c -
+          echo "TLA2TOOLS_JAR=${RUNNER_TEMP}/tla2tools.jar" >> "${GITHUB_ENV}"
+
+      - name: Generate read token
+        id: read-token
+        if: env.DRY_RUN != 'true'
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: valkey
+          permission-contents: read
+          permission-pull-requests: read
+          permission-metadata: read
+
+      - name: Configure AWS credentials
+        if: env.DRY_RUN != 'true'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: valkey-fuzzer-spec-draft-${{ github.run_id }}
+          role-duration-seconds: 18000
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Draft the spec bundle
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.read-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          args=(-m scripts.fuzzer.spec_draft draft
+            --pr "${PR_NUMBER}"
+            --fuzzer-dir valkey-fuzzer --fuzzer-bin "${FUZZER_BIN}"
+            --tla2tools "${TLA2TOOLS_JAR}"
+            --out fuzzer-spec-draft)
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          python "${args[@]}"
+
+      # A separate token, asked for only when dispatching, that can start
+      # workflows on valkey-fuzzer and nothing else.
+      - name: Generate dispatch token
+        id: dispatch-token
+        if: env.DISPATCH == 'true'
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: valkey-io
+          repositories: valkey-fuzzer
+          permission-actions: write
+          permission-metadata: read
+
+      - name: Dispatch the PR batch
+        if: env.DISPATCH == 'true'
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          python -m scripts.fuzzer.spec_draft dispatch --out fuzzer-spec-draft
+
+      - name: Upload spec draft
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzzer-spec-draft-${{ github.run_id }}
+          path: fuzzer-spec-draft
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload agent evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzzer-spec-draft-agent-evidence-${{ github.run_id }}
+          path: agent-evidence
+          if-no-files-found: ignore
+          retention-days: 30

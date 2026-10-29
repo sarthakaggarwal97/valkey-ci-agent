@@ -82,6 +82,7 @@ workflow and, where it's useful, on your own machine:
 [Test Failure Detector](docs/test-failure-detector.md#running-it-by-hand),
 [Fuzzer monitor](docs/fuzzer-monitor.md#running-it-by-hand),
 [Fuzzer proposals](docs/fuzzer-proposals.md#running-it-by-hand),
+[Fuzzer spec drafts](docs/fuzzer-spec-drafts.md#running-it-by-hand),
 [Release notes](docs/release-notes.md#cutting-a-release) and
 [CVE scan](docs/cve-scan.md#running-it-by-hand).
 

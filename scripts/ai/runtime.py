@@ -25,6 +25,7 @@ AgentProfileName = Literal[
     "validation_repair_edit_only",
     "fuzzer_analysis_readonly",
     "fuzzer_proposal_readonly",
+    "fuzzer_spec_draft_readonly",
     "ci_fix_diagnose_readonly",
     "release_notes_review_edit_only",
 ]
@@ -111,6 +112,20 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
         timeout=1800,
         effort="high",
         max_turns=200,
+        writes_allowed=False,
+        output_schema="text",
+        disallowed_tools="Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch",
+    ),
+    # Drafts a TLA+ spec bundle for a Valkey change. Claude reads the diff, the
+    # Valkey and fuzzer checkouts and the example bundles, and answers with the
+    # bundle's files as text; code writes them and the fuzzer's spec tools
+    # judge them. No shell, no file writes, no web.
+    "fuzzer_spec_draft_readonly": AgentProfile(
+        name="fuzzer_spec_draft_readonly",
+        allowed_tools="Read,Grep,Glob",
+        timeout=3600,
+        effort="max",
+        max_turns=300,
         writes_allowed=False,
         output_schema="text",
         disallowed_tools="Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch",

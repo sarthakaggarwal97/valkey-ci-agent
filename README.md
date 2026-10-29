@@ -50,6 +50,15 @@ one repair attempt, and only the ones that validate are kept. They can also
 be run as a PR batch in valkey-fuzzer. See
 [Fuzzer proposals](docs/fuzzer-proposals.md).
 
+**Drafting fuzzer specs.** Given a Valkey PR that changes a protocol, the
+agent asks Claude to draft a TLA+ spec bundle for it: claims, a model,
+negative controls and a mapping onto fuzzer evidence. The fuzzer's own tools
+decide whether the draft is usable: `spec check` (where every negative control
+must violate its property, so a claim that cannot fail is rejected),
+`spec translate` and `validate`. A failing draft gets two repair attempts and
+is otherwise kept as rejected. Drafts never gate a merge; only a bundle a
+maintainer approved can. See [Fuzzer spec drafts](docs/fuzzer-spec-drafts.md).
+
 **Releases.** A maintainer can cut a release of Valkey or one of its modules
 with one dispatch. The agent gathers every change since the last release,
 writes the notes, bumps the version and opens a release PR, and it applies the
@@ -114,7 +123,7 @@ scripts/
   backport/               Backports, backport suggestions, CI follow-up
   ci_fix/                 The CI fix bot
   test_failure_detector/  Daily CI failures to issues
-  fuzzer/                 Fuzzer run triage and scenario proposals
+  fuzzer/                 Fuzzer run triage, scenario proposals and spec drafts
   release_notes/          Release notes and review comments on release PRs
   release/                Release preparation and publication
   cve_scan/               Container CVE scan and verified rebuilds
