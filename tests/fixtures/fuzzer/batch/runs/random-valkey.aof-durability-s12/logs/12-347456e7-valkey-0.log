@@ -1,0 +1,71 @@
+9300:M 28 Oct 2026 21:37:20.658 * oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo
+9300:M 28 Oct 2026 21:37:20.658 * Valkey version=255.255.255, bits=64, commit=dff4c58e, modified=0, pid=9300, just started
+9300:M 28 Oct 2026 21:37:20.659 * Configuration loaded
+9300:M 28 Oct 2026 21:37:20.659 * monotonic clock: ARM CNTVCT @ 1000 ticks/us
+9300:M 28 Oct 2026 21:37:20.659 * Running mode=standalone, port=23000.
+9300:M 28 Oct 2026 21:37:20.660 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+9300:M 28 Oct 2026 21:37:20.660 * Static Module 'lua' successfully loaded (version 1)
+9300:M 28 Oct 2026 21:37:20.661 * Server initialized
+9300:M 28 Oct 2026 21:37:20.662 * Creating AOF base file appendonly.aof.1.base.rdb on server start
+9300:M 28 Oct 2026 21:37:20.666 * Creating AOF incr file appendonly.aof.1.incr.aof on server start
+9300:M 28 Oct 2026 21:37:20.666 * Ready to accept connections tcp
+9300:M 28 Oct 2026 21:37:21.171 * Replica 127.0.0.1:23001 asks for synchronization
+9300:M 28 Oct 2026 21:37:21.172 * Partial resynchronization not accepted: Replication ID mismatch (Replica asked for '1b2b97ae28fe16db654a84d8449180a242fdecd5', my replication IDs are 'a1476c5ac1c56315c07eef9aac864053b1415f43' and '0000000000000000000000000000000000000000')
+9300:M 28 Oct 2026 21:37:21.172 * Dual channel replication: Replica 127.0.0.1:23001 is capable of dual channel synchronization, and partial sync isn't possible. Full sync will continue with dedicated RDB channel.
+9300:M 28 Oct 2026 21:37:21.175 * Replica 127.0.0.1:23001 asks for synchronization
+9300:M 28 Oct 2026 21:37:21.176 * Replication backlog created, my new replication IDs are 'ce0299a88093e973e6ebb9179c4eb0d8ba7fb7f2' and '0000000000000000000000000000000000000000'
+9300:M 28 Oct 2026 21:37:21.177 * Delay next BGSAVE for diskless SYNC
+9300:M 28 Oct 2026 21:37:22.683 * Starting BGSAVE for SYNC with target: replicas sockets using: dual-channel, compression: none
+9300:M 28 Oct 2026 21:37:22.684 * Dual channel replication: Sending to replica 127.0.0.1:23001 RDB end offset 0 and client-id 6
+9300:M 28 Oct 2026 21:37:22.684 * Background RDB transfer started by pid 9317 to direct socket to replica
+9317:C 28 Oct 2026 21:37:22.684 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+9317:C 28 Oct 2026 21:37:22.685 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+9300:M 28 Oct 2026 21:37:22.691 * Replica 127.0.0.1:23001 asks for synchronization
+9300:M 28 Oct 2026 21:37:22.691 * Partial resynchronization request from 127.0.0.1:23001 accepted. Sending 0 bytes of backlog starting from offset 1.
+9300:M 28 Oct 2026 21:37:22.691 * Synchronization with replica 127.0.0.1:23001 succeeded
+9300:M 28 Oct 2026 21:37:22.692 * Dual channel replication: Replica 127.0.0.1:23001 rdb channel disconnected.
+9300:M 28 Oct 2026 21:37:22.785 * Background RDB transfer terminated with success
+9377:M 28 Oct 2026 21:37:26.702 * oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo
+9377:M 28 Oct 2026 21:37:26.703 * Valkey version=255.255.255, bits=64, commit=dff4c58e, modified=0, pid=9377, just started
+9377:M 28 Oct 2026 21:37:26.703 * Configuration loaded
+9377:M 28 Oct 2026 21:37:26.704 * monotonic clock: ARM CNTVCT @ 1000 ticks/us
+9377:M 28 Oct 2026 21:37:26.705 * Running mode=standalone, port=23000.
+9377:M 28 Oct 2026 21:37:26.706 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+9377:M 28 Oct 2026 21:37:26.707 * Static Module 'lua' successfully loaded (version 1)
+9377:M 28 Oct 2026 21:37:26.708 * Server initialized
+9377:M 28 Oct 2026 21:37:26.709 * Cleaning slot migration log in anticipation of a load operation.
+9377:M 28 Oct 2026 21:37:26.710 * Reading RDB base file on AOF loading...
+9377:M 28 Oct 2026 21:37:26.711 * Loading RDB produced by Valkey version 255.255.255
+9377:M 28 Oct 2026 21:37:26.711 * RDB age 6 seconds
+9377:M 28 Oct 2026 21:37:26.712 * RDB memory usage when created 1.47 Mb
+9377:M 28 Oct 2026 21:37:26.712 * RDB is base AOF
+9377:M 28 Oct 2026 21:37:26.713 * Done loading RDB, keys loaded: 0, keys expired: 0, all fields expired hashes: 0.
+9377:M 28 Oct 2026 21:37:26.713 * DB loaded from base file appendonly.aof.1.base.rdb: 0.004 seconds
+9377:M 28 Oct 2026 21:37:26.718 * DB loaded from incr file appendonly.aof.1.incr.aof: 0.005 seconds
+9377:M 28 Oct 2026 21:37:26.719 * DB loaded from append only file: 0.010 seconds
+9377:M 28 Oct 2026 21:37:26.719 * Opening AOF incr file appendonly.aof.1.incr.aof on server start
+9377:M 28 Oct 2026 21:37:26.720 * Ready to accept connections tcp
+9377:M 28 Oct 2026 21:37:26.737 * Replica 127.0.0.1:23001 asks for synchronization
+9377:M 28 Oct 2026 21:37:26.737 * Partial resynchronization not accepted: Replication ID mismatch (Replica asked for 'ce0299a88093e973e6ebb9179c4eb0d8ba7fb7f2', my replication IDs are 'f6c96fa49ffb6081816bfc54041767c2b22c4183' and '0000000000000000000000000000000000000000')
+9377:M 28 Oct 2026 21:37:26.737 * Dual channel replication: Replica 127.0.0.1:23001 is capable of dual channel synchronization, and partial sync isn't possible. Full sync will continue with dedicated RDB channel.
+9377:M 28 Oct 2026 21:37:26.738 * Replica 127.0.0.1:23001 asks for synchronization
+9377:M 28 Oct 2026 21:37:26.738 * Replication backlog created, my new replication IDs are 'c015996b40d5919f3d393e83d9b57dfc05365702' and '0000000000000000000000000000000000000000'
+9377:M 28 Oct 2026 21:37:26.739 * Delay next BGSAVE for diskless SYNC
+9377:M 28 Oct 2026 21:37:27.632 * Starting BGSAVE for SYNC with target: replicas sockets using: dual-channel, compression: none
+9377:M 28 Oct 2026 21:37:27.634 * Dual channel replication: Sending to replica 127.0.0.1:23001 RDB end offset 16465 and client-id 6
+9377:M 28 Oct 2026 21:37:27.638 * Background RDB transfer started by pid 9382 to direct socket to replica
+9377:M 28 Oct 2026 21:37:27.641 * Replica 127.0.0.1:23001 asks for synchronization
+9377:M 28 Oct 2026 21:37:27.644 * Partial resynchronization request from 127.0.0.1:23001 accepted. Sending 0 bytes of backlog starting from offset 16466.
+9382:C 28 Oct 2026 21:37:27.717 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+9382:C 28 Oct 2026 21:37:27.724 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+9377:M 28 Oct 2026 21:37:27.740 * Background RDB transfer terminated with success
+9377:M 28 Oct 2026 21:37:27.740 * Streamed RDB transfer with replica 127.0.0.1:23001 succeeded (socket). Waiting for REPLCONF ACK from replica to enable streaming
+9377:M 28 Oct 2026 21:37:27.741 * RDB transfer completed, rdb only replica (127.0.0.1:23001) should be disconnected asap
+9377:M 28 Oct 2026 21:37:27.741 * Dual channel replication: Replica 127.0.0.1:23001 rdb channel disconnected.
+9377:M 28 Oct 2026 21:37:27.771 * Synchronization with replica 127.0.0.1:23001 succeeded
+9377:signal-handler (1793248648) Received SIGTERM scheduling shutdown...
+9377:M 28 Oct 2026 21:37:28.854 * User requested shutdown...
+9377:M 28 Oct 2026 21:37:28.856 * 1 of 1 replicas are in sync when shutting down.
+9377:M 28 Oct 2026 21:37:28.857 * Calling fsync() on the AOF file.
+9377:M 28 Oct 2026 21:37:28.861 * Module lua unloaded
+9377:M 28 Oct 2026 21:37:28.862 # Valkey is now ready to exit, bye bye...

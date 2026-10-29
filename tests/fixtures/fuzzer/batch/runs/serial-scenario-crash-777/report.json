@@ -1,0 +1,463 @@
+{
+  "generated_at": "2026-10-29T04:37:39Z",
+  "status": "FAIL",
+  "summary": "required components did not pass: liveness; required evidence was not observed: valkey.liveness.verified from liveness",
+  "scenario": {
+    "scenario_id": "ciagent-crash-777",
+    "seed": 777,
+    "experiment": {
+      "id": "ciagent.debug-crash"
+    },
+    "deployment": {
+      "mode": "standalone",
+      "valkey_binary": "/opt/valkey/src/valkey-server",
+      "base_port": 23000,
+      "base_data_dir": "/tmp/valkey-fuzzer/artifacts/batch/work/w0/data"
+    }
+  },
+  "outcome": {
+    "plan": {
+      "scenario_id": "ciagent-crash-777",
+      "experiment_id": "ciagent.debug-crash",
+      "seed": 777,
+      "deployment_mode": "standalone",
+      "components": [
+        {
+          "use": "valkey.action.command",
+          "id": "crash",
+          "role": "action",
+          "config": {
+            "instances": "primaries",
+            "command": [
+              "DEBUG",
+              "SEGFAULT"
+            ],
+            "expect": {
+              "error": true
+            },
+            "repeat": 1,
+            "interval_s": 0.0,
+            "timeout_s": 2
+          },
+          "required": false,
+          "depends_on": [],
+          "timeout_s": null
+        },
+        {
+          "use": "valkey.oracle.liveness",
+          "id": "liveness",
+          "role": "oracle",
+          "config": {
+            "timeout_s": 5,
+            "extra_crash_patterns": []
+          },
+          "required": true,
+          "depends_on": [],
+          "timeout_s": null
+        }
+      ],
+      "deployment_provider": {
+        "provider_id": "valkey-fuzzer.deployment.local",
+        "implementation_digest": null
+      },
+      "mode": "experiment",
+      "inputs": {},
+      "artifacts": [],
+      "resources": [],
+      "policies": [],
+      "startup_overlays": [
+        {
+          "overlay_id": "debug",
+          "selector": {
+            "roles": [],
+            "instance_ids": [],
+            "first": false
+          },
+          "server_config": {
+            "enable-debug-command": "yes"
+          },
+          "conflict_policy": "override"
+        }
+      ],
+      "required_events": [],
+      "required_evidence": [
+        {
+          "evidence_id": "valkey.liveness.verified",
+          "source": "liveness",
+          "min_count": 1
+        }
+      ],
+      "deployment": {
+        "replicas_per_primary": 0,
+        "mode": "standalone",
+        "valkey_binary": "/opt/valkey/src/valkey-server",
+        "base_port": 23000,
+        "base_data_dir": "/tmp/valkey-fuzzer/artifacts/batch/work/w0/data"
+      },
+      "metadata": {
+        "description": "Crash a primary with DEBUG SEGFAULT so liveness fails"
+      },
+      "instances": {
+        "valkey-0": {
+          "role": "primary",
+          "shard": 0,
+          "server_config": {
+            "loglevel": "notice",
+            "appendonly": "yes",
+            "appendfilename": "appendonly.aof",
+            "appendfsync": "everysec",
+            "save": "",
+            "maxmemory": "500mb",
+            "enable-debug-command": "yes"
+          }
+        }
+      }
+    },
+    "status": "FAIL",
+    "summary": "required components did not pass: liveness; required evidence was not observed: valkey.liveness.verified from liveness",
+    "component_results": [
+      {
+        "component_id": "crash",
+        "status": "PASS",
+        "summary": "DEBUG SEGFAULT: 1/1 replies matched",
+        "evidence": [
+          {
+            "evidence_id": "valkey.command.replies",
+            "source": "crash",
+            "phase": "action.completed",
+            "observed_at": 1793248659.194785,
+            "value": [
+              {
+                "instance_id": "valkey-0",
+                "attempt": 0,
+                "at": 1793248659.156537,
+                "error": "ConnectionError: Connection closed by server.",
+                "matched": true
+              }
+            ],
+            "event_sequence": null,
+            "artifacts": [],
+            "metadata": {}
+          }
+        ],
+        "diagnostics": {},
+        "started_at": 1.109253875,
+        "ended_at": 1.149893583
+      },
+      {
+        "component_id": "liveness",
+        "status": "FAIL",
+        "summary": "valkey-0: process not running; valkey-0: crash report (=== VALKEY BUG REPORT START: Cut & paste starting from here ===)",
+        "evidence": [],
+        "diagnostics": {
+          "instances": {
+            "valkey-0": "process not running"
+          },
+          "crash_reports": {
+            "valkey-0": [
+              "=== VALKEY BUG REPORT START: Cut & paste starting from here ===",
+              "9556:M 28 Oct 2026 21:37:39.159 # valkey 255.255.255 crashed by signal: 10, si_code: 1"
+            ]
+          },
+          "forbidden_log_matches": {}
+        },
+        "started_at": 1.151147291,
+        "ended_at": 1.155173041
+      }
+    ],
+    "evidence": [],
+    "diagnostics": {
+      "missing_required_evidence": [
+        {
+          "evidence_id": "valkey.liveness.verified",
+          "source": "liveness",
+          "min_count": 1,
+          "observed_count": 0
+        }
+      ],
+      "required_component_failures": [
+        "liveness"
+      ],
+      "deployment": {
+        "deployment_id": "dcd95095",
+        "mode": "standalone",
+        "addressing": "shared_loopback",
+        "valkey_sha": "dff4c58e",
+        "instances": [
+          {
+            "instance_id": "valkey-0",
+            "role": "primary",
+            "shard_id": 0,
+            "host": "127.0.0.1",
+            "port": 23000,
+            "pid": 9556,
+            "binary": "/opt/valkey/src/valkey-server",
+            "binary_sha256": "3da22ec82450f036320ad5c123381f106b06b2998a26bc21c95900adc8aa1444"
+          }
+        ]
+      },
+      "events": [
+        {
+          "name": "run.started",
+          "sequence": 1,
+          "timestamp": 0.571584291,
+          "source": "runner",
+          "payload": {
+            "scenario_id": "ciagent-crash-777"
+          }
+        },
+        {
+          "name": "deployment.provisioning",
+          "sequence": 2,
+          "timestamp": 0.572242458,
+          "source": "runner",
+          "payload": {
+            "deployment_mode": "standalone"
+          }
+        },
+        {
+          "name": "deployment.ready",
+          "sequence": 3,
+          "timestamp": 1.108898833,
+          "source": "runner",
+          "payload": {
+            "deployment_mode": "standalone"
+          }
+        },
+        {
+          "name": "crash.started",
+          "sequence": 4,
+          "timestamp": 1.109188041,
+          "source": "crash",
+          "payload": {}
+        },
+        {
+          "name": "crash.completed",
+          "sequence": 5,
+          "timestamp": 1.150841875,
+          "source": "crash",
+          "payload": {
+            "status": "PASS",
+            "summary": "DEBUG SEGFAULT: 1/1 replies matched"
+          }
+        },
+        {
+          "name": "liveness.started",
+          "sequence": 6,
+          "timestamp": 1.15108625,
+          "source": "liveness",
+          "payload": {}
+        },
+        {
+          "name": "liveness.failed",
+          "sequence": 7,
+          "timestamp": 1.155541041,
+          "source": "liveness",
+          "payload": {
+            "status": "FAIL",
+            "summary": "valkey-0: process not running; valkey-0: crash report (=== VALKEY BUG REPORT START: Cut & paste starting from here ===)"
+          }
+        },
+        {
+          "name": "validation.completed",
+          "sequence": 8,
+          "timestamp": 1.155779833,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "deployment.cleanup.started",
+          "sequence": 9,
+          "timestamp": 1.155998333,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "deployment.cleanup.completed",
+          "sequence": 10,
+          "timestamp": 1.161958416,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "run.completed",
+          "sequence": 11,
+          "timestamp": 1.162238041,
+          "source": "runner",
+          "payload": {}
+        }
+      ],
+      "committed_events": [
+        {
+          "name": "run.started",
+          "sequence": 1,
+          "timestamp": 0.571584291,
+          "source": "runner",
+          "payload": {
+            "scenario_id": "ciagent-crash-777"
+          }
+        },
+        {
+          "name": "deployment.provisioning",
+          "sequence": 2,
+          "timestamp": 0.572242458,
+          "source": "runner",
+          "payload": {
+            "deployment_mode": "standalone"
+          }
+        },
+        {
+          "name": "deployment.ready",
+          "sequence": 3,
+          "timestamp": 1.108898833,
+          "source": "runner",
+          "payload": {
+            "deployment_mode": "standalone"
+          }
+        },
+        {
+          "name": "crash.started",
+          "sequence": 4,
+          "timestamp": 1.109188041,
+          "source": "crash",
+          "payload": {}
+        },
+        {
+          "name": "crash.completed",
+          "sequence": 5,
+          "timestamp": 1.150841875,
+          "source": "crash",
+          "payload": {
+            "status": "PASS",
+            "summary": "DEBUG SEGFAULT: 1/1 replies matched"
+          }
+        },
+        {
+          "name": "liveness.started",
+          "sequence": 6,
+          "timestamp": 1.15108625,
+          "source": "liveness",
+          "payload": {}
+        },
+        {
+          "name": "liveness.failed",
+          "sequence": 7,
+          "timestamp": 1.155541041,
+          "source": "liveness",
+          "payload": {
+            "status": "FAIL",
+            "summary": "valkey-0: process not running; valkey-0: crash report (=== VALKEY BUG REPORT START: Cut & paste starting from here ===)"
+          }
+        },
+        {
+          "name": "validation.completed",
+          "sequence": 8,
+          "timestamp": 1.155779833,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "deployment.cleanup.started",
+          "sequence": 9,
+          "timestamp": 1.155998333,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "deployment.cleanup.completed",
+          "sequence": 10,
+          "timestamp": 1.161958416,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "run.completed",
+          "sequence": 11,
+          "timestamp": 1.162238041,
+          "source": "runner",
+          "payload": {}
+        }
+      ],
+      "environment_report": {
+        "run_id": "56241b21612b461dbc9474a4566a6d68",
+        "status": "cleaned",
+        "records": [],
+        "events": []
+      }
+    },
+    "started_at": 0.571560291,
+    "ended_at": 1.163691,
+    "valkey_sha": "dff4c58e"
+  },
+  "coverage": {
+    "key": "85c739974946bec6",
+    "tuple": {
+      "experiment": "ciagent.debug-crash",
+      "deployment": {
+        "mode": "standalone",
+        "provider": "valkey-fuzzer.deployment.local",
+        "primaries": null,
+        "replicas_per_primary": 0,
+        "addressing": null
+      },
+      "config_mix": "be38e7c28e8687d1",
+      "inputs": {},
+      "artifact_mix": "61b284e6ff28383c",
+      "resources": [],
+      "policies": [],
+      "workloads": [],
+      "actions": [
+        "valkey.action.command"
+      ],
+      "faults": [],
+      "observers": [],
+      "oracles": [
+        "valkey.oracle.liveness"
+      ],
+      "resource_mix": "4f53cda18c2baa0c",
+      "policy_mix": "4f53cda18c2baa0c"
+    },
+    "status": "FAIL",
+    "evidence": [
+      "valkey.command.replies"
+    ]
+  },
+  "reproducer": {
+    "python": "3.9.6",
+    "platform": "macOS-26.7.1-arm64-arm-64bit",
+    "experiment": {
+      "id": "ciagent.debug-crash",
+      "digest": "3400f070a7c1c23dbc0bc4c5e457a431e6d42032d33195d58060739a363978aa"
+    },
+    "plugins": [
+      {
+        "plugin_id": "valkey-fuzzer.valkey-experiments",
+        "metadata": {
+          "description": "Valkey workloads, faults, observers, oracles, and experiments"
+        }
+      }
+    ],
+    "components": [
+      {
+        "component_id": "valkey.action.command",
+        "role": "action",
+        "implementation": "valkey_fuzzer_experiments.actions.CommandAction",
+        "implementation_digest": "e9a30c984eb227eb7f53b8be0e12da69bf75f89bab03b5e4fa779722156e8117"
+      },
+      {
+        "component_id": "valkey.oracle.liveness",
+        "role": "oracle",
+        "implementation": "valkey_fuzzer_experiments.oracles.LivenessOracle",
+        "implementation_digest": "280ea70953c08b33956d0da58148069557a7fc29f705de6bbcb634c4abaaf831"
+      }
+    ],
+    "deployment_provider": {
+      "provider_id": "valkey-fuzzer.deployment.local",
+      "implementation": "valkey_fuzzer.deployment.local.provider.LocalDeploymentProvider",
+      "implementation_digest": "f56c8d54045f05ed477a5776c2142d726f719a04ef18e7419ba9f6dbabe6d80a"
+    },
+    "plan_digest": "870ee800deb6e2ad69d1fd6ee29e0bfc717ff6b78b1bce1f8f2da91c9fd0eafc",
+    "valkey_sha": "dff4c58e"
+  },
+  "provenance": null
+}

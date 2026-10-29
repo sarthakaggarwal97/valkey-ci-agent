@@ -1,0 +1,1763 @@
+{
+  "generated_at": "2026-10-29T04:37:19Z",
+  "status": "PASS",
+  "summary": "experiment passed",
+  "scenario": {
+    "scenario_id": "valkey.aof-durability-seed11",
+    "seed": 11,
+    "experiment": {
+      "id": "valkey.aof-durability",
+      "inputs": {
+        "appendfsync": "no",
+        "mutable_keys": 204,
+        "mutation_rate": 2000.0,
+        "rdbcompression": "no",
+        "run_after_crash_s": 2.0,
+        "run_before_crash_s": 4.384,
+        "stable_keys": 81,
+        "value_size": 16384,
+        "loss_window_s": 0.0
+      }
+    },
+    "deployment": {
+      "mode": "standalone",
+      "replicas_per_primary": 2,
+      "server_config": {
+        "dual-channel-replication-enabled": "yes",
+        "repl-diskless-load": "swapdb",
+        "repl-diskless-sync": "no",
+        "repl-diskless-sync-delay": "5"
+      },
+      "valkey_binary": "/opt/valkey/src/valkey-server",
+      "base_port": 23000,
+      "base_data_dir": "/tmp/valkey-fuzzer/artifacts/batch/work/w0/data"
+    }
+  },
+  "outcome": {
+    "plan": {
+      "scenario_id": "valkey.aof-durability-seed11",
+      "experiment_id": "valkey.aof-durability",
+      "seed": 11,
+      "deployment_mode": "standalone",
+      "components": [
+        {
+          "use": "valkey.observer.info",
+          "id": "info",
+          "role": "observer",
+          "config": {
+            "instances": "primary",
+            "sections": [
+              "persistence"
+            ],
+            "interval_s": 0,
+            "on_events": [],
+            "expectations": [
+              {
+                "evidence_id": "valkey.aof.enabled",
+                "field": "aof_enabled",
+                "equals": 1,
+                "when": "final",
+                "required": true
+              },
+              {
+                "evidence_id": "valkey.aof.writes-ok",
+                "field": "aof_last_write_status",
+                "equals": "ok",
+                "when": "final"
+              }
+            ]
+          },
+          "required": true,
+          "depends_on": [],
+          "timeout_s": null
+        },
+        {
+          "use": "valkey.observer.log",
+          "id": "logs",
+          "role": "observer",
+          "config": {
+            "instances": "primary",
+            "expect": [
+              {
+                "evidence_id": "valkey.aof.reloaded",
+                "pattern": "DB loaded from append only file",
+                "required": true
+              }
+            ],
+            "forbidden": [
+              {
+                "pattern": "Bad file format reading the append only file"
+              },
+              {
+                "pattern": "Unrecoverable error reading the append only file"
+              }
+            ],
+            "max_excerpt_lines": 200
+          },
+          "required": true,
+          "depends_on": [],
+          "timeout_s": null
+        },
+        {
+          "use": "valkey.workload.key-value",
+          "id": "writes",
+          "role": "workload",
+          "config": {
+            "stable_keys": 81,
+            "mutable_keys": 204,
+            "preload_mutable": true,
+            "rate": 2000.0,
+            "value_size": 16384,
+            "compressible": false,
+            "mix": {
+              "set": 0.8,
+              "del": 0.1,
+              "get": 0.1
+            },
+            "prefix": null,
+            "op_timeout_s": 1.0,
+            "preload_batch": 1000,
+            "max_ops": null,
+            "drain_on_stop": false,
+            "drain_timeout_s": 120.0,
+            "wait_replicas": 0,
+            "wait_timeout_ms": 100
+          },
+          "required": true,
+          "depends_on": [],
+          "timeout_s": null
+        },
+        {
+          "use": "valkey.fault.process-signal",
+          "id": "crash-primary",
+          "role": "fault",
+          "config": {
+            "when_event": "run-before-crash.completed",
+            "occurrence": 1,
+            "when_payload": {},
+            "delay_s": 0.0,
+            "instance": "primary",
+            "signal": "SIGKILL",
+            "restart": true,
+            "restart_mode": "immediate",
+            "restart_delay_s": 0.0,
+            "pause_s": 1.0,
+            "ready_timeout_s": 30.0,
+            "capture_cluster_vars": false
+          },
+          "required": true,
+          "depends_on": [],
+          "timeout_s": null
+        },
+        {
+          "use": "valkey.action.sleep",
+          "id": "run-before-crash",
+          "role": "action",
+          "config": {
+            "seconds": 4.384
+          },
+          "required": true,
+          "depends_on": [
+            "writes",
+            "info",
+            "logs",
+            "crash-primary"
+          ],
+          "timeout_s": null
+        },
+        {
+          "use": "valkey.action.sleep",
+          "id": "run-after-crash",
+          "role": "action",
+          "config": {
+            "seconds": 2.0
+          },
+          "required": true,
+          "depends_on": [
+            "run-before-crash"
+          ],
+          "timeout_s": null
+        },
+        {
+          "use": "valkey.oracle.ledger",
+          "id": "data",
+          "role": "oracle",
+          "config": {
+            "workload": "writes",
+            "acknowledged": "must_survive",
+            "loss_window_s": 0.0,
+            "loss_window_faults": [
+              "crash-primary"
+            ],
+            "loss_window_after_s": 0.0,
+            "loss_window_scope": "all",
+            "lost_writes_budget": 0,
+            "check_reads": true,
+            "window_reads": "strict",
+            "check_replicas": true,
+            "converge_timeout_s": 60
+          },
+          "required": true,
+          "depends_on": [],
+          "timeout_s": null
+        },
+        {
+          "use": "valkey.oracle.deployment-state",
+          "id": "deployment-state",
+          "role": "oracle",
+          "config": {
+            "check_replication": true,
+            "check_cluster_status": true,
+            "check_slot_coverage": true,
+            "check_roles": true,
+            "check_view_consistency": true,
+            "stabilization_wait_s": 1,
+            "timeout_s": 120
+          },
+          "required": true,
+          "depends_on": [],
+          "timeout_s": null
+        },
+        {
+          "use": "valkey.capability.build-probe",
+          "id": "build",
+          "role": "capability",
+          "config": {
+            "startup_config": {},
+            "config_get": {},
+            "config_set": {},
+            "info_fields": {},
+            "commands": [],
+            "min_version": null,
+            "min_distinct_builds": 1,
+            "binaries": [],
+            "timeout_s": 15.0,
+            "scope": "all",
+            "lacks_configs": [],
+            "deployment_config": true
+          },
+          "required": true,
+          "depends_on": [],
+          "timeout_s": null
+        },
+        {
+          "use": "valkey.oracle.liveness",
+          "id": "liveness",
+          "role": "oracle",
+          "config": {
+            "timeout_s": 30.0,
+            "extra_crash_patterns": []
+          },
+          "required": true,
+          "depends_on": [],
+          "timeout_s": null
+        }
+      ],
+      "deployment_provider": {
+        "provider_id": "valkey-fuzzer.deployment.local",
+        "implementation_digest": null
+      },
+      "mode": "experiment",
+      "inputs": {
+        "stable_keys": 81,
+        "mutable_keys": 204,
+        "mutation_rate": 2000.0,
+        "value_size": 16384,
+        "rdbcompression": "no",
+        "appendfsync": "no",
+        "loss_window_s": 0.0,
+        "run_before_crash_s": 4.384,
+        "run_after_crash_s": 2.0
+      },
+      "artifacts": [],
+      "resources": [],
+      "policies": [],
+      "startup_overlays": [
+        {
+          "overlay_id": "aof",
+          "selector": {
+            "roles": [],
+            "instance_ids": [],
+            "first": false
+          },
+          "server_config": {
+            "appendonly": "yes",
+            "appendfsync": "no"
+          },
+          "conflict_policy": "override"
+        },
+        {
+          "overlay_id": "rdb-compression",
+          "selector": {
+            "roles": [],
+            "instance_ids": [],
+            "first": false
+          },
+          "server_config": {
+            "rdbcompression": "no"
+          },
+          "conflict_policy": "override"
+        }
+      ],
+      "required_events": [
+        "run-before-crash.completed",
+        "crash-primary.recovered"
+      ],
+      "required_evidence": [
+        {
+          "evidence_id": "valkey.data.ledger-verified",
+          "source": "data",
+          "min_count": 1
+        },
+        {
+          "evidence_id": "valkey.fault.injected",
+          "source": "crash-primary",
+          "min_count": 1
+        },
+        {
+          "evidence_id": "valkey.aof.enabled",
+          "source": "info",
+          "min_count": 1
+        },
+        {
+          "evidence_id": "valkey.aof.reloaded",
+          "source": "logs",
+          "min_count": 1
+        }
+      ],
+      "deployment": {
+        "replicas_per_primary": 2,
+        "mode": "standalone",
+        "server_config": {
+          "dual-channel-replication-enabled": "yes",
+          "repl-diskless-load": "swapdb",
+          "repl-diskless-sync": "no",
+          "repl-diskless-sync-delay": "5"
+        },
+        "valkey_binary": "/opt/valkey/src/valkey-server",
+        "base_port": 23000,
+        "base_data_dir": "/tmp/valkey-fuzzer/artifacts/batch/work/w0/data"
+      },
+      "metadata": {
+        "generator": {
+          "inputs": {
+            "stable_keys": {
+              "minimum": 0,
+              "maximum": 2000
+            },
+            "mutable_keys": {
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "mutation_rate": {
+              "minimum": 1,
+              "maximum": 2000
+            },
+            "value_size": {
+              "values": [
+                1,
+                64,
+                1024,
+                16384
+              ]
+            },
+            "loss_window_s": {
+              "hook": "valkey.generator.aof-loss-window"
+            },
+            "run_before_crash_s": {
+              "minimum": 0.5,
+              "maximum": 5
+            },
+            "run_after_crash_s": {
+              "minimum": 0,
+              "maximum": 3
+            }
+          },
+          "deployment": {
+            "replicas_per_primary": {
+              "minimum": 0,
+              "maximum": 2
+            }
+          },
+          "server_config": [
+            "valkey.pool.replication"
+          ]
+        },
+        "description": "Crash the primary under writes and verify acknowledged writes survive AOF recovery"
+      },
+      "instances": {
+        "valkey-0": {
+          "role": "primary",
+          "shard": 0,
+          "server_config": {
+            "loglevel": "notice",
+            "appendfilename": "appendonly.aof",
+            "save": "",
+            "maxmemory": "500mb",
+            "dual-channel-replication-enabled": "yes",
+            "repl-diskless-load": "swapdb",
+            "repl-diskless-sync": "no",
+            "repl-diskless-sync-delay": "5",
+            "appendonly": "yes",
+            "appendfsync": "no",
+            "rdbcompression": "no"
+          }
+        },
+        "valkey-1": {
+          "role": "replica",
+          "shard": 0,
+          "server_config": {
+            "loglevel": "notice",
+            "appendfilename": "appendonly.aof",
+            "save": "",
+            "maxmemory": "500mb",
+            "dual-channel-replication-enabled": "yes",
+            "repl-diskless-load": "swapdb",
+            "repl-diskless-sync": "no",
+            "repl-diskless-sync-delay": "5",
+            "appendonly": "yes",
+            "appendfsync": "no",
+            "rdbcompression": "no"
+          }
+        },
+        "valkey-2": {
+          "role": "replica",
+          "shard": 0,
+          "server_config": {
+            "loglevel": "notice",
+            "appendfilename": "appendonly.aof",
+            "save": "",
+            "maxmemory": "500mb",
+            "dual-channel-replication-enabled": "yes",
+            "repl-diskless-load": "swapdb",
+            "repl-diskless-sync": "no",
+            "repl-diskless-sync-delay": "5",
+            "appendonly": "yes",
+            "appendfsync": "no",
+            "rdbcompression": "no"
+          }
+        }
+      }
+    },
+    "status": "PASS",
+    "summary": "experiment passed",
+    "component_results": [
+      {
+        "component_id": "info",
+        "status": "PASS",
+        "summary": "sampling INFO on valkey-0",
+        "evidence": [
+          {
+            "evidence_id": "valkey.aof.enabled",
+            "source": "info",
+            "phase": "observer.stopped",
+            "observed_at": 1793248638.023533,
+            "value": {
+              "field": "aof_enabled",
+              "instances": "any",
+              "predicate": {
+                "equals": 1
+              },
+              "matches": [
+                {
+                  "instance_id": "valkey-0",
+                  "field": "aof_enabled",
+                  "value": 1,
+                  "phase": "final",
+                  "sample_index": 1,
+                  "event": null
+                }
+              ]
+            },
+            "event_sequence": null,
+            "artifacts": [
+              "/tmp/valkey-fuzzer/artifacts/batch/runs/random-valkey.aof-durability-s11/components/info/info-samples.jsonl"
+            ],
+            "metadata": {}
+          },
+          {
+            "evidence_id": "valkey.aof.writes-ok",
+            "source": "info",
+            "phase": "observer.stopped",
+            "observed_at": 1793248638.023575,
+            "value": {
+              "field": "aof_last_write_status",
+              "instances": "any",
+              "predicate": {
+                "equals": "ok"
+              },
+              "matches": [
+                {
+                  "instance_id": "valkey-0",
+                  "field": "aof_last_write_status",
+                  "value": "ok",
+                  "phase": "final",
+                  "sample_index": 1,
+                  "event": null
+                }
+              ]
+            },
+            "event_sequence": null,
+            "artifacts": [
+              "/tmp/valkey-fuzzer/artifacts/batch/runs/random-valkey.aof-durability-s11/components/info/info-samples.jsonl"
+            ],
+            "metadata": {}
+          }
+        ],
+        "diagnostics": {
+          "teardown": {
+            "status": "PASS",
+            "summary": "2 samples; 2 expectation(s) met",
+            "diagnostics": {
+              "unmet_expectations": [],
+              "samples_path": "/tmp/valkey-fuzzer/artifacts/batch/runs/random-valkey.aof-durability-s11/components/info/info-samples.jsonl"
+            }
+          }
+        },
+        "started_at": 2.287065208,
+        "ended_at": 10.469182375
+      },
+      {
+        "component_id": "logs",
+        "status": "PASS",
+        "summary": "watching 1 log file(s)",
+        "evidence": [
+          {
+            "evidence_id": "valkey.aof.reloaded",
+            "source": "logs",
+            "phase": "observer.stopped",
+            "observed_at": 1793248638.0214772,
+            "value": {
+              "pattern": "DB loaded from append only file",
+              "matches": {
+                "valkey-0": [
+                  "9200:M 28 Oct 2026 21:37:15.396 * DB loaded from append only file: 0.006 seconds"
+                ]
+              },
+              "counts": {
+                "valkey-0": 1
+              }
+            },
+            "event_sequence": null,
+            "artifacts": [
+              "/tmp/valkey-fuzzer/artifacts/batch/runs/random-valkey.aof-durability-s11/components/logs/valkey-0.log"
+            ],
+            "metadata": {}
+          }
+        ],
+        "diagnostics": {
+          "teardown": {
+            "status": "PASS",
+            "summary": "scanned 35 log lines",
+            "diagnostics": {
+              "forbidden": {},
+              "unmet": []
+            }
+          }
+        },
+        "started_at": 2.292792958,
+        "ended_at": 10.467052916
+      },
+      {
+        "component_id": "writes",
+        "status": "PASS",
+        "summary": "seeded 285 keys; mutating 204 keys at 2000.0/s",
+        "evidence": [
+          {
+            "evidence_id": "valkey.workload.ledger",
+            "source": "writes",
+            "phase": "workload.quiesced",
+            "observed_at": 1793248638.0204659,
+            "value": {
+              "operations": 1911,
+              "acknowledged": 1909,
+              "rejected": 1,
+              "ambiguous": 1,
+              "preloaded_keys": 285,
+              "stable_keys": 81,
+              "prefix": "vf:writes",
+              "started_at": 1793248629.851885,
+              "stopped_at": 1793248638.012521,
+              "ledger_path": "/tmp/valkey-fuzzer/artifacts/batch/runs/random-valkey.aof-durability-s11/components/writes/ledger.jsonl",
+              "preload_path": "/tmp/valkey-fuzzer/artifacts/batch/runs/random-valkey.aof-durability-s11/components/writes/preload.jsonl",
+              "replies_digest": "8a18d199257c3eef750304b97ea664e326c95ef2298b2b50236c3084de5a8999",
+              "drained": false,
+              "wait_replicas": 0
+            },
+            "event_sequence": null,
+            "artifacts": [
+              "/tmp/valkey-fuzzer/artifacts/batch/runs/random-valkey.aof-durability-s11/components/writes/ledger.jsonl",
+              "/tmp/valkey-fuzzer/artifacts/batch/runs/random-valkey.aof-durability-s11/components/writes/preload.jsonl"
+            ],
+            "metadata": {}
+          }
+        ],
+        "diagnostics": {
+          "prefix": "vf:writes",
+          "teardown": {
+            "status": "PASS",
+            "summary": "1911 operations (1909 acknowledged, 1 ambiguous, 1 rejected)",
+            "diagnostics": {
+              "counters": {
+                "ok": 1909,
+                "error": 1,
+                "ambiguous": 1
+              }
+            }
+          }
+        },
+        "started_at": 2.297113375,
+        "ended_at": 10.466102125
+      },
+      {
+        "component_id": "crash-primary",
+        "status": "PASS",
+        "summary": "trigger installed on run-before-crash.completed",
+        "evidence": [
+          {
+            "evidence_id": "valkey.fault.injected",
+            "source": "crash-primary",
+            "phase": "fault.recovered",
+            "observed_at": 1793248637.8982022,
+            "value": {
+              "target": "valkey-0",
+              "signal": "SIGKILL",
+              "pid": 9062,
+              "signal_sent_at": 1793248635.358891,
+              "applied": true,
+              "exited": true,
+              "exited_at": 1793248635.3628259,
+              "event": "run-before-crash.completed",
+              "event_sequence": 16,
+              "occurrence": 1,
+              "trigger_payload": {
+                "status": "PASS",
+                "summary": "waited 4.384s"
+              },
+              "trigger_received_at": 1793248635.3588,
+              "applied_at": 1793248635.358819,
+              "completed_at": 1793248635.362835,
+              "restarted": true,
+              "restarted_at": 1793248635.8909729,
+              "restart_seconds": 0.528,
+              "restart_pid": 9200
+            },
+            "event_sequence": 16,
+            "artifacts": [],
+            "metadata": {}
+          }
+        ],
+        "diagnostics": {
+          "teardown": {
+            "status": "PASS",
+            "summary": "fault applied on run-before-crash.completed",
+            "diagnostics": {}
+          }
+        },
+        "started_at": 3.382443708,
+        "ended_at": 10.343855791
+      },
+      {
+        "component_id": "run-before-crash",
+        "status": "PASS",
+        "summary": "waited 4.384s",
+        "evidence": [],
+        "diagnostics": {},
+        "started_at": 3.413632208,
+        "ended_at": 7.80414975
+      },
+      {
+        "component_id": "run-after-crash",
+        "status": "PASS",
+        "summary": "waited 2.0s",
+        "evidence": [],
+        "diagnostics": {},
+        "started_at": 8.336730833,
+        "ended_at": 10.343396375
+      },
+      {
+        "component_id": "data",
+        "status": "PASS",
+        "summary": "285 keys match the ledger (1911 operations)",
+        "evidence": [
+          {
+            "evidence_id": "valkey.data.ledger-verified",
+            "source": "data",
+            "phase": "oracle.completed",
+            "observed_at": 1793248638.156109,
+            "value": {
+              "keys_checked": 285,
+              "operations": 1911,
+              "acknowledged": 1909,
+              "ambiguous": 1,
+              "loss_windows": [
+                [
+                  1793248635.358819,
+                  1793248635.3628259
+                ]
+              ],
+              "loss_permitted_ops": 1,
+              "wait_confirmed_replicas": null,
+              "wait_protected_ops": 0,
+              "loss_scope_slots": null,
+              "unchecked_reads": 0,
+              "window_losses": 0,
+              "window_loss_examples": [],
+              "violations": [],
+              "read_violations": [],
+              "replicas": {
+                "valkey-1": {
+                  "keys": 285,
+                  "diverged": false,
+                  "mismatched": [],
+                  "error": null
+                },
+                "valkey-2": {
+                  "keys": 285,
+                  "diverged": false,
+                  "mismatched": [],
+                  "error": null
+                }
+              }
+            },
+            "event_sequence": null,
+            "artifacts": [],
+            "metadata": {}
+          }
+        ],
+        "diagnostics": {},
+        "started_at": 10.469473708,
+        "ended_at": 10.60245675
+      },
+      {
+        "component_id": "deployment-state",
+        "status": "PASS",
+        "summary": "standalone state validated",
+        "evidence": [
+          {
+            "evidence_id": "valkey.deployment.validated",
+            "source": "deployment-state",
+            "phase": "oracle.completed",
+            "observed_at": 1793248639.179565,
+            "value": {
+              "overall_success": true,
+              "critical": false,
+              "failed_checks": [],
+              "error_messages": [],
+              "duration_s": 1.022,
+              "checks": {
+                "replication": {
+                  "success": true,
+                  "all_replicas_synced": true,
+                  "max_lag": 2.0,
+                  "lagging_replicas": 0,
+                  "disconnected_replicas": 0,
+                  "error": null
+                },
+                "roles": {
+                  "success": true,
+                  "expected_primaries": 1,
+                  "actual_primaries": 1,
+                  "expected_replicas": 2,
+                  "actual_replicas": 2,
+                  "mismatches": 0,
+                  "error": null
+                }
+              }
+            },
+            "event_sequence": null,
+            "artifacts": [],
+            "metadata": {}
+          }
+        ],
+        "diagnostics": {},
+        "started_at": 10.602820916,
+        "ended_at": 11.625140875
+      },
+      {
+        "component_id": "build",
+        "status": "PASS",
+        "summary": "every binary supports the requested capabilities",
+        "evidence": [
+          {
+            "evidence_id": "valkey.capability.supported",
+            "source": "build",
+            "phase": "capability.completed",
+            "observed_at": 1793248628.273866,
+            "value": {
+              "default": {
+                "status": "PASS",
+                "summary": "capability probe passed",
+                "binary": "/opt/valkey/src/valkey-server",
+                "version": "255.255.255",
+                "git_sha1": "dff4c58e",
+                "server_name": "valkey",
+                "config": {},
+                "info": {}
+              }
+            },
+            "event_sequence": null,
+            "artifacts": [],
+            "metadata": {}
+          }
+        ],
+        "diagnostics": {
+          "binaries": {
+            "default": {
+              "status": "PASS",
+              "summary": "capability probe passed",
+              "binary": "/opt/valkey/src/valkey-server",
+              "version": "255.255.255",
+              "git_sha1": "dff4c58e",
+              "server_name": "valkey",
+              "config": {},
+              "info": {}
+            }
+          }
+        },
+        "started_at": 0.537575708,
+        "ended_at": 0.719564791
+      },
+      {
+        "component_id": "liveness",
+        "status": "PASS",
+        "summary": "3 instance(s) alive and responsive; no crash reports",
+        "evidence": [
+          {
+            "evidence_id": "valkey.liveness.verified",
+            "source": "liveness",
+            "phase": "oracle.completed",
+            "observed_at": 1793248639.186087,
+            "value": {
+              "instances": {
+                "valkey-0": "ok",
+                "valkey-1": "ok",
+                "valkey-2": "ok"
+              },
+              "crash_reports": {},
+              "forbidden_log_matches": {}
+            },
+            "event_sequence": null,
+            "artifacts": [],
+            "metadata": {}
+          }
+        ],
+        "diagnostics": {},
+        "started_at": 11.625423166,
+        "ended_at": 11.631629541
+      }
+    ],
+    "evidence": [],
+    "diagnostics": {
+      "obligations": {
+        "planned": [
+          {
+            "owner": "crash-primary",
+            "kinds": [
+              "process.stopped",
+              "process.paused"
+            ]
+          },
+          {
+            "owner": "build",
+            "kinds": [
+              "process.private-server"
+            ]
+          }
+        ],
+        "applied": [
+          {
+            "number": 1,
+            "owner": "build",
+            "kind": "process.private-server",
+            "target": "/tmp/vfp-4fmjb_lo",
+            "opened_at": 1793248628.092941,
+            "undone_at": 1793248628.27382,
+            "undone_by": "owner"
+          },
+          {
+            "number": 2,
+            "owner": "crash-primary",
+            "kind": "process.stopped",
+            "target": "valkey-0",
+            "opened_at": 1793248635.358895,
+            "undone_at": 1793248635.890987,
+            "undone_by": "owner"
+          }
+        ],
+        "undone": [
+          {
+            "number": 1,
+            "owner": "build",
+            "kind": "process.private-server",
+            "target": "/tmp/vfp-4fmjb_lo",
+            "opened_at": 1793248628.092941,
+            "undone_at": 1793248628.27382,
+            "undone_by": "owner"
+          },
+          {
+            "number": 2,
+            "owner": "crash-primary",
+            "kind": "process.stopped",
+            "target": "valkey-0",
+            "opened_at": 1793248635.358895,
+            "undone_at": 1793248635.890987,
+            "undone_by": "owner"
+          }
+        ],
+        "still_active": []
+      },
+      "deployment": {
+        "deployment_id": "c04a59ba",
+        "mode": "standalone",
+        "addressing": "shared_loopback",
+        "valkey_sha": "dff4c58e",
+        "instances": [
+          {
+            "instance_id": "valkey-0",
+            "role": "primary",
+            "shard_id": 0,
+            "host": "127.0.0.1",
+            "port": 23000,
+            "pid": 9062,
+            "binary": "/opt/valkey/src/valkey-server",
+            "binary_sha256": "3da22ec82450f036320ad5c123381f106b06b2998a26bc21c95900adc8aa1444"
+          },
+          {
+            "instance_id": "valkey-1",
+            "role": "replica",
+            "shard_id": 0,
+            "host": "127.0.0.1",
+            "port": 23001,
+            "pid": 9063,
+            "binary": "/opt/valkey/src/valkey-server",
+            "binary_sha256": "3da22ec82450f036320ad5c123381f106b06b2998a26bc21c95900adc8aa1444"
+          },
+          {
+            "instance_id": "valkey-2",
+            "role": "replica",
+            "shard_id": 0,
+            "host": "127.0.0.1",
+            "port": 23002,
+            "pid": 9066,
+            "binary": "/opt/valkey/src/valkey-server",
+            "binary_sha256": "3da22ec82450f036320ad5c123381f106b06b2998a26bc21c95900adc8aa1444"
+          }
+        ]
+      },
+      "events": [
+        {
+          "name": "run.started",
+          "sequence": 1,
+          "timestamp": 0.535962791,
+          "source": "runner",
+          "payload": {
+            "scenario_id": "valkey.aof-durability-seed11"
+          }
+        },
+        {
+          "name": "build.started",
+          "sequence": 2,
+          "timestamp": 0.53754725,
+          "source": "build",
+          "payload": {}
+        },
+        {
+          "name": "build.completed",
+          "sequence": 3,
+          "timestamp": 0.719832083,
+          "source": "build",
+          "payload": {
+            "status": "PASS",
+            "summary": "every binary supports the requested capabilities"
+          }
+        },
+        {
+          "name": "deployment.provisioning",
+          "sequence": 4,
+          "timestamp": 0.720121291,
+          "source": "runner",
+          "payload": {
+            "deployment_mode": "standalone"
+          }
+        },
+        {
+          "name": "deployment.ready",
+          "sequence": 5,
+          "timestamp": 2.286839541,
+          "source": "runner",
+          "payload": {
+            "deployment_mode": "standalone"
+          }
+        },
+        {
+          "name": "info.started",
+          "sequence": 6,
+          "timestamp": 2.287028208,
+          "source": "info",
+          "payload": {}
+        },
+        {
+          "name": "info.completed",
+          "sequence": 7,
+          "timestamp": 2.2926015,
+          "source": "info",
+          "payload": {
+            "status": "PASS",
+            "summary": "sampling INFO on valkey-0"
+          }
+        },
+        {
+          "name": "logs.started",
+          "sequence": 8,
+          "timestamp": 2.292767583,
+          "source": "logs",
+          "payload": {}
+        },
+        {
+          "name": "logs.completed",
+          "sequence": 9,
+          "timestamp": 2.296958041,
+          "source": "logs",
+          "payload": {
+            "status": "PASS",
+            "summary": "watching 1 log file(s)"
+          }
+        },
+        {
+          "name": "writes.started",
+          "sequence": 10,
+          "timestamp": 2.29707525,
+          "source": "writes",
+          "payload": {}
+        },
+        {
+          "name": "writes.seeded",
+          "sequence": 11,
+          "timestamp": 3.377686458,
+          "source": "writes",
+          "payload": {
+            "keys": 285,
+            "stable_keys": 81,
+            "mutable_keys": 204
+          }
+        },
+        {
+          "name": "writes.completed",
+          "sequence": 12,
+          "timestamp": 3.382302041,
+          "source": "writes",
+          "payload": {
+            "status": "PASS",
+            "summary": "seeded 285 keys; mutating 204 keys at 2000.0/s"
+          }
+        },
+        {
+          "name": "crash-primary.started",
+          "sequence": 13,
+          "timestamp": 3.382399166,
+          "source": "crash-primary",
+          "payload": {}
+        },
+        {
+          "name": "crash-primary.completed",
+          "sequence": 14,
+          "timestamp": 3.413534416,
+          "source": "crash-primary",
+          "payload": {
+            "status": "PASS",
+            "summary": "trigger installed on run-before-crash.completed"
+          }
+        },
+        {
+          "name": "run-before-crash.started",
+          "sequence": 15,
+          "timestamp": 3.413606041,
+          "source": "run-before-crash",
+          "payload": {}
+        },
+        {
+          "name": "run-before-crash.completed",
+          "sequence": 16,
+          "timestamp": 7.804243708,
+          "source": "run-before-crash",
+          "payload": {
+            "status": "PASS",
+            "summary": "waited 4.384s"
+          }
+        },
+        {
+          "name": "crash-primary.injected",
+          "sequence": 17,
+          "timestamp": 7.808331125,
+          "source": "crash-primary",
+          "payload": {
+            "applied": true,
+            "trigger": "run-before-crash.completed",
+            "applied_at": 1793248635.358819,
+            "target": "valkey-0",
+            "signal": "SIGKILL"
+          }
+        },
+        {
+          "name": "crash-primary.recovered",
+          "sequence": 18,
+          "timestamp": 8.336515625,
+          "source": "crash-primary",
+          "payload": {
+            "instance_id": "valkey-0"
+          }
+        },
+        {
+          "name": "run-after-crash.started",
+          "sequence": 19,
+          "timestamp": 8.336697375,
+          "source": "run-after-crash",
+          "payload": {}
+        },
+        {
+          "name": "run-after-crash.completed",
+          "sequence": 20,
+          "timestamp": 10.343517916,
+          "source": "run-after-crash",
+          "payload": {
+            "status": "PASS",
+            "summary": "waited 2.0s"
+          }
+        },
+        {
+          "name": "crash-primary.stopping",
+          "sequence": 21,
+          "timestamp": 10.343624958,
+          "source": "crash-primary",
+          "payload": {}
+        },
+        {
+          "name": "crash-primary.stopped",
+          "sequence": 22,
+          "timestamp": 10.343928666,
+          "source": "crash-primary",
+          "payload": {
+            "status": "PASS",
+            "summary": "fault applied on run-before-crash.completed"
+          }
+        },
+        {
+          "name": "writes.stopping",
+          "sequence": 23,
+          "timestamp": 10.348220333,
+          "source": "writes",
+          "payload": {}
+        },
+        {
+          "name": "writes.stopped",
+          "sequence": 24,
+          "timestamp": 10.466212,
+          "source": "writes",
+          "payload": {
+            "status": "PASS",
+            "summary": "1911 operations (1909 acknowledged, 1 ambiguous, 1 rejected)"
+          }
+        },
+        {
+          "name": "logs.stopping",
+          "sequence": 25,
+          "timestamp": 10.466294291,
+          "source": "logs",
+          "payload": {}
+        },
+        {
+          "name": "logs.stopped",
+          "sequence": 26,
+          "timestamp": 10.467175708,
+          "source": "logs",
+          "payload": {
+            "status": "PASS",
+            "summary": "scanned 35 log lines"
+          }
+        },
+        {
+          "name": "info.stopping",
+          "sequence": 27,
+          "timestamp": 10.467249333,
+          "source": "info",
+          "payload": {}
+        },
+        {
+          "name": "info.stopped",
+          "sequence": 28,
+          "timestamp": 10.469274666,
+          "source": "info",
+          "payload": {
+            "status": "PASS",
+            "summary": "2 samples; 2 expectation(s) met"
+          }
+        },
+        {
+          "name": "data.started",
+          "sequence": 29,
+          "timestamp": 10.469432875,
+          "source": "data",
+          "payload": {}
+        },
+        {
+          "name": "data.completed",
+          "sequence": 30,
+          "timestamp": 10.602709458,
+          "source": "data",
+          "payload": {
+            "status": "PASS",
+            "summary": "285 keys match the ledger (1911 operations)"
+          }
+        },
+        {
+          "name": "deployment-state.started",
+          "sequence": 31,
+          "timestamp": 10.602791791,
+          "source": "deployment-state",
+          "payload": {}
+        },
+        {
+          "name": "deployment-state.completed",
+          "sequence": 32,
+          "timestamp": 11.625301875,
+          "source": "deployment-state",
+          "payload": {
+            "status": "PASS",
+            "summary": "standalone state validated"
+          }
+        },
+        {
+          "name": "liveness.started",
+          "sequence": 33,
+          "timestamp": 11.625390375,
+          "source": "liveness",
+          "payload": {}
+        },
+        {
+          "name": "liveness.completed",
+          "sequence": 34,
+          "timestamp": 11.631756125,
+          "source": "liveness",
+          "payload": {
+            "status": "PASS",
+            "summary": "3 instance(s) alive and responsive; no crash reports"
+          }
+        },
+        {
+          "name": "validation.completed",
+          "sequence": 35,
+          "timestamp": 11.631979458,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "deployment.cleanup.started",
+          "sequence": 36,
+          "timestamp": 11.632097916,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "deployment.cleanup.completed",
+          "sequence": 37,
+          "timestamp": 11.841892333,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "run.completed",
+          "sequence": 38,
+          "timestamp": 11.842124333,
+          "source": "runner",
+          "payload": {}
+        }
+      ],
+      "committed_events": [
+        {
+          "name": "run.started",
+          "sequence": 1,
+          "timestamp": 0.535962791,
+          "source": "runner",
+          "payload": {
+            "scenario_id": "valkey.aof-durability-seed11"
+          }
+        },
+        {
+          "name": "build.started",
+          "sequence": 2,
+          "timestamp": 0.53754725,
+          "source": "build",
+          "payload": {}
+        },
+        {
+          "name": "build.completed",
+          "sequence": 3,
+          "timestamp": 0.719832083,
+          "source": "build",
+          "payload": {
+            "status": "PASS",
+            "summary": "every binary supports the requested capabilities"
+          }
+        },
+        {
+          "name": "deployment.provisioning",
+          "sequence": 4,
+          "timestamp": 0.720121291,
+          "source": "runner",
+          "payload": {
+            "deployment_mode": "standalone"
+          }
+        },
+        {
+          "name": "deployment.ready",
+          "sequence": 5,
+          "timestamp": 2.286839541,
+          "source": "runner",
+          "payload": {
+            "deployment_mode": "standalone"
+          }
+        },
+        {
+          "name": "info.started",
+          "sequence": 6,
+          "timestamp": 2.287028208,
+          "source": "info",
+          "payload": {}
+        },
+        {
+          "name": "info.completed",
+          "sequence": 7,
+          "timestamp": 2.2926015,
+          "source": "info",
+          "payload": {
+            "status": "PASS",
+            "summary": "sampling INFO on valkey-0"
+          }
+        },
+        {
+          "name": "logs.started",
+          "sequence": 8,
+          "timestamp": 2.292767583,
+          "source": "logs",
+          "payload": {}
+        },
+        {
+          "name": "logs.completed",
+          "sequence": 9,
+          "timestamp": 2.296958041,
+          "source": "logs",
+          "payload": {
+            "status": "PASS",
+            "summary": "watching 1 log file(s)"
+          }
+        },
+        {
+          "name": "writes.started",
+          "sequence": 10,
+          "timestamp": 2.29707525,
+          "source": "writes",
+          "payload": {}
+        },
+        {
+          "name": "writes.seeded",
+          "sequence": 11,
+          "timestamp": 3.377686458,
+          "source": "writes",
+          "payload": {
+            "keys": 285,
+            "stable_keys": 81,
+            "mutable_keys": 204
+          }
+        },
+        {
+          "name": "writes.completed",
+          "sequence": 12,
+          "timestamp": 3.382302041,
+          "source": "writes",
+          "payload": {
+            "status": "PASS",
+            "summary": "seeded 285 keys; mutating 204 keys at 2000.0/s"
+          }
+        },
+        {
+          "name": "crash-primary.started",
+          "sequence": 13,
+          "timestamp": 3.382399166,
+          "source": "crash-primary",
+          "payload": {}
+        },
+        {
+          "name": "crash-primary.completed",
+          "sequence": 14,
+          "timestamp": 3.413534416,
+          "source": "crash-primary",
+          "payload": {
+            "status": "PASS",
+            "summary": "trigger installed on run-before-crash.completed"
+          }
+        },
+        {
+          "name": "run-before-crash.started",
+          "sequence": 15,
+          "timestamp": 3.413606041,
+          "source": "run-before-crash",
+          "payload": {}
+        },
+        {
+          "name": "run-before-crash.completed",
+          "sequence": 16,
+          "timestamp": 7.804243708,
+          "source": "run-before-crash",
+          "payload": {
+            "status": "PASS",
+            "summary": "waited 4.384s"
+          }
+        },
+        {
+          "name": "crash-primary.injected",
+          "sequence": 17,
+          "timestamp": 7.808331125,
+          "source": "crash-primary",
+          "payload": {
+            "applied": true,
+            "trigger": "run-before-crash.completed",
+            "applied_at": 1793248635.358819,
+            "target": "valkey-0",
+            "signal": "SIGKILL"
+          }
+        },
+        {
+          "name": "crash-primary.recovered",
+          "sequence": 18,
+          "timestamp": 8.336515625,
+          "source": "crash-primary",
+          "payload": {
+            "instance_id": "valkey-0"
+          }
+        },
+        {
+          "name": "run-after-crash.started",
+          "sequence": 19,
+          "timestamp": 8.336697375,
+          "source": "run-after-crash",
+          "payload": {}
+        },
+        {
+          "name": "run-after-crash.completed",
+          "sequence": 20,
+          "timestamp": 10.343517916,
+          "source": "run-after-crash",
+          "payload": {
+            "status": "PASS",
+            "summary": "waited 2.0s"
+          }
+        },
+        {
+          "name": "crash-primary.stopping",
+          "sequence": 21,
+          "timestamp": 10.343624958,
+          "source": "crash-primary",
+          "payload": {}
+        },
+        {
+          "name": "crash-primary.stopped",
+          "sequence": 22,
+          "timestamp": 10.343928666,
+          "source": "crash-primary",
+          "payload": {
+            "status": "PASS",
+            "summary": "fault applied on run-before-crash.completed"
+          }
+        },
+        {
+          "name": "writes.stopping",
+          "sequence": 23,
+          "timestamp": 10.348220333,
+          "source": "writes",
+          "payload": {}
+        },
+        {
+          "name": "writes.stopped",
+          "sequence": 24,
+          "timestamp": 10.466212,
+          "source": "writes",
+          "payload": {
+            "status": "PASS",
+            "summary": "1911 operations (1909 acknowledged, 1 ambiguous, 1 rejected)"
+          }
+        },
+        {
+          "name": "logs.stopping",
+          "sequence": 25,
+          "timestamp": 10.466294291,
+          "source": "logs",
+          "payload": {}
+        },
+        {
+          "name": "logs.stopped",
+          "sequence": 26,
+          "timestamp": 10.467175708,
+          "source": "logs",
+          "payload": {
+            "status": "PASS",
+            "summary": "scanned 35 log lines"
+          }
+        },
+        {
+          "name": "info.stopping",
+          "sequence": 27,
+          "timestamp": 10.467249333,
+          "source": "info",
+          "payload": {}
+        },
+        {
+          "name": "info.stopped",
+          "sequence": 28,
+          "timestamp": 10.469274666,
+          "source": "info",
+          "payload": {
+            "status": "PASS",
+            "summary": "2 samples; 2 expectation(s) met"
+          }
+        },
+        {
+          "name": "data.started",
+          "sequence": 29,
+          "timestamp": 10.469432875,
+          "source": "data",
+          "payload": {}
+        },
+        {
+          "name": "data.completed",
+          "sequence": 30,
+          "timestamp": 10.602709458,
+          "source": "data",
+          "payload": {
+            "status": "PASS",
+            "summary": "285 keys match the ledger (1911 operations)"
+          }
+        },
+        {
+          "name": "deployment-state.started",
+          "sequence": 31,
+          "timestamp": 10.602791791,
+          "source": "deployment-state",
+          "payload": {}
+        },
+        {
+          "name": "deployment-state.completed",
+          "sequence": 32,
+          "timestamp": 11.625301875,
+          "source": "deployment-state",
+          "payload": {
+            "status": "PASS",
+            "summary": "standalone state validated"
+          }
+        },
+        {
+          "name": "liveness.started",
+          "sequence": 33,
+          "timestamp": 11.625390375,
+          "source": "liveness",
+          "payload": {}
+        },
+        {
+          "name": "liveness.completed",
+          "sequence": 34,
+          "timestamp": 11.631756125,
+          "source": "liveness",
+          "payload": {
+            "status": "PASS",
+            "summary": "3 instance(s) alive and responsive; no crash reports"
+          }
+        },
+        {
+          "name": "validation.completed",
+          "sequence": 35,
+          "timestamp": 11.631979458,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "deployment.cleanup.started",
+          "sequence": 36,
+          "timestamp": 11.632097916,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "deployment.cleanup.completed",
+          "sequence": 37,
+          "timestamp": 11.841892333,
+          "source": "runner",
+          "payload": {}
+        },
+        {
+          "name": "run.completed",
+          "sequence": 38,
+          "timestamp": 11.842124333,
+          "source": "runner",
+          "payload": {}
+        }
+      ],
+      "environment_report": {
+        "run_id": "662fa2bd5ac848009269231630369230",
+        "status": "cleaned",
+        "records": [],
+        "events": []
+      }
+    },
+    "started_at": 0.53593375,
+    "ended_at": 11.845603166,
+    "valkey_sha": "dff4c58e"
+  },
+  "coverage": {
+    "key": "f4938edd4b1c2f55",
+    "tuple": {
+      "experiment": "valkey.aof-durability",
+      "deployment": {
+        "mode": "standalone",
+        "provider": "valkey-fuzzer.deployment.local",
+        "primaries": null,
+        "replicas_per_primary": 2,
+        "addressing": null
+      },
+      "config_mix": "902af87d402a9e65",
+      "inputs": {
+        "stable_keys": 81,
+        "mutable_keys": 204,
+        "mutation_rate": 2000.0,
+        "value_size": 16384,
+        "rdbcompression": "no",
+        "appendfsync": "no",
+        "loss_window_s": 0.0,
+        "run_before_crash_s": 4.384,
+        "run_after_crash_s": 2.0
+      },
+      "artifact_mix": "61b284e6ff28383c",
+      "resources": [],
+      "policies": [],
+      "workloads": [
+        "valkey.workload.key-value"
+      ],
+      "actions": [
+        "valkey.action.sleep"
+      ],
+      "faults": [
+        "valkey.fault.process-signal"
+      ],
+      "observers": [
+        "valkey.observer.info",
+        "valkey.observer.log"
+      ],
+      "oracles": [
+        "valkey.oracle.deployment-state",
+        "valkey.oracle.ledger",
+        "valkey.oracle.liveness"
+      ],
+      "resource_mix": "4f53cda18c2baa0c",
+      "policy_mix": "4f53cda18c2baa0c"
+    },
+    "status": "PASS",
+    "evidence": [
+      "valkey.aof.enabled",
+      "valkey.aof.reloaded",
+      "valkey.aof.writes-ok",
+      "valkey.capability.supported",
+      "valkey.data.ledger-verified",
+      "valkey.deployment.validated",
+      "valkey.fault.injected",
+      "valkey.liveness.verified",
+      "valkey.workload.ledger"
+    ]
+  },
+  "reproducer": {
+    "python": "3.9.6",
+    "platform": "macOS-26.7.1-arm64-arm-64bit",
+    "experiment": {
+      "id": "valkey.aof-durability",
+      "digest": "07e4400e0e4987902832cad428d46c2597bd63cfdbaffe2914539373275b02e6"
+    },
+    "plugins": [
+      {
+        "plugin_id": "valkey-fuzzer.valkey-experiments",
+        "metadata": {
+          "description": "Valkey workloads, faults, observers, oracles, and experiments"
+        }
+      }
+    ],
+    "components": [
+      {
+        "component_id": "valkey.action.sleep",
+        "role": "action",
+        "implementation": "valkey_fuzzer_experiments.actions.SleepAction",
+        "implementation_digest": "e9a30c984eb227eb7f53b8be0e12da69bf75f89bab03b5e4fa779722156e8117"
+      },
+      {
+        "component_id": "valkey.capability.build-probe",
+        "role": "capability",
+        "implementation": "valkey_fuzzer_experiments.capabilities.BuildProbe",
+        "implementation_digest": "641f15820a9a9a706c716f942988129ae03525254aa9caa93beb8567e7d22494"
+      },
+      {
+        "component_id": "valkey.fault.process-signal",
+        "role": "fault",
+        "implementation": "valkey_fuzzer_experiments.faults.ProcessSignalFault",
+        "implementation_digest": "39b7c5a27fdb5c705ceb1f39ba51a48e0b94c99295649711dddc3a6318334591"
+      },
+      {
+        "component_id": "valkey.observer.info",
+        "role": "observer",
+        "implementation": "valkey_fuzzer_experiments.observers.InfoObserver",
+        "implementation_digest": "4edbe8911511bd2b90219067128122275bef74e8bc2a191c3766ac1ed51da5aa"
+      },
+      {
+        "component_id": "valkey.observer.log",
+        "role": "observer",
+        "implementation": "valkey_fuzzer_experiments.observers.LogObserver",
+        "implementation_digest": "4edbe8911511bd2b90219067128122275bef74e8bc2a191c3766ac1ed51da5aa"
+      },
+      {
+        "component_id": "valkey.oracle.deployment-state",
+        "role": "oracle",
+        "implementation": "valkey_fuzzer_experiments.oracles.DeploymentStateOracle",
+        "implementation_digest": "280ea70953c08b33956d0da58148069557a7fc29f705de6bbcb634c4abaaf831"
+      },
+      {
+        "component_id": "valkey.oracle.ledger",
+        "role": "oracle",
+        "implementation": "valkey_fuzzer_experiments.ledger.LedgerOracle",
+        "implementation_digest": "3a0c34c0f429c23620dad1b874ac51421a75761f62b4a60b20c5d4b022ea95b5"
+      },
+      {
+        "component_id": "valkey.oracle.liveness",
+        "role": "oracle",
+        "implementation": "valkey_fuzzer_experiments.oracles.LivenessOracle",
+        "implementation_digest": "280ea70953c08b33956d0da58148069557a7fc29f705de6bbcb634c4abaaf831"
+      },
+      {
+        "component_id": "valkey.workload.key-value",
+        "role": "workload",
+        "implementation": "valkey_fuzzer_experiments.workloads.KeyValueWorkload",
+        "implementation_digest": "d303dcd05bff6d7d331187aa25b363638f0f0df96e4b7b010d1f144b99982b90"
+      }
+    ],
+    "deployment_provider": {
+      "provider_id": "valkey-fuzzer.deployment.local",
+      "implementation": "valkey_fuzzer.deployment.local.provider.LocalDeploymentProvider",
+      "implementation_digest": "f56c8d54045f05ed477a5776c2142d726f719a04ef18e7419ba9f6dbabe6d80a"
+    },
+    "plan_digest": "f72686e80f294b943ffe15497298b041e1255336d7a1c885acff375ba44470e2",
+    "valkey_sha": "dff4c58e",
+    "generated": {
+      "seed": 11,
+      "experiment": "valkey.aof-durability",
+      "attempt": 0,
+      "excludes": [],
+      "boundary": 4,
+      "profile": null
+    }
+  },
+  "provenance": null
+}

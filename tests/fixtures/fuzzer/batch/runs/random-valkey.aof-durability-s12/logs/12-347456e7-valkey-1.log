@@ -1,0 +1,83 @@
+9301:M 28 Oct 2026 21:37:20.662 * oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo
+9301:M 28 Oct 2026 21:37:20.662 * Valkey version=255.255.255, bits=64, commit=dff4c58e, modified=0, pid=9301, just started
+9301:M 28 Oct 2026 21:37:20.662 * Configuration loaded
+9301:M 28 Oct 2026 21:37:20.664 * monotonic clock: ARM CNTVCT @ 1000 ticks/us
+9301:M 28 Oct 2026 21:37:20.664 * Running mode=standalone, port=23001.
+9301:M 28 Oct 2026 21:37:20.664 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+9301:M 28 Oct 2026 21:37:20.667 * Static Module 'lua' successfully loaded (version 1)
+9301:M 28 Oct 2026 21:37:20.667 * Server initialized
+9301:M 28 Oct 2026 21:37:20.668 * Creating AOF base file appendonly.aof.1.base.rdb on server start
+9301:M 28 Oct 2026 21:37:20.673 * Creating AOF incr file appendonly.aof.1.incr.aof on server start
+9301:M 28 Oct 2026 21:37:20.673 * Ready to accept connections tcp
+9301:S 28 Oct 2026 21:37:21.166 * Before turning into a replica, using my own primary parameters to synthesize a cached primary: I may be able to synchronize with the new primary with just a partial transfer.
+9301:S 28 Oct 2026 21:37:21.166 * Connecting to PRIMARY 127.0.0.1:23000
+9301:S 28 Oct 2026 21:37:21.167 * PRIMARY <-> REPLICA sync started
+9301:S 28 Oct 2026 21:37:21.168 * REPLICAOF 127.0.0.1:23000 enabled (user request from 'id=4 addr=127.0.0.1:53277 laddr=127.0.0.1:23001 fd=9 name=*redacted* user=*redacted* lib-name=valkey-py lib-ver=6.1.1')
+9301:S 28 Oct 2026 21:37:21.169 * Non blocking connect for SYNC fired the event.
+9301:S 28 Oct 2026 21:37:21.170 * Primary replied to PING, replication can continue...
+9301:S 28 Oct 2026 21:37:21.171 * Trying a partial resynchronization (request 1b2b97ae28fe16db654a84d8449180a242fdecd5:1).
+9301:S 28 Oct 2026 21:37:21.173 * Dual channel replication: PSYNC is not possible, initialize RDB channel.
+9301:S 28 Oct 2026 21:37:22.685 * PRIMARY <-> REPLICA sync: receiving streamed RDB from primary with EOF to parser
+9301:S 28 Oct 2026 21:37:22.688 * Discarding previously cached primary state.
+9301:S 28 Oct 2026 21:37:22.688 * PRIMARY <-> REPLICA sync: Loading DB in memory
+9301:S 28 Oct 2026 21:37:22.688 * Cleaning slot migration log in anticipation of a load operation.
+9301:S 28 Oct 2026 21:37:22.688 * RDB signature and version check passed. Flushing old data
+9301:S 28 Oct 2026 21:37:22.689 * Loading RDB produced by Valkey version 255.255.255
+9301:S 28 Oct 2026 21:37:22.689 * RDB age 0 seconds
+9301:S 28 Oct 2026 21:37:22.689 * RDB memory usage when created 1.64 Mb
+9301:S 28 Oct 2026 21:37:22.689 * Done loading RDB, keys loaded: 0, keys expired: 0, all fields expired hashes: 0.
+9301:S 28 Oct 2026 21:37:22.689 * PRIMARY <-> REPLICA sync: Finished with success
+9301:S 28 Oct 2026 21:37:22.689 * Creating AOF incr file temp-appendonly.aof.incr on background rewrite
+9301:S 28 Oct 2026 21:37:22.690 * Background append only file rewriting started by pid 9318
+9301:S 28 Oct 2026 21:37:22.690 * Dual channel replication: Trying a partial resynchronization using main channel (request ce0299a88093e973e6ebb9179c4eb0d8ba7fb7f2:1).
+9301:S 28 Oct 2026 21:37:22.691 * Dual channel replication: PRIMARY <-> REPLICA sync: Primary accepted a Partial Resynchronization.
+9301:S 28 Oct 2026 21:37:22.691 * Dual channel replication: Successfully streamed replication data into memory
+9318:C 28 Oct 2026 21:37:22.691 * Successfully created the temporary AOF base file temp-rewriteaof-bg-9318.aof
+9318:C 28 Oct 2026 21:37:22.692 * Fork CoW for AOF rewrite: current 0 MB, peak 0 MB, average 0 MB
+9301:S 28 Oct 2026 21:37:22.790 * Background AOF rewrite terminated with success
+9301:S 28 Oct 2026 21:37:22.791 * Successfully renamed the temporary AOF base file temp-rewriteaof-bg-9318.aof into appendonly.aof.2.base.rdb
+9301:S 28 Oct 2026 21:37:22.791 * Successfully renamed the temporary AOF incr file temp-appendonly.aof.incr into appendonly.aof.2.incr.aof
+9301:S 28 Oct 2026 21:37:22.798 * Removing the history file appendonly.aof.1.incr.aof in the background
+9301:S 28 Oct 2026 21:37:22.798 * Removing the history file appendonly.aof.1.base.rdb in the background
+9301:S 28 Oct 2026 21:37:22.804 * Background AOF rewrite finished successfully
+9301:S 28 Oct 2026 21:37:26.665 * Connection with primary lost.
+9301:S 28 Oct 2026 21:37:26.666 * Caching the disconnected primary state.
+9301:S 28 Oct 2026 21:37:26.668 * Reconnecting to PRIMARY 127.0.0.1:23000
+9301:S 28 Oct 2026 21:37:26.668 * PRIMARY <-> REPLICA sync started
+9301:S 28 Oct 2026 21:37:26.669 # Error condition on socket for SYNC: Connection refused
+9301:S 28 Oct 2026 21:37:26.735 * Connecting to PRIMARY 127.0.0.1:23000
+9301:S 28 Oct 2026 21:37:26.735 * PRIMARY <-> REPLICA sync started
+9301:S 28 Oct 2026 21:37:26.736 * Non blocking connect for SYNC fired the event.
+9301:S 28 Oct 2026 21:37:26.736 * Primary replied to PING, replication can continue...
+9301:S 28 Oct 2026 21:37:26.736 * Trying a partial resynchronization (request ce0299a88093e973e6ebb9179c4eb0d8ba7fb7f2:12045329).
+9301:S 28 Oct 2026 21:37:26.737 * Dual channel replication: PSYNC is not possible, initialize RDB channel.
+9301:S 28 Oct 2026 21:37:27.640 * Dual channel replication: Trying a partial resynchronization using main channel (request c015996b40d5919f3d393e83d9b57dfc05365702:16466).
+9301:S 28 Oct 2026 21:37:27.640 * Replica main thread creating Bio thread to save RDB to disk
+9301:S 28 Oct 2026 21:37:27.642 * Replica bio thread: PRIMARY <-> REPLICA sync: receiving streamed RDB from primary with EOF to disk
+9301:S 28 Oct 2026 21:37:27.644 * Dual channel replication: PRIMARY <-> REPLICA sync: Primary accepted a Partial Resynchronization.
+9301:S 28 Oct 2026 21:37:27.724 * Replica bio thread: Done downloading RDB
+9301:S 28 Oct 2026 21:37:27.742 * Replica main thread detected RDB download completion in Bio thread
+9301:S 28 Oct 2026 21:37:27.742 * Loading the RDB and finalizing primary-replica sync...
+9301:S 28 Oct 2026 21:37:27.747 * Discarding previously cached primary state.
+9301:S 28 Oct 2026 21:37:27.748 * PRIMARY <-> REPLICA sync: Loading DB in memory
+9301:S 28 Oct 2026 21:37:27.748 * Cleaning slot migration log in anticipation of a load operation.
+9301:S 28 Oct 2026 21:37:27.748 * RDB signature and version check passed. Flushing old data
+9301:S 28 Oct 2026 21:37:27.749 * Loading RDB produced by Valkey version 255.255.255
+9301:S 28 Oct 2026 21:37:27.749 * RDB age 0 seconds
+9301:S 28 Oct 2026 21:37:27.749 * RDB memory usage when created 16.00 Mb
+9301:S 28 Oct 2026 21:37:27.757 * Done loading RDB, keys loaded: 731, keys expired: 0, all fields expired hashes: 0.
+9301:S 28 Oct 2026 21:37:27.757 * Dual channel replication: Successfully streamed replication data into memory
+9301:S 28 Oct 2026 21:37:27.758 * PRIMARY <-> REPLICA sync: Finished with success
+9301:S 28 Oct 2026 21:37:27.764 * Removing the history file appendonly.aof.2.incr.aof in the background
+9301:S 28 Oct 2026 21:37:27.765 * Removing the history file appendonly.aof.2.base.rdb in the background
+9301:S 28 Oct 2026 21:37:27.770 * Reused RDB file from primary sync as AOF base file: appendonly.aof.3.base.rdb
+9301:S 28 Oct 2026 21:37:28.866 * Connection with primary lost.
+9301:S 28 Oct 2026 21:37:28.867 * Caching the disconnected primary state.
+9301:S 28 Oct 2026 21:37:28.868 * Reconnecting to PRIMARY 127.0.0.1:23000
+9301:S 28 Oct 2026 21:37:28.869 * PRIMARY <-> REPLICA sync started
+9301:S 28 Oct 2026 21:37:28.869 # Error condition on socket for SYNC: Connection refused
+9301:signal-handler (1793248648) Received SIGTERM scheduling shutdown...
+9301:S 28 Oct 2026 21:37:28.882 * User requested shutdown...
+9301:S 28 Oct 2026 21:37:28.882 * Calling fsync() on the AOF file.
+9301:S 28 Oct 2026 21:37:28.887 * Module lua unloaded
+9301:S 28 Oct 2026 21:37:28.887 # Valkey is now ready to exit, bye bye...

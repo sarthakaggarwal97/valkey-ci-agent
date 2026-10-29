@@ -1,0 +1,5 @@
+
+*** FATAL CONFIG FILE ERROR (Version 255.255.255) ***
+Reading the configuration file, at line 14
+>>> 'maxmemory "not-a-size"'
+argument must be a memory value

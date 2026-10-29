@@ -1,0 +1,278 @@
+{
+  "batch_id": "ciagent-fixture",
+  "folder": "/tmp/valkey-fuzzer/artifacts/batch",
+  "profile": null,
+  "created_at": "2026-10-29T04:37:07Z",
+  "updated_at": "2026-10-29T04:37:39Z",
+  "complete": true,
+  "status": "FAIL",
+  "exit_code": 1,
+  "jobs": 6,
+  "finished": 6,
+  "counts": {
+    "PASS": 2,
+    "FAIL": 2,
+    "ERROR": 2
+  },
+  "runs": [
+    {
+      "id": "random-valkey.aof-durability-s11",
+      "source": "random",
+      "status": "PASS",
+      "summary": "experiment passed",
+      "experiment": "valkey.aof-durability",
+      "seed": 11,
+      "report": "runs/random-valkey.aof-durability-s11/report.json",
+      "signature_key": null,
+      "duration_s": 12.1,
+      "worker": 0,
+      "leaks": 0,
+      "origin": null
+    },
+    {
+      "id": "random-valkey.aof-durability-s12",
+      "source": "random",
+      "status": "PASS",
+      "summary": "experiment passed",
+      "experiment": "valkey.aof-durability",
+      "seed": 12,
+      "report": "runs/random-valkey.aof-durability-s12/report.json",
+      "signature_key": null,
+      "duration_s": 9.3,
+      "worker": 0,
+      "leaks": 0,
+      "origin": null
+    },
+    {
+      "id": "scenario-crash-777",
+      "source": "scenarios",
+      "status": "FAIL",
+      "summary": "required components did not pass: liveness; required evidence was not observed: valkey.liveness.verified from liveness",
+      "experiment": "ciagent.debug-crash",
+      "seed": 777,
+      "report": "runs/scenario-crash-777/report.json",
+      "signature_key": "cc08b3931ccc",
+      "duration_s": 1.4,
+      "worker": 0,
+      "leaks": 0,
+      "origin": null
+    },
+    {
+      "id": "scenario-crash-778",
+      "source": "scenarios",
+      "status": "FAIL",
+      "summary": "required components did not pass: liveness; required evidence was not observed: valkey.liveness.verified from liveness",
+      "experiment": "ciagent.debug-crash",
+      "seed": 778,
+      "report": "runs/scenario-crash-778/report.json",
+      "signature_key": "cc08b3931ccc",
+      "duration_s": 1.6,
+      "worker": 0,
+      "leaks": 0,
+      "origin": null
+    },
+    {
+      "id": "scenario-noboot",
+      "source": "scenarios",
+      "status": "ERROR",
+      "summary": "runner execution failed during deployment.provision",
+      "experiment": "ciagent.debug-crash",
+      "seed": 779,
+      "report": "runs/scenario-noboot/report.json",
+      "signature_key": "846478c93288",
+      "duration_s": 1.4,
+      "worker": 0,
+      "leaks": 0,
+      "origin": null
+    },
+    {
+      "id": "scenario-unknown",
+      "source": "scenarios",
+      "status": "ERROR",
+      "summary": "valkey_fuzzer.catalog.UnknownExperimentError: experiment 'ciagent.no-such-experiment' is not registered",
+      "experiment": "ciagent.no-such-experiment",
+      "seed": 780,
+      "report": null,
+      "signature_key": "9ab128c1af68",
+      "duration_s": 0.8,
+      "worker": 0,
+      "leaks": 0,
+      "origin": null
+    },
+    {
+      "id": "serial-scenario-crash-777",
+      "source": "serial",
+      "status": "FAIL",
+      "summary": "required components did not pass: liveness; required evidence was not observed: valkey.liveness.verified from liveness",
+      "experiment": "ciagent.debug-crash",
+      "seed": 777,
+      "report": "runs/serial-scenario-crash-777/report.json",
+      "signature_key": "cc08b3931ccc",
+      "duration_s": 1.6,
+      "worker": 0,
+      "leaks": 0,
+      "origin": {
+        "job": "scenario-crash-777"
+      }
+    },
+    {
+      "id": "serial-scenario-noboot",
+      "source": "serial",
+      "status": "ERROR",
+      "summary": "runner execution failed during deployment.provision",
+      "experiment": "ciagent.debug-crash",
+      "seed": 779,
+      "report": "runs/serial-scenario-noboot/report.json",
+      "signature_key": "846478c93288",
+      "duration_s": 1.4,
+      "worker": 0,
+      "leaks": 0,
+      "origin": {
+        "job": "scenario-noboot"
+      }
+    },
+    {
+      "id": "serial-scenario-unknown",
+      "source": "serial",
+      "status": "ERROR",
+      "summary": "valkey_fuzzer.catalog.UnknownExperimentError: experiment 'ciagent.no-such-experiment' is not registered",
+      "experiment": "ciagent.no-such-experiment",
+      "seed": 780,
+      "report": null,
+      "signature_key": "9ab128c1af68",
+      "duration_s": 0.8,
+      "worker": 0,
+      "leaks": 0,
+      "origin": {
+        "job": "scenario-unknown"
+      }
+    }
+  ],
+  "signatures": [
+    {
+      "key": "cc08b3931ccc",
+      "label": "FAIL | ciagent.debug-crash | liveness:FAIL | valkey-N: crash report (=== VALKEY BUG REPORT START: Cut & paste starting from here ===) | missing evidence: valkey.liveness.verified",
+      "status": "FAIL",
+      "experiment": "ciagent.debug-crash",
+      "signature": {
+        "status": "FAIL",
+        "failing_components": [
+          "liveness"
+        ],
+        "failures": {
+          "liveness": {
+            "status": "FAIL",
+            "verdict": [
+              "valkey-N: crash report (=== VALKEY BUG REPORT START: Cut & paste starting from here ===)",
+              "valkey-N: process not running"
+            ]
+          }
+        },
+        "missing_events": [],
+        "missing_evidence": [
+          "valkey.liveness.verified"
+        ],
+        "path_evidence": [],
+        "error_type": null,
+        "error_phase": null
+      },
+      "runs": [
+        "scenario-crash-777",
+        "scenario-crash-778"
+      ],
+      "serial_reruns": {
+        "runs": [
+          {
+            "id": "serial-scenario-crash-777",
+            "status": "FAIL",
+            "same_signature": true
+          }
+        ],
+        "reproduced": 1,
+        "verdict": "reproduced"
+      },
+      "count": 2
+    },
+    {
+      "key": "846478c93288",
+      "label": "ERROR | ciagent.debug-crash | missing evidence: valkey.liveness.verified | Exception during deployment.provision",
+      "status": "ERROR",
+      "experiment": "ciagent.debug-crash",
+      "signature": {
+        "status": "ERROR",
+        "failing_components": [],
+        "failures": {},
+        "missing_events": [],
+        "missing_evidence": [
+          "valkey.liveness.verified"
+        ],
+        "path_evidence": [],
+        "error_type": "Exception",
+        "error_phase": "deployment.provision"
+      },
+      "runs": [
+        "scenario-noboot"
+      ],
+      "serial_reruns": {
+        "runs": [
+          {
+            "id": "serial-scenario-noboot",
+            "status": "ERROR",
+            "same_signature": true
+          }
+        ],
+        "reproduced": 1,
+        "verdict": "reproduced"
+      },
+      "count": 1
+    },
+    {
+      "key": "9ab128c1af68",
+      "label": "ERROR | ciagent.no-such-experiment | valkey_fuzzer.catalog.UnknownExperimentError during prepare",
+      "status": "ERROR",
+      "experiment": "ciagent.no-such-experiment",
+      "signature": {
+        "status": "ERROR",
+        "failing_components": [],
+        "failures": {},
+        "missing_events": [],
+        "missing_evidence": [],
+        "path_evidence": [],
+        "error_type": "valkey_fuzzer.catalog.UnknownExperimentError",
+        "error_phase": "prepare"
+      },
+      "runs": [
+        "scenario-unknown"
+      ],
+      "serial_reruns": {
+        "runs": [
+          {
+            "id": "serial-scenario-unknown",
+            "status": "ERROR",
+            "same_signature": true
+          }
+        ],
+        "reproduced": 1,
+        "verdict": "reproduced"
+      },
+      "count": 1
+    }
+  ],
+  "zoo": null,
+  "leaks": [],
+  "invalid": [],
+  "coverage": {
+    "ciagent.debug-crash": {
+      "runs": 3,
+      "tuples": 2
+    },
+    "ciagent.no-such-experiment": {
+      "runs": 1,
+      "tuples": 0
+    },
+    "valkey.aof-durability": {
+      "runs": 2,
+      "tuples": 2
+    }
+  }
+}

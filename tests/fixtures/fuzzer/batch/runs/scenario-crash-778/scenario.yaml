@@ -1,0 +1,9 @@
+scenario_id: ciagent-crash-778
+seed: 778
+experiment:
+  id: ciagent.debug-crash
+deployment:
+  mode: standalone
+  valkey_binary: /opt/valkey/src/valkey-server
+  base_port: 23000
+  base_data_dir: /tmp/valkey-fuzzer/artifacts/batch/work/w0/data

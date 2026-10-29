@@ -1,0 +1,27 @@
+# valkey-fuzzer generated scenario: valkey.aof-durability, seed 12 (attempt 0).
+# Reproduce with: valkey-fuzzer run scenario.yaml
+scenario_id: valkey.aof-durability-seed12
+seed: 12
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: everysec
+    mutable_keys: 117
+    mutation_rate: 2.0
+    rdbcompression: 'yes'
+    run_after_crash_s: 0.0
+    run_before_crash_s: 0.5586
+    stable_keys: 614
+    value_size: 16384
+    loss_window_s: 2.5
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  server_config:
+    dual-channel-replication-enabled: 'yes'
+    repl-diskless-load: on-empty-db
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: '1'
+  valkey_binary: /opt/valkey/src/valkey-server
+  base_port: 23000
+  base_data_dir: /tmp/valkey-fuzzer/artifacts/batch/work/w0/data

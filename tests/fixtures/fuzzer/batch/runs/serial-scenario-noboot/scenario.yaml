@@ -1,0 +1,11 @@
+scenario_id: ciagent-noboot
+seed: 779
+experiment:
+  id: ciagent.debug-crash
+deployment:
+  mode: standalone
+  server_config:
+    maxmemory: not-a-size
+  valkey_binary: /opt/valkey/src/valkey-server
+  base_port: 23000
+  base_data_dir: /tmp/valkey-fuzzer/artifacts/batch/work/w0/data

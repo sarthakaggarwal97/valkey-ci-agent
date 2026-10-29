@@ -1,0 +1,82 @@
+9063:M 28 Oct 2026 21:37:08.310 * oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo
+9063:M 28 Oct 2026 21:37:08.310 * Valkey version=255.255.255, bits=64, commit=dff4c58e, modified=0, pid=9063, just started
+9063:M 28 Oct 2026 21:37:08.310 * Configuration loaded
+9063:M 28 Oct 2026 21:37:08.313 * monotonic clock: ARM CNTVCT @ 1000 ticks/us
+9063:M 28 Oct 2026 21:37:08.313 * Running mode=standalone, port=23001.
+9063:M 28 Oct 2026 21:37:08.313 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+9063:M 28 Oct 2026 21:37:08.314 * Static Module 'lua' successfully loaded (version 1)
+9063:M 28 Oct 2026 21:37:08.314 * Server initialized
+9063:M 28 Oct 2026 21:37:08.315 * Creating AOF base file appendonly.aof.1.base.rdb on server start
+9063:M 28 Oct 2026 21:37:08.322 * Creating AOF incr file appendonly.aof.1.incr.aof on server start
+9063:M 28 Oct 2026 21:37:08.322 * Ready to accept connections tcp
+9063:S 28 Oct 2026 21:37:08.818 * Before turning into a replica, using my own primary parameters to synthesize a cached primary: I may be able to synchronize with the new primary with just a partial transfer.
+9063:S 28 Oct 2026 21:37:08.819 * Connecting to PRIMARY 127.0.0.1:23000
+9063:S 28 Oct 2026 21:37:08.820 * PRIMARY <-> REPLICA sync started
+9063:S 28 Oct 2026 21:37:08.821 * REPLICAOF 127.0.0.1:23000 enabled (user request from 'id=4 addr=127.0.0.1:53079 laddr=127.0.0.1:23001 fd=9 name=*redacted* user=*redacted* lib-name=valkey-py lib-ver=6.1.1')
+9063:S 28 Oct 2026 21:37:08.822 * Non blocking connect for SYNC fired the event.
+9063:S 28 Oct 2026 21:37:08.824 * Primary replied to PING, replication can continue...
+9063:S 28 Oct 2026 21:37:08.826 * Trying a partial resynchronization (request 857197fc6c365c036bde4b6f222d0031612febd2:1).
+9063:S 28 Oct 2026 21:37:08.833 * Full resync from primary: 42fb8df04c88c5dde098aed9462971eb099eb6d1:0
+9063:S 28 Oct 2026 21:37:08.923 * PRIMARY <-> REPLICA sync: receiving 178 bytes from primary to parser
+9063:S 28 Oct 2026 21:37:08.927 * PRIMARY <-> REPLICA sync: Loading DB in memory
+9063:S 28 Oct 2026 21:37:08.928 * Cleaning slot migration log in anticipation of a load operation.
+9063:S 28 Oct 2026 21:37:08.930 * Loading RDB produced by Valkey version 255.255.255
+9063:S 28 Oct 2026 21:37:08.931 * RDB age 0 seconds
+9063:S 28 Oct 2026 21:37:08.931 * RDB memory usage when created 1.62 Mb
+9063:S 28 Oct 2026 21:37:08.932 * Done loading RDB, keys loaded: 0, keys expired: 0, all fields expired hashes: 0.
+9063:S 28 Oct 2026 21:37:08.933 * Discarding previously cached primary state.
+9063:S 28 Oct 2026 21:37:08.933 * PRIMARY <-> REPLICA sync: Swapping active DB with loaded DB
+9063:S 28 Oct 2026 21:37:08.934 * PRIMARY <-> REPLICA sync: Discarding old DB in background
+9063:S 28 Oct 2026 21:37:08.935 * PRIMARY <-> REPLICA sync: Finished with success
+9063:S 28 Oct 2026 21:37:08.935 * Creating AOF incr file temp-appendonly.aof.incr on background rewrite
+9063:S 28 Oct 2026 21:37:08.939 * Background append only file rewriting started by pid 9101
+9101:C 28 Oct 2026 21:37:08.942 * Successfully created the temporary AOF base file temp-rewriteaof-bg-9101.aof
+9101:C 28 Oct 2026 21:37:08.944 * Fork CoW for AOF rewrite: current 0 MB, peak 0 MB, average 0 MB
+9063:S 28 Oct 2026 21:37:09.041 * Background AOF rewrite terminated with success
+9063:S 28 Oct 2026 21:37:09.043 * Successfully renamed the temporary AOF base file temp-rewriteaof-bg-9101.aof into appendonly.aof.2.base.rdb
+9063:S 28 Oct 2026 21:37:09.044 * Successfully renamed the temporary AOF incr file temp-appendonly.aof.incr into appendonly.aof.2.incr.aof
+9063:S 28 Oct 2026 21:37:09.054 * Removing the history file appendonly.aof.1.incr.aof in the background
+9063:S 28 Oct 2026 21:37:09.057 * Removing the history file appendonly.aof.1.base.rdb in the background
+9063:S 28 Oct 2026 21:37:09.069 * Background AOF rewrite finished successfully
+9063:S 28 Oct 2026 21:37:15.361 * Connection with primary lost.
+9063:S 28 Oct 2026 21:37:15.362 * Caching the disconnected primary state.
+9063:S 28 Oct 2026 21:37:15.363 * Reconnecting to PRIMARY 127.0.0.1:23000
+9063:S 28 Oct 2026 21:37:15.364 * PRIMARY <-> REPLICA sync started
+9063:S 28 Oct 2026 21:37:15.365 # Error condition on socket for SYNC: Connection refused
+9063:S 28 Oct 2026 21:37:15.401 * Connecting to PRIMARY 127.0.0.1:23000
+9063:S 28 Oct 2026 21:37:15.401 * PRIMARY <-> REPLICA sync started
+9063:S 28 Oct 2026 21:37:15.402 * Non blocking connect for SYNC fired the event.
+9063:S 28 Oct 2026 21:37:15.402 * Primary replied to PING, replication can continue...
+9063:S 28 Oct 2026 21:37:15.403 * Trying a partial resynchronization (request 42fb8df04c88c5dde098aed9462971eb099eb6d1:20737371).
+9063:S 28 Oct 2026 21:37:15.405 * Full resync from primary: 544a424fc104ea8da460870d3be066b904706f55:0
+9063:S 28 Oct 2026 21:37:15.501 * PRIMARY <-> REPLICA sync: receiving 4282374 bytes from primary to parser
+9063:S 28 Oct 2026 21:37:15.520 * PRIMARY <-> REPLICA sync: Loading DB in memory
+9063:S 28 Oct 2026 21:37:15.521 * Cleaning slot migration log in anticipation of a load operation.
+9063:S 28 Oct 2026 21:37:15.521 * Loading RDB produced by Valkey version 255.255.255
+9063:S 28 Oct 2026 21:37:15.522 * RDB age 0 seconds
+9063:S 28 Oct 2026 21:37:15.522 * RDB memory usage when created 6.66 Mb
+9063:S 28 Oct 2026 21:37:15.534 * Done loading RDB, keys loaded: 261, keys expired: 0, all fields expired hashes: 0.
+9063:S 28 Oct 2026 21:37:15.534 * Discarding previously cached primary state.
+9063:S 28 Oct 2026 21:37:15.534 * PRIMARY <-> REPLICA sync: Swapping active DB with loaded DB
+9063:S 28 Oct 2026 21:37:15.535 * PRIMARY <-> REPLICA sync: Discarding old DB in background
+9063:S 28 Oct 2026 21:37:15.535 * PRIMARY <-> REPLICA sync: Finished with success
+9063:S 28 Oct 2026 21:37:15.535 * Creating AOF incr file temp-appendonly.aof.incr on background rewrite
+9063:S 28 Oct 2026 21:37:15.537 * Background append only file rewriting started by pid 9203
+9203:C 28 Oct 2026 21:37:15.556 * Successfully created the temporary AOF base file temp-rewriteaof-bg-9203.aof
+9203:C 28 Oct 2026 21:37:15.557 * Fork CoW for AOF rewrite: current 0 MB, peak 0 MB, average 0 MB
+9063:S 28 Oct 2026 21:37:15.638 * Background AOF rewrite terminated with success
+9063:S 28 Oct 2026 21:37:15.639 * Successfully renamed the temporary AOF base file temp-rewriteaof-bg-9203.aof into appendonly.aof.3.base.rdb
+9063:S 28 Oct 2026 21:37:15.644 * Successfully renamed the temporary AOF incr file temp-appendonly.aof.incr into appendonly.aof.3.incr.aof
+9063:S 28 Oct 2026 21:37:15.653 * Removing the history file appendonly.aof.2.incr.aof in the background
+9063:S 28 Oct 2026 21:37:15.656 * Removing the history file appendonly.aof.2.base.rdb in the background
+9063:S 28 Oct 2026 21:37:15.665 * Background AOF rewrite finished successfully
+9063:S 28 Oct 2026 21:37:19.220 * Connection with primary lost.
+9063:S 28 Oct 2026 21:37:19.221 * Caching the disconnected primary state.
+9063:S 28 Oct 2026 21:37:19.221 * Reconnecting to PRIMARY 127.0.0.1:23000
+9063:S 28 Oct 2026 21:37:19.221 * PRIMARY <-> REPLICA sync started
+9063:S 28 Oct 2026 21:37:19.221 # Error condition on socket for SYNC: Connection refused
+9063:signal-handler (1793248639) Received SIGTERM scheduling shutdown...
+9063:S 28 Oct 2026 21:37:19.287 * User requested shutdown...
+9063:S 28 Oct 2026 21:37:19.288 * Calling fsync() on the AOF file.
+9063:S 28 Oct 2026 21:37:19.292 * Module lua unloaded
+9063:S 28 Oct 2026 21:37:19.292 # Valkey is now ready to exit, bye bye...

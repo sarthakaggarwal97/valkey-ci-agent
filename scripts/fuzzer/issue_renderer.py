@@ -1,6 +1,7 @@
-"""Render fuzzer analysis results into GitHub issue title, body, and comment text.
+"""Render fuzzer findings into GitHub issue title, body, and comment text.
 
-The rendering is fuzzer-specific (mentions scenario/seed/Valkey SHA, lists
+The rendering is fuzzer-specific (mentions the batch's runs, the failure
+signature and its serial re-runs, scenario/seed/Valkey SHA, lists
 deterministic anomalies); the surrounding create-or-update machinery lives
 in :mod:`scripts.common.issue_dedup`.
 """
@@ -10,77 +11,114 @@ from __future__ import annotations
 from typing import Callable
 
 from scripts.common.issue_dedup import IssueContent
-from scripts.fuzzer.models import FuzzerRunAnalysis
+from scripts.fuzzer.models import FuzzerFinding
 
 MARKER_NAMESPACE = "valkey-ci-agent:fuzzer-issue"
 
+# Runs named in an issue before the rest are counted.
+_MAX_RUNS_SHOWN = 10
 
-def render_for(analysis: FuzzerRunAnalysis) -> Callable[[str, int], IssueContent]:
+
+def render_for(finding: FuzzerFinding) -> Callable[[str, int], IssueContent]:
     """Return the render callable expected by ``IssueDedupPublisher.upsert``."""
     def _render(marker: str, occurrences: int) -> IssueContent:
         return IssueContent(
-            title=_build_title(analysis),
-            body=_render_body(analysis, marker, occurrences=occurrences),
-            comment=_render_comment(analysis, occurrences),
-            labels=tuple(analysis.suggested_labels),
+            title=_build_title(finding),
+            body=_render_body(finding, marker, occurrences=occurrences),
+            comment=_render_comment(finding, occurrences),
+            labels=tuple(finding.suggested_labels),
         )
     return _render
 
 
-def _build_title(analysis: FuzzerRunAnalysis) -> str:
-    if analysis.root_cause_category:
-        label = analysis.root_cause_category.replace("-", " ").replace("_", " ").title()
+def _build_title(finding: FuzzerFinding) -> str:
+    if finding.title:
+        return finding.title
+    if finding.root_cause_category:
+        label = finding.root_cause_category.replace("-", " ").replace("_", " ").title()
         return f"[fuzzer-run] {label}"
-    if analysis.anomalies:
-        return f"[fuzzer-run] {analysis.anomalies[0].title}"
-    # Set only by _build_incomplete_analysis, which produces no anomalies or
+    if finding.kind == "signature" and finding.signature_label:
+        label = finding.signature_label
+        return f"[fuzzer-run] {label if len(label) <= 100 else label[:99] + '…'}"
+    if finding.anomalies:
+        return f"[fuzzer-run] {finding.anomalies[0].title}"
+    # Set only by _build_error_analysis, which produces no anomalies or
     # root_cause_category, so this is reached only when both checks above miss.
-    if analysis.analyzer_incomplete:
+    if finding.analyzer_incomplete:
         return "[fuzzer-run] Analyzer could not complete"
     return "[fuzzer-run] Anomalous behavior detected"
 
 
-def _render_body(analysis: FuzzerRunAnalysis, marker: str, *, occurrences: int) -> str:
+def _runs_cell(runs: list[str]) -> str:
+    shown = ", ".join(f"`{r}`" for r in runs[:_MAX_RUNS_SHOWN])
+    more = f" and {len(runs) - _MAX_RUNS_SHOWN} more" if len(runs) > _MAX_RUNS_SHOWN else ""
+    return f"{shown}{more} ({len(runs)})"
+
+
+def _render_body(finding: FuzzerFinding, marker: str, *, occurrences: int) -> str:
     lines = [
         marker,
         f"<!-- {MARKER_NAMESPACE}:occurrences:{occurrences} -->",
         "",
         "## Fuzzer Run Analysis",
         "",
-        f"**Verdict**: {analysis.triage_verdict}",
+        f"**Verdict**: {finding.triage_verdict}",
+    ]
+    if finding.fuzzer_side:
+        lines += ["", "> This is a problem in valkey-fuzzer itself, not a Valkey bug."]
+    lines += [
         "",
         "| Field | Value |",
         "|---|---|",
-        f"| Run | [{analysis.run_id}]({analysis.run_url}) |",
-        f"| Status | `{analysis.overall_status}` |",
-        f"| Conclusion | `{analysis.conclusion}` |",
-        f"| Scenario | `{analysis.scenario_id or 'unknown'}` |",
-        f"| Seed | `{analysis.seed or 'unknown'}` |",
+        f"| Workflow run | [{finding.run_id}]({finding.run_url}) |",
+        f"| Status | `{finding.overall_status}` |",
+        f"| Conclusion | `{finding.conclusion}` |",
     ]
-    if analysis.tested_valkey_sha:
-        lines.append(f"| Valkey SHA | `{analysis.tested_valkey_sha}` |")
-    lines.extend(["", "### Summary", "", analysis.summary])
-    if analysis.anomalies:
+    if finding.batch_runs:
+        lines.append(f"| Batch runs | {_runs_cell(finding.batch_runs)} |")
+    if finding.signature_key:
+        label = (finding.signature_label or "").replace("|", "\\|")
+        lines.append(f"| Failure signature | `{finding.signature_key}`: {label} |")
+    if finding.kind == "signature":
+        reruns = (f"{finding.rerun_verdict} ({finding.rerun_detail} reproduced)" if finding.rerun_verdict
+                  else "none")
+        lines.append(f"| Serial re-runs | {reruns} |")
+    if not finding.fuzzer_side and finding.kind != "batch":
+        lines += [
+            f"| Fuzzer outcome | `{finding.run_status or 'unknown'}` |",
+            f"| Experiment | `{finding.experiment_id or 'unknown'}` |",
+            f"| Scenario | `{finding.scenario_id or 'unknown'}` |",
+            f"| Seed | `{finding.seed or 'unknown'}` |",
+        ]
+    elif finding.experiment_id:
+        lines.append(f"| Experiment | `{finding.experiment_id}` |")
+    if finding.tested_valkey_sha:
+        lines.append(f"| Valkey SHA | `{finding.tested_valkey_sha}` |")
+    lines.extend(["", "### Summary", "", finding.summary])
+    if finding.anomalies:
         lines.extend(["", "### Findings", ""])
-        for a in analysis.anomalies[:10]:
+        for a in finding.anomalies[:10]:
             lines.append(f"- **[{a.severity}]** {a.title}: {a.evidence}")
-    if analysis.reproduction_hint:
-        lines.extend(["", f"**Reproduce**: `{analysis.reproduction_hint}`"])
+    if finding.reproduction_hint:
+        lines.extend(["", f"**Reproduce**: `{finding.reproduction_hint}`"])
     lines.extend(["", "---", "*Generated by valkey-ci-agent*"])
     return "\n".join(lines)
 
 
-def _render_comment(analysis: FuzzerRunAnalysis, count: int) -> str:
+def _render_comment(finding: FuzzerFinding, count: int) -> str:
     lines = [
         f"## Occurrence #{count}",
         "",
-        f"Run [{analysis.run_id}]({analysis.run_url}) | "
-        f"`{analysis.overall_status}` | `{analysis.triage_verdict}`",
-        "",
-        analysis.summary,
+        f"Run [{finding.run_id}]({finding.run_url}) | "
+        f"`{finding.overall_status}` | `{finding.triage_verdict}`",
     ]
-    if analysis.anomalies:
+    if finding.batch_runs:
+        lines += ["", f"Batch runs: {_runs_cell(finding.batch_runs)}"]
+    if finding.rerun_verdict:
+        lines.append(f"Serial re-runs: {finding.rerun_verdict} ({finding.rerun_detail} reproduced)")
+    lines += ["", finding.summary]
+    if finding.anomalies:
         lines.append("")
-        for a in analysis.anomalies[:5]:
+        for a in finding.anomalies[:5]:
             lines.append(f"- **[{a.severity}]** {a.title}: {a.evidence}")
     return "\n".join(lines)

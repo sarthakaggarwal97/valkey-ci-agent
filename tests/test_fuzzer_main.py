@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -65,47 +66,82 @@ def test_analysis_error_recorded_and_exits_nonzero(monkeypatch, capsys):
     assert "boom" in payload["runs"][0]["error"]
 
 
+def _batch(*findings) -> MagicMock:
+    return MagicMock(overall_status="anomalous", batch_status="FAIL", counts={"FAIL": 2}, findings=list(findings))
+
+
+def _finding(**kw) -> MagicMock:
+    defaults = dict(kind="signature", overall_status="anomalous", triage_verdict="likely-core-valkey-bug",
+                    summary="real bug", incident_fingerprint="fp-abc", batch_runs=["a", "b"],
+                    signature_key="cc08b3931ccc", rerun_verdict="reproduced")
+    defaults.update(kw)
+    return MagicMock(**defaults)
+
+
 def test_publish_skipped_when_fingerprint_missing(monkeypatch, capsys):
     """Refuse to upsert when fingerprint is empty — otherwise unrelated
-    runs would collide on a single issue.
+    findings would collide on a single issue.
     """
     monkeypatch.setenv("TARGET_TOKEN", "fake")
     mock_run = MagicMock(id=42, conclusion="failure", html_url="https://x/runs/42")
-    bad_analysis = MagicMock(
-        overall_status="anomalous", triage_verdict="needs-human-triage",
-        summary="oops", incident_fingerprint=None,
-    )
     with patch.object(fuzzer_main_mod, "Github", _mock_gh_returning([mock_run])), \
          patch.object(fuzzer_main_mod, "FuzzerRunAnalyzer") as mock_analyzer_cls, \
          patch.object(fuzzer_main_mod, "IssueDedupPublisher") as mock_pub_cls:
-        mock_analyzer_cls.return_value.analyze.return_value = bad_analysis
+        mock_analyzer_cls.return_value.analyze.return_value = _batch(
+            _finding(triage_verdict="needs-human-triage", incident_fingerprint=None),
+        )
         rc = fuzzer_main_mod.main([])
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["runs"][0]["issue_action"] == "skipped-no-fingerprint"
+    assert payload["runs"][0]["findings"][0]["issue_action"] == "skipped-no-fingerprint"
     mock_pub_cls.return_value.upsert.assert_not_called()
 
 
-def test_publish_passes_run_id_as_idempotency_key(monkeypatch, capsys):
-    """Run id must be passed as idempotency_key so a re-run of the monitor
-    against the same fuzzer run does not bump the occurrence counter.
+def test_each_finding_gets_its_own_issue_keyed_by_the_run(monkeypatch, capsys):
+    """One issue per finding, each with the run id as idempotency_key so a
+    re-run of the monitor against the same fuzzer run does not bump the
+    occurrence counter. A dismissed finding files nothing.
     """
     monkeypatch.setenv("TARGET_TOKEN", "fake")
     mock_run = MagicMock(id=7777, conclusion="failure", html_url="https://x/runs/7777")
-    analysis = MagicMock(
-        overall_status="anomalous", triage_verdict="likely-core-valkey-bug",
-        summary="real bug", incident_fingerprint="fp-abc",
-    )
+    findings = [
+        _finding(),
+        _finding(kind="zoo", triage_verdict="needs-human-triage", incident_fingerprint="fp-zoo",
+                 signature_key=None, rerun_verdict=None),
+        _finding(kind="run", overall_status="warning", triage_verdict="expected-chaos-noise",
+                 incident_fingerprint="fp-noise", signature_key=None, rerun_verdict=None),
+    ]
     with patch.object(fuzzer_main_mod, "Github", _mock_gh_returning([mock_run])), \
          patch.object(fuzzer_main_mod, "FuzzerRunAnalyzer") as mock_analyzer_cls, \
          patch.object(fuzzer_main_mod, "IssueDedupPublisher") as mock_pub_cls:
-        mock_analyzer_cls.return_value.analyze.return_value = analysis
-        mock_pub_cls.return_value.upsert.return_value = ("created", "https://x/issues/1")
-        fuzzer_main_mod.main([])
+        mock_analyzer_cls.return_value.analyze.return_value = _batch(*findings)
+        mock_pub_cls.return_value.upsert.side_effect = [("created", "https://x/issues/1"),
+                                                        ("updated", "https://x/issues/2")]
+        rc = fuzzer_main_mod.main([])
 
-    kwargs = mock_pub_cls.return_value.upsert.call_args.kwargs
-    assert kwargs["idempotency_key"] == "7777"
-    assert kwargs["fingerprint"] == "fp-abc"
+    assert rc == 0
+    calls = mock_pub_cls.return_value.upsert.call_args_list
+    assert [c.kwargs["fingerprint"] for c in calls] == ["fp-abc", "fp-zoo"]
+    assert {c.kwargs["idempotency_key"] for c in calls} == {"7777"}
+    entry = json.loads(capsys.readouterr().out)["runs"][0]
+    assert (entry["batch_status"], entry["counts"]) == ("FAIL", {"FAIL": 2})
+    assert [f.get("issue_action") for f in entry["findings"]] == ["created", "updated", None]
+    assert entry["findings"][0]["runs"] == ["a", "b"]
+    assert entry["findings"][0]["rerun_verdict"] == "reproduced"
+
+
+def test_outcome_lists_the_issues():
+    level, message = fuzzer_main_mod._outcome([{
+        "run_id": 5, "action": "analyzed", "status": "anomalous", "batch_status": "FAIL",
+        "findings": [{"issue_action": "created", "issue_url": "https://x/issues/1"}, {}],
+    }], dry_run=False)
+    assert level == logging.WARNING
+    assert message == ("Fuzzer run 5: batch FAIL, 2 finding(s), status anomalous; "
+                       "issues created: https://x/issues/1")
+    level, message = fuzzer_main_mod._outcome([{
+        "run_id": 5, "action": "analyzed", "status": "normal", "batch_status": "PASS", "findings": [],
+    }], dry_run=False)
+    assert (level, message) == (logging.INFO, "Fuzzer run 5: batch PASS, 0 finding(s), status normal; no issue needed")
 
 
 def _analysis_obj(*, status: str, verdict: str) -> MagicMock:

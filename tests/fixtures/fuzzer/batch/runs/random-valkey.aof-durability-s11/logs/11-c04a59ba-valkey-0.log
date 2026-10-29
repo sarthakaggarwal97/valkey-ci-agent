@@ -1,0 +1,67 @@
+9062:M 28 Oct 2026 21:37:08.303 * oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo
+9062:M 28 Oct 2026 21:37:08.303 * Valkey version=255.255.255, bits=64, commit=dff4c58e, modified=0, pid=9062, just started
+9062:M 28 Oct 2026 21:37:08.303 * Configuration loaded
+9062:M 28 Oct 2026 21:37:08.304 * monotonic clock: ARM CNTVCT @ 1000 ticks/us
+9062:M 28 Oct 2026 21:37:08.304 * Running mode=standalone, port=23000.
+9062:M 28 Oct 2026 21:37:08.304 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+9062:M 28 Oct 2026 21:37:08.305 * Static Module 'lua' successfully loaded (version 1)
+9062:M 28 Oct 2026 21:37:08.305 * Server initialized
+9062:M 28 Oct 2026 21:37:08.306 * Creating AOF base file appendonly.aof.1.base.rdb on server start
+9062:M 28 Oct 2026 21:37:08.313 * Creating AOF incr file appendonly.aof.1.incr.aof on server start
+9062:M 28 Oct 2026 21:37:08.313 * Ready to accept connections tcp
+9062:M 28 Oct 2026 21:37:08.825 * Dual channel capability ignored: repl-diskless-sync disabled
+9062:M 28 Oct 2026 21:37:08.827 * Replica 127.0.0.1:23001 asks for synchronization
+9062:M 28 Oct 2026 21:37:08.828 * Partial resynchronization not accepted: Replication ID mismatch (Replica asked for '857197fc6c365c036bde4b6f222d0031612febd2', my replication IDs are '9ebe114a495f56423076f324275d31e5446c2bb5' and '0000000000000000000000000000000000000000')
+9062:M 28 Oct 2026 21:37:08.829 * Replication backlog created, my new replication IDs are '42fb8df04c88c5dde098aed9462971eb099eb6d1' and '0000000000000000000000000000000000000000'
+9062:M 28 Oct 2026 21:37:08.830 * Starting BGSAVE for SYNC with target: disk using: normal sync, compression: none
+9062:M 28 Oct 2026 21:37:08.832 * Background saving started by pid 9099
+9062:M 28 Oct 2026 21:37:08.834 * Dual channel capability ignored: repl-diskless-sync disabled
+9062:M 28 Oct 2026 21:37:08.838 * Replica 127.0.0.1:23002 asks for synchronization
+9099:C 28 Oct 2026 21:37:08.837 * DB saved on disk
+9062:M 28 Oct 2026 21:37:08.839 * Partial resynchronization not accepted: Replication ID mismatch (Replica asked for '7132499790f09f2aeb7d562bbb3e40a7731f8093', my replication IDs are '42fb8df04c88c5dde098aed9462971eb099eb6d1' and '0000000000000000000000000000000000000000')
+9062:M 28 Oct 2026 21:37:08.840 * Waiting for end of BGSAVE for SYNC
+9099:C 28 Oct 2026 21:37:08.839 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+9062:M 28 Oct 2026 21:37:08.918 * Background saving terminated with success
+9062:M 28 Oct 2026 21:37:08.922 * Synchronization with replica 127.0.0.1:23001 succeeded
+9062:M 28 Oct 2026 21:37:08.923 * Synchronization with replica 127.0.0.1:23002 succeeded
+9200:M 28 Oct 2026 21:37:15.386 * oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo
+9200:M 28 Oct 2026 21:37:15.387 * Valkey version=255.255.255, bits=64, commit=dff4c58e, modified=0, pid=9200, just started
+9200:M 28 Oct 2026 21:37:15.387 * Configuration loaded
+9200:M 28 Oct 2026 21:37:15.388 * monotonic clock: ARM CNTVCT @ 1000 ticks/us
+9200:M 28 Oct 2026 21:37:15.388 * Running mode=standalone, port=23000.
+9200:M 28 Oct 2026 21:37:15.388 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+9200:M 28 Oct 2026 21:37:15.389 * Static Module 'lua' successfully loaded (version 1)
+9200:M 28 Oct 2026 21:37:15.390 * Server initialized
+9200:M 28 Oct 2026 21:37:15.390 * Cleaning slot migration log in anticipation of a load operation.
+9200:M 28 Oct 2026 21:37:15.391 * Reading RDB base file on AOF loading...
+9200:M 28 Oct 2026 21:37:15.391 * Loading RDB produced by Valkey version 255.255.255
+9200:M 28 Oct 2026 21:37:15.391 * RDB age 7 seconds
+9200:M 28 Oct 2026 21:37:15.391 * RDB memory usage when created 1.47 Mb
+9200:M 28 Oct 2026 21:37:15.391 * RDB is base AOF
+9200:M 28 Oct 2026 21:37:15.391 * Done loading RDB, keys loaded: 0, keys expired: 0, all fields expired hashes: 0.
+9200:M 28 Oct 2026 21:37:15.392 * DB loaded from base file appendonly.aof.1.base.rdb: 0.001 seconds
+9200:M 28 Oct 2026 21:37:15.396 * DB loaded from incr file appendonly.aof.1.incr.aof: 0.004 seconds
+9200:M 28 Oct 2026 21:37:15.396 * DB loaded from append only file: 0.006 seconds
+9200:M 28 Oct 2026 21:37:15.397 * Opening AOF incr file appendonly.aof.1.incr.aof on server start
+9200:M 28 Oct 2026 21:37:15.397 * Ready to accept connections tcp
+9200:M 28 Oct 2026 21:37:15.402 * Dual channel capability ignored: repl-diskless-sync disabled
+9200:M 28 Oct 2026 21:37:15.403 * Replica 127.0.0.1:23001 asks for synchronization
+9200:M 28 Oct 2026 21:37:15.403 * Partial resynchronization not accepted: Replication ID mismatch (Replica asked for '42fb8df04c88c5dde098aed9462971eb099eb6d1', my replication IDs are '9bf8a1f144f813d5585eef10e7af538df9626172' and '0000000000000000000000000000000000000000')
+9200:M 28 Oct 2026 21:37:15.403 * Replication backlog created, my new replication IDs are '544a424fc104ea8da460870d3be066b904706f55' and '0000000000000000000000000000000000000000'
+9200:M 28 Oct 2026 21:37:15.404 * Starting BGSAVE for SYNC with target: disk using: normal sync, compression: none
+9200:M 28 Oct 2026 21:37:15.404 * Background saving started by pid 9201
+9200:M 28 Oct 2026 21:37:15.405 * Dual channel capability ignored: repl-diskless-sync disabled
+9200:M 28 Oct 2026 21:37:15.406 * Replica 127.0.0.1:23002 asks for synchronization
+9200:M 28 Oct 2026 21:37:15.406 * Partial resynchronization not accepted: Replication ID mismatch (Replica asked for '42fb8df04c88c5dde098aed9462971eb099eb6d1', my replication IDs are '544a424fc104ea8da460870d3be066b904706f55' and '0000000000000000000000000000000000000000')
+9200:M 28 Oct 2026 21:37:15.410 * Waiting for end of BGSAVE for SYNC
+9201:C 28 Oct 2026 21:37:15.428 * DB saved on disk
+9201:C 28 Oct 2026 21:37:15.429 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+9200:M 28 Oct 2026 21:37:15.498 * Background saving terminated with success
+9200:M 28 Oct 2026 21:37:15.529 * Synchronization with replica 127.0.0.1:23002 succeeded
+9200:M 28 Oct 2026 21:37:15.532 * Synchronization with replica 127.0.0.1:23001 succeeded
+9200:signal-handler (1793248639) Received SIGTERM scheduling shutdown...
+9200:M 28 Oct 2026 21:37:19.214 * User requested shutdown...
+9200:M 28 Oct 2026 21:37:19.214 * 2 of 2 replicas are in sync when shutting down.
+9200:M 28 Oct 2026 21:37:19.214 * Calling fsync() on the AOF file.
+9200:M 28 Oct 2026 21:37:19.217 * Module lua unloaded
+9200:M 28 Oct 2026 21:37:19.218 # Valkey is now ready to exit, bye bye...

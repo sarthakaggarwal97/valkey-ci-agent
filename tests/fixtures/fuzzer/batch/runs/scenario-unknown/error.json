@@ -1,0 +1,5 @@
+{
+  "type": "valkey_fuzzer.catalog.UnknownExperimentError",
+  "message": "experiment 'ciagent.no-such-experiment' is not registered",
+  "phase": "prepare"
+}
