@@ -566,8 +566,9 @@ def test_a_model_too_big_for_tlc_times_out_as_a_gate_failure(tmp_path, fuzzer_di
     _, result, _ = _draft(runner, tmp_path, fuzzer_dir, fake_fuzzer, jar, check_timeout_s=1)
     assert result["rounds"][0]["failed_gate"] == "spec_check"
     output = result["rounds"][0]["output"]
-    # Read from the report: its error, and the run marked timed_out.
-    assert "spec check stopped: the 1s time limit ran out" in output
+    # Read from the report: its error, and the run marked timed_out. The
+    # fuzzer exits 2 for it, as for a broken harness, but this one is the draft's.
+    assert "spec check stopped: TLC was stopped after 1s" in output
     assert "make the bounds smaller" in output
     assert "model_checked: model.cfg: TLC was stopped after 1s" in output
     assert result["verdict"] == "passed"

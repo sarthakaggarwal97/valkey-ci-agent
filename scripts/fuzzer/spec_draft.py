@@ -428,7 +428,11 @@ class SpecTools:
                 report = json.loads(report_path.read_text(encoding="utf-8"))
             except ValueError:
                 report = None
-        if run.returncode not in (0, 1):
+        # Exit 2 is a harness error, except a SANY or TLC run cut short by
+        # --timeout: the model is too big, which goes back to Claude to shrink
+        # its bounds. Anything else (no java, a broken jar) fails the job.
+        timed_out = report is not None and _timed_out(report.get("gates"))
+        if run.returncode not in (0, 1) and not (run.returncode == 2 and timed_out):
             raise HarnessError(f"valkey-fuzzer spec check exited {run.returncode}: {run.tail(10)}")
         problems = assurance_problems(report)
         if run.returncode != 0 and not problems:

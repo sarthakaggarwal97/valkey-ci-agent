@@ -10,7 +10,8 @@ way the real fuzzer does, in the same report shapes, without Java or TLC:
   VALKEY_FUZZER_SPEC_PATH does not find it; a control whose name starts with
   ``nofault`` is ``no-fault``, and ``spec translate`` exits 1 on it;
 - a model containing ``HARNESS-BROKEN`` makes it exit 2, like a missing jar;
-- a model containing ``SLOW`` is reported as cut short by ``--timeout``;
+- a model containing ``SLOW`` is reported as cut short by ``--timeout``:
+  its gate and the report are ``error`` and it exits 2;
 - a bundle is a directory when the argument holds a ``/`` (``./register``),
   and otherwise a name looked up only on VALKEY_FUZZER_SPEC_PATH, as the
   real fuzzer does: never in the working directory;
@@ -75,7 +76,7 @@ def _check(args):
     def finish(status):
         report["status"] = status
         output.write_text(json.dumps(report))
-        return 0 if status == "pass" else 1
+        return {"pass": 0, "fail": 1}.get(status, 2)
 
     if "IOUtils" in model:
         gates["parsed"] = {"status": "fail", "modules": {"model.tla": {"status": "fail", "error": (
@@ -91,10 +92,10 @@ def _check(args):
     gates["claims_checked"] = {"status": "pass", "problems": []}
     if "SLOW" in model:
         error = f"TLC was stopped after {_arg(args, '--timeout')}s: the time limit ran out before it finished"
-        gates["model_checked"] = {"status": "fail", "configs": {"model.cfg": {
-            "status": "fail", "exit_code": -9, "timed_out": True, "errors": [error], "error": error}}}
-        report["error"] = f"spec check stopped: the {_arg(args, '--timeout')}s time limit ran out"
-        return finish("fail")
+        gates["model_checked"] = {"status": "error", "configs": {"model.cfg": {
+            "status": "error", "exit_code": -9, "timed_out": True, "errors": [error], "error": error}}}
+        report["error"] = f"spec check stopped: {error}"
+        return finish("error")
     gates["model_checked"] = {"status": "pass", "configs": {"model.cfg": {"status": "pass", "exit_code": 0}}}
     gates["model_coverage"] = {"status": "pass", "actions": {}, "never_fired": []}
     controls = {}
