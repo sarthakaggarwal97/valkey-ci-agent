@@ -77,6 +77,16 @@ def test_root_switches_account_without_sudo_and_macos_through_sudo(monkeypatch):
     )
 
 
+def test_the_command_is_resolved_before_sudo_can_replace_path(monkeypatch):
+    monkeypatch.setattr(isolation.sys, "platform", "linux")
+    monkeypatch.setattr(isolation.os, "geteuid", lambda: 1001)
+    monkeypatch.setattr(isolation.shutil, "which", lambda name: f"/chosen/{name}")
+
+    invocation = isolation.as_user("v", {}, ["claude", "--print"], home="/h")
+
+    assert invocation.argv[-2:] == ("/chosen/claude", "--print")
+
+
 @pytest.fixture
 def checkout():
     """A checkout under a traversable directory, as the engine makes one."""
