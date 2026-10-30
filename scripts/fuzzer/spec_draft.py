@@ -631,9 +631,13 @@ Write each file's text exactly, with no code fences.
 
 _RULES = """\
 - claims.yaml: status: draft and no approved_by; only a maintainer approves
-  claims. scope names the Valkey files and functions you modelled. Every
-  property has a statement a maintainer can check against the code, its
-  holds_when constants, and at least one negative control. List the
+  claims. It holds exactly protocol, summary, status, scope, properties,
+  assumptions, exclusions, bounds and optionally targets, and the fuzzer
+  rejects any other key or shape: scope is a list of {file, functions},
+  assumptions and exclusions are lists of plain strings, and each target is
+  {name, meaning}. scope names the Valkey files and functions you modelled.
+  Every property has a statement a maintainer can check against the code,
+  its holds_when constants, and at least one negative control. List the
   assumptions, the bounds every safe config uses, and what the model leaves
   out (exclusions).
 - model.tla: MODULE model, named actions in Next. EXTENDS or INSTANCE only
@@ -644,14 +648,18 @@ _RULES = """\
 - negative-controls/<name>.cfg for every property, optionally with
   <name>.tla, a mutated model whose MODULE is <name>. TLC must report that
   property, and only that one, violated, so a property that cannot fail is
-  rejected. A control should be a real way the code could go wrong (a config
-  value, a missing check, a reordered step), so its counterexample is worth
-  running.
+  rejected. A mutated module changes actions, never the property: it keeps
+  model.tla's definition of the property, and of every operator it uses,
+  word for word, or takes them with EXTENDS model. A control should be a
+  real way the code could go wrong (a config value, a missing check, a
+  reordered step), so its counterexample is worth running.
 - mapping.yaml: every variable, constant and action of the model, mapped to
   evidence a component publishes or declared unobservable with a reason, and
   a scenario section naming the experiment, whose inputs schema the inputs
   fit. Every fault in scenario.faults names the experiment's fault
-  `component` that injects it.
+  `component` that injects it. A control's counterexample takes every
+  mapped fault action or none: one that skips some is not translated, since
+  the experiment's other fault components would still fire.
 - experiments/<id>.yaml (optional): when no installed experiment can inject
   the mapping's faults, write a data-only experiment composed only of
   installed components (catalog/components.json lists them, with their

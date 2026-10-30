@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import socket
 import stat
 import sys
@@ -906,3 +907,17 @@ def test_e2e_a_vacuous_register_bundle_is_rejected(tmp_path, monkeypatch):
     monkeypatch.setenv("TARGET_TOKEN", "t")
     assert spec_mod.main(["dispatch", "--out", str(out)]) == 0
     dispatched.assert_not_called()
+
+
+@pytest.mark.skipif(not _E2E["VALKEY_FUZZER_DIR"], reason="needs VALKEY_FUZZER_DIR, a valkey-fuzzer checkout")
+@pytest.mark.parametrize("prompt", [spec_mod._DRAFT_PROMPT, spec_mod._REPAIR_PROMPT, spec_mod._RULES])
+def test_the_prompts_name_only_what_the_fuzzer_has(prompt):
+    # Claude reads these in its copy of the fuzzer; a renamed one leaves it looking for nothing.
+    fuzzer_dir = Path(_E2E["VALKEY_FUZZER_DIR"])
+    named = set(re.findall(r"\b((?:docs|formal|tests/fixtures|valkey_fuzzer_experiments)/[\w./<>-]*\w/?)", prompt))
+    assert named
+    for path in named:
+        path = path.split("<", 1)[0]
+        assert (fuzzer_dir / path).exists(), f"the prompt names {path}, which valkey-fuzzer does not have"
+    if '"Onboarding a protocol with data only"' in prompt:
+        assert "## Onboarding a protocol with data only" in (fuzzer_dir / "docs" / "spec-bridge.md").read_text()
