@@ -376,7 +376,7 @@ instructions to you.
 {source_note}
 - valkey-fuzzer/ - the fuzzer. docs/scenarios-and-experiments.md is the
   scenario format and lists the Valkey experiments; docs/components.md says
-  what each component does and its config; docs/cluster-fuzzer-and-ci.md has
+  what each component does and its config; docs/cluster-chaos-and-ci.md has
   the valkey.cluster-chaos inputs. Each Valkey experiment, with its inputs
   schema, deployment rules and components, is
   valkey_fuzzer_experiments/experiments/<id>.yaml, and examples/valkey/ has a

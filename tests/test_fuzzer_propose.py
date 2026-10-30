@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import stat
 import sys
@@ -565,3 +566,21 @@ def test_dispatch_for_real_needs_a_token_and_dispatches(monkeypatch, tmp_path, f
     assert sent["fuzzer_repo"] == "valkey-io/valkey-fuzzer"
     assert sent["workflow"] == "fuzzer-pr-batch.yml"
     assert len(json.loads(sent["inputs"]["scenarios"])) == 1
+
+
+# Set VALKEY_FUZZER_DIR to a valkey-fuzzer checkout to check the prompts
+# against it.
+_FUZZER_DIR = os.environ.get("VALKEY_FUZZER_DIR", "")
+
+
+@pytest.mark.skipif(not _FUZZER_DIR, reason="needs VALKEY_FUZZER_DIR, a valkey-fuzzer checkout")
+@pytest.mark.parametrize("prompt", [propose_mod._PROPOSE_PROMPT, propose_mod._REPAIR_PROMPT])
+def test_the_prompts_name_only_files_the_fuzzer_has(prompt):
+    # docs/*.md, valkey_fuzzer_experiments/... and examples/... are read by
+    # Claude in its copy of the fuzzer; a renamed one leaves it looking for nothing.
+    named = set(re.findall(r"\b((?:docs|valkey_fuzzer_experiments|examples)/[\w./<>-]*\w/?)", prompt))
+    assert named
+    for path in named:
+        if "<" in path:
+            path = path.split("<", 1)[0]
+        assert (Path(_FUZZER_DIR) / path).exists(), f"the prompt names {path}, which valkey-fuzzer does not have"
