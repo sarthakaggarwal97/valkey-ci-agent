@@ -149,13 +149,23 @@ def test_inputs_the_pr_batch_would_refuse_are_refused(inputs, message):
 
 # --- Against the real workflow ---------------------------------------------------
 # Set VALKEY_FUZZER_DIR to a valkey-fuzzer checkout to check against its own
-# fuzzer-pr-batch.yml, and its register bundle.
+# fuzzer-pr-batch.yml, and its register bundle, and VALKEY_FUZZER_BIN to its
+# installed command: the workflow's step runs where the fuzzer is installed,
+# with its dependencies.
 
 _FUZZER_DIR = os.environ.get("VALKEY_FUZZER_DIR", "")
+_FUZZER_BIN = shutil.which(os.environ.get("VALKEY_FUZZER_BIN", "") or "") or ""
 _WORKFLOW = Path(_FUZZER_DIR) / ".github" / "workflows" / "fuzzer-pr-batch.yml"
 _real_workflow = pytest.mark.skipif(
-    not (_FUZZER_DIR and _WORKFLOW.is_file()), reason="needs VALKEY_FUZZER_DIR with its fuzzer-pr-batch.yml",
+    not (_FUZZER_DIR and _WORKFLOW.is_file() and _FUZZER_BIN),
+    reason="needs VALKEY_FUZZER_DIR with its fuzzer-pr-batch.yml, and VALKEY_FUZZER_BIN",
 )
+
+
+def _fuzzer_python() -> str:
+    """The interpreter VALKEY_FUZZER_BIN runs on, from its #! line."""
+    first = Path(_FUZZER_BIN).read_text(encoding="utf-8", errors="replace").splitlines()[0]
+    return first[2:].strip() if first.startswith("#!") else sys.executable
 
 
 def _workflow() -> dict:
@@ -176,7 +186,7 @@ def _workflow_check(inputs: dict[str, str], tmp_path: Path) -> subprocess.Comple
     # An input left out reaches the step as its default, "".
     env.update({f"INPUT_{k.upper()}": inputs.get(k, "") for k in BATCH_INPUTS + OPTIONAL_INPUTS})
     env.update(CANDIDATES_DIR=str(tmp_path / "candidates"), SPEC_DIR=str(tmp_path / "spec"), PYTHONPATH=_FUZZER_DIR)
-    return subprocess.run([sys.executable, "-c", script], env=env, capture_output=True, text=True, check=False)
+    return subprocess.run([_fuzzer_python(), "-c", script], env=env, capture_output=True, text=True, check=False)
 
 
 @_real_workflow
