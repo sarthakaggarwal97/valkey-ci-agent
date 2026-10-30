@@ -79,6 +79,10 @@ _TEST_FILE_RE = re.compile(r"^- Test file: `(?P<value>.+)`\s*$", re.MULTILINE)
 _UNIT_TEST_RE = re.compile(r"^\[err\]: Unit test (?P<name>\S+) failed in (?P<file>\S+)$", re.MULTILINE)
 
 
+class SourceLogsExpired(RuntimeError):
+    """The recorded occurrence can no longer be bound to an exact failed job."""
+
+
 def parse_issue(issue: Any) -> IssueFailure | None:
     """Parse a detector issue."""
     body = str(getattr(issue, "body", "") or "")
@@ -219,8 +223,15 @@ def _failing_jobs(
     recorded = recorded if isinstance(recorded, dict) else {}
 
     unread: list[str] = []
+    expired: list[str] = []
     from_logs, job_failures = find_unrecorded_failures(
-        artifact_client, repo_full_name, recorded, jobs=raw_jobs, ignored_jobs=ignored_jobs, unread=unread,
+        artifact_client,
+        repo_full_name,
+        recorded,
+        jobs=raw_jobs,
+        ignored_jobs=ignored_jobs,
+        unread=unread,
+        expired=expired,
     )
     tests = merge_failures(parse_and_deduplicate(recorded, {}), from_logs)
     if failure.job_name:
@@ -247,6 +258,11 @@ def _failing_jobs(
         # The failure may be in a log that could not be read: that says
         # nothing about the issue, so the attempt failed rather than refused.
         raise RuntimeError(f"the log of {', '.join(sorted(unread))} could not be read")
+    if not candidates and expired:
+        raise SourceLogsExpired(
+            f"the source job logs for run {run.id} have expired, so the recorded "
+            "failure can no longer be bound safely to an exact failed job"
+        )
     if not candidates:
         return ()
     first = select_job(candidates)
@@ -662,7 +678,10 @@ def _plan_occurrence(
             "reason": f"issue #{issue.number} already has an open linked pull request",
         }
 
-    jobs = _failing_jobs(gh, artifact_client, repo_full_name, run, failure, ignored_jobs)
+    try:
+        jobs = _failing_jobs(gh, artifact_client, repo_full_name, run, failure, ignored_jobs)
+    except SourceLogsExpired as exc:
+        return _refuse(issue, failure, repo_full_name, str(exc))
     if not jobs:
         return _refuse(issue, failure, repo_full_name, (
             f"no failed job in run {failure.run_id} matches the failure recorded by this issue"

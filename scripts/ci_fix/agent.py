@@ -96,18 +96,12 @@ Do not repeat a change that was shown not to work. What happened, from code
 """
 
 
-_TEST_COMMAND = """For a patch, also give `test_command`: one focused shell command, run from
-the repository root, that builds what it needs and runs the failing test or
-check (for Valkey's Tcl suite,
-`make -j"$(nproc)" && ./runtest --single unit/<file> --only '<test name>'`).
-Code runs it without your change, where it must fail, and with it, where it
-must pass. Leave it empty only when this runner cannot run the check at all."""
+_TEST_COMMAND = """Code owns executable reproduction and verification. Leave
+`test_command` empty; do not propose or claim to have run a command."""
 
 _TEST_COMMAND_VERIFIED_BY_CODE = """Code verifies a patch with its own
-reproduction command (above), looped many times. If that command did not
-reproduce the failure, you may give a `test_command` that does (for example
-one that widens the race); code runs it without your change, where it must
-fail, and with it, where it must pass. Otherwise leave it empty."""
+reproduction command (above), looped many times. Leave `test_command` empty;
+only code-owned checks are accepted as verification."""
 
 
 _CONTEXT = """

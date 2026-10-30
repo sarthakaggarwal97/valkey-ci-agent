@@ -357,19 +357,9 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
 
 
 _FIX_JOBS = ("fix-in-job", "fix-in-container", "fix-local")
-_CI_FIX_STEPS = "CI fix: check out the agent"
-
-
-def _ci_fix_steps(job):
-    """The CI-fix steps a fix job ends with, and the plan's download."""
-    steps = job["steps"]
-    first = next(index for index, step in enumerate(steps) if step.get("name") == _CI_FIX_STEPS)
-    download = next(step for step in steps if step.get("name") == "CI fix: download the plan")
-    return [download, *steps[first:]]
 
 
 def test_the_fix_runs_in_the_failed_job_or_on_the_bots_runner():
-    from scripts.ci_fix import run
     from scripts.ci_fix.engine import AWS_SESSION_S
 
     jobs = _run_jobs()
@@ -384,13 +374,15 @@ def test_the_fix_runs_in_the_failed_job_or_on_the_bots_runner():
         assert job["runs-on"] == "${{ needs.plan.outputs.runs_on }}"
         assert job["timeout-minutes"] == "${{ fromJSON(needs.plan.outputs.timeout_minutes) }}"
         assert job["env"]["CI_FIX_IN_JOB"] == "1"
-        main, extra, download, setup = job["steps"][:4]
+        main, extra, download = job["steps"][:3]
         assert main["with"]["repository"] == "${{ needs.plan.outputs.use_repo }}"
         assert main["with"]["ref"] == "${{ needs.plan.outputs.use_git_ref }}"
         assert extra["if"] == "needs.plan.outputs.extra_repository != ''"
         assert extra["with"]["path"] == "${{ needs.plan.outputs.extra_path }}"
         assert download["name"] == "CI fix: download the plan"
-        assert setup["run"] == f'sh "${{RUNNER_TEMP}}/ci-fix-plan/{run.SETUP_FILE}"' and setup["shell"] == "sh"
+        setup = next(step for step in job["steps"] if step["name"] == "Run the job's own setup and build")
+        assert setup["shell"] == "bash"
+        assert setup["run"].endswith('scripts/ci_fix/job.sh" setup')
     assert "CI_FIX_IN_JOB" not in str(local)
     assert local["runs-on"] == "ubuntu-24.04"
     assert local["timeout-minutes"] * 60 == AWS_SESSION_S
@@ -399,17 +391,37 @@ def test_the_fix_runs_in_the_failed_job_or_on_the_bots_runner():
     assert jobs["publish"]["needs"] == ["plan", *_FIX_JOBS]
 
 
-def test_every_fix_job_ends_with_the_same_ci_fix_steps():
+def test_every_fix_job_uses_the_same_isolated_lifecycle():
     from scripts.ci_fix.engine import AWS_SESSION_S
 
     jobs = _run_jobs()
-    shared = {job_id: _ci_fix_steps(jobs[job_id]) for job_id in _FIX_JOBS}
-    # In a container, the agent's tools come from the distribution's packages.
-    setup = next(step for step in shared["fix-in-container"] if step["name"] == "CI fix: set up the agent")
-    assert setup["with"].pop("system-packages") == "true"
-    assert shared["fix-in-job"] == shared["fix-in-container"] == shared["fix-local"]
-    aws = next(step for step in shared["fix-local"] if "configure-aws-credentials@" in step.get("uses", ""))
-    assert aws["with"]["role-duration-seconds"] == AWS_SESSION_S
+    for job_id in _FIX_JOBS:
+        steps = jobs[job_id]["steps"]
+        names = [step.get("name") for step in steps]
+        for name in (
+            "CI fix: check out the agent",
+            "CI fix: set up the agent",
+            "CI fix: stage the isolated checkout",
+            "CI fix: configure AWS credentials",
+            "CI fix: prepare the fix in this job",
+            "CI fix: clean up the isolated checkout",
+            "CI fix: upload the result",
+        ):
+            assert names.count(name) == 1, (job_id, name)
+        assert names.index("CI fix: stage the isolated checkout") < names.index(
+            "CI fix: configure AWS credentials"
+        )
+        assert names.index("CI fix: prepare the fix in this job") < names.index(
+            "CI fix: clean up the isolated checkout"
+        ) < names.index("CI fix: upload the result")
+        aws = next(step for step in steps if "configure-aws-credentials@" in step.get("uses", ""))
+        assert aws["with"]["role-duration-seconds"] == AWS_SESSION_S
+
+    container_setup = next(
+        step for step in jobs["fix-in-container"]["steps"]
+        if step["name"] == "CI fix: set up the agent"
+    )
+    assert container_setup["with"]["system-packages"] == "true"
 
 
 def test_the_job_setup_and_dependencies_run_before_any_credential_and_the_agent_apart():
@@ -417,53 +429,30 @@ def test_the_job_setup_and_dependencies_run_before_any_credential_and_the_agent_
         names = [step.get("name") for step in _run_jobs()[job_id]["steps"]]
         before = "Install Valkey build and test dependencies" if job_id == "fix-local" else "Run the job's own setup and build"
         assert names.index(before) < names.index("CI fix: configure AWS credentials"), job_id
-        # The job's setup runs before the agent's code is there to change.
-        assert names.index(before) < names.index(_CI_FIX_STEPS), job_id
+        if job_id != "fix-local":
+            assert names.index("CI fix: stage the isolated checkout") < names.index(before)
     script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
     assert script.index("CI_FIX_AGENT_USER=") < script.index("python -m scripts.ci_fix.run fix")
     assert "TOKEN" not in script
 
 
-@pytest.mark.parametrize(("system", "prefix"), [
-    ("Darwin", "chmod +a ci-fix-agent allow search"),
-    ("Linux", "setfacl -m u:ci-fix-agent:--x"),
-])
-def test_the_fix_account_gets_search_access_to_checkout_parents_but_not_root(system, prefix):
+def test_the_fix_uses_a_temp_checkout_without_acl_grants():
     script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
-    block = script[
-        script.index('  dir="$(dirname "${repo}")"'):
-        script.index('  git -C "${repo}" config')
-    ]
-    program = "\n".join([
-        "set -euo pipefail",
-        f"uname() {{ echo {system}; }}",
-        "as_root() { printf '%s\\n' \"$*\"; }",
-        'repo="/Users/runner/work/valkey-ci-agent/valkey-ci-agent"',
-        block,
-    ])
-
-    result = subprocess.run(
-        ["bash", "-c", program],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [
-        f"{prefix} /Users/runner/work/valkey-ci-agent",
-        f"{prefix} /Users/runner/work",
-        f"{prefix} /Users/runner",
-        f"{prefix} /Users",
-    ]
+    packages = Path(".github/actions/setup-agent/system-packages.sh").read_text(encoding="utf-8")
+    assert "setfacl" not in script
+    assert "chmod +a" not in script
+    assert " acl" not in packages
+    assert 'mktemp -d "${temp_root}/valkey-ci-fix.XXXXXX"' in script
+    assert "/private/tmp" in script
+    assert 'cp -R "${GITHUB_WORKSPACE}/." "${repo}/"' in script
 
 
-def test_the_jobs_cleanup_runs_git_without_fsmonitor_or_hooks():
-    """The post steps run git in a workspace the agent's account wrote to, as the workflow user."""
+def test_the_original_actions_checkout_is_never_handed_to_the_agent():
     script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
-    block = script[script.index("GIT_CONFIG_COUNT=2"):script.index('>> "${GITHUB_ENV}"')]
-    assert "GIT_CONFIG_KEY_0=core.fsmonitor" in block and "GIT_CONFIG_VALUE_0=false" in block
-    assert "GIT_CONFIG_KEY_1=core.hooksPath" in block and "GIT_CONFIG_VALUE_1=/dev/null" in block
+    assert 'cp -R "${GITHUB_WORKSPACE}/." "${repo}/"' in script
+    assert 'rm -rf -- "${repo}/.ci-fix-agent"' in script
+    assert 'config --local --unset-all http.https://github.com/.extraheader' in script
+    assert "chown" not in script[script.index("stage() {"):script.index("setup_job() {")]
 
 
 def _restore_agent(workspace: Path, temp: Path) -> subprocess.CompletedProcess[str]:
@@ -474,7 +463,7 @@ def _restore_agent(workspace: Path, temp: Path) -> subprocess.CompletedProcess[s
         for name in ("as_root", "restore_agent")
     )
     program = (
-        'set -euo pipefail\nsudo() { "$@"; }\n' + functions
+        'set -euo pipefail\nsudo() { [[ "$1" == -n ]] && shift; "$@"; }\n' + functions
         + f'agent={temp / "ci-fix-agent"}\nhome={workspace / ".ci-fix-agent"}\nrestore_agent\n'
     )
     return subprocess.run(["bash", "-c", program], capture_output=True, text=True, check=False)
@@ -490,9 +479,10 @@ def _agent_code(root: Path) -> Path:
 def test_the_agents_code_is_put_back_for_the_jobs_own_cleanup():
     """Its setup is a composite action of this checkout: the post phase reads it from there."""
     script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
-
-    moved = script.index('mv -- "${home}" "${agent}"')
-    assert moved < script.index("trap 'restore_agent") < script.index("python -m scripts.ci_fix.run fix")
+    stage = script[script.index("stage() {"):script.index("setup_job() {")]
+    assert stage.index('mv -- "${home}" "${agent}"') < stage.index(
+        'cp -R "${GITHUB_WORKSPACE}/." "${repo}/"'
+    )
 
 
 @pytest.mark.parametrize("planted", ["directory", "link"])

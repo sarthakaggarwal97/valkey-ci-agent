@@ -82,11 +82,27 @@ def test_ci_fix_profiles_match_their_publication_targets() -> None:
     suggest = agent_runtime.AGENT_PROFILES["ci_fix_suggest"]
 
     assert edit.writes_allowed is True
-    assert edit.confined is False
-    assert "Bash" in edit.allowed_tools
+    assert edit.confined is True
+    assert edit.disallowed_tools == "Bash,Glob"
+    assert "Bash" not in edit.allowed_tools
     assert suggest.writes_allowed is True
     assert suggest.confined is True
     assert suggest.disallowed_tools == "Bash,Glob"
+
+
+def test_a_caller_cannot_extend_an_agent_profiles_timeout(monkeypatch) -> None:
+    captured = {}
+
+    def run_claude_code(_prompt, **kwargs):
+        captured.update(kwargs)
+        return "", "", 0
+
+    monkeypatch.setattr(agent_runtime, "run_claude_code", run_claude_code)
+    monkeypatch.setattr(agent_runtime, "isolated_user", lambda: "")
+
+    agent_runtime.run_agent("ci_fix_edit", "fix it", timeout=9999)
+
+    assert captured["timeout"] == agent_runtime.AGENT_PROFILES["ci_fix_edit"].timeout
 
 
 def test_release_notes_review_profile_is_edit_only() -> None:

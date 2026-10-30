@@ -114,12 +114,14 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
     ),
     "ci_fix_edit": AgentProfile(
         name="ci_fix_edit",
-        allowed_tools="Read,Edit,MultiEdit,Write,Grep,Glob,Bash",
+        allowed_tools="Read,Edit,MultiEdit,Write,Grep",
         timeout=2700,
         effort="max",
         max_turns=160,
         writes_allowed=True,
         output_schema="candidate-json",
+        disallowed_tools="Bash,Glob",
+        confined=True,
         isolated=True,
     ),
     "ci_fix_review": AgentProfile(
@@ -188,10 +190,11 @@ def run_agent(
     # run_claude_code logs the working directory and the exit; this names
     # which agent it was.
     logger.info("Running the %s agent (model %s)", profile_name, resolved_model or "default")
+    effective_timeout = profile.timeout if timeout is None else min(timeout, profile.timeout)
     stdout, stderr, rc = run_claude_code(
         prompt,
         cwd=cwd,
-        timeout=timeout if timeout is not None else profile.timeout,
+        timeout=effective_timeout,
         model=resolved_model,
         effort=profile.effort,
         max_turns=profile.max_turns,

@@ -9,10 +9,10 @@ that job's own setup and build (``scripts/ci_fix/job.sh``):
    (:mod:`scripts.ci_fix.prior_fixes`).
 2. **Reproduce**: run the failing test on the unfixed code the way its CI job
    did, looped, then under load (:mod:`scripts.ci_fix.reproduce`).
-3. **Fix**: when every reproduction probe in an approximation of an
-   unsupported job passes, stop without editing. Otherwise one agent session,
-   told what steps 1 and 2 found and the repository's test conventions,
-   ports an existing fix or writes a patch.
+3. **Fix**: when code planned a reproduction but could not run it or make it
+   fail, stop without editing. Otherwise one agent session, told what steps 1
+   and 2 found and the repository's test conventions, ports an existing fix
+   or writes a patch.
 4. **Verify and review**: the candidate (a port is cherry-picked into the
    checkout first) must pass the reproduction many times, and a separate
    read-only review must approve it. Otherwise the result goes back to the
@@ -167,22 +167,42 @@ def prepare_fix(
             run_test if runs_tests else None,
             repro_deadline=min(deadline, time.monotonic() + REPRO_BUDGET_S), job=job,
         )
-        if (
-            job is None
-            and reproduction is not None
-            and reproduction.status is ReproStatus.NOT_REPRODUCED
-            and reproduction.all_attempts_passed
-        ):
-            return _refusal(
-                "The failed job could not host the fix, and every fallback reproduction "
-                "probe passed without reproducing the failure. No edit was attempted.",
-                verification="\n".join(_established_checks(context, reproduction)),
-            )
+        if runs_tests:
+            refusal = _reproduction_refusal(context, plan, reproduction)
+            if refusal is not None:
+                return refusal
         return _fix_loop(
             task, repo_dir, original_head, job_log, context, plan, reproduction,
             agent_func=agent_func, review=review_func or review_candidate,
             run_test=run_test if runs_tests else None, deadline=deadline, job=job, tests=tests,
         )
+
+
+def _reproduction_refusal(
+    context: FixContext,
+    plan: ReproPlan | None,
+    reproduction: Reproduction | None,
+) -> FixCandidate | None:
+    """Refuse executable changes unless code reproduced the reported failure."""
+    # Build failures and other checks without a focused reproduction plan still
+    # need diagnosis. Fail closed once code did construct a plan but could not
+    # run it or could not make it fail.
+    if plan is None:
+        return None
+    if reproduction is not None and reproduction.reproduced:
+        return None
+    if reproduction is None:
+        reason = "the planned reproduction command was not run"
+    elif reproduction.status is ReproStatus.UNRUNNABLE:
+        reason = "the reproduction command could not run on this runner"
+    elif reproduction.all_attempts_passed:
+        reason = "every reproduction probe passed without reproducing the failure"
+    else:
+        reason = "the reproduction stopped without reproducing the failure"
+    return _refusal(
+        f"The reported failure was not reproduced by code: {reason}. No edit was attempted.",
+        verification="\n".join(_established_checks(context, reproduction)),
+    )
 
 
 @contextmanager
@@ -937,7 +957,14 @@ def run_test_command(repo_dir: str, command: str, timeout: int = TEST_TIMEOUT_S)
     try:
         if user:
             with handed_to(user, Path(repo_dir)) as home:
-                result = _run_in_own_group(as_user(user, env, argv, home=home), repo_dir, None, timeout, user=user)
+                invocation = as_user(user, env, argv, home=home)
+                result = _run_in_own_group(
+                    list(invocation.argv),
+                    repo_dir,
+                    invocation.env,
+                    timeout,
+                    user=user,
+                )
         else:
             result = _run_in_own_group(argv, repo_dir, env, timeout)
     except subprocess.TimeoutExpired:

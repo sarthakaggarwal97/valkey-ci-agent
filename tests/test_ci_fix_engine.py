@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -816,29 +817,10 @@ def test_a_fix_that_does_not_stop_the_reproduction_goes_back(tmp_path, monkeypat
     assert "the reproduction still fails within 10 loop(s)" in agent.feedback[1]
 
 
-def test_an_exact_job_failure_that_does_not_reproduce_is_reported_as_unproven(tmp_path, monkeypatch):
-    source, head_sha = _source_repo(tmp_path)
-    (source / "value.txt").write_text("right\n", encoding="utf-8")
-    git(source, "commit", "-qam", "already right")
-    head_sha = git(source, "rev-parse", "HEAD")
-    _install_clone(monkeypatch, source)
-    _with_plan(monkeypatch)
-    runs = []
-
-    candidate = engine_mod.prepare_fix(
-        _task(head_sha), _LOG_WITH_FAILURE,
-        agent_func=_value_agent("right\nwith a sturdier wait", command=""),
-        test_func=_runs_value_check(runs),
-        job=JobCommands(build="make", runtest="./runtest"),
-    )
-
-    assert candidate.action is CandidateAction.PATCH
-    assert [loops for _value, loops in runs] == ["1", "20", "20", "40"]
-    assert "Did not reproduce" in candidate.verification
-    assert "does not show the fix works" in candidate.verification
-
-
-def test_a_fallback_that_does_not_reproduce_stops_before_the_agent(tmp_path, monkeypatch):
+@pytest.mark.parametrize("job", [None, JobCommands(build="make", runtest="./runtest")])
+def test_a_planned_failure_that_does_not_reproduce_stops_before_the_agent(
+    tmp_path, monkeypatch, job,
+):
     source, head_sha = _source_repo(tmp_path)
     (source / "value.txt").write_text("right\n", encoding="utf-8")
     git(source, "commit", "-qam", "already right")
@@ -852,19 +834,17 @@ def test_a_fallback_that_does_not_reproduce_stops_before_the_agent(tmp_path, mon
         _task(head_sha), _LOG_WITH_FAILURE,
         agent_func=agent,
         test_func=_runs_value_check(runs),
+        job=job,
     )
 
     assert candidate.action is CandidateAction.REFUSE
-    assert "failed job could not host the fix" in candidate.summary
-    assert "every fallback reproduction probe passed" in candidate.summary
+    assert "every reproduction probe passed" in candidate.summary
     assert [loops for _value, loops in runs] == ["1", "20", "20"]
     assert "Did not reproduce" in candidate.verification
-    assert "passed once; passed 20 loops; passed 20 loops with every core busy" in candidate.verification
-    assert "The failed job could not host the fix" in candidate.verification
     agent.assert_not_called()
 
 
-def test_an_incomplete_fallback_nonreproduction_still_reaches_the_agent(tmp_path, monkeypatch):
+def test_an_incomplete_nonreproduction_stops_before_the_agent(tmp_path, monkeypatch):
     source, head_sha = _source_repo(tmp_path)
     (source / "value.txt").write_text("right\n", encoding="utf-8")
     git(source, "commit", "-qam", "already right")
@@ -876,10 +856,7 @@ def test_an_incomplete_fallback_nonreproduction_still_reaches_the_agent(tmp_path
         TestRun(False, "timed out after 60s", timed_out=True),
         TestRun(True, "", "[ok]: value is right (1 ms)"),
     ])
-    agent = MagicMock(return_value=FixCandidate(
-        action=CandidateAction.REFUSE,
-        summary="The incomplete fallback still needed diagnosis.",
-    ))
+    agent = MagicMock(side_effect=AssertionError("the edit agent must not run"))
 
     candidate = engine_mod.prepare_fix(
         _task(head_sha), _LOG_WITH_FAILURE,
@@ -887,9 +864,10 @@ def test_an_incomplete_fallback_nonreproduction_still_reaches_the_agent(tmp_path
         test_func=lambda *_args: next(runs),
     )
 
-    assert candidate.summary == "The incomplete fallback still needed diagnosis."
-    agent.assert_called_once()
-    assert "20 loops did not finish" in agent.call_args.kwargs["context"].reproduction
+    assert candidate.action is CandidateAction.REFUSE
+    assert "reproduction stopped without reproducing" in candidate.summary
+    assert "20 loops did not finish" in candidate.verification
+    agent.assert_not_called()
 
 
 def test_existing_fixes_and_the_test_guide_reach_the_agent_and_the_report(tmp_path, monkeypatch):
@@ -1020,7 +998,14 @@ def test_a_timed_out_command_run_as_the_account_is_stopped_through_it(tmp_path, 
     killed = []
     monkeypatch.setattr(engine_mod, "isolated_user", lambda: "ci-fix-agent")
     monkeypatch.setattr(engine_mod, "handed_to", handed_to)
-    monkeypatch.setattr(engine_mod, "as_user", lambda user, env, argv, home: ["sh", "-c", "exec sleep 2"])
+    monkeypatch.setattr(
+        engine_mod,
+        "as_user",
+        lambda user, env, argv, home: SimpleNamespace(
+            argv=["sh", "-c", "exec sleep 2"],
+            env={},
+        ),
+    )
     monkeypatch.setattr(engine_mod.os, "killpg", no_signal)
     monkeypatch.setattr(engine_mod, "kill_all", killed.append)
 
@@ -1058,27 +1043,6 @@ def test_a_failure_with_nothing_to_search_for_does_not_claim_a_search(tmp_path, 
 
     assert not contexts[0].prior_fixes_searched
     assert "No merged change" not in candidate.verification
-
-
-def test_when_code_cannot_reproduce_the_agents_own_reproduction_proves_the_fix(tmp_path, monkeypatch):
-    source, head_sha = _source_repo(tmp_path)
-    (source / "value.txt").write_text("right\n", encoding="utf-8")
-    git(source, "commit", "-qam", "plan test passes")
-    head_sha = git(source, "rev-parse", "HEAD")
-    _install_clone(monkeypatch, source)
-    _with_plan(monkeypatch)
-    # The agent's command widens the race: it fails until the second line exists.
-    agent = _value_agent("right\nfixed", command="test \"$(wc -l < value.txt)\" -ge 2")
-
-    candidate = engine_mod.prepare_fix(
-        _task(head_sha), _LOG_WITH_FAILURE, agent_func=agent,
-        test_func=_runs_value_check([]),
-        job=JobCommands(build="make", runtest="./runtest"),
-    )
-
-    assert candidate.action is CandidateAction.PATCH
-    assert "Did not reproduce" in candidate.verification
-    assert "failed without the patch (on run 1)" in candidate.verification
 
 
 def test_a_port_not_merged_on_the_default_branch_goes_back_before_testing(tmp_path, monkeypatch):

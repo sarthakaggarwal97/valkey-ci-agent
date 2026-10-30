@@ -83,11 +83,9 @@ def test_a_leak_check_is_a_job_failure_whatever_its_pid():
     assert issue_renderer.job_fingerprint_for(first) == issue_renderer.job_fingerprint_for(second)
 
 
-@pytest.mark.parametrize("log", [RuntimeError("502 Bad Gateway"), ""])
-def test_a_job_whose_log_cannot_be_read_is_reported_as_unread_not_filed(log):
-    """A download error or an expired log says nothing about how the job failed."""
+def test_a_job_whose_log_download_fails_is_reported_as_unread_not_filed():
     client = MagicMock()
-    client.download_job_log.side_effect = log if isinstance(log, Exception) else (lambda *_a: log)
+    client.download_job_log.side_effect = RuntimeError("502 Bad Gateway")
     unread = []
 
     tests, jobs = find_unrecorded_failures(
@@ -95,6 +93,23 @@ def test_a_job_whose_log_cannot_be_read_is_reported_as_unread_not_filed(log):
     )
 
     assert (tests, jobs, unread) == ([], [], ["test-freebsd"])
+
+
+def test_an_expired_job_log_is_distinguished_from_a_transient_read_failure():
+    client = MagicMock()
+    client.download_job_log.return_value = ""
+    unread, expired = [], []
+
+    tests, jobs = find_unrecorded_failures(
+        client,
+        "valkey-io/valkey",
+        {},
+        jobs=[_job(1, "test-freebsd", step="make")],
+        unread=unread,
+        expired=expired,
+    )
+
+    assert (tests, jobs, unread, expired) == ([], [], [], ["test-freebsd"])
 
 
 def test_a_failure_that_printed_no_cause_is_reported_not_filed():
