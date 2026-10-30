@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -85,6 +86,22 @@ def test_the_command_is_resolved_before_sudo_can_replace_path(monkeypatch):
     invocation = isolation.as_user("v", {}, ["claude", "--print"], home="/h")
 
     assert invocation.argv[-2:] == ("/chosen/claude", "--print")
+
+
+def test_file_cleanup_drops_roots_already_covered_by_an_ancestor(monkeypatch):
+    calls = []
+    monkeypatch.setattr(isolation, "_WRITABLE_ROOTS", ("/tmp", "/var/tmp"))
+    monkeypatch.setattr(
+        isolation.pwd,
+        "getpwnam",
+        lambda _user: SimpleNamespace(pw_dir="/tmp/valkey-ci-fix.123/home"),
+    )
+    monkeypatch.setattr(isolation.Path, "is_dir", lambda _path: True)
+    monkeypatch.setattr(isolation, "_as_root", lambda *argv: calls.append(argv))
+
+    isolation._remove_files_of("agent")
+
+    assert calls == [("find", "/tmp", "/var/tmp", "-xdev", "-mindepth", "1", "-user", "agent", "-delete")]
 
 
 @pytest.fixture

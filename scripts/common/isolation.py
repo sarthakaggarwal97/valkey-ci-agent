@@ -225,8 +225,15 @@ def _program(name: str) -> str:
 
 
 def _remove_files_of(user: str) -> None:
-    roots = [root for root in (*_WRITABLE_ROOTS, pwd.getpwnam(user).pw_dir) if os.path.isdir(root)]
-    _as_root("find", *roots, "-xdev", "-mindepth", "1", "-user", user, "-delete")
+    roots: list[Path] = []
+    for raw in (*_WRITABLE_ROOTS, pwd.getpwnam(user).pw_dir):
+        root = Path(raw).absolute()
+        if not root.is_dir() or any(root == kept or root.is_relative_to(kept) for kept in roots):
+            continue
+        roots = [kept for kept in roots if not kept.is_relative_to(root)]
+        roots.append(root)
+    if roots:
+        _as_root("find", *(str(root) for root in roots), "-xdev", "-mindepth", "1", "-user", user, "-delete")
 
 
 def kill_all(user: str) -> None:
