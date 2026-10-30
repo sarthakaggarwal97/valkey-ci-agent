@@ -339,6 +339,34 @@ def test_parse_answer_reads_the_blocks_from_stream_json():
     assert answer.no_change is None
 
 
+def _stream(*events: dict) -> str:
+    return "\n".join(json.dumps(event) for event in events)
+
+
+def _assistant(*blocks: dict) -> dict:
+    return {"type": "assistant", "message": {"content": list(blocks)}}
+
+
+def test_parse_answer_reads_a_bundle_that_went_on_in_a_second_message():
+    # The first message is cut off inside mapping.yaml; Claude Code has the
+    # model go on, and the next message writes mapping.yaml again. The result
+    # event holds only that last message.
+    files = list(REGISTER.items())
+    first = "".join(f"<<<FILE {name}>>>\n{text}<<<END>>>\n" for name, text in files if name != "mapping.yaml")
+    first += "<<<FILE mapping.yaml>>>\n" + REGISTER["mapping.yaml"][:40]
+    second = f"Continuing.\n<<<FILE mapping.yaml>>>\n{REGISTER['mapping.yaml']}<<<END>>>\n"
+    stdout = _stream(
+        _assistant({"type": "text", "text": "<<<FILE model.tla>>>\nnot the answer\n<<<END>>>\n"},
+                   {"type": "tool_use", "name": "Read", "input": {}}),
+        {"type": "user", "message": {"content": [{"type": "tool_result", "content": "..."}]}},
+        _assistant({"type": "text", "text": first}),
+        {"type": "user", "message": {"content": [{"type": "text", "text": "Output token limit hit. Resume."}]}},
+        _assistant({"type": "text", "text": second}),
+        {"type": "result", "result": second},
+    )
+    assert parse_answer(stdout).files == REGISTER
+
+
 def test_parse_answer_keeps_tla_backslashes_verbatim():
     answer = parse_answer(_bundle_text(REGISTER))
     assert "Init == mem = 0 /\\ disk = 0" in answer.files["model.tla"]

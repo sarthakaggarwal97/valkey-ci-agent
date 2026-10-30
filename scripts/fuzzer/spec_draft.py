@@ -165,19 +165,50 @@ def _parse_notes(text: str) -> dict[str, Any]:
     return notes
 
 
+def _answer_text(stdout: str) -> str:
+    """The reply: the text of every assistant message after Claude's last tool call.
+
+    A bundle can be longer than one message may be. Claude Code then has the
+    model go on in the next message, and its result event holds only that
+    last one. Without assistant events, the result event's text, else the
+    raw output.
+    """
+    parts: list[str] = []
+    for line in stdout.strip().splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        message = event.get("message") if isinstance(event, dict) and event.get("type") == "assistant" else None
+        content = message.get("content") if isinstance(message, dict) else None
+        for block in content if isinstance(content, list) else []:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_use":
+                parts = []
+            elif block.get("type") == "text" and isinstance(block.get("text"), str):
+                parts.append(block["text"])
+    return "\n".join(parts) if parts else result_text(stdout)
+
+
 def parse_answer(stdout: str) -> Answer:
-    """Split Claude's reply into its blocks; raise :class:`AnswerError` if it holds no bundle."""
-    text = result_text(stdout)
+    """Split Claude's reply into its blocks; raise :class:`AnswerError` if it holds no bundle.
+
+    A header inside a block that never ended starts over: a message cut off
+    mid-file is followed by one that writes the file again.
+    """
+    text = _answer_text(stdout)
     if len(text) > _MAX_ANSWER_CHARS:
         raise AnswerError(f"the reply is longer than {_MAX_ANSWER_CHARS} characters")
     answer = Answer()
     current: tuple[str, str | None, list[str]] | None = None
     for line in text.splitlines(keepends=True):
         bare = line.rstrip("\r\n")
+        match = _HEADER_RE.match(bare)
+        if match:
+            current = (match.group(1).split(" ")[0], match.group(2), [])
+            continue
         if current is None:
-            match = _HEADER_RE.match(bare)
-            if match:
-                current = (match.group(1).split(" ")[0], match.group(2), [])
             continue
         if bare.strip() == _END_LINE:
             kind, path, body = current
