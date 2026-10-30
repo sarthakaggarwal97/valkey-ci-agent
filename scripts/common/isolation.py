@@ -191,7 +191,10 @@ def as_user(user: str, env: dict[str, str], argv: list[str], *, home: str) -> Is
         # The worktree is the account's but .git is not; let git read it.
         "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "safe.directory", "GIT_CONFIG_VALUE_0": "*",
     }
-    command = [_program("env"), *argv]
+    # sudo may replace PATH with secure_path even with -E. Resolve the
+    # executable before switching accounts so it cannot select another copy.
+    executable = _program(argv[0]) if "/" not in argv[0] else argv[0]
+    command = [_program("env"), executable, *argv[1:]]
     if sys.platform == "darwin":
         return IsolatedInvocation(
             (_program("sudo"), "-n", "-E", "-u", user, "--", *command),

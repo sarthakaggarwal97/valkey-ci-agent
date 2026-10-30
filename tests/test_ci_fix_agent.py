@@ -58,8 +58,9 @@ def test_ci_fix_profiles_match_the_publication_boundary() -> None:
     edit = AGENT_PROFILES["ci_fix_edit"]
     suggest = AGENT_PROFILES["ci_fix_suggest"]
 
-    assert edit.allowed_tools == "Read,Edit,MultiEdit,Write,Grep,Glob,Bash"
-    assert edit.confined is False
+    assert edit.allowed_tools == "Read,Edit,MultiEdit,Write,Grep"
+    assert edit.disallowed_tools == "Bash,Glob"
+    assert edit.confined is True
     assert edit.timeout <= 45 * 60
     assert edit.max_turns == 160
 
@@ -233,22 +234,22 @@ def test_the_agent_is_told_what_code_established_and_shown_ports_first(tmp_path,
     assert "choose `port` with its full SHA rather than writing a new fix" in prompt
     assert "Reproduced intermittently" in prompt
     assert "`tests/README.md`" in prompt
-    # Code verifies with its own reproduction, so no test command is demanded.
-    assert "Otherwise leave it empty." in prompt
+    # Code verifies with its own reproduction, so no model command is accepted.
+    assert "only code-owned checks are accepted as verification" in prompt
     assert prompt.index("- `port`:") < prompt.index("- `patch`:")
     assert seen["files"]["prior-fixes.md"] == "# detail with the diff"
     assert seen["files"]["reproduction.log"] == "[err]: the test in tests/unit/a.tcl"
     assert seen["files"]["test-guide.md"] == "# Fixing a failing Valkey test"
 
 
-def test_without_a_reproduction_the_agent_must_give_a_test_command(tmp_path, monkeypatch) -> None:
+def test_without_a_reproduction_the_agent_must_not_invent_a_test_command(tmp_path, monkeypatch) -> None:
     seen = {}
     monkeypatch.setattr(agent_mod, "run_agent", lambda profile, prompt, **kw: seen.update(prompt=prompt) or _result(
         {"action": "refuse", "summary": "no"}))
 
     agent_mod.run_fix_agent(_task(), str(tmp_path), "log")
 
-    assert "where it must fail, and with it, where it\nmust pass" in seen["prompt"]
+    assert "Leave\n`test_command` empty" in seen["prompt"]
     assert "What code established" not in seen["prompt"]
 
 
