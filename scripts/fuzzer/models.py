@@ -94,8 +94,8 @@ class FuzzerFinding:
     batch_runs: list[str] = field(default_factory=list)
     signature_key: str | None = None
     signature_label: str | None = None
-    # The serial re-runs' verdict ("reproduced", "intermittent",
-    # "not reproduced") and how many reproduced, e.g. "2/3".
+    # The serial re-runs' verdict ("reproduced", "intermittent", "failed
+    # differently", "not reproduced") and how many reproduced, e.g. "2/3".
     rerun_verdict: str | None = None
     rerun_detail: str | None = None
 

@@ -24,7 +24,7 @@ from typing import Any
 
 # Outcomes a run report, a run or a batch can carry.
 RUN_STATUSES = frozenset({"PASS", "FAIL", "ERROR", "SKIP_UNSUPPORTED"})
-RERUN_VERDICTS = frozenset({"reproduced", "intermittent", "not reproduced"})
+RERUN_VERDICTS = frozenset({"reproduced", "intermittent", "failed differently", "not reproduced"})
 
 # Every key a run report always carries.
 REPORT_KEYS = (
@@ -114,10 +114,13 @@ class SignatureGroup:
     status: str
     experiment: str | None
     runs: list[str]
-    # reproduced, intermittent or not reproduced; None without serial re-runs.
+    # reproduced, intermittent, failed differently or not reproduced; None
+    # without serial re-runs.
     rerun_verdict: str | None = None
     reruns_ran: int = 0
     reruns_reproduced: int = 0
+    # The signatures of the re-runs that failed another way.
+    rerun_other_labels: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -254,6 +257,11 @@ def _groups(data: dict[str, Any], batch: BatchFolder) -> list[SignatureGroup]:
         verdict = reruns.get("verdict")
         ran = reruns.get("runs")
         reproduced = reruns.get("reproduced")
+        others = [
+            str(r.get("signature_label") or r.get("signature_key") or r.get("status"))
+            for r in (ran if isinstance(ran, list) else [])
+            if isinstance(r, dict) and r.get("same_signature") is False and r.get("status") != "PASS"
+        ]
         groups.append(SignatureGroup(
             key=raw["key"], label=str(raw.get("label") or raw["key"]),
             status=str(raw.get("status") or ""), experiment=_optional_str(raw.get("experiment")),
@@ -261,6 +269,7 @@ def _groups(data: dict[str, Any], batch: BatchFolder) -> list[SignatureGroup]:
             rerun_verdict=verdict if verdict in RERUN_VERDICTS else None,
             reruns_ran=len(ran) if isinstance(ran, list) else 0,
             reruns_reproduced=reproduced if isinstance(reproduced, int) else 0,
+            rerun_other_labels=list(dict.fromkeys(others)),
         ))
     for run in batch.main_runs:
         if run.status != "PASS" and run.id not in grouped:

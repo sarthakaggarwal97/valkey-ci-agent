@@ -163,6 +163,19 @@ def test_a_run_made_an_error_by_its_leaks_keeps_its_passing_report():
     assert run.leak_only
 
 
+def test_a_group_whose_reruns_failed_differently_names_their_signatures():
+    summary = batch_summary()
+    group = next(g for g in summary["signatures"] if g.get("serial_reruns"))
+    group["serial_reruns"] = {"reproduced": 0, "verdict": "failed differently", "runs": [
+        {"id": "serial-a", "status": "ERROR", "same_signature": False, "signature_key": "k1",
+         "signature_label": "ERROR | x | Deadline during batch"},
+        {"id": "serial-b", "status": "PASS", "same_signature": False, "signature_key": None, "signature_label": None},
+    ]}
+    read = next(g for g in read_batch(with_summary(batch_files(), summary), "batch/").groups if g.key == group["key"])
+    assert (read.rerun_verdict, read.reruns_reproduced, read.reruns_ran) == ("failed differently", 0, 2)
+    assert read.rerun_other_labels == ["ERROR | x | Deadline during batch"]
+
+
 def test_a_non_pass_run_no_signature_holds_gets_a_group_of_its_own():
     summary = batch_summary()
     summary["signatures"] = [g for g in summary["signatures"] if g["key"] != "846478c93288"]

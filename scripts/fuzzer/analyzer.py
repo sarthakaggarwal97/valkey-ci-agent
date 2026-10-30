@@ -254,6 +254,10 @@ def _rerun_signal(group: SignatureGroup) -> FuzzerSignal | None:
     if group.rerun_verdict == "intermittent":
         return FuzzerSignal("Intermittent in serial re-runs", "warning",
                             f"{counted} serial re-runs failed with the same signature")
+    if group.rerun_verdict == "failed differently":
+        return FuzzerSignal("Failed differently in serial re-runs", "warning",
+                            f"{counted} serial re-runs failed with the same signature, but some failed "
+                            f"another way: {'; '.join(group.rerun_other_labels)[:300] or 'see summary.json'}")
     if group.rerun_verdict == "not reproduced":
         return FuzzerSignal("Not reproduced in serial re-runs", "warning",
                             f"{counted} serial re-runs failed with the same signature; "
@@ -299,9 +303,11 @@ finding:
   by failure signature (the same outcome, failing components and verdicts,
   missing events and evidence); its `serial_reruns` ran some of them again
   one at a time, with no other run competing for the host: `reproduced`
-  means the failure is deterministic, `not reproduced` points at flakiness or
-  load, `intermittent` is in between. `zoo` and `leaks` concern the fuzzer
-  itself.
+  means the failure is deterministic, `not reproduced` (every re-run passed)
+  points at flakiness or load, `intermittent` is in between, and `failed
+  differently` means no re-run failed the same way but some failed another
+  way (each re-run's `signature_label` says how). `zoo` and `leaks` concern
+  the fuzzer itself.
 - runs/<id>/report.json: that run's run report:
   - `status` and `summary`: the outcome. PASS; FAIL (a required oracle or
     action judged the system under test and found a problem, or required

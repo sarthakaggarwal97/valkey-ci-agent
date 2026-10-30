@@ -391,11 +391,17 @@ def test_claude_gets_the_signature_runs_and_the_batch_summary(monkeypatch, tmp_p
     assert _signature(analysis, "9ab128c1af68").triage_verdict == "needs-human-triage"
 
 
-def _with_reruns(verdict: str, reproduced: int, ran: int = 2) -> dict[str, bytes]:
+def _with_reruns(verdict: str, reproduced: int, ran: int = 2, other: str = "PASS") -> dict[str, bytes]:
+    """The crash signature's serial re-runs: ``reproduced`` of ``ran`` the same, the rest ``other``."""
     summary = batch_summary()
     group = next(g for g in summary["signatures"] if g["key"] == CRASH_KEY)
     group["serial_reruns"] = {
-        "runs": [{"id": f"serial-{i}", "status": "FAIL", "same_signature": i < reproduced} for i in range(ran)],
+        "runs": [
+            {"id": f"serial-{i}", "status": "FAIL" if i < reproduced else other, "same_signature": i < reproduced,
+             "signature_key": None if i < reproduced or other == "PASS" else "0123abcd",
+             "signature_label": None if i < reproduced or other == "PASS" else f"{other} | timeout during run"}
+            for i in range(ran)
+        ],
         "reproduced": reproduced, "verdict": verdict,
     }
     return with_summary(batch_files(), summary)
@@ -417,6 +423,16 @@ def test_a_failure_not_reproduced_serially_points_at_flakiness(monkeypatch):
 def test_a_failure_reproduced_serially_raises_confidence(monkeypatch):
     crash = _signature(_analyze(batch_files(), monkeypatch, claude=_claude_says("possible-core-valkey-bug")))
     assert crash.triage_verdict == "likely-core-valkey-bug"
+
+
+def test_a_failure_that_failed_differently_serially_keeps_its_verdict(monkeypatch):
+    # No re-run failed the same way, but they did not pass either: not a sign of load.
+    crash = _signature(_analyze(_with_reruns("failed differently", 0, other="ERROR"), monkeypatch,
+                                claude=_claude_says("likely-core-valkey-bug")))
+    assert crash.triage_verdict == "likely-core-valkey-bug"
+    assert (crash.rerun_verdict, crash.rerun_detail) == ("failed differently", "0/2")
+    signal = next(s for s in crash.anomalies if s.title == "Failed differently in serial re-runs")
+    assert "ERROR | timeout during run" in signal.evidence
 
 
 def test_an_intermittent_failure_keeps_its_verdict(monkeypatch):

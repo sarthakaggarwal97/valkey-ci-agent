@@ -53,9 +53,10 @@ Then it turns the batch into findings, and each finding is one issue:
   the three runs. The batch re-runs some runs of each signature one at a
   time, with nothing else on the host. When the re-runs reproduce the
   signature, a `FAIL` the scan rated a possible Valkey bug becomes a likely
-  one; when they don't, the failure points to flakiness or load, and a
-  likely Valkey bug becomes a possible one. Either way the issue says what
-  the re-runs showed.
+  one; when they all pass, the failure points to flakiness or load, and a
+  likely Valkey bug becomes a possible one. When none fails the same way but
+  some fail another way, the verdict stands and the issue names the other
+  signatures. Either way the issue says what the re-runs showed.
 - **A run that passed but shows something.** A passing run is quiet unless
   its scan finds something, such as a crash in a node log or a failed
   optional component; then it is a finding of its own.
