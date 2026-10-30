@@ -11,8 +11,12 @@ way the real fuzzer does, in the same report shapes, without Java or TLC:
   ``nofault`` is ``no-fault``, and ``spec translate`` exits 1 on it;
 - a model containing ``HARNESS-BROKEN`` makes it exit 2, like a missing jar;
 - a model containing ``SLOW`` is reported as cut short by ``--timeout``;
+- a bundle is a directory when the argument holds a ``/`` (``./register``),
+  and otherwise a name looked up only on VALKEY_FUZZER_SPEC_PATH, as the
+  real fuzzer does: never in the working directory;
 - ``validate`` knows toy.register plus the experiments in its
-  ``--experiment-dir`` directories.
+  ``--experiment-dir`` directories, and refuses one whose ``spec: <name>``
+  VALKEY_FUZZER_SPEC_PATH does not find.
 
 Every call, with its VALKEY_FUZZER_SPEC_PATH, is appended to ``calls.log``
 next to this file's copy.
@@ -40,9 +44,25 @@ def _claims(bundle):
     return yaml.safe_load((bundle / "claims.yaml").read_text())
 
 
+def _find(reference):
+    """The bundle directory a spec command's argument names, or None."""
+    if "/" in reference:
+        return Path(reference) if Path(reference).is_dir() else None
+    for directory in filter(None, os.environ.get("VALKEY_FUZZER_SPEC_PATH", "").split(os.pathsep)):
+        if (Path(directory) / reference).is_dir():
+            return Path(directory) / reference
+    return None
+
+
 def _check(args):
-    bundle = Path(args[0])
+    bundle = _find(args[0])
     output = Path(_arg(args, "--output"))
+    if bundle is None:
+        error = f"no spec bundle named {args[0]!r} (write ./{args[0]} for a directory here)"
+        output.write_text(json.dumps({"kind": "spec-assurance", "bundle": args[0], "status": "error",
+                                      "gates": {"bundle": {"status": "error", "error": error}}}))
+        print(f"[ERROR] bundle: {error}")
+        return 2
     model = (bundle / "model.tla").read_text()
     if "HARNESS-BROKEN" in model:
         print("Error: java not found on PATH", file=sys.stderr)
@@ -115,7 +135,10 @@ def _check(args):
 
 
 def _translate(args):
-    bundle = Path(args[0])
+    bundle = _find(args[0])
+    if bundle is None:
+        print(f"Error: no spec bundle named {args[0]!r}", file=sys.stderr)
+        return 2
     control = _arg(args, "--control")
     if control.startswith("nofault"):
         print(f"Error: the {control} counterexample has no mapped fault action", file=sys.stderr)
@@ -145,15 +168,25 @@ def _translate(args):
 
 def _validate(args):
     known = {"toy.register"}
+    unfound = {}
     for index, arg in enumerate(args):
         if arg == "--experiment-dir":
-            known |= {p.stem for p in Path(args[index + 1]).glob("*.yaml")}
+            for path in Path(args[index + 1]).glob("*.yaml"):
+                known.add(path.stem)
+                for name in re.findall(r"spec: ([a-z0-9-]+)", path.read_text()):
+                    if _find(name) is None:
+                        unfound[path.stem] = name
     files = [a for i, a in enumerate(args) if a.endswith(".yaml") and (i == 0 or args[i - 1] != "--experiment-dir")]
     results = []
     for name in files:
         doc = yaml.safe_load(Path(name).read_text())
         experiment = doc["experiment"]["id"]
-        if experiment in known:
+        if experiment in unfound:
+            results.append({"file": name, "ok": False, "errors": [
+                {"path": "components.reload-log.config", "message": (
+                    f"component 'valkey.observer.log-trigger' rejected 'reload-log': spec "
+                    f"'{unfound[experiment]}': no spec bundle named '{unfound[experiment]}'")}]})
+        elif experiment in known:
             results.append({"file": name, "ok": True, "errors": [], "experiment": experiment,
                             "scenario_id": doc["scenario_id"], "converted": False})
         else:

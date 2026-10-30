@@ -76,9 +76,11 @@ stops the attempt.
 
 The agent checks only what the fuzzer can't know, that the claims are a
 draft; everything else is the fuzzer's own gates. Each draft is written to
-`<attempt>/<protocol>/`. When it has `experiments/`, the attempt directory
-goes on `VALKEY_FUZZER_SPEC_PATH`, so the experiment's components find the
-bundle by its protocol name.
+`<attempt>/<protocol>/`, and the spec tools get it as `./<protocol>`: the
+fuzzer looks a bare name up only on `VALKEY_FUZZER_SPEC_PATH` and in its own
+`formal/`. When it has `experiments/`, the attempt directory goes on
+`VALKEY_FUZZER_SPEC_PATH` for every gate, `validate` too, so the
+experiment's components find the bundle by its protocol name.
 
 The negative-control gate is what keeps a claim honest. A property that cannot
 fail, such as `Inv == TRUE`, passes every safe config; its negative control

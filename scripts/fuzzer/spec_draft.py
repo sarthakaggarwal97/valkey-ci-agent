@@ -376,8 +376,11 @@ class SpecTools:
     """``valkey-fuzzer spec check``, ``spec translate`` and ``validate``, as gates.
 
     Each runs in an attempt directory that holds the draft as
-    ``<protocol>/``. When the draft brings its own ``experiments/``, the
-    attempt directory goes on ``VALKEY_FUZZER_SPEC_PATH``, so the
+    ``<protocol>/``, and the spec tools get it as ``./<protocol>``: the
+    fuzzer looks a bare name up only on ``VALKEY_FUZZER_SPEC_PATH`` and in
+    its own ``formal/``, never in the working directory. When the draft
+    brings its own ``experiments/``, the attempt directory goes on
+    ``VALKEY_FUZZER_SPEC_PATH`` for every gate, ``validate`` too, so the
     experiments' components find the bundle by its protocol name. The fuzzer's
     ``--timeout`` bounds SANY and TLC. The fuzzer gets only the process basics
     and JAVA_HOME of the environment: never a token or cloud credential.
@@ -415,7 +418,7 @@ class SpecTools:
     def check(self, attempt: Path, bundle: str) -> tuple[GateResult, dict[str, Any] | None]:
         report_path = attempt / "assurance.json"
         run = self._run(
-            ["spec", "check", bundle, "--tla2tools", self.tla2tools, "--timeout", str(self.check_timeout_s),
+            ["spec", "check", f"./{bundle}", "--tla2tools", self.tla2tools, "--timeout", str(self.check_timeout_s),
              "--output", report_path.name, *self._experiment_args()],
             cwd=attempt, timeout_s=self.check_timeout_s, bundle=bundle,
         )
@@ -435,7 +438,7 @@ class SpecTools:
     def translate(self, attempt: Path, bundle: str, control: str) -> GateResult:
         out = Path("scenarios") / control
         run = self._run(
-            ["spec", "translate", bundle, "--control", control, "--out", str(out),
+            ["spec", "translate", f"./{bundle}", "--control", control, "--out", str(out),
              "--tla2tools", self.tla2tools, "--timeout", str(self.translate_timeout_s), *self._experiment_args()],
             cwd=attempt, timeout_s=self.translate_timeout_s, bundle=bundle,
         )
@@ -464,7 +467,7 @@ class SpecTools:
         try:
             run = self._run(
                 ["validate", *files, "--format", "json", *self._experiment_args(*([own] if own.is_dir() else []))],
-                cwd=attempt, timeout_s=self.validate_timeout_s,
+                cwd=attempt, timeout_s=self.validate_timeout_s, bundle=bundle,
             )
         except HarnessError:
             return GateResult("validate", False, f"validate did not finish within {self.validate_timeout_s}s")

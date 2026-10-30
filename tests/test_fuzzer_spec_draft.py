@@ -187,6 +187,7 @@ OWN_EXPERIMENT = textwrap.dedent("""\
         appendonly: {type: string, enum: ["yes", "no"], default: "yes"}
     components:
       - {use: valkey.fault.process-signal, id: crash, config: {when_event: writes.seeded, signal: SIGKILL}}
+      - {use: valkey.observer.log-trigger, id: reload-log, config: {spec: register}}
 """)
 ONBOARDED = {
     **REGISTER,
@@ -452,7 +453,7 @@ def test_a_good_draft_passes_every_gate(tmp_path, fuzzer_dir, fake_fuzzer, jar):
     # The gates ran in the attempt directory with relative paths and in order.
     calls = _log(fake_fuzzer)
     assert [c["argv"][:3] for c in calls] == [
-        ["spec", "check", "register"], ["spec", "translate", "register"],
+        ["spec", "check", "./register"], ["spec", "translate", "./register"],
         ["validate", "scenarios/ack-before-save/spec-register-ack-before-save.yaml", "--format"]]
     # The fuzzer's own --timeout bounds TLC; no bundle experiments, so no spec path.
     assert calls[0]["argv"][calls[0]["argv"].index("--timeout") + 1] == "1800"
@@ -579,7 +580,8 @@ def test_a_bundles_own_experiment_is_found_by_protocol_and_validated(tmp_path, f
     assert result["verdict"] == "passed", result["rounds"]
     attempt = tmp_path / "work" / "attempts" / "round-0"
     check, translate, validate = _log(fake_fuzzer)
-    assert check["spec_path"] == translate["spec_path"] == str(attempt.resolve())
+    # Its components name the bundle by protocol, in validate as in the spec tools.
+    assert check["spec_path"] == translate["spec_path"] == validate["spec_path"] == str(attempt.resolve())
     argv = validate["argv"]
     assert argv[argv.index("--experiment-dir") + 1] == str((attempt / "register" / "experiments").resolve())
     assert (out / "bundle" / "register" / "experiments" / "toy.own.yaml").read_text() == OWN_EXPERIMENT
@@ -791,7 +793,7 @@ def test_draft_dry_run_makes_no_remote_calls(monkeypatch, fake_fuzzer, fuzzer_di
     # The dry run still checked the tools locally, on the fuzzer's own register bundle.
     calls = _log(fake_fuzzer)
     assert [c["argv"][:3] for c in calls] == [["list", "experiments", "--format"], ["list", "components", "--format"],
-                                             ["spec", "check", "register"]]
+                                             ["spec", "check", "./register"]]
     # Copied under its protocol name with the spec path set, so its experiment gate passes.
     assert calls[2]["spec_path"] is not None
 
