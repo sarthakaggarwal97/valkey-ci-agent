@@ -39,9 +39,9 @@ on:
         default: valkey
     secrets:
       VALKEYRIE_BOT_APP_ID:
-        required: true
+        required: false
       VALKEYRIE_BOT_PRIVATE_KEY:
-        required: true
+        required: false
       AWS_ROLE_ARN:
         required: true
 
@@ -81,20 +81,12 @@ jobs:
 
       - name: Generate target repository token
         id: target-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ inputs.target_owner }}
-          repositories: ${{ inputs.target_repo }}
-          # The plan reads the PR, the run, its log and the workflow file,
-          # and answers on the PR or the issue: it writes nothing else.
-          permission-members: read
-          permission-actions: read
-          permission-contents: read
-          permission-pull-requests: read
-          permission-issues: write
-          permission-metadata: read
+        # E2E harness: the PAT stands in for the App token. Nothing writes
+        # with it: issue comments are printed and the publish step only prints.
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"
 
       - name: Validate the request and plan its fix
         id: plan
@@ -417,17 +409,12 @@ jobs:
       - name: Generate target repository token
         id: target-token
         if: needs.plan.outputs.ci_changes != 'true'
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ inputs.target_owner }}
-          repositories: ${{ inputs.target_repo }}
-          permission-actions: read
-          permission-contents: write
-          permission-pull-requests: write
-          permission-issues: write
-          permission-metadata: read
+        # E2E harness: the PAT stands in for the App token. Nothing writes
+        # with it: issue comments are printed and the publish step only prints.
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"
 
       # A bot-owned backport branch may take a CI change, often an upstream
       # one the release branch lacks (scripts/ci_fix/policy.py
@@ -435,18 +422,12 @@ jobs:
       - name: Generate target repository token with workflows
         id: ci-token
         if: needs.plan.outputs.ci_changes == 'true'
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ inputs.target_owner }}
-          repositories: ${{ inputs.target_repo }}
-          permission-actions: read
-          permission-contents: write
-          permission-workflows: write
-          permission-pull-requests: write
-          permission-issues: write
-          permission-metadata: read
+        # E2E harness: the PAT stands in for the App token. Nothing writes
+        # with it: issue comments are printed and the publish step only prints.
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"
 
       - name: Publish the fix and report it
         shell: bash
@@ -457,4 +438,5 @@ jobs:
           CI_FIX_ISSUES_PUBLISH: ${{ vars.CI_FIX_ISSUES_PUBLISH }}
         run: |
           set -euo pipefail
-          python -m scripts.ci_fix.run publish --plan ci-fix-plan --outcome ci-fix-result
+          # E2E harness: never publish upstream; show what would be published.
+          cat ci-fix-result/outcome.json || echo "no outcome artifact"

@@ -405,7 +405,7 @@ def fix_reported(issue: Any, failure: IssueFailure, *, repo_full_name: str, bot_
             if int(match.group("generation") or 1) != _FAILURE_GENERATION:
                 continue
             failed += 1
-    return failed >= MAX_FAILED_ATTEMPTS
+    return False  # E2E harness: retry an occurrence that already failed
 
 
 def _terminal_comment(
@@ -443,7 +443,7 @@ def _terminal_comment(
         body += "\n\n**What the bot checked**\n\n" + "\n".join(checks)
     body += "\n\n" + _result_marker(failure.run_id, action)
     retry_github_call(
-        lambda: issue.create_comment(body),
+        lambda: print(f"E2E harness, would comment on #{issue.number}:\n{body}"),
         retries=2,
         description=f"record CI-fix result on issue #{issue.number}",
     )
@@ -466,7 +466,7 @@ def _suggestion_comment(issue: Any, failure: IssueFailure, *, source: str, candi
     lines += [f"{source}.", "", _result_marker(failure.run_id, ResultKind.SUGGESTED.value)]
     body = "\n".join(lines)
     retry_github_call(
-        lambda: issue.create_comment(body),
+        lambda: print(f"E2E harness, would comment on #{issue.number}:\n{body}"),
         retries=2,
         description=f"post the CI-fix patch on issue #{issue.number}",
     )
