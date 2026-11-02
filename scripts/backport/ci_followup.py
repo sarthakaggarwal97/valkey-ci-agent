@@ -10,7 +10,8 @@ remains the final verifier, matching the existing backport workflow model. A
 result comment carries a hidden marker with its outcome, so the same logical
 job is not retried on the same head once it has a result. A failed attempt (an
 agent crash, the time running out) is retried, up to ``MAX_FAILED_ATTEMPTS``
-in all.
+in one failure generation. Bumping that generation after repairing the
+follow-up infrastructure gives stranded PRs a fresh bounded retry budget.
 """
 
 from __future__ import annotations
@@ -55,9 +56,15 @@ _MARKER_RE = re.compile(
     r"<!-- valkey-ci-agent:auto-ci-followup "
     r"head=(?P<head>[0-9a-f]{40}) run=(?P<run>\d+)"
     r"(?: attempt=(?P<attempt>\d+))? job=(?P<job>\d+)"
-    r"(?: key=(?P<key>[0-9a-f]{64}))?(?: outcome=(?P<outcome>[a-z]+))? -->"
+    r"(?: key=(?P<key>[0-9a-f]{64}))?"
+    r"(?: generation=(?P<generation>\d+))?"
+    r"(?: outcome=(?P<outcome>[a-z]+))? -->"
 )
 _MAX_ATTEMPTS_PER_HEAD = 3
+# Bump this only when a follow-up infrastructure repair should give failed
+# current-head jobs a fresh bounded retry budget. Markers written before this
+# field existed are generation 1.
+_FAILURE_GENERATION = 2
 
 
 @dataclass(frozen=True)
@@ -358,11 +365,13 @@ def _handled_failures(
             )
             if match.group("head") == head_sha
         )
-        if any(match.group("outcome") != ResultKind.REFUSED.value for match in matches):
+        if any(_counts_as_attempt(match) for match in matches):
             attempt_count += 1
         for match in matches:
             job, key = int(match.group("job")), match.group("key")
             if match.group("outcome") == ResultKind.FAILED.value:
+                if _failure_generation(match) != _FAILURE_GENERATION:
+                    continue
                 failed_ids[job] += 1
                 if key:
                     failed_keys[key] += 1
@@ -377,6 +386,19 @@ def _handled_failures(
         job_keys=frozenset(job_keys),
         attempt_count=attempt_count,
     )
+
+
+def _failure_generation(match: re.Match[str]) -> int:
+    """The bounded-retry generation recorded by one failed marker."""
+    return int(match.group("generation") or 1)
+
+
+def _counts_as_attempt(match: re.Match[str]) -> bool:
+    """Whether one terminal marker spends the current head's attempt budget."""
+    outcome = match.group("outcome")
+    if outcome == ResultKind.REFUSED.value:
+        return False
+    return outcome != ResultKind.FAILED.value or _failure_generation(match) == _FAILURE_GENERATION
 
 
 def _job_key(run: Any, job_name: str) -> str:
@@ -396,6 +418,6 @@ def _markers(
     return [
         f"<!-- valkey-ci-agent:auto-ci-followup head={failure.head_sha} "
         f"run={failure.run_id} attempt={failure.run_attempt} job={job.id} "
-        f"key={_job_key(run, job.name)} -->"
+        f"key={_job_key(run, job.name)} generation={_FAILURE_GENERATION} -->"
         for job in jobs
     ]
