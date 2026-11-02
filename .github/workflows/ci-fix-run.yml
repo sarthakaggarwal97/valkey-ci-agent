@@ -167,7 +167,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: ci-fix-${{ github.run_id }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-duration-seconds: 4500
+          role-duration-seconds: 3000  # E2E harness: the fork role allows less
       - name: 'CI fix: prepare the fix in this job'
         shell: bash
         env:
@@ -263,7 +263,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: ci-fix-${{ github.run_id }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-duration-seconds: 4500
+          role-duration-seconds: 3000  # E2E harness: the fork role allows less
       - name: 'CI fix: prepare the fix in this job'
         shell: bash
         env:
@@ -340,7 +340,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: ci-fix-${{ github.run_id }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-duration-seconds: 4500
+          role-duration-seconds: 3000  # E2E harness: the fork role allows less
       - name: 'CI fix: prepare the fix in this job'
         shell: bash
         env:
