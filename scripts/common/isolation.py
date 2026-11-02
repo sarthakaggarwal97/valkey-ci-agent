@@ -214,14 +214,18 @@ def as_user(
             *command,
         ]
     command = [_program("env"), *command]
+    # Ubuntu 26's sudo-rs ignores ``-E`` because preserving the entire
+    # environment is unsupported. Preserve only the already-scrubbed names:
+    # values stay in the child's environment rather than its command line.
+    preserve = f"--preserve-env={','.join(sorted(scrubbed))}"
     if sys.platform == "darwin":
         return IsolatedInvocation(
-            (_program("sudo"), "-n", "-E", "-u", user, "--", *command),
+            (_program("sudo"), "-n", preserve, "-u", user, "--", *command),
             scrubbed,
         )
     # runuser, not ``sudo -u``: it needs only root, which a runner's sudo
     # grants. setpriv prevents a setuid helper from restoring privileges.
-    root = () if os.geteuid() == 0 else (_program("sudo"), "-n", "-E")
+    root = () if os.geteuid() == 0 else (_program("sudo"), "-n", preserve)
     return IsolatedInvocation(
         (
             *root,

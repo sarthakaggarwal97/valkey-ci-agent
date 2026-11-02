@@ -77,3 +77,31 @@ jobs:
 
       - name: Run the isolation tests
         run: pytest -v tests/test_isolation.py
+
+  isolation-with-sudo-rs:
+    # Ubuntu 26 uses sudo-rs, which does not implement sudo -E. CI-fix jobs
+    # inherit the runner selected by the failed job, so exercise that handoff.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          python-version: "3.11"
+          install-mode: dev
+
+      - name: Create an account for the environment handoff test
+        run: |
+          sudo useradd --create-home --shell /bin/bash ci-fix-agent
+          echo "CI_FIX_TEST_AGENT_USER=ci-fix-agent" >> "${GITHUB_ENV}"
+
+      - name: Verify the scrubbed environment handoff
+        run: |
+          pytest -v tests/test_isolation.py \
+            -k test_the_scrubbed_environment_reaches_the_isolated_account

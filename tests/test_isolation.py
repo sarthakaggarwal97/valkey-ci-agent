@@ -50,7 +50,18 @@ def test_the_command_runs_with_its_own_home_and_git_allowed(monkeypatch):
         home="/w/ci-fix-home-1",
     )
     assert invocation.argv[:9] == (
-        "sudo", "-n", "-E", "runuser", "--preserve-environment", "-u", "v", "--", "setpriv",
+        "sudo",
+        "-n",
+        (
+            "--preserve-env=AWS_SESSION_TOKEN,GIT_CONFIG_COUNT,GIT_CONFIG_KEY_0,"
+            "GIT_CONFIG_VALUE_0,HOME,LOGNAME,PATH,TMP,TMPDIR,USER"
+        ),
+        "runuser",
+        "--preserve-environment",
+        "-u",
+        "v",
+        "--",
+        "setpriv",
     )
     assert invocation.argv[-4:] == ("env", "bash", "-c", "make")
     assert invocation.env["HOME"] == "/w/ci-fix-home-1"
@@ -73,9 +84,18 @@ def test_root_switches_account_without_sudo_and_macos_through_sudo(monkeypatch):
     monkeypatch.setattr(isolation.os, "geteuid", lambda: 501)
     monkeypatch.setattr(isolation.sys, "platform", "darwin")
     macos = isolation.as_user("v", {}, ["make"], home="/h")
-    assert macos.argv[:7] == (
-        "/usr/sbin/sudo", "-n", "-E", "-u", "v", "--", "/usr/sbin/env",
+    assert macos.argv[:6] == (
+        "/usr/sbin/sudo",
+        "-n",
+        (
+            "--preserve-env=GIT_CONFIG_COUNT,GIT_CONFIG_KEY_0,GIT_CONFIG_VALUE_0,"
+            "HOME,LOGNAME,TMP,TMPDIR,USER"
+        ),
+        "-u",
+        "v",
+        "--",
     )
+    assert macos.argv[6] == "/usr/sbin/env"
 
 
 def test_the_command_is_resolved_before_sudo_can_replace_path(monkeypatch):
@@ -111,6 +131,44 @@ def test_the_command_enters_its_checkout_after_switching_accounts(monkeypatch):
         "/chosen/make",
         "test",
     )
+
+
+@needs_user
+def test_the_scrubbed_environment_reaches_the_isolated_account(checkout):
+    checkout.chmod(0o700)
+    with isolation.handed_to(_USER, checkout) as home:
+        invocation = isolation.as_user(
+            _USER,
+            {
+                "CI_FIX_ENV_PROBE": "preserved",
+                "GITHUB_WORKSPACE": str(checkout),
+                "RUNNER_TEMP": home,
+            },
+            [
+                "sh",
+                "-c",
+                'test "$CI_FIX_ENV_PROBE" = preserved'
+                ' && test "$HOME" = "$1"'
+                ' && test "$USER" = "$2"'
+                ' && test "$GITHUB_WORKSPACE" = "$3"'
+                ' && test "$RUNNER_TEMP" = "$1"',
+                "ci-fix-env",
+                home,
+                _USER,
+                str(checkout),
+            ],
+            home=home,
+            cwd=checkout,
+        )
+        result = subprocess.run(
+            list(invocation.argv),
+            cwd=None,
+            env=invocation.env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    assert result.returncode == 0, result.stderr
 
 
 def test_file_cleanup_drops_roots_already_covered_by_an_ancestor(monkeypatch):
