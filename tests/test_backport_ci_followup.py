@@ -109,17 +109,20 @@ def _marker(
     attempt: int | None = None,
     job: int = 2,
     key: str = "",
+    generation: int | None = None,
     author: str = _BOT,
     outcome: str = "",
 ):
     attempt_text = f" attempt={attempt}" if attempt is not None else ""
     key_text = f" key={key}" if key else ""
-    key_text += f" outcome={outcome}" if outcome else ""
+    generation_text = f" generation={generation}" if generation is not None else ""
+    outcome_text = f" outcome={outcome}" if outcome else ""
     return SimpleNamespace(
         user=SimpleNamespace(login=author),
         body=(
             "<!-- valkey-ci-agent:auto-ci-followup "
-            f"head={head} run={run}{attempt_text} job={job}{key_text} -->"
+            f"head={head} run={run}{attempt_text} job={job}"
+            f"{key_text}{generation_text}{outcome_text} -->"
         ),
     )
 
@@ -505,24 +508,57 @@ def test_a_failed_result_is_posted_with_a_failed_marker(monkeypatch) -> None:
 
     assert report["action"] == "failed"
     (body,) = pr.posted
-    assert "<!-- valkey-ci-agent:auto-ci-followup" in body and " outcome=failed -->" in body
+    assert "<!-- valkey-ci-agent:auto-ci-followup" in body
+    assert f" generation={ci_followup._FAILURE_GENERATION} outcome=failed -->" in body
 
 
 def test_a_job_that_keeps_failing_is_retried_a_bounded_number_of_times(monkeypatch) -> None:
     """A failure says nothing about the job, so it is tried again, but not every hour forever."""
-    once = (_marker(run=10, job=3, outcome="failed"),)
+    generation = ci_followup._FAILURE_GENERATION
+    once = (_marker(run=10, job=3, generation=generation, outcome="failed"),)
     target, reason, _gh = _select(monkeypatch, pr=_pr(comments=once))
     assert reason == "actionable" and target is not None and target.job.id == 3
 
-    twice = once + (_marker(run=11, job=3, outcome="failed"),)
+    twice = once + (_marker(run=11, job=3, generation=generation, outcome="failed"),)
     target, reason, _gh = _select(monkeypatch, pr=_pr(comments=twice))
     assert target is None and reason == "no-unhandled-actionable-failures"
 
 
 def test_failed_attempts_count_against_the_heads_budget(monkeypatch) -> None:
-    failed = tuple(_marker(run=index, job=index, outcome="failed") for index in range(50, 53))
+    failed = tuple(
+        _marker(
+            run=index,
+            job=index,
+            generation=ci_followup._FAILURE_GENERATION,
+            outcome="failed",
+        )
+        for index in range(50, 53)
+    )
     _target, reason, _gh = _select(monkeypatch, pr=_pr(comments=failed))
     assert reason == "attempt-budget-exhausted"
+
+
+def test_old_failure_generation_gets_a_fresh_bounded_retry_budget(monkeypatch) -> None:
+    """An infrastructure repair can recover heads stranded by the old engine."""
+    old_failures = tuple(
+        _marker(run=index, job=3, generation=1, outcome="failed")
+        for index in range(50, 53)
+    )
+    target, reason, _gh = _select(monkeypatch, pr=_pr(comments=old_failures))
+
+    assert reason == "actionable"
+    assert target is not None and target.job.id == 3
+
+
+def test_legacy_failed_markers_are_the_first_failure_generation(monkeypatch) -> None:
+    legacy_failures = tuple(
+        _marker(run=index, job=3, outcome="failed")
+        for index in range(50, 53)
+    )
+    target, reason, _gh = _select(monkeypatch, pr=_pr(comments=legacy_failures))
+
+    assert reason == "actionable"
+    assert target is not None and target.job.id == 3
 
 
 # --- a pushed fix or a draft PR also has CI nobody else watches --------------------
