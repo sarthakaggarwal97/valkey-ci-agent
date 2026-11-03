@@ -481,7 +481,7 @@ def test_a_crash_while_planning_is_recorded_as_a_failed_attempt(monkeypatch):
     assert result["action"] == "failed"
     assert "could not be read" in result["summary"]
     (comment,) = issue.comments
-    assert "outcome=failed" in comment.body
+    assert f"generation={issues_mod._FAILURE_GENERATION} outcome=failed" in comment.body
 
 
 def test_expired_source_logs_are_a_terminal_refusal(monkeypatch):

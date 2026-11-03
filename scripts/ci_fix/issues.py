@@ -346,8 +346,24 @@ def _branch_name(failure: IssueFailure) -> str:
 # How the bot recorded a result before the marker below: a heading, then a
 # Source line naming the run. Read, never written, so earlier attempts count.
 _LEGACY_RESULT_HEADING = "**Automatic CI fix \u2014 "
-_RESULT_MARKER = "<!-- valkey-ci-agent:ci-fix-result run={run} outcome={outcome} -->"
-_RESULT_MARKER_RE = re.compile(r"<!-- valkey-ci-agent:ci-fix-result run=(?P<run>\d+) outcome=(?P<outcome>[a-z]+) -->")
+_RESULT_MARKER = "<!-- valkey-ci-agent:ci-fix-result run={run}{generation} outcome={outcome} -->"
+_RESULT_MARKER_RE = re.compile(
+    r"<!-- valkey-ci-agent:ci-fix-result run=(?P<run>\d+)"
+    r"(?: generation=(?P<generation>\d+))?"
+    r" outcome=(?P<outcome>[a-z]+) -->"
+)
+# Bump only after repairing infrastructure that made attempts fail. Markers
+# written before generations existed are generation 1.
+_FAILURE_GENERATION = 2
+
+
+def _result_marker(run: int, outcome: str) -> str:
+    generation = (
+        f" generation={_FAILURE_GENERATION}"
+        if outcome == ResultKind.FAILED.value
+        else ""
+    )
+    return _RESULT_MARKER.format(run=run, generation=generation, outcome=outcome)
 
 def _run_link(repo_full_name: str, failure: IssueFailure) -> str:
     """The Markdown link to the run that recorded ``failure``."""
@@ -381,6 +397,8 @@ def fix_reported(issue: Any, failure: IssueFailure, *, repo_full_name: str, bot_
                 continue
             if match.group("outcome") != ResultKind.FAILED.value:
                 return True
+            if int(match.group("generation") or 1) != _FAILURE_GENERATION:
+                continue
             failed += 1
     return failed >= MAX_FAILED_ATTEMPTS
 
@@ -418,7 +436,7 @@ def _terminal_comment(
         body += "\n\n<details><summary>What the bot checked</summary>\n\n" + "\n".join(checks) + "\n\n</details>"
     elif checks:
         body += "\n\n**What the bot checked**\n\n" + "\n".join(checks)
-    body += "\n\n" + _RESULT_MARKER.format(run=failure.run_id, outcome=action)
+    body += "\n\n" + _result_marker(failure.run_id, action)
     retry_github_call(
         lambda: issue.create_comment(body),
         retries=2,
@@ -440,7 +458,7 @@ def _suggestion_comment(issue: Any, failure: IssueFailure, *, source: str, candi
         if candidate.port_commit:
             lines += [f"It ports `{candidate.port_commit[:12]}`.", ""]
         lines += candidate_patch(candidate)
-    lines += [f"{source}.", "", _RESULT_MARKER.format(run=failure.run_id, outcome=ResultKind.SUGGESTED.value)]
+    lines += [f"{source}.", "", _result_marker(failure.run_id, ResultKind.SUGGESTED.value)]
     body = "\n".join(lines)
     retry_github_call(
         lambda: issue.create_comment(body),

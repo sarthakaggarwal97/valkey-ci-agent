@@ -129,6 +129,22 @@ def test_a_failed_attempt_is_tried_again_once_and_a_result_ends_it():
     assert _done(opened)
 
 
+def test_old_failed_attempts_get_a_fresh_bounded_retry_generation():
+    issue = _detector_issue(4, body=_test_issue_body(run_id=100))
+    for _attempt in range(2):
+        issue.comments.append(SimpleNamespace(
+            user=SimpleNamespace(login=_BOT),
+            body="The old engine timed out.\n\n"
+                 "<!-- valkey-ci-agent:ci-fix-result run=100 outcome=failed -->",
+        ))
+
+    assert not _done(issue)
+    _reported(issue, 100, action="failed")
+    assert not _done(issue)
+    _reported(issue, 100, action="failed")
+    assert _done(issue)
+
+
 def test_another_occurrences_result_does_not_count_for_this_one():
     issue = _detector_issue(4, body=_test_issue_body(run_id=200))
     _reported(issue, 100, action="opened")  # an earlier occurrence's draft
