@@ -109,7 +109,8 @@ def test_run_fix_agent_uses_exact_log_and_one_edit_session(tmp_path, monkeypatch
     assert "Job: unit tests (job id 456)" in seen["prompt"]
     assert "Other failed jobs, out of scope: lint" in seen["prompt"]
     assert "Normal target-repository CI is authoritative" in seen["prompt"]
-    assert "Use at most 12 Read or Grep tool calls" in seen["prompt"]
+    assert "Do not keep surveying the" in seen["prompt"]
+    assert "at most 12" not in seen["prompt"]
     assert "subsystem until the session times out" in seen["prompt"]
     assert "Do not commit or push" in seen["prompt"]
     assert candidate.action is CandidateAction.PATCH

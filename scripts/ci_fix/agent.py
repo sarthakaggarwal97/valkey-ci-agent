@@ -64,10 +64,9 @@ Normal target-repository CI is authoritative. {test_guidance}
 {feedback}
 Keep the investigation bounded:
 
-- Use at most 12 Read or Grep tool calls before choosing an action.
 - Start with the exact failure, reproduction, and prior-fix evidence above.
 - Once the evidence identifies a fix, edit only the needed files and finish.
-- If that budget does not establish a direct, evidence-backed fix, choose
+- If the evidence does not establish a direct, evidence-backed fix, choose
   `refuse` with `failure_type` set to `unknown`. Do not keep surveying the
   subsystem until the session times out.
 
