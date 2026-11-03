@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from types import SimpleNamespace
 
 from github.PaginatedList import PaginatedList
@@ -23,29 +22,37 @@ def _detector_issue(number, **kwargs):
 
 def _reported(issue, run_id, action="refused"):
     failure = issues.parse_issue(issue)
-    issues._terminal_comment(  # the comment the issue fix posts on finishing
-        issue, replace(failure, run_id=run_id),
-        repo_full_name="o/r", action=action, summary="did not reproduce",
+    issue.comments.append(
+        SimpleNamespace(
+            user=SimpleNamespace(login=_BOT),
+            body=issues._result_marker(run_id, action),
+        )
     )
-    issue.comments[-1].user = SimpleNamespace(login=_BOT)
 
 
-def _workflow(*runs, failed=()):
-    """``runs`` as (status, title); ``failed`` the titles of failed completed runs."""
-    def get_runs(status=None):
-        if status == "failure":
-            return [SimpleNamespace(status="completed", conclusion="failure", display_title=title)
-                    for title in failed]
-        return [SimpleNamespace(status=s, display_title=title) for s, title in runs]
-    return SimpleNamespace(get_runs=get_runs)
+def _workflow(*runs):
+    listed = []
+    for item in runs:
+        status, title, *rest = item
+        conclusion = rest[0] if rest else ("success" if status == "completed" else "")
+        listed.append(
+            SimpleNamespace(
+                status=status,
+                display_title=title,
+                conclusion=conclusion,
+            )
+        )
+    return SimpleNamespace(get_runs=lambda: listed)
 
 
 def _dispatch(listed, workflow, *, max_runs=3):
     dispatched = []
     decisions = issue_dispatch.dispatch_issues(
         SimpleNamespace(get_issues=lambda **_kwargs: listed), workflow,
-        repo_full_name="o/r", bot_login=_BOT, max_runs=max_runs,
-        dispatch=lambda issue, run_id: dispatched.append(issue),
+        repo_full_name="o/r",
+        bot_login=_BOT,
+        max_runs=max_runs,
+        dispatch=lambda issue, _run, _generation: dispatched.append(issue),
     )
     return dispatched, {d.issue: d.reason for d in decisions if d.action == "skipped"}
 
@@ -80,7 +87,8 @@ def test_nothing_is_listed_when_the_cap_is_already_reached():
 
     decisions = issue_dispatch.dispatch_issues(
         SimpleNamespace(get_issues=unlisted), _workflow(("in_progress", "CI fix issue #9")),
-        repo_full_name="o/r", bot_login=_BOT, max_runs=1, dispatch=lambda _n, _r: None,
+        repo_full_name="o/r", bot_login=_BOT, max_runs=1,
+        dispatch=lambda _issue, _run, _generation: None,
     )
 
     assert decisions == []
@@ -133,21 +141,86 @@ def test_a_failed_attempt_posts_nothing_and_its_failed_run_counts_instead():
     issue_dispatch.dispatch_issues(
         SimpleNamespace(get_issues=lambda **_kwargs: [issue]), _workflow(),
         repo_full_name="o/r", bot_login=_BOT, max_runs=3,
-        dispatch=lambda number, run_id: seen.append((number, run_id)),
+        dispatch=lambda number, run_id, _generation: seen.append((number, run_id)),
     )
     assert seen == [(4, 100)]  # the run's name carries the occurrence
 
-    once = _workflow(failed=["CI fix issue #4 (run 100)", "CI fix issue #4 (run 99)", "CI fix issue #4"])
+    generation = issues._FAILURE_GENERATION
+    once = _workflow(
+        ("completed", f"CI fix issue #4 (run 100, generation {generation})", "failure"),
+        ("completed", f"CI fix issue #4 (run 99, generation {generation})", "failure"),
+        ("completed", "CI fix issue #4", "failure"),
+    )
     assert _dispatch([issue], once)[0] == [4]
-    twice = _workflow(failed=["CI fix issue #4 (run 100)"] * 2)
+    twice = _workflow(
+        *[
+            ("completed", f"CI fix issue #4 (run 100, generation {generation})", "failure")
+            for _attempt in range(2)
+        ]
+    )
     dispatched, skipped = _dispatch([issue], twice)
-    assert dispatched == [] and skipped[4] == "2 attempts at run 100 failed"
+    assert dispatched == [] and "silent retry budget" in skipped[4]
 
 
 def test_a_result_ends_the_occurrence():
     opened = _detector_issue(5, body=_test_issue_body(run_id=100))
     _reported(opened, 100, action="opened")
     assert _done(opened)
+
+
+def test_old_failed_attempts_get_a_fresh_bounded_retry_generation():
+    issue = _detector_issue(4, body=_test_issue_body(run_id=100))
+    for _attempt in range(2):
+        issue.comments.append(SimpleNamespace(
+            user=SimpleNamespace(login=_BOT),
+            body="The old engine timed out.\n\n"
+                 "<!-- valkey-ci-agent:ci-fix-result run=100 outcome=failed -->",
+        ))
+
+    assert not _done(issue)
+    _reported(issue, 100, action="failed")
+    assert not _done(issue)
+    _reported(issue, 100, action="failed")
+    assert _done(issue)
+
+
+def test_silent_failed_workflows_exhaust_only_the_exact_occurrences_budget():
+    generation = issues._FAILURE_GENERATION
+    failed = (
+        "completed",
+        f"CI fix issue #4 (run 100, generation {generation})",
+        "failure",
+    )
+    other_occurrence = (
+        "completed",
+        f"CI fix issue #4 (run 99, generation {generation})",
+        "failure",
+    )
+    workflow = _workflow(failed, failed, other_occurrence)
+
+    dispatched, skipped = _dispatch(
+        [_detector_issue(4, body=_test_issue_body(run_id=100))],
+        workflow,
+    )
+
+    assert dispatched == []
+    assert "silent retry budget" in skipped[4]
+
+
+def test_dispatch_carries_the_occurrence_and_retry_generation():
+    dispatched = []
+    issue = _detector_issue(7, body=_test_issue_body(run_id=200))
+
+    issue_dispatch.dispatch_issues(
+        SimpleNamespace(get_issues=lambda **_kwargs: [issue]),
+        _workflow(),
+        repo_full_name="o/r",
+        bot_login=_BOT,
+        max_runs=1,
+        dispatch=lambda *args: dispatched.append(args),
+    )
+
+    assert dispatched == [(7, 200, issues._FAILURE_GENERATION)]
 
 
 def test_another_occurrences_result_does_not_count_for_this_one():
@@ -157,7 +230,7 @@ def test_another_occurrences_result_does_not_count_for_this_one():
     assert not _done(issue)
 
 
-def test_a_result_recorded_before_the_marker_still_counts():
+def test_a_failed_result_recorded_before_the_marker_gets_a_fresh_retry():
     issue = _detector_issue(4, body=_test_issue_body(run_id=100))
     issue.comments.append(SimpleNamespace(
         user=SimpleNamespace(login=_BOT),
@@ -165,4 +238,4 @@ def test_a_result_recorded_before_the_marker_still_counts():
              "Source: [run 100](https://github.com/o/r/actions/runs/100).",
     ))
 
-    assert _done(issue)
+    assert not _done(issue)

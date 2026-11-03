@@ -6,8 +6,9 @@ name: CI Fix Issue Dispatch
 # dispatched run handles one issue as before.
 #
 # The schedule runs unless the CI_FIX_ISSUES_AUTO_DISPATCH repository variable
-# is "false". An issue's fix is posted on the issue unless CI_FIX_ISSUES_PUBLISH
-# asks for a draft PR, so nothing is pushed by default.
+# is "false". A successful issue fix is posted on the issue unless
+# CI_FIX_ISSUES_PUBLISH asks for a draft PR. Failed and refused attempts stay
+# in this repository's workflows, so nothing is pushed by default.
 on:
   schedule:
     - cron: "23 * * * *"
