@@ -36,14 +36,17 @@ def valkey(tmp_path) -> Path:
     return repo
 
 
-def test_plan_lists_the_first_parent_merges_oldest_first(valkey):
+def test_plan_lists_the_first_parent_merges_oldest_first(valkey, monkeypatch):
     shas = _git(valkey, "log", "--first-parent", "--format=%H", "unstable").splitlines()[::-1]
+    # The second merge brings the rules the repl-compression oracle models.
+    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", shas[2])
 
     merges = plan(valkey, f"{shas[0]}..unstable")
 
     assert [(m["index"], m["sha"], m["parent"], m["pr"]) for m in merges] == [
         (0, shas[1], shas[0], 4716), (1, shas[2], shas[1], 5071), (2, shas[3], shas[2], None),
     ]
+    assert [m["exclude_experiments"] for m in merges] == [list(replay_mod.REPL_COMPRESSION_EXPERIMENTS), [], []]
     assert [m["subject"] for m in merges] == ["Fix the forkless save (#4716)", "Add PHPATHCOUNT (#5071)",
                                              "Merge the side branch"]
     assert plan(valkey, f"{shas[0]}..unstable", first=1) == merges[:1]
@@ -69,7 +72,7 @@ def _change() -> Change:
                   head_sha="b" * 40, diff="diff --git a/x b/x\n")
 
 
-def _replay(monkeypatch, tmp_path, *, propose):
+def _replay(monkeypatch, tmp_path, *, propose, merge=None):
     fetched, dispatched, waited = [], [], []
     monkeypatch.setattr(replay_mod, "fetch_change", lambda gh, token, request: fetched.append(request) or _change())
     monkeypatch.setattr(replay_mod, "load_catalog", lambda fuzzer_bin: {"experiments": [], "components": []})
@@ -79,7 +82,7 @@ def _replay(monkeypatch, tmp_path, *, propose):
     batch = MagicMock(id=99, html_url="https://x/runs/99", conclusion="failure")
     monkeypatch.setattr(replay_mod, "wait_for_run", lambda gh, **kw: waited.append(kw) or batch)
     result = replay_mod.run(
-        _merge(), gh=MagicMock(), token="t", repo="valkey-io/valkey", fuzzer_repo="owner/valkey-fuzzer",
+        merge or _merge(), gh=MagicMock(), token="t", repo="valkey-io/valkey", fuzzer_repo="owner/valkey-fuzzer",
         fuzzer_ref="generic-fuzzer", fuzzer_dir=tmp_path, fuzzer_bin="valkey-fuzzer", count=5, random_seeds=2,
         out_dir=tmp_path / "out", timeout_s=60,
     )
@@ -116,6 +119,35 @@ def test_a_merge_runs_its_proposals_beside_a_random_baseline_on_the_merge_commit
     assert (result["proposed"], result["dropped"], result["run_id"], result["conclusion"]) == (1, 1, 99, "failure")
     written = json.loads((tmp_path / "out" / "replay.json").read_text())
     assert written["change"] == "valkey-io/valkey#4716, merged as bbbbbbbbbbbb: Fix the forkless save (#4716)"
+
+
+def test_plan_needs_the_rules_commit_in_the_clone(valkey, monkeypatch):
+    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", "f" * 40)
+    with pytest.raises(RuntimeError, match="cannot tell whether"):
+        plan(valkey, "HEAD~1..unstable")
+
+
+def test_a_merge_before_the_rules_leaves_their_experiments_out(monkeypatch, tmp_path):
+    chaos = "seed: 8\nexperiment: {id: valkey.replication-chaos}\ndeployment: {mode: standalone}\n"
+    docs = [check_scenario(text)[0] for text in (SCENARIO, chaos)]
+
+    def propose(change, *, out_dir, **kw):
+        (out_dir / "scenarios").mkdir(parents=True)
+        run = ProposalRun(change=change)
+        for index, doc in enumerate(docs, 1):
+            name = doc["scenario_id"]
+            (out_dir / "scenarios" / f"{name}.yaml").write_text(_render_scenario(doc, change))
+            run.proposals.append(Proposal(index=index, rationale="why", text="x", scenario_id=name,
+                                          file=f"scenarios/{name}.yaml"))
+        return run
+
+    merge = {**_merge(), "exclude_experiments": list(replay_mod.REPL_COMPRESSION_EXPERIMENTS)}
+    result, _, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose, merge=merge)
+
+    ((inputs, _),) = dispatched
+    assert list(json.loads(inputs["scenarios"])) == [docs[0]["scenario_id"]]
+    assert inputs["exclude_experiments"] == " ".join(replay_mod.REPL_COMPRESSION_EXPERIMENTS)
+    assert (result["proposed"], result["excluded_proposals"]) == (2, 1)
 
 
 def test_a_failed_proposal_still_runs_the_random_baseline(monkeypatch, tmp_path):

@@ -65,7 +65,7 @@ def _bundles(value) -> dict[str, str]:
 
 def test_batch_inputs_are_the_ones_the_workflow_takes():
     assert BATCH_INPUTS == ("scenarios", "valkey_repository", "valkey_ref", "valkey_sha")
-    assert OPTIONAL_INPUTS == ("spec_bundles", "random_seeds", "request_id")
+    assert OPTIONAL_INPUTS == ("spec_bundles", "random_seeds", "request_id", "exclude_experiments")
     check_batch_inputs(_inputs())
     check_batch_inputs(_bundles({"toy": BUNDLE}))
     check_batch_inputs(_bundles(""))
@@ -124,6 +124,8 @@ def test_bundle_paths_the_batch_takes(path, allowed):
     (_inputs(random_seeds="21"), "random_seeds must be 0 to 20"),
     (_inputs(random_seeds="-1"), "random_seeds must be 0 to 20"),
     (_inputs(request_id="a b"), "request_id must be at most 100 letters"),
+    (_inputs(random_seeds="2", exclude_experiments="x;rm"), "exclude_experiments must be"),
+    (_inputs(exclude_experiments="valkey.replication-chaos"), "which random_seeds 0 skips"),
     (_scenarios({"../x": SCENARIO}), "scenario name '../x' must be"),
     (_scenarios({"a..b": SCENARIO}), "scenario name 'a..b' must be"),
     (_scenarios({"-x": SCENARIO}), "scenario name '-x' must be"),

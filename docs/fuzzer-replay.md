@@ -17,7 +17,14 @@ what a live run would do when that pull request merged.
    occurrence to the same issue.
 
 Only the replay is made up: the proposals, the batch and the monitor are the
-ones a live run uses. The batches run in parallel; the triage runs one merge
+ones a live run uses. One thing a live run never meets: a build older than the
+rules a fuzzer oracle models. valkey-io/valkey#4749 changed how a full sync
+picks its codec and transport, and the `repl-compression` oracle knows only
+the new rules, so a merge before #4749 leaves the experiments it judges
+(`valkey.repl-compression-full-sync`, `-partial-resync`, `-runtime-change`
+and `valkey.replication-chaos`) out of its batch: the PR batch's
+`exclude_experiments` keeps them out of the random baseline, and the replay
+drops the proposals that use them (`excluded_proposals` in `replay.json`). The batches run in parallel; the triage runs one merge
 at a time, in merge order, so a failure's issue opens on the first merge that
 showed it.
 

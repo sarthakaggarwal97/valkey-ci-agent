@@ -36,6 +36,7 @@ import os
 import re
 import sys
 import time
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -59,7 +60,7 @@ RESULTS_FILE = "batch-results.json"
 # The workflow's inputs: the four always sent, spec_bundles when a scenario
 # needs a bundle, and the random baseline and the run's name when asked for.
 BATCH_INPUTS = ("scenarios", "valkey_repository", "valkey_ref", "valkey_sha")
-OPTIONAL_INPUTS = ("spec_bundles", "random_seeds", "request_id")
+OPTIONAL_INPUTS = ("spec_bundles", "random_seeds", "request_id", "exclude_experiments")
 # The title the workflow gives a run: its run-name, with the request_id.
 RUN_TITLE = "Valkey Fuzzer PR Batch {request_id}"
 # The workflow's own limits on `scenarios` and on `spec_bundles`.
@@ -72,6 +73,7 @@ _REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
 _RANDOM_SEEDS_RE = re.compile(r"[0-9]|1[0-9]|20")
 _REQUEST_ID_RE = re.compile(r"[A-Za-z0-9_.-]{0,100}")
+_EXPERIMENT_ID_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,99}")
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}")
 _BUNDLE_NAME_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _FILE_NAME = r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}"
@@ -118,6 +120,13 @@ def check_batch_inputs(inputs: dict[str, str]) -> None:
         raise ValueError("random_seeds must be 0 to 20")
     if not _REQUEST_ID_RE.fullmatch(inputs.get("request_id", "")):
         raise ValueError("request_id must be at most 100 letters, digits, '.', '_', or '-'")
+    excluded = inputs.get("exclude_experiments", "").split()
+    if len(excluded) > 50 or not all(_EXPERIMENT_ID_RE.fullmatch(item) for item in excluded):
+        raise ValueError("exclude_experiments must be at most 50 experiment IDs separated by spaces")
+    if excluded and random_seeds == "0":
+        raise ValueError(
+            "exclude_experiments leaves experiments out of the random baseline, which random_seeds 0 skips"
+        )
     try:
         scenarios = json.loads(raw)
     except ValueError as exc:
@@ -214,10 +223,11 @@ def batch_names(scenario_ids: list[str]) -> dict[str, str]:
 
 def batch_dispatch_inputs(
     change: dict[str, Any], scenarios: dict[str, str], spec_bundles: dict[str, dict[str, str]] | None = None,
-    *, random_seeds: int = 0, request_id: str = "",
+    *, random_seeds: int = 0, request_id: str = "", exclude_experiments: Sequence[str] = (),
 ) -> dict[str, str]:
     """The PR batch's inputs for ``scenarios`` ({name: YAML}) on ``change``, with any bundles they need,
-    ``random_seeds`` seeds of each one-build experiment beside them, and the run named ``request_id``."""
+    ``random_seeds`` seeds of each one-build experiment but ``exclude_experiments`` beside them, and the
+    run named ``request_id``."""
     pr_number = change.get("pr_number")
     head_sha = str(change["head_sha"])
     inputs = {
@@ -232,6 +242,8 @@ def batch_dispatch_inputs(
         inputs["random_seeds"] = str(random_seeds)
     if request_id:
         inputs["request_id"] = request_id
+    if exclude_experiments:
+        inputs["exclude_experiments"] = " ".join(exclude_experiments)
     check_batch_inputs(inputs)
     return inputs
 

@@ -9,6 +9,12 @@ the merge commit beside a random baseline, and the run waits for the batch and
 writes ``replay.json``, which names the batch's run and the change for the
 fuzzer monitor (``--pr-batch-run``, ``--change``). Only the replay is made up:
 the proposals, the batch and the monitor are the live ones.
+
+valkey-io/valkey#4749 changed how a full sync picks its codec and transport,
+and what the primary logs of it. The fuzzer's ``valkey.oracle.repl-compression``
+knows only the new rules, and nothing a build reports tells the two apart, so
+a merge before #4749 leaves the experiments it judges out of its batch, both
+the random draws and the proposals. A live batch never tests a build that old.
 """
 
 from __future__ import annotations
@@ -24,6 +30,8 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -48,10 +56,17 @@ REPLAY_FILE = "replay.json"
 # A squash merge's subject ends with its pull request: "Fix the thing (#1234)".
 _PR_SUBJECT_RE = re.compile(r"\(#([1-9][0-9]*)\)\s*$")
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
+# valkey-io/valkey#4749, and the experiments whose oracle models its rules.
+REPL_COMPRESSION_RULES = "7fe7ca45ffc7bb0ba009a952a2f64395e45e432a"
+REPL_COMPRESSION_EXPERIMENTS = (
+    "valkey.repl-compression-full-sync", "valkey.repl-compression-partial-resync",
+    "valkey.repl-compression-runtime-change", "valkey.replication-chaos",
+)
 
 
 def plan(valkey_dir: Path, commit_range: str, *, first: int = 0) -> list[dict[str, Any]]:
-    """The merges in ``commit_range`` (BASE..TIP) on TIP's first-parent history, oldest first."""
+    """The merges in ``commit_range`` (BASE..TIP) on TIP's first-parent history, oldest first, each with
+    the experiments its batch leaves out."""
     base, sep, tip = commit_range.partition("..")
     if not sep or not base or not tip:
         raise ValueError(f"a range is BASE..TIP, got {commit_range!r}")
@@ -66,8 +81,26 @@ def plan(valkey_dir: Path, commit_range: str, *, first: int = 0) -> list[dict[st
         sha, parent = shas.split()[:2]
         match = _PR_SUBJECT_RE.search(subject)
         merges.append({"index": index, "sha": sha, "parent": parent,
-                       "pr": int(match.group(1)) if match else None, "subject": subject[:200]})
+                       "pr": int(match.group(1)) if match else None, "subject": subject[:200],
+                       "exclude_experiments": excluded_experiments(valkey_dir, sha)})
     return merges[:first] if first else merges
+
+
+def excluded_experiments(valkey_dir: Path, sha: str) -> list[str]:
+    """The experiments a batch of ``sha`` leaves out: those whose rules ``sha`` predates."""
+    check = subprocess.run(
+        ["git", "-C", str(valkey_dir), "merge-base", "--is-ancestor", REPL_COMPRESSION_RULES, sha],
+        capture_output=True, text=True,
+    )
+    if check.returncode not in (0, 1):
+        raise RuntimeError(f"cannot tell whether {sha} has {REPL_COMPRESSION_RULES}: {check.stderr.strip()}")
+    return [] if check.returncode == 0 else list(REPL_COMPRESSION_EXPERIMENTS)
+
+
+def _experiment(text: str) -> str | None:
+    doc = yaml.safe_load(text)
+    experiment = doc.get("experiment") if isinstance(doc, dict) else None
+    return str(experiment.get("id")) if isinstance(experiment, dict) else None
 
 
 def describe(merge: dict[str, Any], repo: str) -> str:
@@ -107,7 +140,13 @@ def run(
         logger.warning("Proposing scenarios for %s failed: %s", result["change"], exc, exc_info=True)
         summary, scenarios = change.summary(), {}
         result["proposal_error"] = " ".join(str(exc).split())[:500]
-    inputs = batch_dispatch_inputs(summary, scenarios, random_seeds=random_seeds, request_id=result["request_id"])
+    excluded = list(merge.get("exclude_experiments") or [])
+    if excluded:
+        kept = {name: text for name, text in scenarios.items() if _experiment(text) not in excluded}
+        result["excluded_proposals"] = len(scenarios) - len(kept)
+        scenarios = kept
+    inputs = batch_dispatch_inputs(summary, scenarios, random_seeds=random_seeds, request_id=result["request_id"],
+                                   exclude_experiments=excluded)
     # GitHub's clock and ours may differ a little.
     since = datetime.now(timezone.utc) - timedelta(minutes=2)
     dispatch_batch(gh, inputs, fuzzer_repo=fuzzer_repo, workflow=PR_BATCH_WORKFLOW, ref=fuzzer_ref)
