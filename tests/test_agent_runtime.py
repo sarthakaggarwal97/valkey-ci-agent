@@ -85,9 +85,15 @@ def test_ci_fix_profiles_match_their_publication_targets() -> None:
     assert edit.confined is True
     assert edit.disallowed_tools == "Bash,Glob"
     assert "Bash" not in edit.allowed_tools
+    assert edit.timeout <= 20 * 60
+    assert edit.max_turns <= 64
+    assert edit.effort == "high"
     assert suggest.writes_allowed is True
     assert suggest.confined is True
     assert suggest.disallowed_tools == "Bash,Glob"
+    assert suggest.timeout <= 20 * 60
+    assert suggest.max_turns <= 64
+    assert suggest.effort == "high"
 
 
 def test_a_caller_cannot_extend_an_agent_profiles_timeout(monkeypatch) -> None:

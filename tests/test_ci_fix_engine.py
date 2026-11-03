@@ -1098,6 +1098,29 @@ def test_a_later_round_whose_agent_fails_is_a_failed_attempt_not_a_refusal(tmp_p
     assert "With your change" in str(raised.value)
 
 
+def test_a_first_agent_failure_gets_one_clean_retry(tmp_path, monkeypatch):
+    source, head_sha = _source_repo(tmp_path)
+    _install_clone(monkeypatch, source)
+    feedback = []
+
+    def agent(task, repo_dir, job_log, **kwargs):
+        feedback.append(kwargs["feedback"])
+        if len(feedback) == 1:
+            (Path(repo_dir) / "partial.txt").write_text("unfinished\n", encoding="utf-8")
+            raise RuntimeError("CI-fix agent failed with exit code 1: timeout after 1200s")
+        assert not (Path(repo_dir) / "partial.txt").exists()
+        return _value_agent("right")(task, repo_dir, job_log, **kwargs)
+
+    candidate = engine_mod.prepare_fix(
+        _task(head_sha), _LOG, agent_func=agent,
+        review_func=lambda *a, **k: (True, "fixes it"),
+    )
+
+    assert candidate.action is CandidateAction.PATCH
+    assert feedback[0] == ""
+    assert "previous agent session ended before returning a result" in feedback[1]
+
+
 def test_the_review_is_bounded_by_the_deadline(tmp_path, monkeypatch):
     source, head_sha = _source_repo(tmp_path)
     _install_clone(monkeypatch, source)

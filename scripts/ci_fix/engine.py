@@ -409,6 +409,18 @@ def _fix_loop(
                 attempt=attempt, timeout=max(60, agent_timeout), agent_func=agent_func,
             )
         except Exception as exc:
+            remaining_after_failure = int(deadline - time.monotonic())
+            if attempt == 1 and remaining_after_failure >= _MIN_ROUND_S:
+                last = f"The agent failed on attempt 1: {exc}"
+                restore(repo_dir)
+                _remove_ignored(repo_dir)
+                feedback = (
+                    "The previous agent session ended before returning a result. "
+                    "The working tree was reset. Use the bounded investigation "
+                    "budget and either prepare a minimal fix or refuse."
+                )
+                logger.warning("CI-fix round 1 agent failed; retrying once: %s", exc)
+                continue
             if attempt == 1:
                 raise
             raise RuntimeError(f"The agent failed on attempt {attempt}: {exc}. Last: {last}") from exc
