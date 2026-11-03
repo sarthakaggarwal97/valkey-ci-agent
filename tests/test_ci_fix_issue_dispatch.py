@@ -152,11 +152,22 @@ def test_another_occurrences_result_does_not_count_for_this_one():
     assert not _done(issue)
 
 
-def test_a_result_recorded_before_the_marker_still_counts():
+def test_a_failed_result_recorded_before_markers_gets_the_fresh_generation():
     issue = _detector_issue(4, body=_test_issue_body(run_id=100))
     issue.comments.append(SimpleNamespace(
         user=SimpleNamespace(login=_BOT),
         body="**Automatic CI fix \u2014 failed.** The automatic fix attempt failed: boom\n\n"
+             "Source: [run 100](https://github.com/o/r/actions/runs/100).",
+    ))
+
+    assert not _done(issue)
+
+
+def test_a_terminal_result_recorded_before_markers_still_counts():
+    issue = _detector_issue(4, body=_test_issue_body(run_id=100))
+    issue.comments.append(SimpleNamespace(
+        user=SimpleNamespace(login=_BOT),
+        body="**Automatic CI fix \u2014 refused.** No safe fix was found.\n\n"
              "Source: [run 100](https://github.com/o/r/actions/runs/100).",
     ))
 

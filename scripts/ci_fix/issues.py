@@ -391,7 +391,12 @@ def fix_reported(issue: Any, failure: IssueFailure, *, repo_full_name: str, bot_
             continue
         body = str(getattr(comment, "body", "") or "")
         if body.startswith(_LEGACY_RESULT_HEADING) and legacy_source in body:
-            return True
+            # A pre-marker failed result is generation 1, like a failed marker
+            # without an explicit generation. Successful and refused legacy
+            # results remain terminal.
+            if not body.startswith(f"{_LEGACY_RESULT_HEADING}{ResultKind.FAILED.value}."):
+                return True
+            continue
         for match in _RESULT_MARKER_RE.finditer(body):
             if int(match.group("run")) != failure.run_id:
                 continue
