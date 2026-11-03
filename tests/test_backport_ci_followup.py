@@ -134,6 +134,7 @@ def _select(
     runs=None,
     jobs=None,
     entry=None,
+    prior_plans=(),
 ):
     pr = pr or _pr()
     runs = runs if runs is not None else [_run()]
@@ -165,6 +166,7 @@ def _select(
         repo_entry=entry or _entry(),
         target_branch="9.0",
         bot_login=_BOT,
+        prior_plans=prior_plans,
     )
     return target, reason, gh
 
@@ -503,13 +505,33 @@ def test_a_terminal_result_is_posted_with_the_marker_that_retires_the_job(monkey
     assert "<!-- valkey-ci-agent:auto-ci-followup" in body and " outcome=pushed -->" in body
 
 
-def test_a_failed_result_is_posted_with_a_failed_marker(monkeypatch) -> None:
+def test_a_failed_result_does_not_comment(monkeypatch) -> None:
     report, pr = _report(monkeypatch, ResultKind.FAILED)
 
     assert report["action"] == "failed"
-    (body,) = pr.posted
-    assert "<!-- valkey-ci-agent:auto-ci-followup" in body
-    assert f" generation={ci_followup._FAILURE_GENERATION} outcome=failed -->" in body
+    assert pr.posted == []
+
+
+def test_silent_plan_artifacts_bound_retries_without_pr_comments(monkeypatch) -> None:
+    pr = _pr()
+    first = _plan(monkeypatch, _target(pr))
+    assert first.retry_generation == ci_followup._FAILURE_GENERATION
+
+    target, reason, _gh = _select(
+        monkeypatch,
+        pr=pr,
+        prior_plans=(first,),
+    )
+    assert reason == "actionable"
+    assert target is not None
+
+    target, reason, _gh = _select(
+        monkeypatch,
+        pr=pr,
+        prior_plans=(first, first),
+    )
+    assert target is None
+    assert reason == "no-unhandled-actionable-failures"
 
 
 def test_a_job_that_keeps_failing_is_retried_a_bounded_number_of_times(monkeypatch) -> None:

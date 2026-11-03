@@ -95,11 +95,12 @@ def _report(
     kind: ResultKind,
     summary: str,
 ) -> dict[str, Any]:
-    """Comment ``body`` on the PR and react to the command; a comment that fails fails the run."""
-    try:
-        _post_comment(gh, repo_full_name, pr_number, body)
-    finally:
-        _react_outcome(gh, repo_full_name, comment_id, kind)
+    """Report a published fix; unsuccessful attempts stay in workflow logs."""
+    if kind.successful:
+        try:
+            _post_comment(gh, repo_full_name, pr_number, body)
+        finally:
+            _react_outcome(gh, repo_full_name, comment_id, kind)
     level = {
         ResultKind.PUSHED: logging.INFO,
         ResultKind.OPENED: logging.INFO,
@@ -127,14 +128,15 @@ def _react_outcome(
 ) -> None:
     if not comment_id:
         return
-    content = "+1" if kind in (ResultKind.PUSHED, ResultKind.SUGGESTED, ResultKind.OPENED) else "-1"
+    if not kind.successful:
+        return
 
     def react() -> None:
         requester = gh.get_repo(repo_full_name)._requester  # noqa: SLF001 - raw reactions endpoint
         requester.requestJsonAndCheck(
             "POST",
             f"/repos/{repo_full_name}/issues/comments/{comment_id}/reactions",
-            input={"content": content},
+            input={"content": "+1"},
         )
 
     try:

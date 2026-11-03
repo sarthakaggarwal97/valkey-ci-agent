@@ -68,18 +68,18 @@ def test_an_authorized_command_is_planned_against_its_exact_job(wired) -> None:
     assert wired.posted == [] and wired.reacted == []
 
 
-@pytest.mark.parametrize(("gate", "kind", "text"), [
-    (GateRejection("not authorized"), ResultKind.REFUSED, "No fix prepared: not authorized"),
-    (GateError("temporary GitHub failure"), ResultKind.FAILED, "could not evaluate"),
+@pytest.mark.parametrize(("gate", "kind"), [
+    (GateRejection("not authorized"), ResultKind.REFUSED),
+    (GateError("temporary GitHub failure"), ResultKind.FAILED),
 ])
-def test_the_gates_answer_is_posted_at_once(wired, gate, kind, text) -> None:
+def test_an_unsuccessful_gate_answer_stays_in_the_workflow(wired, gate, kind) -> None:
     wired.gate(gate)
 
     result = main_mod.plan_request(MagicMock(), None, _REQUEST, bot_login=_BOT)
 
     assert result["action"] == kind.value
-    assert text in wired.posted[0][2]
-    assert wired.reacted == [(7, kind)]
+    assert wired.posted == []
+    assert wired.reacted == []
 
 
 def test_the_commenter_is_trusted_only_from_the_poller(wired, monkeypatch) -> None:
@@ -112,6 +112,18 @@ def test_the_result_is_commented_and_reacted_to(wired) -> None:
     assert report["action"] == "pushed"
     assert "Pushed `bbbbbbbbbbbb`" in wired.posted[0][2]
     assert wired.reacted == [(7, ResultKind.PUSHED)]
+
+
+@pytest.mark.parametrize("kind", [ResultKind.FAILED, ResultKind.REFUSED])
+def test_an_unsuccessful_result_does_not_touch_the_pr(wired, kind) -> None:
+    plan = FixPlan(front_door=FrontDoor.PR, task=_task(), comment_id=7)
+    result = FixResult(kind=kind, summary="not published", task=_task())
+
+    report = main_mod.report_result(MagicMock(), plan, result)
+
+    assert report["action"] == kind.value
+    assert wired.posted == []
+    assert wired.reacted == []
 
 
 def test_a_comment_that_cannot_be_posted_fails_the_run_but_still_reacts(wired, monkeypatch) -> None:

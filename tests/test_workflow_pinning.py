@@ -302,11 +302,19 @@ def test_ci_fix_issue_runs_are_named_for_the_dispatcher():
 
     workflow = yaml.load(Path(".github/workflows/ci-fix-issues.yml").read_text(encoding="utf-8"),
                          Loader=yaml.BaseLoader)
-    name = workflow["run-name"].replace("${{ inputs.issue }}", "123")
-    with_run = name.replace("${{ inputs.run_id && format(' (run {0})', inputs.run_id) || '' }}", " (run 456)")
-    without = name.replace("${{ inputs.run_id && format(' (run {0})', inputs.run_id) || '' }}", "")
-    assert RUN_NAME.match(with_run).group("issue", "run") == ("123", "456")
-    assert RUN_NAME.match(without).group("issue", "run") == ("123", None)
+    title = (
+        workflow["run-name"]
+        .replace("${{ inputs.issue }}", "123")
+        .replace("${{ inputs.run_id }}", "456")
+        .replace("${{ inputs.generation }}", "3")
+    )
+    match = RUN_NAME.match(title)
+    assert match
+    assert match.groupdict() == {
+        "issue": "123",
+        "run": "456",
+        "generation": "3",
+    }
 
 
 # --- ci-fix-run.yml: every fix is plan -> fix-in-job | fix-in-container | fix-local -> publish
@@ -326,7 +334,11 @@ def test_every_fix_front_door_runs_the_shared_fix():
                              ("ci-fix-issues.yml", "fix")):
         job = yaml.safe_load((Path(".github/workflows") / filename).read_text(encoding="utf-8"))["jobs"][job_id]
         assert job["uses"] == f"./{_RUN.as_posix()}", filename
-        assert job["permissions"] == {"contents": "read", "id-token": "write"}, filename
+        assert job["permissions"] == {
+            "actions": "read",
+            "contents": "read",
+            "id-token": "write",
+        }, filename
         # Exactly what the run declares, not every secret of the repository.
         assert job["secrets"] == {
             name: f"${{{{ secrets.{name} }}}}"
@@ -345,9 +357,12 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
         plan = job_id == "plan"
         assert [token["id"] for token in tokens] == (["target-token"] if plan else ["target-token", "ci-token"])
         permissions = {k: v for k, v in tokens[0]["with"].items() if k.startswith("permission-")}
-        # The plan only reads and answers (a comment, a reaction); publish pushes and opens PRs.
+        # The plan may report a successfully recovered publication; publish
+        # pushes and reports newly successful fixes.
         assert permissions == {
-            "permission-actions": "read", "permission-issues": "write", "permission-metadata": "read",
+            "permission-actions": "read",
+            "permission-issues": "write",
+            "permission-metadata": "read",
             "permission-contents": "read" if plan else "write",
             "permission-pull-requests": "read" if plan else "write",
             # The PR command's gate checks team membership.
@@ -372,7 +387,10 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
             assert publish_step["env"]["TARGET_TOKEN"] == (
                 "${{ steps.ci-token.outputs.token || steps.target-token.outputs.token }}"
             )
-        assert jobs[job_id]["permissions"] == {"contents": "read"}, job_id
+        assert jobs[job_id]["permissions"] == {
+            **({"actions": "read"} if plan else {}),
+            "contents": "read",
+        }, job_id
         assert jobs[job_id]["runs-on"] == "ubuntu-24.04", job_id
     assert _RUN.read_text(encoding="utf-8").count("actions/create-github-app-token@") == 3
     assert jobs["plan"]["outputs"]["ci_changes"] == "${{ steps.plan.outputs.ci_changes }}"

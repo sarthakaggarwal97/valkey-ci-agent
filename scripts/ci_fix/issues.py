@@ -346,8 +346,27 @@ def _branch_name(failure: IssueFailure) -> str:
 # How the bot recorded a result before the marker below: a heading, then a
 # Source line naming the run. Read, never written, so earlier attempts count.
 _LEGACY_RESULT_HEADING = "**Automatic CI fix \u2014 "
-_RESULT_MARKER = "<!-- valkey-ci-agent:ci-fix-result run={run} outcome={outcome} -->"
-_RESULT_MARKER_RE = re.compile(r"<!-- valkey-ci-agent:ci-fix-result run=(?P<run>\d+) outcome=(?P<outcome>[a-z]+) -->")
+_RESULT_MARKER = "<!-- valkey-ci-agent:ci-fix-result run={run}{generation} outcome={outcome} -->"
+_RESULT_MARKER_RE = re.compile(
+    r"<!-- valkey-ci-agent:ci-fix-result run=(?P<run>\d+)"
+    r"(?: generation=(?P<generation>\d+))?"
+    r" outcome=(?P<outcome>[a-z]+) -->"
+)
+# Bump only after repairing infrastructure that made attempts fail. Markers
+# written before generations existed are generation 1. Generation 3 starts
+# the silent-reporting trial and is tracked by the agent workflow rather than
+# new failure comments on detector issues.
+_FAILURE_GENERATION = 3
+
+
+def _result_marker(run: int, outcome: str) -> str:
+    generation = (
+        f" generation={_FAILURE_GENERATION}"
+        if outcome == ResultKind.FAILED.value
+        else ""
+    )
+    return _RESULT_MARKER.format(run=run, generation=generation, outcome=outcome)
+
 
 def _run_link(repo_full_name: str, failure: IssueFailure) -> str:
     """The Markdown link to the run that recorded ``failure``."""
@@ -356,12 +375,11 @@ def _run_link(repo_full_name: str, failure: IssueFailure) -> str:
 
 
 def fix_reported(issue: Any, failure: IssueFailure, *, repo_full_name: str, bot_login: str) -> bool:
-    """Whether the bot is done with ``failure``'s occurrence.
+    """Whether a target comment already retired ``failure``'s occurrence.
 
-    It is once it reported a fix or a refusal for it, or after
-    ``MAX_FAILED_ATTEMPTS`` attempts that failed. The detector records a newer
-    occurrence in the issue when the test fails again, which makes the issue
-    worth another attempt.
+    Published fixes are current behavior. Refusal and failure comments are
+    read for compatibility with older runs; new unsuccessful attempts are
+    tracked in the agent repository instead.
     """
     comments = retry_github_call(
         lambda: list(issue.get_comments()),
@@ -375,12 +393,16 @@ def fix_reported(issue: Any, failure: IssueFailure, *, repo_full_name: str, bot_
             continue
         body = str(getattr(comment, "body", "") or "")
         if body.startswith(_LEGACY_RESULT_HEADING) and legacy_source in body:
-            return True
+            if not body.startswith(f"{_LEGACY_RESULT_HEADING}{ResultKind.FAILED.value}."):
+                return True
+            continue
         for match in _RESULT_MARKER_RE.finditer(body):
             if int(match.group("run")) != failure.run_id:
                 continue
             if match.group("outcome") != ResultKind.FAILED.value:
                 return True
+            if int(match.group("generation") or 1) != _FAILURE_GENERATION:
+                continue
             failed += 1
     return failed >= MAX_FAILED_ATTEMPTS
 
@@ -398,11 +420,11 @@ def _terminal_comment(
     checked: str = "",
     candidate: Optional[FixCandidate] = None,
 ) -> None:
-    # A failed attempt says nothing about the test, only about the bot: it
-    # stays in the agent repository's run, and its failed run is what the
-    # dispatcher counts (scripts/ci_fix/issue_dispatch.py), not a comment.
-    if action == ResultKind.FAILED.value:
-        logger.info("Issue #%s: the attempt failed; nothing is posted: %s", issue.number, summary)
+    if action not in {
+        ResultKind.PUSHED.value,
+        ResultKind.SUGGESTED.value,
+        ResultKind.OPENED.value,
+    }:
         return
     source = f"From {_run_link(repo_full_name, failure)}"
     if job_name:
@@ -424,7 +446,7 @@ def _terminal_comment(
         body += "\n\n<details><summary>What the bot checked</summary>\n\n" + "\n".join(checks) + "\n\n</details>"
     elif checks:
         body += "\n\n**What the bot checked**\n\n" + "\n".join(checks)
-    body += "\n\n" + _RESULT_MARKER.format(run=failure.run_id, outcome=action)
+    body += "\n\n" + _result_marker(failure.run_id, action)
     retry_github_call(
         lambda: issue.create_comment(body),
         retries=2,
@@ -446,7 +468,7 @@ def _suggestion_comment(issue: Any, failure: IssueFailure, *, source: str, candi
         if candidate.port_commit:
             lines += [f"It ports `{candidate.port_commit[:12]}`.", ""]
         lines += candidate_patch(candidate)
-    lines += [f"{source}.", "", _RESULT_MARKER.format(run=failure.run_id, outcome=ResultKind.SUGGESTED.value)]
+    lines += [f"{source}.", "", _result_marker(failure.run_id, ResultKind.SUGGESTED.value)]
     body = "\n".join(lines)
     retry_github_call(
         lambda: issue.create_comment(body),
@@ -498,7 +520,7 @@ def plan_request(
 
 
 def report_result(gh: Any, plan: FixPlan, result: FixResult) -> dict[str, Any]:
-    """Comment the fix's result on its issue, and return it as a result record."""
+    """Comment a published fix on its issue, and return every result as a record."""
     task, failure = plan.task, plan.issue
     if failure is None:
         raise ValueError("an issue fix plan names its issue")
@@ -712,4 +734,9 @@ def _plan_occurrence(
             other_failed_jobs=other_jobs,
         ),
     )
-    return FixPlan(front_door=FrontDoor.ISSUE, task=task, issue=failure)
+    return FixPlan(
+        front_door=FrontDoor.ISSUE,
+        task=task,
+        issue=failure,
+        retry_generation=_FAILURE_GENERATION,
+    )

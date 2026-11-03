@@ -6,12 +6,10 @@ head's CI to finish, chooses one unhandled actionable job, and plans its fix,
 which runs like every other (:mod:`scripts.ci_fix.run`).
 
 The engine owns diagnosis, editing, and publication. The target PR's normal CI
-remains the final verifier, matching the existing backport workflow model. A
-result comment carries a hidden marker with its outcome, so the same logical
-job is not retried on the same head once it has a result. A failed attempt (an
-agent crash, the time running out) is retried, up to ``MAX_FAILED_ATTEMPTS``
-in one failure generation. Bumping that generation after repairing the
-follow-up infrastructure gives stranded PRs a fresh bounded retry budget.
+remains the final verifier, matching the existing backport workflow model.
+Only a published fix is commented on the target PR. Unsuccessful attempts are
+counted from plan artifacts in the agent repository, so they remain bounded
+without adding failure or infrastructure comments to the target PR.
 """
 
 from __future__ import annotations
@@ -62,9 +60,9 @@ _MARKER_RE = re.compile(
 )
 _MAX_ATTEMPTS_PER_HEAD = 3
 # Bump this only when a follow-up infrastructure repair should give failed
-# current-head jobs a fresh bounded retry budget. Markers written before this
-# field existed are generation 1.
-_FAILURE_GENERATION = 2
+# current-head jobs a fresh bounded retry budget. Generation 3 starts the
+# silent-reporting trial, with attempts stored in agent-repository artifacts.
+_FAILURE_GENERATION = 3
 
 
 @dataclass(frozen=True)
@@ -91,6 +89,7 @@ def find_followup_target(
     repo_entry: RepoEntry,
     target_branch: str,
     bot_login: str,
+    prior_plans: tuple[FixPlan, ...] = (),
 ) -> tuple[FollowupTarget | None, str]:
     """Return one safe, unhandled current-head failure or a skip reason.
 
@@ -109,7 +108,12 @@ def find_followup_target(
     reasons: list[str] = []
     for pr in prs:
         target, reason = _followup_for_pr(
-            gh, pr, repo_entry=repo_entry, target_branch=target_branch, bot_login=bot_login,
+            gh,
+            pr,
+            repo_entry=repo_entry,
+            target_branch=target_branch,
+            bot_login=bot_login,
+            prior_plans=prior_plans,
         )
         if target is not None:
             return target, reason
@@ -157,6 +161,7 @@ def _followup_for_pr(
     repo_entry: RepoEntry,
     target_branch: str,
     bot_login: str,
+    prior_plans: tuple[FixPlan, ...] = (),
 ) -> tuple[FollowupTarget | None, str]:
     """One unhandled failure on ``pr``'s exact current head, or why there is none."""
     head_branch = str(getattr(getattr(pr, "head", None), "ref", "") or "")
@@ -172,7 +177,12 @@ def _followup_for_pr(
         return None, rejection
 
     head_sha = str(getattr(pr.head, "sha", "") or "")
-    handled = _handled_failures(pr, head_sha, bot_login)
+    handled = _handled_failures(
+        pr,
+        head_sha,
+        bot_login,
+        prior_plans=prior_plans,
+    )
     if handled.attempt_count >= _MAX_ATTEMPTS_PER_HEAD:
         return None, "attempt-budget-exhausted"
 
@@ -211,6 +221,7 @@ def plan_request(
     *,
     bot_login: str,
     registry: str = "repos.yml",
+    prior_plans: tuple[FixPlan, ...] = (),
 ) -> FixPlan | dict[str, Any]:
     """The fix plan for one failure on ``request``'s branch (``{"repo", "branch"}``), or why there is none."""
     repo_entry, _branch_entry = load_registry(registry).get_branch(str(request["repo"]), str(request["branch"]))
@@ -220,6 +231,7 @@ def plan_request(
         repo_entry=repo_entry,
         target_branch=target_branch,
         bot_login=bot_login,
+        prior_plans=prior_plans,
     )
     if target is None:
         return {
@@ -259,27 +271,24 @@ def plan_request(
     return FixPlan(
         front_door=FrontDoor.FOLLOW_UP, task=task,
         markers=tuple(_markers(failure, target.run, (selected_job,))),
+        retry_generation=_FAILURE_GENERATION,
     )
 
 
 def report_result(gh: Any, plan: FixPlan, result: FixResult) -> dict[str, Any]:
-    """Comment the result on the PR, with the markers that record its outcome.
-
-    The outcome tells a refusal, which retires the job but changed nothing,
-    and a failure, which is retried a bounded number of times, from an
-    attempt that counts against the head's budget.
-    """
+    """Comment a published fix on the PR; keep other results in workflow logs."""
     failure = plan.task.failure
-    what = "backport" if is_backport_branch(plan.task.target.branch) else "pull request"
-    body = f"Automatic follow-up on this {what}'s CI.\n\n" + render_result(result)
-    body += "\n\n" + "\n".join(
-        marker.removesuffix(" -->") + f" outcome={result.kind.value} -->" for marker in plan.markers
-    )
-    retry_github_call(
-        lambda: gh.get_repo(failure.repo_full_name).get_pull(failure.pr_number).create_issue_comment(body),
-        retries=3,
-        description=f"post automatic CI follow-up on #{failure.pr_number}",
-    )
+    if result.kind.successful:
+        what = "backport" if is_backport_branch(plan.task.target.branch) else "pull request"
+        body = f"Automatic follow-up on this {what}'s CI.\n\n" + render_result(result)
+        body += "\n\n" + "\n".join(
+            marker.removesuffix(" -->") + f" outcome={result.kind.value} -->" for marker in plan.markers
+        )
+        retry_github_call(
+            lambda: gh.get_repo(failure.repo_full_name).get_pull(failure.pr_number).create_issue_comment(body),
+            retries=3,
+            description=f"post automatic CI follow-up on #{failure.pr_number}",
+        )
     response: dict[str, Any] = {
         "repo": failure.repo_full_name,
         "branch": failure.base_branch,
@@ -335,6 +344,8 @@ def _handled_failures(
     pr: Any,
     head_sha: str,
     bot_login: str,
+    *,
+    prior_plans: tuple[FixPlan, ...] = (),
 ) -> _HandledFailures:
     """Return the attempts and handled jobs for ``head_sha`` only.
 
@@ -379,6 +390,28 @@ def _handled_failures(
             job_ids.add(job)
             if key:
                 job_keys.add(key)
+    for plan in prior_plans:
+        if (
+            plan.front_door is not FrontDoor.FOLLOW_UP
+            or plan.retry_generation != _FAILURE_GENERATION
+            or plan.task.failure.pr_number != int(pr.number)
+            or plan.task.failure.head_sha != head_sha
+        ):
+            continue
+        matches = tuple(
+            match
+            for marker in plan.markers
+            for match in _MARKER_RE.finditer(marker)
+            if match.group("head") == head_sha
+        )
+        if not matches:
+            continue
+        attempt_count += 1
+        for match in matches:
+            job, key = int(match.group("job")), match.group("key")
+            failed_ids[job] += 1
+            if key:
+                failed_keys[key] += 1
     job_ids.update(job for job, count in failed_ids.items() if count >= MAX_FAILED_ATTEMPTS)
     job_keys.update(key for key, count in failed_keys.items() if count >= MAX_FAILED_ATTEMPTS)
     return _HandledFailures(
