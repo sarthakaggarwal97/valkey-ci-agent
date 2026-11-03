@@ -161,3 +161,28 @@ def _analysis_obj(*, status: str, verdict: str) -> MagicMock:
 ])
 def test_should_publish_gate(status, verdict, expected):
     assert fuzzer_main_mod._should_publish(_analysis_obj(status=status, verdict=verdict)) is expected
+
+
+def test_a_pr_batch_run_is_analyzed_and_filed_on_the_given_repo(monkeypatch, capsys):
+    monkeypatch.setenv("TARGET_TOKEN", "fake")
+    run = MagicMock(id=11, conclusion="failure", html_url="https://x/runs/11")
+    github_cls = MagicMock()
+    github_cls.return_value.get_repo.return_value.get_workflow_run.return_value = run
+    with patch.object(fuzzer_main_mod, "Github", github_cls), \
+         patch.object(fuzzer_main_mod, "FuzzerRunAnalyzer") as mock_analyzer_cls, \
+         patch.object(fuzzer_main_mod, "IssueDedupPublisher") as mock_pub_cls:
+        analyze = mock_analyzer_cls.return_value.analyze
+        analyze.return_value = _batch(_finding())
+        mock_pub_cls.return_value.upsert.return_value = ("created", "https://x/issues/1")
+        rc = fuzzer_main_mod.main(["--fuzzer-repo", "owner/valkey-fuzzer", "--pr-batch-run", "11",
+                                   "--change", "valkey-io/valkey#4716, merged as e082696cf000"])
+
+    assert rc == 0
+    github_cls.return_value.get_repo.return_value.get_workflow_run.assert_called_once_with(11)
+    analyze.assert_called_once_with(
+        "owner/valkey-fuzzer", 11, workflow_file="fuzzer-pr-batch.yml",
+        change="valkey-io/valkey#4716, merged as e082696cf000", artifact_name="fuzzer-batch-11",
+    )
+    assert mock_pub_cls.return_value.upsert.call_args.args == ("owner/valkey-fuzzer",)
+    payload = json.loads(capsys.readouterr().out)
+    assert (payload["target_repo"], payload["runs"][0]["run_id"]) == ("owner/valkey-fuzzer", 11)

@@ -73,6 +73,8 @@ class FuzzerFinding:
     anomalies: list[FuzzerSignal] = field(default_factory=list)
     # The issue title, when the finding names its own.
     title: str | None = None
+    # What the batch tested, when the caller names it, such as a merged pull request.
+    change: str | None = None
     scenario_id: str | None = None
     seed: str | None = None
     tested_valkey_sha: str | None = None

@@ -71,6 +71,7 @@ def _render_body(finding: FuzzerFinding, marker: str, *, occurrences: int) -> st
         "| Field | Value |",
         "|---|---|",
         f"| Workflow run | [{finding.run_id}]({finding.run_url}) |",
+        *([f"| Change tested | {finding.change} |"] if finding.change else []),
         f"| Status | `{finding.overall_status}` |",
         f"| Conclusion | `{finding.conclusion}` |",
     ]
@@ -112,6 +113,8 @@ def _render_comment(finding: FuzzerFinding, count: int) -> str:
         f"Run [{finding.run_id}]({finding.run_url}) | "
         f"`{finding.overall_status}` | `{finding.triage_verdict}`",
     ]
+    if finding.change:
+        lines += ["", f"Change tested: {finding.change}"]
     if finding.batch_runs:
         lines += ["", f"Batch runs: {_runs_cell(finding.batch_runs)}"]
     if finding.rerun_verdict:

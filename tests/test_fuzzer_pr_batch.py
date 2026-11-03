@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -64,7 +65,7 @@ def _bundles(value) -> dict[str, str]:
 
 def test_batch_inputs_are_the_ones_the_workflow_takes():
     assert BATCH_INPUTS == ("scenarios", "valkey_repository", "valkey_ref", "valkey_sha")
-    assert OPTIONAL_INPUTS == ("spec_bundles",)
+    assert OPTIONAL_INPUTS == ("spec_bundles", "random_seeds", "request_id")
     check_batch_inputs(_inputs())
     check_batch_inputs(_bundles({"toy": BUNDLE}))
     check_batch_inputs(_bundles(""))
@@ -76,6 +77,9 @@ def test_batch_inputs_are_the_ones_the_workflow_takes():
     for_range = batch_dispatch_inputs({"repo": "valkey-io/valkey", "pr_number": None, "head_sha": HEAD},
                                       {"ai-0123456789ab": SCENARIO})
     assert for_range["valkey_ref"] == HEAD
+    baseline = batch_dispatch_inputs({"repo": "valkey-io/valkey", "pr_number": None, "head_sha": HEAD}, {},
+                                     random_seeds=5, request_id="replay-007-aaaaaaaaa")
+    assert (baseline["scenarios"], baseline["random_seeds"], baseline["request_id"]) == ("{}", "5", "replay-007-aaaaaaaaa")
 
 
 def test_batch_names_keep_a_fitting_id_and_fix_the_rest():
@@ -115,8 +119,11 @@ def test_bundle_paths_the_batch_takes(path, allowed):
     (_inputs(valkey_sha="a" * 12), "valkey_sha must be a full 40-character lowercase commit SHA"),
     (_inputs(valkey_sha="A" * 40), "valkey_sha must be a full 40-character lowercase commit SHA"),
     (_scenarios("{not json"), "scenarios is not JSON"),
-    (_scenarios({}), "must be a non-empty JSON object"),
-    (_scenarios([SCENARIO]), "must be a non-empty JSON object"),
+    (_scenarios({}), "scenarios is empty and random_seeds is 0: there is nothing to run"),
+    (_scenarios([SCENARIO]), "must be a JSON object"),
+    (_inputs(random_seeds="21"), "random_seeds must be 0 to 20"),
+    (_inputs(random_seeds="-1"), "random_seeds must be 0 to 20"),
+    (_inputs(request_id="a b"), "request_id must be at most 100 letters"),
     (_scenarios({"../x": SCENARIO}), "scenario name '../x' must be"),
     (_scenarios({"a..b": SCENARIO}), "scenario name 'a..b' must be"),
     (_scenarios({"-x": SCENARIO}), "scenario name '-x' must be"),
@@ -396,3 +403,47 @@ def test_download_batch_takes_only_that_runs_artifact(monkeypatch):
     client.download_artifact.return_value = {}
     with pytest.raises(ValueError, match="empty or unreadable"):
         pr_batch_mod.download_batch(MagicMock(), "t", "valkey-io/valkey-fuzzer", 5)
+
+
+SINCE = datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc)
+
+
+def _runs(*runs) -> MagicMock:
+    github = MagicMock()
+    github.get_repo.return_value.get_workflow.return_value.get_runs.return_value = list(runs)
+    return github
+
+
+def _run(title: str, minutes: int, status: str = "completed") -> MagicMock:
+    return MagicMock(display_title=title, created_at=SINCE + timedelta(minutes=minutes), status=status,
+                     html_url=f"https://x/{title}")
+
+
+def test_find_run_matches_the_title_among_runs_since_the_dispatch():
+    mine = _run("Valkey Fuzzer PR Batch replay-003-bbbbbbbbb", 1)
+    github = _runs(_run("Valkey Fuzzer PR Batch replay-004-ccccccccc", 2), mine,
+                   _run("Valkey Fuzzer PR Batch replay-003-bbbbbbbbb", -5))
+    found = pr_batch_mod.find_run(github, fuzzer_repo="o/f", workflow="fuzzer-pr-batch.yml",
+                                  request_id="replay-003-bbbbbbbbb", since=SINCE)
+    assert found is mine
+    github.get_repo.return_value.get_workflow.return_value.get_runs.assert_called_with(event="workflow_dispatch")
+    # Only an older run of the same name: the dispatch has not shown up yet.
+    older = _runs(_run("Valkey Fuzzer PR Batch replay-003-bbbbbbbbb", -5))
+    assert pr_batch_mod.find_run(older, fuzzer_repo="o/f", workflow="fuzzer-pr-batch.yml",
+                                 request_id="replay-003-bbbbbbbbb", since=SINCE) is None
+
+
+def test_wait_for_run_waits_until_the_run_completes():
+    run = _run("Valkey Fuzzer PR Batch r", 1, status="queued")
+    statuses = iter(["in_progress", "completed"])
+    run.update.side_effect = lambda: setattr(run, "status", next(statuses))
+    sleeps = []
+    found = pr_batch_mod.wait_for_run(_runs(run), fuzzer_repo="o/f", workflow="w", request_id="r", since=SINCE,
+                                      timeout_s=3600, poll_s=5, sleep=sleeps.append)
+    assert found is run and sleeps == [5]
+
+
+def test_wait_for_run_gives_up_at_its_timeout():
+    with pytest.raises(TimeoutError, match="no run named 'r' showed up"):
+        pr_batch_mod.wait_for_run(_runs(), fuzzer_repo="o/f", workflow="w", request_id="r", since=SINCE,
+                                  timeout_s=0.01, poll_s=0.01, sleep=lambda s: None)

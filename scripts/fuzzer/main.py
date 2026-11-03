@@ -1,4 +1,8 @@
-"""Monitor the latest scheduled Valkey fuzzer workflow run."""
+"""Monitor the latest scheduled Valkey fuzzer workflow run, or one PR batch run.
+
+With ``--pr-batch-run``, it analyzes that run of the fuzzer's PR batch
+instead, and ``--change`` names what the batch tested in the issues it files.
+"""
 
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ from scripts.common.logging_utils import configure_logging, log_group, log_outco
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.fuzzer import issue_renderer
 from scripts.fuzzer.analyzer import DISMISSING_VERDICTS, FuzzerRunAnalyzer
+from scripts.fuzzer.pr_batch import BATCH_ARTIFACT_PREFIX, PR_BATCH_WORKFLOW
 
 TARGET_REPO = "valkey-io/valkey-fuzzer"
 WORKFLOW_FILE = "fuzzer-run.yml"
@@ -34,7 +39,7 @@ def _should_publish(analysis: Any) -> bool:
     return analysis.triage_verdict not in DISMISSING_VERDICTS
 
 
-def _publish(publisher: IssueDedupPublisher, run_id: int, finding: Any) -> dict[str, Any]:
+def _publish(publisher: IssueDedupPublisher, repo: str, run_id: int, finding: Any) -> dict[str, Any]:
     """File or update the issue for one finding, when it needs one."""
     logger.info("Finding %s %s: status %s, verdict %s", finding.kind,
                 finding.signature_key or ", ".join(finding.batch_runs) or "-",
@@ -58,7 +63,7 @@ def _publish(publisher: IssueDedupPublisher, run_id: int, finding: Any) -> dict[
         item["issue_action"] = "skipped-no-fingerprint"
         return item
     action, url = publisher.upsert(
-        TARGET_REPO,
+        repo,
         fingerprint=finding.incident_fingerprint,
         render=issue_renderer.render_for(finding),
         idempotency_key=str(run_id),
@@ -76,6 +81,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="Write JSON result to this path instead of stdout")
     parser.add_argument("--dry-run", action="store_true",
                         help="List the latest run without analyzing or filing an issue")
+    parser.add_argument("--fuzzer-repo", default=TARGET_REPO,
+                        help="The valkey-fuzzer repository whose runs are read and where issues are filed")
+    parser.add_argument("--pr-batch-run", type=int,
+                        help="Analyze this run of the PR batch workflow instead of the latest scheduled run")
+    parser.add_argument("--change", help="What the PR batch tested, such as a merged pull request, for the issues")
     args = parser.parse_args(argv)
 
     configure_logging()
@@ -89,11 +99,18 @@ def main(argv: list[str] | None = None) -> int:
     analyzer = FuzzerRunAnalyzer(gh, github_token=token, artifact_client=client)
     publisher = IssueDedupPublisher(gh, marker_namespace=issue_renderer.MARKER_NAMESPACE)
 
-    logger.info("Fuzzer monitor for %s (%s, scheduled runs)%s", TARGET_REPO, WORKFLOW_FILE,
+    repo = args.fuzzer_repo
+    if args.pr_batch_run:
+        workflow = PR_BATCH_WORKFLOW
+        runs = [gh.get_repo(repo).get_workflow_run(args.pr_batch_run)]
+    else:
+        workflow = WORKFLOW_FILE
+        runs = client.list_recent_runs(repo, workflow, event="schedule", max_runs=1)
+    logger.info("Fuzzer monitor for %s (%s, %s)%s", repo, workflow,
+                f"run {args.pr_batch_run}" if args.pr_batch_run else "scheduled runs",
                 "; dry run" if args.dry_run else "")
-    runs = client.list_recent_runs(TARGET_REPO, WORKFLOW_FILE, event="schedule", max_runs=1)
     if not runs:
-        logger.warning("No completed scheduled %s run found on %s", WORKFLOW_FILE, TARGET_REPO)
+        logger.warning("No completed %s run found on %s", workflow, repo)
     results: list[dict[str, Any]] = []
     for run in runs:
         logger.info("Latest fuzzer run %s concluded %s: %s", run.id,
@@ -111,14 +128,17 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             with log_group(f"Analyze fuzzer run {run.id}"):
-                analysis = analyzer.analyze(TARGET_REPO, run.id, workflow_file=WORKFLOW_FILE)
+                analysis = analyzer.analyze(
+                    repo, run.id, workflow_file=workflow, change=args.change,
+                    artifact_name=f"{BATCH_ARTIFACT_PREFIX}{run.id}" if args.pr_batch_run else None,
+                )
             logger.info("Run %s: batch %s %s; %d finding(s)", run.id, analysis.batch_status or "unreadable",
                         analysis.counts or "", len(analysis.findings))
             entry["action"] = "analyzed"
             entry["status"] = analysis.overall_status
             entry["batch_status"] = analysis.batch_status
             entry["counts"] = analysis.counts
-            entry["findings"] = [_publish(publisher, run.id, finding) for finding in analysis.findings]
+            entry["findings"] = [_publish(publisher, repo, run.id, finding) for finding in analysis.findings]
         except Exception as exc:
             entry["action"] = "error"
             entry["error"] = str(exc)
@@ -126,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
 
         results.append(entry)
 
-    output = {"target_repo": TARGET_REPO, "dry_run": args.dry_run, "runs": results}
+    output = {"target_repo": repo, "dry_run": args.dry_run, "runs": results}
     rendered = json.dumps(output, indent=2)
     if args.output:
         Path(args.output).write_text(rendered, encoding="utf-8")

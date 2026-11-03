@@ -5,7 +5,10 @@ valkey-fuzzer is started by hand with ``scenarios`` (a JSON object mapping a
 scenario name to its YAML), ``valkey_repository``, ``valkey_ref``,
 ``valkey_sha`` and, optionally, ``spec_bundles`` (a JSON object mapping a
 spec bundle name to ``{path in the bundle: file text}``, for scenarios
-translated from a bundle that brings its own data-only experiments). It
+translated from a bundle that brings its own data-only experiments),
+``random_seeds`` (that many seeds of each one-build experiment run beside the
+scenarios, which may then be empty) and ``request_id`` (shown in the run's
+title, so :func:`find_run` finds the run a dispatch started). It
 builds that Valkey commit, runs the scenarios through ``valkey-fuzzer
 batch`` with the candidate profile, the bundles on
 ``VALKEY_FUZZER_SPEC_PATH`` and their ``experiments/`` loaded, and uploads
@@ -32,8 +35,10 @@ import logging
 import os
 import re
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -51,10 +56,12 @@ PR_BATCH_WORKFLOW = "fuzzer-pr-batch.yml"
 BATCH_ARTIFACT_PREFIX = "fuzzer-batch-"
 RESULTS_FILE = "batch-results.json"
 
-# The workflow's inputs: the four always sent, and spec_bundles when a
-# scenario needs a bundle.
+# The workflow's inputs: the four always sent, spec_bundles when a scenario
+# needs a bundle, and the random baseline and the run's name when asked for.
 BATCH_INPUTS = ("scenarios", "valkey_repository", "valkey_ref", "valkey_sha")
-OPTIONAL_INPUTS = ("spec_bundles",)
+OPTIONAL_INPUTS = ("spec_bundles", "random_seeds", "request_id")
+# The title the workflow gives a run: its run-name, with the request_id.
+RUN_TITLE = "Valkey Fuzzer PR Batch {request_id}"
 # The workflow's own limits on `scenarios` and on `spec_bundles`.
 MAX_SCENARIOS_CHARS = 60_000
 MAX_SPEC_BUNDLES_CHARS = 60_000
@@ -63,6 +70,8 @@ MAX_DISPATCH_CHARS = 65_535
 # The workflow's patterns, exactly.
 _REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
+_RANDOM_SEEDS_RE = re.compile(r"[0-9]|1[0-9]|20")
+_REQUEST_ID_RE = re.compile(r"[A-Za-z0-9_.-]{0,100}")
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}")
 _BUNDLE_NAME_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _FILE_NAME = r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}"
@@ -104,12 +113,19 @@ def check_batch_inputs(inputs: dict[str, str]) -> None:
         raise ValueError("valkey_repository must be OWNER/NAME")
     if not _SHA_RE.fullmatch(inputs["valkey_sha"]):
         raise ValueError("valkey_sha must be a full 40-character lowercase commit SHA")
+    random_seeds = inputs.get("random_seeds", "0")
+    if not _RANDOM_SEEDS_RE.fullmatch(random_seeds):
+        raise ValueError("random_seeds must be 0 to 20")
+    if not _REQUEST_ID_RE.fullmatch(inputs.get("request_id", "")):
+        raise ValueError("request_id must be at most 100 letters, digits, '.', '_', or '-'")
     try:
         scenarios = json.loads(raw)
     except ValueError as exc:
         raise ValueError(f"scenarios is not JSON: {exc}") from exc
-    if not isinstance(scenarios, dict) or not scenarios:
-        raise ValueError("scenarios must be a non-empty JSON object mapping a name to scenario YAML")
+    if not isinstance(scenarios, dict):
+        raise ValueError("scenarios must be a JSON object mapping a name to scenario YAML")
+    if not scenarios and random_seeds == "0":
+        raise ValueError("scenarios is empty and random_seeds is 0: there is nothing to run")
     for name, text in scenarios.items():
         if not _NAME_RE.fullmatch(name) or ".." in name:
             raise ValueError(f"scenario name {name!r} must be letters, digits, '.', '_', or '-'")
@@ -198,8 +214,10 @@ def batch_names(scenario_ids: list[str]) -> dict[str, str]:
 
 def batch_dispatch_inputs(
     change: dict[str, Any], scenarios: dict[str, str], spec_bundles: dict[str, dict[str, str]] | None = None,
+    *, random_seeds: int = 0, request_id: str = "",
 ) -> dict[str, str]:
-    """The PR batch's inputs for ``scenarios`` ({name: YAML}) on ``change``, with any bundles they need."""
+    """The PR batch's inputs for ``scenarios`` ({name: YAML}) on ``change``, with any bundles they need,
+    ``random_seeds`` seeds of each one-build experiment beside them, and the run named ``request_id``."""
     pr_number = change.get("pr_number")
     head_sha = str(change["head_sha"])
     inputs = {
@@ -210,6 +228,10 @@ def batch_dispatch_inputs(
     }
     if spec_bundles:
         inputs["spec_bundles"] = json.dumps(spec_bundles, separators=(",", ":"))
+    if random_seeds:
+        inputs["random_seeds"] = str(random_seeds)
+    if request_id:
+        inputs["request_id"] = request_id
     check_batch_inputs(inputs)
     return inputs
 
@@ -221,6 +243,36 @@ def dispatch_batch(
     target = gh.get_repo(fuzzer_repo).get_workflow(workflow)
     if not target.create_dispatch(ref, inputs):
         raise RuntimeError(f"GitHub refused to dispatch {workflow} on {fuzzer_repo}")
+
+
+def find_run(gh: Any, *, fuzzer_repo: str, workflow: str, request_id: str, since: datetime) -> Any | None:
+    """The run of ``workflow`` a dispatch named ``request_id`` started at or after ``since``, if it shows yet."""
+    title = RUN_TITLE.format(request_id=request_id)
+    target = gh.get_repo(fuzzer_repo).get_workflow(workflow)
+    for run in target.get_runs(event="workflow_dispatch"):
+        if run.created_at < since:
+            return None  # newest first: the rest are older still
+        if run.display_title == title:
+            return run
+    return None
+
+
+def wait_for_run(
+    gh: Any, *, fuzzer_repo: str, workflow: str, request_id: str, since: datetime,
+    timeout_s: float, poll_s: float = 60.0, sleep: Callable[[float], None] = time.sleep,
+) -> Any:
+    """Find the run a dispatch named ``request_id`` started, and wait until it completes."""
+    deadline = time.monotonic() + timeout_s
+    run = None
+    while time.monotonic() < deadline:
+        run = run or find_run(gh, fuzzer_repo=fuzzer_repo, workflow=workflow, request_id=request_id, since=since)
+        if run is not None:
+            run.update()
+            if run.status == "completed":
+                return run
+        sleep(poll_s)
+    where = run.html_url if run is not None else f"no run named {request_id!r} showed up"
+    raise TimeoutError(f"the PR batch did not complete within {timeout_s:.0f}s: {where}")
 
 
 # --- Results -----------------------------------------------------------------

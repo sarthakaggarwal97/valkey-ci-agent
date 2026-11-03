@@ -640,7 +640,21 @@ class FuzzerRunAnalyzer:
         self._gh = github_client
         self._client = artifact_client or ArtifactClient(github_client, token=github_token)
 
-    def analyze(self, repo: str, run_id: int, *, workflow_file: str) -> FuzzerBatchAnalysis:
+    def analyze(
+        self, repo: str, run_id: int, *, workflow_file: str, artifact_name: str | None = None,
+        change: str | None = None,
+    ) -> FuzzerBatchAnalysis:
+        """Analyze a run's batch: the scheduled run's bundle, which holds the folder at ``batch/``, or the
+        artifact ``artifact_name``, which holds it at its root (a PR batch's). ``change`` names what was
+        tested, for the issues."""
+        analysis = self._analyze(repo, run_id, workflow_file=workflow_file, artifact_name=artifact_name)
+        for finding in analysis.findings:
+            finding.change = change
+        return analysis
+
+    def _analyze(
+        self, repo: str, run_id: int, *, workflow_file: str, artifact_name: str | None,
+    ) -> FuzzerBatchAnalysis:
         gh_repo = self._gh.get_repo(repo)
         run = gh_repo.get_workflow_run(run_id)
         base: dict[str, Any] = dict(
@@ -653,7 +667,8 @@ class FuzzerRunAnalyzer:
 
         artifacts = self._client.list_run_artifacts(repo, run_id)
         bundle = next(
-            (a for a in artifacts if a.name.startswith("fuzzer-run-artifacts") and not a.expired),
+            (a for a in artifacts if not a.expired and (
+                a.name == artifact_name if artifact_name else a.name.startswith("fuzzer-run-artifacts"))),
             None,
         )
         if bundle is None:
@@ -664,7 +679,7 @@ class FuzzerRunAnalyzer:
             analysis.findings = [_build_error_analysis(base, "fuzzer artifact bundle was empty or unreadable")]
             return analysis
 
-        batch = read_batch(files, BATCH_PREFIX)
+        batch = read_batch(files, "" if artifact_name else BATCH_PREFIX)
         if batch.problem:
             analysis.findings = [_build_error_analysis(base, batch.problem)]
             return analysis

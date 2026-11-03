@@ -1,0 +1,339 @@
+name: Replay Merged PRs Through the Fuzzer
+
+# Replays the pull requests merged into a Valkey branch, oldest first, as if
+# each had just merged: Claude proposes fuzzer scenarios for the merge's
+# change, valkey-fuzzer's PR batch runs them on the merge commit beside a
+# random baseline, and the fuzzer monitor triages each batch and files or
+# updates an issue on valkey-fuzzer for what looks like a real problem. The
+# batches run in parallel; the triage runs in merge order, so a failure's
+# issue opens on the first merge that showed it. Only the replay is made up:
+# the proposals, the batch and the monitor are the ones a live run uses.
+
+on:
+  workflow_dispatch:
+    inputs:
+      range:
+        description: "BASE..TIP on the Valkey branch: the merges after BASE up to TIP, on TIP's first-parent history"
+        required: true
+        type: string
+      first:
+        description: "Replay only the first N merges of the range (0: all)"
+        required: false
+        default: "0"
+        type: string
+      count:
+        description: "Scenarios to ask Claude for per merge, 1 to 10"
+        required: false
+        default: "5"
+        type: string
+      random_seeds:
+        description: "Random seeds of each one-build experiment per merge, 0 to 20"
+        required: false
+        default: "2"
+        type: string
+      max_parallel:
+        description: "Merges replayed at once, 1 to 10 (each holds a runner while its batch holds another)"
+        required: false
+        default: "10"
+        type: string
+      fuzzer_ref:
+        description: "The valkey-fuzzer branch whose PR batch workflow runs"
+        required: false
+        default: main
+        type: string
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  VALKEY_REPOSITORY: valkey-io/valkey
+  FUZZER_REPOSITORY: ${{ github.repository_owner }}/valkey-fuzzer
+  # Merges per triage job: the jobs run one at a time, in merge order.
+  TRIAGE_CHUNK: "16"
+  # The App where it is installed (valkey-io); a fork rehearses with REHEARSAL_PAT.
+  HAS_APP: ${{ secrets.VALKEYRIE_BOT_APP_ID != '' }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      merges: ${{ steps.plan.outputs.merges }}
+      chunks: ${{ steps.plan.outputs.chunks }}
+    env:
+      RANGE: ${{ inputs.range }}
+      FIRST: ${{ inputs.first }}
+      COUNT: ${{ inputs.count }}
+      RANDOM_SEEDS: ${{ inputs.random_seeds }}
+      MAX_PARALLEL: ${{ inputs.max_parallel }}
+      FUZZER_REF: ${{ inputs.fuzzer_ref }}
+    steps:
+      - name: Check inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref='[A-Za-z0-9][A-Za-z0-9._/-]{0,99}'
+          [[ "${RANGE}" =~ ^${ref}\.\.${ref}$ && "${RANGE}" != *...* ]] || { echo "::error::range must be BASE..TIP"; exit 1; }
+          [[ "${FIRST}" =~ ^[0-9]{1,3}$ ]] || { echo "::error::first must be 0 to 999"; exit 1; }
+          [[ "${COUNT}" =~ ^([1-9]|10)$ ]] || { echo "::error::count must be 1 to 10"; exit 1; }
+          [[ "${RANDOM_SEEDS}" =~ ^([0-9]|1[0-9]|20)$ ]] || { echo "::error::random_seeds must be 0 to 20"; exit 1; }
+          [[ "${MAX_PARALLEL}" =~ ^([1-9]|10)$ ]] || { echo "::error::max_parallel must be 1 to 10"; exit 1; }
+          [[ "${FUZZER_REF}" =~ ^${ref}$ ]] || { echo "::error::fuzzer_ref must be a branch name"; exit 1; }
+
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Check out Valkey
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.VALKEY_REPOSITORY }}
+          path: valkey
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: List the merges
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.fuzzer.replay plan --valkey-dir valkey --range "${RANGE}" --first "${FIRST}" --out merges.json
+          python - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json, os
+          merges = json.load(open("merges.json"))
+          if not merges:
+              raise SystemExit("the range holds no merges")
+          chunk = int(os.environ["TRIAGE_CHUNK"])
+          print("merges=" + json.dumps(merges, separators=(",", ":")))
+          print("chunks=" + json.dumps(list(range((len(merges) + chunk - 1) // chunk))))
+          PY
+
+  replay:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.max_parallel) }}
+      matrix:
+        merge: ${{ fromJSON(needs.plan.outputs.merges) }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_EVIDENCE_DIR: agent-evidence
+      MERGE: ${{ toJSON(matrix.merge) }}
+      COUNT: ${{ inputs.count }}
+      RANDOM_SEEDS: ${{ inputs.random_seeds }}
+      FUZZER_REF: ${{ inputs.fuzzer_ref }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          install-claude: "true"
+
+      - name: Check out valkey-fuzzer
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.FUZZER_REPOSITORY }}
+          ref: ${{ inputs.fuzzer_ref }}
+          path: valkey-fuzzer
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install valkey-fuzzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "${RUNNER_TEMP}/fuzzer-venv"
+          "${RUNNER_TEMP}/fuzzer-venv/bin/python" -m pip install --quiet "${GITHUB_WORKSPACE}/valkey-fuzzer"
+          echo "FUZZER_BIN=${RUNNER_TEMP}/fuzzer-venv/bin/valkey-fuzzer" >> "${GITHUB_ENV}"
+
+      # Reads the public Valkey repository and starts the PR batch on valkey-fuzzer, nothing else.
+      - name: Generate GitHub App token
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: valkey-fuzzer
+          permission-actions: write
+          permission-contents: read
+          permission-metadata: read
+
+      # A fork without the App rehearses with its owner's PAT instead.
+      - name: Use the rehearsal PAT
+        id: pat
+        if: env.HAS_APP != 'true'
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::repositories: valkey-fuzzer; permission-actions: write; permission-contents: read; permission-metadata: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: valkey-fuzzer-replay-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Replay the merge
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.app-token.outputs.token || steps.pat.outputs.token }}
+        run: |
+          set -euo pipefail
+          python -m scripts.fuzzer.replay run --merge "${MERGE}" --repo "${VALKEY_REPOSITORY}" \
+            --fuzzer-repo "${FUZZER_REPOSITORY}" --fuzzer-ref "${FUZZER_REF}" \
+            --fuzzer-dir valkey-fuzzer --fuzzer-bin "${FUZZER_BIN}" \
+            --count "${COUNT}" --random-seeds "${RANDOM_SEEDS}" --out replay
+
+      - name: Upload the replay
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: replay-${{ matrix.merge.index }}
+          path: replay
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload agent evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: replay-agent-evidence-${{ matrix.merge.index }}
+          path: agent-evidence
+          if-no-files-found: ignore
+          retention-days: 30
+
+  triage:
+    needs: [plan, replay]
+    if: ${{ always() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    strategy:
+      fail-fast: false
+      # One at a time, in merge order: a failure's issue opens on the first merge that showed it.
+      max-parallel: 1
+      matrix:
+        chunk: ${{ fromJSON(needs.plan.outputs.chunks) }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_EVIDENCE_DIR: agent-evidence
+      CHUNK: ${{ matrix.chunk }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          install-claude: "true"
+
+      - name: Download the replays
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: replay-[0-9]*
+          path: replays
+
+      - name: Generate GitHub App token
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: valkey-fuzzer
+          permission-actions: read
+          permission-contents: read
+          permission-issues: write
+          permission-metadata: read
+
+      # A fork without the App rehearses with its owner's PAT instead.
+      - name: Use the rehearsal PAT
+        id: pat
+        if: env.HAS_APP != 'true'
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::repositories: valkey-fuzzer; permission-actions: read; permission-contents: read; permission-issues: write; permission-metadata: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: valkey-fuzzer-replay-triage-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # The fuzzer monitor on each merge's batch, as a live run would start it once the batch finished.
+      - name: Triage each merge's batch, in merge order
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.app-token.outputs.token || steps.pat.outputs.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p triage
+          failed=0
+          for index in $(seq $((CHUNK * TRIAGE_CHUNK)) $((CHUNK * TRIAGE_CHUNK + TRIAGE_CHUNK - 1))); do
+            replay="replays/replay-${index}/replay.json"
+            [[ -f "${replay}" ]] || continue
+            run_id="$(jq -r '.run_id // empty' "${replay}")"
+            change="$(jq -r '.change' "${replay}")"
+            if [[ -z "${run_id}" ]]; then
+              echo "::warning::merge ${index} ran no PR batch: ${change}"
+              continue
+            fi
+            echo "::group::Merge ${index}: ${change}"
+            python -m scripts.fuzzer.main --fuzzer-repo "${FUZZER_REPOSITORY}" --pr-batch-run "${run_id}" \
+              --change "${change}" --output "triage/merge-${index}.json" || failed=1
+            echo "::endgroup::"
+          done
+          exit "${failed}"
+
+      - name: Upload the triage
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: replay-triage-${{ matrix.chunk }}
+          path: triage
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload agent evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: replay-triage-agent-evidence-${{ matrix.chunk }}
+          path: agent-evidence
+          if-no-files-found: ignore
+          retention-days: 30

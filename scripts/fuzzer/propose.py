@@ -604,6 +604,14 @@ def render_summary(result: dict[str, Any]) -> str:
 
 def batch_inputs(out_dir: Path) -> dict[str, str] | None:
     """The PR batch workflow's inputs, from the validated scenarios on disk."""
+    change, scenarios = validated_scenarios(out_dir)
+    if not scenarios:
+        return None
+    return batch_dispatch_inputs(change, scenarios)
+
+
+def validated_scenarios(out_dir: Path) -> tuple[dict[str, Any], dict[str, str]]:
+    """The change and its validated scenarios ({scenario id: YAML}), read back and checked again."""
     result = json.loads((out_dir / "proposals.json").read_text(encoding="utf-8"))
     change = result["change"]
     scenarios: dict[str, str] = {}
@@ -617,9 +625,7 @@ def batch_inputs(out_dir: Path) -> dict[str, str] | None:
         if doc is None or doc["scenario_id"] != item["scenario_id"]:
             raise ValueError(f"{item['file']} changed since it was validated: {error or 'renamed'}")
         scenarios[str(item["scenario_id"])] = text
-    if not scenarios:
-        return None
-    return batch_dispatch_inputs(change, scenarios)
+    return change, scenarios
 
 
 # --- Command line ------------------------------------------------------------

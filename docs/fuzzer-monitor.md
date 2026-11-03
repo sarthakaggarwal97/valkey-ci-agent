@@ -127,6 +127,18 @@ gh workflow run monitor-fuzzer.yml --repo valkey-io/valkey-ci-agent --field dry_
 
 Scheduled runs always run for real.
 
+The monitor also reads one run of valkey-fuzzer's PR batch, whose artifact
+`fuzzer-batch-<run id>` holds the batch folder at its root, and names what it
+tested in the issues it files:
+
+```bash
+python -m scripts.fuzzer.main --fuzzer-repo OWNER/valkey-fuzzer --pr-batch-run <run id> \
+  --change "valkey-io/valkey#1234, merged as <commit>"
+```
+
+The [replay of merged pull requests](fuzzer-replay.md) triages each merge's
+batch this way.
+
 The fuzzer's other scheduled workflow, Valkey Experiments Live, uploads only
 its pytest output, so the monitor doesn't watch it.
 
