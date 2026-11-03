@@ -540,6 +540,47 @@ def test_leaks_are_fuzzer_bugs_and_replace_the_leak_only_signature(monkeypatch):
     assert "not a Valkey bug" in leak.summary
 
 
+def test_runs_skipped_as_unsupported_are_not_findings(monkeypatch):
+    summary = batch_summary()
+    run = summary["runs"][0]
+    run.update(status="SKIP_UNSUPPORTED", signature_key="skip0000")
+    summary["signatures"].append({
+        "key": "skip0000", "label": "SKIP_UNSUPPORTED | valkey.aof-durability", "status": "SKIP_UNSUPPORTED",
+        "experiment": "valkey.aof-durability", "signature": {}, "runs": [run["id"]], "count": 1,
+    })
+    analysis = _analyze(with_summary(batch_files(), summary), monkeypatch)
+    assert "skip0000" not in {f.signature_key for f in analysis.findings}
+    assert len(_by_kind(analysis, "signature")) == 3
+
+
+def _passing_run_logging(line: str):
+    batch = read_batch(batch_files(), "batch/")
+    run = next(r for r in batch.main_runs if r.status == "PASS")
+    context = _context_for(_BASE, run, "batch/")
+    context.node_logs = {"valkey-0.log": line}
+    return context
+
+
+@pytest.mark.parametrize("line", [
+    "# Background saving error", "Failover attempt expired.", "Out Of Memory allocating 10 bytes",
+    "slots still assigned to killed nodes",
+])
+def test_a_passing_run_does_not_report_what_its_chaos_causes(line):
+    assert _scan_logs(_passing_run_logging(line)) == []
+
+
+def test_a_passing_run_still_reports_a_crash():
+    signals = _scan_logs(_passing_run_logging("=== VALKEY BUG REPORT START: Cut & paste starting from here ==="))
+    assert [s.title for s in signals] == ["Node crash or assertion"]
+
+
+def test_a_failed_run_still_reports_what_chaos_may_cause():
+    ctx = _ctx(report={"status": "FAIL", "summary": "lost writes",
+                       "outcome": {"status": "FAIL", "component_results": []}},
+               node_logs={"valkey-0.log": "Failover attempt expired."})
+    assert [s.title for s in _scan_logs(ctx)] == ["Run failed", "Failover timeout"]
+
+
 def test_a_missing_summary_is_one_finding_for_a_human(monkeypatch):
     files = batch_files()
     del files["batch/summary.json"]

@@ -8,8 +8,10 @@ each:
 
 - each failure signature: the non-PASS runs the fuzzer grouped as one
   failure, so a bug seen in three runs is one issue; its serial re-runs'
-  verdict is evidence for or against a real bug;
-- each run that passed but whose report or logs show something;
+  verdict is evidence for or against a real bug. Runs skipped as
+  unsupported tested nothing and are not findings;
+- each run that passed but whose report or logs show something other than
+  what its own chaos causes;
 - each bug zoo case that no longer holds: the fuzzer missed a bug it is known
   to catch, a valkey-fuzzer problem and never a Valkey bug;
 - what runs left on the host, also a valkey-fuzzer bug;
@@ -66,6 +68,12 @@ _ANOMALY_PATTERNS: list[tuple[str, str, str, bool]] = [
     ("RDB/AOF failure", "warning",
      r"Background saving error|Failed opening.*rdb|AOF rewrite.*failed", False),
 ]
+# Lines a run's own chaos and workload cause: a full disk fails a save, a
+# partition expires a failover, a killed node holds slots until it is failed
+# over, a maxmemory workload is refused. In a run the fuzzer passed, its
+# oracles already judged what they led to, so only a crash or a sanitizer
+# report there is a finding.
+_CHAOS_CAUSED_TITLES = frozenset({"OOM", "Failover timeout", "Split-brain or slot loss", "RDB/AOF failure"})
 
 # Signal titles that send a finding to a human rather than to a bug verdict:
 # the analyzer could not trust a report, or the run tested nothing.
@@ -165,9 +173,12 @@ def _scan_logs(context: FuzzerRunContext) -> list[FuzzerSignal]:
         for result in context.report["outcome"]["component_results"]:
             if isinstance(result, dict) and result.get("status") in ("FAIL", "ERROR"):
                 texts[f"component {result.get('component_id')}"] = str(result.get("summary") or "")
+    passed = context.report is not None and context.report["status"] == "PASS"
     for name, text in texts.items():
         cleaned = strip_ansi(text)
         for title, severity, pattern, _ in _ANOMALY_PATTERNS:
+            if passed and title in _CHAOS_CAUSED_TITLES:
+                continue
             m = re.search(pattern, cleaned, re.I)
             if m:
                 anomalies.append(FuzzerSignal(title, severity, f"{name}: {m.group(0)[:200]}"))
@@ -697,6 +708,8 @@ class FuzzerRunAnalyzer:
             members = [batch.run(run_id) for run_id in group.runs]
             if members and all(m is not None and m.leak_only for m in members):
                 continue  # the runs passed; what they left behind is a leak finding
+            if group.status == "SKIP_UNSUPPORTED":
+                continue  # the build or host cannot run it: nothing was tested, so nothing to report
             findings.append(self._signature_finding(base, batch, group, budget))
         for run in batch.main_runs:
             if run.status != "PASS":

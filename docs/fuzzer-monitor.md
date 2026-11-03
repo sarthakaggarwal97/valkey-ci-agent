@@ -59,7 +59,10 @@ Then it turns the batch into findings, and each finding is one issue:
   signatures. Either way the issue says what the re-runs showed.
 - **A run that passed but shows something.** A passing run is quiet unless
   its scan finds something, such as a crash in a node log or a failed
-  optional component; then it is a finding of its own.
+  optional component; then it is a finding of its own. Log lines the run's
+  own chaos and workload cause (a failed save on a full disk, an expired
+  failover, slots on a killed node, an out-of-memory refusal) don't count in
+  a passing run: its oracles already judged what they led to.
 - **A bug zoo case that doesn't hold.** The zoo is a set of Valkey builds
   with known, deliberate bugs. A case that doesn't hold means the fuzzer
   missed a bug it is known to catch, or its clean control failed: the fuzzer
@@ -80,8 +83,9 @@ and Claude can't talk it out of that. The monitor recognizes a run report by
 its shape: the keys every report carries (`generated_at`, `status`,
 `summary`, `scenario`, `outcome`, `coverage`, `reproducer` and
 `provenance`), a known outcome, and an outcome object with its own status and
-the component results. A run that errored or was skipped as unsupported goes
-to a human too, since it tested nothing.
+the component results. A run that errored goes to a human too, since it
+tested nothing. A run skipped as unsupported (the build or host lacks what
+its experiment needs) is not a finding at all.
 
 Then Claude takes a closer look at each finding that isn't the fuzzer's own
 problem, up to five per batch. The monitor puts the batch summary and the
