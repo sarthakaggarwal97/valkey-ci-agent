@@ -35,7 +35,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Protocol
 
-from scripts.ci_fix.agent import review_candidate, run_fix_agent
+from scripts.ci_fix.agent import AgentTimeout, review_candidate, run_fix_agent
 from scripts.ci_fix.models import (
     CandidateAction,
     FailedTest,
@@ -47,6 +47,7 @@ from scripts.ci_fix.models import (
 )
 from scripts.ci_fix.policy import target_capabilities
 from scripts.ci_fix.prior_fixes import (
+    failing_test_history,
     find_prior_fixes,
     paths_in_log,
     render_prior_fixes,
@@ -348,6 +349,7 @@ def _establish(
         )
         logger.info("Reproduction: %s", reproduction.describe())
         described = " ".join([reproduction.describe(), *plan.notes])
+    history = failing_test_history(repo_dir, tests)
     found = find_prior_fixes(
         repo_dir, tests, tested_sha=task.failure.head_sha, issue_number=task.failure.issue_number,
         paths=paths,
@@ -360,6 +362,7 @@ def _establish(
         prior_fixes=summarize_prior_fixes(fixes),
         prior_fixes_detail=render_prior_fixes(repo_dir, fixes),
         prior_fixes_searched=found is not None,
+        test_history=history,
         reproduction=described,
         reproduction_output=reproduction.output if reproduction else "",
         verified_by_code=reproduction is not None and reproduction.status is not ReproStatus.UNRUNNABLE,
@@ -408,6 +411,16 @@ def _fix_loop(
                 task, repo_dir, original_head, job_log, context, feedback,
                 attempt=attempt, timeout=max(60, agent_timeout), agent_func=agent_func,
             )
+        except AgentTimeout:
+            # A session that used its whole budget investigating found no
+            # evidence-backed fix; a fresh one repeats the same reading.
+            # Report that as a refusal, which ends this occurrence.
+            logger.info("CI-fix round %d: the agent found no fix within its session", attempt)
+            return _refusal(
+                "The fix agent investigated for its whole session without finding an "
+                "evidence-backed fix. No change was made.",
+                verification="\n".join([*established, *([f"Earlier round: {last}"] if attempt > 1 else [])]),
+            )
         except Exception as exc:
             remaining_after_failure = int(deadline - time.monotonic())
             if attempt == 1 and remaining_after_failure >= _MIN_ROUND_S:
@@ -415,11 +428,10 @@ def _fix_loop(
                 restore(repo_dir)
                 _remove_ignored(repo_dir)
                 feedback = (
-                    "The previous agent session ended before returning a result. "
-                    "The working tree was reset. Use the bounded investigation "
-                    "budget and either prepare a minimal fix or refuse."
+                    "The previous agent session crashed before returning a result. "
+                    "The working tree was reset. Either prepare a minimal fix or refuse."
                 )
-                logger.warning("CI-fix round 1 agent failed; retrying once: %s", exc)
+                logger.warning("CI-fix round 1 agent crashed; retrying once: %s", exc)
                 continue
             if attempt == 1:
                 raise

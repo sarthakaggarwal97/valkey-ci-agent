@@ -145,6 +145,15 @@ def _context_prompt(context: FixContext, context_dir: Path, allows_port: bool) -
             "name and file, the files the log names, and the issue found no "
             "merged change that looks like a fix."
         )
+    if context.test_history:
+        history = context_dir / "test-history.md"
+        history.write_text(context.test_history, encoding="utf-8")
+        sections.append(
+            "### The failing test's history\n"
+            f"The test file's recent commits, and the diff of the newest commit that added or changed the test, are in {history}. "
+            "You cannot run git: read this instead. A test added recently often fails because of what that "
+            "commit assumed."
+        )
     if context.reproduction:
         section = f"### Reproduction\n{context.reproduction}"
         if context.reproduction_output:
@@ -163,6 +172,10 @@ def _context_prompt(context: FixContext, context_dir: Path, allows_port: bool) -
     if not sections:
         return ""
     return _CONTEXT.format(sections="\n\n".join(sections))
+
+
+class AgentTimeout(RuntimeError):
+    """The edit agent used its whole session without choosing an action."""
 
 
 def run_fix_agent(
@@ -211,7 +224,8 @@ def run_fix_agent(
             timeout=timeout,
         )
     if result.returncode != 0:
-        raise RuntimeError(
+        error = AgentTimeout if result.stderr.startswith("timeout") else RuntimeError
+        raise error(
             f"CI-fix agent failed with exit code {result.returncode}: "
             f"{result.stderr.strip()[:300]}"
         )
