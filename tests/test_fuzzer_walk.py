@@ -638,3 +638,20 @@ def _with_fork(fork, call):
         return call()
     finally:
         walk.VALKEY_FORK = saved
+
+
+def test_a_run_that_could_not_start_tested_nothing(monkeypatch, tmp_path):
+    # The first walk's valkey-json runs: the servers never started, and the merge read as tested.
+    summary = "runner execution failed during deployment.provision: LocalDeploymentError: valkey-0 failed to start"
+
+    def run(command, **kw):
+        report = {key: None for key in ("generated_at", "scenario", "coverage", "reproducer", "provenance")}
+        report.update(status="ERROR", summary=summary, outcome={"status": "ERROR", "component_results": []})
+        Path(command[command.index("--output") + 1]).write_text(json.dumps(report))
+
+    monkeypatch.setattr(walk.subprocess, "run", run)
+    doc = {"scenario_id": "s", "experiment": {"id": "proposed.x"}, "deployment": {"mode": "standalone"}}
+    done = walk.fuzz("valkey-fuzzer", doc, 1, candidate={"server": "/m"}, compare={"server": "/p"}, core=True,
+                     experiment_dir=tmp_path / "e", run_dir=tmp_path / "r")
+    assert done["unstarted"] is True and done["status"] is None
+    assert done["error"] == f"the run could not start: {summary}"

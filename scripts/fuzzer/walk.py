@@ -446,6 +446,10 @@ def fuzz(fuzzer_bin: str, doc: dict[str, Any], seed: int, *, candidate: dict[str
     problem = report_problem(report)
     if problem:
         return {"status": None, "error": problem, "found": {}}
+    if report["status"] == "ERROR" and not report["outcome"]["component_results"]:
+        # Nothing ran: the deployment or an artifact failed before the test, so the run says nothing of it.
+        return {"status": None, "error": f"the run could not start: {report['summary']}"[:1000], "found": {},
+                "unstarted": True}
     outcome = _change_outcome(report)
     sequence = (outcome.sequence if outcome else None) or {}
     return {"status": report["status"], "reason": outcome.reason if outcome else None,
@@ -732,6 +736,10 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                 logger.info("%s %s: %s", action, url, finding["detail"])
             result["findings"].append({key: finding.get(key) for key in (
                 "rule", "detail", "scenario", "seed", "builds", "verdict", "fingerprint", "issue")})
+    # A run that could not start tested nothing: the merge is an error, to be walked again, not a pass.
+    unstarted = [run for run in runs.values() if run.get("unstarted")]
+    if unstarted:
+        raise RuntimeError(f"{len(unstarted)} of {len(runs)} run(s) could not start: {unstarted[0]['error']}")
 
 
 # --- State ---------------------------------------------------------------------
