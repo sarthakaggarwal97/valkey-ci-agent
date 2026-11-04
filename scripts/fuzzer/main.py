@@ -1,7 +1,9 @@
 """Monitor the latest scheduled Valkey fuzzer workflow run, or one PR batch run.
 
 With ``--pr-batch-run``, it analyzes that run of the fuzzer's PR batch
-instead, and ``--change`` names what the batch tested in the issues it files.
+instead, ``--change`` names what the batch tested in the issues it files, and
+``--change-diff`` gives Claude the change's diff, which its triage of a run
+that replied differently on the merge commit and its parent needs.
 """
 
 from __future__ import annotations
@@ -90,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pr-batch-run", type=int,
                         help="Analyze this run of the PR batch workflow instead of the latest scheduled run")
     parser.add_argument("--change", help="What the PR batch tested, such as a merged pull request, for the issues")
+    parser.add_argument("--change-diff", type=Path,
+                        help="A file holding the diff of what the PR batch tested, for Claude's triage of a run "
+                             "that replied differently on the merge commit and its parent")
     args = parser.parse_args(argv)
 
     configure_logging()
@@ -97,10 +102,15 @@ def main(argv: list[str] | None = None) -> int:
     token = args.target_token or os.environ.get("TARGET_TOKEN", "")
     if not token:
         parser.error("--target-token or TARGET_TOKEN env var is required")
+    change_diff = None
+    if args.change_diff is not None:
+        if not args.pr_batch_run:
+            parser.error("--change-diff needs --pr-batch-run")
+        change_diff = args.change_diff.read_text(encoding="utf-8", errors="replace")
 
     gh = Github(auth=Auth.Token(token))
     client = ArtifactClient(gh, token=token)
-    analyzer = FuzzerRunAnalyzer(gh, github_token=token, artifact_client=client)
+    analyzer = FuzzerRunAnalyzer(gh, github_token=token, artifact_client=client, change_diff=change_diff)
     publisher = IssueDedupPublisher(gh, marker_namespace=issue_renderer.MARKER_NAMESPACE)
 
     repo = args.fuzzer_repo
@@ -142,6 +152,10 @@ def main(argv: list[str] | None = None) -> int:
             entry["status"] = analysis.overall_status
             entry["batch_status"] = analysis.batch_status
             entry["counts"] = analysis.counts
+            # The runs that tested a change across builds, by how they met it,
+            # and the runs judged but not filed; the replay reports both.
+            entry["change_runs"] = dict(analysis.change_runs)
+            entry["recorded"] = list(analysis.recorded)
             entry["findings"] = [_publish(publisher, repo, run.id, finding) for finding in analysis.findings]
         except Exception as exc:
             entry["action"] = "error"
@@ -173,6 +187,9 @@ def _outcome(results: list[dict[str, Any]], *, dry_run: bool) -> tuple[int, str]
         return logging.ERROR, f"{run}: analysis failed: {' '.join(entry['error'].split())}"
     batch = f"batch {entry.get('batch_status') or 'unreadable'}"
     findings = entry.get("findings") or []
+    change_runs = entry.get("change_runs") or {}
+    if any(change_runs.values()):
+        batch += ", change runs " + ", ".join(f"{k} {v}" for k, v in change_runs.items())
     issues = [f"{f['issue_action']}: {f.get('issue_url') or 'no URL'}" for f in findings if f.get("issue_action")]
     if not issues:
         return logging.INFO, f"{run}: {batch}, {len(findings)} finding(s), status {entry['status']}; no issue needed"

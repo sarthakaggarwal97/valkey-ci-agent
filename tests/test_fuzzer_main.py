@@ -204,3 +204,46 @@ def test_a_finding_without_an_issue_of_its_own_asks_for_one_with_its_root_cause(
     match = mock_pub_cls.return_value.upsert.call_args.kwargs["match_existing"]
     assert match(["open issue"]) == 5
     assert asked == [("fp-abc", ["open issue"])]
+
+
+def test_the_change_diff_goes_to_the_analyzer_and_the_change_runs_to_the_output(monkeypatch, capsys, tmp_path):
+    monkeypatch.setenv("TARGET_TOKEN", "fake")
+    diff = tmp_path / "change.diff"
+    diff.write_text("diff --git a/src/t_list.c b/src/t_list.c\n")
+    run = MagicMock(id=11, conclusion="failure", html_url="https://x/runs/11")
+    github_cls = MagicMock()
+    github_cls.return_value.get_repo.return_value.get_workflow_run.return_value = run
+    recorded = [{"run": "scenario-lset", "experiment": "proposed.lset", "outcome": "unreached"}]
+    with patch.object(fuzzer_main_mod, "Github", github_cls), \
+         patch.object(fuzzer_main_mod, "FuzzerRunAnalyzer") as mock_analyzer_cls:
+        analysis = _batch()
+        analysis.change_runs = {"reached": 2, "unreached": 1, "unexplained": 0, "unvetted": 1}
+        analysis.recorded = recorded
+        mock_analyzer_cls.return_value.analyze.return_value = analysis
+        rc = fuzzer_main_mod.main(["--fuzzer-repo", "owner/valkey-fuzzer", "--pr-batch-run", "11",
+                                   "--change", "valkey-io/valkey#4823", "--change-diff", str(diff)])
+
+    assert rc == 0
+    assert mock_analyzer_cls.call_args.kwargs["change_diff"] == "diff --git a/src/t_list.c b/src/t_list.c\n"
+    entry = json.loads(capsys.readouterr().out)["runs"][0]
+    assert entry["change_runs"] == {"reached": 2, "unreached": 1, "unexplained": 0, "unvetted": 1}
+    assert entry["recorded"] == recorded
+
+
+def test_the_change_diff_needs_a_pr_batch_run(monkeypatch, capsys, tmp_path):
+    monkeypatch.setenv("TARGET_TOKEN", "fake")
+    diff = tmp_path / "change.diff"
+    diff.write_text("d")
+    with patch.object(fuzzer_main_mod, "Github", _mock_gh_returning([])), pytest.raises(SystemExit):
+        fuzzer_main_mod.main(["--change-diff", str(diff)])
+    assert "--change-diff needs --pr-batch-run" in capsys.readouterr().err
+
+
+def test_outcome_counts_the_change_runs():
+    level, message = fuzzer_main_mod._outcome([{
+        "run_id": 5, "action": "analyzed", "status": "warning", "batch_status": "ERROR", "findings": [],
+        "change_runs": {"reached": 2, "unreached": 1, "unexplained": 0, "unvetted": 0},
+    }], dry_run=False)
+    assert level == logging.INFO
+    assert message == ("Fuzzer run 5: batch ERROR, change runs reached 2, unreached 1, unexplained 0, unvetted 0, "
+                       "0 finding(s), status warning; no issue needed")

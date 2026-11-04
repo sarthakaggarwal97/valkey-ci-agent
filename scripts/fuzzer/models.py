@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+# The ID prefix of an experiment the proposals wrote for one change; a PR batch
+# keeps such experiments in its folder's experiments/.
+PROPOSED_PREFIX = "proposed."
+
 
 @dataclass
 class FuzzerSignal:
@@ -16,6 +20,35 @@ class FuzzerSignal:
     title: str
     severity: str
     evidence: str
+
+
+@dataclass
+class ChangeOutcome:
+    """How a run of ``valkey.action.commands`` met the change it tests.
+
+    `reason` is the component's ``diagnostics.reason``: ``unreached-change``
+    (a command marked as changed replied the same on the merge commit and
+    its parent) or ``unexplained-difference`` (an unmarked command replied
+    differently; `commands` names them), or None. `sequence` is its
+    ``valkey.command.sequence`` evidence: both builds' replies, the
+    ``reached`` and ``unexplained`` command indexes and ``dropped_config``.
+    """
+
+    component_id: str
+    reason: str | None = None
+    commands: list[Any] = field(default_factory=list)
+    sequence: dict[str, Any] | None = None
+
+    @property
+    def reached(self) -> bool:
+        """A marked command reproduced the old behaviour on the parent build."""
+        return bool(self.sequence and self.sequence.get("reached"))
+
+    @property
+    def candidate_exited(self) -> bool:
+        """The merge commit's server died during the sequence."""
+        candidate = (self.sequence or {}).get("candidate")
+        return isinstance(candidate, dict) and candidate.get("exited") is True
 
 
 @dataclass
@@ -116,6 +149,17 @@ class FuzzerBatchAnalysis:
     batch_status: str | None = None
     counts: dict[str, int] = field(default_factory=dict)
     findings: list[FuzzerFinding] = field(default_factory=list)
+    # Runs that tested a change with valkey.action.commands: how many reached
+    # it (a marked command reproduced on the parent build), errored without
+    # reaching it, showed an unexplained difference, and how many FAILs of a
+    # proposed experiment were withheld as unvetted.
+    change_runs: dict[str, int] = field(
+        default_factory=lambda: {"reached": 0, "unreached": 0, "unexplained": 0, "unvetted": 0},
+    )
+    # The runs the monitor judged but did not file as findings (an unreached
+    # change, an intended or untriaged difference, an unvetted FAIL), with
+    # why and their evidence, for the replay's results.
+    recorded: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def overall_status(self) -> str:

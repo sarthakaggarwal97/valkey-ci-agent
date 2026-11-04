@@ -18,7 +18,7 @@ from scripts.fuzzer.analyzer import (
 )
 from scripts.fuzzer.batch import read_batch
 from scripts.fuzzer.models import FuzzerRunContext, FuzzerSignal
-from tests.fuzzer_batch_fixture import BATCH, CRASH, batch_files, batch_summary, with_report, with_summary
+from tests.fuzzer_batch_fixture import BATCH, CRASH, batch_files, batch_summary, crash_report, with_report, with_summary
 
 _BASE = dict(repo="r", workflow_file="w", run_id=1, run_url="u", conclusion="failure", head_sha="h")
 
@@ -855,3 +855,319 @@ def test_same_root_cause_without_candidates_does_not_ask(monkeypatch):
     monkeypatch.setattr(analyzer_mod, "run_agent", lambda *a, **k: pytest.fail("Claude was asked"))
     assert analyzer_mod.same_root_cause(_cause_finding(), "t", [_cause_issue(7, marked=False)],
                                         marker_namespace="valkey-ci-agent:fuzzer-issue") is None
+
+
+# --- Runs that test a change across two builds (valkey.action.commands) -------
+# W2's report shape, built by hand on the fixture's crash run: a FAIL or an
+# ERROR whose component compares a command sequence on the merge commit's build
+# (candidate) and its parent's (parent).
+
+LSET = "scenario-lset"
+LSET_KEY = "15e7000001ab"
+_EXPERIMENT_YAML = "id: proposed.lset\ncomponents:\n  - use: valkey.action.commands\n    id: lset\n"
+
+
+def _replies(*replies):
+    return [{"index": i, "reply": r} for i, r in enumerate(replies)]
+
+
+def _commands_report(status: str, *, reason: str | None = None, commands=(), reached=(), unexplained=(),
+                     exited: bool = False, experiment: str = "proposed.lset", parent: bool = True) -> dict:
+    report = crash_report()
+    summary = {
+        "FAIL": "required components did not pass: lset",
+        "ERROR": f"component lset errored: {reason}",
+    }[status]
+    report.update(status=status, summary=summary)
+    report["scenario"]["experiment"]["id"] = experiment
+    report["scenario"]["scenario_id"] = "lset-1"
+    if parent:
+        report["scenario"]["artifacts"] = {"parent": {"use": "valkey.artifact.local-binary",
+                                                      "with": {"path": "/opt/valkey-parent/src/valkey-server"}}}
+    plan = report["outcome"]["plan"]
+    plan.update(experiment_id=experiment, scenario_id="lset-1")
+    plan["components"] = [{
+        "use": "valkey.action.commands", "id": "lset", "role": "action", "required": True, "depends_on": [],
+        "config": {"compare_with": "/opt/valkey-parent/src/valkey-server", "commands": [
+            {"command": ["RPUSH", "l", "a"]}, {"command": ["LSET", "l", 9223372036854775807, "x"],
+                                                "expect_difference": True, "expect": {"error": "out of range"}},
+            {"command": ["LRANGE", "l", 0, -1]},
+        ]},
+    }]
+    if parent:
+        plan["artifacts"] = [{"id": "parent", "use": "valkey.artifact.local-binary",
+                              "config": {"path": "/opt/valkey-parent/src/valkey-server"}}]
+    sequence = {
+        "candidate": {"replies": _replies(1, {"error": "ERR index out of range"}, ["a"]), "digest": "c" * 64,
+                      "exited": exited},
+        "parent": {"replies": _replies(1, "OK", ["x"]), "digest": "p" * 64, "exited": False},
+        "dropped_config": [], "reached": list(reached), "unexplained": list(unexplained),
+    }
+    component = {
+        "component_id": "lset", "status": "ERROR" if reason else status, "summary": summary,
+        "evidence": [{"evidence_id": "valkey.command.sequence", "source": "lset", "phase": "action.completed",
+                      "observed_at": 1.0, "value": sequence, "event_sequence": None, "artifacts": [], "metadata": {}}],
+        "diagnostics": {"reason": reason, "commands": list(commands)} if reason else {},
+    }
+    report["outcome"].update(status=status, summary=summary, component_results=[component])
+    report["outcome"]["diagnostics"] = {"required_component_failures": ["lset"], "deployment": {}, "events": []}
+    return report
+
+
+def _with_commands_run(files: dict[str, bytes], report: dict, *, prefix: str = "batch/", crash_logs: bool = False,
+                       experiments: bool = True) -> dict[str, bytes]:
+    """The fixture batch plus one run of the report, grouped under its own signature."""
+    files = dict(files)
+    files[f"{prefix}runs/{LSET}/report.json"] = json.dumps(report).encode()
+    files[f"{prefix}runs/{LSET}/scenario.yaml"] = b"scenario_id: lset-1\n"
+    if crash_logs:
+        files[f"{prefix}runs/{LSET}/logs/1-aa-valkey-0.log"] = files[f"{prefix}runs/{CRASH}/logs/777-3088e5fa-valkey-0.log"]
+    if experiments:
+        files[f"{prefix}experiments/proposed.lset.yaml"] = _EXPERIMENT_YAML.encode()
+    summary = batch_summary()
+    experiment = report["outcome"]["plan"]["experiment_id"]
+    summary["runs"].append({
+        "id": LSET, "source": "scenarios", "status": report["status"], "summary": report["summary"],
+        "experiment": experiment, "seed": 777, "report": f"runs/{LSET}/report.json", "signature_key": LSET_KEY,
+        "duration_s": 1.0, "worker": 0, "leaks": 0, "origin": None,
+    })
+    summary["signatures"].append({
+        "key": LSET_KEY, "label": f"{report['status']} | {experiment} | lset:{report['status']}",
+        "status": report["status"], "experiment": experiment, "signature": {}, "runs": [LSET], "count": 1,
+    })
+    return with_summary(files, summary, prefix)
+
+
+def _pr_batch(report: dict, **kw) -> dict[str, bytes]:
+    """A PR batch artifact (the folder at its root) of the fixture batch plus one run of ``report``."""
+    return _with_commands_run(batch_files(prefix=""), report, prefix="", **kw)
+
+
+def _analyze_change(files, monkeypatch, claude=_claude_down, *, diff: str | None = None):
+    from scripts.common.workflow_artifacts import WorkflowArtifact
+    from scripts.fuzzer import analyzer as analyzer_mod
+
+    client = MagicMock()
+    client.list_run_artifacts.return_value = [WorkflowArtifact(9, "fuzzer-batch-5", 1, False)]
+    client.download_artifact.return_value = files
+    gh = MagicMock()
+    gh.get_repo.return_value.get_workflow_run.return_value = MagicMock(
+        html_url="https://x/runs/5", conclusion="failure", head_sha="abc",
+    )
+    monkeypatch.setattr(analyzer_mod, "_invoke_claude", claude)
+    analyzer = analyzer_mod.FuzzerRunAnalyzer(gh, github_token="t", artifact_client=client, change_diff=diff)
+    return analyzer.analyze("owner/valkey-fuzzer", 5, workflow_file="fuzzer-pr-batch.yml",
+                            artifact_name="fuzzer-batch-5", change="valkey-io/valkey#4823, merged as e50b62d0b")
+
+
+_NO_CHANGE_RUNS = {"reached": 0, "unreached": 0, "unexplained": 0, "unvetted": 0}
+
+
+def test_a_batch_without_change_runs_counts_none(monkeypatch):
+    analysis = _analyze(batch_files(), monkeypatch)
+    assert analysis.change_runs == _NO_CHANGE_RUNS and analysis.recorded == []
+
+
+def test_an_unreached_change_is_no_finding_but_is_counted(monkeypatch):
+    calls = []
+    report = _commands_report("ERROR", reason="unreached-change")
+    analysis = _analyze_change(_pr_batch(report), monkeypatch,
+                               claude=lambda *a, **kw: calls.append(1) or {})
+    assert LSET_KEY not in {f.signature_key for f in analysis.findings}
+    assert len(calls) == 3  # the fixture's three signatures; nothing to ask about an unreached change
+    assert analysis.change_runs == {**_NO_CHANGE_RUNS, "unreached": 1}
+    (entry,) = analysis.recorded
+    assert (entry["run"], entry["experiment"], entry["outcome"], entry["component"]) == (
+        LSET, "proposed.lset", "unreached", "lset",
+    )
+    assert entry["evidence"]["reached"] == [] and "commands" not in entry
+
+
+def test_an_unexplained_difference_without_the_diff_is_recorded_not_triaged(monkeypatch):
+    calls = []
+    report = _commands_report("ERROR", reason="unexplained-difference", commands=[2], unexplained=[2])
+    analysis = _analyze_change(_pr_batch(report), monkeypatch,
+                               claude=lambda *a, **kw: calls.append(1) or {})
+    assert LSET_KEY not in {f.signature_key for f in analysis.findings}
+    assert len(calls) == 3
+    assert analysis.change_runs == {**_NO_CHANGE_RUNS, "unexplained": 1}
+    (entry,) = analysis.recorded
+    assert (entry["outcome"], entry["filed"], entry["commands"]) == ("unexplained", False, [2])
+    assert entry["triage"] == "not triaged: the change's diff was not given (--change-diff)"
+    assert entry["evidence"]["parent"]["replies"][2] == {"index": 2, "reply": ["x"]}
+
+
+def _judges(intended, verdict="likely-core-valkey-bug"):
+    return lambda *a, **kw: {"overall_status": "anomalous", "triage_verdict": verdict,
+                             "summary": "LRANGE differs because LSET now refuses the index.",
+                             "difference_intended": intended}
+
+
+def test_an_unexplained_difference_the_change_did_not_intend_is_a_possible_bug(monkeypatch):
+    report = _commands_report("ERROR", reason="unexplained-difference", commands=[2], unexplained=[2])
+    analysis = _analyze_change(_pr_batch(report), monkeypatch, claude=_judges(False),
+                               diff="diff --git a/src/t_list.c b/src/t_list.c\n")
+    finding = _signature(analysis, LSET_KEY)
+    # Claude's own verdict does not decide; an unintended difference is a possible bug, no more.
+    assert (finding.triage_verdict, finding.overall_status) == ("possible-core-valkey-bug", "anomalous")
+    assert finding.suggested_labels == ["possible-valkey-bug"]
+    assert finding.summary == "LRANGE differs because LSET now refuses the index."
+    assert finding.change == "valkey-io/valkey#4823, merged as e50b62d0b"
+    assert finding.reproduction_hint == (
+        f"valkey-fuzzer replay runs/{LSET}/report.json --experiment-dir experiments "
+        "--valkey-binary /path/to/valkey-server --artifact parent=/path/to/parent/valkey-server"
+    )
+    (entry,) = analysis.recorded
+    assert entry["filed"] is True and entry["triage"].startswith("judged unintended: LRANGE differs")
+    assert analysis.change_runs["unexplained"] == 1
+
+
+def test_an_intended_difference_is_recorded_not_filed(monkeypatch):
+    report = _commands_report("ERROR", reason="unexplained-difference", commands=[2], unexplained=[2])
+    analysis = _analyze_change(_pr_batch(report), monkeypatch, claude=_judges(True),
+                               diff="diff --git a/src/t_list.c b/src/t_list.c\n")
+    assert LSET_KEY not in {f.signature_key for f in analysis.findings}
+    (entry,) = analysis.recorded
+    assert entry["filed"] is False and entry["triage"].startswith("judged intended: LRANGE differs")
+
+
+@pytest.mark.parametrize("claude,triage", [
+    (_claude_down, "not triaged: the AI analysis failed: Claude Code failed (rc=1): timeout"),
+    (_judges(None), "the triage did not say whether the difference was intended"),
+])
+def test_an_unexplained_difference_claude_did_not_judge_is_not_filed(monkeypatch, claude, triage):
+    report = _commands_report("ERROR", reason="unexplained-difference", commands=[2], unexplained=[2])
+    analysis = _analyze_change(_pr_batch(report), monkeypatch, claude=claude, diff="d")
+    assert LSET_KEY not in {f.signature_key for f in analysis.findings}
+    assert analysis.recorded[0]["triage"] == triage
+
+
+def test_an_unexplained_difference_past_the_claude_budget_is_not_filed(monkeypatch):
+    from scripts.fuzzer import analyzer as analyzer_mod
+
+    monkeypatch.setattr(analyzer_mod, "_MAX_CLAUDE_FINDINGS", 0)
+    report = _commands_report("ERROR", reason="unexplained-difference", commands=[2], unexplained=[2])
+    analysis = _analyze_change(_pr_batch(report), monkeypatch, claude=_judges(False), diff="d")
+    assert LSET_KEY not in {f.signature_key for f in analysis.findings}
+    assert analysis.recorded[0]["triage"] == "not triaged: the batch's Claude budget was spent"
+
+
+def test_claude_gets_the_diff_the_experiments_and_the_question(monkeypatch):
+    from scripts.fuzzer import analyzer as analyzer_mod
+
+    calls: list[dict] = []
+
+    def fake_run_agent(profile, prompt, cwd):
+        root = Path(cwd)
+        calls.append({"prompt": prompt, "diff": (root / "change.diff").read_text() if (root / "change.diff").is_file()
+                      else None, "files": sorted(str(p.relative_to(root / "_artifacts"))
+                                                 for p in (root / "_artifacts").rglob("*") if p.is_file())})
+        return MagicMock(returncode=0, stdout=json.dumps({"overall_status": "anomalous",
+                                                          "triage_verdict": "needs-human-triage"}), stderr="")
+
+    monkeypatch.setattr(analyzer_mod, "shallow_clone_at_sha", lambda *a, **kw: True)
+    monkeypatch.setattr(analyzer_mod, "run_agent", fake_run_agent)
+    report = _commands_report("ERROR", reason="unexplained-difference", commands=[2], unexplained=[2])
+    _analyze_change(_pr_batch(report), monkeypatch, claude=analyzer_mod._invoke_claude,
+                    diff="diff --git a/src/t_list.c b/src/t_list.c\n")
+
+    call = next(c for c in calls if LSET in c["prompt"])
+    assert call["diff"] == "diff --git a/src/t_list.c b/src/t_list.c\n"
+    assert "experiments/proposed.lset.yaml" in call["files"] and f"runs/{LSET}/report.json" in call["files"]
+    prompt = call["prompt"]
+    assert "The batch tested valkey-io/valkey#4823, merged as e50b62d0b. Its diff is in change.diff" in prompt
+    assert "- change.diff - the diff of the change the batch tested." in prompt
+    assert "experiments/<id>.yaml: the experiments the proposals wrote for this change" in prompt
+    assert "errored with unexplained-difference: commands [2] replied differently" in prompt
+    assert "answer in difference_intended" in prompt and '"difference_intended": true|false|null' in prompt
+    # The other findings of the batch see the diff and the experiments too, but are not asked the question.
+    other = next(c for c in calls if CRASH_KEY in c["prompt"])
+    assert other["diff"] is not None and "experiments/proposed.lset.yaml" in other["files"]
+    assert "answer in difference_intended" not in other["prompt"]
+
+
+def test_without_a_diff_or_experiments_the_prompt_says_nothing_of_them(monkeypatch):
+    from scripts.fuzzer import analyzer as analyzer_mod
+
+    prompts = []
+    monkeypatch.setattr(analyzer_mod, "shallow_clone_at_sha", lambda *a, **kw: True)
+    monkeypatch.setattr(analyzer_mod, "run_agent", lambda profile, prompt, cwd: prompts.append(prompt) or MagicMock(
+        returncode=0, stdout='{"overall_status": "normal"}', stderr=""))
+    _analyze(batch_files(), monkeypatch, claude=analyzer_mod._invoke_claude)
+    assert all("## The change" not in p and "experiments/<id>.yaml" not in p and "change.diff" not in p
+               for p in prompts)
+
+
+def test_a_proposed_experiments_fail_that_reached_the_change_is_filed(monkeypatch):
+    report = _commands_report("FAIL", reached=[1])
+    analysis = _analyze_change(_pr_batch(report), monkeypatch)
+    finding = _signature(analysis, LSET_KEY)
+    assert finding.run_status == "FAIL" and finding.experiment_id == "proposed.lset"
+    assert analysis.change_runs == {**_NO_CHANGE_RUNS, "reached": 1} and analysis.recorded == []
+
+
+@pytest.mark.parametrize("exited,crash_logs", [(True, False), (False, True)])
+def test_a_proposed_experiments_fail_that_crashed_is_filed(monkeypatch, exited, crash_logs):
+    report = _commands_report("FAIL", exited=exited)
+    analysis = _analyze_change(_pr_batch(report, crash_logs=crash_logs), monkeypatch)
+    assert _signature(analysis, LSET_KEY).run_status == "FAIL"
+    assert analysis.change_runs["unvetted"] == 0
+
+
+def test_a_proposed_experiments_fail_that_neither_reached_nor_crashed_is_unvetted(monkeypatch):
+    calls = []
+    report = _commands_report("FAIL")
+    analysis = _analyze_change(_pr_batch(report), monkeypatch,
+                               claude=lambda *a, **kw: calls.append(1) or {})
+    assert LSET_KEY not in {f.signature_key for f in analysis.findings}
+    assert len(calls) == 3
+    assert analysis.change_runs == {**_NO_CHANGE_RUNS, "unvetted": 1}
+    (entry,) = analysis.recorded
+    assert (entry["outcome"], entry["summary"]) == ("unvetted", "required components did not pass: lset")
+    assert entry["evidence"]["candidate"]["replies"][1] == {"index": 1, "reply": {"error": "ERR index out of range"}}
+
+
+def test_an_installed_experiments_fail_is_filed_whether_or_not_it_reached_the_change(monkeypatch):
+    report = _commands_report("FAIL", experiment="valkey.aof-durability")
+    analysis = _analyze_change(_pr_batch(report), monkeypatch)
+    finding = _signature(analysis, LSET_KEY)
+    assert finding.reproduction_hint == (
+        f"valkey-fuzzer replay runs/{LSET}/report.json --valkey-binary /path/to/valkey-server "
+        "--artifact parent=/path/to/parent/valkey-server"
+    )
+    assert analysis.change_runs["unvetted"] == 0
+
+
+def test_an_unreadable_run_of_a_proposed_experiment_still_goes_to_a_human(monkeypatch):
+    files = _pr_batch(_commands_report("FAIL"))
+    files[f"runs/{LSET}/report.json"] = b"{not json"
+    finding = _signature(_analyze_change(files, monkeypatch), LSET_KEY)
+    assert finding.triage_verdict == "needs-human-triage"
+
+
+def test_the_reproduction_line_from_a_scheduled_batch_names_its_folder():
+    batch = read_batch(_with_commands_run(batch_files(), _commands_report("FAIL")), "batch/")
+    context = _context_for(_BASE, batch.run(LSET), "batch/")
+    from scripts.fuzzer.analyzer import _reproduction_hint
+    assert _reproduction_hint(context) == (
+        f"valkey-fuzzer replay batch/runs/{LSET}/report.json --experiment-dir batch/experiments "
+        "--valkey-binary /path/to/valkey-server --artifact parent=/path/to/parent/valkey-server"
+    )
+    plain = read_batch(_with_commands_run(batch_files(), _commands_report("FAIL", parent=False)), "batch/")
+    assert _reproduction_hint(_context_for(_BASE, plain.run(LSET), "batch/")) == (
+        f"valkey-fuzzer replay batch/runs/{LSET}/report.json --experiment-dir batch/experiments "
+        "--valkey-binary /path/to/valkey-server"
+    )
+
+
+def test_the_reproduction_line_of_a_run_without_a_report_reads_its_scenario():
+    from scripts.fuzzer.analyzer import _reproduction_hint
+    scenario = "experiment: {id: proposed.lset}\nartifacts:\n  parent: {use: valkey.artifact.local-binary}\n"
+    context = _ctx(scenario_yaml=scenario, experiment_id="proposed.lset", batch_prefix="")
+    assert _reproduction_hint(context) == (
+        "valkey-fuzzer run runs/run-1/scenario.yaml --experiment-dir experiments "
+        "--valkey-binary /path/to/valkey-server --artifact parent=/path/to/parent/valkey-server"
+    )
+    assert _reproduction_hint(_ctx(scenario_yaml="- [", experiment_id="x")) == (
+        "valkey-fuzzer run runs/run-1/scenario.yaml --valkey-binary /path/to/valkey-server"
+    )

@@ -182,3 +182,23 @@ def test_a_non_pass_run_no_signature_holds_gets_a_group_of_its_own():
     groups = {g.key: g for g in read_batch(with_summary(batch_files(), summary), "batch/").groups}
     assert groups["846478c93288"].runs == ["scenario-noboot"]
     assert groups["846478c93288"].rerun_verdict is None
+
+
+def test_the_experiments_the_proposals_brought_are_read_by_file_name(tmp_path):
+    from scripts.fuzzer.batch import read_batch_dir
+
+    files = batch_files()
+    files["batch/experiments/proposed.lset.yaml"] = b"id: proposed.lset\n"
+    files["batch/experiments/proposed.zadd.yml"] = b"id: proposed.zadd\n"
+    files["batch/experiments/nested/other.yaml"] = b"id: other\n"
+    files["batch/experiments/notes.txt"] = b"not an experiment"
+    batch = read_batch(files, "batch/")
+    assert batch.experiments == {"proposed.lset.yaml": "id: proposed.lset\n", "proposed.zadd.yml": "id: proposed.zadd\n"}
+    assert read_batch(batch_files(), "batch/").experiments == {}
+
+    for path, payload in files.items():
+        if path.startswith("batch/"):
+            target = tmp_path / path[len("batch/"):]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+    assert read_batch_dir(tmp_path).experiments == batch.experiments

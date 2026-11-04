@@ -34,7 +34,10 @@ reads the batch folder in it:
   compiled;
 - `batch/runs/<id>/logs/`, each instance's server log,
   `<seed>-<deployment id>-valkey-N.log`, and its captured output,
-  `<seed>-<deployment id>-valkey-N.stdio.log`.
+  `<seed>-<deployment id>-valkey-N.stdio.log`;
+- `batch/experiments/<id>.yaml`, in a PR batch, the experiments the
+  [proposals](fuzzer-proposals.md) wrote for the change (their IDs start
+  with `proposed.`).
 
 It reads every run report and starts with a quick scan of each. From a
 report it takes the outcome, each component that failed or errored with its
@@ -96,10 +99,11 @@ every run was skipped, or that ran no job, tested nothing, and that is one
 batches.
 
 Then Claude takes a closer look at each finding that isn't the fuzzer's own
-problem, up to five per batch. The monitor puts the batch summary and the
-finding's run folders (up to three runs of a signature) in a temporary
-directory next to a copy of Valkey at the commit that was tested and a copy
-of the fuzzer at the run's commit. Claude can read and search those files
+problem, up to five per batch. The monitor puts the batch summary, the
+finding's run folders (up to three runs of a signature) and the batch's
+`experiments/` in a temporary directory next to a copy of Valkey at the
+commit that was tested, a copy of the fuzzer at the run's commit and, for a
+PR batch given `--change-diff`, the change's diff. Claude can read and search those files
 but can't change anything, run commands or reach the network. The prompt
 explains the summary, the report's fields, the serial re-runs and how the
 log files map to the instances in a report. With the source in front of it,
@@ -121,7 +125,10 @@ signature's issue names the runs, the signature and its serial re-runs, the
 fuzzer's outcome, the experiment, the scenario, the seed and the Valkey
 commit, and how to run it again from the downloaded bundle:
 `valkey-fuzzer replay batch/runs/<id>/report.json --valkey-binary
-/path/to/valkey-server` with a build of that commit. A signature's issue is
+/path/to/valkey-server` with a build of that commit, plus `--experiment-dir
+batch/experiments` for a run of a proposed experiment and `--artifact
+parent=/path/to/parent/valkey-server` for a run that declares the parent
+commit's build. A signature's issue is
 identified by the fuzzer's signature key, so the same failure in later
 batches updates the existing issue instead of opening a new one; a zoo case
 by its name; a leak by its experiment and kind. One bug can still show as
@@ -156,11 +163,47 @@ tested in the issues it files:
 
 ```bash
 python -m scripts.fuzzer.main --fuzzer-repo OWNER/valkey-fuzzer --pr-batch-run <run id> \
-  --change "valkey-io/valkey#1234, merged as <commit>"
+  --change "valkey-io/valkey#1234, merged as <commit>" --change-diff change.diff
 ```
 
-The [replay of merged pull requests](fuzzer-replay.md) triages each merge's
-batch this way.
+`--change-diff` is a file holding the change's diff (`gh api
+repos/valkey-io/valkey/compare/<parent>...<commit> -H 'Accept:
+application/vnd.github.diff'`); without it, a run that replied differently
+on the two builds is recorded for a human rather than triaged. The [replay
+of merged pull requests](fuzzer-replay.md) triages each merge's batch this
+way.
+
+## Runs that test a change
+
+A PR batch can run experiments the proposals wrote for the change, which
+compare a command sequence on the merge commit's build and its parent's
+with `valkey.action.commands`. Such a run's report says how it met the
+change, and the monitor treats it accordingly:
+
+- A run that errored with `unreached-change` (a command the proposal marked
+  as changed replied the same on both builds) tested nothing about the
+  change. It is not a finding: the monitor records it and counts it.
+- A run that errored with `unexplained-difference` (a command the proposal
+  did not mark replied differently) is not a failure the fuzzer saw, only a
+  difference. Claude gets the change's diff and both replies and says
+  whether the change accounts for the difference (`difference_intended`).
+  Only a difference it judges unintended is filed, as
+  `possible-core-valkey-bug`; one it judges intended, or could not judge
+  (no diff, Claude failed, the batch's Claude budget spent), is recorded and
+  not filed.
+- A `FAIL` of a `proposed.` experiment is filed only when the run reached
+  the change (a marked command reproduced the old behaviour on the parent
+  build) or when the failure is a crash or a sanitizer report, which no
+  wrong test can fake. Any other `FAIL` of a generated test is recorded as
+  `unvetted`, with its evidence, and not filed: until a generated test has
+  caught a planted bug, its own judgement is not trusted. A `FAIL` of an
+  installed experiment is filed as before.
+
+The monitor's JSON result carries, per run, `change_runs` (the runs that
+`reached` the change, erred `unreached`, showed an `unexplained` difference,
+and the `unvetted` FAILs) and `recorded` (each run judged and not filed:
+its run, experiment, outcome, why, and its `valkey.command.sequence`
+evidence), which the replay's triage results keep.
 
 The fuzzer's other scheduled workflow, Valkey Experiments Live, uploads only
 its pytest output, so the monitor doesn't watch it.

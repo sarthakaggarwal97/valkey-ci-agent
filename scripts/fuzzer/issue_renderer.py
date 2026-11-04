@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Callable
 
 from scripts.common.issue_dedup import IssueContent
-from scripts.fuzzer.models import FuzzerFinding
+from scripts.fuzzer.models import PROPOSED_PREFIX, FuzzerFinding
 
 MARKER_NAMESPACE = "valkey-ci-agent:fuzzer-issue"
 
@@ -85,9 +85,12 @@ def _render_body(finding: FuzzerFinding, marker: str, *, occurrences: int) -> st
                   else "none")
         lines.append(f"| Serial re-runs | {reruns} |")
     if not finding.fuzzer_side and finding.kind != "batch":
+        experiment = f"`{finding.experiment_id or 'unknown'}`"
+        if (finding.experiment_id or "").startswith(PROPOSED_PREFIX):
+            experiment += " (proposed for this change; its YAML is in the batch folder's `experiments/`)"
         lines += [
             f"| Fuzzer outcome | `{finding.run_status or 'unknown'}` |",
-            f"| Experiment | `{finding.experiment_id or 'unknown'}` |",
+            f"| Experiment | {experiment} |",
             f"| Scenario | `{finding.scenario_id or 'unknown'}` |",
             f"| Seed | `{finding.seed or 'unknown'}` |",
         ]

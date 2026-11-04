@@ -154,3 +154,9 @@ def test_a_fuzzer_side_finding_says_it_is_not_a_valkey_bug():
     assert "> This is a problem in valkey-fuzzer itself, not a Valkey bug." in content.body
     assert "Fuzzer outcome" not in content.body and "Serial re-runs" not in content.body
     assert content.labels == ()
+
+
+def test_a_proposed_experiment_says_where_its_yaml_is():
+    body = _render_body(_signature_finding(experiment_id="proposed.lset"), "<!-- marker -->", occurrences=1)
+    assert "| Experiment | `proposed.lset` (proposed for this change; its YAML is in the batch folder's `experiments/`) |" in body
+    assert "proposed for this change" not in _render_body(_signature_finding(), "<!-- marker -->", occurrences=1)

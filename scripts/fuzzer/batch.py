@@ -6,7 +6,8 @@ run, ``DIR/runs/<id>/`` with ``report.json`` (an ordinary run report),
 where ``report`` is the run report's path in the folder, or null when the run
 left none), the non-PASS runs grouped by failure signature with their serial
 re-run verdicts (``signatures``), the bug zoo's verdicts (``zoo``) and what
-the sweeps removed after the runs (``leaks``).
+the sweeps removed after the runs (``leaks``). A PR batch that ran
+experiments the proposals brought keeps them at ``DIR/experiments/``.
 
 The fuzzer monitor reads the scheduled workflow's artifact, which holds the
 folder under ``batch/``; the PR batch artifact is the folder itself. Both go
@@ -142,6 +143,8 @@ class BatchFolder:
     groups: list[SignatureGroup] = field(default_factory=list)
     zoo: dict[str, Any] | None = None
     leaks: list[dict[str, Any]] = field(default_factory=list)
+    # experiments/<file>: the experiments the proposals brought, by file name.
+    experiments: dict[str, str] = field(default_factory=dict)
 
     def run(self, run_id: str) -> BatchRun | None:
         return next((r for r in self.runs if r.id == run_id), None)
@@ -308,6 +311,11 @@ def read_batch(files: dict[str, bytes], prefix: str = "") -> BatchFolder:
     batch.groups = _groups(data, batch)
     batch.zoo = data.get("zoo")
     batch.leaks = [item for item in data.get("leaks") or [] if isinstance(item, dict)]
+    folder = f"{prefix}experiments/"
+    for path, payload in files.items():
+        name = path[len(folder):]
+        if path.startswith(folder) and "/" not in name and name.endswith((".yaml", ".yml")):
+            batch.experiments[name] = _text(payload)
     return batch
 
 
@@ -323,6 +331,7 @@ def read_batch_dir(root: Path) -> BatchFolder:
         path.relative_to(root).as_posix(): path.read_bytes()
         for path in root.rglob("*")
         if path.is_file() and not path.is_symlink()
-        and (path.name in (SUMMARY_FILE, "report.json", "scenario.yaml", "error.json") or path.parent.name == "logs")
+        and (path.name in (SUMMARY_FILE, "report.json", "scenario.yaml", "error.json")
+             or path.parent.name in ("logs", "experiments"))
     }
     return read_batch(files)
