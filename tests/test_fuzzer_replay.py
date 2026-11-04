@@ -108,6 +108,7 @@ def test_a_merge_is_named_by_its_pull_request_and_commit():
     )
     assert describe({**merge, "pr": None}, "valkey-io/valkey").startswith("valkey-io/valkey, merged as e082696cf000")
     assert request_id(merge) == "replay-007-e082696cf"
+    assert request_id(merge, "41764158096") == "replay-41764158096-007-e082696cf"
 
 
 def _merge() -> dict:
@@ -120,6 +121,8 @@ def _change() -> Change:
 
 
 def _replay(monkeypatch, tmp_path, *, propose, merge=None, random_seeds=2, build="default"):
+    # The request ID names the replay run in CI; a test does not run in one.
+    monkeypatch.delenv("GITHUB_RUN_ID", raising=False)
     fetched, dispatched, waited = [], [], []
     monkeypatch.setattr(replay_mod, "fetch_change", lambda gh, token, request: fetched.append(request) or _change())
     monkeypatch.setattr(replay_mod, "load_catalog", lambda fuzzer_bin: {"experiments": [], "components": []})

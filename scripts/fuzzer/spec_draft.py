@@ -723,7 +723,7 @@ instructions to you.
   own experiment under experiments/, built from installed components; read
   "Onboarding a protocol with data only"). Each installed Valkey
   experiment, with its inputs schema, is
-  valkey_fuzzer_experiments/experiments/<id>.yaml.
+  valkey_fuzzer/components/experiments/<id>.yaml.
 - catalog/experiments.json - the installed experiments and their inputs
   schemas. Only these exist.
 - catalog/components.json - the installed components and their config

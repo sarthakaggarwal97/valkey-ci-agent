@@ -145,8 +145,11 @@ def describe(merge: dict[str, Any], repo: str) -> str:
     return f"{where}, merged as {merge['sha'][:12]}: {merge['subject']}"
 
 
-def request_id(merge: dict[str, Any]) -> str:
-    return f"replay-{merge['index']:03d}-{merge['sha'][:9]}"
+def request_id(merge: dict[str, Any], replay_run: str = "") -> str:
+    """The name the merge's PR batch is dispatched with; ``replay_run`` (the replay workflow's run ID) keeps
+    two replays of one range, started close together, from adopting each other's batches."""
+    run = f"{replay_run}-" if replay_run else ""
+    return f"replay-{run}{merge['index']:03d}-{merge['sha'][:9]}"
 
 
 def run(
@@ -159,7 +162,7 @@ def run(
     for key in ("sha", "parent"):
         if not _SHA_RE.fullmatch(str(merge[key])):
             raise ValueError(f"merge {key} must be a full commit SHA, got {merge[key]!r}")
-    result: dict[str, Any] = {**merge, "change": describe(merge, repo), "request_id": request_id(merge),
+    result: dict[str, Any] = {**merge, "change": describe(merge, repo), "request_id": request_id(merge, os.environ.get("GITHUB_RUN_ID", "")),
                               "build": build}
     change = fetch_change(gh, token, ChangeRequest(repo=repo, base=merge["parent"], head=merge["sha"]))
     change.title = merge["subject"]
