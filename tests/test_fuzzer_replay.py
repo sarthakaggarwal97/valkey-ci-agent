@@ -303,6 +303,13 @@ def test_replay_json_names_the_batch_as_soon_as_it_is_found(monkeypatch, tmp_pat
     assert written["wait_error"].startswith("the PR batch did not complete")
 
 
+def test_with_nothing_to_run_the_merge_is_recorded_not_dispatched(monkeypatch, tmp_path):
+    result, _, dispatched, _ = _replay(monkeypatch, tmp_path, propose=lambda change, **kw: ProposalRun(change=change),
+                                       random_seeds=0)
+    assert dispatched == [] and result["skipped"] == "no scenario to run and random_seeds is 0"
+    assert json.loads((tmp_path / "out" / "replay.json").read_text())["skipped"] == result["skipped"]
+
+
 def test_a_failed_proposal_still_runs_the_random_baseline(monkeypatch, tmp_path):
     def propose(change, **kw):
         raise RuntimeError("Claude Code failed (rc=1)")

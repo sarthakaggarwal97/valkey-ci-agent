@@ -677,8 +677,10 @@ def _check_and_validate(
 
 
 _PROPOSE_PROMPT = """\
-You propose scenarios for valkey-fuzzer that exercise the risky paths of one
-Valkey change. A scenario picks one experiment, its inputs, and a deployment;
+This is regression testing that the Valkey project runs against its own
+builds, in its own CI, to find bugs before a release: the scenarios run only
+on throwaway local servers the fuzzer starts. You propose scenarios for valkey-fuzzer that exercise the risky
+paths of one Valkey change. A scenario picks one experiment, its inputs, and a deployment;
 the fuzzer compiles it, runs it against real servers, and its oracles judge
 the result. When no installed experiment reaches the change, you write an
 experiment of your own from the installed components, and your scenarios use
@@ -842,8 +844,10 @@ and "reason" out when there are scenarios.
 """
 
 _REPAIR_PROMPT = """\
-You proposed valkey-fuzzer scenarios for {change_line}, and maybe experiments
-of your own. The ones below failed. Fix each so it validates, keeping what it
+This is regression testing that the Valkey project runs against its own
+builds, in its own CI, to find bugs before a release: the scenarios run only
+on throwaway local servers the fuzzer starts. You proposed valkey-fuzzer scenarios for {change_line}, and
+maybe experiments of your own. The ones below failed. Fix each so it validates, keeping what it
 was meant to test. The working directory is the same as before:
 {source_note}
 - valkey-fuzzer/ - the fuzzer, its docs/ and

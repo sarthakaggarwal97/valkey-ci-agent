@@ -248,6 +248,13 @@ def run(
         # One pinned Valkey build, and the module built at the merge and at its parent, whatever was proposed.
         module = ModuleBuild(repo, merge["sha"], merge["parent"])
         summary, parent_sha = {"repo": VALKEY_REPO, "pr_number": None, "head_sha": merge["valkey_sha"]}, None
+    if not scenarios and not random_seeds:
+        # Nothing to run: no scenario survived and there is no random baseline. Recorded, not dispatched.
+        result["skipped"] = "no scenario to run and random_seeds is 0"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / REPLAY_FILE).write_text(json.dumps(result, indent=2), encoding="utf-8")
+        logger.info("%s: %s", result["change"], result["skipped"])
+        return result
     # The exclusion only applies to the random baseline; without one the workflow refuses it.
     inputs = batch_dispatch_inputs(summary, scenarios, random_seeds=random_seeds, request_id=result["request_id"],
                                    exclude_experiments=excluded if random_seeds else (),
