@@ -197,6 +197,7 @@ def test_fuzzer_steps_that_run_claude_can_assume_the_role_again():
     steps = {
         "fuzzer-propose.yml": ["Propose scenarios"],
         "fuzzer-replay.yml": ["Replay the merge", "Triage each merge's batch, in merge order"],
+        "fuzzer-walk.yml": ["Walk the merge"],
         "monitor-fuzzer.yml": ["Analyze the latest fuzzer run"],
     }
     for filename, names in steps.items():

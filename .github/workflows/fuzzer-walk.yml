@@ -1,0 +1,456 @@
+name: Fuzzer Walk
+
+# Walks every merge of Valkey since 7.2, and of each Valkey module, through
+# the fuzzer: newest first, then every new merge as it lands. Each run plans
+# the merges from walk-state.json on this repository's walk-state branch (new
+# ones, then retries, then the backlog; one queue per repository, sharing the
+# matrix), builds the latest Valkey unstable with ASan and each module's head
+# once, walks each merge in a job of its own (Claude proposes tests, which run
+# on the merge, its parent and unstable; what reproduces on unstable is filed
+# on valkey-fuzzer), and commits the state, PROGRESS.md and the proven tests
+# back to walk-state. Runs never overlap, so the state is never lost; a merge
+# whose job left no result is retried by the next run. See
+# scripts/fuzzer/walk.py.
+
+on:
+  schedule:
+    - cron: "23 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "The repository to walk, or all"
+        required: false
+        default: all
+        type: choice
+        options: [all, valkey-io/valkey, valkey-io/valkey-json, valkey-io/valkey-search, valkey-io/valkey-bloom]
+      max:
+        description: "Merges walked in the run, across the repositories, 1 to 256"
+        required: false
+        default: "20"
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: fuzzer-walk
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  WALK: ${{ inputs.repository || 'all' }}
+  MAX: ${{ inputs.max || '20' }}
+  FUZZER_REPOSITORY: ${{ github.repository_owner }}/valkey-fuzzer
+  # The App where it is installed; a fork files with REHEARSAL_PAT.
+  HAS_APP: ${{ secrets.VALKEYRIE_BOT_APP_ID != '' }}
+  BUILD_PACKAGES: build-essential clang pkg-config libssl-dev libzstd-dev tcl
+
+jobs:
+  plan:
+    # The state lives on this repository's walk-state branch: only a fork walks.
+    if: github.repository_owner != 'valkey-io'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      merges: ${{ steps.plan.outputs.merges }}
+      heads: ${{ steps.plan.outputs.heads }}
+      builds: ${{ steps.plan.outputs.builds }}
+    steps:
+      - name: Check inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${MAX}" =~ ^[1-9][0-9]{0,2}$ && "${MAX}" -le 256 ]] || { echo "::error::max must be 1 to 256"; exit 1; }
+
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      # No walk-state branch means a walk that starts now; any other failure stops the run.
+      - name: Read the state
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/${GITHUB_REPOSITORY}.git"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 -w0)"
+          status=0
+          git -c http.extraheader="${auth}" ls-remote --exit-code --heads "${url}" walk-state > /dev/null || status=$?
+          if [[ "${status}" == 0 ]]; then
+            git -c http.extraheader="${auth}" clone -q --depth 1 --branch walk-state "${url}" state
+          elif [[ "${status}" == 2 ]]; then
+            mkdir state
+          else
+            exit "${status}"
+          fi
+
+      # Valkey always: its head is what every module merge loads into.
+      - name: Check out valkey
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: valkey-io/valkey
+          ref: unstable
+          path: clones/valkey
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Check out valkey-json
+        if: env.WALK == 'all' || env.WALK == 'valkey-io/valkey-json'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: valkey-io/valkey-json
+          ref: unstable
+          path: clones/valkey-json
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Check out valkey-search
+        if: env.WALK == 'all' || env.WALK == 'valkey-io/valkey-search'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: valkey-io/valkey-search
+          ref: main
+          path: clones/valkey-search
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Check out valkey-bloom
+        if: env.WALK == 'all' || env.WALK == 'valkey-io/valkey-bloom'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: valkey-io/valkey-bloom
+          ref: unstable
+          path: clones/valkey-bloom
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Plan the run
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          clones=()
+          for name in valkey valkey-json valkey-search valkey-bloom; do
+            if [[ -d "clones/${name}" ]]; then clones+=(--clone "valkey-io/${name}=clones/${name}"); fi
+          done
+          python -m scripts.fuzzer.walk plan --state state/walk-state.json "${clones[@]}" --walk "${WALK}" \
+            --max "${MAX}" --out plan.json
+          python - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          plan = json.load(open("plan.json"))
+          merges, heads = plan["merges"], plan["heads"]
+          # The heads the merges need: Valkey's, and each module's that has a merge in the run.
+          repos = ["valkey-io/valkey", *sorted({m["repo"] for m in merges} - {"valkey-io/valkey"})] if merges else []
+          builds = [{"repo": repo, "name": repo.split("/")[1], "sha": heads[repo],
+                     "deps": next((m["deps"] for m in merges if m["repo"] == repo), "")} for repo in repos]
+          for key, value in (("merges", merges), ("heads", heads), ("builds", builds)):
+              print(f"{key}={json.dumps(value, separators=(',', ':'))}")
+          PY
+
+      - name: Upload the plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: walk-plan
+          path: plan.json
+          retention-days: 30
+
+  heads:
+    needs: plan
+    if: needs.plan.outputs.builds != '[]'
+    runs-on: ubuntu-latest
+    # valkey-search builds long.
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        build: ${{ fromJSON(needs.plan.outputs.builds) }}
+    env:
+      REPO: ${{ matrix.build.repo }}
+      SHA: ${{ matrix.build.sha }}
+      HEADS: ${{ needs.plan.outputs.heads }}
+      DEPS_DIR: ${{ github.workspace }}/../walk-deps
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Install the build tools
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y ${BUILD_PACKAGES}
+
+      - name: Cache the module's dependencies
+        if: matrix.build.deps != ''
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ env.DEPS_DIR }}
+          key: walk-deps-${{ matrix.build.name }}-${{ matrix.build.deps }}
+
+      - name: Build the head
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.fuzzer.walk build --repo "${REPO}" --sha "${SHA}" \
+            --valkey-sha "$(jq -r '."valkey-io/valkey"' <<< "${HEADS}")" --work "${RUNNER_TEMP}/head" --out walk-head.tgz
+
+      - name: Upload the head
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: walk-head-${{ matrix.build.name }}
+          path: walk-head.tgz
+          retention-days: 7
+
+  walk:
+    needs: [plan, heads]
+    # A head that did not build leaves its merges without a result: the next run retries them.
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.merges != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        merge: ${{ fromJSON(needs.plan.outputs.merges) }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_EVIDENCE_DIR: agent-evidence
+      MERGE: ${{ toJSON(matrix.merge) }}
+      HEADS: ${{ needs.plan.outputs.heads }}
+      DEPS_DIR: ${{ github.workspace }}/../walk-deps
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          install-claude: "true"
+
+      - name: Check out valkey-fuzzer
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.FUZZER_REPOSITORY }}
+          ref: main
+          path: valkey-fuzzer
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install valkey-fuzzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "${RUNNER_TEMP}/fuzzer-venv"
+          "${RUNNER_TEMP}/fuzzer-venv/bin/python" -m pip install --quiet "${GITHUB_WORKSPACE}/valkey-fuzzer"
+          echo "FUZZER_BIN=${RUNNER_TEMP}/fuzzer-venv/bin/valkey-fuzzer" >> "${GITHUB_ENV}"
+
+      - name: Install the build tools
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y ${BUILD_PACKAGES}
+
+      - name: Cache the module's dependencies
+        if: matrix.merge.deps != ''
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ env.DEPS_DIR }}
+          key: walk-deps-${{ matrix.merge.name }}-${{ matrix.merge.deps }}
+
+      - name: Download Valkey's head
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: walk-head-valkey
+          path: heads/valkey
+
+      - name: Download the module's head
+        if: matrix.merge.name != 'valkey'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: walk-head-${{ matrix.merge.name }}
+          path: heads/module
+
+      - name: Unpack the heads
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir unstable && tar xzf heads/valkey/walk-head.tgz -C unstable
+          if [[ -f heads/module/walk-head.tgz ]]; then
+            mkdir module-head && tar xzf heads/module/walk-head.tgz -C module-head
+          fi
+
+      # Reads the public repositories walked and files issues on valkey-fuzzer, nothing else.
+      - name: Generate GitHub App token
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: valkey-fuzzer
+          permission-contents: read
+          permission-issues: write
+          permission-metadata: read
+
+      # A fork without the App files with its owner's PAT instead.
+      - name: Use the rehearsal PAT
+        id: pat
+        if: env.HAS_APP != 'true'
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::repositories: valkey-fuzzer; permission-contents: read; permission-issues: write; permission-metadata: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: valkey-fuzzer-walk-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Shorter than the job, so the uploads below still run when it times out.
+      - name: Walk the merge
+        timeout-minutes: 330
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ steps.app-token.outputs.token || steps.pat.outputs.token }}
+          # Claude's runs outlast the hour the credentials step grants; each run first assumes the role again.
+          CI_AGENT_AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          # Valkey's own test harness's setting, and a smaller quarantine, as the fuzzer's PR batch runs ASan.
+          ASAN_OPTIONS: allocator_may_return_null=1:quarantine_size_mb=16
+        run: |
+          set -euo pipefail
+          module=()
+          if [[ -d module-head ]]; then module=(--module-head module-head); fi
+          python -m scripts.fuzzer.walk run --merge "${MERGE}" --heads "${HEADS}" --unstable unstable "${module[@]}" \
+            --fuzzer-repo "${FUZZER_REPOSITORY}" --fuzzer-dir valkey-fuzzer --fuzzer-bin "${FUZZER_BIN}" \
+            --tests-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/walk-state" --out walk-out --work walk-work
+
+      - name: Upload the merge's tests and result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: walk-test-${{ matrix.merge.sha }}
+          path: walk-out
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload the runs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: walk-runs-${{ matrix.merge.sha }}
+          path: |
+            walk-work/*.log
+            walk-work/proposals
+            walk-work/runs/**/*.json
+            walk-work/runs/**/*.log
+            walk-work/runs/**/*.yaml
+            walk-work/runs/**/console.out
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload agent evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: walk-agent-evidence-${{ matrix.merge.sha }}
+          path: agent-evidence
+          if-no-files-found: ignore
+          retention-days: 14
+
+  record:
+    needs: [plan, walk]
+    if: ${{ always() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download the plan
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: walk-plan
+          path: plan
+
+      # A run whose jobs all died uploads nothing: its merges are retried.
+      - name: Download the merges' tests and results
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: walk-test-*
+          path: results
+          merge-multiple: true
+
+      - name: Check out the state branch
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/${GITHUB_REPOSITORY}.git"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 -w0)"
+          status=0
+          git -c http.extraheader="${auth}" ls-remote --exit-code --heads "${url}" walk-state > /dev/null || status=$?
+          if [[ "${status}" == 0 ]]; then
+            git -c http.extraheader="${auth}" clone -q --depth 1 --branch walk-state "${url}" state
+          elif [[ "${status}" == 2 ]]; then
+            git init -q state && git -C state checkout -q --orphan walk-state
+          else
+            exit "${status}"
+          fi
+          mkdir -p results
+
+      - name: Update the state
+        shell: bash
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python -m scripts.fuzzer.walk update --state-dir state --plan plan/plan.json --results results --run-url "${RUN_URL}"
+
+      # The state, PROGRESS.md and the tests in one commit, on this fork only.
+      - name: Push the state
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REPOSITORY}" != valkey-io/* ]] || { echo "::error::the walk's state is written on a fork only"; exit 1; }
+          cd state
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Walk run ${GITHUB_RUN_ID}"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 -w0)"
+          git -c http.extraheader="${auth}" push -q "https://github.com/${GITHUB_REPOSITORY}.git" HEAD:walk-state
