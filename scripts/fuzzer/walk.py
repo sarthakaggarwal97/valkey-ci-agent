@@ -98,8 +98,6 @@ RUN_TIMEOUT_S = 900
 MERGE_KEYS = ("repo", "sha", "parent", "pr", "pr_repo", "subject", "date")
 # The checks the walk turns on in every compared command sequence.
 CHECKS = {"variants": True, "replica": True, "acl": True, "concurrency": 4, "compat": True}
-# Whether the walk sets CHECKS: off until valkey-fuzzer takes `checks`, which its validation refuses until then.
-WITH_CHECKS = False
 # The diagnostics.reason a failed check gives.
 CHECK_REASONS = frozenset({
     "variant-mismatch", "replica-diverged", "acl-bypass", "acl-overreach", "compat-load", "compat-sync", "hang",
@@ -640,8 +638,7 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
             build_test_modules(tree)
             sides[build]["module"] = tree / module_file
         sides["unstable"]["module"] = unstable / module_file
-    if WITH_CHECKS:
-        experiments = {file: with_checks(text) for file, text in experiments.items()}
+    experiments = {file: with_checks(text) for file, text in experiments.items()}
     experiment_dir = work / "experiments"
     experiment_dir.mkdir(parents=True, exist_ok=True)
     for file, text in experiments.items():

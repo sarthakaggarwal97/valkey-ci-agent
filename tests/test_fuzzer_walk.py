@@ -348,8 +348,6 @@ def test_the_template_turns_every_check_on_where_a_sequence_compares_two_builds(
     module_checks = {"variants": True, "replica": True, "acl": True, "concurrency": 4}
     assert [c["config"].get("checks") for c in doc["components"]] == [CHECKS, None, module_checks]
     assert doc["components"][0]["config"]["compare_with"] == {"$ref": "artifacts.parent.binary"}
-    # Off until valkey-fuzzer takes `checks`.
-    assert walk.WITH_CHECKS is False
 
 
 def test_a_plain_sequence_replays_as_valkey_cli_steps():
