@@ -469,6 +469,20 @@ def test_an_issue_shows_each_build_the_scenario_and_an_upstream_draft():
     assert "4716-bbbbbbbbb" in render_issue(finding, _merge(), context)("<!-- m -->", 2).comment
 
 
+def test_a_reply_the_client_cannot_parse_is_filed_by_the_rule_with_its_raw_bytes(tmp_path):
+    report = _report({"component_id": "seq", "status": "FAIL", "summary": "command 3 (GET k): unparsable reply",
+                      "diagnostics": {"reason": "protocol-error", "command": 3, "raw": "$5\\r\\nab\\r\\n"}})
+    (fingerprint, finding), = findings(report, tmp_path).items()
+    assert (finding["rule"], finding["detail"]) == ("check", "protocol-error: command 3 (GET k): unparsable reply")
+    finding.update(builds={"parent": False, "merge": True, "unstable": True}, verdict="introduced by #4716")
+    assert files(finding)
+    scenario = "seed: 1\nexperiment: {id: valkey.forkless-save}\ndeployment: {mode: standalone}\n"
+    context = {"doc": yaml.safe_load(scenario), "scenario": scenario, "experiment": "", "experiments": {},
+               "module": None, "unstable": "c" * 40, "module_head": "", "tests_url": "https://t"}
+    body = render_issue(finding, _merge(), context)("<!-- m -->", 1).body
+    assert '"raw": "$5\\\\r\\\\nab\\\\r\\\\n"' in body.split("Key log lines:")[1]
+
+
 def test_claudes_cost_is_read_from_its_stream():
     stream = "\n".join([json.dumps({"type": "system"}), json.dumps({"type": "result", "total_cost_usd": 1.25}),
                         "not json", json.dumps({"type": "result", "total_cost_usd": 0.5})])

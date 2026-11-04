@@ -115,6 +115,8 @@ CHECKS = {"variants": True, "replica": True, "acl": True, "concurrency": 4, "com
 # The diagnostics.reason a failed check gives.
 CHECK_REASONS = frozenset({
     "variant-mismatch", "replica-diverged", "acl-bypass", "acl-overreach", "compat-load", "compat-sync", "hang",
+    # The client could not parse a reply; the diagnostics hold its raw bytes.
+    "protocol-error",
 })
 MARKER_NAMESPACE = "valkey-ci-agent:fuzzer-walk"
 VALKEY_TOOLS = ("valkey-server", "valkey-cli", "valkey-benchmark", "valkey-check-rdb", "valkey-check-aof")
@@ -401,7 +403,11 @@ def findings(report: dict[str, Any], run_dir: Path) -> dict[str, dict[str, Any]]
         reason = diagnostics.get("reason")
         if result.get("status") in ("FAIL", "ERROR") and reason in CHECK_REASONS:
             summary = " ".join(str(result.get("summary") or "").split())
-            add("check", f"{reason}: {summary}", [summary], str(reason))
+            lines = [summary]
+            if reason == "protocol-error":
+                # The reply's raw bytes, and what else the diagnostics say of it, for the issue.
+                lines.append(json.dumps({k: v for k, v in diagnostics.items() if k != "reason"}, default=str))
+            add("check", f"{reason}: {summary}", lines, str(reason))
     for cause in causes:
         add("crash", f"crash: {cause}", [cause])
     if causes:
