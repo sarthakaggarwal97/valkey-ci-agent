@@ -8,6 +8,7 @@ import re
 import shutil
 import socket
 import stat
+import subprocess
 import sys
 import textwrap
 from pathlib import Path
@@ -467,8 +468,11 @@ def test_failed_repair_round_drops_the_invalid_ones(tmp_path, fuzzer_dir):
 
 
 def test_unusable_first_answer_raises(tmp_path, fuzzer_dir):
+    # Prose, and prose again when asked to restate it as the object.
+    runner = StubRunner(_result("I could not find anything"), _result("Still nothing to say"))
     with pytest.raises(ValueError, match="scenarios list"):
-        _propose(StubRunner(_result("I could not find anything")), tmp_path, fuzzer_dir)
+        _propose(runner, tmp_path, fuzzer_dir)
+    assert len(runner.prompts) == 2 and "I could not find anything" in runner.prompts[1]
     (tmp_path / "again").mkdir()
     with pytest.raises(ValueError, match="experiments are not a list"):
         _propose(StubRunner(_result(json.dumps({"scenarios": [], "experiments": {"experiment": PROPOSED}}))),
@@ -483,6 +487,40 @@ def test_a_change_that_needs_no_test_gets_a_reason_and_nothing_else(tmp_path, fu
     assert (result["scenarios"], result["dropped"], result["experiments"]) == ([], [], [])
     assert "needs no test. A comment-only change" in render_summary(result)
     assert batch_inputs(out) is None
+
+
+def test_an_answer_that_only_gives_a_reason_needs_no_scenarios_key(tmp_path, fuzzer_dir):
+    runner = StubRunner(_result("A performance change.\n" + json.dumps({"reason": "INFO replies the same"})))
+    _, result, _ = _propose(runner, tmp_path, fuzzer_dir)
+    assert len(runner.prompts) == 1
+    assert (result["reason"], result["scenarios"]) == ("INFO replies the same", [])
+
+
+def test_an_answer_that_ends_in_prose_is_restated_as_the_object(tmp_path, fuzzer_dir):
+    runner = StubRunner(_result("## Conclusion\nThe change needs no test: it only pre-allocates."),
+                        _result(json.dumps({"reason": "it only pre-allocates", "scenarios": []})))
+    _, result, _ = _propose(runner, tmp_path, fuzzer_dir)
+    assert len(runner.prompts) == 2
+    assert "Do not read any file again" in runner.prompts[1] and "it only pre-allocates" in runner.prompts[1]
+    assert result["reason"] == "it only pre-allocates"
+
+
+def test_the_validator_and_lister_pass_absolute_paths(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "out" / "experiments").mkdir(parents=True)
+    (tmp_path / "out" / "s.yaml").write_text("seed: 1\n")
+
+    def run(args, **kw):
+        calls.append((args, kw.get("cwd")))
+        return subprocess.CompletedProcess(args, 0, "[]", "")
+
+    monkeypatch.setattr(propose_mod.subprocess, "run", run)
+    propose_mod.fuzzer_validator("vf")(Path("out/s.yaml"), Path("out/experiments"))
+    propose_mod.fuzzer_lister("vf")(Path("out/experiments"))
+    (validate, cwd), (listing, _) = calls
+    assert validate[3] == str(tmp_path / "out" / "experiments") and validate[4] == str(tmp_path / "out" / "s.yaml")
+    assert cwd == str(tmp_path / "out") and listing[-1] == str(tmp_path / "out" / "experiments")
 
 
 # --- Proposing experiments -----------------------------------------------------

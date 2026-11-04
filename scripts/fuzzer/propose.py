@@ -48,7 +48,7 @@ if __package__ in {None, ""}:
 import yaml
 
 from scripts.ai.runtime import AgentRunResult, run_agent
-from scripts.common.ai_output import extract_json_object
+from scripts.common.ai_output import extract_json_object, result_text
 from scripts.common.git_clone import REPO_RE, SHA_RE, shallow_clone_at_sha
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_group, log_outcome
@@ -284,6 +284,8 @@ def load_catalog(fuzzer_bin: str) -> dict[str, list[Any]]:
 def fuzzer_validator(fuzzer_bin: str) -> Validator:
     """``valkey-fuzzer validate`` with ``experiment_dir`` loaded: None when the scenario compiles, else the error."""
     def _validate(path: Path, experiment_dir: Path) -> str | None:
+        # Absolute: the command runs in the scenario's directory, where a relative experiment directory is not.
+        path, experiment_dir = path.resolve(), experiment_dir.resolve()
         try:
             result = subprocess.run(
                 [fuzzer_bin, "validate", "--experiment-dir", str(experiment_dir), str(path)],
@@ -305,6 +307,7 @@ def fuzzer_lister(fuzzer_bin: str) -> Lister:
     the whole listing, and the error names its file.
     """
     def _list(experiment_dir: Path) -> tuple[list[dict[str, Any]], str | None]:
+        experiment_dir = experiment_dir.resolve()
         try:
             result = subprocess.run(
                 [fuzzer_bin, "list", "experiments", "--format", "json", "--experiment-dir", str(experiment_dir)],
@@ -930,13 +933,46 @@ def _default_runner(prompt: str, workdir: Path) -> AgentRunResult:
     return run_agent("fuzzer_proposal_readonly", prompt, cwd=str(workdir))
 
 
+_FORMAT_PROMPT = """\
+Your answer below should have ended with one JSON object, and it did not.
+Rewrite your conclusion as that object, and return ONLY the object:
+{{"reason": "only when no scenario is needed: why", "experiments": [...], "scenarios": [...]}}
+Keep every scenario and experiment you wrote, as YAML strings, unchanged.
+Do not read any file again.
+
+Your answer:
+{answer}
+"""
+# The characters of a previous answer the format request quotes.
+_MAX_ANSWER_CHARS = 60_000
+
+
+def _answer(stdout: str) -> dict[str, Any] | None:
+    """The answer's JSON object: one with ``scenarios``, or one that only gives the ``reason`` no test is needed."""
+    payload = extract_json_object(stdout, required_key="scenarios")
+    if payload is None:
+        payload = extract_json_object(stdout, required_key="reason")
+        if payload is not None and "scenarios" not in payload:
+            payload = {**payload, "scenarios": []}
+    return payload
+
+
 def _ask_claude(runner: Runner, prompt: str, workdir: Path) -> dict[str, Any]:
-    """Run Claude and return its answer, with a ``scenarios`` list; one retry on a failed exit."""
+    """Run Claude and return its answer, with a ``scenarios`` list; one retry on a failed exit.
+
+    An answer that ends without the JSON object (a long reading can end in prose) gets one short request to
+    restate itself as the object, rather than losing everything it found.
+    """
     last_error: RuntimeError | None = None
     for attempt in range(_CLAUDE_MAX_ATTEMPTS):
         result = runner(prompt, workdir)
         if result.returncode == 0:
-            payload = extract_json_object(result.stdout, required_key="scenarios")
+            payload = _answer(result.stdout)
+            if payload is None:
+                logger.warning("Claude's answer has no JSON object; asking it to restate the answer as one")
+                answer = result_text(result.stdout)[-_MAX_ANSWER_CHARS:]
+                again = runner(_FORMAT_PROMPT.format(answer=answer), workdir)
+                payload = _answer(again.stdout) if again.returncode == 0 else None
             if payload is None or not isinstance(payload.get("scenarios"), list):
                 raise ValueError("Claude did not return a scenarios list")
             if not isinstance(payload.get("experiments", []), list):
