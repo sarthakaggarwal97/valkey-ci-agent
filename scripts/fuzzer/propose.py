@@ -914,7 +914,7 @@ RESTORE of a checksum-valid payload with a non-minimal encoding, as !!binary;
 a command out of its protocol state (EXEC without MULTI, REPLCONF after the
 handshake); a command during a forkless save or a resync.
 
-Return ONLY one JSON object:
+{extra}Return ONLY one JSON object:
 {{"reason": "only when no scenario is needed: why the change needs no test", "experiments": [{{"experiment": "<an experiment YAML document as one string>"}}], "scenarios": [{{"rationale": "one or two sentences: which changed path it drives, and how", "scenario": "<the YAML document as one string>"}}]}}
 Leave "experiments" out when the scenarios use installed experiments only,
 and "reason" out when there are scenarios.
@@ -1127,11 +1127,13 @@ def _repairs_by_index(items: Any, failed: dict[int, Any]) -> dict[int, dict[str,
 def propose(
     change: Change, *, count: int, workdir: Path, out_dir: Path, catalog: dict[str, list[Any]],
     fuzzer_dir: Path, validator: Validator, lister: Lister, runner: Runner | None = None, valkey_sha: str = "",
+    extra: str = "",
 ) -> ProposalRun:
     """Ask Claude for scenarios and experiments, then keep only those that compile and validate.
 
     A change to a module repository needs ``valkey_sha``, the pinned Valkey
-    commit both of the module's builds load into.
+    commit both of the module's builds load into. ``extra`` is one more
+    section of the prompt, before the answer's format.
     """
     runner = runner or _default_runner
     is_module = module_repository(change.repo)
@@ -1179,6 +1181,7 @@ def propose(
         change_line=change_line, count=count, max_experiments=MAX_EXPERIMENTS, source_note=source_note,
         truncated_note=f" (cut short; read the rest in {checkout_name(change.repo)}/)" if change.diff_truncated else "",
         references_rule=references_rule, module_section=module_section,
+        extra=f"{extra.strip()}\n\n" if extra.strip() else "",
     )
     with log_group("Ask Claude for scenarios"):
         answer = _ask_claude(runner, prompt, workdir)

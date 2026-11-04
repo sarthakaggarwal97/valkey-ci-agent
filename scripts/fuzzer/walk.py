@@ -13,14 +13,18 @@ tests/modules, or a module's default branch against it.
 
 ``run`` processes one merge, in its own job: it builds the merge and its
 parent (for a module, both loaded into the run's ``unstable`` build), asks
-Claude for tests (:func:`~scripts.fuzzer.propose.propose`), turns every
-check on, and runs each test on three builds: the merge against its parent,
-the parent against the merge, and ``unstable`` against the parent, on
-several seeds. A crash, a sanitizer report or a check failure is filed only
-when it shows on ``unstable`` and again on one rerun, and so is a test that
-reached the change at the merge but no longer does on ``unstable`` (a fix
-that regressed). The rest is recorded. Issues go to the fuzzer repository,
-one per signature: a repeat adds an occurrence.
+Claude for as many tests as the change's size needs
+(:func:`~scripts.fuzzer.propose.propose`), turns every check on, and runs
+each test on three builds: the merge against its parent, the parent against
+the merge, and ``unstable`` against the parent, on several seeds. A crash, a
+sanitizer report or a check failure is filed only when it shows on
+``unstable`` and again on one rerun, and so is a test that reached the
+change at the merge but no longer does on ``unstable`` (a fix that
+regressed). The rest is recorded. Issues go to the fuzzer repository, one
+per signature: a repeat adds an occurrence. For a Valkey merge, the tests
+then run once more on a gcov build of the merge, and while they leave too
+many of its changed lines unrun, more rounds ask Claude for tests that reach
+them (:func:`cover`).
 
 ``update`` folds a run's results into its repository's state on the state
 branch, copies each merge's proven tests beside it under ``tests/``,
@@ -38,10 +42,12 @@ import os
 import re
 import shlex
 import shutil
+import statistics
 import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -71,6 +77,7 @@ from scripts.fuzzer.pr_batch import MODULES, module_repository
 from scripts.fuzzer.propose import (
     VALKEY_REPO,
     ChangeRequest,
+    ProposalRun,
     fetch_change,
     fuzzer_lister,
     fuzzer_validator,
@@ -109,6 +116,18 @@ MAX_MISSES = 10
 # Seeds each test runs with on unstable: its own and the next ones.
 HUNT_SEEDS = 3
 RUN_TIMEOUT_S = 900
+# The tests asked for: MIN_TESTS for a change of a few lines, one more per 50 changed lines of code and per file
+# of code past the first, at most MAX_TESTS.
+MIN_TESTS, MAX_TESTS = 3, 15
+# Changed-line coverage, of Valkey merges for now: while the tests run fewer than COVERAGE_TARGET percent of the
+# merge's changed lines, up to COVERAGE_ROUNDS more rounds ask for tests that reach the rest. A round starts only
+# within ROUNDS_WITHIN_S of the walk's start, so the job's time holds it. The first UNCOVERED_KEPT lines no test
+# ran are kept, each shown to Claude with CONTEXT_LINES of code around it.
+COVERAGE_TARGET = 80
+COVERAGE_ROUNDS = 3
+ROUNDS_WITHIN_S = 3 * 3600
+UNCOVERED_KEPT = 50
+CONTEXT_LINES = 3
 MERGE_KEYS = ("repo", "sha", "parent", "pr", "pr_repo", "subject", "date")
 # The checks the walk turns on in every compared command sequence.
 CHECKS = {"variants": True, "replica": True, "acl": True, "concurrency": 4, "compat": True}
@@ -127,6 +146,7 @@ _SIGNAL_RE = re.compile(r"crashed by signal[^\n]*")
 _FRAME_RE = re.compile(r"#\d+ 0x[0-9a-f]+ in (\S+)")
 _EIP_RE = re.compile(r"EIP:\s*\n[^\n(]*\((\w+)")
 _FIX_RE = re.compile(r"\bfix", re.IGNORECASE)
+_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
 
 
 def _git(repo_dir: Path, *args: str) -> str:
@@ -189,14 +209,17 @@ def first_parent(repo_dir: Path, repo: str) -> list[dict[str, Any]]:
     return history
 
 
+def _code(path: str, repo: str) -> bool:
+    """Whether a changed path is code: not docs (``*.md``, ``docs/``), CI (``.github/``) or tests (``tests/``,
+    but Valkey's tests/modules, and ``integration/``)."""
+    if path.endswith(".md") or path.startswith(("docs/", ".github/", "integration/")):
+        return False
+    return not path.startswith("tests/") or (repo == VALKEY_REPO and path.startswith("tests/modules/"))
+
+
 def no_code_change(paths: list[str], repo: str) -> bool:
-    """Whether a merge changes only docs (``*.md``, ``docs/``), CI (``.github/``) or tests (``tests/``, but
-    Valkey's tests/modules, and ``integration/``)."""
-    def other(path: str) -> bool:
-        if path.endswith(".md") or path.startswith(("docs/", ".github/", "integration/")):
-            return False
-        return not path.startswith("tests/") or (repo == VALKEY_REPO and path.startswith("tests/modules/"))
-    return not any(other(path) for path in paths)
+    """Whether a merge changes only docs, CI or tests."""
+    return not any(_code(path, repo) for path in paths)
 
 
 def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey_head: str) -> dict[str, Any]:
@@ -287,10 +310,11 @@ def fetch(repo: str, sha: str, dest: Path) -> Path:
     return dest
 
 
-def build_valkey(src: Path, *, asan: bool = False) -> Path:
-    """Build Valkey in ``src`` as the fuzzer's PR batch does; the server it built."""
+def build_valkey(src: Path, *, asan: bool = False, coverage: bool = False) -> Path:
+    """Build Valkey in ``src`` as the fuzzer's PR batch does, with ASan, or for gcov (Valkey's ``make gcov``, at -O0
+    so each line keeps its code); the server it built."""
     nproc = os.cpu_count() or 2
-    flags = " CC=clang OPT=-O3 SANITIZER=address" if asan else ""
+    flags = " CC=clang OPT=-O3 SANITIZER=address" if asan else " gcov OPTIMIZATION=-O0" if coverage else ""
     _sh(f"make -j{nproc} BUILD_ZSTD=yes{flags}", src, src.parent / f"{src.name}-build.log")
     # A commit from before the rename builds redis-server.
     server = src / "src" / "valkey-server"
@@ -339,6 +363,128 @@ def build_head(repo: str, sha: str, valkey_sha: str, work: Path, out: Path) -> N
             setup_module(name, work)
             built = build_module(name, fetch(repo, sha, work / name), fetch(VALKEY_REPO, valkey_sha, work / "valkey"))
             tar.add(built, arcname=MODULES[name].file)
+
+
+# --- Coverage ------------------------------------------------------------------
+
+
+def diff_lines(diff: str) -> tuple[dict[str, list[int]], dict[str, int]]:
+    """Each file a diff changes: the numbers of its added lines in the new file, and how many lines it removes."""
+    added: dict[str, list[int]] = {}
+    removed: dict[str, int] = {}
+    path, line, hunk = "", 0, False
+    for text in diff.splitlines():
+        if text.startswith("diff --git "):
+            path, hunk = text.rsplit(" b/", 1)[-1], False
+            added[path], removed[path] = [], 0
+        elif text.startswith("@@") and path:
+            match = _HUNK_RE.match(text)
+            line, hunk = (int(match.group(1)), True) if match else (0, False)
+        elif not hunk:
+            continue
+        elif text.startswith("+"):
+            added[path].append(line)
+            line += 1
+        elif text.startswith("-"):
+            removed[path] += 1
+        elif not text.startswith("\\"):
+            line += 1
+    return added, removed
+
+
+def budget(diff: str, repo: str) -> int:
+    """How many tests a merge is asked for, from its diff's files of code (see MIN_TESTS)."""
+    added, removed = diff_lines(diff)
+    code = [path for path in added if _code(path, repo)]
+    lines = sum(len(added[path]) + removed[path] for path in code)
+    return min(MAX_TESTS, MIN_TESTS + lines // 50 + max(len(code) - 1, 0))
+
+
+def coverage_lines(diff: str) -> dict[str, list[int]]:
+    """The changed lines coverage measures: the added lines of Valkey's C files under src/, but its unit tests'."""
+    added, _ = diff_lines(diff)
+    return {path: lines for path, lines in added.items()
+            if lines and path.startswith("src/") and path.endswith(".c") and not path.startswith("src/unit/")}
+
+
+def gcov_counts(text: str) -> dict[int, int]:
+    """How often each executable line ran, from a ``.gcov`` file: ``-`` is a line of no code, ``#####`` and
+    ``=====`` never ran, ``N`` (or ``N*``, some of its blocks never ran) ran N times."""
+    counts = {}
+    for row in text.splitlines():
+        parts = row.split(":", 2)
+        if len(parts) < 3 or not parts[1].strip().isdigit() or parts[1].strip() == "0":
+            continue
+        count, number = parts[0].strip().rstrip("*"), int(parts[1])
+        if count in ("#####", "====="):
+            counts[number] = 0
+        elif count.isdigit():
+            counts[number] = int(count)
+    return counts
+
+
+def gcov(tree: Path, path: str) -> dict[int, int] | None:
+    """How often each executable line of ``path`` ran on the coverage build in ``tree``, from every run so far;
+    None when the build compiles no object of it."""
+    source = tree / path
+    if not source.with_suffix(".gcno").is_file():
+        return None
+    subprocess.run(["gcov", "-o", ".", source.name], cwd=source.parent, check=True, capture_output=True, text=True,
+                   timeout=300)
+    return gcov_counts((source.parent / f"{source.name}.gcov").read_text(errors="replace"))
+
+
+def coverage(changed: dict[str, list[int]], counts: dict[str, dict[int, int] | None]) -> dict[str, Any]:
+    """The changed lines gcov counts as code, how many of them ran, the percent (rounded down) and the first
+    UNCOVERED_KEPT that never ran, as ``file:line``."""
+    executable = [(path, line, (counts.get(path) or {})[line]) for path, lines in changed.items()
+                  for line in lines if line in (counts.get(path) or {})]
+    uncovered = [f"{path}:{line}" for path, line, ran in executable if not ran]
+    executed = len(executable) - len(uncovered)
+    return {"lines": len(executable), "executed": executed,
+            "percent": 100 * executed // len(executable) if executable else None, "uncovered": uncovered[:UNCOVERED_KEPT]}
+
+
+def uncovered_section(found: dict[str, Any], tree: Path, experiment_ids: list[str]) -> str:
+    """The prompt's section for one more round: the changed lines no test ran, each with code around it."""
+    shown: dict[str, set[int]] = {}
+    for item in found["uncovered"]:
+        path, line = item.rsplit(":", 1)
+        shown.setdefault(path, set()).update(range(int(line) - CONTEXT_LINES, int(line) + CONTEXT_LINES + 1))
+    blocks = []
+    for path, numbers in shown.items():
+        source = (tree / path).read_text(errors="replace").splitlines()
+        rows: list[str] = []
+        for number in sorted(n for n in numbers if 1 <= n <= len(source)):
+            if rows and number - 1 not in numbers:
+                rows.append("...")
+            mark = ">" if f"{path}:{number}" in found["uncovered"] else " "
+            rows.append(f"{mark} {number:5} | {source[number - 1]}")
+        blocks.append(f"{path}:\n```c\n" + "\n".join(rows) + "\n```")
+    ids = f" Experiment ids already used: {', '.join(experiment_ids)}; give new experiments other ids." \
+        if experiment_ids else ""
+    return ("## Changed lines no test reached\n"
+            f"The tests proposed so far ran {found['executed']} of the change's {found['lines']} changed lines of code "
+            f"({found['percent']}%); the lines marked > below never ran. Write new scenarios, unlike the earlier ones, "
+            "that reach them: find in the code the commands, arguments, config or state that lead there." + ids
+            + "\n\n" + "\n\n".join(blocks))
+
+
+def cover(measure: Callable[[list[Any]], dict[str, Any]], more: Callable[[dict[str, Any]], list[Any]],
+          tests: list[Any], started: float) -> dict[str, Any]:
+    """The changed lines' coverage by ``tests``, and by the tests of more rounds while it is under COVERAGE_TARGET:
+    at most COVERAGE_ROUNDS, each started within ROUNDS_WITHIN_S of ``started``, until one covers no new line.
+    ``measure`` runs tests on the coverage build and returns the coverage of every test run on it so far; ``more``
+    walks one more round and returns its tests."""
+    found = {**measure(tests), "rounds": 0}
+    while (found["lines"] and found["executed"] * 100 < COVERAGE_TARGET * found["lines"]
+           and found["rounds"] < COVERAGE_ROUNDS and time.monotonic() - started < ROUNDS_WITHIN_S):
+        tests = more(found)
+        again = {**(measure(tests) if tests else found), "rounds": found["rounds"] + 1}
+        if again["executed"] <= found["executed"]:
+            return again
+        found = again
+    return found
 
 
 # --- Running a test ------------------------------------------------------------
@@ -592,7 +738,7 @@ def claude_cost(stdout: str) -> float:
 
 def run(merge: dict[str, Any], *, gh: Any, token: str, publisher: Any, fuzzer_repo: str, fuzzer_dir: Path,
         fuzzer_bin: str, heads: dict[str, str], unstable: Path, module_head: Path | None, out: Path, work: Path,
-        count: int, tests_url: str, runner: Callable[[str, Path], AgentRunResult] | None = None) -> dict[str, Any]:
+        tests_url: str, runner: Callable[[str, Path], AgentRunResult] | None = None) -> dict[str, Any]:
     """Process one merge end to end; its result.json, beside its proven tests, in ``out``/:func:`merge_folder`."""
     repo = merge["repo"]
     core = repo == VALKEY_REPO
@@ -602,7 +748,7 @@ def run(merge: dict[str, Any], *, gh: Any, token: str, publisher: Any, fuzzer_re
     result: dict[str, Any] = {
         **{key: merge.get(key) for key in MERGE_KEYS}, "unstable": heads[VALKEY_REPO],
         "module_head": module_head_sha or None, "outcome": "tested", "proposed": 0, "proven": 0, "hunted": 0,
-        "dropped": 0, "recall": False, "cost_usd": 0.0, "findings": [], "recorded": [],
+        "dropped": 0, "recall": False, "coverage": None, "cost_usd": 0.0, "findings": [], "recorded": [],
         "error": "the run did not finish",
     }
     cost = [0.0]
@@ -620,7 +766,7 @@ def run(merge: dict[str, Any], *, gh: Any, token: str, publisher: Any, fuzzer_re
     try:
         _walk(merge, result, ask, gh=gh, token=token, publisher=publisher, fuzzer_repo=fuzzer_repo,
               fuzzer_dir=fuzzer_dir, fuzzer_bin=fuzzer_bin, heads=heads, unstable=unstable,
-              module_head=module_head, folder=folder, work=work, count=count, tests_url=tests_url)
+              module_head=module_head, folder=folder, work=work, tests_url=tests_url)
         del result["error"]
     except Exception as exc:
         logger.warning("The walk of %s failed: %s", merge["sha"], exc, exc_info=True)
@@ -632,7 +778,8 @@ def run(merge: dict[str, Any], *, gh: Any, token: str, publisher: Any, fuzzer_re
 
 def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Path], AgentRunResult], *, gh: Any,
           token: str, publisher: Any, fuzzer_repo: str, fuzzer_dir: Path, fuzzer_bin: str, heads: dict[str, str],
-          unstable: Path, module_head: Path | None, folder: Path, work: Path, count: int, tests_url: str) -> None:
+          unstable: Path, module_head: Path | None, folder: Path, work: Path, tests_url: str) -> None:
+    started = time.monotonic()
     repo, core = merge["repo"], merge["repo"] == VALKEY_REPO
     server = unstable / "src" / "valkey-server"
     # The three builds: each a Valkey server and, for a module merge or a test module, the module it loads.
@@ -652,32 +799,62 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
 
     change = fetch_change(gh, token, ChangeRequest(repo=repo, base=merge["parent"], head=merge["sha"]))
     change.title = merge["subject"]
-    proposals = work / "proposals"
-    with tempfile.TemporaryDirectory(prefix="fuzzer-walk-") as td:
-        proposal_run = propose(change, count=count, workdir=Path(td), out_dir=proposals,
-                               catalog=load_catalog(fuzzer_bin), fuzzer_dir=fuzzer_dir,
-                               validator=fuzzer_validator(fuzzer_bin), lister=fuzzer_lister(fuzzer_bin),
-                               runner=ask, valkey_sha="" if core else heads[VALKEY_REPO])
-    write_results(proposal_run, proposals)
-    _, scenarios, experiments = validated_scenarios(proposals)
-    result["proposed"], result["dropped"] = len(scenarios), len(proposal_run.dropped)
+    count = budget(change.diff, repo)
+    logger.info("Asking for %d test(s) of %s", count, _short(merge))
+    catalog = load_catalog(fuzzer_bin)
+    # The proposed experiments as written, and with every check on; the runs read them from these folders.
+    plain: dict[str, str] = {}
+    experiments: dict[str, str] = {}
+    plain_dir, experiment_dir = work / "experiments-plain", work / "experiments"
+    walked: set[str] = set()
+    rounds: list[ProposalRun] = []
+
+    def ask_tests(extra: str = "") -> tuple[ProposalRun, dict[str, str]]:
+        """One round of proposals: Claude's run, and the validated scenarios not walked yet."""
+        proposals = work / ("proposals" + (f"-{len(rounds)}" if rounds else ""))
+        with tempfile.TemporaryDirectory(prefix="fuzzer-walk-") as td:
+            proposal_run = propose(change, count=count, workdir=Path(td), out_dir=proposals, catalog=catalog,
+                                   fuzzer_dir=fuzzer_dir, validator=fuzzer_validator(fuzzer_bin),
+                                   lister=fuzzer_lister(fuzzer_bin), runner=ask,
+                                   valkey_sha="" if core else heads[VALKEY_REPO], extra=extra)
+        rounds.append(proposal_run)
+        write_results(proposal_run, proposals)
+        _, scenarios, proposed = validated_scenarios(proposals)
+        result["dropped"] += len(proposal_run.dropped)
+        if core and proposal_run.module is not None and sides["merge"]["module"] is None:
+            # A test module of Valkey's own, built in each tree; unstable's came with its build.
+            module_file = proposal_run.module.file
+            for build in ("merge", "parent"):
+                tree = Path(sides[build]["server"]).parents[1]
+                build_test_modules(tree)
+                sides[build]["module"] = tree / module_file
+            sides["unstable"]["module"] = unstable / module_file
+        # A later round's experiment named like an earlier one's but unlike it is not taken, nor its scenarios.
+        clash = {file for file, text in proposed.items() if plain.get(file, text) != text}
+        plain_dir.mkdir(parents=True, exist_ok=True)
+        experiment_dir.mkdir(parents=True, exist_ok=True)
+        for file, text in proposed.items():
+            if file not in clash:
+                plain[file], experiments[file] = text, with_checks(text)
+                (plain_dir / file).write_text(text, encoding="utf-8")
+                (experiment_dir / file).write_text(experiments[file], encoding="utf-8")
+        fresh = {}
+        for test, text in scenarios.items():
+            if test in walked:
+                continue
+            result["proposed"] += 1
+            if f"{yaml.safe_load(text)['experiment']['id']}.yaml" in clash:
+                result["dropped"] += 1
+                result["recorded"].append({"scenario": test, "reason": "its experiment's id is an earlier one's"})
+                continue
+            fresh[test] = text
+        return proposal_run, fresh
+
+    first_round, scenarios = ask_tests()
     if not scenarios:
         result["outcome"] = "declined"
-        result["reason"] = proposal_run.reason or "no proposed test validated"
+        result["reason"] = first_round.reason or "no proposed test validated"
         return
-    if core and proposal_run.module is not None:
-        # A test module of Valkey's own, built in each tree; unstable's came with its build.
-        module_file = proposal_run.module.file
-        for build in ("merge", "parent"):
-            tree = Path(sides[build]["server"]).parents[1]
-            build_test_modules(tree)
-            sides[build]["module"] = tree / module_file
-        sides["unstable"]["module"] = unstable / module_file
-    experiments = {file: with_checks(text) for file, text in experiments.items()}
-    experiment_dir = work / "experiments"
-    experiment_dir.mkdir(parents=True, exist_ok=True)
-    for file, text in experiments.items():
-        (experiment_dir / file).write_text(text, encoding="utf-8")
     against = {"merge": "parent", "parent": "merge", "unstable": "parent"}
     runs: dict[tuple[str, str, int], dict[str, Any]] = {}
 
@@ -694,86 +871,143 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
             runs[key] = done
         return runs[key]
 
+    def all_started() -> None:
+        # A run that could not start tested nothing: the merge is an error, to be walked again, not a pass.
+        unstarted = [run for run in runs.values() if run.get("unstarted")]
+        if unstarted:
+            raise RuntimeError(f"{len(unstarted)} of {len(runs)} run(s) could not start: {unstarted[0]['error']}")
+
     pr = _short(merge)
-    for test, text in scenarios.items():
-        doc = yaml.safe_load(text)
-        seed = int(doc["seed"])
-        first = view(test, doc, "merge", seed)
-        if not first["reached"] and first["status"] not in ("PASS", "FAIL"):
-            # It neither reached the change nor ran to a verdict on the merge: dropped, only counted.
-            result["dropped"] += 1
-            result["recorded"].append({"scenario": test, "build": "merge", "status": first["status"],
-                                       "reason": first.get("reason") or first.get("error")})
-            continue
-        result["proven"] += int(first["reached"])
-        result["recall"] = result["recall"] or first["reached"] or first["parent_exited"]
-        (folder / "scenarios").mkdir(exist_ok=True)
-        (folder / "scenarios" / f"{test}.yaml").write_text(text, encoding="utf-8")
-        experiment_file = f"{doc['experiment']['id']}.yaml"
-        if experiment_file in experiments:
-            (folder / "experiments").mkdir(exist_ok=True)
-            (folder / "experiments" / experiment_file).write_text(experiments[experiment_file], encoding="utf-8")
-        seeds = [seed + offset for offset in range(HUNT_SEEDS)]
-        view(test, doc, "parent", seed)
-        result["hunted"] += 1
-        found: list[dict[str, Any]] = []
-        judged: set[str] = set()
-        for hunt_seed in seeds:
-            for fingerprint, info in view(test, doc, "unstable", hunt_seed)["found"].items():
-                if fingerprint in judged:
-                    continue
-                judged.add(fingerprint)
-                again = fingerprint in view(test, doc, "unstable", hunt_seed, again=True)["found"]
-                found.append({**info, "fingerprint": fingerprint, "seed": hunt_seed, "builds": {
-                    "parent": fingerprint in view(test, doc, "parent", hunt_seed)["found"],
-                    "merge": fingerprint in view(test, doc, "merge", hunt_seed)["found"], "unstable": again}})
-        for build in ("merge", "parent"):
-            for fingerprint, info in view(test, doc, build, seed)["found"].items():
-                if fingerprint not in judged:
+
+    def walk_tests(scenarios: dict[str, str]) -> list[tuple[str, dict[str, Any]]]:
+        """Prove, hunt and file each test; the tests that joined the hunt."""
+        hunting = []
+        for test, text in scenarios.items():
+            walked.add(test)
+            doc = yaml.safe_load(text)
+            seed = int(doc["seed"])
+            first = view(test, doc, "merge", seed)
+            if not first["reached"] and first["status"] not in ("PASS", "FAIL"):
+                # It neither reached the change nor ran to a verdict on the merge: dropped, only counted.
+                result["dropped"] += 1
+                result["recorded"].append({"scenario": test, "build": "merge", "status": first["status"],
+                                           "reason": first.get("reason") or first.get("error")})
+                continue
+            hunting.append((test, doc))
+            result["proven"] += int(first["reached"])
+            result["recall"] = result["recall"] or first["reached"] or first["parent_exited"]
+            (folder / "scenarios").mkdir(exist_ok=True)
+            (folder / "scenarios" / f"{test}.yaml").write_text(text, encoding="utf-8")
+            experiment_file = f"{doc['experiment']['id']}.yaml"
+            if experiment_file in experiments:
+                (folder / "experiments").mkdir(exist_ok=True)
+                (folder / "experiments" / experiment_file).write_text(experiments[experiment_file], encoding="utf-8")
+            seeds = [seed + offset for offset in range(HUNT_SEEDS)]
+            view(test, doc, "parent", seed)
+            result["hunted"] += 1
+            found: list[dict[str, Any]] = []
+            judged: set[str] = set()
+            for hunt_seed in seeds:
+                for fingerprint, info in view(test, doc, "unstable", hunt_seed)["found"].items():
+                    if fingerprint in judged:
+                        continue
                     judged.add(fingerprint)
-                    found.append({**info, "fingerprint": fingerprint, "seed": seed, "builds": {
-                        "parent": fingerprint in view(test, doc, "parent", seed)["found"],
-                        "merge": fingerprint in view(test, doc, "merge", seed)["found"], "unstable": False}})
-        hunted = view(test, doc, "unstable", seed)
-        # A fix regressed when commands that reached the change at the merge no longer do on unstable: not when
-        # some marked command is unreached on both, which unreached-change alone says.
-        lost = first["reached_commands"] - hunted.get("reached_commands", set())
-        if first["reached"] and hunted.get("reason") == UNREACHED and lost:
-            rerun = view(test, doc, "unstable", seed, again=True)
-            named = ", ".join(f"{component} {index}" for component, index in sorted(lost))
-            found.append({"rule": "regressed-fix", "detail": f"regressed fix: the change of {_where(merge)} no longer "
-                          f"shows on {heads[repo][:12]} (commands {named})", "lines": [], "seed": seed,
-                          "fingerprint": compute_fingerprint(namespace=("fuzzer-walk", "regressed-fix", repo,
-                                                                        merge["sha"]), shapes=[]),
-                          "builds": {"parent": True, "merge": False, "unstable": rerun.get("reason") == UNREACHED
-                                     and lost.isdisjoint(rerun.get("reached_commands", set()))}})
-        for hunt_seed in seeds:
-            if view(test, doc, "unstable", hunt_seed).get("reason") == UNEXPLAINED:
-                result["recorded"].append({"scenario": test, "build": "unstable", "seed": hunt_seed,
-                                           "reason": UNEXPLAINED})
-        for finding in found:
-            finding.update(scenario=test, verdict=verdict(finding["builds"], pr))
-            if finding["rule"] == "regressed-fix":
-                finding["verdict"] = f"the fix of {pr} regressed" if finding["builds"]["unstable"] else "not reproduced"
-            builds = finding["builds"]
-            result["recall"] = result["recall"] or (builds["parent"] and not builds["merge"]
-                                                    and finding["rule"] != "regressed-fix")
-            if files(finding):
-                context = {"doc": doc, "scenario": text, "experiment": experiments.get(experiment_file, ""),
-                           "experiments": experiments, "module": sides["unstable"]["module"],
-                           "unstable": heads[VALKEY_REPO], "module_head": result["module_head"] or "",
-                           "tests_url": f"{tests_url}/{merge_folder(merge)}"}
-                action, url = publisher.upsert(fuzzer_repo, fingerprint=finding["fingerprint"],
-                                               render=render_issue(finding, merge, context),
-                                               idempotency_key=merge["sha"], keep_title=True)
-                finding.update(issue=url, issue_action=action)
-                logger.info("%s %s: %s", action, url, finding["detail"])
-            result["findings"].append({key: finding.get(key) for key in (
-                "rule", "detail", "scenario", "seed", "builds", "verdict", "fingerprint", "issue")})
-    # A run that could not start tested nothing: the merge is an error, to be walked again, not a pass.
-    unstarted = [run for run in runs.values() if run.get("unstarted")]
-    if unstarted:
-        raise RuntimeError(f"{len(unstarted)} of {len(runs)} run(s) could not start: {unstarted[0]['error']}")
+                    again = fingerprint in view(test, doc, "unstable", hunt_seed, again=True)["found"]
+                    found.append({**info, "fingerprint": fingerprint, "seed": hunt_seed, "builds": {
+                        "parent": fingerprint in view(test, doc, "parent", hunt_seed)["found"],
+                        "merge": fingerprint in view(test, doc, "merge", hunt_seed)["found"], "unstable": again}})
+            for build in ("merge", "parent"):
+                for fingerprint, info in view(test, doc, build, seed)["found"].items():
+                    if fingerprint not in judged:
+                        judged.add(fingerprint)
+                        found.append({**info, "fingerprint": fingerprint, "seed": seed, "builds": {
+                            "parent": fingerprint in view(test, doc, "parent", seed)["found"],
+                            "merge": fingerprint in view(test, doc, "merge", seed)["found"], "unstable": False}})
+            hunted = view(test, doc, "unstable", seed)
+            # A fix regressed when commands that reached the change at the merge no longer do on unstable: not when
+            # some marked command is unreached on both, which unreached-change alone says.
+            lost = first["reached_commands"] - hunted.get("reached_commands", set())
+            if first["reached"] and hunted.get("reason") == UNREACHED and lost:
+                rerun = view(test, doc, "unstable", seed, again=True)
+                named = ", ".join(f"{component} {index}" for component, index in sorted(lost))
+                found.append({"rule": "regressed-fix", "detail": f"regressed fix: the change of {_where(merge)} no longer "
+                              f"shows on {heads[repo][:12]} (commands {named})", "lines": [], "seed": seed,
+                              "fingerprint": compute_fingerprint(namespace=("fuzzer-walk", "regressed-fix", repo,
+                                                                            merge["sha"]), shapes=[]),
+                              "builds": {"parent": True, "merge": False, "unstable": rerun.get("reason") == UNREACHED
+                                         and lost.isdisjoint(rerun.get("reached_commands", set()))}})
+            for hunt_seed in seeds:
+                if view(test, doc, "unstable", hunt_seed).get("reason") == UNEXPLAINED:
+                    result["recorded"].append({"scenario": test, "build": "unstable", "seed": hunt_seed,
+                                               "reason": UNEXPLAINED})
+            for finding in found:
+                finding.update(scenario=test, verdict=verdict(finding["builds"], pr))
+                if finding["rule"] == "regressed-fix":
+                    finding["verdict"] = f"the fix of {pr} regressed" if finding["builds"]["unstable"] else "not reproduced"
+                builds = finding["builds"]
+                result["recall"] = result["recall"] or (builds["parent"] and not builds["merge"]
+                                                        and finding["rule"] != "regressed-fix")
+                if files(finding):
+                    context = {"doc": doc, "scenario": text, "experiment": experiments.get(experiment_file, ""),
+                               "experiments": experiments, "module": sides["unstable"]["module"],
+                               "unstable": heads[VALKEY_REPO], "module_head": result["module_head"] or "",
+                               "tests_url": f"{tests_url}/{merge_folder(merge)}"}
+                    action, url = publisher.upsert(fuzzer_repo, fingerprint=finding["fingerprint"],
+                                                   render=render_issue(finding, merge, context),
+                                                   idempotency_key=merge["sha"], keep_title=True)
+                    finding.update(issue=url, issue_action=action)
+                    logger.info("%s %s: %s", action, url, finding["detail"])
+                result["findings"].append({key: finding.get(key) for key in (
+                    "rule", "detail", "scenario", "seed", "builds", "verdict", "fingerprint", "issue")})
+        return hunting
+
+    tests = walk_tests(scenarios)
+    all_started()
+    changed = coverage_lines(change.diff) if core else {}
+    if not core:
+        result["coverage_reason"] = "not measured for modules yet"
+    elif not changed:
+        result["coverage_reason"] = "the merge adds no line to a C file under src/"
+    else:
+        tree = work / "coverage"
+
+        def measure(tests: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
+            """Run ``tests`` once on the coverage build (built first), checks off, against the parent; the changed
+            lines' coverage by every run on it so far."""
+            try:
+                if not (tree / "src").is_dir():
+                    build_valkey(fetch(repo, merge["sha"], tree), coverage=True)
+                server = tree / "src" / "valkey-server"
+                server = server if server.exists() else tree / "src" / "redis-server"
+                done = [fuzz(fuzzer_bin, doc, int(doc["seed"]), candidate={**sides["merge"], "server": server},
+                             compare=sides["parent"], core=core, experiment_dir=plain_dir,
+                             run_dir=work / "runs" / f"{test}-coverage") for test, doc in tests]
+                if done and all(run["status"] is None for run in done):
+                    raise RuntimeError(f"no run on the coverage build finished: {done[0]['error']}")
+                return coverage(changed, {path: gcov(tree, path) for path in changed})
+            except Exception as exc:
+                raise _Unmeasured(" ".join(str(exc).split())[:500]) from exc
+
+        def more(found: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+            """One more round: tests aimed at the lines no test ran, walked like the first."""
+            logger.info("Coverage %s%% of %d changed line(s): asking for tests that reach the rest",
+                        found["percent"], found["lines"])
+            try:
+                _, scenarios = ask_tests(uncovered_section(found, tree, sorted(file[:-5] for file in plain)))
+            except Exception as exc:
+                logger.warning("Round %d proposed nothing: %s", len(rounds), exc)
+                return []
+            return walk_tests(scenarios)
+
+        try:
+            result["coverage"] = cover(measure, more, tests, started)
+        except _Unmeasured as exc:
+            result["coverage_reason"] = str(exc)
+    all_started()
+
+
+class _Unmeasured(Exception):
+    """The coverage build, its runs or gcov failed: the merge's coverage is not known, and the merge goes on."""
 
 
 # --- State ---------------------------------------------------------------------
@@ -790,6 +1024,7 @@ def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> 
     if result is None:
         return {**entry, "outcome": "no-code-change"}
     entry.update({key: result.get(key) for key in ("outcome", "proposed", "proven", "hunted", "recall", "cost_usd")})
+    entry["coverage"] = (result.get("coverage") or {}).get("percent")
     if not result.get("error"):
         # record() keeps the tests of a merge whose run finished.
         entry["folder"] = merge_folder(merge)
@@ -896,6 +1131,7 @@ def progress(states: list[dict[str, Any]], now: datetime) -> str:
             what = f"{entry.get('subject', '')}: "
             if entry["outcome"] == "tested":
                 what += f"{entry['proven']} of {entry['proposed']} test(s) reached the change"
+                what += f", coverage {entry['coverage']}%" if entry.get("coverage") is not None else ""
                 what += "".join(f"; [{f['rule']}, {f['verdict']}]({f['issue']})" if f.get("issue")
                                 else f"; {f['rule']}, {f['verdict']} (recorded)" for f in entry.get("findings", []))
             else:
@@ -905,9 +1141,12 @@ def progress(states: list[dict[str, Any]], now: datetime) -> str:
     fixes = [e for e in tested if _FIX_RE.search(e.get("subject") or "")]
     issues = sorted({f["issue"] for e in done.values() for f in e.get("findings", []) if f.get("issue")})
     reached = sum(1 for e in tested if e.get("proven"))
+    covered = [e["coverage"] for e in tested if e.get("coverage") is not None]
     lines += ["", "## Totals", "",
               f"- Merges whose tests reached the change: {reached} of {len(tested)} tested"
               + (f" ({100 * reached / len(tested):.0f}%)" if tested else ""),
+              f"- Changed-line coverage: median {statistics.median(covered):.0f}% of {len(covered)} merge(s) measured, "
+              f"{sum(1 for c in covered if c < 50)} under 50%" if covered else "- Changed-line coverage: none measured",
               f"- Recall: {sum(1 for e in fixes if e.get('recall'))} parents flagged of {len(fixes)} fix merges",
               f"- Claude: {spend(1)} in the last 24 hours, {spend(7)} in the last 7 days, {spend(None)} in all",
               f"- Issues filed: {len(issues)}", *(f"  - {url}" for url in issues)]
@@ -993,7 +1232,6 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--fuzzer-repo", required=True, help="where issues are filed")
     r.add_argument("--fuzzer-dir", type=Path, required=True)
     r.add_argument("--fuzzer-bin", required=True)
-    r.add_argument("--count", type=int, default=5)
     r.add_argument("--tests-url", required=True, help="where the state branch keeps the tests, for the issues")
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--work", type=Path, required=True)
@@ -1041,7 +1279,7 @@ def main(argv: list[str] | None = None) -> int:
     result = run(merge, gh=gh, token=token, publisher=IssueDedupPublisher(gh, marker_namespace=MARKER_NAMESPACE),
                  fuzzer_repo=args.fuzzer_repo, fuzzer_dir=args.fuzzer_dir, fuzzer_bin=args.fuzzer_bin,
                  heads=json.loads(args.heads), unstable=args.unstable, module_head=args.module_head, out=args.out,
-                 work=args.work, count=args.count, tests_url=args.tests_url)
+                 work=args.work, tests_url=args.tests_url)
     filed = [f["issue"] for f in result["findings"] if f.get("issue")]
     log_outcome(logger, logging.ERROR if result.get("error") else logging.INFO,
                 f"{merge['repo']} {_short(merge)}: {result['outcome']}, {result['proven']} of {result['proposed']} "

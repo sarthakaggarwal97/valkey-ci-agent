@@ -498,14 +498,19 @@ def _scenario(text: str) -> dict:
     return doc
 
 
-def _walk_merge(monkeypatch, tmp_path, fuzz, docs, merge=None):
-    """walk.run on one merge with fakes: Claude proposes ``docs`` (using proposed.lset), ``fuzz`` runs them."""
+def _walk_merge(monkeypatch, tmp_path, fuzz, *rounds, merge=None, diff="diff", extras=None, counts=None,
+                build=None):
+    """walk.run on one merge with fakes: Claude proposes each round's docs (using proposed.lset), the last again when
+    asked more often, and ``fuzz`` runs them. ``extras`` collects the extra section of each round's prompt."""
     merge = merge or _merge()
     change = Change(repo=merge["repo"], pr_number=None, title="", base_sha=merge["parent"], head_sha=merge["sha"],
-                    diff="diff")
+                    diff=diff)
+    asked = [] if extras is None else extras
 
-    def propose(change_, *, out_dir, runner, **kw):
+    def propose(change_, *, out_dir, runner, count, extra="", **kw):
         runner("propose", tmp_path)
+        asked.append(extra)
+        docs = rounds[min(len(asked), len(rounds)) - 1]
         run = ProposalRun(change=change_)
         for directory in ("scenarios", "experiments"):
             (out_dir / directory).mkdir(parents=True)
@@ -520,7 +525,8 @@ def _walk_merge(monkeypatch, tmp_path, fuzz, docs, merge=None):
         return run
 
     monkeypatch.setattr(walk, "fetch", lambda repo, sha, dest: dest)
-    monkeypatch.setattr(walk, "build_valkey", lambda src, asan=False: src / "src" / "valkey-server")
+    monkeypatch.setattr(walk, "build_valkey", build or (lambda src, asan=False, coverage=False: src / "src" / "valkey-server"))
+    monkeypatch.setattr(walk, "gcov", counts or (lambda tree, path: None))
     monkeypatch.setattr(walk, "fetch_change", lambda gh, token, request: change)
     monkeypatch.setattr(walk, "load_catalog", lambda fuzzer_bin: {})
     monkeypatch.setattr(walk, "propose", propose)
@@ -533,7 +539,7 @@ def _walk_merge(monkeypatch, tmp_path, fuzz, docs, merge=None):
     result = walk.run(merge, gh=MagicMock(), token="t", publisher=publisher, fuzzer_repo="o/valkey-fuzzer",
                       fuzzer_dir=tmp_path, fuzzer_bin="valkey-fuzzer", heads={walk.VALKEY_REPO: "c" * 40},
                       unstable=tmp_path / "unstable", module_head=None, out=tmp_path / "out", work=tmp_path / "work",
-                      count=5, tests_url="https://t", runner=lambda prompt, workdir: answer)
+                      tests_url="https://t", runner=lambda prompt, workdir: answer)
     return result, publisher
 
 
@@ -569,7 +575,7 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
                 "reached_commands": {("lset", 1), ("lset", 2)} if build == "merge" else {("lset", 2)},
                 "parent_exited": False, "found": found}
 
-    result, publisher = _walk_merge(monkeypatch, tmp_path, fuzz, (reached, missed), merge)
+    result, publisher = _walk_merge(monkeypatch, tmp_path, fuzz, (reached, missed), merge=merge)
 
     assert "error" not in result
     assert (result["proposed"], result["proven"], result["hunted"], result["dropped"]) == (2, 1, 1, 1)
@@ -723,3 +729,187 @@ def test_the_commands_that_reached_the_change_are_read_from_the_sequence_and_too
         {"component_id": "cli", "evidence": [{"evidence_id": "valkey.tool.runs", "value": {"reached": [0]}}]},
         {"component_id": "other", "evidence": [{"evidence_id": "valkey.ledger", "value": {"reached": [9]}}]})
     assert walk.reached_commands(report) == {("seq", 3), ("seq", 5), ("cli", 0)}
+
+
+# --- Coverage -------------------------------------------------------------------
+
+DIFF = """\
+diff --git a/src/t_list.c b/src/t_list.c
+index 1..2 100644
+--- a/src/t_list.c
++++ b/src/t_list.c
+@@ -10,4 +10,5 @@ void lsetCommand(client *c) {
+     long index;
+-    if (getLongFromObject(c->argv[2], &index) != C_OK) return;
++    if (getRangeLongFromObjectOrReply(c, c->argv[2], LONG_MIN, LONG_MAX, &index, NULL) != C_OK)
++        return;
+     robj *o = lookupKeyWrite(c->db, c->argv[1]);
+@@ -40,2 +41,3 @@ void lsetCommand(client *c) {
+ }
++-- not a header
+\\ No newline at end of file
+diff --git a/src/gone.c b/src/gone.c
+deleted file mode 100644
+--- a/src/gone.c
++++ /dev/null
+@@ -1,2 +0,0 @@
+-int gone;
+---x;
+diff --git a/tests/unit/type/list.tcl b/tests/unit/type/list.tcl
+--- a/tests/unit/type/list.tcl
++++ b/tests/unit/type/list.tcl
+@@ -1 +1,2 @@
+ start_server {
++    test {LSET out of range} {}
+"""
+
+
+def test_a_diff_gives_each_files_added_lines_and_its_removed_count():
+    added, removed = walk.diff_lines(DIFF)
+    assert added == {"src/t_list.c": [11, 12, 42], "src/gone.c": [], "tests/unit/type/list.tcl": [2]}
+    assert removed == {"src/t_list.c": 1, "src/gone.c": 2, "tests/unit/type/list.tcl": 0}
+    # Coverage measures the added lines of C files under src/ only.
+    assert walk.coverage_lines(DIFF) == {"src/t_list.c": [11, 12, 42]}
+
+
+def _diff(files: int, lines: int, path: str = "src/f{}.c") -> str:
+    return "".join(f"diff --git a/{path.format(i)} b/{path.format(i)}\n@@ -1 +1,{lines} @@\n" + "+x\n" * lines
+                   for i in range(files))
+
+
+@pytest.mark.parametrize("diff, expected", [
+    (_diff(1, 4), 3),  # a few lines: the minimum
+    (DIFF, 4),  # 6 changed lines in 2 files of code; the test file does not count
+    (_diff(1, 4) + _diff(5, 400, "tests/unit/t{}.tcl") + _diff(2, 9, "docs/d{}.md"), 3),
+    (_diff(3, 40), 3 + 120 // 50 + 2),  # more lines, more files
+    (_diff(1, 249), 3 + 4),
+    (_diff(20, 300), walk.MAX_TESTS),  # capped
+])
+def test_the_tests_asked_for_grow_with_the_changed_code(diff, expected):
+    assert walk.budget(diff, walk.VALKEY_REPO) == expected
+
+
+def test_coverage_counts_the_changed_lines_gcov_marks_as_code():
+    counts = walk.gcov_counts((Path(__file__).parent / "fixtures" / "hyperloglog.c.gcov").read_text())
+    # Lines of no code are left out; ##### never ran; 100* ran (some of its blocks did not).
+    assert (counts[856], counts[864], counts[888], counts[891]) == (84, 0, 100, 100)
+    assert 0 not in counts and 857 not in counts and 880 not in counts
+    found = walk.coverage({"src/hyperloglog.c": [857, 864, 865, 888, 891, 999], "src/other.c": [5]},
+                          {"src/hyperloglog.c": counts, "src/other.c": None})
+    assert found == {"lines": 3, "executed": 2, "percent": 66, "uncovered": ["src/hyperloglog.c:864"]}
+    assert walk.coverage({"src/a.c": [1]}, {"src/a.c": {}})["percent"] is None
+
+
+def _rounds(executed: list[int], lines: int = 10, tests: list[list[str]] | None = None, started: float | None = None):
+    """cover() with fakes: each measure reports the next of ``executed``; each round walks the next of ``tests``."""
+    measured: list[list[str]] = []
+    walked: list[dict] = []
+    more_tests = iter(tests if tests is not None else [["t"]] * 10)
+
+    def measure(tests):
+        measured.append(tests)
+        return {"lines": lines, "executed": executed[len(measured) - 1], "uncovered": []}
+
+    def more(found):
+        walked.append(found)
+        return next(more_tests)
+
+    found = walk.cover(measure, more, ["first"], walk.time.monotonic() if started is None else started)
+    return found, measured, walked
+
+
+def test_more_rounds_run_while_the_coverage_is_low_and_growing():
+    # At the target: no round.
+    found, measured, walked = _rounds([8])
+    assert (found["executed"], found["rounds"], len(walked)) == (8, 0, 0)
+    # Under it and growing: rounds until the target...
+    found, measured, walked = _rounds([2, 5, 8, 9])
+    assert (found["executed"], found["rounds"], measured) == (8, 2, [["first"], ["t"], ["t"]])
+    # ...or COVERAGE_ROUNDS of them.
+    found, measured, walked = _rounds([1, 2, 3, 4, 5, 6])
+    assert (found["executed"], found["rounds"], len(walked)) == (4, walk.COVERAGE_ROUNDS, walk.COVERAGE_ROUNDS)
+    # A round that covers no new line ends them, and one with no test is not measured.
+    found, measured, walked = _rounds([2, 4, 4, 9])
+    assert (found["executed"], found["rounds"]) == (4, 2)
+    found, measured, walked = _rounds([2, 9], tests=[[]])
+    assert (found["executed"], found["rounds"], len(measured)) == (2, 1, 1)
+    # No changed line of code: nothing to ask for.
+    found, measured, walked = _rounds([0], lines=0)
+    assert (found["rounds"], walked) == (0, [])
+    # A walk that has run long starts no round.
+    found, measured, walked = _rounds([2], started=walk.time.monotonic() - walk.ROUNDS_WITHIN_S)
+    assert walked == []
+
+
+def test_a_merge_gets_rounds_aimed_at_its_unrun_lines_until_one_covers_nothing_new(monkeypatch, tmp_path):
+    first, second, third = (_scenario(f"seed: {seed}\nexperiment: {{id: proposed.lset}}\n"
+                                      "deployment: {mode: standalone}\n") for seed in (10, 20, 30))
+    on_coverage: set[int] = set()
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        if run_dir.name.endswith("-coverage"):
+            # Checks off, against the parent, on the coverage build.
+            assert experiment_dir.name == "experiments-plain" and "checks" not in (experiment_dir / "proposed.lset.yaml").read_text()
+            assert Path(candidate["server"]).parts[-3] == "coverage" and Path(compare["server"]).parts[-3] == "parent"
+            on_coverage.add(seed)
+        return {"status": "PASS", "reason": None, "reached": True, "parent_exited": False,
+                "reached_commands": {("lset", 1)}, "found": {}}
+
+    def built(src, asan=False, coverage=False):
+        if coverage:
+            (src / "src").mkdir(parents=True)
+            (src / "src" / "t_list.c").write_text("".join(f"line {n}\n" for n in range(1, 50)))
+        return src / "src" / "valkey-server"
+
+    def counts(tree, path):
+        # The first test runs line 11, the second 12, the third nothing more; 42 never runs.
+        assert tree.name == "coverage" and path == "src/t_list.c"
+        return {11: int(10 in on_coverage), 12: int(20 in on_coverage), 42: 0}
+
+    extras: list[str] = []
+    result, _ = _walk_merge(monkeypatch, tmp_path, fuzz, (first,), (second,), (third,), diff=DIFF, extras=extras,
+                            counts=counts, build=built)
+    assert "error" not in result
+    assert result["coverage"] == {"lines": 3, "executed": 2, "percent": 66, "uncovered": ["src/t_list.c:42"],
+                                  "rounds": 2}
+    assert on_coverage == {10, 20, 30}
+    assert (result["proposed"], result["hunted"]) == (3, 3)
+    # The first round asks plainly; the next show the lines no test ran, with code around them.
+    assert extras[0] == "" and len(extras) == 3
+    assert "ran 1 of the change's 3 changed lines of code (33%)" in extras[1]
+    assert ">    12 | line 12" in extras[1] and "     13 | line 13" in extras[1] and "...\n     39 | line 39" in extras[1]
+    assert "Experiment ids already used: proposed.lset" in extras[1]
+    assert ">    12 | line 12" not in extras[2] and ">    42 | line 42" in extras[2]
+    # Every round's tests were walked like the first's.
+    folder = tmp_path / "out" / merge_folder(_merge())
+    assert sorted(p.name for p in (folder / "scenarios").iterdir()) == sorted(
+        f"{doc['scenario_id']}.yaml" for doc in (first, second, third))
+
+
+def test_a_coverage_build_that_fails_leaves_the_coverage_unknown_and_the_merge_tested(monkeypatch, tmp_path):
+    test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        return {"status": "PASS", "reason": None, "reached": True, "parent_exited": False,
+                "reached_commands": {("lset", 1)}, "found": {}}
+
+    def built(src, asan=False, coverage=False):
+        if coverage:
+            raise RuntimeError("`make gcov` failed in coverage (exit 2)")
+        return src / "src" / "valkey-server"
+
+    result, _ = _walk_merge(monkeypatch, tmp_path, fuzz, (test,), diff=DIFF, build=built)
+    assert "error" not in result and result["outcome"] == "tested" and result["proven"] == 1
+    assert result["coverage"] is None and result["coverage_reason"] == "`make gcov` failed in coverage (exit 2)"
+
+
+def test_progress_shows_each_merges_coverage_and_the_median():
+    merges = [_merge(sha=c * 40, pr=i) for i, c in enumerate("bcde", 1)]
+    covered = [{"lines": 10, "executed": e, "percent": e * 10, "uncovered": []} for e in (9, 4, 7)] + [None]
+    planned = {"repo": walk.VALKEY_REPO, "merges": merges, "skipped": [], "pointer": {}}
+    state = update(initial_state(walk.VALKEY_REPO), planned,
+                   [_result(m, coverage=c, findings=[]) for m, c in zip(merges, covered)], now=NOW)
+    text = progress([state], datetime(2026, 11, 4, 18, tzinfo=timezone.utc))
+    assert "2 of 3 test(s) reached the change, coverage 90%" in text
+    assert "2 of 3 test(s) reached the change\n" in text  # not measured: no coverage shown
+    assert "- Changed-line coverage: median 70% of 3 merge(s) measured, 1 under 50%" in text

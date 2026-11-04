@@ -322,7 +322,7 @@ jobs:
           name: walk-runs-${{ matrix.merge.sha }}
           path: |
             walk-work/*.log
-            walk-work/proposals
+            walk-work/proposals*
             walk-work/runs/**/*.json
             walk-work/runs/**/*.log
             walk-work/runs/**/*.yaml

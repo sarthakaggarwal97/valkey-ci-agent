@@ -193,13 +193,13 @@ def no_clone(monkeypatch):
     return calls
 
 
-def _propose(runner, tmp_path, fuzzer_dir, *, count=5, change=None, valkey_sha="", validator=None):
+def _propose(runner, tmp_path, fuzzer_dir, *, count=5, change=None, valkey_sha="", validator=None, extra=""):
     out = tmp_path / "out"
     work = tmp_path / "work"
     work.mkdir()
     run = propose(change or _change(), count=count, workdir=work, out_dir=out, catalog=CATALOG,
                   fuzzer_dir=fuzzer_dir, validator=validator or _stub_validator, lister=_stub_lister, runner=runner,
-                  valkey_sha=valkey_sha)
+                  valkey_sha=valkey_sha, extra=extra)
     return run, write_results(run, out), out
 
 
@@ -454,6 +454,13 @@ def test_no_repair_round_when_everything_validates(tmp_path, fuzzer_dir, no_clon
     workdir = runner.workdirs[0]
     assert no_clone == [("valkey-io/valkey", HEAD, "refs/pull/123/head")]
     assert str(fuzzer_dir) not in runner.prompts[0]
+
+
+def test_an_extra_section_goes_before_the_answers_format(tmp_path, fuzzer_dir, no_clone):
+    runner = StubRunner(_answer([{"rationale": "a", "scenario": GOOD}]))
+    _propose(runner, tmp_path, fuzzer_dir, extra="## Lines the tests did not reach\nsrc/t_list.c:12\n")
+    prompt = runner.prompts[0]
+    assert "a resync.\n\n## Lines the tests did not reach\nsrc/t_list.c:12\n\nReturn ONLY one JSON object" in prompt
 
 
 def test_failed_repair_round_drops_the_invalid_ones(tmp_path, fuzzer_dir):
@@ -1233,7 +1240,7 @@ def test_the_prompts_name_only_files_the_fuzzer_has(prompt):
 def test_the_prompts_render():
     prompt = propose_mod._PROPOSE_PROMPT.format(change_line="c", count=5, max_experiments=5, source_note="s",
                                                 truncated_note="", references_rule=propose_mod._PARENT_RULE,
-                                                module_section="")
+                                                module_section="", extra="")
     assert "compare_with: {$ref: artifacts.parent.binary}" in prompt
     assert "may hold is\n  {$ref: artifacts.parent.binary}, the build of the change's parent commit" in prompt
     assert "expect_difference: true, expect: {equals: [a, b, c]}" in prompt

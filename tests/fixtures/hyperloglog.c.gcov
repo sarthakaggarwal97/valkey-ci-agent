@@ -1,0 +1,41 @@
+        -:    0:Source:hyperloglog.c
+        -:    0:Graph:./hyperloglog.gcno
+        -:    0:Data:./hyperloglog.gcda
+        -:    0:Runs:2
+       84:  856:                n += 2;
+        -:  857:            } else {
+       16:  858:                HLL_SPARSE_ZERO_SET(n, len);
+       16:  859:                n++;
+        -:  860:            }
+        -:  861:        }
+        -:  862:    } else {
+        -:  863:        /* Handle splitting of VAL. */
+    #####:  864:        int curval = HLL_SPARSE_VAL_VALUE(p);
+        -:  865:
+    #####:  866:        if (index != first) {
+    #####:  867:            len = index - first;
+    #####:  868:            HLL_SPARSE_VAL_SET(n, curval, len);
+    #####:  869:            n++;
+        -:  870:        }
+    #####:  871:        HLL_SPARSE_VAL_SET(n, count, 1);
+    #####:  872:        n++;
+    #####:  873:        if (index != last) {
+    #####:  874:            len = last - index;
+    #####:  875:            HLL_SPARSE_VAL_SET(n, curval, len);
+    #####:  876:            n++;
+        -:  877:        }
+        -:  878:    }
+        -:  879:
+        -:  880:    /* Step 3: substitute the new sequence with the old one.
+        -:  881:     *
+        -:  882:     * Note that we already allocated space on the sds string
+        -:  883:     * calling sdsResize(). */
+      100:  884:    int seqlen = n - seq;
+      100:  885:    int oldlen = is_xzero ? 2 : 1;
+      100:  886:    int deltalen = seqlen - oldlen;
+        -:  887:
+     100*:  888:    if (deltalen > 0 && sdslen(objectGetVal(o)) + deltalen > server.hll_sparse_max_bytes) goto promote;
+     100*:  889:    serverAssert(sdslen(objectGetVal(o)) + deltalen <= sdsalloc(objectGetVal(o)));
+      100:  890:    if (deltalen && next) memmove(next + deltalen, next, end - next);
+      100:  891:    if (deltalen) sdsIncrLen(objectGetVal(o), deltalen);
+      100:  892:    memcpy(p, seq, seqlen);
