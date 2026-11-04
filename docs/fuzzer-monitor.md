@@ -60,9 +60,14 @@ Then it turns the batch into findings, and each finding is one issue:
 - **A run that passed but shows something.** A passing run is quiet unless
   its scan finds something, such as a crash in a node log or a failed
   optional component; then it is a finding of its own. Log lines the run's
-  own chaos and workload cause (a failed save on a full disk, an expired
-  failover, slots on a killed node, an out-of-memory refusal) don't count in
-  a passing run: its oracles already judged what they led to.
+  own chaos and workload cause don't count in a passing run when its
+  scenario injects the fault that causes them: a failed save when it fills
+  the disk or makes the data directory read-only, an expired failover or
+  slots on a killed node when it kills, partitions, restarts or fails over
+  an instance, an out-of-memory refusal when it sets a memory limit or an
+  eviction policy of its own (not the fuzzer's default `maxmemory`). Its
+  oracles already judged what those led to. The same line in a run that
+  injects no such fault stays, as a warning.
 - **A bug zoo case that doesn't hold.** The zoo is a set of Valkey builds
   with known, deliberate bugs. A case that doesn't hold means the fuzzer
   missed a bug it is known to catch, or its clean control failed: the fuzzer
@@ -85,7 +90,10 @@ its shape: the keys every report carries (`generated_at`, `status`,
 `provenance`), a known outcome, and an outcome object with its own status and
 the component results. A run that errored goes to a human too, since it
 tested nothing. A run skipped as unsupported (the build or host lacks what
-its experiment needs) is not a finding at all.
+its experiment needs) is not a finding at all; but a finished batch in which
+every run was skipped, or that ran no job, tested nothing, and that is one
+`needs-human-triage` finding for the batch, kept as one issue across
+batches.
 
 Then Claude takes a closer look at each finding that isn't the fuzzer's own
 problem, up to five per batch. The monitor puts the batch summary and the
@@ -118,12 +126,16 @@ identified by the fuzzer's signature key, so the same failure in later
 batches updates the existing issue instead of opening a new one; a zoo case
 by its name; a leak by its experiment and kind. One bug can still show as
 several signatures, such as the same defect failing different experiments.
-So before a finding opens a new issue, Claude reads the open fuzzer issues
-and says whether one of them has the same root cause, meaning one fix would
-make both go away. If so, that issue gets the finding as a comment and keeps
-its title, and later findings with the same signature go straight to it.
-When Claude fails or names anything but an open fuzzer issue, the finding
-opens its own: a duplicate is cheaper than a bug hidden in the wrong issue. The monitor uploads its
+So before a signature or passing-run finding opens a new issue, Claude
+reads the open fuzzer issues and says whether one of them has the same root
+cause, meaning one fix would make both go away. That is a short question
+with everything in the prompt, so Claude gets no tools, a few turns and a
+five-minute limit for it; the fuzzer's own findings (a zoo case, a leak,
+the batch) are keyed by what they are and never asked about. If so, that
+issue gets the finding as a comment and keeps its title, and later findings
+with the same signature go straight to it. When Claude fails or names
+anything but an open fuzzer issue, the finding opens its own: a duplicate
+is cheaper than a bug hidden in the wrong issue. The monitor uploads its
 results and Claude's evidence as artifacts on every run.
 
 ## Running it by hand
@@ -165,6 +177,7 @@ one repository.
 `scripts/fuzzer/main.py` is the entry point. `batch.py` reads the batch
 folder. `analyzer.py` does the work: the quick scan, the findings, cloning
 the source, and calling Claude with the read-only `fuzzer_analysis_readonly`
-profile. `issue_renderer.py` writes the issue, and
+profile, or the tool-less `fuzzer_root_cause_text_only` one for the root
+cause question. `issue_renderer.py` writes the issue, and
 `models.py` holds the data types. Downloading artifacts, cloning, the
 fingerprint and issue updates all come from `scripts/common/`.

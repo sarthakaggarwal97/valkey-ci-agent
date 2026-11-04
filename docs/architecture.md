@@ -113,6 +113,7 @@ hard it should think. Each task gets the narrowest set of tools that works:
 | `validation_repair_edit_only` | Read, search and edit | Repairing a backport that failed its checks |
 | `test_adaptation_edit_only` | Read, search and edit | Porting a test an older branch can't run |
 | `fuzzer_analysis_readonly` | Read and search | Triaging fuzzer runs |
+| `fuzzer_root_cause_text_only` | Nothing: a short answer from the prompt alone | Matching a fuzzer finding to the open issue of its root cause |
 | `fuzzer_proposal_readonly` | Read and search; no commands, file writes or web | Proposing fuzzer scenarios for a Valkey change |
 | `fuzzer_spec_draft_readonly` | Read and search; no commands, file writes or web | Drafting a TLA+ spec bundle for a Valkey change |
 | `ci_fix_edit` | Read, search, edit, create files and run commands, as a separate account; never commit or push | Fixing CI failures on the bot's own PRs |

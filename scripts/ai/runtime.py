@@ -24,6 +24,7 @@ AgentProfileName = Literal[
     "test_adaptation_edit_only",
     "validation_repair_edit_only",
     "fuzzer_analysis_readonly",
+    "fuzzer_root_cause_text_only",
     "fuzzer_proposal_readonly",
     "fuzzer_spec_draft_readonly",
     "ci_fix_diagnose_readonly",
@@ -102,6 +103,19 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
         max_turns=200,
         writes_allowed=False,
         output_schema="text",
+    ),
+    # Says whether a new fuzzer finding has the root cause of an open issue.
+    # Everything Claude needs is in the prompt, so it gets no tools, a few
+    # turns and a short timeout: a question, not an investigation.
+    "fuzzer_root_cause_text_only": AgentProfile(
+        name="fuzzer_root_cause_text_only",
+        allowed_tools="",
+        timeout=300,
+        effort="medium",
+        max_turns=3,
+        writes_allowed=False,
+        output_schema="text",
+        disallowed_tools="Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch,Read,Grep,Glob",
     ),
     # Proposes fuzzer scenarios for a Valkey change. Claude reads the diff, the
     # Valkey and fuzzer checkouts and the catalog, and answers in text; code

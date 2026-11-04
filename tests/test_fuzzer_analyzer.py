@@ -551,22 +551,96 @@ def test_runs_skipped_as_unsupported_are_not_findings(monkeypatch):
     analysis = _analyze(with_summary(batch_files(), summary), monkeypatch)
     assert "skip0000" not in {f.signature_key for f in analysis.findings}
     assert len(_by_kind(analysis, "signature")) == 3
+    assert not _by_kind(analysis, "batch")
 
 
-def _passing_run_logging(line: str):
+def _all_skipped(complete: bool = True) -> dict:
+    summary = batch_summary()
+    for run in summary["runs"]:
+        run.update(status="SKIP_UNSUPPORTED", report=None, summary="needs a Linux host", signature_key=None)
+    summary.update(signatures=[], counts={"SKIP_UNSUPPORTED": len(summary["runs"])}, status="SKIP_UNSUPPORTED",
+                   complete=complete, finished=len(summary["runs"]) if complete else 4)
+    return summary
+
+
+def test_a_batch_where_every_run_was_skipped_is_one_finding_for_a_human(monkeypatch):
+    from scripts.fuzzer.main import _should_publish
+
+    analysis = _analyze(with_summary(batch_files(), _all_skipped()), monkeypatch, run_id=1)
+    assert [f.kind for f in analysis.findings] == ["batch"]
+    finding = analysis.findings[0]
+    assert finding.title == "[fuzzer-run] Batch tested nothing"
+    assert (finding.overall_status, finding.triage_verdict) == ("warning", "needs-human-triage")
+    assert "Every one of the batch's 6 run(s) was skipped as unsupported" in finding.summary
+    assert finding.anomalies[0].evidence == "needs a Linux host"
+    assert len(finding.batch_runs) == 6 and not any(r.startswith("serial-") for r in finding.batch_runs)
+    assert _should_publish(finding)
+    # The same host or build problem in the next batch updates the same issue.
+    later = _analyze(with_summary(batch_files(), _all_skipped()), monkeypatch, run_id=2)
+    assert later.findings[0].incident_fingerprint == finding.incident_fingerprint
+
+
+def test_a_batch_that_ran_nothing_is_the_same_finding(monkeypatch):
+    summary = _all_skipped()
+    summary.update(runs=[], jobs=0, finished=0, counts={})
+    analysis = _analyze(with_summary(batch_files(), summary), monkeypatch)
+    assert [f.title for f in analysis.findings] == ["[fuzzer-run] Batch tested nothing"]
+    assert "without running any job" in analysis.findings[0].summary
+
+
+def test_an_unfinished_batch_of_skipped_runs_is_only_the_unfinished_finding(monkeypatch):
+    analysis = _analyze(with_summary(batch_files(), _all_skipped(complete=False)), monkeypatch)
+    assert [f.title for f in analysis.findings] == ["[fuzzer-run] Batch did not finish"]
+
+
+def _passing_run_logging(line: str, *, fault: str | None = None, server_config: dict | None = None):
+    """The passing aof-durability run (it kills its primary) logging ``line``, with a fault or config added."""
     batch = read_batch(batch_files(), "batch/")
     run = next(r for r in batch.main_runs if r.status == "PASS")
     context = _context_for(_BASE, run, "batch/")
     context.node_logs = {"valkey-0.log": line}
+    plan = context.report["outcome"]["plan"]
+    if fault:
+        plan["components"].append({"use": fault, "id": "fault", "role": "fault", "config": {}})
+    if server_config:
+        plan["deployment"]["server_config"].update(server_config)
     return context
 
 
-@pytest.mark.parametrize("line", [
-    "# Background saving error", "Failover attempt expired.", "Out Of Memory allocating 10 bytes",
-    "slots still assigned to killed nodes",
-])
+@pytest.mark.parametrize("line", ["Failover attempt expired.", "slots still assigned to killed nodes"])
 def test_a_passing_run_does_not_report_what_its_chaos_causes(line):
     assert _scan_logs(_passing_run_logging(line)) == []
+
+
+@pytest.mark.parametrize("line,title", [
+    ("# Background saving error", "RDB/AOF failure"), ("Out Of Memory allocating 10 bytes", "OOM"),
+])
+def test_a_passing_run_reports_a_chaos_line_its_scenario_does_not_cause_as_a_warning(line, title):
+    # The run kills its primary; it fills no disk and sets no memory limit of its own.
+    assert [(s.title, s.severity) for s in _scan_logs(_passing_run_logging(line))] == [(title, "warning")]
+
+
+def test_a_passing_run_with_a_full_disk_does_not_report_a_failed_save():
+    assert _scan_logs(_passing_run_logging("# Background saving error", fault="valkey.fault.disk-fill")) == []
+
+
+def test_a_passing_run_with_its_own_memory_limit_does_not_report_an_oom_refusal():
+    context = _passing_run_logging("OOM command not allowed when used memory > 'maxmemory'",
+                                   server_config={"maxmemory": "4mb", "maxmemory-policy": "allkeys-random"})
+    assert _scan_logs(context) == []
+
+
+def test_the_fuzzer_default_maxmemory_does_not_explain_an_oom_line():
+    context = _passing_run_logging("OOM command not allowed when used memory > 'maxmemory'")
+    assert context.report["outcome"]["plan"]["instances"]["valkey-0"]["server_config"]["maxmemory"] == "500mb"
+    assert [s.title for s in _scan_logs(context)] == ["OOM"]
+
+
+def test_a_passing_run_without_failover_chaos_reports_an_expired_failover():
+    context = _passing_run_logging("Failover attempt expired.")
+    plan = context.report["outcome"]["plan"]
+    plan["components"] = [c for c in plan["components"] if c["use"] != "valkey.fault.process-signal"]
+    assert [(s.title, s.severity) for s in _scan_logs(context)] == [("Failover timeout", "warning")]
 
 
 def test_a_passing_run_still_reports_a_crash():
@@ -748,8 +822,8 @@ def _cause_finding():
 ])
 def test_same_root_cause_counts_only_an_open_fuzzer_issue(monkeypatch, stdout, rc, expected):
     from scripts.fuzzer import analyzer as analyzer_mod
-    prompts = []
-    monkeypatch.setattr(analyzer_mod, "run_agent", lambda profile, prompt, cwd: prompts.append(prompt)
+    calls = []
+    monkeypatch.setattr(analyzer_mod, "run_agent", lambda profile, prompt, cwd: calls.append((profile, prompt))
                         or MagicMock(returncode=rc, stdout=stdout))
     issues = [_cause_issue(13), _cause_issue(7, marked=False)]
 
@@ -757,9 +831,23 @@ def test_same_root_cause_counts_only_an_open_fuzzer_issue(monkeypatch, stdout, r
                                           marker_namespace="valkey-ci-agent:fuzzer-issue")
 
     assert number == expected
-    (prompt,) = prompts
+    ((profile, prompt),) = calls
+    # A question with everything in the prompt: no tools, few turns, a short timeout.
+    assert profile == "fuzzer_root_cause_text_only"
     assert "#13: issue 13" in prompt and "#7:" not in prompt
     assert "Title: Forkless crash" in prompt and "<!--" not in prompt
+
+
+@pytest.mark.parametrize("kind,fuzzer_side", [("zoo", True), ("leak", True), ("batch", False), ("run", True)])
+def test_same_root_cause_is_asked_only_for_a_signature_or_run_finding_that_is_not_the_fuzzers(
+    monkeypatch, kind, fuzzer_side,
+):
+    from scripts.fuzzer import analyzer as analyzer_mod
+    monkeypatch.setattr(analyzer_mod, "run_agent", lambda *a, **k: pytest.fail("Claude was asked"))
+    finding = _cause_finding()
+    finding.kind, finding.fuzzer_side = kind, fuzzer_side
+    assert analyzer_mod.same_root_cause(finding, "t", [_cause_issue(13)],
+                                        marker_namespace="valkey-ci-agent:fuzzer-issue") is None
 
 
 def test_same_root_cause_without_candidates_does_not_ask(monkeypatch):

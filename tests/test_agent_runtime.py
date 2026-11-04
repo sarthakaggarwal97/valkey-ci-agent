@@ -77,6 +77,15 @@ def test_fuzzer_profile_is_readonly() -> None:
     assert "Read" in profile.allowed_tools
 
 
+def test_fuzzer_root_cause_profile_is_a_short_question_without_tools() -> None:
+    profile = agent_runtime.AGENT_PROFILES["fuzzer_root_cause_text_only"]
+    analysis = agent_runtime.AGENT_PROFILES["fuzzer_analysis_readonly"]
+    assert profile.allowed_tools == "" and profile.writes_allowed is False
+    assert {"Read", "Grep", "Glob", "Bash", "Write", "WebFetch"} <= set(profile.disallowed_tools.split(","))
+    assert profile.timeout < analysis.timeout and profile.max_turns < analysis.max_turns
+    assert profile.output_schema == "text"
+
+
 def test_fuzzer_proposal_profile_is_readonly_without_shell_or_network(monkeypatch) -> None:
     profile = agent_runtime.AGENT_PROFILES["fuzzer_proposal_readonly"]
     assert profile.writes_allowed is False

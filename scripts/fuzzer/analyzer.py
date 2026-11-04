@@ -76,9 +76,21 @@ _ANOMALY_PATTERNS: list[tuple[str, str, str, bool]] = [
 # Lines a run's own chaos and workload cause: a full disk fails a save, a
 # partition expires a failover, a killed node holds slots until it is failed
 # over, a maxmemory workload is refused. In a run the fuzzer passed, its
-# oracles already judged what they led to, so only a crash or a sanitizer
-# report there is a finding.
+# oracles already judged what they led to, so such a line is not a finding
+# when the scenario injects the fault that causes it (_chaos_explains); in a
+# run that injects no such fault it stays, as a warning.
 _CHAOS_CAUSED_TITLES = frozenset({"OOM", "Failover timeout", "Split-brain or slot loss", "RDB/AOF failure"})
+# The components that kill, partition, restart or fail over an instance.
+_FAILOVER_CHAOS = frozenset({
+    "valkey.fault.network-partition", "valkey.fault.process-signal", "valkey.action.failover",
+    "valkey.action.cluster-chaos", "valkey.action.replication-chaos", "valkey.action.cluster-election",
+    "valkey.action.restart-instance", "valkey.action.rolling-upgrade",
+})
+_CHAOS_CAUSES: dict[str, frozenset[str]] = {
+    "RDB/AOF failure": frozenset({"valkey.fault.disk-fill", "valkey.fault.deny-writes"}),
+    "Failover timeout": _FAILOVER_CHAOS,
+    "Split-brain or slot loss": _FAILOVER_CHAOS,
+}
 
 # Signal titles that send a finding to a human rather than to a bug verdict:
 # the analyzer could not trust a report, or the run tested nothing.
@@ -168,6 +180,28 @@ def _scan_report(context: FuzzerRunContext) -> list[FuzzerSignal]:
     return signals
 
 
+def _mentions(value: Any, word: str) -> bool:
+    """Whether ``word`` appears in any key or string of ``value``."""
+    if isinstance(value, dict):
+        return any(word in str(k) or _mentions(v, word) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_mentions(v, word) for v in value)
+    return isinstance(value, str) and word in value
+
+
+def _chaos_explains(title: str, plan: dict[str, Any]) -> bool:
+    """Whether the run's plan injects the fault that causes a ``title`` line.
+
+    An out-of-memory refusal is the scenario's own when it sets a memory
+    limit or an eviction policy anywhere but the fuzzer's per-instance
+    defaults (``instances``), which set ``maxmemory`` on every run.
+    """
+    if title == "OOM":
+        return _mentions({k: v for k, v in plan.items() if k != "instances"}, "maxmemory")
+    components = {c.get("use") for c in plan.get("components") or [] if isinstance(c, dict)}
+    return bool(components & _CHAOS_CAUSES.get(title, frozenset()))
+
+
 def _scan_logs(context: FuzzerRunContext) -> list[FuzzerSignal]:
     """Deterministic scan of one run: its report and its instance logs."""
     anomalies = _scan_report(context)
@@ -179,11 +213,14 @@ def _scan_logs(context: FuzzerRunContext) -> list[FuzzerSignal]:
             if isinstance(result, dict) and result.get("status") in ("FAIL", "ERROR"):
                 texts[f"component {result.get('component_id')}"] = str(result.get("summary") or "")
     passed = context.report is not None and context.report["status"] == "PASS"
+    plan = _object(context.report["outcome"].get("plan")) if context.report is not None else {}
     for name, text in texts.items():
         cleaned = strip_ansi(text)
         for title, severity, pattern, _ in _ANOMALY_PATTERNS:
             if passed and title in _CHAOS_CAUSED_TITLES:
-                continue
+                if _chaos_explains(title, plan):
+                    continue
+                severity = "warning"
             m = re.search(pattern, cleaned, re.I)
             if m:
                 anomalies.append(FuzzerSignal(title, severity, f"{name}: {m.group(0)[:200]}"))
@@ -528,7 +565,13 @@ def same_root_cause(finding: FuzzerFinding, title: str, issues: list[Any], *, ma
     candidates. Claude's answer counts only when it names one of them; when
     Claude fails or answers anything else, the finding opens its own issue: a
     duplicate is cheaper than a finding hidden in the wrong issue.
+
+    Only a signature or run finding can share a root cause with another: a
+    zoo case, a leak or the batch itself is the fuzzer's own problem, keyed
+    by what it is, and is never asked about.
     """
+    if finding.fuzzer_side or finding.kind not in ("signature", "run"):
+        return None
     candidates = [i for i in issues if f"<!-- {marker_namespace}:" in (i.body or "")]
     candidates = sorted(candidates, key=lambda i: i.number, reverse=True)[:_MAX_CAUSE_CANDIDATES]
     if not candidates:
@@ -549,7 +592,7 @@ def same_root_cause(finding: FuzzerFinding, title: str, issues: list[Any], *, ma
     prompt = _SAME_CAUSE_PROMPT.format(finding=described, issues=listed)
     try:
         with tempfile.TemporaryDirectory(prefix="fuzzer-cause-") as td:
-            result = run_agent("fuzzer_analysis_readonly", prompt, cwd=td)
+            result = run_agent("fuzzer_root_cause_text_only", prompt, cwd=td)
     except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
         logger.warning("Root-cause match failed: %s", exc)
         return None
@@ -793,6 +836,8 @@ class FuzzerRunAnalyzer:
             signals = _scan_logs(context)
             if signals:
                 findings.append(self._run_finding(base, batch, context, signals, budget))
+        if batch.complete and all(run.status == "SKIP_UNSUPPORTED" for run in batch.main_runs):
+            findings.append(_nothing_tested(base, batch))
         findings += _zoo_findings(base, batch)
         findings += _leak_findings(base, batch)
         return findings
@@ -946,6 +991,31 @@ def _incomplete_batch(base: dict[str, Any], batch: BatchFolder) -> FuzzerFinding
         incident_fingerprint=compute_fingerprint(
             namespace=(base["repo"], base["workflow_file"], "incomplete"), shapes=[],
         ),
+    )
+
+
+def _nothing_tested(base: dict[str, Any], batch: BatchFolder) -> FuzzerFinding:
+    """Every run was skipped as unsupported, or none ran: the batch tested nothing.
+
+    One skipped run is not a finding (its experiment needs what the build or
+    host lacks), but a whole batch of them means the build or host is wrong
+    for every experiment, and nobody would notice from the runs alone.
+    """
+    runs = batch.main_runs
+    reasons = list(dict.fromkeys(run.summary[:200] for run in runs if run.summary))[:5]
+    summary = (
+        f"Every one of the batch's {len(runs)} run(s) was skipped as unsupported: the build or host "
+        "could not run any experiment, so the batch tested nothing."
+        if runs else "The batch finished without running any job, so it tested nothing."
+    )
+    return FuzzerFinding(
+        **base, kind="batch", title="[fuzzer-run] Batch tested nothing",
+        overall_status="warning", triage_verdict="needs-human-triage", summary=summary,
+        anomalies=[FuzzerSignal("Nothing tested", "warning", "; ".join(reasons) or f"{len(runs)} run(s)")],
+        incident_fingerprint=compute_fingerprint(
+            namespace=(base["repo"], base["workflow_file"], "nothing-tested"), shapes=[],
+        ),
+        batch_runs=[run.id for run in runs],
     )
 
 
