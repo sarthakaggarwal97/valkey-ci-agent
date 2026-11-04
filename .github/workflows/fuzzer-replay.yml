@@ -14,7 +14,13 @@ on:
     inputs:
       range:
         description: "BASE..TIP on the Valkey branch: the merges after BASE up to TIP, on TIP's first-parent history"
-        required: true
+        required: false
+        default: ""
+        type: string
+      merges:
+        description: "Instead of a range: the merge commits to replay, SHAs separated by commas or spaces, in this order"
+        required: false
+        default: ""
         type: string
       first:
         description: "Replay only the first N merges of the range (0: all)"
@@ -70,6 +76,7 @@ jobs:
       chunks: ${{ steps.plan.outputs.chunks }}
     env:
       RANGE: ${{ inputs.range }}
+      MERGES: ${{ inputs.merges }}
       FIRST: ${{ inputs.first }}
       COUNT: ${{ inputs.count }}
       RANDOM_SEEDS: ${{ inputs.random_seeds }}
@@ -82,7 +89,13 @@ jobs:
         run: |
           set -euo pipefail
           ref='[A-Za-z0-9][A-Za-z0-9._/-]{0,99}'
-          [[ "${RANGE}" =~ ^${ref}\.\.${ref}$ && "${RANGE}" != *...* ]] || { echo "::error::range must be BASE..TIP"; exit 1; }
+          sha='[0-9a-f]{7,40}'
+          if [[ -n "${MERGES}" ]]; then
+            [[ -z "${RANGE}" ]] || { echo "::error::give range or merges, not both"; exit 1; }
+            [[ "${MERGES}" =~ ^${sha}([,\ ]+${sha}){0,255}$ ]] || { echo "::error::merges must be 1 to 256 commit SHAs separated by commas or spaces"; exit 1; }
+          else
+            [[ "${RANGE}" =~ ^${ref}\.\.${ref}$ && "${RANGE}" != *...* ]] || { echo "::error::range must be BASE..TIP"; exit 1; }
+          fi
           [[ "${FIRST}" =~ ^[0-9]{1,3}$ ]] || { echo "::error::first must be 0 to 999"; exit 1; }
           [[ "${COUNT}" =~ ^([1-9]|10)$ ]] || { echo "::error::count must be 1 to 10"; exit 1; }
           [[ "${RANDOM_SEEDS}" =~ ^[0-4]$ ]] || { echo "::error::random_seeds must be 0 to 4"; exit 1; }
@@ -112,7 +125,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m scripts.fuzzer.replay plan --valkey-dir valkey --range "${RANGE}" --first "${FIRST}" --out merges.json
+          python -m scripts.fuzzer.replay plan --valkey-dir valkey --range "${RANGE}" --merges "${MERGES}" \
+            --first "${FIRST}" --out merges.json
           python - <<'PY' >> "${GITHUB_OUTPUT}"
           import json, os
           merges = json.load(open("merges.json"))

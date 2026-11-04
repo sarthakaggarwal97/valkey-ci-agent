@@ -1,8 +1,9 @@
 """Replay merged Valkey pull requests through the fuzzer, as if each had just merged.
 
 ``plan`` lists the merges on a branch's first-parent history in a range,
-oldest first, each with its parent and its pull request (from the
-``(#1234)`` its squash-merge subject ends with). ``run`` replays one of them
+oldest first, or the merges given by SHA in the order given, each with its
+parent and its pull request (from the ``(#1234)`` its squash-merge subject
+ends with). ``run`` replays one of them
 as it would run live when it merged: Claude proposes scenarios for its change
 (the diff of the merge against its parent), and experiments of its own when
 no installed one reaches it; the fuzzer's PR batch runs them on the merge
@@ -31,6 +32,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -77,6 +79,8 @@ MAX_MERGES = 256
 # A squash merge's subject ends with its pull request: "Fix the thing (#1234)".
 _PR_SUBJECT_RE = re.compile(r"\(#([1-9][0-9]*)\)\s*$")
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
+# A merge given to plan by hand may be abbreviated; the clone resolves it.
+_MERGE_SHA_RE = re.compile(r"[0-9a-f]{7,40}")
 # valkey-io/valkey#4749, and the experiments whose oracle models its rules.
 REPL_COMPRESSION_RULES = "7fe7ca45ffc7bb0ba009a952a2f64395e45e432a"
 REPL_COMPRESSION_EXPERIMENTS = (
@@ -85,32 +89,49 @@ REPL_COMPRESSION_EXPERIMENTS = (
 )
 
 
-def plan(valkey_dir: Path, commit_range: str, *, first: int = 0) -> list[dict[str, Any]]:
-    """The merges in ``commit_range`` (BASE..TIP) on TIP's first-parent history, oldest first, each with
-    the experiments its batch leaves out."""
-    base, sep, tip = commit_range.partition("..")
-    if not sep or not base or not tip:
-        raise ValueError(f"a range is BASE..TIP, got {commit_range!r}")
-    out = subprocess.run(
-        ["git", "-C", str(valkey_dir), "log", "--first-parent", "--reverse", "--format=%H %P%x09%s",
-         f"{base}..{tip}"],
-        check=True, capture_output=True, text=True,
-    ).stdout
-    merges = []
-    for index, line in enumerate(out.splitlines()):
+def plan(
+    valkey_dir: Path, commit_range: str = "", *, first: int = 0, merges: Sequence[str] = (),
+) -> list[dict[str, Any]]:
+    """The merges to replay, each with the experiments its batch leaves out: the commits in ``commit_range``
+    (BASE..TIP) on TIP's first-parent history, oldest first, or the given ``merges`` (commit SHAs, resolved in
+    the clone) in the order given."""
+    git = ["git", "-C", str(valkey_dir)]
+    if merges:
+        lines = []
+        for sha in merges:
+            if not _MERGE_SHA_RE.fullmatch(sha):
+                raise ValueError(f"a merge is a commit SHA of 7 to 40 lowercase hex characters, got {sha!r}")
+            resolved = subprocess.run([*git, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}"],
+                                      capture_output=True, text=True)
+            if resolved.returncode != 0:
+                raise ValueError(f"{sha} is not a commit in {valkey_dir}")
+            lines += subprocess.run([*git, "log", "-1", "--format=%H %P%x09%s", resolved.stdout.strip()],
+                                    check=True, capture_output=True, text=True).stdout.splitlines()
+        what = f"the {len(merges)} merge(s) given"
+    else:
+        base, sep, tip = commit_range.partition("..")
+        if not sep or not base or not tip:
+            raise ValueError(f"a range is BASE..TIP, got {commit_range!r}")
+        lines = subprocess.run(
+            [*git, "log", "--first-parent", "--reverse", "--format=%H %P%x09%s", f"{base}..{tip}"],
+            check=True, capture_output=True, text=True,
+        ).stdout.splitlines()
+        what = commit_range
+    planned = []
+    for index, line in enumerate(lines):
         shas, _, subject = line.partition("\t")
         sha, parent = shas.split()[:2]
         match = _PR_SUBJECT_RE.search(subject)
-        merges.append({"index": index, "sha": sha, "parent": parent,
-                       "pr": int(match.group(1)) if match else None, "subject": subject[:200],
-                       "exclude_experiments": excluded_experiments(valkey_dir, sha)})
-    merges = merges[:first] if first else merges
-    if len(merges) > MAX_MERGES:
+        planned.append({"index": index, "sha": sha, "parent": parent,
+                        "pr": int(match.group(1)) if match else None, "subject": subject[:200],
+                        "exclude_experiments": excluded_experiments(valkey_dir, sha)})
+    planned = planned[:first] if first else planned
+    if len(planned) > MAX_MERGES:
         raise ValueError(
-            f"{commit_range} holds {len(merges)} merges; a replay runs at most {MAX_MERGES} (GitHub's matrix "
+            f"{what} holds {len(planned)} merges; a replay runs at most {MAX_MERGES} (GitHub's matrix "
             "limit). Replay a shorter range, or set first."
         )
-    return merges
+    return planned
 
 
 def excluded_experiments(valkey_dir: Path, sha: str) -> list[str]:
@@ -246,7 +267,8 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     p = commands.add_parser("plan", help="list the merges to replay as a JSON array")
     p.add_argument("--valkey-dir", required=True, help="a Valkey clone holding the whole range")
-    p.add_argument("--range", required=True, help="BASE..TIP")
+    p.add_argument("--range", default="", help="BASE..TIP")
+    p.add_argument("--merges", default="", help="instead of a range: commit SHAs, separated by commas or spaces")
     p.add_argument("--first", type=int, default=0, help="replay only the first N merges (0: all)")
     p.add_argument("--out", required=True)
     r = commands.add_parser("run", help="replay one merge")
@@ -266,9 +288,12 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging()
 
     if args.command == "plan":
-        merges = plan(Path(args.valkey_dir), args.range, first=args.first)
+        given = args.merges.replace(",", " ").split()
+        if bool(given) == bool(args.range):
+            parser.error("give exactly one of --range and --merges")
+        merges = plan(Path(args.valkey_dir), args.range, first=args.first, merges=given)
         Path(args.out).write_text(json.dumps(merges), encoding="utf-8")
-        log_outcome(logger, logging.INFO, f"{len(merges)} merge(s) to replay in {args.range}")
+        log_outcome(logger, logging.INFO, f"{len(merges)} merge(s) to replay in {args.range or 'the merges given'}")
         return 0
 
     for name in ("repo", "fuzzer_repo"):

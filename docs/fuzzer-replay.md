@@ -42,11 +42,16 @@ gh workflow run fuzzer-replay.yml --repo OWNER/valkey-ci-agent \
 
 # Every merge in the range
 gh workflow run fuzzer-replay.yml --repo OWNER/valkey-ci-agent --field range=122ec7e16..7220c38f9
+
+# Chosen merges, in the order given, instead of a range
+gh workflow run fuzzer-replay.yml --repo OWNER/valkey-ci-agent \
+  --field merges="e50b62d0b bce52d39f 45ec67c30 d30102951 b3a135637"
 ```
 
 | Input | Default | Meaning |
 |---|---|---|
 | `range` | | `BASE..TIP`: the merges after `BASE` up to `TIP`, on `TIP`'s first-parent history of `valkey-io/valkey`. |
+| `merges` | | Instead of `range`: the merge commits to replay, 1 to 256 SHAs of 7 to 40 lowercase hex characters, separated by commas or spaces. Each is resolved in the Valkey clone and replayed against its first parent, in the order given. Give one of `range` and `merges`. |
 | `first` | `0` | Replay only the first N merges (0: all). |
 | `count` | `5` | Scenarios to ask Claude for per merge. |
 | `random_seeds` | `2` | Random seeds of each one-build experiment per merge, 0 to 4. |

@@ -65,6 +65,44 @@ def test_plan_lists_the_first_parent_merges_oldest_first(valkey, monkeypatch):
         plan(valkey, "unstable")
 
 
+def test_plan_takes_the_merges_given_in_their_order(valkey, monkeypatch):
+    shas = _git(valkey, "log", "--first-parent", "--format=%H", "unstable").splitlines()[::-1]
+    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", shas[2])
+
+    # Out of history order, one abbreviated: kept in the order given, each resolved with its first parent.
+    merges = plan(valkey, merges=[shas[3], shas[1][:9]])
+
+    assert [(m["index"], m["sha"], m["parent"], m["pr"]) for m in merges] == [
+        (0, shas[3], shas[2], None), (1, shas[1], shas[0], 4716),
+    ]
+    assert [m["exclude_experiments"] for m in merges] == [[], list(replay_mod.REPL_COMPRESSION_EXPERIMENTS)]
+    assert merges[1]["subject"] == "Fix the forkless save (#4716)"
+    assert plan(valkey, merges=[shas[3], shas[1]], first=1) == merges[:1]
+
+
+@pytest.mark.parametrize("sha,error", [
+    ("f" * 40, "is not a commit in"),
+    ("abc", "7 to 40 lowercase hex"),
+    ("HEAD~1", "7 to 40 lowercase hex"),
+])
+def test_plan_refuses_a_merge_it_cannot_resolve(valkey, monkeypatch, sha, error):
+    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", _git(valkey, "rev-parse", "HEAD"))
+    with pytest.raises(ValueError, match=error):
+        plan(valkey, merges=[sha])
+
+
+def test_plan_command_takes_merges_separated_by_commas_or_spaces(valkey, monkeypatch, tmp_path):
+    shas = _git(valkey, "log", "--first-parent", "--format=%H", "unstable").splitlines()[::-1]
+    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", shas[0])
+    out = tmp_path / "merges.json"
+    assert replay_mod.main(["plan", "--valkey-dir", str(valkey), "--merges", f"{shas[2]}, {shas[1]} {shas[3]}",
+                            "--out", str(out)]) == 0
+    assert [m["sha"] for m in json.loads(out.read_text())] == [shas[2], shas[1], shas[3]]
+    for args in (["--merges", shas[1], "--range", f"{shas[0]}..unstable"], []):
+        with pytest.raises(SystemExit):
+            replay_mod.main(["plan", "--valkey-dir", str(valkey), "--out", str(out), *args])
+
+
 def test_a_merge_is_named_by_its_pull_request_and_commit():
     merge = {"index": 7, "sha": "e082696cf" + "0" * 31, "pr": 4716, "subject": "Fix the forkless save (#4716)"}
     assert describe(merge, "valkey-io/valkey") == (

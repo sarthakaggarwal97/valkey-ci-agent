@@ -23,8 +23,11 @@ def test_dispatch_only_with_its_inputs() -> None:
     on = _workflow()["on"]
     assert list(on) == ["workflow_dispatch"]
     inputs = on["workflow_dispatch"]["inputs"]
-    assert list(inputs) == ["range", "first", "count", "random_seeds", "max_parallel", "fuzzer_ref", "build"]
-    assert [name for name, spec in inputs.items() if spec.get("required") == "true"] == ["range"]
+    assert list(inputs) == ["range", "merges", "first", "count", "random_seeds", "max_parallel", "fuzzer_ref",
+                            "build"]
+    # A range or the merges given by SHA: neither is required on its own, the plan step wants one of them.
+    assert [name for name, spec in inputs.items() if spec.get("required") == "true"] == []
+    assert (inputs["range"]["default"], inputs["merges"]["default"]) == ("", "")
     assert (inputs["build"]["type"], inputs["build"]["options"], inputs["build"]["default"]) == (
         "choice", ["default", "asan", "ubsan"], "default",
     )
@@ -81,3 +84,10 @@ def test_the_batches_run_in_parallel_and_the_triage_in_merge_order() -> None:
     triage = _step("triage", "Triage each merge's batch, in merge order")["run"]
     assert "python -m scripts.fuzzer.main" in triage and '--pr-batch-run "${run_id}"' in triage
 
+
+def test_the_plan_takes_a_range_or_the_merges_given() -> None:
+    check = _step("plan", "Check inputs")["run"]
+    assert "give range or merges, not both" in check
+    assert "merges must be 1 to 256 commit SHAs" in check and "sha='[0-9a-f]{7,40}'" in check
+    assert '--range "${RANGE}" --merges "${MERGES}"' in _step("plan", "List the merges")["run"]
+    assert _workflow()["jobs"]["plan"]["env"]["MERGES"] == "${{ inputs.merges }}"
