@@ -4,11 +4,15 @@
 oldest first, each with its parent and its pull request (from the
 ``(#1234)`` its squash-merge subject ends with). ``run`` replays one of them
 as it would run live when it merged: Claude proposes scenarios for its change
-(the diff of the merge against its parent), the fuzzer's PR batch runs them on
-the merge commit beside a random baseline, and the run waits for the batch and
-writes ``replay.json``, which names the batch's run and the change for the
-fuzzer monitor (``--pr-batch-run``, ``--change``). Only the replay is made up:
-the proposals, the batch and the monitor are the live ones.
+(the diff of the merge against its parent), and experiments of its own when
+no installed one reaches it; the fuzzer's PR batch runs them on the merge
+commit, with the parent built beside it for the experiments that compare the
+two, beside a random baseline; and the run waits for the batch and writes
+``replay.json``, which names the batch's run and the change for the fuzzer
+monitor (``--pr-batch-run``, ``--change``) and counts, among the proposed
+experiments' runs, those that reached the change, those that did not, and
+those that showed an unexplained difference. Only the replay is made up: the
+proposals, the batch and the monitor are the live ones.
 
 valkey-io/valkey#4749 changed how a full sync picks its codec and transport,
 and what the primary logs of it. The fuzzer's ``valkey.oracle.repl-compression``
@@ -37,12 +41,23 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.common.logging_utils import configure_logging, log_outcome
-from scripts.fuzzer.pr_batch import PR_BATCH_WORKFLOW, batch_dispatch_inputs, dispatch_batch, wait_for_run
+from scripts.fuzzer.batch import BatchFolder, read_batch
+from scripts.fuzzer.pr_batch import (
+    BUILDS,
+    PR_BATCH_WORKFLOW,
+    PROPOSED_PREFIX,
+    batch_dispatch_inputs,
+    dispatch_batch,
+    download_batch,
+    scenario_name,
+    wait_for_run,
+)
 from scripts.fuzzer.propose import (
     MAX_COUNT,
     REPO_RE,
     ChangeRequest,
     fetch_change,
+    fuzzer_lister,
     fuzzer_validator,
     load_catalog,
     propose,
@@ -53,6 +68,10 @@ from scripts.fuzzer.propose import (
 logger = logging.getLogger(__name__)
 
 REPLAY_FILE = "replay.json"
+# How valkey.action.commands reports, in a component result's diagnostics, a
+# compared sequence that never saw the change, or saw one it was not told of.
+UNREACHED = "unreached-change"
+UNEXPLAINED = "unexplained-difference"
 # GitHub runs at most this many jobs from one matrix, and the workflow replays one merge per job.
 MAX_MERGES = 256
 # A squash merge's subject ends with its pull request: "Fix the thing (#1234)".
@@ -111,6 +130,28 @@ def _experiment(text: str) -> str | None:
     return str(experiment.get("id")) if isinstance(experiment, dict) else None
 
 
+def proposed_run_counts(batch: BatchFolder, scenarios: dict[str, str]) -> dict[str, int]:
+    """Among the batch's runs of the scenarios that use a proposed experiment: how many reached the change
+    (a verdict), did not (``unreached-change``), or showed an unexplained difference."""
+    proposed = {name for name, text in scenarios.items() if (_experiment(text) or "").startswith(PROPOSED_PREFIX)}
+    counts = {"reached": 0, "unreached": 0, "unexplained": 0}
+    for run in batch.main_runs:
+        if scenario_name(run.id) not in proposed:
+            continue
+        outcome = (run.report or {}).get("outcome") or {}
+        reasons = {
+            (result.get("diagnostics") or {}).get("reason")
+            for result in [outcome, *(outcome.get("component_results") or [])] if isinstance(result, dict)
+        }
+        if UNREACHED in reasons:
+            counts["unreached"] += 1
+        elif UNEXPLAINED in reasons:
+            counts["unexplained"] += 1
+        elif run.status in ("PASS", "FAIL"):
+            counts["reached"] += 1
+    return counts
+
+
 def describe(merge: dict[str, Any], repo: str) -> str:
     """How an issue names the merge: its pull request and commit."""
     where = f"{repo}#{merge['pr']}" if merge.get("pr") else repo
@@ -124,25 +165,33 @@ def request_id(merge: dict[str, Any]) -> str:
 def run(
     merge: dict[str, Any], *, gh: Any, token: str, repo: str, fuzzer_repo: str, fuzzer_ref: str,
     fuzzer_dir: Path, fuzzer_bin: str, count: int, random_seeds: int, out_dir: Path, timeout_s: float,
+    build: str = "default",
 ) -> dict[str, Any]:
-    """Replay one merge: propose scenarios for it, run them with a random baseline, wait for the batch."""
+    """Replay one merge: propose scenarios for it, run them with a random baseline on ``build`` of the merge
+    commit and its parent, wait for the batch, and count the proposed experiments' runs."""
     for key in ("sha", "parent"):
         if not _SHA_RE.fullmatch(str(merge[key])):
             raise ValueError(f"merge {key} must be a full commit SHA, got {merge[key]!r}")
-    result: dict[str, Any] = {**merge, "change": describe(merge, repo), "request_id": request_id(merge)}
+    result: dict[str, Any] = {**merge, "change": describe(merge, repo), "request_id": request_id(merge),
+                              "build": build}
     change = fetch_change(gh, token, ChangeRequest(repo=repo, base=merge["parent"], head=merge["sha"]))
     change.title = merge["subject"]
     proposals_dir = out_dir / "proposals"
+    experiments: dict[str, str] = {}
     try:
         with tempfile.TemporaryDirectory(prefix="fuzzer-replay-") as td:
             proposal_run = propose(
                 change, count=count, workdir=Path(td), out_dir=proposals_dir, catalog=load_catalog(fuzzer_bin),
-                fuzzer_dir=fuzzer_dir, validator=fuzzer_validator(fuzzer_bin),
+                fuzzer_dir=fuzzer_dir, validator=fuzzer_validator(fuzzer_bin), lister=fuzzer_lister(fuzzer_bin),
             )
         write_results(proposal_run, proposals_dir)
-        summary, scenarios = validated_scenarios(proposals_dir)
+        summary, scenarios, experiments = validated_scenarios(proposals_dir)
         result["proposed"] = len(scenarios)
         result["dropped"] = len(proposal_run.dropped)
+        result["experiments"] = len(experiments)
+        result["dropped_experiments"] = len(proposal_run.dropped_experiments)
+        if proposal_run.reason:
+            result["reason"] = proposal_run.reason
     except Exception as exc:
         # The random baseline still runs: a failed proposal is recorded, not fatal.
         logger.warning("Proposing scenarios for %s failed: %s", result["change"], exc, exc_info=True)
@@ -150,17 +199,19 @@ def run(
         result["proposal_error"] = " ".join(str(exc).split())[:500]
     excluded = list(merge.get("exclude_experiments") or [])
     if excluded:
+        # A proposed experiment never matches: the experiments stay as they are.
         kept = {name: text for name, text in scenarios.items() if _experiment(text) not in excluded}
         result["excluded_proposals"] = len(scenarios) - len(kept)
         scenarios = kept
     # The exclusion only applies to the random baseline; without one the workflow refuses it.
     inputs = batch_dispatch_inputs(summary, scenarios, random_seeds=random_seeds, request_id=result["request_id"],
-                                   exclude_experiments=excluded if random_seeds else ())
+                                   exclude_experiments=excluded if random_seeds else (),
+                                   parent_sha=merge["parent"], build=build, experiments=experiments or None)
     # GitHub's clock and ours may differ a little.
     since = datetime.now(timezone.utc) - timedelta(minutes=2)
     dispatch_batch(gh, inputs, fuzzer_repo=fuzzer_repo, workflow=PR_BATCH_WORKFLOW, ref=fuzzer_ref)
-    logger.info("Dispatched %s with %d scenario(s) and %d random seed(s) per experiment",
-                result["request_id"], len(scenarios), random_seeds)
+    logger.info("Dispatched %s with %d scenario(s), %d experiment(s) and %d random seed(s) per experiment, "
+                "build %s", result["request_id"], len(scenarios), len(experiments), random_seeds, build)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def record(**fields: Any) -> None:
@@ -179,6 +230,14 @@ def run(
         record(wait_error=" ".join(str(exc).split())[:500])
         raise
     record(run_id=batch.id, run_url=batch.html_url, conclusion=batch.conclusion)
+    if experiments:
+        try:
+            folder = read_batch(download_batch(gh, token, fuzzer_repo, batch.id))
+            record(proposed_runs=proposed_run_counts(folder, scenarios))
+        except Exception as exc:
+            # The triage reads the batch again; a count that failed is recorded, not fatal.
+            logger.warning("Counting the proposed experiments' runs of %s failed: %s", result["request_id"], exc)
+            record(count_error=" ".join(str(exc).split())[:500])
     return result
 
 
@@ -199,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--fuzzer-bin", required=True)
     r.add_argument("--count", type=int, default=5)
     r.add_argument("--random-seeds", type=int, default=2)
+    r.add_argument("--build", choices=BUILDS, default="default", help="the build of the merge commit and its parent")
     r.add_argument("--timeout", type=float, default=5 * 3600, help="seconds to wait for the PR batch")
     r.add_argument("--out", required=True)
     r.add_argument("--target-token", default=None, help="GitHub token (falls back to TARGET_TOKEN)")
@@ -226,10 +286,11 @@ def main(argv: list[str] | None = None) -> int:
         merge, gh=Github(auth=Auth.Token(token)), token=token, repo=args.repo, fuzzer_repo=args.fuzzer_repo,
         fuzzer_ref=args.fuzzer_ref, fuzzer_dir=Path(args.fuzzer_dir), fuzzer_bin=args.fuzzer_bin,
         count=args.count, random_seeds=args.random_seeds, out_dir=Path(args.out), timeout_s=args.timeout,
+        build=args.build,
     )
     log_outcome(logger, logging.INFO,
-                f"{result['change']}: {result.get('proposed', 0)} scenario(s); PR batch "
-                f"{result['conclusion']}: {result['run_url']}")
+                f"{result['change']}: {result.get('proposed', 0)} scenario(s), {result.get('experiments', 0)} "
+                f"experiment(s); PR batch {result['conclusion']}: {result['run_url']}")
     return 0
 
 

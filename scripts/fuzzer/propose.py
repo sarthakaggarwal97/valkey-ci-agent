@@ -3,11 +3,17 @@
 The request is a valkey-io/valkey pull request or commit range. Code resolves
 it to exact commits and fetches the diff; Claude never fetches anything. Claude
 reads the diff, a Valkey checkout at the change, the fuzzer checkout and the
-fuzzer's catalog, and answers with scenario YAML as text. Code then checks
-each scenario, names it, writes it, and runs ``valkey-fuzzer validate`` on it.
-A scenario that fails gets one repair round with the error; one that still
-fails is dropped. Only validated scenarios reach the output directory, which
-the workflow uploads as an artifact.
+fuzzer's catalog, and answers with scenario YAML as text, and, when no
+installed experiment reaches the change, experiment YAML of its own
+(``proposed.`` IDs, installed components only; see :func:`check_experiment`
+and :func:`compiled_experiment_error`). Code then compiles each experiment
+with ``valkey-fuzzer list experiments --experiment-dir``, checks it as
+compiled, and checks each scenario, names it, writes it, and runs
+``valkey-fuzzer validate`` on it with the experiments loaded. What fails gets
+one repair round with the error; what still fails is dropped, a failed
+experiment with the scenarios that use it. Only validated scenarios and the
+experiments they use reach the output directory, which the workflow uploads
+as an artifact. A change that needs no test gets no scenario and a reason.
 
 ``dispatch`` optionally hands the validated scenarios to valkey-fuzzer's PR
 batch workflow, with exactly the inputs it takes (see
@@ -45,13 +51,22 @@ from scripts.common.git_clone import REPO_RE, SHA_RE, shallow_clone_at_sha
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_group, log_outcome
 from scripts.common.proc import PROCESS_BASICS, filter_env
-from scripts.fuzzer.pr_batch import FUZZER_REPO, PR_BATCH_WORKFLOW, batch_dispatch_inputs, dispatch_batch
+from scripts.fuzzer.pr_batch import (
+    EXPERIMENT_FILE_RE,
+    FUZZER_REPO,
+    MAX_EXPERIMENTS_CHARS,
+    PR_BATCH_WORKFLOW,
+    PROPOSED_PREFIX,
+    batch_dispatch_inputs,
+    dispatch_batch,
+)
 
 logger = logging.getLogger(__name__)
 
 VALKEY_REPO = "valkey-io/valkey"
 
 MAX_COUNT = 10
+MAX_EXPERIMENTS = 5
 # A diff larger than this is cut; Claude still has the full tree in valkey/.
 _MAX_DIFF_BYTES = 600_000
 _MAX_SCENARIO_CHARS = 20_000
@@ -68,10 +83,27 @@ _SCENARIO_KEYS = frozenset({"scenario_id", "seed", "experiment", "deployment"})
 _FORBIDDEN_DEPLOYMENT_KEYS = frozenset({
     "valkey_binary", "instance_binaries", "base_data_dir", "instance_data_roots", "provider",
 })
+# A proposed experiment composes installed components, but not the two that
+# send any command to the deployment's instances (valkey.action.commands
+# carries its own refused list), and declares no environment of its own.
+_FORBIDDEN_COMPONENTS = frozenset({"valkey.action.command", "valkey.fault.command"})
+_FORBIDDEN_EXPERIMENT_KEYS = frozenset({"artifacts", "resources", "policies"})
+# The one environment reference a proposed experiment may hold: the parent
+# commit's build, which the PR batch declares as the artifact `parent`.
+PARENT_REFERENCE = "artifacts.parent.binary"
+# Appended to a scenario's copy for validation only, so a scenario whose
+# experiment references the parent compiles; local-binary resolves the path
+# when a run starts, and the batch appends the real block.
+PARENT_ARTIFACT_BLOCK = (
+    "artifacts:\n  parent: {use: valkey.artifact.local-binary, with: {path: /parent-build/valkey-server}}\n"
+)
 _RANGE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$")
 
 Runner = Callable[[str, Path], AgentRunResult]
-Validator = Callable[[Path], "str | None"]
+# valkey-fuzzer validate on a scenario, with the proposed experiments of a directory loaded.
+Validator = Callable[[Path, Path], "str | None"]
+# valkey-fuzzer list experiments of a directory, as compiled: the entries, or the error.
+Lister = Callable[[Path], "tuple[list[dict[str, Any]], str | None]"]
 
 
 # --- The request -------------------------------------------------------------
@@ -140,11 +172,17 @@ class Change:
 
 
 def fetch_change(gh: Any, token: str, request: ChangeRequest) -> Change:
-    """Pin the request to commits and download its diff."""
+    """Pin the request to commits and download its diff.
+
+    The base is the merge-base commit, what GitHub's three-dot compare and a
+    pull request's diff are against, not the base branch's tip: it is the
+    parent build a proposed experiment compares the change with.
+    """
     repo = gh.get_repo(request.repo)
     if request.pr_number is not None:
         pull = repo.get_pull(request.pr_number)
-        head_sha, base_sha = str(pull.head.sha), str(pull.base.sha)
+        head_sha = str(pull.head.sha)
+        base_sha = str(repo.compare(str(pull.base.sha), head_sha).merge_base_commit.sha)
         diff_path = f"/repos/{request.repo}/pulls/{request.pr_number}"
         title = str(pull.title or "")
         fetch_ref: str | None = f"refs/pull/{request.pr_number}/head"
@@ -219,11 +257,11 @@ def load_catalog(fuzzer_bin: str) -> dict[str, list[Any]]:
 
 
 def fuzzer_validator(fuzzer_bin: str) -> Validator:
-    """``valkey-fuzzer validate``: None when the scenario compiles, else the error."""
-    def _validate(path: Path) -> str | None:
+    """``valkey-fuzzer validate`` with ``experiment_dir`` loaded: None when the scenario compiles, else the error."""
+    def _validate(path: Path, experiment_dir: Path) -> str | None:
         try:
             result = subprocess.run(
-                [fuzzer_bin, "validate", str(path)],
+                [fuzzer_bin, "validate", "--experiment-dir", str(experiment_dir), str(path)],
                 capture_output=True, text=True, timeout=_VALIDATE_TIMEOUT_S,
                 env=filter_env(PROCESS_BASICS), cwd=str(path.parent),
             )
@@ -231,11 +269,39 @@ def fuzzer_validator(fuzzer_bin: str) -> Validator:
             return f"valkey-fuzzer validate timed out after {_VALIDATE_TIMEOUT_S}s"
         if result.returncode == 0:
             return None
-        output = f"{result.stdout}\n{result.stderr}"
-        errors = [line.strip() for line in output.splitlines() if line.strip().startswith("Error")]
-        message = "\n".join(errors) or "\n".join(output.strip().splitlines()[-20:])
-        return (message or f"valkey-fuzzer validate exited {result.returncode}")[:_MAX_ERROR_CHARS]
+        return _fuzzer_error(result, "validate")
     return _validate
+
+
+def fuzzer_lister(fuzzer_bin: str) -> Lister:
+    """``valkey-fuzzer list experiments --experiment-dir``: the directory's experiments as compiled, or the error.
+
+    One directory per experiment: an experiment that does not compile fails
+    the whole listing, and the error names its file.
+    """
+    def _list(experiment_dir: Path) -> tuple[list[dict[str, Any]], str | None]:
+        try:
+            result = subprocess.run(
+                [fuzzer_bin, "list", "experiments", "--format", "json", "--experiment-dir", str(experiment_dir)],
+                capture_output=True, text=True, timeout=_LIST_TIMEOUT_S, env=filter_env(PROCESS_BASICS),
+            )
+        except subprocess.TimeoutExpired:
+            return [], f"valkey-fuzzer list experiments timed out after {_LIST_TIMEOUT_S}s"
+        if result.returncode != 0:
+            return [], _fuzzer_error(result, "list experiments").replace(f"{experiment_dir}/", "")
+        try:
+            entries = json.loads(result.stdout)
+        except ValueError as exc:
+            raise RuntimeError(f"valkey-fuzzer list experiments did not print JSON: {exc}") from exc
+        return [e for e in entries if isinstance(e, dict) and e.get("directory") == str(experiment_dir)], None
+    return _list
+
+
+def _fuzzer_error(result: subprocess.CompletedProcess[str], command: str) -> str:
+    output = f"{result.stdout}\n{result.stderr}"
+    errors = [line.strip() for line in output.splitlines() if line.strip().startswith("Error")]
+    message = "\n".join(errors) or "\n".join(output.strip().splitlines()[-20:])
+    return (message or f"valkey-fuzzer {command} exited {result.returncode}")[:_MAX_ERROR_CHARS]
 
 
 # --- Checking what Claude wrote ----------------------------------------------
@@ -293,8 +359,79 @@ def check_scenario(text: Any) -> tuple[dict[str, Any] | None, str | None]:
     return {"scenario_id": f"ai-{digest[:12]}", **doc}, None
 
 
-def _yaml_field(item: dict[str, Any]) -> str:
-    value = item.get("scenario")
+def check_experiment(text: Any) -> tuple[dict[str, Any] | None, str | None]:
+    """Parse and check one proposed experiment's YAML before the fuzzer compiles it.
+
+    What the YAML alone shows: a mapping with a ``proposed.`` ID the PR
+    batch's file name pattern takes, and none of the environment keys. The
+    components and references are checked on the compiled experiment, by
+    :func:`compiled_experiment_error`, since a fragment can bring either.
+    """
+    if not isinstance(text, str) or not text.strip():
+        return None, "the experiment is not a YAML string"
+    if len(text) > MAX_EXPERIMENTS_CHARS:
+        return None, f"the experiment is longer than {MAX_EXPERIMENTS_CHARS} characters"
+    try:
+        doc = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        return None, f"the experiment is not valid YAML: {str(exc)[:300]}"
+    if not isinstance(doc, dict):
+        return None, "the experiment is not a YAML mapping"
+    experiment_id = doc.get("id")
+    if not isinstance(experiment_id, str) or not experiment_id.startswith(PROPOSED_PREFIX):
+        return None, f"the experiment's id must start with {PROPOSED_PREFIX}"
+    if not EXPERIMENT_FILE_RE.fullmatch(f"{experiment_id}.yaml") or ".." in experiment_id:
+        return None, "the experiment's id must be lowercase letters, digits, '.', '_' or '-', at most 100 characters"
+    forbidden = sorted(str(key) for key in doc if key in _FORBIDDEN_EXPERIMENT_KEYS)
+    if forbidden:
+        return None, f"the experiment declares {', '.join(forbidden)}; the runner supplies the environment"
+    return doc, None
+
+
+def compiled_experiment_error(entry: dict[str, Any]) -> str | None:
+    """Why the experiment, as the fuzzer compiled it (``list experiments --format json``), may not be proposed.
+
+    After ``extends`` and fragment expansion: no component that sends any
+    command to the deployment, and no environment reference but the parent
+    build's.
+    """
+    components = entry.get("components")
+    if not isinstance(components, list):
+        return "the fuzzer listed the experiment without its components"
+    forbidden = sorted({
+        str(c.get("use")) for c in components if isinstance(c, dict) and c.get("use") in _FORBIDDEN_COMPONENTS
+    })
+    if forbidden:
+        return (
+            f"the experiment uses {', '.join(forbidden)}, which sends any command to the deployment; "
+            "a proposed experiment uses valkey.action.commands for commands"
+        )
+    references = sorted(ref for ref in _references(entry) if ref != PARENT_REFERENCE)
+    if references:
+        return (
+            f"the experiment references {', '.join(references)}; the only environment reference a proposed "
+            f"experiment may hold is {PARENT_REFERENCE}"
+        )
+    return None
+
+
+def _references(value: Any) -> set[str]:
+    """The ``{$ref: artifacts.<id>.<output>}`` and ``resources.`` references anywhere in ``value``."""
+    found: set[str] = set()
+    if isinstance(value, dict):
+        ref = value.get("$ref")
+        if isinstance(ref, str) and ref.startswith(("artifacts.", "resources.")):
+            found.add(ref)
+        for nested in value.values():
+            found |= _references(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            found |= _references(nested)
+    return found
+
+
+def _text_field(item: dict[str, Any], key: str) -> str:
+    value = item.get(key)
     return value if isinstance(value, str) else ""
 
 
@@ -311,6 +448,24 @@ class Proposal:
     rationale: str
     text: str
     scenario_id: str | None = None
+    # The experiment it uses; a proposed one when the ID starts with `proposed.`.
+    experiment: str | None = None
+    file: str | None = None
+    error: str | None = None
+    repaired: bool = False
+
+    @property
+    def valid(self) -> bool:
+        return self.file is not None and self.error is None
+
+
+@dataclass
+class ExperimentProposal:
+    """One experiment Claude proposed, and what code made of it."""
+
+    index: int
+    text: str
+    experiment_id: str | None = None
     file: str | None = None
     error: str | None = None
     repaired: bool = False
@@ -324,6 +479,9 @@ class Proposal:
 class ProposalRun:
     change: Change
     proposals: list[Proposal] = field(default_factory=list)
+    experiments: list[ExperimentProposal] = field(default_factory=list)
+    # Claude's reason when it proposes no scenario: the change needs no test.
+    reason: str = ""
 
     @property
     def validated(self) -> list[Proposal]:
@@ -332,6 +490,14 @@ class ProposalRun:
     @property
     def dropped(self) -> list[Proposal]:
         return [p for p in self.proposals if not p.valid]
+
+    @property
+    def compiled(self) -> list[ExperimentProposal]:
+        return [e for e in self.experiments if e.valid]
+
+    @property
+    def dropped_experiments(self) -> list[ExperimentProposal]:
+        return [e for e in self.experiments if not e.valid]
 
 
 def _render_scenario(doc: dict[str, Any], change: Change) -> str:
@@ -342,11 +508,65 @@ def _render_scenario(doc: dict[str, Any], change: Change) -> str:
     return header + yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
 
 
-def _check_and_validate(
-    proposal: Proposal, *, change: Change, candidates: Path, accepted: Path,
-    validator: Validator, taken: set[str],
+def _render_experiment(text: str, change: Change) -> str:
+    header = (
+        f"# Proposed by valkey-ci-agent for {change.describe()}.\n"
+        "# Compiled with `valkey-fuzzer list experiments`; load it with `--experiment-dir`.\n"
+    )
+    return header + text.rstrip("\n") + "\n"
+
+
+def _check_and_compile(
+    experiment: ExperimentProposal, *, change: Change, candidates: Path, accepted: Path,
+    lister: Lister, taken: dict[str, ExperimentProposal],
 ) -> None:
-    """Check, name, validate and, if it holds, accept one proposal."""
+    """Check, compile, check as compiled and, if it holds, accept one proposed experiment.
+
+    ``taken`` maps every experiment ID proposed so far to its proposal, valid
+    or not, so a scenario can name the one it uses and what happened to it.
+    """
+    experiment.file = None
+    doc, error = check_experiment(experiment.text)
+    if doc is None:
+        experiment.error = error
+        return
+    experiment_id = str(doc["id"])
+    experiment.experiment_id = experiment_id
+    if taken.setdefault(experiment_id, experiment) is not experiment:
+        experiment.error = "the same experiment ID as an earlier proposal"
+        return
+    # Its own directory: one that does not compile must not hide the others.
+    directory = candidates / f"experiment-{experiment.index}"
+    directory.mkdir(parents=True, exist_ok=True)
+    rendered = _render_experiment(experiment.text, change)
+    (directory / f"{experiment_id}.yaml").write_text(rendered, encoding="utf-8")
+    entries, error = lister(directory)
+    if error is not None:
+        experiment.error = error
+        return
+    entry = next((e for e in entries if e.get("id") == experiment_id), None)
+    if entry is None:
+        experiment.error = f"the fuzzer listed no experiment {experiment_id} from {experiment_id}.yaml"
+        return
+    error = compiled_experiment_error(entry)
+    if error is not None:
+        experiment.error = error
+        return
+    (accepted / f"{experiment_id}.yaml").write_text(rendered, encoding="utf-8")
+    experiment.file = f"experiments/{experiment_id}.yaml"
+    experiment.error = None
+
+
+def _check_and_validate(
+    proposal: Proposal, *, change: Change, candidates: Path, accepted: Path, experiment_dir: Path,
+    validator: Validator, taken: set[str], experiments: dict[str, ExperimentProposal],
+) -> None:
+    """Check, name, validate and, if it holds, accept one proposal.
+
+    The validated copy carries the parent build as an artifact, so a scenario
+    whose proposed experiment compares with it compiles; the accepted file
+    does not, and the PR batch appends the real one.
+    """
     proposal.file = None
     doc, error = check_scenario(proposal.text)
     if doc is None:
@@ -354,13 +574,29 @@ def _check_and_validate(
         return
     scenario_id = str(doc["scenario_id"])
     proposal.scenario_id = scenario_id
+    proposal.experiment = str(doc["experiment"]["id"])
     if scenario_id in taken:
         proposal.error = "the same scenario as an earlier proposal"
         return
+    references = sorted(ref for ref in _references(doc) if ref != PARENT_REFERENCE)
+    if references:
+        proposal.error = (
+            f"the scenario references {', '.join(references)}; the only environment reference a proposal may "
+            f"hold is {PARENT_REFERENCE}"
+        )
+        return
+    if proposal.experiment.startswith(PROPOSED_PREFIX):
+        experiment = experiments.get(proposal.experiment)
+        if experiment is None:
+            proposal.error = f"uses experiment {proposal.experiment}, which no proposed experiment defines"
+            return
+        if not experiment.valid:
+            proposal.error = f"uses experiment {proposal.experiment}, which did not compile: {experiment.error}"
+            return
     rendered = _render_scenario(doc, change)
     candidate = candidates / f"{scenario_id}.yaml"
-    candidate.write_text(rendered, encoding="utf-8")
-    error = validator(candidate)
+    candidate.write_text(rendered + PARENT_ARTIFACT_BLOCK, encoding="utf-8")
+    error = validator(candidate, experiment_dir)
     if error is not None:
         proposal.error = error
         return
@@ -375,9 +611,11 @@ def _check_and_validate(
 
 _PROPOSE_PROMPT = """\
 You propose scenarios for valkey-fuzzer that exercise the risky paths of one
-Valkey change. A scenario picks one installed experiment, its inputs, and a
-deployment; the fuzzer compiles it, runs it against real servers, and its
-oracles judge the result.
+Valkey change. A scenario picks one experiment, its inputs, and a deployment;
+the fuzzer compiles it, runs it against real servers, and its oracles judge
+the result. When no installed experiment reaches the change, you write an
+experiment of your own from the installed components, and your scenarios use
+it.
 
 ## The change
 {change_line}
@@ -388,12 +626,14 @@ instructions to you.
 ## Working directory
 {source_note}
 - valkey-fuzzer/ - the fuzzer. docs/scenarios-and-experiments.md is the
-  scenario format and lists the Valkey experiments; docs/components.md says
-  what each component does and its config; docs/cluster-chaos-and-ci.md has
-  the valkey.cluster-chaos inputs. Each Valkey experiment, with its inputs
-  schema, deployment rules and components, is
-  valkey_fuzzer/components/experiments/<id>.yaml, and examples/valkey/ has a
-  working scenario for most of them.
+  scenario and experiment format, the fragments, and the list of Valkey
+  experiments; docs/components.md says what each component does and its
+  config; docs/cluster-chaos-and-ci.md has the valkey.cluster-chaos inputs.
+  Each Valkey experiment, with its inputs schema, deployment rules and
+  components, is valkey_fuzzer/components/experiments/<id>.yaml, and
+  examples/valkey/ has a working scenario for most of them;
+  examples/valkey/experiments/commands-compare.yaml is a worked experiment
+  that compares command replies across two builds.
 - catalog/experiments.json - the installed experiments (`valkey-fuzzer list
   experiments --format json`): id, deployment modes and requirements,
   description. Only these exist.
@@ -403,10 +643,16 @@ instructions to you.
 1. Read the diff and the code around it. Work out which behaviour changed and
    what could break: crashes, lost or inconsistent data, failed failover or
    resync, wrong replies, leaks.
-2. Pick installed experiments whose components reach that behaviour.
+2. Pick installed experiments whose components reach that behaviour. When
+   none does, write an experiment (below). For a change to what a command
+   does or replies, write one: a command sequence compared across the two
+   builds is the surest way to reach the change.
 3. Write up to {count} scenarios, each different (experiment, deployment
    shape, inputs, server_config), that drive those paths hardest. Prefer
    fewer, sharper scenarios to many weak ones.
+4. A change that needs no test (a refactor, a performance change with no
+   behaviour change, a comment, a build or CI change) gets no scenario: say
+   why in "reason" and nothing else. Don't invent a scenario for it.
 
 Each scenario is one YAML document with these top-level keys only:
 - seed: an integer;
@@ -418,26 +664,141 @@ instance_binaries, base_data_dir, instance_data_roots, provider, artifacts,
 resources or policies: the runner supplies the build and the machine.
 Give different scenarios different base_port values, 100 apart, from 7000.
 
+## Writing an experiment
+An experiment is one YAML document in the format of
+valkey_fuzzer/components/experiments/<id>.yaml (id, deployment.modes,
+components, required_evidence, and optionally extends, inputs,
+required_events). Rules:
+- its id starts with `proposed.`, for example proposed.lset-out-of-range;
+- `extends` may name installed fragments: valkey.liveness brings the liveness
+  oracle, valkey.base also the key-value workload, the ledger and
+  deployment-state oracles (not needed for a compared command sequence);
+- it composes installed components only, never valkey.action.command or
+  valkey.fault.command (they send any command to the deployment's
+  instances), and declares no artifacts, resources or policies;
+- the only reference to the environment it may hold is
+  {{$ref: artifacts.parent.binary}}, the build of the change's parent commit,
+  which the runner supplies;
+- at most {max_experiments} experiments, 20,000 characters together. One
+  experiment with inputs serves several scenarios.
+
+### valkey.action.commands
+Sends a command sequence on one connection, so MULTI/EXEC, WATCH, SELECT and
+client state span commands. With compare_with it runs the sequence twice, on
+two private servers it starts itself from an empty dataset with the same
+server_config and RESP version: one of the change's build, one of the
+parent's. It never touches the deployment's instances. Without compare_with
+it runs on the deployment's instances, under whatever faults the experiment
+injects, judged by expect alone: use that for a command during a forkless
+save or a resync, with the installed fault components.
+
+```yaml
+extends: [valkey.liveness]
+id: proposed.lset-out-of-range
+deployment:
+  modes: [standalone]
+metadata:
+  description: LSET with an out-of-range 64-bit index leaves the list unchanged
+inputs:
+  properties:
+    resp: {{type: integer, enum: [2, 3], default: 2}}
+components:
+  - use: valkey.action.commands
+    id: lset
+    config:
+      compare_with: {{$ref: artifacts.parent.binary}}
+      server_config: {{list-max-listpack-size: 4}}
+      resp: {{$ref: inputs.resp}}
+      timeout_s: 10
+      commands:
+        - {{command: [RPUSH, l, a, b, c], expect: {{equals: 3}}}}
+        - {{command: [LSET, l, 9223372036854775807, x], expect_difference: true,
+           expect: {{error: "index out of range"}}}}
+        - {{command: [LRANGE, l, 0, -1], expect_difference: true, expect: {{equals: [a, b, c]}}}}
+        - {{command: [HGETALL, h], compare: unordered-pairs}}
+        - {{command: [RESTORE, k, 0, !!binary "AA4BAgMEBQ=="], expect: {{equals: OK}}}}
+required_events: [lset.completed]
+required_evidence:
+  - {{evidence_id: valkey.command.sequence, source: lset}}
+```
+
+An experiment needs at least one required_evidence item, the path evidence
+that the run reached what it tests: the sequence's `valkey.command.sequence`
+above, or what the fragments bring (valkey.base brings the ledger's).
+
+For a compared sequence:
+- The sequence is self-contained: it starts from an empty server, on both
+  builds, so it writes what it reads.
+- Mark `expect_difference: true` on every command whose reply the change
+  means to change, including the later reads a changed write carries into
+  (the LRANGE after the fixed LSET above), and give each an `expect`
+  (`equals`, `in`, `contains`, `min`/`max`, `exists`, or `error:
+  true|false|substring`, as docs/components.md lists under Predicates). A
+  marked command whose replies are equal on
+  both builds means the test did not reach the change: an error, not a
+  finding. For a bug fix, at least one marked command must show the bug on
+  the parent, where the bug still is.
+- An unmarked command whose replies differ is an unexplained difference,
+  recorded for triage, not a failure: mark it or leave it out.
+- Replies that are not deterministic need `compare`: `unordered` sorts a
+  flat reply (SMEMBERS, HKEYS, KEYS), `unordered-pairs` sorts a RESP2
+  field/value reply by pairs (HGETALL), `skip` records a reply and never
+  compares it (TIME, TTL and PTTL, INFO, CLIENT ID, SCAN cursors, OBJECT
+  ENCODING, MEMORY USAGE, DEBUG OBJECT). Avoid SPOP, SRANDMEMBER, HRANDFIELD
+  and RANDOMKEY in a compared sequence: they change state at random, and
+  Valkey seeds its hash function per process.
+- An option the change adds is set inside the sequence, `CONFIG SET
+  new-option value` marked expect_difference (the parent answers an error,
+  the change OK); an option in server_config that the parent rejects is
+  dropped on both sides. sanitize-dump-payload is yes on both servers unless
+  server_config says no.
+- Refused: SHUTDOWN; DEBUG RESTART, CRASH-AND-RECOVER and RELOAD; DEBUG
+  SLEEP above timeout_s; MODULE LOAD, LOADEX and UNLOAD; CONFIG SET of dir,
+  logfile, unixsocket, a port or a bind; MONITOR, SUBSCRIBE, PSUBSCRIBE and
+  SSUBSCRIBE. REPLICAOF, CLUSTER, SYNC, PSYNC and REPLCONF are allowed on the
+  private servers.
+- Arguments and replies are raw bytes; a binary argument is YAML !!binary.
+  RESP 2 and 3 both deserve a scenario when the change touches replies: make
+  resp an input, as above, and write one scenario per version.
+
+### Adversarial inputs
+The shapes the maintainers' own audits keep finding bugs with
+(valkey-io/valkey#4604, #4838, #4839, #5151, #5146, #5163): empty strings and
+empty collections; many repeated arguments; arguments at the INT64, 2^31 and
+2^32 boundaries; keys named like keywords (a hash key named "fields");
+RESTORE of a checksum-valid payload with a non-minimal encoding, as !!binary;
+a command out of its protocol state (EXEC without MULTI, REPLCONF after the
+handshake); a command during a forkless save or a resync.
+
 Return ONLY one JSON object:
-{{"scenarios": [{{"rationale": "one or two sentences: which changed path it drives, and how", "scenario": "<the YAML document as one string>"}}]}}
+{{"reason": "only when no scenario is needed: why the change needs no test", "experiments": [{{"experiment": "<an experiment YAML document as one string>"}}], "scenarios": [{{"rationale": "one or two sentences: which changed path it drives, and how", "scenario": "<the YAML document as one string>"}}]}}
+Leave "experiments" out when the scenarios use installed experiments only,
+and "reason" out when there are scenarios.
 """
 
 _REPAIR_PROMPT = """\
-You proposed valkey-fuzzer scenarios for {change_line}. The ones below failed
-validation. Fix each so it validates, keeping what it was meant to test. The
-working directory is the same as before:
+You proposed valkey-fuzzer scenarios for {change_line}, and maybe experiments
+of your own. The ones below failed. Fix each so it validates, keeping what it
+was meant to test. The working directory is the same as before:
 {source_note}
 - valkey-fuzzer/ - the fuzzer, its docs/ and
   valkey_fuzzer/components/experiments/<id>.yaml (inputs schemas).
 - catalog/experiments.json and catalog/components.json - what is installed.
-The same rules hold: top-level keys seed, experiment and deployment only; no
-scenario_id, valkey_binary, instance_binaries, base_data_dir,
-instance_data_roots, provider, artifacts, resources or policies.
+The same rules hold. A scenario: top-level keys seed, experiment and
+deployment only; no scenario_id, valkey_binary, instance_binaries,
+base_data_dir, instance_data_roots, provider, artifacts, resources or
+policies. An experiment: an id starting with `proposed.`, installed
+components only, never valkey.action.command or valkey.fault.command, no
+artifacts, resources or policies, and no environment reference but
+{{$ref: artifacts.parent.binary}}; every command marked expect_difference has
+an expect. A scenario that failed only because its experiment did not
+compile is validated again once the experiment is fixed; return it only if
+it needs a change itself.
 
 {failures}
 
-Return ONLY one JSON object, leaving out any scenario you cannot fix:
-{{"scenarios": [{{"index": <its number>, "rationale": "...", "scenario": "<the fixed YAML document as one string>"}}]}}
+Return ONLY one JSON object, leaving out anything you cannot fix:
+{{"experiments": [{{"index": <its number>, "experiment": "<the fixed experiment YAML as one string>"}}], "scenarios": [{{"index": <its number>, "rationale": "...", "scenario": "<the fixed YAML document as one string>"}}]}}
 """
 
 
@@ -445,8 +806,8 @@ def _default_runner(prompt: str, workdir: Path) -> AgentRunResult:
     return run_agent("fuzzer_proposal_readonly", prompt, cwd=str(workdir))
 
 
-def _ask_claude(runner: Runner, prompt: str, workdir: Path) -> list[Any]:
-    """Run Claude and return its ``scenarios`` list; one retry on a failed exit."""
+def _ask_claude(runner: Runner, prompt: str, workdir: Path) -> dict[str, Any]:
+    """Run Claude and return its answer, with a ``scenarios`` list; one retry on a failed exit."""
     last_error: RuntimeError | None = None
     for attempt in range(_CLAUDE_MAX_ATTEMPTS):
         result = runner(prompt, workdir)
@@ -454,7 +815,9 @@ def _ask_claude(runner: Runner, prompt: str, workdir: Path) -> list[Any]:
             payload = extract_json_object(result.stdout, required_key="scenarios")
             if payload is None or not isinstance(payload.get("scenarios"), list):
                 raise ValueError("Claude did not return a scenarios list")
-            return payload["scenarios"]
+            if not isinstance(payload.get("experiments", []), list):
+                raise ValueError("Claude's experiments are not a list")
+            return payload
         last_error = RuntimeError(f"Claude Code failed (rc={result.returncode}): {result.stderr[:300]}")
         if attempt + 1 < _CLAUDE_MAX_ATTEMPTS:
             logger.warning("Claude failed, retrying: %s", last_error)
@@ -491,11 +854,23 @@ def prepare_workspace(
     )
 
 
+def _repairs_by_index(items: Any, failed: dict[int, Any]) -> dict[int, dict[str, Any]]:
+    """The repair answers that name a failed item, the first for each index."""
+    repairs: dict[int, dict[str, Any]] = {}
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        number = item.get("index")
+        if isinstance(number, int) and number in failed and number not in repairs:
+            repairs[number] = item
+    return repairs
+
+
 def propose(
     change: Change, *, count: int, workdir: Path, out_dir: Path, catalog: dict[str, list[Any]],
-    fuzzer_dir: Path, validator: Validator, runner: Runner | None = None,
+    fuzzer_dir: Path, validator: Validator, lister: Lister, runner: Runner | None = None,
 ) -> ProposalRun:
-    """Ask Claude for scenarios, then keep only those that validate."""
+    """Ask Claude for scenarios and experiments, then keep only those that compile and validate."""
     runner = runner or _default_runner
     valkey_ok = prepare_workspace(workdir, change, fuzzer_dir=fuzzer_dir, catalog=catalog)
     source_note = describe_sources(change, valkey_ok)
@@ -504,60 +879,101 @@ def propose(
     candidates.mkdir()
     accepted = out_dir / "scenarios"
     accepted.mkdir(parents=True, exist_ok=True)
+    experiment_dir = out_dir / "experiments"
+    experiment_dir.mkdir(parents=True, exist_ok=True)
     run = ProposalRun(change=change)
     taken: set[str] = set()
+    experiments: dict[str, ExperimentProposal] = {}
+
+    def compile_one(experiment: ExperimentProposal) -> None:
+        _check_and_compile(experiment, change=change, candidates=candidates, accepted=experiment_dir,
+                           lister=lister, taken=experiments)
+
+    def validate_one(proposal: Proposal) -> None:
+        _check_and_validate(proposal, change=change, candidates=candidates, accepted=accepted,
+                            experiment_dir=experiment_dir, validator=validator, taken=taken,
+                            experiments=experiments)
 
     prompt = _PROPOSE_PROMPT.format(
-        change_line=change_line, count=count, source_note=source_note,
+        change_line=change_line, count=count, max_experiments=MAX_EXPERIMENTS, source_note=source_note,
         truncated_note=" (cut short; read the rest in valkey/)" if change.diff_truncated else "",
     )
     with log_group("Ask Claude for scenarios"):
-        raw = _ask_claude(runner, prompt, workdir)
-    for index, item in enumerate(raw[:count], start=1):
+        answer = _ask_claude(runner, prompt, workdir)
+    run.reason = _clean_rationale(answer.get("reason"))
+    total = 0
+    for index, item in enumerate(answer.get("experiments", [])[:MAX_EXPERIMENTS], start=1):
+        item = item if isinstance(item, dict) else {}
+        experiment = ExperimentProposal(index=index, text=_text_field(item, "experiment"))
+        total += len(experiment.text)
+        if total > MAX_EXPERIMENTS_CHARS:
+            experiment.error = f"with the earlier experiments, longer than {MAX_EXPERIMENTS_CHARS} characters together"
+        else:
+            compile_one(experiment)
+        run.experiments.append(experiment)
+    for index, item in enumerate(answer["scenarios"][:count], start=1):
         item = item if isinstance(item, dict) else {}
         proposal = Proposal(
             index=index, rationale=_clean_rationale(item.get("rationale")),
-            text=_yaml_field(item),
+            text=_text_field(item, "scenario"),
         )
-        _check_and_validate(proposal, change=change, candidates=candidates, accepted=accepted,
-                            validator=validator, taken=taken)
+        validate_one(proposal)
         run.proposals.append(proposal)
-    logger.info("Claude proposed %d scenario(s); %d validated", len(run.proposals), len(run.validated))
+    logger.info("Claude proposed %d experiment(s), %d compiled, and %d scenario(s), %d validated%s",
+                len(run.experiments), len(run.compiled), len(run.proposals), len(run.validated),
+                f"; its reason: {run.reason}" if run.reason else "")
 
     # One repair round for everything that failed, then what still fails is dropped.
     failed = {p.index: p for p in run.dropped}
-    if failed:
-        failures = "\n\n".join(
-            f"### Scenario {p.index}\nIntent: {p.rationale or 'not given'}\n"
-            f"Error:\n{p.error}\nYAML:\n{p.text[:_MAX_SCENARIO_CHARS]}"
-            for p in failed.values()
-        )
+    failed_experiments = {e.index: e for e in run.dropped_experiments}
+    if failed or failed_experiments:
+        failures = "\n\n".join([
+            *(f"### Experiment {e.index}\nError:\n{e.error}\nYAML:\n{e.text[:MAX_EXPERIMENTS_CHARS]}"
+              for e in failed_experiments.values()),
+            *(f"### Scenario {p.index}\nIntent: {p.rationale or 'not given'}\n"
+              f"Error:\n{p.error}\nYAML:\n{p.text[:_MAX_SCENARIO_CHARS]}"
+              for p in failed.values()),
+        ])
         repair_prompt = _REPAIR_PROMPT.format(
             change_line=change_line, source_note=source_note, failures=failures,
         )
         try:
-            with log_group(f"Ask Claude to repair {len(failed)} scenario(s)"):
-                repairs = _ask_claude(runner, repair_prompt, workdir)
+            with log_group(f"Ask Claude to repair {len(failed_experiments)} experiment(s) and {len(failed)} scenario(s)"):
+                answer = _ask_claude(runner, repair_prompt, workdir)
         except (RuntimeError, ValueError) as exc:
-            logger.warning("The repair round failed; dropping %d scenario(s): %s", len(failed), exc)
-            repairs = []
-        repaired: set[int] = set()
-        for item in repairs:
-            if not isinstance(item, dict):
-                continue
-            number = item.get("index")
-            if not isinstance(number, int) or number not in failed or number in repaired:
-                continue
-            repaired.add(number)
-            proposal = failed[number]
-            proposal.repaired = True
-            proposal.text = _yaml_field(item)
-            if item.get("rationale"):
-                proposal.rationale = _clean_rationale(item.get("rationale"))
-            _check_and_validate(proposal, change=change, candidates=candidates, accepted=accepted,
-                                validator=validator, taken=taken)
+            logger.warning("The repair round failed; dropping %d experiment(s) and %d scenario(s): %s",
+                           len(failed_experiments), len(failed), exc)
+            answer = {"scenarios": []}
+        repaired_experiments = _repairs_by_index(answer.get("experiments"), failed_experiments)
+        for number, item in repaired_experiments.items():
+            experiment = failed_experiments[number]
+            experiment.repaired = True
+            experiment.text = _text_field(item, "experiment")
+            compile_one(experiment)
+        recompiled = {e.experiment_id for e in failed_experiments.values() if e.repaired and e.valid}
+        repaired_scenarios = _repairs_by_index(answer.get("scenarios"), failed)
+        for number, proposal in failed.items():
+            item = repaired_scenarios.get(number)
+            if item is not None:
+                proposal.repaired = True
+                proposal.text = _text_field(item, "scenario")
+                if item.get("rationale"):
+                    proposal.rationale = _clean_rationale(item.get("rationale"))
+            # A scenario Claude left alone is tried again when its experiment was the problem.
+            if item is not None or proposal.experiment in recompiled:
+                validate_one(proposal)
+        for experiment in run.dropped_experiments:
+            logger.info("Dropping experiment %d: %s", experiment.index, " ".join((experiment.error or "").split())[:300])
         for proposal in run.dropped:
             logger.info("Dropping scenario %d: %s", proposal.index, " ".join((proposal.error or "").split())[:300])
+
+    # An experiment no validated scenario uses has nothing to run; it is not sent.
+    used = {p.experiment for p in run.validated}
+    for experiment in run.compiled:
+        if experiment.experiment_id not in used:
+            (experiment_dir / f"{experiment.experiment_id}.yaml").unlink()
+            experiment.file = None
+            experiment.error = "no validated scenario uses it"
     return run
 
 
@@ -565,16 +981,29 @@ def propose(
 
 
 def write_results(run: ProposalRun, out_dir: Path) -> dict[str, Any]:
-    """proposals.json: the change, the validated scenarios and the dropped ones."""
+    """proposals.json: the change, Claude's reason for no scenario, the validated scenarios, the experiments
+    they use, and the dropped ones."""
     result = {
         "change": run.change.summary(),
+        "reason": run.reason or None,
         "scenarios": [
-            {"scenario_id": p.scenario_id, "file": p.file, "rationale": p.rationale, "repaired": p.repaired}
+            {"scenario_id": p.scenario_id, "file": p.file, "rationale": p.rationale, "repaired": p.repaired,
+             "experiment": p.experiment}
             for p in run.validated
+        ],
+        "experiments": [
+            {"experiment_id": e.experiment_id, "file": e.file, "repaired": e.repaired,
+             "sha256": hashlib.sha256((out_dir / str(e.file)).read_bytes()).hexdigest(),
+             "used_by": [p.scenario_id for p in run.validated if p.experiment == e.experiment_id]}
+            for e in run.compiled
         ],
         "dropped": [
             {"index": p.index, "rationale": p.rationale, "error": p.error, "repaired": p.repaired}
             for p in run.dropped
+        ],
+        "dropped_experiments": [
+            {"index": e.index, "experiment_id": e.experiment_id, "error": e.error, "repaired": e.repaired}
+            for e in run.dropped_experiments
         ],
     }
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -588,14 +1017,23 @@ def render_summary(result: dict[str, Any]) -> str:
              else f"{change['repo']} {change['base_sha'][:12]}..{change['head_sha'][:12]}")
     lines = [f"## Fuzzer scenarios for {where}", ""]
     if result["scenarios"]:
-        lines += ["| Scenario | Why |", "|---|---|"]
+        lines += ["| Scenario | Experiment | Why |", "|---|---|---|"]
         for item in result["scenarios"]:
             why = item["rationale"].replace("|", "\\|") or "not given"
-            lines.append(f"| `{item['scenario_id']}`{' (repaired)' if item['repaired'] else ''} | {why} |")
+            lines.append(f"| `{item['scenario_id']}`{' (repaired)' if item['repaired'] else ''} | "
+                         f"`{item['experiment']}` | {why} |")
+    elif result.get("reason"):
+        lines.append(f"No scenario: Claude says the change needs no test. {result['reason']}")
     else:
         lines.append("No proposed scenario validated.")
+    if result.get("experiments"):
+        names = ", ".join(f"`{e['experiment_id']}`" for e in result["experiments"])
+        lines += ["", f"Brings {len(result['experiments'])} proposed experiment(s): {names}."]
     if result["dropped"]:
         lines += ["", f"Dropped {len(result['dropped'])} scenario(s) that did not validate."]
+    if result.get("dropped_experiments"):
+        lines += ["", f"Dropped {len(result['dropped_experiments'])} experiment(s) that did not compile "
+                      "or that no scenario uses."]
     return "\n".join(lines)
 
 
@@ -603,15 +1041,23 @@ def render_summary(result: dict[str, Any]) -> str:
 
 
 def batch_inputs(out_dir: Path) -> dict[str, str] | None:
-    """The PR batch workflow's inputs, from the validated scenarios on disk."""
-    change, scenarios = validated_scenarios(out_dir)
+    """The PR batch workflow's inputs, from the validated scenarios and experiments on disk.
+
+    The batch builds the change's parent too when the proposals bring
+    experiments: that is the build a proposed experiment compares with.
+    """
+    change, scenarios, experiments = validated_scenarios(out_dir)
     if not scenarios:
         return None
-    return batch_dispatch_inputs(change, scenarios)
+    return batch_dispatch_inputs(
+        change, scenarios, experiments=experiments or None,
+        parent_sha=str(change["base_sha"]) if experiments else None,
+    )
 
 
-def validated_scenarios(out_dir: Path) -> tuple[dict[str, Any], dict[str, str]]:
-    """The change and its validated scenarios ({scenario id: YAML}), read back and checked again."""
+def validated_scenarios(out_dir: Path) -> tuple[dict[str, Any], dict[str, str], dict[str, str]]:
+    """The change, its validated scenarios ({scenario id: YAML}) and the proposed experiments they use
+    ({file name: YAML}), read back and checked again."""
     result = json.loads((out_dir / "proposals.json").read_text(encoding="utf-8"))
     change = result["change"]
     scenarios: dict[str, str] = {}
@@ -625,7 +1071,18 @@ def validated_scenarios(out_dir: Path) -> tuple[dict[str, Any], dict[str, str]]:
         if doc is None or doc["scenario_id"] != item["scenario_id"]:
             raise ValueError(f"{item['file']} changed since it was validated: {error or 'renamed'}")
         scenarios[str(item["scenario_id"])] = text
-    return change, scenarios
+    experiments: dict[str, str] = {}
+    experiment_dir = (out_dir / "experiments").resolve()
+    for item in result.get("experiments", []):
+        path = (out_dir / str(item["file"])).resolve()
+        if path.parent != experiment_dir or not path.is_file():
+            raise ValueError(f"experiment file outside {experiment_dir}: {item['file']}")
+        data = path.read_bytes()
+        doc, error = check_experiment(data.decode("utf-8"))
+        if hashlib.sha256(data).hexdigest() != item["sha256"] or doc is None or doc["id"] != item["experiment_id"]:
+            raise ValueError(f"{item['file']} changed since it compiled: {error or 'renamed'}")
+        experiments[path.name] = data.decode("utf-8")
+    return change, scenarios, experiments
 
 
 # --- Command line ------------------------------------------------------------
@@ -674,7 +1131,7 @@ def _run_propose(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     with tempfile.TemporaryDirectory(prefix="fuzzer-propose-") as td:
         run = propose(
             change, count=args.count, workdir=Path(td), out_dir=out_dir, catalog=catalog,
-            fuzzer_dir=fuzzer_dir, validator=fuzzer_validator(args.fuzzer_bin),
+            fuzzer_dir=fuzzer_dir, validator=fuzzer_validator(args.fuzzer_bin), lister=fuzzer_lister(args.fuzzer_bin),
         )
     result = write_results(run, out_dir)
     emit_job_summary(render_summary(result))

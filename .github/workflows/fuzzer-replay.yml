@@ -41,6 +41,12 @@ on:
         required: false
         default: main
         type: string
+      build:
+        description: "The build of each merge commit and its parent: default (plain), asan or ubsan"
+        required: false
+        default: default
+        type: choice
+        options: [default, asan, ubsan]
 
 permissions: {}
 
@@ -69,6 +75,7 @@ jobs:
       RANDOM_SEEDS: ${{ inputs.random_seeds }}
       MAX_PARALLEL: ${{ inputs.max_parallel }}
       FUZZER_REF: ${{ inputs.fuzzer_ref }}
+      BUILD: ${{ inputs.build }}
     steps:
       - name: Check inputs
         shell: bash
@@ -81,6 +88,7 @@ jobs:
           [[ "${RANDOM_SEEDS}" =~ ^[0-4]$ ]] || { echo "::error::random_seeds must be 0 to 4"; exit 1; }
           [[ "${MAX_PARALLEL}" =~ ^([1-9]|10)$ ]] || { echo "::error::max_parallel must be 1 to 10"; exit 1; }
           [[ "${FUZZER_REF}" =~ ^${ref}$ ]] || { echo "::error::fuzzer_ref must be a branch name"; exit 1; }
+          [[ "${BUILD}" =~ ^(default|asan|ubsan)$ ]] || { echo "::error::build must be default, asan or ubsan"; exit 1; }
 
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -135,6 +143,7 @@ jobs:
       COUNT: ${{ inputs.count }}
       RANDOM_SEEDS: ${{ inputs.random_seeds }}
       FUZZER_REF: ${{ inputs.fuzzer_ref }}
+      BUILD: ${{ inputs.build }}
     steps:
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -205,7 +214,7 @@ jobs:
           python -m scripts.fuzzer.replay run --merge "${MERGE}" --repo "${VALKEY_REPOSITORY}" \
             --fuzzer-repo "${FUZZER_REPOSITORY}" --fuzzer-ref "${FUZZER_REF}" \
             --fuzzer-dir valkey-fuzzer --fuzzer-bin "${FUZZER_BIN}" \
-            --count "${COUNT}" --random-seeds "${RANDOM_SEEDS}" --out replay
+            --count "${COUNT}" --random-seeds "${RANDOM_SEEDS}" --build "${BUILD}" --out replay
 
       - name: Upload the replay
         if: always()

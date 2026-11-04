@@ -23,8 +23,20 @@ def test_dispatch_only_with_its_inputs() -> None:
     on = _workflow()["on"]
     assert list(on) == ["workflow_dispatch"]
     inputs = on["workflow_dispatch"]["inputs"]
-    assert list(inputs) == ["range", "first", "count", "random_seeds", "max_parallel", "fuzzer_ref"]
+    assert list(inputs) == ["range", "first", "count", "random_seeds", "max_parallel", "fuzzer_ref", "build"]
     assert [name for name, spec in inputs.items() if spec.get("required") == "true"] == ["range"]
+    assert (inputs["build"]["type"], inputs["build"]["options"], inputs["build"]["default"]) == (
+        "choice", ["default", "asan", "ubsan"], "default",
+    )
+
+
+def test_the_build_is_checked_and_handed_to_the_replay() -> None:
+    check = _step("plan", "Check inputs")["run"]
+    assert '"${BUILD}" =~ ^(default|asan|ubsan)$' in check
+    replay = _step("replay", "Replay the merge")["run"]
+    assert '--build "${BUILD}"' in replay
+    for job in ("plan", "replay"):
+        assert _workflow()["jobs"][job]["env"]["BUILD"] == "${{ inputs.build }}"
 
 
 def test_job_permissions_are_minimal() -> None:
@@ -68,3 +80,4 @@ def test_the_batches_run_in_parallel_and_the_triage_in_merge_order() -> None:
     assert jobs["triage"]["strategy"]["max-parallel"] == "1"
     triage = _step("triage", "Triage each merge's batch, in merge order")["run"]
     assert "python -m scripts.fuzzer.main" in triage and '--pr-batch-run "${run_id}"' in triage
+

@@ -5,11 +5,16 @@ pull request merged into a Valkey branch in a range, oldest first, it does
 what a live run would do when that pull request merged.
 
 1. [Fuzzer proposals](fuzzer-proposals.md): Claude reads the merge's change,
-   its diff against its parent, and proposes scenarios aimed at it. Only the
-   ones `valkey-fuzzer validate` accepts are kept.
+   its diff against its parent, and proposes scenarios aimed at it, with
+   experiments of its own when no installed one reaches the change. Only the
+   ones `valkey-fuzzer validate` accepts are kept. A change that needs no
+   test gets a reason instead (`reason` in `replay.json`).
 2. valkey-fuzzer's PR batch (`fuzzer-pr-batch.yml`) builds the merge commit
-   and runs those scenarios beside a random baseline: `random_seeds` seeds of
-   every experiment that needs one build, drawn from the commit.
+   and its parent, with the chosen `build`, and runs those scenarios beside
+   a random baseline: `random_seeds` seeds of every experiment that needs
+   one build, drawn from the commit. A proposed experiment that compares a
+   command sequence across the two builds reaches the parent as
+   `artifacts.parent`.
 3. The [fuzzer monitor](fuzzer-monitor.md) triages the batch
    (`--pr-batch-run`) and files or updates an issue on valkey-fuzzer for each
    finding that looks like a real problem. The issue names the merge it
@@ -47,6 +52,7 @@ gh workflow run fuzzer-replay.yml --repo OWNER/valkey-ci-agent --field range=122
 | `random_seeds` | `2` | Random seeds of each one-build experiment per merge, 0 to 4. |
 | `max_parallel` | `10` | Merges replayed at once. Each holds a runner while its batch holds another. |
 | `fuzzer_ref` | `main` | The valkey-fuzzer branch whose PR batch runs. |
+| `build` | `default` | The build of each merge commit and its parent: `default` (plain), `asan` or `ubsan`. |
 
 valkey-fuzzer is `OWNER/valkey-fuzzer`, the repository owner's. GitHub
 starts a dispatched workflow only when its file is on the default branch,
@@ -56,8 +62,12 @@ so `fuzzer-pr-batch.yml` must be on valkey-fuzzer's default branch and
 ## Each merge's files
 
 The `replay-<index>` artifact holds `replay.json` (the merge, its pull
-request, how many scenarios were proposed and dropped, and the PR batch's
-run) and `proposals/` (the proposals as [fuzzer proposals](fuzzer-proposals.md)
+request, the build, how many scenarios and experiments were proposed and
+dropped, the PR batch's run, and `proposed_runs`: among the runs of the
+scenarios that use a proposed experiment, how many reached the change, how
+many did not (the fuzzer's `unreached-change`: a marked command replied the
+same on both builds) and how many showed an `unexplained-difference`) and
+`proposals/` (the proposals as [fuzzer proposals](fuzzer-proposals.md)
 write them). `replay-triage-<chunk>` holds the monitor's result for each
 merge it triaged. The batch folders are the PR batch runs' own
 `fuzzer-batch-<run id>` artifacts on valkey-fuzzer.
