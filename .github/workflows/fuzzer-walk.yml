@@ -1,0 +1,34 @@
+# Registers the walk for dispatch and starts it on its schedule. The walk
+# itself is the workflow of the same name on the fuzzer-replay branch: a
+# dispatch with --ref fuzzer-replay runs that version, and the schedule here
+# dispatches it.
+name: Walk Every Merge Through the Fuzzer
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "The repository to walk, or all"
+        required: false
+        default: all
+        type: choice
+        options: [all, valkey-io/valkey, valkey-io/valkey-json, valkey-io/valkey-search, valkey-io/valkey-bloom]
+      max:
+        description: "Merges walked in the run, across the repositories, 1 to 256"
+        required: false
+        default: "20"
+        type: string
+
+permissions: {}
+
+jobs:
+  start:
+    if: github.event_name == 'schedule' && github.repository_owner != 'valkey-io'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Start the walk on fuzzer-replay
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run fuzzer-walk.yml -R "${GITHUB_REPOSITORY}" --ref fuzzer-replay
