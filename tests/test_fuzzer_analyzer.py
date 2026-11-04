@@ -722,3 +722,48 @@ def test_a_pr_batch_is_read_at_the_artifact_root_and_names_the_change(monkeypatc
     assert analysis.counts == {"PASS": 2, "FAIL": 2, "ERROR": 2}
     assert {f.change for f in analysis.findings} == {"valkey-io/valkey#4716, merged as e082696cf000"}
     assert _signature(analysis).reproduction_hint.startswith("valkey-fuzzer replay runs/scenario-crash-777/")
+
+
+def _cause_issue(number: int, marked: bool = True):
+    body = "<!-- valkey-ci-agent:fuzzer-issue:abc -->\n## Fuzzer Run Analysis\nForkless save ignores lz4" if marked else "x"
+    issue = MagicMock(number=number, title=f"issue {number}")
+    issue.body = body
+    return issue
+
+
+def _cause_finding():
+    from scripts.fuzzer.models import FuzzerFinding
+    return FuzzerFinding(**_BASE, kind="signature", overall_status="anomalous",
+                         triage_verdict="likely-core-valkey-bug", summary="The forkless save wrote a plain RDB",
+                         experiment_id="valkey.forkless-save-crash")
+
+
+@pytest.mark.parametrize(("stdout", "rc", "expected"), [
+    ('{"same_as": 13, "reason": "one fix"}', 0, 13),
+    ('{"same_as": null, "reason": "different"}', 0, None),
+    ('{"same_as": 7, "reason": "not a fuzzer issue"}', 0, None),
+    ('{"same_as": true}', 0, None),
+    ("no answer", 0, None),
+    ('{"same_as": 13}', 1, None),
+])
+def test_same_root_cause_counts_only_an_open_fuzzer_issue(monkeypatch, stdout, rc, expected):
+    from scripts.fuzzer import analyzer as analyzer_mod
+    prompts = []
+    monkeypatch.setattr(analyzer_mod, "run_agent", lambda profile, prompt, cwd: prompts.append(prompt)
+                        or MagicMock(returncode=rc, stdout=stdout))
+    issues = [_cause_issue(13), _cause_issue(7, marked=False)]
+
+    number = analyzer_mod.same_root_cause(_cause_finding(), "Forkless crash", issues,
+                                          marker_namespace="valkey-ci-agent:fuzzer-issue")
+
+    assert number == expected
+    (prompt,) = prompts
+    assert "#13: issue 13" in prompt and "#7:" not in prompt
+    assert "Title: Forkless crash" in prompt and "<!--" not in prompt
+
+
+def test_same_root_cause_without_candidates_does_not_ask(monkeypatch):
+    from scripts.fuzzer import analyzer as analyzer_mod
+    monkeypatch.setattr(analyzer_mod, "run_agent", lambda *a, **k: pytest.fail("Claude was asked"))
+    assert analyzer_mod.same_root_cause(_cause_finding(), "t", [_cause_issue(7, marked=False)],
+                                        marker_namespace="valkey-ci-agent:fuzzer-issue") is None

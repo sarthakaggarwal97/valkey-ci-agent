@@ -9,6 +9,11 @@ Optional ``idempotency_key`` records the source event (e.g. a workflow run
 id) and skips the update if the same key has already been seen, so a
 re-triggered cron does not inflate the counter.
 
+When no open issue carries the marker, an optional ``match_existing``
+callback may still pick an open issue for the finding, such as one with the
+same root cause under another fingerprint; that issue is updated and gains
+the new marker, so later findings with this fingerprint go straight to it.
+
 When no open issue matches and ``closed_lookback`` is set, the publisher
 checks for a recently closed issue with the same marker (or, for legacy
 issues, the exact fallback title). If one is found, creation is suppressed
@@ -94,6 +99,7 @@ class IssueDedupPublisher:
         idempotency_key: str | None = None,
         body_transform: Callable[[str], str] | None = None,
         title_fallback: str | None = None,
+        match_existing: Callable[[list[Any]], int | None] | None = None,
     ) -> tuple[str, str]:
         """Create or update the issue for ``fingerprint``.
 
@@ -128,6 +134,11 @@ class IssueDedupPublisher:
         case-sensitive. Pass the same title ``render`` produces. The same
         fallback applies to the recently-closed check, so a legacy issue
         closed within the lookback window also suppresses creation.
+
+        ``match_existing`` runs only when neither the marker nor the title
+        matched. It receives the open issues and returns the number of the one
+        this finding belongs to, or None. The chosen issue is updated like a
+        marker match and gains the new marker, but keeps its own title.
         """
         repo = retry_github_call(
             lambda: self._gh.get_repo(repo_name),
@@ -147,6 +158,14 @@ class IssueDedupPublisher:
                     "Adopting legacy issue #%s for %s via title fallback",
                     existing.number, fingerprint,
                 )
+
+        matched = False
+        if existing is None and match_existing is not None:
+            number = match_existing(self._open_issues_for(repo, repo_name))
+            if number is not None and any(i.number == number for i in self._open_issues_for(repo, repo_name)):
+                existing = self._reload(repo, number)
+                matched = True
+                logger.info("Adding %s to issue #%s, which match_existing chose", fingerprint, number)
 
         if existing is None:
             recently_closed = self._find_recently_closed(
@@ -209,8 +228,11 @@ class IssueDedupPublisher:
             else:
                 new_body = f"{new_body}\n{replacement}"
         content = render(marker, count)
+        # An issue chosen by match_existing keeps its title: it names the root
+        # cause, and this finding is one more case of it.
+        title = existing.title if matched else content.title
         retry_github_call(
-            lambda: existing.edit(body=new_body, title=content.title),
+            lambda: existing.edit(body=new_body, title=title),
             retries=2, description=f"update issue #{existing.number}",
         )
         retry_github_call(

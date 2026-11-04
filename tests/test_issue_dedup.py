@@ -570,3 +570,46 @@ def test_closed_lookback_custom_duration():
     assert closed_call.kwargs["since"] == datetime(
         2026, 7, 21, 6, 0, 0, tzinfo=timezone.utc,
     )
+
+
+def test_match_existing_adds_the_finding_to_the_chosen_issue_under_its_title():
+    other = _mock_issue(8, body=f"<!-- {NAMESPACE}:fpA -->\n<!-- {NAMESPACE}:occurrences:1 -->", title="Root cause")
+    mock_gh, mock_repo = _mock_gh(open_issues=[other])
+    seen = []
+
+    publisher = IssueDedupPublisher(mock_gh, marker_namespace=NAMESPACE)
+    action, url = publisher.upsert(
+        "o/r", fingerprint="fpB", render=_render_static(title="New title"),
+        match_existing=lambda issues: seen.append([i.number for i in issues]) or 8,
+    )
+
+    assert (action, url, seen) == ("updated", "https://x/issues/8", [[8]])
+    edited = other.edit.call_args.kwargs
+    assert f"<!-- {NAMESPACE}:fpB -->" in edited["body"] and f"<!-- {NAMESPACE}:fpA -->" in edited["body"]
+    assert edited["title"] == "Root cause"
+    other.create_comment.assert_called_once()
+    mock_repo.create_issue.assert_not_called()
+
+
+@pytest.mark.parametrize("choice", [None, 99])
+def test_match_existing_that_names_no_open_issue_creates_one(choice):
+    other = _mock_issue(8, body=f"<!-- {NAMESPACE}:fpA -->", title="Root cause")
+    mock_gh, mock_repo = _mock_gh(open_issues=[other])
+    mock_repo.create_issue.return_value = _mock_issue(9)
+
+    publisher = IssueDedupPublisher(mock_gh, marker_namespace=NAMESPACE)
+    action, _ = publisher.upsert("o/r", fingerprint="fpB", render=_render_static(), match_existing=lambda _: choice)
+
+    assert action == "created"
+    other.edit.assert_not_called()
+
+
+def test_match_existing_is_not_asked_when_the_marker_matches():
+    marked = _mock_issue(5, body=f"<!-- {NAMESPACE}:fp1 -->", title="old")
+    mock_gh, _ = _mock_gh(open_issues=[marked])
+    asked = []
+
+    publisher = IssueDedupPublisher(mock_gh, marker_namespace=NAMESPACE)
+    publisher.upsert("o/r", fingerprint="fp1", render=_render_static(), match_existing=asked.append)
+
+    assert asked == []

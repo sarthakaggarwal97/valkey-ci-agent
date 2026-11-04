@@ -116,7 +116,14 @@ commit, and how to run it again from the downloaded bundle:
 /path/to/valkey-server` with a build of that commit. A signature's issue is
 identified by the fuzzer's signature key, so the same failure in later
 batches updates the existing issue instead of opening a new one; a zoo case
-by its name; a leak by its experiment and kind. The monitor uploads its
+by its name; a leak by its experiment and kind. One bug can still show as
+several signatures, such as the same defect failing different experiments.
+So before a finding opens a new issue, Claude reads the open fuzzer issues
+and says whether one of them has the same root cause, meaning one fix would
+make both go away. If so, that issue gets the finding as a comment and keeps
+its title, and later findings with the same signature go straight to it.
+When Claude fails or names anything but an open fuzzer issue, the finding
+opens its own: a duplicate is cheaper than a bug hidden in the wrong issue. The monitor uploads its
 results and Claude's evidence as artifacts on every run.
 
 ## Running it by hand

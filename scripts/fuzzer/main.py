@@ -23,7 +23,7 @@ from scripts.common.issue_dedup import IssueDedupPublisher
 from scripts.common.logging_utils import configure_logging, log_group, log_outcome
 from scripts.common.workflow_artifacts import ArtifactClient
 from scripts.fuzzer import issue_renderer
-from scripts.fuzzer.analyzer import DISMISSING_VERDICTS, FuzzerRunAnalyzer
+from scripts.fuzzer.analyzer import DISMISSING_VERDICTS, FuzzerRunAnalyzer, same_root_cause
 from scripts.fuzzer.pr_batch import BATCH_ARTIFACT_PREFIX, PR_BATCH_WORKFLOW
 
 TARGET_REPO = "valkey-io/valkey-fuzzer"
@@ -62,11 +62,15 @@ def _publish(publisher: IssueDedupPublisher, repo: str, run_id: int, finding: An
                      finding.kind, run_id)
         item["issue_action"] = "skipped-no-fingerprint"
         return item
+    render = issue_renderer.render_for(finding)
     action, url = publisher.upsert(
         repo,
         fingerprint=finding.incident_fingerprint,
-        render=issue_renderer.render_for(finding),
+        render=render,
         idempotency_key=str(run_id),
+        match_existing=lambda issues: same_root_cause(
+            finding, render("", 1).title, issues, marker_namespace=issue_renderer.MARKER_NAMESPACE,
+        ),
     )
     item["issue_action"] = action
     item["issue_url"] = url

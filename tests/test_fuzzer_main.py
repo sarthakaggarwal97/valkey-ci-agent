@@ -186,3 +186,21 @@ def test_a_pr_batch_run_is_analyzed_and_filed_on_the_given_repo(monkeypatch, cap
     assert mock_pub_cls.return_value.upsert.call_args.args == ("owner/valkey-fuzzer",)
     payload = json.loads(capsys.readouterr().out)
     assert (payload["target_repo"], payload["runs"][0]["run_id"]) == ("owner/valkey-fuzzer", 11)
+
+
+def test_a_finding_without_an_issue_of_its_own_asks_for_one_with_its_root_cause(monkeypatch, capsys):
+    monkeypatch.setenv("TARGET_TOKEN", "fake")
+    mock_run = MagicMock(id=7777, conclusion="failure", html_url="https://x/runs/7777")
+    asked = []
+    monkeypatch.setattr(fuzzer_main_mod, "same_root_cause",
+                        lambda finding, title, issues, **kw: asked.append((finding.incident_fingerprint, issues)) or 5)
+    with patch.object(fuzzer_main_mod, "Github", _mock_gh_returning([mock_run])), \
+         patch.object(fuzzer_main_mod, "FuzzerRunAnalyzer") as mock_analyzer_cls, \
+         patch.object(fuzzer_main_mod, "IssueDedupPublisher") as mock_pub_cls:
+        mock_analyzer_cls.return_value.analyze.return_value = _batch(_finding())
+        mock_pub_cls.return_value.upsert.return_value = ("updated", "https://x/issues/5")
+        assert fuzzer_main_mod.main([]) == 0
+
+    match = mock_pub_cls.return_value.upsert.call_args.kwargs["match_existing"]
+    assert match(["open issue"]) == 5
+    assert asked == [("fp-abc", ["open issue"])]
