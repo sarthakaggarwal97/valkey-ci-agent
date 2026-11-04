@@ -57,7 +57,15 @@ from scripts.common.issue_dedup import IssueContent, IssueDedupPublisher
 from scripts.common.logging_utils import configure_logging, log_outcome
 from scripts.common.proc import PROCESS_BASICS, filter_env
 from scripts.common.text_utils import strip_ansi
-from scripts.fuzzer.analyzer import _ANOMALY_PATTERNS, _CRASH_TITLES, UNEXPLAINED, UNREACHED, _change_outcome
+from scripts.fuzzer.analyzer import (
+    _ANOMALY_PATTERNS,
+    _CRASH_TITLES,
+    SEQUENCE_EVIDENCE,
+    TOOL_RUNS_EVIDENCE,
+    UNEXPLAINED,
+    UNREACHED,
+    _change_outcome,
+)
 from scripts.fuzzer.batch import report_problem
 from scripts.fuzzer.pr_batch import MODULES, module_repository
 from scripts.fuzzer.propose import (
@@ -412,6 +420,21 @@ def findings(report: dict[str, Any], run_dir: Path) -> dict[str, dict[str, Any]]
     return found
 
 
+def reached_commands(report: dict[str, Any]) -> set[tuple[str, int]]:
+    """The commands (or tool runs) that reached the change in one run, as (component id, index): the
+    ``reached`` lists of its sequence and tool runs evidence."""
+    reached = set()
+    for result in report["outcome"]["component_results"]:
+        if not isinstance(result, dict):
+            continue
+        for evidence in result.get("evidence") or []:
+            if isinstance(evidence, dict) and evidence.get("evidence_id") in (SEQUENCE_EVIDENCE, TOOL_RUNS_EVIDENCE):
+                value = evidence.get("value")
+                indexes = value.get("reached") if isinstance(value, dict) else None
+                reached |= {(str(result.get("component_id")), int(index)) for index in indexes or []}
+    return reached
+
+
 def fuzz(fuzzer_bin: str, doc: dict[str, Any], seed: int, *, candidate: dict[str, Any], compare: dict[str, Any],
          core: bool, experiment_dir: Path, run_dir: Path) -> dict[str, Any]:
     """Run one test with ``candidate`` as the build under test and ``compare`` as what it compares with: each a
@@ -453,7 +476,7 @@ def fuzz(fuzzer_bin: str, doc: dict[str, Any], seed: int, *, candidate: dict[str
     outcome = _change_outcome(report)
     sequence = (outcome.sequence if outcome else None) or {}
     return {"status": report["status"], "reason": outcome.reason if outcome else None,
-            "reached": bool(outcome and outcome.reached),
+            "reached": bool(outcome and outcome.reached), "reached_commands": reached_commands(report),
             "parent_exited": isinstance(sequence.get("parent"), dict) and "exited" in sequence["parent"],
             "found": findings(report, run_dir / "artifacts")}
 
@@ -706,13 +729,18 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                         "parent": fingerprint in view(test, doc, "parent", seed)["found"],
                         "merge": fingerprint in view(test, doc, "merge", seed)["found"], "unstable": False}})
         hunted = view(test, doc, "unstable", seed)
-        if first["reached"] and hunted.get("reason") == UNREACHED:
+        # A fix regressed when commands that reached the change at the merge no longer do on unstable: not when
+        # some marked command is unreached on both, which unreached-change alone says.
+        lost = first["reached_commands"] - hunted.get("reached_commands", set())
+        if first["reached"] and hunted.get("reason") == UNREACHED and lost:
             rerun = view(test, doc, "unstable", seed, again=True)
+            named = ", ".join(f"{component} {index}" for component, index in sorted(lost))
             found.append({"rule": "regressed-fix", "detail": f"regressed fix: the change of {_where(merge)} no longer "
-                          f"shows on {heads[repo][:12]}", "lines": [], "seed": seed,
+                          f"shows on {heads[repo][:12]} (commands {named})", "lines": [], "seed": seed,
                           "fingerprint": compute_fingerprint(namespace=("fuzzer-walk", "regressed-fix", repo,
                                                                         merge["sha"]), shapes=[]),
-                          "builds": {"parent": True, "merge": False, "unstable": rerun.get("reason") == UNREACHED}})
+                          "builds": {"parent": True, "merge": False, "unstable": rerun.get("reason") == UNREACHED
+                                     and lost.isdisjoint(rerun.get("reached_commands", set()))}})
         for hunt_seed in seeds:
             if view(test, doc, "unstable", hunt_seed).get("reason") == UNEXPLAINED:
                 result["recorded"].append({"scenario": test, "build": "unstable", "seed": hunt_seed,
@@ -759,8 +787,12 @@ def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> 
     if not result.get("error"):
         # record() keeps the tests of a merge whose run finished.
         entry["folder"] = merge_folder(merge)
+    # One line per finding, though several of the merge's tests found it.
+    unique: dict[Any, dict[str, Any]] = {}
+    for f in result.get("findings") or []:
+        unique.setdefault(f.get("fingerprint") or id(f), f)
     entry["findings"] = [{"rule": f["rule"], "verdict": f["verdict"], "issue": f.get("issue")}
-                         for f in result.get("findings") or []]
+                         for f in unique.values()]
     if result.get("reason") or result.get("error"):
         entry["reason"] = result.get("reason") or result.get("error")
     if result.get("error"):

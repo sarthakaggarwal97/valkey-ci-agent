@@ -475,52 +475,35 @@ def test_claudes_cost_is_read_from_its_stream():
     assert walk.claude_cost(stream) == 1.75
 
 
-def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_path):
-    merge = _merge()
+SINGLE = EXPERIMENT.split("  - use: valkey.action.commands\n    id: plain")[0]
+
+
+def _scenario(text: str) -> dict:
+    doc, _ = check_scenario(text)
+    assert doc is not None
+    return doc
+
+
+def _walk_merge(monkeypatch, tmp_path, fuzz, docs, merge=None):
+    """walk.run on one merge with fakes: Claude proposes ``docs`` (using proposed.lset), ``fuzz`` runs them."""
+    merge = merge or _merge()
     change = Change(repo=merge["repo"], pr_number=None, title="", base_sha=merge["parent"], head_sha=merge["sha"],
                     diff="diff")
-    single = EXPERIMENT.split("  - use: valkey.action.commands\n    id: plain")[0]
-    reached, _ = check_scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
-    missed, _ = check_scenario("seed: 20\nexperiment: {id: valkey.forkless-save}\ndeployment: {mode: standalone}\n")
-    assert reached is not None and missed is not None
 
     def propose(change_, *, out_dir, runner, **kw):
         runner("propose", tmp_path)
         run = ProposalRun(change=change_)
         for directory in ("scenarios", "experiments"):
             (out_dir / directory).mkdir(parents=True)
-        for index, doc in enumerate((reached, missed), 1):
+        for index, doc in enumerate(docs, 1):
             (out_dir / "scenarios" / f"{doc['scenario_id']}.yaml").write_text(_render_scenario(doc, change_))
             run.proposals.append(Proposal(index=index, rationale="", text="", scenario_id=doc["scenario_id"],
                                           file=f"scenarios/{doc['scenario_id']}.yaml",
                                           experiment=doc["experiment"]["id"]))
-        (out_dir / "experiments" / "proposed.lset.yaml").write_text(single)
-        run.experiments.append(ExperimentProposal(index=1, text=single, experiment_id="proposed.lset",
+        (out_dir / "experiments" / "proposed.lset.yaml").write_text(SINGLE)
+        run.experiments.append(ExperimentProposal(index=1, text=SINGLE, experiment_id="proposed.lset",
                                                   file="experiments/proposed.lset.yaml"))
         return run
-
-    crash = {"rule": "crash", "detail": "crash: signal 11 in lsetCommand", "lines": []}
-    flaky = {"rule": "crash", "detail": "crash: signal 6 in other", "lines": []}
-    fixed = {"rule": "check", "detail": "replica-diverged: x", "lines": []}
-    calls = []
-
-    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
-        again = run_dir.name.endswith("-again")
-        build = run_dir.name.removesuffix("-again").rsplit("-", 2)[1]
-        calls.append((doc["scenario_id"], build, seed, again, Path(candidate["server"]).parts[-3]))
-        if doc["scenario_id"] == missed["scenario_id"]:
-            return {"status": "ERROR", "reason": "unreached-change", "reached": False, "parent_exited": False,
-                    "found": {}}
-        found = {}
-        if build in ("merge", "unstable") and seed == 11:
-            found["c"] = crash
-        if build == "unstable" and seed == 12 and not again:
-            found["f"] = flaky
-        if build == "parent" and seed == 10:
-            found["p"] = fixed
-        return {"status": "PASS" if build != "unstable" else "ERROR", "reached": build == "merge",
-                "reason": "unreached-change" if build == "unstable" and seed == 10 else None,
-                "parent_exited": False, "found": found}
 
     monkeypatch.setattr(walk, "fetch", lambda repo, sha, dest: dest)
     monkeypatch.setattr(walk, "build_valkey", lambda src, asan=False: src / "src" / "valkey-server")
@@ -533,11 +516,46 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
     cost = json.dumps({"type": "result", "total_cost_usd": 0.75})
     answer = AgentRunResult(profile="fuzzer_proposal_readonly", stdout=cost, stderr="", returncode=0,
                             prompt_sha256="", cwd="", allowed_tools="", model="", started_at="", finished_at="")
-
     result = walk.run(merge, gh=MagicMock(), token="t", publisher=publisher, fuzzer_repo="o/valkey-fuzzer",
                       fuzzer_dir=tmp_path, fuzzer_bin="valkey-fuzzer", heads={walk.VALKEY_REPO: "c" * 40},
                       unstable=tmp_path / "unstable", module_head=None, out=tmp_path / "out", work=tmp_path / "work",
                       count=5, tests_url="https://t", runner=lambda prompt, workdir: answer)
+    return result, publisher
+
+
+def _build(run_dir: Path) -> str:
+    return run_dir.name.removesuffix("-again").rsplit("-", 2)[1]
+
+
+def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_path):
+    merge = _merge()
+    reached = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+    missed = _scenario("seed: 20\nexperiment: {id: valkey.forkless-save}\ndeployment: {mode: standalone}\n")
+    crash = {"rule": "crash", "detail": "crash: signal 11 in lsetCommand", "lines": []}
+    flaky = {"rule": "crash", "detail": "crash: signal 6 in other", "lines": []}
+    fixed = {"rule": "check", "detail": "replica-diverged: x", "lines": []}
+    calls = []
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        again = run_dir.name.endswith("-again")
+        build = _build(run_dir)
+        calls.append((doc["scenario_id"], build, seed, again, Path(candidate["server"]).parts[-3]))
+        if doc["scenario_id"] == missed["scenario_id"]:
+            return {"status": "ERROR", "reason": "unreached-change", "reached": False, "parent_exited": False,
+                    "reached_commands": set(), "found": {}}
+        found = {}
+        if build in ("merge", "unstable") and seed == 11:
+            found["c"] = crash
+        if build == "unstable" and seed == 12 and not again:
+            found["f"] = flaky
+        if build == "parent" and seed == 10:
+            found["p"] = fixed
+        return {"status": "PASS" if build != "unstable" else "ERROR", "reached": build == "merge",
+                "reason": "unreached-change" if build == "unstable" and seed == 10 else None,
+                "reached_commands": {("lset", 1), ("lset", 2)} if build == "merge" else {("lset", 2)},
+                "parent_exited": False, "found": found}
+
+    result, publisher = _walk_merge(monkeypatch, tmp_path, fuzz, (reached, missed), merge)
 
     assert "error" not in result
     assert (result["proposed"], result["proven"], result["hunted"], result["dropped"]) == (2, 1, 1, 1)
@@ -549,8 +567,10 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
     # Not on the rerun: recorded, not filed. On the parent only: the merge fixed it.
     assert by_detail[flaky["detail"]]["verdict"] == "not reproduced" and by_detail[flaky["detail"]]["issue"] is None
     assert by_detail[fixed["detail"]]["verdict"] == "fixed by #4716" and by_detail[fixed["detail"]]["issue"] is None
+    # Command 1 reached the change at the merge and no longer does on unstable.
     regressed = next(f for f in result["findings"] if f["rule"] == "regressed-fix")
     assert regressed["verdict"] == "the fix of #4716 regressed" and regressed["issue"] == "https://x/issues/2"
+    assert regressed["detail"].endswith("(commands lset 1)")
     assert [c.kwargs["idempotency_key"] for c in publisher.upsert.call_args_list] == [merge["sha"]] * 2
     # Each build runs against its own: the merge against the parent, unstable from the run's build.
     test = reached["scenario_id"]
@@ -560,6 +580,32 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
     assert sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()) == [
         "experiments/proposed.lset.yaml", "result.json", f"scenarios/{test}.yaml"]
     assert json.loads((folder / "result.json").read_text()) == result
+
+
+def test_the_same_commands_unreached_on_both_builds_is_no_regressed_fix(monkeypatch, tmp_path):
+    # valkey-json #123: its test reached the change on 24 commands at the merge and on unstable, with the same few
+    # marked commands unreached on both, and was filed as a regressed fix.
+    test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        return {"status": "ERROR", "reason": "unreached-change", "reached": True, "parent_exited": False,
+                "reached_commands": {("compared", index) for index in range(24)}, "found": {}}
+
+    result, publisher = _walk_merge(monkeypatch, tmp_path, fuzz, (test,))
+    assert result["proven"] == 1 and result["findings"] == []
+    publisher.upsert.assert_not_called()
+
+
+def test_a_finding_of_several_tests_is_one_line_per_merge():
+    merge = _merge()
+    same = {"rule": "regressed-fix", "verdict": "the fix of #4716 regressed", "issue": "https://x/issues/40",
+            "fingerprint": "f1"}
+    other = {"rule": "crash", "verdict": "introduced by #4716", "issue": None, "fingerprint": "f2"}
+    planned = {"repo": walk.VALKEY_REPO, "merges": [merge], "skipped": [], "pointer": {}}
+    state = update(initial_state(walk.VALKEY_REPO), planned, [_result(merge, findings=[same, other, same, same])],
+                   now=NOW)
+    assert state["done"][merge["sha"]]["findings"] == [
+        {key: f[key] for key in ("rule", "verdict", "issue")} for f in (same, other)]
 
 
 def _workflow() -> dict:
@@ -655,3 +701,11 @@ def test_a_run_that_could_not_start_tested_nothing(monkeypatch, tmp_path):
                      experiment_dir=tmp_path / "e", run_dir=tmp_path / "r")
     assert done["unstarted"] is True and done["status"] is None
     assert done["error"] == f"the run could not start: {summary}"
+
+
+def test_the_commands_that_reached_the_change_are_read_from_the_sequence_and_tool_evidence():
+    report = _report(
+        {"component_id": "seq", "evidence": [{"evidence_id": "valkey.command.sequence", "value": {"reached": [3, 5]}}]},
+        {"component_id": "cli", "evidence": [{"evidence_id": "valkey.tool.runs", "value": {"reached": [0]}}]},
+        {"component_id": "other", "evidence": [{"evidence_id": "valkey.ledger", "value": {"reached": [9]}}]})
+    assert walk.reached_commands(report) == {("seq", 3), ("seq", 5), ("cli", 0)}
