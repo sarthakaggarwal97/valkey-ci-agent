@@ -40,6 +40,8 @@ env:
   WALK: ${{ inputs.repository || 'all' }}
   MAX: ${{ inputs.max || '20' }}
   FUZZER_REPOSITORY: ${{ github.repository_owner }}/valkey-fuzzer
+  # The fuzzer branch the walk runs; the fork's main predates the package layout.
+  FUZZER_REF: generic-fuzzer
   # The App where it is installed; a fork files with REHEARSAL_PAT.
   HAS_APP: ${{ secrets.VALKEYRIE_BOT_APP_ID != '' }}
   BUILD_PACKAGES: build-essential clang pkg-config libssl-dev libzstd-dev tcl
@@ -254,7 +256,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ env.FUZZER_REPOSITORY }}
-          ref: main
+          ref: ${{ env.FUZZER_REF }}
           path: valkey-fuzzer
           persist-credentials: false
           fetch-depth: 1
