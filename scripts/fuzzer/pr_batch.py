@@ -105,12 +105,63 @@ _BUNDLE_PATH_RE = re.compile(
 BUNDLE_REQUIRED_FILES = ("claims.yaml", "model.tla", "mapping.yaml")
 # A batch job running a scenario file is named scenario-<file stem>.
 _SCENARIO_JOB = "scenario-"
-# The module repositories the batch builds, by repository name (a fork builds as its upstream), and the file each
-# build leaves in its checkout: the workflow's MODULE_FILES (.github/scripts/ci.py), exactly. valkey means its
-# tests/modules, many modules, so module_file names the one.
-MODULE_FILES = {"valkey-json": "build/src/libjson.so", "valkey": None}
-# The module table's entry for Valkey's own tests/modules: a change to Valkey, not to a module.
-CORE_MODULES = "valkey"
+
+
+@dataclass(frozen=True)
+class Module:
+    """A Valkey module repository: its default branch, the file its build leaves in its checkout, the bash
+    commands that build it there against a Valkey checkout (``$VALKEY_SRC``), what the proposal prompt says of
+    its commands and pitfalls, and what the runner needs first: ``setup``, bash run once before any build, which
+    may keep downloads in ``$DEPS_DIR``, a directory cached under ``deps`` (the version of what it fetches)."""
+
+    branch: str
+    file: str
+    build: str
+    note: str
+    setup: str = ""
+    deps: str = ""
+
+
+# The module repositories, by repository name (a fork builds as its upstream). Adding a module is one entry.
+MODULES = {
+    "valkey-json": Module(
+        branch="unstable", file="build/src/libjson.so",
+        setup="command -v cmake > /dev/null || sudo apt-get install -y cmake",
+        build='SERVER_VERSION=unstable VALKEY_MODULE_H_PATH="${VALKEY_SRC}/src/valkeymodule.h" ./build.sh',
+        note="For valkey-json, give JSON.GET `compare: json`: both replies are parsed and compared as JSON "
+             "values, so key order and spacing do not count.",
+    ),
+    "valkey-search": Module(
+        branch="main", file=".build-release/libsearch.so", deps="1.0.0-rc1",
+        # The project's own prebuilt gRPC, Protobuf and Abseil (its devcontainer installs the same package).
+        setup="""sudo apt-get install -y cmake ninja-build
+deb="${DEPS_DIR}/valkey-search-deps-ubuntu-noble-amd64.deb"
+if [ ! -f "${deb}" ]; then
+  mkdir -p "${DEPS_DIR}"
+  curl -fsSL -o "${deb}" "https://github.com/valkey-io/valkey-search/releases/download/${DEPS_VERSION}/${deb##*/}"
+fi
+sudo dpkg -i "${deb}"
+""",
+        # build.sh finds /opt/valkey-search-deps itself since August 2026; before, it took --use-system-modules.
+        build="""deps=/opt/valkey-search-deps
+export CMAKE_PREFIX_PATH="${deps}/lib/cmake/protobuf:${deps}/lib/cmake/absl:${deps}/lib/cmake/grpc:\
+${deps}/lib/cmake/GTest:${deps}/lib/cmake/utf8_range:${deps}/lib/cmake/benchmark:${deps}"
+if grep -q -- '--use-system-modules)' build.sh; then ./build.sh --use-system-modules; else ./build.sh; fi""",
+        note="For valkey-search, FT.SEARCH returns its results in no fixed order: give it `compare: unordered`. "
+             "Indexing is asynchronous: after writing the documents, send FT.INFO with `wait_s` and an `expect` "
+             "on its num_docs or indexing state before any FT.SEARCH.",
+    ),
+    "valkey-bloom": Module(
+        branch="unstable", file="target/release/libvalkey_bloom.so", build="cargo build --release",
+        note="For valkey-bloom (BF.ADD, BF.MADD, BF.EXISTS, BF.MEXISTS, BF.CARD, BF.RESERVE, BF.INFO, BF.INSERT, "
+             "BF.LOAD), a filter is probabilistic: BF.EXISTS of an item never added may answer 1, so never expect "
+             "a reply about an absent item; BF.INFO's sizes follow the build's internals.",
+    ),
+}
+# The module repositories the PR batch builds and the file each build leaves in its checkout: the workflow's
+# MODULE_FILES (.github/scripts/ci.py), exactly. valkey means its tests/modules, many modules, so module_file
+# names the one.
+MODULE_FILES = {"valkey-json": MODULES["valkey-json"].file, "valkey": None}
 _MODULE_FILE_RE = re.compile(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.so")
 # The artifacts the batch may declare, and the input each needs, for the refusal of a reference to one it does not.
 _DECLARED_BY = {
@@ -121,9 +172,8 @@ _DECLARED_BY = {
 
 
 def module_repository(repo: str) -> bool:
-    """Whether ``repo`` (OWNER/NAME) is a module repository the batch builds, not Valkey itself."""
-    name = repo.split("/")[-1]
-    return name in MODULE_FILES and name != CORE_MODULES
+    """Whether ``repo`` (OWNER/NAME) is a module repository, not Valkey itself."""
+    return repo.split("/")[-1] in MODULES
 
 
 @dataclass(frozen=True)

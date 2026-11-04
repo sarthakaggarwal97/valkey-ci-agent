@@ -57,6 +57,7 @@ from scripts.fuzzer.pr_batch import (
     EXPERIMENT_FILE_RE,
     FUZZER_REPO,
     MAX_EXPERIMENTS_CHARS,
+    MODULES,
     PR_BATCH_WORKFLOW,
     PROPOSED_PREFIX,
     ModuleBuild,
@@ -983,9 +984,7 @@ parent's on the second:
 The rules for a compared sequence above hold as they are: mark
 expect_difference on every reply the change means to change.
 examples/valkey/experiments/module-commands-compare.yaml is such a sequence
-on another module. For valkey-json, give JSON.GET `compare: json`: both
-replies are parsed and compared as JSON values, so key order and spacing do
-not count. The module's source is in {checkout}/.
+on another module. {note} The module's source is in {checkout}/.
 """
 
 _REPAIR_MODULE_NOTE = """
@@ -1169,7 +1168,8 @@ def propose(
     if is_module:
         references_rule = _MODULE_RULE
         module_section = _MODULE_SECTION.format(repo=change.repo, head=change.head_sha, base=change.base_sha,
-                                                valkey_sha=valkey_sha, checkout=checkout_name(change.repo))
+                                                valkey_sha=valkey_sha, checkout=checkout_name(change.repo),
+                                                note=MODULES[checkout_name(change.repo)].note)
     elif test_modules:
         references_rule = _TEST_MODULES_RULE
         module_section = _TEST_MODULES_SECTION.format(names=", ".join(test_modules))

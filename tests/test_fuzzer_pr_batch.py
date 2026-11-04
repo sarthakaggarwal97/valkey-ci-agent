@@ -140,10 +140,11 @@ def test_a_module_is_sent_as_its_four_inputs():
         batch_dispatch_inputs(pinned, loads, module=ModuleBuild("o/valkey-json", MODULE_SHA))
 
 
-def test_module_repositories_are_the_module_table_less_valkey_itself():
+def test_module_repositories_are_the_module_table_and_the_batch_builds_some():
     assert MODULE_FILES == {"valkey-json": "build/src/libjson.so", "valkey": None}
     assert module_repository("valkey-io/valkey-json") and module_repository("someone/valkey-json")
-    assert not module_repository("valkey-io/valkey") and not module_repository("valkey-io/valkey-search")
+    assert module_repository("valkey-io/valkey-search") and module_repository("valkey-io/valkey-bloom")
+    assert not module_repository("valkey-io/valkey") and not module_repository("valkey-io/other")
 
 
 def test_batch_names_keep_a_fitting_id_and_fix_the_rest():

@@ -1248,7 +1248,7 @@ def test_the_prompts_render():
     assert '"experiments": [{"index": <its number>' in repair
     assert "no environment reference but\n{$ref: artifacts.parent.binary};" in repair
     module = propose_mod._MODULE_SECTION.format(repo="valkey-io/valkey-json", head=HEAD, base=BASE,
-                                                valkey_sha="e" * 40, checkout="valkey-json")
+                                                valkey_sha="e" * 40, checkout="valkey-json", note="N.")
     assert "      modules: [{$ref: artifacts.module.path}]\n      modules_parent: [{$ref: artifacts.module_parent.path}]" in module
     tests = propose_mod._TEST_MODULES_SECTION.format(names="tests/modules/datatype.so")
     assert "      compare_with: {$ref: artifacts.parent.binary}\n      modules: [{$ref: artifacts.module.path}]" in tests
