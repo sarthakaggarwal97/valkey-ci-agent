@@ -1090,7 +1090,7 @@ def test_claude_gets_the_diff_the_experiments_and_the_question(monkeypatch):
     assert "The batch tested valkey-io/valkey#4823, merged as e50b62d0b. Its diff is in change.diff" in prompt
     assert "- change.diff - the diff of the change the batch tested." in prompt
     assert "experiments/<id>.yaml: the experiments the proposals wrote for this change" in prompt
-    assert "errored with unexplained-difference: commands [2] replied differently" in prompt
+    assert "errored with unexplained-difference: commands or runs [2] replied differently" in prompt
     assert "answer in difference_intended" in prompt and '"difference_intended": true|false|null' in prompt
     # The other findings of the batch see the diff and the experiments too, but are not asked the question.
     other = next(c for c in calls if CRASH_KEY in c["prompt"])
@@ -1108,6 +1108,22 @@ def test_without_a_diff_or_experiments_the_prompt_says_nothing_of_them(monkeypat
     _analyze(batch_files(), monkeypatch, claude=analyzer_mod._invoke_claude)
     assert all("## The change" not in p and "experiments/<id>.yaml" not in p and "change.diff" not in p
                for p in prompts)
+
+
+def test_a_tool_run_that_reached_the_change_counts_as_one(monkeypatch):
+    # valkey.action.tools reports on the change as valkey.action.commands does, in valkey.tool.runs.
+    report = _commands_report("FAIL", reached=[0])
+    [component] = report["outcome"]["component_results"]
+    evidence = component["evidence"][0]
+    evidence["evidence_id"] = "valkey.tool.runs"
+    evidence["value"] = {"candidate": {"runs": [{"index": 0, "exit": 1}], "digest": "c" * 64, "server_exited": -11},
+                         "parent": {"runs": [{"index": 0, "exit": 0}], "digest": "p" * 64},
+                         "server": False, "reached": [0], "unexplained": []}
+    analysis = _analyze_change(_pr_batch(report), monkeypatch)
+    assert analysis.change_runs == {**_NO_CHANGE_RUNS, "reached": 1}
+    from scripts.fuzzer.analyzer import _change_outcome
+    outcome = _change_outcome(report)
+    assert outcome is not None and outcome.evidence_id == "valkey.tool.runs" and outcome.candidate_exited
 
 
 def test_a_proposed_experiments_fail_that_reached_the_change_is_filed(monkeypatch):

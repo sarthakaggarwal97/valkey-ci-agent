@@ -126,6 +126,8 @@ UNEXPLAINED = "unexplained-difference"
 # An expect both builds violate alike: about behaviour the change did not touch, the test's own mistake.
 DISPUTED = "expect-disputed"
 SEQUENCE_EVIDENCE = "valkey.command.sequence"
+# valkey.action.tools reports the same way, on tool runs.
+TOOL_RUNS_EVIDENCE = "valkey.tool.runs"
 
 
 def _object(value: Any) -> dict[str, Any]:
@@ -304,25 +306,28 @@ def _read_run_identity(context: FuzzerRunContext, report: dict[str, Any]) -> Non
 
 
 def _change_outcome(report: dict[str, Any]) -> ChangeOutcome | None:
-    """What the run's valkey.action.commands component said about the change, or None without one."""
+    """What the run's valkey.action.commands or valkey.action.tools component said about the change, or None
+    without one."""
     found: ChangeOutcome | None = None
     for result in report["outcome"]["component_results"]:
         if not isinstance(result, dict):
             continue
         diagnostics = _object(result.get("diagnostics"))
         reason = diagnostics.get("reason") if diagnostics.get("reason") in (UNREACHED, UNEXPLAINED, DISPUTED) else None
-        sequence = next(
-            (e.get("value") for e in result.get("evidence") or []
-             if isinstance(e, dict) and e.get("evidence_id") == SEQUENCE_EVIDENCE),
-            None,
+        evidence = next(
+            (e for e in result.get("evidence") or []
+             if isinstance(e, dict) and e.get("evidence_id") in (SEQUENCE_EVIDENCE, TOOL_RUNS_EVIDENCE)),
+            {},
         )
+        sequence = evidence.get("value")
         if reason is None and sequence is None:
             continue
-        commands = diagnostics.get("commands")
+        commands = diagnostics.get("commands", diagnostics.get("runs"))
         outcome = ChangeOutcome(
             component_id=str(result.get("component_id") or "unknown"), reason=reason,
             commands=list(commands) if isinstance(commands, list) else [],
             sequence=sequence if isinstance(sequence, dict) else None,
+            evidence_id=str(evidence.get("evidence_id") or SEQUENCE_EVIDENCE),
         )
         if reason is not None:
             return outcome
@@ -1028,11 +1033,11 @@ class FuzzerRunAnalyzer:
             why = "not triaged: the change's diff was not given (--change-diff)"
         else:
             note = (
-                f"The run compared a command sequence on the merge commit's build (candidate) and its parent's "
-                f"(parent), and errored with {UNEXPLAINED}: commands {commands} "
+                f"The run compared a command sequence or tool runs on the merge commit's build (candidate) and "
+                f"its parent's (parent), and errored with {UNEXPLAINED}: commands or runs {commands} "
                 "replied differently on the two builds although the scenario did not mark them as meant to "
                 f"differ. Both replies are in the run report, component {outcome.component_id}, evidence "
-                f"{SEQUENCE_EVIDENCE}. Read change.diff and decide whether the change accounts for the "
+                f"{outcome.evidence_id}. Read change.diff and decide whether the change accounts for the "
                 "difference (a write it changed carried into a later read is intended; a reply it did not "
                 "mean to change is not), and answer in difference_intended."
             )

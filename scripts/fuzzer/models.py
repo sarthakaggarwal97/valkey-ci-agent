@@ -24,21 +24,23 @@ class FuzzerSignal:
 
 @dataclass
 class ChangeOutcome:
-    """How a run of ``valkey.action.commands`` met the change it tests.
+    """How a run of ``valkey.action.commands`` or ``valkey.action.tools`` met the change it tests.
 
     `reason` is the component's ``diagnostics.reason``: ``unreached-change``
     (a command marked as changed replied the same on the merge commit and
     its parent), ``unexplained-difference`` (an unmarked command replied
     differently; `commands` names them) or ``expect-disputed`` (an expect
-    both builds violate alike; `commands` names them), or None. `sequence` is its
-    ``valkey.command.sequence`` evidence: both builds' replies, the
-    ``reached`` and ``unexplained`` command indexes and ``dropped_config``.
+    both builds violate alike; `commands` names them), or None; for tools, a
+    command is a tool run. `sequence` is its `evidence_id` evidence,
+    ``valkey.command.sequence`` or ``valkey.tool.runs``: both builds' replies
+    or runs, and the ``reached`` and ``unexplained`` indexes.
     """
 
     component_id: str
     reason: str | None = None
     commands: list[Any] = field(default_factory=list)
     sequence: dict[str, Any] | None = None
+    evidence_id: str = "valkey.command.sequence"
 
     @property
     def reached(self) -> bool:
@@ -47,9 +49,11 @@ class ChangeOutcome:
 
     @property
     def candidate_exited(self) -> bool:
-        """The merge commit's server died during the sequence."""
+        """The merge commit's server died during the sequence or the tool runs."""
         candidate = (self.sequence or {}).get("candidate")
-        return isinstance(candidate, dict) and candidate.get("exited") is True
+        return isinstance(candidate, dict) and (
+            candidate.get("exited") is True or candidate.get("server_exited") is not None
+        )
 
 
 @dataclass
