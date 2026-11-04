@@ -1,6 +1,7 @@
 """Tests for the PR batch workflow's inputs and for reading the batch it uploads."""
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -19,12 +20,15 @@ import scripts.fuzzer.pr_batch as pr_batch_mod
 from scripts.fuzzer.batch import read_batch, read_batch_dir
 from scripts.fuzzer.pr_batch import (
     BATCH_INPUTS,
+    MODULE_FILES,
     OPTIONAL_INPUTS,
     RESULTS_FILE,
+    ModuleBuild,
     batch_dispatch_inputs,
     batch_names,
     bundle_path_allowed,
     check_batch_inputs,
+    module_repository,
     render_results,
     scenario_name,
     summarize,
@@ -45,9 +49,16 @@ WITH_ARTIFACTS = SCENARIO + "artifacts: {parent: {use: valkey.artifact.local-bin
 REFERENCES_PARENT = SCENARIO.replace("replicas_per_primary: 1}",
                                      "replicas_per_primary: 1, server_config: {x: {$ref: artifacts.parent.binary}}}")
 REFERENCES_OTHER = REFERENCES_PARENT.replace("artifacts.parent.binary", "artifacts.baseline.binary")
+# Scenarios that load the module builds the batch declares when it is given a module.
+REFERENCES_MODULE = REFERENCES_PARENT.replace("artifacts.parent.binary", "artifacts.module.path")
+REFERENCES_MODULE_PARENT = REFERENCES_PARENT.replace("artifacts.parent.binary", "artifacts.module_parent.path")
 # A flow-style top-level mapping: the batch cannot append the parent block to it.
 FLOW_SCENARIO = "{scenario_id: ai-0123456789ab, seed: 7, experiment: {id: valkey.cluster-chaos}, deployment: {mode: cluster}}\n"
 PARENT = "b" * 40
+MODULE_SHA, MODULE_PARENT = "c" * 40, "d" * 40
+JSON_MODULE = {"module_repository": "valkey-io/valkey-json", "module_sha": MODULE_SHA, "module_parent_sha": MODULE_PARENT}
+TEST_MODULES = {"module_repository": "valkey-io/valkey", "module_sha": HEAD, "module_parent_sha": PARENT,
+                "module_file": "tests/modules/datatype.so", "valkey_parent_sha": PARENT}
 # A proposed experiment the fuzzer's catalog loads: the installed fragment brings its components.
 EXPERIMENT = "extends: [valkey.base]\nid: proposed.probe\ndeployment: {modes: [standalone]}\ncomponents: []\n"
 # The smallest bundle the input check takes; the workflow also loads it with
@@ -81,7 +92,8 @@ def _experiments(value, **changes) -> dict[str, str]:
 def test_batch_inputs_are_the_ones_the_workflow_takes():
     assert BATCH_INPUTS == ("scenarios", "valkey_repository", "valkey_ref", "valkey_sha")
     assert OPTIONAL_INPUTS == ("spec_bundles", "random_seeds", "request_id", "exclude_experiments",
-                               "valkey_parent_sha", "build", "experiments")
+                               "valkey_parent_sha", "build", "experiments", "module_repository", "module_sha",
+                               "module_parent_sha", "module_file")
     check_batch_inputs(_inputs())
     check_batch_inputs(_bundles({"toy": BUNDLE}))
     check_batch_inputs(_bundles(""))
@@ -106,7 +118,32 @@ def test_batch_inputs_are_the_ones_the_workflow_takes():
     # The defaults are left out, as the workflow would fill them in.
     plain = batch_dispatch_inputs(change, {"ai-0123456789ab": SCENARIO}, parent_sha=None, build="default",
                                   experiments={})
-    assert not {"valkey_parent_sha", "build", "experiments"} & set(plain)
+    assert not {"valkey_parent_sha", "build", "experiments", "module_repository"} & set(plain)
+
+
+def test_a_module_is_sent_as_its_four_inputs():
+    pinned = {"repo": "valkey-io/valkey", "pr_number": None, "head_sha": HEAD}
+    loads = {"x": REFERENCES_MODULE, "y": REFERENCES_MODULE_PARENT}
+    inputs = batch_dispatch_inputs(pinned, loads, module=ModuleBuild("valkey-io/valkey-json", MODULE_SHA, MODULE_PARENT))
+    assert {k: inputs[k] for k in JSON_MODULE} == JSON_MODULE
+    # A module change needs no Valkey parent: one Valkey build, two module builds; valkey-json's file is its own.
+    assert not {"valkey_parent_sha", "module_file"} & set(inputs)
+    assert (inputs["valkey_sha"], inputs["valkey_ref"]) == (HEAD, HEAD)
+    core = batch_dispatch_inputs({"repo": "valkey-io/valkey", "pr_number": 9, "head_sha": HEAD}, loads,
+                                 parent_sha=PARENT,
+                                 module=ModuleBuild("valkey-io/valkey", HEAD, PARENT, "tests/modules/datatype.so"))
+    assert {k: core[k] for k in TEST_MODULES} == TEST_MODULES
+    # One module build, without its parent: artifacts.module only.
+    only = batch_dispatch_inputs(pinned, {"x": REFERENCES_MODULE}, module=ModuleBuild("o/valkey-json", MODULE_SHA))
+    assert "module_parent_sha" not in only
+    with pytest.raises(ValueError, match="references artifacts.module_parent, which the batch does not declare"):
+        batch_dispatch_inputs(pinned, loads, module=ModuleBuild("o/valkey-json", MODULE_SHA))
+
+
+def test_module_repositories_are_the_module_table_less_valkey_itself():
+    assert MODULE_FILES == {"valkey-json": "build/src/libjson.so", "valkey": None}
+    assert module_repository("valkey-io/valkey-json") and module_repository("someone/valkey-json")
+    assert not module_repository("valkey-io/valkey") and not module_repository("valkey-io/valkey-search")
 
 
 def test_batch_names_keep_a_fitting_id_and_fix_the_rest():
@@ -163,15 +200,45 @@ def test_bundle_paths_the_batch_takes(path, allowed):
     (_scenarios({"x": "- a"}), "scenario x must be a mapping"),
     (_scenarios({"x": WITH_BINARY}), "sets deployment.valkey_binary; the batch runs valkey_sha's build"),
     (_scenarios({"x": WITH_INSTANCE_BINARIES}), "sets deployment.instance_binaries; the batch runs valkey_sha's build"),
-    (_scenarios({"x": WITH_ARTIFACTS}), "scenario x declares artifacts; the batch declares them (artifacts.parent)"),
+    (_scenarios({"x": WITH_ARTIFACTS}),
+     "scenario x declares artifacts; the batch declares them (artifacts.parent, artifacts.module, artifacts.module_parent)"),
     (_scenarios({"x": REFERENCES_PARENT}),
      "scenario x references artifacts.parent, which the batch does not declare (no valkey_parent_sha)"),
     (_scenarios({"x": REFERENCES_OTHER}) | {"valkey_parent_sha": PARENT},
      "scenario x references artifacts.baseline, which the batch does not declare"),
     (_scenarios({"x": FLOW_SCENARIO}) | {"valkey_parent_sha": PARENT},
-     "scenario x: appending the artifacts.parent block does not add exactly that key"),
+     "scenario x: appending the artifacts block does not add exactly that key"),
     (_scenarios({"x": SCENARIO.rstrip("\n")}) | {"valkey_parent_sha": PARENT},
-     "appending the artifacts.parent block does not add exactly that key"),
+     "appending the artifacts block does not add exactly that key"),
+    (_scenarios({"x": FLOW_SCENARIO}) | JSON_MODULE, "scenario x: appending the artifacts block does not add"),
+    (_scenarios({"x": REFERENCES_MODULE}),
+     "scenario x references artifacts.module, which the batch does not declare (no module_repository)"),
+    (_scenarios({"x": REFERENCES_MODULE_PARENT}) | {**JSON_MODULE, "module_parent_sha": ""},
+     "scenario x references artifacts.module_parent, which the batch does not declare (no module_parent_sha)"),
+    (_scenarios({"x": REFERENCES_PARENT}) | JSON_MODULE,
+     "scenario x references artifacts.parent, which the batch does not declare (no valkey_parent_sha)"),
+    (_scenarios({"x": REFERENCES_OTHER}),
+     "scenario x references artifacts.baseline, which the batch does not declare"),
+    (_inputs(module_sha=MODULE_SHA), "module_sha, module_parent_sha, and module_file need module_repository"),
+    (_inputs(module_file="x.so"), "module_sha, module_parent_sha, and module_file need module_repository"),
+    (_inputs(**{**JSON_MODULE, "module_repository": "valkey-json"}), "module_repository must be empty or OWNER/NAME"),
+    (_inputs(**{**JSON_MODULE, "module_repository": "valkey-io/valkey-search"}),
+     "module_repository valkey-io/valkey-search is not a module the batch builds; it builds valkey-json, valkey"),
+    (_inputs(**{**JSON_MODULE, "module_sha": "C" * 40}), "module_sha must be a full 40-character lowercase commit SHA"),
+    (_inputs(**{**JSON_MODULE, "module_sha": ""}), "module_sha must be a full 40-character lowercase commit SHA"),
+    (_inputs(**{**JSON_MODULE, "module_parent_sha": "d" * 12}),
+     "module_parent_sha must be empty or a full 40-character lowercase commit SHA"),
+    (_inputs(**{**JSON_MODULE, "module_parent_sha": MODULE_SHA}),
+     "module_parent_sha is module_sha: a comparison with the same build shows nothing"),
+    (_inputs(**{**TEST_MODULES, "module_file": ""}),
+     "valkey builds many modules: module_file must name one, such as tests/modules/datatype.so"),
+    (_inputs(**{**TEST_MODULES, "module_file": "tests/modules/../x.so"}),
+     "module_file must be a relative path to a .so in the module's checkout"),
+    (_inputs(**{**TEST_MODULES, "module_file": "/abs/x.so"}), "module_file must be a relative path to a .so"),
+    (_inputs(**{**TEST_MODULES, "module_file": "tests/modules/datatype.c"}), "module_file must be a relative path"),
+    # The module inputs are checked after the build and before random_seeds, as the workflow checks them.
+    (_inputs(build="valgrind", module_sha="x"), "build must be one of"),
+    (_inputs(random_seeds="5", module_sha="x"), "module_sha, module_parent_sha, and module_file need module_repository"),
     (_inputs(valkey_parent_sha="b" * 12), "valkey_parent_sha must be empty or a full 40-character lowercase commit SHA"),
     (_inputs(valkey_parent_sha=HEAD), "valkey_parent_sha is valkey_sha: a comparison with the same build shows nothing"),
     (_inputs(build="valgrind"), "build must be one of default, asan, ubsan"),
@@ -251,7 +318,7 @@ def _workflow_check(inputs: dict[str, str], tmp_path: Path) -> subprocess.Comple
                 for k in BATCH_INPUTS + OPTIONAL_INPUTS})
     env.update(CANDIDATES_DIR=str(tmp_path / "candidates"), SPEC_DIR=str(tmp_path / "spec"),
                EXPERIMENTS_DIR=str(tmp_path / "experiments"), PARENT_BINARY="/work/valkey-parent/src/valkey-server",
-               PYTHONPATH=_FUZZER_DIR)
+               MODULE_DIR="/work/module-src", MODULE_PARENT_DIR="/work/module-parent", PYTHONPATH=_FUZZER_DIR)
     return subprocess.run([_fuzzer_python(), ".github/scripts/ci.py", "check-inputs"], env=env, cwd=_FUZZER_DIR,
                           capture_output=True, text=True, check=False)
 
@@ -309,7 +376,38 @@ def _real_cases() -> list:
         _experiments({"Proposed.probe.yaml": EXPERIMENT}),
         _experiments({"proposed.probe.yaml": "- a"}),
         _experiments({"proposed.probe.yaml": EXPERIMENT.replace("proposed.", "valkey.")}),
+        _scenarios({"x": REFERENCES_MODULE, "y": REFERENCES_MODULE_PARENT}) | JSON_MODULE,
+        _scenarios({"x": REFERENCES_MODULE, "y": REFERENCES_PARENT}) | TEST_MODULES,
+        _scenarios({"x": REFERENCES_MODULE}) | {**JSON_MODULE, "module_parent_sha": ""},
+        _scenarios({"x": REFERENCES_MODULE}),
+        _scenarios({"x": REFERENCES_MODULE_PARENT}) | {**JSON_MODULE, "module_parent_sha": ""},
+        _scenarios({"x": REFERENCES_PARENT}) | JSON_MODULE,
+        _scenarios({"x": REFERENCES_OTHER}),
+        _scenarios({"x": FLOW_SCENARIO}) | JSON_MODULE,
+        _scenarios({"x": WITH_ARTIFACTS}) | JSON_MODULE,
+        _inputs(module_sha=MODULE_SHA),
+        _inputs(module_parent_sha=MODULE_PARENT),
+        _inputs(**{**JSON_MODULE, "module_repository": "valkey-json"}),
+        _inputs(**{**JSON_MODULE, "module_repository": "valkey-io/valkey-search"}),
+        _inputs(**{**JSON_MODULE, "module_sha": "C" * 40}),
+        _inputs(**{**JSON_MODULE, "module_parent_sha": "d" * 12}),
+        _inputs(**{**JSON_MODULE, "module_parent_sha": MODULE_SHA}),
+        _inputs(**{**JSON_MODULE, "module_file": "build/src/other.so"}),
+        _inputs(**{**TEST_MODULES, "module_file": ""}),
+        _inputs(**{**TEST_MODULES, "module_file": "tests/modules/../x.so"}),
+        _inputs(**{**TEST_MODULES, "module_file": "/abs/x.so"}),
+        _inputs(**{**TEST_MODULES, "module_file": "tests/modules/a..b.so"}),
+        _inputs(build="valgrind", module_sha="x"),
+        _inputs(random_seeds="5", module_sha="x"),
     ]
+
+
+@pytest.mark.skipif(not _FUZZER_DIR, reason="needs VALKEY_FUZZER_DIR, a valkey-fuzzer checkout")
+def test_the_module_table_is_the_workflows():
+    tree = ast.parse((Path(_FUZZER_DIR) / ".github" / "scripts" / "ci.py").read_text())
+    table = next(node.value for node in tree.body if isinstance(node, ast.Assign)
+                 and [getattr(t, "id", None) for t in node.targets] == ["MODULE_FILES"])
+    assert ast.literal_eval(table) == MODULE_FILES
 
 
 @_real_workflow

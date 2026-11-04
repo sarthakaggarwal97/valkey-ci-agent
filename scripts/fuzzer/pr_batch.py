@@ -11,9 +11,12 @@ scenarios, which may then be empty), ``request_id`` (shown in the run's
 title, so :func:`find_run` finds the run a dispatch started),
 ``valkey_parent_sha`` (a second build, of the change's parent, that the
 scenarios reach as the artifact ``parent``), ``build`` (``default``,
-``asan`` or ``ubsan``, for both commits) and ``experiments`` (a JSON object
+``asan`` or ``ubsan``, for both commits), ``experiments`` (a JSON object
 mapping a file name to the YAML of a ``proposed.`` experiment the scenarios
-use). It builds that Valkey commit, runs the scenarios through
+use) and ``module_repository``, ``module_sha``, ``module_parent_sha`` and
+``module_file`` (a module the batch builds at one or two commits and
+declares as the artifacts ``module`` and ``module_parent``, loaded into the
+Valkey build; see :class:`ModuleBuild`). It builds that Valkey commit, runs the scenarios through
 ``valkey-fuzzer batch`` with the candidate profile, the bundles on
 ``VALKEY_FUZZER_SPEC_PATH`` and their ``experiments/`` loaded, the proposed
 experiments loaded too, and uploads the batch folder as
@@ -41,6 +44,7 @@ import re
 import sys
 import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -65,10 +69,11 @@ RESULTS_FILE = "batch-results.json"
 # The workflow's inputs: the four always sent, spec_bundles when a scenario
 # needs a bundle, the random baseline and the run's name when asked for, the
 # parent build and the proposed experiments when the scenarios need them, and
-# the build when it is not the default.
+# the build when it is not the default, and the module builds when the scenarios load a module.
 BATCH_INPUTS = ("scenarios", "valkey_repository", "valkey_ref", "valkey_sha")
 OPTIONAL_INPUTS = (
     "spec_bundles", "random_seeds", "request_id", "exclude_experiments", "valkey_parent_sha", "build", "experiments",
+    "module_repository", "module_sha", "module_parent_sha", "module_file",
 )
 # The builds the workflow offers; both commits get the same one.
 BUILDS = ("default", "asan", "ubsan")
@@ -100,6 +105,37 @@ _BUNDLE_PATH_RE = re.compile(
 BUNDLE_REQUIRED_FILES = ("claims.yaml", "model.tla", "mapping.yaml")
 # A batch job running a scenario file is named scenario-<file stem>.
 _SCENARIO_JOB = "scenario-"
+# The module repositories the batch builds, by repository name (a fork builds as its upstream), and the file each
+# build leaves in its checkout: the workflow's MODULE_FILES (.github/scripts/ci.py), exactly. valkey means its
+# tests/modules, many modules, so module_file names the one.
+MODULE_FILES = {"valkey-json": "build/src/libjson.so", "valkey": None}
+# The module table's entry for Valkey's own tests/modules: a change to Valkey, not to a module.
+CORE_MODULES = "valkey"
+_MODULE_FILE_RE = re.compile(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.so")
+# The artifacts the batch may declare, and the input each needs, for the refusal of a reference to one it does not.
+_DECLARED_BY = {
+    "artifacts.parent": "valkey_parent_sha",
+    "artifacts.module": "module_repository",
+    "artifacts.module_parent": "module_parent_sha",
+}
+
+
+def module_repository(repo: str) -> bool:
+    """Whether ``repo`` (OWNER/NAME) is a module repository the batch builds, not Valkey itself."""
+    name = repo.split("/")[-1]
+    return name in MODULE_FILES and name != CORE_MODULES
+
+
+@dataclass(frozen=True)
+class ModuleBuild:
+    """A module the PR batch builds against its Valkey build: ``repository`` at ``sha`` is ``artifacts.module``,
+    at ``parent_sha`` (when given) ``artifacts.module_parent``; ``file`` is the built module in its checkout,
+    empty for the module's own (Valkey's tests/modules needs one, such as ``tests/modules/datatype.so``)."""
+
+    repository: str
+    sha: str
+    parent_sha: str = ""
+    file: str = ""
 
 
 def check_batch_inputs(inputs: dict[str, str]) -> None:
@@ -107,8 +143,8 @@ def check_batch_inputs(inputs: dict[str, str]) -> None:
 
     The checks, their order and their messages are the workflow's: the sizes
     of ``scenarios`` and ``spec_bundles``, the repository, the commits, the
-    build, each scenario's name, YAML, build, artifact references and the
-    shape the parent block is appended to, then each bundle's name, required
+    build, the module inputs, each scenario's name, YAML, build, artifact
+    references and the shape the artifacts block is appended to, then each bundle's name, required
     files, paths and YAML, then the size of ``experiments`` and each
     experiment's file name, YAML and ID. GitHub's limit on all inputs
     together comes last.
@@ -142,6 +178,10 @@ def check_batch_inputs(inputs: dict[str, str]) -> None:
         raise ValueError("valkey_parent_sha is valkey_sha: a comparison with the same build shows nothing")
     if inputs.get("build", "default") not in BUILDS:
         raise ValueError(f"build must be one of {', '.join(BUILDS)}")
+    module_repository, module_parent_sha = _check_module(inputs)
+    # What the batch declares to every scenario: the parent build, and the module builds.
+    declared = [name for name, given in (("artifacts.parent", parent_sha), ("artifacts.module", module_repository),
+                                         ("artifacts.module_parent", module_parent_sha)) if given]
     random_seeds = inputs.get("random_seeds", "0")
     if not _RANDOM_SEEDS_RE.fullmatch(random_seeds):
         raise ValueError("random_seeds must be 0 to 4")
@@ -174,27 +214,30 @@ def check_batch_inputs(inputs: dict[str, str]) -> None:
             if field in (document.get("deployment") or {}):
                 raise ValueError(f"scenario {name} sets deployment.{field}; the batch runs valkey_sha's build")
         if "artifacts" in document:
-            raise ValueError(f"scenario {name} declares artifacts; the batch declares them (artifacts.parent)")
-        # The batch declares artifacts.parent, and only with a parent build.
-        declared = {"artifacts.parent"} if parent_sha else set()
+            raise ValueError(
+                f"scenario {name} declares artifacts; the batch declares them (artifacts.parent, artifacts.module, "
+                "artifacts.module_parent)"
+            )
+        # The batch declares only what it built.
         for reference in _artifact_references(document):
             if reference not in declared:
+                needs = _DECLARED_BY.get(reference)
                 raise ValueError(
                     f"scenario {name} references {reference}, which the batch does not declare"
-                    + ("" if parent_sha else " (no valkey_parent_sha)")
+                    + (f" (no {needs})" if needs else "")
                 )
-        if parent_sha:
+        if declared:
             # The batch appends the block to the text, so the scenario runs as sent; the append must add
-            # exactly that key. The path does not matter here, only the shape.
-            appended = text + _PARENT_ARTIFACT_BLOCK
+            # exactly that key. The paths do not matter here, only the shape.
+            block = _artifacts_block(declared)
             try:
-                after = yaml.safe_load(appended)
+                after = yaml.safe_load(text + block)
             except yaml.YAMLError:
                 after = None
-            if after != {**document, "artifacts": yaml.safe_load(_PARENT_ARTIFACT_BLOCK)["artifacts"]}:
+            if after != {**document, "artifacts": yaml.safe_load(block)["artifacts"]}:
                 raise ValueError(
-                    f"scenario {name}: appending the artifacts.parent block does not add exactly that key (a "
-                    "flow-style top-level mapping, or no final newline?)"
+                    f"scenario {name}: appending the artifacts block does not add exactly that key (a flow-style "
+                    "top-level mapping, or no final newline?)"
                 )
     _check_spec_bundles(raw_bundles)
     _check_experiments(inputs.get("experiments", ""))
@@ -203,10 +246,50 @@ def check_batch_inputs(inputs: dict[str, str]) -> None:
         raise ValueError(f"the PR batch inputs are {size} characters, over GitHub's limit of 65,535")
 
 
-# The shape of the block the batch appends; the batch fills in its parent build's path.
-_PARENT_ARTIFACT_BLOCK = (
-    "artifacts:\n  parent:\n    use: valkey.artifact.local-binary\n    with:\n      path: \"valkey-server\"\n"
-)
+def _check_module(inputs: dict[str, str]) -> tuple[str, str]:
+    """The workflow's check of the module inputs: the module repository and its parent commit, empty without."""
+    repository, sha = inputs.get("module_repository", ""), inputs.get("module_sha", "")
+    parent_sha, module_file = inputs.get("module_parent_sha", ""), inputs.get("module_file", "")
+    if not repository:
+        if sha or parent_sha or module_file:
+            raise ValueError("module_sha, module_parent_sha, and module_file need module_repository")
+        return "", ""
+    if not _REPOSITORY_RE.fullmatch(repository):
+        raise ValueError("module_repository must be empty or OWNER/NAME")
+    name = repository.split("/")[1]
+    if name not in MODULE_FILES:
+        raise ValueError(
+            f"module_repository {repository} is not a module the batch builds; it builds {', '.join(MODULE_FILES)}"
+        )
+    if not _SHA_RE.fullmatch(sha):
+        raise ValueError("module_sha must be a full 40-character lowercase commit SHA")
+    if parent_sha and not _SHA_RE.fullmatch(parent_sha):
+        raise ValueError("module_parent_sha must be empty or a full 40-character lowercase commit SHA")
+    if parent_sha == sha:
+        raise ValueError("module_parent_sha is module_sha: a comparison with the same build shows nothing")
+    module_file = module_file or MODULE_FILES[name] or ""
+    if not module_file:
+        raise ValueError(f"{name} builds many modules: module_file must name one, such as tests/modules/datatype.so")
+    if not _MODULE_FILE_RE.fullmatch(module_file) or ".." in module_file.split("/"):
+        raise ValueError("module_file must be a relative path to a .so in the module's checkout")
+    return repository, parent_sha
+
+
+# The provider of each artifact the batch declares.
+_ARTIFACT_PROVIDERS = {
+    "artifacts.parent": "valkey.artifact.local-binary",
+    "artifacts.module": "valkey.artifact.local-module",
+    "artifacts.module_parent": "valkey.artifact.local-module",
+}
+
+
+def _artifacts_block(declared: Sequence[str]) -> str:
+    """The shape of the block the batch appends, declaring ``declared``; the batch fills in its builds' paths."""
+    lines = ["artifacts:"]
+    for reference in declared:
+        lines += [f"  {reference.split('.')[1]}:", f"    use: {_ARTIFACT_PROVIDERS[reference]}", "    with:",
+                  '      path: "build"']
+    return "\n".join(lines) + "\n"
 
 
 def _artifact_references(value: Any) -> list[str]:
@@ -327,12 +410,15 @@ def batch_dispatch_inputs(
     change: dict[str, Any], scenarios: dict[str, str], spec_bundles: dict[str, dict[str, str]] | None = None,
     *, random_seeds: int = 0, request_id: str = "", exclude_experiments: Sequence[str] = (),
     parent_sha: str | None = None, build: str = "default", experiments: dict[str, str] | None = None,
+    module: ModuleBuild | None = None,
 ) -> dict[str, str]:
     """The PR batch's inputs for ``scenarios`` ({name: YAML}) on ``change``, with any bundles they need,
     ``random_seeds`` seeds of each one-build experiment but ``exclude_experiments`` beside them, and the
     run named ``request_id``. With ``parent_sha`` the batch also builds that commit, as the artifact
     ``parent``; ``build`` picks the build of both; ``experiments`` ({file name: YAML}) are the proposed
-    experiments the scenarios use."""
+    experiments the scenarios use; ``module`` is a module the batch builds and loads into ``change``'s
+    build, as the artifacts ``module`` and ``module_parent``. For a change to a module, ``change`` is the
+    pinned Valkey commit the module builds load into."""
     pr_number = change.get("pr_number")
     head_sha = str(change["head_sha"])
     inputs = {
@@ -355,6 +441,13 @@ def batch_dispatch_inputs(
         inputs["build"] = build
     if experiments:
         inputs["experiments"] = json.dumps(experiments, separators=(",", ":"))
+    if module is not None:
+        inputs["module_repository"] = module.repository
+        inputs["module_sha"] = module.sha
+        if module.parent_sha:
+            inputs["module_parent_sha"] = module.parent_sha
+        if module.file:
+            inputs["module_file"] = module.file
     check_batch_inputs(inputs)
     return inputs
 
