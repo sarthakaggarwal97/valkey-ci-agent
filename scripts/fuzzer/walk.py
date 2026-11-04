@@ -77,6 +77,10 @@ logger = logging.getLogger(__name__)
 VALKEY_BRANCH = "unstable"
 # git merge-base unstable 7.2.4: where unstable left 7.2, the end of Valkey's backlog.
 VALKEY_BASE = "f4549d1cf4830c0584f8e41369a8628842a67aec"
+# Valkey's first commit on unstable ("A single commit to get stuff building", 2024-03-21), right after Redis's
+# #13154: the merges before it are Redis's, and their (#N) are redis/redis pull requests.
+VALKEY_FORK = "38632278fd06fe186f7707e4fa099f666d805547"
+REDIS_REPO = "redis/redis"
 REPOSITORIES = (VALKEY_REPO, *(f"valkey-io/{name}" for name in MODULES))
 STATE_FILE = "walk-state.json"
 PROGRESS_FILE = "PROGRESS.md"
@@ -91,7 +95,7 @@ MAX_MISSES = 10
 # Seeds each test runs with on unstable: its own and the next ones.
 HUNT_SEEDS = 3
 RUN_TIMEOUT_S = 900
-MERGE_KEYS = ("repo", "sha", "parent", "pr", "subject", "date")
+MERGE_KEYS = ("repo", "sha", "parent", "pr", "pr_repo", "subject", "date")
 # The checks the walk turns on in every compared command sequence.
 CHECKS = {"variants": True, "replica": True, "acl": True, "concurrency": 4, "compat": True}
 # Whether the walk sets CHECKS: off until valkey-fuzzer takes `checks`, which its validation refuses until then.
@@ -119,9 +123,28 @@ def _name(repo: str) -> str:
     return repo.split("/")[-1]
 
 
+def _pr_repo(merge: dict[str, Any]) -> str:
+    """The repository the merge's pull request is in: its own, or Redis's before Valkey forked."""
+    return str(merge.get("pr_repo") or merge["repo"])
+
+
 def _short(merge: dict[str, Any]) -> str:
-    """How an issue names the merge: #PR, or its commit."""
-    return f"#{merge['pr']}" if merge.get("pr") else str(merge["sha"])[:12]
+    """How a verdict names the merge: #PR (redis/redis#PR before the fork), or its commit."""
+    if not merge.get("pr"):
+        return str(merge["sha"])[:12]
+    return f"#{merge['pr']}" if _pr_repo(merge) == merge["repo"] else f"{_pr_repo(merge)}#{merge['pr']}"
+
+
+def _where(merge: dict[str, Any]) -> str:
+    """How an issue or PROGRESS.md names the merge: OWNER/NAME#PR, or the repository and its commit."""
+    return f"{_pr_repo(merge)}#{merge['pr']}" if merge.get("pr") else f"{merge['repo']}@{merge['sha'][:12]}"
+
+
+def _pr_url(merge: dict[str, Any]) -> str:
+    """The merge's pull request, or its commit."""
+    if merge.get("pr"):
+        return f"https://github.com/{_pr_repo(merge)}/pull/{merge['pr']}"
+    return f"https://github.com/{merge['repo']}/commit/{merge['sha']}"
 
 
 def merge_folder(merge: dict[str, Any]) -> str:
@@ -136,11 +159,15 @@ def merge_folder(merge: dict[str, Any]) -> str:
 def first_parent(repo_dir: Path, repo: str) -> list[dict[str, Any]]:
     """The commits on the checked-out branch's first-parent history, newest first."""
     history = []
+    redis = False
     for line in _git(repo_dir, "log", "--first-parent", "--format=%H%x09%P%x09%cs%x09%s", "HEAD").splitlines():
         sha, parents, date, subject = line.split("\t", 3)
         match = _PR_SUBJECT_RE.search(subject)
         history.append({"repo": repo, "sha": sha, "parent": parents.split(" ")[0], "pr": int(match.group(1))
-                        if match else None, "subject": subject[:200], "date": date})
+                        if match else None, "pr_repo": REDIS_REPO if redis else repo, "subject": subject[:200],
+                        "date": date})
+        # Older than Valkey's first commit: Redis's merges.
+        redis = redis or (repo == VALKEY_REPO and sha == VALKEY_FORK)
     return history
 
 
@@ -188,7 +215,7 @@ def plan(clones: dict[str, Path], state: dict[str, Any], max_jobs: int, walk: li
         history, pointer = histories[repo], pointers[repo]
         for item, kind in queues[repo]:
             if kind == "retry":
-                return {key: item[key] for key in MERGE_KEYS}
+                return {key: item.get(key) for key in MERGE_KEYS}
             merge = history[item]
             if kind == "new":
                 pointer["head"] = merge["sha"]
@@ -308,13 +335,18 @@ def build_head(repo: str, sha: str, valkey_sha: str, work: Path, out: Path) -> N
 
 
 def with_checks(text: str) -> str:
-    """An experiment's YAML with CHECKS on every valkey.action.commands that compares with another build."""
+    """An experiment's YAML with CHECKS on every valkey.action.commands that compares two builds: of Valkey
+    (``compare_with``), or of a module (``modules_parent``), which leaves out compat, a check of two Valkey
+    builds."""
     doc = yaml.safe_load(text)
     for component in doc.get("components") or []:
         config = component.get("config") if isinstance(component, dict) else None
-        if component.get("use") == "valkey.action.commands" and isinstance(config, dict) \
-                and config.get("compare_with") is not None:
+        if component.get("use") != "valkey.action.commands" or not isinstance(config, dict):
+            continue
+        if config.get("compare_with") is not None:
             config["checks"] = dict(CHECKS)
+        elif config.get("modules_parent") is not None:
+            config["checks"] = {key: value for key, value in CHECKS.items() if key != "compat"}
     return yaml.safe_dump(doc, sort_keys=False)
 
 
@@ -473,7 +505,7 @@ def render_issue(finding: dict[str, Any], merge: dict[str, Any], context: dict[s
     """The issue for a finding, and the comment a repeat adds: what failed, on which builds, the scenario, how to
     reproduce it, the key log lines, and a draft of the report to file upstream."""
     repo = merge["repo"]
-    where = f"{repo}#{merge['pr']}" if merge.get("pr") else f"{repo}@{merge['sha'][:12]}"
+    where, commit = _where(merge), f"https://github.com/{repo}/commit/{merge['sha']}"
     builds = finding["builds"]
     branch = VALKEY_BRANCH if repo == VALKEY_REPO else MODULES[_name(repo)].branch
     head = context["module_head"] or context["unstable"]
@@ -492,8 +524,8 @@ def render_issue(finding: dict[str, Any], merge: dict[str, Any], context: dict[s
         body = [
             marker, f"<!-- {MARKER_NAMESPACE}:occurrences:{occurrences} -->", "",
             f"**{finding['rule']}**: {finding['detail']}", "",
-            f"{finding['verdict'].capitalize()}: [{where}](https://github.com/{repo}/commit/{merge['sha']}) "
-            f"{merge['subject']}", "",
+            f"{finding['verdict'].capitalize()}: [{where}]({_pr_url(merge)}) {merge['subject']} "
+            f"(commit [`{merge['sha'][:12]}`]({commit}))", "",
             "| Build | Commit | Failed |", "|---|---|---|",
             *(f"| {name} | `{sha[:12]}` | {'yes' if failed else 'no'} |" for name, sha, failed in rows), "",
             f"Reproduce: `{reproduce}`. The test's files: {context['tests_url']}", "",
@@ -506,7 +538,7 @@ def render_issue(finding: dict[str, Any], merge: dict[str, Any], context: dict[s
             f"**Since:** {finding['verdict']}", "", "**Reproduce:**", "", "```",
             *(steps or [reproduce]), "```", "", "---", "*Filed by valkey-ci-agent's fuzzer walk*",
         ]
-        comment = (f"Seen again testing [{where}](https://github.com/{repo}/commit/{merge['sha']}) on "
+        comment = (f"Seen again testing [{where}]({_pr_url(merge)}) on "
                    f"`{head[:12]}`: {finding['verdict']}. The test's files: {context['tests_url']}")
         return IssueContent(title=title, body="\n".join(body)[:65000], comment=comment)
     return render
@@ -673,7 +705,7 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
         hunted = view(test, doc, "unstable", seed)
         if first["reached"] and hunted.get("reason") == UNREACHED:
             rerun = view(test, doc, "unstable", seed, again=True)
-            found.append({"rule": "regressed-fix", "detail": f"regressed fix: the change of {repo} {pr} no longer "
+            found.append({"rule": "regressed-fix", "detail": f"regressed fix: the change of {_where(merge)} no longer "
                           f"shows on {heads[repo][:12]}", "lines": [], "seed": seed,
                           "fingerprint": compute_fingerprint(namespace=("fuzzer-walk", "regressed-fix", repo,
                                                                         merge["sha"]), shapes=[]),
@@ -712,7 +744,7 @@ def initial_state() -> dict[str, Any]:
 
 def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> dict[str, Any]:
     """The state's line for a merge done."""
-    entry = {key: merge.get(key) for key in ("repo", "pr", "subject")}
+    entry = {key: merge.get(key) for key in ("repo", "pr", "pr_repo", "subject")}
     entry["at"] = now
     if result is None:
         return {**entry, "outcome": "no-code-change"}
@@ -785,8 +817,9 @@ def progress(state: dict[str, Any], now: datetime) -> str:
         return datetime.fromisoformat(entry["at"]) >= now - timedelta(days=days)
 
     def name(sha: str, entry: dict[str, Any]) -> str:
-        label = f"{entry['repo']}{'#' + str(entry['pr']) if entry.get('pr') else ' ' + sha[:12]}"
-        return f"[{label}]({entry['folder']}/)" if entry.get("folder") else label
+        merge = {**entry, "sha": sha}
+        tests = f" ([tests]({entry['folder']}/))" if entry.get("folder") else ""
+        return f"[{_where(merge)}]({_pr_url(merge)}){tests}"
 
     def spend(days: float | None) -> str:
         return f"${sum(float(e.get('cost_usd') or 0) for e in done.values() if days is None or since(e, days)):.2f}"

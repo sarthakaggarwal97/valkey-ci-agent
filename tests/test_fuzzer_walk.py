@@ -82,7 +82,7 @@ def test_the_first_run_starts_at_the_head_and_walks_back_to_the_first_commit(jso
     planned = plan({JSON: json_repo}, initial_state(), 2)
     shas = _shas(json_repo)
     assert _jobs(planned) == [5, 4]
-    assert planned["merges"][0] == {"repo": JSON, "sha": shas[0], "parent": shas[1], "pr": 5,
+    assert planned["merges"][0] == {"repo": JSON, "sha": shas[0], "parent": shas[1], "pr": 5, "pr_repo": JSON,
                                     "subject": "Fix JSON.ARR (#5)", "date": planned["merges"][0]["date"],
                                     "name": "valkey-json", "deps": ""}
     pointer = planned["repos"][JSON]
@@ -105,7 +105,7 @@ def test_new_merges_come_first_oldest_first_then_retries_then_the_backlog(json_r
     shas = _shas(json_repo)
     state = initial_state()
     state["repos"][JSON] = {"head": shas[0], "cursor": shas[2], "end": shas[-1]}
-    retry = {"repo": JSON, "sha": "f" * 40, "parent": "e" * 40, "pr": 9, "subject": "s", "date": "d",
+    retry = {"repo": JSON, "sha": "f" * 40, "parent": "e" * 40, "pr": 9, "pr_repo": JSON, "subject": "s", "date": "d",
              "attempts": 1, "error": "x"}
     state["failed"]["f" * 40] = retry
     _commit(json_repo, "Fix JSON.MSET (#6)", "src/e.c", 6)
@@ -157,8 +157,9 @@ def test_a_merge_of_docs_ci_or_tests_changes_no_code(paths, repo, expected):
 
 
 def _merge(**fields) -> dict:
-    return {"repo": walk.VALKEY_REPO, "sha": "b" * 40, "parent": "a" * 40, "pr": 4716, "subject": "Fix LSET (#4716)",
-            "date": "2026-11-01", **fields}
+    repo = fields.get("repo", walk.VALKEY_REPO)
+    return {"repo": repo, "sha": "b" * 40, "parent": "a" * 40, "pr": 4716, "pr_repo": repo,
+            "subject": "Fix LSET (#4716)", "date": "2026-11-01", **fields}
 
 
 def test_tests_are_kept_by_repository_pr_and_short_sha():
@@ -180,7 +181,8 @@ def test_the_state_marks_done_retries_and_gives_up():
 
     assert state["repos"] == {walk.VALKEY_REPO: {"head": "h"}}
     assert state["done"][ok["sha"]]["outcome"] == "tested" and state["done"][ok["sha"]]["folder"] == merge_folder(ok)
-    assert state["done"][skipped["sha"]] == {"repo": walk.VALKEY_REPO, "pr": 7, "subject": "Fix LSET (#4716)",
+    assert state["done"][skipped["sha"]] == {"repo": walk.VALKEY_REPO, "pr": 7, "pr_repo": walk.VALKEY_REPO,
+                                             "subject": "Fix LSET (#4716)",
                                              "at": NOW, "outcome": "no-code-change"}
     # A run that failed counts an attempt; a job that left nothing does not.
     assert (state["failed"][failed["sha"]]["attempts"], state["failed"][died["sha"]]["attempts"]) == (1, 0)
@@ -226,7 +228,8 @@ def test_record_keeps_the_tests_of_the_merges_done(tmp_path):
     assert not (state_dir / merge_folder(failed)).exists()
     state = json.loads((state_dir / "walk-state.json").read_text())
     assert ok["sha"] in state["done"] and failed["sha"] in state["failed"]
-    assert "[valkey-io/valkey#4716](tests/valkey/4716-bbbbbbbbb/)" in (state_dir / "PROGRESS.md").read_text()
+    assert ("[valkey-io/valkey#4716](https://github.com/valkey-io/valkey/pull/4716) "
+            "([tests](tests/valkey/4716-bbbbbbbbb/))") in (state_dir / "PROGRESS.md").read_text()
 
 
 def test_progress_shows_each_repository_the_last_run_totals_and_retries():
@@ -240,9 +243,10 @@ def test_progress_shows_each_repository_the_last_run_totals_and_retries():
 
     assert "| valkey-io/valkey | 2 | 41 | #1200 (2025-01-02) | 2 | 0.3 |" in text
     assert "[2026-11-04T12:00:00+00:00](https://run): 3 merge(s) tested" in text
-    assert ("- [valkey-io/valkey#4716](tests/valkey/4716-bbbbbbbbb/): Fix LSET (#4716): 2 of 3 test(s) reached the "
+    assert ("- [valkey-io/valkey#4716](https://github.com/valkey-io/valkey/pull/4716) "
+            "([tests](tests/valkey/4716-bbbbbbbbb/)): Fix LSET (#4716): 2 of 3 test(s) reached the "
             "change; [crash, introduced by #4716](https://x/issues/1)") in text
-    assert "- valkey-io/valkey#6: to retry, the job left no result" in text
+    assert "- [valkey-io/valkey#6](https://github.com/valkey-io/valkey/pull/6): to retry, the job left no result" in text
     assert "- Merges whose tests reached the change: 1 of 2 tested (50%)" in text
     assert "- Recall: 1 parents flagged of 1 fix merges" in text
     assert "- Claude: $1.75 in the last 24 hours, $1.75 in the last 7 days, $1.75 in all" in text
@@ -337,10 +341,12 @@ required_evidence: [{evidence_id: valkey.command.sequence, source: compared}]
 """
 
 
-def test_the_template_turns_every_check_on_where_a_sequence_compares_with_another_build():
+def test_the_template_turns_every_check_on_where_a_sequence_compares_two_builds():
     doc = yaml.safe_load(with_checks(EXPERIMENT))
     assert CHECKS == {"variants": True, "replica": True, "acl": True, "concurrency": 4, "compat": True}
-    assert [c["config"].get("checks") for c in doc["components"]] == [CHECKS, None, None]
+    # A module's two builds load into one Valkey: every check but compat, which compares two Valkey builds.
+    module_checks = {"variants": True, "replica": True, "acl": True, "concurrency": 4}
+    assert [c["config"].get("checks") for c in doc["components"]] == [CHECKS, None, module_checks]
     assert doc["components"][0]["config"]["compare_with"] == {"$ref": "artifacts.parent.binary"}
     # Off until valkey-fuzzer takes `checks`.
     assert walk.WITH_CHECKS is False
@@ -374,7 +380,8 @@ def test_an_issue_shows_each_build_the_scenario_and_an_upstream_draft():
     assert body.startswith("<!-- m -->\n<!-- valkey-ci-agent:fuzzer-walk:occurrences:1 -->")
     assert "| parent | `aaaaaaaaaaaa` | no |" in body and "| merge, valkey-io/valkey#4716 | `bbbbbbbbbbbb` | yes |" in body
     assert "| latest unstable (on Valkey unstable with ASan) | `cccccccccccc` | yes |" in body
-    assert "Introduced by #4716: [valkey-io/valkey#4716](https://github.com/valkey-io/valkey/commit/" in body
+    assert ("Introduced by #4716: [valkey-io/valkey#4716](https://github.com/valkey-io/valkey/pull/4716) Fix LSET "
+            "(#4716) (commit [`bbbbbbbbbbbb`](https://github.com/valkey-io/valkey/commit/" + "b" * 40 + "))") in body
     assert scenario in body and "crashed by signal: 11" in body
     draft = body.split("### Upstream report (draft)")[1]
     assert "**Title:** crash: signal 11 in lsetCommand" in draft
@@ -512,3 +519,37 @@ def test_the_workflow_walks_each_merge_in_its_own_job_and_records_the_run():
     assert all(job["permissions"].get("contents") == "read" for name, job in jobs.items() if name != "record")
     push = next(s for s in jobs["record"]["steps"] if s.get("name") == "Push the state")["run"]
     assert 'HEAD:walk-state' in push and '"${GITHUB_REPOSITORY}" != valkey-io/*' in push
+
+
+def test_merges_before_the_fork_name_their_redis_pull_requests(tmp_path):
+    repo = _repo(tmp_path, "valkey", [("Base (#12477)", "src/a.c"), ("Redis fix (#13154)", "src/b.c")])
+    _commit(repo, "A single commit to get stuff building", "src/c.c", 2)
+    fork = _shas(repo)[0]
+    _commit(repo, "Fix LSET (#4716)", "src/d.c", 3)
+    history = {m["pr"] or m["subject"]: m for m in _with_fork(fork, lambda: walk.first_parent(repo, walk.VALKEY_REPO))}
+    assert history[4716]["pr_repo"] == walk.VALKEY_REPO
+    assert history["A single commit to get stuff building"]["pr_repo"] == walk.VALKEY_REPO
+    assert (history[13154]["pr_repo"], history[12477]["pr_repo"]) == ("redis/redis", "redis/redis")
+
+    redis = _merge(pr=13154, pr_repo="redis/redis", subject="Redis fix (#13154)")
+    assert walk._short(redis) == "redis/redis#13154" and walk._short(_merge()) == "#4716"
+    finding = {"rule": "crash", "detail": "crash: x", "lines": [], "verdict": "predates redis/redis#13154",
+               "builds": {"parent": True, "merge": True, "unstable": True}}
+    scenario = "seed: 1\nexperiment: {id: valkey.forkless-save}\ndeployment: {mode: standalone}\n"
+    context = {"doc": yaml.safe_load(scenario), "scenario": scenario, "experiment": "", "experiments": {},
+               "module": None, "unstable": "c" * 40, "module_head": "", "tests_url": "u"}
+    body = render_issue(finding, redis, context)("<!-- m -->", 1).body
+    assert "Predates redis/redis#13154: [redis/redis#13154](https://github.com/redis/redis/pull/13154)" in body
+    assert "| merge, redis/redis#13154 |" in body
+    state = update(initial_state(), {"merges": [redis], "skipped": [], "repos": {}}, [_result(redis)], now=NOW)
+    assert "- [redis/redis#13154](https://github.com/redis/redis/pull/13154) ([tests](tests/valkey/13154-bbbbbbbbb/))" \
+        in progress(state, datetime(2026, 11, 4, 18, tzinfo=timezone.utc))
+
+
+def _with_fork(fork, call):
+    saved = walk.VALKEY_FORK
+    walk.VALKEY_FORK = fork
+    try:
+        return call()
+    finally:
+        walk.VALKEY_FORK = saved
