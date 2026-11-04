@@ -960,7 +960,7 @@ def _analyze_change(files, monkeypatch, claude=_claude_down, *, diff: str | None
                             artifact_name="fuzzer-batch-5", change="valkey-io/valkey#4823, merged as e50b62d0b")
 
 
-_NO_CHANGE_RUNS = {"reached": 0, "unreached": 0, "unexplained": 0, "unvetted": 0}
+_NO_CHANGE_RUNS = {"reached": 0, "unreached": 0, "unexplained": 0, "disputed": 0, "unvetted": 0}
 
 
 def test_a_batch_without_change_runs_counts_none(monkeypatch):
@@ -981,6 +981,18 @@ def test_an_unreached_change_is_no_finding_but_is_counted(monkeypatch):
         LSET, "proposed.lset", "unreached", "lset",
     )
     assert entry["evidence"]["reached"] == [] and "commands" not in entry
+
+
+def test_an_expectation_both_builds_break_alike_is_no_finding_but_is_counted(monkeypatch):
+    calls = []
+    report = _commands_report("ERROR", reason="expect-disputed", commands=[2])
+    analysis = _analyze_change(_pr_batch(report), monkeypatch,
+                               claude=lambda *a, **kw: calls.append(1) or {})
+    assert LSET_KEY not in {f.signature_key for f in analysis.findings}
+    assert len(calls) == 3  # only the fixture's own signatures
+    assert analysis.change_runs == {**_NO_CHANGE_RUNS, "disputed": 1}
+    (entry,) = analysis.recorded
+    assert (entry["run"], entry["outcome"], entry["commands"]) == (LSET, "disputed", [2])
 
 
 def test_an_unexplained_difference_without_the_diff_is_recorded_not_triaged(monkeypatch):

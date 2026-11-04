@@ -123,7 +123,8 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
     "fuzzer_proposal_readonly": AgentProfile(
         name="fuzzer_proposal_readonly",
         allowed_tools="Read,Grep,Glob",
-        timeout=1800,
+        # A module change, read against its own source and the fuzzer's, ran past 30 minutes twice.
+        timeout=3000,
         effort="high",
         max_turns=200,
         writes_allowed=False,

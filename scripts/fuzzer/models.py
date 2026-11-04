@@ -28,8 +28,9 @@ class ChangeOutcome:
 
     `reason` is the component's ``diagnostics.reason``: ``unreached-change``
     (a command marked as changed replied the same on the merge commit and
-    its parent) or ``unexplained-difference`` (an unmarked command replied
-    differently; `commands` names them), or None. `sequence` is its
+    its parent), ``unexplained-difference`` (an unmarked command replied
+    differently; `commands` names them) or ``expect-disputed`` (an expect
+    both builds violate alike; `commands` names them), or None. `sequence` is its
     ``valkey.command.sequence`` evidence: both builds' replies, the
     ``reached`` and ``unexplained`` command indexes and ``dropped_config``.
     """
@@ -154,7 +155,7 @@ class FuzzerBatchAnalysis:
     # reaching it, showed an unexplained difference, and how many FAILs of a
     # proposed experiment were withheld as unvetted.
     change_runs: dict[str, int] = field(
-        default_factory=lambda: {"reached": 0, "unreached": 0, "unexplained": 0, "unvetted": 0},
+        default_factory=lambda: {"reached": 0, "unreached": 0, "unexplained": 0, "disputed": 0, "unvetted": 0},
     )
     # The runs the monitor judged but did not file as findings (an unreached
     # change, an intended or untriaged difference, an unvetted FAIL), with

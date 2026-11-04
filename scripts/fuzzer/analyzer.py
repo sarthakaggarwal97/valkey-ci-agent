@@ -123,6 +123,8 @@ _CRASH_TITLES = frozenset({"Node crash or assertion", "Sanitizer failure", "Segf
 # diagnostics.reason and its evidence (see models.ChangeOutcome).
 UNREACHED = "unreached-change"
 UNEXPLAINED = "unexplained-difference"
+# An expect both builds violate alike: about behaviour the change did not touch, the test's own mistake.
+DISPUTED = "expect-disputed"
 SEQUENCE_EVIDENCE = "valkey.command.sequence"
 
 
@@ -308,7 +310,7 @@ def _change_outcome(report: dict[str, Any]) -> ChangeOutcome | None:
         if not isinstance(result, dict):
             continue
         diagnostics = _object(result.get("diagnostics"))
-        reason = diagnostics.get("reason") if diagnostics.get("reason") in (UNREACHED, UNEXPLAINED) else None
+        reason = diagnostics.get("reason") if diagnostics.get("reason") in (UNREACHED, UNEXPLAINED, DISPUTED) else None
         sequence = next(
             (e.get("value") for e in result.get("evidence") or []
              if isinstance(e, dict) and e.get("evidence_id") == SEQUENCE_EVIDENCE),
@@ -956,6 +958,11 @@ class FuzzerRunAnalyzer:
                     for member in readable:
                         _record(analysis, member, "unreached")
                     continue
+                if group.status == "ERROR" and reasons == {DISPUTED}:
+                    # An expectation both builds break alike: the test's, not the change's.
+                    for member in readable:
+                        _record(analysis, member, "disputed")
+                    continue
                 if group.status == "ERROR" and reasons == {UNEXPLAINED}:
                     findings += self._unexplained(base, batch, group, readable, budget, analysis)
                     continue
@@ -1162,6 +1169,8 @@ def _count_change_runs(batch: BatchFolder, analysis: FuzzerBatchAnalysis) -> Non
             analysis.change_runs["unreached"] += 1
         if run.report["status"] == "ERROR" and outcome.reason == UNEXPLAINED:
             analysis.change_runs["unexplained"] += 1
+        if run.report["status"] == "ERROR" and outcome.reason == DISPUTED:
+            analysis.change_runs["disputed"] += 1
 
 
 def _record(analysis: FuzzerBatchAnalysis, run: BatchRun, outcome: str, **fields: Any) -> None:
