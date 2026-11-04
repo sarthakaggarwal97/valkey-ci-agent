@@ -8,13 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       repository:
-        description: "The repository to walk, or all"
+        description: "The repository to walk"
         required: false
-        default: all
+        default: valkey
         type: choice
-        options: [all, valkey-io/valkey, valkey-io/valkey-json, valkey-io/valkey-search, valkey-io/valkey-bloom]
+        options: [valkey, valkey-json, valkey-search, valkey-bloom]
       max:
-        description: "Merges walked in the run, across the repositories, 1 to 256"
+        description: "Merges walked in the run, 1 to 256"
         required: false
         default: "20"
         type: string
@@ -28,7 +28,10 @@ jobs:
     permissions:
       actions: write
     steps:
-      - name: Start the walk on fuzzer-replay
+      - name: Start the walk of each repository on fuzzer-replay
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run fuzzer-walk.yml -R "${GITHUB_REPOSITORY}" --ref fuzzer-replay
+        run: |
+          for repository in valkey valkey-json valkey-search valkey-bloom; do
+            gh workflow run fuzzer-walk.yml -R "${GITHUB_REPOSITORY}" --ref fuzzer-replay -f repository="${repository}"
+          done
