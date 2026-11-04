@@ -1,16 +1,15 @@
 """Walk every merge of Valkey and its modules through the fuzzer, newest first, then every new one.
 
-``plan`` reads the walk's state and lists the merges a run processes: for
-each repository (valkey ``unstable`` and each module in
-:data:`~scripts.fuzzer.pr_batch.MODULES`), the merges after the forward
-head, oldest first, then the merges to retry, then backlog merges from the
-cursor back toward the end (valkey: where ``unstable`` left 7.2, a module:
-its first commit). The repositories' queues share the run's matrix, taken in
-turn. A merge that changes only docs, CI or tests is done without a job
-(``no-code-change``).
+A run walks one repository: valkey ``unstable`` or a module in
+:data:`~scripts.fuzzer.pr_batch.MODULES`, each with a state file of its own.
+``plan`` reads it and lists the merges the run processes: the merges after
+the forward head, oldest first, then the merges to retry, then backlog
+merges from the cursor back toward the end (valkey: where ``unstable`` left
+7.2, a module: its first commit). A merge that changes only docs, CI or
+tests is done without a job (``no-code-change``).
 
-``build`` builds one repository's head for the whole run: ``unstable`` with
-ASan and its tests/modules, or a module's default branch against it.
+``build`` builds a head for the whole run: ``unstable`` with ASan and its
+tests/modules, or a module's default branch against it.
 
 ``run`` processes one merge, in its own job: it builds the merge and its
 parent (for a module, both loaded into the run's ``unstable`` build), asks
@@ -23,8 +22,10 @@ reached the change at the merge but no longer does on ``unstable`` (a fix
 that regressed). The rest is recorded. Issues go to the fuzzer repository,
 one per signature: a repeat adds an occurrence.
 
-``update`` folds a run's results into the state, writes ``PROGRESS.md`` and
-copies each merge's proven tests beside them, under ``tests/``.
+``update`` folds a run's results into its repository's state on the state
+branch, copies each merge's proven tests beside it under ``tests/``,
+writes ``PROGRESS.md`` from every repository's state, and pushes, again
+from a fresh fetch when another repository's run pushed first.
 """
 
 from __future__ import annotations
@@ -81,8 +82,13 @@ VALKEY_BASE = "f4549d1cf4830c0584f8e41369a8628842a67aec"
 # #13154: the merges before it are Redis's, and their (#N) are redis/redis pull requests.
 VALKEY_FORK = "38632278fd06fe186f7707e4fa099f666d805547"
 REDIS_REPO = "redis/redis"
-REPOSITORIES = (VALKEY_REPO, *(f"valkey-io/{name}" for name in MODULES))
-STATE_FILE = "walk-state.json"
+# The repositories walked, by name: valkey-io/<name>.
+NAMES = ("valkey", *MODULES)
+STATE_BRANCH = "walk-state"
+# Each repository's state on the state branch: state/<name>.json.
+STATE_DIR = "state"
+# A push the state branch rejects (another repository's run pushed first) is redone this often.
+MAX_PUSHES = 5
 PROGRESS_FILE = "PROGRESS.md"
 RESULT_FILE = "result.json"
 TESTS_DIR = "tests"
@@ -119,6 +125,10 @@ def _git(repo_dir: Path, *args: str) -> str:
 
 def _name(repo: str) -> str:
     return repo.split("/")[-1]
+
+
+def _branch(repo: str) -> str:
+    return VALKEY_BRANCH if repo == VALKEY_REPO else MODULES[_name(repo)].branch
 
 
 def _pr_repo(merge: dict[str, Any]) -> str:
@@ -179,73 +189,65 @@ def no_code_change(paths: list[str], repo: str) -> bool:
     return not any(other(path) for path in paths)
 
 
-def plan(clones: dict[str, Path], state: dict[str, Any], max_jobs: int, walk: list[str] | None = None,
-         ) -> dict[str, Any]:
-    """The run's merges, the merges done without a job, and each repository's new pointers.
+def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey_head: str) -> dict[str, Any]:
+    """The run's merges, the merges done without a job, the repository's new pointer, and the heads the run
+    builds: the repository's, and for a module the Valkey ``unstable`` commit ``valkey_head`` it loads into.
 
-    ``clones`` maps each repository to a full clone with its default branch checked out; ``walk`` names the
-    ones walked (all by default), and the others give only their head. A repository the state does not know
-    yet starts at its head: the forward head and the backlog cursor both name the newest merge, so the walk
-    begins with it.
+    ``repo_dir`` is a full clone of ``repo`` with its default branch checked out. A repository the state does
+    not know yet starts at its head: the forward head and the backlog cursor both name the newest merge, so the
+    walk begins with it.
     """
-    walk = list(clones) if walk is None else walk
-    histories = {repo: first_parent(repo_dir, repo) for repo, repo_dir in clones.items()}
-    queues: dict[str, Any] = {}
-    pointers: dict[str, dict[str, Any]] = {}
-    for repo in walk:
-        history = histories[repo]
-        index = {merge["sha"]: i for i, merge in enumerate(history)}
-        end = VALKEY_BASE if repo == VALKEY_REPO else history[-1]["sha"]
-        pointer = pointers[repo] = dict(state["repos"].get(repo) or {
-            "head": history[0]["sha"], "cursor": history[0]["sha"], "end": end})
-        for key in ("head", "cursor", "end"):
-            if pointer[key] not in index:
-                raise ValueError(f"the walk's {key} of {repo}, {pointer[key]}, is not on its first-parent history")
-        new = [(i, "new") for i in reversed(range(index[pointer["head"]]))]
-        backlog = [(i, "backlog") for i in range(index[pointer["cursor"]], index[pointer["end"]])]
-        retries = [(entry, "retry") for entry in state["failed"].values() if entry["repo"] == repo]
-        queues[repo] = iter([*new, *retries, *backlog])
-
+    history = first_parent(repo_dir, repo)
+    index = {merge["sha"]: i for i, merge in enumerate(history)}
+    pointer = dict(state["pointer"] or {"head": history[0]["sha"], "cursor": history[0]["sha"],
+                                        "end": VALKEY_BASE if repo == VALKEY_REPO else history[-1]["sha"]})
+    for key in ("head", "cursor", "end"):
+        if pointer[key] not in index:
+            raise ValueError(f"the walk's {key} of {repo}, {pointer[key]}, is not on its first-parent history")
+    new = [(i, "new") for i in reversed(range(index[pointer["head"]]))]
+    retries = [(entry, "retry") for entry in state["failed"].values()]
+    backlog = [(i, "backlog") for i in range(index[pointer["cursor"]], index[pointer["end"]])]
     jobs: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    for item, kind in [*new, *retries, *backlog]:
+        if len(jobs) >= max_jobs:
+            break
+        if kind == "retry":
+            jobs.append({key: item.get(key) for key in MERGE_KEYS})
+            continue
+        merge = history[item]
+        if kind == "new":
+            pointer["head"] = merge["sha"]
+        else:
+            pointer["cursor"] = history[item + 1]["sha"]
+        if merge["sha"] in state["done"] or merge["sha"] in state["failed"]:
+            continue
+        if no_code_change(_git(repo_dir, "diff", "--name-only", merge["parent"], merge["sha"]).split(), repo):
+            skipped.append(merge)
+        else:
+            jobs.append(merge)
+    cursor = history[index[pointer["cursor"]]]
+    pointer.update(remaining=index[pointer["end"]] - index[pointer["cursor"]], cursor_pr=cursor["pr"],
+                   cursor_date=cursor["date"])
+    # The workflow's names for the job's builds and cache.
+    extra = {"name": _name(repo), "deps": MODULES[_name(repo)].deps if module_repository(repo) else ""}
+    heads = {repo: history[0]["sha"]} if repo == VALKEY_REPO else {VALKEY_REPO: valkey_head, repo: history[0]["sha"]}
+    return {"repo": repo, "merges": [{**job, **extra} for job in jobs], "skipped": skipped, "pointer": pointer,
+            "heads": heads}
 
-    def next_job(repo: str) -> dict[str, Any] | None:
-        history, pointer = histories[repo], pointers[repo]
-        for item, kind in queues[repo]:
-            if kind == "retry":
-                return {key: item.get(key) for key in MERGE_KEYS}
-            merge = history[item]
-            if kind == "new":
-                pointer["head"] = merge["sha"]
-            else:
-                pointer["cursor"] = history[item + 1]["sha"]
-            if merge["sha"] in state["done"] or merge["sha"] in state["failed"]:
-                continue
-            if no_code_change(_git(clones[repo], "diff", "--name-only", merge["parent"], merge["sha"]).split(), repo):
-                skipped.append(merge)
-                continue
-            return merge
-        return None
 
-    live = list(walk)
-    while live and len(jobs) < max_jobs:
-        for repo in list(live):
-            if len(jobs) >= max_jobs:
-                break
-            merge = next_job(repo)
-            if merge is None:
-                live.remove(repo)
-            else:
-                # The workflow's names for the job's builds and cache.
-                jobs.append({**merge, "name": _name(repo),
-                             "deps": MODULES[_name(repo)].deps if module_repository(repo) else ""})
-    for repo, pointer in pointers.items():
-        index = {merge["sha"]: i for i, merge in enumerate(histories[repo])}
-        cursor = histories[repo][index[pointer["cursor"]]]
-        pointer.update(remaining=index[pointer["end"]] - index[pointer["cursor"]], cursor_pr=cursor["pr"],
-                       cursor_date=cursor["date"])
-    heads = {repo: history[0]["sha"] for repo, history in histories.items()}
-    return {"merges": jobs, "skipped": skipped, "repos": pointers, "heads": heads}
+def clone(repo: str, dest: Path) -> Path:
+    """A clone of ``repo``'s default branch with its whole history, without the files' contents."""
+    subprocess.run(["git", "clone", "-q", "--filter=blob:none", "--single-branch", "--branch", _branch(repo),
+                    f"https://github.com/{repo}.git", str(dest)], check=True, capture_output=True, text=True)
+    return dest
+
+
+def remote_head(repo: str) -> str:
+    """The commit ``repo``'s default branch points at."""
+    out = subprocess.run(["git", "ls-remote", "--exit-code", f"https://github.com/{repo}.git",
+                          f"refs/heads/{_branch(repo)}"], check=True, capture_output=True, text=True).stdout
+    return out.split()[0]
 
 
 # --- Builds --------------------------------------------------------------------
@@ -735,8 +737,8 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
 # --- State ---------------------------------------------------------------------
 
 
-def initial_state() -> dict[str, Any]:
-    return {"repos": {}, "done": {}, "failed": {}, "last_run": {}}
+def initial_state(repo: str) -> dict[str, Any]:
+    return {"repo": repo, "pointer": {}, "done": {}, "failed": {}, "last_run": {}}
 
 
 def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> dict[str, Any]:
@@ -760,11 +762,11 @@ def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> 
 
 def update(state: dict[str, Any], planned: dict[str, Any], results: list[dict[str, Any]], *, now: str,
            run_url: str = "") -> dict[str, Any]:
-    """The state after a run: its pointers, the merges done (and those with no code change), and the merges
+    """The state after a run: its pointer, the merges done (and those with no code change), and the merges
     to retry. A merge whose run failed counts an attempt, and after MAX_ATTEMPTS it is done with its error; one
     whose job left no result (it never ran, or died) counts a miss, and is given up after MAX_MISSES."""
     state = copy.deepcopy(state)
-    state["repos"].update(planned["repos"])
+    state["pointer"] = planned["pointer"]
     by_sha = {result["sha"]: result for result in results}
     cost = 0.0
     for merge in planned["skipped"]:
@@ -805,10 +807,10 @@ def dump_state(state: dict[str, Any]) -> str:
     return "{\n" + ",\n".join(parts) + "\n}\n"
 
 
-def progress(state: dict[str, Any], now: datetime) -> str:
-    """PROGRESS.md, from the state alone."""
-    done = state["done"]
-    failed = state["failed"]
+def progress(states: list[dict[str, Any]], now: datetime) -> str:
+    """PROGRESS.md, from every repository's state alone."""
+    done = {sha: entry for state in states for sha, entry in state["done"].items()}
+    failed = {sha: entry for state in states for sha, entry in state["failed"].items()}
 
     def since(entry: dict[str, Any], days: float) -> bool:
         return datetime.fromisoformat(entry["at"]) >= now - timedelta(days=days)
@@ -821,36 +823,38 @@ def progress(state: dict[str, Any], now: datetime) -> str:
     def spend(days: float | None) -> str:
         return f"${sum(float(e.get('cost_usd') or 0) for e in done.values() if days is None or since(e, days)):.2f}"
 
+    states = sorted(states, key=lambda state: state["repo"])
     lines = ["# Fuzzer walk", "", f"Updated {now.isoformat(timespec='minutes')}.", "",
              "| Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |",
              "|---|---|---|---|---|---|"]
-    for repo, pointer in sorted(state["repos"].items()):
-        mine = [e for e in done.values() if e["repo"] == repo]
-        retries = sum(1 for e in failed.values() if e["repo"] == repo)
-        cursor = f"#{pointer['cursor_pr']}" if pointer.get("cursor_pr") else pointer["cursor"][:12]
-        lines.append(f"| {repo} | {len(mine)} | {pointer.get('remaining', 0) + retries} | {cursor} "
-                     f"({pointer.get('cursor_date', '?')}) | {sum(since(e, 1) for e in mine)} | "
+    for state in states:
+        mine, pointer = list(state["done"].values()), state["pointer"]
+        cursor = f"#{pointer['cursor_pr']}" if pointer.get("cursor_pr") else pointer.get("cursor", "?")[:12]
+        lines.append(f"| {state['repo']} | {len(mine)} | {pointer.get('remaining', 0) + len(state['failed'])} | "
+                     f"{cursor} ({pointer.get('cursor_date', '?')}) | {sum(since(e, 1) for e in mine)} | "
                      f"{sum(since(e, 7) for e in mine) / 7:.1f} |")
-    last = state.get("last_run") or {}
-    lines += ["", "## Last run", ""]
-    if last:
-        lines += [f"[{last['at']}]({last['url']}): {len(last['merges'])} merge(s) tested, "
-                  f"{last.get('skipped', 0)} without a code change.", ""]
-    for sha in last.get("merges", []):
-        if sha in failed:
-            lines.append(f"- {name(sha, failed[sha])}: to retry, {failed[sha]['error'][:200]}")
+    lines += ["", "## Last runs"]
+    for state in states:
+        last = state.get("last_run") or {}
+        if not last:
             continue
-        entry = done.get(sha)
-        if entry is None:
-            continue
-        what = f"{entry.get('subject', '')}: "
-        if entry["outcome"] == "tested":
-            what += f"{entry['proven']} of {entry['proposed']} test(s) reached the change"
-            what += "".join(f"; [{f['rule']}, {f['verdict']}]({f['issue']})" if f.get("issue")
-                            else f"; {f['rule']}, {f['verdict']} (recorded)" for f in entry.get("findings", []))
-        else:
-            what += f"{entry['outcome']}: {entry.get('reason', '')}"[:300]
-        lines.append(f"- {name(sha, entry)}: {what}")
+        lines += ["", f"### {state['repo']}", "", f"[{last['at']}]({last['url']}): {len(last['merges'])} merge(s) "
+                  f"tested, {last.get('skipped', 0)} without a code change.", ""]
+        for sha in last["merges"]:
+            if sha in failed:
+                lines.append(f"- {name(sha, failed[sha])}: to retry, {failed[sha]['error'][:200]}")
+                continue
+            entry = done.get(sha)
+            if entry is None:
+                continue
+            what = f"{entry.get('subject', '')}: "
+            if entry["outcome"] == "tested":
+                what += f"{entry['proven']} of {entry['proposed']} test(s) reached the change"
+                what += "".join(f"; [{f['rule']}, {f['verdict']}]({f['issue']})" if f.get("issue")
+                                else f"; {f['rule']}, {f['verdict']} (recorded)" for f in entry.get("findings", []))
+            else:
+                what += f"{entry['outcome']}: {entry.get('reason', '')}"[:300]
+            lines.append(f"- {name(sha, entry)}: {what}")
     tested = [e for e in done.values() if e["outcome"] == "tested"]
     fixes = [e for e in tested if _FIX_RE.search(e.get("subject") or "")]
     issues = sorted({f["issue"] for e in done.values() for f in e.get("findings", []) if f.get("issue")})
@@ -867,21 +871,54 @@ def progress(state: dict[str, Any], now: datetime) -> str:
     return "\n".join(lines) + "\n"
 
 
-def record(state_dir: Path, planned: dict[str, Any], results_dir: Path, *, now: datetime, run_url: str) -> None:
-    """Fold a run into the state branch's checkout: the state, PROGRESS.md and the done merges' tests."""
-    path = state_dir / STATE_FILE
-    state = json.loads(path.read_text()) if path.is_file() else initial_state()
+def record(branch: Path, planned: dict[str, Any], results_dir: Path, *, now: datetime, run_url: str) -> None:
+    """Fold a run into the state branch's checkout: its repository's state and the done merges' tests, then
+    PROGRESS.md from every repository's state."""
+    path = branch / STATE_DIR / f"{_name(planned['repo'])}.json"
+    state = json.loads(path.read_text()) if path.is_file() else initial_state(planned["repo"])
     results = []
     for result_file in sorted(results_dir.glob(f"{TESTS_DIR}/*/*/{RESULT_FILE}")):
         results.append(json.loads(result_file.read_text()))
     state = update(state, planned, results, now=now.isoformat(timespec="seconds"), run_url=run_url)
     for result in results:
         if result["sha"] in state["done"] and not result.get("error"):
-            target = state_dir / merge_folder(result)
+            target = branch / merge_folder(result)
             shutil.rmtree(target, ignore_errors=True)
             shutil.copytree(results_dir / merge_folder(result), target)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(dump_state(state), encoding="utf-8")
-    (state_dir / PROGRESS_FILE).write_text(progress(state, now), encoding="utf-8")
+    states = [json.loads(p.read_text()) for p in sorted((branch / STATE_DIR).glob("*.json"))]
+    (branch / PROGRESS_FILE).write_text(progress(states, now), encoding="utf-8")
+
+
+def publish(remote: str, work: Path, apply: Callable[[Path], None], message: str) -> None:
+    """Commit what ``apply`` does to a fresh checkout of the state branch at ``remote`` and push it. A push
+    rejected because the branch moved (another repository's run pushed first) starts again from a new fetch,
+    up to MAX_PUSHES times. Without the branch, the first push creates it."""
+    for attempt in range(1, MAX_PUSHES + 1):
+        shutil.rmtree(work, ignore_errors=True)
+        work.mkdir(parents=True)
+        _git(work, "init", "-q")
+        listed = subprocess.run(["git", "-C", str(work), "ls-remote", "--exit-code", "--heads", remote, STATE_BRANCH],
+                                capture_output=True, text=True)
+        if listed.returncode == 0:
+            _git(work, "fetch", "-q", "--depth", "1", remote, STATE_BRANCH)
+            _git(work, "checkout", "-q", "-B", STATE_BRANCH, "FETCH_HEAD")
+        elif listed.returncode == 2:
+            _git(work, "checkout", "-q", "--orphan", STATE_BRANCH)
+        else:
+            raise RuntimeError(f"cannot read {remote}: {listed.stderr.strip()[:300]}")
+        apply(work)
+        _git(work, "add", "-A")
+        _git(work, "-c", "user.name=github-actions[bot]",
+             "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com", "commit", "-q", "-m", message)
+        pushed = subprocess.run(["git", "-C", str(work), "push", "-q", remote, f"HEAD:{STATE_BRANCH}"],
+                                capture_output=True, text=True)
+        if pushed.returncode == 0:
+            return
+        logger.warning("Push %d of %d to %s was rejected: %s", attempt, MAX_PUSHES, STATE_BRANCH,
+                       pushed.stderr.strip()[:300])
+    raise RuntimeError(f"{STATE_BRANCH} rejected {MAX_PUSHES} pushes")
 
 
 # --- Command line --------------------------------------------------------------
@@ -890,15 +927,14 @@ def record(state_dir: Path, planned: dict[str, Any], results_dir: Path, *, now: 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
-    p = commands.add_parser("plan", help="list the run's merges")
-    p.add_argument("--state", type=Path, help="walk-state.json; absent means a walk that starts now")
-    p.add_argument("--clone", action="append", default=[], metavar="OWNER/NAME=DIR",
-                   help="a full clone of a repository on its default branch; one per repository walked")
-    p.add_argument("--walk", default="all", help="the repository to walk, or all; the others give only their head")
-    p.add_argument("--max", type=int, default=20, help="jobs in the run, across the repositories")
+    p = commands.add_parser("plan", help="list the run's merges of one repository")
+    p.add_argument("--repo", required=True, choices=NAMES, help="the repository walked, by name")
+    p.add_argument("--state", type=Path, required=True, help="its state file; absent means a walk that starts now")
+    p.add_argument("--work", type=Path, required=True, help="where the repository is cloned")
+    p.add_argument("--max", type=int, default=20, help="jobs in the run")
     p.add_argument("--out", type=Path, required=True)
-    b = commands.add_parser("build", help="build a repository's head for the run")
-    b.add_argument("--repo", required=True, choices=REPOSITORIES)
+    b = commands.add_parser("build", help="build a head for the run")
+    b.add_argument("--repo", required=True, choices=NAMES)
     b.add_argument("--sha", required=True)
     b.add_argument("--valkey-sha", default="", help="for a module: the Valkey commit it builds against")
     b.add_argument("--work", type=Path, required=True)
@@ -915,8 +951,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--tests-url", required=True, help="where the state branch keeps the tests, for the issues")
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--work", type=Path, required=True)
-    u = commands.add_parser("update", help="fold a run into the state branch's checkout")
-    u.add_argument("--state-dir", type=Path, required=True)
+    u = commands.add_parser("update", help="fold a run into the state branch and publish it")
+    u.add_argument("--remote", required=True, help="the repository whose state branch holds the walk's state")
+    u.add_argument("--work", type=Path, required=True, help="where the state branch is checked out")
     u.add_argument("--plan", type=Path, required=True)
     u.add_argument("--results", type=Path, required=True, help="the jobs' tests folders, merged")
     u.add_argument("--run-url", default="")
@@ -924,30 +961,28 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging()
 
     if args.command == "plan":
-        clones = {}
-        for item in args.clone:
-            repo, _, directory = item.partition("=")
-            if repo not in REPOSITORIES or not directory:
-                parser.error(f"--clone takes OWNER/NAME=DIR for one of {', '.join(REPOSITORIES)}, got {item!r}")
-            clones[repo] = Path(directory)
-        walk = list(clones) if args.walk == "all" else [args.walk]
-        if VALKEY_REPO not in clones or not set(walk) <= set(clones) or not 1 <= args.max <= MAX_JOBS:
-            parser.error(f"give a --clone of {VALKEY_REPO} and of each repository walked, and --max from 1 to "
-                         f"{MAX_JOBS}")
-        state = json.loads(args.state.read_text()) if args.state and args.state.is_file() else initial_state()
-        planned = plan(clones, state, args.max, walk)
+        if not 1 <= args.max <= MAX_JOBS:
+            parser.error(f"--max must be 1 to {MAX_JOBS}")
+        repo = f"{VALKEY_REPO.split('/')[0]}/{args.repo}"
+        state = json.loads(args.state.read_text()) if args.state.is_file() else initial_state(repo)
+        planned = plan(clone(repo, args.work / args.repo), repo, state, args.max,
+                       "" if repo == VALKEY_REPO else remote_head(VALKEY_REPO))
         args.out.write_text(json.dumps(planned, indent=2), encoding="utf-8")
-        log_outcome(logger, logging.INFO, f"{len(planned['merges'])} merge(s) to walk, "
+        log_outcome(logger, logging.INFO, f"{len(planned['merges'])} merge(s) of {repo} to walk, "
                                           f"{len(planned['skipped'])} without a code change")
         return 0
     if args.command == "build":
-        build_head(args.repo, args.sha, args.valkey_sha, args.work, args.out)
-        log_outcome(logger, logging.INFO, f"Built {args.repo} at {args.sha} into {args.out}")
+        repo = f"{VALKEY_REPO.split('/')[0]}/{args.repo}"
+        build_head(repo, args.sha, args.valkey_sha, args.work, args.out)
+        log_outcome(logger, logging.INFO, f"Built {repo} at {args.sha} into {args.out}")
         return 0
     if args.command == "update":
-        record(args.state_dir, json.loads(args.plan.read_text()), args.results, now=datetime.now(timezone.utc),
-               run_url=args.run_url)
-        log_outcome(logger, logging.INFO, f"Updated the walk's state in {args.state_dir}")
+        planned = json.loads(args.plan.read_text())
+        now = datetime.now(timezone.utc)
+        publish(args.remote, args.work,
+                lambda branch: record(branch, planned, args.results, now=now, run_url=args.run_url),
+                f"Walk {planned['repo']}: {len(planned['merges'])} merge(s), {len(planned['skipped'])} without code")
+        log_outcome(logger, logging.INFO, f"Published the walk's state of {planned['repo']} on {STATE_BRANCH}")
         return 0
 
     token = os.environ.get("TARGET_TOKEN", "")

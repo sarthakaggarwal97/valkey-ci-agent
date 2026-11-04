@@ -78,70 +78,77 @@ def _jobs(planned: dict) -> list[int | None]:
     return [m["pr"] for m in planned["merges"]]
 
 
+UNSTABLE = "c" * 40
+
+
 def test_the_first_run_starts_at_the_head_and_walks_back_to_the_first_commit(json_repo):
-    planned = plan({JSON: json_repo}, initial_state(), 2)
+    planned = plan(json_repo, JSON, initial_state(JSON), 2, UNSTABLE)
     shas = _shas(json_repo)
-    assert _jobs(planned) == [5, 4]
+    assert _jobs(planned) == [5, 4] and planned["repo"] == JSON
     assert planned["merges"][0] == {"repo": JSON, "sha": shas[0], "parent": shas[1], "pr": 5, "pr_repo": JSON,
                                     "subject": "Fix JSON.ARR (#5)", "date": planned["merges"][0]["date"],
                                     "name": "valkey-json", "deps": ""}
-    pointer = planned["repos"][JSON]
+    pointer = planned["pointer"]
     assert (pointer["head"], pointer["cursor"], pointer["end"]) == (shas[0], shas[2], shas[-1])
     assert (pointer["remaining"], pointer["cursor_pr"]) == (3, 3)
-    assert planned["heads"] == {JSON: shas[0]}
+    # A module's merges load into Valkey unstable: the run builds both heads.
+    assert planned["heads"] == {walk.VALKEY_REPO: UNSTABLE, JSON: shas[0]}
 
     # The docs-only merge is done without a job; the backlog stops before the first commit.
-    state = update(initial_state(), planned, [], now=NOW)
+    state = update(initial_state(JSON), planned, [], now=NOW)
     state["done"].update({m["sha"]: {"repo": JSON} for m in planned["merges"]})
     state["failed"].clear()
-    rest = plan({JSON: json_repo}, state, 10)
+    rest = plan(json_repo, JSON, state, 10, UNSTABLE)
     assert _jobs(rest) == [2, 1]
     assert [m["pr"] for m in rest["skipped"]] == [3]
-    assert rest["repos"][JSON]["cursor"] == shas[-1] and rest["repos"][JSON]["remaining"] == 0
-    assert _jobs(plan({JSON: json_repo}, {**state, "repos": rest["repos"]}, 10)) == []
+    assert rest["pointer"]["cursor"] == shas[-1] and rest["pointer"]["remaining"] == 0
+    assert _jobs(plan(json_repo, JSON, {**state, "pointer": rest["pointer"]}, 10, UNSTABLE)) == []
 
 
 def test_new_merges_come_first_oldest_first_then_retries_then_the_backlog(json_repo):
     shas = _shas(json_repo)
-    state = initial_state()
-    state["repos"][JSON] = {"head": shas[0], "cursor": shas[2], "end": shas[-1]}
+    state = initial_state(JSON)
+    state["pointer"] = {"head": shas[0], "cursor": shas[2], "end": shas[-1]}
     retry = {"repo": JSON, "sha": "f" * 40, "parent": "e" * 40, "pr": 9, "pr_repo": JSON, "subject": "s", "date": "d",
              "attempts": 1, "error": "x"}
     state["failed"]["f" * 40] = retry
+    state["done"][shas[3]] = {"repo": JSON}
     _commit(json_repo, "Fix JSON.MSET (#6)", "src/e.c", 6)
     _commit(json_repo, "Fix JSON.TYPE (#7)", "src/f.c", 7)
-    planned = plan({JSON: json_repo}, state, 3)
-    assert _jobs(planned) == [6, 7, 9]
+    planned = plan(json_repo, JSON, state, 4, UNSTABLE)
+    # In the backlog, the docs-only #3 is skipped and the done #2 passed over.
+    assert _jobs(planned) == [6, 7, 9, 1]
+    assert [m["pr"] for m in planned["skipped"]] == [3]
     # The retry keeps only the merge's own fields.
     assert planned["merges"][2] == {**{k: retry[k] for k in walk.MERGE_KEYS}, "name": "valkey-json", "deps": ""}
-    assert planned["repos"][JSON]["head"] == _shas(json_repo)[0]
-    assert planned["repos"][JSON]["cursor"] == shas[2]
+    assert planned["pointer"]["head"] == _shas(json_repo)[0]
     # --max bounds the run: the head moves only past the new merges taken.
-    first = plan({JSON: json_repo}, state, 1)
-    assert _jobs(first) == [6] and first["repos"][JSON]["head"] == _shas(json_repo)[1]
+    first = plan(json_repo, JSON, state, 1, UNSTABLE)
+    assert _jobs(first) == [6] and first["pointer"]["head"] == _shas(json_repo)[1]
+    assert first["pointer"]["cursor"] == shas[2]
 
 
-def test_the_repositories_share_the_matrix_in_turn_and_skip_what_is_done(tmp_path, json_repo):
-    bloom = _repo(tmp_path, "valkey-bloom", [("Initial commit", "README"), ("Add BF.ADD (#10)", "src/lib.rs"),
-                                             ("Add BF.CARD (#11)", "src/card.rs"), ("CI (#12)", ".github/ci.yml")])
-    state = initial_state()
-    state["repos"][JSON] = {"head": _shas(json_repo)[0], "cursor": _shas(json_repo)[0], "end": _shas(json_repo)[-1]}
-    state["done"][_shas(json_repo)[1]] = {"repo": JSON}
-    planned = plan({JSON: json_repo, BLOOM: bloom}, state, 4)
-    assert [(m["repo"], m["pr"]) for m in planned["merges"]] == [(JSON, 5), (BLOOM, 11), (JSON, 2), (BLOOM, 10)]
-    assert [m["pr"] for m in planned["skipped"]] == [12, 3]
-    assert planned["merges"][1]["deps"] == "" and planned["merges"][1]["name"] == "valkey-bloom"
-    # Only the repositories walked move; the others give their head.
-    only = plan({JSON: json_repo, BLOOM: bloom}, state, 4, [BLOOM])
-    assert {m["repo"] for m in only["merges"]} == {BLOOM} and set(only["repos"]) == {BLOOM}
-    assert set(only["heads"]) == {JSON, BLOOM}
+def test_a_valkey_run_builds_only_valkeys_head(tmp_path):
+    repo = _repo(tmp_path, "valkey", [("Base", "src/a.c"), ("Fix (#1)", "src/b.c")])
+    planned = _with_base(_shas(repo)[-1], lambda: plan(repo, walk.VALKEY_REPO, initial_state(walk.VALKEY_REPO), 5, ""))
+    assert planned["heads"] == {walk.VALKEY_REPO: _shas(repo)[0]}
+    assert _jobs(planned) == [1] and planned["merges"][0]["name"] == "valkey"
+
+
+def _with_base(base, call):
+    saved = walk.VALKEY_BASE
+    walk.VALKEY_BASE = base
+    try:
+        return call()
+    finally:
+        walk.VALKEY_BASE = saved
 
 
 def test_a_pointer_off_the_history_stops_the_plan(json_repo):
-    state = initial_state()
-    state["repos"][JSON] = {"head": "0" * 40, "cursor": _shas(json_repo)[0], "end": _shas(json_repo)[-1]}
+    state = initial_state(JSON)
+    state["pointer"] = {"head": "0" * 40, "cursor": _shas(json_repo)[0], "end": _shas(json_repo)[-1]}
     with pytest.raises(ValueError, match="head of valkey-io/valkey-json"):
-        plan({JSON: json_repo}, state, 1)
+        plan(json_repo, JSON, state, 1, UNSTABLE)
 
 
 @pytest.mark.parametrize(("paths", "repo", "expected"), [
@@ -175,11 +182,11 @@ def _result(merge: dict, **fields) -> dict:
 def test_the_state_marks_done_retries_and_gives_up():
     ok, failed, died = _merge(), _merge(sha="c" * 40, pr=5), _merge(sha="d" * 40, pr=6)
     skipped = _merge(sha="e" * 40, pr=7)
-    planned = {"merges": [ok, failed, died], "skipped": [skipped], "repos": {walk.VALKEY_REPO: {"head": "h"}}}
+    planned = {"repo": walk.VALKEY_REPO, "merges": [ok, failed, died], "skipped": [skipped], "pointer": {"head": "h"}}
     results = [_result(ok), _result(failed, error="the build failed", cost_usd=0.5)]
-    state = update(initial_state(), planned, results, now=NOW, run_url="u")
+    state = update(initial_state(walk.VALKEY_REPO), planned, results, now=NOW, run_url="u")
 
-    assert state["repos"] == {walk.VALKEY_REPO: {"head": "h"}}
+    assert state["repo"] == walk.VALKEY_REPO and state["pointer"] == {"head": "h"}
     assert state["done"][ok["sha"]]["outcome"] == "tested" and state["done"][ok["sha"]]["folder"] == merge_folder(ok)
     assert state["done"][skipped["sha"]] == {"repo": walk.VALKEY_REPO, "pr": 7, "pr_repo": walk.VALKEY_REPO,
                                              "subject": "Fix LSET (#4716)",
@@ -210,48 +217,121 @@ def test_the_state_marks_done_retries_and_gives_up():
     assert sum(1 for line in text.splitlines() if line.startswith('  "')) == len(state["done"]) + len(state["failed"])
 
 
-def test_record_keeps_the_tests_of_the_merges_done(tmp_path):
-    ok, failed = _merge(), _merge(sha="c" * 40, pr=5)
+def _results(tmp_path: Path, *pairs: tuple[dict, dict]) -> Path:
+    """The jobs' uploads, merged: each merge's tests folder with a scenario and its result.json."""
     results = tmp_path / "results"
-    for merge, result in ((ok, _result(ok)), (failed, _result(failed, error="boom"))):
+    for merge, result in pairs:
         folder = results / merge_folder(merge)
         (folder / "scenarios").mkdir(parents=True)
         (folder / "scenarios" / "ai-1.yaml").write_text("seed: 1\n")
         (folder / "result.json").write_text(json.dumps(result))
-    state_dir = tmp_path / "state"
-    state_dir.mkdir()
-    planned = {"merges": [ok, failed], "skipped": [], "repos": {}}
-    record(state_dir, planned, results, now=datetime(2026, 11, 4, tzinfo=timezone.utc), run_url="u")
+    return results
 
-    assert (state_dir / "tests/valkey/4716-bbbbbbbbb/scenarios/ai-1.yaml").read_text() == "seed: 1\n"
-    assert json.loads((state_dir / "tests/valkey/4716-bbbbbbbbb/result.json").read_text())["proven"] == 2
-    assert not (state_dir / merge_folder(failed)).exists()
-    state = json.loads((state_dir / "walk-state.json").read_text())
+
+def test_record_keeps_one_state_per_repository_and_the_tests_of_the_merges_done(tmp_path):
+    ok, failed = _merge(), _merge(sha="c" * 40, pr=5)
+    results = _results(tmp_path, (ok, _result(ok)), (failed, _result(failed, error="boom")))
+    branch = tmp_path / "branch"
+    # Another repository's run recorded first.
+    json_state = update(initial_state(JSON), {"repo": JSON, "merges": [], "skipped": [_merge(repo=JSON, pr=3)],
+                                              "pointer": {"cursor": "f" * 40}}, [], now=NOW)
+    (branch / "state").mkdir(parents=True)
+    (branch / "state" / "valkey-json.json").write_text(dump_state(json_state))
+    planned = {"repo": walk.VALKEY_REPO, "merges": [ok, failed], "skipped": [], "pointer": {"cursor": "f" * 40}}
+    record(branch, planned, results, now=datetime(2026, 11, 4, tzinfo=timezone.utc), run_url="u")
+
+    assert (branch / "tests/valkey/4716-bbbbbbbbb/scenarios/ai-1.yaml").read_text() == "seed: 1\n"
+    assert json.loads((branch / "tests/valkey/4716-bbbbbbbbb/result.json").read_text())["proven"] == 2
+    assert not (branch / merge_folder(failed)).exists()
+    state = json.loads((branch / "state/valkey.json").read_text())
+    assert state["repo"] == walk.VALKEY_REPO
     assert ok["sha"] in state["done"] and failed["sha"] in state["failed"]
+    # The other repository's state is untouched, and PROGRESS.md covers both.
+    assert json.loads((branch / "state/valkey-json.json").read_text()) == json_state
+    text = (branch / "PROGRESS.md").read_text()
     assert ("[valkey-io/valkey#4716](https://github.com/valkey-io/valkey/pull/4716) "
-            "([tests](tests/valkey/4716-bbbbbbbbb/))") in (state_dir / "PROGRESS.md").read_text()
+            "([tests](tests/valkey/4716-bbbbbbbbb/))") in text
+    assert "| valkey-io/valkey | 1 |" in text and "| valkey-io/valkey-json | 1 |" in text
 
 
-def test_progress_shows_each_repository_the_last_run_totals_and_retries():
+def test_progress_shows_each_repository_the_last_runs_totals_and_retries():
     ok, other, failed = _merge(), _merge(sha="c" * 40, pr=5, subject="Add a command (#5)"), _merge(sha="d" * 40, pr=6)
-    planned = {"merges": [ok, other, failed], "skipped": [],
-               "repos": {walk.VALKEY_REPO: {"head": "h", "cursor": "f" * 40, "end": "0" * 40, "remaining": 40,
-                                           "cursor_pr": 1200, "cursor_date": "2025-01-02"}}}
+    planned = {"repo": walk.VALKEY_REPO, "merges": [ok, other, failed], "skipped": [],
+               "pointer": {"head": "h", "cursor": "f" * 40, "end": "0" * 40, "remaining": 40, "cursor_pr": 1200,
+                           "cursor_date": "2025-01-02"}}
     results = [_result(ok), _result(other, proven=0, recall=False, findings=[], cost_usd=0.25)]
-    state = update(initial_state(), planned, results, now=NOW, run_url="https://run")
-    text = progress(state, datetime(2026, 11, 4, 18, tzinfo=timezone.utc))
+    state = update(initial_state(walk.VALKEY_REPO), planned, results, now=NOW, run_url="https://run")
+    bloom_merge = _merge(repo=BLOOM, sha="e" * 40, pr=11, subject="Fix BF.ADD (#11)")
+    bloom = update(initial_state(BLOOM), {"repo": BLOOM, "merges": [bloom_merge], "skipped": [],
+                                          "pointer": {"cursor": "a" * 40, "remaining": 0}},
+                   [_result(bloom_merge, cost_usd=0.5)], now=NOW, run_url="https://bloom-run")
+    text = progress([state, bloom], datetime(2026, 11, 4, 18, tzinfo=timezone.utc))
 
     assert "| valkey-io/valkey | 2 | 41 | #1200 (2025-01-02) | 2 | 0.3 |" in text
+    assert "| valkey-io/valkey-bloom | 1 | 0 | aaaaaaaaaaaa (?) | 1 | 0.1 |" in text
+    # Each repository's last run under its own heading, in repository order.
+    assert text.index("### valkey-io/valkey\n") < text.index("### valkey-io/valkey-bloom\n")
     assert "[2026-11-04T12:00:00+00:00](https://run): 3 merge(s) tested" in text
+    assert "[2026-11-04T12:00:00+00:00](https://bloom-run): 1 merge(s) tested" in text
+    assert "- Merges whose tests reached the change: 2 of 3 tested (67%)" in text
+    assert "- Claude: $2.25 in the last 24 hours, $2.25 in the last 7 days, $2.25 in all" in text
     assert ("- [valkey-io/valkey#4716](https://github.com/valkey-io/valkey/pull/4716) "
             "([tests](tests/valkey/4716-bbbbbbbbb/)): Fix LSET (#4716): 2 of 3 test(s) reached the "
             "change; [crash, introduced by #4716](https://x/issues/1)") in text
     assert "- [valkey-io/valkey#6](https://github.com/valkey-io/valkey/pull/6): to retry, the job left no result" in text
-    assert "- Merges whose tests reached the change: 1 of 2 tested (50%)" in text
-    assert "- Recall: 1 parents flagged of 1 fix merges" in text
-    assert "- Claude: $1.75 in the last 24 hours, $1.75 in the last 7 days, $1.75 in all" in text
+    assert "- Recall: 2 parents flagged of 2 fix merges" in text
     assert "- Issues filed: 1\n  - https://x/issues/1" in text
     assert "attempt 0 of 3, the job left no result" in text
+
+
+def _write(name: str, text: str):
+    def apply(branch: Path) -> None:
+        (branch / "state").mkdir(exist_ok=True)
+        (branch / "state" / name).write_text(text)
+    return apply
+
+
+def _branch_files(remote: Path) -> list[str]:
+    return _git(remote, "ls-tree", "-r", "--name-only", walk.STATE_BRANCH).splitlines()
+
+
+def test_publish_creates_the_branch_and_starts_again_when_another_run_got_there_first(tmp_path):
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    walk.publish(str(remote), tmp_path / "first", _write("valkey.json", "{}"), "first")
+    assert _branch_files(remote) == ["state/valkey.json"]
+
+    seen = []
+
+    def racing(branch: Path) -> None:
+        seen.append(sorted(p.name for p in (branch / "state").iterdir()))
+        if len(seen) == 1:
+            # Another repository's run pushes between this one's fetch and its push.
+            walk.publish(str(remote), tmp_path / "other", _write("valkey-json.json", "{}"), "other")
+        _write("valkey-bloom.json", "{}")(branch)
+
+    walk.publish(str(remote), tmp_path / "bloom", racing, "bloom")
+    # Applied again on the new fetch, so nothing the other run pushed is lost.
+    assert seen == [["valkey.json"], ["valkey-json.json", "valkey.json"]]
+    assert _branch_files(remote) == ["state/valkey-bloom.json", "state/valkey-json.json", "state/valkey.json"]
+    assert _git(remote, "log", "--format=%s", walk.STATE_BRANCH).splitlines() == ["bloom", "other", "first"]
+
+
+def test_publish_gives_up_after_its_retries(tmp_path, monkeypatch):
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    walk.publish(str(remote), tmp_path / "first", _write("valkey.json", "{}"), "first")
+    monkeypatch.setattr(walk, "MAX_PUSHES", 2)
+    count = []
+
+    def always_beaten(branch: Path) -> None:
+        count.append(1)
+        walk.publish(str(remote), tmp_path / f"other{len(count)}", _write(f"x{len(count)}.json", "{}"), "other")
+        _write("valkey-bloom.json", "{}")(branch)
+
+    with pytest.raises(RuntimeError, match="rejected 2 pushes"):
+        walk.publish(str(remote), tmp_path / "bloom", always_beaten, "bloom")
+    assert len(count) == 2 and "state/valkey-bloom.json" not in _branch_files(remote)
 
 
 @pytest.mark.parametrize(("parent", "merge", "unstable", "expected", "filed"), [
@@ -487,15 +567,20 @@ def _workflow() -> dict:
     return yaml.load(Path(".github/workflows/fuzzer-walk.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
 
-def test_the_workflow_runs_on_a_schedule_and_by_hand_one_run_at_a_time():
+def test_the_workflow_is_dispatched_per_repository_by_name_and_never_overlaps_itself():
     workflow = _workflow()
-    assert list(workflow["on"]) == ["schedule", "workflow_dispatch"]
+    # The fork's main dispatches it, once per repository; it has no schedule of its own.
+    assert list(workflow["on"]) == ["workflow_dispatch"]
     inputs = workflow["on"]["workflow_dispatch"]["inputs"]
     assert list(inputs) == ["repository", "max"] and inputs["max"]["default"] == "20"
-    assert inputs["repository"]["options"] == ["all", *walk.REPOSITORIES]
-    assert workflow["concurrency"] == {"group": "fuzzer-walk", "cancel-in-progress": "false"}
+    assert inputs["repository"]["options"] == list(walk.NAMES) and inputs["repository"]["default"] == "valkey"
+    assert workflow["concurrency"] == {"group": "fuzzer-walk-${{ inputs.repository || 'valkey' }}",
+                                       "cancel-in-progress": "false"}
+    assert workflow["env"]["NAME"] == "${{ inputs.repository || 'valkey' }}"
     assert workflow["permissions"] == {}
     assert workflow["jobs"]["plan"]["if"] == "github.repository_owner != 'valkey-io'"
+    planning = next(s for s in workflow["jobs"]["plan"]["steps"] if s.get("name") == "Plan the run")["run"]
+    assert '--repo "${NAME}" --state "walk-state/state/${NAME}.json"' in planning
 
 
 def test_the_workflow_walks_each_merge_in_its_own_job_and_records_the_run():
@@ -515,8 +600,9 @@ def test_the_workflow_walks_each_merge_in_its_own_job_and_records_the_run():
     # Only the record job writes, and only to this repository's walk-state branch.
     assert jobs["record"]["permissions"] == {"contents": "write"}
     assert all(job["permissions"].get("contents") == "read" for name, job in jobs.items() if name != "record")
-    push = next(s for s in jobs["record"]["steps"] if s.get("name") == "Push the state")["run"]
-    assert 'HEAD:walk-state' in push and '"${GITHUB_REPOSITORY}" != valkey-io/*' in push
+    recording = next(s for s in jobs["record"]["steps"] if s.get("name") == "Record the run")["run"]
+    assert '"${GITHUB_REPOSITORY}" != valkey-io/*' in recording
+    assert 'walk update --remote "https://github.com/${GITHUB_REPOSITORY}.git"' in recording
 
 
 def test_merges_before_the_fork_name_their_redis_pull_requests(tmp_path):
@@ -539,9 +625,10 @@ def test_merges_before_the_fork_name_their_redis_pull_requests(tmp_path):
     body = render_issue(finding, redis, context)("<!-- m -->", 1).body
     assert "Predates redis/redis#13154: [redis/redis#13154](https://github.com/redis/redis/pull/13154)" in body
     assert "| merge, redis/redis#13154 |" in body
-    state = update(initial_state(), {"merges": [redis], "skipped": [], "repos": {}}, [_result(redis)], now=NOW)
+    state = update(initial_state(walk.VALKEY_REPO), {"repo": walk.VALKEY_REPO, "merges": [redis], "skipped": [],
+                                                     "pointer": {}}, [_result(redis)], now=NOW)
     assert "- [redis/redis#13154](https://github.com/redis/redis/pull/13154) ([tests](tests/valkey/13154-bbbbbbbbb/))" \
-        in progress(state, datetime(2026, 11, 4, 18, tzinfo=timezone.utc))
+        in progress([state], datetime(2026, 11, 4, 18, tzinfo=timezone.utc))
 
 
 def _with_fork(fork, call):
