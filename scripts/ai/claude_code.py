@@ -12,6 +12,7 @@ import threading
 import time
 from typing import Any
 
+from scripts.ai.aws_refresh import refresh_aws_credentials
 from scripts.common.logging_utils import log_group
 from scripts.common.proc import filter_env
 
@@ -67,6 +68,7 @@ def run_claude_code(
     Requires ``claude`` on PATH and Bedrock credentials in the
     environment (CLAUDE_CODE_USE_BEDROCK=1 + AWS creds).
     """
+    refresh_aws_credentials()
     env = _build_claude_env(env_allowlist)
     env["CLAUDE_CODE_USE_BEDROCK"] = "1"
     # Resolve once here so the env-var override (CI_AGENT_CLAUDE_MODEL)

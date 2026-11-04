@@ -192,14 +192,20 @@ def test_backport_workflows_refresh_credentials_after_validation():
     assert "steps.poll.outputs.had_error == 'true'" in poll
 
 
-def test_fuzzer_workflows_hold_aws_sessions_longer_than_the_default_hour():
-    # Claude's proposal, repair and triage rounds outlast an hour; an expired token fails them midway.
-    for filename in ("fuzzer-propose.yml", "fuzzer-replay.yml", "monitor-fuzzer.yml", "fuzzer-spec-draft.yml"):
+def test_fuzzer_steps_that_run_claude_can_assume_the_role_again():
+    # Claude's proposal, repair and triage rounds outlast the hour the role grants; see scripts/ai/aws_refresh.py.
+    steps = {
+        "fuzzer-propose.yml": ["Propose scenarios"],
+        "fuzzer-replay.yml": ["Replay the merge", "Triage each merge's batch, in merge order"],
+        "monitor-fuzzer.yml": ["Analyze the latest fuzzer run"],
+    }
+    for filename, names in steps.items():
         workflow = yaml.load((Path(".github/workflows") / filename).read_text(), Loader=yaml.BaseLoader)
-        for job in workflow["jobs"].values():
-            for step in job.get("steps", []):
-                if step.get("name") == "Configure AWS credentials":
-                    assert int(step["with"]["role-duration-seconds"]) > 3600, filename
+        found = {step["name"]: step for job in workflow["jobs"].values() for step in job.get("steps", [])
+                 if step.get("name") in names}
+        assert set(found) == set(names), filename
+        for step in found.values():
+            assert step["env"]["CI_AGENT_AWS_ROLE_ARN"] == "${{ secrets.AWS_ROLE_ARN }}", filename
 
 def test_backport_branch_mutations_share_one_concurrency_group():
     groups = []

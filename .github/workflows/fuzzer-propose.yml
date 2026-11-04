@@ -114,13 +114,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: valkey-fuzzer-propose-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
-          # Longer than the default hour, which expired mid-way through Claude's work.
-          role-duration-seconds: 5400
 
       - name: Propose scenarios
         shell: bash
         env:
           TARGET_TOKEN: ${{ steps.read-token.outputs.token }}
+          # Claude's runs outlast the hour the credentials step grants; each run first assumes the role again.
+          CI_AGENT_AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
         run: |
           set -euo pipefail
           args=(-m scripts.fuzzer.propose propose
