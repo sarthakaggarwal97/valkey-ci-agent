@@ -39,6 +39,17 @@ SCENARIO = textwrap.dedent("""\
     deployment: {mode: cluster, primaries: 3, replicas_per_primary: 1}
 """)
 WITH_BINARY = SCENARIO.replace("replicas_per_primary: 1}", "replicas_per_primary: 1, valkey_binary: /tmp/v}")
+WITH_INSTANCE_BINARIES = SCENARIO.replace("replicas_per_primary: 1}", "replicas_per_primary: 1, instance_binaries: {}}")
+WITH_ARTIFACTS = SCENARIO + "artifacts: {parent: {use: valkey.artifact.local-binary, with: {path: /v}}}\n"
+# A scenario that reaches the parent build through a reference, and one that names an artifact no batch declares.
+REFERENCES_PARENT = SCENARIO.replace("replicas_per_primary: 1}",
+                                     "replicas_per_primary: 1, server_config: {x: {$ref: artifacts.parent.binary}}}")
+REFERENCES_OTHER = REFERENCES_PARENT.replace("artifacts.parent.binary", "artifacts.baseline.binary")
+# A flow-style top-level mapping: the batch cannot append the parent block to it.
+FLOW_SCENARIO = "{scenario_id: ai-0123456789ab, seed: 7, experiment: {id: valkey.cluster-chaos}, deployment: {mode: cluster}}\n"
+PARENT = "b" * 40
+# A proposed experiment the fuzzer's catalog loads: the installed fragment brings its components.
+EXPERIMENT = "extends: [valkey.base]\nid: proposed.probe\ndeployment: {modes: [standalone]}\ncomponents: []\n"
 # The smallest bundle the input check takes; the workflow also loads it with
 # the fuzzer's bundle checks, which the real-workflow tests run on a real one.
 BUNDLE = {"claims.yaml": "protocol: toy\n", "model.tla": "---- MODULE model ----\n====\n", "mapping.yaml": "a: 1\n"}
@@ -63,12 +74,20 @@ def _bundles(value) -> dict[str, str]:
     return _inputs(spec_bundles=value if isinstance(value, str) else json.dumps(value))
 
 
+def _experiments(value, **changes) -> dict[str, str]:
+    return _inputs(experiments=value if isinstance(value, str) else json.dumps(value), **changes)
+
+
 def test_batch_inputs_are_the_ones_the_workflow_takes():
     assert BATCH_INPUTS == ("scenarios", "valkey_repository", "valkey_ref", "valkey_sha")
-    assert OPTIONAL_INPUTS == ("spec_bundles", "random_seeds", "request_id", "exclude_experiments")
+    assert OPTIONAL_INPUTS == ("spec_bundles", "random_seeds", "request_id", "exclude_experiments",
+                               "valkey_parent_sha", "build", "experiments")
     check_batch_inputs(_inputs())
     check_batch_inputs(_bundles({"toy": BUNDLE}))
     check_batch_inputs(_bundles(""))
+    check_batch_inputs(_experiments({"proposed.probe.yaml": EXPERIMENT}, valkey_parent_sha=PARENT, build="asan"))
+    check_batch_inputs(_experiments("", valkey_parent_sha="", build="default"))
+    check_batch_inputs(_scenarios({"x": REFERENCES_PARENT}) | {"valkey_parent_sha": PARENT})
     change = {"repo": "valkey-io/valkey", "pr_number": 123, "head_sha": HEAD}
     inputs = batch_dispatch_inputs(change, {"ai-0123456789ab": SCENARIO})
     assert inputs == _inputs(scenarios=json.dumps({"ai-0123456789ab": SCENARIO}, separators=(",", ":")))
@@ -79,7 +98,15 @@ def test_batch_inputs_are_the_ones_the_workflow_takes():
     assert for_range["valkey_ref"] == HEAD
     baseline = batch_dispatch_inputs({"repo": "valkey-io/valkey", "pr_number": None, "head_sha": HEAD}, {},
                                      random_seeds=4, request_id="replay-007-aaaaaaaaa")
-    assert (baseline["scenarios"], baseline["random_seeds"], baseline["request_id"]) == ("{}", "5", "replay-007-aaaaaaaaa")
+    assert (baseline["scenarios"], baseline["random_seeds"], baseline["request_id"]) == ("{}", "4", "replay-007-aaaaaaaaa")
+    compared = batch_dispatch_inputs(change, {"ai-0123456789ab": SCENARIO}, parent_sha=PARENT, build="ubsan",
+                                     experiments={"proposed.probe.yaml": EXPERIMENT})
+    assert (compared["valkey_parent_sha"], compared["build"]) == (PARENT, "ubsan")
+    assert json.loads(compared["experiments"]) == {"proposed.probe.yaml": EXPERIMENT}
+    # The defaults are left out, as the workflow would fill them in.
+    plain = batch_dispatch_inputs(change, {"ai-0123456789ab": SCENARIO}, parent_sha=None, build="default",
+                                  experiments={})
+    assert not {"valkey_parent_sha", "build", "experiments"} & set(plain)
 
 
 def test_batch_names_keep_a_fitting_id_and_fix_the_rest():
@@ -135,6 +162,32 @@ def test_bundle_paths_the_batch_takes(path, allowed):
     (_scenarios({"x": "a: [b"}), "scenario x is not YAML"),
     (_scenarios({"x": "- a"}), "scenario x must be a mapping"),
     (_scenarios({"x": WITH_BINARY}), "sets deployment.valkey_binary; the batch runs valkey_sha's build"),
+    (_scenarios({"x": WITH_INSTANCE_BINARIES}), "sets deployment.instance_binaries; the batch runs valkey_sha's build"),
+    (_scenarios({"x": WITH_ARTIFACTS}), "scenario x declares artifacts; the batch declares them (artifacts.parent)"),
+    (_scenarios({"x": REFERENCES_PARENT}),
+     "scenario x references artifacts.parent, which the batch does not declare (no valkey_parent_sha)"),
+    (_scenarios({"x": REFERENCES_OTHER}) | {"valkey_parent_sha": PARENT},
+     "scenario x references artifacts.baseline, which the batch does not declare"),
+    (_scenarios({"x": FLOW_SCENARIO}) | {"valkey_parent_sha": PARENT},
+     "scenario x: appending the artifacts.parent block does not add exactly that key"),
+    (_scenarios({"x": SCENARIO.rstrip("\n")}) | {"valkey_parent_sha": PARENT},
+     "appending the artifacts.parent block does not add exactly that key"),
+    (_inputs(valkey_parent_sha="b" * 12), "valkey_parent_sha must be empty or a full 40-character lowercase commit SHA"),
+    (_inputs(valkey_parent_sha=HEAD), "valkey_parent_sha is valkey_sha: a comparison with the same build shows nothing"),
+    (_inputs(build="valgrind"), "build must be one of default, asan, ubsan"),
+    (_inputs(build=""), "build must be one of default, asan, ubsan"),
+    (_experiments("x" * 20_001), "experiments is 20001 characters; the limit is 20,000"),
+    (_experiments("{not json"), "experiments is not JSON"),
+    (_experiments([EXPERIMENT]), "experiments must be a JSON object mapping a file name to experiment YAML"),
+    (_experiments({"Proposed.probe.yaml": EXPERIMENT}), "experiment file name 'Proposed.probe.yaml' must be <name>.yaml"),
+    (_experiments({"proposed.probe": EXPERIMENT}), "experiment file name 'proposed.probe' must be <name>.yaml"),
+    (_experiments({"a..b.yaml": EXPERIMENT}), "experiment file name 'a..b.yaml' must be"),
+    (_experiments({"proposed.probe.yaml": 1}), "experiment proposed.probe.yaml: the value must be YAML text"),
+    (_experiments({"proposed.probe.yaml": "a: [b"}), "experiment proposed.probe.yaml is not YAML"),
+    (_experiments({"proposed.probe.yaml": "- a"}), "experiment proposed.probe.yaml must be a mapping"),
+    (_experiments({"proposed.probe.yaml": EXPERIMENT.replace("proposed.", "valkey.")}),
+     "experiment proposed.probe.yaml: id must start with 'proposed.'"),
+    (_experiments({"proposed.probe.yaml": "components: []\n"}), "id must start with 'proposed.'"),
     (_bundles("{not json"), "spec_bundles is not JSON"),
     (_bundles([BUNDLE]), "spec_bundles must be a JSON object mapping a bundle name to its files"),
     (_bundles({"Toy": BUNDLE}), "spec bundle name 'Toy' must be lowercase letters, digits, or '-'"),
@@ -189,13 +242,18 @@ def _register() -> dict[str, str]:
 def _workflow_check(inputs: dict[str, str], tmp_path: Path) -> subprocess.CompletedProcess:
     """Run the workflow's own input check on ``inputs``, as its step runs it."""
     steps = _workflow()["jobs"]["batch"]["steps"]
-    step = next(s for s in steps if s.get("name") == "Check the inputs and write the scenarios and bundles")
-    script = step["run"].split("<<'PY'\n", 1)[1].rsplit("PY", 1)[0]
+    step = next(s for s in steps if "ci.py check-inputs" in s.get("run", ""))
+    assert step["run"].strip() == "python .github/scripts/ci.py check-inputs"
     env = {k: os.environ[k] for k in ("PATH", "HOME") if k in os.environ}
-    # An input left out reaches the step as its default, "".
-    env.update({f"INPUT_{k.upper()}": inputs.get(k, "") for k in BATCH_INPUTS + OPTIONAL_INPUTS})
-    env.update(CANDIDATES_DIR=str(tmp_path / "candidates"), SPEC_DIR=str(tmp_path / "spec"), PYTHONPATH=_FUZZER_DIR)
-    return subprocess.run([_fuzzer_python(), "-c", script], env=env, capture_output=True, text=True, check=False)
+    # An input left out reaches the step as the workflow's default for it.
+    specs = _workflow()["on" if "on" in _workflow() else True]["workflow_dispatch"]["inputs"]
+    env.update({f"INPUT_{k.upper()}": inputs.get(k, str(specs[k].get("default", "")))
+                for k in BATCH_INPUTS + OPTIONAL_INPUTS})
+    env.update(CANDIDATES_DIR=str(tmp_path / "candidates"), SPEC_DIR=str(tmp_path / "spec"),
+               EXPERIMENTS_DIR=str(tmp_path / "experiments"), PARENT_BINARY="/work/valkey-parent/src/valkey-server",
+               PYTHONPATH=_FUZZER_DIR)
+    return subprocess.run([_fuzzer_python(), ".github/scripts/ci.py", "check-inputs"], env=env, cwd=_FUZZER_DIR,
+                          capture_output=True, text=True, check=False)
 
 
 @_real_workflow
@@ -236,6 +294,21 @@ def _real_cases() -> list:
         _bundles({"register": {**register, "../model.cfg": "x"}}),
         _bundles({"register": {**register, "experiments/x.yaml": "- a"}}),
         _bundles({"register": {**register, "model.cfg": 1}}),
+        _experiments({"proposed.probe.yaml": EXPERIMENT}, valkey_parent_sha=PARENT, build="asan"),
+        _scenarios({"x": REFERENCES_PARENT}) | {"valkey_parent_sha": PARENT},
+        _scenarios({"x": WITH_INSTANCE_BINARIES}),
+        _scenarios({"x": WITH_ARTIFACTS}),
+        _scenarios({"x": REFERENCES_PARENT}),
+        _scenarios({"x": REFERENCES_OTHER}) | {"valkey_parent_sha": PARENT},
+        _scenarios({"x": FLOW_SCENARIO}) | {"valkey_parent_sha": PARENT},
+        _inputs(valkey_parent_sha="b" * 12),
+        _inputs(valkey_parent_sha=HEAD),
+        _inputs(build="valgrind"),
+        _experiments("x" * 20_001),
+        _experiments([EXPERIMENT]),
+        _experiments({"Proposed.probe.yaml": EXPERIMENT}),
+        _experiments({"proposed.probe.yaml": "- a"}),
+        _experiments({"proposed.probe.yaml": EXPERIMENT.replace("proposed.", "valkey.")}),
     ]
 
 
@@ -250,7 +323,11 @@ def test_the_real_workflow_agrees_with_the_check(inputs, tmp_path):
     theirs = _workflow_check(inputs, tmp_path)
     if ours is None:
         assert theirs.returncode == 0, theirs.stderr
-        assert sorted(p.name for p in (tmp_path / "candidates").iterdir()) == ["ai-0123456789ab.yaml"]
+        written = sorted(p.name for p in (tmp_path / "candidates").iterdir())
+        assert written == [f"{name}.yaml" for name in sorted(json.loads(inputs["scenarios"]))]
+        experiments = json.loads(inputs.get("experiments") or "{}")
+        if experiments:
+            assert sorted(p.name for p in (tmp_path / "experiments").iterdir()) == sorted(experiments)
         bundles = json.loads(inputs.get("spec_bundles") or "{}")
         for name, files in bundles.items():
             written = tmp_path / "spec" / name

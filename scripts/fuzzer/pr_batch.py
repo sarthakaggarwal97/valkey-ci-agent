@@ -7,14 +7,18 @@ scenario name to its YAML), ``valkey_repository``, ``valkey_ref``,
 spec bundle name to ``{path in the bundle: file text}``, for scenarios
 translated from a bundle that brings its own data-only experiments),
 ``random_seeds`` (that many seeds of each one-build experiment run beside the
-scenarios, which may then be empty) and ``request_id`` (shown in the run's
-title, so :func:`find_run` finds the run a dispatch started). It
-builds that Valkey commit, runs the scenarios through ``valkey-fuzzer
-batch`` with the candidate profile, the bundles on
-``VALKEY_FUZZER_SPEC_PATH`` and their ``experiments/`` loaded, and uploads
-the batch folder as ``fuzzer-batch-<run id>``. :func:`check_batch_inputs`
-refuses what the workflow's own input check would refuse, before anything is
-dispatched.
+scenarios, which may then be empty), ``request_id`` (shown in the run's
+title, so :func:`find_run` finds the run a dispatch started),
+``valkey_parent_sha`` (a second build, of the change's parent, that the
+scenarios reach as the artifact ``parent``), ``build`` (``default``,
+``asan`` or ``ubsan``, for both commits) and ``experiments`` (a JSON object
+mapping a file name to the YAML of a ``proposed.`` experiment the scenarios
+use). It builds that Valkey commit, runs the scenarios through
+``valkey-fuzzer batch`` with the candidate profile, the bundles on
+``VALKEY_FUZZER_SPEC_PATH`` and their ``experiments/`` loaded, the proposed
+experiments loaded too, and uploads the batch folder as
+``fuzzer-batch-<run id>``. :func:`check_batch_inputs` refuses what the
+workflow's own input check would refuse, before anything is dispatched.
 
 The results are read with the same reader the fuzzer monitor uses,
 :mod:`scripts.fuzzer.batch`, with the folder at the artifact's root:
@@ -59,14 +63,23 @@ BATCH_ARTIFACT_PREFIX = "fuzzer-batch-"
 RESULTS_FILE = "batch-results.json"
 
 # The workflow's inputs: the four always sent, spec_bundles when a scenario
-# needs a bundle, and the random baseline and the run's name when asked for.
+# needs a bundle, the random baseline and the run's name when asked for, the
+# parent build and the proposed experiments when the scenarios need them, and
+# the build when it is not the default.
 BATCH_INPUTS = ("scenarios", "valkey_repository", "valkey_ref", "valkey_sha")
-OPTIONAL_INPUTS = ("spec_bundles", "random_seeds", "request_id", "exclude_experiments")
+OPTIONAL_INPUTS = (
+    "spec_bundles", "random_seeds", "request_id", "exclude_experiments", "valkey_parent_sha", "build", "experiments",
+)
+# The builds the workflow offers; both commits get the same one.
+BUILDS = ("default", "asan", "ubsan")
+# A proposed experiment's ID starts with this; the batch loads no other from `experiments`.
+PROPOSED_PREFIX = "proposed."
 # The title the workflow gives a run: its run-name, with the request_id.
 RUN_TITLE = "Valkey Fuzzer PR Batch {request_id}"
-# The workflow's own limits on `scenarios` and on `spec_bundles`.
+# The workflow's own limits on `scenarios`, on `spec_bundles` and on `experiments`.
 MAX_SCENARIOS_CHARS = 60_000
 MAX_SPEC_BUNDLES_CHARS = 60_000
+MAX_EXPERIMENTS_CHARS = 20_000
 # GitHub limits all of a dispatch's inputs together to 65,535 characters.
 MAX_DISPATCH_CHARS = 65_535
 # The workflow's patterns, exactly.
@@ -75,6 +88,8 @@ _SHA_RE = re.compile(r"[0-9a-f]{40}")
 _RANDOM_SEEDS_RE = re.compile(r"[0-4]")
 _REQUEST_ID_RE = re.compile(r"[A-Za-z0-9_.-]{0,100}")
 _EXPERIMENT_ID_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,99}")
+# A proposed experiment's file in `experiments`: its ID and .yaml.
+EXPERIMENT_FILE_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,99}\.yaml")
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}")
 _BUNDLE_NAME_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _FILE_NAME = r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}"
@@ -91,11 +106,15 @@ def check_batch_inputs(inputs: dict[str, str]) -> None:
     """Raise ValueError for inputs fuzzer-pr-batch.yml would refuse.
 
     The checks, their order and their messages are the workflow's: the sizes
-    of ``scenarios`` and ``spec_bundles``, the repository, the commit, each
-    scenario's name, YAML and build, then each bundle's name, required files,
-    paths and YAML. GitHub's limit on all inputs together comes last. The
-    workflow then loads each bundle with the fuzzer's own bundle checks; a
-    spec draft's bundle passed those in its spec check gate.
+    of ``scenarios`` and ``spec_bundles``, the repository, the commits, the
+    build, each scenario's name, YAML, build, artifact references and the
+    shape the parent block is appended to, then each bundle's name, required
+    files, paths and YAML, then the size of ``experiments`` and each
+    experiment's file name, YAML and ID. GitHub's limit on all inputs
+    together comes last.
+    The workflow then loads each bundle with the fuzzer's own bundle checks
+    (a spec draft's bundle passed those in its spec check gate) and compiles
+    the experiments (a proposal's passed that too).
     """
     keys = set(inputs)
     if not set(BATCH_INPUTS) <= keys <= set(BATCH_INPUTS + OPTIONAL_INPUTS):
@@ -116,6 +135,13 @@ def check_batch_inputs(inputs: dict[str, str]) -> None:
         raise ValueError("valkey_repository must be OWNER/NAME")
     if not _SHA_RE.fullmatch(inputs["valkey_sha"]):
         raise ValueError("valkey_sha must be a full 40-character lowercase commit SHA")
+    parent_sha = inputs.get("valkey_parent_sha", "")
+    if parent_sha and not _SHA_RE.fullmatch(parent_sha):
+        raise ValueError("valkey_parent_sha must be empty or a full 40-character lowercase commit SHA")
+    if parent_sha == inputs["valkey_sha"]:
+        raise ValueError("valkey_parent_sha is valkey_sha: a comparison with the same build shows nothing")
+    if inputs.get("build", "default") not in BUILDS:
+        raise ValueError(f"build must be one of {', '.join(BUILDS)}")
     random_seeds = inputs.get("random_seeds", "0")
     if not _RANDOM_SEEDS_RE.fullmatch(random_seeds):
         raise ValueError("random_seeds must be 0 to 4")
@@ -143,12 +169,59 @@ def check_batch_inputs(inputs: dict[str, str]) -> None:
             raise ValueError(f"scenario {name}: the value must be YAML text")
         _yaml_mapping(text, f"scenario {name} is not YAML", f"scenario {name} must be a mapping")
         document = yaml.safe_load(text)
-        if "valkey_binary" in (document.get("deployment") or {}):
-            raise ValueError(f"scenario {name} sets deployment.valkey_binary; the batch runs valkey_sha's build")
+        # Each of these names a binary the batch would run instead of valkey_sha's build.
+        for field in ("valkey_binary", "instance_binaries"):
+            if field in (document.get("deployment") or {}):
+                raise ValueError(f"scenario {name} sets deployment.{field}; the batch runs valkey_sha's build")
+        if "artifacts" in document:
+            raise ValueError(f"scenario {name} declares artifacts; the batch declares them (artifacts.parent)")
+        # The batch declares artifacts.parent, and only with a parent build.
+        declared = {"artifacts.parent"} if parent_sha else set()
+        for reference in _artifact_references(document):
+            if reference not in declared:
+                raise ValueError(
+                    f"scenario {name} references {reference}, which the batch does not declare"
+                    + ("" if parent_sha else " (no valkey_parent_sha)")
+                )
+        if parent_sha:
+            # The batch appends the block to the text, so the scenario runs as sent; the append must add
+            # exactly that key. The path does not matter here, only the shape.
+            appended = text + _PARENT_ARTIFACT_BLOCK
+            try:
+                after = yaml.safe_load(appended)
+            except yaml.YAMLError:
+                after = None
+            if after != {**document, "artifacts": yaml.safe_load(_PARENT_ARTIFACT_BLOCK)["artifacts"]}:
+                raise ValueError(
+                    f"scenario {name}: appending the artifacts.parent block does not add exactly that key (a "
+                    "flow-style top-level mapping, or no final newline?)"
+                )
     _check_spec_bundles(raw_bundles)
+    _check_experiments(inputs.get("experiments", ""))
     size = sum(len(value) for value in inputs.values())
     if size > MAX_DISPATCH_CHARS:
         raise ValueError(f"the PR batch inputs are {size} characters, over GitHub's limit of 65,535")
+
+
+# The shape of the block the batch appends; the batch fills in its parent build's path.
+_PARENT_ARTIFACT_BLOCK = (
+    "artifacts:\n  parent:\n    use: valkey.artifact.local-binary\n    with:\n      path: \"valkey-server\"\n"
+)
+
+
+def _artifact_references(value: Any) -> list[str]:
+    """Every ``artifacts.<id>`` an authored ``{$ref: artifacts.<id>.<output>}`` in ``value`` names, in order seen."""
+    found: list[str] = []
+    if isinstance(value, dict):
+        reference = value.get("$ref")
+        if isinstance(reference, str) and reference.startswith("artifacts."):
+            found.append(".".join(reference.split(".")[:2]))
+        for item in value.values():
+            found += _artifact_references(item)
+    elif isinstance(value, list):
+        for item in value:
+            found += _artifact_references(item)
+    return found
 
 
 def _yaml_mapping(text: str, not_yaml: str, not_mapping: str) -> None:
@@ -189,6 +262,34 @@ def _check_spec_bundles(raw: str) -> None:
                               f"spec bundle {bundle}: {path} must be a mapping")
 
 
+def _check_experiments(raw: str) -> None:
+    """The workflow's check of ``experiments``: {file name: the YAML of a proposed experiment}.
+
+    The workflow then loads them into the fuzzer's catalog; a proposal's
+    experiments compiled there before they were accepted.
+    """
+    if len(raw) > MAX_EXPERIMENTS_CHARS:
+        raise ValueError(f"experiments is {len(raw)} characters; the limit is 20,000")
+    try:
+        experiments = json.loads(raw) if raw.strip() else {}
+    except ValueError as exc:
+        raise ValueError(f"experiments is not JSON: {exc}") from exc
+    if not isinstance(experiments, dict):
+        raise ValueError("experiments must be a JSON object mapping a file name to experiment YAML")
+    for name, text in experiments.items():
+        if not EXPERIMENT_FILE_RE.fullmatch(name) or ".." in name:
+            raise ValueError(
+                f"experiment file name {name!r} must be <name>.yaml, the name lowercase letters, digits, '.', '_', "
+                "or '-'"
+            )
+        if not isinstance(text, str):
+            raise ValueError(f"experiment {name}: the value must be YAML text")
+        _yaml_mapping(text, f"experiment {name} is not YAML", f"experiment {name} must be a mapping")
+        experiment_id = yaml.safe_load(text).get("id")
+        if not isinstance(experiment_id, str) or not experiment_id.startswith(PROPOSED_PREFIX):
+            raise ValueError(f"experiment {name}: id must start with '{PROPOSED_PREFIX}'")
+
+
 def bundle_path_allowed(path: str) -> bool:
     """Whether the PR batch takes ``path`` in a spec bundle."""
     return bool(_BUNDLE_PATH_RE.fullmatch(path)) and ".." not in path
@@ -225,10 +326,13 @@ def batch_names(scenario_ids: list[str]) -> dict[str, str]:
 def batch_dispatch_inputs(
     change: dict[str, Any], scenarios: dict[str, str], spec_bundles: dict[str, dict[str, str]] | None = None,
     *, random_seeds: int = 0, request_id: str = "", exclude_experiments: Sequence[str] = (),
+    parent_sha: str | None = None, build: str = "default", experiments: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """The PR batch's inputs for ``scenarios`` ({name: YAML}) on ``change``, with any bundles they need,
     ``random_seeds`` seeds of each one-build experiment but ``exclude_experiments`` beside them, and the
-    run named ``request_id``."""
+    run named ``request_id``. With ``parent_sha`` the batch also builds that commit, as the artifact
+    ``parent``; ``build`` picks the build of both; ``experiments`` ({file name: YAML}) are the proposed
+    experiments the scenarios use."""
     pr_number = change.get("pr_number")
     head_sha = str(change["head_sha"])
     inputs = {
@@ -245,6 +349,12 @@ def batch_dispatch_inputs(
         inputs["request_id"] = request_id
     if exclude_experiments:
         inputs["exclude_experiments"] = " ".join(exclude_experiments)
+    if parent_sha:
+        inputs["valkey_parent_sha"] = parent_sha
+    if build != "default":
+        inputs["build"] = build
+    if experiments:
+        inputs["experiments"] = json.dumps(experiments, separators=(",", ":"))
     check_batch_inputs(inputs)
     return inputs
 
