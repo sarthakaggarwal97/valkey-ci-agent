@@ -1,6 +1,8 @@
 """Propose valkey-fuzzer scenarios that exercise one Valkey change.
 
-The request is a valkey-io/valkey pull request or commit range. Code resolves
+The request is a valkey-io/valkey pull request or commit range, or one of a
+module repository the PR batch builds (valkey-json), whose two builds load
+into one pinned Valkey build. Code resolves
 it to exact commits and fetches the diff; Claude never fetches anything. Claude
 reads the diff, a Valkey checkout at the change, the fuzzer checkout and the
 fuzzer's catalog, and answers with scenario YAML as text, and, when no
@@ -34,7 +36,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
@@ -57,8 +59,10 @@ from scripts.fuzzer.pr_batch import (
     MAX_EXPERIMENTS_CHARS,
     PR_BATCH_WORKFLOW,
     PROPOSED_PREFIX,
+    ModuleBuild,
     batch_dispatch_inputs,
     dispatch_batch,
+    module_repository,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,15 +92,36 @@ _FORBIDDEN_DEPLOYMENT_KEYS = frozenset({
 # carries its own refused list), and declares no environment of its own.
 _FORBIDDEN_COMPONENTS = frozenset({"valkey.action.command", "valkey.fault.command"})
 _FORBIDDEN_EXPERIMENT_KEYS = frozenset({"artifacts", "resources", "policies"})
-# The one environment reference a proposed experiment may hold: the parent
-# commit's build, which the PR batch declares as the artifact `parent`.
+# The environment references a proposed experiment may hold: the parent
+# commit's build, which the PR batch declares as the artifact `parent`, and,
+# when it builds a module, the module's builds at the change and its parent.
 PARENT_REFERENCE = "artifacts.parent.binary"
+MODULE_REFERENCE = "artifacts.module.path"
+MODULE_PARENT_REFERENCE = "artifacts.module_parent.path"
+_REFERENCES = {"parent": PARENT_REFERENCE, "module": MODULE_REFERENCE, "module_parent": MODULE_PARENT_REFERENCE}
 # Appended to a scenario's copy for validation only, so a scenario whose
-# experiment references the parent compiles; local-binary resolves the path
-# when a run starts, and the batch appends the real block.
-PARENT_ARTIFACT_BLOCK = (
-    "artifacts:\n  parent: {use: valkey.artifact.local-binary, with: {path: /parent-build/valkey-server}}\n"
-)
+# experiment references them compiles; local-binary and local-module resolve
+# the path when a run starts, and the batch appends the real block.
+_VALIDATION_ARTIFACTS = {
+    "parent": "{use: valkey.artifact.local-binary, with: {path: /parent-build/valkey-server}}",
+    "module": "{use: valkey.artifact.local-module, with: {path: /module-build/module.so}}",
+    "module_parent": "{use: valkey.artifact.local-module, with: {path: /module-parent-build/module.so}}",
+}
+
+
+def artifacts_block(declared: tuple[str, ...]) -> str:
+    """The artifacts block a validated copy carries, declaring ``declared`` (``parent``, ``module``, ...)."""
+    return "artifacts:\n" + "".join(f"  {name}: {_VALIDATION_ARTIFACTS[name]}\n" for name in declared)
+
+
+PARENT_ARTIFACT_BLOCK = artifacts_block(("parent",))
+# A Valkey change that touches these reaches the module API: the batch can
+# build Valkey's own tests/modules at the change and at its parent.
+_MODULE_API_FILES = ("src/module.c", "src/valkeymodule.h")
+_TEST_MODULES_DIR = "tests/modules/"
+_DIFF_PATHS_RE = re.compile(r"^diff --git a/(\S+) b/(\S+)$", re.MULTILINE)
+# A module tests/modules/Makefile builds: commandfilter.so, datatype.so, ...
+_TEST_MODULE_RE = re.compile(r"\b([A-Za-z0-9_-]+\.so)\b")
 _RANGE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$")
 
 Runner = Callable[[str, Path], AgentRunResult]
@@ -388,12 +413,15 @@ def check_experiment(text: Any) -> tuple[dict[str, Any] | None, str | None]:
     return doc, None
 
 
-def compiled_experiment_error(entry: dict[str, Any]) -> str | None:
+def compiled_experiment_error(
+    entry: dict[str, Any], references: tuple[str, ...] = (PARENT_REFERENCE,),
+) -> str | None:
     """Why the experiment, as the fuzzer compiled it (``list experiments --format json``), may not be proposed.
 
     After ``extends`` and fragment expansion: no component that sends any
-    command to the deployment, and no environment reference but the parent
-    build's.
+    command to the deployment, and no environment reference but
+    ``references``, the builds the PR batch declares: the parent's, or for a
+    module the module's two.
     """
     components = entry.get("components")
     if not isinstance(components, list):
@@ -406,11 +434,11 @@ def compiled_experiment_error(entry: dict[str, Any]) -> str | None:
             f"the experiment uses {', '.join(forbidden)}, which sends any command to the deployment; "
             "a proposed experiment uses valkey.action.commands for commands"
         )
-    references = sorted(ref for ref in _references(entry) if ref != PARENT_REFERENCE)
-    if references:
+    held = sorted(ref for ref in _references(entry) if ref not in references)
+    if held:
         return (
-            f"the experiment references {', '.join(references)}; the only environment reference a proposed "
-            f"experiment may hold is {PARENT_REFERENCE}"
+            f"the experiment references {', '.join(held)}; the only environment reference a proposed "
+            f"experiment may hold is {' or '.join(references)}"
         )
     return None
 
@@ -433,6 +461,22 @@ def _references(value: Any) -> set[str]:
 def _text_field(item: dict[str, Any], key: str) -> str:
     value = item.get(key)
     return value if isinstance(value, str) else ""
+
+
+def touches_module_api(diff: str) -> bool:
+    """Whether a Valkey diff changes the module API: src/module.c, src/valkeymodule.h or tests/modules/."""
+    return any(path in _MODULE_API_FILES or path.startswith(_TEST_MODULES_DIR)
+               for match in _DIFF_PATHS_RE.finditer(diff) for path in match.groups())
+
+
+def built_test_modules(valkey_dir: Path) -> list[str]:
+    """The modules ``make -C tests/modules`` builds in a Valkey checkout, as the PR batch's module_file names them
+    (``tests/modules/datatype.so``): the ``.so`` files its Makefile names."""
+    makefile = valkey_dir / "tests" / "modules" / "Makefile"
+    if not makefile.is_file():
+        return []
+    names = _TEST_MODULE_RE.findall(makefile.read_text(errors="replace"))
+    return sorted({f"{_TEST_MODULES_DIR}{name}" for name in names})
 
 
 def _clean_rationale(value: Any) -> str:
@@ -482,6 +526,12 @@ class ProposalRun:
     experiments: list[ExperimentProposal] = field(default_factory=list)
     # Claude's reason when it proposes no scenario: the change needs no test.
     reason: str = ""
+    # The module the batch builds and loads: a module change's own, or the tests/modules build Claude names
+    # (module_file) for a change to the module API; and, for a module change, the pinned Valkey commit.
+    module: ModuleBuild | None = None
+    valkey_sha: str = ""
+    # Why the module_file Claude named was not taken.
+    module_file_error: str = ""
 
     @property
     def validated(self) -> list[Proposal]:
@@ -518,7 +568,7 @@ def _render_experiment(text: str, change: Change) -> str:
 
 def _check_and_compile(
     experiment: ExperimentProposal, *, change: Change, candidates: Path, accepted: Path,
-    lister: Lister, taken: dict[str, ExperimentProposal],
+    lister: Lister, taken: dict[str, ExperimentProposal], declared: tuple[str, ...],
 ) -> None:
     """Check, compile, check as compiled and, if it holds, accept one proposed experiment.
 
@@ -550,7 +600,7 @@ def _check_and_compile(
     if entry is None:
         experiment.error = f"the fuzzer listed no experiment {experiment_id} from {experiment_id}.yaml"
         return
-    error = compiled_experiment_error(entry)
+    error = compiled_experiment_error(entry, tuple(_REFERENCES[name] for name in declared))
     if error is not None:
         experiment.error = error
         return
@@ -571,13 +621,14 @@ def _check_and_compile(
 
 def _check_and_validate(
     proposal: Proposal, *, change: Change, candidates: Path, accepted: Path, experiment_dir: Path,
-    validator: Validator, taken: set[str], experiments: dict[str, ExperimentProposal],
+    validator: Validator, taken: set[str], experiments: dict[str, ExperimentProposal], declared: tuple[str, ...],
 ) -> None:
     """Check, name, validate and, if it holds, accept one proposal.
 
-    The validated copy carries the parent build as an artifact, so a scenario
-    whose proposed experiment compares with it compiles; the accepted file
-    does not, and the PR batch appends the real one.
+    The validated copy carries the artifacts the PR batch will declare,
+    ``declared`` (the parent build, the module builds), so a scenario whose
+    proposed experiment uses them compiles; the accepted file does not, and
+    the PR batch appends the real ones.
     """
     proposal.file = None
     doc, error = check_scenario(proposal.text)
@@ -590,11 +641,12 @@ def _check_and_validate(
     if scenario_id in taken:
         proposal.error = "the same scenario as an earlier proposal"
         return
-    references = sorted(ref for ref in _references(doc) if ref != PARENT_REFERENCE)
+    allowed = tuple(_REFERENCES[name] for name in declared)
+    references = sorted(ref for ref in _references(doc) if ref not in allowed)
     if references:
         proposal.error = (
             f"the scenario references {', '.join(references)}; the only environment reference a proposal may "
-            f"hold is {PARENT_REFERENCE}"
+            f"hold is {' or '.join(allowed)}"
         )
         return
     if proposal.experiment.startswith(PROPOSED_PREFIX):
@@ -607,7 +659,7 @@ def _check_and_validate(
             return
     rendered = _render_scenario(doc, change)
     candidate = candidates / f"{scenario_id}.yaml"
-    candidate.write_text(rendered + PARENT_ARTIFACT_BLOCK, encoding="utf-8")
+    candidate.write_text(rendered + artifacts_block(declared), encoding="utf-8")
     error = validator(candidate, experiment_dir)
     if error is not None:
         proposal.error = error
@@ -688,9 +740,7 @@ required_events). Rules:
 - it composes installed components only, never valkey.action.command or
   valkey.fault.command (they send any command to the deployment's
   instances), and declares no artifacts, resources or policies;
-- the only reference to the environment it may hold is
-  {{$ref: artifacts.parent.binary}}, the build of the change's parent commit,
-  which the runner supplies;
+{references_rule}
 - at most {max_experiments} experiments, 20,000 characters together. One
   experiment with inputs serves several scenarios.
 
@@ -772,7 +822,7 @@ For a compared sequence:
 - Arguments and replies are raw bytes; a binary argument is YAML !!binary.
   RESP 2 and 3 both deserve a scenario when the change touches replies: make
   resp an input, as above, and write one scenario per version.
-
+{module_section}
 ### Adversarial inputs
 The shapes the maintainers' own audits keep finding bugs with
 (valkey-io/valkey#4604, #4838, #4839, #5151, #5146, #5163): empty strings and
@@ -802,7 +852,7 @@ base_data_dir, instance_data_roots, provider, artifacts, resources or
 policies. An experiment: an id starting with `proposed.`, installed
 components only, never valkey.action.command or valkey.fault.command, no
 artifacts, resources or policies, and no environment reference but
-{{$ref: artifacts.parent.binary}}; every command marked expect_difference has
+{references}; every command marked expect_difference has
 an expect. A scenario that failed only because its experiment did not
 compile is validated again once the experiment is fixed; return it only if
 it needs a change itself.
@@ -811,6 +861,68 @@ it needs a change itself.
 
 Return ONLY one JSON object, leaving out anything you cannot fix:
 {{"experiments": [{{"index": <its number>, "experiment": "<the fixed experiment YAML as one string>"}}], "scenarios": [{{"index": <its number>, "rationale": "...", "scenario": "<the fixed YAML document as one string>"}}]}}
+"""
+
+
+# The environment references a proposal may hold, in "Writing an experiment": for a Valkey change, for one
+# whose module API change can load Valkey's tests/modules, and for a module change.
+_PARENT_RULE = """\
+- the only reference to the environment it may hold is
+  {$ref: artifacts.parent.binary}, the build of the change's parent commit,
+  which the runner supplies;"""
+_TEST_MODULES_RULE = """\
+- the only references to the environment it may hold are
+  {$ref: artifacts.parent.binary}, the build of the change's parent commit,
+  which the runner supplies, and, when you name a module_file,
+  {$ref: artifacts.module.path} and {$ref: artifacts.module_parent.path}
+  (see Valkey's test modules, below);"""
+_MODULE_RULE = """\
+- the only references to the environment it may hold are
+  {$ref: artifacts.module.path} and {$ref: artifacts.module_parent.path},
+  the module's builds at the change and at its parent, which the runner
+  supplies (see The module, below);"""
+
+_MODULE_SECTION = """
+### The module
+The change is to {repo}, a Valkey module, not to Valkey. The runner builds
+the module at the change ({head}) and at its parent ({base}) and loads both
+builds into one pinned Valkey build, valkey-io/valkey at {valkey_sha}:
+Valkey itself is the same build on both sides, so there is no
+artifacts.parent and no compare_with. A compared sequence instead loads the
+module on both private servers, the change's build on the first and the
+parent's on the second:
+
+```yaml
+      modules: [{{$ref: artifacts.module.path}}]
+      modules_parent: [{{$ref: artifacts.module_parent.path}}]
+```
+
+The rules for a compared sequence above hold as they are: mark
+expect_difference on every reply the change means to change.
+examples/valkey/experiments/module-commands-compare.yaml is such a sequence
+on another module. For valkey-json, give JSON.GET `compare: json`: both
+replies are parsed and compared as JSON values, so key order and spacing do
+not count. The module's source is in {checkout}/.
+"""
+
+_TEST_MODULES_SECTION = """
+### Valkey's test modules
+The change reaches the module API. The runner can build Valkey's own test
+modules (valkey/tests/modules/, `make -C tests/modules`) at the change and
+at its parent: to load one, add "module_file" to your JSON answer, one of
+{names}. A compared sequence then loads it on both private servers, the
+change's build of Valkey with the change's build of the module on the
+first, the parent's with the parent's on the second:
+
+```yaml
+      compare_with: {{$ref: artifacts.parent.binary}}
+      modules: [{{$ref: artifacts.module.path}}]
+      modules_parent: [{{$ref: artifacts.module_parent.path}}]
+```
+
+A module's commands are in valkey/tests/modules/<name>.c;
+examples/valkey/experiments/module-commands-compare.yaml is a sequence on
+datatype.so. Leave "module_file" out when no scenario loads a module.
 """
 
 
@@ -836,12 +948,19 @@ def _ask_claude(runner: Runner, prompt: str, workdir: Path) -> dict[str, Any]:
     raise last_error or RuntimeError("_CLAUDE_MAX_ATTEMPTS must be >= 1")
 
 
+def checkout_name(repo: str) -> str:
+    """The directory Claude finds the change's repository in: valkey/, or a module's own name."""
+    return repo.split("/")[-1] if module_repository(repo) else "valkey"
+
+
 def describe_sources(change: Change, valkey_ok: bool) -> str:
     lines = ["- change.diff, change.json - the change."]
+    name = checkout_name(change.repo)
     if valkey_ok:
-        lines.append(f"- valkey/ - Valkey at {change.head_sha}, with the change applied.")
+        what = "Valkey" if name == "valkey" else change.repo
+        lines.append(f"- {name}/ - {what} at {change.head_sha}, with the change applied.")
     else:
-        lines.append("- valkey/ - NOT AVAILABLE (clone failed); work from the diff alone.")
+        lines.append(f"- {name}/ - NOT AVAILABLE (clone failed); work from the diff alone.")
     return "\n".join(lines)
 
 
@@ -862,7 +981,7 @@ def prepare_workspace(
         symlinks=True,
     )
     return shallow_clone_at_sha(
-        change.repo, workdir / "valkey", change.head_sha, fetch_ref=change.fetch_ref,
+        change.repo, workdir / checkout_name(change.repo), change.head_sha, fetch_ref=change.fetch_ref,
     )
 
 
@@ -880,12 +999,22 @@ def _repairs_by_index(items: Any, failed: dict[int, Any]) -> dict[int, dict[str,
 
 def propose(
     change: Change, *, count: int, workdir: Path, out_dir: Path, catalog: dict[str, list[Any]],
-    fuzzer_dir: Path, validator: Validator, lister: Lister, runner: Runner | None = None,
+    fuzzer_dir: Path, validator: Validator, lister: Lister, runner: Runner | None = None, valkey_sha: str = "",
 ) -> ProposalRun:
-    """Ask Claude for scenarios and experiments, then keep only those that compile and validate."""
+    """Ask Claude for scenarios and experiments, then keep only those that compile and validate.
+
+    A change to a module repository needs ``valkey_sha``, the pinned Valkey
+    commit both of the module's builds load into.
+    """
     runner = runner or _default_runner
+    is_module = module_repository(change.repo)
+    if is_module and not SHA_RE.fullmatch(valkey_sha):
+        raise ValueError(f"{change.repo} is a module: its proposals need the pinned Valkey commit, not {valkey_sha!r}")
     valkey_ok = prepare_workspace(workdir, change, fuzzer_dir=fuzzer_dir, catalog=catalog)
     source_note = describe_sources(change, valkey_ok)
+    # A change to the module API may load one of Valkey's tests/modules, which Claude names.
+    test_modules = (built_test_modules(workdir / "valkey")
+                    if not is_module and valkey_ok and touches_module_api(change.diff) else [])
     change_line = f"{change.describe()}: {change.title}" if change.title else change.describe()
     candidates = workdir / "candidates"
     candidates.mkdir()
@@ -893,26 +1022,49 @@ def propose(
     accepted.mkdir(parents=True, exist_ok=True)
     experiment_dir = out_dir / "experiments"
     experiment_dir.mkdir(parents=True, exist_ok=True)
-    run = ProposalRun(change=change)
+    run = ProposalRun(change=change, valkey_sha=valkey_sha if is_module else "")
     taken: set[str] = set()
     experiments: dict[str, ExperimentProposal] = {}
+    # The artifacts the PR batch will declare: a module change's two module builds; otherwise the parent
+    # build, and the tests/modules builds when Claude names one.
+    declared: tuple[str, ...] = ("module", "module_parent") if is_module else ("parent",)
 
     def compile_one(experiment: ExperimentProposal) -> None:
         _check_and_compile(experiment, change=change, candidates=candidates, accepted=experiment_dir,
-                           lister=lister, taken=experiments)
+                           lister=lister, taken=experiments, declared=declared)
 
     def validate_one(proposal: Proposal) -> None:
         _check_and_validate(proposal, change=change, candidates=candidates, accepted=accepted,
                             experiment_dir=experiment_dir, validator=validator, taken=taken,
-                            experiments=experiments)
+                            experiments=experiments, declared=declared)
 
+    if is_module:
+        references_rule = _MODULE_RULE
+        module_section = _MODULE_SECTION.format(repo=change.repo, head=change.head_sha, base=change.base_sha,
+                                                valkey_sha=valkey_sha, checkout=checkout_name(change.repo))
+    elif test_modules:
+        references_rule = _TEST_MODULES_RULE
+        module_section = _TEST_MODULES_SECTION.format(names=", ".join(test_modules))
+    else:
+        references_rule, module_section = _PARENT_RULE, ""
     prompt = _PROPOSE_PROMPT.format(
         change_line=change_line, count=count, max_experiments=MAX_EXPERIMENTS, source_note=source_note,
-        truncated_note=" (cut short; read the rest in valkey/)" if change.diff_truncated else "",
+        truncated_note=f" (cut short; read the rest in {checkout_name(change.repo)}/)" if change.diff_truncated else "",
+        references_rule=references_rule, module_section=module_section,
     )
     with log_group("Ask Claude for scenarios"):
         answer = _ask_claude(runner, prompt, workdir)
     run.reason = _clean_rationale(answer.get("reason"))
+    if is_module:
+        run.module = ModuleBuild(change.repo, change.head_sha, change.base_sha)
+    elif test_modules and answer.get("module_file"):
+        module_file = answer["module_file"]
+        if module_file in test_modules:
+            run.module = ModuleBuild(change.repo, change.head_sha, change.base_sha, module_file)
+            declared += ("module", "module_parent")
+        else:
+            run.module_file_error = f"module_file {str(module_file)[:120]!r} is not a module tests/modules builds"
+            logger.warning("Not loading a module: %s", run.module_file_error)
     for index, item in enumerate(answer.get("experiments", [])[:MAX_EXPERIMENTS], start=1):
         item = item if isinstance(item, dict) else {}
         experiment = ExperimentProposal(index=index, text=_text_field(item, "experiment"))
@@ -943,6 +1095,7 @@ def propose(
         ])
         repair_prompt = _REPAIR_PROMPT.format(
             change_line=change_line, source_note=source_note, failures=failures,
+            references=" or ".join(f"{{$ref: {_REFERENCES[name]}}}" for name in declared),
         )
         try:
             with log_group(f"Ask Claude to repair {len(failed_experiments)} experiment(s) and {len(failed)} scenario(s)"):
@@ -993,6 +1146,9 @@ def write_results(run: ProposalRun, out_dir: Path) -> dict[str, Any]:
     result = {
         "change": run.change.summary(),
         "reason": run.reason or None,
+        "module": asdict(run.module) if run.module else None,
+        "valkey_sha": run.valkey_sha or None,
+        "module_file_error": run.module_file_error or None,
         "scenarios": [
             {"scenario_id": p.scenario_id, "file": p.file, "rationale": p.rationale, "repaired": p.repaired,
              "experiment": p.experiment}
@@ -1036,6 +1192,11 @@ def render_summary(result: dict[str, Any]) -> str:
     if result.get("experiments"):
         names = ", ".join(f"`{e['experiment_id']}`" for e in result["experiments"])
         lines += ["", f"Brings {len(result['experiments'])} proposed experiment(s): {names}."]
+    module = result.get("module")
+    if module:
+        into = f"the pinned Valkey `{result['valkey_sha'][:12]}`" if result.get("valkey_sha") else "both builds"
+        lines += ["", f"Loads `{module['file'] or module['repository']}`, built at the change and its parent, "
+                      f"into {into}."]
     if result["dropped"]:
         lines += ["", f"Dropped {len(result['dropped'])} scenario(s) that did not validate."]
     if result.get("dropped_experiments"):
@@ -1052,16 +1213,31 @@ def batch_inputs(out_dir: Path) -> dict[str, str] | None:
 
     The batch builds the change's parent too when the proposals bring
     experiments, the build a proposed experiment compares with, or when a
-    scenario references it.
+    scenario references it, and the module the proposals load. A module
+    change runs on the pinned Valkey commit, with no Valkey parent: one
+    Valkey build, two module builds.
     """
     change, scenarios, experiments = validated_scenarios(out_dir)
     if not scenarios:
         return None
-    needs_parent = bool(experiments) or any(_references(yaml.safe_load(text)) for text in scenarios.values())
+    module, valkey_sha = proposed_module(out_dir)
+    if module_repository(str(change["repo"])):
+        pinned = {"repo": VALKEY_REPO, "pr_number": None, "head_sha": valkey_sha}
+        return batch_dispatch_inputs(pinned, scenarios, experiments=experiments or None, module=module)
+    needs_parent = bool(experiments) or any(
+        PARENT_REFERENCE in _references(yaml.safe_load(text)) for text in scenarios.values()
+    )
     return batch_dispatch_inputs(
         change, scenarios, experiments=experiments or None,
-        parent_sha=str(change["base_sha"]) if needs_parent else None,
+        parent_sha=str(change["base_sha"]) if needs_parent else None, module=module,
     )
+
+
+def proposed_module(out_dir: Path) -> tuple[ModuleBuild | None, str]:
+    """The module the proposals load, and for a module change the pinned Valkey commit, from proposals.json."""
+    result = json.loads((out_dir / "proposals.json").read_text(encoding="utf-8"))
+    module = result.get("module")
+    return (ModuleBuild(**module) if module else None), str(result.get("valkey_sha") or "")
 
 
 def validated_scenarios(out_dir: Path) -> tuple[dict[str, Any], dict[str, str], dict[str, str]]:
@@ -1104,6 +1280,16 @@ def _token(args: argparse.Namespace, parser: argparse.ArgumentParser) -> str:
     return token
 
 
+def pinned_valkey(gh: Any, ref: str) -> str:
+    """The valkey-io/valkey commit ``ref`` (a branch, tag or commit) names: what a module change's builds load into."""
+    if not _RANGE_REF_RE.fullmatch(ref) or ".." in ref:
+        raise ValueError(f"not a commit or branch name: {ref!r}")
+    sha = str(gh.get_repo(VALKEY_REPO).get_commit(ref).sha)
+    if not SHA_RE.fullmatch(sha):
+        raise ValueError(f"GitHub returned a malformed commit: {sha!r}")
+    return sha
+
+
 def _count(value: str) -> int:
     count = int(value)
     if not 1 <= count <= MAX_COUNT:
@@ -1135,12 +1321,15 @@ def _run_propose(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     token = _token(args, parser)
     gh = Github(auth=Auth.Token(token))
     change = fetch_change(gh, token, request)
-    logger.info("Proposing scenarios for %s (%d bytes of diff%s)", change.describe(),
-                len(change.diff), ", cut short" if change.diff_truncated else "")
+    valkey_sha = pinned_valkey(gh, args.valkey_ref) if module_repository(request.repo) else ""
+    logger.info("Proposing scenarios for %s (%d bytes of diff%s)%s", change.describe(),
+                len(change.diff), ", cut short" if change.diff_truncated else "",
+                f", loaded into Valkey {valkey_sha[:12]}" if valkey_sha else "")
     with tempfile.TemporaryDirectory(prefix="fuzzer-propose-") as td:
         run = propose(
             change, count=args.count, workdir=Path(td), out_dir=out_dir, catalog=catalog,
             fuzzer_dir=fuzzer_dir, validator=fuzzer_validator(args.fuzzer_bin), lister=fuzzer_lister(args.fuzzer_bin),
+            valkey_sha=valkey_sha,
         )
     result = write_results(run, out_dir)
     emit_job_summary(render_summary(result))
@@ -1180,9 +1369,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("propose", help="Propose and validate scenarios for a change")
     target = p.add_mutually_exclusive_group(required=True)
-    target.add_argument("--pr", type=int, help="valkey-io/valkey pull request number")
+    target.add_argument("--pr", type=int, help="pull request number on --repo")
     target.add_argument("--range", help="commit range BASE..HEAD")
-    p.add_argument("--repo", default=VALKEY_REPO, help=argparse.SUPPRESS)
+    p.add_argument("--repo", default=VALKEY_REPO,
+                   help="the change's repository: valkey-io/valkey, or a module the PR batch builds (valkey-json)")
+    p.add_argument("--valkey-ref", default="unstable",
+                   help="for a module change: the valkey-io/valkey branch, tag or commit its builds load into")
     p.add_argument("--fuzzer-dir", required=True, help="valkey-fuzzer checkout")
     p.add_argument("--fuzzer-bin", default="valkey-fuzzer", help="installed valkey-fuzzer command")
     p.add_argument("--count", type=_count, default=5, help=f"scenarios to ask for, 1 to {MAX_COUNT}")

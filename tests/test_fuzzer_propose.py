@@ -18,11 +18,14 @@ import yaml
 
 import scripts.fuzzer.propose as propose_mod
 from scripts.ai.runtime import AgentRunResult
+from scripts.fuzzer.pr_batch import ModuleBuild
 from scripts.fuzzer.propose import (
     PARENT_ARTIFACT_BLOCK,
     Change,
     ChangeRequest,
+    artifacts_block,
     batch_inputs,
+    built_test_modules,
     check_experiment,
     check_scenario,
     compiled_experiment_error,
@@ -32,8 +35,10 @@ from scripts.fuzzer.propose import (
     fuzzer_validator,
     load_catalog,
     parse_request,
+    pinned_valkey,
     propose,
     render_summary,
+    touches_module_api,
     validated_scenarios,
     write_results,
 )
@@ -187,12 +192,13 @@ def no_clone(monkeypatch):
     return calls
 
 
-def _propose(runner, tmp_path, fuzzer_dir, *, count=5, change=None):
+def _propose(runner, tmp_path, fuzzer_dir, *, count=5, change=None, valkey_sha="", validator=None):
     out = tmp_path / "out"
     work = tmp_path / "work"
     work.mkdir()
     run = propose(change or _change(), count=count, workdir=work, out_dir=out, catalog=CATALOG,
-                  fuzzer_dir=fuzzer_dir, validator=_stub_validator, lister=_stub_lister, runner=runner)
+                  fuzzer_dir=fuzzer_dir, validator=validator or _stub_validator, lister=_stub_lister, runner=runner,
+                  valkey_sha=valkey_sha)
     return run, write_results(run, out), out
 
 
@@ -930,6 +936,207 @@ def test_dispatch_for_real_needs_a_token_and_dispatches(monkeypatch, tmp_path, f
     assert len(json.loads(sent["inputs"]["scenarios"])) == 1
 
 
+# --- Modules -------------------------------------------------------------------
+
+PINNED = "e" * 40
+# A proposed experiment comparing two builds of a module on one Valkey build, and a scenario that uses it.
+MODULE_PROPOSED = textwrap.dedent("""\
+    extends: [valkey.liveness]
+    id: proposed.json-get
+    deployment: {modes: [standalone]}
+    components:
+      - use: valkey.action.commands
+        id: json
+        config:
+          modules: [{$ref: artifacts.module.path}]
+          modules_parent: [{$ref: artifacts.module_parent.path}]
+          commands: [{command: [JSON.GET, k], compare: json}]
+    required_evidence:
+      - {evidence_id: valkey.command.sequence, source: json}
+""")
+USES_MODULE = "seed: 9\nexperiment: {id: proposed.json-get}\ndeployment: {mode: standalone, base_port: 7200}\n"
+# A module change: a valkey-json pull request.
+JSON_CHANGE = dict(repo="valkey-io/valkey-json", pr_number=42, title="Fix JSON.GET", fetch_ref="refs/pull/42/head",
+                   diff="diff --git a/src/json/json.cc b/src/json/json.cc\n")
+# A Valkey change to the module API, and the tests/modules Makefile its checkout holds.
+MODULE_API_DIFF = "diff --git a/src/module.c b/src/module.c\n"
+MAKEFILE = "TEST_MODULES = \\\n    commandfilter.so \\\n    datatype.so\n\nclean:\n\trm -f $(TEST_MODULES:.so=.xo)\n"
+
+
+def _validating(seen: dict):
+    def validator(path: Path, experiment_dir: Path) -> str | None:
+        seen[path.name] = path.read_text()
+        return _stub_validator(path, experiment_dir)
+    return validator
+
+
+@pytest.fixture
+def valkey_checkout(monkeypatch):
+    """The clone Claude reads, with tests/modules/Makefile in a Valkey one; the destinations, as cloned."""
+    cloned: list[Path] = []
+
+    def clone(repo, dest, sha=None, *, fetch_ref=None):
+        cloned.append(dest)
+        if dest.name == "valkey":
+            (dest / "tests" / "modules").mkdir(parents=True)
+            (dest / "tests" / "modules" / "Makefile").write_text(MAKEFILE)
+        return True
+
+    monkeypatch.setattr(propose_mod, "shallow_clone_at_sha", clone)
+    return cloned
+
+
+def test_a_module_change_loads_its_two_builds_into_the_pinned_valkey(tmp_path, fuzzer_dir, valkey_checkout):
+    seen: dict[str, str] = {}
+    parent = GOOD.replace("base_port: 7000}", "base_port: 7000, server_config: {x: {$ref: artifacts.parent.binary}}}")
+    runner = StubRunner(
+        _answer([{"rationale": "compares JSON.GET", "scenario": USES_MODULE},
+                 {"rationale": "the parent", "scenario": parent}],
+                [{"experiment": MODULE_PROPOSED}, {"experiment": PROPOSED}]),
+        _answer([], []),
+    )
+    run, result, out = _propose(runner, tmp_path, fuzzer_dir, change=_change(**JSON_CHANGE), valkey_sha=PINNED,
+                                validator=_validating(seen))
+
+    prompt = runner.prompts[0]
+    # Claude reads the module at the change, under its own name.
+    assert [path.name for path in valkey_checkout] == ["valkey-json"]
+    assert f"- valkey-json/ - valkey-io/valkey-json at {HEAD}, with the change applied." in prompt
+    assert propose_mod._MODULE_RULE in prompt and propose_mod._PARENT_RULE not in prompt
+    assert f"one pinned Valkey build, valkey-io/valkey at {PINNED}" in prompt
+    assert "modules: [{$ref: artifacts.module.path}]" in prompt and "compare: json" in prompt
+    # The module's builds are the only environment references; there is no Valkey parent.
+    assert [e["experiment_id"] for e in result["experiments"]] == ["proposed.json-get"]
+    assert result["dropped_experiments"][0]["error"] == (
+        "the experiment references artifacts.parent.binary; the only environment reference a proposed experiment "
+        "may hold is artifacts.module.path or artifacts.module_parent.path"
+    )
+    assert result["dropped"][0]["error"].startswith("the scenario references artifacts.parent.binary; the only "
+                                                    "environment reference a proposal may hold is artifacts.module.path")
+    assert "no environment reference but\n{$ref: artifacts.module.path} or {$ref: artifacts.module_parent.path};" in (
+        runner.prompts[1])
+    [uses] = result["scenarios"]
+    assert seen[f"{uses['scenario_id']}.yaml"].endswith(artifacts_block(("module", "module_parent")))
+    assert "artifacts" not in (out / uses["file"]).read_text()
+    assert (result["module"], result["valkey_sha"]) == (
+        {"repository": "valkey-io/valkey-json", "sha": HEAD, "parent_sha": BASE, "file": ""}, PINNED,
+    )
+    assert "Loads `valkey-io/valkey-json`, built at the change and its parent, into the pinned Valkey `eeeeeeeeeeee`" in (
+        render_summary(result))
+    # The batch runs on the pinned Valkey, with the module's two builds and no Valkey parent, experiments or not.
+    inputs = batch_inputs(out)
+    assert (inputs["valkey_repository"], inputs["valkey_ref"], inputs["valkey_sha"]) == ("valkey-io/valkey", PINNED,
+                                                                                         PINNED)
+    assert (inputs["module_repository"], inputs["module_sha"], inputs["module_parent_sha"]) == (
+        "valkey-io/valkey-json", HEAD, BASE,
+    )
+    assert "experiments" in inputs and not {"valkey_parent_sha", "module_file"} & set(inputs)
+
+
+def test_a_module_change_needs_the_pinned_valkey(tmp_path, fuzzer_dir):
+    with pytest.raises(ValueError, match="valkey-io/valkey-json is a module: its proposals need the pinned Valkey"):
+        _propose(StubRunner(), tmp_path, fuzzer_dir, change=_change(**JSON_CHANGE))
+
+
+def test_a_change_to_the_module_api_may_load_one_of_the_test_modules(tmp_path, fuzzer_dir, valkey_checkout):
+    seen: dict[str, str] = {}
+    loads = USES_MODULE.replace("proposed.json-get", "proposed.datatype")
+    experiment = MODULE_PROPOSED.replace("proposed.json-get", "proposed.datatype").replace(
+        "          modules:", "          compare_with: {$ref: artifacts.parent.binary}\n          modules:")
+    runner = StubRunner(_answer([{"rationale": "datatype on both builds", "scenario": loads}],
+                                [{"experiment": experiment}], module_file="tests/modules/datatype.so"))
+    run, result, out = _propose(runner, tmp_path, fuzzer_dir, change=_change(diff=MODULE_API_DIFF),
+                                validator=_validating(seen))
+
+    prompt = runner.prompts[0]
+    assert propose_mod._TEST_MODULES_RULE in prompt
+    assert '"module_file" to your JSON answer, one of\ntests/modules/commandfilter.so, tests/modules/datatype.so.' in prompt
+    assert result["module"] == {"repository": "valkey-io/valkey", "sha": HEAD, "parent_sha": BASE,
+                                "file": "tests/modules/datatype.so"}
+    assert result["valkey_sha"] is None and result["module_file_error"] is None
+    [uses] = result["scenarios"]
+    assert seen[f"{uses['scenario_id']}.yaml"].endswith(artifacts_block(("parent", "module", "module_parent")))
+    # Valkey's parent build beside the change's, each loading its own commit's tests/modules.
+    inputs = batch_inputs(out)
+    assert (inputs["valkey_sha"], inputs["valkey_parent_sha"]) == (HEAD, BASE)
+    assert (inputs["module_repository"], inputs["module_sha"], inputs["module_parent_sha"], inputs["module_file"]) == (
+        "valkey-io/valkey", HEAD, BASE, "tests/modules/datatype.so",
+    )
+
+
+def test_a_module_file_tests_modules_does_not_build_loads_nothing(tmp_path, fuzzer_dir, valkey_checkout):
+    runner = StubRunner(_answer([{"rationale": "r", "scenario": USES_MODULE}], [{"experiment": MODULE_PROPOSED}],
+                                module_file="tests/modules/nope.so"),
+                        _answer([], []))
+    run, result, out = _propose(runner, tmp_path, fuzzer_dir, change=_change(diff=MODULE_API_DIFF))
+    assert result["module"] is None
+    assert result["module_file_error"] == "module_file 'tests/modules/nope.so' is not a module tests/modules builds"
+    assert result["dropped_experiments"][0]["error"].startswith(
+        "the experiment references artifacts.module.path, artifacts.module_parent.path; the only environment "
+        "reference a proposed experiment may hold is artifacts.parent.binary"
+    )
+    assert result["scenarios"] == []
+
+
+def test_a_change_off_the_module_api_is_offered_no_module(tmp_path, fuzzer_dir, valkey_checkout):
+    runner = StubRunner(_answer([{"rationale": "r", "scenario": GOOD}], module_file="tests/modules/datatype.so"))
+    run, result, out = _propose(runner, tmp_path, fuzzer_dir)
+    assert "Valkey's test modules" not in runner.prompts[0] and propose_mod._PARENT_RULE in runner.prompts[0]
+    assert (result["module"], result["module_file_error"]) == (None, None)
+    assert "module_repository" not in batch_inputs(out)
+
+
+@pytest.mark.parametrize("diff,touches", [
+    ("diff --git a/src/module.c b/src/module.c\n", True),
+    ("diff --git a/src/valkeymodule.h b/src/valkeymodule.h\n", True),
+    ("diff --git a/src/t_list.c b/src/t_list.c\ndiff --git a/tests/modules/list.c b/tests/modules/list.c\n", True),
+    ("diff --git a/src/t_list.c b/src/t_list.c\n+ src/module.c\n", False),
+    ("diff --git a/tests/unit/moduleapi/list.tcl b/tests/unit/moduleapi/list.tcl\n", False),
+])
+def test_the_module_api_is_module_c_valkeymodule_h_and_tests_modules(diff, touches):
+    assert touches_module_api(diff) is touches
+
+
+def test_the_test_modules_are_the_ones_the_makefile_builds(tmp_path):
+    assert built_test_modules(tmp_path) == []
+    (tmp_path / "tests" / "modules").mkdir(parents=True)
+    (tmp_path / "tests" / "modules" / "Makefile").write_text(MAKEFILE + "hellovalkey.so: hellovalkey.xo\n")
+    assert built_test_modules(tmp_path) == ["tests/modules/commandfilter.so", "tests/modules/datatype.so",
+                                            "tests/modules/hellovalkey.so"]
+
+
+def test_the_pinned_valkey_is_a_full_commit():
+    gh = MagicMock()
+    gh.get_repo.return_value.get_commit.return_value.sha = PINNED
+    assert pinned_valkey(gh, "unstable") == PINNED
+    gh.get_repo.assert_called_with("valkey-io/valkey")
+    gh.get_repo.return_value.get_commit.assert_called_with("unstable")
+    for ref in ("--upload-pack=x", "a..b"):
+        with pytest.raises(ValueError, match="not a commit or branch name"):
+            pinned_valkey(gh, ref)
+    gh.get_repo.return_value.get_commit.return_value.sha = "abc"
+    with pytest.raises(ValueError, match="malformed commit"):
+        pinned_valkey(gh, "unstable")
+
+
+def test_propose_for_a_module_resolves_the_pinned_valkey(monkeypatch, fake_fuzzer, fuzzer_dir, tmp_path):
+    monkeypatch.setenv("TARGET_TOKEN", "t")
+    requests = []
+    monkeypatch.setattr(propose_mod, "fetch_change",
+                        lambda gh, token, request: requests.append(request) or _change(**JSON_CHANGE))
+    monkeypatch.setattr(propose_mod, "_default_runner", StubRunner(_answer([{"rationale": "a", "scenario": GOOD}])))
+    import github
+    gh = MagicMock()
+    gh.get_repo.return_value.get_commit.return_value.sha = PINNED
+    monkeypatch.setattr(github, "Github", lambda **kw: gh)
+    out = tmp_path / "out"
+    assert propose_mod.main(["propose", "--repo", "valkey-io/valkey-json", "--pr", "42", "--valkey-ref", "9.0",
+                             "--fuzzer-dir", str(fuzzer_dir), "--fuzzer-bin", fake_fuzzer, "--out", str(out)]) == 0
+    assert requests == [ChangeRequest("valkey-io/valkey-json", pr_number=42)]
+    gh.get_repo.return_value.get_commit.assert_called_with("9.0")
+    assert json.loads((out / "proposals.json").read_text())["valkey_sha"] == PINNED
+
+
 # Set VALKEY_FUZZER_DIR to a valkey-fuzzer checkout to check the prompts
 # against it, and VALKEY_FUZZER_BIN to its installed command to run the real
 # compile and validate steps on a proposed experiment.
@@ -938,7 +1145,8 @@ _FUZZER_BIN = shutil.which(os.environ.get("VALKEY_FUZZER_BIN", "") or "") or ""
 
 
 @pytest.mark.skipif(not _FUZZER_DIR, reason="needs VALKEY_FUZZER_DIR, a valkey-fuzzer checkout")
-@pytest.mark.parametrize("prompt", [propose_mod._PROPOSE_PROMPT, propose_mod._REPAIR_PROMPT])
+@pytest.mark.parametrize("prompt", [propose_mod._PROPOSE_PROMPT, propose_mod._REPAIR_PROMPT,
+                                    propose_mod._MODULE_SECTION, propose_mod._TEST_MODULES_SECTION])
 def test_the_prompts_name_only_files_the_fuzzer_has(prompt):
     # docs/*.md, valkey_fuzzer/... and examples/... are read by Claude in its
     # copy of the fuzzer; a renamed one leaves it looking for nothing.
@@ -952,12 +1160,22 @@ def test_the_prompts_name_only_files_the_fuzzer_has(prompt):
 
 def test_the_prompts_render():
     prompt = propose_mod._PROPOSE_PROMPT.format(change_line="c", count=5, max_experiments=5, source_note="s",
-                                                truncated_note="")
+                                                truncated_note="", references_rule=propose_mod._PARENT_RULE,
+                                                module_section="")
     assert "compare_with: {$ref: artifacts.parent.binary}" in prompt
+    assert "may hold is\n  {$ref: artifacts.parent.binary}, the build of the change's parent commit" in prompt
     assert "expect_difference: true, expect: {equals: [a, b, c]}" in prompt
     assert "valkey-io/valkey#4604" in prompt and "RESP 2 and 3" in prompt
-    repair = propose_mod._REPAIR_PROMPT.format(change_line="c", source_note="s", failures="f")
+    assert "per version.\n\n### Adversarial inputs" in prompt
+    repair = propose_mod._REPAIR_PROMPT.format(change_line="c", source_note="s", failures="f",
+                                               references="{$ref: artifacts.parent.binary}")
     assert '"experiments": [{"index": <its number>' in repair
+    assert "no environment reference but\n{$ref: artifacts.parent.binary};" in repair
+    module = propose_mod._MODULE_SECTION.format(repo="valkey-io/valkey-json", head=HEAD, base=BASE,
+                                                valkey_sha="e" * 40, checkout="valkey-json")
+    assert "      modules: [{$ref: artifacts.module.path}]\n      modules_parent: [{$ref: artifacts.module_parent.path}]" in module
+    tests = propose_mod._TEST_MODULES_SECTION.format(names="tests/modules/datatype.so")
+    assert "      compare_with: {$ref: artifacts.parent.binary}\n      modules: [{$ref: artifacts.module.path}]" in tests
 
 
 # A proposed experiment that references the parent build through an installed
@@ -994,6 +1212,24 @@ def test_the_real_fuzzer_compiles_and_validates_a_proposed_experiment(tmp_path):
     scenario.write_text(_REAL_SCENARIO + PARENT_ARTIFACT_BLOCK)
     assert validator(scenario, directory) is None
     assert validator(scenario, tmp_path / "empty") is not None  # the experiment is loaded from the directory
+
+
+@pytest.mark.skipif(not _FUZZER_BIN, reason="needs VALKEY_FUZZER_BIN, the installed valkey-fuzzer command")
+def test_the_real_fuzzer_validates_a_module_experiment_with_the_module_builds_declared(tmp_path):
+    directory = tmp_path / "experiments"
+    directory.mkdir()
+    (directory / "proposed.json-get.yaml").write_text(MODULE_PROPOSED)
+    entries, error = fuzzer_lister(_FUZZER_BIN)(directory)
+    assert error is None
+    assert compiled_experiment_error(entries[0], (propose_mod.MODULE_REFERENCE,
+                                                  propose_mod.MODULE_PARENT_REFERENCE)) is None
+    assert "references artifacts.module.path" in compiled_experiment_error(entries[0])
+    scenario = tmp_path / "scenario.yaml"
+    scenario.write_text("scenario_id: ai-json\n" + USES_MODULE)
+    validator = fuzzer_validator(_FUZZER_BIN)
+    assert "artifacts.module" in validator(scenario, directory)
+    scenario.write_text("scenario_id: ai-json\n" + USES_MODULE + artifacts_block(("module", "module_parent")))
+    assert validator(scenario, directory) is None
 
 
 @pytest.mark.skipif(not _FUZZER_BIN, reason="needs VALKEY_FUZZER_BIN, the installed valkey-fuzzer command")
