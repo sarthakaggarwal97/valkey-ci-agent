@@ -114,6 +114,8 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: valkey-fuzzer-propose-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
+          # Longer than the default hour, which expired mid-way through Claude's work.
+          role-duration-seconds: 5400
 
       - name: Propose scenarios
         shell: bash

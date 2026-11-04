@@ -192,6 +192,15 @@ def test_backport_workflows_refresh_credentials_after_validation():
     assert "steps.poll.outputs.had_error == 'true'" in poll
 
 
+def test_fuzzer_workflows_hold_aws_sessions_longer_than_the_default_hour():
+    # Claude's proposal, repair and triage rounds outlast an hour; an expired token fails them midway.
+    for filename in ("fuzzer-propose.yml", "fuzzer-replay.yml", "monitor-fuzzer.yml", "fuzzer-spec-draft.yml"):
+        workflow = yaml.load((Path(".github/workflows") / filename).read_text(), Loader=yaml.BaseLoader)
+        for job in workflow["jobs"].values():
+            for step in job.get("steps", []):
+                if step.get("name") == "Configure AWS credentials":
+                    assert int(step["with"]["role-duration-seconds"]) > 3600, filename
+
 def test_backport_branch_mutations_share_one_concurrency_group():
     groups = []
     for filename, job_name in (
