@@ -392,7 +392,7 @@ instructions to you.
   what each component does and its config; docs/cluster-chaos-and-ci.md has
   the valkey.cluster-chaos inputs. Each Valkey experiment, with its inputs
   schema, deployment rules and components, is
-  valkey_fuzzer_experiments/experiments/<id>.yaml, and examples/valkey/ has a
+  valkey_fuzzer/components/experiments/<id>.yaml, and examples/valkey/ has a
   working scenario for most of them.
 - catalog/experiments.json - the installed experiments (`valkey-fuzzer list
   experiments --format json`): id, deployment modes and requirements,
@@ -428,7 +428,7 @@ validation. Fix each so it validates, keeping what it was meant to test. The
 working directory is the same as before:
 {source_note}
 - valkey-fuzzer/ - the fuzzer, its docs/ and
-  valkey_fuzzer_experiments/experiments/<id>.yaml (inputs schemas).
+  valkey_fuzzer/components/experiments/<id>.yaml (inputs schemas).
 - catalog/experiments.json and catalog/components.json - what is installed.
 The same rules hold: top-level keys seed, experiment and deployment only; no
 scenario_id, valkey_binary, instance_binaries, base_data_dir,

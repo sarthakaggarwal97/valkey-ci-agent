@@ -576,9 +576,9 @@ _FUZZER_DIR = os.environ.get("VALKEY_FUZZER_DIR", "")
 @pytest.mark.skipif(not _FUZZER_DIR, reason="needs VALKEY_FUZZER_DIR, a valkey-fuzzer checkout")
 @pytest.mark.parametrize("prompt", [propose_mod._PROPOSE_PROMPT, propose_mod._REPAIR_PROMPT])
 def test_the_prompts_name_only_files_the_fuzzer_has(prompt):
-    # docs/*.md, valkey_fuzzer_experiments/... and examples/... are read by
-    # Claude in its copy of the fuzzer; a renamed one leaves it looking for nothing.
-    named = set(re.findall(r"\b((?:docs|valkey_fuzzer_experiments|examples)/[\w./<>-]*\w/?)", prompt))
+    # docs/*.md, valkey_fuzzer/... and examples/... are read by Claude in its
+    # copy of the fuzzer; a renamed one leaves it looking for nothing.
+    named = set(re.findall(r"\b((?:docs|valkey_fuzzer\w*|examples)/[\w./<>-]*\w/?)", prompt))
     assert named
     for path in named:
         if "<" in path:
