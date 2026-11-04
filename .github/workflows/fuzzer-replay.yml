@@ -78,7 +78,7 @@ jobs:
           [[ "${RANGE}" =~ ^${ref}\.\.${ref}$ && "${RANGE}" != *...* ]] || { echo "::error::range must be BASE..TIP"; exit 1; }
           [[ "${FIRST}" =~ ^[0-9]{1,3}$ ]] || { echo "::error::first must be 0 to 999"; exit 1; }
           [[ "${COUNT}" =~ ^([1-9]|10)$ ]] || { echo "::error::count must be 1 to 10"; exit 1; }
-          [[ "${RANDOM_SEEDS}" =~ ^([0-9]|1[0-9]|20)$ ]] || { echo "::error::random_seeds must be 0 to 20"; exit 1; }
+          [[ "${RANDOM_SEEDS}" =~ ^[0-4]$ ]] || { echo "::error::random_seeds must be 0 to 4"; exit 1; }
           [[ "${MAX_PARALLEL}" =~ ^([1-9]|10)$ ]] || { echo "::error::max_parallel must be 1 to 10"; exit 1; }
           [[ "${FUZZER_REF}" =~ ^${ref}$ ]] || { echo "::error::fuzzer_ref must be a branch name"; exit 1; }
 
@@ -306,12 +306,19 @@ jobs:
           failed=0
           for index in $(seq $((CHUNK * TRIAGE_CHUNK)) $((CHUNK * TRIAGE_CHUNK + TRIAGE_CHUNK - 1))); do
             replay="replays/replay-${index}/replay.json"
-            [[ -f "${replay}" ]] || continue
+            if [[ ! -f "${replay}" ]]; then
+              # Past the last merge of the range, or a replay job that died before writing anything.
+              [[ -d "replays/replay-${index}" ]] && echo "::warning::merge ${index} left no replay.json"
+              continue
+            fi
             run_id="$(jq -r '.run_id // empty' "${replay}")"
             change="$(jq -r '.change' "${replay}")"
             if [[ -z "${run_id}" ]]; then
               echo "::warning::merge ${index} ran no PR batch: ${change}"
               continue
+            fi
+            if [[ "$(jq -r '.conclusion // empty' "${replay}")" == "" ]]; then
+              echo "::warning::merge ${index}: the replay stopped waiting for PR batch ${run_id}; triaging it as it is"
             fi
             echo "::group::Merge ${index}: ${change}"
             python -m scripts.fuzzer.main --fuzzer-repo "${FUZZER_REPOSITORY}" --pr-batch-run "${run_id}" \

@@ -44,7 +44,7 @@ gh workflow run fuzzer-replay.yml --repo OWNER/valkey-ci-agent --field range=122
 | `range` | | `BASE..TIP`: the merges after `BASE` up to `TIP`, on `TIP`'s first-parent history of `valkey-io/valkey`. |
 | `first` | `0` | Replay only the first N merges (0: all). |
 | `count` | `5` | Scenarios to ask Claude for per merge. |
-| `random_seeds` | `2` | Random seeds of each one-build experiment per merge. |
+| `random_seeds` | `2` | Random seeds of each one-build experiment per merge, 0 to 4. |
 | `max_parallel` | `10` | Merges replayed at once. Each holds a runner while its batch holds another. |
 | `fuzzer_ref` | `main` | The valkey-fuzzer branch whose PR batch runs. |
 

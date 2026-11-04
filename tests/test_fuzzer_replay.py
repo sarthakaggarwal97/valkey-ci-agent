@@ -72,7 +72,7 @@ def _change() -> Change:
                   head_sha="b" * 40, diff="diff --git a/x b/x\n")
 
 
-def _replay(monkeypatch, tmp_path, *, propose, merge=None):
+def _replay(monkeypatch, tmp_path, *, propose, merge=None, random_seeds=2):
     fetched, dispatched, waited = [], [], []
     monkeypatch.setattr(replay_mod, "fetch_change", lambda gh, token, request: fetched.append(request) or _change())
     monkeypatch.setattr(replay_mod, "load_catalog", lambda fuzzer_bin: {"experiments": [], "components": []})
@@ -83,7 +83,8 @@ def _replay(monkeypatch, tmp_path, *, propose, merge=None):
     monkeypatch.setattr(replay_mod, "wait_for_run", lambda gh, **kw: waited.append(kw) or batch)
     result = replay_mod.run(
         merge or _merge(), gh=MagicMock(), token="t", repo="valkey-io/valkey", fuzzer_repo="owner/valkey-fuzzer",
-        fuzzer_ref="generic-fuzzer", fuzzer_dir=tmp_path, fuzzer_bin="valkey-fuzzer", count=5, random_seeds=2,
+        fuzzer_ref="generic-fuzzer", fuzzer_dir=tmp_path, fuzzer_bin="valkey-fuzzer", count=5,
+        random_seeds=random_seeds,
         out_dir=tmp_path / "out", timeout_s=60,
     )
     return result, fetched, dispatched, waited
@@ -148,6 +149,51 @@ def test_a_merge_before_the_rules_leaves_their_experiments_out(monkeypatch, tmp_
     assert list(json.loads(inputs["scenarios"])) == [docs[0]["scenario_id"]]
     assert inputs["exclude_experiments"] == " ".join(replay_mod.REPL_COMPRESSION_EXPERIMENTS)
     assert (result["proposed"], result["excluded_proposals"]) == (2, 1)
+
+
+def test_plan_refuses_more_merges_than_a_matrix_runs(valkey, monkeypatch):
+    monkeypatch.setattr(replay_mod, "MAX_MERGES", 2)
+    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", _git(valkey, "rev-parse", "HEAD~3"))
+    with pytest.raises(ValueError, match="holds 3 merges; a replay runs at most 2"):
+        plan(valkey, "HEAD~3..unstable")
+    assert len(plan(valkey, "HEAD~3..unstable", first=2)) == 2
+
+
+def test_without_a_random_baseline_the_exclusion_is_not_sent(monkeypatch, tmp_path):
+    doc = check_scenario(SCENARIO)[0]
+
+    def propose(change, *, out_dir, **kw):
+        (out_dir / "scenarios").mkdir(parents=True)
+        (out_dir / "scenarios" / f"{doc['scenario_id']}.yaml").write_text(_render_scenario(doc, change))
+        run = ProposalRun(change=change)
+        run.proposals.append(Proposal(index=1, rationale="why", text=SCENARIO, scenario_id=doc["scenario_id"],
+                                      file=f"scenarios/{doc['scenario_id']}.yaml"))
+        return run
+
+    merge = {**_merge(), "exclude_experiments": list(replay_mod.REPL_COMPRESSION_EXPERIMENTS)}
+    _, _, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose, merge=merge, random_seeds=0)
+    ((inputs, _),) = dispatched
+    assert "exclude_experiments" not in inputs and "random_seeds" not in inputs
+
+
+def test_replay_json_names_the_batch_as_soon_as_it_is_found(monkeypatch, tmp_path):
+    def wait(gh, **kw):
+        kw["on_found"](MagicMock(id=99, html_url="https://x/runs/99"))
+        raise TimeoutError("the PR batch did not complete")
+
+    monkeypatch.setattr(replay_mod, "fetch_change", lambda gh, token, request: _change())
+    monkeypatch.setattr(replay_mod, "load_catalog", lambda fuzzer_bin: {"experiments": [], "components": []})
+    monkeypatch.setattr(replay_mod, "fuzzer_validator", lambda fuzzer_bin: None)
+    monkeypatch.setattr(replay_mod, "propose", lambda change, **kw: ProposalRun(change=change))
+    monkeypatch.setattr(replay_mod, "dispatch_batch", lambda gh, inputs, **kw: None)
+    monkeypatch.setattr(replay_mod, "wait_for_run", wait)
+    with pytest.raises(TimeoutError):
+        replay_mod.run(_merge(), gh=MagicMock(), token="t", repo="valkey-io/valkey", fuzzer_repo="o/f",
+                       fuzzer_ref="r", fuzzer_dir=tmp_path, fuzzer_bin="f", count=5, random_seeds=2,
+                       out_dir=tmp_path / "out", timeout_s=1)
+    written = json.loads((tmp_path / "out" / "replay.json").read_text())
+    assert (written["run_id"], written["conclusion"], written["dispatched"]) == (99, None, True)
+    assert written["wait_error"].startswith("the PR batch did not complete")
 
 
 def test_a_failed_proposal_still_runs_the_random_baseline(monkeypatch, tmp_path):

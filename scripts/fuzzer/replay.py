@@ -53,6 +53,8 @@ from scripts.fuzzer.propose import (
 logger = logging.getLogger(__name__)
 
 REPLAY_FILE = "replay.json"
+# GitHub runs at most this many jobs from one matrix, and the workflow replays one merge per job.
+MAX_MERGES = 256
 # A squash merge's subject ends with its pull request: "Fix the thing (#1234)".
 _PR_SUBJECT_RE = re.compile(r"\(#([1-9][0-9]*)\)\s*$")
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
@@ -83,7 +85,13 @@ def plan(valkey_dir: Path, commit_range: str, *, first: int = 0) -> list[dict[st
         merges.append({"index": index, "sha": sha, "parent": parent,
                        "pr": int(match.group(1)) if match else None, "subject": subject[:200],
                        "exclude_experiments": excluded_experiments(valkey_dir, sha)})
-    return merges[:first] if first else merges
+    merges = merges[:first] if first else merges
+    if len(merges) > MAX_MERGES:
+        raise ValueError(
+            f"{commit_range} holds {len(merges)} merges; a replay runs at most {MAX_MERGES} (GitHub's matrix "
+            "limit). Replay a shorter range, or set first."
+        )
+    return merges
 
 
 def excluded_experiments(valkey_dir: Path, sha: str) -> list[str]:
@@ -145,18 +153,32 @@ def run(
         kept = {name: text for name, text in scenarios.items() if _experiment(text) not in excluded}
         result["excluded_proposals"] = len(scenarios) - len(kept)
         scenarios = kept
+    # The exclusion only applies to the random baseline; without one the workflow refuses it.
     inputs = batch_dispatch_inputs(summary, scenarios, random_seeds=random_seeds, request_id=result["request_id"],
-                                   exclude_experiments=excluded)
+                                   exclude_experiments=excluded if random_seeds else ())
     # GitHub's clock and ours may differ a little.
     since = datetime.now(timezone.utc) - timedelta(minutes=2)
     dispatch_batch(gh, inputs, fuzzer_repo=fuzzer_repo, workflow=PR_BATCH_WORKFLOW, ref=fuzzer_ref)
     logger.info("Dispatched %s with %d scenario(s) and %d random seed(s) per experiment",
                 result["request_id"], len(scenarios), random_seeds)
-    batch = wait_for_run(gh, fuzzer_repo=fuzzer_repo, workflow=PR_BATCH_WORKFLOW, request_id=result["request_id"],
-                         since=since, timeout_s=timeout_s)
-    result.update(run_id=batch.id, run_url=batch.html_url, conclusion=batch.conclusion)
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / REPLAY_FILE).write_text(json.dumps(result, indent=2), encoding="utf-8")
+
+    def record(**fields: Any) -> None:
+        """Write replay.json now: a wait that fails later still leaves the batch's run for the triage."""
+        result.update(fields)
+        (out_dir / REPLAY_FILE).write_text(json.dumps(result, indent=2), encoding="utf-8")
+
+    record(dispatched=True)
+    try:
+        batch = wait_for_run(
+            gh, fuzzer_repo=fuzzer_repo, workflow=PR_BATCH_WORKFLOW, request_id=result["request_id"],
+            since=since, timeout_s=timeout_s,
+            on_found=lambda run: record(run_id=run.id, run_url=run.html_url, conclusion=None),
+        )
+    except Exception as exc:
+        record(wait_error=" ".join(str(exc).split())[:500])
+        raise
+    record(run_id=batch.id, run_url=batch.html_url, conclusion=batch.conclusion)
     return result
 
 

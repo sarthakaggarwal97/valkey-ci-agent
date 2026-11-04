@@ -78,7 +78,7 @@ def test_batch_inputs_are_the_ones_the_workflow_takes():
                                       {"ai-0123456789ab": SCENARIO})
     assert for_range["valkey_ref"] == HEAD
     baseline = batch_dispatch_inputs({"repo": "valkey-io/valkey", "pr_number": None, "head_sha": HEAD}, {},
-                                     random_seeds=5, request_id="replay-007-aaaaaaaaa")
+                                     random_seeds=4, request_id="replay-007-aaaaaaaaa")
     assert (baseline["scenarios"], baseline["random_seeds"], baseline["request_id"]) == ("{}", "5", "replay-007-aaaaaaaaa")
 
 
@@ -121,8 +121,8 @@ def test_bundle_paths_the_batch_takes(path, allowed):
     (_scenarios("{not json"), "scenarios is not JSON"),
     (_scenarios({}), "scenarios is empty and random_seeds is 0: there is nothing to run"),
     (_scenarios([SCENARIO]), "must be a JSON object"),
-    (_inputs(random_seeds="21"), "random_seeds must be 0 to 20"),
-    (_inputs(random_seeds="-1"), "random_seeds must be 0 to 20"),
+    (_inputs(random_seeds="5"), "random_seeds must be 0 to 4"),
+    (_inputs(random_seeds="-1"), "random_seeds must be 0 to 4"),
     (_inputs(request_id="a b"), "request_id must be at most 100 letters"),
     (_inputs(random_seeds="2", exclude_experiments="x;rm"), "exclude_experiments must be"),
     (_inputs(exclude_experiments="valkey.replication-chaos"), "which random_seeds 0 skips"),
@@ -449,3 +449,22 @@ def test_wait_for_run_gives_up_at_its_timeout():
     with pytest.raises(TimeoutError, match="no run named 'r' showed up"):
         pr_batch_mod.wait_for_run(_runs(), fuzzer_repo="o/f", workflow="w", request_id="r", since=SINCE,
                                   timeout_s=0.01, poll_s=0.01, sleep=lambda s: None)
+
+
+def test_wait_for_run_reports_the_run_once_found_and_survives_a_failed_poll():
+    from github import GithubException
+
+    run = _run("Valkey Fuzzer PR Batch r", 1, status="queued")
+    updates = iter([GithubException(502, "bad gateway", None), "in_progress", "completed"])
+
+    def update():
+        outcome = next(updates)
+        if isinstance(outcome, Exception):
+            raise outcome
+        run.status = outcome
+
+    run.update.side_effect = update
+    found_runs, sleeps = [], []
+    found = pr_batch_mod.wait_for_run(_runs(run), fuzzer_repo="o/f", workflow="w", request_id="r", since=SINCE,
+                                      timeout_s=3600, poll_s=5, sleep=sleeps.append, on_found=found_runs.append)
+    assert found is run and found_runs == [run] and sleeps == [5, 5]

@@ -613,3 +613,26 @@ def test_match_existing_is_not_asked_when_the_marker_matches():
     publisher.upsert("o/r", fingerprint="fp1", render=_render_static(), match_existing=asked.append)
 
     assert asked == []
+
+
+def test_a_second_finding_of_one_event_routed_to_the_same_issue_is_recorded():
+    """Two findings of one batch share a root cause: the first created (or updated) the issue and stamped the
+    run id; the second, routed there by match_existing, is new to the issue, so it is recorded, marker and all."""
+    issue = _mock_issue(8, body=f"<!-- {NAMESPACE}:fpA -->\n<!-- {NAMESPACE}:occurrences:1 -->\n"
+                                f"<!-- {NAMESPACE}:last-key:7777 -->", title="Root cause")
+    mock_gh, _ = _mock_gh(open_issues=[issue])
+
+    publisher = IssueDedupPublisher(mock_gh, marker_namespace=NAMESPACE)
+    action, _ = publisher.upsert("o/r", fingerprint="fpB", render=_render_static(), idempotency_key="7777",
+                                 match_existing=lambda issues: 8)
+
+    assert action == "updated"
+    edited = issue.edit.call_args.kwargs["body"]
+    assert f"<!-- {NAMESPACE}:fpB -->" in edited and f"<!-- {NAMESPACE}:occurrences:2 -->" in edited
+    issue.create_comment.assert_called_once()
+    # The same finding again for the same event is still a repeat.
+    repeat = _mock_issue(8, body=edited, title="Root cause")
+    mock_gh, _ = _mock_gh(open_issues=[repeat])
+    action, _ = IssueDedupPublisher(mock_gh, marker_namespace=NAMESPACE).upsert(
+        "o/r", fingerprint="fpB", render=_render_static(), idempotency_key="7777")
+    assert action == "skipped-duplicate"

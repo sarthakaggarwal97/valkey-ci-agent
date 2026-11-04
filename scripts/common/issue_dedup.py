@@ -201,7 +201,11 @@ class IssueDedupPublisher:
         if body_transform is not None:
             body = body_transform(body)
 
-        if idempotency_key is not None:
+        # A repeat of the same source event, for a finding the issue already
+        # carries. A finding whose marker is not on the issue yet (one
+        # match_existing routed here, after another finding of the same event
+        # did) is new to it, so it is recorded, marker and all.
+        if idempotency_key is not None and marker in body:
             last = _last_key_re(self._ns).search(body)
             if last and last.group(1) == idempotency_key:
                 logger.info(

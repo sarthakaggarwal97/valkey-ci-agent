@@ -45,6 +45,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import yaml
+from github import GithubException
 
 from scripts.common.job_summary import emit_job_summary
 from scripts.common.logging_utils import configure_logging, log_outcome
@@ -71,7 +72,7 @@ MAX_DISPATCH_CHARS = 65_535
 # The workflow's patterns, exactly.
 _REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
-_RANDOM_SEEDS_RE = re.compile(r"[0-9]|1[0-9]|20")
+_RANDOM_SEEDS_RE = re.compile(r"[0-4]")
 _REQUEST_ID_RE = re.compile(r"[A-Za-z0-9_.-]{0,100}")
 _EXPERIMENT_ID_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,99}")
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}")
@@ -117,7 +118,7 @@ def check_batch_inputs(inputs: dict[str, str]) -> None:
         raise ValueError("valkey_sha must be a full 40-character lowercase commit SHA")
     random_seeds = inputs.get("random_seeds", "0")
     if not _RANDOM_SEEDS_RE.fullmatch(random_seeds):
-        raise ValueError("random_seeds must be 0 to 20")
+        raise ValueError("random_seeds must be 0 to 4")
     if not _REQUEST_ID_RE.fullmatch(inputs.get("request_id", "")):
         raise ValueError("request_id must be at most 100 letters, digits, '.', '_', or '-'")
     excluded = inputs.get("exclude_experiments", "").split()
@@ -272,16 +273,28 @@ def find_run(gh: Any, *, fuzzer_repo: str, workflow: str, request_id: str, since
 def wait_for_run(
     gh: Any, *, fuzzer_repo: str, workflow: str, request_id: str, since: datetime,
     timeout_s: float, poll_s: float = 60.0, sleep: Callable[[float], None] = time.sleep,
+    on_found: Callable[[Any], None] | None = None,
 ) -> Any:
-    """Find the run a dispatch named ``request_id`` started, and wait until it completes."""
+    """Find the run a dispatch named ``request_id`` started, and wait until it completes.
+
+    ``on_found`` is called once, with the run, as soon as it shows. A GitHub
+    or network error during a poll is logged and the next poll tries again:
+    one failed call must not lose a wait of several hours.
+    """
     deadline = time.monotonic() + timeout_s
     run = None
     while time.monotonic() < deadline:
-        run = run or find_run(gh, fuzzer_repo=fuzzer_repo, workflow=workflow, request_id=request_id, since=since)
-        if run is not None:
-            run.update()
-            if run.status == "completed":
-                return run
+        try:
+            if run is None:
+                run = find_run(gh, fuzzer_repo=fuzzer_repo, workflow=workflow, request_id=request_id, since=since)
+                if run is not None and on_found is not None:
+                    on_found(run)
+            if run is not None:
+                run.update()
+                if run.status == "completed":
+                    return run
+        except (GithubException, OSError) as exc:
+            logger.warning("Polling the PR batch %s failed, retrying: %s", request_id, exc)
         sleep(poll_s)
     where = run.html_url if run is not None else f"no run named {request_id!r} showed up"
     raise TimeoutError(f"the PR batch did not complete within {timeout_s:.0f}s: {where}")
