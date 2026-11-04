@@ -70,6 +70,8 @@ def _publish(publisher: IssueDedupPublisher, repo: str, run_id: int, finding: An
         fingerprint=finding.incident_fingerprint,
         render=render,
         idempotency_key=str(run_id),
+        # An issue's title names its root cause once; later occurrences add comments.
+        keep_title=True,
         match_existing=lambda issues: same_root_cause(
             finding, render("", 1).title, issues, marker_namespace=issue_renderer.MARKER_NAMESPACE,
         ),
@@ -110,10 +112,13 @@ def main(argv: list[str] | None = None) -> int:
 
     gh = Github(auth=Auth.Token(token))
     client = ArtifactClient(gh, token=token)
-    analyzer = FuzzerRunAnalyzer(gh, github_token=token, artifact_client=client, change_diff=change_diff)
     publisher = IssueDedupPublisher(gh, marker_namespace=issue_renderer.MARKER_NAMESPACE)
-
     repo = args.fuzzer_repo
+    analyzer = FuzzerRunAnalyzer(
+        gh, github_token=token, artifact_client=client, change_diff=change_diff,
+        known=lambda fingerprint: publisher.has_open_issue(repo, fingerprint),
+    )
+
     if args.pr_batch_run:
         workflow = PR_BATCH_WORKFLOW
         runs = [gh.get_repo(repo).get_workflow_run(args.pr_batch_run)]

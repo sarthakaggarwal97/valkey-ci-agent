@@ -38,7 +38,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -879,12 +879,16 @@ class FuzzerRunAnalyzer:
     """Analyzes fuzzer workflow runs: pattern matching + Claude Code."""
 
     def __init__(self, github_client: Any, *, github_token: str,
-                 artifact_client: ArtifactClient | None = None, change_diff: str | None = None) -> None:
+                 artifact_client: ArtifactClient | None = None, change_diff: str | None = None,
+                 known: Callable[[str], bool] | None = None) -> None:
         """``change_diff`` is the diff of the change a PR batch tested, which Claude's triage of
-        an unexplained difference between the merge commit and its parent needs."""
+        an unexplained difference between the merge commit and its parent needs. ``known`` says
+        whether a fingerprint already has an open issue: such a signature skips Claude's analysis,
+        which the issue already holds, and only adds an occurrence."""
         self._gh = github_client
         self._client = artifact_client or ArtifactClient(github_client, token=github_token)
         self._change_diff = change_diff
+        self._known = known
         self._change: str | None = None
 
     def analyze(
@@ -1099,7 +1103,19 @@ class FuzzerRunAnalyzer:
             + (f"\n{change_note}" if change_note else "")
         )
         others = [c for c in contexts if c is not focus][: _MAX_CLAUDE_RUNS - 1]
-        payload, claude_error = self._ask_claude(budget, focus, signals, others=others, batch=batch, note=note)
+        fingerprint = compute_fingerprint(
+            namespace=(base["repo"], base["workflow_file"], "signature", group.key), shapes=[],
+        )
+        if self._known is not None and not unreadable and self._known(fingerprint):
+            # Seen before: the open issue holds Claude's analysis; this batch is one more occurrence.
+            payload, claude_error = {"summary": (
+                f"{len(group.runs)} run(s) of {group.experiment or 'an unknown experiment'} failed again with "
+                f"this signature, which already has an open issue: {group.label}"
+            )}, None
+        else:
+            payload, claude_error = self._ask_claude(
+                budget, focus, signals, others=others, batch=batch, note=note,
+            )
         signals = _with_claude_anomalies(signals, payload)
         run_status = group.status or (focus.report or {}).get("status")
         overall_status, verdict = _final_verdict(payload, signals, unreadable=unreadable, run_status=run_status)
@@ -1117,9 +1133,7 @@ class FuzzerRunAnalyzer:
             experiment_id=focus.experiment_id or group.experiment, run_status=run_status,
             root_cause_category=_root_cause(payload),
             reproduction_hint=_hint(payload) or _reproduction_hint(focus),
-            incident_fingerprint=compute_fingerprint(
-                namespace=(base["repo"], base["workflow_file"], "signature", group.key), shapes=[],
-            ),
+            incident_fingerprint=fingerprint,
             suggested_labels=["possible-valkey-bug"] if verdict in _BUG_VERDICTS else [],
             batch_runs=list(group.runs), signature_key=group.key, signature_label=group.label,
             rerun_verdict=group.rerun_verdict, rerun_detail=rerun_detail,

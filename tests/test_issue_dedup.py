@@ -636,3 +636,20 @@ def test_a_second_finding_of_one_event_routed_to_the_same_issue_is_recorded():
     action, _ = IssueDedupPublisher(mock_gh, marker_namespace=NAMESPACE).upsert(
         "o/r", fingerprint="fpB", render=_render_static(), idempotency_key="7777")
     assert action == "skipped-duplicate"
+
+
+def test_has_open_issue_reads_the_cached_listing():
+    marked = _mock_issue(5, body=f"<!-- {NAMESPACE}:fp1 -->", title="old")
+    mock_gh, mock_repo = _mock_gh(open_issues=[marked])
+    publisher = IssueDedupPublisher(mock_gh, marker_namespace=NAMESPACE)
+    assert publisher.has_open_issue("o/r", "fp1") and not publisher.has_open_issue("o/r", "fp2")
+    assert mock_repo.get_issues.call_count == 1
+
+
+def test_keep_title_keeps_an_existing_issues_title_on_update():
+    marker = f"<!-- {NAMESPACE}:fp1 -->"
+    existing = _mock_issue(5, body=f"{marker}\n<!-- {NAMESPACE}:occurrences:1 -->", title="Root cause title")
+    mock_gh, _ = _mock_gh(open_issues=[existing])
+    IssueDedupPublisher(mock_gh, marker_namespace=NAMESPACE).upsert(
+        "o/r", fingerprint="fp1", render=_render_static(title="FAIL | some signature"), keep_title=True)
+    assert existing.edit.call_args.kwargs["title"] == "Root cause title"

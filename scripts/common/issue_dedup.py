@@ -100,6 +100,7 @@ class IssueDedupPublisher:
         body_transform: Callable[[str], str] | None = None,
         title_fallback: str | None = None,
         match_existing: Callable[[list[Any]], int | None] | None = None,
+        keep_title: bool = False,
     ) -> tuple[str, str]:
         """Create or update the issue for ``fingerprint``.
 
@@ -134,6 +135,9 @@ class IssueDedupPublisher:
         case-sensitive. Pass the same title ``render`` produces. The same
         fallback applies to the recently-closed check, so a legacy issue
         closed within the lookback window also suppresses creation.
+
+        ``keep_title`` keeps an existing issue's title on every update, not
+        only on one ``match_existing`` chose.
 
         ``match_existing`` runs only when neither the marker nor the title
         matched. It receives the open issues and returns the number of the one
@@ -234,7 +238,7 @@ class IssueDedupPublisher:
         content = render(marker, count)
         # An issue chosen by match_existing keeps its title: it names the root
         # cause, and this finding is one more case of it.
-        title = existing.title if matched else content.title
+        title = existing.title if matched or keep_title else content.title
         retry_github_call(
             lambda: existing.edit(body=new_body, title=title),
             retries=2, description=f"update issue #{existing.number}",
@@ -245,6 +249,14 @@ class IssueDedupPublisher:
         )
         logger.info("Updated issue #%s (occurrence %d)", existing.number, count)
         return "updated", existing.html_url
+
+    def has_open_issue(self, repo_name: str, fingerprint: str) -> bool:
+        """Whether an open issue of ``repo_name`` carries ``fingerprint``'s marker (the cached listing)."""
+        repo = retry_github_call(
+            lambda: self._gh.get_repo(repo_name), retries=2, description=f"get repo {repo_name}",
+        )
+        marker = f"<!-- {self._ns}:{fingerprint} -->"
+        return any(marker in (issue.body or "") for issue in self._open_issues_for(repo, repo_name))
 
     def _open_issues_for(self, repo: Any, repo_name: str) -> list[Any]:
         """Open issues of the repo, fetched once and cached.

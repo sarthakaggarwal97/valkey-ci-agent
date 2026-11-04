@@ -1183,3 +1183,32 @@ def test_the_reproduction_line_of_a_run_without_a_report_reads_its_scenario():
     assert _reproduction_hint(_ctx(scenario_yaml="- [", experiment_id="x")) == (
         "valkey-fuzzer run runs/run-1/scenario.yaml --valkey-binary /path/to/valkey-server"
     )
+
+
+def test_a_signature_with_an_open_issue_skips_claude(monkeypatch):
+    from scripts.common.workflow_artifacts import WorkflowArtifact
+    from scripts.fuzzer import analyzer as analyzer_mod
+
+    asked = []
+    monkeypatch.setattr(analyzer_mod, "_invoke_claude", lambda *a, **kw: asked.append(1) or {})
+    client = MagicMock()
+    client.list_run_artifacts.return_value = [WorkflowArtifact(9, "fuzzer-run-artifacts-1", 1, False)]
+    client.download_artifact.return_value = batch_files()
+    github = MagicMock()
+    github.get_repo.return_value.get_workflow_run.return_value = MagicMock(
+        html_url="https://x/runs/1", conclusion="failure", head_sha="abc")
+    seen: set[str] = set()
+
+    def is_known(fingerprint):
+        seen.add(fingerprint)
+        return True
+
+    analysis = analyzer_mod.FuzzerRunAnalyzer(
+        github, github_token="t", artifact_client=client, known=is_known,
+    ).analyze("r", 1, workflow_file="w")
+    signatures = [f for f in analysis.findings if f.kind == "signature"]
+    readable = [f for f in signatures if not any(a.title == "Run report unreadable" for a in f.anomalies)]
+    assert readable and all("already has an open issue" in f.summary for f in readable)
+    assert {f.incident_fingerprint for f in readable} <= seen
+    # Claude is asked only about a signature whose report could not be read.
+    assert len(asked) == len(signatures) - len(readable)
