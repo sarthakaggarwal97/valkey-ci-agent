@@ -913,3 +913,12 @@ def test_progress_shows_each_merges_coverage_and_the_median():
     assert "2 of 3 test(s) reached the change, coverage 90%" in text
     assert "2 of 3 test(s) reached the change\n" in text  # not measured: no coverage shown
     assert "- Changed-line coverage: median 70% of 3 merge(s) measured, 1 under 50%" in text
+
+
+def test_checks_leave_every_scalar_as_written():
+    # As in the walk's test of valkey-io/valkey-bloom#110: PyYAML reads `no` as false, which the fuzzer refuses.
+    text = EXPERIMENT.replace("{command: [RPUSH, l, a]", "{command: [CONFIG, SET, bf.bloom-use-random-seed, no]")
+    assert "bf.bloom-use-random-seed, no]" in text
+    out = walk.with_checks(text)
+    assert yaml.safe_load(out)["components"][0]["config"]["checks"] == CHECKS
+    assert "bf.bloom-use-random-seed, no]" in out and "false" not in out

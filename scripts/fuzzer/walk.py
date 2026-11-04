@@ -493,17 +493,33 @@ def cover(measure: Callable[[list[Any]], dict[str, Any]], more: Callable[[dict[s
 def with_checks(text: str) -> str:
     """An experiment's YAML with CHECKS on every valkey.action.commands that compares two builds: of Valkey
     (``compare_with``), or of a module (``modules_parent``), which leaves out compat, a check of two Valkey
-    builds."""
-    doc = yaml.safe_load(text)
-    for component in doc.get("components") or []:
-        config = component.get("config") if isinstance(component, dict) else None
-        if component.get("use") != "valkey.action.commands" or not isinstance(config, dict):
+    builds.
+
+    It edits the YAML's nodes, not the values they load as, so every scalar keeps its text: PyYAML reads ``no``
+    as false, and a command's ``no`` would come back a boolean the fuzzer refuses."""
+
+    def child(node: yaml.Node | None, key: str) -> yaml.Node | None:
+        if isinstance(node, yaml.MappingNode):
+            return next((v for k, v in node.value if isinstance(k, yaml.ScalarNode) and k.value == key), None)
+        return None
+
+    root = yaml.compose(text, Loader=yaml.SafeLoader)
+    components = child(root, "components")
+    for component in components.value if isinstance(components, yaml.SequenceNode) else []:
+        use, config = child(component, "use"), child(component, "config")
+        if not (isinstance(use, yaml.ScalarNode) and use.value == "valkey.action.commands"):
             continue
-        if config.get("compare_with") is not None:
-            config["checks"] = dict(CHECKS)
-        elif config.get("modules_parent") is not None:
-            config["checks"] = {key: value for key, value in CHECKS.items() if key != "compat"}
-    return yaml.safe_dump(doc, sort_keys=False)
+        if not isinstance(config, yaml.MappingNode) or child(config, "checks") is not None:
+            continue
+        if child(config, "compare_with") is not None:
+            checks = dict(CHECKS)
+        elif child(config, "modules_parent") is not None:
+            checks = {key: value for key, value in CHECKS.items() if key != "compat"}
+        else:
+            continue
+        key = yaml.ScalarNode("tag:yaml.org,2002:str", "checks")
+        config.value.append((key, yaml.compose(yaml.safe_dump(checks), Loader=yaml.SafeLoader)))
+    return yaml.serialize(root, Dumper=yaml.SafeDumper)
 
 
 def log_cause(text: str) -> str | None:
@@ -887,15 +903,15 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
             doc = yaml.safe_load(text)
             seed = int(doc["seed"])
             first = view(test, doc, "merge", seed)
-            if not first["reached"] and first["status"] not in ("PASS", "FAIL"):
+            if not first.get("reached") and first["status"] not in ("PASS", "FAIL"):
                 # It neither reached the change nor ran to a verdict on the merge: dropped, only counted.
                 result["dropped"] += 1
                 result["recorded"].append({"scenario": test, "build": "merge", "status": first["status"],
                                            "reason": first.get("reason") or first.get("error")})
                 continue
             hunting.append((test, doc))
-            result["proven"] += int(first["reached"])
-            result["recall"] = result["recall"] or first["reached"] or first["parent_exited"]
+            result["proven"] += int(bool(first.get("reached")))
+            result["recall"] = result["recall"] or bool(first.get("reached")) or bool(first.get("parent_exited"))
             (folder / "scenarios").mkdir(exist_ok=True)
             (folder / "scenarios" / f"{test}.yaml").write_text(text, encoding="utf-8")
             experiment_file = f"{doc['experiment']['id']}.yaml"
@@ -927,7 +943,7 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
             # A fix regressed when commands that reached the change at the merge no longer do on unstable: not when
             # some marked command is unreached on both, which unreached-change alone says.
             lost = first["reached_commands"] - hunted.get("reached_commands", set())
-            if first["reached"] and hunted.get("reason") == UNREACHED and lost:
+            if first.get("reached") and hunted.get("reason") == UNREACHED and lost:
                 rerun = view(test, doc, "unstable", seed, again=True)
                 named = ", ".join(f"{component} {index}" for component, index in sorted(lost))
                 found.append({"rule": "regressed-fix", "detail": f"regressed fix: the change of {_where(merge)} no longer "
