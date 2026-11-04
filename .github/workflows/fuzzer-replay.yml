@@ -73,8 +73,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REPOSITORY: ${{ inputs.repository }}
   FUZZER_REPOSITORY: ${{ github.repository_owner }}/valkey-fuzzer
-  # Merges per triage job: the jobs run one at a time, in merge order.
-  TRIAGE_CHUNK: "16"
+  # Merges per triage job: the jobs run one at a time, in merge order. A merge's triage takes 10 to 30
+  # minutes of Claude, and a job's AWS session lasts an hour; past it every Claude call fails with an
+  # expired token, so a job holds two merges.
+  TRIAGE_CHUNK: "2"
   # The App where it is installed (valkey-io); a fork rehearses with REHEARSAL_PAT.
   HAS_APP: ${{ secrets.VALKEYRIE_BOT_APP_ID != '' }}
 
