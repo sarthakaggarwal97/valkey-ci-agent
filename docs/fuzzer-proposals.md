@@ -73,7 +73,8 @@ The agent checks each experiment before any scenario uses it:
   command to the deployment's instances, and the only environment reference
   it holds is `artifacts.parent.binary`. The check runs on the compiled
   experiment, not the YAML, because a fragment can bring either back;
-- at most 5 experiments, 20,000 characters together.
+- at most 5 experiments, 20,000 characters together as the PR batch is sent
+  them (JSON, each file as written).
 
 Each experiment is compiled in a directory of its own, so one that does not
 compile does not hide the others, and the ones that compile are written to
@@ -81,7 +82,8 @@ compile does not hide the others, and the ones that compile are written to
 (`valkey-fuzzer validate --experiment-dir`), on a copy with an
 `artifacts.parent` block appended, so a scenario whose experiment compares
 with the parent compiles; the accepted file stays without the block, and the
-PR batch appends the real one. An experiment that does not compile drops the
+PR batch appends the real one; a scenario may reference that build and no
+other. An experiment that does not compile drops the
 scenarios that use it, and the repair round sees both; a scenario Claude
 leaves alone is validated again once its experiment is fixed. An experiment
 no validated scenario uses is dropped too.

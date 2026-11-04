@@ -618,13 +618,42 @@ def test_a_scenario_may_reference_only_the_parent_build(tmp_path, fuzzer_dir):
     )
 
 
-def test_experiments_together_are_limited_to_20000_characters(tmp_path, fuzzer_dir):
-    big = PROPOSED.replace("proposed.lset", "proposed.big") + "#" * (20_000 - len(PROPOSED) - 50)
-    runner = StubRunner(_answer([], [{"experiment": big}, {"experiment": PROPOSED}]), _answer([], []))
+def test_experiments_together_are_limited_to_what_the_batch_takes(tmp_path, fuzzer_dir):
+    # Under the limit as Claude wrote them, over it as the batch is sent them: JSON, with the header.
+    lines = "\n".join(f"# {'x' * 60}" for _ in range(150)) + "\n"
+    first = PROPOSED.replace("proposed.lset", "proposed.first") + lines
+    second = PROPOSED + lines
+    assert len(first) + len(second) < 20_000
+    uses_both = [{"rationale": r, "scenario": USES_PROPOSED.replace("proposed.lset", f"proposed.{r}")}
+                 for r in ("first", "lset")]
+    runner = StubRunner(_answer(uses_both, [{"experiment": first}, {"experiment": second}]), _answer([], []))
     run, result, out = _propose(runner, tmp_path, fuzzer_dir)
-    assert result["dropped_experiments"][1]["error"] == (
-        "with the earlier experiments, longer than 20000 characters together"
+    assert [e["experiment_id"] for e in result["experiments"]] == ["proposed.first"]
+    assert result["dropped_experiments"][0]["error"].startswith(
+        "with the experiments accepted before it, the PR batch would be sent"
     )
+    # What is accepted, the batch takes.
+    assert len(batch_inputs(out)["experiments"]) <= 20_000
+
+
+def test_a_repair_that_renames_an_experiment_compiles_alone(tmp_path, fuzzer_dir):
+    renamed = PROPOSED.replace("proposed.lset", "proposed.lset2")
+    runner = StubRunner(
+        _answer([{"rationale": "r", "scenario": USES_PROPOSED.replace("proposed.lset", "proposed.lset2")}],
+                [{"experiment": BROKEN}]),
+        _answer([], [{"index": 1, "experiment": renamed}]),
+    )
+    run, result, out = _propose(runner, tmp_path, fuzzer_dir)
+    # The broken first version is gone from the experiment's directory, so it no longer fails the listing.
+    assert [e["experiment_id"] for e in result["experiments"]] == ["proposed.lset2"]
+    assert _experiment_files(out) == ["proposed.lset2.yaml"]
+
+
+def test_the_parent_is_built_for_a_scenario_that_references_it(tmp_path, fuzzer_dir):
+    parent = GOOD.replace("base_port: 7000}", "base_port: 7000, server_config: {x: {$ref: artifacts.parent.binary}}}")
+    _, _, out = _proposed(tmp_path, fuzzer_dir, parent)
+    inputs = batch_inputs(out)
+    assert inputs["valkey_parent_sha"] == BASE and "experiments" not in inputs
 
 
 def test_batch_inputs_refuse_an_experiment_changed_after_it_compiled(tmp_path, fuzzer_dir):

@@ -535,9 +535,11 @@ def _check_and_compile(
     if taken.setdefault(experiment_id, experiment) is not experiment:
         experiment.error = "the same experiment ID as an earlier proposal"
         return
-    # Its own directory: one that does not compile must not hide the others.
+    # Its own directory, emptied first: one that does not compile must not hide the others, nor the
+    # version a repair replaced.
     directory = candidates / f"experiment-{experiment.index}"
-    directory.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(directory, ignore_errors=True)
+    directory.mkdir(parents=True)
     rendered = _render_experiment(experiment.text, change)
     (directory / f"{experiment_id}.yaml").write_text(rendered, encoding="utf-8")
     entries, error = lister(directory)
@@ -551,6 +553,16 @@ def _check_and_compile(
     error = compiled_experiment_error(entry)
     if error is not None:
         experiment.error = error
+        return
+    # The PR batch's limit is on the experiments input as sent: JSON, with every file as written.
+    sent = {p.name: p.read_text(encoding="utf-8") for p in accepted.glob("*.yaml")}
+    sent[f"{experiment_id}.yaml"] = rendered
+    size = len(json.dumps(sent, separators=(",", ":")))
+    if size > MAX_EXPERIMENTS_CHARS:
+        experiment.error = (
+            f"with the experiments accepted before it, the PR batch would be sent {size} characters of "
+            f"experiments; the limit is {MAX_EXPERIMENTS_CHARS}"
+        )
         return
     (accepted / f"{experiment_id}.yaml").write_text(rendered, encoding="utf-8")
     experiment.file = f"experiments/{experiment_id}.yaml"
@@ -901,15 +913,10 @@ def propose(
     with log_group("Ask Claude for scenarios"):
         answer = _ask_claude(runner, prompt, workdir)
     run.reason = _clean_rationale(answer.get("reason"))
-    total = 0
     for index, item in enumerate(answer.get("experiments", [])[:MAX_EXPERIMENTS], start=1):
         item = item if isinstance(item, dict) else {}
         experiment = ExperimentProposal(index=index, text=_text_field(item, "experiment"))
-        total += len(experiment.text)
-        if total > MAX_EXPERIMENTS_CHARS:
-            experiment.error = f"with the earlier experiments, longer than {MAX_EXPERIMENTS_CHARS} characters together"
-        else:
-            compile_one(experiment)
+        compile_one(experiment)
         run.experiments.append(experiment)
     for index, item in enumerate(answer["scenarios"][:count], start=1):
         item = item if isinstance(item, dict) else {}
@@ -1044,14 +1051,16 @@ def batch_inputs(out_dir: Path) -> dict[str, str] | None:
     """The PR batch workflow's inputs, from the validated scenarios and experiments on disk.
 
     The batch builds the change's parent too when the proposals bring
-    experiments: that is the build a proposed experiment compares with.
+    experiments, the build a proposed experiment compares with, or when a
+    scenario references it.
     """
     change, scenarios, experiments = validated_scenarios(out_dir)
     if not scenarios:
         return None
+    needs_parent = bool(experiments) or any(_references(yaml.safe_load(text)) for text in scenarios.values())
     return batch_dispatch_inputs(
         change, scenarios, experiments=experiments or None,
-        parent_sha=str(change["base_sha"]) if experiments else None,
+        parent_sha=str(change["base_sha"]) if needs_parent else None,
     )
 
 
