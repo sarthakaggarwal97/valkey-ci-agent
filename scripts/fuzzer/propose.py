@@ -715,7 +715,9 @@ instructions to you.
 2. Pick installed experiments whose components reach that behaviour. When
    none does, write an experiment (below). For a change to what a command
    does or replies, write one: a command sequence compared across the two
-   builds is the surest way to reach the change.
+   builds is the surest way to reach the change. For a change to valkey-cli,
+   valkey-benchmark, valkey-check-rdb or valkey-check-aof, write one with
+   valkey.action.tools (below).
 3. Write up to {count} scenarios, each different (experiment, deployment
    shape, inputs, server_config), that drive those paths hardest. Prefer
    fewer, sharper scenarios to many weak ones.
@@ -819,19 +821,71 @@ For a compared sequence:
   the change OK); an option in server_config that the parent rejects is
   dropped on both sides. sanitize-dump-payload is yes on both servers unless
   server_config says no.
-- Refused: SHUTDOWN; DEBUG RESTART, CRASH-AND-RECOVER and RELOAD; DEBUG
-  SLEEP above timeout_s; MODULE LOAD, LOADEX and UNLOAD; CONFIG SET of dir,
-  logfile, unixsocket, a port or a bind; MONITOR, SUBSCRIBE, PSUBSCRIBE and
-  SSUBSCRIBE. REPLICAOF, CLUSTER, SYNC, PSYNC and REPLCONF are allowed on the
-  private servers.
+- Refused: SHUTDOWN (a `restart: true` step restarts a node instead); DEBUG
+  RESTART, CRASH-AND-RECOVER and RELOAD; DEBUG SLEEP above timeout_s; MODULE
+  LOAD, LOADEX and UNLOAD; CONFIG SET of dir, logfile, unixsocket, a port or
+  a bind; MONITOR; SUBSCRIBE, PSUBSCRIBE and SSUBSCRIBE on the main
+  connection (send them on a named `connection`, one channel each).
+  REPLICAOF, CLUSTER, SYNC, PSYNC and REPLCONF are allowed on the private
+  servers.
 - Arguments and replies are raw bytes; a binary argument is YAML !!binary.
   RESP 2 and 3 both deserve a scenario when the change touches replies: make
   resp an input, as above, and write one scenario per version.
-- `cluster: true` makes both private servers one-node clusters holding all
-  16384 slots, for a change to a CLUSTER subcommand or to slot-keyed
-  replies. A change that matters only in a topology a single node cannot
-  have (replicas, a failover, a slot migration) needs an installed cluster
-  experiment instead, without compare_with.
+- `cluster: true` makes the private servers clusters, node 0 holding all
+  16384 slots. `nodes: N` (up to 6) gives each side N nodes: in a cluster
+  the others join as empty primaries, without `cluster` they are standalone
+  primaries. A command names its node with `node: 1`, and an argument names
+  a node of its own side as `<node.1.id>`, `<node.1.host>`, `<node.1.port>`
+  or `<node.1.cluster-port>`; replies are mapped back to those names before
+  the sides compare. So the sequence builds the topology the change needs
+  itself: replicas and sub-replicas (`CLUSTER REPLICATE <node.0.id>`,
+  `REPLICAOF <node.0.host> <node.0.port>`), a slot migration (`CLUSTER
+  MIGRATESLOTS`, `CLUSTER SETSLOT`). `wait_s: 30` on a command sends it
+  again until its expect holds, for asynchronous work: a migration
+  finishing, a replica's `master_link_status:up`.
+  examples/valkey/experiments/commands-compare-cluster.yaml is a two-node
+  sequence. A topology change under faults (a failover, a killed node) still
+  needs an installed cluster experiment, without compare_with.
+- `raw: "SET k v\\0 EX 100\\r\\n"` (or !!binary) instead of `command` sends bytes
+  as they are, for the inline protocol and malformed requests; a reply that
+  never comes is recorded as `{{no_reply: true}}`. Send raw bytes on a
+  `connection` of their own.
+- `connection: sub` sends a command on another connection to the node,
+  opened on first use; `read: true` on it reads the replies waiting there:
+  Pub/Sub messages, RESP3 pushes, tracking invalidations. A connection the
+  server closes without a reply (QUIT, CLIENT KILL) is `{{closed: true}}`,
+  which `expect: {{exists: false}}` matches.
+- `files: {{users.acl: "user default on nopass ~* &* +@all"}}` writes files into
+  each private server's directory before it starts, which server_config may
+  name (`aclfile: users.acl`). Each server starts from a config file there,
+  so CONFIG REWRITE and ACL SAVE work, and a `restart: true` command stops
+  the node and starts it again from that directory: it reads back the
+  rewritten config, the ACL file, a SAVEd RDB.
+  examples/valkey/experiments/commands-compare-restart.yaml restarts across
+  a CONFIG REWRITE.
+
+### valkey.action.tools
+Runs Valkey's own tools, valkey-cli, valkey-benchmark, valkey-check-rdb and
+valkey-check-aof, of both builds with the same arguments, stdin and files,
+and compares their exit status, stdout and stderr; with `server: true` each
+side's tools talk to a private server of their own build (`$port`,
+`$socket`). The same expect, expect_difference and outcome rules hold, with
+`expect: {{exit, stdout, stderr}}`. docs/components.md has its fields, and
+examples/valkey/experiments/tools-compare.yaml is a worked experiment:
+
+```yaml
+  - use: valkey.action.tools
+    id: cli
+    config:
+      compare_with: {{$ref: artifacts.parent.binary}}
+      server: true
+      files: {{empty-db2.rdb: !!binary UkVESVMwMDA5/gL/AAAAAAAAAAA=}}
+      runs:
+        - {{tool: valkey-check-rdb, args: [empty-db2.rdb, --stats, --format, info],
+           expect_difference: true, expect: {{exit: {{equals: 0}}}}}}
+        - {{tool: valkey-cli, args: [-p, $port, -3, --json, GET, k],
+           expect: {{stdout: {{equals: "null\\n"}}}}}}
+```
 {module_section}
 ### Adversarial inputs
 The shapes the maintainers' own audits keep finding bugs with

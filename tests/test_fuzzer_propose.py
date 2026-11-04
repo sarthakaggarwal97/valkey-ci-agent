@@ -1223,8 +1223,11 @@ def test_the_prompts_render():
     assert "may hold is\n  {$ref: artifacts.parent.binary}, the build of the change's parent commit" in prompt
     assert "expect_difference: true, expect: {equals: [a, b, c]}" in prompt
     assert "valkey-io/valkey#4604" in prompt and "RESP 2 and 3" in prompt
-    assert "have (replicas, a failover, a slot migration) needs an installed cluster" in prompt
-    assert "without compare_with.\n\n### Adversarial inputs" in prompt
+    assert "`<node.1.id>`, `<node.1.host>`, `<node.1.port>`" in prompt and "`wait_s: 30`" in prompt
+    assert '`raw: "SET k v\\0 EX 100\\r\\n"`' in prompt and "`read: true`" in prompt
+    assert "`files: {users.acl:" in prompt and "`restart: true`" in prompt
+    assert "### valkey.action.tools" in prompt and "with\n   valkey.action.tools (below)" in prompt
+    assert "null\\n\"}}}\n```\n\n### Adversarial inputs" in prompt
     repair = propose_mod._REPAIR_PROMPT.format(change_line="c", source_note="s", failures="f",
                                                references="{$ref: artifacts.parent.binary}", module_note="")
     assert '"experiments": [{"index": <its number>' in repair
