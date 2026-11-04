@@ -58,11 +58,44 @@ gh workflow run fuzzer-replay.yml --repo OWNER/valkey-ci-agent \
 | `max_parallel` | `10` | Merges replayed at once. Each holds a runner while its batch holds another. |
 | `fuzzer_ref` | `main` | The valkey-fuzzer branch whose PR batch runs. |
 | `build` | `default` | The build of each merge commit and its parent: `default` (plain), `asan` or `ubsan`. |
+| `repository` | `valkey-io/valkey` | The repository whose merges are replayed, `OWNER/NAME`: Valkey, or a module the PR batch builds (see [Modules](#modules)). |
+| `valkey_ref` | `unstable` | For a module repository: the `valkey-io/valkey` branch, tag or full commit every merge loads into. |
 
 valkey-fuzzer is `OWNER/valkey-fuzzer`, the repository owner's. GitHub
 starts a dispatched workflow only when its file is on the default branch,
 so `fuzzer-pr-batch.yml` must be on valkey-fuzzer's default branch and
 `fuzzer-replay.yml` on this repository's.
+
+## Modules
+
+With `repository` set to a module the PR batch builds (`valkey-io/valkey-json`,
+or a fork of it), the replay replays the module's merges the same way, on one
+Valkey build:
+
+- `plan` clones the module instead of Valkey and lists its merges as it lists
+  Valkey's. It resolves `valkey_ref` to a commit once, so every merge of the
+  replay loads into the same Valkey build, and records it on each merge as
+  `valkey_sha` (in `replay.json` too).
+- Each merge's proposals are a module change's (see
+  [fuzzer proposals](fuzzer-proposals.md#modules)): its scenarios load the
+  module's two builds through `artifacts.module` and `artifacts.module_parent`.
+- Its PR batch builds that Valkey commit, and the module at the merge
+  (`module_sha`) and at its parent (`module_parent_sha`), against it; there is
+  no `valkey_parent_sha`. The module is sent even when the proposal failed.
+- The #4749 exclusion is for Valkey merges: a module's merge leaves no
+  experiment out.
+
+The random baseline still draws Valkey's own one-build experiments, which do
+not load the module and so run the same Valkey build at every merge; a module
+replay usually wants `random_seeds=0`. A Valkey merge whose proposals name
+one of Valkey's `tests/modules` (`module_file`) sends it the same way, beside
+the parent build.
+
+```bash
+# Every valkey-json merge in a range, loaded into Valkey unstable as it is now
+gh workflow run fuzzer-replay.yml --repo OWNER/valkey-ci-agent \
+  --field repository=valkey-io/valkey-json --field range=BASE..unstable --field random_seeds=0
+```
 
 ## Each merge's files
 
@@ -90,5 +123,5 @@ have been given. Claude runs on Bedrock through `AWS_ROLE_ARN`.
 
 ## Where the code lives
 
-`scripts/fuzzer/replay.py` lists the merges (`plan`) and replays one
-(`run`). The workflow is `.github/workflows/fuzzer-replay.yml`.
+`scripts/fuzzer/replay.py` lists the merges (`plan`, with `--repo-dir` a
+clone of `--repository`) and replays one (`run`). The workflow is `.github/workflows/fuzzer-replay.yml`.

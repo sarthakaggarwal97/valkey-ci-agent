@@ -88,6 +88,41 @@ scenarios that use it, and the repair round sees both; a scenario Claude
 leaves alone is validated again once its experiment is fixed. An experiment
 no validated scenario uses is dropped too.
 
+### Modules
+
+The PR batch can build a module and load it into Valkey (valkey-fuzzer's
+`fuzzer-pr-batch.yml` keeps the table of the modules it builds, by
+repository name: `valkey-json`, and `valkey` for Valkey's own
+`tests/modules`). Proposals use it two ways.
+
+**A change to a module.** With `--repo valkey-io/valkey-json` (or a fork of
+it), the request is a pull request or range of the module. Claude reads the
+module at the change, in `valkey-json/`, and the prompt tells it that the
+batch builds the module at the change and at its parent and loads both
+builds into one pinned Valkey build, so Valkey itself is the same on both
+sides and there is no `artifacts.parent`: a `valkey.action.commands`
+sequence loads the module on its two private servers with
+`modules: [{$ref: artifacts.module.path}]` and
+`modules_parent: [{$ref: artifacts.module_parent.path}]`, and
+`compare: json` compares valkey-json's `JSON.GET` replies as JSON values.
+Those two references are the only environment references a scenario or
+experiment may hold, and the validated copy declares them (as
+`valkey.artifact.local-module`, at any path) instead of the parent. The
+pinned Valkey is `--valkey-ref` (`unstable` by default), resolved to a
+commit when the change is fetched and recorded in `proposals.json` as
+`valkey_sha`.
+
+**A change to Valkey's module API.** A Valkey change that touches
+`src/module.c`, `src/valkeymodule.h` or `tests/modules/` is told that the
+batch can build one of Valkey's own test modules at the change and at its
+parent, and is given the ones `tests/modules/Makefile` builds. Claude may
+name one in its answer as `module_file` (`tests/modules/datatype.so`); one
+the Makefile does not build is not taken (`module_file_error` in
+`proposals.json`). With a module named, a scenario or experiment may also
+hold the two module references, and a compared sequence pairs
+`compare_with: {$ref: artifacts.parent.binary}` with `modules` and
+`modules_parent`, so each Valkey build loads its own commit's module.
+
 ## What you get
 
 The run uploads `fuzzer-proposals-<run id>`:
@@ -96,7 +131,7 @@ The run uploads `fuzzer-proposals-<run id>`:
 |---|---|
 | `scenarios/ai-<hash>.yaml` | Each scenario that validated, ready for `valkey-fuzzer run`. |
 | `experiments/proposed.<name>.yaml` | Each experiment Claude wrote that compiled and a validated scenario uses. |
-| `proposals.json` | The PR and its commits; Claude's `reason` when it proposed no scenario; each validated scenario with its file, reason and experiment; each experiment with its file, digest and the scenarios that use it; and each dropped scenario and experiment with its error. |
+| `proposals.json` | The PR and its commits; Claude's `reason` when it proposed no scenario; the `module` the batch builds and loads, if any, with the pinned `valkey_sha` for a module change and the `module_file_error` when Claude's `module_file` was not taken; each validated scenario with its file, reason and experiment; each experiment with its file, digest and the scenarios that use it; and each dropped scenario and experiment with its error. |
 
 The job summary lists the scenarios, their experiments and their reasons.
 To run one yourself, build Valkey at the PR's head and run:
@@ -122,17 +157,26 @@ mapping each file name (`proposed.<name>.yaml`) to its YAML, and
 parent the experiments compare with. For a pull request the base is the
 merge-base commit, what the pull request's diff is against, not the base
 branch's tip. Proposals never need its optional `spec_bundles`, and leave
-`build` at its default (the replay can pick `asan` or `ubsan`). Before it
+`build` at its default (the replay can pick `asan` or `ubsan`). When the
+proposals load a module, it sends `module_repository`, `module_sha` (the
+change's head) and `module_parent_sha` (its base), and `module_file` for one
+of Valkey's `tests/modules`; for a change to a module, `valkey_sha` and
+`valkey_ref` are the pinned Valkey commit and no `valkey_parent_sha` is
+sent, experiments or not. Before it
 dispatches, the agent reads the files back and checks that each one is
 still the scenario that validated and the experiment that compiled, and it
 refuses anything the workflow's own input check would refuse: a `scenarios`
 over 60,000 characters or an `experiments` over 20,000, a repository that
 isn't `OWNER/NAME`, a commit that isn't a full 40-character lowercase SHA, a
 parent equal to the commit, a build other than `default`, `asan` or `ubsan`,
+module inputs without `module_repository`, a module repository the batch
+does not build, a `module_file` that is not a relative path to a `.so` (or
+none for Valkey's `tests/modules`),
 a name outside letters, digits, `.`, `_` and `-`, a scenario that isn't a
 YAML mapping, that sets `deployment.valkey_binary` or
 `deployment.instance_binaries`, that declares `artifacts` or references one
-the batch doesn't declare, an experiment file name outside
+the batch doesn't declare (`artifacts.parent` without a parent,
+`artifacts.module` and `artifacts.module_parent` without the module builds), an experiment file name outside
 `<name>.yaml` or an experiment whose `id` doesn't start with `proposed.`.
 The dispatch uses its own token, made after Claude has finished, that can
 start workflows on valkey-fuzzer and do nothing else. A dry run never
@@ -191,6 +235,10 @@ python -m scripts.fuzzer.propose propose --pr 1234 \
 python -m scripts.fuzzer.propose propose --range 9.0.0..unstable \
   --fuzzer-dir ../valkey-fuzzer --fuzzer-bin valkey-fuzzer
 
+# A valkey-json pull request, its builds loaded into Valkey unstable
+python -m scripts.fuzzer.propose propose --repo valkey-io/valkey-json --pr 42 \
+  --fuzzer-dir ../valkey-fuzzer --fuzzer-bin valkey-fuzzer --valkey-ref unstable
+
 # See what would be dispatched
 python -m scripts.fuzzer.propose dispatch --out fuzzer-proposals --dry-run
 ```
@@ -200,7 +248,9 @@ python -m scripts.fuzzer.propose dispatch --out fuzzer-proposals --dry-run
 The workflow uses the shared secrets described in [setup.md](setup.md). It
 asks for two tokens, each only when it needs it: one that can read
 `valkey-io/valkey` to fetch the PR, and, when dispatching, one that can start
-workflows on `valkey-io/valkey-fuzzer`.
+workflows on `valkey-io/valkey-fuzzer`. The workflow takes `valkey-io/valkey`
+pull requests only; a module's pull request is proposed for from the
+command line (`--repo`).
 
 ## Where the code lives
 
