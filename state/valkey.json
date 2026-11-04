@@ -1,0 +1,11 @@
+{
+"repo": "valkey-io/valkey",
+"pointer": {"cursor": "4500d5824f70955e729945a1cf8d29a11294b9e9", "cursor_date": "2026-11-04", "cursor_pr": 5138, "end": "f4549d1cf4830c0584f8e41369a8628842a67aec", "head": "71a43e9dd13afe376eea748fb501058c48901265", "remaining": 2480},
+"done": {
+  "71a43e9dd13afe376eea748fb501058c48901265": {"at": "2026-11-04T23:33:34+00:00", "cost_usd": 1.5127, "findings": [], "folder": "tests/valkey/5122-71a43e9dd", "hunted": 2, "outcome": "tested", "pr": 5122, "pr_repo": "valkey-io/valkey", "proposed": 2, "proven": 2, "recall": true, "repo": "valkey-io/valkey", "subject": "Return an empty string from lm_asprintf() when vsnprintf() fails (#5122)"},
+  "9f05a35a6b71aa765553cc64fcea689d5111d40e": {"at": "2026-11-04T23:33:34+00:00", "cost_usd": 10.4075, "findings": [{"issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41", "rule": "check", "verdict": "introduced by #5170"}, {"issue": null, "rule": "check", "verdict": "not reproduced"}, {"issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41", "rule": "check", "verdict": "appeared after #5170"}, {"issue": null, "rule": "check", "verdict": "not reproduced"}], "folder": "tests/valkey/5170-9f05a35a6", "hunted": 2, "outcome": "tested", "pr": 5170, "pr_repo": "valkey-io/valkey", "proposed": 2, "proven": 2, "recall": true, "repo": "valkey-io/valkey", "subject": "Rehash in proportion to scan work when sampling a shrinking hashtable (#5170)"}
+},
+"failed": {
+},
+"last_run": {"at": "2026-11-04T23:33:34+00:00", "cost_usd": 11.9202, "merges": ["71a43e9dd13afe376eea748fb501058c48901265", "9f05a35a6b71aa765553cc64fcea689d5111d40e"], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41928150529"}
+}

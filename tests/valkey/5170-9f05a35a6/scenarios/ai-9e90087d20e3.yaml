@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4500d5824f70..9f05a35a6b71.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9e90087d20e3
+seed: 51703
+experiment:
+  id: proposed.zrandmember-shrink-rehash
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

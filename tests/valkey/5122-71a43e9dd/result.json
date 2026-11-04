@@ -1,0 +1,20 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "71a43e9dd13afe376eea748fb501058c48901265",
+  "parent": "9f05a35a6b71aa765553cc64fcea689d5111d40e",
+  "pr": 5122,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Return an empty string from lm_asprintf() when vsnprintf() fails (#5122)",
+  "date": "2026-11-04",
+  "unstable": "71a43e9dd13afe376eea748fb501058c48901265",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "cost_usd": 1.5127,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,46 @@
+extends:
+- valkey.liveness
+id: proposed.lua-error-reply-oversized
+deployment:
+  modes:
+  - standalone
+metadata:
+  description: server.error_reply() with a string over 2GB returns "ERR " after vsnprintf()
+    fails, not stale allocation bytes
+inputs:
+  properties:
+    resp:
+      type: integer
+      enum:
+      - 2
+      - 3
+      default: 2
+components:
+- use: valkey.action.commands
+  id: oversized-error
+  config:
+    compare_with:
+      $ref: artifacts.parent.binary
+    resp:
+      $ref: inputs.resp
+    timeout_s: 120
+    commands:
+    - command:
+      - EVAL
+      - local s = string.rep('a', 1024 * 1024) for i=1,9 do s = s .. s end s = s ..
+        s .. s .. s server.error_reply('-PRIME') return {#s, server.error_reply(s)['err']}
+      - '0'
+      expect_difference: true
+      expect:
+        equals:
+        - 2147483648
+        - 'ERR '
+    checks:
+      variants: true
+      replica: true
+      acl: true
+      concurrency: 4
+      compat: true
+required_evidence:
+- evidence_id: valkey.command.sequence
+  source: oversized-error

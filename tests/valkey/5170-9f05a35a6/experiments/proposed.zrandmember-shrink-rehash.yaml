@@ -1,0 +1,218 @@
+extends:
+- valkey.liveness
+id: proposed.zrandmember-shrink-rehash
+deployment:
+  modes:
+  - standalone
+metadata:
+  description: Sampling (ZRANDMEMBER) on a zset whose hashtable is shrink-rehashing
+    must rehash in proportion to the scan work and finish the shrink; the parent build
+    takes one rehash step per sample call and stays stuck rehashing the 4096-bucket
+    old table. Verified with DEBUG HTSTATS-KEY rehashing index, plus deterministic
+    reads to catch corruption from the mass rehash.
+inputs:
+  properties:
+    resp:
+      type: integer
+      enum:
+      - 2
+      - 3
+      default: 2
+components:
+- use: valkey.action.commands
+  id: zrand-sparse
+  config:
+    compare_with:
+      $ref: artifacts.parent.binary
+    server_config:
+      save: ''
+      activerehashing: 'no'
+    resp:
+      $ref: inputs.resp
+    timeout_s: 30
+    commands:
+    - command:
+      - EVAL
+      - for i=0,19999 do redis.call('ZADD', KEYS[1], i, i) end return redis.call('ZCARD',
+        KEYS[1])
+      - 1
+      - myzset
+      expect:
+        equals: 20000
+    - command:
+      - ZREMRANGEBYRANK
+      - myzset
+      - 6
+      - -1
+      expect:
+        equals: 19994
+    - command:
+      - DEBUG
+      - HTSTATS-KEY
+      - myzset
+      - full
+      compare: skip
+      expect:
+        contains: 'rehashing index: 0'
+    - command:
+      - ZRANDMEMBER
+      - myzset
+      - -100
+      compare: skip
+    - command:
+      - DEBUG
+      - HTSTATS-KEY
+      - myzset
+      - full
+      expect_difference: true
+      expect:
+        contains: 'rehashing index: -1'
+    - command:
+      - ZCARD
+      - myzset
+      expect:
+        equals: 6
+    - command:
+      - ZRANGE
+      - myzset
+      - 0
+      - -1
+      expect:
+        equals:
+        - '0'
+        - '1'
+        - '2'
+        - '3'
+        - '4'
+        - '5'
+    - command:
+      - EVAL
+      - for i=20000,20049 do redis.call('ZADD', KEYS[1], i, i) end return redis.call('ZCARD',
+        KEYS[1])
+      - 1
+      - myzset
+      expect:
+        equals: 56
+    - command:
+      - ZRANGE
+      - myzset
+      - 6
+      - 8
+      expect:
+        equals:
+        - '20000'
+        - '20001'
+        - '20002'
+    checks:
+      variants: true
+      replica: true
+      acl: true
+      concurrency: 4
+      compat: true
+- use: valkey.action.commands
+  id: zrand-dense
+  config:
+    compare_with:
+      $ref: artifacts.parent.binary
+    server_config:
+      save: ''
+      activerehashing: 'no'
+    resp:
+      $ref: inputs.resp
+    timeout_s: 30
+    commands:
+    - command:
+      - EVAL
+      - for i=0,19999 do redis.call('ZADD', KEYS[1], i, i) end return redis.call('ZCARD',
+        KEYS[1])
+      - 1
+      - myzset
+      expect:
+        equals: 20000
+    - command:
+      - ZREMRANGEBYRANK
+      - myzset
+      - 300
+      - -1
+      expect:
+        equals: 19700
+    - command:
+      - DEBUG
+      - HTSTATS-KEY
+      - myzset
+      - full
+      compare: skip
+      expect:
+        contains: 'rehashing index: 0'
+    - command:
+      - ZRANDMEMBER
+      - myzset
+      - -20
+      compare: skip
+    - command:
+      - ZRANDMEMBER
+      - myzset
+      - -20
+      compare: skip
+    - command:
+      - ZRANDMEMBER
+      - myzset
+      - -20
+      compare: skip
+    - command:
+      - ZRANDMEMBER
+      - myzset
+      - -20
+      compare: skip
+    - command:
+      - ZRANDMEMBER
+      - myzset
+      - -20
+      compare: skip
+    - command:
+      - DEBUG
+      - HTSTATS-KEY
+      - myzset
+      - full
+      expect_difference: true
+      expect:
+        contains: 'rehashing index: -1'
+    - command:
+      - ZCARD
+      - myzset
+      expect:
+        equals: 300
+    - command:
+      - ZRANGE
+      - myzset
+      - 0
+      - 2
+      expect:
+        equals:
+        - '0'
+        - '1'
+        - '2'
+    - command:
+      - ZRANGE
+      - myzset
+      - 297
+      - 299
+      expect:
+        equals:
+        - '297'
+        - '298'
+        - '299'
+    checks:
+      variants: true
+      replica: true
+      acl: true
+      concurrency: 4
+      compat: true
+required_events:
+- zrand-sparse.completed
+- zrand-dense.completed
+required_evidence:
+- evidence_id: valkey.command.sequence
+  source: zrand-sparse
+- evidence_id: valkey.command.sequence
+  source: zrand-dense
