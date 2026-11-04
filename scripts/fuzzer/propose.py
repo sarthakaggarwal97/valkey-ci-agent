@@ -867,7 +867,7 @@ artifacts, resources or policies, and no environment reference but
 {references}; every command marked expect_difference has
 an expect. A scenario that failed only because its experiment did not
 compile is validated again once the experiment is fixed; return it only if
-it needs a change itself.
+it needs a change itself.{module_note}
 
 {failures}
 
@@ -917,12 +917,22 @@ replies are parsed and compared as JSON values, so key order and spacing do
 not count. The module's source is in {checkout}/.
 """
 
+_REPAIR_MODULE_NOTE = """
+To load one of Valkey's test modules, add "module_file" to the object, one
+of {names}: {{$ref: artifacts.module.path}} and
+{{$ref: artifacts.module_parent.path}} are then allowed too, and an
+experiment or scenario that failed only for referencing them passes as it
+is."""
+
 _TEST_MODULES_SECTION = """
 ### Valkey's test modules
 The change reaches the module API. The runner can build Valkey's own test
 modules (valkey/tests/modules/, `make -C tests/modules`) at the change and
 at its parent: to load one, add "module_file" to your JSON answer, one of
-{names}. A compared sequence then loads it on both private servers, the
+{names}, as in {{"module_file": "tests/modules/datatype.so", "experiments":
+[...], "scenarios": [...]}}. Without it the runner builds no module, and a
+scenario that references artifacts.module.path is dropped. A compared
+sequence then loads it on both private servers, the
 change's build of Valkey with the change's build of the module on the
 first, the parent's with the parent's on the second:
 
@@ -945,8 +955,8 @@ def _default_runner(prompt: str, workdir: Path) -> AgentRunResult:
 _FORMAT_PROMPT = """\
 Your answer below should have ended with one JSON object, and it did not.
 Rewrite your conclusion as that object, and return ONLY the object:
-{{"reason": "only when no scenario is needed: why", "experiments": [...], "scenarios": [...]}}
-Keep every scenario and experiment you wrote, as YAML strings, unchanged.
+{{"reason": "only when no scenario is needed: why", "module_file": "only when a scenario loads one of Valkey's test modules", "experiments": [...], "scenarios": [...]}}
+Keep every scenario and experiment you wrote, as YAML strings, and the module_file you named, unchanged.
 Do not read any file again.
 
 Your answer:
@@ -1100,16 +1110,23 @@ def propose(
     with log_group("Ask Claude for scenarios"):
         answer = _ask_claude(runner, prompt, workdir)
     run.reason = _clean_rationale(answer.get("reason"))
-    if is_module:
-        run.module = ModuleBuild(change.repo, change.head_sha, change.base_sha)
-    elif test_modules and answer.get("module_file"):
-        module_file = answer["module_file"]
+
+    def take_module_file(answer: dict[str, Any]) -> None:
+        nonlocal declared
+        module_file = answer.get("module_file")
+        if not test_modules or run.module is not None or not module_file:
+            return
         if module_file in test_modules:
             run.module = ModuleBuild(change.repo, change.head_sha, change.base_sha, module_file)
+            run.module_file_error = ""
             declared += ("module", "module_parent")
         else:
             run.module_file_error = f"module_file {str(module_file)[:120]!r} is not a module tests/modules builds"
             logger.warning("Not loading a module: %s", run.module_file_error)
+
+    if is_module:
+        run.module = ModuleBuild(change.repo, change.head_sha, change.base_sha)
+    take_module_file(answer)
     for index, item in enumerate(answer.get("experiments", [])[:MAX_EXPERIMENTS], start=1):
         item = item if isinstance(item, dict) else {}
         experiment = ExperimentProposal(index=index, text=_text_field(item, "experiment"))
@@ -1141,6 +1158,8 @@ def propose(
         repair_prompt = _REPAIR_PROMPT.format(
             change_line=change_line, source_note=source_note, failures=failures,
             references=" or ".join(f"{{$ref: {_REFERENCES[name]}}}" for name in declared),
+            module_note=_REPAIR_MODULE_NOTE.format(names=", ".join(test_modules))
+            if test_modules and run.module is None else "",
         )
         try:
             with log_group(f"Ask Claude to repair {len(failed_experiments)} experiment(s) and {len(failed)} scenario(s)"):
@@ -1149,13 +1168,20 @@ def propose(
             logger.warning("The repair round failed; dropping %d experiment(s) and %d scenario(s): %s",
                            len(failed_experiments), len(failed), exc)
             answer = {"scenarios": []}
+        # A module named only now may be all that the failed experiments and scenarios lacked.
+        had_module = run.module is not None
+        take_module_file(answer)
+        module_named = not had_module and run.module is not None
         repaired_experiments = _repairs_by_index(answer.get("experiments"), failed_experiments)
-        for number, item in repaired_experiments.items():
-            experiment = failed_experiments[number]
-            experiment.repaired = True
-            experiment.text = _text_field(item, "experiment")
-            compile_one(experiment)
-        recompiled = {e.experiment_id for e in failed_experiments.values() if e.repaired and e.valid}
+        for number, experiment in failed_experiments.items():
+            item = repaired_experiments.get(number)
+            if item is not None:
+                experiment.repaired = True
+                experiment.text = _text_field(item, "experiment")
+            if item is not None or module_named:
+                compile_one(experiment)
+        recompiled = {e.experiment_id for e in failed_experiments.values()
+                      if (e.repaired or module_named) and e.valid}
         repaired_scenarios = _repairs_by_index(answer.get("scenarios"), failed)
         for number, proposal in failed.items():
             item = repaired_scenarios.get(number)
@@ -1164,8 +1190,8 @@ def propose(
                 proposal.text = _text_field(item, "scenario")
                 if item.get("rationale"):
                     proposal.rationale = _clean_rationale(item.get("rationale"))
-            # A scenario Claude left alone is tried again when its experiment was the problem.
-            if item is not None or proposal.experiment in recompiled:
+            # A scenario Claude left alone is tried again when its experiment or a missing module was the problem.
+            if item is not None or proposal.experiment in recompiled or module_named:
                 validate_one(proposal)
         for experiment in run.dropped_experiments:
             logger.info("Dropping experiment %d: %s", experiment.index, " ".join((experiment.error or "").split())[:300])

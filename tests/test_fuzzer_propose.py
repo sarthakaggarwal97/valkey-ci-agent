@@ -1088,7 +1088,7 @@ def test_a_change_to_the_module_api_may_load_one_of_the_test_modules(tmp_path, f
 
     prompt = runner.prompts[0]
     assert propose_mod._TEST_MODULES_RULE in prompt
-    assert '"module_file" to your JSON answer, one of\ntests/modules/commandfilter.so, tests/modules/datatype.so.' in prompt
+    assert '"module_file" to your JSON answer, one of\ntests/modules/commandfilter.so, tests/modules/datatype.so, as in' in prompt
     assert result["module"] == {"repository": "valkey-io/valkey", "sha": HEAD, "parent_sha": BASE,
                                 "file": "tests/modules/datatype.so"}
     assert result["valkey_sha"] is None and result["module_file_error"] is None
@@ -1101,6 +1101,25 @@ def test_a_change_to_the_module_api_may_load_one_of_the_test_modules(tmp_path, f
         "valkey-io/valkey", HEAD, BASE, "tests/modules/datatype.so",
     )
 
+
+def test_the_repair_round_may_name_the_test_module_the_first_answer_left_out(tmp_path, fuzzer_dir, valkey_checkout):
+    # The full replay's module-API merges lost every test this way: the scenarios loaded a test module
+    # and the answer never named it.
+    loads = USES_MODULE.replace("proposed.json-get", "proposed.datatype")
+    experiment = MODULE_PROPOSED.replace("proposed.json-get", "proposed.datatype").replace(
+        "          modules:", "          compare_with: {$ref: artifacts.parent.binary}\n          modules:")
+    runner = StubRunner(_answer([{"rationale": "datatype on both builds", "scenario": loads}],
+                                [{"experiment": experiment}]),
+                        _answer([], [], module_file="tests/modules/datatype.so"))
+    run, result, out = _propose(runner, tmp_path, fuzzer_dir, change=_change(diff=MODULE_API_DIFF))
+
+    assert '"module_file" to the object, one\nof tests/modules/commandfilter.so, tests/modules/datatype.so' in (
+        runner.prompts[1])
+    assert result["module"] == {"repository": "valkey-io/valkey", "sha": HEAD, "parent_sha": BASE,
+                                "file": "tests/modules/datatype.so"}
+    assert [e["experiment_id"] for e in result["experiments"]] == ["proposed.datatype"]
+    assert len(result["scenarios"]) == 1 and result["dropped"] == []
+    assert batch_inputs(out)["module_file"] == "tests/modules/datatype.so"
 
 def test_a_module_file_tests_modules_does_not_build_loads_nothing(tmp_path, fuzzer_dir, valkey_checkout):
     runner = StubRunner(_answer([{"rationale": "r", "scenario": USES_MODULE}], [{"experiment": MODULE_PROPOSED}],
@@ -1207,7 +1226,7 @@ def test_the_prompts_render():
     assert "have (replicas, a failover, a slot migration) needs an installed cluster" in prompt
     assert "without compare_with.\n\n### Adversarial inputs" in prompt
     repair = propose_mod._REPAIR_PROMPT.format(change_line="c", source_note="s", failures="f",
-                                               references="{$ref: artifacts.parent.binary}")
+                                               references="{$ref: artifacts.parent.binary}", module_note="")
     assert '"experiments": [{"index": <its number>' in repair
     assert "no environment reference but\n{$ref: artifacts.parent.binary};" in repair
     module = propose_mod._MODULE_SECTION.format(repo="valkey-io/valkey-json", head=HEAD, base=BASE,
