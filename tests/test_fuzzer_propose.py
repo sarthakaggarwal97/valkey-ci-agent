@@ -1204,7 +1204,8 @@ def test_the_prompts_render():
     assert "may hold is\n  {$ref: artifacts.parent.binary}, the build of the change's parent commit" in prompt
     assert "expect_difference: true, expect: {equals: [a, b, c]}" in prompt
     assert "valkey-io/valkey#4604" in prompt and "RESP 2 and 3" in prompt
-    assert "per version.\n\n### Adversarial inputs" in prompt
+    assert "have (replicas, a failover, a slot migration) needs an installed cluster" in prompt
+    assert "without compare_with.\n\n### Adversarial inputs" in prompt
     repair = propose_mod._REPAIR_PROMPT.format(change_line="c", source_note="s", failures="f",
                                                references="{$ref: artifacts.parent.binary}")
     assert '"experiments": [{"index": <its number>' in repair

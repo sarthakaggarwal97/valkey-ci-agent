@@ -827,6 +827,11 @@ For a compared sequence:
 - Arguments and replies are raw bytes; a binary argument is YAML !!binary.
   RESP 2 and 3 both deserve a scenario when the change touches replies: make
   resp an input, as above, and write one scenario per version.
+- `cluster: true` makes both private servers one-node clusters holding all
+  16384 slots, for a change to a CLUSTER subcommand or to slot-keyed
+  replies. A change that matters only in a topology a single node cannot
+  have (replicas, a failover, a slot migration) needs an installed cluster
+  experiment instead, without compare_with.
 {module_section}
 ### Adversarial inputs
 The shapes the maintainers' own audits keep finding bugs with
