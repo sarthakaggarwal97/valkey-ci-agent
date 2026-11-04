@@ -1,0 +1,63 @@
+extends:
+- valkey.liveness
+id: proposed.json-arrappend-recursive-uaf
+deployment:
+  modes:
+  - standalone
+metadata:
+  description: JSON.ARRAPPEND with a recursive path over nested arrays must not use-after-free
+    and must write replies in document order
+inputs:
+  properties:
+    resp:
+      type: integer
+      enum:
+      - 2
+      - 3
+      default: 2
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules:
+    - $ref: artifacts.module.path
+    modules_parent:
+    - $ref: artifacts.module_parent.path
+    resp:
+      $ref: inputs.resp
+    timeout_s: 10
+    commands:
+    - command:
+      - JSON.SET
+      - k
+      - $
+      - '[[[0]]]'
+      expect:
+        equals: OK
+    - command:
+      - JSON.ARRAPPEND
+      - k
+      - $..
+      - '"x"'
+      expect_difference: true
+      expect:
+        equals:
+        - 2
+        - 2
+        - 2
+    - command:
+      - JSON.GET
+      - k
+      - $
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '[[[[0,"x"],"x"],"x"]]'
+    checks:
+      variants: true
+      replica: true
+      acl: true
+      concurrency: 4
+required_evidence:
+- evidence_id: valkey.command.sequence
+  source: seq

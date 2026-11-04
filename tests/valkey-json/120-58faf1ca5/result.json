@@ -1,0 +1,68 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "58faf1ca5fb35b5e3ccc70d5d8bde60ed6c35d1a",
+  "parent": "f8cc5369541691dfa45c545db4fa7763d762e805",
+  "pr": 120,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Fixing crash on recursive path mutation (#120)",
+  "date": "2026-08-31",
+  "unstable": "71a43e9dd13afe376eea748fb501058c48901265",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 3,
+  "recall": true,
+  "cost_usd": 3.9957,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-buffer-overflow",
+      "scenario": "ai-b2931f24abb6",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #120",
+      "fingerprint": "eb0c99e4d6ba2e8052a0",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: bad-malloc_usable_size (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27b061) (BuildId: 2431ddd1bfdb62276b7e84906ea66abf4636f841) in malloc_usable_size",
+      "scenario": "ai-9fe9b6b9f084",
+      "seed": 303,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #120",
+      "fingerprint": "c54c65466ceeff78db46",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-a082685c9d1f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unreached-change"
+    },
+    {
+      "scenario": "ai-a219b7462e84",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unreached-change"
+    },
+    {
+      "scenario": "ai-51896075d831",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unreached-change"
+    }
+  ]
+}

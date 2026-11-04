@@ -1,0 +1,340 @@
+extends:
+- valkey.liveness
+id: proposed.jsonpath-object-filter
+deployment:
+  modes:
+  - standalone
+metadata:
+  description: JSONPath filters over object children compared between the change's
+    and the parent's valkey-json builds
+inputs:
+  properties:
+    resp:
+      type: integer
+      enum:
+      - 2
+      - 3
+      default: 2
+    cluster:
+      type: boolean
+      default: false
+components:
+- use: valkey.action.commands
+  id: objfilter
+  config:
+    modules:
+    - $ref: artifacts.module.path
+    modules_parent:
+    - $ref: artifacts.module_parent.path
+    resp:
+      $ref: inputs.resp
+    cluster:
+      $ref: inputs.cluster
+    timeout_s: 30
+    commands:
+    - command:
+      - JSON.SET
+      - p
+      - $
+      - '{"productsById":{"product1":{"price":10,"active":true,"title":"One","tags":[1,2,3]},"product2":{"price":20,"active":false,"title":"Two","tags":[4,5,6]},"product3":{"price":30,"active":true,"title":"Three","tags":[7,8,9]}}}'
+      expect:
+        equals: OK
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById[?(@.price>15)].title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '["Two","Three"]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById[?(@.title)].title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '["One","Two","Three"]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById[?(@.price>15&&@.price<25)].title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '["Two"]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById[?(@.price>25||@.title=="One")].title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '["One","Three"]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById[?(@.tags[0]>3)].title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '["Two","Three"]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById[?(@.tags[-1]==6)].title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '["Two"]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById[?(@.tags[5]>0)].title
+      compare: json
+      expect:
+        equals: '[]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById[?(@.tags[?(@==5)])].title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '["Two"]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById[?(@.price>100)].title
+      compare: json
+      expect:
+        equals: '[]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById.*[?(@.price>15)].title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '["Two","Three"]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById[*][?(@.price>15)].title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '["Two","Three"]'
+    - command:
+      - JSON.GET
+      - p
+      - $.productsById.product1[?(@.title)].title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '[]'
+    - command:
+      - JSON.GET
+      - p
+      - $..[?(@.price>15)].title
+      compare: json
+      expect:
+        equals: '["Two","Three"]'
+    - command:
+      - JSON.SET
+      - m
+      - $
+      - '{"a":1,"b":{"a":1,"x":2},"c":{"a":2}}'
+      expect:
+        equals: OK
+    - command:
+      - JSON.GET
+      - m
+      - $[?(@.a==1)]
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '[{"a":1,"x":2}]'
+    - command:
+      - JSON.NUMINCRBY
+      - m
+      - $[?(@.a==1)].a
+      - '10'
+      expect:
+        equals: '[11]'
+    - command:
+      - JSON.GET
+      - m
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '{"a":1,"b":{"a":11,"x":2},"c":{"a":2}}'
+    - command:
+      - JSON.SET
+      - s
+      - $
+      - '{"low":1,"high":3}'
+      expect:
+        equals: OK
+    - command:
+      - JSON.GET
+      - s
+      - $[?(@>2)]
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '[3]'
+    - command:
+      - JSON.SET
+      - o
+      - $
+      - '{"an object":{"weight":300,"a value":300},"objects":[{"weight":300,"a value":300}]}'
+      expect:
+        equals: OK
+    - command:
+      - JSON.GET
+      - o
+      - $["an object"][?(@.weight>200)]["a value"]
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '[]'
+    - command:
+      - JSON.GET
+      - o
+      - $["objects"][?(@.weight>200)]["a value"]
+      compare: json
+      expect:
+        equals: '[300]'
+    - command:
+      - JSON.SET
+      - a
+      - $
+      - '[8,1,9,2]'
+      expect:
+        equals: OK
+    - command:
+      - JSON.GET
+      - a
+      - $[?(@>7||@<3)]
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '[8,1,9,2]'
+    - command:
+      - JSON.SET
+      - w
+      - $
+      - '{"productsById":{"product1":{"price":10,"active":true,"title":"One","tags":[1,2,3]},"product2":{"price":20,"active":false,"title":"Two","tags":[4,5,6]},"product3":{"price":30,"active":true,"title":"Three","tags":[7,8,9]}}}'
+      expect:
+        equals: OK
+    - command:
+      - JSON.SET
+      - w
+      - $.productsById[?(@.price>15)].title
+      - '"Updated"'
+      expect_difference: true
+      expect:
+        equals: OK
+    - command:
+      - JSON.GET
+      - w
+      - $.productsById.*.title
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '["One","Updated","Updated"]'
+    - command:
+      - JSON.NUMINCRBY
+      - w
+      - $.productsById[?(@.price>15)].price
+      - '1'
+      expect_difference: true
+      expect:
+        equals: '[21,31]'
+    - command:
+      - JSON.TOGGLE
+      - w
+      - $.productsById[?(@.price>20)].active
+      expect_difference: true
+      expect:
+        equals:
+        - 1
+        - 0
+    - command:
+      - JSON.ARRAPPEND
+      - w
+      - $.productsById[?(@.tags[?(@==5)])].tags
+      - '10'
+      expect_difference: true
+      expect:
+        equals:
+        - 4
+    - command:
+      - JSON.DEL
+      - w
+      - $.productsById[?(@.price>25)]
+      expect_difference: true
+      expect:
+        equals: 1
+    - command:
+      - JSON.OBJLEN
+      - w
+      - $.productsById
+      expect_difference: true
+      expect:
+        equals:
+        - 2
+    - command:
+      - JSON.GET
+      - w
+      - $.productsById
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '[{"product1":{"price":10,"active":true,"title":"One","tags":[1,2,3]},"product2":{"price":21,"active":true,"title":"Updated","tags":[4,5,6,10]}}]'
+    - command:
+      - JSON.SET
+      - t
+      - $
+      - '{"items":{"slash/key":{"v":1},"tilde~key":{"v":2},"0":{"v":3},"":{"v":4},"plain":{"v":0}}}'
+      expect:
+        equals: OK
+    - command:
+      - JSON.DEL
+      - t
+      - $.items[?(@.v>0)]
+      expect_difference: true
+      expect:
+        equals: 4
+    - command:
+      - JSON.GET
+      - t
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '{"items":{"plain":{"v":0}}}'
+    - command:
+      - JSON.SET
+      - e
+      - $
+      - '{}'
+      expect:
+        equals: OK
+    - command:
+      - JSON.GET
+      - e
+      - $[?(@.x==1)]
+      compare: json
+      expect:
+        equals: '[]'
+    checks:
+      variants: true
+      replica: true
+      acl: true
+      concurrency: 4
+required_events:
+- objfilter.completed
+required_evidence:
+- evidence_id: valkey.command.sequence
+  source: objfilter

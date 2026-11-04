@@ -1,0 +1,63 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "parent": "58faf1ca5fb35b5e3ccc70d5d8bde60ed6c35d1a",
+  "pr": 123,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Fix JSONPath filters over object children (#123)",
+  "date": "2026-10-27",
+  "unstable": "71a43e9dd13afe376eea748fb501058c48901265",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "cost_usd": 7.3113,
+  "findings": [
+    {
+      "rule": "regressed-fix",
+      "detail": "regressed fix: the change of valkey-io/valkey-json#123 no longer shows on aeaa68237eb8",
+      "scenario": "ai-8b4fac4c0131",
+      "seed": 1123,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "the fix of #123 regressed",
+      "fingerprint": "acb0ce81bdcd5e965759",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40"
+    },
+    {
+      "rule": "regressed-fix",
+      "detail": "regressed fix: the change of valkey-io/valkey-json#123 no longer shows on aeaa68237eb8",
+      "scenario": "ai-36b24b585c1e",
+      "seed": 2246,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "the fix of #123 regressed",
+      "fingerprint": "acb0ce81bdcd5e965759",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40"
+    },
+    {
+      "rule": "regressed-fix",
+      "detail": "regressed fix: the change of valkey-io/valkey-json#123 no longer shows on aeaa68237eb8",
+      "scenario": "ai-88358fe95bcd",
+      "seed": 3369,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "the fix of #123 regressed",
+      "fingerprint": "acb0ce81bdcd5e965759",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40"
+    }
+  ],
+  "recorded": []
+}

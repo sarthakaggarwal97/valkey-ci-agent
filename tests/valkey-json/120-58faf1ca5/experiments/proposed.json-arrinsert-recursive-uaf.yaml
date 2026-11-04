@@ -1,0 +1,63 @@
+extends:
+- valkey.liveness
+id: proposed.json-arrinsert-recursive-uaf
+deployment:
+  modes:
+  - standalone
+metadata:
+  description: JSON.ARRINSERT with a recursive path over a parent and a nested-descendant
+    array must not use-after-free and must write replies in document order
+inputs:
+  properties:
+    resp:
+      type: integer
+      enum:
+      - 2
+      - 3
+      default: 2
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules:
+    - $ref: artifacts.module.path
+    modules_parent:
+    - $ref: artifacts.module_parent.path
+    resp:
+      $ref: inputs.resp
+    timeout_s: 10
+    commands:
+    - command:
+      - JSON.SET
+      - k
+      - $
+      - '[[0],0]'
+      expect:
+        equals: OK
+    - command:
+      - JSON.ARRINSERT
+      - k
+      - $..
+      - 0
+      - '"x"'
+      expect_difference: true
+      expect:
+        equals:
+        - 3
+        - 2
+    - command:
+      - JSON.GET
+      - k
+      - $
+      compare: json
+      expect_difference: true
+      expect:
+        equals: '[["x",["x",0],0]]'
+    checks:
+      variants: true
+      replica: true
+      acl: true
+      concurrency: 4
+required_evidence:
+- evidence_id: valkey.command.sequence
+  source: seq

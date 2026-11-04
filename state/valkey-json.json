@@ -1,0 +1,11 @@
+{
+"repo": "valkey-io/valkey-json",
+"pointer": {"cursor": "f8cc5369541691dfa45c545db4fa7763d762e805", "cursor_date": "2026-08-27", "cursor_pr": 119, "end": "c1423d7e4b3804e7bef985405a7f65104cf1b2c2", "head": "aeaa68237eb862069061d2797de8c0e790c57c11", "remaining": 60},
+"done": {
+  "aeaa68237eb862069061d2797de8c0e790c57c11": {"at": "2026-11-04T23:15:05+00:00", "cost_usd": 7.3113, "findings": [{"issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40", "rule": "regressed-fix", "verdict": "the fix of #123 regressed"}, {"issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40", "rule": "regressed-fix", "verdict": "the fix of #123 regressed"}, {"issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40", "rule": "regressed-fix", "verdict": "the fix of #123 regressed"}], "folder": "tests/valkey-json/123-aeaa68237", "hunted": 3, "outcome": "tested", "pr": 123, "pr_repo": "valkey-io/valkey-json", "proposed": 3, "proven": 3, "recall": true, "repo": "valkey-io/valkey-json", "subject": "Fix JSONPath filters over object children (#123)"},
+  "58faf1ca5fb35b5e3ccc70d5d8bde60ed6c35d1a": {"at": "2026-11-04T23:15:05+00:00", "cost_usd": 3.9957, "findings": [{"issue": null, "rule": "crash", "verdict": "fixed by #120"}, {"issue": null, "rule": "crash", "verdict": "fixed by #120"}], "folder": "tests/valkey-json/120-58faf1ca5", "hunted": 2, "outcome": "tested", "pr": 120, "pr_repo": "valkey-io/valkey-json", "proposed": 5, "proven": 2, "recall": true, "repo": "valkey-io/valkey-json", "subject": "Fixing crash on recursive path mutation (#120)"}
+},
+"failed": {
+},
+"last_run": {"at": "2026-11-04T23:15:05+00:00", "cost_usd": 11.307, "merges": ["aeaa68237eb862069061d2797de8c0e790c57c11", "58faf1ca5fb35b5e3ccc70d5d8bde60ed6c35d1a"], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41928154386"}
+}
